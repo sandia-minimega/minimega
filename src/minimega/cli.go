@@ -552,12 +552,8 @@ Attach an initrd image to a VM. Passed along with the kernel image at boot time.
 				return cli_response{
 					Response: info.Append,
 				}
-			} else if len(c.Args) == 1 {
-				info.Append = c.Args[0]
 			} else {
-				return cli_response{
-					Error: errors.New("vm_append takes only one argument"),
-				}
+				info.Append = strings.Join(c.Args, " ")
 			}
 			return cli_response{}
 		},

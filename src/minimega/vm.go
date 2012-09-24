@@ -374,8 +374,8 @@ func (vm *vm_info) vm_get_args() []string {
 	if vm.Kernel_path != "" {
 		args = append(args, "-kernel")
 		args = append(args, vm.Kernel_path)
-		args = append(args, "-append")
-		args = append(args, "root=/dev/vda,console=ttyS0")
+		//args = append(args, "-append")
+		//args = append(args, "root=/dev/vda,console=ttyS0")
 	}
 	if vm.Initrd_path != "" {
 		args = append(args, "-initrd")
