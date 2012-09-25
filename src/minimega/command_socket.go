@@ -11,7 +11,8 @@ import (
 func command_socket_start() {
 	l, err := net.Listen("unix", *f_base+"minimega")
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
+		teardown()
 	}
 
 	for {
@@ -20,7 +21,7 @@ func command_socket_start() {
 			log.Errorln(err)
 		}
 		log.Infoln("client connected")
-		go command_socket_handle(conn)
+		command_socket_handle(conn) // don't allow multiple connections
 	}
 }
 
