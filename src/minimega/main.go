@@ -14,6 +14,8 @@ package main
 // write unit tests
 // dnsmasq server stuff
 
+// BUG: weird newlines in errorln,println,etc...
+
 import (
 	"encoding/json"
 	"flag"

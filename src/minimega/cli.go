@@ -222,7 +222,7 @@ failed, as well as some commands that do not impact the VM state, such as
 		},
 	},
 
-	//TODO: read currently is non-blocking, and that's wrong. get it blocking
+	//BUG: read currently is non-blocking, and that's wrong. get it blocking
 	"read": &command{
 		Call: func(c cli_command) cli_response {
 			if len(c.Args) != 1 {
@@ -260,7 +260,18 @@ failed, as well as some commands that do not impact the VM state, such as
 						Command: command,
 						Args:    args,
 					}
-					<-ack_chan_local
+					r := <-ack_chan_local
+					if r.Error != nil {
+						log.Errorln(r.Error)
+						break // stop on errors
+					}
+					if r.Response != "" {
+						if strings.HasSuffix(r.Response,"\n") {
+							fmt.Print(r.Response)
+						} else {
+							fmt.Println(r.Response)
+						}
+					}
 				}
 			}()
 			return cli_response{}
@@ -743,7 +754,7 @@ func cli() {
 		command_chan_local <- c
 		r := <-ack_chan_local
 		if r.Error != nil {
-			log.Error("%v",r.Error)
+			log.Errorln(r.Error)
 		}
 		if r.Response != "" {
 			if strings.HasSuffix(r.Response,"\n") {
