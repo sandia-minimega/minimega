@@ -306,10 +306,10 @@ func (vm *vm_info) launch_one() {
 	}
 	time.Sleep(launch_rate)
 
-	err = os.RemoveAll(vm.instance_path)
-	if err != nil {
-		log.Error("%v", err)
-	}
+	//err = os.RemoveAll(vm.instance_path)
+	//if err != nil {
+	//	log.Error("%v", err)
+	//}
 	vm.state(VM_QUIT)
 }
 
