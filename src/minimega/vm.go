@@ -39,6 +39,7 @@ var (
 	// each vm struct acknowledges that it launched. this way, we won't
 	// return from a vm_launch command until all have actually launched.
 	launch_ack chan int
+	kill_ack chan int
 )
 
 const (
@@ -74,6 +75,7 @@ type vm_info struct {
 func init() {
 	launch_rate = time.Millisecond * 100
 	launch_ack = make(chan int)
+	kill_ack = make(chan int)
 
 	// default parameters at startup
 	info.Memory = "512"
@@ -149,14 +151,12 @@ func (l *vm_list) start(c cli_command) cli_response {
 }
 
 // kill one or all vms (-1 for all)
-// BUG: kill needs some acknowledgement so we don't move on in the teardown phase
-// until the kills are actually registered. This bug leads to errors when doing things
-// like destroying the bridge connections on networked vms.
 func (l *vm_list) kill(id int) {
 	if id == -1 {
 		for _, i := range l.vms {
 			if i.State != VM_QUIT {
 				i.Kill <- true
+				log.Info("VM %v killed", <-kill_ack)
 			}
 		}
 	} else {
@@ -306,6 +306,7 @@ func (vm *vm_info) launch_one() {
 	}
 	time.Sleep(launch_rate)
 
+	kill_ack <- vm.Id
 	//err = os.RemoveAll(vm.instance_path)
 	//if err != nil {
 	//	log.Error("%v", err)

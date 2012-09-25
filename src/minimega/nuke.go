@@ -26,7 +26,6 @@ import (
 // 	kill all qemu instances
 //	kill all taps
 //	remove everything inside of info.Base_path (careful, that's dangerous)
-// TODO: clean up from pid and tap files
 func nuke(c cli_command) cli_response { // the cli_response return is just so we can fit in the cli model
 	if len(c.Args) != 0 {
 		return cli_response{
