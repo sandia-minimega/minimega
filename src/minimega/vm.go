@@ -209,7 +209,7 @@ func (vm *vm_info) status() string {
 	status, err := vm.q.Status()
 	if err != nil {
 		log.Error("could not get qmp status")
-		vm.State = VM_ERROR
+		vm.state(VM_ERROR)
 	}
 	return fmt.Sprintf("VM %v: %v, QMP: %v\n", vm.Id, s, status["status"])
 }
@@ -223,9 +223,9 @@ func (vm *vm_info) start() {
 	err := vm.q.Start()
 	if err != nil {
 		log.Error("%v", err)
-		vm.State = VM_ERROR
+		vm.state(VM_ERROR)
 	} else {
-		vm.State = VM_RUNNING
+		vm.state(VM_RUNNING)
 	}
 }
 
@@ -236,6 +236,26 @@ func (vm *vm_info) launch_one() {
 	err := os.MkdirAll(vm.instance_path, os.FileMode(0700))
 	if err != nil {
 		log.Fatal("%v", err)
+	}
+
+	// assert our state as building
+	vm.state(VM_BUILDING)
+
+	// create and add taps if we are associated with any networks
+	for _, lan := range vm.Networks {
+		tap, err := current_bridge.Tap_create(lan, false)
+		if err != nil {
+			log.Error("%v", err)
+			continue
+		}
+		vm.taps = append(vm.taps, tap)
+	}
+
+	if len(vm.Networks) > 0 {
+		err := ioutil.WriteFile(vm.instance_path+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
+		if err != nil {
+			log.Error("%v", err)
+		}
 	}
 
 	args := vm.vm_get_args()
@@ -285,12 +305,36 @@ func (vm *vm_info) launch_one() {
 		cmd.Process.Kill()
 	}
 	time.Sleep(launch_rate)
+
 	err = os.RemoveAll(vm.instance_path)
 	if err != nil {
 		log.Error("%v", err)
 	}
-	vm.State = VM_QUIT
+	vm.state(VM_QUIT)
+}
 
+// update the vm state, and write the state to file
+func (vm *vm_info) state(s int) {
+	var state_string string
+	switch s {
+	case VM_BUILDING:
+		state_string = "VM_BUILDING"
+	case VM_RUNNING:
+		state_string = "VM_RUNNING"
+	case VM_PAUSED:
+		state_string = "VM_PAUSED"
+	case VM_QUIT:
+		state_string = "VM_QUIT"
+	case VM_ERROR:
+		state_string = "VM_ERROR"
+	default:
+		log.Errorln("unknown state")
+	}
+	vm.State = s
+	err := ioutil.WriteFile(vm.instance_path+"state", []byte(state_string), 0666)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 // return the path to the qmp socket
@@ -375,26 +419,6 @@ func (vm *vm_info) vm_get_args() []string {
 		args = append(args, "file="+vm.Cdrom_path+",if=ide,index=1,media=cdrom")
 		args = append(args, "-boot")
 		args = append(args, "once=d")
-	}
-
-	// create and add taps if we are associated with any networks
-	for _, lan := range vm.Networks {
-		// BUG: this shouldn't be here. It should be done just before calling create args
-		// and torn down if launching the vm fails
-		tap, err := current_bridge.Tap_create(lan, false)
-		if err != nil {
-			log.Error("%v", err)
-			continue
-		}
-		vm.taps = append(vm.taps, tap)
-	}
-
-	// BUG: this shouldn't be in the args creation routine, and it's incorrect anyways
-	// as ioutil.WriteFile just overwrites the file here each time with the last launched
-	// vm's taps. We want the whole list. Move this to bridge.go
-	err := ioutil.WriteFile(vm.instance_path+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
-	if err != nil {
-		log.Error("%v", err)
 	}
 
 	for _, tap := range vm.taps {
