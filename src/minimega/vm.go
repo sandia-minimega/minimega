@@ -251,12 +251,6 @@ func (vm *vm_info) launch_one() {
 	}
 	err = cmd.Start()
 
-	// create the pidfile
-	err = ioutil.WriteFile(vm.instance_path+"pid", []byte(fmt.Sprintf("%v", cmd.Process.Pid)), 0666)
-	if err != nil {
-		log.Error("%v", err)
-	}
-
 	if err != nil {
 		log.Error("%v %v", err, s_err.String())
 	}
