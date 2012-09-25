@@ -320,11 +320,6 @@ func (vm *vm_info) vm_get_args() []string {
 	args = append(args, "-balloon")
 	args = append(args, "none")
 
-	//args = append(args, "-no-fd-bootchk")
-
-	// qemu should autodetect if kvm is available and use it, or not.
-	//args = append(args, "-enable-kvm")
-
 	args = append(args, "-vnc")
 	args = append(args, "0.0.0.0:"+s_id) // if we have more than 10000 vnc sessions, we're in trouble
 
@@ -333,12 +328,6 @@ func (vm *vm_info) vm_get_args() []string {
 
 	args = append(args, "-qmp")
 	args = append(args, "unix:"+vm.qmp_path()+",server")
-
-	//args = append(args, "-chardev")
-	//args = append(args, "socket,id=mon1,server,nowait,path="+vm.qmp_path())
-
-	//args = append(args, "-mon")
-	//args = append(args, "chardev=mon1,mode=control")
 
 	args = append(args, "-vga")
 	args = append(args, "cirrus")
@@ -374,8 +363,6 @@ func (vm *vm_info) vm_get_args() []string {
 	if vm.Kernel_path != "" {
 		args = append(args, "-kernel")
 		args = append(args, vm.Kernel_path)
-		//args = append(args, "-append")
-		//args = append(args, "root=/dev/vda,console=ttyS0")
 	}
 	if vm.Initrd_path != "" {
 		args = append(args, "-initrd")
@@ -395,6 +382,8 @@ func (vm *vm_info) vm_get_args() []string {
 
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
+		// BUG: this shouldn't be here. It should be done just before calling create args
+		// and torn down if launching the vm fails
 		tap, err := current_bridge.Tap_create(lan, false)
 		if err != nil {
 			log.Error("%v", err)
@@ -403,6 +392,9 @@ func (vm *vm_info) vm_get_args() []string {
 		vm.taps = append(vm.taps, tap)
 	}
 
+	// BUG: this shouldn't be in the args creation routine, and it's incorrect anyways
+	// as ioutil.WriteFile just overwrites the file here each time with the last launched
+	// vm's taps. We want the whole list. Move this to bridge.go
 	err := ioutil.WriteFile(vm.instance_path+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
 	if err != nil {
 		log.Error("%v", err)

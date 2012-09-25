@@ -49,5 +49,5 @@ func nuke(c cli_command) cli_response {
 			Error: err,
 		}
 	}
-	return cli_response{}
+	teardown()
 }

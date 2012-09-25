@@ -46,7 +46,7 @@ func init() {
 	tap_chan = make(chan string)
 	go func() {
 		for {
-			tap_chan <- fmt.Sprintf("tap%v", tap_count)
+			tap_chan <- fmt.Sprintf("mega_tap%v", tap_count)
 			tap_count++
 			log.Info("tap_count: %v", tap_count)
 		}
