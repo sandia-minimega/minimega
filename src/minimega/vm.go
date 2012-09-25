@@ -149,6 +149,9 @@ func (l *vm_list) start(c cli_command) cli_response {
 }
 
 // kill one or all vms (-1 for all)
+// BUG: kill needs some acknowledgement so we don't move on in the teardown phase
+// until the kills are actually registered. This bug leads to errors when doing things
+// like destroying the bridge connections on networked vms.
 func (l *vm_list) kill(id int) {
 	if id == -1 {
 		for _, i := range l.vms {
