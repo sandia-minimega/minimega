@@ -15,6 +15,7 @@ package main
 // dnsmasq server stuff
 
 // BUG: weird newlines in errorln,println,etc...
+// BUG: socket connection can't enc/dec error type
 
 import (
 	"encoding/json"
