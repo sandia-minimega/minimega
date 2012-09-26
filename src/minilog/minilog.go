@@ -15,13 +15,13 @@
 package minilog
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"runtime"
 	"strconv"
-	"errors"
 )
 
 // Log levels supported:
@@ -35,11 +35,11 @@ const (
 )
 
 var (
-	loggers map[string]*minilogger
-	color_line = FgYellow
+	loggers     map[string]*minilogger
+	color_line  = FgYellow
 	color_debug = FgBlue
-	color_info = FgGreen
-	color_warn = FgYellow
+	color_info  = FgGreen
+	color_warn  = FgYellow
 	color_error = FgRed
 	color_fatal = FgRed
 )

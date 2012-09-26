@@ -39,7 +39,7 @@ var (
 	// each vm struct acknowledges that it launched. this way, we won't
 	// return from a vm_launch command until all have actually launched.
 	launch_ack chan int
-	kill_ack chan int
+	kill_ack   chan int
 )
 
 const (

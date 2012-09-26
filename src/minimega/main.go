@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	log "minilog"
 	"net"
 	"os"
@@ -62,6 +63,7 @@ func main() {
 	// minimega instance
 	if *f_e {
 		local_command()
+		return
 	}
 
 	// set up signal handling
@@ -98,12 +100,24 @@ func main() {
 			Args:    []string{a},
 		}
 		command_chan_local <- c
-		r := <-ack_chan_local
-		if r.Error != nil {
-			log.Errorln(r.Error)
-		}
-		if r.Response != "" {
-			fmt.Println(r.Response)
+		for {
+			r := <-ack_chan_local
+			if r.Error != nil {
+				log.Errorln(r.Error)
+			}
+			if r.Response != "" {
+				if strings.HasSuffix(r.Response, "\n") {
+					fmt.Print(r.Response)
+				} else {
+					fmt.Println(r.Response)
+				}
+			}
+			if !r.More {
+				log.Debugln("got last message")
+				break
+			} else {
+				log.Debugln("expecting more data")
+			}
 		}
 	}
 
@@ -158,17 +172,39 @@ func local_command() {
 		Command: command,
 		Args:    args,
 	}
-	enc.Encode(&c)
+	err = enc.Encode(&c)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+	log.Debugln("encoded command:", c)
 
-	var r cli_response
-	dec.Decode(&r)
-	code := 0
-	if r.Error != nil {
-		log.Errorln(r.Error)
-		code = 1
+	for {
+		var r cli_response
+		err = dec.Decode(&r)
+		if err != nil {
+			if err == io.EOF {
+				log.Infoln("server disconnected")
+			} else {
+				log.Errorln(err)
+			}
+			return
+		}
+		if r.Error != nil {
+			log.Errorln(r.Error)
+		}
+		if r.Response != "" {
+			if strings.HasSuffix(r.Response, "\n") {
+				fmt.Print(r.Response)
+			} else {
+				fmt.Println(r.Response)
+			}
+		}
+		if !r.More {
+			log.Debugln("got last message")
+			break
+		} else {
+			log.Debugln("expecting more data")
+		}
 	}
-	if r.Response != "" {
-		fmt.Println(r.Response)
-	}
-	os.Exit(code)
 }

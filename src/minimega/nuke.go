@@ -10,13 +10,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"io/ioutil"
 	log "minilog"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"io/ioutil"
-	"bytes"
 	"strings"
 )
 

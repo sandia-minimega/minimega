@@ -25,7 +25,7 @@ var external_processes = map[string]string{
 	"dnsmasq": "dnsmasq",
 	"tunctl":  "tunctl",
 	"browser": "x-www-browser",
-	"kill": "kill",
+	"kill":    "kill",
 }
 
 // check for the presence of each of the external processes we may call,

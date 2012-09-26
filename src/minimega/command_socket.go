@@ -36,7 +36,8 @@ func command_socket_remove() {
 func command_socket_handle(c net.Conn) {
 	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
-	for {
+	done := false
+	for !done {
 		var c cli_command
 		err := dec.Decode(&c)
 		if err != nil {
@@ -49,15 +50,23 @@ func command_socket_handle(c net.Conn) {
 		}
 		// just shove it in the cli command channel
 		command_chan_socket <- c
-		r := <-ack_chan_socket
-		err = enc.Encode(&r)
-		if err != nil {
-			if err == io.EOF {
-				log.Infoln("command client disconnected")
-			} else {
-				log.Errorln(err)
+		for {
+			r := <-ack_chan_socket
+			err = enc.Encode(&r)
+			if err != nil {
+				if err == io.EOF {
+					log.Infoln("command client disconnected")
+				} else {
+					log.Errorln(err)
+				}
+				done = true
 			}
-			break
+			if !r.More {
+				log.Debugln("got last message")
+				break
+			} else {
+				log.Debugln("expecting more data")
+			}
 		}
 	}
 }
