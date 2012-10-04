@@ -365,6 +365,9 @@ func (vm *vm_info) vm_get_args() []string {
 	args = append(args, "-vnc")
 	args = append(args, "0.0.0.0:"+s_id) // if we have more than 10000 vnc sessions, we're in trouble
 
+	args = append(args, "-usbdevice") // this allows absolute pointers in vnc, and works great on android vms
+	args = append(args, "tablet")
+
 	args = append(args, "-smp")
 	args = append(args, vm.Vcpus)
 
