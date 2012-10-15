@@ -400,6 +400,7 @@ func (vm *vm_info) vm_get_args() []string {
 	if vm.Disk_path != "" {
 		args = append(args, "-drive")
 		args = append(args, "file="+vm.Disk_path+",cache=writeback,media=disk")
+		args = append(args, "-snapshot")
 	}
 
 	if vm.Kernel_path != "" {
