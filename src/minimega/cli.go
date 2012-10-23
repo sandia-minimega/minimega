@@ -361,6 +361,32 @@ after launching will have no effect on launched VMs.`,
 			},
 		},
 
+		"vm_kill": &command{
+			Call: func(c cli_command) cli_response {
+				if len(c.Args) != 1 {
+					return cli_response{
+						Error: errors.New("vm_kill takes one argument"),
+					}
+				}
+				a, err := strconv.Atoi(c.Args[0])
+				if err != nil {
+					return cli_response{
+						Error: err,
+					}
+				}
+				vms.kill(a)
+				return cli_response{}
+			},
+			Helpshort: "kill running virtual machines",
+			Helplong: `
+Usage: vm_kill <vm id>
+Kill a virtual machine by ID. Pass -1 to kill all virtual machines.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 		"vm_start": &command{
 			Call: func(c cli_command) cli_response {
 				return vms.start(c)
