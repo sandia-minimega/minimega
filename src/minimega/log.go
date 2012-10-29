@@ -7,24 +7,8 @@ import (
 	"os"
 )
 
-func log_level(l string) (int, error) {
-	switch l {
-	case "debug":
-		return log.DEBUG, nil
-	case "info":
-		return log.INFO, nil
-	case "warn":
-		return log.WARN, nil
-	case "error":
-		return log.ERROR, nil
-	case "fatal":
-		return log.FATAL, nil
-	}
-	return -1, errors.New("invalid log level")
-}
-
 func log_setup() {
-	level, err := log_level(*f_loglevel)
+	level, err := log.LevelInt(*f_loglevel)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -54,7 +38,7 @@ func cli_log_level(c cli_command) cli_response {
 			Error: errors.New("log_level must be [debug, info, warn, error, fatal]"),
 		}
 	} else {
-		level, err := log_level(c.Args[0])
+		level, err := log.LevelInt(c.Args[0])
 		if err != nil {
 			return cli_response{
 				Error: err,
@@ -88,7 +72,7 @@ func cli_log_stderr(c cli_command) cli_response {
 		_, err := log.GetLevel("stdio")
 		switch c.Args[0] {
 		case "true":
-			level, _ := log_level(*f_loglevel)
+			level, _ := log.LevelInt(*f_loglevel)
 			if err != nil {
 				log.AddLogger("stdio", os.Stderr, level, true)
 			} else {
@@ -136,7 +120,7 @@ func cli_log_file(c cli_command) cli_response {
 					Error: err,
 				}
 			}
-			level, _ := log_level(*f_loglevel)
+			level, _ := log.LevelInt(*f_loglevel)
 			log.AddLogger("file", logfile, level, false)
 		}
 	}

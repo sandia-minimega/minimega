@@ -80,6 +80,23 @@ func GetLevel(name string) (int, error) {
 	return loggers[name].Level, nil
 }
 
+// Return the log level from a string. Useful for parsing log levels from a flag package.
+func LevelInt(l string) (int, error) {
+	switch l {
+	case "debug":
+		return DEBUG, nil
+	case "info":
+		return INFO, nil
+	case "warn":
+		return WARN, nil
+	case "error":
+		return ERROR, nil
+	case "fatal":
+		return FATAL, nil
+	}
+	return -1, errors.New("invalid log level")
+}
+
 func (l *minilogger) prologue(level int) (msg string) {
 	switch level {
 	case DEBUG:
