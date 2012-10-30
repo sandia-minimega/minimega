@@ -22,6 +22,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"bufio"
 )
 
 // Log levels supported:
@@ -78,6 +79,23 @@ func GetLevel(name string) (int, error) {
 		return -1, errors.New("logger does not exist")
 	}
 	return loggers[name].Level, nil
+}
+
+// Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and 
+// returns immediately.
+func LogAll(i io.Reader, level int) {
+	go func() {
+		r := bufio.NewReader(i)
+		for {
+			d, err := r.ReadString('\n')
+			if err != nil {
+				break
+			}
+			for _, l := range loggers {
+				l.logln(level, d)
+			}
+		}
+	}()
 }
 
 // Return the log level from a string. Useful for parsing log levels from a flag package.

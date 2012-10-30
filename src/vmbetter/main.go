@@ -15,7 +15,7 @@ var (
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
-minimega comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
+vmbetter comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
 welcome to redistribute it under certain conditions. See the included LICENSE
 for details.
 `
@@ -46,6 +46,16 @@ func main() {
 	} else {
 		log.Debugln("read config:", m)
 	}
+
+	// find any other dependent configs and get an ordered list of those 
+	// merge packages to add from all dependent configs
+	// invoke debootstrap
+	// copy the default init script over
+	// copy any overlay into place in reverse order of opened dependencies
+	// call post build chroot commands in reverse order as well
+	// build the image file
+	// copy out the kernel 
+	// cleanup?
 }
 
 func log_setup() {
