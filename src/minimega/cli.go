@@ -694,60 +694,73 @@ shows the command history`,
 				return nil
 			},
 		},
-	}
-}
 
-func clear(c cli_command) cli_response {
-	var r cli_response
-	if len(c.Args) != 1 {
-		return cli_response{
-			Error: errors.New("clear takes one argument"),
-		}
-	}
-	cc := c.Args[0]
-	if cc == "clear" {
-		return cli_response{
-			Error: errors.New("it's unclear how to clear clear"),
-		}
-	}
-	if cli_commands[cc] == nil {
-		e := fmt.Sprintf("invalid command: %v", cc)
-		r.Error = errors.New(e)
-	} else {
-		r.Error = cli_commands[cc].Clear()
-	}
-	return r
-}
+		"clear": &command{
+			Call: func (c cli_command) cli_response {
+				var r cli_response
+				if len(c.Args) != 1 {
+					return cli_response{
+						Error: errors.New("clear takes one argument"),
+					}
+				}
+				cc := c.Args[0]
+				if cli_commands[cc] == nil {
+					e := fmt.Sprintf("invalid command: %v", cc)
+					r.Error = errors.New(e)
+				} else {
+					r.Error = cli_commands[cc].Clear()
+				}
+				return r
+			},
+			Helpshort: "restore a variable to its default state",
+			Helplong: `
+Restores a variable to its default state or clears it. For example, 'clear net'
+will clear the list of associated networks.`,
+			Record: true,
+			Clear: func() error {
+				return fmt.Errorf("it's unclear how to clear clear")
+			},
+		},
 
-func help(c cli_command) cli_response {
-	r := cli_response{}
-	if len(c.Args) == 0 { // display help on help, and list the short helps
-		r.Response = "Display help on a command. Here is a list of commands:\n"
-		var sorted_names []string
-		for c, _ := range cli_commands {
-			sorted_names = append(sorted_names, c)
-		}
-		sort.Strings(sorted_names)
-		w := new(tabwriter.Writer)
-		buf := bytes.NewBufferString(r.Response)
-		w.Init(buf, 0, 8, 0, '\t', 0)
-		for _, c := range sorted_names {
-			fmt.Fprintln(w, c, "\t", ":\t", cli_commands[c].Helpshort, "\t")
-		}
-		w.Flush()
-		r.Response = buf.String()
-	} else if len(c.Args) == 1 { // try to display help on args[0]
-		if cli_commands[c.Args[0]] != nil {
-			r.Response = fmt.Sprintln(c.Args[0], ":", cli_commands[c.Args[0]].Helpshort)
-			r.Response += fmt.Sprintln(cli_commands[c.Args[0]].Helplong)
-		} else {
-			e := fmt.Sprintf("no help on command: %v", c.Args[0])
-			r.Error = errors.New(e)
-		}
-	} else {
-		r.Error = errors.New("help takes one argument")
+		"help": &command{
+			Call: func (c cli_command) cli_response {
+				r := cli_response{}
+				if len(c.Args) == 0 { // display help on help, and list the short helps
+					r.Response = "Display help on a command. Here is a list of commands:\n"
+					var sorted_names []string
+					for c, _ := range cli_commands {
+						sorted_names = append(sorted_names, c)
+					}
+					sort.Strings(sorted_names)
+					w := new(tabwriter.Writer)
+					buf := bytes.NewBufferString(r.Response)
+					w.Init(buf, 0, 8, 0, '\t', 0)
+					for _, c := range sorted_names {
+						fmt.Fprintln(w, c, "\t", ":\t", cli_commands[c].Helpshort, "\t")
+					}
+					w.Flush()
+					r.Response = buf.String()
+				} else if len(c.Args) == 1 { // try to display help on args[0]
+					if cli_commands[c.Args[0]] != nil {
+						r.Response = fmt.Sprintln(c.Args[0], ":", cli_commands[c.Args[0]].Helpshort)
+						r.Response += fmt.Sprintln(cli_commands[c.Args[0]].Helplong)
+					} else {
+						e := fmt.Sprintf("no help on command: %v", c.Args[0])
+						r.Error = errors.New(e)
+					}
+				} else {
+					r.Error = errors.New("help takes one argument")
+				}
+				return r
+			},
+			Helpshort: "show this help message",
+			Helplong: ``,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
-	return r
 }
 
 // local command line interface, wrapping readline
@@ -825,17 +838,6 @@ func cli_exec(c cli_command) cli_response {
 		}
 		command_buf = append(command_buf, s)
 		return cli_response{}
-	}
-
-	// special case, help. This can't go in the cli_commands list in order
-	// to avoid an initialization loop with help referencing it's own struct
-	if c.Command == "help" {
-		return help(c)
-	}
-
-	// special case, clear.
-	if c.Command == "clear" {
-		return clear(c)
 	}
 
 	if cli_commands[c.Command] == nil {
