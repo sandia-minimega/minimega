@@ -207,14 +207,6 @@ func (b *bridge) Tap_create(lan string, host bool) (string, error) {
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
-	if host {
-		cmd.Args = append(cmd.Args, "--")
-		cmd.Args = append(cmd.Args, "set")
-		cmd.Args = append(cmd.Args, "Interface")
-		cmd.Args = append(cmd.Args, tap)
-		cmd.Args = append(cmd.Args, "type=internal")
-	}
-
 	log.Info("creating tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
@@ -223,7 +215,7 @@ func (b *bridge) Tap_create(lan string, host bool) (string, error) {
 	}
 	// the tap add was successful, so try to add it to the bridge
 	b.lans[lan].Taps[tap] = true
-	err = b.tap_add(lan, tap)
+	err = b.tap_add(lan, tap, host)
 	if err != nil {
 		return "", err
 	}
@@ -307,7 +299,7 @@ func (b *bridge) Tap_destroy(lan, tap string) error {
 }
 
 // add a tap to the bridge
-func (b *bridge) tap_add(lan, tap string) error {
+func (b *bridge) tap_add(lan, tap string, host bool) error {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 	p := process("ovs")
@@ -325,6 +317,15 @@ func (b *bridge) tap_add(lan, tap string) error {
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
+
+	if host {
+		cmd.Args = append(cmd.Args, "--")
+		cmd.Args = append(cmd.Args, "set")
+		cmd.Args = append(cmd.Args, "Interface")
+		cmd.Args = append(cmd.Args, tap)
+		cmd.Args = append(cmd.Args, "type=internal")
+	}
+
 	log.Info("adding tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {

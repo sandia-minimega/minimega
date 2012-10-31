@@ -760,6 +760,20 @@ will clear the list of associated networks.`,
 				return nil
 			},
 		},
+
+		"host_tap": &command{
+			Call: host_tap_create,
+			Helpshort: "create a host tap for communicating between hosts and VMs",
+			Helplong: `
+Create host tap on a named vlan for communicating between a host and any VMs on
+that vlan. host_tap takes one argument, the named vlan to tap, and returns
+successful if a tap was created. The tap will be named 'host_tap_<vlan>', where
+<vlan> is the named vlan specified.`,
+			Record: true,
+			Clear: func() error {
+				return nil //perhaps calling this should remove all host taps
+			},
+		},
 	}
 }
 
