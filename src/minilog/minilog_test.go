@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"strings"
+	"time"
 )
 
 func TestMultilog(t *testing.T) {
@@ -22,11 +23,11 @@ func TestMultilog(t *testing.T) {
 	s2 := sink2.String()
 
 	if !strings.Contains(s1,test_string) {
-		t.Error("sink1 got:", s1)
+		t.Fatal("sink1 got:", s1)
 	}
 
 	if !strings.Contains(s2,test_string) {
-		t.Error("sink2 got:", s2)
+		t.Fatal("sink2 got:", s2)
 	}
 }
 
@@ -34,8 +35,8 @@ func TestLogLevels(t *testing.T) {
 	sink1 := new(bytes.Buffer)
 	sink2 := new(bytes.Buffer)
 
-	AddLogger("sink1", sink1, DEBUG, false)
-	AddLogger("sink2", sink2, INFO, false)
+	AddLogger("sink1_level", sink1, DEBUG, false)
+	AddLogger("sink2_level", sink2, INFO, false)
 
 	test_string := "test 123"
 
@@ -45,18 +46,18 @@ func TestLogLevels(t *testing.T) {
 	s2 := sink2.String()
 
 	if !strings.Contains(s1,test_string) {
-		t.Error("sink1 got:", s1)
+		t.Fatal("sink1 got:", s1)
 	}
 
 	if len(s2) != 0 {
-		t.Error("sink2 got:", s2)
+		t.Fatal("sink2 got:", s2)
 	}
 }
 
 func TestDelLogger(t *testing.T) {
 	sink := new(bytes.Buffer)
 
-	AddLogger("sink", sink, DEBUG, false)
+	AddLogger("sink_del", sink, DEBUG, false)
 
 	test_string := "test 123"
 	test_string2 := "test 456"
@@ -65,25 +66,63 @@ func TestDelLogger(t *testing.T) {
 
 	s, err := sink.ReadString('\n')
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if !strings.Contains(s,test_string) {
-		t.Error("sink got:", s)
+		t.Fatal("sink got:", s)
 	}
 
-	DelLogger("sink")
+	DelLogger("sink_del")
 
 	Debug(test_string2)
 
 	s,err = sink.ReadString('\n')
 	if err != nil && err != io.EOF {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	if len(s) != 0 {
-		t.Error("sink got:", s)
+		t.Fatal("sink got:", s)
 	}
 }
 
+func TestLogAll(t *testing.T) {
+	sink := new(bytes.Buffer)
+	source := bytes.NewBufferString("line_1\nline_2\nline_3")
 
+	AddLogger("sink_all", sink, DEBUG, false)
+
+	LogAll(source, DEBUG)
+	time.Sleep(1*time.Second) // allow the LogAll goroutine to finish
+
+	// we should see only three lines on the logger output
+	l1, err := sink.ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(l1, "line_1") {
+		t.Fatal("sink got:", l1)
+	}
+
+	l2, err := sink.ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(l2, "line_2") {
+		t.Fatal("sink got:", l2)
+	}
+
+	l3, err := sink.ReadString('\n')
+	if err != nil {
+		t.Fatal(err, l3)
+	}
+	if !strings.Contains(l3, "line_3") {
+		t.Fatal("sink got:", l3)
+	}
+
+	oops, err := sink.ReadString('\n')
+	if err != io.EOF {
+		t.Fatal(err, oops)
+	}
+}
