@@ -33,7 +33,13 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 		return nil, err
 	}
 	if !match {
-		return nil, errors.New("Invalid range specification")
+		if m2, err := regexp.MatchString(r.Prefix, s); m2 && err == nil {
+			// assume they just handed us "kn1" or similar
+			result = append(result, s)
+			return result, nil
+		} else {
+			return nil, errors.New("Invalid range specification")
+		}
 	}
 
 	// Get rid of the kn[] parts

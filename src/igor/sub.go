@@ -1,7 +1,11 @@
 package main
 
 import (
+	"os"
+	"io"
 	"ranges"
+	"net"
+	"fmt"
 )
 
 var cmdSub = &Command{
@@ -61,6 +65,11 @@ func init() {
 
 func runSub(cmd *Command, args []string) {
 	var nodes []string
+	var IPs []net.IP
+	var pxefiles []string
+
+	reservations := analyzeReservations()
+	fmt.Printf("reservations: %#v\n", reservations)
 
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
@@ -70,16 +79,79 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// figure out which nodes to reserve
-	if subW != nil {
-		rnge := ranges.NewRange(PREFIX, START, END)
-		nodes := rnge.SplitRange(subW)
+	if subW != "" {
+		rnge, _ := ranges.NewRange(PREFIX, START, END)
+		nodes, _ = rnge.SplitRange(subW)
+	}
+
+	// Convert list of node names to PXE filenames
+	// 1. lookup nodename -> IP
+	for _, hostname := range nodes {
+		ip, err := net.LookupIP(hostname)
+		if err != nil {
+			fatalf("failure looking up %v: %v", hostname, err)
+		}
+		IPs = append(IPs, ip...)
+	}
+
+fmt.Printf("%v\n", IPs)
+
+	// 2. IP -> hex
+	for _, ip := range IPs {
+		pxefiles = append(pxefiles, toPXE(ip))
+	}
+fmt.Printf("%v\n", pxefiles)
+
+	// Make sure none of those nodes are reserved
+	// Check every reservation...
+	for _, res := range reservations {
+		// For every node in a reservation...
+		for _, node := range res.pxenames {
+			// make sure no node in *our* potential reservation conflicts
+			for _, pxe := range pxefiles {
+				if node == pxe {
+					fatalf("Conflict with reservation %v, specific PXE file %v\n", res.name, pxe)
+				}
+			}
+		}
 	}
 
 	// copy kernel and initrd
+	// 1. Validate and open source files
+	ksource, err := os.Open(subK)
+	if err != nil { fatalf("couldn't open kernel: %v", err) }
+	isource, err := os.Open(subI)
+	if err != nil { fatalf("couldn't open initrd: %v", err) }
+
+	// make kernel copy
+	kdest, err := os.Create(TFTPROOT + "/igor/" + subR + "-kernel")
+	if err != nil { fatalf("%v", err) }
+	io.Copy(kdest, ksource)
+	kdest.Close(); ksource.Close()
+
+	// make initrd copy
+	idest, err := os.Create(TFTPROOT + "/igor/" + subR + "-initrd")
+	if err != nil { fatalf("%v", err) }
+	io.Copy(idest, isource)
+	idest.Close(); isource.Close()
 
 	// create appropriate pxe config file in TFTPROOT+/pxelinux.cfg/igor/
+	masterfile, err := os.Create(TFTPROOT + "/pxelinux.cfg/igor/" + subR)
+	if err != nil { fatalf("failed to create %v: %v", TFTPROOT+"pxelinux.cfg/igor/"+subR, err) }
+	defer masterfile.Close()
+	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
+	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
+	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
+	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd\n", subR))
+	masterfile.Seek(0, 0)
 
 	// create individual PXE boot configs i.e. TFTPROOT+/pxelinux.cfg/AC10001B by copying config created above
+	for _, pxename := range pxefiles {
+		f, err := os.Create(TFTPROOT+"/pxelinux.cfg/"+pxename)
+		if err != nil { fatalf("%v", err) }
+		io.Copy(f, masterfile)
+		f.Close()
+	}
 
 	// reboot all the nodes in the reservation (unless -O)
 }

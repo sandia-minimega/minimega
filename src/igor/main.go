@@ -4,12 +4,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 	"sync"
@@ -19,10 +23,12 @@ import (
 )
 
 // All of these must be replaced by a config file.
-const TFTPROOT = "/tftpboot/"
+const TFTPROOT = "/home/john/tftpboot/"
 const PREFIX = "kn"
 const START = 1
 const END = 520
+
+var Reservations map[string][]string		// maps a reservation name to a slice of node names
 
 // A Command is an implementation of a go command
 // like go build or go fix.
@@ -254,4 +260,83 @@ func fatalf(format string, args ...interface{}) {
 func errorf(format string, args ...interface{}) {
 	log.Printf(format, args...)
 	setExitStatus(1)
+}
+
+type Reservation struct {
+	name	string
+	pxenames	[]string  // eg C000025B
+}
+
+func readResName(filename string) (string, error) {
+	tmp, err := os.Open(filename)
+	if err != nil { fatalf("failed to open %v: %v", filename, err) }
+	defer tmp.Close()
+	filebuf := bufio.NewReader(tmp)
+	line, _ := filebuf.ReadString('\n')
+	line = strings.Replace(line, "\n", "", -1)
+	parts := strings.Split(line, " ")
+	if len(parts) != 2 || parts[0] != "default" {
+		return "", errors.New("bad format")
+	}
+	return parts[1], nil
+}
+
+func addNode(reservations *[]Reservation, root, name string) {
+	var resname string
+	found := false
+
+	// validate the filename, only continue if it's a pxe config file
+	if matched, _ := regexp.Match("[0-9A-F]{8}", []byte(name)); !matched {
+		return
+	}
+
+	resname, err := readResName(root+name)
+	if err != nil {
+		return
+	}
+
+	for _, r := range *reservations {
+		if r.name == resname {
+			found = true
+			r.pxenames = append(r.pxenames, name)
+		}
+	}
+	if !found {
+		r := Reservation{ name: resname, pxenames: []string{ name } }
+		*reservations = append(*reservations, r)
+	}
+}
+
+func analyzeReservations() []Reservation {
+	var ret []Reservation
+	pxeconfig := TFTPROOT + "pxelinux.cfg/"
+
+	f, err := os.Open(pxeconfig)
+	if err != nil {
+		fatalf("failed to open directory %v: %v", pxeconfig, err)
+	}
+	defer f.Close()
+
+	files, err := f.Readdirnames(-1)
+	if err != nil {
+		fatalf("failed to read entries of %v: %v", pxeconfig, err)
+	}
+
+	for _, name := range files {
+		addNode(&ret, pxeconfig, name)
+	}
+
+	return ret
+}
+
+func findReservation(node string) string {
+	//ips, err := net.LookupIP(node)
+
+	return ""
+}
+
+// Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
+func toPXE(ip net.IP) string {
+	s := fmt.Sprintf("%02X%02X%02X%02X", ip[0], ip[1], ip[2], ip[3])
+	return s
 }
