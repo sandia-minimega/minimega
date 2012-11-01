@@ -4,6 +4,7 @@ import (
 	"text/scanner"
 	"os"
 	"fmt"
+	"strings"
 )
 
 func ReadConfig(path string) (config map[string]string, err error) {
@@ -12,6 +13,7 @@ func ReadConfig(path string) (config map[string]string, err error) {
 	if err != nil {
 		return
 	}
+	defer f.Close()
 
 	var s scanner.Scanner
 	s.Init(f)
@@ -34,7 +36,7 @@ func ReadConfig(path string) (config map[string]string, err error) {
 			return
 		}
 		v := s.TokenText()
-		config[k] = v
+		config[k] = strings.Trim(v,"\"")
 		tok = s.Scan()
 	}
 	return
