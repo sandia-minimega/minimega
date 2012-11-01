@@ -409,8 +409,8 @@ func hybiClientHandshake(config *Config, br *bufio.Reader, bw *bufio.Writer) (er
 	if len(config.Protocol) > 0 {
 		bw.WriteString("Sec-WebSocket-Protocol: " + strings.Join(config.Protocol, ", ") + "\r\n")
 	}
-	// TODO(ukai): send extensions.
-	// TODO(ukai): send cookie if any.
+	// xTODO(ukai): send extensions.
+	// xTODO(ukai): send cookie if any.
 
 	bw.WriteString("\r\n")
 	if err = bw.Flush(); err != nil {
@@ -534,7 +534,7 @@ func (c *hybiServerHandshaker) AcceptHandshake(buf *bufio.Writer) (err error) {
 	if len(c.Protocol) > 0 {
 		buf.WriteString("Sec-WebSocket-Protocol: " + c.Protocol[0] + "\r\n")
 	}
-	// TODO(ukai): support extensions
+	// xTODO(ukai): support extensions
 	buf.WriteString("\r\n")
 	return buf.Flush()
 }
