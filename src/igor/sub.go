@@ -153,5 +153,7 @@ fmt.Printf("%v\n", pxefiles)
 		f.Close()
 	}
 
+	// Make the "-expires" file
+
 	// reboot all the nodes in the reservation (unless -O)
 }

@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -17,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 	"text/template"
 	"unicode"
 	"unicode/utf8"
@@ -265,6 +267,7 @@ func errorf(format string, args ...interface{}) {
 type Reservation struct {
 	name	string
 	pxenames	[]string  // eg C000025B
+	timeleft	time.Duration
 }
 
 func readResName(filename string) (string, error) {
@@ -302,7 +305,23 @@ func addNode(reservations *[]Reservation, root, name string) {
 		}
 	}
 	if !found {
-		r := Reservation{ name: resname, pxenames: []string{ name } }
+		expiretime := time.Duration(0) * time.Second
+		expirepath := TFTPROOT + "/igor/" + resname + "-expires"
+		contents, err := ioutil.ReadFile(expirepath)
+		cstring := string(contents)
+		cstring = strings.Replace(cstring, "\n", "", -1)
+		if err == nil {
+			timefmt := "2006-01-02 15:04:05.999999999 -0700 MST"
+			fmt.Println(timefmt)
+			fmt.Println(cstring)
+			expdate, err := time.Parse(timefmt, string(cstring))
+			if err != nil { 
+				log.Printf("couldn't parse expiration time for reservation %v\n", resname);
+			} else {
+				expiretime = expdate.Sub(time.Now())
+			}
+		}
+		r := Reservation{ name: resname, pxenames: []string{ name }, timeleft: expiretime }
 		*reservations = append(*reservations, r)
 	}
 }
