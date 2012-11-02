@@ -18,3 +18,43 @@ func TestSplitRange(t *testing.T) {
 		t.Fatal("SplitRange returned: ", res, ", expected: ", expected)
 	}
 }
+
+func TestUnsplitRange(t *testing.T) {
+	r, _ := NewRange("kn", 1, 520)
+
+	expected := "kn[1-5]"
+	input := []string{ "kn1", "kn2", "kn3", "kn4", "kn5" }
+
+	res, err := r.UnsplitRange(input)
+	fmt.Println(res)
+	if err != nil {
+		t.Fatal("UnsplitRange returned error: ", err)
+	}
+	if expected != res {
+		t.Fatal("UnsplitRange returned: ", res)
+	}
+
+	expected = "kn[1-5,20]"
+	input = []string{ "kn1", "kn2", "kn3", "kn4", "kn5", "kn20" }
+
+	res, err = r.UnsplitRange(input)
+	fmt.Println(res)
+	if err != nil {
+		t.Fatal("UnsplitRange returned error: ", err)
+	}
+	if expected != res {
+		t.Fatal("UnsplitRange returned: ", res)
+	}
+
+	expected = "kn[1-5,20,44-45]"
+	input = []string{ "kn44", "kn45", "kn1", "kn2", "kn3", "kn4", "kn5", "kn20" }
+
+	res, err = r.UnsplitRange(input)
+	fmt.Println(res)
+	if err != nil {
+		t.Fatal("UnsplitRange returned error: ", err)
+	}
+	if expected != res {
+		t.Fatal("UnsplitRange returned: ", res)
+	}
+}

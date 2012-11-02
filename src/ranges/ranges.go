@@ -2,7 +2,6 @@ package ranges
 
 import (
 	"errors"
-//	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -77,6 +76,62 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	for _, n := range tmp {
 		result = append(result, r.Prefix + strconv.Itoa(n))
 	}
+
+	return result, nil
+}
+
+// Turn an array of node names into a single string like kn[1-5,20]
+func (r *Range) UnsplitRange(nodes []string) (string, error) {
+	var nums []int
+	// Remove the prefix from every name and put the
+	// numbers into an array of ints
+	for _, node := range nodes {
+		// make sure it's a valid node
+		match, err := regexp.MatchString(r.Prefix + "[0-9]+", node)
+		if err != nil {
+			return "", err
+		}
+		if !match {
+			return "", errors.New("Invalid node: " + node)
+		}
+		// strip out "kn"
+		tmp := strings.Replace(node, r.Prefix, "", -1)
+		if i, err := strconv.Atoi(tmp); err == nil {
+			nums = append(nums, i)
+		} else {
+			return "", errors.New("couldn't parse node " + node)
+		}
+	}
+
+	if len(nums) == 0 {
+		return "", errors.New("nothing to parse")
+	}
+
+	// Sort the numbers
+	sort.Ints(nums)
+
+	// "count along" to find stretches like 1-5
+	result := "kn[" + strconv.Itoa(nums[0])
+	start := nums[0]
+	prev := nums[0]
+	for i := 1; i < len(nums); i++ {
+		if nums[i] - prev != 1 {
+			if start != prev {
+				result = result + "-" + strconv.Itoa(prev) + "," + strconv.Itoa(nums[i])
+			} else {
+				result = result + "," + strconv.Itoa(nums[i])
+			}
+			start = nums[i]
+		} else if i == len(nums) -1 {
+			if nums[i] - prev == 1 {
+				result = result + "-" + strconv.Itoa(nums[i])
+			} else {
+				result = result + "," + strconv.Itoa(nums[i])
+			}
+		}
+		prev = nums[i]
+	}
+	result = result + "]"
 
 	return result, nil
 }
