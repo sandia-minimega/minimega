@@ -4,21 +4,17 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net"
+	"encoding/json"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 	"sync"
-	"time"
 	"text/template"
 	"unicode"
 	"unicode/utf8"
@@ -265,93 +261,24 @@ func errorf(format string, args ...interface{}) {
 }
 
 type Reservation struct {
-	name	string
-	pxenames	[]string  // eg C000025B
-	timeleft	time.Duration
+	ResName	string
+	Hosts	[]string	// separate, not a range
+	PXENames	[]string  // eg C000025B
+	Expiration	int64	// UNIX time
+	Owner	string
 }
 
-func readResName(filename string) (string, error) {
-	tmp, err := os.Open(filename)
-	if err != nil { fatalf("failed to open %v: %v", filename, err) }
-	defer tmp.Close()
-	filebuf := bufio.NewReader(tmp)
-	line, _ := filebuf.ReadString('\n')
-	line = strings.Replace(line, "\n", "", -1)
-	parts := strings.Split(line, " ")
-	if len(parts) != 2 || parts[0] != "default" {
-		return "", errors.New("bad format")
-	}
-	return parts[1], nil
-}
-
-func addNode(reservations *[]Reservation, root, name string) {
-	var resname string
-	found := false
-
-	// validate the filename, only continue if it's a pxe config file
-	if matched, _ := regexp.Match("[0-9A-F]{8}", []byte(name)); !matched {
-		return
-	}
-
-	resname, err := readResName(root+name)
-	if err != nil {
-		return
-	}
-
-	for _, r := range *reservations {
-		if r.name == resname {
-			found = true
-			r.pxenames = append(r.pxenames, name)
-		}
-	}
-	if !found {
-		expiretime := time.Duration(0) * time.Second
-		expirepath := TFTPROOT + "/igor/" + resname + "-expires"
-		contents, err := ioutil.ReadFile(expirepath)
-		cstring := string(contents)
-		cstring = strings.Replace(cstring, "\n", "", -1)
-		if err == nil {
-			timefmt := "2006-01-02 15:04:05.999999999 -0700 MST"
-			fmt.Println(timefmt)
-			fmt.Println(cstring)
-			expdate, err := time.Parse(timefmt, string(cstring))
-			if err != nil { 
-				log.Printf("couldn't parse expiration time for reservation %v\n", resname);
-			} else {
-				expiretime = expdate.Sub(time.Now())
-			}
-		}
-		r := Reservation{ name: resname, pxenames: []string{ name }, timeleft: expiretime }
-		*reservations = append(*reservations, r)
-	}
-}
-
-func analyzeReservations() []Reservation {
+func getReservations(f io.Reader) []Reservation {
 	var ret []Reservation
-	pxeconfig := TFTPROOT + "pxelinux.cfg/"
 
-	f, err := os.Open(pxeconfig)
-	if err != nil {
-		fatalf("failed to open directory %v: %v", pxeconfig, err)
-	}
-	defer f.Close()
-
-	files, err := f.Readdirnames(-1)
-	if err != nil {
-		fatalf("failed to read entries of %v: %v", pxeconfig, err)
-	}
-
-	for _, name := range files {
-		addNode(&ret, pxeconfig, name)
+	dec := json.NewDecoder(f)
+	err := dec.Decode(&ret)
+	// an empty file is OK, but other errors are not
+	if err != nil && err != io.EOF {
+		fatalf("failure parsing reservation file: %v", err)
 	}
 
 	return ret
-}
-
-func findReservation(node string) string {
-	//ips, err := net.LookupIP(node)
-
-	return ""
 }
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B

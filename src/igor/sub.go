@@ -2,10 +2,14 @@ package main
 
 import (
 	"os"
+	"os/user"
+	"encoding/json"
 	"io"
 	"ranges"
 	"net"
 	"fmt"
+	"time"
+	"syscall"
 )
 
 var cmdSub = &Command{
@@ -68,8 +72,17 @@ func runSub(cmd *Command, args []string) {
 	var IPs []net.IP
 	var pxefiles []string
 
-	reservations := analyzeReservations()
-	fmt.Printf("reservations: %#v\n", reservations)
+	// Open and lock the reservation file
+	path := TFTPROOT + "/igor/reservations.json"
+	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
+	if err != nil {
+		fatalf("failed to open reservations file: %v", err)
+	}
+	defer resdb.Close()
+	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
+
+	reservations := getReservations(resdb)
 
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
@@ -94,27 +107,33 @@ func runSub(cmd *Command, args []string) {
 		IPs = append(IPs, ip...)
 	}
 
-fmt.Printf("%v\n", IPs)
-
 	// 2. IP -> hex
 	for _, ip := range IPs {
 		pxefiles = append(pxefiles, toPXE(ip))
 	}
-fmt.Printf("%v\n", pxefiles)
 
 	// Make sure none of those nodes are reserved
 	// Check every reservation...
 	for _, res := range reservations {
 		// For every node in a reservation...
-		for _, node := range res.pxenames {
+		for _, node := range res.PXENames {
 			// make sure no node in *our* potential reservation conflicts
 			for _, pxe := range pxefiles {
 				if node == pxe {
-					fatalf("Conflict with reservation %v, specific PXE file %v\n", res.name, pxe)
+					fatalf("Conflict with reservation %v, specific PXE file %v\n", res.ResName, pxe)
 				}
 			}
 		}
 	}
+
+	// Ok, build our reservation
+	reservation := Reservation{ ResName: subR, Hosts: nodes, PXENames: pxefiles }
+	user, err := user.Current()
+	reservation.Owner = user.Name
+	reservation.Expiration = (time.Now().Add(time.Duration(subT)*time.Hour)).Unix()
+
+	// Add it to the list of reservations
+	reservations = append(reservations, reservation)
 
 	// copy kernel and initrd
 	// 1. Validate and open source files
@@ -153,10 +172,13 @@ fmt.Printf("%v\n", pxefiles)
 		f.Close()
 	}
 
-	// Make the "-expires" file
-	expiretime := time.Now().Add(time.Duration(subT)*time.Hour)
-	f, err := os.Create(TFTPROOT + "/igor/" + subR + "-expires")
-	if err != nil { fatalf("couldn't set reservation expiration file: %v", err) }
+	// Truncate the existing reservation file
+	resdb.Truncate(0)
+	resdb.Seek(0, 0)
+	// Write out the new reservations
+	enc := json.NewEncoder(resdb)
+	enc.Encode(reservations)
+	resdb.Sync()
 	
-	// reboot all the nodes in the reservation (unless -O)
+	// TODO: reboot all the nodes in the reservation (unless -O)
 }
