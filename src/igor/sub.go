@@ -60,7 +60,7 @@ func init() {
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
 	cmdSub.Flag.BoolVar(&subO, "o", false, "")
-	cmdSub.Flag.IntVar(&subT, "t", 0, "")
+	cmdSub.Flag.IntVar(&subT, "t", 12, "")
 }
 
 func runSub(cmd *Command, args []string) {
@@ -154,6 +154,9 @@ fmt.Printf("%v\n", pxefiles)
 	}
 
 	// Make the "-expires" file
-
+	expiretime := time.Now().Add(time.Duration(subT)*time.Hour)
+	f, err := os.Create(TFTPROOT + "/igor/" + subR + "-expires")
+	if err != nil { fatalf("couldn't set reservation expiration file: %v", err) }
+	
 	// reboot all the nodes in the reservation (unless -O)
 }
