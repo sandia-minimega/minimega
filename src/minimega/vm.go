@@ -165,6 +165,7 @@ func (l *vm_list) kill(id int) {
 		} else {
 			if l.vms[id].State != VM_QUIT {
 				l.vms[id].Kill <- true
+				log.Info("VM %v killed", <-kill_ack)
 			}
 		}
 	}

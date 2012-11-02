@@ -22,6 +22,8 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"bufio"
+	"strings"
 )
 
 // Log levels supported:
@@ -80,6 +82,52 @@ func GetLevel(name string) (int, error) {
 	return loggers[name].Level, nil
 }
 
+// Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and 
+// returns immediately.
+func LogAll(i io.Reader, level int) {
+	go func(i io.Reader, level int) {
+		r := bufio.NewReader(i)
+		for {
+			d, err := r.ReadString('\n')
+			d = strings.TrimSpace(d)
+			if d != "" {
+				switch level {
+				case DEBUG:
+					Debugln(d)
+				case INFO:
+					Infoln(d)
+				case WARN:
+					Warnln(d)
+				case ERROR:
+					Errorln(d)
+				case FATAL:
+					Fatalln(d)
+				}
+			}
+			if err != nil {
+				break
+			}
+		}
+	}(i, level)
+}
+
+// Return the log level from a string. Useful for parsing log levels from a flag package.
+func LevelInt(l string) (int, error) {
+	switch l {
+	case "debug":
+		return DEBUG, nil
+	case "info":
+		return INFO, nil
+	case "warn":
+		return WARN, nil
+	case "error":
+		return ERROR, nil
+	case "fatal":
+		return FATAL, nil
+	}
+	return -1, errors.New("invalid log level")
+}
+
 func (l *minilogger) prologue(level int) (msg string) {
 	switch level {
 	case DEBUG:
@@ -136,7 +184,7 @@ func (l *minilogger) log(level int, format string, arg ...interface{}) {
 }
 
 func (l *minilogger) logln(level int, arg ...interface{}) {
-	msg := l.prologue(level) + fmt.Sprintln(arg...) + l.epilogue()
+	msg := l.prologue(level) + fmt.Sprint(arg...) + l.epilogue()
 	l.Println(msg)
 }
 
