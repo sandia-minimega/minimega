@@ -1,18 +1,20 @@
 package vmconfig
 
 import (
-	"text/scanner"
-	"os"
 	"fmt"
-	"strings"
 	log "minilog"
+	"os"
+	"path/filepath"
+	"strings"
+	"text/scanner"
 )
 
 type Config struct {
-	Path string // path to the head config file (passed to vmbetter)
-	Parents []string // paths to all dependent config files in order
-	Packages []string // list of in order packages to include (although order shouldn't matter)
-	Overlays []string // reverse order list of overlays
+	Path       string   // path to the head config file (passed to vmbetter)
+	Parents    []string // paths to all dependent config files in order
+	Packages   []string // list of in order packages to include (although order shouldn't matter)
+	Overlays   []string // reverse order list of overlays
+	Postbuilds []string // post build commands
 }
 
 func ReadConfig(path string) (c Config, err error) {
@@ -25,7 +27,19 @@ func ReadConfig(path string) (c Config, err error) {
 func read(path string, c *Config) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return err
+		if strings.Contains(err.Error(), "no such file") { // file doesn't exist, let's try some path magic
+			if path == c.Path {
+				return err
+			}
+			newpath := filepath.Dir(c.Path) + "/" + filepath.Base(path)
+			f, err = os.Open(newpath)
+			if err != nil {
+				return err
+			}
+			log.Warn("could not find %v, but found a similar one at %v, using that instead", path, newpath)
+		} else {
+			return err
+		}
 	}
 	defer f.Close()
 
@@ -40,7 +54,7 @@ func read(path string, c *Config) error {
 		}
 		k := s.TokenText()
 		tok = s.Scan()
-		if tok !=  '=' {
+		if tok != '=' {
 			err = fmt.Errorf("%s:%s malformed config: %s, expected '=', got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
 			return err
 		}
@@ -49,7 +63,8 @@ func read(path string, c *Config) error {
 			err = fmt.Errorf("%s:%s malformed config %s, expected string, got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
 			return err
 		}
-		v := strings.Trim(s.TokenText(), "\"")
+
+		v := strings.Trim(s.TokenText(), "\"`")
 		d := strings.Fields(v)
 		switch k {
 		case "parents":
@@ -64,7 +79,13 @@ func read(path string, c *Config) error {
 		case "packages":
 			c.Packages = append(c.Packages, d...)
 		case "overlay":
+			// trim any trailing "/"
+			for i, j := range d {
+				d[i] = strings.TrimRight(j, "/")
+			}
 			c.Overlays = append(c.Overlays, d...)
+		case "postbuild":
+			c.Postbuilds = append(c.Postbuilds, v)
 		default:
 			err = fmt.Errorf("invalid key %s", k, d)
 			return err
@@ -73,4 +94,3 @@ func read(path string, c *Config) error {
 	}
 	return nil
 }
-

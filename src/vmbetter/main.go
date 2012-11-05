@@ -3,16 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"os"
 	"vmconfig"
 )
 
 var (
-	f_loglevel = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_loglevel      = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
+	f_log           = flag.Bool("v", true, "log on stderr")
+	f_logfile       = flag.String("logfile", "", "also log to file")
 	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
+	f_noclean       = flag.Bool("noclean", false, "do not remove build directory")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -48,19 +50,45 @@ func main() {
 		log.Debugln("read config:", config)
 	}
 
+	// create a build path
+	build_path, err := ioutil.TempDir("", "vmbetter_build_")
+	if err != nil {
+		log.Fatalln("cannot create temporary directory:", err)
+	}
+	log.Debugln("using build path:", build_path)
+
 	// invoke debootstrap
 	fmt.Println("invoking deboostrap (this may take a while)...")
-	err = debootstrap(config)
+	err = debootstrap(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	// copy the default init script over
 	// copy any overlay into place in reverse order of opened dependencies
+	err = overlays(build_path, config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// call post build chroot commands in reverse order as well
+	err = post_build_commands(build_path, config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// build the image file
-	// copy out the kernel 
+	err = build_targets(build_path, config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// cleanup?
+	if !*f_noclean {
+		err = os.RemoveAll(build_path)
+		if err != nil {
+			log.Errorln(err)
+		}
+	}
 }
 
 func log_setup() {
