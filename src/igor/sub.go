@@ -73,7 +73,7 @@ func runSub(cmd *Command, args []string) {
 	var pxefiles []string
 
 	// Open and lock the reservation file
-	path := TFTPROOT + "/igor/reservations.json"
+	path := igorConfig.TFTPRoot + "/igor/reservations.json"
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)
@@ -93,7 +93,7 @@ func runSub(cmd *Command, args []string) {
 
 	// figure out which nodes to reserve
 	if subW != "" {
-		rnge, _ := ranges.NewRange(PREFIX, START, END)
+		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ = rnge.SplitRange(subW)
 	}
 
@@ -143,20 +143,20 @@ func runSub(cmd *Command, args []string) {
 	if err != nil { fatalf("couldn't open initrd: %v", err) }
 
 	// make kernel copy
-	kdest, err := os.Create(TFTPROOT + "/igor/" + subR + "-kernel")
+	kdest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-kernel")
 	if err != nil { fatalf("%v", err) }
 	io.Copy(kdest, ksource)
 	kdest.Close(); ksource.Close()
 
 	// make initrd copy
-	idest, err := os.Create(TFTPROOT + "/igor/" + subR + "-initrd")
+	idest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-initrd")
 	if err != nil { fatalf("%v", err) }
 	io.Copy(idest, isource)
 	idest.Close(); isource.Close()
 
-	// create appropriate pxe config file in TFTPROOT+/pxelinux.cfg/igor/
-	masterfile, err := os.Create(TFTPROOT + "/pxelinux.cfg/igor/" + subR)
-	if err != nil { fatalf("failed to create %v: %v", TFTPROOT+"pxelinux.cfg/igor/"+subR, err) }
+	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+	masterfile, err := os.Create(igorConfig.TFTPRoot + "/pxelinux.cfg/igor/" + subR)
+	if err != nil { fatalf("failed to create %v: %v", igorConfig.TFTPRoot+"pxelinux.cfg/igor/"+subR, err) }
 	defer masterfile.Close()
 	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
 	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
@@ -164,9 +164,9 @@ func runSub(cmd *Command, args []string) {
 	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd\n", subR))
 	masterfile.Seek(0, 0)
 
-	// create individual PXE boot configs i.e. TFTPROOT+/pxelinux.cfg/AC10001B by copying config created above
+	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range pxefiles {
-		f, err := os.Create(TFTPROOT+"/pxelinux.cfg/"+pxename)
+		f, err := os.Create(igorConfig.TFTPRoot+"/pxelinux.cfg/"+pxename)
 		if err != nil { fatalf("%v", err) }
 		io.Copy(f, masterfile)
 		f.Close()

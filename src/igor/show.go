@@ -24,7 +24,7 @@ func init() {
 // and which nodes are in which reservation
 // TODO: implement real pinging
 func runShow(cmd *Command, args []string) {
-	path := TFTPROOT + "/igor/reservations.json"
+	path := igorConfig.TFTPRoot + "/igor/reservations.json"
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)
@@ -36,7 +36,7 @@ func runShow(cmd *Command, args []string) {
 	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
 	reservations := getReservations(resdb)
 
-	rnge, _ := ranges.NewRange(PREFIX, START, END)
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
 	fmt.Printf("RESERVATION NAME      OWNER      TIME REMAINING      NODES\n")
 	fmt.Printf("--------------------------------------------------------------------------------\n")
