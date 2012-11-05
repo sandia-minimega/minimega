@@ -6,20 +6,13 @@ import (
 	"os/exec"
 	"strings"
 	"fmt"
-	"io/ioutil"
 )
 
-func debootstrap(c vmconfig.Config) error {
+func debootstrap(build_path string, c vmconfig.Config) error {
 	path, err := exec.LookPath("debootstrap")
 	if err != nil {
 		return fmt.Errorf("cannot find debootstrap: %v", err)
 	}
-
-	build_path, err := ioutil.TempDir("", "vmbetter_build_")
-	if err != nil {
-		return fmt.Errorf("cannot create temporary directory: %v", err)
-	}
-	log.Debugln("using build path:", build_path)
 
 	// build debootstrap parameters
 	var args []string
