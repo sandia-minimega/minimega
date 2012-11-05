@@ -1,19 +1,19 @@
 package vmconfig
 
 import (
-	"text/scanner"
-	"os"
 	"fmt"
-	"strings"
 	log "minilog"
+	"os"
 	"path/filepath"
+	"strings"
+	"text/scanner"
 )
 
 type Config struct {
-	Path string // path to the head config file (passed to vmbetter)
-	Parents []string // paths to all dependent config files in order
-	Packages []string // list of in order packages to include (although order shouldn't matter)
-	Overlays []string // reverse order list of overlays
+	Path       string   // path to the head config file (passed to vmbetter)
+	Parents    []string // paths to all dependent config files in order
+	Packages   []string // list of in order packages to include (although order shouldn't matter)
+	Overlays   []string // reverse order list of overlays
 	Postbuilds []string // post build commands
 }
 
@@ -54,7 +54,7 @@ func read(path string, c *Config) error {
 		}
 		k := s.TokenText()
 		tok = s.Scan()
-		if tok !=  '=' {
+		if tok != '=' {
 			err = fmt.Errorf("%s:%s malformed config: %s, expected '=', got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
 			return err
 		}
@@ -81,7 +81,7 @@ func read(path string, c *Config) error {
 		case "overlay":
 			// trim any trailing "/"
 			for i, j := range d {
-				d[i] =  strings.TrimRight(j, "/")
+				d[i] = strings.TrimRight(j, "/")
 			}
 			c.Overlays = append(c.Overlays, d...)
 		case "postbuild":
@@ -94,4 +94,3 @@ func read(path string, c *Config) error {
 	}
 	return nil
 }
-

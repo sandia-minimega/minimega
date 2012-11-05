@@ -1,11 +1,11 @@
 package vmconfig
 
 import (
-	"testing"
+	"fmt"
 	"io/ioutil"
 	"os"
-	"fmt"
 	"path/filepath"
+	"testing"
 )
 
 func create_config(input string) (string, error) {
@@ -36,10 +36,13 @@ func TestSimilarPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.Remove(parent)
+
 	child, err := create_config("")
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.Remove(child)
 
 	parent_input := `
 packages = "parent_test"
@@ -62,16 +65,15 @@ parents = "` + filepath.Base(parent) + `"`
 	}
 
 	expected := Config{
-		Path: child,
-		Parents: []string{filepath.Base(parent)},
+		Path:     child,
+		Parents:  []string{filepath.Base(parent)},
 		Packages: []string{"parent_test"},
 	}
 
-	if fmt.Sprintf("%v",expected) != fmt.Sprintf("%v", config) {
+	if fmt.Sprintf("%v", expected) != fmt.Sprintf("%v", config) {
 		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
 	}
 }
-
 
 func TestPostBuild(t *testing.T) {
 	input := "postbuild = `\ntest testing\ntest2`"
@@ -94,7 +96,7 @@ test testing
 test2`},
 	}
 
-	if fmt.Sprintf("%v",expected) != fmt.Sprintf("%v", config) {
+	if fmt.Sprintf("%v", expected) != fmt.Sprintf("%v", config) {
 		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
 	}
 }
@@ -124,10 +126,10 @@ overlay = "/home/foo/bar"`
 	if config.Parents != nil {
 		t.Fatal("too many parents")
 	}
-	if fmt.Sprintf("%v",config.Packages) != fmt.Sprintf("%v", []string{"linux-headers","openvswitch-switch"}) {
+	if fmt.Sprintf("%v", config.Packages) != fmt.Sprintf("%v", []string{"linux-headers", "openvswitch-switch"}) {
 		t.Fatal("invalid packages")
 	}
-	if fmt.Sprintf("%v",config.Overlays) != fmt.Sprintf("%v", []string{"/home/foo/bar"}) {
+	if fmt.Sprintf("%v", config.Overlays) != fmt.Sprintf("%v", []string{"/home/foo/bar"}) {
 		t.Fatal("invalid overlay")
 	}
 }
@@ -211,8 +213,8 @@ overlay = "/path4"
 	}
 
 	expected := Config{
-		Path: path1,
-		Parents: []string{path2, path4, path3},
+		Path:     path1,
+		Parents:  []string{path2, path4, path3},
 		Packages: []string{"path3_package1", "path2_package1", "path2_package2", "path4_package1", "path4_package2", "linux-headers", "openvswitch-switch"},
 		Overlays: []string{"/path3", "/path4", "/home/foo/bar"},
 	}

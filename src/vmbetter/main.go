@@ -3,18 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"os"
 	"vmconfig"
-	"io/ioutil"
 )
 
 var (
-	f_loglevel = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_loglevel      = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
+	f_log           = flag.Bool("v", true, "log on stderr")
+	f_logfile       = flag.String("logfile", "", "also log to file")
 	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
-	f_noclean = flag.Bool("noclean", false, "do not remove build directory")
+	f_noclean       = flag.Bool("noclean", false, "do not remove build directory")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -77,7 +77,11 @@ func main() {
 	}
 
 	// build the image file
-	// copy out the kernel 
+	err = build_targets(build_path, config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// cleanup?
 	if !*f_noclean {
 		err = os.RemoveAll(build_path)

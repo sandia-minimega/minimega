@@ -2,8 +2,8 @@ package main
 
 import (
 	log "minilog"
-	"vmconfig"
 	"os/exec"
+	"vmconfig"
 )
 
 func overlays(build_path string, c vmconfig.Config) error {
@@ -11,7 +11,7 @@ func overlays(build_path string, c vmconfig.Config) error {
 	for _, o := range c.Overlays {
 		log.Infoln("copying overlay:", o)
 
-		cmd := exec.Command("cp", "-r", "-v", o + "/.", build_path)
+		cmd := exec.Command("cp", "-r", "-v", o+"/.", build_path)
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			return err

@@ -1,11 +1,11 @@
 package main
 
 import (
-	log "minilog"
-	"vmconfig"
-	"os/exec"
 	"io/ioutil"
+	log "minilog"
 	"os"
+	"os/exec"
+	"vmconfig"
 )
 
 func post_build_commands(build_path string, c vmconfig.Config) error {

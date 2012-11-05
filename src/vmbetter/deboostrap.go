@@ -1,11 +1,11 @@
 package main
 
 import (
+	"fmt"
 	log "minilog"
-	"vmconfig"
 	"os/exec"
 	"strings"
-	"fmt"
+	"vmconfig"
 )
 
 func debootstrap(build_path string, c vmconfig.Config) error {
@@ -17,7 +17,7 @@ func debootstrap(build_path string, c vmconfig.Config) error {
 	// build debootstrap parameters
 	var args []string
 	args = append(args, "--variant=minbase")
-	args = append(args, fmt.Sprintf("--include=%v", strings.Join(c.Packages,",")))
+	args = append(args, fmt.Sprintf("--include=%v", strings.Join(c.Packages, ",")))
 	args = append(args, "testing")
 	args = append(args, build_path)
 	args = append(args, *f_debian_mirror)
