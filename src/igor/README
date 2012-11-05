@@ -1,0 +1,47 @@
+Igor is a tool for managing reservations on a cluster.
+
+Users make reservations with igor, requesting either a number of nodes or a specific set of nodes. They also specify a kernel and initial ramdisk which their nodes should boot. Igor assumes an environment of good faith--users can specify arbitrarily long reservations or delete another person's reservation. Although this behavior may change in the future, it is sufficient for our purposes.
+
+SETUP
+----------------
+
+You will need to have syslinux, specifically pxelinux, installed. Figure out where your TFTP root will be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and set up the default PXE configuration in /tftpboot/pxelinux.cfg/default. This setup is simple but is outside the scope of this document.
+
+Compile igor; depending on your environment, the process may differ. Here's how we do it:
+
+	$ cd ~/mega/
+	$ ./all.bash
+
+This will place the "igor" binary into bin/. Place it somewhere accessible, such as /usr/local/bin.
+
+Run "setup.sh" to make some files and directories needed by igor.
+
+To configure igor, edit /etc/igor.conf, as created by setup.sh. Here's what ours looks like:
+
+	{
+		"tftproot" : "/tftpboot/",
+		"prefix" : "kn",
+		"start" : 1,
+		"end" : 520,
+	}
+
+The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" directory. The other options describe your cluster naming scheme. Our cluster nodes are named kn1 through kn520, so our "prefix" is "kn", "start" is 1, and "end" is 520. Note that 1 and 520 are *not* in quotes.
+
+RUNNING
+-----------------
+
+Generally, to use igor you will check what nodes are reserved, make your own reservation with some un-used nodes, and then delete the reservation when you're done. When creating a reservation, you can specify a duration (default 12 hours); after this expires, your reservation is not automatically deleted, but it should be considered "fair game" for deletion by anyone else.
+
+To see what reservations exist:
+
+	$ igor show
+
+To make a reservation named "testing", using some kernel and initrd, with nodes 1-10:
+
+	$ igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w kn[1-10]
+
+To remove your reservation:
+
+	$ igor del testing
+
+You can type "igor help" to access the built-in help, which gives more details on all the possible command line switches.
