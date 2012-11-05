@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"fmt"
+	"path/filepath"
 )
 
 func create_config(input string) (string, error) {
@@ -28,6 +29,74 @@ func write_config(path, input string) error {
 	f.WriteString(input)
 	f.Close()
 	return nil
+}
+
+func TestSimilarPath(t *testing.T) {
+	parent, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	parent_input := `
+packages = "parent_test"
+`
+	child_input := `
+parents = "` + filepath.Base(parent) + `"`
+
+	err = write_config(parent, parent_input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = write_config(child, child_input)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := ReadConfig(child)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := Config{
+		Path: child,
+		Parents: []string{filepath.Base(parent)},
+		Packages: []string{"parent_test"},
+	}
+
+	if fmt.Sprintf("%v",expected) != fmt.Sprintf("%v", config) {
+		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
+	}
+}
+
+
+func TestPostBuild(t *testing.T) {
+	input := "postbuild = `\ntest testing\ntest2`"
+
+	path, err := create_config(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+
+	config, err := ReadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := Config{
+		Path: path,
+		Postbuilds: []string{`
+test testing
+test2`},
+	}
+
+	if fmt.Sprintf("%v",expected) != fmt.Sprintf("%v", config) {
+		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
+	}
 }
 
 func TestConfigNoParents(t *testing.T) {
