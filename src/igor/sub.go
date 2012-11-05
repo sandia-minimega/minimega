@@ -129,7 +129,7 @@ func runSub(cmd *Command, args []string) {
 	// Ok, build our reservation
 	reservation := Reservation{ ResName: subR, Hosts: nodes, PXENames: pxefiles }
 	user, err := user.Current()
-	reservation.Owner = user.Name
+	reservation.Owner = user.Username
 	reservation.Expiration = (time.Now().Add(time.Duration(subT)*time.Hour)).Unix()
 
 	// Add it to the list of reservations
