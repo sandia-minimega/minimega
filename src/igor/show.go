@@ -42,7 +42,7 @@ func runShow(cmd *Command, args []string) {
 	fmt.Printf("--------------------------------------------------------------------------------\n")
 	for _, r := range reservations {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		fmt.Printf("%-22s%-11s%-20.1f%s\n",  r.ResName, r.Owner, time.Now().Sub(time.Unix(r.Expiration, 0)).Hours(), unsplit)
+		fmt.Printf("%-22s%-11s%-20.1f%s\n",  r.ResName, r.Owner, time.Unix(r.Expiration, 0).Sub(time.Now()).Hours(), unsplit)
 	}
 	//fmt.Println(reservations)
 }
