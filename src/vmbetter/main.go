@@ -37,9 +37,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// find any other dependent configs and get an ordered list of those 
+	handle_config(flag.Arg(0))
+
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
-
 	m, err := vmconfig.ReadConfig(configfile)
 	if err != nil {
 		log.Fatalln(err)
@@ -47,7 +49,6 @@ func main() {
 		log.Debugln("read config:", m)
 	}
 
-	// find any other dependent configs and get an ordered list of those 
 	// merge packages to add from all dependent configs
 	// invoke debootstrap
 	// copy the default init script over

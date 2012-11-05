@@ -4,6 +4,7 @@ import (
 	"testing"
 	"io/ioutil"
 	"os"
+	"fmt"
 )
 
 func create_config(input string) (string, error) {
@@ -19,12 +20,23 @@ func create_config(input string) (string, error) {
 	return n, nil
 }
 
-func TestConfigWorking(t *testing.T) {
+func write_config(path, input string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	f.WriteString(input)
+	f.Close()
+	return nil
+}
+
+func TestConfigNoParents(t *testing.T) {
 	input := `
 // comment
-v = "v data" //more comments
+parents = "" //more comments
 // another comment
-d = "d data"`
+packages = "linux-headers openvswitch-switch
+overlay = "/home/foo/bar"`
 
 	path, err := create_config(input)
 	if err != nil {
@@ -37,12 +49,17 @@ d = "d data"`
 		t.Fatal(err)
 	}
 
-	if len(config) != 2 {
-		t.Fatal("too many elements:", config)
+	if config.Path != path {
+		t.Fatal("path not set")
 	}
-
-	if config["d"] != "d data" || config["v"] != "v data" {
-		t.Fatalf("invalid parsing: %#v", config)
+	if config.Parents != nil {
+		t.Fatal("too many parents")
+	}
+	if fmt.Sprintf("%v",config.Packages) != fmt.Sprintf("%v", []string{"linux-headers","openvswitch-switch"}) {
+		t.Fatal("invalid packages")
+	}
+	if fmt.Sprintf("%v",config.Overlays) != fmt.Sprintf("%v", []string{"/home/foo/bar"}) {
+		t.Fatal("invalid overlay")
 	}
 }
 
@@ -63,5 +80,75 @@ boo = 35`
 	config, err := ReadConfig(path)
 	if err == nil {
 		t.Fatal(config)
+	}
+}
+
+func TestConfigRecursive(t *testing.T) {
+	path1, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path1)
+
+	path2, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path2)
+
+	path3, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path3)
+
+	path4, err := create_config("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path4)
+
+	input1 := `
+// comment
+parents = "` + fmt.Sprintf("%v %v", path2, path4) + `" //more comments
+// another comment
+packages = "linux-headers openvswitch-switch
+overlay = "/home/foo/bar"`
+
+	input2 := `
+parents = "` + path3 + `"
+packages = "path2_package1 path2_package2"
+overlay = ""`
+
+	input3 := `
+packages = "path3_package1"
+overlay = "/path3"`
+
+	input4 := `
+parents = ""
+packages = "path4_package1 path4_package2"
+overlay = "/path4"
+
+`
+
+	write_config(path1, input1)
+	write_config(path2, input2)
+	write_config(path3, input3)
+	write_config(path4, input4)
+
+	config, err := ReadConfig(path1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := Config{
+		Path: path1,
+		Parents: []string{path2, path4, path3},
+		Packages: []string{"path3_package1", "path2_package1", "path2_package2", "path4_package1", "path4_package2", "linux-headers", "openvswitch-switch"},
+		Overlays: []string{"/path3", "/path4", "/home/foo/bar"},
+	}
+
+	if fmt.Sprintf("%v", expected) != fmt.Sprintf("%v", config) {
+		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
 	}
 }
