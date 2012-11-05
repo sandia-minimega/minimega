@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"encoding/json"
@@ -21,10 +22,21 @@ import (
 )
 
 // All of these must be replaced by a config file.
-const TFTPROOT = "/home/john/tftpboot/"
-const PREFIX = "kn"
-const START = 1
-const END = 520
+//const igorConfig.TFTPRoot = "/home/john/tftpboot/"
+//const igorConfig.Prefix = "kn"
+//const igorConfig.Start = 1
+//const igorConfig.End = 520
+
+var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
+var igorConfig Config
+
+// The configuration of the system
+type Config struct {
+	TFTPRoot	string
+	Prefix	string
+	Start		int
+	End		int
+}
 
 var Reservations map[string][]string		// maps a reservation name to a slice of node names
 
@@ -95,6 +107,19 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
+func readConfig(path string) (c Config) {
+        b, err := ioutil.ReadFile(path)
+        if err != nil {
+                fatalf("Couldn't read config file: %v", err)
+        }
+
+        err = json.Unmarshal(b, &c)
+        if err != nil {
+                fatalf("Couldn't parse json: %v", err)
+        }
+        return
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -109,6 +134,8 @@ func main() {
 		help(args[1:])
 		return
 	}
+
+	igorConfig = readConfig(*configpath)
 
 	// Diagnose common mistake: GOPATH==GOROOT.
 	// This setting is equivalent to not setting GOPATH at all,

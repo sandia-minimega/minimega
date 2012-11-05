@@ -21,7 +21,7 @@ func init() {
 
 // Remove the specified reservation.
 func runDel(cmd *Command, args []string) {
-	path := TFTPROOT + "/igor/reservations.json"
+	path := igorConfig.TFTPRoot + "/igor/reservations.json"
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)
@@ -57,6 +57,6 @@ func runDel(cmd *Command, args []string) {
 
 	// Delete all the PXE files in the reservation
 	for _, pxename := range deletedReservation.PXENames {
-		os.Remove(TFTPROOT+"/pxelinux.cfg/" + pxename)
+		os.Remove(igorConfig.TFTPRoot+"/pxelinux.cfg/" + pxename)
 	}
 }
