@@ -84,6 +84,7 @@ func GetLevel(name string) (int, error) {
 
 // Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and 
 // returns immediately.
+// BUG(fritz): logall does not show the correct log location, needs callstack offset + 1
 func LogAll(i io.Reader, level int) {
 	go func(i io.Reader, level int) {
 		r := bufio.NewReader(i)
