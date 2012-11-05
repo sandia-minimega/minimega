@@ -12,6 +12,7 @@ var (
 	f_loglevel = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -38,19 +39,22 @@ func main() {
 	}
 
 	// find any other dependent configs and get an ordered list of those 
-	handle_config(flag.Arg(0))
-
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
-	m, err := vmconfig.ReadConfig(configfile)
+	config, err := vmconfig.ReadConfig(configfile)
 	if err != nil {
 		log.Fatalln(err)
 	} else {
-		log.Debugln("read config:", m)
+		log.Debugln("read config:", config)
 	}
 
-	// merge packages to add from all dependent configs
 	// invoke debootstrap
+	fmt.Println("invoking deboostrap (this may take a while)...")
+	err = debootstrap(config)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	// copy the default init script over
 	// copy any overlay into place in reverse order of opened dependencies
 	// call post build chroot commands in reverse order as well
