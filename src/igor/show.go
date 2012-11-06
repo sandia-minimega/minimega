@@ -71,10 +71,14 @@ func printShelves(reservations []Reservation) {
 			if (j - 1) % igorConfig.Rackwidth == 0 {
 				output += outline("|")
 			}
-			if contains, index := resContains(reservations, fmt.Sprintf("%s%d", igorConfig.Prefix, j)); contains {
-				output += colorize(index, fmt.Sprintf("%3d", j))
+			if j <= igorConfig.End {
+				if contains, index := resContains(reservations, fmt.Sprintf("%s%d", igorConfig.Prefix, j)); contains {
+					output += colorize(index, fmt.Sprintf("%3d", j))
+				} else {
+					output += fmt.Sprintf("%3d", j)
+				}
 			} else {
-				output += fmt.Sprintf("%3d", j)
+				output += "   "
 			}
 			output += outline("|")
 			if (j -1) % igorConfig.Rackwidth == igorConfig.Rackwidth - 1 {

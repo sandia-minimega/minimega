@@ -16,16 +16,42 @@ This will place the "igor" binary into bin/. Place it somewhere accessible, such
 
 Run "setup.sh" to make some files and directories needed by igor.
 
-To configure igor, edit /etc/igor.conf, as created by setup.sh. Here's what ours looks like:
+To configure igor, edit /etc/igor.conf, a JSON config file created by setup.sh. Here's what ours looks like:
 
 	{
 		"tftproot" : "/tftpboot/",
 		"prefix" : "kn",
 		"start" : 1,
 		"end" : 520,
+		"rackwidth" : 8,
+		"rackheight" : 5
 	}
 
-The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" directory. The other options describe your cluster naming scheme. Our cluster nodes are named kn1 through kn520, so our "prefix" is "kn", "start" is 1, and "end" is 520. Note that 1 and 520 are *not* in quotes.
+N.B.: It is extremely important that the last entry ("rackheight" in this case) is not followed by a comma; this is a quirk of json.
+
+The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" directory. The other options describe your cluster naming scheme. Our cluster nodes are named kn1 through kn520, so our "prefix" is "kn", "start" is 1, and "end" is 520. Note that the numbers are *not* in quotes.
+
+"Rackheight" and "rackwidth" define the physical dimensions of your cluster hardware, for use with "igor show". Our cluster is composed of 13 shelves, each containing 5 shelves of 8 PCs each. When "igor show" runs,  part of the information it gives is a diagram of "racks"; one "rack" from our cluster is shown below:
+
+	---------------------------------
+	|281|282|283|284|285|286|287|288|
+	|289|290|291|292|293|294|295|296|
+	|297|298|299|300|301|302|303|304|
+	|305|306|307|308|309|310|311|312|
+	|313|314|315|316|317|318|319|320|
+	---------------------------------
+
+If you are running a cluster of 4x 1U servers, and they are all in a single rack, you would set rackheight = 4, and rackwidth = 1, to see something like this:
+
+	---
+	|1|
+	|2|
+	|3|
+	|4|
+	---
+
+If the physical layout of your cluster is strange, or if you'd just prefer a big grid, you can set rackheight = sqrt(# nodes) and rackwidth = sqrt(# nodes). This will just show one big grid of all your nodes.
+
 
 RUNNING
 -----------------
