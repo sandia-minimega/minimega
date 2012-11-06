@@ -58,7 +58,7 @@ func main() {
 	log.Debugln("using build path:", build_path)
 
 	// invoke debootstrap
-	fmt.Println("invoking deboostrap (this may take a while)...")
+	fmt.Println("invoking debootstrap (this may take a while)...")
 	err = debootstrap(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
