@@ -33,8 +33,8 @@ func debootstrap(build_path string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	log.LogAll(stdout, log.INFO)
-	log.LogAll(stderr, log.ERROR)
+	log.LogAll(stdout, log.INFO, "debootstrap")
+	log.LogAll(stderr, log.ERROR, "debootstrap")
 
 	err = cmd.Run()
 	if err != nil {

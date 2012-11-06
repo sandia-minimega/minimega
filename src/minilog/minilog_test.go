@@ -93,7 +93,7 @@ func TestLogAll(t *testing.T) {
 
 	AddLogger("sink_all", sink, DEBUG, false)
 
-	LogAll(source, DEBUG)
+	LogAll(source, DEBUG, "test")
 	time.Sleep(1*time.Second) // allow the LogAll goroutine to finish
 
 	// we should see only three lines on the logger output

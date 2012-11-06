@@ -84,32 +84,28 @@ func GetLevel(name string) (int, error) {
 
 // Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and 
 // returns immediately.
-// BUG(fritz): logall does not show the correct log location, needs callstack offset + 1
-func LogAll(i io.Reader, level int) {
-	go func(i io.Reader, level int) {
+func LogAll(i io.Reader, level int, name string) {
+	go func(i io.Reader, level int, name string) {
 		r := bufio.NewReader(i)
 		for {
 			d, err := r.ReadString('\n')
 			d = strings.TrimSpace(d)
 			if d != "" {
-				switch level {
-				case DEBUG:
-					Debugln(d)
-				case INFO:
-					Infoln(d)
-				case WARN:
-					Warnln(d)
-				case ERROR:
-					Errorln(d)
-				case FATAL:
-					Fatalln(d)
+				for _, logger := range loggers {
+					if logger.Level <= level {
+						msg := logger.prologue(level, name) + d + logger.epilogue()
+						logger.Println(msg)
+					}
 				}
+			}
+			if level == FATAL {
+				os.Exit(1)
 			}
 			if err != nil {
 				break
 			}
 		}
-	}(i, level)
+	}(i, level, name)
 }
 
 // Return the log level from a string. Useful for parsing log levels from a flag package.
@@ -129,7 +125,7 @@ func LevelInt(l string) (int, error) {
 	return -1, errors.New("invalid log level")
 }
 
-func (l *minilogger) prologue(level int) (msg string) {
+func (l *minilogger) prologue(level int, name string) (msg string) {
 	switch level {
 	case DEBUG:
 		msg += "DEBUG "
@@ -143,16 +139,19 @@ func (l *minilogger) prologue(level int) (msg string) {
 		msg += "FATAL "
 	}
 
-	_, file, line, _ := runtime.Caller(3)
-	short := file
-	for i := len(file) - 1; i > 0; i-- {
-		if file[i] == '/' {
-			short = file[i+1:]
-			break
+	if name == "" {
+		_, file, line, _ := runtime.Caller(3)
+		short := file
+		for i := len(file) - 1; i > 0; i-- {
+			if file[i] == '/' {
+				short = file[i+1:]
+				break
+			}
 		}
+		msg += short + ":" + strconv.Itoa(line) + ": "
+	} else {
+		msg += name + ": "
 	}
-
-	msg += short + ":" + strconv.Itoa(line) + ": "
 
 	if l.Color {
 		msg = color_line + msg
@@ -180,12 +179,12 @@ func (l *minilogger) epilogue() string {
 }
 
 func (l *minilogger) log(level int, format string, arg ...interface{}) {
-	msg := l.prologue(level) + fmt.Sprintf(format, arg...) + l.epilogue()
+	msg := l.prologue(level, "") + fmt.Sprintf(format, arg...) + l.epilogue()
 	l.Print(msg)
 }
 
 func (l *minilogger) logln(level int, arg ...interface{}) {
-	msg := l.prologue(level) + fmt.Sprint(arg...) + l.epilogue()
+	msg := l.prologue(level, "") + fmt.Sprint(arg...) + l.epilogue()
 	l.Println(msg)
 }
 

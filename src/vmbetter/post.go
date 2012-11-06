@@ -25,8 +25,8 @@ func post_build_commands(build_path string, c vmconfig.Config) error {
 		if err != nil {
 			return err
 		}
-		log.LogAll(stdout, log.INFO)
-		log.LogAll(stderr, log.ERROR)
+		log.LogAll(stdout, log.INFO, "postbuild")
+		log.LogAll(stderr, log.ERROR, "postbuild")
 
 		err = cmd.Run()
 		if err != nil {
