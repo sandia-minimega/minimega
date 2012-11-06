@@ -162,10 +162,10 @@ func runSub(cmd *Command, args []string) {
 	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
 	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
 	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd\n", subR))
-	masterfile.Seek(0, 0)
 
 	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range pxefiles {
+		masterfile.Seek(0,0)
 		f, err := os.Create(igorConfig.TFTPRoot+"/pxelinux.cfg/"+pxename)
 		if err != nil { fatalf("%v", err) }
 		io.Copy(f, masterfile)
