@@ -36,6 +36,8 @@ type Config struct {
 	Prefix	string
 	Start		int
 	End		int
+	Rackwidth	int
+	Rackheight	int
 }
 
 var Reservations map[string][]string		// maps a reservation name to a slice of node names
