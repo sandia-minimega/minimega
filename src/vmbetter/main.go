@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	f_loglevel      = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
+	f_loglevel      = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log           = flag.Bool("v", true, "log on stderr")
 	f_logfile       = flag.String("logfile", "", "also log to file")
 	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
@@ -65,18 +65,21 @@ func main() {
 	}
 
 	// copy any overlay into place in reverse order of opened dependencies
+	fmt.Println("copying overlays")
 	err = overlays(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// call post build chroot commands in reverse order as well
+	fmt.Println("executing post-build commands")
 	err = post_build_commands(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// build the image file
+	fmt.Println("building target files")
 	err = build_targets(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
@@ -84,11 +87,13 @@ func main() {
 
 	// cleanup?
 	if !*f_noclean {
+		fmt.Println("cleaning up")
 		err = os.RemoveAll(build_path)
 		if err != nil {
 			log.Errorln(err)
 		}
 	}
+	fmt.Println("done")
 }
 
 func log_setup() {

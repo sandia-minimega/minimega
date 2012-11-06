@@ -45,7 +45,8 @@ func build_targets(build_path string, c vmconfig.Config) error {
 		return err
 	}
 	log.LogAll(stdout, log.INFO)
-	log.LogAll(stderr, log.ERROR)
+	// BUG(fritz): for some reason the above command outputs regular stuff to stderr, so i have a fix here
+	log.LogAll(stderr, log.INFO)
 
 	err = cmd.Run()
 	if err != nil {
