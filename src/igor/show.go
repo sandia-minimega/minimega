@@ -38,6 +38,7 @@ func runShow(cmd *Command, args []string) {
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
+	fmt.Printf("Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Printf("RESERVATION NAME      OWNER      TIME REMAINING      NODES\n")
 	fmt.Printf("--------------------------------------------------------------------------------\n")
 	for _, r := range reservations {
