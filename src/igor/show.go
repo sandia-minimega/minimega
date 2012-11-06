@@ -53,6 +53,7 @@ func runShow(cmd *Command, args []string) {
 func printShelves(reservations []Reservation) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(fmt.Sprintf("%d", igorConfig.End))
+	nodefmt := "%" + fmt.Sprintf("%d", nodewidth)	// for example, %3, for use as %3d or %3s
 
 	// how many nodes per rack?
 	perrack := igorConfig.Rackwidth * igorConfig.Rackheight
@@ -73,12 +74,12 @@ func printShelves(reservations []Reservation) {
 			}
 			if j <= igorConfig.End {
 				if contains, index := resContains(reservations, fmt.Sprintf("%s%d", igorConfig.Prefix, j)); contains {
-					output += colorize(index, fmt.Sprintf("%3d", j))
+					output += colorize(index, fmt.Sprintf(nodefmt+"d", j))
 				} else {
-					output += fmt.Sprintf("%3d", j)
+					output += fmt.Sprintf(nodefmt+"d", j)
 				}
 			} else {
-				output += "   "
+				output += fmt.Sprintf(nodefmt+"s", " ")
 			}
 			output += outline("|")
 			if (j -1) % igorConfig.Rackwidth == igorConfig.Rackwidth - 1 {
