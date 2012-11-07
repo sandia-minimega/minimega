@@ -6,6 +6,10 @@ import (
 	"vmconfig"
 )
 
+// overlays copies any overlay directories indicated in c into the build 
+// directory build_path. Overlays are copied in depth-first order, so that
+// the oldest parent overlay data is copied in first. This allows a child
+// to overwrite any overlay data created by a parent.
 func overlays(build_path string, c vmconfig.Config) error {
 	// copy the overlays in order
 	for _, o := range c.Overlays {

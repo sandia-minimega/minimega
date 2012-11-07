@@ -8,6 +8,11 @@ import (
 	"vmconfig"
 )
 
+// post_build_commands invokes any commands listed in the postbuild variable
+// of a config file. It does so by copying the entire string of the postbuild
+// variable into a bash script under /tmp of the build directory, and then 
+// executing it with bash inside of a chroot. Post build commands are executed
+// in depth-first order.
 func post_build_commands(build_path string, c vmconfig.Config) error {
 	for _, p := range c.Postbuilds {
 		log.Debugln("postbuild:", p)

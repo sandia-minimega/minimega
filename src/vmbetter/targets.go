@@ -11,6 +11,12 @@ import (
 	"vmconfig"
 )
 
+// build_targets generates the initrd and kernel files as the last stage of the
+// build process. It does so by writing a find/cpio/gzip command as a script
+// to a temporary file and executing that in a bash shell. The output filenames
+// are equal to the base name of the input config file. So a config called
+// 'my_vm.conf' will generate 'my_vm.initrd' and 'my_vm.kernel'. The kernel
+// image is the one found in /boot of the build directory.
 func build_targets(build_path string, c vmconfig.Config) error {
 	target_name := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", target_name)
@@ -45,7 +51,7 @@ func build_targets(build_path string, c vmconfig.Config) error {
 		return err
 	}
 	log.LogAll(stdout, log.INFO, "cpio")
-	// BUG(fritz): for some reason the above command outputs regular stuff to stderr, so i have a fix here
+	// BUG(fritz): the cpio command outputs regular stuff to stderr, so i have a hack to push all output to the INFO level, instead of INFO/ERROR
 	log.LogAll(stderr, log.INFO, "cpio")
 
 	err = cmd.Run()

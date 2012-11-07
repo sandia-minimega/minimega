@@ -1,3 +1,6 @@
+// vmbetter is a debootstrap based toolchain for creating virtual machine
+// images for booting host and guest nodes. It generates a debian based initrd 
+// and kernel image from a configuration file.
 package main
 
 import (
@@ -23,6 +26,7 @@ welcome to redistribute it under certain conditions. See the included LICENSE
 for details.
 `
 
+// usage prints the flag usage parameters.
 func usage() {
 	fmt.Println(banner)
 	fmt.Println("usage: vmbetter [option]... [config]")
@@ -96,6 +100,7 @@ func main() {
 	fmt.Println("done")
 }
 
+// log_setup creates loggers on stderr or to file, based on input flags.
 func log_setup() {
 	level, err := log.LevelInt(*f_loglevel)
 	if err != nil {
