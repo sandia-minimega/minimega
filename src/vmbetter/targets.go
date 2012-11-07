@@ -11,13 +11,13 @@ import (
 	"vmconfig"
 )
 
-// build_targets generates the initrd and kernel files as the last stage of the
+// BuildTargets generates the initrd and kernel files as the last stage of the
 // build process. It does so by writing a find/cpio/gzip command as a script
 // to a temporary file and executing that in a bash shell. The output filenames
 // are equal to the base name of the input config file. So a config called
 // 'my_vm.conf' will generate 'my_vm.initrd' and 'my_vm.kernel'. The kernel
 // image is the one found in /boot of the build directory.
-func build_targets(build_path string, c vmconfig.Config) error {
+func BuildTargets(build_path string, c vmconfig.Config) error {
 	target_name := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", target_name)
 

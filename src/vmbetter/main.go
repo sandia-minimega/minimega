@@ -37,7 +37,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	log_setup()
+	LogSetup()
 
 	if flag.NArg() != 1 {
 		usage()
@@ -63,28 +63,28 @@ func main() {
 
 	// invoke debootstrap
 	fmt.Println("invoking debootstrap (this may take a while)...")
-	err = debootstrap(build_path, config)
+	err = Debootstrap(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// copy any overlay into place in reverse order of opened dependencies
 	fmt.Println("copying overlays")
-	err = overlays(build_path, config)
+	err = Overlays(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// call post build chroot commands in reverse order as well
 	fmt.Println("executing post-build commands")
-	err = post_build_commands(build_path, config)
+	err = PostBuildCommands(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	// build the image file
 	fmt.Println("building target files")
-	err = build_targets(build_path, config)
+	err = BuildTargets(build_path, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -100,8 +100,8 @@ func main() {
 	fmt.Println("done")
 }
 
-// log_setup creates loggers on stderr or to file, based on input flags.
-func log_setup() {
+// LogSetup creates loggers on stderr or to file, based on input flags.
+func LogSetup() {
 	level, err := log.LevelInt(*f_loglevel)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
