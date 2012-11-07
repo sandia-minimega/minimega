@@ -1,3 +1,8 @@
+// package vmconfig reads in a config file for the vmbetter tool. 
+// vmconfig config files use valid Go syntax and are parsed by a go lexical
+// scanner. 
+//
+// See example.conf in the vmconfig source tree for an example.
 package vmconfig
 
 import (
@@ -9,6 +14,9 @@ import (
 	"text/scanner"
 )
 
+// Config contains a complete vmconfig configuration and is returned by
+// ReadConfig. Config also contains the vmconfig parameters, in depth-first
+// order of any parents inherited by the top level config. 
 type Config struct {
 	Path       string   // path to the head config file (passed to vmbetter)
 	Parents    []string // paths to all dependent config files in order
@@ -17,6 +25,8 @@ type Config struct {
 	Postbuilds []string // post build commands
 }
 
+// Read config returns a Config object with the config file parameters and 
+// any parents. Config is invalid on any non-nil error.
 func ReadConfig(path string) (c Config, err error) {
 	c.Path = path
 	err = read(path, &c)
