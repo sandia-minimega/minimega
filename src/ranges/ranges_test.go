@@ -26,7 +26,6 @@ func TestUnsplitRange(t *testing.T) {
 	input := []string{ "kn1", "kn2", "kn3", "kn4", "kn5" }
 
 	res, err := r.UnsplitRange(input)
-	fmt.Println(res)
 	if err != nil {
 		t.Fatal("UnsplitRange returned error: ", err)
 	}
@@ -38,7 +37,6 @@ func TestUnsplitRange(t *testing.T) {
 	input = []string{ "kn1", "kn2", "kn3", "kn4", "kn5", "kn20" }
 
 	res, err = r.UnsplitRange(input)
-	fmt.Println(res)
 	if err != nil {
 		t.Fatal("UnsplitRange returned error: ", err)
 	}
@@ -50,7 +48,6 @@ func TestUnsplitRange(t *testing.T) {
 	input = []string{ "kn44", "kn45", "kn1", "kn2", "kn3", "kn4", "kn5", "kn20" }
 
 	res, err = r.UnsplitRange(input)
-	fmt.Println(res)
 	if err != nil {
 		t.Fatal("UnsplitRange returned error: ", err)
 	}
