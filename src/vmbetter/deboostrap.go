@@ -8,7 +8,9 @@ import (
 	"vmconfig"
 )
 
-func debootstrap(build_path string, c vmconfig.Config) error {
+// Debootstrap will invoke the debootstrap tool with a target build directory
+// in build_path, using configuration from c.
+func Debootstrap(build_path string, c vmconfig.Config) error {
 	path, err := exec.LookPath("debootstrap")
 	if err != nil {
 		return fmt.Errorf("cannot find debootstrap: %v", err)
