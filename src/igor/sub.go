@@ -1,21 +1,21 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/user"
-	"encoding/json"
-	"io"
 	"ranges"
-	"net"
-	"fmt"
-	"time"
 	"syscall"
+	"time"
 )
 
 var cmdSub = &Command{
 	UsageLine: "sub -r <reservation name> -k <kernel path> -i <initrd path> {-n <integer> | -w <node list>} [OPTIONS]",
-	Short:	"create a reservation",
-	Long:`
+	Short:     "create a reservation",
+	Long: `
 Create a new reservation.
 
 REQUIRED FLAGS:
@@ -47,11 +47,11 @@ The -t flag is used to specify the reservation time in integer hours. (default =
 var subR string // -r flag
 var subK string // -k flag
 var subI string // -i
-var subN int // -n
+var subN int    // -n
 var subW string // -w
 var subC string // -c
-var subO bool // -o
-var subT int // -t
+var subO bool   // -o
+var subT int    // -t
 
 func init() {
 	// break init cycle
@@ -80,14 +80,14 @@ func runSub(cmd *Command, args []string) {
 	}
 	defer resdb.Close()
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 
 	reservations := getReservations(resdb)
 
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
 		errorf("Missing required argument!")
-		help([]string{ "sub" })
+		help([]string{"sub"})
 		exit()
 	}
 
@@ -127,10 +127,10 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Ok, build our reservation
-	reservation := Reservation{ ResName: subR, Hosts: nodes, PXENames: pxefiles }
+	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles}
 	user, err := user.Current()
 	reservation.Owner = user.Username
-	reservation.Expiration = (time.Now().Add(time.Duration(subT)*time.Hour)).Unix()
+	reservation.Expiration = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
 
 	// Add it to the list of reservations
 	reservations = append(reservations, reservation)
@@ -138,25 +138,37 @@ func runSub(cmd *Command, args []string) {
 	// copy kernel and initrd
 	// 1. Validate and open source files
 	ksource, err := os.Open(subK)
-	if err != nil { fatalf("couldn't open kernel: %v", err) }
+	if err != nil {
+		fatalf("couldn't open kernel: %v", err)
+	}
 	isource, err := os.Open(subI)
-	if err != nil { fatalf("couldn't open initrd: %v", err) }
+	if err != nil {
+		fatalf("couldn't open initrd: %v", err)
+	}
 
 	// make kernel copy
 	kdest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-kernel")
-	if err != nil { fatalf("%v", err) }
+	if err != nil {
+		fatalf("%v", err)
+	}
 	io.Copy(kdest, ksource)
-	kdest.Close(); ksource.Close()
+	kdest.Close()
+	ksource.Close()
 
 	// make initrd copy
 	idest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-initrd")
-	if err != nil { fatalf("%v", err) }
+	if err != nil {
+		fatalf("%v", err)
+	}
 	io.Copy(idest, isource)
-	idest.Close(); isource.Close()
+	idest.Close()
+	isource.Close()
 
 	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 	masterfile, err := os.Create(igorConfig.TFTPRoot + "/pxelinux.cfg/igor/" + subR)
-	if err != nil { fatalf("failed to create %v: %v", igorConfig.TFTPRoot+"pxelinux.cfg/igor/"+subR, err) }
+	if err != nil {
+		fatalf("failed to create %v: %v", igorConfig.TFTPRoot+"pxelinux.cfg/igor/"+subR, err)
+	}
 	defer masterfile.Close()
 	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
 	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
@@ -165,9 +177,11 @@ func runSub(cmd *Command, args []string) {
 
 	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range pxefiles {
-		masterfile.Seek(0,0)
-		f, err := os.Create(igorConfig.TFTPRoot+"/pxelinux.cfg/"+pxename)
-		if err != nil { fatalf("%v", err) }
+		masterfile.Seek(0, 0)
+		f, err := os.Create(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+		if err != nil {
+			fatalf("%v", err)
+		}
 		io.Copy(f, masterfile)
 		f.Close()
 	}
@@ -179,6 +193,6 @@ func runSub(cmd *Command, args []string) {
 	enc := json.NewEncoder(resdb)
 	enc.Encode(reservations)
 	resdb.Sync()
-	
+
 	// TODO: reboot all the nodes in the reservation (unless -O)
 }

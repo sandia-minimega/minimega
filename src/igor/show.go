@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"time"
 	"ranges"
 	"text/tabwriter"
+	"time"
 )
 
 // Some color constants for output
@@ -28,14 +28,14 @@ const (
 	FgCyan    = "\x1b[36m"
 	FgWhite   = "\x1b[37m"
 
-	BgBlack   = "\x1b[40m"
-	BgRed     = "\x1b[41m"
-	BgGreen   = "\x1b[42m"
-	BgYellow  = "\x1b[43m"
-	BgBlue    = "\x1b[44m"
-	BgMagenta = "\x1b[45m"
-	BgCyan    = "\x1b[46m"
-	BgWhite   = "\x1b[47m"
+	BgBlack         = "\x1b[40m"
+	BgRed           = "\x1b[41m"
+	BgGreen         = "\x1b[42m"
+	BgYellow        = "\x1b[43m"
+	BgBlue          = "\x1b[44m"
+	BgMagenta       = "\x1b[45m"
+	BgCyan          = "\x1b[46m"
+	BgWhite         = "\x1b[47m"
 	BgBrightBlack   = "\x1b[100m"
 	BgBrightRed     = "\x1b[101m"
 	BgBrightGreen   = "\x1b[102m"
@@ -48,8 +48,8 @@ const (
 
 var cmdShow = &Command{
 	UsageLine: "show",
-	Short:	"show reservations",
-	Long:`
+	Short:     "show reservations",
+	Long: `
 List all extant reservations. Checks if a host is up by issuing a "ping"
 	`,
 }
@@ -86,16 +86,16 @@ func runShow(cmd *Command, args []string) {
 	reservations := getReservations(resdb)
 
 	// Find out what nodes are down
-	nodesAlive := make(map[int]bool)	// if node is alive, set bool to true
+	nodesAlive := make(map[int]bool) // if node is alive, set bool to true
 	done := make(chan bool)
 	fifo := make(chan int, 200)
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		fifo<- 1
+		fifo <- 1
 		go func(i int) {
 			hostname := fmt.Sprintf("%s%d", igorConfig.Prefix, i)
 			nodesAlive[i] = isAlive(hostname)
 			<-fifo
-			done<- true
+			done <- true
 		}(i)
 	}
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
@@ -108,7 +108,6 @@ func runShow(cmd *Command, args []string) {
 			downNodes = append(downNodes, hostname)
 		}
 	}
-			
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
@@ -117,7 +116,7 @@ func runShow(cmd *Command, args []string) {
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
 
-//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "TIME LEFT", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
 	w.Flush()
@@ -128,7 +127,7 @@ func runShow(cmd *Command, args []string) {
 	for idx, r := range reservations {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
 		timeleft := fmt.Sprintf("%.1f", time.Unix(r.Expiration, 0).Sub(time.Now()).Hours())
-//		fmt.Fprintln(w, colorize(idx, r.ResName), "\t", r.Owner, "\t", timeleft, "\t", unsplit)
+		//		fmt.Fprintln(w, colorize(idx, r.ResName), "\t", r.Owner, "\t", timeleft, "\t", unsplit)
 		fmt.Print(colorize(idx, r.ResName))
 		fmt.Fprintln(w, "\t", r.Owner, "\t", timeleft, "\t", unsplit)
 		w.Flush()
@@ -139,14 +138,14 @@ func runShow(cmd *Command, args []string) {
 func printShelves(reservations []Reservation, alive map[int]bool) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(fmt.Sprintf("%d", igorConfig.End))
-	nodefmt := "%" + fmt.Sprintf("%d", nodewidth)	// for example, %3, for use as %3d or %3s
+	nodefmt := "%" + fmt.Sprintf("%d", nodewidth) // for example, %3, for use as %3d or %3s
 
 	// how many nodes per rack?
 	perrack := igorConfig.Rackwidth * igorConfig.Rackheight
 
 	// How wide is the full rack display?
 	// width of nodes * number of nodes across a rack, plus the number of | characters we need
-	totalwidth := nodewidth * igorConfig.Rackwidth + igorConfig.Rackwidth + 1
+	totalwidth := nodewidth*igorConfig.Rackwidth + igorConfig.Rackwidth + 1
 
 	output := ""
 	for i := igorConfig.Start; i <= igorConfig.End; i += perrack {
@@ -154,8 +153,8 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 			output += outline("-")
 		}
 		output += "\n"
-		for j := i; j < i + perrack; j++ {
-			if (j - 1) % igorConfig.Rackwidth == 0 {
+		for j := i; j < i+perrack; j++ {
+			if (j-1)%igorConfig.Rackwidth == 0 {
 				output += outline("|")
 			}
 			if j <= igorConfig.End {
@@ -176,7 +175,7 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 				output += fmt.Sprintf(nodefmt+"s", " ")
 			}
 			output += outline("|")
-			if (j -1) % igorConfig.Rackwidth == igorConfig.Rackwidth - 1 {
+			if (j-1)%igorConfig.Rackwidth == igorConfig.Rackwidth-1 {
 				output += "\n"
 			}
 		}
@@ -189,7 +188,7 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 }
 
 func outline(str string) string {
-    return Reverse + str + Reset
+	return Reverse + str + Reset
 }
 
 func resContains(reservations []Reservation, node string) (bool, int) {
@@ -204,7 +203,7 @@ func resContains(reservations []Reservation, node string) (bool, int) {
 }
 
 func colorize(index int, str string) string {
-	return colors[index % len(colors)] + str + Reset
+	return colors[index%len(colors)] + str + Reset
 }
 
 var colors = []string{

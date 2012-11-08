@@ -8,8 +8,8 @@ import (
 
 var cmdDel = &Command{
 	UsageLine: "del <reservation name>",
-	Short:	"delete reservation",
-	Long:`
+	Short:     "delete reservation",
+	Long: `
 Delete an existing reservation.
 	`,
 }
@@ -28,7 +28,7 @@ func runDel(cmd *Command, args []string) {
 	}
 	defer resdb.Close()
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	reservations := getReservations(resdb)
 
 	var newres []Reservation
@@ -57,6 +57,6 @@ func runDel(cmd *Command, args []string) {
 
 	// Delete all the PXE files in the reservation
 	for _, pxename := range deletedReservation.PXENames {
-		os.Remove(igorConfig.TFTPRoot+"/pxelinux.cfg/" + pxename)
+		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 	}
 }

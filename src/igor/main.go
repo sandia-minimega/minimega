@@ -5,13 +5,13 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
 	"net"
-	"encoding/json"
 	"os"
 	"runtime"
 	"strings"
@@ -32,15 +32,15 @@ var igorConfig Config
 
 // The configuration of the system
 type Config struct {
-	TFTPRoot	string
-	Prefix	string
-	Start		int
-	End		int
-	Rackwidth	int
-	Rackheight	int
+	TFTPRoot   string
+	Prefix     string
+	Start      int
+	End        int
+	Rackwidth  int
+	Rackheight int
 }
 
-var Reservations map[string][]string		// maps a reservation name to a slice of node names
+var Reservations map[string][]string // maps a reservation name to a slice of node names
 
 // A Command is an implementation of a go command
 // like go build or go fix.
@@ -109,16 +109,16 @@ func setExitStatus(n int) {
 }
 
 func readConfig(path string) (c Config) {
-        b, err := ioutil.ReadFile(path)
-        if err != nil {
-                fatalf("Couldn't read config file: %v", err)
-        }
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		fatalf("Couldn't read config file: %v", err)
+	}
 
-        err = json.Unmarshal(b, &c)
-        if err != nil {
-                fatalf("Couldn't parse json: %v", err)
-        }
-        return
+	err = json.Unmarshal(b, &c)
+	if err != nil {
+		fatalf("Couldn't parse json: %v", err)
+	}
+	return
 }
 
 func main() {
@@ -291,11 +291,11 @@ func errorf(format string, args ...interface{}) {
 }
 
 type Reservation struct {
-	ResName	string
-	Hosts	[]string	// separate, not a range
-	PXENames	[]string  // eg C000025B
-	Expiration	int64	// UNIX time
-	Owner	string
+	ResName    string
+	Hosts      []string // separate, not a range
+	PXENames   []string // eg C000025B
+	Expiration int64    // UNIX time
+	Owner      string
 }
 
 func getReservations(f io.Reader) []Reservation {
