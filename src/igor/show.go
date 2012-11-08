@@ -3,8 +3,47 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"time"
 	"ranges"
+	"text/tabwriter"
+)
+
+// Some color constants for output
+const (
+	Reset      = "\x1b[0m"
+	Bright     = "\x1b[1m"
+	Dim        = "\x1b[2m"
+	Underscore = "\x1b[4m"
+	Blink      = "\x1b[5m"
+	Reverse    = "\x1b[7m"
+	Hidden     = "\x1b[8m"
+
+	FgBlack   = "\x1b[30m"
+	FgRed     = "\x1b[31m"
+	FgGreen   = "\x1b[32m"
+	FgYellow  = "\x1b[33m"
+	FgBlue    = "\x1b[34m"
+	FgMagenta = "\x1b[35m"
+	FgCyan    = "\x1b[36m"
+	FgWhite   = "\x1b[37m"
+
+	BgBlack   = "\x1b[40m"
+	BgRed     = "\x1b[41m"
+	BgGreen   = "\x1b[42m"
+	BgYellow  = "\x1b[43m"
+	BgBlue    = "\x1b[44m"
+	BgMagenta = "\x1b[45m"
+	BgCyan    = "\x1b[46m"
+	BgWhite   = "\x1b[47m"
+	BgBrightBlack   = "\x1b[100m"
+	BgBrightRed     = "\x1b[101m"
+	BgBrightGreen   = "\x1b[102m"
+	BgBrightYellow  = "\x1b[103m"
+	BgBrightBlue    = "\x1b[104m"
+	BgBrightMagenta = "\x1b[105m"
+	BgBrightCyan    = "\x1b[106m"
+	BgBrightWhite   = "\x1b[107m"
 )
 
 var cmdShow = &Command{
@@ -18,6 +57,16 @@ List all extant reservations. Checks if a host is up by issuing a "ping"
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
+}
+
+// Ping a host, return true if it is alive
+func isAlive(host string) bool {
+	cmd := exec.Command("ping", "-c1", "-W1", host)
+	err := cmd.Run()
+	if err != nil {
+		return false
+	}
+	return true
 }
 
 // Ping every node (concurrently), then show which nodes are up
@@ -36,21 +85,58 @@ func runShow(cmd *Command, args []string) {
 	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
 	reservations := getReservations(resdb)
 
+	// Find out what nodes are down
+	nodesAlive := make(map[int]bool)	// if node is alive, set bool to true
+	done := make(chan bool)
+	fifo := make(chan int, 200)
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		fifo<- 1
+		go func(i int) {
+			hostname := fmt.Sprintf("%s%d", igorConfig.Prefix, i)
+			nodesAlive[i] = isAlive(hostname)
+			<-fifo
+			done<- true
+		}(i)
+	}
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		<-done
+	}
+	var downNodes []string
+	for number, isup := range nodesAlive {
+		if !isup {
+			hostname := fmt.Sprintf("%s%d", igorConfig.Prefix, number)
+			downNodes = append(downNodes, hostname)
+		}
+	}
+			
+
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
-	printShelves(reservations)
+	printShelves(reservations, nodesAlive)
 
-	fmt.Printf("Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Printf("RESERVATION NAME      OWNER      TIME REMAINING      NODES\n")
-	fmt.Printf("--------------------------------------------------------------------------------\n")
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
+
+//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "TIME LEFT", "\t", "NODES")
+	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
+	w.Flush()
+	downrange, _ := rnge.UnsplitRange(downNodes)
+	fmt.Print(BgRed + "DOWN" + Reset)
+	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", downrange)
+	w.Flush()
 	for idx, r := range reservations {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		fmt.Printf("%-22s%-11s%-20.1f%s\n",  colorize(idx, r.ResName), r.Owner, time.Unix(r.Expiration, 0).Sub(time.Now()).Hours(), unsplit)
+		timeleft := fmt.Sprintf("%.1f", time.Unix(r.Expiration, 0).Sub(time.Now()).Hours())
+//		fmt.Fprintln(w, colorize(idx, r.ResName), "\t", r.Owner, "\t", timeleft, "\t", unsplit)
+		fmt.Print(colorize(idx, r.ResName))
+		fmt.Fprintln(w, "\t", r.Owner, "\t", timeleft, "\t", unsplit)
+		w.Flush()
 	}
-	//fmt.Println(reservations)
+	w.Flush()
 }
 
-func printShelves(reservations []Reservation) {
+func printShelves(reservations []Reservation, alive map[int]bool) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(fmt.Sprintf("%d", igorConfig.End))
 	nodefmt := "%" + fmt.Sprintf("%d", nodewidth)	// for example, %3, for use as %3d or %3s
@@ -74,9 +160,17 @@ func printShelves(reservations []Reservation) {
 			}
 			if j <= igorConfig.End {
 				if contains, index := resContains(reservations, fmt.Sprintf("%s%d", igorConfig.Prefix, j)); contains {
-					output += colorize(index, fmt.Sprintf(nodefmt+"d", j))
+					if alive[j] {
+						output += colorize(index, fmt.Sprintf(nodefmt+"d", j))
+					} else {
+						output += BgRed + fmt.Sprintf(nodefmt+"d", j) + Reset
+					}
 				} else {
-					output += fmt.Sprintf(nodefmt+"d", j)
+					if alive[j] {
+						output += fmt.Sprintf(nodefmt+"d", j)
+					} else {
+						output += BgRed + fmt.Sprintf(nodefmt+"d", j) + Reset
+					}
 				}
 			} else {
 				output += fmt.Sprintf(nodefmt+"s", " ")
@@ -95,7 +189,7 @@ func printShelves(reservations []Reservation) {
 }
 
 func outline(str string) string {
-    return "\033[7m" + str + "\033[0m"
+    return Reverse + str + Reset
 }
 
 func resContains(reservations []Reservation, node string) (bool, int) {
@@ -110,23 +204,19 @@ func resContains(reservations []Reservation, node string) (bool, int) {
 }
 
 func colorize(index int, str string) string {
-	return colors[index % len(colors)] + str + "\033[0m"
+	return colors[index % len(colors)] + str + Reset
 }
 
 var colors = []string{
-//	"\033[40m",	// black
-//	"\033[41m",	// red is reserved
-	"\033[42m",
-	"\033[43m",
-	"\033[44m",
-	"\033[45m",
-	"\033[46m",
-//	"\033[47m",	// light gray is too light on white terminals
-	"\033[100m",	// dark gray
-//	"\033[101m",	// light red is reserved
-	"\033[102m",
-	"\033[103m",
-	"\033[104m",
-	"\033[105m",
-	"\033[106m",
+	BgGreen,
+	BgYellow,
+	BgBlue,
+	BgMagenta,
+	BgCyan,
+	BgBrightBlack,
+	BgBrightGreen,
+	BgBrightYellow,
+	BgBrightBlue,
+	BgBrightMagenta,
+	BgBrightCyan,
 }
