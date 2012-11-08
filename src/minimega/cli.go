@@ -21,7 +21,6 @@ package main
 
 // TODO: vm_info command to list current info
 // TODO: bridge_info or something like it 
-// TODO: add a way to unset variables such as vm_net, vm_disk, vm_initrd...
 
 import (
 	"bufio"
