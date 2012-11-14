@@ -6,7 +6,7 @@ source env.bash
 echo TESTING
 for i in `ls src`
 do
-	go test $i || exit 1
+	go test $i
 done
 echo
 
@@ -15,7 +15,7 @@ echo BUILD PACKAGES
 for i in `ls src`
 do
 	echo $i
-	go install $i || exit 1
+	go install $i
 done
 echo
 

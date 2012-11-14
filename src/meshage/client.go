@@ -1,7 +1,7 @@
 package meshage
 
 import (
-	"gob"
+	"encoding/gob"
 	"net"
 )
 
