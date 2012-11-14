@@ -20,6 +20,7 @@ const (
         MESSAGE
         ACK
         NACK
+	HANDSHAKE
 )
 
 // errors
@@ -86,9 +87,11 @@ On a network that supports it, UDP is the preferred way to broadcast eligibility
 
 Direct connections follow a simple handshake that both establishes the legitimacy of the connection as well as communicates the network details of the known mesh to both nodes. 
 
-1) Node A connects to a listening node B
-2) If Node B does not wish to keep the connection, is simply disconnects. If Node B does wish to keep the connection, it responds with it's entire known network, not including the new connection from Node A to B.
-3) Node A merges the network topology from Node B with its own, adds the new connection from Node A to B, and then broadcasts the new network to all connected nodes on the mesh with a MESH_UNION command. 
+1) Node A connects to a listening Node B
+2) Node B responds by sending its entire known network topology in a HANDSHAKE message.
+3) Node A checks the source, and sends a NACK if a connection already exists to this node, or if it does not wish to keep the connection. Otherwise sends an ACK.
+4) It Node B receives a NACK, it simply hangs up. If it receives an ACK, it uses the source field to determine the name and inserts it into the list of connected clients, but not the topology. 
+5) Node A adds the connectiont to its client list, merges the network topology from Node B with its own, adds the new connection from Node A to B, and then broadcasts the new network to all connected nodes on the mesh with a MESH_UNION command. 
 
 disconnecting
 
