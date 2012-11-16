@@ -21,12 +21,6 @@ import (
 	"unicode/utf8"
 )
 
-// All of these must be replaced by a config file.
-//const igorConfig.TFTPRoot = "/home/john/tftpboot/"
-//const igorConfig.Prefix = "kn"
-//const igorConfig.Start = 1
-//const igorConfig.End = 520
-
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
 var igorConfig Config
 
