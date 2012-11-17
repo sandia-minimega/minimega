@@ -12,11 +12,12 @@ udevadm settle
 ifconfig eth0 up
 dhclient -v eth0
 
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+modprobe openvswitch_mod
 /etc/init.d/openvswitch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl add-port mega_bridge eth0
-
-mkdir /var/run/sshd
-/usr/sbin/sshd
 
 exec /bin/sh
