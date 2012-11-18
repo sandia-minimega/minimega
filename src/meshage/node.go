@@ -29,6 +29,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"math/rand"
 )
 
 const (
@@ -120,6 +121,9 @@ func NewNode(name string, degree uint) (Node, chan Message, chan error) {
 
 // check degree emits connection requests when our number of connected clients is below the degree threshold
 func (n *Node) checkDegree() {
+	var backoff uint = 1
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
 	for uint(len(n.clients)) < n.degree {
 		log.Debugln("soliciting connections")
 		b := net.IPv4(255,255,255,255)
@@ -139,7 +143,11 @@ func (n *Node) checkDegree() {
 			n.errors <- err
 			break
 		}
-		time.Sleep(1 * time.Second)
+		wait := r.Intn(1<<backoff)
+		time.Sleep(time.Duration(wait) * time.Second)
+		if (backoff < 7) { // maximum wait won't exceed 128 seconds
+			backoff++
+		}
 	}
 }
 
@@ -227,15 +235,19 @@ func (n *Node) handleConnection(conn net.Conn) {
 	}
 	err := c.enc.Encode(hs)
 	if err != nil {
-		log.Errorln(err)
-		n.errors <- err
+		if err != io.EOF {
+			log.Errorln(err)
+			n.errors <- err
+		}
 		return
 	}
 
 	err = c.dec.Decode(&hs)
 	if err != nil {
-		log.Errorln(err)
-		n.errors <- err
+		if err != io.EOF {
+			log.Errorln(err)
+			n.errors <- err
+		}
 		return
 	}
 
@@ -254,11 +266,10 @@ func (n *Node) receiveHandler(client string) {
 		var m Message
 		err := c.dec.Decode(&m)
 		if err != nil {
-			if err == io.EOF {
-				break
+			if err != io.EOF {
+				log.Errorln(err)
+				n.errors <- err
 			}
-			log.Errorln(err)
-			n.errors <- err
 			break
 		} else {
 			log.Debug("receiveHandler got: %v\n", m)
