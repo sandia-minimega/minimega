@@ -1,13 +1,5 @@
-// minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
-// the U.S. Government retains certain rights in this software.
-//
-// David Fritz <djfritz@sandia.gov>
-
 // readline binding
-package main
+package goreadline
 
 // TODO: register our builtin commands with readline for tab completion.
 
@@ -31,7 +23,7 @@ func init() {
 }
 
 // the readline call proper, called by the cli
-func rlwrap(prompt string) (string, error) {
+func Rlwrap(prompt string) (string, error) {
 	p := C.CString(prompt)
 
 	ret := C.readline(p)
@@ -48,7 +40,7 @@ func rlwrap(prompt string) (string, error) {
 
 // make readline restore the terminal state before we exit, which will allow
 // us to reclaim our terminal
-func rlcleanup() {
+func Rlcleanup() {
 	log.Info("restoring terminal state from readline")
 	C.rl_deprep_terminal()
 }

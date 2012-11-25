@@ -281,10 +281,15 @@ func (n *Node) receiveHandler(client string) {
 	n.clientLock.Unlock()
 }
 
-// Degree sets the degree for a given node. Setting degree == 0 will cause the 
+// SetDegree sets the degree for a given node. Setting degree == 0 will cause the 
 // node to stop broadcasting for connections.
-func (n *Node) Degree(d uint) {
+func (n *Node) SetDegree(d uint) {
 	n.degree = d
+}
+
+// Degree returns the current degree
+func (n *Node) Degree() uint {
+	return n.degree
 }
 
 // Dial connects a node to another, regardless of degree. Returned error is nil 

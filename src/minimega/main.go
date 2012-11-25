@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"goreadline"
 )
 
 var (
@@ -137,7 +138,7 @@ func teardown() {
 	}
 	ksm_restore()
 	command_socket_remove()
-	rlcleanup()
+	goreadline.Rlcleanup()
 	os.Exit(0)
 }
 

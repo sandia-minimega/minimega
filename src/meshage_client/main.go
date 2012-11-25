@@ -4,15 +4,17 @@ import (
 	"meshage"
 	"fmt"
 	"flag"
-	"os/signal"
 	"os"
 	log "minilog"
+	"os/signal"
+	"goreadline"
 )
 
 var (
 	f_addr = flag.String("addr", "", "host to connect to")
 	f_degree = flag.Int("degree", 1, "graph degree")
 	f_log = flag.Bool("log", false, "enable logging")
+	n meshage.Node
 )
 
 func main() {
@@ -24,6 +26,10 @@ func main() {
 
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt)
+	go func() {
+		<-sig
+		teardown()
+	}()
 
 	log.Debugln("starting")
 	host, _ := os.Hostname()
@@ -43,7 +49,12 @@ func main() {
 		}
 	}
 
-	log.Debugln("waiting on signal")
-	<-sig
+	cli()
+	teardown()
 }
 
+func teardown() {
+	goreadline.Rlcleanup()
+	fmt.Println()
+	os.Exit(0)
+}

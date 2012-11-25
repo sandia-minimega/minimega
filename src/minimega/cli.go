@@ -35,6 +35,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"goreadline"
 )
 
 var (
@@ -780,7 +781,7 @@ successful if a tap was created. The tap will be named 'host_tap_<vlan>', where
 func cli() {
 	for {
 		prompt := "minimega$ "
-		line, err := rlwrap(prompt)
+		line, err := goreadline.Rlwrap(prompt)
 		if err != nil {
 			break // EOF
 		}
