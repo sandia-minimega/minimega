@@ -121,6 +121,10 @@ func NewNode(name string, degree uint) (Node, chan Message, chan error) {
 
 // check degree emits connection requests when our number of connected clients is below the degree threshold
 func (n *Node) checkDegree() {
+	// check degree only if we're not already running
+	n.degreeLock.Lock()
+	defer n.degreeLock.Unlock()
+
 	var backoff uint = 1
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
@@ -275,7 +279,7 @@ func (n *Node) receiveHandler(client string) {
 			}
 			break
 		} else {
-			log.Debug("receiveHandler got: %v\n", m)
+			log.Debug("receiveHandler got: %#v\n", m)
 			n.messagePump <- m
 		}
 	}
@@ -285,10 +289,10 @@ func (n *Node) receiveHandler(client string) {
 	delete(n.clients, client)
 	n.clientLock.Unlock()
 
-	m := make(map[string][]string)
-	m[n.name] = []string{client}
-	m[client] = []string{n.name}
-	n.intersect(m)
+	mesh := make(map[string][]string)
+	mesh[n.name] = []string{client}
+	mesh[client] = []string{n.name}
+	n.intersect(mesh)
 
 	// let everyone know about the new topology
 	u := Message{
@@ -297,10 +301,13 @@ func (n *Node) receiveHandler(client string) {
 		CurrentRoute: []string{n.name},
 		ID:           n.broadcastID(),
 		Command:      INTERSECTION,
-		Body:         m,
+		Body:         mesh,
 	}
 	log.Debug("receiveHandler broadcasting topology: %v\n", u)
 	n.Send(u)
+
+	// make sure we keep up the necessary degree
+	go n.checkDegree()
 }
 
 // SetDegree sets the degree for a given node. Setting degree == 0 will cause the 
@@ -401,16 +408,22 @@ func (n *Node) dial(host string, solicited bool) error {
 		Command:      UNION,
 		Body:         n.mesh,
 	}
-	log.Debug("Dial broadcasting topology: %v\n", u)
+	log.Debug("Dial broadcasting topology: %#v\n", u)
 	n.Send(u)
 	return nil
 }
 
 // union merges a mesh with the local one and eliminates redundant connections
+// union can also generate intersection messages - it checks the client list
+// to ensure that union messages do not alter what it knows about its own 
+// connections. If a discrepancy is found, it broadcasts an intersection to
+// fix the discrepancy.
 func (n *Node) union(m map[string][]string) {
 	log.Debug("union mesh: %v\n", m)
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
 
 	// merge everything, sort each bin, and eliminate duplicate entries
 	for k, v := range m {
@@ -429,6 +442,29 @@ func (n *Node) union(m map[string][]string) {
 		n.mesh[k] = nl
 	}
 	log.Debug("new mesh is: %v\n", n.mesh)
+
+	// check to make sure that our client list matches the connections
+	// listed in the mesh
+	intersection_mesh := make(map[string][]string)
+	for _, v := range n.mesh[n.name] {
+		if _, ok := n.clients[v]; !ok {
+			intersection_mesh[n.name] = append(intersection_mesh[n.name], v)
+			intersection_mesh[v] = append(intersection_mesh[v], n.name)
+		}
+	}
+	if len(intersection_mesh) != 0 {
+		n.intersect_locked(intersection_mesh)
+		u := Message{
+			MessageType: BROADCAST,
+			Source: n.name,
+			CurrentRoute: []string{n.name},
+			ID: n.broadcastID(),
+			Command: INTERSECTION,
+			Body: intersection_mesh,
+		}
+		log.Debug("found union conflicts, broadcasting new intersection %v\n", intersection_mesh)
+		n.Send(u)
+	}
 }
 
 // intersect (this isn't actually an intersection function...) removes the 
@@ -436,8 +472,11 @@ func (n *Node) union(m map[string][]string) {
 func (n *Node) intersect(m map[string][]string) {
 	log.Debug("intersect mesh: %v\n", m)
 	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
+	n.intersect_locked(m)
+	n.meshLock.Unlock()
+}
 
+func (n *Node) intersect_locked(m map[string][]string) {
 	for k, v := range m {
 		// remove all of v from key k
 		var nv []string
@@ -472,7 +511,7 @@ func (n *Node) intersect(m map[string][]string) {
 // receives an error. Broadcast messages will return immediately. 
 // Users will generally use the Set and Broadcast methods instead of Send.
 func (n *Node) Send(m Message) {
-	log.Debug("Send: %v\n", m)
+	log.Debug("Send: %#v\n", m)
 	switch m.MessageType {
 	case SET:
 		n.setSend(m)
@@ -491,7 +530,7 @@ func (n *Node) setSend(m Message) {
 // broadcastSend sends a broadcast message to all connected clients
 func (n *Node) broadcastSend(m Message) {
 	for k, c := range n.clients {
-		log.Debug("broadcasting to: %v : %v\n", k, m)
+		log.Debug("broadcasting to: %v : %#v\n", k, m)
 		err := c.send(m)
 		if err != nil {
 			log.Errorln(err)
@@ -542,7 +581,7 @@ func (n *Node) setID() uint64 {
 func (n *Node) messageHandler() {
 	for {
 		m := <-n.messagePump
-		log.Debug("messageHandler: %v\n", m)
+		log.Debug("messageHandler: %#v\n", m)
 		switch m.MessageType {
 		case SET:
 			// shoudl we handle this or drop it?
@@ -583,11 +622,12 @@ func (n *Node) messageHandler() {
 // If the message is a control message, we process it here, if it's
 // a regular message, we put it on the receive channel.
 func (n *Node) handleMessage(m Message) {
-	log.Debug("handleMessage: %v\n", m)
+	log.Debug("handleMessage: %#v\n", m)
 	switch m.Command {
 	case UNION:
 		n.union(m.Body.(map[string][]string))
 	case INTERSECTION:
+		n.intersect(m.Body.(map[string][]string))
 	case MESSAGE:
 		n.receive <- m
 	case ACK:
