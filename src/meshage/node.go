@@ -22,14 +22,14 @@ package meshage
 import (
 	"encoding/gob"
 	"fmt"
+	"io"
+	"math/rand"
+	log "minilog"
 	"net"
 	"sort"
-	"sync"
-	log "minilog"
-	"io"
 	"strings"
+	"sync"
 	"time"
-	"math/rand"
 )
 
 const (
@@ -72,7 +72,7 @@ type Node struct {
 	clientLock   sync.Mutex
 	sequenceLock sync.Mutex
 	meshLock     sync.Mutex
-	degreeLock	sync.Mutex
+	degreeLock   sync.Mutex
 	messagePump  chan Message
 
 	errors chan error
@@ -126,9 +126,9 @@ func (n *Node) checkDegree() {
 	r := rand.New(s)
 	for uint(len(n.clients)) < n.degree {
 		log.Debugln("soliciting connections")
-		b := net.IPv4(255,255,255,255)
+		b := net.IPv4(255, 255, 255, 255)
 		addr := net.UDPAddr{
-			IP: b,
+			IP:   b,
 			Port: PORT,
 		}
 		socket, err := net.DialUDP("udp4", nil, &addr)
@@ -137,15 +137,16 @@ func (n *Node) checkDegree() {
 			n.errors <- err
 			break
 		}
-		_, err = socket.Write([]byte("meshage"))
+		message := fmt.Sprintf("meshage:%s", n.name)
+		_, err = socket.Write([]byte(message))
 		if err != nil {
 			log.Errorln(err)
 			n.errors <- err
 			break
 		}
-		wait := r.Intn(1<<backoff)
+		wait := r.Intn(1 << backoff)
 		time.Sleep(time.Duration(wait) * time.Second)
-		if (backoff < 7) { // maximum wait won't exceed 128 seconds
+		if backoff < 7 { // maximum wait won't exceed 128 seconds
 			backoff++
 		}
 	}
@@ -154,7 +155,7 @@ func (n *Node) checkDegree() {
 // broadcastListener listens for broadcast connection requests and attempts to connect to that node
 func (n *Node) broadcastListener() {
 	listenAddr := net.UDPAddr{
-		IP: net.IPv4(0,0,0,0),
+		IP:   net.IPv4(0, 0, 0, 0),
 		Port: PORT,
 	}
 	ln, err := net.ListenUDP("udp4", &listenAddr)
@@ -164,22 +165,24 @@ func (n *Node) broadcastListener() {
 		return
 	}
 	for {
-		data := make([]byte, 7)
-		_, remoteAddr, err := ln.ReadFromUDP(data)
-		if string(data) != "meshage" {
-			err = fmt.Errorf("got malformed udp data: %v\n", string(data))
+		d := make([]byte, 1024)
+		read, _, err := ln.ReadFromUDP(d)
+		data := strings.Split(string(d[:read]), ":")
+		if len(data) != 2 {
+			err = fmt.Errorf("gor malformed udp data: %v\n", data)
 			log.Errorln(err)
 			n.errors <- err
 			continue
 		}
-		addr := remoteAddr.String()
-		f := strings.Split(addr, ":")
-		if len(f) != 2 {
-			err = fmt.Errorf("malformed host: %v\n", remoteAddr)
+		if data[0] != "meshage" {
+			err = fmt.Errorf("got malformed udp data: %v\n", data)
+			log.Errorln(err)
 			n.errors <- err
+			continue
 		}
-		host := f[0]
+		host := data[1]
 		if host == n.name {
+			log.Debugln("got solicitation from myself, dropping")
 			continue
 		}
 		log.Debug("got solicitation from %v\n", host)
@@ -214,7 +217,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 		dec:  gob.NewDecoder(conn),
 	}
 
-	log.Debug("got conn: %v\n", conn)
+	log.Debug("got conn: %v\n", conn.RemoteAddr())
 
 	var command int
 	if uint(len(n.clients)) < n.degree {
@@ -295,12 +298,15 @@ func (n *Node) Degree() uint {
 // Dial connects a node to another, regardless of degree. Returned error is nil 
 // if successful.
 func (n *Node) Dial(addr string) error {
-	return n.dial(addr,false)
+	return n.dial(addr, false)
 }
 
-func (n *Node) dial(addr string, solicited bool) error {
-	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", addr, PORT))
+func (n *Node) dial(host string, solicited bool) error {
+	addr := fmt.Sprintf("%s:%d", host, PORT)
+	log.Debug("Dialing: %v\n", addr)
+	conn, err := net.Dial("tcp", addr)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 	enc := gob.NewEncoder(conn)
@@ -309,9 +315,17 @@ func (n *Node) dial(addr string, solicited bool) error {
 	var hs Message
 	err = dec.Decode(&hs)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 	log.Debug("Dial got: %v\n", hs)
+
+	// am i connecting to myself?
+	if hs.Source == n.name {
+		conn.Close()
+		log.Errorln("connecting to myself is not allowed")
+		return fmt.Errorf("connecting to myself is not allowed")
+	}
 
 	if _, ok := n.clients[hs.Source]; ok {
 		// we are already connected to you, no thanks.
@@ -526,6 +540,21 @@ func (n *Node) handleMessage(m Message) {
 	default:
 		err := fmt.Errorf("handleMessage: invalid message type")
 		log.Errorln(err)
-		n.errors <- err 
+		n.errors <- err
 	}
+}
+
+// Mesh returns an adjacency list containing the known mesh. The adjacency list
+// is a map[string][]string containing all connections to a node given as the
+// key.
+// The returned map is a copy of the internal mesh, and modifying is will not
+// affect the mesh.
+func (n *Node) Mesh() map[string][]string {
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
+	ret := make(map[string][]string)
+	for k,v := range n.mesh {
+		ret[k] = v
+	}
+	return ret
 }

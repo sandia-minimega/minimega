@@ -1,15 +1,15 @@
 package main
 
 import (
-	"goreadline"
 	"bytes"
-	"text/tabwriter"
-	"strconv"
+	"fmt"
+	"goreadline"
+	log "minilog"
 	"os"
 	"sort"
-	"fmt"
-	log "minilog"
+	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 var cli_commands map[string]*command
@@ -20,7 +20,7 @@ type command struct {
 }
 
 func init() {
-	cli_commands = map[string]*command {
+	cli_commands = map[string]*command{
 		"degree": &command{
 			Call: func(args []string) (string, error) {
 				switch len(args) {
@@ -59,7 +59,7 @@ func init() {
 				if err != nil {
 					return "", err
 				}
-				
+
 				d := n.Dot()
 				f.WriteString(d)
 				f.Close()
@@ -67,7 +67,7 @@ func init() {
 			},
 			Help: "write out a graphviz dot file of the mesh",
 		},
-					
+
 		"help": &command{
 			Call: func(args []string) (string, error) {
 				var sorted []string
@@ -85,6 +85,37 @@ func init() {
 				return buf.String(), nil
 			},
 			Help: "help",
+		},
+
+		"status": &command{
+			Call: func(args []string) (string, error) {
+				mesh := n.Mesh()
+				degree := n.Degree()
+				nodes := len(mesh)
+				host, err := os.Hostname()
+				if err != nil {
+					return "", err
+				}
+				clients := len(mesh[host])
+				ret := fmt.Sprintf("mesh size %d\ndegree %d\nclients connected to this node: %d", nodes, degree, clients)
+				return ret, nil
+			},
+			Help: "return statistics on the current mesh",
+		},
+
+		"list": &command{
+			Call: func(args []string) (string, error) {
+				mesh := n.Mesh()
+				var ret string
+				for k, v := range mesh {
+					ret += fmt.Sprintf("%s\n", k)
+					for _, x := range v {
+						ret += fmt.Sprintf(" |--%s\n", x)
+					}
+				}
+				return ret, nil
+			},
+			Help: "print the adjacency list of the mesh",
 		},
 	}
 }
@@ -105,7 +136,7 @@ func cli() {
 		if len(f) > 1 {
 			args = f[1:]
 		}
-	
+
 		c := cli_commands[f[0]]
 		if c != nil {
 			ret, err := c.Call(args)
@@ -119,4 +150,3 @@ func cli() {
 		}
 	}
 }
-

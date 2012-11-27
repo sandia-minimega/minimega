@@ -1,20 +1,21 @@
 package main
 
 import (
-	"meshage"
-	"fmt"
 	"flag"
-	"os"
-	log "minilog"
-	"os/signal"
+	"fmt"
 	"goreadline"
+	"meshage"
+	log "minilog"
+	"os"
+	"os/signal"
 )
 
 var (
-	f_addr = flag.String("addr", "", "host to connect to")
+	f_addr   = flag.String("addr", "", "host to connect to")
 	f_degree = flag.Int("degree", 1, "graph degree")
-	f_log = flag.Bool("log", false, "enable logging")
-	n meshage.Node
+	f_log    = flag.Bool("log", false, "enable logging")
+	f_b	= flag.Bool("bg", true, "don't start a cli, just wait to be killed")
+	n        meshage.Node
 )
 
 func main() {
@@ -34,7 +35,8 @@ func main() {
 	log.Debugln("starting")
 	host, _ := os.Hostname()
 	log.Debugln("creating node")
-	n, _, errors := meshage.NewNode(host, uint(*f_degree))
+	errors := make(chan error)
+	n, _, errors = meshage.NewNode(host, uint(*f_degree))
 	log.Debugln("starting error handler")
 	go func() {
 		for {
@@ -49,7 +51,11 @@ func main() {
 		}
 	}
 
-	cli()
+	if *f_b {
+		<-sig
+	} else {
+		cli()
+	}
 	teardown()
 }
 
