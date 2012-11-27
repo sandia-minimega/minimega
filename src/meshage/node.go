@@ -279,9 +279,28 @@ func (n *Node) receiveHandler(client string) {
 			n.messagePump <- m
 		}
 	}
+
+	// remove the client from our client list, and broadcast an intersection announcement about this connection
 	n.clientLock.Lock()
 	delete(n.clients, client)
 	n.clientLock.Unlock()
+
+	m := make(map[string][]string)
+	m[n.name] = []string{client}
+	m[client] = []string{n.name}
+	n.intersect(m)
+
+	// let everyone know about the new topology
+	u := Message{
+		MessageType:  BROADCAST,
+		Source:       n.name,
+		CurrentRoute: []string{n.name},
+		ID:           n.broadcastID(),
+		Command:      INTERSECTION,
+		Body:         m,
+	}
+	log.Debug("receiveHandler broadcasting topology: %v\n", u)
+	n.Send(u)
 }
 
 // SetDegree sets the degree for a given node. Setting degree == 0 will cause the 
@@ -408,6 +427,42 @@ func (n *Node) union(m map[string][]string) {
 			}
 		}
 		n.mesh[k] = nl
+	}
+	log.Debug("new mesh is: %v\n", n.mesh)
+}
+
+// intersect (this isn't actually an intersection function...) removes the 
+// nodes given from the topology.
+func (n *Node) intersect(m map[string][]string) {
+	log.Debug("intersect mesh: %v\n", m)
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
+
+	for k, v := range m {
+		// remove all of v from key k
+		var nv []string
+		for _, x := range n.mesh[k] {
+			found := false
+			for _, y := range v {
+				if x == y {
+					found = true
+					break
+				}
+			}
+			if !found {
+				nv = append(nv, x)
+			}
+		}
+		n.mesh[k] = nv
+
+		// if key k is now empty, then remove key k
+		if len(n.mesh[k]) == 0 {
+			delete(n.mesh, k)
+			n.sequenceLock.Lock()
+			defer n.sequenceLock.Unlock()
+			delete(n.setSequences, k)
+			delete(n.broadcastSequences, k)
+		}
 	}
 	log.Debug("new mesh is: %v\n", n.mesh)
 }
