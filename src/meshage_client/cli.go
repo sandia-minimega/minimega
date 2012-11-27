@@ -131,6 +131,17 @@ func init() {
 			},
 			Help: "hang up on a specified client",
 		},
+
+		"broadcast": &command{
+			Call: func(args []string) (string, error) {
+				if len(args) != 1 {
+					return "", fmt.Errorf("broadcast takes one argument")
+				}
+				n.Broadcast(args[0])
+				return "", nil
+			},
+			Help: "broadcast a message to other nodes",
+		},
 	}
 }
 

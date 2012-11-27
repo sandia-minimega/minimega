@@ -584,7 +584,18 @@ func (n *Node) Set(recipients []string, body interface{}) error {
 
 // Broadcast sends a broadcast message to all connected nodes. Broadcast does 
 // not block.
-func (n *Node) Broadcast(body interface{}) {}
+func (n *Node) Broadcast(body interface{}) {
+	u := Message{
+		MessageType:  BROADCAST,
+		Source:       n.name,
+		CurrentRoute: []string{n.name},
+		ID:           n.broadcastID(),
+		Command:      MESSAGE,
+		Body:         body,
+	}
+	log.Debug("broadcasting message %#v\n", u)
+	n.Send(u)
+}
 
 // Return a broadcast ID for this node and automatically increment the ID
 func (n *Node) broadcastID() uint64 {
