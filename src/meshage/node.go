@@ -219,6 +219,7 @@ func (n *Node) handleConnection(conn net.Conn) {
 		conn: conn,
 		enc:  gob.NewEncoder(conn),
 		dec:  gob.NewDecoder(conn),
+		hangup: make(chan bool),
 	}
 
 	log.Debug("got conn: %v\n", conn.RemoteAddr())
@@ -269,18 +270,34 @@ func (n *Node) handleConnection(conn net.Conn) {
 func (n *Node) receiveHandler(client string) {
 	c := n.clients[client]
 
-	for {
-		var m Message
-		err := c.dec.Decode(&m)
-		if err != nil {
-			if err != io.EOF {
-				log.Errorln(err)
-				n.errors <- err
+	messages := make(chan Message)
+
+	go func() {
+		for {
+			var m Message
+			err := c.dec.Decode(&m)
+			if err != nil {
+				if err != io.EOF {
+					log.Errorln(err)
+					n.errors <- err
+				}
+				c.hangup <- true
+				break
+			} else {
+				messages <- m
 			}
-			break
-		} else {
+		}
+	}()
+
+receiveHandlerLoop:
+	for {
+		select {
+		case m := <-messages:
 			log.Debug("receiveHandler got: %#v\n", m)
 			n.messagePump <- m
+		case <-c.hangup:
+			log.Debugln("disconnecting from client")
+			break receiveHandlerLoop
 		}
 	}
 
@@ -325,6 +342,17 @@ func (n *Node) Degree() uint {
 // if successful.
 func (n *Node) Dial(addr string) error {
 	return n.dial(addr, false)
+}
+
+func (n *Node) Hangup(client string) error {
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
+	c, ok := n.clients[client]
+	if !ok {
+		return fmt.Errorf("no such client")
+	}
+	c.hangup <- true
+	return nil
 }
 
 func (n *Node) dial(host string, solicited bool) error {
@@ -384,6 +412,7 @@ func (n *Node) dial(host string, solicited bool) error {
 		conn: conn,
 		enc:  enc,
 		dec:  dec,
+		hangup: make(chan bool),
 	}
 
 	n.clientLock.Lock()

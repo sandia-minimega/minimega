@@ -117,6 +117,20 @@ func init() {
 			},
 			Help: "print the adjacency list of the mesh",
 		},
+
+		"hangup": &command{
+			Call: func(args []string) (string, error) {
+				if len(args) != 1 {
+					return "", fmt.Errorf("hangup takes one argument")
+				}
+				err := n.Hangup(args[0])
+				if err != nil {
+					return "", err
+				}
+				return "", nil
+			},
+			Help: "hang up on a specified client",
+		},
 	}
 }
 
