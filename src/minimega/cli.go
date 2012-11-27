@@ -577,6 +577,29 @@ Attach an initrd image to a VM. Passed along with the kernel image at boot time.
 			},
 		},
 
+		"vm_qemu_append": &command{
+			Call: func(c cli_command) cli_response {
+				if len(c.Args) == 0 {
+                                        return cli_response{
+                                                Response: strings.Join(info.Qemu_Append, " "),
+                                        }
+                                } else {
+                                        info.Qemu_Append = c.Args
+                                }
+                                return cli_response{}
+			},
+			Helpshort: "add additional arguments for the QEMU command",
+			Helplong: `
+Add additional arguments to be passed to the QEMU instance. For example,
+"-serial tcp:localhost:4001".
+`,
+			Record: true,
+			Clear: func() error {
+				info.Qemu_Append = nil
+				return nil
+			},
+		},
+
 		"vm_append": &command{
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) == 0 {

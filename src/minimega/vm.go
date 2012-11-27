@@ -64,6 +64,7 @@ type vm_info struct {
 	Kernel_path   string
 	Initrd_path   string
 	Append        string
+	Qemu_Append	[]string	// extra arguments for QEMU
 	State         int       // one of the VM_ states listed above
 	Kill          chan bool // kill channel to signal to shut a vm down
 	instance_path string
@@ -352,6 +353,8 @@ func (vm *vm_info) vm_get_args() []string {
 
 	args = append(args, process("qemu"))
 
+	args = append(args, "-enable-kvm")
+
 	args = append(args, "-name")
 	args = append(args, s_id)
 
@@ -431,7 +434,11 @@ func (vm *vm_info) vm_get_args() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("rtl8139,netdev=%v,mac=%v", tap, random_mac()))
+		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, random_mac()))
+	}
+
+	if len(vm.Qemu_Append) > 0 {
+		args = append(args, vm.Qemu_Append...)
 	}
 
 	log.Info("args for vm %v is: %v", vm.Id, strings.Join(args, " "))
