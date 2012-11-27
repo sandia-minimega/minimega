@@ -344,6 +344,8 @@ func (n *Node) Dial(addr string) error {
 	return n.dial(addr, false)
 }
 
+// Hangup disconnects from a connected client and announces the disconnect to the
+// topology.
 func (n *Node) Hangup(client string) error {
 	n.clientLock.Lock()
 	defer n.clientLock.Unlock()
