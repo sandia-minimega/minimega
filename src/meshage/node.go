@@ -44,16 +44,8 @@ const (
 	INTERSECTION
 	MESSAGE
 	ACK
-	NACK
 	HANDSHAKE
 	HANDSHAKE_SOLICITED
-)
-
-// Errors
-const (
-	UNROUTABLE        = iota // host is/was on the network, but is now unroutable
-	RETRY_LIMIT              // attempt to send failed too many times
-	INVALID_RECIPIENT        // recipient node is not on the network
 )
 
 // A Node object contains the network information for a given node. Creating a 
@@ -67,15 +59,23 @@ type Node struct {
 	broadcastSequences map[string]uint64   // broadcast sequence IDs for each node, including this node
 	routes             map[string]string   // one-hop routes for every node on the network, including this node
 	receive            chan Message        // channel of incoming messages. A program will read this channel for incoming messages to this node
+	ackChan		chan ack
 
 	clients      map[string]client // list of connections to this node
 	clientLock   sync.Mutex
 	sequenceLock sync.Mutex
 	meshLock     sync.Mutex
 	degreeLock   sync.Mutex
+	setLock	     sync.Mutex
 	messagePump  chan Message
 
 	errors chan error
+}
+
+// an ack struct contains a responding node and error message. A nil error means ACK. 
+type ack struct {
+	Recipient string
+	Err error
 }
 
 // A Message is the payload for all message passing, and contains the user 
@@ -92,6 +92,7 @@ type Message struct {
 
 func init() {
 	gob.Register(map[string][]string{})
+	gob.Register(ack{})
 }
 
 // NewNode returns a new node and receiver channel with a given name and 
@@ -109,6 +110,7 @@ func NewNode(name string, degree uint) (Node, chan Message, chan error) {
 		clients:            make(map[string]client),
 		messagePump:        make(chan Message, RECEIVE_BUFFER),
 		errors:             make(chan error),
+		ackChan:		make(chan ack, RECEIVE_BUFFER),
 	}
 	n.setSequences[name] = 1
 	n.broadcastSequences[name] = 1
@@ -555,18 +557,85 @@ func (n *Node) Send(m Message) {
 }
 
 // setSend sends a set type message according to known routes
-func (n *Node) setSend(m Message) {
+func (n *Node) setSend(m Message) error {
+	n.setLock.Lock()
+	defer n.setLock.Unlock()
+	n.clientLock.Lock()
+
+	original_recipients := m.Recipients
+
+	// we want to duplicate the message for each slice of recipients that follow a like route from this node
+	route_slices := make(map[string][]string)
+
+	for _, v := range m.Recipients {
+		log.Debug("set sending to %v\n", v)
+
+		// make sure we have a route to this client
+		var route string
+		var ok bool
+		if route, ok = n.routes[v]; !ok {
+			n.updateRoute(v)
+			if route, ok = n.routes[v]; !ok {
+				err := fmt.Errorf("no route to host: %v", v)
+				log.Errorln(err)
+				n.errors <- err
+				go func(v string, err error) {
+					n.ackChan <-ack{
+						Recipient: v,
+						Err: err,
+					}
+				}(v,err)
+				continue
+			}
+		}
+		route_slices[route] = append(route_slices[route], v)
+	}
+
+	for k, v := range route_slices {
+		m.Recipients = v
+		// get the client for this route
+		if c, ok := n.clients[k]; ok {
+			go n.sendOne(c, m)
+		} else {
+			err := fmt.Errorf("mismatched client list and topology, something is very wrong: %v, %#v", v, n.clients)
+			log.Errorln(err)
+			n.errors <- err
+		}
+	}
+	n.clientLock.Unlock()
+
+	// wait on ack/nacks from evreyone
+	// TODO: add timeout to this, lest we wait forever!
+	var ret error
+	for i:=0; i<len(original_recipients); i++ {
+		a := <-n.ackChan
+		if a.Err != nil {
+			n.errors <- a.Err
+			if ret == nil {
+				ret = fmt.Errorf("failed to send to: %v", a.Recipient)
+			} else {
+				ret = fmt.Errorf("%v, %v", ret, a.Recipient)
+			}
+		}
+	}
+	return ret
 }
 
 // broadcastSend sends a broadcast message to all connected clients
 func (n *Node) broadcastSend(m Message) {
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
 	for k, c := range n.clients {
 		log.Debug("broadcasting to: %v : %#v\n", k, m)
-		err := c.send(m)
-		if err != nil {
-			log.Errorln(err)
-			n.errors <- err
-		}
+		go n.sendOne(c,m)
+	}
+}
+
+func (n *Node) sendOne(c client, m Message) {
+	err := c.send(m)
+	if err != nil {
+		log.Errorln(err)
+		n.errors <- err
 	}
 }
 
@@ -579,7 +648,17 @@ func (n *Node) Heartbeat() error {
 // Set sends a set message to a list of recipients. Set blocks until all 
 // recipients have acknowledged the message, or returns a non-nil error.
 func (n *Node) Set(recipients []string, body interface{}) error {
-	return nil
+	u := Message{
+		MessageType: SET,
+		Source: n.name,
+		Recipients: recipients,
+		CurrentRoute: []string{n.name},
+		ID: n.setID(),
+		Command: MESSAGE,
+		Body: body,
+	}
+	log.Debug("set send message %#v\n", u)
+	return n.setSend(u)
 }
 
 // Broadcast sends a broadcast message to all connected nodes. Broadcast does 
@@ -594,7 +673,7 @@ func (n *Node) Broadcast(body interface{}) {
 		Body:         body,
 	}
 	log.Debug("broadcasting message %#v\n", u)
-	n.Send(u)
+	n.broadcastSend(u)
 }
 
 // Return a broadcast ID for this node and automatically increment the ID
@@ -626,7 +705,7 @@ func (n *Node) messageHandler() {
 		log.Debug("messageHandler: %#v\n", m)
 		switch m.MessageType {
 		case SET:
-			// shoudl we handle this or drop it?
+			// should we handle this or drop it?
 			if n.setSequences[m.Source] < m.ID {
 				// it's a new message to us
 				n.sequenceLock.Lock()
@@ -634,15 +713,18 @@ func (n *Node) messageHandler() {
 				n.sequenceLock.Unlock()
 				m.CurrentRoute = append(m.CurrentRoute, n.name)
 
-				go n.setSend(m)
-
 				// do we also handle it?
+				var new_recipients []string
 				for _, i := range m.Recipients {
 					if i == n.name {
-						n.handleMessage(m)
-						break
+						go n.handleMessage(m)
+					} else {
+						new_recipients = append(new_recipients, i)
 					}
 				}
+				m.Recipients = new_recipients
+
+				go n.setSend(m)
 			}
 		case BROADCAST:
 			// should we handle this or drop it?
@@ -673,7 +755,7 @@ func (n *Node) handleMessage(m Message) {
 	case MESSAGE:
 		n.receive <- m
 	case ACK:
-	case NACK:
+		n.ackChan <- m.Body.(ack)
 	default:
 		err := fmt.Errorf("handleMessage: invalid message type")
 		log.Errorln(err)
