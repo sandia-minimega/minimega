@@ -11,13 +11,17 @@ func (n *Node) updateRoute(client string) {
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
 
+	if len(n.mesh) == 0 {
+		return
+	}
+
 	log.Debugln("updating route for ", client)
 
 	routes := make(map[string]string) // a key node has a value of the previous hop, the key exists if it's been visited
 	routes[n.name] = n.name
 
 	q := make(chan string, len(n.mesh))
-	q <-n.name
+	q <- n.name
 
 	for len(q) != 0 {
 		v := <-q
@@ -26,7 +30,7 @@ func (n *Node) updateRoute(client string) {
 
 		for _, a := range n.mesh[v] {
 			if _, ok := routes[a]; !ok {
-				q <-a
+				q <- a
 				log.Debug("previous hop for %v is %v\n", a, v)
 				routes[a] = v
 			}

@@ -1,4 +1,3 @@
-// Meshage is a fully distributed, mesh based, message passing protocol. It 
 // supports completely decentralized message passing, both to a set of nodes 
 // as well as broadcast. Meshage is design for resiliency, and automatically 
 // updates routes and topologies when nodes in the mesh fail. Meshage 
@@ -34,7 +33,6 @@ import (
 
 const (
 	RECEIVE_BUFFER = 1024
-	PORT           = 8966
 )
 
 const (
@@ -49,19 +47,18 @@ const (
 // Node object with a non-zero degree will cause it to begin broadcasting for 
 // connections automatically.
 type Node struct {
-	name               string              // node name. Must be unique on a network.
-	degree             uint                // degree for this node, set to 0 to force node to not broadcast
-	mesh               map[string][]string // adjacency list for the known topology for this node
-	sequenceIDs       map[string]uint64   // set sequence IDs for each node, including this node
-	routes             map[string]string   // one-hop routes for every node on the network, including this node
-	receive            chan Message        // channel of incoming messages. A program will read this channel for incoming messages to this node
+	name        string              // node name. Must be unique on a network.
+	degree      uint                // degree for this node, set to 0 to force node to not broadcast
+	mesh        map[string][]string // adjacency list for the known topology for this node
+	sequenceIDs map[string]uint64   // set sequence IDs for each node, including this node
+	routes      map[string]string   // one-hop routes for every node on the network, including this node
+	receive     chan Message        // channel of incoming messages. A program will read this channel for incoming messages to this node
 
-	clients      map[string]client // list of connections to this node
-	clientLock   sync.Mutex
-	sequenceLock sync.Mutex
-	meshLock     sync.Mutex
-	degreeLock   sync.Mutex
-	messagePump  chan Message
+	clients     map[string]client // list of connections to this node
+	meshLock    sync.Mutex
+	degreeLock  sync.Mutex
+	messagePump chan Message
+	port	int
 
 	errors chan error
 }
@@ -84,23 +81,24 @@ func init() {
 // NewNode returns a new node and receiver channel with a given name and 
 // degree. If degree is non-zero, the node will automatically begin 
 // broadcasting for connections.
-func NewNode(name string, degree uint) (Node, chan Message, chan error) {
-	n := Node{
-		name:               name,
-		degree:             degree,
-		mesh:               make(map[string][]string),
-		sequenceIDs:       make(map[string]uint64),
-		routes:             make(map[string]string),
-		receive:            make(chan Message, RECEIVE_BUFFER),
-		clients:            make(map[string]client),
-		messagePump:        make(chan Message, RECEIVE_BUFFER),
-		errors:             make(chan error),
+func NewNode(name string, degree uint, port int) (*Node, chan Message, chan error) {
+	n := &Node{
+		name:        name,
+		degree:      degree,
+		mesh:        make(map[string][]string),
+		sequenceIDs: make(map[string]uint64),
+		routes:      make(map[string]string),
+		receive:     make(chan Message, RECEIVE_BUFFER),
+		clients:     make(map[string]client),
+		messagePump: make(chan Message, RECEIVE_BUFFER),
+		port: port,
+		errors:      make(chan error),
 	}
-	n.sequenceIDs[name] = 1
 	go n.connectionListener()
 	go n.broadcastListener()
 	go n.messageHandler()
 	go n.checkDegree()
+
 	return n, n.receive, n.errors
 }
 
@@ -118,7 +116,7 @@ func (n *Node) checkDegree() {
 		b := net.IPv4(255, 255, 255, 255)
 		addr := net.UDPAddr{
 			IP:   b,
-			Port: PORT,
+			Port: n.port,
 		}
 		socket, err := net.DialUDP("udp4", nil, &addr)
 		if err != nil {
@@ -145,7 +143,7 @@ func (n *Node) checkDegree() {
 func (n *Node) broadcastListener() {
 	listenAddr := net.UDPAddr{
 		IP:   net.IPv4(0, 0, 0, 0),
-		Port: PORT,
+		Port: n.port,
 	}
 	ln, err := net.ListenUDP("udp4", &listenAddr)
 	if err != nil {
@@ -181,7 +179,7 @@ func (n *Node) broadcastListener() {
 
 // connectionListener accepts incoming connections and hands new connections to a connection handler
 func (n *Node) connectionListener() {
-	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", PORT))
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", n.port))
 	if err != nil {
 		n.errors <- err
 		return
@@ -201,9 +199,9 @@ func (n *Node) connectionListener() {
 // of clients only after a successful handshake
 func (n *Node) handleConnection(conn net.Conn) {
 	c := client{
-		conn: conn,
-		enc:  gob.NewEncoder(conn),
-		dec:  gob.NewDecoder(conn),
+		conn:   conn,
+		enc:    gob.NewEncoder(conn),
+		dec:    gob.NewDecoder(conn),
 		hangup: make(chan bool),
 	}
 
@@ -244,17 +242,16 @@ func (n *Node) handleConnection(conn net.Conn) {
 	}
 
 	// valid connection, add it to the client roster
-	n.clientLock.Lock()
+	n.meshLock.Lock()
 	n.clients[hs.Source] = c
-	n.clientLock.Unlock()
+	n.meshLock.Unlock()
 
 	go n.receiveHandler(hs.Source)
 }
 
 func (n *Node) receiveHandler(client string) {
-	c := n.clients[client]
-
 	messages := make(chan Message)
+	c := n.clients[client]
 
 	go func() {
 		for {
@@ -265,6 +262,7 @@ func (n *Node) receiveHandler(client string) {
 					log.Errorln(err)
 					n.errors <- err
 				}
+				c.conn.Close()
 				c.hangup <- true
 				break
 			} else {
@@ -286,14 +284,14 @@ receiveHandlerLoop:
 	}
 
 	// remove the client from our client list, and broadcast an intersection announcement about this connection
-	n.clientLock.Lock()
+	n.meshLock.Lock()
 	delete(n.clients, client)
-	n.clientLock.Unlock()
 
 	mesh := make(map[string][]string)
 	mesh[n.name] = []string{client}
 	mesh[client] = []string{n.name}
-	n.intersect(mesh)
+	n.intersect_locked(mesh)
+	n.meshLock.Unlock()
 
 	// let everyone know about the new topology
 	u := Message{
@@ -307,7 +305,7 @@ receiveHandlerLoop:
 	n.broadcast(u)
 
 	// make sure we keep up the necessary degree
-	go n.checkDegree()
+	n.checkDegree()
 }
 
 // SetDegree sets the degree for a given node. Setting degree == 0 will cause the 
@@ -330,8 +328,8 @@ func (n *Node) Dial(addr string) error {
 // Hangup disconnects from a connected client and announces the disconnect to the
 // topology.
 func (n *Node) Hangup(client string) error {
-	n.clientLock.Lock()
-	defer n.clientLock.Unlock()
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
 	c, ok := n.clients[client]
 	if !ok {
 		return fmt.Errorf("no such client")
@@ -341,7 +339,7 @@ func (n *Node) Hangup(client string) error {
 }
 
 func (n *Node) dial(host string, solicited bool) error {
-	addr := fmt.Sprintf("%s:%d", host, PORT)
+	addr := fmt.Sprintf("%s:%d", host, n.port)
 	log.Debug("Dialing: %v\n", addr)
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
@@ -390,15 +388,15 @@ func (n *Node) dial(host string, solicited bool) error {
 
 	// add this client to our client list
 	c := client{
-		conn: conn,
-		enc:  enc,
-		dec:  dec,
+		conn:   conn,
+		enc:    enc,
+		dec:    dec,
 		hangup: make(chan bool),
 	}
 
-	n.clientLock.Lock()
+	n.meshLock.Lock()
 	n.clients[hs.Source] = c
-	n.clientLock.Unlock()
+	n.meshLock.Unlock()
 	go n.receiveHandler(hs.Source)
 
 	// the network we're connecting to
@@ -428,11 +426,10 @@ func (n *Node) dial(host string, solicited bool) error {
 // connections. If a discrepancy is found, it broadcasts an intersection to
 // fix the discrepancy.
 func (n *Node) union(m map[string][]string) {
-	log.Debug("union mesh: %v\n", m)
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
-	n.clientLock.Lock()
-	defer n.clientLock.Unlock()
+
+	log.Debug("union mesh: %v\n", m)
 
 	n.dropRoutes()
 
@@ -466,11 +463,11 @@ func (n *Node) union(m map[string][]string) {
 	if len(intersection_mesh) != 0 {
 		n.intersect_locked(intersection_mesh)
 		u := Message{
-			Source: n.name,
+			Source:       n.name,
 			CurrentRoute: []string{n.name},
-			ID: n.sequenceID(),
-			Command: INTERSECTION,
-			Body: intersection_mesh,
+			ID:           n.sequenceID(),
+			Command:      INTERSECTION,
+			Body:         intersection_mesh,
 		}
 		log.Debug("found union conflicts, broadcasting new intersection %v\n", intersection_mesh)
 		n.broadcast(u)
@@ -508,9 +505,12 @@ func (n *Node) intersect_locked(m map[string][]string) {
 		// if key k is now empty, then remove key k
 		if len(n.mesh[k]) == 0 {
 			delete(n.mesh, k)
-			n.sequenceLock.Lock()
-			defer n.sequenceLock.Unlock()
 			delete(n.sequenceIDs, k)
+			if k == n.name {
+				log.Debug("disconnected from all clients! %#v\n", n.clients)
+				n.mesh = make(map[string][]string)
+				n.sequenceIDs = make(map[string]uint64)
+			}
 		}
 	}
 	log.Debug("new mesh is: %v\n", n.mesh)
@@ -519,11 +519,10 @@ func (n *Node) intersect_locked(m map[string][]string) {
 // Send a message according to the parameters set in the message. 
 // Users will generally use the Set and Broadcast methods instead of Send.
 func (n *Node) SendMessage(m Message) {
-	n.clientLock.Lock()
-
 	// we want to duplicate the message for each slice of recipients that follow a like route from this node
 	route_slices := make(map[string][]string)
 
+	log.Debug("sending message to %d clients\n", len(m.Recipients))
 	for _, v := range m.Recipients {
 		log.Debug("sending to %v\n", v)
 
@@ -547,6 +546,7 @@ func (n *Node) SendMessage(m Message) {
 		route_slices[route] = append(route_slices[route], v)
 	}
 
+	log.Debug("route slices: %#v\n", route_slices)
 	for k, v := range route_slices {
 		m.Recipients = v
 		// get the client for this route
@@ -558,13 +558,13 @@ func (n *Node) SendMessage(m Message) {
 			n.errors <- err
 		}
 	}
-	n.clientLock.Unlock()
 }
 
 // broadcastSend sends a broadcast message to all connected clients
 func (n *Node) broadcast(m Message) {
 	m.Recipients = []string{}
 	for k, _ := range n.mesh {
+		log.Debug("adding broadcast recipient: %v\n", k)
 		m.Recipients = append(m.Recipients, k)
 	}
 	n.SendMessage(m)
@@ -581,12 +581,12 @@ func (n *Node) sendOne(c client, m Message) {
 // Send a message to a list of recipients.
 func (n *Node) Send(recipients []string, body interface{}) {
 	u := Message{
-		Source: n.name,
-		Recipients: recipients,
+		Source:       n.name,
+		Recipients:   recipients,
 		CurrentRoute: []string{n.name},
-		ID: n.sequenceID(),
-		Command: MESSAGE,
-		Body: body,
+		ID:           n.sequenceID(),
+		Command:      MESSAGE,
+		Body:         body,
 	}
 	log.Debug("send message %#v\n", u)
 	n.SendMessage(u)
@@ -607,11 +607,11 @@ func (n *Node) Broadcast(body interface{}) {
 
 // Return a sequence ID for this node and automatically increment the ID
 func (n *Node) sequenceID() uint64 {
-	n.sequenceLock.Lock()
-	id := n.sequenceIDs[n.name]
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
 	n.sequenceIDs[n.name]++
+	id := n.sequenceIDs[n.name]
 	log.Debug("set id: %v", n.sequenceIDs[n.name])
-	n.sequenceLock.Unlock()
 	return id
 }
 
@@ -625,9 +625,9 @@ func (n *Node) messageHandler() {
 		// should we handle this or drop it?
 		if n.sequenceIDs[m.Source] < m.ID {
 			// it's a new message to us
-			n.sequenceLock.Lock()
+			n.meshLock.Lock()
 			n.sequenceIDs[m.Source] = m.ID
-			n.sequenceLock.Unlock()
+			n.meshLock.Unlock()
 			m.CurrentRoute = append(m.CurrentRoute, n.name)
 
 			// do we also handle it?
@@ -643,6 +643,8 @@ func (n *Node) messageHandler() {
 			m.Recipients = new_recipients
 
 			go n.SendMessage(m)
+		} else {
+			log.Debugln("dropping message, sequence already encountered")
 		}
 	}
 }
@@ -675,7 +677,7 @@ func (n *Node) Mesh() map[string][]string {
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
 	ret := make(map[string][]string)
-	for k,v := range n.mesh {
+	for k, v := range n.mesh {
 		ret[k] = v
 	}
 	return ret

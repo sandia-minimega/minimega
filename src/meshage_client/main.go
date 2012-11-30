@@ -15,7 +15,7 @@ var (
 	f_degree = flag.Int("degree", 1, "graph degree")
 	f_log    = flag.Bool("log", false, "enable logging")
 	f_b	= flag.Bool("bg", true, "don't start a cli, just wait to be killed")
-	n        meshage.Node
+	n        *meshage.Node
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	log.Debugln("creating node")
 	errors := make(chan error)
 	var m chan meshage.Message
-	n, m, errors = meshage.NewNode(host, uint(*f_degree))
+	n, m, errors = meshage.NewNode(host, uint(*f_degree), 8966)
 	log.Debugln("starting error handler")
 	go func() {
 		for {
