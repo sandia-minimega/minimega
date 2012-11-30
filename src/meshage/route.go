@@ -53,3 +53,8 @@ func (n *Node) updateRoute(client string) {
 		n.routes[k] = prev
 	}
 }
+
+func (n *Node) dropRoutes() {
+	log.Debugln("dropping known routes")
+	n.routes = make(map[string]string)
+}

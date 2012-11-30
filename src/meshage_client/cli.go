@@ -143,13 +143,13 @@ func init() {
 			Help: "broadcast a message to other nodes",
 		},
 
-		"set": &command{
+		"send": &command{
 			Call: func(args []string) (string, error) {
 				if len(args) < 2 {
 					return "", fmt.Errorf("set takes at least two arguments")
 				}
-				err := n.Set(args[0:len(args)-1], args[len(args)-1])
-				return "", err
+				n.Send(args[0:len(args)-1], args[len(args)-1])
+				return "", nil
 			},
 			Help: "set send a message to one or more nodes. last argument is the message, all preceeding arguments are node names",
 		},
