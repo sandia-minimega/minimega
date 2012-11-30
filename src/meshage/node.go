@@ -41,6 +41,7 @@ const (
 	MESSAGE
 	HANDSHAKE
 	HANDSHAKE_SOLICITED
+	ACK
 )
 
 // A Node object contains the network information for a given node. Creating a 
@@ -54,11 +55,12 @@ type Node struct {
 	routes      map[string]string   // one-hop routes for every node on the network, including this node
 	receive     chan Message        // channel of incoming messages. A program will read this channel for incoming messages to this node
 
-	clients     map[string]client // list of connections to this node
+	clients     map[string]*client // list of connections to this node
 	meshLock    sync.Mutex
 	degreeLock  sync.Mutex
 	messagePump chan Message
 	port	int
+	timeout time.Duration
 
 	errors chan error
 }
@@ -81,7 +83,7 @@ func init() {
 // NewNode returns a new node and receiver channel with a given name and 
 // degree. If degree is non-zero, the node will automatically begin 
 // broadcasting for connections.
-func NewNode(name string, degree uint, port int) (*Node, chan Message, chan error) {
+func NewNode(name string, degree uint, port int, timeout int) (*Node, chan Message, chan error) {
 	n := &Node{
 		name:        name,
 		degree:      degree,
@@ -89,10 +91,11 @@ func NewNode(name string, degree uint, port int) (*Node, chan Message, chan erro
 		sequenceIDs: make(map[string]uint64),
 		routes:      make(map[string]string),
 		receive:     make(chan Message, RECEIVE_BUFFER),
-		clients:     make(map[string]client),
+		clients:     make(map[string]*client),
 		messagePump: make(chan Message, RECEIVE_BUFFER),
 		port: port,
 		errors:      make(chan error),
+		timeout: time.Duration(timeout) * time.Second,
 	}
 	go n.connectionListener()
 	go n.broadcastListener()
@@ -198,12 +201,7 @@ func (n *Node) connectionListener() {
 // handleConnection creates a new client and issues a handshake. It adds the client to the list
 // of clients only after a successful handshake
 func (n *Node) handleConnection(conn net.Conn) {
-	c := client{
-		conn:   conn,
-		enc:    gob.NewEncoder(conn),
-		dec:    gob.NewDecoder(conn),
-		hangup: make(chan bool),
-	}
+	c := NewClient(conn, n.timeout)
 
 	log.Debug("got conn: %v\n", conn.RemoteAddr())
 
@@ -250,37 +248,16 @@ func (n *Node) handleConnection(conn net.Conn) {
 }
 
 func (n *Node) receiveHandler(client string) {
-	messages := make(chan Message)
 	c := n.clients[client]
 
-	go func() {
-		for {
-			var m Message
-			err := c.dec.Decode(&m)
-			if err != nil {
-				if err != io.EOF {
-					log.Errorln(err)
-					n.errors <- err
-				}
-				c.conn.Close()
-				c.hangup <- true
-				break
-			} else {
-				messages <- m
-			}
-		}
-	}()
-
-receiveHandlerLoop:
 	for {
-		select {
-		case m := <-messages:
-			log.Debug("receiveHandler got: %#v\n", m)
-			n.messagePump <- m
-		case <-c.hangup:
+		m, err := c.receive()
+		if err != nil {
 			log.Debugln("disconnecting from client")
-			break receiveHandlerLoop
+			break
 		}
+		log.Debug("receiveHandler got: %#v\n", m)
+		n.messagePump <- m
 	}
 
 	// remove the client from our client list, and broadcast an intersection announcement about this connection
@@ -334,7 +311,7 @@ func (n *Node) Hangup(client string) error {
 	if !ok {
 		return fmt.Errorf("no such client")
 	}
-	c.hangup <- true
+	c.hangup()
 	return nil
 }
 
@@ -346,11 +323,10 @@ func (n *Node) dial(host string, solicited bool) error {
 		log.Errorln(err)
 		return err
 	}
-	enc := gob.NewEncoder(conn)
-	dec := gob.NewDecoder(conn)
+	c := NewClient(conn, n.timeout)
 
 	var hs Message
-	err = dec.Decode(&hs)
+	err = c.dec.Decode(&hs)
 	if err != nil {
 		log.Errorln(err)
 		return err
@@ -381,17 +357,9 @@ func (n *Node) dial(host string, solicited bool) error {
 		Source:       n.name,
 		CurrentRoute: []string{n.name},
 	}
-	err = enc.Encode(resp)
+	err = c.enc.Encode(resp)
 	if err != nil {
 		return err
-	}
-
-	// add this client to our client list
-	c := client{
-		conn:   conn,
-		enc:    enc,
-		dec:    dec,
-		hangup: make(chan bool),
 	}
 
 	n.meshLock.Lock()
@@ -570,7 +538,7 @@ func (n *Node) broadcast(m Message) {
 	n.SendMessage(m)
 }
 
-func (n *Node) sendOne(c client, m Message) {
+func (n *Node) sendOne(c *client, m Message) {
 	err := c.send(m)
 	if err != nil {
 		log.Errorln(err)

@@ -37,7 +37,7 @@ func main() {
 	log.Debugln("creating node")
 	errors := make(chan error)
 	var m chan meshage.Message
-	n, m, errors = meshage.NewNode(host, uint(*f_degree), 8966)
+	n, m, errors = meshage.NewNode(host, uint(*f_degree), 8966, 5)
 	log.Debugln("starting error handler")
 	go func() {
 		for {
