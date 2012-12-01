@@ -51,7 +51,6 @@ type Node struct {
 	name        string              // node name. Must be unique on a network.
 	degree      uint                // degree for this node, set to 0 to force node to not broadcast
 	mesh        map[string][]string // adjacency list for the known topology for this node
-	sequenceIDs map[string]uint64   // set sequence IDs for each node, including this node
 	routes      map[string]string   // one-hop routes for every node on the network, including this node
 	receive     chan Message        // channel of incoming messages. A program will read this channel for incoming messages to this node
 
@@ -88,7 +87,6 @@ func NewNode(name string, degree uint, port int, timeout int) (*Node, chan Messa
 		name:        name,
 		degree:      degree,
 		mesh:        make(map[string][]string),
-		sequenceIDs: make(map[string]uint64),
 		routes:      make(map[string]string),
 		receive:     make(chan Message, RECEIVE_BUFFER),
 		clients:     make(map[string]*client),
@@ -201,7 +199,7 @@ func (n *Node) connectionListener() {
 // handleConnection creates a new client and issues a handshake. It adds the client to the list
 // of clients only after a successful handshake
 func (n *Node) handleConnection(conn net.Conn) {
-	c := NewClient(conn, n.timeout)
+	c := newClient(conn, n.timeout)
 
 	log.Debug("got conn: %v\n", conn.RemoteAddr())
 
@@ -323,7 +321,7 @@ func (n *Node) dial(host string, solicited bool) error {
 		log.Errorln(err)
 		return err
 	}
-	c := NewClient(conn, n.timeout)
+	c := newClient(conn, n.timeout)
 
 	var hs Message
 	err = c.dec.Decode(&hs)
@@ -395,7 +393,6 @@ func (n *Node) dial(host string, solicited bool) error {
 // fix the discrepancy.
 func (n *Node) union(m map[string][]string) {
 	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
 
 	log.Debug("union mesh: %v\n", m)
 
@@ -428,8 +425,11 @@ func (n *Node) union(m map[string][]string) {
 			intersection_mesh[v] = append(intersection_mesh[v], n.name)
 		}
 	}
+
+	n.meshLock.Unlock()
+
 	if len(intersection_mesh) != 0 {
-		n.intersect_locked(intersection_mesh)
+		n.intersect(intersection_mesh)
 		u := Message{
 			Source:       n.name,
 			CurrentRoute: []string{n.name},
@@ -447,12 +447,12 @@ func (n *Node) union(m map[string][]string) {
 func (n *Node) intersect(m map[string][]string) {
 	log.Debug("intersect mesh: %v\n", m)
 	n.meshLock.Lock()
-	n.dropRoutes()
 	n.intersect_locked(m)
 	n.meshLock.Unlock()
 }
 
 func (n *Node) intersect_locked(m map[string][]string) {
+	n.dropRoutes()
 	for k, v := range m {
 		// remove all of v from key k
 		var nv []string
@@ -473,11 +473,9 @@ func (n *Node) intersect_locked(m map[string][]string) {
 		// if key k is now empty, then remove key k
 		if len(n.mesh[k]) == 0 {
 			delete(n.mesh, k)
-			delete(n.sequenceIDs, k)
 			if k == n.name {
 				log.Debug("disconnected from all clients! %#v\n", n.clients)
 				n.mesh = make(map[string][]string)
-				n.sequenceIDs = make(map[string]uint64)
 			}
 		}
 	}
@@ -487,6 +485,8 @@ func (n *Node) intersect_locked(m map[string][]string) {
 // Send a message according to the parameters set in the message. 
 // Users will generally use the Set and Broadcast methods instead of Send.
 func (n *Node) SendMessage(m Message) {
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
 	// we want to duplicate the message for each slice of recipients that follow a like route from this node
 	route_slices := make(map[string][]string)
 
@@ -575,11 +575,10 @@ func (n *Node) Broadcast(body interface{}) {
 
 // Return a sequence ID for this node and automatically increment the ID
 func (n *Node) sequenceID() uint64 {
-	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
-	n.sequenceIDs[n.name]++
-	id := n.sequenceIDs[n.name]
-	log.Debug("set id: %v", n.sequenceIDs[n.name])
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	id := uint64(r.Int63())
+	log.Debug("set id: %v", id)
 	return id
 }
 
@@ -590,30 +589,23 @@ func (n *Node) messageHandler() {
 	for {
 		m := <-n.messagePump
 		log.Debug("messageHandler: %#v\n", m)
-		// should we handle this or drop it?
-		if n.sequenceIDs[m.Source] < m.ID {
-			// it's a new message to us
-			n.meshLock.Lock()
-			n.sequenceIDs[m.Source] = m.ID
-			n.meshLock.Unlock()
-			m.CurrentRoute = append(m.CurrentRoute, n.name)
+		n.meshLock.Lock()
+		n.meshLock.Unlock()
+		m.CurrentRoute = append(m.CurrentRoute, n.name)
 
-			// do we also handle it?
-			// TODO: is there a better way to slice up this slice?
-			var new_recipients []string
-			for _, i := range m.Recipients {
-				if i == n.name {
-					go n.handleMessage(m)
-				} else {
-					new_recipients = append(new_recipients, i)
-				}
+		// do we also handle it?
+		// TODO: is there a better way to slice up this slice?
+		var new_recipients []string
+		for _, i := range m.Recipients {
+			if i == n.name {
+				go n.handleMessage(m)
+			} else {
+				new_recipients = append(new_recipients, i)
 			}
-			m.Recipients = new_recipients
-
-			go n.SendMessage(m)
-		} else {
-			log.Debugln("dropping message, sequence already encountered")
 		}
+		m.Recipients = new_recipients
+
+		go n.SendMessage(m)
 	}
 }
 

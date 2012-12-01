@@ -18,7 +18,7 @@ type client struct {
 	ack chan uint64
 }
 
-func NewClient(conn net.Conn, timeout time.Duration) *client {
+func newClient(conn net.Conn, timeout time.Duration) *client {
 	return &client{
 		conn: conn,
 		enc: gob.NewEncoder(conn),
@@ -31,6 +31,7 @@ func NewClient(conn net.Conn, timeout time.Duration) *client {
 func (c *client) send(m Message) error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	log.Debug("encoding message: %v\n", m)
 	err := c.enc.Encode(m)
 	if err != nil {
 		return err
@@ -45,6 +46,7 @@ ACKLOOP:
 				break ACKLOOP
 			}
 		case <-time.After(c.timeout):
+			c.hangup()
 			return errors.New("timeout")
 		}
 	}
@@ -61,13 +63,14 @@ func (c *client) receive() (Message, error) {
 		log.Debug("decoded message: %#v\n", m)
 		if m.Command == ACK {
 			c.ack <- m.Body.(uint64)
+			m = Message{}
 		} else {
 			// send an ack
 			a := Message{
 				Command: ACK,
 				Body: m.ID,
 			}
-			c.enc.Encode(&a)
+			c.enc.Encode(a)
 			break
 		}
 	}

@@ -8,9 +8,6 @@ import (
 // Additionally, all hops along this route are also the shortest path, so record those as well to 
 // save on effort.
 func (n *Node) updateRoute(client string) {
-	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
-
 	if len(n.mesh) == 0 {
 		return
 	}
