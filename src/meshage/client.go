@@ -3,80 +3,117 @@ package meshage
 import (
 	"encoding/gob"
 	"net"
-	"time"
 	"sync"
+	"time"
 	"errors"
+	"fmt"
+	"io"
 	log "minilog"
 )
 
 type client struct {
+	name string // name of client
 	conn net.Conn
 	enc  *gob.Encoder
 	dec  *gob.Decoder
-	timeout time.Duration
+	ack  chan uint64
 	lock sync.Mutex
-	ack chan uint64
 }
 
-func newClient(conn net.Conn, timeout time.Duration) *client {
-	return &client{
-		conn: conn,
-		enc: gob.NewEncoder(conn),
-		dec: gob.NewDecoder(conn),
-		timeout: timeout,
-		ack: make(chan uint64, RECEIVE_BUFFER),
-	}
-}
+func (n *Node) clientSend(host string, m *Message, async bool) error {
+	log.Debug("clientSend %s: %v\n", host, m)
+	if c, ok := n.clients[host]; ok {
+		c.lock.Lock()
+		defer c.lock.Unlock()
 
-func (c *client) send(m Message) error {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	log.Debug("encoding message: %v\n", m)
-	err := c.enc.Encode(m)
-	if err != nil {
-		return err
-	}
-
-	// wait for an ack or a timeout
-ACKLOOP:
-	for {
-		select {
-		case a := <-c.ack:
-			if a == m.ID {
-				break ACKLOOP
+		err := c.enc.Encode(m)
+		if err != nil {
+			c.conn.Close()
+			if async {
+				n.errors <- err
 			}
-		case <-time.After(c.timeout):
-			c.hangup()
-			return errors.New("timeout")
+			return err
+		}
+
+		// wait for a response
+		for {
+			select {
+			case ID := <-c.ack:
+				if ID == m.ID {
+					return nil
+				}
+			case <-time.After(n.timeout):
+				c.conn.Close()
+				err = errors.New("timeout")
+				if async {
+					n.errors <- err
+				}
+				return err
+			}
 		}
 	}
-	return nil
+	err := fmt.Errorf("no such client %s", host)
+	if async {
+		n.errors <- err
+	}
+	return err
 }
 
-func (c *client) receive() (Message, error) {
-	var m Message
+// clientHandler is called as a goroutine after a successful handshake. It begins
+// by issuing an MSA, and starting the receiver for the client. When the receiver
+// exits, another MSA is issued without the client.
+func (n *Node) clientHandler(host string) {
+	log.Debug("clientHandler: %v\n", host)
+	c := n.clients[host]
+
+	n.MSA()
+
 	for {
+		var m Message
 		err := c.dec.Decode(&m)
 		if err != nil {
-			return Message{}, err
+			if err != io.EOF {
+				n.errors <- err
+			}
+			break
 		}
-		log.Debug("decoded message: %#v\n", m)
+
+		log.Debug("decoded message: %v: %#v\n", host, m)
+
 		if m.Command == ACK {
-			c.ack <- m.Body.(uint64)
-			m = Message{}
+			c.ack <- m.ID
 		} else {
 			// send an ack
 			a := Message{
 				Command: ACK,
-				Body: m.ID,
+				ID:      m.ID,
 			}
-			c.enc.Encode(a)
-			break
+			err := c.enc.Encode(a)
+			if err != nil {
+				if err != io.EOF {
+					n.errors <- err
+				}
+				break
+			}
+			n.messagePump <- &m
 		}
 	}
-	return m, nil
+	log.Debug("client %v disconnected\n", host)
+
+	// client has disconnected
+	c.conn.Close()
+	n.clientLock.Lock()
+	delete(n.clients, c.name)
+	n.clientLock.Unlock()
+
+	n.MSA()
 }
 
-func (c *client) hangup() {
-	c.conn.Close()
+func (n *Node) Hangup(host string) error {
+	log.Debug("hangup: %v\n", host)
+	if c, ok := n.clients[host]; ok {
+		c.conn.Close()
+		return nil
+	}
+	return fmt.Errorf("no such client: %s", host)
 }

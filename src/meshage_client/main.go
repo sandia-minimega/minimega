@@ -36,8 +36,8 @@ func main() {
 	host, _ := os.Hostname()
 	log.Debugln("creating node")
 	errors := make(chan error)
-	var m chan meshage.Message
-	n, m, errors = meshage.NewNode(host, uint(*f_degree), 8966, 5)
+	var m chan *meshage.Message
+	n, m, errors = meshage.NewNode(host, uint(*f_degree), 8966)
 	log.Debugln("starting error handler")
 	go func() {
 		for {
@@ -48,10 +48,7 @@ func main() {
 	go messageHandler(m)
 	log.Debugln("checking for host to connect to")
 	if *f_addr != "" {
-		err := n.Dial(*f_addr)
-		if err != nil {
-			fmt.Println(err)
-		}
+		n.Dial(*f_addr)
 	}
 
 	if *f_b {

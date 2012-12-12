@@ -25,7 +25,7 @@ func init() {
 			Call: func(args []string) (string, error) {
 				switch len(args) {
 				case 0:
-					return fmt.Sprintf("%d", n.Degree()), nil
+					return fmt.Sprintf("%d", n.GetDegree()), nil
 				case 1:
 					i, err := strconv.Atoi(args[0])
 					if err != nil {
@@ -44,8 +44,8 @@ func init() {
 				if len(args) != 1 {
 					return "", fmt.Errorf("dial takes one argument")
 				}
-				err := n.Dial(args[0])
-				return "", err
+				n.Dial(args[0])
+				return "", nil
 			},
 			Help: "dial a host",
 		},
@@ -90,7 +90,7 @@ func init() {
 		"status": &command{
 			Call: func(args []string) (string, error) {
 				mesh := n.Mesh()
-				degree := n.Degree()
+				degree := n.GetDegree()
 				nodes := len(mesh)
 				host, err := os.Hostname()
 				if err != nil {
@@ -106,9 +106,18 @@ func init() {
 		"list": &command{
 			Call: func(args []string) (string, error) {
 				mesh := n.Mesh()
+
+				var keys []string
+				for k, _ := range mesh {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+
 				var ret string
-				for k, v := range mesh {
-					ret += fmt.Sprintf("%s\n", k)
+				for _, key := range keys {
+					v := mesh[key]
+					ret += fmt.Sprintf("%s\n", key)
+					sort.Strings(v)
 					for _, x := range v {
 						ret += fmt.Sprintf(" |--%s\n", x)
 					}
@@ -148,7 +157,7 @@ func init() {
 				if len(args) < 2 {
 					return "", fmt.Errorf("set takes at least two arguments")
 				}
-				n.Send(args[0:len(args)-1], args[len(args)-1])
+				n.Set(args[0:len(args)-1], args[len(args)-1])
 				return "", nil
 			},
 			Help: "set send a message to one or more nodes. last argument is the message, all preceeding arguments are node names",
