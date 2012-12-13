@@ -5,7 +5,6 @@ import (
 	"errors"
 )
 
-
 func host_tap_create(c cli_command) cli_response {
 	if len(c.Args) != 1 {
 		return cli_response{

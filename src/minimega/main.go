@@ -20,13 +20,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"goreadline"
 	"io"
 	log "minilog"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
-	"goreadline"
 )
 
 var (
@@ -35,6 +35,8 @@ var (
 	f_logfile   = flag.String("logfile", "", "also log to file")
 	f_base      = flag.String("base", "/tmp/minimega", "base path for minimega data")
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
+	f_degree    = flag.Int("degree", 0, "meshage starting degree")
+	f_port      = flag.Int("port", 8966, "meshage port to listen on")
 	vms         vm_list
 	signal_once bool = false
 )
@@ -88,6 +90,13 @@ func main() {
 	}
 
 	ksm_save()
+
+	// create a node for meshage
+	host, err := os.Hostname()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	meshageInit(host, uint(*f_degree), *f_port)
 
 	// invoke the cli
 	go cli_mux()

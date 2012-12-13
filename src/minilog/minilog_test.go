@@ -1,10 +1,10 @@
 package minilog
 
 import (
-	"testing"
 	"bytes"
 	"io"
 	"strings"
+	"testing"
 	"time"
 )
 
@@ -22,11 +22,11 @@ func TestMultilog(t *testing.T) {
 	s1 := sink1.String()
 	s2 := sink2.String()
 
-	if !strings.Contains(s1,test_string) {
+	if !strings.Contains(s1, test_string) {
 		t.Fatal("sink1 got:", s1)
 	}
 
-	if !strings.Contains(s2,test_string) {
+	if !strings.Contains(s2, test_string) {
 		t.Fatal("sink2 got:", s2)
 	}
 }
@@ -45,7 +45,7 @@ func TestLogLevels(t *testing.T) {
 	s1 := sink1.String()
 	s2 := sink2.String()
 
-	if !strings.Contains(s1,test_string) {
+	if !strings.Contains(s1, test_string) {
 		t.Fatal("sink1 got:", s1)
 	}
 
@@ -69,7 +69,7 @@ func TestDelLogger(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(s,test_string) {
+	if !strings.Contains(s, test_string) {
 		t.Fatal("sink got:", s)
 	}
 
@@ -77,7 +77,7 @@ func TestDelLogger(t *testing.T) {
 
 	Debug(test_string2)
 
-	s,err = sink.ReadString('\n')
+	s, err = sink.ReadString('\n')
 	if err != nil && err != io.EOF {
 		t.Fatal(err)
 	}
@@ -94,7 +94,7 @@ func TestLogAll(t *testing.T) {
 	AddLogger("sink_all", sink, DEBUG, false)
 
 	LogAll(source, DEBUG, "test")
-	time.Sleep(1*time.Second) // allow the LogAll goroutine to finish
+	time.Sleep(1 * time.Second) // allow the LogAll goroutine to finish
 
 	// we should see only three lines on the logger output
 	l1, err := sink.ReadString('\n')

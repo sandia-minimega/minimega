@@ -27,6 +27,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"goreadline"
 	"io"
 	log "minilog"
 	"os"
@@ -35,7 +36,6 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
-	"goreadline"
 )
 
 var (
@@ -580,13 +580,13 @@ Attach an initrd image to a VM. Passed along with the kernel image at boot time.
 		"vm_qemu_append": &command{
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) == 0 {
-                                        return cli_response{
-                                                Response: strings.Join(info.Qemu_Append, " "),
-                                        }
-                                } else {
-                                        info.Qemu_Append = c.Args
-                                }
-                                return cli_response{}
+					return cli_response{
+						Response: strings.Join(info.Qemu_Append, " "),
+					}
+				} else {
+					info.Qemu_Append = c.Args
+				}
+				return cli_response{}
 			},
 			Helpshort: "add additional arguments for the QEMU command",
 			Helplong: `
@@ -719,7 +719,7 @@ shows the command history`,
 		},
 
 		"clear": &command{
-			Call: func (c cli_command) cli_response {
+			Call: func(c cli_command) cli_response {
 				var r cli_response
 				if len(c.Args) != 1 {
 					return cli_response{
@@ -746,7 +746,7 @@ will clear the list of associated networks.`,
 		},
 
 		"help": &command{
-			Call: func (c cli_command) cli_response {
+			Call: func(c cli_command) cli_response {
 				r := cli_response{}
 				if len(c.Args) == 0 { // display help on help, and list the short helps
 					r.Response = "Display help on a command. Here is a list of commands:\n"
@@ -777,15 +777,15 @@ will clear the list of associated networks.`,
 				return r
 			},
 			Helpshort: "show this help message",
-			Helplong: ``,
-			Record: false,
+			Helplong:  ``,
+			Record:    false,
 			Clear: func() error {
 				return nil
 			},
 		},
 
 		"host_tap": &command{
-			Call: host_tap_create,
+			Call:      host_tap_create,
 			Helpshort: "create a host tap for communicating between hosts and VMs",
 			Helplong: `
 Create host tap on a named vlan for communicating between a host and any VMs on

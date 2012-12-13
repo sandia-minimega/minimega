@@ -15,6 +15,7 @@
 package minilog
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -22,7 +23,6 @@ import (
 	"os"
 	"runtime"
 	"strconv"
-	"bufio"
 	"strings"
 )
 

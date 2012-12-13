@@ -1,13 +1,13 @@
 package novnctun
 
 import (
-	"websocket"
 	"encoding/base64"
 	"fmt"
 	"html"
 	"net"
 	"net/http"
 	"strings"
+	"websocket"
 )
 
 const BUF = 32768
@@ -17,9 +17,9 @@ type Host_list interface {
 }
 
 type Tun struct {
-	Addr  string
-	Hosts Host_list
-	Files string // path to files for novnc to serve
+	Addr   string
+	Hosts  Host_list
+	Files  string // path to files for novnc to serve
 	Unsafe bool
 }
 
@@ -40,7 +40,7 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case 3: // "/<host>"
 		w.Write([]byte(t.html_ports(fields[1])))
 	case 4: // "/<host>/<port>"
-		if t.allowed(fields[1],fields[2]) {
+		if t.allowed(fields[1], fields[2]) {
 			title := html.EscapeString(fields[1] + ":" + fields[2])
 			path := fmt.Sprintf("/novnc/vnc_auto.html?title=%v&path=ws/%v/%v", title, fields[1], fields[2])
 			http.Redirect(w, r, path, http.StatusTemporaryRedirect)
@@ -48,7 +48,7 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 		}
 	case 5: // "/ws/<host>/<port>"
-		if t.allowed(fields[2],fields[3]) {
+		if t.allowed(fields[2], fields[3]) {
 			t.ws_handler(w, r)
 		} else {
 			http.NotFound(w, r)

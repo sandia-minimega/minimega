@@ -9,9 +9,9 @@ import (
 )
 
 type Range struct {
-	Prefix	string
-	Min		int
-	Max		int
+	Prefix string
+	Min    int
+	Max    int
 }
 
 func NewRange(prefix string, min, max int) (*Range, error) {
@@ -27,7 +27,7 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	dedup := make(map[int]int)
 
 	// Make sure it's something like kn[1-50]
-	match, err := regexp.MatchString(r.Prefix + "\\[.*\\]", s)
+	match, err := regexp.MatchString(r.Prefix+"\\[.*\\]", s)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +60,9 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 			}
 		} else {
 			t, err := strconv.Atoi(part)
-			if err != nil {return nil, err}
+			if err != nil {
+				return nil, err
+			}
 			//result = append(result, r.Prefix + t)
 			dedup[t] = t
 		}
@@ -74,7 +76,7 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	sort.Ints(tmp)
 
 	for _, n := range tmp {
-		result = append(result, r.Prefix + strconv.Itoa(n))
+		result = append(result, r.Prefix+strconv.Itoa(n))
 	}
 
 	return result, nil
@@ -87,7 +89,7 @@ func (r *Range) UnsplitRange(nodes []string) (string, error) {
 	// numbers into an array of ints
 	for _, node := range nodes {
 		// make sure it's a valid node
-		match, err := regexp.MatchString(r.Prefix + "[0-9]+", node)
+		match, err := regexp.MatchString(r.Prefix+"[0-9]+", node)
 		if err != nil {
 			return "", err
 		}
@@ -115,15 +117,15 @@ func (r *Range) UnsplitRange(nodes []string) (string, error) {
 	start := nums[0]
 	prev := nums[0]
 	for i := 1; i < len(nums); i++ {
-		if nums[i] - prev != 1 {
+		if nums[i]-prev != 1 {
 			if start != prev {
 				result = result + "-" + strconv.Itoa(prev) + "," + strconv.Itoa(nums[i])
 			} else {
 				result = result + "," + strconv.Itoa(nums[i])
 			}
 			start = nums[i]
-		} else if i == len(nums) -1 {
-			if nums[i] - prev == 1 {
+		} else if i == len(nums)-1 {
+			if nums[i]-prev == 1 {
 				result = result + "-" + strconv.Itoa(nums[i])
 			} else {
 				result = result + "," + strconv.Itoa(nums[i])
@@ -139,9 +141,13 @@ func (r *Range) UnsplitRange(nodes []string) (string, error) {
 func subrange(s string) ([]string, error) {
 	limits := strings.Split(s, "-")
 	start, err := strconv.Atoi(limits[0])
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	end, err := strconv.Atoi(limits[1])
-	if err != nil {return nil, err}
+	if err != nil {
+		return nil, err
+	}
 
 	var nodes []string
 	for i := start; i <= end; i++ {

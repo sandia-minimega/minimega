@@ -64,7 +64,7 @@ type vm_info struct {
 	Kernel_path   string
 	Initrd_path   string
 	Append        string
-	Qemu_Append	[]string	// extra arguments for QEMU
+	Qemu_Append   []string  // extra arguments for QEMU
 	State         int       // one of the VM_ states listed above
 	Kill          chan bool // kill channel to signal to shut a vm down
 	instance_path string

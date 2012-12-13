@@ -2,13 +2,13 @@ package meshage
 
 import (
 	"encoding/gob"
-	"net"
-	"sync"
-	"time"
 	"errors"
 	"fmt"
 	"io"
 	log "minilog"
+	"net"
+	"sync"
+	"time"
 )
 
 type client struct {

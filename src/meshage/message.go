@@ -1,8 +1,8 @@
 package meshage
 
 import (
-	log "minilog"
 	"fmt"
+	log "minilog"
 )
 
 const (
@@ -54,13 +54,13 @@ func (n *Node) send(m *Message, async bool) error {
 	}
 
 	log.Debug("routeSlices: %v\n", routeSlices)
-	for k,v := range routeSlices {
+	for k, v := range routeSlices {
 		mOne := &Message{
-			Recipients: v,
-			Source: m.Source,
+			Recipients:   v,
+			Source:       m.Source,
 			CurrentRoute: m.CurrentRoute,
-			Command: m.Command,
-			Body: m.Body,
+			Command:      m.Command,
+			Body:         m.Body,
 		}
 		err := n.clientSend(k, mOne, async)
 		if err != nil {
@@ -77,11 +77,11 @@ func (n *Node) send(m *Message, async bool) error {
 // from all recipient nodes, or until the timeout is reached.
 func (n *Node) Set(recipients []string, body interface{}) error {
 	m := &Message{
-		Recipients: recipients,
-		Source: n.name,
+		Recipients:   recipients,
+		Source:       n.name,
 		CurrentRoute: []string{n.name},
-		Command: MESSAGE,
-		Body: body,
+		Command:      MESSAGE,
+		Body:         body,
 	}
 	return n.send(m, false)
 }
@@ -95,11 +95,11 @@ func (n *Node) Broadcast(body interface{}) error {
 		}
 	}
 	m := &Message{
-		Recipients: recipients,
-		Source: n.name,
+		Recipients:   recipients,
+		Source:       n.name,
 		CurrentRoute: []string{n.name},
-		Command: MESSAGE,
-		Body: body,
+		Command:      MESSAGE,
+		Body:         body,
 	}
 	return n.send(m, false)
 }

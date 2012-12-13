@@ -14,7 +14,7 @@ func (n *Node) generateEffectiveNetwork() {
 	emesh := make(mesh)
 
 	for k, v := range n.network {
-effectiveNetworkLoop:
+	effectiveNetworkLoop:
 		for _, i := range v {
 			for _, j := range emesh[i] {
 				if j == k {
