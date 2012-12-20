@@ -87,7 +87,7 @@ func (n *Node) Set(recipients []string, body interface{}) error {
 }
 
 // Broadcast sends a message to all nodes on the mesh.
-func (n *Node) Broadcast(body interface{}) error {
+func (n *Node) Broadcast(body interface{}) (int, error) {
 	var recipients []string
 	for k, _ := range n.effectiveNetwork {
 		if k != n.name {
@@ -101,7 +101,7 @@ func (n *Node) Broadcast(body interface{}) error {
 		Command:      MESSAGE,
 		Body:         body,
 	}
-	return n.send(m, false)
+	return len(recipients), n.send(m, false)
 }
 
 // messageHandler accepts messages from all connected clients and forwards them to the

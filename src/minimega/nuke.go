@@ -11,7 +11,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"io/ioutil"
 	log "minilog"
 	"os"
@@ -29,7 +28,7 @@ import (
 func nuke(c cli_command) cli_response { // the cli_response return is just so we can fit in the cli model
 	if len(c.Args) != 0 {
 		return cli_response{
-			Error: errors.New("nuke does not take any arguments"),
+			Error: "nuke does not take any arguments",
 		}
 	}
 
@@ -38,7 +37,7 @@ func nuke(c cli_command) cli_response { // the cli_response return is just so we
 	err := filepath.Walk(*f_base, nuke_walker)
 	if err != nil {
 		return cli_response{
-			Error: err,
+			Error: err.Error(),
 		}
 	}
 
@@ -47,7 +46,7 @@ func nuke(c cli_command) cli_response { // the cli_response return is just so we
 	err = os.RemoveAll(*f_base)
 	if err != nil {
 		return cli_response{
-			Error: err,
+			Error: err.Error(),
 		}
 	}
 	teardown()

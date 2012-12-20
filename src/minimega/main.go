@@ -79,7 +79,7 @@ func main() {
 	}()
 
 	r := external_check(cli_command{})
-	if r.Error != nil {
+	if r.Error != "" {
 		log.Error("%v", r.Error)
 	}
 
@@ -112,7 +112,7 @@ func main() {
 		command_chan_local <- c
 		for {
 			r := <-ack_chan_local
-			if r.Error != nil {
+			if r.Error != "" {
 				log.Errorln(r.Error)
 			}
 			if r.Response != "" {
@@ -200,7 +200,7 @@ func local_command() {
 			}
 			return
 		}
-		if r.Error != nil {
+		if r.Error != "" {
 			log.Errorln(r.Error)
 		}
 		if r.Response != "" {

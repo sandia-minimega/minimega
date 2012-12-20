@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"novnctun"
@@ -48,7 +47,7 @@ func cli_vnc(c cli_command) cli_response {
 		err := vnc_launch("")
 		if err != nil {
 			return cli_response{
-				Error: err,
+				Error: err.Error(),
 			}
 		}
 		return cli_response{}
@@ -61,7 +60,7 @@ func cli_vnc(c cli_command) cli_response {
 			}
 		} else if len(c.Args) > 2 {
 			return cli_response{
-				Error: errors.New("vnc novnc takes 2 arguments"),
+				Error: "vnc novnc takes 2 arguments",
 			}
 		}
 		vnc_novnc = c.Args[1]
@@ -72,7 +71,7 @@ func cli_vnc(c cli_command) cli_response {
 			} else {
 				e := fmt.Sprintf("vnc already running on: %v", vnc_server.Addr)
 				return cli_response{
-					Error: errors.New(e),
+					Error: e,
 				}
 			}
 		} else if len(c.Args) == 2 {
@@ -81,19 +80,19 @@ func cli_vnc(c cli_command) cli_response {
 			} else {
 				e := fmt.Sprintf("vnc already running on: %v", vnc_server.Addr)
 				return cli_response{
-					Error: errors.New(e),
+					Error: e,
 				}
 			}
 		} else {
 			return cli_response{
-				Error: errors.New("invalid command"),
+				Error: "invalid command",
 			}
 		}
 	default: // must be an id right?
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
 			return cli_response{
-				Error: err,
+				Error: err.Error(),
 			}
 		}
 		if id < len(vms.vms) {
@@ -103,19 +102,19 @@ func cli_vnc(c cli_command) cli_response {
 			host, err := os.Hostname()
 			if err != nil {
 				return cli_response{
-					Error: err,
+					Error: err.Error(),
 				}
 			}
 			s := fmt.Sprintf("/%v/%v", host, 5900+id)
 			err = vnc_launch(s)
 			if err != nil {
 				return cli_response{
-					Error: err,
+					Error: err.Error(),
 				}
 			}
 		} else {
 			return cli_response{
-				Error: errors.New("invalid VM id"),
+				Error: "invalid VM id",
 			}
 		}
 	}

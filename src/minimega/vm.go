@@ -20,7 +20,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
@@ -99,13 +98,13 @@ func (l *vm_list) status(c cli_command) cli_response {
 		}
 	} else if len(c.Args) != 1 {
 		return cli_response{
-			Error: errors.New("status takes one argument"),
+			Error: "status takes one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
 			return cli_response{
-				Error: err,
+				Error: err.Error(),
 			}
 		}
 		// find that vm, should be in order...
@@ -116,7 +115,7 @@ func (l *vm_list) status(c cli_command) cli_response {
 			}
 		} else {
 			return cli_response{
-				Error: errors.New("invalid VM id"),
+				Error: "invalid VM id",
 			}
 		}
 	}
@@ -131,20 +130,20 @@ func (l *vm_list) start(c cli_command) cli_response {
 		}
 	} else if len(c.Args) != 1 {
 		return cli_response{
-			Error: errors.New("start takes one argument"),
+			Error: "start takes one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
 			return cli_response{
-				Error: err,
+				Error: err.Error(),
 			}
 		}
 		if id < len(l.vms) {
 			l.vms[id].start()
 		} else {
 			return cli_response{
-				Error: errors.New("invalid VM id"),
+				Error: "invalid VM id",
 			}
 		}
 	}

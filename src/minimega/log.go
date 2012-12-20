@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"os"
@@ -35,13 +34,13 @@ func cli_log_level(c cli_command) cli_response {
 		}
 	} else if len(c.Args) > 1 {
 		return cli_response{
-			Error: errors.New("log_level must be [debug, info, warn, error, fatal]"),
+			Error: "log_level must be [debug, info, warn, error, fatal]",
 		}
 	} else {
 		level, err := log.LevelInt(c.Args[0])
 		if err != nil {
 			return cli_response{
-				Error: err,
+				Error: err.Error(),
 			}
 		}
 		*f_loglevel = c.Args[0]
@@ -66,7 +65,7 @@ func cli_log_stderr(c cli_command) cli_response {
 		}
 	} else if len(c.Args) > 1 {
 		return cli_response{
-			Error: errors.New("log_stderr takes only one argument"),
+			Error: "log_stderr takes only one argument",
 		}
 	} else {
 		_, err := log.GetLevel("stdio")
@@ -84,7 +83,7 @@ func cli_log_stderr(c cli_command) cli_response {
 			}
 		default:
 			return cli_response{
-				Error: errors.New("log_stderr must be [true, false]"),
+				Error: "log_stderr must be [true, false]",
 			}
 		}
 	}
@@ -105,7 +104,7 @@ func cli_log_file(c cli_command) cli_response {
 		}
 	} else if len(c.Args) > 1 {
 		return cli_response{
-			Error: errors.New("log_file takes only one argument"),
+			Error: "log_file takes only one argument",
 		}
 	} else {
 		_, err := log.GetLevel("file")
@@ -117,7 +116,7 @@ func cli_log_file(c cli_command) cli_response {
 			logfile, err := os.OpenFile(c.Args[0], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 			if err != nil {
 				return cli_response{
-					Error: err,
+					Error: err.Error(),
 				}
 			}
 			level, _ := log.LevelInt(*f_loglevel)

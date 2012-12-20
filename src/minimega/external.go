@@ -12,7 +12,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"os/exec"
@@ -33,7 +32,7 @@ var external_processes = map[string]string{
 func external_check(c cli_command) cli_response {
 	if len(c.Args) != 0 {
 		return cli_response{
-			Error: errors.New("check does not take any arguments"),
+			Error: "check does not take any arguments",
 		}
 	}
 	for _, i := range external_processes {
@@ -41,7 +40,7 @@ func external_check(c cli_command) cli_response {
 		if err != nil {
 			e := fmt.Sprintf("%v not found", i)
 			return cli_response{
-				Error: errors.New(e),
+				Error: e,
 			}
 		} else {
 			log.Info("%v found at: %v", i, path)

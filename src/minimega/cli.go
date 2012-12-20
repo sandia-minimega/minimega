@@ -25,7 +25,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"goreadline"
 	"io"
@@ -46,9 +45,11 @@ var (
 	// them all as if they were typed locally.
 	command_chan_local  chan cli_command
 	command_chan_socket chan cli_command
+	command_chan_meshage chan cli_command
 
 	ack_chan_local  chan cli_response // acknowledgements from the cli, one per incoming command
 	ack_chan_socket chan cli_response
+	ack_chan_meshage chan cli_response
 
 	cli_commands map[string]*command
 )
@@ -57,12 +58,14 @@ type cli_command struct {
 	Command  string
 	Args     []string
 	ack_chan chan cli_response
+	TID int32
 }
 
 type cli_response struct {
 	Response string
-	Error    error
+	Error    string // because you can't gob/json encode an error type
 	More     bool // more is set if the called command will be sending multiple responses
+	TID int32
 }
 
 type command struct {
@@ -76,8 +79,10 @@ type command struct {
 func init() {
 	command_chan_local = make(chan cli_command)
 	command_chan_socket = make(chan cli_command)
+	command_chan_meshage = make(chan cli_command)
 	ack_chan_local = make(chan cli_response)
 	ack_chan_socket = make(chan cli_response)
+	ack_chan_meshage = make(chan cli_response)
 
 	// list of commands the cli supports. some commands have small callbacks, which
 	// are defined inline.
@@ -90,13 +95,13 @@ func init() {
 					}
 				} else if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("rate takes one argument"),
+						Error: "rate takes one argument",
 					}
 				} else {
 					r, err := strconv.Atoi(c.Args[0])
 					if err != nil {
 						return cli_response{
-							Error: err,
+							Error: err.Error(),
 						}
 					}
 					launch_rate = time.Millisecond * time.Duration(r)
@@ -193,20 +198,20 @@ removes the temporary minimega state on the harddisk.`,
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("write takes a single argument"),
+						Error: "write takes a single argument",
 					}
 				}
 				file, err := os.Create(c.Args[0])
 				if err != nil {
 					return cli_response{
-						Error: err,
+						Error: err.Error(),
 					}
 				}
 				for _, i := range command_buf {
 					_, err = file.WriteString(i + "\n")
 					if err != nil {
 						return cli_response{
-							Error: err,
+							Error: err.Error(),
 						}
 					}
 				}
@@ -229,13 +234,13 @@ failed, as well as some commands that do not impact the VM state, such as
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("read takes a single argument"),
+						Error: "read takes a single argument",
 					}
 				}
 				file, err := os.Open(c.Args[0])
 				if err != nil {
 					return cli_response{
-						Error: err,
+						Error: err.Error(),
 					}
 				}
 				r := bufio.NewReader(file)
@@ -263,7 +268,7 @@ failed, as well as some commands that do not impact the VM state, such as
 					})
 					resp.More = true
 					c.ack_chan <- resp
-					if resp.Error != nil {
+					if resp.Error != "" {
 						log.Errorln(resp.Error)
 						break // stop on errors
 					}
@@ -300,7 +305,7 @@ id field.`,
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 0 {
 					return cli_response{
-						Error: errors.New("quit takes no arguments"),
+						Error: "quit takes no arguments",
 					}
 				}
 				teardown()
@@ -318,7 +323,7 @@ id field.`,
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 0 {
 					return cli_response{
-						Error: errors.New("exit takes no arguments"),
+						Error: "exit takes no arguments",
 					}
 				}
 				teardown()
@@ -336,13 +341,13 @@ id field.`,
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("vm_launch takes one argument"),
+						Error: "vm_launch takes one argument",
 					}
 				}
 				a, err := strconv.Atoi(c.Args[0])
 				if err != nil {
 					return cli_response{
-						Error: err,
+						Error: err.Error(),
 					}
 				}
 				ksm_enable()
@@ -365,13 +370,13 @@ after launching will have no effect on launched VMs.`,
 			Call: func(c cli_command) cli_response {
 				if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("vm_kill takes one argument"),
+						Error: "vm_kill takes one argument",
 					}
 				}
 				a, err := strconv.Atoi(c.Args[0])
 				if err != nil {
 					return cli_response{
-						Error: err,
+						Error: err.Error(),
 					}
 				}
 				vms.kill(a)
@@ -412,7 +417,7 @@ call start without the optional VM id.`,
 					external_processes["qemu"] = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_qemu takes only one argument"),
+						Error: "vm_qemu takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -436,7 +441,7 @@ call start without the optional VM id.`,
 					info.Memory = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_memory takes only one argument"),
+						Error: "vm_memory takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -460,7 +465,7 @@ call start without the optional VM id.`,
 					info.Vcpus = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_vcpus takes only one argument"),
+						Error: "vm_vcpus takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -484,7 +489,7 @@ call start without the optional VM id.`,
 					info.Disk_path = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_disk takes only one argument"),
+						Error: "vm_disk takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -510,7 +515,7 @@ Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 					info.Cdrom_path = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_cdrom takes only one argument"),
+						Error: "vm_cdrom takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -536,7 +541,7 @@ to be the boot device.`,
 					info.Kernel_path = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_kernel takes only one argument"),
+						Error: "vm_kernel takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -562,7 +567,7 @@ of any disk image.`,
 					info.Initrd_path = c.Args[0]
 				} else {
 					return cli_response{
-						Error: errors.New("vm_initrd takes only one argument"),
+						Error: "vm_initrd takes only one argument",
 					}
 				}
 				return cli_response{}
@@ -639,7 +644,7 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 						err, ok := current_bridge.Lan_create(lan)
 						if !ok {
 							return cli_response{
-								Error: err,
+								Error: err.Error(),
 							}
 						}
 						if err == nil {
@@ -702,7 +707,7 @@ invoke the vnc server if it isn't already started, on the default port of 8080.`
 			Call: func(c cli_command) cli_response {
 				r := cli_response{}
 				if len(c.Args) != 0 {
-					r.Error = errors.New("history takes no arguments")
+					r.Error = "history takes no arguments"
 				} else {
 					r.Response = strings.Join(command_buf, "\n")
 
@@ -723,15 +728,15 @@ shows the command history`,
 				var r cli_response
 				if len(c.Args) != 1 {
 					return cli_response{
-						Error: errors.New("clear takes one argument"),
+						Error: "clear takes one argument",
 					}
 				}
 				cc := c.Args[0]
 				if cli_commands[cc] == nil {
 					e := fmt.Sprintf("invalid command: %v", cc)
-					r.Error = errors.New(e)
+					r.Error = e
 				} else {
-					r.Error = cli_commands[cc].Clear()
+					r.Error = cli_commands[cc].Clear().Error()
 				}
 				return r
 			},
@@ -769,10 +774,10 @@ will clear the list of associated networks.`,
 						r.Response += fmt.Sprintln(cli_commands[c.Args[0]].Helplong)
 					} else {
 						e := fmt.Sprintf("no help on command: %v", c.Args[0])
-						r.Error = errors.New(e)
+						r.Error = e
 					}
 				} else {
-					r.Error = errors.New("help takes one argument")
+					r.Error = "help takes one argument"
 				}
 				return r
 			},
@@ -797,8 +802,151 @@ successful if a tap was created. The tap will be named 'host_tap_<vlan>', where
 				return nil //perhaps calling this should remove all host taps
 			},
 		},
+
+		"mesh_degree": &command{
+			Call: meshageDegree,
+			Helpshort: "view or set the current degree for this mesh node",
+			Helplong: `
+View or set the current degree for this mesh node.`,
+			Record: true,
+			Clear: func() error {
+				meshageNode.SetDegree(0)
+				return nil
+			},
+		},
+
+		"mesh_dial": &command{
+			Call: meshageDial,
+			Helpshort: "connect this node to another",
+			Helplong: `
+Attempt to connect to another listening node.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_dot": &command{
+			Call: meshageDot,
+			Helpshort: "output a graphviz formatted dot file",
+			Helplong: `
+Output a graphviz formatted dot file representing the connected topology.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_status": &command{
+			Call: meshageStatus,
+			Helpshort: "display a short status report of the mesh",
+			Helplong: `
+Display a short status report of the mesh.`,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_list": &command{
+			Call: meshageList,
+			Helpshort: "display the mesh adjacency list",
+			Helplong: `
+Display the mesh adjacency list.`,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_hangup": &command{
+			Call: meshageHangup,
+			Helpshort: "disconnect from a client",
+			Helplong: `
+Disconnect from a client.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_msa_timeout": &command{
+			Call: meshageMSATimeout,
+			Helpshort: "view or set the MSA timeout",
+			Helplong: `
+View or the the Meshage State Announcement timeout.`,
+			Record: true,
+			Clear: func() error {
+				meshageNode.SetMSATimeout(60)
+				return nil
+			},
+		},
+
+		"mesh_set": &command{
+			Call: meshageSet,
+			Helpshort: "send a command to one or more connected clients",
+			Helplong: `
+Send a command to one or more connected clients.
+For example, to get the vm_status from nodes kn1 and kn2:
+	mesh_set kn[1-2] vm_status`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"mesh_broadcast": &command{
+			Call: meshageBroadcast,
+			Helpshort: "send a command to all connected clients",
+			Helplong: `
+Send a command to all connected clients.
+For example, to get the vm_status from all nodes:
+	mesh_broadcast vm_status`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"hostname": &command{
+			Call: func(c cli_command) cli_response {
+				host, err := os.Hostname()
+				if err != nil {
+					return cli_response{
+						Error: err.Error(),
+					}
+				}
+				return cli_response{
+					Response: host,
+				}
+			},
+			Helpshort: "return the hostname",
+			Helplong: `
+Return the hostname`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
+
+func makeCommand(s string) cli_command {
+	f := strings.Fields(s)
+	var command string
+	var args []string
+	if len(f) > 0 {
+		command = f[0]
+	}
+	if len(f) > 1 {
+		args = f[1:]
+	}
+	return cli_command{
+		Command: command,
+		Args:    args,
+	}
+}
+
 
 // local command line interface, wrapping readline
 func cli() {
@@ -809,23 +957,13 @@ func cli() {
 			break // EOF
 		}
 		log.Debug("got from stdin:", line)
-		f := strings.Fields(string(line))
-		var command string
-		var args []string
-		if len(f) > 0 {
-			command = f[0]
-		}
-		if len(f) > 1 {
-			args = f[1:]
-		}
-		c := cli_command{
-			Command: command,
-			Args:    args,
-		}
+
+		c := makeCommand(string(line))
+
 		command_chan_local <- c
 		for {
 			r := <-ack_chan_local
-			if r.Error != nil {
+			if r.Error != "" {
 				log.Errorln(r.Error)
 			}
 			if r.Response != "" {
@@ -854,6 +992,9 @@ func cli_mux() {
 		case c := <-command_chan_socket:
 			c.ack_chan = ack_chan_socket
 			ack_chan_socket <- cli_exec(c)
+		case c := <-command_chan_meshage:
+			c.ack_chan = ack_chan_meshage
+			ack_chan_meshage <- cli_exec(c)
 		}
 	}
 }
@@ -880,11 +1021,11 @@ func cli_exec(c cli_command) cli_response {
 	if cli_commands[c.Command] == nil {
 		e := fmt.Sprintf("invalid command: %v", c.Command)
 		return cli_response{
-			Error: errors.New(e),
+			Error: e,
 		}
 	}
 	r := cli_commands[c.Command].Call(c)
-	if r.Error == nil {
+	if r.Error == "" {
 		if cli_commands[c.Command].Record {
 			s := c.Command
 			if len(c.Args) > 0 {
