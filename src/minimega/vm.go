@@ -12,12 +12,6 @@
 // struct for launching vms of other types.
 package main
 
-// TODO: refactor this so that the vm_info struct has the Cmd struct in it, 
-// and the methods for it. This way, we can just keep a global list of 
-// vm_infos. This will make it easy to do things like attach to an instance's 
-// stdio, or qmp socket, etc. Meanwhile, the vm_info's themselves all have 
-// things running in goroutines.
-
 import (
 	"bytes"
 	"fmt"

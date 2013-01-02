@@ -9,12 +9,9 @@
 package main
 
 // TODO:
-// ranged commands
 // get detailed status
 // write unit tests
 // dnsmasq server stuff
-
-// BUG(fritz): socket connection can't enc/dec error type
 
 import (
 	"encoding/json"

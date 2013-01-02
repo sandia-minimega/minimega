@@ -1,7 +1,5 @@
 package meshage
 
-// TODO: periodic MSA to avoid lollipop problem
-
 import (
 	"encoding/gob"
 	"errors"

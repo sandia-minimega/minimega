@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"strconv"
+	"io/ioutil"
 	"strings"
 )
 
@@ -37,23 +38,16 @@ func ksm_save() {
 	ksm_sleep_millisecs = ksm_get_int_from_file(ksm_path_sleep_millisecs)
 }
 
-// TODO: rewrite this using ReadFile in ioutil
 func ksm_get_int_from_file(filename string) int {
-	buffer := make([]byte, 1024)
-	// get the state for us to return ksm to when we're done
-	file, err := os.Open(filename)
+	buffer, err := ioutil.ReadFile(filename)
 	if err != nil {
-		log.Fatal("%v", err)
+		log.Fatalln(err)
 	}
-	n, err := file.Read(buffer[:])
-	if err != nil {
-		log.Fatal("%v", err)
-	}
-	b := strings.TrimSpace(string(buffer[:n]))
+	b := strings.TrimSpace(string(buffer))
 	log.Info("read: %v", b)
 	run, err := strconv.Atoi(b)
 	if err != nil {
-		log.Fatal("%v", err)
+		log.Fatalln(err)
 	}
 	log.Info("got %v from %v", int(run), filename)
 	return int(run)
