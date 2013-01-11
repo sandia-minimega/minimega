@@ -10,6 +10,9 @@ import (
 	log "minilog"
 	"os"
 	"vmconfig"
+	"strings"
+	"path/filepath"
+	"os/exec"
 )
 
 var (
@@ -18,6 +21,8 @@ var (
 	f_logfile       = flag.String("logfile", "", "also log to file")
 	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
 	f_noclean       = flag.Bool("noclean", false, "do not remove build directory")
+	f_stage1	= flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
+	f_stage2	= flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -44,6 +49,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// stage 1 and stage 2 flags are mutually exclusive
+	if *f_stage1 && *f_stage2 != "" {
+		log.Fatalln("-1 cannot be used with -2")
+	}
+
 	// find any other dependent configs and get an ordered list of those 
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
@@ -54,43 +64,84 @@ func main() {
 		log.Debugln("read config:", config)
 	}
 
-	// create a build path
-	build_path, err := ioutil.TempDir("", "vmbetter_build_")
-	if err != nil {
-		log.Fatalln("cannot create temporary directory:", err)
-	}
-	log.Debugln("using build path:", build_path)
+	var build_path string
 
-	// invoke debootstrap
-	fmt.Println("invoking debootstrap (this may take a while)...")
-	err = Debootstrap(build_path, config)
-	if err != nil {
-		log.Fatalln(err)
+	// stage 1
+	if *f_stage2 == "" {
+		// create a build path
+		build_path, err = ioutil.TempDir("", "vmbetter_build_")
+		if err != nil {
+			log.Fatalln("cannot create temporary directory:", err)
+		}
+		log.Debugln("using build path:", build_path)
+
+		// invoke debootstrap
+		fmt.Println("invoking debootstrap (this may take a while)...")
+		err = Debootstrap(build_path, config)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		// copy any overlay into place in reverse order of opened dependencies
+		fmt.Println("copying overlays")
+		err = Overlays(build_path, config)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		//
+		// stage 1 complete
+		//
+
+		if *f_stage1 {
+			stage1_target := strings.Split(filepath.Base(config.Path), ".")[0] + "_stage1"
+			log.Infoln("writing stage 1 target", stage1_target)
+
+			err = os.Mkdir(stage1_target, 0666)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			cmd := exec.Command("cp", "-r", "-v", build_path+"/.", stage1_target)
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Fatalln(err)
+			}
+			stderr, err := cmd.StderrPipe()
+			if err != nil {
+				log.Fatalln(err)
+			}
+			log.LogAll(stdout, log.INFO, "cp")
+			log.LogAll(stderr, log.ERROR, "cp")
+
+			err = cmd.Run()
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
+	} else {
+		build_path = *f_stage2
 	}
 
-	// copy any overlay into place in reverse order of opened dependencies
-	fmt.Println("copying overlays")
-	err = Overlays(build_path, config)
-	if err != nil {
-		log.Fatalln(err)
-	}
+	// stage 2
+	if *f_stage2 != "" || !*f_stage1 {
+		// call post build chroot commands in reverse order as well
+		fmt.Println("executing post-build commands")
+		err = PostBuildCommands(build_path, config)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
-	// call post build chroot commands in reverse order as well
-	fmt.Println("executing post-build commands")
-	err = PostBuildCommands(build_path, config)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// build the image file
-	fmt.Println("building target files")
-	err = BuildTargets(build_path, config)
-	if err != nil {
-		log.Fatalln(err)
+		// build the image file
+		fmt.Println("building target files")
+		err = BuildTargets(build_path, config)
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	// cleanup?
-	if !*f_noclean {
+	if !*f_noclean && *f_stage2 == "" {
 		fmt.Println("cleaning up")
 		err = os.RemoveAll(build_path)
 		if err != nil {

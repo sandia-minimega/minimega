@@ -16,7 +16,8 @@ mkdir /var/run/sshd
 /usr/sbin/sshd
 
 modprobe openvswitch_mod
-/etc/init.d/openvswitch start
+sleep 5
+/etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl add-port mega_bridge eth0
 
