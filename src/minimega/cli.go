@@ -637,21 +637,27 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 				r := cli_response{}
 				if len(c.Args) == 0 {
 					return cli_response{
-						Response: strings.Join(info.Networks, "\n"),
+						Response: fmt.Sprintf("%v\n", info.Networks),
 					}
 				} else {
 					for _, lan := range c.Args {
-						err, ok := current_bridge.Lan_create(lan)
+						val, err := strconv.Atoi(lan)
+						if err != nil {
+							return cli_response{
+								Error: err.Error(),
+							}
+						}
+						err, ok := current_bridge.Lan_create(val)
 						if !ok {
 							return cli_response{
 								Error: err.Error(),
 							}
 						}
 						if err == nil {
-							r.Response = fmt.Sprintln("creating new lan:", lan)
+							r.Response = fmt.Sprintln("creating new lan:", val)
 						}
+						info.Networks = append(info.Networks, val)
 					}
-					info.Networks = c.Args
 				}
 				return r
 			},
@@ -659,16 +665,15 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 			Helplong: `
 Usage: vm_net <name> <optional addtional names>
 Specify the network(s) that the VM is a member of by name. A corresponding VLAN
-will be created for each named network. Like named networks will be joined by
-all connected hosts. You may specifiy multiple named networks for a VM. For
-example, if you wanted a VM to be on network "monitor" and "test":
+will be created for each named network. For example, to connect a VM to VLAN 1
+and 5:
 
-vm_net monitor test
+vm_net 1 5
 
 Calling vm_net with no parameters will list the current networks for this VM.`,
 			Record: true,
 			Clear: func() error {
-				info.Networks = []string{}
+				info.Networks = []int{}
 				return nil
 			},
 		},

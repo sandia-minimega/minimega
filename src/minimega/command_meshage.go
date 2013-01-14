@@ -109,9 +109,11 @@ func meshageDial(c cli_command) cli_response {
 		}
 	}
 	err := meshageNode.Dial(c.Args[0])
-	return cli_response{
-		Error: err.Error(),
+	ret := cli_response{}
+	if err != nil {
+		ret.Error = err.Error()
 	}
+	return ret
 }
 
 func meshageDot(c cli_command) cli_response {
@@ -191,9 +193,11 @@ func meshageHangup(c cli_command) cli_response {
 		}
 	}
 	err := meshageNode.Hangup(c.Args[0])
-	return cli_response{
-		Error: err.Error(),
+	ret := cli_response{}
+	if err != nil {
+		ret.Error = err.Error()
 	}
+	return ret
 }
 
 func meshageMSATimeout(c cli_command) cli_response {

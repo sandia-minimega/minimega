@@ -22,7 +22,7 @@ import (
 // taps.
 type bridge struct {
 	Name   string
-	lans   map[string]*vlan
+	lans   map[int]*vlan
 	exists bool // false until the first usage, then true until destroyed.
 }
 
@@ -56,7 +56,7 @@ func init() {
 // create a new vlan. If this is the first vlan being allocated, then the 
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
-func (b *bridge) Lan_create(lan string) (error, bool) {
+func (b *bridge) Lan_create(lan int) (error, bool) {
 	if !b.exists {
 		log.Info("bridge does not exist")
 		err := b.create()
@@ -64,13 +64,13 @@ func (b *bridge) Lan_create(lan string) (error, bool) {
 			return err, false
 		}
 		b.exists = true
-		b.lans = make(map[string]*vlan)
+		b.lans = make(map[int]*vlan)
 	}
 	if b.lans[lan] != nil {
 		return errors.New("lan already exists"), true
 	}
 	b.lans[lan] = &vlan{
-		Id:   len(b.lans) + 1, // vlans start at 1, because 0 is a special vlan
+		Id:   lan, // vlans start at 1, because 0 is a special vlan
 		Taps: make(map[string]bool),
 	}
 	return nil, true
@@ -190,7 +190,7 @@ func (b *bridge) Destroy() error {
 }
 
 // create and add a tap to a bridge
-func (b *bridge) Tap_create(lan string, host bool) (string, error) {
+func (b *bridge) Tap_create(lan int, host bool) (string, error) {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 	tap := <-tap_chan
@@ -245,7 +245,7 @@ func (b *bridge) Tap_create(lan string, host bool) (string, error) {
 }
 
 // destroy and remove a tap from a bridge
-func (b *bridge) Tap_destroy(lan, tap string) error {
+func (b *bridge) Tap_destroy(lan int, tap string) error {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 
@@ -299,7 +299,7 @@ func (b *bridge) Tap_destroy(lan, tap string) error {
 }
 
 // add a tap to the bridge
-func (b *bridge) tap_add(lan, tap string, host bool) error {
+func (b *bridge) tap_add(lan int, tap string, host bool) error {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 	p := process("ovs")

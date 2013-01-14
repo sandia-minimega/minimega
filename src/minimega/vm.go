@@ -63,7 +63,7 @@ type vm_info struct {
 	instance_path string
 	q             qmp.Conn // qmp connection for this vm
 	taps          []string // list of taps associated with this vm
-	Networks      []string // ordered list of networks (matches 1-1 with Taps)
+	Networks      []int // ordered list of networks (matches 1-1 with Taps)
 }
 
 func init() {
