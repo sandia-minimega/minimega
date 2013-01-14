@@ -1,5 +1,7 @@
 #!/bin/sh
 
+export PATH
+
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
@@ -16,9 +18,8 @@ mkdir /var/run/sshd
 /usr/sbin/sshd
 
 modprobe openvswitch_mod
-sleep 5
 /etc/init.d/openvswitch-switch start
-ovs-vsctl add-br mega_bridge
-ovs-vsctl add-port mega_bridge eth0
+#ovs-vsctl add-br mega_bridge
+#ovs-vsctl add-port mega_bridge eth0
 
 exec /bin/sh
