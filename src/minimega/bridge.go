@@ -16,6 +16,7 @@ import (
 	"fmt"
 	log "minilog"
 	"os/exec"
+	"strconv"
 )
 
 // a bridge representation that includes a list of vlans and their respective
@@ -194,12 +195,15 @@ func (b *bridge) Tap_create(lan int, host bool) (string, error) {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 	tap := <-tap_chan
-	p := process("tunctl")
+	p := process("ip")
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"-t",
+			"tuntap",
+			"add",
+			"mode",
+			"tap",
 			tap,
 		},
 		Env:    nil,
@@ -220,7 +224,6 @@ func (b *bridge) Tap_create(lan int, host bool) (string, error) {
 		return "", err
 	}
 
-	p = process("ip")
 	cmd = &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -271,12 +274,14 @@ func (b *bridge) Tap_destroy(lan int, tap string) error {
 		return e
 	}
 
-	p = process("tunctl")
 	cmd = &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"-d",
+			"tuntap",
+			"del",
+			"mode",
+			"tap",
 			tap,
 		},
 		Env:    nil,
@@ -360,4 +365,91 @@ func (b *bridge) tap_remove(tap string) error {
 		return e
 	}
 	return nil
+}
+
+// TODO: allow creating a host tap with dhcp address instead of hardcoded
+// routines for interfacing bridge mechanisms with the cli
+func host_tap_create(c cli_command) cli_response {
+	if len(c.Args) != 2 {
+		return cli_response{
+			Error: "host_tap takes two arguments",
+		}
+	}
+	r, err := strconv.Atoi(c.Args[0])
+	if err != nil {
+		return cli_response{
+			Error: err.Error(),
+		}
+	}
+	lan_err, ok := current_bridge.Lan_create(r)
+	if !ok {
+		return cli_response{
+			Error: lan_err.Error(),
+		}
+	}
+
+	// create the tap
+	tap, err := current_bridge.Tap_create(r, true)
+	if err != nil {
+		return cli_response{
+			Error: err.Error(),
+		}
+	}
+
+	// bring the tap up
+	p := process("ip")
+	var s_out bytes.Buffer
+	var s_err bytes.Buffer
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"set",
+			tap,
+			"up",
+			"promisc",
+			"on",
+		},
+		Env: nil,
+		Dir: "",
+		Stdout: &s_out,
+		Stderr: &s_err,
+	}
+	log.Info("bringing up host tap %v", tap)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Sprintf("%v: %v", err, s_err.String())
+		return cli_response{
+			Error: e,
+		}
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"addr",
+			"add",
+			"dev",
+			tap,
+			c.Args[1],
+		},
+		Env: nil,
+		Dir: "",
+		Stdout: &s_out,
+		Stderr: &s_err,
+	}
+	log.Info("setting ip on tap %v", tap)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Sprintf("%v: %v", err, s_err.String())
+		return cli_response{
+			Error: e,
+		}
+	}
+
+	return cli_response{
+		Response: tap,
+	}
 }

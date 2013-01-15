@@ -121,12 +121,14 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 				log.Error("%v: %v", err, s_err.String())
 			}
 
-			p = process("tunctl")
 			cmd = &exec.Cmd{
 				Path: p,
 				Args: []string{
 					p,
-					"-d",
+					"tuntap",
+					"del",
+					"mode",
+					"tap",
 					v,
 				},
 				Env:    nil,

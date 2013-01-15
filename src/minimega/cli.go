@@ -799,9 +799,12 @@ will clear the list of associated networks.`,
 			Helpshort: "create a host tap for communicating between hosts and VMs",
 			Helplong: `
 Create host tap on a named vlan for communicating between a host and any VMs on
-that vlan. host_tap takes one argument, the named vlan to tap, and returns
-successful if a tap was created. The tap will be named 'host_tap_<vlan>', where
-<vlan> is the named vlan specified.`,
+that vlan. host_tap takes two arguments, the named vlan to tap and an 
+ip/netmask. It returns the name of the created tap if successful.
+
+For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
+
+host_tap 5 10.0.0.1/24`, 
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps
@@ -928,6 +931,34 @@ For example, to get the vm_status from all nodes:
 			Helpshort: "return the hostname",
 			Helplong: `
 Return the hostname`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"dhcp": &command{
+			Call: dhcpCLI,
+			Helpshort: "start a dhcp server on a specified ip",
+			Helplong: `
+Start a dhcp server on a specified IP with a specified range.
+
+For example, to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 - 10.0.254.254:
+
+dhcp start 10.0.0.1 10.0.0.2 10.0.254.254
+
+To list running DHCP servers, invoke dhcp with no arguments.
+
+To kill a running DHCP server, specify its ID from the list of running servers:
+
+For example, to kill DHCP server 2:
+
+dhcp kill 2
+
+To kill all running DHCP servers, pass -1 as the ID:
+
+dhcp kill -1
+`,
 			Record: true,
 			Clear: func() error {
 				return nil

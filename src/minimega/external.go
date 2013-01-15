@@ -18,11 +18,10 @@ import (
 )
 
 var external_processes = map[string]string{
-	"qemu":    "qemu-system-x86_64",
+	"qemu":    "kvm",
 	"ip":      "ip",
 	"ovs":     "ovs-vsctl",
 	"dnsmasq": "dnsmasq",
-	"tunctl":  "tunctl",
 	"browser": "x-www-browser",
 	"kill":    "kill",
 }
