@@ -56,8 +56,12 @@ func dhcpCLI(c cli_command) cli_response {
 		if err != nil {
 			ret.Error = err.Error()
 		}
-	case 3:
-		err := dhcpStart(c.Args[0], c.Args[1], c.Args[2])
+	case 4:
+		if c.Args[0] != "start" {
+			ret.Error = "malformed command"
+			break
+		}
+		err := dhcpStart(c.Args[1], c.Args[2], c.Args[3])
 		if err != nil {
 			ret.Error = err.Error()
 		}

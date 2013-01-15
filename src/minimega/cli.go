@@ -942,15 +942,12 @@ Return the hostname`,
 			Helpshort: "start a dhcp server on a specified ip",
 			Helplong: `
 Start a dhcp server on a specified IP with a specified range.
-
 For example, to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 - 10.0.254.254:
 
 dhcp start 10.0.0.1 10.0.0.2 10.0.254.254
 
 To list running DHCP servers, invoke dhcp with no arguments.
-
 To kill a running DHCP server, specify its ID from the list of running servers:
-
 For example, to kill DHCP server 2:
 
 dhcp kill 2
