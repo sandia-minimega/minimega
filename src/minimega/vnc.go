@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -20,8 +21,9 @@ const vnc_port = ":8080"
 func (vms *vm_list) Hosts() map[string][]string {
 	ret := make(map[string][]string)
 
-	//TODO: once we have this up for multiple hosts, generalize this for many hosts
 	// the vnc port is just 5900 + the vm id
+
+	// first grab our own list of hosts
 	host, err := os.Hostname()
 	if err != nil {
 		log.Errorln(err)
@@ -30,6 +32,42 @@ func (vms *vm_list) Hosts() map[string][]string {
 	for _, vm := range vms.vms {
 		port := fmt.Sprintf("%v", 5900+vm.Id)
 		ret[host] = append(ret[host], port)
+	}
+
+	// get a list of the other hosts on the network
+	cmd := cli_command{
+		Args: []string{"hostname"},
+	}
+	resp := meshageBroadcast(cmd)
+	if resp.Error != "" {
+		log.Errorln(resp.Error)
+		return nil
+	}
+
+	hosts := strings.Fields(resp.Response)
+
+	for _, h := range hosts {
+		// get a list of vms from that host
+		cmd := cli_command{
+			Args: []string{h, "vm_status"},
+		}
+		resp := meshageSet(cmd)
+		if resp.Error != "" {
+			log.Errorln(resp.Error)
+			continue // don't error out if just one host fails us
+		}
+
+		// the vm id is the second field
+		f := strings.Fields(resp.Response)
+		if len(f) > 2 {
+			val, err := strconv.Atoi(f[1])
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			port := fmt.Sprintf("%v", 5900+val)
+			ret[h] = append(ret[h], port)
+		}
 	}
 	return ret
 }

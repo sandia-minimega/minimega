@@ -15,24 +15,24 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
+	"os"
 	"os/exec"
 	"strconv"
-	"io/ioutil"
-	"os"
-	"text/tabwriter"
 	"strings"
+	"text/tabwriter"
 )
 
 type dhcpServer struct {
-	Addr string
+	Addr     string
 	MinRange string
 	MaxRange string
-	Path string
+	Path     string
 }
 
 var (
-	dhcpServers map[int]*dhcpServer
+	dhcpServers     map[int]*dhcpServer
 	dhcpServerCount int
 )
 
@@ -104,7 +104,7 @@ func dhcpKill(id int) error {
 		if e == "" {
 			return nil
 		} else {
-			return fmt.Errorf("%v",e)
+			return fmt.Errorf("%v", e)
 		}
 	}
 
@@ -123,8 +123,8 @@ func dhcpKill(id int) error {
 			p,
 			fmt.Sprintf("%v", pid),
 		},
-		Env: nil,
-		Dir: "",
+		Env:    nil,
+		Dir:    "",
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
@@ -143,10 +143,10 @@ func dhcpStart(ip, min, max string) error {
 	}
 
 	d := &dhcpServer{
-		Addr: ip,
+		Addr:     ip,
 		MinRange: min,
 		MaxRange: max,
-		Path: path,
+		Path:     path,
 	}
 
 	p := process("dnsmasq")
@@ -169,8 +169,8 @@ func dhcpStart(ip, min, max string) error {
 			"-o",
 			"-k",
 		},
-		Env: nil,
-		Dir: "",
+		Env:    nil,
+		Dir:    "",
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}

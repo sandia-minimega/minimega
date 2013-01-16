@@ -1,24 +1,24 @@
 package main
 
 import (
+	"encoding/gob"
+	"fmt"
+	"math/rand"
 	"meshage"
 	log "minilog"
-	"fmt"
-	"strconv"
 	"os"
-	"sort"
-	"encoding/gob"
-	"math/rand"
-	"time"
-	"reflect"
-	"strings"
 	"ranges"
+	"reflect"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
 var (
 	meshageNode     *meshage.Node
 	meshageMessages chan *meshage.Message
-	meshageCommand chan *meshage.Message
+	meshageCommand  chan *meshage.Message
 	meshageResponse chan *meshage.Message
 	meshageErrors   chan error
 )
@@ -263,7 +263,7 @@ func meshageSet(c cli_command) cli_response {
 	}
 	return cli_response{
 		Response: respString,
-		Error: respError,
+		Error:    respError,
 	}
 }
 
@@ -307,7 +307,7 @@ func meshageBroadcast(c cli_command) cli_response {
 	}
 	return cli_response{
 		Response: respString,
-		Error: respError,
+		Error:    respError,
 	}
 }
 
@@ -317,7 +317,7 @@ func getRecipients(r string) []string {
 		return []string{r}
 	}
 	prefix := r[:index]
-	rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0) >> 1))
+	rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0)>>1))
 	ret, _ := rangeObj.SplitRange(r)
 	log.Debug("expanded range: %v\n", ret)
 	return ret

@@ -10,10 +10,10 @@
 package main
 
 import (
+	"io/ioutil"
 	log "minilog"
 	"os"
 	"strconv"
-	"io/ioutil"
 	"strings"
 )
 

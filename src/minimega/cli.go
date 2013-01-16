@@ -43,12 +43,12 @@ var (
 	// incoming commands for the cli to parse. these can come from the cli
 	// proper (readline), or from a network source, etc. the cli will parse
 	// them all as if they were typed locally.
-	command_chan_local  chan cli_command
-	command_chan_socket chan cli_command
+	command_chan_local   chan cli_command
+	command_chan_socket  chan cli_command
 	command_chan_meshage chan cli_command
 
-	ack_chan_local  chan cli_response // acknowledgements from the cli, one per incoming command
-	ack_chan_socket chan cli_response
+	ack_chan_local   chan cli_response // acknowledgements from the cli, one per incoming command
+	ack_chan_socket  chan cli_response
 	ack_chan_meshage chan cli_response
 
 	cli_commands map[string]*command
@@ -58,14 +58,14 @@ type cli_command struct {
 	Command  string
 	Args     []string
 	ack_chan chan cli_response
-	TID int32
+	TID      int32
 }
 
 type cli_response struct {
 	Response string
 	Error    string // because you can't gob/json encode an error type
-	More     bool // more is set if the called command will be sending multiple responses
-	TID int32
+	More     bool   // more is set if the called command will be sending multiple responses
+	TID      int32
 }
 
 type command struct {
@@ -804,7 +804,7 @@ ip/netmask. It returns the name of the created tap if successful.
 
 For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-host_tap 5 10.0.0.1/24`, 
+host_tap 5 10.0.0.1/24`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps
@@ -812,7 +812,7 @@ host_tap 5 10.0.0.1/24`,
 		},
 
 		"mesh_degree": &command{
-			Call: meshageDegree,
+			Call:      meshageDegree,
 			Helpshort: "view or set the current degree for this mesh node",
 			Helplong: `
 View or set the current degree for this mesh node.`,
@@ -824,7 +824,7 @@ View or set the current degree for this mesh node.`,
 		},
 
 		"mesh_dial": &command{
-			Call: meshageDial,
+			Call:      meshageDial,
 			Helpshort: "connect this node to another",
 			Helplong: `
 Attempt to connect to another listening node.`,
@@ -835,7 +835,7 @@ Attempt to connect to another listening node.`,
 		},
 
 		"mesh_dot": &command{
-			Call: meshageDot,
+			Call:      meshageDot,
 			Helpshort: "output a graphviz formatted dot file",
 			Helplong: `
 Output a graphviz formatted dot file representing the connected topology.`,
@@ -846,7 +846,7 @@ Output a graphviz formatted dot file representing the connected topology.`,
 		},
 
 		"mesh_status": &command{
-			Call: meshageStatus,
+			Call:      meshageStatus,
 			Helpshort: "display a short status report of the mesh",
 			Helplong: `
 Display a short status report of the mesh.`,
@@ -857,7 +857,7 @@ Display a short status report of the mesh.`,
 		},
 
 		"mesh_list": &command{
-			Call: meshageList,
+			Call:      meshageList,
 			Helpshort: "display the mesh adjacency list",
 			Helplong: `
 Display the mesh adjacency list.`,
@@ -868,7 +868,7 @@ Display the mesh adjacency list.`,
 		},
 
 		"mesh_hangup": &command{
-			Call: meshageHangup,
+			Call:      meshageHangup,
 			Helpshort: "disconnect from a client",
 			Helplong: `
 Disconnect from a client.`,
@@ -879,7 +879,7 @@ Disconnect from a client.`,
 		},
 
 		"mesh_msa_timeout": &command{
-			Call: meshageMSATimeout,
+			Call:      meshageMSATimeout,
 			Helpshort: "view or set the MSA timeout",
 			Helplong: `
 View or the the Meshage State Announcement timeout.`,
@@ -891,7 +891,7 @@ View or the the Meshage State Announcement timeout.`,
 		},
 
 		"mesh_set": &command{
-			Call: meshageSet,
+			Call:      meshageSet,
 			Helpshort: "send a command to one or more connected clients",
 			Helplong: `
 Send a command to one or more connected clients.
@@ -904,7 +904,7 @@ For example, to get the vm_status from nodes kn1 and kn2:
 		},
 
 		"mesh_broadcast": &command{
-			Call: meshageBroadcast,
+			Call:      meshageBroadcast,
 			Helpshort: "send a command to all connected clients",
 			Helplong: `
 Send a command to all connected clients.
@@ -938,7 +938,7 @@ Return the hostname`,
 		},
 
 		"dhcp": &command{
-			Call: dhcpCLI,
+			Call:      dhcpCLI,
 			Helpshort: "start a dhcp server on a specified ip",
 			Helplong: `
 Start a dhcp server on a specified IP with a specified range.
@@ -979,7 +979,6 @@ func makeCommand(s string) cli_command {
 		Args:    args,
 	}
 }
-
 
 // local command line interface, wrapping readline
 func cli() {

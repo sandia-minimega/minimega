@@ -411,8 +411,8 @@ func host_tap_create(c cli_command) cli_response {
 			"promisc",
 			"on",
 		},
-		Env: nil,
-		Dir: "",
+		Env:    nil,
+		Dir:    "",
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
@@ -435,8 +435,8 @@ func host_tap_create(c cli_command) cli_response {
 			tap,
 			c.Args[1],
 		},
-		Env: nil,
-		Dir: "",
+		Env:    nil,
+		Dir:    "",
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}

@@ -63,7 +63,7 @@ type vm_info struct {
 	instance_path string
 	q             qmp.Conn // qmp connection for this vm
 	taps          []string // list of taps associated with this vm
-	Networks      []int // ordered list of networks (matches 1-1 with Taps)
+	Networks      []int    // ordered list of networks (matches 1-1 with Taps)
 }
 
 func init() {
@@ -206,7 +206,7 @@ func (vm *vm_info) status() string {
 		log.Error("could not get qmp status")
 		vm.state(VM_ERROR)
 	}
-	return fmt.Sprintf("VM %v: %v, QMP: %v\n", vm.Id, s, status["status"])
+	return fmt.Sprintf("VM %v : %v, QMP : %v\n", vm.Id, s, status["status"])
 }
 
 func (vm *vm_info) start() {
