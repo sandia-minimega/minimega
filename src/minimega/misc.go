@@ -12,6 +12,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	log "minilog"
+	"strconv"
+	"strings"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -21,4 +23,18 @@ func random_mac() string {
 	mac := fmt.Sprintf("00:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
 	log.Info("generated mac: %v", mac)
 	return mac
+}
+
+func hostid(s string) (string, int) {
+	k := strings.Split(s, ":")
+	if len(k) != 2 {
+		log.Error("hostid cannot split host vmid pair: %v", k)
+		return "", -1
+	}
+	val, err := strconv.Atoi(k[1])
+	if err != nil {
+		log.Errorln(err)
+		return "", -1
+	}
+	return k[0], val
 }
