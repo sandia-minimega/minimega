@@ -17,7 +17,7 @@ const (
 	DEFAULT_TIMEOUT     = 5 // wait for ACK for 5 seconds
 	DEFAULT_TTL         = 1
 	RECEIVE_BUFFER      = 1024
-	DEFAULT_MSA_TIMEOUT = 60
+	DEFAULT_MSA_TIMEOUT = 10
 )
 
 type mesh map[string][]string

@@ -251,6 +251,9 @@ func meshageSet(c cli_command) cli_response {
 		body := resp.Body.(cli_response)
 		if body.TID != TID {
 			log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
+			go func() {
+				meshageResponse <- resp
+			}()
 		} else {
 			if body.Response != "" {
 				respString += body.Response + "\n"

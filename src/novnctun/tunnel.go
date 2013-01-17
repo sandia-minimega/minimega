@@ -59,12 +59,13 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (t *Tun) html_hosts() (body string) {
-	if len(t.Hosts.Hosts()) == 0 {
+	hosts := t.Hosts.Hosts()
+	if len(hosts) == 0 {
 		body = "no hosts found"
 		return
 	}
-	for i, _ := range t.Hosts.Hosts() {
-		body += "<a href=\"" + i + "\">" + i + "<br>\n"
+	for i, v := range hosts {
+		body += fmt.Sprintf("<a href=\"%v\">%v</a> (%v)<br>\n", i, i, len(v))
 	}
 	return
 }

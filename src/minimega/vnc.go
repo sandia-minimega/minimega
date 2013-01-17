@@ -57,16 +57,19 @@ func (vms *vm_list) Hosts() map[string][]string {
 			continue // don't error out if just one host fails us
 		}
 
-		// the vm id is the second field
-		f := strings.Fields(resp.Response)
-		if len(f) > 2 {
-			val, err := strconv.Atoi(f[1])
-			if err != nil {
-				log.Errorln(err)
-				continue
+		lines := strings.Split(resp.Response, "\n")
+		for _, l := range lines {
+			// the vm id is the second field
+			f := strings.Fields(l)
+			if len(f) > 2 {
+				val, err := strconv.Atoi(f[1])
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+				port := fmt.Sprintf("%v", 5900+val)
+				ret[h] = append(ret[h], port)
 			}
-			port := fmt.Sprintf("%v", 5900+val)
-			ret[h] = append(ret[h], port)
 		}
 	}
 	return ret
