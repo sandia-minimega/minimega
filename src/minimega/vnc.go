@@ -5,7 +5,6 @@ import (
 	log "minilog"
 	"novnctun"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 )
@@ -76,22 +75,13 @@ func (vms *vm_list) Hosts() map[string][]string {
 }
 
 func cli_vnc(c cli_command) cli_response {
-	// we have 4 possible cases:
-	// vnc - just launch with everything default and fire up the browser
-	// vnc ID - launch with default and fire up the browser to that specific id
+	// we have 2 possible cases:
 	// vnc novnc - set the vnc path
 	// vnc serve :8080 serve on a specific port and don't launch anything
 	if len(c.Args) == 0 {
-		if vnc_server == nil {
-			vnc_serve(vnc_port)
+		return cli_response{
+			Error: "vnc takes at least one argument",
 		}
-		err := vnc_launch("")
-		if err != nil {
-			return cli_response{
-				Error: err.Error(),
-			}
-		}
-		return cli_response{}
 	}
 	switch c.Args[0] {
 	case "novnc":
@@ -147,21 +137,4 @@ func vnc_serve(addr string) {
 	go func() {
 		log.Errorln(vnc_server.Start())
 	}()
-}
-
-func vnc_launch(url string) error {
-	path := process("browser")
-	cmd := &exec.Cmd{
-		Path:   path,
-		Args:   []string{path, url},
-		Env:    nil,
-		Dir:    "",
-		Stdout: nil,
-		Stderr: nil,
-	}
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-	return nil
 }

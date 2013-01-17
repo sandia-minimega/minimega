@@ -22,7 +22,6 @@ var external_processes = map[string]string{
 	"ip":      "ip",
 	"ovs":     "ovs-vsctl",
 	"dnsmasq": "dnsmasq",
-	"browser": "x-www-browser",
 	"kill":    "kill",
 }
 
