@@ -130,33 +130,8 @@ func cli_vnc(c cli_command) cli_response {
 			}
 		}
 	default: // must be an id right?
-		id, err := strconv.Atoi(c.Args[0])
-		if err != nil {
-			return cli_response{
-				Error: err.Error(),
-			}
-		}
-		if id < len(vms.vms) {
-			if vnc_server == nil {
-				vnc_serve(vnc_port)
-			}
-			host, err := os.Hostname()
-			if err != nil {
-				return cli_response{
-					Error: err.Error(),
-				}
-			}
-			s := fmt.Sprintf("/%v/%v", host, 5900+id)
-			err = vnc_launch(s)
-			if err != nil {
-				return cli_response{
-					Error: err.Error(),
-				}
-			}
-		} else {
-			return cli_response{
-				Error: "invalid VM id",
-			}
+		return cli_response{
+			Error: "invalid command",
 		}
 	}
 	return cli_response{}

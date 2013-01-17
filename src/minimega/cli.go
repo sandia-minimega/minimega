@@ -682,25 +682,21 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			Call:      cli_vnc,
 			Helpshort: "invoke a vnc viewer on a VM or start a vnc pool server",
 			Helplong: `
-Usage: vnc [VM id, serve <host:port>, novnc <novnc path>]
-Launch a vnc viewer for a specific VM or launch a webserver that allows you to
-browse the connected minimega hosts and VMs, and connect to any VM in the pool.
+Usage: vnc [serve <host:port>, novnc <novnc path>]
+Launch a webserver that allows you to browse the connected minimega hosts and 
+VMs, and connect to any VM in the pool.
 
 This command requires access to an installation of novnc. By default minimega
-looks in 'pwd'/novnc. To set a different path, invoke:
+looks in 'pwd'/misc/novnc. To set a different path, invoke:
 
 vnc novnc <path to novnc>
 
-To start the vnc webserver without launching a vnc session, issue the vnc serve
-command with a host and port. For example, if you wanted to serve on localhost,
-port 8080, invoke:
+To start the vnc webserver, issue the vnc serve command with a host and port. 
+For example, if you wanted to serve on localhost, port 8080, invoke:
 
 vnc serve :8080
 
-:8080 is the default port.
-
-To connect to a particular vm, invoke vnc with the VM id. Note, this will 
-invoke the vnc server if it isn't already started, on the default port of 8080.`,
+:8080 is the default port.`,
 			Record: true,
 			Clear: func() error {
 				vnc_novnc = "misc/novnc"
