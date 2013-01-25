@@ -11,15 +11,15 @@ udevd --daemon
 udevadm trigger
 udevadm settle
 
-ifconfig eth0 up
-dhclient -v eth0
+modprobe openvswitch_mod
+/etc/init.d/openvswitch-switch start
+ovs-vsctl add-br mega_bridge
+ovs-vsctl add-port mega_bridge eth0
+ifconfig eth0 up 0.0.0.0
+dhclient -v mega_bridge
 
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
-modprobe openvswitch_mod
-/etc/init.d/openvswitch-switch start
-#ovs-vsctl add-br mega_bridge
-#ovs-vsctl add-port mega_bridge eth0
 
 exec /bin/sh
