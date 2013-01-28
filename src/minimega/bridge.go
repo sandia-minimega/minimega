@@ -17,6 +17,7 @@ import (
 	log "minilog"
 	"os/exec"
 	"strconv"
+	"strings"
 )
 
 // a bridge representation that includes a list of vlans and their respective
@@ -25,6 +26,7 @@ type bridge struct {
 	Name   string
 	lans   map[int]*vlan
 	exists bool // false until the first usage, then true until destroyed.
+	preExist bool
 }
 
 type vlan struct {
@@ -97,6 +99,11 @@ func (b *bridge) create() error {
 	log.Info("creating bridge with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
+		es := s_err.String()
+		if strings.Contains(es, "already exists") {
+			b.preExist = true
+			return nil
+		}
 		e := fmt.Errorf("%v: %v", err, s_err.String())
 		return e
 	}
@@ -128,7 +135,7 @@ func (b *bridge) create() error {
 
 // destroy a bridge with ovs, and remove all of the taps, etc associated with it
 func (b *bridge) Destroy() error {
-	if !b.exists {
+	if !b.exists || b.preExist {
 		return nil
 	}
 	// first get all of the taps off of this bridge and destroy them
