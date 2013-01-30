@@ -21,5 +21,8 @@ dhclient -v mega_bridge
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
+modprobe kvm-intel
 
-exec /bin/sh
+exec </dev/tty1 >/dev/tty1 2&1
+exec sh
+
