@@ -148,7 +148,7 @@ func (l *vm_list) start(c cli_command) cli_response {
 func (l *vm_list) kill(id int) {
 	if id == -1 {
 		for _, i := range l.vms {
-			if i.State != VM_QUIT {
+			if i.State != VM_QUIT && i.State != VM_ERROR {
 				i.Kill <- true
 				log.Info("VM %v killed", <-kill_ack)
 			}
@@ -157,7 +157,7 @@ func (l *vm_list) kill(id int) {
 		if l.vms[id] == nil {
 			log.Error("invalid VM id")
 		} else {
-			if l.vms[id].State != VM_QUIT {
+			if l.vms[id].State != VM_QUIT && l.vms[id].State != VM_ERROR {
 				l.vms[id].Kill <- true
 				log.Info("VM %v killed", <-kill_ack)
 			}

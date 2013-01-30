@@ -47,7 +47,10 @@ func (q *Conn) connect(s string) error {
 	v = map[string]interface{}{
 		"execute": "qmp_capabilities",
 	}
-	q.write(v)
+	err = q.write(v)
+	if err != nil {
+		return err
+	}
 
 	v, err = q.read()
 	if err != nil {
@@ -97,7 +100,10 @@ func (q *Conn) Status() (map[string]interface{}, error) {
 	s := map[string]interface{}{
 		"execute": "query-status",
 	}
-	q.write(s)
+	err := q.write(s)
+	if err != nil {
+		return nil, err
+	}
 	v := <-q.message_sync
 	status := v["return"]
 	if status == nil {
@@ -110,7 +116,10 @@ func (q *Conn) Start() error {
 	s := map[string]interface{}{
 		"execute": "cont",
 	}
-	q.write(s)
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
 	v := <-q.message_sync
 	if !success(v) {
 		return errors.New("could not start VM")
@@ -122,7 +131,10 @@ func (q *Conn) Stop() error {
 	s := map[string]interface{}{
 		"execute": "stop",
 	}
-	q.write(s)
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
 	v := <-q.message_sync
 	if !success(v) {
 		return errors.New("could not stop VM")
@@ -139,7 +151,10 @@ func (q *Conn) Pmemsave(path string, size uint64) error {
 			"filename": path,
 		},
 	}
-	q.write(s)
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
 	v := <-q.message_sync
 	if !success(v) {
 		return errors.New("pmemsave")
@@ -156,7 +171,10 @@ func (q *Conn) Blockdev_snapshot(path, device string) error {
 			"format":        "raw",
 		},
 	}
-	q.write(s)
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
 	v := <-q.message_sync
 	if !success(v) {
 		return errors.New("blockdev_snapshot")
