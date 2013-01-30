@@ -198,7 +198,7 @@ func (b *bridge) Destroy() error {
 }
 
 // create and add a tap to a bridge
-func (b *bridge) Tap_create(lan int, host bool) (string, error) {
+func (b *bridge) Tap_create(lan int) (string, error) {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
 	tap := <-tap_chan
@@ -224,9 +224,10 @@ func (b *bridge) Tap_create(lan int, host bool) (string, error) {
 		e := fmt.Errorf("%v: %v", err, s_err.String())
 		return "", e
 	}
+
 	// the tap add was successful, so try to add it to the bridge
 	b.lans[lan].Taps[tap] = true
-	err = b.tap_add(lan, tap, host)
+	err = b.tap_add(lan, tap, false)
 	if err != nil {
 		return "", err
 	}
@@ -395,8 +396,10 @@ func host_tap_create(c cli_command) cli_response {
 		}
 	}
 
+	tap := <-tap_chan
 	// create the tap
-	tap, err := current_bridge.Tap_create(r, true)
+	current_bridge.lans[r].Taps[tap] = true
+	err = current_bridge.tap_add(r, tap, true)
 	if err != nil {
 		return cli_response{
 			Error: err.Error(),

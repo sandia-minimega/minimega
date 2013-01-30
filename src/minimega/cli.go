@@ -640,6 +640,7 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 						Response: fmt.Sprintf("%v\n", info.Networks),
 					}
 				} else {
+					info.Networks = []int{}
 					for _, lan := range c.Args {
 						val, err := strconv.Atoi(lan)
 						if err != nil {

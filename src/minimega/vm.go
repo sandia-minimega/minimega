@@ -238,7 +238,7 @@ func (vm *vm_info) launch_one() {
 
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
-		tap, err := current_bridge.Tap_create(lan, false)
+		tap, err := current_bridge.Tap_create(lan)
 		if err != nil {
 			log.Error("%v", err)
 			continue

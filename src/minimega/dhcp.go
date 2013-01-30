@@ -165,7 +165,7 @@ func dhcpStart(ip, min, max string) error {
 			"--dhcp-range",
 			fmt.Sprintf("%v,%v", min, max),
 			fmt.Sprintf("--dhcp-leasefile=%v/dnsmasq.leases", d.Path),
-			"--dhcp-lease-max=4294967296",
+			"--dhcp-lease-max=4294967295",
 			"-o",
 			"-k",
 		},
