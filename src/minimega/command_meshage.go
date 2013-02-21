@@ -21,6 +21,7 @@ var (
 	meshageCommand  chan *meshage.Message
 	meshageResponse chan *meshage.Message
 	meshageErrors   chan error
+	meshageTimeout time.Duration
 )
 
 func init() {
@@ -33,6 +34,8 @@ func meshageInit(host string, degree uint, port int) {
 
 	meshageCommand = make(chan *meshage.Message, 1024)
 	meshageResponse = make(chan *meshage.Message, 1024)
+
+	meshageTimeout = time.Duration(10)
 
 	go meshageMux()
 	go meshageErrorHandler()
@@ -294,18 +297,25 @@ func meshageBroadcast(c cli_command) cli_response {
 	var respString string
 	var respError string
 	for i := 0; i < n; {
-		resp := <-meshageResponse
-		body := resp.Body.(cli_response)
-		if body.TID != TID {
-			log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
-		} else {
-			if body.Response != "" {
-				respString += body.Response + "\n"
+		select {
+		case resp := <-meshageResponse:
+			body := resp.Body.(cli_response)
+			if body.TID != TID {
+				log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
+			} else {
+				if body.Response != "" {
+					respString += body.Response + "\n"
+				}
+				if body.Error != "" {
+					respError += body.Error + "\n"
+				}
+				i++
 			}
-			if body.Error != "" {
-				respError += body.Error + "\n"
-			}
-			i++
+		case <-time.After(meshageTimeout * time.Second):
+			e := fmt.Sprintf("meshage timeout: %v", command)
+			log.Errorln(e)
+			respError += e
+			break
 		}
 	}
 	return cli_response{

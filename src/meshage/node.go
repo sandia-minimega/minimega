@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"sort"
 )
 
 const (
@@ -105,7 +106,9 @@ func (n *Node) Mesh() mesh {
 
 	ret := make(mesh)
 	for k, v := range n.effectiveNetwork {
-		ret[k] = v
+		ns := make([]string, len(v))
+		copy(ns, v)
+		ret[k] = ns
 	}
 	return ret
 }
@@ -348,10 +351,14 @@ func (n *Node) MSA() {
 	}
 	n.clientLock.Unlock()
 
+	sort.Strings(clients)
+
 	n.meshLock.Lock()
 	n.network[n.name] = clients
 	n.generateEffectiveNetwork()
 	n.meshLock.Unlock()
+
+	log.Debug("client list: %v\n", clients)
 
 	m := &Message{
 		Source:       n.name,
@@ -375,10 +382,22 @@ func (n *Node) sequence() uint64 {
 
 func (n *Node) handleMSA(m *Message) {
 	log.Debug("handleMSA: %v\n", m)
+
+	if len(n.network[m.Source]) == len(m.Body.([]string)) {
+		diff := false
+		for i, v := range n.network[m.Source] {
+			if m.Body.([]string)[i] != v {
+				diff = true
+				break
+			}
+		}
+		if !diff {
+			return
+		}
+	}
+
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
-
-	// TODO: if the new client list doesn't change anything here, just return.
 
 	n.routes = make(map[string]string)
 	n.network[m.Source] = m.Body.([]string)

@@ -14,6 +14,7 @@ udevadm settle
 modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
+ovs-vsctl set Bridge mega_bridge stp_enable=false
 ovs-vsctl add-port mega_bridge eth0
 ifconfig eth0 up 0.0.0.0
 dhclient -v mega_bridge

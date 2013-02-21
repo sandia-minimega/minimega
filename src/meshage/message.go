@@ -11,6 +11,10 @@ const (
 	MESSAGE
 )
 
+const (
+	LOLLIPOP_LENGTH = 16
+)
+
 // A message is the payload for all message passing, and contains the user
 // specified message in the body field.
 type Message struct {
@@ -117,7 +121,7 @@ func (n *Node) messageHandler() {
 		switch m.Command {
 		case MSA:
 			n.sequenceLock.Lock()
-			if m.ID == 1 && n.sequences[m.Source] != 1 {
+			if m.ID == 1 && n.sequences[m.Source] > LOLLIPOP_LENGTH {
 				n.sequences[m.Source] = 0
 			}
 			if m.ID > n.sequences[m.Source] {
