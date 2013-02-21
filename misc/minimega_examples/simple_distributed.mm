@@ -35,6 +35,9 @@ mesh_broadcast vm_memory 512
 mesh_broadcast vm_initrd default_amd64.initrd
 mesh_broadcast vm_kernel default_amd64.kernel
 
+# launch 5 on each minimega instance
+mesh_broadcast vm_launch 5
+
 # all of the images are launched in the paused state, so now we just start them
 mesh_broadcast vm_start
 
