@@ -249,22 +249,27 @@ func meshageSet(c cli_command) cli_response {
 	// TODO: add support for timeouts on recipient responses
 	var respString string
 	var respError string
+	SET_WAIT_LOOP:
 	for i := 0; i < len(recipients); {
-		resp := <-meshageResponse
-		body := resp.Body.(cli_response)
-		if body.TID != TID {
-			log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
-			go func() {
-				meshageResponse <- resp
-			}()
-		} else {
-			if body.Response != "" {
-				respString += body.Response + "\n"
+		select {
+		case resp := <-meshageResponse:
+			body := resp.Body.(cli_response)
+			if body.TID != TID {
+				log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
+			} else {
+				if body.Response != "" {
+					respString += body.Response + "\n"
+				}
+				if body.Error != "" {
+					respError += body.Error + "\n"
+				}
+				i++
 			}
-			if body.Error != "" {
-				respError += body.Error + "\n"
-			}
-			i++
+		case <-time.After(meshageTimeout * time.Second):
+			e := fmt.Sprintf("meshage timeout: %v", command)
+			log.Errorln(e)
+			respError += e
+			break SET_WAIT_LOOP
 		}
 	}
 	return cli_response{
@@ -296,6 +301,7 @@ func meshageBroadcast(c cli_command) cli_response {
 	// TODO: add support for timeouts on recipient responses
 	var respString string
 	var respError string
+	BROADCAST_WAIT_LOOP:
 	for i := 0; i < n; {
 		select {
 		case resp := <-meshageResponse:
@@ -315,7 +321,7 @@ func meshageBroadcast(c cli_command) cli_response {
 			e := fmt.Sprintf("meshage timeout: %v", command)
 			log.Errorln(e)
 			respError += e
-			break
+			break BROADCAST_WAIT_LOOP
 		}
 	}
 	return cli_response{
