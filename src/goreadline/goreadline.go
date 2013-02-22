@@ -1,8 +1,6 @@
 // readline binding
 package goreadline
 
-// TODO: register our builtin commands with readline for tab completion.
-
 // #cgo LDFLAGS: -lreadline
 // #include <stdlib.h>
 // #include <readline/readline.h>

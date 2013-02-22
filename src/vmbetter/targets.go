@@ -51,7 +51,7 @@ func BuildTargets(build_path string, c vmconfig.Config) error {
 		return err
 	}
 	log.LogAll(stdout, log.INFO, "cpio")
-	// BUG(fritz): the cpio command outputs regular stuff to stderr, so i have a hack to push all output to the INFO level, instead of INFO/ERROR
+	// the cpio command outputs regular stuff to stderr, so i have a hack to push all output to the INFO level, instead of INFO/ERROR
 	log.LogAll(stderr, log.INFO, "cpio")
 
 	err = cmd.Run()

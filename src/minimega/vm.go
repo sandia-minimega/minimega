@@ -272,9 +272,11 @@ func (vm *vm_info) launch_one() {
 	wait_chan := make(chan bool)
 	go func() {
 		err = cmd.Wait()
+		vm.state(VM_QUIT)
 		if err != nil {
 			if err.Error() != "signal 9" { // because we killed it
 				log.Error("%v %v", err, s_err.String())
+				vm.state(VM_ERROR)
 			}
 		}
 		wait_chan <- true
@@ -306,7 +308,6 @@ func (vm *vm_info) launch_one() {
 	//if err != nil {
 	//	log.Error("%v", err)
 	//}
-	vm.state(VM_QUIT)
 }
 
 // update the vm state, and write the state to file

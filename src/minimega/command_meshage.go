@@ -21,7 +21,7 @@ var (
 	meshageCommand  chan *meshage.Message
 	meshageResponse chan *meshage.Message
 	meshageErrors   chan error
-	meshageTimeout time.Duration
+	meshageTimeout  time.Duration
 )
 
 func init() {

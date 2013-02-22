@@ -10,8 +10,6 @@
 // minimega dhcp server support
 package main
 
-// TODO: add support for killing dhcp servers
-
 import (
 	"bytes"
 	"fmt"

@@ -23,9 +23,9 @@ import (
 // a bridge representation that includes a list of vlans and their respective
 // taps.
 type bridge struct {
-	Name   string
-	lans   map[int]*vlan
-	exists bool // false until the first usage, then true until destroyed.
+	Name     string
+	lans     map[int]*vlan
+	exists   bool // false until the first usage, then true until destroyed.
 	preExist bool
 }
 

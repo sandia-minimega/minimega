@@ -8,11 +8,6 @@
 
 package main
 
-// TODO:
-// get detailed status
-// write unit tests
-// dnsmasq server stuff
-
 import (
 	"encoding/json"
 	"flag"
