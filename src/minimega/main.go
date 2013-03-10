@@ -29,6 +29,7 @@ var (
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_degree    = flag.Int("degree", 0, "meshage starting degree")
 	f_port      = flag.Int("port", 8966, "meshage port to listen on")
+	f_force	= flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	vms         vm_list
 	signal_once bool = false
 )
@@ -61,6 +62,15 @@ func main() {
 		return
 	}
 
+	// check for a running instance of minimega
+	_, err := os.Stat(*f_base + "minimega")
+	if err == nil {
+		if !*f_force {
+			log.Fatalln("minimega appears to already be running, override with -force")
+		}
+		log.Warn("minimega may already be running, proceed with caution")
+	}
+
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt)
@@ -76,7 +86,7 @@ func main() {
 	}
 
 	// attempt to set up the base path
-	err := os.MkdirAll(*f_base, os.FileMode(0770))
+	err = os.MkdirAll(*f_base, os.FileMode(0770))
 	if err != nil {
 		log.Fatalln(err)
 	}

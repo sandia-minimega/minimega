@@ -20,7 +20,7 @@ type client struct {
 	lock sync.Mutex
 }
 
-func (n *Node) clientSend(host string, m *Message, async bool) error {
+func (n *Node) clientSend(host string, m *Message) error {
 	log.Debug("clientSend %s: %v\n", host, m)
 	if c, ok := n.clients[host]; ok {
 		c.lock.Lock()
@@ -29,9 +29,6 @@ func (n *Node) clientSend(host string, m *Message, async bool) error {
 		err := c.enc.Encode(m)
 		if err != nil {
 			c.conn.Close()
-			if async {
-				n.errors <- err
-			}
 			return err
 		}
 
@@ -44,19 +41,11 @@ func (n *Node) clientSend(host string, m *Message, async bool) error {
 				}
 			case <-time.After(n.timeout):
 				c.conn.Close()
-				err = errors.New("timeout")
-				if async {
-					n.errors <- err
-				}
-				return err
+				return errors.New("timeout")
 			}
 		}
 	}
-	err := fmt.Errorf("no such client %s", host)
-	if async {
-		n.errors <- err
-	}
-	return err
+	return fmt.Errorf("no such client %s", host)
 }
 
 // clientHandler is called as a goroutine after a successful handshake. It begins

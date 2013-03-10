@@ -29,8 +29,10 @@ func (vms *vm_list) Hosts() map[string][]string {
 		return nil
 	}
 	for _, vm := range vms.vms {
-		port := fmt.Sprintf("%v", 5900+vm.Id)
-		ret[host] = append(ret[host], port)
+		if vm.State != VM_QUIT && vm.State != VM_ERROR {
+			port := fmt.Sprintf("%v", 5900+vm.Id)
+			ret[host] = append(ret[host], port)
+		}
 	}
 
 	// get a list of the other hosts on the network
@@ -59,6 +61,7 @@ func (vms *vm_list) Hosts() map[string][]string {
 		lines := strings.Split(resp.Response, "\n")
 		for _, l := range lines {
 			// the vm id is the second field
+			// TODO: filter out any quit or error state vms from remote vnc lsit
 			f := strings.Fields(l)
 			if len(f) > 2 {
 				val, err := strconv.Atoi(f[1])

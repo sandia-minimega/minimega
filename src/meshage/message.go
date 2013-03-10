@@ -31,10 +31,6 @@ type Message struct {
 // The returned error is always nil if the message type is broadcast.
 // If an error is encountered, Send returns immediately.
 func (n *Node) Send(m *Message) error {
-	return n.send(m, false)
-}
-
-func (n *Node) send(m *Message, async bool) error {
 	log.Debug("Send: %v\n", m)
 	routeSlices := make(map[string][]string)
 	for _, v := range m.Recipients {
@@ -47,34 +43,46 @@ func (n *Node) send(m *Message, async bool) error {
 		if route, ok = n.routes[v]; !ok {
 			n.updateRoute(v)
 			if route, ok = n.routes[v]; !ok {
-				err := fmt.Errorf("no route to host: %v", v)
-				if async {
-					n.errors <- err
-				}
-				return err
+				return fmt.Errorf("no route to host: %v", v)
 			}
 		}
 		routeSlices[route] = append(routeSlices[route], v)
 	}
 
 	log.Debug("routeSlices: %v\n", routeSlices)
+
+
+	errChan := make(chan error)
 	for k, v := range routeSlices {
-		mOne := &Message{
-			Recipients:   v,
-			Source:       m.Source,
-			CurrentRoute: m.CurrentRoute,
-			Command:      m.Command,
-			Body:         m.Body,
-		}
-		err := n.clientSend(k, mOne, async)
-		if err != nil {
-			if async {
-				n.errors <- err
+		go func(client string, recipients []string) {
+			mOne := &Message{
+				Recipients:   recipients,
+				Source:       m.Source,
+				CurrentRoute: m.CurrentRoute,
+				Command:      m.Command,
+				Body:         m.Body,
 			}
-			return err
+			err := n.clientSend(client, mOne)
+			if err != nil {
+				errChan <- err
+			}
+			errChan <- nil
+		}(k, v)
+	}
+
+	// wait on all of the client sends to complete
+	var ret string
+	for i := 0; i < len(routeSlices); i++ {
+		r := <-errChan
+		if r != nil {
+			ret += r.Error() + "\n"
 		}
 	}
-	return nil
+	if ret == "" {
+		return nil
+	}
+
+	return fmt.Errorf("%v", ret)
 }
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
@@ -87,7 +95,7 @@ func (n *Node) Set(recipients []string, body interface{}) error {
 		Command:      MESSAGE,
 		Body:         body,
 	}
-	return n.send(m, false)
+	return n.Send(m)
 }
 
 // Broadcast sends a message to all nodes on the mesh.
@@ -105,7 +113,7 @@ func (n *Node) Broadcast(body interface{}) (int, error) {
 		Command:      MESSAGE,
 		Body:         body,
 	}
-	return len(recipients), n.send(m, false)
+	return len(recipients), n.Send(m)
 }
 
 // messageHandler accepts messages from all connected clients and forwards them to the
@@ -143,7 +151,7 @@ func (n *Node) messageHandler() {
 				}
 			}
 			m.Recipients = newRecipients
-			go n.send(m, true)
+			go n.Send(m)
 		default:
 			n.errors <- fmt.Errorf("invalid message command: %v", m.Command)
 		}
@@ -159,7 +167,7 @@ floodLoop:
 				continue floodLoop
 			}
 		}
-		go n.clientSend(k, m, true)
+		go n.clientSend(k, m)
 	}
 }
 
