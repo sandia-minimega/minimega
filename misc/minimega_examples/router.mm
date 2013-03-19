@@ -26,6 +26,7 @@ vm_net 100 200
 vm_memory 2048
 vm_initrd quagga.initrd
 vm_kernel quagga.kernel
+vm_append eth0=10.0.0.1 eth1=11.0.0.1 NET0=10.0.0.0/24 NET1=11.0.0.0/24
 vm_launch 1
 
 # now launch 5 VMs on the 10.0.0.0/24 subnet, which is VLAN 100

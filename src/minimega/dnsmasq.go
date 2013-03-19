@@ -7,7 +7,7 @@
 // David Fritz <djfritz@sandia.gov>
 //
 
-// minimega dhcp server support
+// minimega dhcp and dns server support
 package main
 
 import (
@@ -22,7 +22,7 @@ import (
 	"text/tabwriter"
 )
 
-type dhcpServer struct {
+type dnsmasqServer struct {
 	Addr     string
 	MinRange string
 	MaxRange string
@@ -30,24 +30,24 @@ type dhcpServer struct {
 }
 
 var (
-	dhcpServers     map[int]*dhcpServer
-	dhcpServerCount int
+	dnsmasqServers     map[int]*dnsmasqServer
+	dnsmasqServerCount int
 )
 
 func init() {
-	dhcpServers = make(map[int]*dhcpServer)
+	dnsmasqServers = make(map[int]*dnsmasqServer)
 }
 
-// generate paths for the leases and pid files (should be unique) so we can support multiple dhcp servers
-// maintain a map of dhcp servers that can be listed
-// allow killing dhcp servers with dhcp kill 
+// generate paths for the leases and pid files (should be unique) so we can support multiple dnsmasq servers
+// maintain a map of dnsmasq servers that can be listed
+// allow killing dnsmasq servers with dnsmasq kill 
 
-func dhcpCLI(c cli_command) cli_response {
+func dnsmasqCLI(c cli_command) cli_response {
 	var ret cli_response
 	switch len(c.Args) {
 	case 0:
-		// show the list of dhcp servers
-		ret.Response = dhcpList()
+		// show the list of dnsmasq servers
+		ret.Response = dnsmasqList()
 	case 2:
 		if c.Args[0] != "kill" {
 			ret.Error = "malformed command"
@@ -58,16 +58,21 @@ func dhcpCLI(c cli_command) cli_response {
 			ret.Error = err.Error()
 			break
 		}
-		err = dhcpKill(val)
+		err = dnsmasqKill(val)
 		if err != nil {
 			ret.Error = err.Error()
 		}
-	case 4:
+	case 4,5:
 		if c.Args[0] != "start" {
 			ret.Error = "malformed command"
 			break
 		}
-		err := dhcpStart(c.Args[1], c.Args[2], c.Args[3])
+		var err error
+		if len(c.Args) == 4 {
+			err = dnsmasqStart(c.Args[1], c.Args[2], c.Args[3], "")
+		} else {
+			err = dnsmasqStart(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
+		}
 		if err != nil {
 			ret.Error = err.Error()
 		}
@@ -77,24 +82,24 @@ func dhcpCLI(c cli_command) cli_response {
 	return ret
 }
 
-func dhcpList() string {
+func dnsmasqList() string {
 	w := new(tabwriter.Writer)
 	buf := new(bytes.Buffer)
 	w.Init(buf, 0, 8, 1, ' ', 0)
 	fmt.Fprintf(w, "ID\t:\tListening Address\tMin\tMax\tPath\tPID\n")
-	for id, c := range dhcpServers {
-		pid := dhcpPID(id)
+	for id, c := range dnsmasqServers {
+		pid := dnsmasqPID(id)
 		fmt.Fprintf(w, "%v\t:\t%v\t%v\t%v\t%v\t%v\n", id, c.Addr, c.MinRange, c.MaxRange, c.Path, pid)
 	}
 	w.Flush()
 	return buf.String()
 }
 
-func dhcpKill(id int) error {
+func dnsmasqKill(id int) error {
 	if id == -1 {
 		var e string
-		for c, _ := range dhcpServers {
-			err := dhcpKill(c)
+		for c, _ := range dnsmasqServers {
+			err := dnsmasqKill(c)
 			if err != nil {
 				e = fmt.Sprintf("%v\n%v", e, err)
 			}
@@ -106,8 +111,8 @@ func dhcpKill(id int) error {
 		}
 	}
 
-	pid := dhcpPID(id)
-	log.Debug("dhcp id %v has pid %v", id, pid)
+	pid := dnsmasqPID(id)
+	log.Debug("dnsmasq id %v has pid %v", id, pid)
 	if pid == -1 {
 		return fmt.Errorf("invalid id")
 	}
@@ -126,7 +131,7 @@ func dhcpKill(id int) error {
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
-	log.Infoln("killing dhcp server:", pid)
+	log.Infoln("killing dnsmasq server:", pid)
 	err := cmd.Run()
 	if err != nil {
 		return err
@@ -134,13 +139,13 @@ func dhcpKill(id int) error {
 	return nil
 }
 
-func dhcpStart(ip, min, max string) error {
-	path, err := dhcpPath()
+func dnsmasqStart(ip, min, max, hosts string) error {
+	path, err := dnsmasqPath()
 	if err != nil {
 		return err
 	}
 
-	d := &dhcpServer{
+	d := &dnsmasqServer{
 		Addr:     ip,
 		MinRange: min,
 		MaxRange: max,
@@ -172,15 +177,18 @@ func dhcpStart(ip, min, max string) error {
 		Stdout: &s_out,
 		Stderr: &s_err,
 	}
-	log.Debug("starting dhcp server with command: %v", cmd)
+	if hosts != "" {
+		cmd.Args = append(cmd.Args, fmt.Sprintf("--addn-hosts=%v", hosts))
+	}
+	log.Debug("starting dnsmasq server with command: %v", cmd)
 	err = cmd.Start()
 	if err != nil {
 		return err
 	}
 
-	id := dhcpServerCount
-	dhcpServerCount++
-	dhcpServers[id] = d
+	id := dnsmasqServerCount
+	dnsmasqServerCount++
+	dnsmasqServers[id] = d
 
 	// wait on the server to finish or be killed
 	go func() {
@@ -190,27 +198,27 @@ func dhcpStart(ip, min, max string) error {
 				log.Error("%v %v", err, s_err.String())
 			}
 		}
-		// remove it from the list of dhcp servers
-		delete(dhcpServers, id)
+		// remove it from the list of dnsmasq servers
+		delete(dnsmasqServers, id)
 
 		// and clean up the directory
 		err = os.RemoveAll(d.Path)
 		if err != nil {
 			log.Errorln(err)
 		}
-		log.Info("dhcp server %v quit", id)
+		log.Info("dnsmasq server %v quit", id)
 	}()
 	return nil
 }
 
-func dhcpPath() (string, error) {
-	path, err := ioutil.TempDir(*f_base, "dhcp_")
-	log.Info("created dhcp server path: %v", path)
+func dnsmasqPath() (string, error) {
+	path, err := ioutil.TempDir(*f_base, "dnsmasq_")
+	log.Info("created dnsmasq server path: %v", path)
 	return path, err
 }
 
-func dhcpPID(id int) int {
-	c, ok := dhcpServers[id]
+func dnsmasqPID(id int) int {
+	c, ok := dnsmasqServers[id]
 	if !ok {
 		return -1
 	}

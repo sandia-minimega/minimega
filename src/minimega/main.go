@@ -143,7 +143,7 @@ func teardown() {
 	}
 	signal_once = true
 	vms.kill(-1)
-	dhcpKill(-1)
+	dnsmasqKill(-1)
 	err := current_bridge.Destroy()
 	if err != nil {
 		log.Error("%v", err)

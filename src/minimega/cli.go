@@ -934,24 +934,31 @@ Return the hostname`,
 			},
 		},
 
-		"dhcp": &command{
-			Call:      dhcpCLI,
-			Helpshort: "start a dhcp server on a specified ip",
+		"dnsmasq": &command{
+			Call:      dnsmasqCLI,
+			Helpshort: "start a dhcp/dns server on a specified ip",
 			Helplong: `
-Start a dhcp server on a specified IP with a specified range.
+Start a dhcp/dns server on a specified IP with a specified range.
 For example, to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 - 10.0.254.254:
 
-dhcp start 10.0.0.1 10.0.0.2 10.0.254.254
+dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
 
-To list running DHCP servers, invoke dhcp with no arguments.
-To kill a running DHCP server, specify its ID from the list of running servers:
-For example, to kill DHCP server 2:
+To list running dnsmasq servers, invoke dnsmasq with no arguments.
+To kill a running dnsmasq server, specify its ID from the list of running servers:
+For example, to kill dnsmasq server 2:
 
-dhcp kill 2
+dnsmasq kill 2
 
-To kill all running DHCP servers, pass -1 as the ID:
+To kill all running dnsmasq servers, pass -1 as the ID:
 
-dhcp kill -1
+dnsmasq kill -1
+
+dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You can specify
+an additional hosts file to serve by providing a file as an additional argument. For example,
+to start a dnsmasq server serving the range as above and serving dns for a list of hosts in
+the file "addn-hosts":
+
+dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 addn-hosts
 `,
 			Record: true,
 			Clear: func() error {
