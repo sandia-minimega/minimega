@@ -961,7 +961,9 @@ an additional hosts file to serve by providing a file as an additional argument.
 to start a dnsmasq server serving the range as above and serving dns for a list of hosts in
 the file "addn-hosts":
 
-dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 addn-hosts
+dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/addn-hosts
+
+NOTE: If specifying an additional hosts file, you must provide the full path to the file.
 `,
 			Record: true,
 			Clear: func() error {
