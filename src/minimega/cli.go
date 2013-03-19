@@ -738,7 +738,10 @@ shows the command history`,
 					e := fmt.Sprintf("invalid command: %v", cc)
 					r.Error = e
 				} else {
-					r.Error = cli_commands[cc].Clear().Error()
+					e := cli_commands[cc].Clear()
+					if e != nil {
+						r.Error = e.Error()
+					} 
 				}
 				return r
 			},
