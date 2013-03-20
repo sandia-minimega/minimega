@@ -8,6 +8,7 @@ mount -n -t devpts -o gid=5,mode=620 none /dev/pts
 udevd --daemon
 udevadm trigger
 udevadm settle
+chmod a+rx /
 
 ifconfig eth0 up
 dhclient -v eth0
