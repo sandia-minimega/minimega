@@ -6,6 +6,8 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
+// TODO: var/func naming scheme is busted, fix with Go camelcase scheme.
+
 package main
 
 import (
