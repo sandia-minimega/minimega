@@ -62,7 +62,7 @@ func dnsmasqCLI(c cli_command) cli_response {
 		if err != nil {
 			ret.Error = err.Error()
 		}
-	case 4,5:
+	case 4, 5:
 		if c.Args[0] != "start" {
 			ret.Error = "malformed command"
 			break

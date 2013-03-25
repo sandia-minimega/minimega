@@ -248,7 +248,7 @@ func meshageSet(c cli_command) cli_response {
 	// wait on a response from the recipient
 	var respString string
 	var respError string
-	SET_WAIT_LOOP:
+SET_WAIT_LOOP:
 	for i := 0; i < len(recipients); {
 		select {
 		case resp := <-meshageResponse:
@@ -299,7 +299,7 @@ func meshageBroadcast(c cli_command) cli_response {
 	// wait on a response from the recipient
 	var respString string
 	var respError string
-	BROADCAST_WAIT_LOOP:
+BROADCAST_WAIT_LOOP:
 	for i := 0; i < n; {
 		select {
 		case resp := <-meshageResponse:

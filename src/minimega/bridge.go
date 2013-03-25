@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"os/exec"
 	"strconv"
@@ -201,7 +202,10 @@ func (b *bridge) Destroy() error {
 func (b *bridge) Tap_create(lan int) (string, error) {
 	var s_out bytes.Buffer
 	var s_err bytes.Buffer
-	tap := <-tap_chan
+	tap, err := getNewTap()
+	if err != nil {
+		return "", err
+	}
 	p := process("ip")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -219,7 +223,7 @@ func (b *bridge) Tap_create(lan int) (string, error) {
 		Stderr: &s_err,
 	}
 	log.Info("creating tap with cmd: %v", cmd)
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, s_err.String())
 		return "", e
@@ -396,7 +400,13 @@ func host_tap_create(c cli_command) cli_response {
 		}
 	}
 
-	tap := <-tap_chan
+	tap, err := getNewTap()
+	if err != nil {
+		return cli_response{
+			Error: err.Error(),
+		}
+	}
+
 	// create the tap
 	current_bridge.lans[r].Taps[tap] = true
 	err = current_bridge.tap_add(r, tap, true)
@@ -462,4 +472,27 @@ func host_tap_create(c cli_command) cli_response {
 	return cli_response{
 		Response: tap,
 	}
+}
+
+// gets a new tap from tap_chan and verifies that it doesn't already exist
+func getNewTap() (string, error) {
+	var t string
+	for {
+		t = <-tap_chan
+		taps, err := ioutil.ReadDir("/sys/class/net")
+		if err != nil {
+			return "", err
+		}
+		found := false
+		for _, v := range taps {
+			if v.Name() == t {
+				found = true
+				log.Info("tap %v already exists, trying again\n", t)
+			}
+		}
+		if !found {
+			break
+		}
+	}
+	return t, nil
 }

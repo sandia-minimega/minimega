@@ -741,7 +741,7 @@ shows the command history`,
 					e := cli_commands[cc].Clear()
 					if e != nil {
 						r.Error = e.Error()
-					} 
+					}
 				}
 				return r
 			},
