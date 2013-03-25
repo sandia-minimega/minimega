@@ -494,3 +494,5 @@ func getNewTap() (string, error) {
 			break
 		}
 	}
+	return t, nil
+}
