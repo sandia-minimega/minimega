@@ -487,12 +487,10 @@ func getNewTap() (string, error) {
 		for _, v := range taps {
 			if v.Name() == t {
 				found = true
-				log.Info("tap %v already exists, trying again\n", t)
+				log.Warn("tap %v already exists, trying again\n", t)
 			}
 		}
 		if !found {
 			break
 		}
 	}
-	return t, nil
-}
