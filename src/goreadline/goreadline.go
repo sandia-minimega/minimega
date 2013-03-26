@@ -1,4 +1,4 @@
-// readline binding
+// Very simple libreadline binding. 
 package goreadline
 
 // #cgo LDFLAGS: -lreadline

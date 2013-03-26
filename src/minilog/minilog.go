@@ -11,7 +11,6 @@
 // loggers, each one with their own logging level. To use minilog, call
 // AddLogger() to set up each desired logger, then use the package-level
 // logging functions defined to send messages to all defined loggers.
-
 package minilog
 
 import (
@@ -63,10 +62,12 @@ func AddLogger(name string, output io.Writer, level int, color bool) {
 	loggers[name] = &minilogger{log.New(output, "", log.LstdFlags), level, color}
 }
 
+// Remove a named logger that was added using AddLogger
 func DelLogger(name string) {
 	delete(loggers, name)
 }
 
+// Change a log level for a named logger.
 func SetLevel(name string, level int) error {
 	if loggers[name] == nil {
 		return errors.New("logger does not exist")
@@ -75,6 +76,7 @@ func SetLevel(name string, level int) error {
 	return nil
 }
 
+// Return the log level for a named logger.
 func GetLevel(name string) (int, error) {
 	if loggers[name] == nil {
 		return -1, errors.New("logger does not exist")
