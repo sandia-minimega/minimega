@@ -20,7 +20,9 @@ func init() {
 	C.rl_catch_signals = 0
 }
 
-// the readline call proper, called by the cli
+// Rlwrap prompts the user with the given prompt string and calls the
+// underlying readline function. If the input stream closes, Rlwrap returns an
+// EOF error.
 func Rlwrap(prompt string) (string, error) {
 	p := C.CString(prompt)
 
@@ -36,8 +38,8 @@ func Rlwrap(prompt string) (string, error) {
 	return s, nil
 }
 
-// make readline restore the terminal state before we exit, which will allow
-// us to reclaim our terminal
+// Rlcleanup calls the readline rl_deprep_terminal function, restoring the 
+// terminal state
 func Rlcleanup() {
 	log.Info("restoring terminal state from readline")
 	C.rl_deprep_terminal()
