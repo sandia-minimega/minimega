@@ -6,7 +6,7 @@ import (
 	"os"
 )
 
-func log_setup() {
+func logSetup() {
 	level, err := log.LevelInt(*f_loglevel)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -27,19 +27,19 @@ func log_setup() {
 	}
 }
 
-func cli_log_level(c cli_command) cli_response {
+func cliLogLevel(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
-		return cli_response{
+		return cliResponse{
 			Response: *f_loglevel,
 		}
 	} else if len(c.Args) > 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "log_level must be [debug, info, warn, error, fatal]",
 		}
 	} else {
 		level, err := log.LevelInt(c.Args[0])
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Error: err.Error(),
 			}
 		}
@@ -48,23 +48,23 @@ func cli_log_level(c cli_command) cli_response {
 		log.SetLevel("stdio", level)
 		log.SetLevel("file", level)
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
-func cli_log_stderr(c cli_command) cli_response {
+func cliLogStderr(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		_, err := log.GetLevel("stdio")
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Response: "false",
 			}
 		} else {
-			return cli_response{
+			return cliResponse{
 				Response: "true",
 			}
 		}
 	} else if len(c.Args) > 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "log_stderr takes only one argument",
 		}
 	} else {
@@ -82,28 +82,28 @@ func cli_log_stderr(c cli_command) cli_response {
 				log.DelLogger("stdio")
 			}
 		default:
-			return cli_response{
+			return cliResponse{
 				Error: "log_stderr must be [true, false]",
 			}
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
-func cli_log_file(c cli_command) cli_response {
+func cliLogFile(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		_, err := log.GetLevel("file")
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Response: "false",
 			}
 		} else {
-			return cli_response{
+			return cliResponse{
 				Response: "true",
 			}
 		}
 	} else if len(c.Args) > 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "log_file takes only one argument",
 		}
 	} else {
@@ -115,7 +115,7 @@ func cli_log_file(c cli_command) cli_response {
 		} else {
 			logfile, err := os.OpenFile(c.Args[0], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 			if err != nil {
-				return cli_response{
+				return cliResponse{
 					Error: err.Error(),
 				}
 			}
@@ -123,5 +123,5 @@ func cli_log_file(c cli_command) cli_response {
 			log.AddLogger("file", logfile, level, false)
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }

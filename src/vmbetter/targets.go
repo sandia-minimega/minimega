@@ -17,31 +17,31 @@ import (
 // are equal to the base name of the input config file. So a config called
 // 'my_vm.conf' will generate 'my_vm.initrd' and 'my_vm.kernel'. The kernel
 // image is the one found in /boot of the build directory.
-func BuildTargets(build_path string, c vmconfig.Config) error {
-	target_name := strings.Split(filepath.Base(c.Path), ".")[0]
-	log.Debugln("using target name:", target_name)
+func BuildTargets(buildPath string, c vmconfig.Config) error {
+	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
+	log.Debugln("using target name:", targetName)
 
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
-	target_initrd := fmt.Sprintf("%v/%v.initrd", wd, target_name)
-	target_kernel := fmt.Sprintf("%v/%v.kernel", wd, target_name)
+	targetInitrd := fmt.Sprintf("%v/%v.initrd", wd, targetName)
+	targetKernel := fmt.Sprintf("%v/%v.kernel", wd, targetName)
 
 	f, err := ioutil.TempFile("", "vmbetter_cpio")
 	if err != nil {
 		return err
 	}
 
-	e_name := f.Name()
-	initrd_command := fmt.Sprintf("cd %v && find . -print0 | cpio --quiet --null -ov --format=newc | gzip -9 > %v\ncp boot/vmlinu* %v", build_path, target_initrd, target_kernel)
-	f.WriteString(initrd_command)
+	eName := f.Name()
+	initrdCommand := fmt.Sprintf("cd %v && find . -print0 | cpio --quiet --null -ov --format=newc | gzip -9 > %v\ncp boot/vmlinu* %v", buildPath, targetInitrd, targetKernel)
+	f.WriteString(initrdCommand)
 	f.Close()
 
-	log.Debugln("initrd command:", initrd_command)
+	log.Debugln("initrd command:", initrdCommand)
 
-	cmd := exec.Command("bash", e_name)
+	cmd := exec.Command("bash", eName)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -58,7 +58,7 @@ func BuildTargets(build_path string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	os.Remove(e_name)
+	os.Remove(eName)
 
 	return nil
 }

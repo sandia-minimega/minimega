@@ -13,15 +13,15 @@ import (
 // variable into a bash script under /tmp of the build directory, and then 
 // executing it with bash inside of a chroot. Post build commands are executed
 // in depth-first order.
-func PostBuildCommands(build_path string, c vmconfig.Config) error {
+func PostBuildCommands(buildPath string, c vmconfig.Config) error {
 	for _, p := range c.Postbuilds {
 		log.Debugln("postbuild:", p)
 
-		tmpfile := build_path + "/tmp/postbuild.bash"
+		tmpfile := buildPath + "/tmp/postbuild.bash"
 
 		ioutil.WriteFile(tmpfile, []byte(p), 0770)
 
-		cmd := exec.Command("chroot", build_path, "/bin/bash", "/tmp/postbuild.bash")
+		cmd := exec.Command("chroot", buildPath, "/bin/bash", "/tmp/postbuild.bash")
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			return err

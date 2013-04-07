@@ -6,8 +6,6 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
-// TODO: var/func naming scheme is busted, fix with Go camelcase scheme.
-
 package main
 
 import (
@@ -32,8 +30,8 @@ var (
 	f_degree    = flag.Int("degree", 0, "meshage starting degree")
 	f_port      = flag.Int("port", 8966, "meshage port to listen on")
 	f_force     = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
-	vms         vm_list
-	signal_once bool = false
+	vms         vmList
+	signalOnce bool = false
 )
 
 var banner string = `minimega, Copyright 2012 Sandia Corporation.
@@ -55,12 +53,12 @@ func main() {
 		*f_base += "/"
 	}
 
-	log_setup()
+	logSetup()
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
 	if *f_e {
-		local_command()
+		localCommand()
 		return
 	}
 
@@ -82,7 +80,7 @@ func main() {
 		teardown()
 	}()
 
-	r := external_check(cli_command{})
+	r := externalCheck(cliCommand{})
 	if r.Error != "" {
 		log.Error("%v", r.Error)
 	}
@@ -93,7 +91,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	ksm_save()
+	ksmSave()
 
 	// create a node for meshage
 	host, err := os.Hostname()
@@ -103,19 +101,19 @@ func main() {
 	meshageInit(host, uint(*f_degree), *f_port)
 
 	// invoke the cli
-	go cli_mux()
-	go command_socket_start()
+	go cliMux()
+	go commandSocketStart()
 
 	// check for a script on the command line, and invoke it as a read command
 	for _, a := range flag.Args() {
 		log.Infoln("reading script:", a)
-		c := cli_command{
+		c := cliCommand{
 			Command: "read",
 			Args:    []string{a},
 		}
-		command_chan_local <- c
+		commandChanLocal <- c
 		for {
-			r := <-ack_chan_local
+			r := <-ackChanLocal
 			if r.Error != "" {
 				log.Errorln(r.Error)
 			}
@@ -140,23 +138,23 @@ func main() {
 }
 
 func teardown() {
-	if signal_once {
+	if signalOnce {
 		log.Fatal("caught signal, exiting without cleanup")
 	}
-	signal_once = true
+	signalOnce = true
 	vms.kill(-1)
 	dnsmasqKill(-1)
-	err := current_bridge.Destroy()
+	err := currentBridge.Destroy()
 	if err != nil {
 		log.Error("%v", err)
 	}
-	ksm_restore()
-	command_socket_remove()
+	ksmRestore()
+	commandSocketRemove()
 	goreadline.Rlcleanup()
 	os.Exit(0)
 }
 
-func local_command() {
+func localCommand() {
 	a := flag.Args()
 	var command string
 	var args []string
@@ -183,7 +181,7 @@ func local_command() {
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 
-	c := cli_command{
+	c := cliCommand{
 		Command: command,
 		Args:    args,
 	}
@@ -195,7 +193,7 @@ func local_command() {
 	log.Debugln("encoded command:", c)
 
 	for {
-		var r cli_response
+		var r cliResponse
 		err = dec.Decode(&r)
 		if err != nil {
 			if err == io.EOF {

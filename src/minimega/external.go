@@ -17,7 +17,7 @@ import (
 	"os/exec"
 )
 
-var external_processes = map[string]string{
+var externalProcesses = map[string]string{
 	"qemu":    "kvm",
 	"ip":      "ip",
 	"ovs":     "ovs-vsctl",
@@ -27,28 +27,28 @@ var external_processes = map[string]string{
 
 // check for the presence of each of the external processes we may call,
 // and error if any aren't in our path
-func external_check(c cli_command) cli_response {
+func externalCheck(c cliCommand) cliResponse {
 	if len(c.Args) != 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "check does not take any arguments",
 		}
 	}
-	for _, i := range external_processes {
+	for _, i := range externalProcesses {
 		path, err := exec.LookPath(i)
 		if err != nil {
 			e := fmt.Sprintf("%v not found", i)
-			return cli_response{
+			return cliResponse{
 				Error: e,
 			}
 		} else {
 			log.Info("%v found at: %v", i, path)
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
 func process(p string) string {
-	path, err := exec.LookPath(external_processes[p])
+	path, err := exec.LookPath(externalProcesses[p])
 	if err != nil {
 		log.Error("%v", err)
 		return ""

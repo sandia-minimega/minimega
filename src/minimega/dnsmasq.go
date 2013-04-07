@@ -42,8 +42,8 @@ func init() {
 // maintain a map of dnsmasq servers that can be listed
 // allow killing dnsmasq servers with dnsmasq kill 
 
-func dnsmasqCLI(c cli_command) cli_response {
-	var ret cli_response
+func dnsmasqCLI(c cliCommand) cliResponse {
+	var ret cliResponse
 	switch len(c.Args) {
 	case 0:
 		// show the list of dnsmasq servers
@@ -117,8 +117,8 @@ func dnsmasqKill(id int) error {
 		return fmt.Errorf("invalid id")
 	}
 
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	p := process("kill")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -128,8 +128,8 @@ func dnsmasqKill(id int) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Infoln("killing dnsmasq server:", pid)
 	err := cmd.Run()
@@ -153,8 +153,8 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 	}
 
 	p := process("dnsmasq")
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -174,8 +174,8 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	if hosts != "" {
 		cmd.Args = append(cmd.Args, fmt.Sprintf("--addn-hosts=%v", hosts))
@@ -195,7 +195,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		err = cmd.Wait()
 		if err != nil {
 			if err.Error() != "signal 9" { // because we killed it
-				log.Error("%v %v", err, s_err.String())
+				log.Error("%v %v", err, sErr.String())
 			}
 		}
 		// remove it from the list of dnsmasq servers

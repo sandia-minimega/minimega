@@ -18,27 +18,27 @@ import (
 )
 
 var (
-	ksm_pages_to_scan   int
-	ksm_run             int
-	ksm_sleep_millisecs int
+	ksmPagesToScan   int
+	ksmRun             int
+	ksmSleepMillisecs int
 )
 
 const (
-	ksm_path_run             = "/sys/kernel/mm/ksm/run"
-	ksm_path_pages_to_scan   = "/sys/kernel/mm/ksm/pages_to_scan"
-	ksm_path_sleep_millisecs = "/sys/kernel/mm/ksm/sleep_millisecs"
-	ksm_tune_pages_to_scan   = 100000
-	ksm_tune_sleep_millisecs = 10
+	ksmPathRun             = "/sys/kernel/mm/ksm/run"
+	ksmPathPagesToScan   = "/sys/kernel/mm/ksm/pages_to_scan"
+	ksmPathSleepMillisecs = "/sys/kernel/mm/ksm/sleep_millisecs"
+	ksmTunePagesToScan   = 100000
+	ksmTuneSleepMillisecs = 10
 )
 
-func ksm_save() {
+func ksmSave() {
 	log.Info("saving ksm values")
-	ksm_run = ksm_get_int_from_file(ksm_path_run)
-	ksm_pages_to_scan = ksm_get_int_from_file(ksm_path_pages_to_scan)
-	ksm_sleep_millisecs = ksm_get_int_from_file(ksm_path_sleep_millisecs)
+	ksmRun = ksmGetIntFromFile(ksmPathRun)
+	ksmPagesToScan = ksmGetIntFromFile(ksmPathPagesToScan)
+	ksmSleepMillisecs = ksmGetIntFromFile(ksmPathSleepMillisecs)
 }
 
-func ksm_get_int_from_file(filename string) int {
+func ksmGetIntFromFile(filename string) int {
 	buffer, err := ioutil.ReadFile(filename)
 	if err != nil {
 		log.Fatalln(err)
@@ -53,21 +53,21 @@ func ksm_get_int_from_file(filename string) int {
 	return int(run)
 }
 
-func ksm_enable() {
+func ksmEnable() {
 	log.Info("enabling ksm")
-	ksm_write(ksm_path_run, 1)
-	ksm_write(ksm_path_pages_to_scan, ksm_tune_pages_to_scan)
-	ksm_write(ksm_path_sleep_millisecs, ksm_tune_sleep_millisecs)
+	ksmWrite(ksmPathRun, 1)
+	ksmWrite(ksmPathPagesToScan, ksmTunePagesToScan)
+	ksmWrite(ksmPathSleepMillisecs, ksmTuneSleepMillisecs)
 }
 
-func ksm_restore() {
+func ksmRestore() {
 	log.Info("restoring ksm values")
-	ksm_write(ksm_path_run, ksm_run)
-	ksm_write(ksm_path_pages_to_scan, ksm_pages_to_scan)
-	ksm_write(ksm_path_sleep_millisecs, ksm_sleep_millisecs)
+	ksmWrite(ksmPathRun, ksmRun)
+	ksmWrite(ksmPathPagesToScan, ksmPagesToScan)
+	ksmWrite(ksmPathSleepMillisecs, ksmSleepMillisecs)
 }
 
-func ksm_write(filename string, value int) {
+func ksmWrite(filename string, value int) {
 	file, err := os.Create(filename)
 	if err != nil {
 		log.Error("%v", err)

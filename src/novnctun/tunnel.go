@@ -12,13 +12,13 @@ import (
 
 const BUF = 32768
 
-type Host_list interface {
+type HostList interface {
 	Hosts() map[string][]string
 }
 
 type Tun struct {
 	Addr   string
-	Hosts  Host_list
+	Hosts  HostList
 	Files  string // path to files for novnc to serve
 	Unsafe bool
 }
@@ -36,9 +36,9 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	fields := strings.Split(url, "/")
 	switch len(fields) {
 	case 2: // "/"
-		w.Write([]byte(t.html_hosts()))
+		w.Write([]byte(t.htmlHosts()))
 	case 3: // "/<host>"
-		w.Write([]byte(t.html_ports(fields[1])))
+		w.Write([]byte(t.htmlPorts(fields[1])))
 	case 4: // "/<host>/<port>"
 		if t.allowed(fields[1], fields[2]) {
 			title := html.EscapeString(fields[1] + ":" + fields[2])
@@ -49,7 +49,7 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	case 5: // "/ws/<host>/<port>"
 		if t.allowed(fields[2], fields[3]) {
-			t.ws_handler(w, r)
+			t.wsHandler(w, r)
 		} else {
 			http.NotFound(w, r)
 		}
@@ -58,7 +58,7 @@ func (t *Tun) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (t *Tun) html_hosts() (body string) {
+func (t *Tun) htmlHosts() (body string) {
 	hosts := t.Hosts.Hosts()
 	if len(hosts) == 0 {
 		body = "no hosts found"
@@ -70,7 +70,7 @@ func (t *Tun) html_hosts() (body string) {
 	return
 }
 
-func (t *Tun) html_ports(host string) (body string) {
+func (t *Tun) htmlPorts(host string) (body string) {
 	ports := t.Hosts.Hosts()[host]
 	if ports == nil {
 		body = "no ports found for host: " + host
@@ -105,7 +105,7 @@ func (t *Tun) allowed(host, port string) bool {
 	return false
 }
 
-func (t *Tun) ws_handler(w http.ResponseWriter, r *http.Request) {
+func (t *Tun) wsHandler(w http.ResponseWriter, r *http.Request) {
 	// we assume that if we got here, then the url must be sane and of 
 	// the format /<host>/<port>
 	url := r.URL.String()

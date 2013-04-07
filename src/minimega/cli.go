@@ -9,7 +9,7 @@
 // command line interface for minimega
 // 
 // The command line interface wraps a number of commands listed in the 
-// cli_commands map. Each entry to the map defines a function that is called
+// cliCommands map. Each entry to the map defines a function that is called
 // when the command is invoked on the command line, as well as short and long
 // form help. The record parameter instructs the cli to put the command in the
 // command history.
@@ -38,30 +38,30 @@ import (
 )
 
 var (
-	command_buf []string // command history for the write command
+	commandBuf []string // command history for the write command
 
 	// incoming commands for the cli to parse. these can come from the cli
 	// proper (readline), or from a network source, etc. the cli will parse
 	// them all as if they were typed locally.
-	command_chan_local   chan cli_command
-	command_chan_socket  chan cli_command
-	command_chan_meshage chan cli_command
+	commandChanLocal   chan cliCommand
+	commandChanSocket  chan cliCommand
+	commandChanMeshage chan cliCommand
 
-	ack_chan_local   chan cli_response // acknowledgements from the cli, one per incoming command
-	ack_chan_socket  chan cli_response
-	ack_chan_meshage chan cli_response
+	ackChanLocal   chan cliResponse // acknowledgements from the cli, one per incoming command
+	ackChanSocket  chan cliResponse
+	ackChanMeshage chan cliResponse
 
-	cli_commands map[string]*command
+	cliCommands map[string]*command
 )
 
-type cli_command struct {
+type cliCommand struct {
 	Command  string
 	Args     []string
-	ack_chan chan cli_response
+	ackChan chan cliResponse
 	TID      int32
 }
 
-type cli_response struct {
+type cliResponse struct {
 	Response string
 	Error    string // because you can't gob/json encode an error type
 	More     bool   // more is set if the called command will be sending multiple responses
@@ -69,7 +69,7 @@ type cli_response struct {
 }
 
 type command struct {
-	Call      func(c cli_command) cli_response // callback function
+	Call      func(c cliCommand) cliResponse // callback function
 	Helpshort string                           // short form help test, one line only
 	Helplong  string                           // long form help text
 	Record    bool                             // record in the command history
@@ -77,36 +77,36 @@ type command struct {
 }
 
 func init() {
-	command_chan_local = make(chan cli_command)
-	command_chan_socket = make(chan cli_command)
-	command_chan_meshage = make(chan cli_command)
-	ack_chan_local = make(chan cli_response)
-	ack_chan_socket = make(chan cli_response)
-	ack_chan_meshage = make(chan cli_response)
+	commandChanLocal = make(chan cliCommand)
+	commandChanSocket = make(chan cliCommand)
+	commandChanMeshage = make(chan cliCommand)
+	ackChanLocal = make(chan cliResponse)
+	ackChanSocket = make(chan cliResponse)
+	ackChanMeshage = make(chan cliResponse)
 
 	// list of commands the cli supports. some commands have small callbacks, which
 	// are defined inline.
-	cli_commands = map[string]*command{
+	cliCommands = map[string]*command{
 		"rate": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: fmt.Sprintf("%v", launch_rate),
+					return cliResponse{
+						Response: fmt.Sprintf("%v", launchRate),
 					}
 				} else if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "rate takes one argument",
 					}
 				} else {
 					r, err := strconv.Atoi(c.Args[0])
 					if err != nil {
-						return cli_response{
+						return cliResponse{
 							Error: err.Error(),
 						}
 					}
-					launch_rate = time.Millisecond * time.Duration(r)
+					launchRate = time.Millisecond * time.Duration(r)
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set the launch/kill rate in milliseconds",
 			Helplong: `
@@ -115,13 +115,13 @@ take some time to respond, causing errors if you try to launch or kill VMs too
 quickly. The default value is 100 milliseconds.`,
 			Record: true,
 			Clear: func() error {
-				launch_rate = time.Millisecond * 100
+				launchRate = time.Millisecond * 100
 				return nil
 			},
 		},
 
 		"log_level": &command{
-			Call:      cli_log_level,
+			Call:      cliLogLevel,
 			Helpshort: "set the log level",
 			Helplong: `
 Usage: log_level <level>
@@ -138,7 +138,7 @@ setting the mode to debug will log everything.`,
 		},
 
 		"log_stderr": &command{
-			Call:      cli_log_stderr,
+			Call:      cliLogStderr,
 			Helpshort: "enable/disable logging to stderr",
 			Helplong: `
 Enable or disable logging to stderr. Valid options are [true, false].`,
@@ -153,7 +153,7 @@ Enable or disable logging to stderr. Valid options are [true, false].`,
 		},
 
 		"log_file": &command{
-			Call:      cli_log_file,
+			Call:      cliLogFile,
 			Helpshort: "enable logging to a file",
 			Helplong: `
 Usage log_file <filename>
@@ -169,7 +169,7 @@ Log to a file. To disable file logging, call "log_file false".`,
 		},
 
 		"check": &command{
-			Call:      external_check,
+			Call:      externalCheck,
 			Helpshort: "check for the presence of all external executables minimega uses",
 			Helplong: `
 Minimega maintains a list of external packages that it depends on, such as qemu.
@@ -195,27 +195,27 @@ removes the temporary minimega state on the harddisk.`,
 		},
 
 		"write": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "write takes a single argument",
 					}
 				}
 				file, err := os.Create(c.Args[0])
 				if err != nil {
-					return cli_response{
+					return cliResponse{
 						Error: err.Error(),
 					}
 				}
-				for _, i := range command_buf {
+				for _, i := range commandBuf {
 					_, err = file.WriteString(i + "\n")
 					if err != nil {
-						return cli_response{
+						return cliResponse{
 							Error: err.Error(),
 						}
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "write the command history to a file",
 			Helplong: `
@@ -231,15 +231,15 @@ failed, as well as some commands that do not impact the VM state, such as
 		},
 
 		"read": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "read takes a single argument",
 					}
 				}
 				file, err := os.Open(c.Args[0])
 				if err != nil {
-					return cli_response{
+					return cliResponse{
 						Error: err.Error(),
 					}
 				}
@@ -262,18 +262,18 @@ failed, as well as some commands that do not impact the VM state, such as
 					if len(f) > 1 {
 						args = f[1:]
 					}
-					resp := cli_exec(cli_command{
+					resp := cliExec(cliCommand{
 						Command: command,
 						Args:    args,
 					})
 					resp.More = true
-					c.ack_chan <- resp
+					c.ackChan <- resp
 					if resp.Error != "" {
 						log.Errorln(resp.Error)
 						break // stop on errors
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "read and execute a command file",
 			Helplong: `
@@ -287,7 +287,7 @@ the file in manually.`,
 		},
 
 		"vm_status": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				return vms.status(c)
 			},
 			Helpshort: "print the status of each VM",
@@ -302,14 +302,14 @@ id field.`,
 		},
 
 		"quit": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 0 {
-					return cli_response{
+					return cliResponse{
 						Error: "quit takes no arguments",
 					}
 				}
 				teardown()
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "quit",
 			Helplong:  "Quit",
@@ -320,14 +320,14 @@ id field.`,
 		},
 
 		"exit": &command{ // just an alias to quit
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 0 {
-					return cli_response{
+					return cliResponse{
 						Error: "exit takes no arguments",
 					}
 				}
 				teardown()
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "exit",
 			Helplong:  "Exit",
@@ -338,21 +338,21 @@ id field.`,
 		},
 
 		"vm_launch": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_launch takes one argument",
 					}
 				}
 				a, err := strconv.Atoi(c.Args[0])
 				if err != nil {
-					return cli_response{
+					return cliResponse{
 						Error: err.Error(),
 					}
 				}
-				ksm_enable()
+				ksmEnable()
 				vms.launch(a)
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "launch virtual machines in a paused state",
 			Helplong: `
@@ -367,20 +367,20 @@ after launching will have no effect on launched VMs.`,
 		},
 
 		"vm_kill": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_kill takes one argument",
 					}
 				}
 				a, err := strconv.Atoi(c.Args[0])
 				if err != nil {
-					return cli_response{
+					return cliResponse{
 						Error: err.Error(),
 					}
 				}
 				vms.kill(a)
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "kill running virtual machines",
 			Helplong: `
@@ -393,7 +393,7 @@ Kill a virtual machine by ID. Pass -1 to kill all virtual machines.`,
 		},
 
 		"vm_start": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				return vms.start(c)
 			},
 			Helpshort: "start paused virtual machines",
@@ -408,43 +408,43 @@ call start without the optional VM id.`,
 		},
 
 		"vm_qemu": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
+					return cliResponse{
 						Response: process("qemu"),
 					}
 				} else if len(c.Args) == 1 {
-					external_processes["qemu"] = c.Args[0]
+					externalProcesses["qemu"] = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_qemu takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set the qemu process to invoke",
 			Helplong:  "Set the qemu process to invoke. Relative paths are ok.",
 			Record:    true,
 			Clear: func() error {
-				external_processes["qemu"] = "qemu-system-x86_64"
+				externalProcesses["qemu"] = "qemu-system-x86_64"
 				return nil
 			},
 		},
 
 		"vm_memory": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
+					return cliResponse{
 						Response: info.Memory,
 					}
 				} else if len(c.Args) == 1 {
 					info.Memory = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_memory takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set the amount of physical memory for a VM",
 			Helplong:  "Set the amount of physical memory to allocate in megabytes.",
@@ -456,19 +456,19 @@ call start without the optional VM id.`,
 		},
 
 		"vm_vcpus": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
+					return cliResponse{
 						Response: info.Vcpus,
 					}
 				} else if len(c.Args) == 1 {
 					info.Vcpus = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_vcpus takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set the number of virtual CPUs for a VM",
 			Helplong:  "Set the number of virtual CPUs to allocate a VM.",
@@ -480,19 +480,19 @@ call start without the optional VM id.`,
 		},
 
 		"vm_disk": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: info.Disk_path,
+					return cliResponse{
+						Response: info.DiskPath,
 					}
 				} else if len(c.Args) == 1 {
-					info.Disk_path = c.Args[0]
+					info.DiskPath = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_disk takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set a disk image to attach to a VM",
 			Helplong: `
@@ -500,25 +500,25 @@ Attach a disk to a VM. Any disk image supported by QEMU is a valid parameter.
 Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 			Record: true,
 			Clear: func() error {
-				info.Disk_path = ""
+				info.DiskPath = ""
 				return nil
 			},
 		},
 
 		"vm_cdrom": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: info.Cdrom_path,
+					return cliResponse{
+						Response: info.CdromPath,
 					}
 				} else if len(c.Args) == 1 {
-					info.Cdrom_path = c.Args[0]
+					info.CdromPath = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_cdrom takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set a cdrom image to attach to a VM",
 			Helplong: `
@@ -526,25 +526,25 @@ Attach a cdrom to a VM. When using a cdrom, it will automatically be set
 to be the boot device.`,
 			Record: true,
 			Clear: func() error {
-				info.Cdrom_path = ""
+				info.CdromPath = ""
 				return nil
 			},
 		},
 
 		"vm_kernel": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: info.Kernel_path,
+					return cliResponse{
+						Response: info.KernelPath,
 					}
 				} else if len(c.Args) == 1 {
-					info.Kernel_path = c.Args[0]
+					info.KernelPath = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_kernel takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set a kernel image to attach to a VM",
 			Helplong: `
@@ -552,46 +552,46 @@ Attach a kernel image to a VM. If set, QEMU will boot from this image instead
 of any disk image.`,
 			Record: true,
 			Clear: func() error {
-				info.Kernel_path = ""
+				info.KernelPath = ""
 				return nil
 			},
 		},
 
 		"vm_initrd": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: info.Initrd_path,
+					return cliResponse{
+						Response: info.InitrdPath,
 					}
 				} else if len(c.Args) == 1 {
-					info.Initrd_path = c.Args[0]
+					info.InitrdPath = c.Args[0]
 				} else {
-					return cli_response{
+					return cliResponse{
 						Error: "vm_initrd takes only one argument",
 					}
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set a initrd image to attach to a VM",
 			Helplong: `
 Attach an initrd image to a VM. Passed along with the kernel image at boot time.`,
 			Record: true,
 			Clear: func() error {
-				info.Initrd_path = ""
+				info.InitrdPath = ""
 				return nil
 			},
 		},
 
 		"vm_qemu_append": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
-						Response: strings.Join(info.Qemu_Append, " "),
+					return cliResponse{
+						Response: strings.Join(info.QemuAppend, " "),
 					}
 				} else {
-					info.Qemu_Append = c.Args
+					info.QemuAppend = c.Args
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "add additional arguments for the QEMU command",
 			Helplong: `
@@ -600,21 +600,21 @@ Add additional arguments to be passed to the QEMU instance. For example,
 `,
 			Record: true,
 			Clear: func() error {
-				info.Qemu_Append = nil
+				info.QemuAppend = nil
 				return nil
 			},
 		},
 
 		"vm_append": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {
-					return cli_response{
+					return cliResponse{
 						Response: info.Append,
 					}
 				} else {
 					info.Append = strings.Join(c.Args, " ")
 				}
-				return cli_response{}
+				return cliResponse{}
 			},
 			Helpshort: "set an append string to pass to a kernel set with vm_kernel",
 			Helplong: `
@@ -633,10 +633,10 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 		},
 
 		"vm_net": &command{
-			Call: func(c cli_command) cli_response {
-				r := cli_response{}
+			Call: func(c cliCommand) cliResponse {
+				r := cliResponse{}
 				if len(c.Args) == 0 {
-					return cli_response{
+					return cliResponse{
 						Response: fmt.Sprintf("%v\n", info.Networks),
 					}
 				} else {
@@ -644,13 +644,13 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 					for _, lan := range c.Args {
 						val, err := strconv.Atoi(lan)
 						if err != nil {
-							return cli_response{
+							return cliResponse{
 								Error: err.Error(),
 							}
 						}
-						err, ok := current_bridge.Lan_create(val)
+						err, ok := currentBridge.LanCreate(val)
 						if !ok {
-							return cli_response{
+							return cliResponse{
 								Error: err.Error(),
 							}
 						}
@@ -680,7 +680,7 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 		},
 
 		"vnc": &command{
-			Call:      cli_vnc,
+			Call:      cliVnc,
 			Helpshort: "invoke a vnc viewer on a VM or start a vnc pool server",
 			Helplong: `
 Usage: vnc [serve <host:port>, novnc <novnc path>]
@@ -700,18 +700,18 @@ vnc serve :8080
 :8080 is the default port.`,
 			Record: true,
 			Clear: func() error {
-				vnc_novnc = "misc/novnc"
+				vncNovnc = "misc/novnc"
 				return nil
 			},
 		},
 
 		"history": &command{
-			Call: func(c cli_command) cli_response {
-				r := cli_response{}
+			Call: func(c cliCommand) cliResponse {
+				r := cliResponse{}
 				if len(c.Args) != 0 {
 					r.Error = "history takes no arguments"
 				} else {
-					r.Response = strings.Join(command_buf, "\n")
+					r.Response = strings.Join(commandBuf, "\n")
 
 				}
 				return r
@@ -726,19 +726,19 @@ shows the command history`,
 		},
 
 		"clear": &command{
-			Call: func(c cli_command) cli_response {
-				var r cli_response
+			Call: func(c cliCommand) cliResponse {
+				var r cliResponse
 				if len(c.Args) != 1 {
-					return cli_response{
+					return cliResponse{
 						Error: "clear takes one argument",
 					}
 				}
 				cc := c.Args[0]
-				if cli_commands[cc] == nil {
+				if cliCommands[cc] == nil {
 					e := fmt.Sprintf("invalid command: %v", cc)
 					r.Error = e
 				} else {
-					e := cli_commands[cc].Clear()
+					e := cliCommands[cc].Clear()
 					if e != nil {
 						r.Error = e.Error()
 					}
@@ -756,27 +756,27 @@ will clear the list of associated networks.`,
 		},
 
 		"help": &command{
-			Call: func(c cli_command) cli_response {
-				r := cli_response{}
+			Call: func(c cliCommand) cliResponse {
+				r := cliResponse{}
 				if len(c.Args) == 0 { // display help on help, and list the short helps
 					r.Response = "Display help on a command. Here is a list of commands:\n"
-					var sorted_names []string
-					for c, _ := range cli_commands {
-						sorted_names = append(sorted_names, c)
+					var sortedNames []string
+					for c, _ := range cliCommands {
+						sortedNames = append(sortedNames, c)
 					}
-					sort.Strings(sorted_names)
+					sort.Strings(sortedNames)
 					w := new(tabwriter.Writer)
 					buf := bytes.NewBufferString(r.Response)
 					w.Init(buf, 0, 8, 0, '\t', 0)
-					for _, c := range sorted_names {
-						fmt.Fprintln(w, c, "\t", ":\t", cli_commands[c].Helpshort, "\t")
+					for _, c := range sortedNames {
+						fmt.Fprintln(w, c, "\t", ":\t", cliCommands[c].Helpshort, "\t")
 					}
 					w.Flush()
 					r.Response = buf.String()
 				} else if len(c.Args) == 1 { // try to display help on args[0]
-					if cli_commands[c.Args[0]] != nil {
-						r.Response = fmt.Sprintln(c.Args[0], ":", cli_commands[c.Args[0]].Helpshort)
-						r.Response += fmt.Sprintln(cli_commands[c.Args[0]].Helplong)
+					if cliCommands[c.Args[0]] != nil {
+						r.Response = fmt.Sprintln(c.Args[0], ":", cliCommands[c.Args[0]].Helpshort)
+						r.Response += fmt.Sprintln(cliCommands[c.Args[0]].Helplong)
 					} else {
 						e := fmt.Sprintf("no help on command: %v", c.Args[0])
 						r.Error = e
@@ -795,7 +795,7 @@ will clear the list of associated networks.`,
 		},
 
 		"host_tap": &command{
-			Call:      host_tap_create,
+			Call:      hostTapCreate,
 			Helpshort: "create a host tap for communicating between hosts and VMs",
 			Helplong: `
 Create host tap on a named vlan for communicating between a host and any VMs on
@@ -917,14 +917,14 @@ For example, to get the vm_status from all nodes:
 		},
 
 		"hostname": &command{
-			Call: func(c cli_command) cli_response {
+			Call: func(c cliCommand) cliResponse {
 				host, err := os.Hostname()
 				if err != nil {
-					return cli_response{
+					return cliResponse{
 						Error: err.Error(),
 					}
 				}
-				return cli_response{
+				return cliResponse{
 					Response: host,
 				}
 			},
@@ -973,7 +973,7 @@ NOTE: If specifying an additional hosts file, you must provide the full path to 
 	}
 }
 
-func makeCommand(s string) cli_command {
+func makeCommand(s string) cliCommand {
 	f := strings.Fields(s)
 	var command string
 	var args []string
@@ -983,7 +983,7 @@ func makeCommand(s string) cli_command {
 	if len(f) > 1 {
 		args = f[1:]
 	}
-	return cli_command{
+	return cliCommand{
 		Command: command,
 		Args:    args,
 	}
@@ -1001,9 +1001,9 @@ func cli() {
 
 		c := makeCommand(string(line))
 
-		command_chan_local <- c
+		commandChanLocal <- c
 		for {
-			r := <-ack_chan_local
+			r := <-ackChanLocal
 			if r.Error != "" {
 				log.Errorln(r.Error)
 			}
@@ -1024,27 +1024,27 @@ func cli() {
 	}
 }
 
-func cli_mux() {
+func cliMux() {
 	for {
 		select {
-		case c := <-command_chan_local:
-			c.ack_chan = ack_chan_local
-			ack_chan_local <- cli_exec(c)
-		case c := <-command_chan_socket:
-			c.ack_chan = ack_chan_socket
-			ack_chan_socket <- cli_exec(c)
-		case c := <-command_chan_meshage:
-			c.ack_chan = ack_chan_meshage
-			ack_chan_meshage <- cli_exec(c)
+		case c := <-commandChanLocal:
+			c.ackChan = ackChanLocal
+			ackChanLocal <- cliExec(c)
+		case c := <-commandChanSocket:
+			c.ackChan = ackChanSocket
+			ackChanSocket <- cliExec(c)
+		case c := <-commandChanMeshage:
+			c.ackChan = ackChanMeshage
+			ackChanMeshage <- cliExec(c)
 		}
 	}
 }
 
 // process commands from the command channel. each command is acknowledged with
-// true/false success codes on command_ack.
-func cli_exec(c cli_command) cli_response {
+// true/false success codes on commandAck.
+func cliExec(c cliCommand) cliResponse {
 	if c.Command == "" {
-		return cli_response{}
+		return cliResponse{}
 	}
 
 	// special case, comments. Any line starting with # is a comment and WILL be 
@@ -1055,24 +1055,24 @@ func cli_exec(c cli_command) cli_response {
 		if len(c.Args) > 0 {
 			s += " " + strings.Join(c.Args, " ")
 		}
-		command_buf = append(command_buf, s)
-		return cli_response{}
+		commandBuf = append(commandBuf, s)
+		return cliResponse{}
 	}
 
-	if cli_commands[c.Command] == nil {
+	if cliCommands[c.Command] == nil {
 		e := fmt.Sprintf("invalid command: %v", c.Command)
-		return cli_response{
+		return cliResponse{
 			Error: e,
 		}
 	}
-	r := cli_commands[c.Command].Call(c)
+	r := cliCommands[c.Command].Call(c)
 	if r.Error == "" {
-		if cli_commands[c.Command].Record {
+		if cliCommands[c.Command].Record {
 			s := c.Command
 			if len(c.Args) > 0 {
 				s += " " + strings.Join(c.Args, " ")
 			}
-			command_buf = append(command_buf, s)
+			commandBuf = append(commandBuf, s)
 		}
 	}
 	return r

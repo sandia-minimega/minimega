@@ -25,8 +25,8 @@ var (
 )
 
 func init() {
-	gob.Register(cli_command{})
-	gob.Register(cli_response{})
+	gob.Register(cliCommand{})
+	gob.Register(cliResponse{})
 }
 
 func meshageInit(host string, degree uint, port int) {
@@ -53,9 +53,9 @@ func meshageMux() {
 	for {
 		m := <-meshageMessages
 		switch reflect.TypeOf(m.Body) {
-		case reflect.TypeOf(cli_command{}):
+		case reflect.TypeOf(cliCommand{}):
 			meshageCommand <- m
-		case reflect.TypeOf(cli_response{}):
+		case reflect.TypeOf(cliResponse{}):
 			meshageResponse <- m
 		default:
 			log.Errorln("got invalid message!")
@@ -67,11 +67,11 @@ func meshageHandler() {
 	for {
 		m := <-meshageCommand
 		go func() {
-			command_chan_meshage <- m.Body.(cli_command)
+			commandChanMeshage <- m.Body.(cliCommand)
 
 			//generate a response
-			r := <-ack_chan_meshage
-			r.TID = m.Body.(cli_command).TID
+			r := <-ackChanMeshage
+			r.TID = m.Body.(cliCommand).TID
 			recipient := []string{m.Source}
 			err := meshageNode.Set(recipient, r)
 			if err != nil {
@@ -82,52 +82,52 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func meshageDegree(c cli_command) cli_response {
+func meshageDegree(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
-		return cli_response{
+		return cliResponse{
 			Response: fmt.Sprintf("%d", meshageNode.GetDegree()),
 		}
 	case 1:
 		a, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Error: err.Error(),
 			}
 		}
 		meshageNode.SetDegree(uint(a))
-		return cli_response{}
+		return cliResponse{}
 	default:
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_degree takes zero or one argument",
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
-func meshageDial(c cli_command) cli_response {
+func meshageDial(c cliCommand) cliResponse {
 	if len(c.Args) != 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_dial takes one argument",
 		}
 	}
 	err := meshageNode.Dial(c.Args[0])
-	ret := cli_response{}
+	ret := cliResponse{}
 	if err != nil {
 		ret.Error = err.Error()
 	}
 	return ret
 }
 
-func meshageDot(c cli_command) cli_response {
+func meshageDot(c cliCommand) cliResponse {
 	if len(c.Args) != 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_dot takes one argument",
 		}
 	}
 	f, err := os.Create(c.Args[0])
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
@@ -135,12 +135,12 @@ func meshageDot(c cli_command) cli_response {
 	d := meshageNode.Dot()
 	f.WriteString(d)
 	f.Close()
-	return cli_response{}
+	return cliResponse{}
 }
 
-func meshageStatus(c cli_command) cli_response {
+func meshageStatus(c cliCommand) cliResponse {
 	if len(c.Args) != 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_status takes no arguments",
 		}
 	}
@@ -149,20 +149,20 @@ func meshageStatus(c cli_command) cli_response {
 	nodes := len(mesh)
 	host, err := os.Hostname()
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
 	clients := len(mesh[host])
 	ret := fmt.Sprintf("mesh size %d\ndegree %d\nclients connected to this node: %d", nodes, degree, clients)
-	return cli_response{
+	return cliResponse{
 		Response: ret,
 	}
 }
 
-func meshageList(c cli_command) cli_response {
+func meshageList(c cliCommand) cliResponse {
 	if len(c.Args) != 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_list takes no arguments",
 		}
 	}
@@ -184,51 +184,51 @@ func meshageList(c cli_command) cli_response {
 			ret += fmt.Sprintf(" |--%s\n", x)
 		}
 	}
-	return cli_response{
+	return cliResponse{
 		Response: ret,
 	}
 }
 
-func meshageHangup(c cli_command) cli_response {
+func meshageHangup(c cliCommand) cliResponse {
 	if len(c.Args) != 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_hangup takes one argument",
 		}
 	}
 	err := meshageNode.Hangup(c.Args[0])
-	ret := cli_response{}
+	ret := cliResponse{}
 	if err != nil {
 		ret.Error = err.Error()
 	}
 	return ret
 }
 
-func meshageMSATimeout(c cli_command) cli_response {
+func meshageMSATimeout(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
-		return cli_response{
+		return cliResponse{
 			Response: fmt.Sprintf("%d", meshageNode.GetMSATimeout()),
 		}
 	case 1:
 		a, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Error: err.Error(),
 			}
 		}
 		meshageNode.SetMSATimeout(uint(a))
-		return cli_response{}
+		return cliResponse{}
 	default:
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_msa_timeout takes zero or one argument",
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
-func meshageSet(c cli_command) cli_response {
+func meshageSet(c cliCommand) cliResponse {
 	if len(c.Args) < 2 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_set takes at least two arguments",
 		}
 	}
@@ -240,7 +240,7 @@ func meshageSet(c cli_command) cli_response {
 	command.TID = TID
 	err := meshageNode.Set(recipients, command)
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
@@ -252,9 +252,9 @@ SET_WAIT_LOOP:
 	for i := 0; i < len(recipients); {
 		select {
 		case resp := <-meshageResponse:
-			body := resp.Body.(cli_response)
+			body := resp.Body.(cliResponse)
 			if body.TID != TID {
-				log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
+				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
 			} else {
 				if body.Response != "" {
 					respString += body.Response + "\n"
@@ -271,15 +271,15 @@ SET_WAIT_LOOP:
 			break SET_WAIT_LOOP
 		}
 	}
-	return cli_response{
+	return cliResponse{
 		Response: respString,
 		Error:    respError,
 	}
 }
 
-func meshageBroadcast(c cli_command) cli_response {
+func meshageBroadcast(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "mesh_broadcast takes at least one argument",
 		}
 	}
@@ -291,7 +291,7 @@ func meshageBroadcast(c cli_command) cli_response {
 	command.TID = TID
 	n, err := meshageNode.Broadcast(command)
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
@@ -303,9 +303,9 @@ BROADCAST_WAIT_LOOP:
 	for i := 0; i < n; {
 		select {
 		case resp := <-meshageResponse:
-			body := resp.Body.(cli_response)
+			body := resp.Body.(cliResponse)
 			if body.TID != TID {
-				log.Warn("invalid TID from response channel: %d", resp.Body.(cli_response).TID)
+				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
 			} else {
 				if body.Response != "" {
 					respString += body.Response + "\n"
@@ -322,7 +322,7 @@ BROADCAST_WAIT_LOOP:
 			break BROADCAST_WAIT_LOOP
 		}
 	}
-	return cli_response{
+	return cliResponse{
 		Response: respString,
 		Error:    respError,
 	}

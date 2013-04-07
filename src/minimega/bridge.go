@@ -41,23 +41,23 @@ type tap struct {
 }
 
 var (
-	current_bridge *bridge     // bridge for the current context, currently the *only* bridge
-	tap_count      int         // total number of allocated taps on this host
-	tap_chan       chan string // atomic feeder of tap names, wraps tap_count
+	currentBridge *bridge     // bridge for the current context, currently the *only* bridge
+	tapCount      int         // total number of allocated taps on this host
+	tapChan       chan string // atomic feeder of tap names, wraps tapCount
 )
 
 // create the default bridge struct and create a goroutine to generate
 // tap names for this host.
 func init() {
-	current_bridge = &bridge{
+	currentBridge = &bridge{
 		Name: "mega_bridge",
 	}
-	tap_chan = make(chan string)
+	tapChan = make(chan string)
 	go func() {
 		for {
-			tap_chan <- fmt.Sprintf("mega_tap%v", tap_count)
-			tap_count++
-			log.Info("tap_count: %v", tap_count)
+			tapChan <- fmt.Sprintf("mega_tap%v", tapCount)
+			tapCount++
+			log.Info("tapCount: %v", tapCount)
 		}
 	}()
 }
@@ -65,7 +65,7 @@ func init() {
 // create a new vlan. If this is the first vlan being allocated, then the 
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
-func (b *bridge) Lan_create(lan int) (error, bool) {
+func (b *bridge) LanCreate(lan int) (error, bool) {
 	if !b.exists {
 		log.Info("bridge does not exist")
 		err := b.create()
@@ -87,8 +87,8 @@ func (b *bridge) Lan_create(lan int) (error, bool) {
 
 // create the bridge with ovs
 func (b *bridge) create() error {
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	p := process("ovs")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -99,18 +99,18 @@ func (b *bridge) create() error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("creating bridge with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		es := s_err.String()
+		es := sErr.String()
 		if strings.Contains(es, "already exists") {
 			b.preExist = true
 			return nil
 		}
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 
@@ -126,13 +126,13 @@ func (b *bridge) create() error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("bringing bridge up with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 
@@ -146,7 +146,7 @@ func (b *bridge) Destroy() error {
 		log.Info("destroying lan %v", name)
 		for tapName, t := range lan.Taps {
 			if t != nil {
-				err := b.Tap_destroy(name, tapName)
+				err := b.TapDestroy(name, tapName)
 				if err != nil {
 					log.Error("%v", err)
 				}
@@ -159,8 +159,8 @@ func (b *bridge) Destroy() error {
 		return nil
 	}
 
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	p := process("ip")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -173,13 +173,13 @@ func (b *bridge) Destroy() error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("bringing bridge down with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 
@@ -193,22 +193,22 @@ func (b *bridge) Destroy() error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("destroying bridge with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 	return nil
 }
 
 // create and add a tap to a bridge
-func (b *bridge) Tap_create(lan int) (string, error) {
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+func (b *bridge) TapCreate(lan int) (string, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	tapName, err := getNewTap()
 	if err != nil {
 		return "", err
@@ -226,13 +226,13 @@ func (b *bridge) Tap_create(lan int) (string, error) {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("creating tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return "", e
 	}
 
@@ -241,7 +241,7 @@ func (b *bridge) Tap_create(lan int) (string, error) {
 		active: true,
 		host:   false,
 	}
-	err = b.tap_add(lan, tapName, false)
+	err = b.tapAdd(lan, tapName, false)
 	if err != nil {
 		return "", err
 	}
@@ -257,22 +257,22 @@ func (b *bridge) Tap_create(lan int) (string, error) {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("bringing tap up with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return "", e
 	}
 	return tapName, nil
 }
 
 // destroy and remove a tap from a bridge
-func (b *bridge) Tap_destroy(lan int, tap string) error {
+func (b *bridge) TapDestroy(lan int, tap string) error {
 	b.lans[lan].Taps[tap].active = false
-	err := b.tap_remove(tap)
+	err := b.tapRemove(tap)
 	if err != nil {
 		return err
 	}
@@ -282,8 +282,8 @@ func (b *bridge) Tap_destroy(lan int, tap string) error {
 		return nil
 	}
 
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 
 	p := process("ip")
 	cmd := &exec.Cmd{
@@ -297,13 +297,14 @@ func (b *bridge) Tap_destroy(lan int, tap string) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
+
 	}
 	log.Info("bringing tap down with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 
@@ -319,22 +320,22 @@ func (b *bridge) Tap_destroy(lan int, tap string) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("destroying tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 	return nil
 }
 
 // add a tap to the bridge
-func (b *bridge) tap_add(lan int, tap string, host bool) error {
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+func (b *bridge) tapAdd(lan int, tap string, host bool) error {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	p := process("ovs")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -347,8 +348,8 @@ func (b *bridge) tap_add(lan int, tap string, host bool) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 
 	if host {
@@ -362,16 +363,16 @@ func (b *bridge) tap_add(lan int, tap string, host bool) error {
 	log.Info("adding tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 	return nil
 }
 
 // remove a tap from a bridge
-func (b *bridge) tap_remove(tap string) error {
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+func (b *bridge) tapRemove(tap string) error {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	p := process("ovs")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -383,13 +384,13 @@ func (b *bridge) tap_remove(tap string) error {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("removing tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, s_err.String())
+		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
 	return nil
@@ -397,48 +398,48 @@ func (b *bridge) tap_remove(tap string) error {
 
 // TODO: allow creating a host tap with dhcp address instead of hardcoded
 // routines for interfacing bridge mechanisms with the cli
-func host_tap_create(c cli_command) cli_response {
+func hostTapCreate(c cliCommand) cliResponse {
 	if len(c.Args) != 2 {
-		return cli_response{
+		return cliResponse{
 			Error: "host_tap takes two arguments",
 		}
 	}
 	r, err := strconv.Atoi(c.Args[0])
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
-	lan_err, ok := current_bridge.Lan_create(r)
+	lanErr, ok := currentBridge.LanCreate(r)
 	if !ok {
-		return cli_response{
-			Error: lan_err.Error(),
+		return cliResponse{
+			Error: lanErr.Error(),
 		}
 	}
 
 	tapName, err := getNewTap()
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
 
 	// create the tap
-	current_bridge.lans[r].Taps[tapName] = &tap{
+	currentBridge.lans[r].Taps[tapName] = &tap{
 		active: true,
 		host:   true,
 	}
-	err = current_bridge.tap_add(r, tapName, true)
+	err = currentBridge.tapAdd(r, tapName, true)
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
 
 	// bring the tap up
 	p := process("ip")
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -452,14 +453,14 @@ func host_tap_create(c cli_command) cli_response {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("bringing up host tap %v", tapName)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Sprintf("%v: %v", err, s_err.String())
-		return cli_response{
+		e := fmt.Sprintf("%v: %v", err, sErr.String())
+		return cliResponse{
 			Error: e,
 		}
 	}
@@ -476,28 +477,28 @@ func host_tap_create(c cli_command) cli_response {
 		},
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	log.Info("setting ip on tap %v", tapName)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Sprintf("%v: %v", err, s_err.String())
-		return cli_response{
+		e := fmt.Sprintf("%v: %v", err, sErr.String())
+		return cliResponse{
 			Error: e,
 		}
 	}
 
-	return cli_response{
+	return cliResponse{
 		Response: tapName,
 	}
 }
 
-// gets a new tap from tap_chan and verifies that it doesn't already exist
+// gets a new tap from tapChan and verifies that it doesn't already exist
 func getNewTap() (string, error) {
 	var t string
 	for {
-		t = <-tap_chan
+		t = <-tapChan
 		taps, err := ioutil.ReadDir("/sys/class/net")
 		if err != nil {
 			return "", err

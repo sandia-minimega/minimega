@@ -11,13 +11,13 @@ type Conn struct {
 	conn          net.Conn
 	dec           *json.Decoder
 	enc           *json.Encoder
-	message_sync  chan map[string]interface{}
-	message_async chan map[string]interface{}
+	messageSync  chan map[string]interface{}
+	messageAsync chan map[string]interface{}
 }
 
 // return an asynchronous message, blocking until one shows up
 func (q *Conn) Message() map[string]interface{} {
-	return <-q.message_async
+	return <-q.messageAsync
 }
 
 func Dial(s string) (Conn, error) {
@@ -35,8 +35,8 @@ func (q *Conn) connect(s string) error {
 	q.conn = conn
 	q.dec = json.NewDecoder(q.conn)
 	q.enc = json.NewEncoder(q.conn)
-	q.message_sync = make(chan map[string]interface{}, 1024)
-	q.message_async = make(chan map[string]interface{}, 1024)
+	q.messageSync = make(chan map[string]interface{}, 1024)
+	q.messageAsync = make(chan map[string]interface{}, 1024)
 
 	// upon connecting we should get the qmp version etc.
 	v, err := q.read()
@@ -104,7 +104,7 @@ func (q *Conn) Status() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := <-q.message_sync
+	v := <-q.messageSync
 	status := v["return"]
 	if status == nil {
 		return nil, errors.New("received nil status")
@@ -120,7 +120,7 @@ func (q *Conn) Start() error {
 	if err != nil {
 		return err
 	}
-	v := <-q.message_sync
+	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("could not start VM")
 	}
@@ -135,7 +135,7 @@ func (q *Conn) Stop() error {
 	if err != nil {
 		return err
 	}
-	v := <-q.message_sync
+	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("could not stop VM")
 	}
@@ -155,14 +155,14 @@ func (q *Conn) Pmemsave(path string, size uint64) error {
 	if err != nil {
 		return err
 	}
-	v := <-q.message_sync
+	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("pmemsave")
 	}
 	return nil
 }
 
-func (q *Conn) Blockdev_snapshot(path, device string) error {
+func (q *Conn) BlockdevSnapshot(path, device string) error {
 	s := map[string]interface{}{
 		"execute": "blockdev-snapshot",
 		"arguments": map[string]interface{}{
@@ -175,7 +175,7 @@ func (q *Conn) Blockdev_snapshot(path, device string) error {
 	if err != nil {
 		return err
 	}
-	v := <-q.message_sync
+	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("blockdev_snapshot")
 	}
@@ -190,9 +190,9 @@ func (q *Conn) reader() {
 		}
 		// split asynchronous and synchronous events.
 		if v["event"] != nil {
-			q.message_async <- v
+			q.messageAsync <- v
 		} else {
-			q.message_sync <- v
+			q.messageSync <- v
 		}
 	}
 }

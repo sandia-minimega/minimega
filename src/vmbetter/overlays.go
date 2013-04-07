@@ -10,12 +10,12 @@ import (
 // directory build_path. Overlays are copied in depth-first order, so that
 // the oldest parent overlay data is copied in first. This allows a child
 // to overwrite any overlay data created by a parent.
-func Overlays(build_path string, c vmconfig.Config) error {
+func Overlays(buildPath string, c vmconfig.Config) error {
 	// copy the overlays in order
 	for _, o := range c.Overlays {
 		log.Infoln("copying overlay:", o)
 
-		cmd := exec.Command("cp", "-r", "-v", o+"/.", build_path)
+		cmd := exec.Command("cp", "-r", "-v", o+"/.", buildPath)
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			return err

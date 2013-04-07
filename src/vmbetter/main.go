@@ -64,27 +64,27 @@ func main() {
 		log.Debugln("read config:", config)
 	}
 
-	var build_path string
+	var buildPath string
 
 	// stage 1
 	if *f_stage2 == "" {
 		// create a build path
-		build_path, err = ioutil.TempDir("", "vmbetter_build_")
+		buildPath, err = ioutil.TempDir("", "vmbetter_build_")
 		if err != nil {
 			log.Fatalln("cannot create temporary directory:", err)
 		}
-		log.Debugln("using build path:", build_path)
+		log.Debugln("using build path:", buildPath)
 
 		// invoke debootstrap
 		fmt.Println("invoking debootstrap (this may take a while)...")
-		err = Debootstrap(build_path, config)
+		err = Debootstrap(buildPath, config)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
 		// copy any overlay into place in reverse order of opened dependencies
 		fmt.Println("copying overlays")
-		err = Overlays(build_path, config)
+		err = Overlays(buildPath, config)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -94,15 +94,15 @@ func main() {
 		//
 
 		if *f_stage1 {
-			stage1_target := strings.Split(filepath.Base(config.Path), ".")[0] + "_stage1"
-			log.Infoln("writing stage 1 target", stage1_target)
+			stage1Target := strings.Split(filepath.Base(config.Path), ".")[0] + "_stage1"
+			log.Infoln("writing stage 1 target", stage1Target)
 
-			err = os.Mkdir(stage1_target, 0666)
+			err = os.Mkdir(stage1Target, 0666)
 			if err != nil {
 				log.Fatalln(err)
 			}
 
-			cmd := exec.Command("cp", "-r", "-v", build_path+"/.", stage1_target)
+			cmd := exec.Command("cp", "-r", "-v", buildPath+"/.", stage1Target)
 			stdout, err := cmd.StdoutPipe()
 			if err != nil {
 				log.Fatalln(err)
@@ -120,21 +120,21 @@ func main() {
 			}
 		}
 	} else {
-		build_path = *f_stage2
+		buildPath = *f_stage2
 	}
 
 	// stage 2
 	if *f_stage2 != "" || !*f_stage1 {
 		// call post build chroot commands in reverse order as well
 		fmt.Println("executing post-build commands")
-		err = PostBuildCommands(build_path, config)
+		err = PostBuildCommands(buildPath, config)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
 		// build the image file
 		fmt.Println("building target files")
-		err = BuildTargets(build_path, config)
+		err = BuildTargets(buildPath, config)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -143,7 +143,7 @@ func main() {
 	// cleanup?
 	if !*f_noclean && *f_stage2 == "" {
 		fmt.Println("cleaning up")
-		err = os.RemoveAll(build_path)
+		err = os.RemoveAll(buildPath)
 		if err != nil {
 			log.Errorln(err)
 		}

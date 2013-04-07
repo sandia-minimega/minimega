@@ -10,14 +10,14 @@ import (
 )
 
 var (
-	vnc_server *novnctun.Tun
-	vnc_novnc  string = "misc/novnc"
+	vncServer *novnctun.Tun
+	vncNovnc  string = "misc/novnc"
 )
 
-const vnc_port = ":8080"
+const vncPort = ":8080"
 
-// register a Hosts() function on type vm_list, allowing us to point novnctun at it
-func (vms *vm_list) Hosts() map[string][]string {
+// register a Hosts() function on type vmList, allowing us to point novnctun at it
+func (vms *vmList) Hosts() map[string][]string {
 	ret := make(map[string][]string)
 
 	// the vnc port is just 5900 + the vm id
@@ -36,7 +36,7 @@ func (vms *vm_list) Hosts() map[string][]string {
 	}
 
 	// get a list of the other hosts on the network
-	cmd := cli_command{
+	cmd := cliCommand{
 		Args: []string{"hostname"},
 	}
 	resp := meshageBroadcast(cmd)
@@ -49,7 +49,7 @@ func (vms *vm_list) Hosts() map[string][]string {
 
 	for _, h := range hosts {
 		// get a list of vms from that host
-		cmd := cli_command{
+		cmd := cliCommand{
 			Args: []string{h, "vm_status"},
 		}
 		resp := meshageSet(cmd)
@@ -77,67 +77,67 @@ func (vms *vm_list) Hosts() map[string][]string {
 	return ret
 }
 
-func cli_vnc(c cli_command) cli_response {
+func cliVnc(c cliCommand) cliResponse {
 	// we have 2 possible cases:
 	// vnc novnc - set the vnc path
 	// vnc serve :8080 serve on a specific port and don't launch anything
 	if len(c.Args) == 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "vnc takes at least one argument",
 		}
 	}
 	switch c.Args[0] {
 	case "novnc":
 		if len(c.Args) == 1 {
-			return cli_response{
-				Response: vnc_novnc,
+			return cliResponse{
+				Response: vncNovnc,
 			}
 		} else if len(c.Args) > 2 {
-			return cli_response{
+			return cliResponse{
 				Error: "vnc novnc takes 2 arguments",
 			}
 		}
-		vnc_novnc = c.Args[1]
+		vncNovnc = c.Args[1]
 	case "serve":
 		if len(c.Args) == 1 { // just start the server
-			if vnc_server == nil {
-				vnc_serve(vnc_port)
+			if vncServer == nil {
+				vncServe(vncPort)
 			} else {
-				e := fmt.Sprintf("vnc already running on: %v", vnc_server.Addr)
-				return cli_response{
+				e := fmt.Sprintf("vnc already running on: %v", vncServer.Addr)
+				return cliResponse{
 					Error: e,
 				}
 			}
 		} else if len(c.Args) == 2 {
-			if vnc_server == nil {
-				vnc_serve(c.Args[1])
+			if vncServer == nil {
+				vncServe(c.Args[1])
 			} else {
-				e := fmt.Sprintf("vnc already running on: %v", vnc_server.Addr)
-				return cli_response{
+				e := fmt.Sprintf("vnc already running on: %v", vncServer.Addr)
+				return cliResponse{
 					Error: e,
 				}
 			}
 		} else {
-			return cli_response{
+			return cliResponse{
 				Error: "invalid command",
 			}
 		}
 	default: // must be an id right?
-		return cli_response{
+		return cliResponse{
 			Error: "invalid command",
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
-func vnc_serve(addr string) {
-	vnc_server = &novnctun.Tun{
+func vncServe(addr string) {
+	vncServer = &novnctun.Tun{
 		Addr:   addr,
 		Hosts:  &vms,
-		Files:  vnc_novnc,
+		Files:  vncNovnc,
 		Unsafe: false,
 	}
 	go func() {
-		log.Errorln(vnc_server.Start())
+		log.Errorln(vncServer.Start())
 	}()
 }

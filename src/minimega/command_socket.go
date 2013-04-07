@@ -8,7 +8,7 @@ import (
 	"os"
 )
 
-func command_socket_start() {
+func commandSocketStart() {
 	l, err := net.Listen("unix", *f_base+"minimega")
 	if err != nil {
 		log.Errorln(err)
@@ -21,11 +21,11 @@ func command_socket_start() {
 			log.Errorln(err)
 		}
 		log.Infoln("client connected")
-		command_socket_handle(conn) // don't allow multiple connections
+		commandSocketHandle(conn) // don't allow multiple connections
 	}
 }
 
-func command_socket_remove() {
+func commandSocketRemove() {
 	f := *f_base + "minimega"
 	err := os.Remove(f)
 	if err != nil {
@@ -33,12 +33,12 @@ func command_socket_remove() {
 	}
 }
 
-func command_socket_handle(c net.Conn) {
+func commandSocketHandle(c net.Conn) {
 	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
 	done := false
 	for !done {
-		var c cli_command
+		var c cliCommand
 		err := dec.Decode(&c)
 		if err != nil {
 			if err == io.EOF {
@@ -49,9 +49,9 @@ func command_socket_handle(c net.Conn) {
 			break
 		}
 		// just shove it in the cli command channel
-		command_chan_socket <- c
+		commandChanSocket <- c
 		for {
-			r := <-ack_chan_socket
+			r := <-ackChanSocket
 			err = enc.Encode(&r)
 			if err != nil {
 				if err == io.EOF {

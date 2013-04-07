@@ -24,19 +24,19 @@ import (
 // currently this will:
 // 	kill all qemu instances
 //	kill all taps
-//	remove everything inside of info.Base_path (careful, that's dangerous)
-func nuke(c cli_command) cli_response { // the cli_response return is just so we can fit in the cli model
+//	remove everything inside of info.BasePath (careful, that's dangerous)
+func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we can fit in the cli model
 	if len(c.Args) != 0 {
-		return cli_response{
+		return cliResponse{
 			Error: "nuke does not take any arguments",
 		}
 	}
 
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
-	err := filepath.Walk(*f_base, nuke_walker)
+	err := filepath.Walk(*f_base, nukeWalker)
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
@@ -45,15 +45,15 @@ func nuke(c cli_command) cli_response { // the cli_response return is just so we
 	log.Info("cleaning up base path: %v", *f_base)
 	err = os.RemoveAll(*f_base)
 	if err != nil {
-		return cli_response{
+		return cliResponse{
 			Error: err.Error(),
 		}
 	}
 	teardown()
-	return cli_response{}
+	return cliResponse{}
 }
 
-func nuke_walker(path string, info os.FileInfo, err error) error {
+func nukeWalker(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		return nil
 	}
@@ -68,8 +68,8 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		var s_out bytes.Buffer
-		var s_err bytes.Buffer
+		var sOut bytes.Buffer
+		var sErr bytes.Buffer
 
 		p := process("kill")
 		cmd := &exec.Cmd{
@@ -80,13 +80,13 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 			},
 			Env:    nil,
 			Dir:    "",
-			Stdout: &s_out,
-			Stderr: &s_err,
+			Stdout: &sOut,
+			Stderr: &sErr,
 		}
 		log.Infoln("killing qemu process:", t)
 		err = cmd.Run()
 		if err != nil {
-			log.Error("%v: %v", err, s_err.String())
+			log.Error("%v: %v", err, sErr.String())
 		}
 	case "taps":
 		d, err := ioutil.ReadFile(path)
@@ -97,8 +97,8 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 		f := strings.Fields(t)
 		log.Debugln("got taps:", f)
 		for _, v := range f {
-			var s_out bytes.Buffer
-			var s_err bytes.Buffer
+			var sOut bytes.Buffer
+			var sErr bytes.Buffer
 
 			p := process("ip")
 			cmd := &exec.Cmd{
@@ -112,13 +112,13 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 				},
 				Env:    nil,
 				Dir:    "",
-				Stdout: &s_out,
-				Stderr: &s_err,
+				Stdout: &sOut,
+				Stderr: &sErr,
 			}
 			log.Info("bringing tap down with cmd: %v", cmd)
 			err := cmd.Run()
 			if err != nil {
-				log.Error("%v: %v", err, s_err.String())
+				log.Error("%v: %v", err, sErr.String())
 			}
 
 			cmd = &exec.Cmd{
@@ -133,13 +133,13 @@ func nuke_walker(path string, info os.FileInfo, err error) error {
 				},
 				Env:    nil,
 				Dir:    "",
-				Stdout: &s_out,
-				Stderr: &s_err,
+				Stdout: &sOut,
+				Stderr: &sErr,
 			}
 			log.Info("destroying tap with cmd: %v", cmd)
 			err = cmd.Run()
 			if err != nil {
-				log.Error("%v: %v", err, s_err.String())
+				log.Error("%v: %v", err, sErr.String())
 			}
 		}
 	}

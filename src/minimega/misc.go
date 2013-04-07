@@ -17,7 +17,7 @@ import (
 )
 
 // generate a random ipv4 mac address and return as a string
-func random_mac() string {
+func randomMac() string {
 	b := make([]byte, 5)
 	rand.Read(b)
 	mac := fmt.Sprintf("00:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])

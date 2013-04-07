@@ -15,18 +15,18 @@ func TestMultilog(t *testing.T) {
 	AddLogger("sink1", sink1, DEBUG, false)
 	AddLogger("sink2", sink2, DEBUG, false)
 
-	test_string := "test 123"
+	testString := "test 123"
 
-	Debugln(test_string)
+	Debugln(testString)
 
 	s1 := sink1.String()
 	s2 := sink2.String()
 
-	if !strings.Contains(s1, test_string) {
+	if !strings.Contains(s1, testString) {
 		t.Fatal("sink1 got:", s1)
 	}
 
-	if !strings.Contains(s2, test_string) {
+	if !strings.Contains(s2, testString) {
 		t.Fatal("sink2 got:", s2)
 	}
 }
@@ -35,17 +35,17 @@ func TestLogLevels(t *testing.T) {
 	sink1 := new(bytes.Buffer)
 	sink2 := new(bytes.Buffer)
 
-	AddLogger("sink1_level", sink1, DEBUG, false)
-	AddLogger("sink2_level", sink2, INFO, false)
+	AddLogger("sink1Level", sink1, DEBUG, false)
+	AddLogger("sink2Level", sink2, INFO, false)
 
-	test_string := "test 123"
+	testString := "test 123"
 
-	Debugln(test_string)
+	Debugln(testString)
 
 	s1 := sink1.String()
 	s2 := sink2.String()
 
-	if !strings.Contains(s1, test_string) {
+	if !strings.Contains(s1, testString) {
 		t.Fatal("sink1 got:", s1)
 	}
 
@@ -57,25 +57,25 @@ func TestLogLevels(t *testing.T) {
 func TestDelLogger(t *testing.T) {
 	sink := new(bytes.Buffer)
 
-	AddLogger("sink_del", sink, DEBUG, false)
+	AddLogger("sinkDel", sink, DEBUG, false)
 
-	test_string := "test 123"
-	test_string2 := "test 456"
+	testString := "test 123"
+	testString2 := "test 456"
 
-	Debug(test_string)
+	Debug(testString)
 
 	s, err := sink.ReadString('\n')
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if !strings.Contains(s, test_string) {
+	if !strings.Contains(s, testString) {
 		t.Fatal("sink got:", s)
 	}
 
-	DelLogger("sink_del")
+	DelLogger("sinkDel")
 
-	Debug(test_string2)
+	Debug(testString2)
 
 	s, err = sink.ReadString('\n')
 	if err != nil && err != io.EOF {
@@ -91,7 +91,7 @@ func TestLogAll(t *testing.T) {
 	sink := new(bytes.Buffer)
 	source := bytes.NewBufferString("line_1\nline_2\nline_3")
 
-	AddLogger("sink_all", sink, DEBUG, false)
+	AddLogger("sinkAll", sink, DEBUG, false)
 
 	LogAll(source, DEBUG, "test")
 	time.Sleep(1 * time.Second) // allow the LogAll goroutine to finish

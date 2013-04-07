@@ -37,12 +37,12 @@ const (
 
 var (
 	loggers     map[string]*minilogger
-	color_line  = FgYellow
-	color_debug = FgBlue
-	color_info  = FgGreen
-	color_warn  = FgYellow
-	color_error = FgRed
-	color_fatal = FgRed
+	colorLine  = FgYellow
+	colorDebug = FgBlue
+	colorInfo  = FgGreen
+	colorWarn  = FgYellow
+	colorError = FgRed
+	colorFatal = FgRed
 )
 
 type minilogger struct {
@@ -156,18 +156,18 @@ func (l *minilogger) prologue(level int, name string) (msg string) {
 	}
 
 	if l.Color {
-		msg = color_line + msg
+		msg = colorLine + msg
 		switch level {
 		case DEBUG:
-			msg += color_debug
+			msg += colorDebug
 		case INFO:
-			msg += color_info
+			msg += colorInfo
 		case WARN:
-			msg += color_warn
+			msg += colorWarn
 		case ERROR:
-			msg += color_error
+			msg += colorError
 		default:
-			msg += color_fatal
+			msg += colorFatal
 		}
 	}
 	return

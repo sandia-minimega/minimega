@@ -26,13 +26,13 @@ import (
 )
 
 var (
-	info        vm_info       // current vm info, interfaced be the cli
-	launch_rate time.Duration // launch/kill rate for vms
+	info        vmInfo       // current vm info, interfaced be the cli
+	launchRate time.Duration // launch/kill rate for vms
 
 	// each vm struct acknowledges that it launched. this way, we won't
 	// return from a vm_launch command until all have actually launched.
-	launch_ack chan int
-	kill_ack   chan int
+	launchAck chan int
+	killAck   chan int
 )
 
 const (
@@ -44,113 +44,113 @@ const (
 )
 
 // total list of vms running on this host
-type vm_list struct {
-	vms []*vm_info
+type vmList struct {
+	vms []*vmInfo
 }
 
-type vm_info struct {
+type vmInfo struct {
 	Id            int
 	Memory        string // memory for the vm, in megabytes
 	Vcpus         string // number of virtual cpus
-	Disk_path     string
-	Cdrom_path    string
-	Kernel_path   string
-	Initrd_path   string
+	DiskPath     string
+	CdromPath    string
+	KernelPath   string
+	InitrdPath   string
 	Append        string
-	Qemu_Append   []string  // extra arguments for QEMU
+	QemuAppend   []string  // extra arguments for QEMU
 	State         int       // one of the VM_ states listed above
 	Kill          chan bool // kill channel to signal to shut a vm down
-	instance_path string
+	instancePath string
 	q             qmp.Conn // qmp connection for this vm
 	taps          []string // list of taps associated with this vm
 	Networks      []int    // ordered list of networks (matches 1-1 with Taps)
 }
 
 func init() {
-	launch_rate = time.Millisecond * 100
-	launch_ack = make(chan int)
-	kill_ack = make(chan int)
+	launchRate = time.Millisecond * 100
+	launchAck = make(chan int)
+	killAck = make(chan int)
 
 	// default parameters at startup
 	info.Memory = "512"
 	info.Vcpus = "1"
-	info.Disk_path = ""
-	info.Kernel_path = ""
-	info.Initrd_path = ""
+	info.DiskPath = ""
+	info.KernelPath = ""
+	info.InitrdPath = ""
 	info.State = VM_BUILDING
 }
 
 // return internal and qmp status of one or more vms
-func (l *vm_list) status(c cli_command) cli_response {
+func (l *vmList) status(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		var s string
 		for _, i := range l.vms {
 			s += i.status()
 		}
-		return cli_response{
+		return cliResponse{
 			Response: s,
 		}
 	} else if len(c.Args) != 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "status takes one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Error: err.Error(),
 			}
 		}
 		// find that vm, should be in order...
 		if id < len(l.vms) {
 			s := l.vms[id].status()
-			return cli_response{
+			return cliResponse{
 				Response: s,
 			}
 		} else {
-			return cli_response{
+			return cliResponse{
 				Error: "invalid VM id",
 			}
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
 // start vms that are paused or building
-func (l *vm_list) start(c cli_command) cli_response {
+func (l *vmList) start(c cliCommand) cliResponse {
 	if len(c.Args) == 0 { // start all paused vms
 		for _, i := range l.vms {
 			i.start()
 		}
 	} else if len(c.Args) != 1 {
-		return cli_response{
+		return cliResponse{
 			Error: "start takes one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cli_response{
+			return cliResponse{
 				Error: err.Error(),
 			}
 		}
 		if id < len(l.vms) {
 			l.vms[id].start()
 		} else {
-			return cli_response{
+			return cliResponse{
 				Error: "invalid VM id",
 			}
 		}
 	}
-	return cli_response{}
+	return cliResponse{}
 }
 
 // kill one or all vms (-1 for all)
-func (l *vm_list) kill(id int) {
+func (l *vmList) kill(id int) {
 	if id == -1 {
 		for _, i := range l.vms {
 			if i.State != VM_QUIT && i.State != VM_ERROR {
 				i.Kill <- true
-				log.Info("VM %v killed", <-kill_ack)
+				log.Info("VM %v killed", <-killAck)
 			}
 		}
 	} else {
@@ -159,7 +159,7 @@ func (l *vm_list) kill(id int) {
 		} else {
 			if l.vms[id].State != VM_QUIT && l.vms[id].State != VM_ERROR {
 				l.vms[id].Kill <- true
-				log.Info("VM %v killed", <-kill_ack)
+				log.Info("VM %v killed", <-killAck)
 			}
 		}
 	}
@@ -168,26 +168,26 @@ func (l *vm_list) kill(id int) {
 // launch one or more vms. this will copy the info struct, one per vm
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
-func (l *vm_list) launch(num_vms int) {
+func (l *vmList) launch(numVms int) {
 	// we have some configuration from the cli (right?), all we need 
 	// to do here is fire off the vms in goroutines, passing the 
 	// configuration in by value, as it may change for the next run.
-	log.Info("launching %v vms", num_vms)
+	log.Info("launching %v vms", numVms)
 	start := len(l.vms)
-	for i := start; i < num_vms+start; i++ {
+	for i := start; i < numVms+start; i++ {
 		vm := info
 		vm.Id = i
 		vm.Kill = make(chan bool)
 		l.vms = append(l.vms, &vm)
-		go vm.launch_one()
+		go vm.launchOne()
 	}
 	// get acknowledgements from each vm
-	for i := 0; i < num_vms; i++ {
-		fmt.Printf("VM: %v launched\n", <-launch_ack)
+	for i := 0; i < numVms; i++ {
+		fmt.Printf("VM: %v launched\n", <-launchAck)
 	}
 }
 
-func (vm *vm_info) status() string {
+func (vm *vmInfo) status() string {
 	var s string
 	switch vm.State {
 	case VM_BUILDING:
@@ -209,7 +209,7 @@ func (vm *vm_info) status() string {
 	return fmt.Sprintf("VM %v : %v, QMP : %v\n", vm.Id, s, status["status"])
 }
 
-func (vm *vm_info) start() {
+func (vm *vmInfo) start() {
 	if vm.State != VM_PAUSED && vm.State != VM_BUILDING {
 		log.Info("VM %v not runnable", vm.Id)
 		return
@@ -224,11 +224,11 @@ func (vm *vm_info) start() {
 	}
 }
 
-func (vm *vm_info) launch_one() {
+func (vm *vmInfo) launchOne() {
 	log.Info("launching vm: %v", vm.Id)
 
-	vm.instance_path = *f_base + strconv.Itoa(vm.Id) + "/"
-	err := os.MkdirAll(vm.instance_path, os.FileMode(0700))
+	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
+	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
 	if err != nil {
 		log.Fatal("%v", err)
 	}
@@ -238,7 +238,7 @@ func (vm *vm_info) launch_one() {
 
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
-		tap, err := current_bridge.Tap_create(lan)
+		tap, err := currentBridge.TapCreate(lan)
 		if err != nil {
 			log.Error("%v", err)
 			continue
@@ -247,110 +247,110 @@ func (vm *vm_info) launch_one() {
 	}
 
 	if len(vm.Networks) > 0 {
-		err := ioutil.WriteFile(vm.instance_path+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
+		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
 		if err != nil {
 			log.Error("%v", err)
 		}
 	}
 
-	args := vm.vm_get_args()
-	var s_out bytes.Buffer
-	var s_err bytes.Buffer
+	args := vm.vmGetArgs()
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path:   process("qemu"),
 		Args:   args,
 		Env:    nil,
 		Dir:    "",
-		Stdout: &s_out,
-		Stderr: &s_err,
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
 	err = cmd.Start()
 
 	if err != nil {
-		log.Error("%v %v", err, s_err.String())
+		log.Error("%v %v", err, sErr.String())
 	}
-	wait_chan := make(chan bool)
+	waitChan := make(chan bool)
 	go func() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
 		if err != nil {
 			if err.Error() != "signal 9" { // because we killed it
-				log.Error("%v %v", err, s_err.String())
+				log.Error("%v %v", err, sErr.String())
 				vm.state(VM_ERROR)
 			}
 		}
-		wait_chan <- true
+		waitChan <- true
 	}()
 
-	time.Sleep(launch_rate)
+	time.Sleep(launchRate)
 
 	// connect to qmp
-	vm.q, err = qmp.Dial(vm.qmp_path())
+	vm.q, err = qmp.Dial(vm.qmpPath())
 	if err != nil {
 		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
 	}
 
-	go vm.async_logger()
+	go vm.asyncLogger()
 
-	launch_ack <- vm.Id
+	launchAck <- vm.Id
 
 	select {
-	case <-wait_chan:
+	case <-waitChan:
 		log.Info("VM %v exited", vm.Id)
 	case <-vm.Kill:
 		fmt.Printf("Killing VM %v\n", vm.Id)
 		cmd.Process.Kill()
 	}
-	time.Sleep(launch_rate)
+	time.Sleep(launchRate)
 
-	kill_ack <- vm.Id
-	//err = os.RemoveAll(vm.instance_path)
+	killAck <- vm.Id
+	//err = os.RemoveAll(vm.instancePath)
 	//if err != nil {
 	//	log.Error("%v", err)
 	//}
 }
 
 // update the vm state, and write the state to file
-func (vm *vm_info) state(s int) {
-	var state_string string
+func (vm *vmInfo) state(s int) {
+	var stateString string
 	switch s {
 	case VM_BUILDING:
-		state_string = "VM_BUILDING"
+		stateString = "VM_BUILDING"
 	case VM_RUNNING:
-		state_string = "VM_RUNNING"
+		stateString = "VM_RUNNING"
 	case VM_PAUSED:
-		state_string = "VM_PAUSED"
+		stateString = "VM_PAUSED"
 	case VM_QUIT:
-		state_string = "VM_QUIT"
+		stateString = "VM_QUIT"
 	case VM_ERROR:
-		state_string = "VM_ERROR"
+		stateString = "VM_ERROR"
 	default:
 		log.Errorln("unknown state")
 	}
 	vm.State = s
-	err := ioutil.WriteFile(vm.instance_path+"state", []byte(state_string), 0666)
+	err := ioutil.WriteFile(vm.instancePath+"state", []byte(stateString), 0666)
 	if err != nil {
 		log.Errorln(err)
 	}
 }
 
 // return the path to the qmp socket
-func (vm *vm_info) qmp_path() string {
-	return vm.instance_path + "qmp"
+func (vm *vmInfo) qmpPath() string {
+	return vm.instancePath + "qmp"
 }
 
 // build the horribly long qemu argument string
-func (vm *vm_info) vm_get_args() []string {
+func (vm *vmInfo) vmGetArgs() []string {
 	var args []string
 
-	s_id := strconv.Itoa(vm.Id)
+	sId := strconv.Itoa(vm.Id)
 
 	args = append(args, process("qemu"))
 
 	args = append(args, "-enable-kvm")
 
 	args = append(args, "-name")
-	args = append(args, s_id)
+	args = append(args, sId)
 
 	args = append(args, "-m")
 	args = append(args, vm.Memory)
@@ -361,7 +361,7 @@ func (vm *vm_info) vm_get_args() []string {
 	args = append(args, "none")
 
 	args = append(args, "-vnc")
-	args = append(args, "0.0.0.0:"+s_id) // if we have more than 10000 vnc sessions, we're in trouble
+	args = append(args, "0.0.0.0:"+sId) // if we have more than 10000 vnc sessions, we're in trouble
 
 	args = append(args, "-usbdevice") // this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "tablet")
@@ -370,7 +370,7 @@ func (vm *vm_info) vm_get_args() []string {
 	args = append(args, vm.Vcpus)
 
 	args = append(args, "-qmp")
-	args = append(args, "unix:"+vm.qmp_path()+",server")
+	args = append(args, "unix:"+vm.qmpPath()+",server")
 
 	args = append(args, "-vga")
 	args = append(args, "cirrus")
@@ -379,10 +379,10 @@ func (vm *vm_info) vm_get_args() []string {
 	args = append(args, "clock=vm,base=utc")
 
 	args = append(args, "-chardev")
-	args = append(args, "file,id=charserial0,path="+vm.instance_path+"serial")
+	args = append(args, "file,id=charserial0,path="+vm.instancePath+"serial")
 
 	args = append(args, "-pidfile")
-	args = append(args, vm.instance_path+"qemu.pid")
+	args = append(args, vm.instancePath+"qemu.pid")
 
 	args = append(args, "-device")
 	args = append(args, "isa-serial,chardev=charserial0,id=serial0")
@@ -398,28 +398,28 @@ func (vm *vm_info) vm_get_args() []string {
 
 	args = append(args, "-S")
 
-	if vm.Disk_path != "" {
+	if vm.DiskPath != "" {
 		args = append(args, "-drive")
-		args = append(args, "file="+vm.Disk_path+",cache=writeback,media=disk")
+		args = append(args, "file="+vm.DiskPath+",cache=writeback,media=disk")
 		args = append(args, "-snapshot")
 	}
 
-	if vm.Kernel_path != "" {
+	if vm.KernelPath != "" {
 		args = append(args, "-kernel")
-		args = append(args, vm.Kernel_path)
+		args = append(args, vm.KernelPath)
 	}
-	if vm.Initrd_path != "" {
+	if vm.InitrdPath != "" {
 		args = append(args, "-initrd")
-		args = append(args, vm.Initrd_path)
+		args = append(args, vm.InitrdPath)
 	}
 	if vm.Append != "" {
 		args = append(args, "-append")
 		args = append(args, vm.Append)
 	}
 
-	if vm.Cdrom_path != "" {
+	if vm.CdromPath != "" {
 		args = append(args, "-drive")
-		args = append(args, "file="+vm.Cdrom_path+",if=ide,index=1,media=cdrom")
+		args = append(args, "file="+vm.CdromPath+",if=ide,index=1,media=cdrom")
 		args = append(args, "-boot")
 		args = append(args, "once=d")
 	}
@@ -428,11 +428,11 @@ func (vm *vm_info) vm_get_args() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, random_mac()))
+		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, randomMac()))
 	}
 
-	if len(vm.Qemu_Append) > 0 {
-		args = append(args, vm.Qemu_Append...)
+	if len(vm.QemuAppend) > 0 {
+		args = append(args, vm.QemuAppend...)
 	}
 
 	log.Info("args for vm %v is: %v", vm.Id, strings.Join(args, " "))
@@ -440,7 +440,7 @@ func (vm *vm_info) vm_get_args() []string {
 }
 
 // log any asynchronous messages, such as vnc connects, to log.Info
-func (vm *vm_info) async_logger() {
+func (vm *vmInfo) asyncLogger() {
 	for {
 		v := vm.q.Message()
 		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
