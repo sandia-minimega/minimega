@@ -1,10 +1,10 @@
 package main
 
 import (
-	"os/exec"
 	"bytes"
-	"strings"
 	log "minilog"
+	"os/exec"
+	"strings"
 )
 
 func shellCLI(c cliCommand) cliResponse {
@@ -80,6 +80,6 @@ func backgroundCLI(c cliCommand) cliResponse {
 		log.Info(sOut.String())
 		log.Info(sErr.String())
 	}()
-			
+
 	return cliResponse{}
 }

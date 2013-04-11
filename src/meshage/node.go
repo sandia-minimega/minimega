@@ -8,10 +8,10 @@ import (
 	"math/rand"
 	log "minilog"
 	"net"
+	"sort"
 	"strings"
 	"sync"
 	"time"
-	"sort"
 )
 
 const (

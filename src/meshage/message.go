@@ -51,7 +51,6 @@ func (n *Node) Send(m *Message) error {
 
 	log.Debug("routeSlices: %v\n", routeSlices)
 
-
 	errChan := make(chan error)
 	for k, v := range routeSlices {
 		go func(client string, recipients []string) {

@@ -974,7 +974,7 @@ the file.
 		},
 
 		"shell": &command{
-			Call: shellCLI,
+			Call:      shellCLI,
 			Helpshort: "execute a command",
 			Helplong: `
 Execute a command under the credentials of the running user. 
@@ -989,7 +989,7 @@ that does not return.
 		},
 
 		"background": &command{
-			Call: backgroundCLI,
+			Call:      backgroundCLI,
 			Helpshort: "execute a command in the background",
 			Helplong: `
 Execute a command under the credentials of the running user. 

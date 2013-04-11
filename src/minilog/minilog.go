@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	loggers     map[string]*minilogger
+	loggers    map[string]*minilogger
 	colorLine  = FgYellow
 	colorDebug = FgBlue
 	colorInfo  = FgGreen

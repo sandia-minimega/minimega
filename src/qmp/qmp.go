@@ -7,10 +7,10 @@ import (
 )
 
 type Conn struct {
-	socket        string // path to unix domain socket to connect to
-	conn          net.Conn
-	dec           *json.Decoder
-	enc           *json.Encoder
+	socket       string // path to unix domain socket to connect to
+	conn         net.Conn
+	dec          *json.Decoder
+	enc          *json.Encoder
 	messageSync  chan map[string]interface{}
 	messageAsync chan map[string]interface{}
 }
