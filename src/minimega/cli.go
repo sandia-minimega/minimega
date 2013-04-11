@@ -987,6 +987,21 @@ that does not return.
 				return nil
 			},
 		},
+
+		"background": &command{
+			Call: backgroundCLI,
+			Helpshort: "execute a command in the background",
+			Helplong: `
+Execute a command under the credentials of the running user. 
+
+Commands run in the background and control returns immediately. Any output is
+logged.
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
