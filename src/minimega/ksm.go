@@ -18,16 +18,16 @@ import (
 )
 
 var (
-	ksmPagesToScan   int
-	ksmRun             int
+	ksmPagesToScan    int
+	ksmRun            int
 	ksmSleepMillisecs int
 )
 
 const (
-	ksmPathRun             = "/sys/kernel/mm/ksm/run"
-	ksmPathPagesToScan   = "/sys/kernel/mm/ksm/pages_to_scan"
+	ksmPathRun            = "/sys/kernel/mm/ksm/run"
+	ksmPathPagesToScan    = "/sys/kernel/mm/ksm/pages_to_scan"
 	ksmPathSleepMillisecs = "/sys/kernel/mm/ksm/sleep_millisecs"
-	ksmTunePagesToScan   = 100000
+	ksmTunePagesToScan    = 100000
 	ksmTuneSleepMillisecs = 10
 )
 

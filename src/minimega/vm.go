@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	info        vmInfo       // current vm info, interfaced be the cli
+	info       vmInfo        // current vm info, interfaced be the cli
 	launchRate time.Duration // launch/kill rate for vms
 
 	// each vm struct acknowledges that it launched. this way, we won't
@@ -49,21 +49,21 @@ type vmList struct {
 }
 
 type vmInfo struct {
-	Id            int
-	Memory        string // memory for the vm, in megabytes
-	Vcpus         string // number of virtual cpus
+	Id           int
+	Memory       string // memory for the vm, in megabytes
+	Vcpus        string // number of virtual cpus
 	DiskPath     string
 	CdromPath    string
 	KernelPath   string
 	InitrdPath   string
-	Append        string
+	Append       string
 	QemuAppend   []string  // extra arguments for QEMU
-	State         int       // one of the VM_ states listed above
-	Kill          chan bool // kill channel to signal to shut a vm down
+	State        int       // one of the VM_ states listed above
+	Kill         chan bool // kill channel to signal to shut a vm down
 	instancePath string
-	q             qmp.Conn // qmp connection for this vm
-	taps          []string // list of taps associated with this vm
-	Networks      []int    // ordered list of networks (matches 1-1 with Taps)
+	q            qmp.Conn // qmp connection for this vm
+	taps         []string // list of taps associated with this vm
+	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
 }
 
 func init() {

@@ -22,15 +22,15 @@ import (
 )
 
 var (
-	f_loglevel  = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
-	f_log       = flag.Bool("v", true, "log on stderr")
-	f_logfile   = flag.String("logfile", "", "also log to file")
-	f_base      = flag.String("base", "/tmp/minimega", "base path for minimega data")
-	f_e         = flag.Bool("e", false, "execute command on running minimega")
-	f_degree    = flag.Int("degree", 0, "meshage starting degree")
-	f_port      = flag.Int("port", 8966, "meshage port to listen on")
-	f_force     = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
-	vms         vmList
+	f_loglevel = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
+	f_log      = flag.Bool("v", true, "log on stderr")
+	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_base     = flag.String("base", "/tmp/minimega", "base path for minimega data")
+	f_e        = flag.Bool("e", false, "execute command on running minimega")
+	f_degree   = flag.Int("degree", 0, "meshage starting degree")
+	f_port     = flag.Int("port", 8966, "meshage port to listen on")
+	f_force    = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
+	vms        vmList
 	signalOnce bool = false
 )
 

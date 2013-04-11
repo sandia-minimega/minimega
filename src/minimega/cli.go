@@ -55,10 +55,10 @@ var (
 )
 
 type cliCommand struct {
-	Command  string
-	Args     []string
+	Command string
+	Args    []string
 	ackChan chan cliResponse
-	TID      int32
+	TID     int32
 }
 
 type cliResponse struct {
@@ -70,10 +70,10 @@ type cliResponse struct {
 
 type command struct {
 	Call      func(c cliCommand) cliResponse // callback function
-	Helpshort string                           // short form help test, one line only
-	Helplong  string                           // long form help text
-	Record    bool                             // record in the command history
-	Clear     func() error                     // clear/restore to default state
+	Helpshort string                         // short form help test, one line only
+	Helplong  string                         // long form help text
+	Record    bool                           // record in the command history
+	Clear     func() error                   // clear/restore to default state
 }
 
 func init() {
@@ -941,14 +941,15 @@ Return the hostname`,
 			Call:      dnsmasqCLI,
 			Helpshort: "start a dhcp/dns server on a specified ip",
 			Helplong: `
-Start a dhcp/dns server on a specified IP with a specified range.
-For example, to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 - 10.0.254.254:
+Start a dhcp/dns server on a specified IP with a specified range.  For example,
+to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
+10.0.254.254:
 
 dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
 
-To list running dnsmasq servers, invoke dnsmasq with no arguments.
-To kill a running dnsmasq server, specify its ID from the list of running servers:
-For example, to kill dnsmasq server 2:
+To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
+running dnsmasq server, specify its ID from the list of running servers: For
+example, to kill dnsmasq server 2:
 
 dnsmasq kill 2
 
@@ -956,14 +957,30 @@ To kill all running dnsmasq servers, pass -1 as the ID:
 
 dnsmasq kill -1
 
-dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You can specify
-an additional hosts file to serve by providing a file as an additional argument. For example,
-to start a dnsmasq server serving the range as above and serving dns for a list of hosts in
-the file "addn-hosts":
+dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You
+can specify an additional hosts file to serve by providing a file as an
+additional argument. For example, to start a dnsmasq server serving the range
+as above and serving dns for a list of hosts in the file "addn-hosts":
 
 dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/addn-hosts
 
-NOTE: If specifying an additional hosts file, you must provide the full path to the file.
+NOTE: If specifying an additional hosts file, you must provide the full path to
+the file.
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"shell": &command{
+			Call: shellCLI,
+			Helpshort: "execute a command",
+			Helplong: `
+Execute a command under the credentials of the running user. 
+
+Commands run until they complete or error, so take care not to execute a command
+that does not return.
 `,
 			Record: true,
 			Clear: func() error {

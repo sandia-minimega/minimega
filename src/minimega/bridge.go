@@ -299,7 +299,6 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
-
 	}
 	log.Info("bringing tap down with cmd: %v", cmd)
 	err = cmd.Run()
