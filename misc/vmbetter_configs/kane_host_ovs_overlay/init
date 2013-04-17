@@ -17,6 +17,7 @@ modprobe openvswitch_mod
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
 ovs-vsctl add-port mega_bridge eth0
+ifconfig lo up
 ifconfig eth0 up 0.0.0.0
 dhclient -v mega_bridge
 

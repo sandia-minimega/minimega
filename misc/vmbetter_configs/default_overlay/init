@@ -10,6 +10,7 @@ udevadm trigger
 udevadm settle
 chmod a+rx /
 
+ifconfig lo up
 ifconfig eth0 up
 dhclient -v eth0
 
