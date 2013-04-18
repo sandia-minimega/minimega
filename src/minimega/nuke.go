@@ -49,6 +49,20 @@ func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we ca
 			Error: err.Error(),
 		}
 	}
+
+	// remove all mega_taps, but leave the mega_bridge
+	dirs, err := ioutil.ReadDir("/sys/class/net")
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
+	for _, n := range dirs {
+		if strings.Contains(n.Name(), "mega_tap") {
+			nukeTap(n.Name())
+		}
+	}
+
 	teardown()
 	return cliResponse{}
 }
@@ -97,51 +111,75 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		f := strings.Fields(t)
 		log.Debugln("got taps:", f)
 		for _, v := range f {
-			var sOut bytes.Buffer
-			var sErr bytes.Buffer
-
-			p := process("ip")
-			cmd := &exec.Cmd{
-				Path: p,
-				Args: []string{
-					p,
-					"link",
-					"set",
-					v,
-					"down",
-				},
-				Env:    nil,
-				Dir:    "",
-				Stdout: &sOut,
-				Stderr: &sErr,
-			}
-			log.Info("bringing tap down with cmd: %v", cmd)
-			err := cmd.Run()
-			if err != nil {
-				log.Error("%v: %v", err, sErr.String())
-			}
-
-			cmd = &exec.Cmd{
-				Path: p,
-				Args: []string{
-					p,
-					"tuntap",
-					"del",
-					"mode",
-					"tap",
-					v,
-				},
-				Env:    nil,
-				Dir:    "",
-				Stdout: &sOut,
-				Stderr: &sErr,
-			}
-			log.Info("destroying tap with cmd: %v", cmd)
-			err = cmd.Run()
-			if err != nil {
-				log.Error("%v: %v", err, sErr.String())
-			}
+			nukeTap(v)
 		}
 	}
 	return nil
+}
+
+func nukeTap(tap string) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	p := process("ip")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"set",
+			tap,
+			"down",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Info("bringing tap down with cmd: %v", cmd)
+	err := cmd.Run()
+	if err != nil {
+		log.Error("%v: %v", err, sErr.String())
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"tuntap",
+			"del",
+			"mode",
+			"tap",
+			tap,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Info("destroying tap with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		log.Error("%v: %v", err, sErr.String())
+	}
+
+	p = process("ovs")
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"del-port",
+			"mega_bridge",
+			tap,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Info("removing tap from mega_bridge with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		log.Error("%v: %v", err, sErr.String())
+	}
 }
