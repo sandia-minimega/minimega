@@ -154,7 +154,9 @@ func (l *vmList) kill(id int) {
 			}
 		}
 	} else {
-		if l.vms[id] == nil {
+		if len(l.vms) < id {
+			log.Error("invalid VM id")
+		} else if l.vms[id] == nil {
 			log.Error("invalid VM id")
 		} else {
 			if l.vms[id].State != VM_QUIT && l.vms[id].State != VM_ERROR {
