@@ -243,7 +243,8 @@ func (vm *vmInfo) launchOne() {
 		tap, err := currentBridge.TapCreate(lan)
 		if err != nil {
 			log.Error("%v", err)
-			continue
+			vm.state(VM_ERROR)
+			return
 		}
 		vm.taps = append(vm.taps, tap)
 	}
@@ -252,6 +253,8 @@ func (vm *vmInfo) launchOne() {
 		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
 		if err != nil {
 			log.Error("%v", err)
+			vm.state(VM_ERROR)
+			return
 		}
 	}
 
@@ -270,6 +273,8 @@ func (vm *vmInfo) launchOne() {
 
 	if err != nil {
 		log.Error("%v %v", err, sErr.String())
+		vm.state(VM_ERROR)
+		return
 	}
 	waitChan := make(chan bool)
 	go func() {
@@ -290,6 +295,8 @@ func (vm *vmInfo) launchOne() {
 	vm.q, err = qmp.Dial(vm.qmpPath())
 	if err != nil {
 		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
+		vm.state(VM_ERROR)
+		return
 	}
 
 	go vm.asyncLogger()
@@ -306,10 +313,6 @@ func (vm *vmInfo) launchOne() {
 	time.Sleep(launchRate)
 
 	killAck <- vm.Id
-	//err = os.RemoveAll(vm.instancePath)
-	//if err != nil {
-	//	log.Error("%v", err)
-	//}
 }
 
 // update the vm state, and write the state to file
