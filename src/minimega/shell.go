@@ -24,7 +24,7 @@ func shellCLI(c cliCommand) cliResponse {
 	}
 	cmd := &exec.Cmd{
 		Path:   p,
-		Args:   c.Args[1:],
+		Args:   c.Args,
 		Env:    nil,
 		Dir:    "",
 		Stdout: &sOut,
@@ -60,7 +60,7 @@ func backgroundCLI(c cliCommand) cliResponse {
 	}
 	cmd := &exec.Cmd{
 		Path:   p,
-		Args:   c.Args[1:],
+		Args:   c.Args,
 		Env:    nil,
 		Dir:    "",
 		Stdout: &sOut,
