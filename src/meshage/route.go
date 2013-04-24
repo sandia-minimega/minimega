@@ -11,28 +11,45 @@ import (
 // generateEffectiveNetwork expects to be called with meshLock obtained.
 func (n *Node) generateEffectiveNetwork() {
 	log.Debugln("generateEffectiveNetwork")
-	emesh := make(mesh)
 
-	for k, v := range n.network {
-	effectiveNetworkLoop:
-		for _, i := range v {
-			for _, j := range emesh[i] {
-				if j == k {
-					continue effectiveNetworkLoop
+	for {
+		emesh := make(mesh)
+		for k, v := range n.network {
+		effectiveNetworkLoop:
+			for _, i := range v {
+				for _, j := range emesh[i] {
+					if j == k {
+						continue effectiveNetworkLoop
+					}
 				}
-			}
-			for _, j := range n.network[i] {
-				if j == k {
-					log.Debug("found pair %v <-> %v\n", k, i)
-					emesh[k] = append(emesh[k], i)
-					emesh[i] = append(emesh[i], k)
-					break
+				for _, j := range n.network[i] {
+					if j == k {
+						log.Debug("found pair %v <-> %v\n", k, i)
+						emesh[k] = append(emesh[k], i)
+						emesh[i] = append(emesh[i], k)
+						break
+					}
 				}
 			}
 		}
+		n.effectiveNetwork = emesh
+		n.routes = make(map[string]string)
+
+		stable := true
+		for h, _ := range n.effectiveNetwork {
+			if _, ok := n.routes[h]; !ok {
+				n.updateRoute(h)
+				if _, ok := n.routes[h]; !ok {
+					delete(n.network, h)
+					stable = false
+				}
+			}
+		}
+		if stable {
+			break
+		}
 	}
-	n.effectiveNetwork = emesh
-	n.routes = make(map[string]string)
+
 	log.Debug("new effectiveNetwork: %v\n", n.effectiveNetwork)
 }
 
@@ -40,8 +57,8 @@ func (n *Node) generateEffectiveNetwork() {
 // Additionally, all hops along this route are also the shortest path, so record those as well to
 // save on effort.
 func (n *Node) updateRoute(c string) {
-	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
+	//n.meshLock.Lock()
+	//defer n.meshLock.Unlock()
 
 	if len(n.effectiveNetwork) == 0 {
 		return

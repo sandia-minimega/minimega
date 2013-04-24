@@ -268,7 +268,7 @@ func (n *Node) dial(host string, solicited bool) error {
 	addr := fmt.Sprintf("%s:%d", host, n.port)
 	log.Debug("dialing: %v\n", addr)
 
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, DEFAULT_TIMEOUT * time.Second)
 	if err != nil {
 		if solicited {
 			n.errors <- err

@@ -21,6 +21,7 @@ var (
 	meshageCommand  chan *meshage.Message
 	meshageResponse chan *meshage.Message
 	meshageErrors   chan error
+	meshageLog	bool
 	meshageTimeout  time.Duration
 )
 
@@ -35,6 +36,7 @@ func meshageInit(host string, degree uint, port int) {
 	meshageCommand = make(chan *meshage.Message, 1024)
 	meshageResponse = make(chan *meshage.Message, 1024)
 
+	// TODO: make this configurable
 	meshageTimeout = time.Duration(10)
 
 	go meshageMux()
@@ -45,7 +47,9 @@ func meshageInit(host string, degree uint, port int) {
 func meshageErrorHandler() {
 	for {
 		err := <-meshageErrors
-		log.Errorln(err)
+		if meshageLog {
+			log.Errorln(err)
+		}
 	}
 }
 
@@ -73,7 +77,7 @@ func meshageHandler() {
 			r := <-ackChanMeshage
 			r.TID = m.Body.(cliCommand).TID
 			recipient := []string{m.Source}
-			err := meshageNode.Set(recipient, r)
+			err := meshageNode.Set(recipient, meshage.UNORDERED, r)
 			if err != nil {
 				log.Errorln(err)
 			}
@@ -82,6 +86,31 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
+func meshageLogCLI(c cliCommand) cliResponse {
+	switch len(c.Args) {
+	case 0:
+		return cliResponse{
+			Response: fmt.Sprintf("%v", meshageLog),
+		}
+	case 1:
+		switch c.Args[0] {
+		case "true":
+			meshageLog = true
+		case "false":
+			meshageLog = false
+		default:
+			return cliResponse{
+				Error: "arguments are [true,false]",
+			}
+		}
+	default:
+		return cliResponse{
+			Error: "mesh_log takes zero or one argument",
+		}
+	}
+	return cliResponse{}
+}
+
 func meshageDegree(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
@@ -226,19 +255,41 @@ func meshageMSATimeout(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
+// Parse the first argument of the command and return the traveral type and true.
+// If the first argument is not a listed traveral type, return meshage.UNORDERED and false.
+// The boolean return is used to truncate the field from the passed message.
+func meshageTraversal(t string) (int, bool) {
+	switch strings.ToLower(t) {
+	case "unordered":
+		return meshage.UNORDERED, true
+	case "depth":
+		return meshage.DEPTH, true
+	case "breadth":
+		return meshage.BREADTH, true
+	}
+	return meshage.UNORDERED, false
+}
+
 func meshageSet(c cliCommand) cliResponse {
 	if len(c.Args) < 2 {
 		return cliResponse{
 			Error: "mesh_set takes at least two arguments",
 		}
 	}
+
+	traversal, truncate := meshageTraversal(c.Args[1])
+	commandOffset := 1
+	if truncate {
+		commandOffset = 2
+	}
+
 	recipients := getRecipients(c.Args[0])
-	command := makeCommand(strings.Join(c.Args[1:], " "))
+	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	TID := r.Int31()
 	command.TID = TID
-	err := meshageNode.Set(recipients, command)
+	err := meshageNode.Set(recipients, traversal, command)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
@@ -284,12 +335,18 @@ func meshageBroadcast(c cliCommand) cliResponse {
 		}
 	}
 
-	command := makeCommand(strings.Join(c.Args, " "))
+	traversal, truncate := meshageTraversal(c.Args[0])
+	commandOffset := 0
+	if truncate {
+		commandOffset = 1
+	}
+
+	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	TID := r.Int31()
 	command.TID = TID
-	n, err := meshageNode.Broadcast(command)
+	n, err := meshageNode.Broadcast(traversal, command)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),

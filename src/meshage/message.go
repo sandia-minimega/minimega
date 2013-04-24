@@ -15,6 +15,12 @@ const (
 	LOLLIPOP_LENGTH = 16
 )
 
+const (
+	UNORDERED = iota
+	DEPTH
+	BREADTH
+)
+
 // A message is the payload for all message passing, and contains the user
 // specified message in the body field.
 type Message struct {
@@ -24,6 +30,7 @@ type Message struct {
 	ID           uint64      // sequence ID, uses lollipop sequence numbering
 	Command      int         // mesh state announcement, message
 	Body         interface{} // message body
+	Traversal    int         // order in which to process message and send to clients
 }
 
 // Send a message according to the parameters set in the message.
@@ -33,6 +40,7 @@ type Message struct {
 func (n *Node) Send(m *Message) error {
 	log.Debug("Send: %v\n", m)
 	routeSlices := make(map[string][]string)
+	n.meshLock.Lock()
 	for _, v := range m.Recipients {
 		if v == n.name {
 			continue
@@ -41,13 +49,14 @@ func (n *Node) Send(m *Message) error {
 		var route string
 		var ok bool
 		if route, ok = n.routes[v]; !ok {
-			n.updateRoute(v)
-			if route, ok = n.routes[v]; !ok {
+			//n.updateRoute(v)
+			//if route, ok = n.routes[v]; !ok {
 				return fmt.Errorf("no route to host: %v", v)
-			}
+			//}
 		}
 		routeSlices[route] = append(routeSlices[route], v)
 	}
+	n.meshLock.Unlock()
 
 	log.Debug("routeSlices: %v\n", routeSlices)
 
@@ -86,19 +95,20 @@ func (n *Node) Send(m *Message) error {
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
 // from all recipient nodes, or until the timeout is reached.
-func (n *Node) Set(recipients []string, body interface{}) error {
+func (n *Node) Set(recipients []string, traversal int, body interface{}) error {
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
+		Traversal:    traversal,
 	}
 	return n.Send(m)
 }
 
 // Broadcast sends a message to all nodes on the mesh.
-func (n *Node) Broadcast(body interface{}) (int, error) {
+func (n *Node) Broadcast(traversal int, body interface{}) (int, error) {
 	var recipients []string
 	for k, _ := range n.effectiveNetwork {
 		if k != n.name {
@@ -111,6 +121,7 @@ func (n *Node) Broadcast(body interface{}) (int, error) {
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
+		Traversal:    traversal,
 	}
 	return len(recipients), n.Send(m)
 }
@@ -142,15 +153,34 @@ func (n *Node) messageHandler() {
 			n.sequenceLock.Unlock()
 		case MESSAGE:
 			var newRecipients []string
+			runLocal := false
 			for _, i := range m.Recipients {
 				if i == n.name {
-					go n.handleMessage(m)
+					runLocal = true
+					//go n.handleMessage(m)
 				} else {
 					newRecipients = append(newRecipients, i)
 				}
 			}
 			m.Recipients = newRecipients
-			go n.Send(m)
+
+			switch m.Traversal {
+			case UNORDERED:
+				go n.Send(m)
+				if runLocal {
+					go n.handleMessage(m)
+				}
+			case DEPTH:
+				n.Send(m)
+				if runLocal {
+					go n.handleMessage(m)
+				}
+			case BREADTH:
+				if runLocal {
+					n.handleMessage(m)
+				}
+				go n.Send(m)
+			}
 		default:
 			n.errors <- fmt.Errorf("invalid message command: %v", m.Command)
 		}

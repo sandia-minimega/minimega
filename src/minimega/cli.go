@@ -811,6 +811,17 @@ host_tap 5 10.0.0.1/24`,
 			},
 		},
 
+		"mesh_log": &command{
+			Call: meshageLogCLI,
+			Helpshort: "enable/disable logging of meshage errors",
+			Helplong: `
+Enable or disable logging on meshage errors.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 		"mesh_degree": &command{
 			Call:      meshageDegree,
 			Helpshort: "view or set the current degree for this mesh node",
