@@ -30,6 +30,7 @@ var (
 	f_degree   = flag.Int("degree", 0, "meshage starting degree")
 	f_port     = flag.Int("port", 8966, "meshage port to listen on")
 	f_force    = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
+	f_nostdin  = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	vms        vmList
 	signalOnce bool = false
 )
@@ -91,6 +92,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
+	// TODO: make cli commands for KSM
 	ksmSave()
 
 	// create a node for meshage
@@ -133,7 +135,11 @@ func main() {
 		}
 	}
 
-	cli()
+	if !*f_nostdin {
+		cli()
+	} else {
+		<-sig
+	}
 	teardown()
 }
 
