@@ -1,0 +1,21 @@
+#!/bin/sh
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o gid=5,mode=620 none /dev/pts
+udevd --daemon
+udevadm trigger
+udevadm settle
+chmod a+rx /
+
+ETH0=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "eth0") {print a[2]; }}' /proc/cmdline`
+ifconfig eth0 up $ETH0 netmask 255.255.0.0
+
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+/etc/init.d/ircd-irc2 start
+
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
