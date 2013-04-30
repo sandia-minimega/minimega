@@ -18,6 +18,12 @@
 // TODO: fix all the logging nonsense
 // TODO: meshage: file transfer
 // TODO: meshage/cli: timeouts and commands that never return breaking the command flow. Relax the ordering?
+// TODO: some solution for backchannels
+// TODO: some solution for nagios type functionality
+// TODO: improve vm_info
+// TODO: add bridge info
+// TODO: add router info
+// TODO: add network visualizer with graphviz
 
 package main
 
