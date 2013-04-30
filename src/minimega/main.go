@@ -6,6 +6,19 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
+// TODO: vyatta: arbitrary interfaces with static ips
+// TODO: vyatta: route areas
+// TODO: vyatta: ipv6 support for routing and arbitrary ips
+// TODO: vyatta: dhcp support
+// TODO: vyatta: serial backchannel for dhcp/mac/ipv6 learning
+// TODO: cli: rewrite to have namespaces style input
+// TODO: cli: helper functions for common tasks (eliminate low level requirements)
+// TODO: documentation and examples
+// TODO: web frontend
+// TODO: fix all the logging nonsense
+// TODO: meshage: file transfer
+// TODO: meshage/cli: timeouts and commands that never return breaking the command flow. Relax the ordering?
+
 package main
 
 import (
