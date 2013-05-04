@@ -32,7 +32,7 @@ const (
 )
 
 func ksmSave() {
-	log.Info("saving ksm values")
+	log.Infoln("saving ksm values")
 	ksmRun = ksmGetIntFromFile(ksmPathRun)
 	ksmPagesToScan = ksmGetIntFromFile(ksmPathPagesToScan)
 	ksmSleepMillisecs = ksmGetIntFromFile(ksmPathSleepMillisecs)
@@ -54,14 +54,14 @@ func ksmGetIntFromFile(filename string) int {
 }
 
 func ksmEnable() {
-	log.Info("enabling ksm")
+	log.Infoln("enabling ksm")
 	ksmWrite(ksmPathRun, 1)
 	ksmWrite(ksmPathPagesToScan, ksmTunePagesToScan)
 	ksmWrite(ksmPathSleepMillisecs, ksmTuneSleepMillisecs)
 }
 
 func ksmRestore() {
-	log.Info("restoring ksm values")
+	log.Infoln("restoring ksm values")
 	ksmWrite(ksmPathRun, ksmRun)
 	ksmWrite(ksmPathPagesToScan, ksmPagesToScan)
 	ksmWrite(ksmPathSleepMillisecs, ksmSleepMillisecs)
@@ -70,7 +70,7 @@ func ksmRestore() {
 func ksmWrite(filename string, value int) {
 	file, err := os.Create(filename)
 	if err != nil {
-		log.Error("%v", err)
+		log.Errorln(err)
 		return
 	}
 	defer file.Close()

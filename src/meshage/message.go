@@ -38,7 +38,7 @@ type Message struct {
 // The returned error is always nil if the message type is broadcast.
 // If an error is encountered, Send returns immediately.
 func (n *Node) Send(m *Message) error {
-	log.Debug("Send: %v\n", m)
+	log.Debug("Send: %v", m)
 	routeSlices := make(map[string][]string)
 	n.meshLock.Lock()
 	for _, v := range m.Recipients {
@@ -51,14 +51,14 @@ func (n *Node) Send(m *Message) error {
 		if route, ok = n.routes[v]; !ok {
 			//n.updateRoute(v)
 			//if route, ok = n.routes[v]; !ok {
-				return fmt.Errorf("no route to host: %v", v)
+			return fmt.Errorf("no route to host: %v", v)
 			//}
 		}
 		routeSlices[route] = append(routeSlices[route], v)
 	}
 	n.meshLock.Unlock()
 
-	log.Debug("routeSlices: %v\n", routeSlices)
+	log.Debug("routeSlices: %v", routeSlices)
 
 	errChan := make(chan error)
 	for k, v := range routeSlices {
@@ -133,7 +133,7 @@ func (n *Node) messageHandler() {
 	log.Debugln("messageHandler")
 	for {
 		m := <-n.messagePump
-		log.Debug("messageHandler: %#v\n", m)
+		log.Debug("messageHandler: %#v", m)
 		m.CurrentRoute = append(m.CurrentRoute, n.name)
 
 		switch m.Command {
@@ -148,7 +148,7 @@ func (n *Node) messageHandler() {
 				go n.handleMSA(m)
 				go n.flood(m)
 			} else {
-				log.Debug("dropping broadcast: %v:%v\n", m.Source, m.ID)
+				log.Debug("dropping broadcast: %v:%v", m.Source, m.ID)
 			}
 			n.sequenceLock.Unlock()
 		case MESSAGE:
@@ -182,13 +182,13 @@ func (n *Node) messageHandler() {
 				go n.Send(m)
 			}
 		default:
-			n.errors <- fmt.Errorf("invalid message command: %v", m.Command)
+			log.Errorln(fmt.Errorf("invalid message command: %v", m.Command))
 		}
 	}
 }
 
 func (n *Node) flood(m *Message) {
-	log.Debug("flood: %v\n", m)
+	log.Debug("flood: %v", m)
 floodLoop:
 	for k, _ := range n.clients {
 		for _, j := range m.CurrentRoute {

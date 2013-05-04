@@ -15,7 +15,6 @@
 // TODO: cli: helper functions for common tasks (eliminate low level requirements)
 // TODO: documentation and examples
 // TODO: web frontend
-// TODO: fix all the logging nonsense
 // TODO: meshage: file transfer
 // TODO: meshage/cli: timeouts and commands that never return breaking the command flow. Relax the ordering?
 // TODO: some solution for backchannels
@@ -102,7 +101,7 @@ func main() {
 
 	r := externalCheck(cliCommand{})
 	if r.Error != "" {
-		log.Error("%v", r.Error)
+		log.Errorln(r.Error)
 	}
 
 	// attempt to set up the base path
@@ -171,7 +170,7 @@ func teardown() {
 	dnsmasqKill(-1)
 	err := currentBridge.Destroy()
 	if err != nil {
-		log.Error("%v", err)
+		log.Errorln(err)
 	}
 	ksmRestore()
 	commandSocketRemove()

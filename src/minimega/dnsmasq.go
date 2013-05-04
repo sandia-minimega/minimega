@@ -206,14 +206,14 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		if err != nil {
 			log.Errorln(err)
 		}
-		log.Info("dnsmasq server %v quit", id)
+		log.Infoln("dnsmasq server %v quit", id)
 	}()
 	return nil
 }
 
 func dnsmasqPath() (string, error) {
 	path, err := ioutil.TempDir(*f_base, "dnsmasq_")
-	log.Info("created dnsmasq server path: %v", path)
+	log.Infoln("created dnsmasq server path: %v", path)
 	return path, err
 }
 

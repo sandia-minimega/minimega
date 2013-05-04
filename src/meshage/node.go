@@ -54,8 +54,8 @@ func init() {
 // NewNode returns a new node, receiver channel, and error channel with a given name
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
-func NewNode(name string, degree uint, port int) (*Node, chan *Message, chan error) {
-	log.Debug("NewNode: %v %v %v\n", name, degree, port)
+func NewNode(name string, degree uint, port int) (*Node, chan *Message) {
+	log.Debug("NewNode: %v %v %v", name, degree, port)
 	n := &Node{
 		name:             name,
 		degree:           degree,
@@ -79,7 +79,7 @@ func NewNode(name string, degree uint, port int) (*Node, chan *Message, chan err
 	go n.checkDegree()
 	go n.periodicMSA()
 
-	return n, n.receive, n.errors
+	return n, n.receive
 }
 
 // Dial connects a node to another, regardless of degree. Error is nil on success.
@@ -119,13 +119,12 @@ func (n *Node) connectionListener() {
 	log.Debugln("connectionListener")
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", n.port))
 	if err != nil {
-		n.errors <- err
-		return
+		log.Fatalln(err)
 	}
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			n.errors <- err
+			log.Warnln(err)
 			continue
 		}
 		n.newConnection(conn)
@@ -135,7 +134,7 @@ func (n *Node) connectionListener() {
 // newConnection processes a new incoming connection from another node, processes the connection
 // handshake, adds the connection to the client list, and starts the client message handler.
 func (n *Node) newConnection(conn net.Conn) {
-	log.Debug("newConnection: %v\n", conn.RemoteAddr().String())
+	log.Debug("newConnection: %v", conn.RemoteAddr().String())
 
 	// are we soliciting connections?
 	var solicited bool
@@ -144,7 +143,7 @@ func (n *Node) newConnection(conn net.Conn) {
 	} else {
 		solicited = false
 	}
-	log.Debug("solicited: %v\n", solicited)
+	log.Debug("solicited: %v", solicited)
 
 	c := &client{
 		conn: conn,
@@ -161,13 +160,13 @@ func (n *Node) newConnection(conn net.Conn) {
 	// 4.  The remote node does the same as 3.
 	err := c.enc.Encode(n.name)
 	if err != nil {
-		n.errors <- err
+		log.Errorln(err)
 		return
 	}
 
 	err = c.enc.Encode(solicited)
 	if err != nil {
-		n.errors <- err
+		log.Errorln(err)
 		return
 	}
 
@@ -175,13 +174,13 @@ func (n *Node) newConnection(conn net.Conn) {
 	err = c.dec.Decode(&resp)
 	if err != nil {
 		if err != io.EOF {
-			n.errors <- err
+			log.Errorln(err)
 		}
 		return
 	}
 
 	c.name = resp
-	log.Debug("handshake from: %v\n", c.name)
+	log.Debug("handshake from: %v", c.name)
 
 	n.clientLock.Lock()
 	n.clients[resp] = c
@@ -199,21 +198,20 @@ func (n *Node) broadcastListener() {
 	}
 	ln, err := net.ListenUDP("udp4", &listenAddr)
 	if err != nil {
-		n.errors <- err
-		return
+		log.Fatalln(err)
 	}
 	for {
 		d := make([]byte, 1024)
 		read, _, err := ln.ReadFromUDP(d)
 		data := strings.Split(string(d[:read]), ":")
 		if len(data) != 2 {
-			err = fmt.Errorf("gor malformed udp data: %v\n", data)
-			n.errors <- err
+			err = fmt.Errorf("got malformed udp data: %v\n", data)
+			log.Warnln(err)
 			continue
 		}
 		if data[0] != "meshage" {
 			err = fmt.Errorf("got malformed udp data: %v\n", data)
-			n.errors <- err
+			log.Warnln(err)
 			continue
 		}
 		host := data[1]
@@ -221,7 +219,7 @@ func (n *Node) broadcastListener() {
 			log.Debugln("got solicitation from myself, dropping")
 			continue
 		}
-		log.Debug("got solicitation from %v\n", host)
+		log.Debug("got solicitation from %v", host)
 		go n.dial(host, true)
 	}
 }
@@ -246,13 +244,13 @@ func (n *Node) checkDegree() {
 		}
 		socket, err := net.DialUDP("udp4", nil, &addr)
 		if err != nil {
-			n.errors <- err
+			log.Errorln(err)
 			break
 		}
 		message := fmt.Sprintf("meshage:%s", n.name)
 		_, err = socket.Write([]byte(message))
 		if err != nil {
-			n.errors <- err
+			log.Errorln(err)
 			break
 		}
 		wait := r.Intn(1 << backoff)
@@ -266,12 +264,12 @@ func (n *Node) checkDegree() {
 // dial another node, perform a handshake, and add the client to the client list if successful
 func (n *Node) dial(host string, solicited bool) error {
 	addr := fmt.Sprintf("%s:%d", host, n.port)
-	log.Debug("dialing: %v\n", addr)
+	log.Debug("dialing: %v", addr)
 
-	conn, err := net.DialTimeout("tcp", addr, DEFAULT_TIMEOUT * time.Second)
+	conn, err := net.DialTimeout("tcp", addr, DEFAULT_TIMEOUT*time.Second)
 	if err != nil {
 		if solicited {
-			n.errors <- err
+			log.Errorln(err)
 		}
 		return err
 	}
@@ -287,7 +285,7 @@ func (n *Node) dial(host string, solicited bool) error {
 	err = c.dec.Decode(&remoteHost)
 	if err != nil {
 		if solicited {
-			n.errors <- err
+			log.Errorln(err)
 		}
 		return err
 	}
@@ -296,7 +294,7 @@ func (n *Node) dial(host string, solicited bool) error {
 	err = c.dec.Decode(&remoteSolicited)
 	if err != nil {
 		if solicited {
-			n.errors <- err
+			log.Errorln(err)
 		}
 		return err
 	}
@@ -307,7 +305,7 @@ func (n *Node) dial(host string, solicited bool) error {
 			conn.Close()
 			err = errors.New("already connected")
 			if solicited {
-				n.errors <- err
+				log.Errorln(err)
 			}
 			return err
 		}
@@ -316,21 +314,19 @@ func (n *Node) dial(host string, solicited bool) error {
 	// we should hangup if the connection no longer wants solicited connections and we're solicited
 	if solicited && !remoteSolicited {
 		conn.Close()
-		err = errors.New("node no longer wants solicited connections")
-		n.errors <- err
-		return err
+		return nil
 	}
 
 	err = c.enc.Encode(n.name)
 	if err != nil {
 		if solicited {
-			n.errors <- err
+			log.Errorln(err)
 		}
 		return err
 	}
 
 	c.name = remoteHost
-	log.Debug("handshake from: %v\n", remoteHost)
+	log.Debug("handshake from: %v", remoteHost)
 
 	n.clientLock.Lock()
 	n.clients[remoteHost] = c
@@ -358,7 +354,7 @@ func (n *Node) MSA() {
 	n.generateEffectiveNetwork()
 	n.meshLock.Unlock()
 
-	log.Debug("client list: %v\n", clients)
+	log.Debug("client list: %v", clients)
 
 	m := &Message{
 		Source:       n.name,
@@ -376,12 +372,11 @@ func (n *Node) sequence() uint64 {
 	defer n.sequenceLock.Unlock()
 	n.sequences[n.name]++
 	ret := n.sequences[n.name]
-	log.Debugln("done...")
 	return ret
 }
 
 func (n *Node) handleMSA(m *Message) {
-	log.Debug("handleMSA: %v\n", m)
+	log.Debug("handleMSA: %v", m)
 
 	if len(n.network[m.Source]) == len(m.Body.([]string)) {
 		diff := false
@@ -402,7 +397,7 @@ func (n *Node) handleMSA(m *Message) {
 	n.routes = make(map[string]string)
 	n.network[m.Source] = m.Body.([]string)
 
-	log.Debug("new network is: %v\n", n.network)
+	log.Debug("new network is: %v", n.network)
 
 	n.generateEffectiveNetwork()
 }

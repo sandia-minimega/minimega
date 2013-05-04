@@ -249,27 +249,17 @@ failed, as well as some commands that do not impact the VM state, such as
 					if err != nil {
 						if err == io.EOF {
 							break
+						} else {
+							return cliResponse{
+								Error: err.Error(),
+							}
 						}
-						log.Error("%v", err)
 					}
-					log.Info("read command: %v", string(l))
-					f := strings.Fields(string(l))
-					var command string
-					var args []string
-					if len(f) > 0 {
-						command = f[0]
-					}
-					if len(f) > 1 {
-						args = f[1:]
-					}
-					resp := cliExec(cliCommand{
-						Command: command,
-						Args:    args,
-					})
+					log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
+					resp := cliExec(makeCommand(string(l)))
 					resp.More = true
 					c.ackChan <- resp
 					if resp.Error != "" {
-						log.Errorln(resp.Error)
 						break // stop on errors
 					}
 				}
@@ -808,17 +798,6 @@ host_tap 5 10.0.0.1/24`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps
-			},
-		},
-
-		"mesh_log": &command{
-			Call: meshageLogCLI,
-			Helpshort: "enable/disable logging of meshage errors",
-			Helplong: `
-Enable or disable logging on meshage errors.`,
-			Record: true,
-			Clear: func() error {
-				return nil
 			},
 		},
 

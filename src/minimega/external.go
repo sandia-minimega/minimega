@@ -50,7 +50,7 @@ func externalCheck(c cliCommand) cliResponse {
 func process(p string) string {
 	path, err := exec.LookPath(externalProcesses[p])
 	if err != nil {
-		log.Error("%v", err)
+		log.Errorln(err)
 		return ""
 	}
 	return path

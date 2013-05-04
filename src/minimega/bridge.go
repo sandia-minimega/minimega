@@ -57,7 +57,7 @@ func init() {
 		for {
 			tapChan <- fmt.Sprintf("mega_tap%v", tapCount)
 			tapCount++
-			log.Info("tapCount: %v", tapCount)
+			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
 }
@@ -67,7 +67,7 @@ func init() {
 // bridge utils when we create vms with no network.
 func (b *bridge) LanCreate(lan int) (error, bool) {
 	if !b.exists {
-		log.Info("bridge does not exist")
+		log.Debugln("bridge does not exist")
 		err := b.create()
 		if err != nil {
 			return err, false
@@ -102,7 +102,7 @@ func (b *bridge) create() error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("creating bridge with cmd: %v", cmd)
+	log.Debug("creating bridge with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
 		es := sErr.String()
@@ -129,7 +129,7 @@ func (b *bridge) create() error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("bringing bridge up with cmd: %v", cmd)
+	log.Debug("bringing bridge up with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -143,12 +143,12 @@ func (b *bridge) create() error {
 func (b *bridge) Destroy() error {
 	// first get all of the taps off of this bridge and destroy them
 	for name, lan := range b.lans {
-		log.Info("destroying lan %v", name)
+		log.Debug("destroying lan %v", name)
 		for tapName, t := range lan.Taps {
 			if t != nil {
 				err := b.TapDestroy(name, tapName)
 				if err != nil {
-					log.Error("%v", err)
+					log.Warnln(err)
 				}
 			}
 		}
@@ -176,7 +176,7 @@ func (b *bridge) Destroy() error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("bringing bridge down with cmd: %v", cmd)
+	log.Debug("bringing bridge down with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -196,7 +196,7 @@ func (b *bridge) Destroy() error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("destroying bridge with cmd: %v", cmd)
+	log.Debug("destroying bridge with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -229,7 +229,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("creating tap with cmd: %v", cmd)
+	log.Debug("creating tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -260,7 +260,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("bringing tap up with cmd: %v", cmd)
+	log.Debug("bringing tap up with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -300,7 +300,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("bringing tap down with cmd: %v", cmd)
+	log.Debug("bringing tap down with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -322,7 +322,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("destroying tap with cmd: %v", cmd)
+	log.Debug("destroying tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -359,7 +359,7 @@ func (b *bridge) tapAdd(lan int, tap string, host bool) error {
 		cmd.Args = append(cmd.Args, "type=internal")
 	}
 
-	log.Info("adding tap with cmd: %v", cmd)
+	log.Debug("adding tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -386,7 +386,7 @@ func (b *bridge) tapRemove(tap string) error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("removing tap with cmd: %v", cmd)
+	log.Debug("removing tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -455,7 +455,7 @@ func hostTapCreate(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("bringing up host tap %v", tapName)
+	log.Debug("bringing up host tap %v", tapName)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Sprintf("%v: %v", err, sErr.String())
@@ -479,7 +479,7 @@ func hostTapCreate(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("setting ip on tap %v", tapName)
+	log.Debug("setting ip on tap %v", tapName)
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Sprintf("%v: %v", err, sErr.String())
@@ -506,7 +506,7 @@ func getNewTap() (string, error) {
 		for _, v := range taps {
 			if v.Name() == t {
 				found = true
-				log.Warn("tap %v already exists, trying again\n", t)
+				log.Warn("tap %v already exists, trying again", t)
 			}
 		}
 		if !found {
