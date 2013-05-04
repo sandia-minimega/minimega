@@ -19,9 +19,6 @@
 // disk. 
 package main
 
-// TODO: vm_info command to list current info
-// TODO: bridge_info or something like it 
-
 import (
 	"bufio"
 	"bytes"
@@ -789,12 +786,17 @@ will clear the list of associated networks.`,
 			Helpshort: "create a host tap for communicating between hosts and VMs",
 			Helplong: `
 Create host tap on a named vlan for communicating between a host and any VMs on
-that vlan. host_tap takes two arguments, the named vlan to tap and an 
+that vlan. host_tap takes two arguments, the named vlan to tap and an optional
 ip/netmask. It returns the name of the created tap if successful.
 
 For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-host_tap 5 10.0.0.1/24`,
+host_tap 5 10.0.0.1/24
+
+Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
+ip/netmask:
+
+host_tap 5 dhcp`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps

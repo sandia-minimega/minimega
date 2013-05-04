@@ -23,6 +23,7 @@ var externalProcesses = map[string]string{
 	"ovs":     "ovs-vsctl",
 	"dnsmasq": "dnsmasq",
 	"kill":    "kill",
+	"dhcp": "dhclient",
 }
 
 // check for the presence of each of the external processes we may call,

@@ -395,7 +395,6 @@ func (b *bridge) tapRemove(tap string) error {
 	return nil
 }
 
-// TODO: allow creating a host tap with dhcp address instead of hardcoded
 // routines for interfacing bridge mechanisms with the cli
 func hostTapCreate(c cliCommand) cliResponse {
 	if len(c.Args) != 2 {
@@ -464,27 +463,50 @@ func hostTapCreate(c cliCommand) cliResponse {
 		}
 	}
 
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"addr",
-			"add",
-			"dev",
-			tapName,
-			c.Args[1],
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("setting ip on tap %v", tapName)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Sprintf("%v: %v", err, sErr.String())
-		return cliResponse{
-			Error: e,
+	if strings.ToLower(c.Args[1]) == "dhcp" {
+		p = process("dhcp")
+		cmd = &exec.Cmd{
+			Path: p,
+			Args: []string{
+				p,
+				tapName,
+			},
+			Env: nil,
+			Dir: "",
+			Stdout: &sOut,
+			Stderr: &sErr,
+		}
+		log.Debug("obtaining dhcp on tap %v", tapName)
+		err = cmd.Run()
+		if err != nil {
+			e := fmt.Sprintf("%v: %v", err, sErr.String())
+			return cliResponse{
+				Error: e,
+			}
+		}
+	} else {
+		cmd = &exec.Cmd{
+			Path: p,
+			Args: []string{
+				p,
+				"addr",
+				"add",
+				"dev",
+				tapName,
+				c.Args[1],
+			},
+			Env:    nil,
+			Dir:    "",
+			Stdout: &sOut,
+			Stderr: &sErr,
+		}
+		log.Debug("setting ip on tap %v", tapName)
+		err = cmd.Run()
+		if err != nil {
+			e := fmt.Sprintf("%v: %v", err, sErr.String())
+			return cliResponse{
+				Error: e,
+			}
 		}
 	}
 
