@@ -882,6 +882,24 @@ View or the the Meshage State Announcement timeout.`,
 			},
 		},
 
+		"mesh_timeout": &command{
+			Call:      meshageTimeoutCLI,
+			Helpshort: "view or set the mesh timeout",
+			Helplong: `
+View or set the timeout on sending mesh commands.
+
+When a mesh command is issued, if a response isn't sent within mesh_timeout
+seconds, the command will be dropped and any future response will be discarded.
+Note that this does not cancel the outstanding command - the node receiving the
+command may still complete - but rather this node will stop waiting on a
+response.`,
+			Record: true,
+			Clear: func() error {
+				meshageTimeout = meshageTimeoutDefault
+				return nil
+			},
+		},
+
 		"mesh_set": &command{
 			Call:      meshageSet,
 			Helpshort: "send a command to one or more connected clients",
