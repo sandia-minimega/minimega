@@ -471,8 +471,8 @@ func hostTapCreate(c cliCommand) cliResponse {
 				p,
 				tapName,
 			},
-			Env: nil,
-			Dir: "",
+			Env:    nil,
+			Dir:    "",
 			Stdout: &sOut,
 			Stderr: &sErr,
 		}

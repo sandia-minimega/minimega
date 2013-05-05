@@ -16,7 +16,6 @@
 // TODO: documentation and examples
 // TODO: web frontend
 // TODO: meshage: file transfer
-// TODO: meshage/cli: timeouts and commands that never return breaking the command flow. Relax the ordering?
 // TODO: some solution for backchannels
 // TODO: some solution for nagios type functionality
 // TODO: improve vm_info

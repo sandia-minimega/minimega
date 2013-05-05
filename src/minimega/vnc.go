@@ -61,7 +61,6 @@ func (vms *vmList) Hosts() map[string][]string {
 		lines := strings.Split(resp.Response, "\n")
 		for _, l := range lines {
 			// the vm id is the second field
-			// TODO: TEST filter out any quit or error state vms from remote vnc lsit
 			f := strings.Fields(l)
 			if len(f) == 7 {
 				if !strings.Contains(f[3], "QUIT") && !strings.Contains(f[3], "ERROR") {

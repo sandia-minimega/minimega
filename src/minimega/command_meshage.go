@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	meshageNode     *meshage.Node
-	meshageMessages chan *meshage.Message
-	meshageCommand  chan *meshage.Message
-	meshageResponse chan *meshage.Message
-	meshageLog      bool
-	meshageTimeout  time.Duration
+	meshageNode           *meshage.Node
+	meshageMessages       chan *meshage.Message
+	meshageCommand        chan *meshage.Message
+	meshageResponse       chan *meshage.Message
+	meshageLog            bool
+	meshageTimeout        time.Duration
 	meshageTimeoutDefault = time.Duration(10 * time.Second)
 )
 

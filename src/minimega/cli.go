@@ -1012,6 +1012,19 @@ logged.
 				return nil
 			},
 		},
+
+		"host_stats": &command{
+			Call:      hostStatsCLI,
+			Helpshort: "report statistics about the host",
+			Helplong: `
+Report statistics about the host including hostname, load averages, total and
+free memory, and current bandwidth usage",
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
