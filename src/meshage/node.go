@@ -304,9 +304,6 @@ func (n *Node) dial(host string, solicited bool) error {
 		if k == remoteHost {
 			conn.Close()
 			err = errors.New("already connected")
-			if solicited {
-				log.Errorln(err)
-			}
 			return err
 		}
 	}

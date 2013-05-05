@@ -49,10 +49,8 @@ func (n *Node) Send(m *Message) error {
 		var route string
 		var ok bool
 		if route, ok = n.routes[v]; !ok {
-			//n.updateRoute(v)
-			//if route, ok = n.routes[v]; !ok {
+			n.meshLock.Unlock()
 			return fmt.Errorf("no route to host: %v", v)
-			//}
 		}
 		routeSlices[route] = append(routeSlices[route], v)
 	}

@@ -57,9 +57,6 @@ func (n *Node) generateEffectiveNetwork() {
 // Additionally, all hops along this route are also the shortest path, so record those as well to
 // save on effort.
 func (n *Node) updateRoute(c string) {
-	//n.meshLock.Lock()
-	//defer n.meshLock.Unlock()
-
 	if len(n.effectiveNetwork) == 0 {
 		return
 	}
