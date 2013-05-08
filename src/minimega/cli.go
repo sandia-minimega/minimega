@@ -1025,6 +1025,21 @@ free memory, and current bandwidth usage",
 				return nil
 			},
 		},
+
+		"vm_snapshot": &command{
+			Call:      snapshotCLI,
+			Helpshort: "enable or disable snapshot mode when using disk images",
+			Helplong: `
+Enable or disable snapshot mode when using disk images. When enabled, disks
+images will be loaded in memory when run and changes will not be saved. This
+allows a single disk image to be used for many VMs.
+`,
+			Record: true,
+			Clear: func() error {
+				info.Snapshot = true
+				return nil
+			},
+		},
 	}
 }
 

@@ -79,22 +79,23 @@ func init() {
 	info.KernelPath = ""
 	info.InitrdPath = ""
 	info.State = VM_BUILDING
+	info.Snapshot = true
 }
 
 func snapshotCLI(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		return cliResponse{
-			Response: fmt.Sprintf("%v", info.Snapshot)
+			Response: fmt.Sprintf("%v", info.Snapshot),
 		}
 	}
 	switch strings.ToLower(c.Args[0]) {
 	case "true":
 		info.Snapshot = true
-	case "false:
+	case "false":
 		info.Snapshot = false
 	default:
 		return cliResponse{
-			Error: "usage: vm_snapshot [true,false]"
+			Error: "usage: vm_snapshot [true,false]",
 		}
 	}
 	return cliResponse{}
