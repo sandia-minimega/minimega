@@ -64,6 +64,7 @@ type vmInfo struct {
 	q            qmp.Conn // qmp connection for this vm
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
+	Snapshot	bool
 }
 
 func init() {
@@ -78,6 +79,25 @@ func init() {
 	info.KernelPath = ""
 	info.InitrdPath = ""
 	info.State = VM_BUILDING
+}
+
+func snapshotCLI(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: fmt.Sprintf("%v", info.Snapshot)
+		}
+	}
+	switch strings.ToLower(c.Args[0]) {
+	case "true":
+		info.Snapshot = true
+	case "false:
+		info.Snapshot = false
+	default:
+		return cliResponse{
+			Error: "usage: vm_snapshot [true,false]"
+		}
+	}
+	return cliResponse{}
 }
 
 // return internal and qmp status of one or more vms
@@ -406,7 +426,9 @@ func (vm *vmInfo) vmGetArgs() []string {
 	if vm.DiskPath != "" {
 		args = append(args, "-drive")
 		args = append(args, "file="+vm.DiskPath+",cache=writeback,media=disk")
-		args = append(args, "-snapshot")
+		if vm.Snapshot {	
+			args = append(args, "-snapshot")
+		}
 	}
 
 	if vm.KernelPath != "" {
