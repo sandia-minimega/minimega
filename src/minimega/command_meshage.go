@@ -16,13 +16,13 @@ import (
 )
 
 var (
-	meshageNode     *meshage.Node
-	meshageMessages chan *meshage.Message
-	meshageCommand  chan *meshage.Message
-	meshageResponse chan *meshage.Message
-	meshageErrors   chan error
-	meshageLog	bool
-	meshageTimeout  time.Duration
+	meshageNode           *meshage.Node
+	meshageMessages       chan *meshage.Message
+	meshageCommand        chan *meshage.Message
+	meshageResponse       chan *meshage.Message
+	meshageLog            bool
+	meshageTimeout        time.Duration
+	meshageTimeoutDefault = time.Duration(10 * time.Second)
 )
 
 func init() {
@@ -31,26 +31,15 @@ func init() {
 }
 
 func meshageInit(host string, degree uint, port int) {
-	meshageNode, meshageMessages, meshageErrors = meshage.NewNode(host, degree, port)
+	meshageNode, meshageMessages = meshage.NewNode(host, degree, port)
 
 	meshageCommand = make(chan *meshage.Message, 1024)
 	meshageResponse = make(chan *meshage.Message, 1024)
 
-	// TODO: make this configurable
-	meshageTimeout = time.Duration(10)
+	meshageTimeout = time.Duration(10 * time.Second)
 
 	go meshageMux()
-	go meshageErrorHandler()
 	go meshageHandler()
-}
-
-func meshageErrorHandler() {
-	for {
-		err := <-meshageErrors
-		if meshageLog {
-			log.Errorln(err)
-		}
-	}
 }
 
 func meshageMux() {
@@ -86,31 +75,6 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func meshageLogCLI(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		return cliResponse{
-			Response: fmt.Sprintf("%v", meshageLog),
-		}
-	case 1:
-		switch c.Args[0] {
-		case "true":
-			meshageLog = true
-		case "false":
-			meshageLog = false
-		default:
-			return cliResponse{
-				Error: "arguments are [true,false]",
-			}
-		}
-	default:
-		return cliResponse{
-			Error: "mesh_log takes zero or one argument",
-		}
-	}
-	return cliResponse{}
-}
-
 func meshageDegree(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
@@ -232,6 +196,29 @@ func meshageHangup(c cliCommand) cliResponse {
 	return ret
 }
 
+func meshageTimeoutCLI(c cliCommand) cliResponse {
+	switch len(c.Args) {
+	case 0:
+		return cliResponse{
+			Response: fmt.Sprintf("%v", meshageTimeout),
+		}
+	case 1:
+		a, err := strconv.Atoi(c.Args[0])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		meshageTimeout = time.Duration(a) * time.Second
+		return cliResponse{}
+	default:
+		return cliResponse{
+			Error: "mesh_timeout takes zero or one argument",
+		}
+	}
+	return cliResponse{}
+}
+
 func meshageMSATimeout(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
@@ -315,10 +302,8 @@ SET_WAIT_LOOP:
 				}
 				i++
 			}
-		case <-time.After(meshageTimeout * time.Second):
-			e := fmt.Sprintf("meshage timeout: %v", command)
-			log.Errorln(e)
-			respError += e
+		case <-time.After(meshageTimeout):
+			respError += fmt.Sprintf("meshage timeout: %v", command)
 			break SET_WAIT_LOOP
 		}
 	}
@@ -372,10 +357,8 @@ BROADCAST_WAIT_LOOP:
 				}
 				i++
 			}
-		case <-time.After(meshageTimeout * time.Second):
-			e := fmt.Sprintf("meshage timeout: %v", command)
-			log.Errorln(e)
-			respError += e
+		case <-time.After(meshageTimeout):
+			respError += fmt.Sprintf("meshage timeout: %v", command)
 			break BROADCAST_WAIT_LOOP
 		}
 	}
@@ -393,6 +376,6 @@ func getRecipients(r string) []string {
 	prefix := r[:index]
 	rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0)>>1))
 	ret, _ := rangeObj.SplitRange(r)
-	log.Debug("expanded range: %v\n", ret)
+	log.Debug("expanded range: %v", ret)
 	return ret
 }

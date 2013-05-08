@@ -19,9 +19,6 @@
 // disk. 
 package main
 
-// TODO: vm_info command to list current info
-// TODO: bridge_info or something like it 
-
 import (
 	"bufio"
 	"bytes"
@@ -249,27 +246,17 @@ failed, as well as some commands that do not impact the VM state, such as
 					if err != nil {
 						if err == io.EOF {
 							break
+						} else {
+							return cliResponse{
+								Error: err.Error(),
+							}
 						}
-						log.Error("%v", err)
 					}
-					log.Info("read command: %v", string(l))
-					f := strings.Fields(string(l))
-					var command string
-					var args []string
-					if len(f) > 0 {
-						command = f[0]
-					}
-					if len(f) > 1 {
-						args = f[1:]
-					}
-					resp := cliExec(cliCommand{
-						Command: command,
-						Args:    args,
-					})
+					log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
+					resp := cliExec(makeCommand(string(l)))
 					resp.More = true
 					c.ackChan <- resp
 					if resp.Error != "" {
-						log.Errorln(resp.Error)
 						break // stop on errors
 					}
 				}
@@ -799,26 +786,20 @@ will clear the list of associated networks.`,
 			Helpshort: "create a host tap for communicating between hosts and VMs",
 			Helplong: `
 Create host tap on a named vlan for communicating between a host and any VMs on
-that vlan. host_tap takes two arguments, the named vlan to tap and an 
+that vlan. host_tap takes two arguments, the named vlan to tap and an optional
 ip/netmask. It returns the name of the created tap if successful.
 
 For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-host_tap 5 10.0.0.1/24`,
+host_tap 5 10.0.0.1/24
+
+Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
+ip/netmask:
+
+host_tap 5 dhcp`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps
-			},
-		},
-
-		"mesh_log": &command{
-			Call: meshageLogCLI,
-			Helpshort: "enable/disable logging of meshage errors",
-			Helplong: `
-Enable or disable logging on meshage errors.`,
-			Record: true,
-			Clear: func() error {
-				return nil
 			},
 		},
 
@@ -897,6 +878,24 @@ View or the the Meshage State Announcement timeout.`,
 			Record: true,
 			Clear: func() error {
 				meshageNode.SetMSATimeout(60)
+				return nil
+			},
+		},
+
+		"mesh_timeout": &command{
+			Call:      meshageTimeoutCLI,
+			Helpshort: "view or set the mesh timeout",
+			Helplong: `
+View or set the timeout on sending mesh commands.
+
+When a mesh command is issued, if a response isn't sent within mesh_timeout
+seconds, the command will be dropped and any future response will be discarded.
+Note that this does not cancel the outstanding command - the node receiving the
+command may still complete - but rather this node will stop waiting on a
+response.`,
+			Record: true,
+			Clear: func() error {
+				meshageTimeout = meshageTimeoutDefault
 				return nil
 			},
 		},
@@ -1007,6 +1006,19 @@ Execute a command under the credentials of the running user.
 
 Commands run in the background and control returns immediately. Any output is
 logged.
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"host_stats": &command{
+			Call:      hostStatsCLI,
+			Helpshort: "report statistics about the host",
+			Helplong: `
+Report statistics about the host including hostname, load averages, total and
+free memory, and current bandwidth usage",
 `,
 			Record: true,
 			Clear: func() error {

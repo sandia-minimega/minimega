@@ -23,6 +23,7 @@ var externalProcesses = map[string]string{
 	"ovs":     "ovs-vsctl",
 	"dnsmasq": "dnsmasq",
 	"kill":    "kill",
+	"dhcp":    "dhclient",
 }
 
 // check for the presence of each of the external processes we may call,
@@ -50,7 +51,7 @@ func externalCheck(c cliCommand) cliResponse {
 func process(p string) string {
 	path, err := exec.LookPath(externalProcesses[p])
 	if err != nil {
-		log.Error("%v", err)
+		log.Errorln(err)
 		return ""
 	}
 	return path

@@ -24,7 +24,7 @@ func (n *Node) generateEffectiveNetwork() {
 				}
 				for _, j := range n.network[i] {
 					if j == k {
-						log.Debug("found pair %v <-> %v\n", k, i)
+						log.Debug("found pair %v <-> %v", k, i)
 						emesh[k] = append(emesh[k], i)
 						emesh[i] = append(emesh[i], k)
 						break
@@ -50,21 +50,18 @@ func (n *Node) generateEffectiveNetwork() {
 		}
 	}
 
-	log.Debug("new effectiveNetwork: %v\n", n.effectiveNetwork)
+	log.Debug("new effectiveNetwork: %v", n.effectiveNetwork)
 }
 
 // find and record the next hop route for c.
 // Additionally, all hops along this route are also the shortest path, so record those as well to
 // save on effort.
 func (n *Node) updateRoute(c string) {
-	//n.meshLock.Lock()
-	//defer n.meshLock.Unlock()
-
 	if len(n.effectiveNetwork) == 0 {
 		return
 	}
 
-	log.Debug("updating route for %v\n", c)
+	log.Debug("updating route for %v", c)
 
 	routes := make(map[string]string) // a key node has a value of the previous hop, the key exists if it's been visited
 	routes[n.name] = n.name
@@ -75,12 +72,12 @@ func (n *Node) updateRoute(c string) {
 	for len(q) != 0 {
 		v := <-q
 
-		log.Debug("visiting %v\n", v)
+		log.Debug("visiting %v", v)
 
 		for _, a := range n.effectiveNetwork[v] {
 			if _, ok := routes[a]; !ok {
 				q <- a
-				log.Debug("previous hop for %v is %v\n", a, v)
+				log.Debug("previous hop for %v is %v", a, v)
 				routes[a] = v
 			}
 		}
@@ -100,7 +97,7 @@ func (n *Node) updateRoute(c string) {
 			r += "<-" + routes[curr]
 		}
 		r += "<-" + routes[curr]
-		log.Debug("full route for %v is %v\n", k, r)
+		log.Debug("full route for %v is %v", k, r)
 		n.routes[k] = prev
 	}
 }

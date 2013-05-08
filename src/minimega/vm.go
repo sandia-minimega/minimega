@@ -252,7 +252,8 @@ func (vm *vmInfo) launchOne() {
 	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
 	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
 	if err != nil {
-		log.Fatal("%v", err)
+		log.Errorln(err)
+		teardown()
 	}
 
 	// assert our state as building
@@ -262,7 +263,7 @@ func (vm *vmInfo) launchOne() {
 	for _, lan := range vm.Networks {
 		tap, err := currentBridge.TapCreate(lan)
 		if err != nil {
-			log.Error("%v", err)
+			log.Errorln(err)
 			vm.state(VM_ERROR)
 			return
 		}
@@ -272,7 +273,7 @@ func (vm *vmInfo) launchOne() {
 	if len(vm.Networks) > 0 {
 		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
 		if err != nil {
-			log.Error("%v", err)
+			log.Errorln(err)
 			vm.state(VM_ERROR)
 			return
 		}

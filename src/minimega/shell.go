@@ -30,7 +30,7 @@ func shellCLI(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("shell: %v\n", strings.Join(c.Args, " "))
+	log.Info("shell: %v", strings.Join(c.Args, " "))
 	err = cmd.Run()
 	if err != nil {
 		return cliResponse{
@@ -66,7 +66,7 @@ func backgroundCLI(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("shell: %v\n", strings.Join(c.Args, " "))
+	log.Info("shell: %v", strings.Join(c.Args, " "))
 	err = cmd.Start()
 	if err != nil {
 		return cliResponse{
@@ -76,7 +76,7 @@ func backgroundCLI(c cliCommand) cliResponse {
 
 	go func() {
 		cmd.Wait()
-		log.Info("command %v exited\n", strings.Join(c.Args, " "))
+		log.Info("command %v exited", strings.Join(c.Args, " "))
 		log.Info(sOut.String())
 		log.Info(sErr.String())
 	}()

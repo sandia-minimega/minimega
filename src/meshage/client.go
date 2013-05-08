@@ -21,7 +21,7 @@ type client struct {
 }
 
 func (n *Node) clientSend(host string, m *Message) error {
-	log.Debug("clientSend %s: %v\n", host, m)
+	log.Debug("clientSend %s: %v", host, m)
 	if c, ok := n.clients[host]; ok {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -52,7 +52,7 @@ func (n *Node) clientSend(host string, m *Message) error {
 // by issuing an MSA, and starting the receiver for the client. When the receiver
 // exits, another MSA is issued without the client.
 func (n *Node) clientHandler(host string) {
-	log.Debug("clientHandler: %v\n", host)
+	log.Debug("clientHandler: %v", host)
 	c := n.clients[host]
 
 	n.MSA()
@@ -62,12 +62,12 @@ func (n *Node) clientHandler(host string) {
 		err := c.dec.Decode(&m)
 		if err != nil {
 			if err != io.EOF {
-				n.errors <- err
+				log.Errorln(err)
 			}
 			break
 		}
 
-		log.Debug("decoded message: %v: %#v\n", host, m)
+		log.Debug("decoded message: %v: %#v", host, m)
 
 		if m.Command == ACK {
 			c.ack <- m.ID
@@ -80,14 +80,14 @@ func (n *Node) clientHandler(host string) {
 			err := c.enc.Encode(a)
 			if err != nil {
 				if err != io.EOF {
-					n.errors <- err
+					log.Errorln(err)
 				}
 				break
 			}
 			n.messagePump <- &m
 		}
 	}
-	log.Debug("client %v disconnected\n", host)
+	log.Debug("client %v disconnected", host)
 
 	// client has disconnected
 	c.conn.Close()
@@ -99,7 +99,7 @@ func (n *Node) clientHandler(host string) {
 }
 
 func (n *Node) Hangup(host string) error {
-	log.Debug("hangup: %v\n", host)
+	log.Debug("hangup: %v", host)
 	if c, ok := n.clients[host]; ok {
 		c.conn.Close()
 		return nil
