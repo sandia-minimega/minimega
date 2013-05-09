@@ -117,8 +117,8 @@ Prerequisites
 
 Minimega needs very little. You must have QEMU, dnsmasq, and openvswitch installed. To use minimega across a cluster of computers, you must enable VLAN trunking on the physical switches.
 
-Basics: Starting a VM
------------------
+Basics: Starting VMs on the local machine
+---------------------------------
 
 Minimega makes it easy to configure and launch virtual machines. This example will describe how to start 4 virtual machines, all on the same emulated network. We will assume that minimega is running on just one host.
 
@@ -156,3 +156,5 @@ Because you can easily run dozens of virtual machines on a single host, we do no
 
 And then browse to http://localhost:8080. If you're running from some other directory, you must first issue another comand, "vnc novnc <wherever the mega dir is>/misc/novnc", so it knows where to find the VNC files.
 
+Controlling a cluster
+-----------------
