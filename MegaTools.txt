@@ -1,0 +1,158 @@
+Using the Mega tools
+===================
+
+The Mega* projects (MegaTux, MegaWin, and MegaDroid) have produced a number of tools for managing clusters and virtual machines. They include:
+
+* VMBetter, a tool for generating Debian-based virtual machine images
+* Igor, a cluster reservation tool
+* Minimega, a tool to start and control virtual machines
+
+This document describes how to set up and use these tools.
+
+Getting the tools
+=============
+
+Download a tarball or check out a git repository containing the tools. Sandia users can go to http://moustache.ca.sandia.gov/mega to find daily-built archives; simply find today's archive and download. If you have downloaded a tarball, simply unpack it. If you have checked out a repository, you'll probably need to build the tools from source; make sure you have Go installed, then run "./all.bash". In either case, you'll find the binaries for the tools in the bin directory.
+
+VMBetter
+========
+
+VMBetter uses the "debootstrap" tool from Debian to provide a kernel and basic initrd. The user can specify additional Debian packages that should be included in the ramdisk. The generated kernel and initrd are suitable for booting physical machines (hosts) or virtual machines.
+
+The configuration of the ramdisk is determined by a vmbetter config file. A config file has the following fields:
+
+* parents = a list of other config files in the same directory. Their settings will be inherited.
+* packages = a list of Debian packages. These will be built into the initrd.
+* overlay = a path, relative to the directory in which you run vmbetter, that contains any files you would like to have included in the initrd's root.
+* postbuild = a set of commands that should be executed in the new ramdisk as the final step of the build process.
+
+Sample config files and overlay directories can be found in misc/vmbetter_configs. The "kane_host.conf" configuration is suitable for booting on physical cluster nodes; it allows passwordless root logins, includes QEMU, and can serve dhcp. Note that kane_host.conf includes default_amd64.conf, a very basic configuration.
+
+To build a config, for example kane_host.conf, change to the top-level directory of the Mega tools and execute:
+
+	sudo ./bin/vmbetter ./misc/vmbetter_configs/kane_host.conf
+
+Once this completes, it will place kane_host.kernel and kane_host.initrd in the current directory.
+
+Igor
+======
+
+Igor is a tool for reserving nodes on a cluster. It is designed to reserve a group of nodes and set them to boot a given kernel and initrd. Users make reservations with igor, requesting either a number of nodes or a specific set of nodes. They also specify a kernel and initial ramdisk which their nodes should boot. Igor assumes an environment of good faith--users can specify arbitrarily long reservations or delete another person's reservation.
+
+Installation
+---------
+
+To use igor, you will need to have syslinux, specifically pxelinux, installed. Figure out where your TFTP root will be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and set up the default PXE configuration in /tftpboot/pxelinux.cfg/default. This setup is simple but is outside the scope of this document.
+
+To set up igor, first copy the bin/igor binary to somewhere accessible, like /usr/local/bin, and give it the SETUID bit (chmod +s /usr/local/bin/igor). The SETUID bit allows multiple people to run igor, all changing the same set of files, without requiring a daemon.
+
+After copying the igor binary, run:
+
+	sudo src/igor/setup.sh
+
+This will set up some basic configuration. To configure igor for your specific cluster, edit /etc/igor.conf, a JSON config file created by setup.sh. Here's what ours looks like:
+
+        {
+                "tftproot" : "/tftpboot/",
+                "prefix" : "kn",
+                "start" : 1,
+                "end" : 520,
+                "rackwidth" : 8,
+                "rackheight" : 5
+        }
+
+N.B.: It is extremely important that the last entry ("rackheight" in this case) is not followed by a comma; this is a quirk of json.
+
+The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" directory. The other options describe your cluster naming scheme. Our cluster nodes are named kn1 through kn520, so our "prefix" is "kn", "start" is 1, and "end" is 520. Note that the numbers are *not* in quotes.
+
+"Rackheight" and "rackwidth" define the physical dimensions of your cluster hardware, for use with "igor show". Our cluster is composed of 13 shelves, each containing 5 shelves of 8 PCs each. When "igor show" runs,  part of the information it gives is a diagram of "racks"; one "rack" from our cluster is shown below:
+
+        ---------------------------------
+        |281|282|283|284|285|286|287|288|
+        |289|290|291|292|293|294|295|296|
+        |297|298|299|300|301|302|303|304|
+        |305|306|307|308|309|310|311|312|
+        |313|314|315|316|317|318|319|320|
+        ---------------------------------
+
+If you are running a cluster of 4x 1U servers, and they are all in a single rack, you would set rackheight = 4, and rackwidth = 1, to see something like this:
+
+        ---
+        |1|
+        |2|
+        |3|
+        |4|
+        ---
+
+If the physical layout of your cluster is strange, or if you'd just prefer a big grid, you can set rackheight = sqrt(# nodes) and rackwidth = sqrt(# nodes). This will just show one big grid of all your nodes.
+
+Running Igor
+------------
+
+Generally, to use igor you will check what nodes are reserved, make your own reservation with some un-used nodes, and then delete the reservation when you're done. When creating a reservation, you can specify a duration (default 12 hours); after this expires, your reservation is not automatically deleted, but it should be considered "fair game" for deletion by anyone else.
+
+To see what reservations exist:
+
+        $ igor show
+
+To make a reservation named "testing", using some kernel and initrd, with nodes 1-10:
+
+        $ igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w kn[1-10]
+
+To remove your reservation:
+
+        $ igor del testing
+
+You can type "igor help" to access the built-in help, which gives more details on all the possible command line switches. Running "igor sub" or "igor del" without arguments will show more detailed help for that specific command.
+
+Minimega
+========
+
+Minimega is a tool for launching and managing virtual machines. It fulfills a similar role to OpenStack, but is capable of booting far more VMs, far more quickly. Minimega can be useful on the desktop (to fire up several virtual machines for quick tests) or on a cluster (where it can have each node start hundreds of virtual machines).
+
+Minimega requires no configuration. When run on a cluster, the minimega instances on each node can automatically discover each other and connect up as a mesh. You interact with minimega by entering commands at a shell-like prompt, or you can provide it a prepared script in a file.
+
+Prerequisites
+----------
+
+Minimega needs very little. You must have QEMU, dnsmasq, and openvswitch installed. To use minimega across a cluster of computers, you must enable VLAN trunking on the physical switches.
+
+Basics: Starting a VM
+-----------------
+
+Minimega makes it easy to configure and launch virtual machines. This example will describe how to start 4 virtual machines, all on the same emulated network. We will assume that minimega is running on just one host.
+
+First, we set up a network; you can create many networks, each specified by a number which corresponds to a VLAN tag. We make a tap device which gives our host an IP (10.0.0.1) on network 1:
+
+	host_tap 1 10.0.0.1/24
+
+Next, we start a dhcp server, so the virtual machines can easily join the network. The first argument specifies the host's IP (10.0.0.1), the next two give the range of IPs that should be assigned to virtual machines.
+
+	dnsmasq start 10.0.0.1 10.0.0.2 10.0.0.254
+
+Then, we issue a set of commands which create a VM configuration. Commands starting with "vm_" affect any VMs launched after that point. Here, we specify that VMs should be on network #1, use the given kernel and initrd, and have 1.5 GB of memory:
+
+	vm_net 1
+	vm_initrd /path/to/example.initrd
+	vm_kernel /path/to/example.kernel
+	vm_memory 1500
+
+Having specified the VM parameters, we launch 2 virtual machines. They will be created in a "paused" state.
+
+	vm_launch 2
+
+Now, we can go back and change some parameters. Perhaps we want two make two more VMs, but with only 512 MB of memory each. We can simply issue another vm_memory command to change that parameter, then launch another two virtual machines:
+
+	vm_memory 512
+	vm_launch 2
+
+With 4 VMs launched, we can now let them start running and booting:
+
+	vm_start
+
+Because you can easily run dozens of virtual machines on a single host, we do not show the VM displays. Instead, we provide a web-based VNC interface. Assuming you've run minimega from the distribution root, you can simply enter:
+
+	vnc serve
+
+And then browse to http://localhost:8080. If you're running from some other directory, you must first issue another comand, "vnc novnc <wherever the mega dir is>/misc/novnc", so it knows where to find the VNC files.
+
