@@ -44,11 +44,10 @@ Installation
 
 To use igor, you will need to have syslinux, specifically pxelinux, installed. Figure out where your TFTP root will be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and set up the default PXE configuration in /tftpboot/pxelinux.cfg/default. This setup is simple but is outside the scope of this document.
 
-To set up igor, first copy the bin/igor binary to somewhere accessible, like /usr/local/bin, and give it the SETUID bit (chmod +s /usr/local/bin/igor). The SETUID bit allows multiple people to run igor, all changing the same set of files, without requiring a daemon.
+To install igor, run:
 
-After copying the igor binary, run:
-
-	sudo src/igor/setup.sh
+	cd src/igor
+	sudo ./setup.sh /tftpboot/
 
 This will set up some basic configuration. To configure igor for your specific cluster, edit /etc/igor.conf, a JSON config file created by setup.sh. Here's what ours looks like:
 
