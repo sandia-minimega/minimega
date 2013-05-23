@@ -5,7 +5,7 @@ source env.bash
 # set the version from the repo
 VERSION=`git rev-parse HEAD`
 DATE=`date --rfc-3339=date`
-mkdir src/version
+mkdir -p src/version
 echo "package version
 
 var (

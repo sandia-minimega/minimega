@@ -1,7 +1,7 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
@@ -49,7 +49,7 @@ var (
 	f_port     = flag.Int("port", 8966, "meshage port to listen on")
 	f_force    = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin  = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
-	f_version = flag.Bool("version", false, "print the version and exit")
+	f_version  = flag.Bool("version", false, "print the version and exit")
 	vms        vmList
 	signalOnce bool = false
 )
@@ -120,9 +120,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// TODO: make cli commands for KSM
-	ksmSave()
-
 	// create a node for meshage
 	host, err := os.Hostname()
 	if err != nil {
@@ -184,7 +181,7 @@ func teardown() {
 	if err != nil {
 		log.Errorln(err)
 	}
-	ksmRestore()
+	ksmDisable()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
 	os.Exit(0)

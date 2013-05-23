@@ -1,5 +1,5 @@
 // vmbetter is a debootstrap based toolchain for creating virtual machine
-// images for booting host and guest nodes. It generates a debian based initrd 
+// images for booting host and guest nodes. It generates a debian based initrd
 // and kernel image from a configuration file.
 package main
 
@@ -23,7 +23,7 @@ var (
 	f_noclean       = flag.Bool("noclean", false, "do not remove build directory")
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
-	f_branch	= flag.String("branch", "testing", "debian branch to use")
+	f_branch        = flag.String("branch", "testing", "debian branch to use")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -55,7 +55,7 @@ func main() {
 		log.Fatalln("-1 cannot be used with -2")
 	}
 
-	// find any other dependent configs and get an ordered list of those 
+	// find any other dependent configs and get an ordered list of those
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
 	config, err := vmconfig.ReadConfig(configfile)

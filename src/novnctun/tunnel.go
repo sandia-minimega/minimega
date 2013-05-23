@@ -106,7 +106,7 @@ func (t *Tun) allowed(host, port string) bool {
 }
 
 func (t *Tun) wsHandler(w http.ResponseWriter, r *http.Request) {
-	// we assume that if we got here, then the url must be sane and of 
+	// we assume that if we got here, then the url must be sane and of
 	// the format /<host>/<port>
 	url := r.URL.String()
 	if !strings.HasSuffix(url, "/") {

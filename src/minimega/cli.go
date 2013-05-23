@@ -1,14 +1,14 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
 
 // command line interface for minimega
-// 
-// The command line interface wraps a number of commands listed in the 
+//
+// The command line interface wraps a number of commands listed in the
 // cliCommands map. Each entry to the map defines a function that is called
 // when the command is invoked on the command line, as well as short and long
 // form help. The record parameter instructs the cli to put the command in the
@@ -16,7 +16,7 @@
 //
 // The cli uses the readline library for command history and tab completion.
 // A separate command history is kept and used for writing the buffer out to
-// disk. 
+// disk.
 package main
 
 import (
@@ -337,7 +337,6 @@ id field.`,
 						Error: err.Error(),
 					}
 				}
-				ksmEnable()
 				vms.launch(a)
 				return cliResponse{}
 			},
@@ -1040,6 +1039,20 @@ allows a single disk image to be used for many VMs.
 				return nil
 			},
 		},
+
+		"ksm": &command{
+			Call:      ksmCLI,
+			Helpshort: "enable or disable Kernel Samepage Merging",
+			Helplong: `
+Enable or disable Kernel Samepage Merging, which can vastly increase the
+density of VMs a node can run depending on how similar the VMs are.
+`,
+			Record: true,
+			Clear: func() error {
+				ksmDisable()
+				return nil
+			},
+		},
 	}
 }
 
@@ -1117,7 +1130,7 @@ func cliExec(c cliCommand) cliResponse {
 		return cliResponse{}
 	}
 
-	// special case, comments. Any line starting with # is a comment and WILL be 
+	// special case, comments. Any line starting with # is a comment and WILL be
 	// recorded.
 	if strings.HasPrefix(c.Command, "#") {
 		log.Debugln("comment:", c.Command, c.Args)

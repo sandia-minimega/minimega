@@ -1,14 +1,14 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
 
 // virtual machine control routines. The vm state is centered around the 'info'
 // struct, which is updated via the cli. When vms are launched, the info struct
-// is copied once for each VM and launched. The user can then update the vm 
+// is copied once for each VM and launched. The user can then update the vm
 // struct for launching vms of other types.
 package main
 
@@ -64,7 +64,7 @@ type vmInfo struct {
 	q            qmp.Conn // qmp connection for this vm
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
-	Snapshot	bool
+	Snapshot     bool
 }
 
 func init() {
@@ -192,8 +192,8 @@ func (l *vmList) kill(id int) {
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
 func (l *vmList) launch(numVms int) {
-	// we have some configuration from the cli (right?), all we need 
-	// to do here is fire off the vms in goroutines, passing the 
+	// we have some configuration from the cli (right?), all we need
+	// to do here is fire off the vms in goroutines, passing the
 	// configuration in by value, as it may change for the next run.
 	log.Info("launching %v vms", numVms)
 	start := len(l.vms)
@@ -428,7 +428,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 	if vm.DiskPath != "" {
 		args = append(args, "-drive")
 		args = append(args, "file="+vm.DiskPath+",cache=writeback,media=disk")
-		if vm.Snapshot {	
+		if vm.Snapshot {
 			args = append(args, "-snapshot")
 		}
 	}

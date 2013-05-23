@@ -99,7 +99,7 @@ func (n *Node) GetDegree() uint {
 	return n.degree
 }
 
-// Mesh returns the current known topology as an adjacency list. 
+// Mesh returns the current known topology as an adjacency list.
 func (n *Node) Mesh() mesh {
 	n.meshLock.Lock()
 	defer n.meshLock.Unlock()
@@ -113,7 +113,7 @@ func (n *Node) Mesh() mesh {
 	return ret
 }
 
-// connectionListener accepts connections on tcp/port for both solicited and unsolicited 
+// connectionListener accepts connections on tcp/port for both solicited and unsolicited
 // client connections.
 func (n *Node) connectionListener() {
 	log.Debugln("connectionListener")
@@ -189,7 +189,7 @@ func (n *Node) newConnection(conn net.Conn) {
 	go n.clientHandler(resp)
 }
 
-// broadcastListener listens for broadcast connection solicitations and connects to 
+// broadcastListener listens for broadcast connection solicitations and connects to
 // soliciting nodes.
 func (n *Node) broadcastListener() {
 	listenAddr := net.UDPAddr{

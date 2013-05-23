@@ -10,7 +10,7 @@ import (
 
 // PostBuildCommands invokes any commands listed in the postbuild variable
 // of a config file. It does so by copying the entire string of the postbuild
-// variable into a bash script under /tmp of the build directory, and then 
+// variable into a bash script under /tmp of the build directory, and then
 // executing it with bash inside of a chroot. Post build commands are executed
 // in depth-first order.
 func PostBuildCommands(buildPath string, c vmconfig.Config) error {

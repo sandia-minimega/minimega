@@ -80,7 +80,7 @@ A trivial example client:
 
 	func main() {
 		origin := "http://localhost/"
-		url := "ws://localhost/ws" 
+		url := "ws://localhost/ws"
 		ws, err := websocket.Dial(url, "", origin)
 		if err != nil {
 			log.Fatal(err)
