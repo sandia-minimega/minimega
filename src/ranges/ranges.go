@@ -113,7 +113,7 @@ func (r *Range) UnsplitRange(nodes []string) (string, error) {
 	sort.Ints(nums)
 
 	// "count along" to find stretches like 1-5
-	result := "kn[" + strconv.Itoa(nums[0])
+	result := r.Prefix + "[" + strconv.Itoa(nums[0])
 	start := nums[0]
 	prev := nums[0]
 	for i := 1; i < len(nums); i++ {
