@@ -358,7 +358,6 @@ func hixie76ClientHandshake(config *Config, br *bufio.Reader, bw *bufio.Writer) 
 		}
 		fields = append(fields, "Sec-WebSocket-Protocol: "+config.Protocol[0]+"\r\n")
 	}
-	// TODO(ukai): Step 15. send cookie if any.
 
 	// Step 16-23. generate keys and push Sec-WebSocket-Key<n> in fields.
 	key1, number1 := generateKeyNumber()
@@ -532,7 +531,6 @@ func (c *hixie76ServerHandshaker) ReadHandshake(buf *bufio.Reader, req *http.Req
 		return http.StatusBadRequest, ErrNotWebSocket
 	}
 
-	// TODO(ukai): check Host
 	c.Origin, err = url.ParseRequestURI(req.Header.Get("Origin"))
 	if err != nil {
 		return http.StatusBadRequest, err
