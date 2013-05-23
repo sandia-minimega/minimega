@@ -77,8 +77,7 @@ func main() {
 	}
 
 	if *f_version {
-		fmt.Println("build date:", version.Date)
-		fmt.Println("build revision:", version.Revision)
+		fmt.Println("minimega", version.Revision, version.Date)
 		os.Exit(0)
 	}
 

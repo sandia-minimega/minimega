@@ -32,6 +32,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"version"
 )
 
 var (
@@ -1050,6 +1051,22 @@ density of VMs a node can run depending on how similar the VMs are.
 			Record: true,
 			Clear: func() error {
 				ksmDisable()
+				return nil
+			},
+		},
+
+		"version": &command{
+			Call: func(c cliCommand) cliResponse {
+				return cliResponse{
+					Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
+				}
+			},
+			Helpshort: "display the version",
+			Helplong: `
+Display the version.
+`,
+			Record: true,
+			Clear: func() error {
 				return nil
 			},
 		},
