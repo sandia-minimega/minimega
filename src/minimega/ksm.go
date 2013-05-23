@@ -1,7 +1,7 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
@@ -10,6 +10,7 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	log "minilog"
 	"os"
@@ -21,6 +22,7 @@ var (
 	ksmPagesToScan    int
 	ksmRun            int
 	ksmSleepMillisecs int
+	ksmEnabled        bool
 )
 
 const (
@@ -54,17 +56,24 @@ func ksmGetIntFromFile(filename string) int {
 }
 
 func ksmEnable() {
-	log.Infoln("enabling ksm")
-	ksmWrite(ksmPathRun, 1)
-	ksmWrite(ksmPathPagesToScan, ksmTunePagesToScan)
-	ksmWrite(ksmPathSleepMillisecs, ksmTuneSleepMillisecs)
+	if !ksmEnabled {
+		ksmSave()
+		log.Infoln("enabling ksm")
+		ksmWrite(ksmPathRun, 1)
+		ksmWrite(ksmPathPagesToScan, ksmTunePagesToScan)
+		ksmWrite(ksmPathSleepMillisecs, ksmTuneSleepMillisecs)
+		ksmEnabled = true
+	}
 }
 
-func ksmRestore() {
-	log.Infoln("restoring ksm values")
-	ksmWrite(ksmPathRun, ksmRun)
-	ksmWrite(ksmPathPagesToScan, ksmPagesToScan)
-	ksmWrite(ksmPathSleepMillisecs, ksmSleepMillisecs)
+func ksmDisable() {
+	if ksmEnabled {
+		log.Infoln("restoring ksm values")
+		ksmWrite(ksmPathRun, ksmRun)
+		ksmWrite(ksmPathPagesToScan, ksmPagesToScan)
+		ksmWrite(ksmPathSleepMillisecs, ksmSleepMillisecs)
+		ksmEnabled = false
+	}
 }
 
 func ksmWrite(filename string, value int) {
@@ -76,4 +85,33 @@ func ksmWrite(filename string, value int) {
 	defer file.Close()
 	log.Info("writing %v to %v", value, filename)
 	file.WriteString(strconv.Itoa(value))
+}
+
+func ksmCLI(c cliCommand) cliResponse {
+	switch len(c.Args) {
+	case 0:
+		r := "disabled"
+		if ksmEnabled {
+			r = "enabled"
+		}
+		return cliResponse{
+			Response: fmt.Sprintf("%v", r),
+		}
+	case 1:
+		switch strings.ToLower(c.Args[0]) {
+		case "disable":
+			ksmDisable()
+		case "enable":
+			ksmEnable()
+		default:
+			return cliResponse{
+				Error: "valid arguments are [enable, disable]",
+			}
+		}
+	default:
+		return cliResponse{
+			Error: "ksm takes one argument",
+		}
+	}
+	return cliResponse{}
 }

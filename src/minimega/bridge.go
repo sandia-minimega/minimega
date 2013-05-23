@@ -1,7 +1,7 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
@@ -62,7 +62,7 @@ func init() {
 	}()
 }
 
-// create a new vlan. If this is the first vlan being allocated, then the 
+// create a new vlan. If this is the first vlan being allocated, then the
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
 func (b *bridge) LanCreate(lan int) (error, bool) {

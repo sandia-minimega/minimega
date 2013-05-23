@@ -1,7 +1,7 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
@@ -40,7 +40,7 @@ func init() {
 
 // generate paths for the leases and pid files (should be unique) so we can support multiple dnsmasq servers
 // maintain a map of dnsmasq servers that can be listed
-// allow killing dnsmasq servers with dnsmasq kill 
+// allow killing dnsmasq servers with dnsmasq kill
 
 func dnsmasqCLI(c cliCommand) cliResponse {
 	var ret cliResponse

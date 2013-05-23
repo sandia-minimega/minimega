@@ -1,7 +1,7 @@
 // minimega
-// 
-// Copyright (2012) Sandia Corporation. 
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+//
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
@@ -84,7 +84,7 @@ func GetLevel(name string) (int, error) {
 	return loggers[name].Level, nil
 }
 
-// Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and 
+// Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and
 // returns immediately.
 func LogAll(i io.Reader, level int, name string) {
 	go func(i io.Reader, level int, name string) {

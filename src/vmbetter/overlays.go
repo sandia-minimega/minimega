@@ -6,7 +6,7 @@ import (
 	"vmconfig"
 )
 
-// Overlays copies any overlay directories indicated in c into the build 
+// Overlays copies any overlay directories indicated in c into the build
 // directory build_path. Overlays are copied in depth-first order, so that
 // the oldest parent overlay data is copied in first. This allows a child
 // to overwrite any overlay data created by a parent.

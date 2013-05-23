@@ -1,4 +1,4 @@
-// Very simple libreadline binding. 
+// Very simple libreadline binding.
 package goreadline
 
 // #cgo LDFLAGS: -lreadline
@@ -38,7 +38,7 @@ func Rlwrap(prompt string) (string, error) {
 	return s, nil
 }
 
-// Rlcleanup calls the readline rl_deprep_terminal function, restoring the 
+// Rlcleanup calls the readline rl_deprep_terminal function, restoring the
 // terminal state
 func Rlcleanup() {
 	log.Info("restoring terminal state from readline")
