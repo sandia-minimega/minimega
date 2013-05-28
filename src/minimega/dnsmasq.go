@@ -178,7 +178,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		Stderr: &sErr,
 	}
 	if hosts != "" {
-		cmd.Args = append(cmd.Args, fmt.Sprintf("--addn-hosts=%v", hosts))
+		cmd.Args = append(cmd.Args, fmt.Sprintf("--conf-file=%v", hosts))
 	}
 	log.Debug("starting dnsmasq server with command: %v", cmd)
 	err = cmd.Start()

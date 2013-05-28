@@ -967,14 +967,13 @@ To kill all running dnsmasq servers, pass -1 as the ID:
 
 dnsmasq kill -1
 
-dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You
-can specify an additional hosts file to serve by providing a file as an
-additional argument. For example, to start a dnsmasq server serving the range
-as above and serving dns for a list of hosts in the file "addn-hosts":
+dnsmasq will provide DNS service from the host, as well as from /etc/hosts. 
+You can specify an additional config file for dnsmasq by providing a file as an
+additional argument.
 
-dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/addn-hosts
+dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/dnsmasq-extra.conf
 
-NOTE: If specifying an additional hosts file, you must provide the full path to
+NOTE: If specifying an additional config file, you must provide the full path to
 the file.
 `,
 			Record: true,
