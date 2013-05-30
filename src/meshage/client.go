@@ -48,6 +48,22 @@ func (n *Node) clientSend(host string, m *Message) error {
 	return fmt.Errorf("no such client %s", host)
 }
 
+func (c *client) clientMessagePump(p chan *Message) {
+	for {
+		var m Message
+		err := c.dec.Decode(&m)
+		if err != nil {
+			if err != io.EOF {
+				log.Errorln(err)
+			}
+			p <- nil
+			return
+		}
+		log.Debug("decoded message: %v: %#v", c.name, m)
+		p <- &m
+	}
+}
+
 // clientHandler is called as a goroutine after a successful handshake. It begins
 // by issuing an MSA, and starting the receiver for the client. When the receiver
 // exits, another MSA is issued without the client.
@@ -57,37 +73,39 @@ func (n *Node) clientHandler(host string) {
 
 	n.MSA()
 
+	clientMessages := make(chan *Message)
+	go c.clientMessagePump(clientMessages)
+
+CLIENT_HANDLER_LOOP:
 	for {
-		var m Message
-		err := c.dec.Decode(&m)
-		if err != nil {
-			if err != io.EOF {
-				log.Errorln(err)
+		select {
+		case m := <-clientMessages:
+			if m == nil {
+				break CLIENT_HANDLER_LOOP
 			}
-			break
-		}
-
-		log.Debug("decoded message: %v: %#v", host, m)
-
-		if m.Command == ACK {
-			c.ack <- m.ID
-		} else {
-			// send an ack
-			a := Message{
-				Command: ACK,
-				ID:      m.ID,
-			}
-			err := c.enc.Encode(a)
-			if err != nil {
-				if err != io.EOF {
-					log.Errorln(err)
+			if m.Command == ACK {
+				c.ack <- m.ID
+			} else {
+				// send an ack
+				a := Message{
+					Command: ACK,
+					ID:      m.ID,
 				}
-				break
+				err := c.enc.Encode(a)
+				if err != nil {
+					if err != io.EOF {
+						log.Errorln(err)
+					}
+					break CLIENT_HANDLER_LOOP
+				}
+				n.messagePump <- m
 			}
-			n.messagePump <- &m
+		case <-time.After(2 * time.Duration(n.msaTimeout) * time.Second):
+			log.Errorln("client %v MSA timeout", host)
+			break CLIENT_HANDLER_LOOP
 		}
 	}
-	log.Debug("client %v disconnected", host)
+	log.Info("client %v disconnected", host)
 
 	// client has disconnected
 	c.conn.Close()
