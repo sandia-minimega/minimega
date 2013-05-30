@@ -112,6 +112,7 @@ CLIENT_HANDLER_LOOP:
 	n.clientLock.Lock()
 	delete(n.clients, c.name)
 	n.clientLock.Unlock()
+	go n.checkDegree()
 
 	n.MSA()
 }
