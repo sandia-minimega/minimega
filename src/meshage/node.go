@@ -1,7 +1,5 @@
 package meshage
 
-// TODO: meshage heartbeats for killed nodes
-
 import (
 	"encoding/gob"
 	"errors"
