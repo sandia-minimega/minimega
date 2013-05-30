@@ -22,6 +22,8 @@
 // TODO: add bridge info
 // TODO: add router info
 // TODO: add network visualizer with graphviz
+// TODO: lxc support
+// TODO: meshage double in-flight messages
 
 package main
 
