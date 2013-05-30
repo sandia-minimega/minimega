@@ -303,7 +303,7 @@ func (vm *vmInfo) launchOne() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
 		if err != nil {
-			if err.Error() != "signal 9" { // because we killed it
+			if err.Error() != "signal: killed" { // because we killed it
 				log.Error("%v %v", err, sErr.String())
 				vm.state(VM_ERROR)
 			}
