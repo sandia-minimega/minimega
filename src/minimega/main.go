@@ -23,7 +23,6 @@
 // TODO: add router info
 // TODO: add network visualizer with graphviz
 // TODO: lxc support
-// TODO: meshage double in-flight messages
 
 package main
 
@@ -53,7 +52,6 @@ var (
 	f_nostdin  = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version  = flag.Bool("version", false, "print the version and exit")
 	vms        vmList
-	signalOnce bool = false
 )
 
 var banner string = `minimega, Copyright (2013) Sandia Corporation. 
@@ -172,10 +170,6 @@ func main() {
 }
 
 func teardown() {
-	if signalOnce {
-		log.Fatal("caught signal, exiting without cleanup")
-	}
-	signalOnce = true
 	vms.kill(-1)
 	dnsmasqKill(-1)
 	err := currentBridge.Destroy()

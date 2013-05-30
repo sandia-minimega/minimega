@@ -272,6 +272,13 @@ func meshageSet(c cliCommand) cliResponse {
 
 	recipients := getRecipients(c.Args[0])
 	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
+
+	if command.Command == "mesh_broadcast" || command.Command == "mesh_set" {
+		return cliResponse{
+			Error: "compound mesh commands are not allowed",
+		}
+	}
+
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	TID := r.Int31()
@@ -327,6 +334,13 @@ func meshageBroadcast(c cliCommand) cliResponse {
 	}
 
 	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
+
+	if command.Command == "mesh_broadcast" || command.Command == "mesh_set" {
+		return cliResponse{
+			Error: "compound mesh commands are not allowed",
+		}
+	}
+
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	TID := r.Int31()
