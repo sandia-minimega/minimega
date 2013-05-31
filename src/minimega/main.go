@@ -11,6 +11,7 @@
 // TODO: vyatta: ipv6 support for routing and arbitrary ips
 // TODO: vyatta: dhcp support
 // TODO: vyatta: serial backchannel for dhcp/mac/ipv6 learning
+// TODO: vyatta: info cli
 // TODO: cli: rewrite to have namespaces style input
 // TODO: cli: helper functions for common tasks (eliminate low level requirements)
 // TODO: documentation and examples
@@ -18,9 +19,7 @@
 // TODO: meshage: file transfer
 // TODO: some solution for backchannels
 // TODO: some solution for nagios type functionality
-// TODO: improve vm_info
 // TODO: add bridge info
-// TODO: add router info
 // TODO: add network visualizer with graphviz
 // TODO: lxc support
 
