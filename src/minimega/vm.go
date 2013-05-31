@@ -22,6 +22,7 @@ import (
 	"qmp"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 	"time"
 )
 
@@ -42,6 +43,10 @@ const (
 	VM_QUIT
 	VM_ERROR
 )
+
+// TODO: add vm_pause
+// TODO: remove vm_status
+// TODO: move vm cli into vm.go
 
 // total list of vms running on this host
 type vmList struct {
@@ -64,6 +69,7 @@ type vmInfo struct {
 	q            qmp.Conn // qmp connection for this vm
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
+	macs         []string // ordered list of macs (matches 1-1 with Taps, Networks)
 	Snapshot     bool
 }
 
@@ -207,6 +213,276 @@ func (l *vmList) launch(numVms int) {
 	// get acknowledgements from each vm
 	for i := 0; i < numVms; i++ {
 		fmt.Printf("VM: %v launched\n", <-launchAck)
+	}
+}
+
+func (l *vmList) info(c cliCommand) cliResponse {
+	var v []*vmInfo
+
+	var search string
+	var mask string
+	switch len(c.Args) {
+	case 0:
+	case 1: // search or mask
+		if strings.Contains(c.Args[0], "=") {
+			search = c.Args[0]
+		} else if strings.HasPrefix(c.Args[0], "[") {
+			mask = strings.Trim(c.Args[0], "[]")
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+	case 2: // first term MUST be search
+		if search == "" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		if strings.HasPrefix(c.Args[1], "[") {
+			mask = strings.Trim(c.Args[1], "[]")
+		}
+	default:
+		return cliResponse{
+			Error: "too many arguments",
+		}
+	}
+
+	// vm_info takes a search term and an output mask, we'll start with the optional seach term
+	if search != "" {
+		d := strings.Split(c.Args[0], "=")
+		if len(d) != 2 {
+			return cliResponse{
+				Error: "malformed search term",
+			}
+		}
+
+		log.Debug("vm_info: search term: %v", d)
+
+		switch strings.ToLower(d[0]) {
+		case "id":
+			id, err := strconv.Atoi(d[1])
+			if err != nil {
+				return cliResponse{
+					Error: fmt.Sprintf("invalid ID: %v", d[1]),
+				}
+			}
+			for i, j := range l.vms {
+				if j.Id == id {
+					v = append(v, l.vms[i])
+					break // there can only be one vm with this id
+				}
+			}
+		case "memory":
+			for i, j := range l.vms {
+				if j.Memory == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "disk":
+			for i, j := range l.vms {
+				if j.DiskPath == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "initrd":
+			for i, j := range l.vms {
+				if j.InitrdPath == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "kernel":
+			for i, j := range l.vms {
+				if j.KernelPath == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "cdrom":
+			for i, j := range l.vms {
+				if j.CdromPath == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "state":
+			var s int
+			switch strings.ToLower(d[1]) {
+			case "building":
+				s = VM_BUILDING
+			case "running":
+				s = VM_RUNNING
+			case "paused":
+				s = VM_PAUSED
+			case "quit":
+				s = VM_QUIT
+			case "error":
+				s = VM_ERROR
+			default:
+				return cliResponse{
+					Error: fmt.Sprintf("invalid state: %v", d[1]),
+				}
+			}
+			for i, j := range l.vms {
+				if j.State == s {
+					v = append(v, l.vms[i])
+				}
+			}
+		case "tap":
+		VM_INFO_TAP_LOOP:
+			for i, j := range l.vms {
+				for _, k := range j.taps {
+					if k == d[1] {
+						v = append(v, l.vms[i])
+						break VM_INFO_TAP_LOOP
+					}
+				}
+			}
+		case "mac":
+			for i, j := range l.vms {
+				for _, k := range j.macs {
+					if k == d[1] {
+						v = append(v, l.vms[i])
+						break
+					}
+				}
+			}
+		//case "ip":
+		//case "ip6":
+		case "vlan":
+			vlan, err := strconv.Atoi(d[1])
+			if err != nil {
+				return cliResponse{
+					Error: fmt.Sprintf("invalid tap: %v", d[1]),
+				}
+			}
+			for i, j := range l.vms {
+				for _, k := range j.Networks {
+					if k == vlan {
+						v = append(v, l.vms[i])
+						break
+					}
+				}
+			}
+		default:
+			return cliResponse{
+				Error: fmt.Sprintf("invalid search term: %v", d[0]),
+			}
+		}
+	} else { // all vms
+		v = l.vms
+	}
+	if len(v) == 0 {
+		return cliResponse{
+			Error: "no VMs found",
+		}
+	}
+
+	// output mask
+	var omask []string
+	if mask != "" {
+		d := strings.Split(mask, ",")
+		for _, j := range d {
+			switch strings.ToLower(j) {
+			case "id":
+				omask = append(omask, "id")
+			case "memory":
+				omask = append(omask, "memory")
+			case "disk":
+				omask = append(omask, "disk")
+			case "initrd":
+				omask = append(omask, "initrd")
+			case "kernel":
+				omask = append(omask, "kernel")
+			case "cdrom":
+				omask = append(omask, "cdrom")
+			case "state":
+				omask = append(omask, "state")
+			case "tap":
+				omask = append(omask, "tap")
+			case "mac":
+				omask = append(omask, "mac")
+			case "ip":
+				omask = append(omask, "ip")
+			case "ip6":
+				omask = append(omask, "ip6")
+			case "vlan":
+				omask = append(omask, "vlan")
+			default:
+				return cliResponse{
+					Error: fmt.Sprintf("invalid output mask: %v", j),
+				}
+			}
+		}
+	} else { // print everything
+		omask = []string{"id", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+	}
+
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	for i, k := range omask {
+		if i != 0 {
+			fmt.Fprintf(w, "\t| ")
+		}
+		fmt.Fprintf(w, k)
+	}
+	fmt.Fprintf(w, "\n")
+	for _, j := range v {
+		for i, k := range omask {
+			if i != 0 {
+				fmt.Fprintf(w, "\t| ")
+			}
+			switch k {
+			case "id":
+				fmt.Fprintf(w, "%v", j.Id)
+			case "memory":
+				fmt.Fprintf(w, "%v", j.Memory)
+			case "state":
+				switch j.State {
+				case VM_BUILDING:
+					fmt.Fprintf(w, "building")
+				case VM_RUNNING:
+					fmt.Fprintf(w, "running")
+				case VM_PAUSED:
+					fmt.Fprintf(w, "paused")
+				case VM_QUIT:
+					fmt.Fprintf(w, "quit")
+				case VM_ERROR:
+					fmt.Fprintf(w, "error")
+				default:
+					fmt.Fprintf(w, "unknown")
+				}
+			case "disk":
+				fmt.Fprintf(w, "%v", j.DiskPath)
+				if j.Snapshot && j.DiskPath != "" {
+					fmt.Fprintf(w, " [snapshot]")
+				}
+			case "initrd":
+				fmt.Fprintf(w, "%v", j.InitrdPath)
+			case "kernel":
+				fmt.Fprintf(w, "%v", j.KernelPath)
+			case "cdrom":
+				fmt.Fprintf(w, "%v", j.CdromPath)
+			case "tap":
+				fmt.Fprintf(w, "%v", j.taps)
+			case "mac":
+				fmt.Fprintf(w, "%v", j.macs)
+			case "ip":
+				// IP?
+				fmt.Fprintf(w, "unimplemented")
+			case "ip6":
+				// IP6?
+				fmt.Fprintf(w, "unimplemented")
+			case "vlan":
+				fmt.Fprintf(w, "%v", j.Networks)
+			}
+		}
+		fmt.Fprintf(w, "\n")
+	}
+	w.Flush()
+
+	return cliResponse{
+		Response: o.String(),
 	}
 }
 
@@ -457,7 +733,9 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, randomMac()))
+		mac := randomMac()
+		vm.macs = append(vm.macs, mac)
+		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, mac))
 	}
 
 	if len(vm.QemuAppend) > 0 {

@@ -289,6 +289,61 @@ id field.`,
 			},
 		},
 
+		"vm_info": &command{
+			Call: func(c cliCommand) cliResponse {
+				return vms.info(c)
+			},
+			Helpshort: "print information about VMs",
+			Helplong: `
+Usage: vm_info <optional search term> <optional output mask>
+Print information about VMs. vm_info allows searching for VMs based on any VM
+parameter, and output some or all information about the VMs in question.
+Additionally, you can display information about all running VMs. 
+
+A vm_info command takes two optional arguments, a search term, and an output
+mask. If the search term is omitted, information about all VMs will be
+displayed. If the output mask is omitted, all information about the VMs will be
+displayed.
+
+The search term uses a single key=value argument. For example, if you want all
+information about VM 50: 
+	vm_info id=50
+
+The output mask uses an ordered list of fields inside [] brackets. For example,
+if you want the ID and IPs for all VMs on vlan 100: 
+	vm_info vlan=100 [id,ip]
+
+Searchable and maskable fields are:
+	id	: The VM ID, as an integer
+	memory  : Allocated memory, in megabytes
+	disk    : disk image
+	initrd  : initrd image
+	kernel  : kernel image
+	cdrom   : cdrom image
+	state   : one of (building, running, paused, quit, error)
+	tap	: tap name
+	mac	: mac address
+	ip	: IPv4 address
+	ip6	: IPv6 address
+	vlan	: vlan, as an integer
+
+Examples:
+	Display a list of all IPs for all VMs:
+		vm_info [ip, ip6]
+	
+	Display all information about VMs with the disk image foo.qc2:
+		vm_info disk=foo.qc2
+
+	Display all information about all VMs:
+		vm_info
+
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 		"quit": &command{
 			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 0 {
