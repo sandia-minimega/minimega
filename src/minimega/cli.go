@@ -329,7 +329,7 @@ Searchable and maskable fields are:
 
 Examples:
 	Display a list of all IPs for all VMs:
-		vm_info [ip, ip6]
+		vm_info [ip,ip6]
 	
 	Display all information about VMs with the disk image foo.qc2:
 		vm_info disk=foo.qc2
