@@ -193,6 +193,4 @@ func runSub(cmd *Command, args []string) {
 	enc := json.NewEncoder(resdb)
 	enc.Encode(reservations)
 	resdb.Sync()
-
-	// TODO: reboot all the nodes in the reservation (unless -O)
 }

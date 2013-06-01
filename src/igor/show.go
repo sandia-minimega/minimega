@@ -71,7 +71,6 @@ func isAlive(host string) bool {
 
 // Ping every node (concurrently), then show which nodes are up
 // and which nodes are in which reservation
-// TODO: implement real pinging
 func runShow(cmd *Command, args []string) {
 	path := igorConfig.TFTPRoot + "/igor/reservations.json"
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
