@@ -274,21 +274,6 @@ the file in manually.`,
 			},
 		},
 
-		"vm_status": &command{
-			Call: func(c cliCommand) cliResponse {
-				return vms.status(c)
-			},
-			Helpshort: "print the status of each VM",
-			Helplong: `
-Usage: vm_status <optional VM id>
-Print the status for all or one VM, depending on if you supply the optional VM
-id field.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"vm_info": &command{
 			Call: func(c cliCommand) cliResponse {
 				return vms.info(c)
@@ -721,25 +706,23 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			},
 		},
 
-		"vnc": &command{
-			Call:      cliVnc,
-			Helpshort: "invoke a vnc viewer on a VM or start a vnc pool server",
+		"web": &command{
+			Call:      WebCLI,
+			Helpshort: "start the minimega web interface",
 			Helplong: `
-Usage: vnc [serve <host:port>, novnc <novnc path>]
+Usage: web [port, novnc <novnc path>]
 Launch a webserver that allows you to browse the connected minimega hosts and 
 VMs, and connect to any VM in the pool.
 
 This command requires access to an installation of novnc. By default minimega
 looks in 'pwd'/misc/novnc. To set a different path, invoke:
 
-vnc novnc <path to novnc>
+web novnc <path to novnc>
 
-To start the vnc webserver, issue the vnc serve command with a host and port. 
-For example, if you wanted to serve on localhost, port 8080, invoke:
+To start the webserver on a specific port, issue the web command with the port:
+	web 7000
 
-vnc serve :8080
-
-:8080 is the default port.`,
+8080 is the default port.`,
 			Record: true,
 			Clear: func() error {
 				vncNovnc = "misc/novnc"

@@ -45,7 +45,6 @@ const (
 )
 
 // TODO: add vm_pause
-// TODO: remove vm_status
 // TODO: move vm cli into vm.go
 
 // total list of vms running on this host
@@ -102,42 +101,6 @@ func snapshotCLI(c cliCommand) cliResponse {
 	default:
 		return cliResponse{
 			Error: "usage: vm_snapshot [true,false]",
-		}
-	}
-	return cliResponse{}
-}
-
-// return internal and qmp status of one or more vms
-func (l *vmList) status(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		var s string
-		for _, i := range l.vms {
-			s += i.status()
-		}
-		return cliResponse{
-			Response: s,
-		}
-	} else if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "status takes one argument",
-		}
-	} else {
-		id, err := strconv.Atoi(c.Args[0])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		// find that vm, should be in order...
-		if id < len(l.vms) {
-			s := l.vms[id].status()
-			return cliResponse{
-				Response: s,
-			}
-		} else {
-			return cliResponse{
-				Error: "invalid VM id",
-			}
 		}
 	}
 	return cliResponse{}
@@ -484,28 +447,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	return cliResponse{
 		Response: o.String(),
 	}
-}
-
-func (vm *vmInfo) status() string {
-	var s string
-	switch vm.State {
-	case VM_BUILDING:
-		s = "BUILDING"
-	case VM_RUNNING:
-		s = "RUNNING"
-	case VM_PAUSED:
-		s = "PAUSED"
-	case VM_QUIT: // don't call qmp if we're VM_QUIT
-		return fmt.Sprintf("VM %v: QUIT\n", vm.Id)
-	case VM_ERROR:
-		return fmt.Sprintf("VM %v: ERROR\n", vm.Id)
-	}
-	status, err := vm.q.Status()
-	if err != nil {
-		log.Error("could not get qmp status")
-		vm.state(VM_ERROR)
-	}
-	return fmt.Sprintf("VM %v : %v, QMP : %v\n", vm.Id, s, status["status"])
 }
 
 func (vm *vmInfo) start() {
