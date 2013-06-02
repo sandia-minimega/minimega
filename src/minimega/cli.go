@@ -434,6 +434,23 @@ call start without the optional VM id.`,
 			},
 		},
 
+		"vm_stop": &command{
+			Call: func(c cliCommand) cliResponse {
+				return vms.stop(c)
+			},
+			Helpshort: "stop/pause virtual machines",
+			Helplong: `
+Usage: vm_stop <optional VM id>
+Stop all or one running virtual machine. To stop all running virtual machines,
+call stop without the optional VM id.
+
+Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 		"vm_qemu": &command{
 			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) == 0 {

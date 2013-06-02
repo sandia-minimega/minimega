@@ -44,7 +44,6 @@ const (
 	VM_ERROR
 )
 
-// TODO: add vm_pause
 // TODO: move vm cli into vm.go
 
 // total list of vms running on this host
@@ -108,13 +107,17 @@ func snapshotCLI(c cliCommand) cliResponse {
 
 // start vms that are paused or building
 func (l *vmList) start(c cliCommand) cliResponse {
+	errors := ""
 	if len(c.Args) == 0 { // start all paused vms
 		for _, i := range l.vms {
-			i.start()
+			err := i.start()
+			if err != nil {
+				errors += fmt.Sprintln(err)
+			}
 		}
 	} else if len(c.Args) != 1 {
 		return cliResponse{
-			Error: "start takes one argument",
+			Error: "vm_start takes one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
@@ -124,14 +127,86 @@ func (l *vmList) start(c cliCommand) cliResponse {
 			}
 		}
 		if id < len(l.vms) {
-			l.vms[id].start()
+			err := l.vms[id].start()
+			if err != nil {
+				errors += fmt.Sprintln(err)
+			}
 		} else {
 			return cliResponse{
 				Error: "invalid VM id",
 			}
 		}
 	}
-	return cliResponse{}
+	return cliResponse{
+		Error: errors,
+	}
+}
+
+func (vm *vmInfo) start() error {
+	if vm.State != VM_PAUSED && vm.State != VM_BUILDING {
+		return fmt.Errorf("VM %v not runnable", vm.Id)
+	}
+	log.Info("starting VM: %v", vm.Id)
+	err := vm.q.Start()
+	if err != nil {
+		vm.state(VM_ERROR)
+		return err
+	} else {
+		vm.state(VM_RUNNING)
+	}
+	return nil
+}
+
+// stop vms that are paused or building
+func (l *vmList) stop(c cliCommand) cliResponse {
+	errors := ""
+	if len(c.Args) == 0 { // start all paused vms
+		for _, i := range l.vms {
+			err := i.stop()
+			if err != nil {
+				errors += fmt.Sprintln(err)
+			}
+		}
+	} else if len(c.Args) != 1 {
+		return cliResponse{
+			Error: "vm_stop takes one argument",
+		}
+	} else {
+		id, err := strconv.Atoi(c.Args[0])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		if id < len(l.vms) {
+			err := l.vms[id].stop()
+			if err != nil {
+				errors += fmt.Sprintln(err)
+			}
+		} else {
+			return cliResponse{
+				Error: "invalid VM id",
+			}
+		}
+	}
+	return cliResponse{
+		Error: errors,
+	}
+}
+
+func (vm *vmInfo) stop() error {
+	if vm.State != VM_RUNNING {
+		return fmt.Errorf("VM %v not running", vm.Id)
+	}
+	log.Info("stopping VM: %v", vm.Id)
+	err := vm.q.Stop()
+	if err != nil {
+		vm.state(VM_ERROR)
+		return err
+	} else {
+		vm.state(VM_PAUSED)
+	}
+	return nil
 }
 
 // kill one or all vms (-1 for all)
@@ -446,21 +521,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 
 	return cliResponse{
 		Response: o.String(),
-	}
-}
-
-func (vm *vmInfo) start() {
-	if vm.State != VM_PAUSED && vm.State != VM_BUILDING {
-		log.Info("VM %v not runnable", vm.Id)
-		return
-	}
-	log.Info("starting VM: %v", vm.Id)
-	err := vm.q.Start()
-	if err != nil {
-		log.Error("%v", err)
-		vm.state(VM_ERROR)
-	} else {
-		vm.state(VM_RUNNING)
 	}
 }
 
