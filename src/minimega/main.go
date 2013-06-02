@@ -17,11 +17,9 @@
 // TODO: documentation and examples
 // TODO: web frontend
 // TODO: meshage: file transfer
-// TODO: some solution for backchannels
-// TODO: some solution for nagios type functionality
 // TODO: add bridge info
 // TODO: add network visualizer with graphviz
-// TODO: lxc support
+// TODO(dylan): lxc support
 
 package main
 
