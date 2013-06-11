@@ -18,12 +18,13 @@ import (
 )
 
 var externalProcesses = map[string]string{
-	"qemu":    "kvm",
-	"ip":      "ip",
-	"ovs":     "ovs-vsctl",
-	"dnsmasq": "dnsmasq",
-	"kill":    "kill",
-	"dhcp":    "dhclient",
+	"qemu":     "kvm",
+	"ip":       "ip",
+	"ovs":      "ovs-vsctl",
+	"dnsmasq":  "dnsmasq",
+	"kill":     "kill",
+	"dhcp":     "dhclient",
+	"openflow": "ovs-ofctl",
 }
 
 // check for the presence of each of the external processes we may call,

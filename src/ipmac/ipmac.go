@@ -99,6 +99,7 @@ func (iml *IPMacLearner) learner() {
 			continue
 		}
 		mac := C.GoString(pair.mac)
+
 		var ip, ip6 string
 		if pair.ip != nil {
 			ip = C.GoString(pair.ip)

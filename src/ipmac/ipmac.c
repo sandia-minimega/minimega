@@ -61,22 +61,20 @@ struct pair *pcapRead(void *handle) {
 	}
 
 	eptr = (struct ether_header *)packet;
-
-	if (ntohs(eptr->ether_type) != ETHERTYPE_VLAN) {
-		return NULL;
+	p->mac = ether_mac((const struct ether_addr *)&eptr->ether_shost);
+	if (ntohs(eptr->ether_type) == ETHERTYPE_VLAN) {
+		eptr = (struct ether_header *)(packet+4);
+		packet += 4;
 	}
 
-	p->mac = ether_mac((const struct ether_addr *)&eptr->ether_shost);
-	eptr = (struct ether_header *)(packet+4);
-
 	if (ntohs(eptr->ether_type) == ETHERTYPE_ARP) {
-		struct ether_arp *aptr = (struct ether_arp *)(packet + sizeof(struct ether_header) + 4);
+		struct ether_arp *aptr = (struct ether_arp *)(packet + sizeof(struct ether_header));
 		inet_ntop(AF_INET, (const void *)&aptr->arp_spa, ip, INET_ADDRSTRLEN);
 		p->ip = ip;
 		p->ip6 = NULL;
 		return p;
 	} else if (ntohs(eptr->ether_type) == ETHERTYPE_IPV6) {
-		struct nd_neighbor_solicit *icmp6ptr = (struct nd_neighbor_solicit *)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr) + 4);
+		struct nd_neighbor_solicit *icmp6ptr = (struct nd_neighbor_solicit *)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
 		inet_ntop(AF_INET6, (const void *)&icmp6ptr->nd_ns_target, ip6, INET6_ADDRSTRLEN);
 		p->ip = NULL;
 		p->ip6 = ip6;

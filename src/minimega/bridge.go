@@ -73,12 +73,9 @@ func (b *bridge) LanCreate(lan int) (error, bool) {
 		return err, false
 	}
 	// start the ipmaclearner if need be
-	if b.iml == nil {
-		iml, err := ipmac.NewLearner(b.Name)
-		if err != nil {
-			return fmt.Errorf("cannot start ip learner on bridge: %v", err), false
-		}
-		b.iml = iml
+	err = b.startIML()
+	if err != nil {
+		return err, false
 	}
 	if b.lans[lan] != nil {
 		return errors.New("lan already exists"), true
@@ -88,6 +85,64 @@ func (b *bridge) LanCreate(lan int) (error, bool) {
 		Taps: make(map[string]*tap),
 	}
 	return nil, true
+}
+
+func (b *bridge) startIML() error {
+	if b.iml != nil {
+		return nil
+	}
+
+	// use openflow to redirect arp and icmp6 traffic to the local tap
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("openflow")
+
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"add-flow",
+			b.Name,
+			"dl_type=0x0806,actions=local,normal",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("adding arp flow with cmd: %v", cmd)
+	err := cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return e
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"add-flow",
+			b.Name,
+			"dl_type=0x86dd,nw_proto=58,icmp_type=135,actions=local,normal",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("adding icmp6 ND flow with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return e
+	}
+
+	iml, err := ipmac.NewLearner(b.Name)
+	if err != nil {
+		return fmt.Errorf("cannot start ip learner on bridge: %v", err)
+	}
+	b.iml = iml
+	return nil
 }
 
 // create the bridge with ovs
@@ -471,6 +526,12 @@ func hostTapCreate(c cliCommand) cliResponse {
 		e := fmt.Sprintf("%v: %v", err, sErr.String())
 		return cliResponse{
 			Error: e,
+		}
+	}
+
+	if strings.ToLower(c.Args[1]) == "none" {
+		return cliResponse{
+			Response: tapName,
 		}
 	}
 
