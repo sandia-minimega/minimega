@@ -272,13 +272,19 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	case 2: // first term MUST be search
-		if search == "" {
+		if strings.Contains(c.Args[0], "=") {
+			search = c.Args[0]
+		} else {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
 		if strings.HasPrefix(c.Args[1], "[") {
 			mask = strings.Trim(c.Args[1], "[]")
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
 		}
 	default:
 		return cliResponse{
@@ -506,11 +512,23 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			case "mac":
 				fmt.Fprintf(w, "%v", j.macs)
 			case "ip":
-				// IP?
-				fmt.Fprintf(w, "unimplemented")
+				var ips []string
+				for _, m := range j.macs {
+					ip := currentBridge.iml.GetMac(m)
+					if ip != nil {
+						ips = append(ips, ip.IP4)
+					}
+				}
+				fmt.Fprintf(w, "%v", ips)
 			case "ip6":
-				// IP6?
-				fmt.Fprintf(w, "unimplemented")
+				var ips []string
+				for _, m := range j.macs {
+					ip := currentBridge.iml.GetMac(m)
+					if ip != nil {
+						ips = append(ips, ip.IP6)
+					}
+				}
+				fmt.Fprintf(w, "%v", ips)
 			case "vlan":
 				fmt.Fprintf(w, "%v", j.Networks)
 			}
@@ -537,13 +555,19 @@ func (vm *vmInfo) launchOne() {
 	// assert our state as building
 	vm.state(VM_BUILDING)
 
+	var args []string
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	var cmd *exec.Cmd
+	var waitChan chan bool
+
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
 		tap, err := currentBridge.TapCreate(lan)
 		if err != nil {
 			log.Errorln(err)
 			vm.state(VM_ERROR)
-			return
+			goto LAUNCH_ONE_OUT
 		}
 		vm.taps = append(vm.taps, tap)
 	}
@@ -553,14 +577,12 @@ func (vm *vmInfo) launchOne() {
 		if err != nil {
 			log.Errorln(err)
 			vm.state(VM_ERROR)
-			return
+			goto LAUNCH_ONE_OUT
 		}
 	}
 
-	args := vm.vmGetArgs()
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	cmd := &exec.Cmd{
+	args = vm.vmGetArgs()
+	cmd = &exec.Cmd{
 		Path:   process("qemu"),
 		Args:   args,
 		Env:    nil,
@@ -573,9 +595,9 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Error("%v %v", err, sErr.String())
 		vm.state(VM_ERROR)
-		return
+		goto LAUNCH_ONE_OUT
 	}
-	waitChan := make(chan bool)
+	waitChan = make(chan bool)
 	go func() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
@@ -595,11 +617,12 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
 		vm.state(VM_ERROR)
-		return
+		goto LAUNCH_ONE_OUT
 	}
 
 	go vm.asyncLogger()
 
+LAUNCH_ONE_OUT:
 	launchAck <- vm.Id
 
 	select {
@@ -608,10 +631,9 @@ func (vm *vmInfo) launchOne() {
 	case <-vm.Kill:
 		fmt.Printf("Killing VM %v\n", vm.Id)
 		cmd.Process.Kill()
+		time.Sleep(launchRate)
+		killAck <- vm.Id
 	}
-	time.Sleep(launchRate)
-
-	killAck <- vm.Id
 }
 
 // update the vm state, and write the state to file
@@ -736,6 +758,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-device")
 		mac := randomMac()
 		vm.macs = append(vm.macs, mac)
+		currentBridge.iml.AddMac(mac)
 		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, mac))
 	}
 

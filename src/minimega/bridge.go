@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"ipmac"
 	log "minilog"
 	"os/exec"
 	"strconv"
@@ -28,6 +29,7 @@ type bridge struct {
 	lans     map[int]*vlan
 	exists   bool // false until the first usage, then true until destroyed.
 	preExist bool
+	iml      *ipmac.IPMacLearner
 }
 
 type vlan struct {
@@ -66,14 +68,17 @@ func init() {
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
 func (b *bridge) LanCreate(lan int) (error, bool) {
-	if !b.exists {
-		log.Debugln("bridge does not exist")
-		err := b.create()
+	err := b.create()
+	if err != nil {
+		return err, false
+	}
+	// start the ipmaclearner if need be
+	if b.iml == nil {
+		iml, err := ipmac.NewLearner(b.Name)
 		if err != nil {
-			return err, false
+			return fmt.Errorf("cannot start ip learner on bridge: %v", err), false
 		}
-		b.exists = true
-		b.lans = make(map[int]*vlan)
+		b.iml = iml
 	}
 	if b.lans[lan] != nil {
 		return errors.New("lan already exists"), true
@@ -89,51 +94,57 @@ func (b *bridge) LanCreate(lan int) (error, bool) {
 func (b *bridge) create() error {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-br",
-			b.Name,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("creating bridge with cmd: %v", cmd)
-	err := cmd.Run()
-	if err != nil {
-		es := sErr.String()
-		if strings.Contains(es, "already exists") {
-			b.preExist = true
-			return nil
-		}
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
-	}
 
-	p = process("ip")
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			b.Name,
-			"up",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing bridge up with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+	if !b.exists {
+		log.Debugln("bridge does not exist")
+		p := process("ovs")
+		cmd := &exec.Cmd{
+			Path: p,
+			Args: []string{
+				p,
+				"add-br",
+				b.Name,
+			},
+			Env:    nil,
+			Dir:    "",
+			Stdout: &sOut,
+			Stderr: &sErr,
+		}
+		log.Debug("creating bridge with cmd: %v", cmd)
+		err := cmd.Run()
+		if err != nil {
+			es := sErr.String()
+			if strings.Contains(es, "already exists") {
+				b.preExist = true
+			} else {
+				e := fmt.Errorf("%v: %v", err, sErr.String())
+				return e
+			}
+		}
+		b.exists = true
+		b.lans = make(map[int]*vlan)
+
+		p = process("ip")
+		cmd = &exec.Cmd{
+			Path: p,
+			Args: []string{
+				p,
+				"link",
+				"set",
+				b.Name,
+				"up",
+			},
+			Env:    nil,
+			Dir:    "",
+			Stdout: &sOut,
+			Stderr: &sErr,
+		}
+		log.Debug("bringing bridge up with cmd: %v", cmd)
+		err = cmd.Run()
+		if err != nil {
+			e := fmt.Errorf("%v: %v", err, sErr.String())
+			return e
+		}
 	}
 
 	return nil
