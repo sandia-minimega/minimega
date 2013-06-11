@@ -12,8 +12,8 @@ import "C"
 
 import (
 	"fmt"
-	"unsafe"
 	log "minilog"
+	"unsafe"
 )
 
 type IPMacLearner struct {
