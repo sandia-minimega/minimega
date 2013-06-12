@@ -126,7 +126,7 @@ func (l *vmList) start(c cliCommand) cliResponse {
 				Error: err.Error(),
 			}
 		}
-		if id < len(l.vms) {
+		if id < len(l.vms) && id >= 0 {
 			err := l.vms[id].start()
 			if err != nil {
 				errors += fmt.Sprintln(err)
@@ -144,7 +144,7 @@ func (l *vmList) start(c cliCommand) cliResponse {
 
 func (vm *vmInfo) start() error {
 	if vm.State != VM_PAUSED && vm.State != VM_BUILDING {
-		return fmt.Errorf("VM %v not runnable", vm.Id)
+		return nil
 	}
 	log.Info("starting VM: %v", vm.Id)
 	err := vm.q.Start()
@@ -178,7 +178,7 @@ func (l *vmList) stop(c cliCommand) cliResponse {
 				Error: err.Error(),
 			}
 		}
-		if id < len(l.vms) {
+		if id < len(l.vms) && id >= 0 {
 			err := l.vms[id].stop()
 			if err != nil {
 				errors += fmt.Sprintln(err)

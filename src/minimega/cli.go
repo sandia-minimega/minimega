@@ -698,9 +698,6 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 								Error: err.Error(),
 							}
 						}
-						if err == nil {
-							r.Response = fmt.Sprintln("creating new lan:", val)
-						}
 						info.Networks = append(info.Networks, val)
 					}
 				}
