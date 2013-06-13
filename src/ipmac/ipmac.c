@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <pcap.h>
 #include <net/ethernet.h> /* ether_header */
 #include <netinet/if_ether.h> /* for ether_arp */
@@ -74,7 +75,15 @@ struct pair *pcapRead(void *handle) {
 		p->ip6 = NULL;
 		return p;
 	} else if (ntohs(eptr->ether_type) == ETHERTYPE_IPV6) {
+		struct ip6_hdr *ip6ptr = (struct ip6_hdr *)(packet + sizeof(struct ether_header));
 		struct nd_neighbor_solicit *icmp6ptr = (struct nd_neighbor_solicit *)(packet + sizeof(struct ether_header) + sizeof(struct ip6_hdr));
+
+		// ip6 header must have a source address that is blank for the ns_target to be a valid DAD packet
+		inet_ntop(AF_INET6, (const void *)&ip6ptr->ip6_src, ip6, INET6_ADDRSTRLEN);
+		if (strcmp(ip6,"::") != 0) {
+			return NULL;
+		}
+
 		inet_ntop(AF_INET6, (const void *)&icmp6ptr->nd_ns_target, ip6, INET6_ADDRSTRLEN);
 		p->ip = NULL;
 		p->ip6 = ip6;
