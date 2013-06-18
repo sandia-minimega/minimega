@@ -705,7 +705,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 	args = append(args, "clock=vm,base=utc")
 
 	args = append(args, "-chardev")
-	args = append(args, "file,id=charserial0,path="+vm.instancePath+"serial")
+	args = append(args, "socket,id=charserial0,path="+vm.instancePath+"serial,server,nowait")
 
 	args = append(args, "-pidfile")
 	args = append(args, vm.instancePath+"qemu.pid")

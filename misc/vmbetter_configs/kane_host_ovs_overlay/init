@@ -26,4 +26,12 @@ mkdir /var/run/sshd
 
 modprobe kvm-intel
 
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv4/neigh/default/gc_thresh3
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv6/neigh/default/gc_thresh3
+
+
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
