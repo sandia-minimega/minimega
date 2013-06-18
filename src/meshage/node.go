@@ -347,8 +347,22 @@ func (n *Node) MSA() {
 	sort.Strings(clients)
 
 	n.meshLock.Lock()
-	n.network[n.name] = clients
-	n.generateEffectiveNetwork()
+	diff := false
+	if len(n.network[n.name]) != len(clients) {
+		diff = true
+	} else {
+		for i, v := range n.network[n.name] {
+			if clients[i] != v {
+				diff = true
+				break
+			}
+		}
+	}
+	if diff {
+		log.Debugln("client list changed, recalculating topology")
+		n.network[n.name] = clients
+		n.generateEffectiveNetwork()
+	}
 	n.meshLock.Unlock()
 
 	log.Debug("client list: %v", clients)
@@ -384,6 +398,7 @@ func (n *Node) handleMSA(m *Message) {
 			}
 		}
 		if !diff {
+			log.Debugln("MSA discarded, client data hasn't changed")
 			return
 		}
 	}

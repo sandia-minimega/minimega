@@ -13,6 +13,7 @@ import "C"
 import (
 	"fmt"
 	log "minilog"
+	"sync"
 	"unsafe"
 )
 
@@ -20,6 +21,7 @@ type IPMacLearner struct {
 	handle unsafe.Pointer
 	pairs  map[string]*IP
 	closed bool
+	lock   sync.Mutex
 }
 
 type IP struct {
@@ -49,22 +51,30 @@ func (iml *IPMacLearner) GetMac(mac string) *IP {
 }
 
 func (iml *IPMacLearner) AddMac(mac string) {
+	iml.lock.Lock()
+	defer iml.lock.Unlock()
 	log.Debugln("adding mac to filter:", mac)
 	iml.pairs[mac] = &IP{}
 	iml.updateFilter()
 }
 
 func (iml *IPMacLearner) DelMac(mac string) {
+	iml.lock.Lock()
+	defer iml.lock.Unlock()
 	delete(iml.pairs, mac)
 	iml.updateFilter()
 }
 
 func (iml *IPMacLearner) Flush() {
+	iml.lock.Lock()
+	defer iml.lock.Unlock()
 	iml.pairs = make(map[string]*IP)
 	iml.updateFilter()
 }
 
 func (iml *IPMacLearner) Close() {
+	iml.lock.Lock()
+	defer iml.lock.Unlock()
 	iml.closed = true
 	C.pcapClose(iml.handle)
 }
@@ -110,7 +120,10 @@ func (iml *IPMacLearner) learner() {
 
 		log.Debug("got mac/ip pair:", mac, ip, ip6)
 
+		iml.lock.Lock()
+
 		if _, ok := iml.pairs[mac]; !ok {
+			iml.lock.Unlock()
 			continue
 		}
 
@@ -119,5 +132,7 @@ func (iml *IPMacLearner) learner() {
 		} else if ip6 != "" {
 			iml.pairs[mac].IP6 = ip6
 		}
+
+		iml.lock.Unlock()
 	}
 }
