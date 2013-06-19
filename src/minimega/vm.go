@@ -53,6 +53,7 @@ type vmList struct {
 
 type vmInfo struct {
 	Id           int
+	Name         string
 	Memory       string // memory for the vm, in megabytes
 	Vcpus        string // number of virtual cpus
 	DiskPath     string
@@ -117,23 +118,26 @@ func (l *vmList) start(c cliCommand) cliResponse {
 		}
 	} else if len(c.Args) != 1 {
 		return cliResponse{
-			Error: "vm_start takes one argument",
+			Error: "vm_start takes zero or one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
+			id = l.findByName(c.Args[0])
 		}
-		if id < len(l.vms) && id >= 0 {
+
+		if id == -2 {
+			return cliResponse{
+				Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+			}
+		} else if id < len(l.vms) && id >= 0 {
 			err := l.vms[id].start()
 			if err != nil {
 				errors += fmt.Sprintln(err)
 			}
 		} else {
 			return cliResponse{
-				Error: "invalid VM id",
+				Error: fmt.Sprintf("invalid VM id: %v", id),
 			}
 		}
 	}
@@ -169,16 +173,19 @@ func (l *vmList) stop(c cliCommand) cliResponse {
 		}
 	} else if len(c.Args) != 1 {
 		return cliResponse{
-			Error: "vm_stop takes one argument",
+			Error: "vm_stop takes zero or one argument",
 		}
 	} else {
 		id, err := strconv.Atoi(c.Args[0])
 		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
+			id = l.findByName(c.Args[0])
 		}
-		if id < len(l.vms) && id >= 0 {
+
+		if id == -2 {
+			return cliResponse{
+				Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+			}
+		} else if id < len(l.vms) && id >= 0 {
 			err := l.vms[id].stop()
 			if err != nil {
 				errors += fmt.Sprintln(err)
@@ -209,9 +216,36 @@ func (vm *vmInfo) stop() error {
 	return nil
 }
 
+// findByName returns the id of a VM based on its name. If the VM doesn't exist
+// return -2, as -1 is reserved as the wildcard.
+func (l *vmList) findByName(name string) int {
+	for i, v := range l.vms {
+		if v.Name == name {
+			return i
+		}
+	}
+	return -2
+}
+
 // kill one or all vms (-1 for all)
-func (l *vmList) kill(id int) {
-	if id == -1 {
+func (l *vmList) kill(c cliCommand) cliResponse {
+	if len(c.Args) != 1 {
+		return cliResponse{
+			Error: "vm_kill takes one argument",
+		}
+	}
+	// if the argument is a number, then kill that vm (or all vms on -1)
+	// if it's a string, kill the one with that name
+	id, err := strconv.Atoi(c.Args[0])
+	if err != nil {
+		id = l.findByName(c.Args[0])
+	}
+
+	if id == -2 {
+		return cliResponse{
+			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+		}
+	} else if id == -1 {
 		for _, i := range l.vms {
 			if i.State != VM_QUIT && i.State != VM_ERROR {
 				i.Kill <- true
@@ -220,9 +254,13 @@ func (l *vmList) kill(id int) {
 		}
 	} else {
 		if len(l.vms) < id {
-			log.Error("invalid VM id")
+			return cliResponse{
+				Error: fmt.Sprintf("invalid VM id: %v", id),
+			}
 		} else if l.vms[id] == nil {
-			log.Error("invalid VM id")
+			return cliResponse{
+				Error: fmt.Sprintf("invalid VM id: %v", id),
+			}
 		} else {
 			if l.vms[id].State != VM_QUIT && l.vms[id].State != VM_ERROR {
 				l.vms[id].Kill <- true
@@ -230,20 +268,36 @@ func (l *vmList) kill(id int) {
 			}
 		}
 	}
+	return cliResponse{}
 }
 
 // launch one or more vms. this will copy the info struct, one per vm
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
-func (l *vmList) launch(numVms int) {
+func (l *vmList) launch(c cliCommand) cliResponse {
+	if len(c.Args) != 1 {
+		return cliResponse{
+			Error: "vm_launch takes one argument",
+		}
+	}
+	// if the argument is a number, then launch that many VMs
+	// if it's a string, launch one with that name
+	var name string
+	numVms, err := strconv.Atoi(c.Args[0])
+	if err != nil {
+		numVms = 1
+		name = c.Args[0]
+	}
+
 	// we have some configuration from the cli (right?), all we need
 	// to do here is fire off the vms in goroutines, passing the
 	// configuration in by value, as it may change for the next run.
-	log.Info("launching %v vms", numVms)
+	log.Info("launching %v vms, name %v", numVms, name)
 	start := len(l.vms)
 	for i := start; i < numVms+start; i++ {
 		vm := info
 		vm.Id = i
+		vm.Name = name
 		vm.Kill = make(chan bool)
 		l.vms = append(l.vms, &vm)
 		go vm.launchOne()
@@ -252,6 +306,7 @@ func (l *vmList) launch(numVms int) {
 	for i := 0; i < numVms; i++ {
 		fmt.Printf("VM: %v launched\n", <-launchAck)
 	}
+	return cliResponse{}
 }
 
 func (l *vmList) info(c cliCommand) cliResponse {
@@ -309,6 +364,19 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			if err != nil {
 				return cliResponse{
 					Error: fmt.Sprintf("invalid ID: %v", d[1]),
+				}
+			}
+			for i, j := range l.vms {
+				if j.Id == id {
+					v = append(v, l.vms[i])
+					break // there can only be one vm with this id
+				}
+			}
+		case "name":
+			id := l.findByName(d[1])
+			if id == -2 {
+				return cliResponse{
+					Error: fmt.Sprintf("cannot find VM %v", d[1]),
 				}
 			}
 			for i, j := range l.vms {
@@ -428,6 +496,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			switch strings.ToLower(j) {
 			case "id":
 				omask = append(omask, "id")
+			case "name":
+				omask = append(omask, "name")
 			case "memory":
 				omask = append(omask, "memory")
 			case "disk":
@@ -457,7 +527,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
@@ -479,6 +549,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			switch k {
 			case "id":
 				fmt.Fprintf(w, "%v", j.Id)
+			case "name":
+				fmt.Fprintf(w, "%v", j.Name)
 			case "memory":
 				fmt.Fprintf(w, "%v", j.Memory)
 			case "state":

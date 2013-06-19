@@ -367,19 +367,7 @@ Examples:
 
 		"vm_launch": &command{
 			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "vm_launch takes one argument",
-					}
-				}
-				a, err := strconv.Atoi(c.Args[0])
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				vms.launch(a)
-				return cliResponse{}
+				return vms.launch(c)
 			},
 			Helpshort: "launch virtual machines in a paused state",
 			Helplong: `
@@ -395,19 +383,7 @@ after launching will have no effect on launched VMs.`,
 
 		"vm_kill": &command{
 			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "vm_kill takes one argument",
-					}
-				}
-				a, err := strconv.Atoi(c.Args[0])
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				vms.kill(a)
-				return cliResponse{}
+				return vms.kill(c)
 			},
 			Helpshort: "kill running virtual machines",
 			Helplong: `
@@ -957,8 +933,8 @@ response.`,
 			Helpshort: "send a command to one or more connected clients",
 			Helplong: `
 Send a command to one or more connected clients.
-For example, to get the vm_status from nodes kn1 and kn2:
-	mesh_set kn[1-2] vm_status`,
+For example, to get the vm_info from nodes kn1 and kn2:
+	mesh_set kn[1-2] vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -970,8 +946,8 @@ For example, to get the vm_status from nodes kn1 and kn2:
 			Helpshort: "send a command to all connected clients",
 			Helplong: `
 Send a command to all connected clients.
-For example, to get the vm_status from all nodes:
-	mesh_broadcast vm_status`,
+For example, to get the vm_info from all nodes:
+	mesh_broadcast vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
