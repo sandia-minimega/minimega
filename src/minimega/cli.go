@@ -300,6 +300,7 @@ if you want the ID and IPs for all VMs on vlan 100:
 
 Searchable and maskable fields are:
 	id	: The VM ID, as an integer
+	name	: The VM name, if it exists
 	memory  : Allocated memory, in megabytes
 	disk    : disk image
 	initrd  : initrd image
@@ -371,10 +372,12 @@ Examples:
 			},
 			Helpshort: "launch virtual machines in a paused state",
 			Helplong: `
-Usage: vm_launch <number of vms>
-Launch <number of vms> virtual machines in a paused state, using the parameters
+Usage: vm_launch <number of vms or vm name>
+Launch <number of vms or vm name> virtual machines in a paused state, using the parameters
 defined leading up to the launch command. Any changes to the VM parameters 
-after launching will have no effect on launched VMs.`,
+after launching will have no effect on launched VMs.
+
+If you supply a name instead of a number of VMs, one VM with that name will be launched.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -387,8 +390,8 @@ after launching will have no effect on launched VMs.`,
 			},
 			Helpshort: "kill running virtual machines",
 			Helplong: `
-Usage: vm_kill <vm id>
-Kill a virtual machine by ID. Pass -1 to kill all virtual machines.`,
+Usage: vm_kill <vm id or name>
+Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -401,9 +404,9 @@ Kill a virtual machine by ID. Pass -1 to kill all virtual machines.`,
 			},
 			Helpshort: "start paused virtual machines",
 			Helplong: `
-Usage: vm_start <optional VM id>
+Usage: vm_start <optional VM id or name>
 Start all or one paused virtual machine. To start all paused virtual machines,
-call start without the optional VM id.`,
+call start without the optional VM ID or name.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -416,11 +419,11 @@ call start without the optional VM id.`,
 			},
 			Helpshort: "stop/pause virtual machines",
 			Helplong: `
-Usage: vm_stop <optional VM id>
+Usage: vm_stop <optional VM id or name>
 Stop all or one running virtual machine. To stop all running virtual machines,
-call stop without the optional VM id.
+call stop without the optional VM ID or name.
 
-Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
+Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -428,20 +431,7 @@ Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
 		},
 
 		"vm_qemu": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: process("qemu"),
-					}
-				} else if len(c.Args) == 1 {
-					externalProcesses["qemu"] = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_qemu takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMQemu,
 			Helpshort: "set the qemu process to invoke",
 			Helplong:  "Set the qemu process to invoke. Relative paths are ok.",
 			Record:    true,
@@ -452,20 +442,7 @@ Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
 		},
 
 		"vm_memory": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.Memory,
-					}
-				} else if len(c.Args) == 1 {
-					info.Memory = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_memory takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMMemory,
 			Helpshort: "set the amount of physical memory for a VM",
 			Helplong:  "Set the amount of physical memory to allocate in megabytes.",
 			Record:    true,
@@ -476,20 +453,7 @@ Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
 		},
 
 		"vm_vcpus": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.Vcpus,
-					}
-				} else if len(c.Args) == 1 {
-					info.Vcpus = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_vcpus takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMVCPUs,
 			Helpshort: "set the number of virtual CPUs for a VM",
 			Helplong:  "Set the number of virtual CPUs to allocate a VM.",
 			Record:    true,
@@ -500,20 +464,7 @@ Calling stop will put VMs in a paused state. Start stopped Vms with vm_start`,
 		},
 
 		"vm_disk": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.DiskPath,
-					}
-				} else if len(c.Args) == 1 {
-					info.DiskPath = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_disk takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMDisk,
 			Helpshort: "set a disk image to attach to a VM",
 			Helplong: `
 Attach a disk to a VM. Any disk image supported by QEMU is a valid parameter.
@@ -526,20 +477,7 @@ Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 		},
 
 		"vm_cdrom": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.CdromPath,
-					}
-				} else if len(c.Args) == 1 {
-					info.CdromPath = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_cdrom takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMCdrom,
 			Helpshort: "set a cdrom image to attach to a VM",
 			Helplong: `
 Attach a cdrom to a VM. When using a cdrom, it will automatically be set
@@ -552,20 +490,7 @@ to be the boot device.`,
 		},
 
 		"vm_kernel": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.KernelPath,
-					}
-				} else if len(c.Args) == 1 {
-					info.KernelPath = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_kernel takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMKernel,
 			Helpshort: "set a kernel image to attach to a VM",
 			Helplong: `
 Attach a kernel image to a VM. If set, QEMU will boot from this image instead
@@ -578,20 +503,7 @@ of any disk image.`,
 		},
 
 		"vm_initrd": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.InitrdPath,
-					}
-				} else if len(c.Args) == 1 {
-					info.InitrdPath = c.Args[0]
-				} else {
-					return cliResponse{
-						Error: "vm_initrd takes only one argument",
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMInitrd,
 			Helpshort: "set a initrd image to attach to a VM",
 			Helplong: `
 Attach an initrd image to a VM. Passed along with the kernel image at boot time.`,
@@ -603,16 +515,7 @@ Attach an initrd image to a VM. Passed along with the kernel image at boot time.
 		},
 
 		"vm_qemu_append": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: strings.Join(info.QemuAppend, " "),
-					}
-				} else {
-					info.QemuAppend = c.Args
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMQemuAppend,
 			Helpshort: "add additional arguments for the QEMU command",
 			Helplong: `
 Add additional arguments to be passed to the QEMU instance. For example,
@@ -626,16 +529,7 @@ Add additional arguments to be passed to the QEMU instance. For example,
 		},
 
 		"vm_append": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: info.Append,
-					}
-				} else {
-					info.Append = strings.Join(c.Args, " ")
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMAppend,
 			Helpshort: "set an append string to pass to a kernel set with vm_kernel",
 			Helplong: `
 Add an append string to a kernel set with vm_kernel. Setting vm_append without
@@ -653,32 +547,7 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 		},
 
 		"vm_net": &command{
-			Call: func(c cliCommand) cliResponse {
-				r := cliResponse{}
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: fmt.Sprintf("%v\n", info.Networks),
-					}
-				} else {
-					info.Networks = []int{}
-					for _, lan := range c.Args {
-						val, err := strconv.Atoi(lan)
-						if err != nil {
-							return cliResponse{
-								Error: err.Error(),
-							}
-						}
-						err, ok := currentBridge.LanCreate(val)
-						if !ok {
-							return cliResponse{
-								Error: err.Error(),
-							}
-						}
-						info.Networks = append(info.Networks, val)
-					}
-				}
-				return r
-			},
+			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",
 			Helplong: `
 Usage: vm_net <name> <optional addtional names>
@@ -1054,7 +923,7 @@ free memory, and current bandwidth usage",
 		},
 
 		"vm_snapshot": &command{
-			Call:      snapshotCLI,
+			Call:      cliVMSnapshot,
 			Helpshort: "enable or disable snapshot mode when using disk images",
 			Helplong: `
 Enable or disable snapshot mode when using disk images. When enabled, disks

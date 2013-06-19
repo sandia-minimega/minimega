@@ -44,8 +44,6 @@ const (
 	VM_ERROR
 )
 
-// TODO: move vm cli into vm.go
-
 // total list of vms running on this host
 type vmList struct {
 	vms []*vmInfo
@@ -87,7 +85,7 @@ func init() {
 	info.Snapshot = true
 }
 
-func snapshotCLI(c cliCommand) cliResponse {
+func cliVMSnapshot(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		return cliResponse{
 			Response: fmt.Sprintf("%v", info.Snapshot),
@@ -848,4 +846,158 @@ func (vm *vmInfo) asyncLogger() {
 		v := vm.q.Message()
 		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
 	}
+}
+
+func cliVMQemu(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: process("qemu"),
+		}
+	} else if len(c.Args) == 1 {
+		externalProcesses["qemu"] = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_qemu takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMMemory(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.Memory,
+		}
+	} else if len(c.Args) == 1 {
+		info.Memory = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_memory takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMVCPUs(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.Vcpus,
+		}
+	} else if len(c.Args) == 1 {
+		info.Vcpus = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_vcpus takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMDisk(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.DiskPath,
+		}
+	} else if len(c.Args) == 1 {
+		info.DiskPath = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_disk takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMCdrom(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.CdromPath,
+		}
+	} else if len(c.Args) == 1 {
+		info.CdromPath = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_cdrom takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMKernel(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.KernelPath,
+		}
+	} else if len(c.Args) == 1 {
+		info.KernelPath = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_kernel takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMInitrd(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.InitrdPath,
+		}
+	} else if len(c.Args) == 1 {
+		info.InitrdPath = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_initrd takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMQemuAppend(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: strings.Join(info.QemuAppend, " "),
+		}
+	} else {
+		info.QemuAppend = c.Args
+	}
+	return cliResponse{}
+}
+
+func cliVMAppend(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.Append,
+		}
+	} else {
+		info.Append = strings.Join(c.Args, " ")
+	}
+	return cliResponse{}
+}
+
+func cliVMNet(c cliCommand) cliResponse {
+	r := cliResponse{}
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: fmt.Sprintf("%v\n", info.Networks),
+		}
+	} else {
+		info.Networks = []int{}
+		for _, lan := range c.Args {
+			val, err := strconv.Atoi(lan)
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			err, ok := currentBridge.LanCreate(val)
+			if !ok {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			info.Networks = append(info.Networks, val)
+		}
+	}
+	return r
 }
