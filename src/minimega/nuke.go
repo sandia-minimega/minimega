@@ -36,30 +36,25 @@ func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we ca
 	// kill qemu pids, remove taps, and remove the bridge
 	err := filepath.Walk(*f_base, nukeWalker)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		log.Errorln(err)
 	}
 
 	// clean up the base path
 	log.Info("cleaning up base path: %v", *f_base)
 	err = os.RemoveAll(*f_base)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		log.Errorln(err)
 	}
 
 	// remove all mega_taps, but leave the mega_bridge
 	dirs, err := ioutil.ReadDir("/sys/class/net")
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-	for _, n := range dirs {
-		if strings.Contains(n.Name(), "mega_tap") {
-			nukeTap(n.Name())
+		log.Errorln(err)
+	} else {
+		for _, n := range dirs {
+			if strings.Contains(n.Name(), "mega_tap") {
+				nukeTap(n.Name())
+			}
 		}
 	}
 
