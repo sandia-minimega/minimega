@@ -480,8 +480,30 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					}
 				}
 			}
-			// TODO: case "ip":
-			// TODO: case "ip6":
+		case "ip":
+			for i, j := range l.vms {
+				for _, m := range j.macs {
+					ip := currentBridge.iml.GetMac(m)
+					if ip != nil {
+						if ip.IP4 == d[1] {
+							v = append(v, l.vms[i])
+							break
+						}
+					}
+				}
+			}
+		case "ip6":
+			for i, j := range l.vms {
+				for _, m := range j.macs {
+					ip := currentBridge.iml.GetMac(m)
+					if ip != nil {
+						if ip.IP6 == d[1] {
+							v = append(v, l.vms[i])
+							break
+						}
+					}
+				}
+			}
 		case "vlan":
 			vlan, err := strconv.Atoi(d[1])
 			if err != nil {
