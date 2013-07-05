@@ -669,14 +669,13 @@ func (vm *vmInfo) launchOne() {
 		teardown()
 	}
 
-	// assert our state as building
 	vm.state(VM_BUILDING)
 
 	var args []string
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	var cmd *exec.Cmd
-	var waitChan chan bool
+	var waitChan = make(chan int)
 
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
@@ -684,7 +683,8 @@ func (vm *vmInfo) launchOne() {
 		if err != nil {
 			log.Errorln(err)
 			vm.state(VM_ERROR)
-			goto LAUNCH_ONE_OUT
+			launchAck <- vm.Id
+			return
 		}
 		vm.taps = append(vm.taps, tap)
 	}
@@ -694,7 +694,8 @@ func (vm *vmInfo) launchOne() {
 		if err != nil {
 			log.Errorln(err)
 			vm.state(VM_ERROR)
-			goto LAUNCH_ONE_OUT
+			launchAck <- vm.Id
+			return
 		}
 	}
 
@@ -712,9 +713,9 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Error("%v %v", err, sErr.String())
 		vm.state(VM_ERROR)
-		goto LAUNCH_ONE_OUT
+		launchAck <- vm.Id
+		return
 	}
-	waitChan = make(chan bool)
 	go func() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
@@ -724,8 +725,10 @@ func (vm *vmInfo) launchOne() {
 				vm.state(VM_ERROR)
 			}
 		}
-		waitChan <- true
+		waitChan <- vm.Id
 	}()
+
+	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
 
 	time.Sleep(launchRate)
 
@@ -734,12 +737,13 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
 		vm.state(VM_ERROR)
-		goto LAUNCH_ONE_OUT
+		cmd.Process.Kill()
+		<-waitChan
+		launchAck <- vm.Id
 	}
 
 	go vm.asyncLogger()
 
-LAUNCH_ONE_OUT:
 	launchAck <- vm.Id
 
 	select {
@@ -747,10 +751,8 @@ LAUNCH_ONE_OUT:
 		log.Info("VM %v exited", vm.Id)
 	case <-vm.Kill:
 		fmt.Printf("Killing VM %v\n", vm.Id)
-		// TODO: waitchan?
 		cmd.Process.Kill()
-		time.Sleep(launchRate)
-		killAck <- vm.Id
+		killAck <- <-waitChan
 	}
 }
 
@@ -892,6 +894,9 @@ func (vm *vmInfo) vmGetArgs() []string {
 func (vm *vmInfo) asyncLogger() {
 	for {
 		v := vm.q.Message()
+		if v == nil {
+			return
+		}
 		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
 	}
 }
