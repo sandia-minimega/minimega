@@ -15,7 +15,6 @@
 // TODO: documentation and examples
 // TODO: web frontend
 // TODO: meshage: file transfer
-// TODO: add bridge info
 // TODO: add network visualizer with graphviz
 // TODO(dylan): lxc support?
 
