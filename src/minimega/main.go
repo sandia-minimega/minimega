@@ -13,10 +13,7 @@
 // TODO: vyatta: info cli
 // TODO: possible cli cleanup
 // TODO: documentation and examples
-// TODO: web frontend
 // TODO: meshage: file transfer
-// TODO: add network visualizer with graphviz
-// TODO(dylan): lxc support?
 
 package main
 
