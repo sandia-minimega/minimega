@@ -966,6 +966,18 @@ Display the version.
 				return nil
 			},
 		},
+
+		"vm_config": &command{
+			Call:      cliVMConfig,
+			Helpshort: "display the current VM configuration",
+			Helplong: `
+Display the current VM configuration.
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 

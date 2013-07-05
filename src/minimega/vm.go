@@ -85,6 +85,31 @@ func init() {
 	info.Snapshot = true
 }
 
+// return a pretty printed list of the current configuration
+func cliVMConfig(c cliCommand) cliResponse {
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintln(&o, "Current VM configuration:")
+	fmt.Fprintf(w, "Memory:\t%v\n", info.Memory)
+	fmt.Fprintf(w, "VCPUS:\t%v\n", info.Vcpus)
+	fmt.Fprintf(w, "Disk Path:\t%v\n", info.DiskPath)
+	fmt.Fprintf(w, "CDROM Path:\t%v\n", info.CdromPath)
+	fmt.Fprintf(w, "Kernel Path:\t%v\n", info.KernelPath)
+	fmt.Fprintf(w, "Initrd Path:\t%v\n", info.InitrdPath)
+	fmt.Fprintf(w, "Kernel Append:\t%v\n", info.Append)
+	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
+	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
+	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
+	fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
+	w.Flush()
+
+	return cliResponse{
+		Response: o.String(),
+	}
+}
+
 func cliVMSnapshot(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		return cliResponse{
@@ -455,8 +480,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					}
 				}
 			}
-		//case "ip":
-		//case "ip6":
+			// TODO: case "ip":
+			// TODO: case "ip6":
 		case "vlan":
 			vlan, err := strconv.Atoi(d[1])
 			if err != nil {
@@ -700,6 +725,7 @@ LAUNCH_ONE_OUT:
 		log.Info("VM %v exited", vm.Id)
 	case <-vm.Kill:
 		fmt.Printf("Killing VM %v\n", vm.Id)
+		// TODO: waitchan?
 		cmd.Process.Kill()
 		time.Sleep(launchRate)
 		killAck <- vm.Id
