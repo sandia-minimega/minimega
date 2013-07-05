@@ -978,6 +978,18 @@ Display the current VM configuration.
 				return nil
 			},
 		},
+
+		"debug": &command{
+			Call:      cliDebug,
+			Helpshort: "display internal debug information",
+			Helplong: `
+Display internal debug information
+`,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 

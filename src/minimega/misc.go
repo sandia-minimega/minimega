@@ -9,11 +9,14 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"fmt"
 	log "minilog"
+	"runtime"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -37,4 +40,19 @@ func hostid(s string) (string, int) {
 		return "", -1
 	}
 	return k[0], val
+}
+
+func cliDebug(c cliCommand) cliResponse {
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Go Version:\t%v\n", runtime.Version)
+	fmt.Fprintf(w, "Goroutines:\t%v\n", runtime.NumGoroutine())
+	fmt.Fprintf(w, "CGO calls:\t%v\n", runtime.NumCgoCall())
+	w.Flush()
+
+	return cliResponse{
+		Response: o.String(),
+	}
 }
