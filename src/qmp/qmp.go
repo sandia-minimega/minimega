@@ -186,6 +186,8 @@ func (q *Conn) reader() {
 	for {
 		v, err := q.read()
 		if err != nil {
+			close(q.messageAsync)
+			close(q.messageSync)
 			break
 		}
 		// split asynchronous and synchronous events.
