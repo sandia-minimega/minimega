@@ -33,8 +33,7 @@ type bridge struct {
 }
 
 type vlan struct {
-	Id   int             // the actual id passed to openvswitch
-	Taps map[string]*tap // named list of taps. If false, the tap is destroyed.
+	Taps map[string]*tap // named list of taps. If !tap.active, then the tap is destroyed
 }
 
 type tap struct {
@@ -81,7 +80,6 @@ func (b *bridge) LanCreate(lan int) (error, bool) {
 		return errors.New("lan already exists"), true
 	}
 	b.lans[lan] = &vlan{
-		Id:   lan, // vlans start at 1, because 0 is a special vlan
 		Taps: make(map[string]*tap),
 	}
 	return nil, true
@@ -409,7 +407,7 @@ func (b *bridge) tapAdd(lan int, tap string, host bool) error {
 			"add-port",
 			b.Name,
 			tap,
-			fmt.Sprintf("tag=%v", b.lans[lan].Id),
+			fmt.Sprintf("tag=%v", lan),
 		},
 		Env:    nil,
 		Dir:    "",
