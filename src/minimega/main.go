@@ -6,6 +6,8 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
+// TODO: license files for mega and 3rd party packages
+// TODO: godoc correctness
 // TODO: vyatta: arbitrary interfaces with static ips
 // TODO: vyatta: route areas
 // TODO: vyatta: ipv6 support for routing and arbitrary ips
