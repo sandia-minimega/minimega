@@ -10,16 +10,14 @@
 // TODO: vyatta: route areas
 // TODO: vyatta: ipv6 support for routing and arbitrary ips
 // TODO: vyatta: dhcp support
-// TODO: vyatta: serial backchannel for dhcp/mac/ipv6 learning
 // TODO: vyatta: info cli
-// TODO: cli: rewrite to have namespaces style input
-// TODO: cli: helper functions for common tasks (eliminate low level requirements)
+// TODO: possible cli cleanup
 // TODO: documentation and examples
 // TODO: web frontend
 // TODO: meshage: file transfer
 // TODO: add bridge info
 // TODO: add network visualizer with graphviz
-// TODO(dylan): lxc support
+// TODO(dylan): lxc support?
 
 package main
 
