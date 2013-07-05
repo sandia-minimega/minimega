@@ -11,5 +11,7 @@ welcome to redistribute it under certain conditions. See the included LICENSE
 for details.
 
 websocket package Copyright The Go Authors. All rights reserved.
+
+noVNC Copyright 2011 Joel Martin <github@martintribe.org>
 `
 )
