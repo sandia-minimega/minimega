@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 // a bridge representation that includes a list of vlans and their respective
@@ -61,6 +62,28 @@ func init() {
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
+}
+
+func cliBridgeInfo(c cliCommand) cliResponse {
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Bridge name:\t%v\n", currentBridge.Name)
+	fmt.Fprintf(w, "Exists:\t%v\n", currentBridge.exists)
+	fmt.Fprintf(w, "Existed before minimega:\t%v\n", currentBridge.preExist)
+
+	var vlans []int
+	for v, _ := range currentBridge.lans {
+		vlans = append(vlans, v)
+	}
+
+	fmt.Fprintf(w, "Active vlans:\t%v\n", vlans)
+
+	w.Flush()
+
+	return cliResponse{
+		Response: o.String(),
+	}
 }
 
 // create a new vlan. If this is the first vlan being allocated, then the

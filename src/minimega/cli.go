@@ -990,6 +990,18 @@ Display internal debug information
 				return nil
 			},
 		},
+
+		"bridge_info": &command{
+			Call:      cliBridgeInfo,
+			Helpshort: "display information about the virtual bridge",
+			Helplong: `
+Display information about the virtual bridge.
+`,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
