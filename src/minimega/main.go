@@ -43,17 +43,13 @@ var (
 	f_port     = flag.Int("port", 8966, "meshage port to listen on")
 	f_force    = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin  = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
-	f_version  = flag.Bool("version", false, "print the version and exit")
+	f_version  = flag.Bool("version", false, "print the version and copyright notices")
 	vms        vmList
 )
 
 var banner string = `minimega, Copyright (2013) Sandia Corporation. 
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
 the U.S. Government retains certain rights in this software.
-
-minimega comes with ABSOLUTELY NO WARRANTY. This is free software, and you are
-welcome to redistribute it under certain conditions. See the included LICENSE
-for details.
 `
 
 func usage() {
@@ -71,6 +67,7 @@ func main() {
 
 	if *f_version {
 		fmt.Println("minimega", version.Revision, version.Date)
+		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
 
