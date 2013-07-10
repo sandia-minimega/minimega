@@ -30,8 +30,8 @@ func init() {
 	gob.Register(cliResponse{})
 }
 
-func meshageInit(host string, degree uint, port int) {
-	meshageNode, meshageMessages = meshage.NewNode(host, degree, port)
+func meshageInit(host string, namespace string, degree uint, port int) {
+	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port)
 
 	meshageCommand = make(chan *meshage.Message, 1024)
 	meshageResponse = make(chan *meshage.Message, 1024)

@@ -28,6 +28,7 @@ type mesh map[string][]string
 // connections automatically.
 type Node struct {
 	name             string             // node name, must be unique on a network
+	namespace        string             // namespace, other meshage nodes will connect to solicitations only with this namespace
 	degree           uint               // degree for this node, set to 0 to force node not to broadcast
 	network          mesh               // adjacency list for the known topology for this node
 	effectiveNetwork mesh               // effective topology for pairwise connections from the network
@@ -54,10 +55,11 @@ func init() {
 // NewNode returns a new node, receiver channel, and error channel with a given name
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
-func NewNode(name string, degree uint, port int) (*Node, chan *Message) {
+func NewNode(name string, namespace string, degree uint, port int) (*Node, chan *Message) {
 	log.Debug("NewNode: %v %v %v", name, degree, port)
 	n := &Node{
 		name:             name,
+		namespace:        namespace,
 		degree:           degree,
 		network:          make(mesh),
 		effectiveNetwork: make(mesh),
@@ -204,7 +206,7 @@ func (n *Node) broadcastListener() {
 		d := make([]byte, 1024)
 		read, _, err := ln.ReadFromUDP(d)
 		data := strings.Split(string(d[:read]), ":")
-		if len(data) != 2 {
+		if len(data) != 3 {
 			err = fmt.Errorf("got malformed udp data: %v\n", data)
 			log.Warnln(err)
 			continue
@@ -214,7 +216,12 @@ func (n *Node) broadcastListener() {
 			log.Warnln(err)
 			continue
 		}
-		host := data[1]
+		namespace := data[1]
+		host := data[2]
+		if namespace != n.namespace {
+			log.Debugln("got solicitation from another namespace, dropping")
+			continue
+		}
 		if host == n.name {
 			log.Debugln("got solicitation from myself, dropping")
 			continue
@@ -247,7 +254,7 @@ func (n *Node) checkDegree() {
 			log.Errorln(err)
 			break
 		}
-		message := fmt.Sprintf("meshage:%s", n.name)
+		message := fmt.Sprintf("meshage:%s:%s", n.namespace, n.name)
 		_, err = socket.Write([]byte(message))
 		if err != nil {
 			log.Errorln(err)
