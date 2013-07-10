@@ -8,7 +8,7 @@
 
 // TODO: vm_info only print non error/quit
 // TODO: remove taps when vms error/quit
-// TODO: nuke more aggression 
+// TODO: nuke more aggression
 // TODO: godoc correctness
 // TODO: vyatta: arbitrary interfaces with static ips
 // TODO: vyatta: route areas

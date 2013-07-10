@@ -754,6 +754,10 @@ func (vm *vmInfo) launchOne() {
 		cmd.Process.Kill()
 		killAck <- <-waitChan
 	}
+
+	for i, l := range vm.Networks {
+		currentBridge.TapDestroy(l, vm.taps[i])
+	}
 }
 
 // update the vm state, and write the state to file
