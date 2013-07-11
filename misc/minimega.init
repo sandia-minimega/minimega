@@ -1,0 +1,125 @@
+#!/bin/bash
+#
+# This is the base of the init script. It needs to be sourced from the different scripts that provide different parameters to it
+# This script will not work on it's own. It requires the $user and $parameters variables to be defined
+
+if [ "`id -un`" != "root" ]; then # if user running this script is not user 'root'
+  echo "Must run as root"
+  exit 1
+fi
+
+#source /etc/minimega/minimega.conf
+source minimega.conf
+
+update() {
+  # update minimega
+  read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
+  echo ""
+  if [[ $REPLY =~ ^[Yy]$ ]]
+  then
+    # dev code here
+    wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
+    if [ "$?" == "0" ]; then
+      echo "Failed to download latest minimega build"
+      return 1
+    fi
+    tar xjf /tmp/latest.tar.bz2 -C /tmp >>/dev/null 2>&1
+    rm /tmp/latest.tar.bz2 >>/dev/null 2>&1
+    rm -rf /mega >>/dev/null 2>&1
+    mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
+  fi
+}
+
+start() {
+  check_if_running
+  if [ "$?" == "0" ]; then # if there's already a process running
+    old_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    echo "minimega already running as pid $old_pid"
+    return 1
+  fi
+  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE
+  new_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  if [ "$?" != "0" ]; then # if the process has already died
+    echo "minimega did not start"
+    return 1
+  fi
+  echo "minimega started as process `cat $RUN_PATH/minimega.pid`"
+  return 0
+}
+
+stop() {
+  check_if_running
+  if [ "$?" != "0" ]; then # if it isn't running before we "stop" it
+    echo "minimega is not running."
+    return 1
+  fi
+  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  kill $pid
+  rm $RUN_PATH/minimega.pid
+  echo "minimega stopped"
+  return 0
+}
+
+status() {
+  check_if_running
+  if [ "$?" == "0" ]; then # if it is running
+    pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    echo "minimega is running at pid $pid."
+    return 0
+  else
+    echo "minimega is not running."
+    return 1
+  fi
+}
+
+check_if_running() {
+  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  if [ "$?" == "0" ]; then # if it is supposed to be running
+    check=`ps aux | grep minimega | grep $pid 2>/dev/null` # TODO: check for a minimega running with a different pid
+    if [ "$?" == "0" ]; then # if it is running
+      return 0
+    else
+      return 1
+    fi
+  else
+    return 1
+  fi
+}
+
+
+rtn=0
+case "$1" in
+  start)
+    start
+    rtn=$?
+    ;;
+
+  stop)
+    stop
+    rtn=$?
+    ;;
+
+  restart)
+    stop
+    start
+    rtn=$?
+    ;;
+  status)
+    status
+    ;;
+  update)
+    update
+    ;;
+  *)
+    echo "Usage: /etc/init.d/minimega {start|stop|restart|status|update}"
+    exit 1
+    ;;
+esac
+
+if [ "$rtn" == "0" ]; then
+  exit 0
+else
+  exit 1
+fi
+
+
