@@ -331,10 +331,13 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		go vm.launchOne()
 	}
 	// get acknowledgements from each vm
+	ret := ""
 	for i := 0; i < numVms; i++ {
-		fmt.Printf("VM: %v launched\n", <-launchAck)
+		ret += fmt.Sprintf("VM: %v launched\n", <-launchAck)
 	}
-	return cliResponse{}
+	return cliResponse{
+		Response: ret,
+	}
 }
 
 func (l *vmList) info(c cliCommand) cliResponse {
@@ -768,7 +771,7 @@ func (vm *vmInfo) launchOne() {
 	case <-waitChan:
 		log.Info("VM %v exited", vm.Id)
 	case <-vm.Kill:
-		fmt.Printf("Killing VM %v\n", vm.Id)
+		log.Info("Killing VM %v", vm.Id)
 		cmd.Process.Kill()
 		killAck <- <-waitChan
 	}
