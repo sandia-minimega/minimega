@@ -6,7 +6,6 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
-// TODO: nuke more aggression
 // TODO: godoc correctness
 // TODO: vyatta: arbitrary interfaces with static ips
 // TODO: vyatta: route areas
