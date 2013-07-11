@@ -87,6 +87,14 @@ func init() {
 
 // return a pretty printed list of the current configuration
 func cliVMConfig(c cliCommand) cliResponse {
+	config := configToString()
+
+	return cliResponse{
+		Response: config,
+	}
+}
+
+func configToString() string {
 	// create output
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
@@ -104,10 +112,7 @@ func cliVMConfig(c cliCommand) cliResponse {
 	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
 	fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
 	w.Flush()
-
-	return cliResponse{
-		Response: o.String(),
-	}
+	return o.String()
 }
 
 func cliVMSnapshot(c cliCommand) cliResponse {
@@ -670,6 +675,19 @@ func (vm *vmInfo) launchOne() {
 	}
 
 	vm.state(VM_BUILDING)
+
+	// write the config for this vm
+	config := configToString()
+	err = ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+	err = ioutil.WriteFile(vm.instancePath+"name", []byte(vm.Name), 0664)
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
 
 	var args []string
 	var sOut bytes.Buffer

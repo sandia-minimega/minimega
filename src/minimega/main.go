@@ -110,7 +110,11 @@ func main() {
 		log.Fatalln(err)
 	}
 	pid := os.Getpid()
-	ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
+	err = ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
 	go commandSocketStart()
 
 	// create a node for meshage
