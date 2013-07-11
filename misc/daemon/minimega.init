@@ -19,7 +19,7 @@ update() {
   then
     # dev code here
     wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
-    if [ "$?" == "0" ]; then
+    if [ "$?" != "0" ]; then
       echo "Failed to download latest minimega build"
       return 1
     fi
