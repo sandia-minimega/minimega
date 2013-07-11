@@ -6,8 +6,6 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
-// TODO: vm_info only print non error/quit
-// TODO: remove taps when vms error/quit
 // TODO: nuke more aggression
 // TODO: godoc correctness
 // TODO: vyatta: arbitrary interfaces with static ips
@@ -15,7 +13,7 @@
 // TODO: vyatta: ipv6 support for routing and arbitrary ips
 // TODO: vyatta: dhcp support
 // TODO: vyatta: info cli
-// TODO: possible cli cleanup
+// TODO: cli cleanup
 // TODO: documentation and examples
 // TODO: meshage: file transfer
 

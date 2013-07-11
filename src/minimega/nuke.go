@@ -70,10 +70,10 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 	log.Debug("walking file: %v", path)
 
 	switch info.Name() {
-	case "qemu.pid":
+	case "qemu.pid", "dnsmasq.pid":
 		d, err := ioutil.ReadFile(path)
 		t := strings.TrimSpace(string(d))
-		log.Debug("found qemu pid: %v", t)
+		log.Debug("found pid: %v", t)
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 			Stdout: &sOut,
 			Stderr: &sErr,
 		}
-		log.Infoln("killing qemu process:", t)
+		log.Infoln("killing process:", t)
 		err = cmd.Run()
 		if err != nil {
 			log.Error("%v: %v", err, sErr.String())
