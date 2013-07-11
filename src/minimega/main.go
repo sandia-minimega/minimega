@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"goreadline"
 	"io"
+	"io/ioutil"
 	log "minilog"
 	"net"
 	"os"
@@ -108,6 +109,9 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	pid := os.Getpid()
+	ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
+	go commandSocketStart()
 
 	// create a node for meshage
 	host, err := os.Hostname()
@@ -118,7 +122,6 @@ func main() {
 
 	// invoke the cli
 	go cliMux()
-	go commandSocketStart()
 
 	fmt.Println(banner)
 
