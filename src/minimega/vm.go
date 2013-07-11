@@ -758,6 +758,11 @@ func (vm *vmInfo) launchOne() {
 	for i, l := range vm.Networks {
 		currentBridge.TapDestroy(l, vm.taps[i])
 	}
+
+	err = os.RemoveAll(vm.instancePath)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 // update the vm state, and write the state to file
