@@ -678,21 +678,31 @@ will clear the list of associated networks.`,
 		},
 
 		"host_tap": &command{
-			Call:      hostTapCreate,
-			Helpshort: "create a host tap for communicating between hosts and VMs",
+			Call:      hostTap,
+			Helpshort: "control host taps for communicating between hosts and VMs",
 			Helplong: `
-Create host tap on a named vlan for communicating between a host and any VMs on
-that vlan. host_tap takes two arguments, the named vlan to tap and an optional
-ip/netmask. It returns the name of the created tap if successful.
+Contrl host taps on a named vlan for communicating between a host and any VMs
+on that vlan. 
+
+Calling host_tap with no arguments will list all created host_taps.
+
+To create a host_tap on a particular vlan, invoke host_tap with the create
+command:
+
+	host_tap create <vlan> <ip/dhcp>
 
 For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-host_tap 5 10.0.0.1/24
+	host_tap create 5 10.0.0.1/24
 
 Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
 ip/netmask:
 
-host_tap 5 dhcp`,
+	host_tap create 5 dhcp
+
+To delete a host tap, use the delete command and tap name from the host_tap list:
+
+	host_tap delete <id>`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps

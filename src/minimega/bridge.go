@@ -1,9 +1,6 @@
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-//
-// David Fritz <djfritz@sandia.gov>
-//
 
 package main
 
@@ -35,8 +32,9 @@ type vlan struct {
 }
 
 type tap struct {
-	active bool
-	host   bool
+	active     bool
+	host       bool
+	hostOption string
 }
 
 var (
@@ -480,13 +478,79 @@ func (b *bridge) tapRemove(tap string) error {
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func hostTapCreate(c cliCommand) cliResponse {
-	if len(c.Args) != 2 {
-		return cliResponse{
-			Error: "host_tap takes two arguments",
+
+func hostTap(c cliCommand) cliResponse {
+	switch len(c.Args) {
+	case 0:
+		return hostTapList()
+	case 2: // must be delete
+		if c.Args[0] != "delete" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		return hostTapDelete(c.Args[1])
+	case 3: // must be create
+		if c.Args[0] != "create" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		return hostTapCreate(c.Args[1], c.Args[2])
+	}
+	return cliResponse{
+		Error: "malformed command",
+	}
+}
+
+func hostTapList() cliResponse {
+	var lans []int
+	var taps []string
+	var options []string
+
+	// find all the host taps first
+	for lan, t := range currentBridge.lans {
+		for tap, ti := range t.Taps {
+			if ti.host && ti.active {
+				lans = append(lans, lan)
+				taps = append(taps, tap)
+				options = append(options, ti.hostOption)
+			}
 		}
 	}
-	r, err := strconv.Atoi(c.Args[0])
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "tap\tvlan\toption\n")
+	for i, _ := range lans {
+		fmt.Fprintf(w, "%v\t%v\t%v\n", taps[i], lans[i], options[i])
+	}
+
+	w.Flush()
+
+	return cliResponse{
+		Response: o.String(),
+	}
+}
+
+func hostTapDelete(tap string) cliResponse {
+	for lan, t := range currentBridge.lans {
+		if tf, ok := t.Taps[tap]; ok {
+			if !tf.host {
+				return cliResponse{
+					Error: "not a host tap",
+				}
+			}
+			currentBridge.lans[lan].Taps[tap].active = false
+			currentBridge.tapRemove(tap)
+		}
+	}
+	return cliResponse{}
+}
+
+func hostTapCreate(lan string, ip string) cliResponse {
+	r, err := strconv.Atoi(lan)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
@@ -508,8 +572,9 @@ func hostTapCreate(c cliCommand) cliResponse {
 
 	// create the tap
 	currentBridge.lans[r].Taps[tapName] = &tap{
-		active: true,
-		host:   true,
+		active:     true,
+		host:       true,
+		hostOption: ip,
 	}
 	err = currentBridge.tapAdd(r, tapName, true)
 	if err != nil {
@@ -547,13 +612,13 @@ func hostTapCreate(c cliCommand) cliResponse {
 		}
 	}
 
-	if strings.ToLower(c.Args[1]) == "none" {
+	if strings.ToLower(ip) == "none" {
 		return cliResponse{
 			Response: tapName,
 		}
 	}
 
-	if strings.ToLower(c.Args[1]) == "dhcp" {
+	if strings.ToLower(ip) == "dhcp" {
 		p = process("dhcp")
 		cmd = &exec.Cmd{
 			Path: p,
@@ -583,7 +648,7 @@ func hostTapCreate(c cliCommand) cliResponse {
 				"add",
 				"dev",
 				tapName,
-				c.Args[1],
+				ip,
 			},
 			Env:    nil,
 			Dir:    "",
