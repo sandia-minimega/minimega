@@ -1,5 +1,3 @@
-// minimega
-//
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
@@ -17,6 +15,7 @@
 // The cli uses the readline library for command history and tab completion.
 // A separate command history is kept and used for writing the buffer out to
 // disk.
+
 package main
 
 import (

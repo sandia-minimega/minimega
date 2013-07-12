@@ -1,9 +1,12 @@
-package ipmac
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
 
 // ipmac attempts to learn about active ip addresses associated with mac
 // addresses on a particular interface, usually a bridge that can see data from
 // many other interfaces. ipmac is used by creating a new ipmac object on a
 // particular interface, and providing one or more MAC addresses to filter on.
+package ipmac
 
 // #cgo LDFLAGS: -lpcap
 // #include <stdlib.h>
@@ -25,10 +28,11 @@ type IPMacLearner struct {
 }
 
 type IP struct {
-	IP4 string
-	IP6 string
+	IP4 string // string representation of the IPv4 address, if known
+	IP6 string // string representation of the IPv6 address, if known
 }
 
+// NewLearner returns an IPMacLearner object bound to a particular interface.
 func NewLearner(dev string) (*IPMacLearner, error) {
 	ret := &IPMacLearner{
 		pairs: make(map[string]*IP),
@@ -46,10 +50,13 @@ func NewLearner(dev string) (*IPMacLearner, error) {
 	return ret, nil
 }
 
+// Lookup any known IPv4 or IPv6 addresses associated with a given MAC address.
 func (iml *IPMacLearner) GetMac(mac string) *IP {
 	return iml.pairs[mac]
 }
 
+// Add a MAC address to the list of addresses to search for. IPMacLearner will
+// not gather information on MAC addresses not in the list.
 func (iml *IPMacLearner) AddMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
@@ -58,6 +65,7 @@ func (iml *IPMacLearner) AddMac(mac string) {
 	iml.updateFilter()
 }
 
+// Delete a MAC address from the list of addresses to search for.
 func (iml *IPMacLearner) DelMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
@@ -65,6 +73,7 @@ func (iml *IPMacLearner) DelMac(mac string) {
 	iml.updateFilter()
 }
 
+// Remove all MAC addresses from the search list.
 func (iml *IPMacLearner) Flush() {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
@@ -72,6 +81,7 @@ func (iml *IPMacLearner) Flush() {
 	iml.updateFilter()
 }
 
+// Stop searching for IP addresses.
 func (iml *IPMacLearner) Close() {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()

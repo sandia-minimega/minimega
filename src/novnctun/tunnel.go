@@ -1,3 +1,13 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
+// novnctun supports creating a websocket based tunnel to vnc ports on other
+// hosts and serving a novnc client to the machine requesting the tunnel. This
+// is used to automate connecting to virtual machines on a cluster when the
+// user does not have direct access to cluster nodes. novnctun runs on the
+// routable head node of the cluster, the user connects to it, and tunnels are
+// created to connect to virtual machines.
 package novnctun
 
 import (

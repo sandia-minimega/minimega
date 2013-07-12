@@ -1,3 +1,7 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 // vmbetter is a debootstrap based toolchain for creating virtual machine
 // images for booting host and guest nodes. It generates a debian based initrd
 // and kernel image from a configuration file.

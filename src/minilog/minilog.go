@@ -1,13 +1,11 @@
-// minimega
-//
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
 // David Fritz <djfritz@sandia.gov>
 // Devin Cook <devcook@sandia.gov>
-//
-// This package extends Go's logging functionality to allow for multiple
+
+// minilog extends Go's logging functionality to allow for multiple
 // loggers, each one with their own logging level. To use minilog, call
 // AddLogger() to set up each desired logger, then use the package-level
 // logging functions defined to send messages to all defined loggers.

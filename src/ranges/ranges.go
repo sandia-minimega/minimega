@@ -1,3 +1,12 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
+// ranges provides methods to expand or condense ranges of like strings. This
+// is used for specifying a list of hosts eg. host[1-10]. The ranges package
+// can expand host[1-10] into a slice of strings: [host1, host2, host3...].
+// Similarly, it can condense a slice of strings into a compact form: [host1,
+// host2, host5, host6] -> host[1-2,5-6].
 package ranges
 
 import (

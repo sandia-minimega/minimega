@@ -1,3 +1,7 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 // package vmconfig reads in a config file for the vmbetter tool.
 // vmconfig config files use valid Go syntax and are parsed by a go lexical
 // scanner.

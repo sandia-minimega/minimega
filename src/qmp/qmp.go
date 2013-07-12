@@ -1,3 +1,8 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
+// A qemu qmp wrapper. qmp will connect to qmp unix domain sockets associated with running instances of qemu.
 package qmp
 
 import (
@@ -20,6 +25,7 @@ func (q *Conn) Message() map[string]interface{} {
 	return <-q.messageAsync
 }
 
+// Connect to a qmp socket.
 func Dial(s string) (Conn, error) {
 	var q Conn
 	err := q.connect(s)

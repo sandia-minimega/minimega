@@ -1,3 +1,7 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package meshage
 
 import (
@@ -117,6 +121,7 @@ CLIENT_HANDLER_LOOP:
 	n.MSA()
 }
 
+// Dicconnect from the specified host.
 func (n *Node) Hangup(host string) error {
 	log.Debug("hangup: %v", host)
 	if c, ok := n.clients[host]; ok {

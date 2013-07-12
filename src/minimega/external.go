@@ -1,14 +1,7 @@
-// minimega
-//
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-//
-// David Fritz <djfritz@sandia.gov>
 
-// routines to check for the presence and path of all external processes.
-// you should use process("my process") and register the process here if you
-// plan on calling external processes.
 package main
 
 import (

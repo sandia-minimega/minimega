@@ -1,3 +1,32 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
+// meshage is a mesh based message passing protocol that supports
+// auto-configuration and simple resiliency.
+//
+// meshage is used by creating a node with a name, namespace, degree of
+// connectivity, and a port. Other meshage nodes on the broadcast domain that
+// have the same namespace and port will automatically connect in an arbitrary
+// graph. Additionally, the user can direct nodes to connect to other nodes
+// directly (without requiring they be on the same broadcast domain). Nodes
+// must use the same port to communicate, but not necessarily the same
+// namespace. Nodes will auto-configure only with other nodes with the same
+// namespace, but direct dialing will ignore the namespace.
+//
+// Messages are passed either as a set of connected nodes or as a broadcast to
+// all nodes. A set message is a message sent to one or more nodes on the mesh.
+// A broadcast is a message sent to all nodes on the mesh. Messages are
+// automatically routed to their destination via the shortest path along the
+// mesh. Messages that fail to complete return an error with no retry along an
+// alternate route.
+//
+// The state of the mesh is maintained automatically by connected nodes via
+// mesh state announcements (MSA). MSA messages are periodically flooded to all
+// nodes by all nodes to determine the mesh topology and routes. The user can
+// set the MSA period, which defaults to 10 seconds. When nodes fail or leave
+// the mesh unexpectedly, MSA processing will detect the lost node and
+// recalculate the topology.
 package meshage
 
 import (
@@ -428,10 +457,12 @@ func (n *Node) periodicMSA() {
 	}
 }
 
+// Set the MSA period, in seconds.
 func (n *Node) SetMSATimeout(timeout uint) {
 	n.msaTimeout = timeout
 }
 
+// Return the MSA period, in seconds.
 func (n *Node) GetMSATimeout() uint {
 	return n.msaTimeout
 }

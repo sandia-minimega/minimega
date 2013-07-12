@@ -1,15 +1,7 @@
-// minimega
-//
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-//
-// David Fritz <djfritz@sandia.gov>
 
-// virtual machine control routines. The vm state is centered around the 'info'
-// struct, which is updated via the cli. When vms are launched, the info struct
-// is copied once for each VM and launched. The user can then update the vm
-// struct for launching vms of other types.
 package main
 
 import (

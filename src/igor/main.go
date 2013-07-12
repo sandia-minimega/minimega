@@ -1,6 +1,10 @@
-// The basic structure of how commands are defined and executed are taken
-// from Go's "go" tool, meaning this file is essentially brought over wholesale.
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
 
+// igor is a simple command line tool for managing reservations of nodes in a
+// cluster. It also will configure the pxeboot environment for booting kernels
+// and initrds for cluster nodes.
 package main
 
 import (
