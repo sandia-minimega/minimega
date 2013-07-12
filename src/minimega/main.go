@@ -2,7 +2,6 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
-// TODO: godoc correctness
 // TODO: vyatta: arbitrary interfaces with static ips
 // TODO: vyatta: route areas
 // TODO: vyatta: ipv6 support for routing and arbitrary ips
