@@ -18,4 +18,10 @@ ifconfig eth1 up $ETH1 netmask 255.255.255.0
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
+# nat
+modprobe iptable_nat
+echo 1 > /proc/sys/net/ipv4/ip_forward
+iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+# end nat
+
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'

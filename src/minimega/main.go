@@ -171,6 +171,10 @@ func teardown() {
 	ksmDisable()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
+	err = os.Remove(*f_base + "minimega.pid")
+	if err != nil {
+		log.Fatalln(err)
+	}
 	os.Exit(0)
 }
 
