@@ -77,7 +77,7 @@ start() {
     echo "minimega already running as pid $old_pid"
     return 1
   fi
-  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE
+  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &
   new_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" != "0" ]; then # if the process has already died
     echo "minimega did not start"
@@ -130,7 +130,7 @@ check_if_running() {
 rtn=0
 case "$1" in
   start)
-    start
+    start ${@:2}
     rtn=$?
     ;;
   stop)
@@ -139,7 +139,7 @@ case "$1" in
     ;;
   restart)
     stop
-    start
+    start ${@:2}
     rtn=$?
     ;;
   status)
