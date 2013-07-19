@@ -1,7 +1,14 @@
 #!/bin/bash
 #
-# This is the base of the init script. It needs to be sourced from the different scripts that provide different parameters to it
-# This script will not work on it's own. It requires the $user and $parameters variables to be defined
+### BEGIN INIT INFO
+# Provides: minimega
+# Required-Start:
+# Required-Stop:
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Manages minimega process
+# Description: Auto-starts minimega on boot, allows more flexible monitoring and management of minimega daemon process.
+### END INIT INFO
 
 if [ "`id -un`" != "root" ]; then # if user running this script is not user 'root'
   echo "Must run as root"
@@ -9,7 +16,7 @@ if [ "`id -un`" != "root" ]; then # if user running this script is not user 'roo
 fi
 
 source /etc/minimega/minimega.conf 2> /dev/null # don't display "no file or directory" error message
-if [ "$?" != "0" ] && [ "$1" != "install" ] && [ "$1" != "" ]; then # if we weren't able to import the conf file
+if [ "$?" != "0" ] && [ "$1" != "" ] && [ "$1" != "install" ] && [ "$1" != "uninstall" ]; then # if we weren't able to import the conf file
   echo "Unable to import configuration file. Please 'install' first."
   exit 1
 fi
@@ -17,7 +24,7 @@ fi
 install() {
   # ask for init script and conf file directory
   cwd=`pwd`
-  read -p "Directory containing init script and configuration file: [$cwd] " -n 1 -r
+  read -p "Directory containing init script and configuration file: [$cwd] " -r
   if [[ $REPLY == "" ]]; then
     REPLY=$cwd
   fi
@@ -36,6 +43,12 @@ install() {
   ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
   update-rc.d minimega defaults # make 'start' run on boot
   return 0
+}
+
+uninstall() {
+  unlink /etc/init.d/minimega
+  unlink /etc/minimega/minimega.conf
+  update-rc.d minimega remove
 }
 
 update() {
@@ -141,8 +154,12 @@ case "$1" in
     install
     rtn=$?
     ;;
+  uninstall)
+    uninstall
+    rtn=$?
+    ;;
   *)
-    echo "Usage: $0{start|stop|restart|status|update|install}"
+    echo "Usage: $0{start|stop|restart|status|update|install|uninstall}"
     exit 1
     ;;
 esac
