@@ -34,6 +34,7 @@ install() {
   ln -s $REPLY/minimega.init /etc/init.d/minimega
   mkdir -p /etc/minimega/
   ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
+  update-rc.d minimega defaults # make 'start' run on boot
   return 0
 }
 
@@ -41,8 +42,7 @@ update() {
   # update minimega
   read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
   echo ""
-  if [[ $REPLY =~ ^[Yy]$ ]]
-  then
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
     # dev code here
     wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
     if [ "$?" != "0" ]; then
@@ -54,6 +54,7 @@ update() {
     rm -rf /mega >>/dev/null 2>&1
     mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
   fi
+  return 0
 }
 
 start() {
@@ -130,12 +131,15 @@ case "$1" in
     ;;
   status)
     status
+    rtn=$?
     ;;
   update)
     update
+    rtn=$?
     ;;
   install)
     install
+    rtn=$?
     ;;
   *)
     echo "Usage: $0{start|stop|restart|status|update|install}"
