@@ -73,17 +73,17 @@ update() {
 start() {
   check_if_running
   if [ "$?" == "0" ]; then # if there's already a process running
-    old_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    old_pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
     echo "minimega already running as pid $old_pid"
     return 1
   fi
   $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &
-  new_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  new_pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" != "0" ]; then # if the process has already died
     echo "minimega did not start"
     return 1
   fi
-  echo "minimega started as process `cat $RUN_PATH/minimega.pid`"
+  echo "minimega started as process `cat $MM_RUN_PATH/minimega.pid`"
   return 0
 }
 
@@ -93,9 +93,9 @@ stop() {
     echo "minimega is not running."
     return 1
   fi
-  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   kill $pid
-  rm $RUN_PATH/minimega.pid
+  rm $MM_RUN_PATH/minimega.pid
   echo "minimega stopped"
   return 0
 }
@@ -103,7 +103,7 @@ stop() {
 status() {
   check_if_running
   if [ "$?" == "0" ]; then # if it is running
-    pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
     echo "minimega is running at pid $pid."
     return 0
   else
@@ -113,7 +113,7 @@ status() {
 }
 
 check_if_running() {
-  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" == "0" ]; then # if it is supposed to be running
     check=`ps aux | grep minimega | grep $pid 2>/dev/null` # TODO: check for a minimega running with a different pid
     if [ "$?" == "0" ]; then # if it is running
