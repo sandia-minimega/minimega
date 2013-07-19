@@ -8,8 +8,34 @@ if [ "`id -un`" != "root" ]; then # if user running this script is not user 'roo
   exit 1
 fi
 
-#source /etc/minimega/minimega.conf
-source minimega.conf
+source /etc/minimega/minimega.conf 2> /dev/null # don't display "no file or directory" error message
+if [ "$?" != "0" ] && [ "$1" != "install" ] && [ "$1" != "" ]; then # if we weren't able to import the conf file
+  echo "Unable to import configuration file. Please 'install' first."
+  exit 1
+fi
+
+install() {
+  # ask for init script and conf file directory
+  cwd=`pwd`
+  read -p "Directory containing init script and configuration file: [$cwd] " -n 1 -r
+  if [[ $REPLY == "" ]]; then
+    REPLY=$cwd
+  fi
+  # locate init script and conf file
+  if [ ! -f "$REPLY/minimega.init" ]; then
+    echo "Cannot find init script at $REPLY/minimega.init"
+    return 1
+  fi
+  if [ ! -f "$REPLY/minimega.conf" ]; then
+    echo "Cannot find configuration at $REPLY/minimega.conf"
+    return 1
+  fi
+  # create sumlinks to 'install' the init script
+  ln -s $REPLY/minimega.init /etc/init.d/minimega
+  mkdir -p /etc/minimega/
+  ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
+  return 0
+}
 
 update() {
   # update minimega
@@ -93,12 +119,10 @@ case "$1" in
     start
     rtn=$?
     ;;
-
   stop)
     stop
     rtn=$?
     ;;
-
   restart)
     stop
     start
@@ -110,8 +134,11 @@ case "$1" in
   update)
     update
     ;;
+  install)
+    install
+    ;;
   *)
-    echo "Usage: /etc/init.d/minimega {start|stop|restart|status|update}"
+    echo "Usage: $0{start|stop|restart|status|update|install}"
     exit 1
     ;;
 esac
