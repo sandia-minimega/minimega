@@ -1,22 +1,61 @@
 #!/bin/bash
 #
-# This is the base of the init script. It needs to be sourced from the different scripts that provide different parameters to it
-# This script will not work on it's own. It requires the $user and $parameters variables to be defined
+### BEGIN INIT INFO
+# Provides: minimega
+# Required-Start:
+# Required-Stop:
+# Default-Start: 2 3 4 5
+# Default-Stop: 0 1 6
+# Short-Description: Manages minimega process
+# Description: Auto-starts minimega on boot, allows more flexible monitoring and management of minimega daemon process.
+### END INIT INFO
 
 if [ "`id -un`" != "root" ]; then # if user running this script is not user 'root'
   echo "Must run as root"
   exit 1
 fi
 
-#source /etc/minimega/minimega.conf
-source minimega.conf
+source /etc/minimega/minimega.conf 2> /dev/null # don't display "no file or directory" error message
+if [ "$?" != "0" ] && [ "$1" != "" ] && [ "$1" != "install" ] && [ "$1" != "uninstall" ]; then # if we weren't able to import the conf file
+  echo "Unable to import configuration file. Please 'install' first."
+  exit 1
+fi
+
+install() {
+  # ask for init script and conf file directory
+  cwd=`pwd`
+  read -p "Directory containing init script and configuration file: [$cwd] " -r
+  if [[ $REPLY == "" ]]; then
+    REPLY=$cwd
+  fi
+  # locate init script and conf file
+  if [ ! -f "$REPLY/minimega.init" ]; then
+    echo "Cannot find init script at $REPLY/minimega.init"
+    return 1
+  fi
+  if [ ! -f "$REPLY/minimega.conf" ]; then
+    echo "Cannot find configuration at $REPLY/minimega.conf"
+    return 1
+  fi
+  # create sumlinks to 'install' the init script
+  ln -s $REPLY/minimega.init /etc/init.d/minimega
+  mkdir -p /etc/minimega/
+  ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
+  update-rc.d minimega defaults # make 'start' run on boot
+  return 0
+}
+
+uninstall() {
+  unlink /etc/init.d/minimega
+  unlink /etc/minimega/minimega.conf
+  update-rc.d minimega remove
+}
 
 update() {
   # update minimega
   read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
   echo ""
-  if [[ $REPLY =~ ^[Yy]$ ]]
-  then
+  if [[ $REPLY =~ ^[Yy]$ ]]; then
     # dev code here
     wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
     if [ "$?" != "0" ]; then
@@ -28,22 +67,23 @@ update() {
     rm -rf /mega >>/dev/null 2>&1
     mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
   fi
+  return 0
 }
 
 start() {
   check_if_running
   if [ "$?" == "0" ]; then # if there's already a process running
-    old_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    old_pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
     echo "minimega already running as pid $old_pid"
     return 1
   fi
-  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE
-  new_pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &
+  new_pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" != "0" ]; then # if the process has already died
     echo "minimega did not start"
     return 1
   fi
-  echo "minimega started as process `cat $RUN_PATH/minimega.pid`"
+  echo "minimega started as process `cat $MM_RUN_PATH/minimega.pid`"
   return 0
 }
 
@@ -53,9 +93,9 @@ stop() {
     echo "minimega is not running."
     return 1
   fi
-  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   kill $pid
-  rm $RUN_PATH/minimega.pid
+  rm $MM_RUN_PATH/minimega.pid
   echo "minimega stopped"
   return 0
 }
@@ -63,7 +103,7 @@ stop() {
 status() {
   check_if_running
   if [ "$?" == "0" ]; then # if it is running
-    pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+    pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
     echo "minimega is running at pid $pid."
     return 0
   else
@@ -73,7 +113,7 @@ status() {
 }
 
 check_if_running() {
-  pid=`cat $RUN_PATH/minimega.pid 2> /dev/null`
+  pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" == "0" ]; then # if it is supposed to be running
     check=`ps aux | grep minimega | grep $pid 2>/dev/null` # TODO: check for a minimega running with a different pid
     if [ "$?" == "0" ]; then # if it is running
@@ -90,28 +130,36 @@ check_if_running() {
 rtn=0
 case "$1" in
   start)
-    start
+    start ${@:2}
     rtn=$?
     ;;
-
   stop)
     stop
     rtn=$?
     ;;
-
   restart)
     stop
-    start
+    start ${@:2}
     rtn=$?
     ;;
   status)
     status
+    rtn=$?
     ;;
   update)
     update
+    rtn=$?
+    ;;
+  install)
+    install
+    rtn=$?
+    ;;
+  uninstall)
+    uninstall
+    rtn=$?
     ;;
   *)
-    echo "Usage: /etc/init.d/minimega {start|stop|restart|status|update}"
+    echo "Usage: $0{start|stop|restart|status|update|install|uninstall}"
     exit 1
     ;;
 esac
