@@ -12,6 +12,7 @@ chmod a+rx /
 
 ETH0=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "eth0") {print a[2]; }}' /proc/cmdline`
 ifconfig eth0 up $ETH0 netmask 255.255.0.0
+ifconfig lo up
 
 mkdir /var/run/sshd
 /usr/sbin/sshd
