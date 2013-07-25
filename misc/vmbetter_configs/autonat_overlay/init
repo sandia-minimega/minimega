@@ -12,6 +12,7 @@ chmod a+rx /
 
 ETH0=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "eth0") {print a[2]; }}' /proc/cmdline`
 ETH1=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "eth1") {print a[2]; }}' /proc/cmdline`
+ifconfig lo up
 ifconfig eth0 up $ETH0 netmask 255.255.255.0
 ifconfig eth1 up $ETH1 netmask 255.255.255.0
 
