@@ -753,19 +753,19 @@ func (vm *vmInfo) launchOne() {
 		cmd.Process.Kill()
 		<-waitChan
 		launchAck <- vm.Id
-	}
+	} else {
+		go vm.asyncLogger()
 
-	go vm.asyncLogger()
+		launchAck <- vm.Id
 
-	launchAck <- vm.Id
-
-	select {
-	case <-waitChan:
-		log.Info("VM %v exited", vm.Id)
-	case <-vm.Kill:
-		log.Info("Killing VM %v", vm.Id)
-		cmd.Process.Kill()
-		killAck <- <-waitChan
+		select {
+		case <-waitChan:
+			log.Info("VM %v exited", vm.Id)
+		case <-vm.Kill:
+			log.Info("Killing VM %v", vm.Id)
+			cmd.Process.Kill()
+			killAck <- <-waitChan
+		}
 	}
 
 	for i, l := range vm.Networks {
