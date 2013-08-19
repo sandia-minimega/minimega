@@ -1012,6 +1012,20 @@ Display information about the virtual bridge.
 				return nil
 			},
 		},
+
+		"vm_flush": &command{
+			Call:      cliVMFlush,
+			Helpshort: "discard information about quit or failed VMs",
+			Helplong: `
+Discard information about VMs that have either quit or encountered an error.
+This will remove any VMs with a state of "quit" or "error" from vm_info. Names
+of VMs that have been flushed may be reused.
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
