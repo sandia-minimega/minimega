@@ -298,6 +298,7 @@ if you want the ID and IPs for all VMs on vlan 100:
 	vm_info vlan=100 [id,ip]
 
 Searchable and maskable fields are:
+	host	: The host that the VM is running on
 	id	: The VM ID, as an integer
 	name	: The VM name, if it exists
 	memory  : Allocated memory, in megabytes

@@ -382,6 +382,15 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		log.Debug("vm_info: search term: %v", d)
 
 		switch strings.ToLower(d[0]) {
+		case "host":
+			host, err := os.Hostname()
+			if err != nil {
+				log.Errorln(err)
+				teardown()
+			}
+			if strings.ToLower(d[1]) == strings.ToLower(host) {
+				v = append(v, l.vms...)
+			}
 		case "id":
 			id, err := strconv.Atoi(d[1])
 			if err != nil {
@@ -539,6 +548,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		d := strings.Split(mask, ",")
 		for _, j := range d {
 			switch strings.ToLower(j) {
+			case "host":
+				omask = append(omask, "host")
 			case "id":
 				omask = append(omask, "id")
 			case "name":
@@ -572,7 +583,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"host", "id", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
@@ -592,6 +603,13 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				fmt.Fprintf(w, "\t| ")
 			}
 			switch k {
+			case "host":
+				host, err := os.Hostname()
+				if err != nil {
+					log.Errorln(err)
+					teardown()
+				}
+				fmt.Fprintf(w, "%v", host)
 			case "id":
 				fmt.Fprintf(w, "%v", j.Id)
 			case "name":
