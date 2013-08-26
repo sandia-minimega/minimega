@@ -542,10 +542,10 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		d := strings.Split(mask, ",")
 		for _, j := range d {
 			switch strings.ToLower(j) {
-			case "host":
-				omask = append(omask, "host")
 			case "id":
 				omask = append(omask, "id")
+			case "host":
+				omask = append(omask, "host")
 			case "name":
 				omask = append(omask, "name")
 			case "memory":
@@ -577,7 +577,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"host", "id", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "host", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
