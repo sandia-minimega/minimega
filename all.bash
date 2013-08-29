@@ -29,13 +29,3 @@ do
 	go test $i
 done
 echo
-
-# list bugs
-echo BUGS
-grep -rHsi '//[ ]*BUG' src
-echo
-
-# list todos
-echo TODO
-grep -rHsi '//[ ]*TODO' src
-echo
