@@ -1,0 +1,63 @@
+<!-- borrowed from buttercup festival's lovely website: buttercupfestival.com -->
+
+BODY
+   {
+   color: black;
+   background-color: white;
+   font-family: sans-serif; 
+	font-size: 10pt; }
+ 
+
+a:link {color: #006666;}
+a:visited {color: #006666;}
+a:hover {color: #006666;}
+a:active {color: #006666;}
+
+
+.bftable, .bftable TD, .bftable TH
+{
+font-family:sans-serif;
+font-size: 10pt;
+color: black;
+background-color: white;
+}
+
+
+.bfheader
+   {
+   color: black;
+   background-color: white;
+   font-family: sans-serif;
+	font-size: 16pt; }
+
+.bfsmall
+   {
+   color: black;
+   background-color: white;
+   font-family: sans-serif; 
+	font-size: 8pt; }
+
+.poemtitle
+   {
+   color: #996666;
+   background-color: white;
+   font-family: sans-serif; 
+	font-weight: 600;
+	font-size: 10pt; }
+
+.poemnote
+   {
+   color: #999999;
+   background-color: white;
+   font-family: sans-serif; 
+	font-size: 8pt; }
+
+.blockquotepoetry {
+  font: 10pt sans-serif;
+
+  margin-top: 10px;
+  margin-bottom: 10px;
+  margin-left: 25px;
+  padding-left: 15px;
+  border-left: 4px solid #66cccc;
+} 
