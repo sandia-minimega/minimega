@@ -47,6 +47,9 @@ func (n *Node) Send(m *Message) error {
 	n.meshLock.Lock()
 	for _, v := range m.Recipients {
 		if v == n.name {
+			if len(m.Recipients) == 1 {
+				return fmt.Errorf("cannot mesh_set yourself")
+			}
 			continue
 		}
 
