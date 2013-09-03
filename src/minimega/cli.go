@@ -154,7 +154,7 @@ Enable or disable logging to stderr. Valid options are [true, false].`,
 			Helpshort: "enable logging to a file",
 			Helplong: `
 Usage log_file <filename>
-Log to a file. To disable file logging, call "log_file false".`,
+Log to a file. To disable file logging, call "clear log_file".`,
 			Record: true,
 			Clear: func() error {
 				_, err := log.GetLevel("file")
@@ -847,7 +847,7 @@ For example, to get the vm_info from all nodes:
 			},
 			Helpshort: "return the hostname",
 			Helplong: `
-Return the hostname`,
+Return the hostname.`,
 			Record: true,
 			Clear: func() error {
 				return nil
