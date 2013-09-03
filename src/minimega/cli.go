@@ -602,7 +602,7 @@ To start the webserver on a specific port, issue the web command with the port:
 			},
 			Helpshort: "shows the command history",
 			Helplong: `
-shows the command history`,
+Shows the command history`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -682,7 +682,7 @@ will clear the list of associated networks.`,
 			Call:      hostTap,
 			Helpshort: "control host taps for communicating between hosts and VMs",
 			Helplong: `
-Contrl host taps on a named vlan for communicating between a host and any VMs
+Control host taps on a named vlan for communicating between a host and any VMs
 on that vlan. 
 
 Calling host_tap with no arguments will list all created host_taps.
