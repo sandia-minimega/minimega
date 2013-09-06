@@ -64,7 +64,7 @@ type vmInfo struct {
 }
 
 func init() {
-	launchRate = time.Millisecond * 100
+	launchRate = time.Millisecond * 1000
 	launchAck = make(chan int)
 	killAck = make(chan int)
 	vmIdChan = make(chan int)
