@@ -59,7 +59,7 @@ func cliFile(c cliCommand) cliResponse {
 				Response: l,
 			}
 		case "delete":
-			err := iomDelete(c.Args[1])
+			err := iom.Delete(c.Args[1])
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
@@ -67,8 +67,7 @@ func cliFile(c cliCommand) cliResponse {
 			}
 			return cliResponse{}
 		case "get":
-			iomGet(c.Args[1])
-			return cliResponse{}
+			return iom.Get(c.Args[1])
 		default:
 			return cliResponse{
 				Error: "malformed command",
@@ -79,14 +78,6 @@ func cliFile(c cliCommand) cliResponse {
 			Error: "file takes at least one argument",
 		}
 	}
-}
-
-func iomDelete(file string) error {
-	return iom.Delete(file)
-}
-
-func iomGet(file string) {
-	iom.GetNB(file)
 }
 
 func iomList(dir string) (string, error) {

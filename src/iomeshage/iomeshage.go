@@ -73,20 +73,12 @@ func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 }
 
 // Retrieve a file from the shortest path node that has it. Get blocks until
-// the file transfer is complete or errors out. If the file specified is a
+// the file transfer is begins or errors out. If the file specified is a
 // directory, the entire directory will be recursively transferred.
 // If the file already exists on this node, Get will return immediately with no
 // error.
 func (iom *IOMeshage) Get(file string) error {
 	return nil
-}
-
-// Retrieve a file from the shortest path node that has it, and return control
-// immediately. In-flight transfers can be checked with Status(). If the file
-// specified is a directory, the entire directory will be recursively
-// tranferred.
-func (iom *IOMeshage) GetNB(file string) {
-
 }
 
 // Return status on in-flight file transfers
