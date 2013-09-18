@@ -319,13 +319,10 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		go vm.launchOne()
 	}
 	// get acknowledgements from each vm
-	ret := ""
 	for i := 0; i < numVms; i++ {
-		ret += fmt.Sprintf("VM: %v launched\n", <-launchAck)
+		<-launchAck
 	}
-	return cliResponse{
-		Response: ret,
-	}
+	return cliResponse{}
 }
 
 func (l *vmList) info(c cliCommand) cliResponse {
