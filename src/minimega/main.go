@@ -31,6 +31,7 @@ var (
 	f_nostdin   = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version   = flag.Bool("version", false, "print the version and copyright notices")
 	f_namespace = flag.String("namespace", "minimega", "meshage namespace for discovery")
+	f_iomBase   = flag.String("filepath", "/tmp/minimega/files", "directory to serve files from")
 	vms         vmList
 )
 
@@ -50,6 +51,15 @@ func main() {
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
 		*f_base += "/"
+	}
+
+	// rebase f_iomBase if f_base changed but iomBase did not
+	if *f_base != "/tmp/minimega/" && *f_iomBase == "/tmp/minimega/files" {
+		*f_iomBase = *f_base + "files"
+	}
+
+	if !strings.HasSuffix(*f_iomBase, "/") {
+		*f_iomBase += "/"
 	}
 
 	if *f_version {

@@ -45,6 +45,8 @@ func meshageInit(host string, namespace string, degree uint, port int) {
 	go meshageMux()
 	go meshageHandler()
 
+	iomeshageInit(meshageNode)
+
 	// wait a bit to let things settle
 	time.Sleep(500 * time.Millisecond)
 }

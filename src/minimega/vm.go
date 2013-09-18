@@ -528,8 +528,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		}
 	}
 	if len(v) == 0 {
-		return cliResponse{
-		}
+		return cliResponse{}
 	}
 
 	// output mask
