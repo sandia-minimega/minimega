@@ -5,65 +5,17 @@
 package main
 
 import (
-	"encoding/gob"
 	"fmt"
 	"math/rand"
 	"meshage"
 	log "minilog"
 	"os"
 	"ranges"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
-
-var (
-	meshageNode           *meshage.Node
-	meshageMessages       chan *meshage.Message
-	meshageCommand        chan *meshage.Message
-	meshageResponse       chan *meshage.Message
-	meshageLog            bool
-	meshageTimeout        time.Duration
-	meshageTimeoutDefault = time.Duration(10 * time.Second)
-)
-
-func init() {
-	gob.Register(cliCommand{})
-	gob.Register(cliResponse{})
-}
-
-func meshageInit(host string, namespace string, degree uint, port int) {
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port)
-
-	meshageCommand = make(chan *meshage.Message, 1024)
-	meshageResponse = make(chan *meshage.Message, 1024)
-
-	meshageTimeout = time.Duration(10 * time.Second)
-
-	go meshageMux()
-	go meshageHandler()
-
-	iomeshageInit(meshageNode)
-
-	// wait a bit to let things settle
-	time.Sleep(500 * time.Millisecond)
-}
-
-func meshageMux() {
-	for {
-		m := <-meshageMessages
-		switch reflect.TypeOf(m.Body) {
-		case reflect.TypeOf(cliCommand{}):
-			meshageCommand <- m
-		case reflect.TypeOf(cliResponse{}):
-			meshageResponse <- m
-		default:
-			log.Errorln("got invalid message!")
-		}
-	}
-}
 
 func meshageHandler() {
 	for {

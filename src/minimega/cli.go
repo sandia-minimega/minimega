@@ -1026,6 +1026,42 @@ of VMs that have been flushed may be reused.
 				return nil
 			},
 		},
+
+		"file": &command{
+			Call:      cliFile,
+			Helpshort: "work with files served by minimega",
+			Helplong: `
+file allows you to transfer and manage files served by minimega in the
+directory set by the -filepath flag (default is <base directory>/files).
+
+To list files currently being served, issue the list command with a directory
+relative to the served directory:
+
+        file list /foo
+
+Issuing "file list /" will list the contents of the served directory.
+
+Files can be deleted with the delete command:
+
+        file delete /foo
+
+If a directory is given, the directory will be recursively deleted.
+
+Files are transferred using the get command. When a get command is issued, the
+node will begin searching for a file matching the path and name within the
+mesh. If the file exists, it will be transferred to the requesting node. If
+multiple different files exist with the same name, the behavior is undefined.
+When a file transfer begins, control will return to minimega while the
+transfer completes.
+
+To see files that are currently being transferred, use the status command:
+
+        file status`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 

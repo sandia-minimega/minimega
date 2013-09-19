@@ -8,7 +8,9 @@
 package iomeshage
 
 import (
+	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"meshage"
 	log "minilog"
 	"os"
@@ -19,9 +21,11 @@ import (
 // IOMeshage object, which must have a base path to serve files on and a
 // meshage node.
 type IOMeshage struct {
-	base  string        // base path for serving files
-	node  *meshage.Node // meshage node to use
-	Cache bool          // true if this node should cache files routed through it
+	base     string                // base path for serving files
+	node     *meshage.Node         // meshage node to use
+	Cache    bool                  // true if this node should cache files routed through it
+	Messages chan *meshage.Message // Incoming messages from meshage
+	TIDs     map[int64]chan *IOMMessage
 }
 
 // FileInfo contains information about a file or directory being served by iomeshage.
@@ -38,6 +42,10 @@ type Transfer struct {
 	BytesTransferred int64         // Number of bytes transferred so far.
 }
 
+var (
+	timeout = time.Duration(10 * time.Second)
+)
+
 // New returns a new iomeshage object service base directory b on meshage node
 // n, and optionally caching
 func New(base string, node *meshage.Node, cache bool) (*IOMeshage, error) {
@@ -46,11 +54,18 @@ func New(base string, node *meshage.Node, cache bool) (*IOMeshage, error) {
 	}
 	log.Debug("new iomeshage node on base %v", base)
 	err := os.MkdirAll(base, 0644)
-	return &IOMeshage{
-		base:  base,
-		node:  node,
-		Cache: cache,
-	}, err
+
+	r := &IOMeshage{
+		base:     base,
+		node:     node,
+		Cache:    cache,
+		Messages: make(chan *meshage.Message, 1024),
+		TIDs:     make(map[int64]chan *IOMMessage),
+	}
+
+	go r.handleMessages()
+
+	return r, err
 }
 
 // List files and directories starting at iom.Base+dir
@@ -78,6 +93,51 @@ func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 // If the file already exists on this node, Get will return immediately with no
 // error.
 func (iom *IOMeshage) Get(file string) error {
+	// first, find the file somewhere in the mesh
+	TID := genTID()
+	c := make(chan *IOMMessage)
+	err := iom.registerTID(TID, c)
+	defer iom.unregisterTID(TID)
+
+	if err != nil {
+		// a collision in int64, we should tell someone about this
+		log.Fatalln(err)
+	}
+
+	m := &IOMMessage{
+		From:     iom.node.Name(),
+		Type:     TYPE_INFO,
+		Filename: file,
+		TID:      TID,
+	}
+	n, err := iom.node.Broadcast(meshage.UNORDERED, m)
+	if err != nil {
+		return err
+	}
+	log.Debug("sent info request to %v nodes", n)
+
+	var info *IOMMessage
+	var gotInfo bool
+	// wait for n responses, or a timeout
+	for i := 0; i < n; i++ {
+		select {
+		case resp := <-c:
+			log.Debugln("got response: ", resp)
+			if resp.ACK {
+				log.Debugln("got info from: ", resp.From)
+				info = resp
+				gotInfo = true
+			}
+		case <-time.After(timeout):
+			return fmt.Errorf("timeout")
+		}
+	}
+	if !gotInfo {
+		return fmt.Errorf("file not found")
+	}
+
+	log.Debug("found file on node %v with %v parts", info.From, info.Part)
+
 	return nil
 }
 
@@ -98,4 +158,10 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 	}
 	log.Debug("dir is %v%v\n", iom.base, dir)
 	return iom.base + dir
+}
+
+func genTID() int64 {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	return r.Int63()
 }

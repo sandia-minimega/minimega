@@ -67,7 +67,13 @@ func cliFile(c cliCommand) cliResponse {
 			}
 			return cliResponse{}
 		case "get":
-			return iom.Get(c.Args[1])
+			err := iom.Get(c.Args[1])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			return cliResponse{}
 		default:
 			return cliResponse{
 				Error: "malformed command",

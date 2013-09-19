@@ -110,6 +110,11 @@ func NewNode(name string, namespace string, degree uint, port int) (*Node, chan 
 	return n, n.receive
 }
 
+// return the name of this node
+func (n *Node) Name() string {
+	return n.name
+}
+
 // Dial connects a node to another, regardless of degree. Error is nil on success.
 func (n *Node) Dial(addr string) error {
 	return n.dial(addr, false)
