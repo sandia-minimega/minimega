@@ -19,11 +19,16 @@ import (
 	"version"
 )
 
+const (
+	BASE_PATH = "/tmp/minimega"
+	IOM_PATH = "/tmp/minimega/files"
+)
+
 var (
 	f_loglevel  = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
 	f_log       = flag.Bool("v", true, "log on stderr")
 	f_logfile   = flag.String("logfile", "", "also log to file")
-	f_base      = flag.String("base", "/tmp/minimega", "base path for minimega data")
+	f_base      = flag.String("base", BASE_PATH, "base path for minimega data")
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_degree    = flag.Int("degree", 0, "meshage starting degree")
 	f_port      = flag.Int("port", 8966, "meshage port to listen on")
@@ -31,7 +36,7 @@ var (
 	f_nostdin   = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version   = flag.Bool("version", false, "print the version and copyright notices")
 	f_namespace = flag.String("namespace", "minimega", "meshage namespace for discovery")
-	f_iomBase   = flag.String("filepath", "/tmp/minimega/files", "directory to serve files from")
+	f_iomBase   = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	vms         vmList
 )
 
@@ -54,7 +59,7 @@ func main() {
 	}
 
 	// rebase f_iomBase if f_base changed but iomBase did not
-	if *f_base != "/tmp/minimega/" && *f_iomBase == "/tmp/minimega/files" {
+	if *f_base != BASE_PATH && *f_iomBase == IOM_PATH {
 		*f_iomBase = *f_base + "files"
 	}
 
