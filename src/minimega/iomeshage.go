@@ -114,5 +114,14 @@ func iomStatus() string {
 	if transfers == nil {
 		return ""
 	}
-	return fmt.Sprintln("%v", transfers)
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Filename\tTemporary directory\tCompleted parts\n")
+	for _, f := range transfers {
+		fmt.Fprintf(w, "%v\t%v\t%v/%v\n", f.Filename, f.Dir, len(f.Parts), f.NumParts)
+	}
+	w.Flush()
+	return o.String()
 }

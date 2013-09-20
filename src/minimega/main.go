@@ -21,7 +21,7 @@ import (
 
 const (
 	BASE_PATH = "/tmp/minimega"
-	IOM_PATH = "/tmp/minimega/files"
+	IOM_PATH  = "/tmp/minimega/files"
 )
 
 var (
