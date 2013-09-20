@@ -92,9 +92,17 @@ func main() {
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt)
 	go func() {
-		<-sig
-		log.Info("caught signal, tearing down, ctrl-c again will force quit")
-		teardown()
+		first := true
+		for {
+			<-sig
+			if first {
+				log.Info("caught signal, tearing down, ctrl-c again will force quit")
+				go teardown()
+				first = false
+			} else {
+				os.Exit(1)
+			}
+		}
 	}()
 
 	r := externalCheck(cliCommand{})
