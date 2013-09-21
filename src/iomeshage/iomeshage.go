@@ -19,6 +19,7 @@ import (
 	log "minilog"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -31,6 +32,7 @@ type IOMeshage struct {
 	Messages  chan *meshage.Message // Incoming messages from meshage
 	TIDs      map[int64]chan *IOMMessage
 	transfers map[string]*Transfer // current transfers or caches of file parts
+	drainLock sync.RWMutex
 }
 
 type FileInfo struct {
@@ -58,7 +60,7 @@ func New(base string, node *meshage.Node, cache bool) (*IOMeshage, error) {
 		base += "/"
 	}
 	log.Debug("new iomeshage node on base %v", base)
-	err := os.MkdirAll(base, 0644)
+	err := os.MkdirAll(base, 0755)
 
 	r := &IOMeshage{
 		base:      base,
@@ -99,6 +101,12 @@ func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 // If the file already exists on this node, Get will return immediately with no
 // error.
 func (iom *IOMeshage) Get(file string) error {
+	// is this file available locally?
+	_, err := iom.fileInfo(file)
+	if err == nil {
+		return nil
+	}
+
 	// is this file already in flight?
 	if _, ok := iom.transfers[file]; ok {
 		return fmt.Errorf("file already in flight")
@@ -107,7 +115,7 @@ func (iom *IOMeshage) Get(file string) error {
 	// find the file somewhere in the mesh
 	TID := genTID()
 	c := make(chan *IOMMessage)
-	err := iom.registerTID(TID, c)
+	err = iom.registerTID(TID, c)
 	defer iom.unregisterTID(TID)
 
 	if err != nil {
@@ -237,7 +245,11 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 		log.Debug("found part %v on node %v", info.Part, info.From)
 
 		// transfer this part
-		iom.Xfer(m.Filename, info.Part, info.From)
+		err = iom.Xfer(m.Filename, info.Part, info.From)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
 		iom.transfers[filename].Parts[p] = true
 	}
 
@@ -270,6 +282,8 @@ func (iom *IOMeshage) destroyTempTransfer(filename string) {
 		return
 	}
 
+	iom.drainLock.Lock()
+	defer iom.drainLock.Unlock()
 	err := os.RemoveAll(t.Dir)
 	if err != nil {
 		log.Errorln(err)
@@ -277,7 +291,7 @@ func (iom *IOMeshage) destroyTempTransfer(filename string) {
 	delete(iom.transfers, filename)
 }
 
-func (iom *IOMeshage) Xfer(filename string, part int64, from string) {
+func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 	TID := genTID()
 	c := make(chan *IOMMessage)
 	err := iom.registerTID(TID, c)
@@ -297,8 +311,7 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) {
 	}
 	err = iom.node.Set([]string{from}, meshage.UNORDERED, m)
 	if err != nil {
-		log.Errorln(err)
-		return
+		return err
 	}
 
 	// wait for a response, or a timeout
@@ -312,17 +325,18 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) {
 				outfile := fmt.Sprintf("%v/%v.part_%v", t.Dir, filename, part)
 				err := ioutil.WriteFile(outfile, resp.Data, 0664)
 				if err != nil {
-					log.Errorln(err)
-					return
+					return err
 				}
 			} else {
-				log.Errorln("no transfer temporary directory to write to!")
+				return fmt.Errorf("no transfer temporary directory to write to!")
 			}
+		} else {
+			return fmt.Errorf("received NACK from xfer node")
 		}
 	case <-time.After(timeout):
-		log.Errorln("timeout")
-		return
+		return fmt.Errorf("timeout")
 	}
+	return nil
 }
 
 // Return status on in-flight file transfers

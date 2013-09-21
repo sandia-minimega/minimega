@@ -6,6 +6,7 @@ import (
 	"meshage"
 	log "minilog"
 	"os"
+	"strings"
 )
 
 const (
@@ -129,6 +130,9 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		TID:      m.TID,
 	}
 
+	iom.drainLock.RLock()
+	defer iom.drainLock.RUnlock()
+
 	_, err := iom.fileInfo(m.Filename)
 	if err != nil {
 		resp.ACK = false
@@ -144,13 +148,13 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	if resp.ACK {
 		err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
 		if err != nil {
-			log.Errorln("handleWhohas: sending message: ", err)
+			log.Errorln("handlePart: sending message: ", err)
 		}
 		return
 	}
 
 	// we don't have the file in a complete state at least, do we have that specific part in flight somewhere?
-	// we consider a part to be transferrable IFF it exists on disk and is not in the in-flight list.
+	// we consider a part to be transferrable IFF it exists on disk and is marked as being fully received.
 	if t, ok := iom.transfers[m.Filename]; ok {
 		// we are currently transferring or caching parts of this file
 		if t.Parts[m.Part] {
@@ -159,6 +163,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 			if err != nil {
 				// we have it
 				resp.ACK = true
+				resp.Part = m.Part
 				if xfer {
 					resp.Data = iom.readPart(partname, 0)
 				}
@@ -170,7 +175,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 
 	err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
 	if err != nil {
-		log.Errorln("handleWhohas: sending message: ", err)
+		log.Errorln("handlePart: sending message: ", err)
 	}
 }
 
@@ -179,7 +184,10 @@ func (iom *IOMeshage) handleXfer(m *IOMMessage) {
 }
 
 func (iom *IOMeshage) readPart(filename string, part int64) []byte {
-	f, err := os.Open(iom.base + filename)
+	if !strings.HasPrefix(filename, iom.base) {
+		filename = iom.base + filename
+	}
+	f, err := os.Open(filename)
 	if err != nil {
 		log.Errorln(err)
 		return nil
