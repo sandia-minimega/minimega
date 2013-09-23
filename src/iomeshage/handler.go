@@ -88,6 +88,7 @@ func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 		log.Debugln("fileInfo error opening file: ", err)
 		return 0, err
 	}
+	defer f.Close()
 
 	// we do have the file, calculate the number of parts
 	fi, err := f.Stat()
@@ -192,6 +193,7 @@ func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 		log.Errorln(err)
 		return nil
 	}
+	defer f.Close()
 
 	// we do have the file, calculate the number of parts
 	fi, err := f.Stat()

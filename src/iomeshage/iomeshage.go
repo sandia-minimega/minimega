@@ -276,6 +276,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 		fpart, err := os.Open(fname)
 		if err != nil {
 			log.Errorln(err)
+			tfile.Close()
 			return
 		}
 		io.Copy(tfile, fpart)
