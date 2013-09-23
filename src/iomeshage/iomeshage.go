@@ -3,12 +3,8 @@
 // Files are stored in a predetermined directory structure. When a particular
 // meshage node needs a file, it polls nodes looking for that file, looking at
 // shortest path nodes first. The node with the file and the fewest hops will
-// transfer the file to the requesting node. Any nodes along the route will
-// also cache the file, unless the node has caching turned off (on by default).
+// transfer the file to the requesting node.
 package iomeshage
-
-// TODO: local check to see if the file exists
-// TODO: caching
 
 import (
 	"fmt"
@@ -23,15 +19,18 @@ import (
 	"time"
 )
 
+const (
+	MAX_ATTEMPTS = 3
+)
+
 // IOMeshage object, which must have a base path to serve files on and a
 // meshage node.
 type IOMeshage struct {
 	base      string                // base path for serving files
 	node      *meshage.Node         // meshage node to use
-	Cache     bool                  // true if this node should cache files routed through it
 	Messages  chan *meshage.Message // Incoming messages from meshage
 	TIDs      map[int64]chan *IOMMessage
-	transfers map[string]*Transfer // current transfers or caches of file parts
+	transfers map[string]*Transfer // current transfers
 	drainLock sync.RWMutex
 }
 
@@ -41,7 +40,7 @@ type FileInfo struct {
 	Size int64
 }
 
-// Transfer describes an in-flight transfer or cache of file parts
+// Transfer describes an in-flight transfer
 type Transfer struct {
 	Dir      string         // temporary directory hold the file parts
 	Filename string         // file name
@@ -54,8 +53,8 @@ var (
 )
 
 // New returns a new iomeshage object service base directory b on meshage node
-// n, and optionally caching
-func New(base string, node *meshage.Node, cache bool) (*IOMeshage, error) {
+// n
+func New(base string, node *meshage.Node) (*IOMeshage, error) {
 	if !strings.HasSuffix(base, "/") {
 		base += "/"
 	}
@@ -65,7 +64,6 @@ func New(base string, node *meshage.Node, cache bool) (*IOMeshage, error) {
 	r := &IOMeshage{
 		base:      base,
 		node:      node,
-		Cache:     cache,
 		Messages:  make(chan *meshage.Message, 1024),
 		TIDs:      make(map[int64]chan *IOMMessage),
 		transfers: make(map[string]*Transfer),
@@ -206,51 +204,60 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 	defer iom.destroyTempTransfer(filename)
 
 	for _, p := range parts {
-		m := &IOMMessage{
-			From:     iom.node.Name(),
-			Type:     TYPE_WHOHAS,
-			Filename: filename,
-			TID:      TID,
-			Part:     p,
-		}
-		n, err := iom.node.Broadcast(meshage.UNORDERED, m)
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-		log.Debug("sent info request to %v nodes", n)
-
-		var info *IOMMessage
-		var gotPart bool
-		// wait for n responses, or a timeout
-		for i := 0; i < n; i++ {
-			select {
-			case resp := <-c:
-				log.Debugln("got response: ", resp)
-				if resp.ACK {
-					log.Debugln("got partInfo from: ", resp.From)
-					info = resp
-					gotPart = true
-				}
-			case <-time.After(timeout):
-				log.Errorln("timeout")
-				return
+		// attempt to get this part up to MAX_ATTEMPTS attempts
+		for attempt := 0; attempt < MAX_ATTEMPTS; attempt++ {
+			log.Debug("transferring filepart %v:%v, attempt %v", filename, p, attempt)
+			m := &IOMMessage{
+				From:     iom.node.Name(),
+				Type:     TYPE_WHOHAS,
+				Filename: filename,
+				TID:      TID,
+				Part:     p,
 			}
+			n, err := iom.node.Broadcast(meshage.UNORDERED, m)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			log.Debug("sent info request to %v nodes", n)
+
+			var info *IOMMessage
+			var gotPart bool
+			// wait for n responses, or a timeout
+			for i := 0; i < n; i++ {
+				select {
+				case resp := <-c:
+					log.Debugln("got response: ", resp)
+					if resp.ACK {
+						log.Debugln("got partInfo from: ", resp.From)
+						info = resp
+						gotPart = true
+					}
+				case <-time.After(timeout):
+					log.Errorln("timeout")
+					continue
+				}
+			}
+			if !gotPart {
+				log.Errorln("part not found")
+				continue
+			}
+
+			log.Debug("found part %v on node %v", info.Part, info.From)
+
+			// transfer this part
+			err = iom.Xfer(m.Filename, info.Part, info.From)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			iom.transfers[filename].Parts[p] = true
+			break
 		}
-		if !gotPart {
-			log.Errorln("part not found")
+		if !iom.transfers[filename].Parts[p] {
+			log.Error("could not transfer filepart %v:%v after %v attempts", filename, p, MAX_ATTEMPTS)
 			return
 		}
-
-		log.Debug("found part %v on node %v", info.Part, info.From)
-
-		// transfer this part
-		err = iom.Xfer(m.Filename, info.Part, info.From)
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-		iom.transfers[filename].Parts[p] = true
 	}
 
 	// copy the parts into the whole file

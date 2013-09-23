@@ -15,7 +15,7 @@ var (
 
 func iomeshageInit(node *meshage.Node) {
 	var err error
-	iom, err = iomeshage.New(*f_iomBase, node, true)
+	iom, err = iomeshage.New(*f_iomBase, node)
 	if err != nil {
 		log.Errorln(err)
 		teardown()

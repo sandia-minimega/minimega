@@ -156,7 +156,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	// we don't have the file in a complete state at least, do we have that specific part in flight somewhere?
 	// we consider a part to be transferrable IFF it exists on disk and is marked as being fully received.
 	if t, ok := iom.transfers[m.Filename]; ok {
-		// we are currently transferring or caching parts of this file
+		// we are currently transferring parts of the file
 		if t.Parts[m.Part] {
 			partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, t.Filename, m.Part)
 			_, err := iom.fileInfo(partname)
