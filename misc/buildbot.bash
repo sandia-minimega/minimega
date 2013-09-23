@@ -7,7 +7,7 @@ export PATH=${PATH}:/opt/go/bin
 cd /home/fritz/buildbot/mega
 git pull
 ./clean.bash
-./all.bash > build.log
+./build.bash > build.log
 cd /home/fritz/buildbot
 DATE=`date +%Y-%m-%d`
 mkdir mega-$DATE && cd mega-$DATE

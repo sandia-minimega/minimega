@@ -10,7 +10,7 @@ You will need to have syslinux, specifically pxelinux, installed. Figure out whe
 Compile igor; depending on your environment, the process may differ. Here's how we do it:
 
 	$ cd ~/mega/
-	$ ./all.bash
+	$ ./build.bash
 
 This will place the "igor" binary into bin/. Place it somewhere accessible, such as /usr/local/bin.
 
