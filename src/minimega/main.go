@@ -38,6 +38,7 @@ var (
 	f_namespace = flag.String("namespace", "minimega", "meshage namespace for discovery")
 	f_iomBase   = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	vms         vmList
+	panicOnQuit bool
 )
 
 var banner string = `minimega, Copyright (2013) Sandia Corporation. 
@@ -178,6 +179,9 @@ func main() {
 }
 
 func teardown() {
+	if panicOnQuit {
+		panic("teardown")
+	}
 	vms.kill(makeCommand("vm_kill -1"))
 	dnsmasqKill(-1)
 	err := currentBridge.Destroy()
