@@ -207,6 +207,10 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 		// attempt to get this part up to MAX_ATTEMPTS attempts
 		for attempt := 0; attempt < MAX_ATTEMPTS; attempt++ {
 			log.Debug("transferring filepart %v:%v, attempt %v", filename, p, attempt)
+			if attempt > 0 {
+				// we're most likely issuing multiple attempts because of heavy traffic, wait a bit for things to calm down
+				time.Sleep(timeout)
+			}
 			m := &IOMMessage{
 				From:     iom.node.Name(),
 				Type:     TYPE_WHOHAS,
