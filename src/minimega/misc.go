@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	log "minilog"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -39,16 +40,35 @@ func hostid(s string) (string, int) {
 }
 
 func cliDebug(c cliCommand) cliResponse {
-	// create output
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Go Version:\t%v\n", runtime.Version)
-	fmt.Fprintf(w, "Goroutines:\t%v\n", runtime.NumGoroutine())
-	fmt.Fprintf(w, "CGO calls:\t%v\n", runtime.NumCgoCall())
-	w.Flush()
+	if len(c.Args) == 0 {
+		// create output
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "Go Version:\t%v\n", runtime.Version)
+		fmt.Fprintf(w, "Goroutines:\t%v\n", runtime.NumGoroutine())
+		fmt.Fprintf(w, "CGO calls:\t%v\n", runtime.NumCgoCall())
+		w.Flush()
 
-	return cliResponse{
-		Response: o.String(),
+		return cliResponse{
+			Response: o.String(),
+		}
+	}
+
+	switch strings.ToLower(c.Args[0]) {
+	case "panic":
+		panicOnQuit = true
+		host, err := os.Hostname()
+		if err != nil {
+			log.Errorln(err)
+			teardown()
+		}
+		return cliResponse{
+			Response: fmt.Sprintf("%v wonders what you're up to...", host),
+		}
+	default:
+		return cliResponse{
+			Error: "usage: debug [panic]",
+		}
 	}
 }
