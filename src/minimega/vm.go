@@ -332,7 +332,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	var mask string
 	switch len(c.Args) {
 	case 0:
-	case 1: // search or mask
+		case 1: // search or mask
 		if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else if strings.HasPrefix(c.Args[0], "[") {
@@ -342,7 +342,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-	case 2: // first term MUST be search
+		case 2: // first term MUST be search
 		if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else {
@@ -460,7 +460,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 			}
 		case "tap":
-		VM_INFO_TAP_LOOP:
+			VM_INFO_TAP_LOOP:
 			for i, j := range l.vms {
 				for _, k := range j.taps {
 					if k == d[1] {
@@ -1058,6 +1058,7 @@ func cliVMAppend(c cliCommand) cliResponse {
 }
 
 func cliVMNet(c cliCommand) cliResponse {
+	// example: vm_net 100,00:00:00:00:00:00 101,00:00:00:00:00:01
 	r := cliResponse{}
 	if len(c.Args) == 0 {
 		return cliResponse{
@@ -1066,7 +1067,8 @@ func cliVMNet(c cliCommand) cliResponse {
 	} else {
 		info.Networks = []int{}
 		for _, lan := range c.Args {
-			val, err := strconv.Atoi(lan)
+			lansplit := SplitN(lan,",",2) // split on comma into two strings, before and after the first comma
+			val, err := strconv.Atoi(lansplit[0]) // the vlan id
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),

@@ -107,9 +107,9 @@ func init() {
 			},
 			Helpshort: "set the launch/kill rate in milliseconds",
 			Helplong: `
-Set the launch and kill rate in milliseconds. Some calls to external tools can
-take some time to respond, causing errors if you try to launch or kill VMs too
-quickly. The default value is 100 milliseconds.`,
+			Set the launch and kill rate in milliseconds. Some calls to external tools can
+			take some time to respond, causing errors if you try to launch or kill VMs too
+			quickly. The default value is 100 milliseconds.`,
 			Record: true,
 			Clear: func() error {
 				launchRate = time.Millisecond * 100
@@ -121,10 +121,10 @@ quickly. The default value is 100 milliseconds.`,
 			Call:      cliLogLevel,
 			Helpshort: "set the log level",
 			Helplong: `
-Usage: log_level <level>
-Set the log level to one of [debug, info, warn, error, fatal, off]. Log levels
-inherit lower levels, so setting the level to error will also log fatal, and
-setting the mode to debug will log everything.`,
+			Usage: log_level <level>
+			Set the log level to one of [debug, info, warn, error, fatal, off]. Log levels
+			inherit lower levels, so setting the level to error will also log fatal, and
+			setting the mode to debug will log everything.`,
 			Record: true,
 			Clear: func() error {
 				*f_loglevel = "error"
@@ -138,7 +138,7 @@ setting the mode to debug will log everything.`,
 			Call:      cliLogStderr,
 			Helpshort: "enable/disable logging to stderr",
 			Helplong: `
-Enable or disable logging to stderr. Valid options are [true, false].`,
+			Enable or disable logging to stderr. Valid options are [true, false].`,
 			Record: true,
 			Clear: func() error {
 				_, err := log.GetLevel("stdio")
@@ -153,8 +153,8 @@ Enable or disable logging to stderr. Valid options are [true, false].`,
 			Call:      cliLogFile,
 			Helpshort: "enable logging to a file",
 			Helplong: `
-Usage log_file <filename>
-Log to a file. To disable file logging, call "clear log_file".`,
+			Usage log_file <filename>
+			Log to a file. To disable file logging, call "clear log_file".`,
 			Record: true,
 			Clear: func() error {
 				_, err := log.GetLevel("file")
@@ -169,9 +169,9 @@ Log to a file. To disable file logging, call "clear log_file".`,
 			Call:      externalCheck,
 			Helpshort: "check for the presence of all external executables minimega uses",
 			Helplong: `
-Minimega maintains a list of external packages that it depends on, such as qemu.
-Calling check will attempt to find each of these executables in the avaiable
-path, and returns an error on the first one not found.`,
+			Minimega maintains a list of external packages that it depends on, such as qemu.
+			Calling check will attempt to find each of these executables in the avaiable
+			path, and returns an error on the first one not found.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -182,9 +182,9 @@ path, and returns an error on the first one not found.`,
 			Call:      nuke,
 			Helpshort: "attempt to clean up after a crash",
 			Helplong: `
-After a crash, the VM state on the machine can be difficult to recover from.
-Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
-removes the temporary minimega state on the harddisk.`,
+			After a crash, the VM state on the machine can be difficult to recover from.
+			Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
+			removes the temporary minimega state on the harddisk.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -216,11 +216,11 @@ removes the temporary minimega state on the harddisk.`,
 			},
 			Helpshort: "write the command history to a file",
 			Helplong: `
-Usage: write <file>
-Write the command history to <file>. This is useful for handcrafting configs
-on the minimega command line and then saving them for later use. Argss that
-failed, as well as some commands that do not impact the VM state, such as
-'help', do not get recorded.`,
+			Usage: write <file>
+			Write the command history to <file>. This is useful for handcrafting configs
+			on the minimega command line and then saving them for later use. Argss that
+			failed, as well as some commands that do not impact the VM state, such as
+			'help', do not get recorded.`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -264,9 +264,9 @@ failed, as well as some commands that do not impact the VM state, such as
 			},
 			Helpshort: "read and execute a command file",
 			Helplong: `
-Usage: read <file>
-Read a command file and execute it. This has the same behavior as if you typed
-the file in manually.`,
+			Usage: read <file>
+			Read a command file and execute it. This has the same behavior as if you typed
+			the file in manually.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -279,51 +279,51 @@ the file in manually.`,
 			},
 			Helpshort: "print information about VMs",
 			Helplong: `
-Usage: vm_info <optional search term> <optional output mask>
-Print information about VMs. vm_info allows searching for VMs based on any VM
-parameter, and output some or all information about the VMs in question.
-Additionally, you can display information about all running VMs. 
+			Usage: vm_info <optional search term> <optional output mask>
+			Print information about VMs. vm_info allows searching for VMs based on any VM
+			parameter, and output some or all information about the VMs in question.
+			Additionally, you can display information about all running VMs. 
 
-A vm_info command takes two optional arguments, a search term, and an output
-mask. If the search term is omitted, information about all VMs will be
-displayed. If the output mask is omitted, all information about the VMs will be
-displayed.
+			A vm_info command takes two optional arguments, a search term, and an output
+			mask. If the search term is omitted, information about all VMs will be
+			displayed. If the output mask is omitted, all information about the VMs will be
+			displayed.
 
-The search term uses a single key=value argument. For example, if you want all
-information about VM 50: 
-	vm_info id=50
+			The search term uses a single key=value argument. For example, if you want all
+			information about VM 50: 
+			vm_info id=50
 
-The output mask uses an ordered list of fields inside [] brackets. For example,
-if you want the ID and IPs for all VMs on vlan 100: 
-	vm_info vlan=100 [id,ip]
+			The output mask uses an ordered list of fields inside [] brackets. For example,
+			if you want the ID and IPs for all VMs on vlan 100: 
+			vm_info vlan=100 [id,ip]
 
-Searchable and maskable fields are:
-	host	: The host that the VM is running on
-	id	: The VM ID, as an integer
-	name	: The VM name, if it exists
-	memory  : Allocated memory, in megabytes
-	disk    : disk image
-	initrd  : initrd image
-	kernel  : kernel image
-	cdrom   : cdrom image
-	state   : one of (building, running, paused, quit, error)
-	tap	: tap name
-	mac	: mac address
-	ip	: IPv4 address
-	ip6	: IPv6 address
-	vlan	: vlan, as an integer
+			Searchable and maskable fields are:
+			host	: The host that the VM is running on
+			id	: The VM ID, as an integer
+			name	: The VM name, if it exists
+			memory  : Allocated memory, in megabytes
+			disk    : disk image
+			initrd  : initrd image
+			kernel  : kernel image
+			cdrom   : cdrom image
+			state   : one of (building, running, paused, quit, error)
+			tap	: tap name
+			mac	: mac address
+			ip	: IPv4 address
+			ip6	: IPv6 address
+			vlan	: vlan, as an integer
 
-Examples:
-	Display a list of all IPs for all VMs:
-		vm_info [ip,ip6]
-	
-	Display all information about VMs with the disk image foo.qc2:
-		vm_info disk=foo.qc2
+			Examples:
+			Display a list of all IPs for all VMs:
+			vm_info [ip,ip6]
 
-	Display all information about all VMs:
-		vm_info
+			Display all information about VMs with the disk image foo.qc2:
+			vm_info disk=foo.qc2
 
-`,
+			Display all information about all VMs:
+			vm_info
+
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -372,12 +372,12 @@ Examples:
 			},
 			Helpshort: "launch virtual machines in a paused state",
 			Helplong: `
-Usage: vm_launch <number of vms or vm name>
-Launch <number of vms or vm name> virtual machines in a paused state, using the parameters
-defined leading up to the launch command. Any changes to the VM parameters 
-after launching will have no effect on launched VMs.
+			Usage: vm_launch <number of vms or vm name>
+			Launch <number of vms or vm name> virtual machines in a paused state, using the parameters
+			defined leading up to the launch command. Any changes to the VM parameters 
+			after launching will have no effect on launched VMs.
 
-If you supply a name instead of a number of VMs, one VM with that name will be launched.`,
+			If you supply a name instead of a number of VMs, one VM with that name will be launched.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -390,8 +390,8 @@ If you supply a name instead of a number of VMs, one VM with that name will be l
 			},
 			Helpshort: "kill running virtual machines",
 			Helplong: `
-Usage: vm_kill <vm id or name>
-Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
+			Usage: vm_kill <vm id or name>
+			Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -404,9 +404,9 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 			},
 			Helpshort: "start paused virtual machines",
 			Helplong: `
-Usage: vm_start <optional VM id or name>
-Start all or one paused virtual machine. To start all paused virtual machines,
-call start without the optional VM ID or name.`,
+			Usage: vm_start <optional VM id or name>
+			Start all or one paused virtual machine. To start all paused virtual machines,
+			call start without the optional VM ID or name.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -419,11 +419,11 @@ call start without the optional VM ID or name.`,
 			},
 			Helpshort: "stop/pause virtual machines",
 			Helplong: `
-Usage: vm_stop <optional VM id or name>
-Stop all or one running virtual machine. To stop all running virtual machines,
-call stop without the optional VM ID or name.
+			Usage: vm_stop <optional VM id or name>
+			Stop all or one running virtual machine. To stop all running virtual machines,
+			call stop without the optional VM ID or name.
 
-Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
+			Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -467,8 +467,8 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
 			Call:      cliVMDisk,
 			Helpshort: "set a disk image to attach to a VM",
 			Helplong: `
-Attach a disk to a VM. Any disk image supported by QEMU is a valid parameter.
-Disk images launched in snapshot mode may safely be used for multiple VMs.`,
+			Attach a disk to a VM. Any disk image supported by QEMU is a valid parameter.
+			Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 			Record: true,
 			Clear: func() error {
 				info.DiskPath = ""
@@ -480,8 +480,8 @@ Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 			Call:      cliVMCdrom,
 			Helpshort: "set a cdrom image to attach to a VM",
 			Helplong: `
-Attach a cdrom to a VM. When using a cdrom, it will automatically be set
-to be the boot device.`,
+			Attach a cdrom to a VM. When using a cdrom, it will automatically be set
+			to be the boot device.`,
 			Record: true,
 			Clear: func() error {
 				info.CdromPath = ""
@@ -493,8 +493,8 @@ to be the boot device.`,
 			Call:      cliVMKernel,
 			Helpshort: "set a kernel image to attach to a VM",
 			Helplong: `
-Attach a kernel image to a VM. If set, QEMU will boot from this image instead
-of any disk image.`,
+			Attach a kernel image to a VM. If set, QEMU will boot from this image instead
+			of any disk image.`,
 			Record: true,
 			Clear: func() error {
 				info.KernelPath = ""
@@ -506,7 +506,7 @@ of any disk image.`,
 			Call:      cliVMInitrd,
 			Helpshort: "set a initrd image to attach to a VM",
 			Helplong: `
-Attach an initrd image to a VM. Passed along with the kernel image at boot time.`,
+			Attach an initrd image to a VM. Passed along with the kernel image at boot time.`,
 			Record: true,
 			Clear: func() error {
 				info.InitrdPath = ""
@@ -518,9 +518,9 @@ Attach an initrd image to a VM. Passed along with the kernel image at boot time.
 			Call:      cliVMQemuAppend,
 			Helpshort: "add additional arguments for the QEMU command",
 			Helplong: `
-Add additional arguments to be passed to the QEMU instance. For example,
-"-serial tcp:localhost:4001".
-`,
+			Add additional arguments to be passed to the QEMU instance. For example,
+			"-serial tcp:localhost:4001".
+			`,
 			Record: true,
 			Clear: func() error {
 				info.QemuAppend = nil
@@ -532,13 +532,13 @@ Add additional arguments to be passed to the QEMU instance. For example,
 			Call:      cliVMAppend,
 			Helpshort: "set an append string to pass to a kernel set with vm_kernel",
 			Helplong: `
-Add an append string to a kernel set with vm_kernel. Setting vm_append without
-using vm_kernel will result in an error.
+			Add an append string to a kernel set with vm_kernel. Setting vm_append without
+			using vm_kernel will result in an error.
 
-For example, to set a static IP for a linux VM:
+			For example, to set a static IP for a linux VM:
 
-vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
-`,
+			vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
+			`,
 			Record: true,
 			Clear: func() error {
 				info.Append = ""
@@ -550,14 +550,20 @@ vm_append "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",
 			Helplong: `
-Usage: vm_net <name> <optional addtional names>
-Specify the network(s) that the VM is a member of by name. A corresponding VLAN
-will be created for each named network. For example, to connect a VM to VLAN 1
-and 5:
+			Usage: vm_net <id>[,<mac address>] [<id>[,<mac address] ...]
+			Specify the network(s) that the VM is a member of by id. A corresponding VLAN
+			will be created for each network. Optionally, you may specify the mac address 
+			of the interface to connect to that network. If not specifed, the mac address
+			will be randomly generated.
 
-vm_net 1 5
+			Examples:
 
-Calling vm_net with no parameters will list the current networks for this VM.`,
+			To connect a VM to VLANs 1 and 5:
+			vm_net 1 5
+			To connect a VM to VLANs 100, 101, and 102 with specific mac addresses:
+			vm_net 100,00:00:00:00:00:00 101,00:00:00:00:01:00 102,00:00:00:00:02:00
+
+			Calling vm_net with no parameters will list the current networks for this VM.`,
 			Record: true,
 			Clear: func() error {
 				info.Networks = []int{}
@@ -569,19 +575,19 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			Call:      WebCLI,
 			Helpshort: "start the minimega web interface",
 			Helplong: `
-Usage: web [port, novnc <novnc path>]
-Launch a webserver that allows you to browse the connected minimega hosts and 
-VMs, and connect to any VM in the pool.
+			Usage: web [port, novnc <novnc path>]
+			Launch a webserver that allows you to browse the connected minimega hosts and 
+			VMs, and connect to any VM in the pool.
 
-This command requires access to an installation of novnc. By default minimega
-looks in 'pwd'/misc/novnc. To set a different path, invoke:
+			This command requires access to an installation of novnc. By default minimega
+			looks in 'pwd'/misc/novnc. To set a different path, invoke:
 
-web novnc <path to novnc>
+			web novnc <path to novnc>
 
-To start the webserver on a specific port, issue the web command with the port:
-	web 7000
+			To start the webserver on a specific port, issue the web command with the port:
+			web 7000
 
-8080 is the default port.`,
+			8080 is the default port.`,
 			Record: true,
 			Clear: func() error {
 				vncNovnc = "misc/novnc"
@@ -602,7 +608,7 @@ To start the webserver on a specific port, issue the web command with the port:
 			},
 			Helpshort: "shows the command history",
 			Helplong: `
-Shows the command history`,
+			Shows the command history`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -631,8 +637,8 @@ Shows the command history`,
 			},
 			Helpshort: "restore a variable to its default state",
 			Helplong: `
-Restores a variable to its default state or clears it. For example, 'clear net'
-will clear the list of associated networks.`,
+			Restores a variable to its default state or clears it. For example, 'clear net'
+			will clear the list of associated networks.`,
 			Record: true,
 			Clear: func() error {
 				return fmt.Errorf("it's unclear how to clear clear")
@@ -682,28 +688,28 @@ will clear the list of associated networks.`,
 			Call:      hostTap,
 			Helpshort: "control host taps for communicating between hosts and VMs",
 			Helplong: `
-Control host taps on a named vlan for communicating between a host and any VMs
-on that vlan. 
+			Control host taps on a named vlan for communicating between a host and any VMs
+			on that vlan. 
 
-Calling host_tap with no arguments will list all created host_taps.
+			Calling host_tap with no arguments will list all created host_taps.
 
-To create a host_tap on a particular vlan, invoke host_tap with the create
-command:
+			To create a host_tap on a particular vlan, invoke host_tap with the create
+			command:
 
-	host_tap create <vlan> <ip/dhcp>
+			host_tap create <vlan> <ip/dhcp>
 
-For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
+			For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-	host_tap create 5 10.0.0.1/24
+			host_tap create 5 10.0.0.1/24
 
-Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
-ip/netmask:
+			Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
+			ip/netmask:
 
-	host_tap create 5 dhcp
+			host_tap create 5 dhcp
 
-To delete a host tap, use the delete command and tap name from the host_tap list:
+			To delete a host tap, use the delete command and tap name from the host_tap list:
 
-	host_tap delete <id>`,
+			host_tap delete <id>`,
 			Record: true,
 			Clear: func() error {
 				return nil //perhaps calling this should remove all host taps
@@ -714,7 +720,7 @@ To delete a host tap, use the delete command and tap name from the host_tap list
 			Call:      meshageDegree,
 			Helpshort: "view or set the current degree for this mesh node",
 			Helplong: `
-View or set the current degree for this mesh node.`,
+			View or set the current degree for this mesh node.`,
 			Record: true,
 			Clear: func() error {
 				meshageNode.SetDegree(0)
@@ -726,7 +732,7 @@ View or set the current degree for this mesh node.`,
 			Call:      meshageDial,
 			Helpshort: "connect this node to another",
 			Helplong: `
-Attempt to connect to another listening node.`,
+			Attempt to connect to another listening node.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -737,7 +743,7 @@ Attempt to connect to another listening node.`,
 			Call:      meshageDot,
 			Helpshort: "output a graphviz formatted dot file",
 			Helplong: `
-Output a graphviz formatted dot file representing the connected topology.`,
+			Output a graphviz formatted dot file representing the connected topology.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -748,7 +754,7 @@ Output a graphviz formatted dot file representing the connected topology.`,
 			Call:      meshageStatus,
 			Helpshort: "display a short status report of the mesh",
 			Helplong: `
-Display a short status report of the mesh.`,
+			Display a short status report of the mesh.`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -759,7 +765,7 @@ Display a short status report of the mesh.`,
 			Call:      meshageList,
 			Helpshort: "display the mesh adjacency list",
 			Helplong: `
-Display the mesh adjacency list.`,
+			Display the mesh adjacency list.`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -770,7 +776,7 @@ Display the mesh adjacency list.`,
 			Call:      meshageHangup,
 			Helpshort: "disconnect from a client",
 			Helplong: `
-Disconnect from a client.`,
+			Disconnect from a client.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -781,7 +787,7 @@ Disconnect from a client.`,
 			Call:      meshageMSATimeout,
 			Helpshort: "view or set the MSA timeout",
 			Helplong: `
-View or the the Meshage State Announcement timeout.`,
+			View or the the Meshage State Announcement timeout.`,
 			Record: true,
 			Clear: func() error {
 				meshageNode.SetMSATimeout(60)
@@ -793,13 +799,13 @@ View or the the Meshage State Announcement timeout.`,
 			Call:      meshageTimeoutCLI,
 			Helpshort: "view or set the mesh timeout",
 			Helplong: `
-View or set the timeout on sending mesh commands.
+			View or set the timeout on sending mesh commands.
 
-When a mesh command is issued, if a response isn't sent within mesh_timeout
-seconds, the command will be dropped and any future response will be discarded.
-Note that this does not cancel the outstanding command - the node receiving the
-command may still complete - but rather this node will stop waiting on a
-response.`,
+			When a mesh command is issued, if a response isn't sent within mesh_timeout
+			seconds, the command will be dropped and any future response will be discarded.
+			Note that this does not cancel the outstanding command - the node receiving the
+			command may still complete - but rather this node will stop waiting on a
+			response.`,
 			Record: true,
 			Clear: func() error {
 				meshageTimeout = meshageTimeoutDefault
@@ -811,9 +817,9 @@ response.`,
 			Call:      meshageSet,
 			Helpshort: "send a command to one or more connected clients",
 			Helplong: `
-Send a command to one or more connected clients.
-For example, to get the vm_info from nodes kn1 and kn2:
-	mesh_set kn[1-2] vm_info`,
+			Send a command to one or more connected clients.
+			For example, to get the vm_info from nodes kn1 and kn2:
+			mesh_set kn[1-2] vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -824,9 +830,9 @@ For example, to get the vm_info from nodes kn1 and kn2:
 			Call:      meshageBroadcast,
 			Helpshort: "send a command to all connected clients",
 			Helplong: `
-Send a command to all connected clients.
-For example, to get the vm_info from all nodes:
-	mesh_broadcast vm_info`,
+			Send a command to all connected clients.
+			For example, to get the vm_info from all nodes:
+			mesh_broadcast vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -847,7 +853,7 @@ For example, to get the vm_info from all nodes:
 			},
 			Helpshort: "return the hostname",
 			Helplong: `
-Return the hostname.`,
+			Return the hostname.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -858,31 +864,31 @@ Return the hostname.`,
 			Call:      dnsmasqCLI,
 			Helpshort: "start a dhcp/dns server on a specified ip",
 			Helplong: `
-Start a dhcp/dns server on a specified IP with a specified range.  For example,
-to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
-10.0.254.254:
+			Start a dhcp/dns server on a specified IP with a specified range.  For example,
+			to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
+			10.0.254.254:
 
-dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
+			dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
 
-To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
-running dnsmasq server, specify its ID from the list of running servers: For
-example, to kill dnsmasq server 2:
+			To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
+			running dnsmasq server, specify its ID from the list of running servers: For
+			example, to kill dnsmasq server 2:
 
-dnsmasq kill 2
+			dnsmasq kill 2
 
-To kill all running dnsmasq servers, pass -1 as the ID:
+			To kill all running dnsmasq servers, pass -1 as the ID:
 
-dnsmasq kill -1
+			dnsmasq kill -1
 
-dnsmasq will provide DNS service from the host, as well as from /etc/hosts. 
-You can specify an additional config file for dnsmasq by providing a file as an
-additional argument.
+			dnsmasq will provide DNS service from the host, as well as from /etc/hosts. 
+			You can specify an additional config file for dnsmasq by providing a file as an
+			additional argument.
 
-dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/dnsmasq-extra.conf
+			dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/dnsmasq-extra.conf
 
-NOTE: If specifying an additional config file, you must provide the full path to
-the file.
-`,
+			NOTE: If specifying an additional config file, you must provide the full path to
+			the file.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -893,11 +899,11 @@ the file.
 			Call:      shellCLI,
 			Helpshort: "execute a command",
 			Helplong: `
-Execute a command under the credentials of the running user. 
+			Execute a command under the credentials of the running user. 
 
-Commands run until they complete or error, so take care not to execute a command
-that does not return.
-`,
+			Commands run until they complete or error, so take care not to execute a command
+			that does not return.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -908,11 +914,11 @@ that does not return.
 			Call:      backgroundCLI,
 			Helpshort: "execute a command in the background",
 			Helplong: `
-Execute a command under the credentials of the running user. 
+			Execute a command under the credentials of the running user. 
 
-Commands run in the background and control returns immediately. Any output is
-logged.
-`,
+			Commands run in the background and control returns immediately. Any output is
+			logged.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -923,9 +929,9 @@ logged.
 			Call:      hostStatsCLI,
 			Helpshort: "report statistics about the host",
 			Helplong: `
-Report statistics about the host including hostname, load averages, total and
-free memory, and current bandwidth usage",
-`,
+			Report statistics about the host including hostname, load averages, total and
+			free memory, and current bandwidth usage",
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -936,10 +942,10 @@ free memory, and current bandwidth usage",
 			Call:      cliVMSnapshot,
 			Helpshort: "enable or disable snapshot mode when using disk images",
 			Helplong: `
-Enable or disable snapshot mode when using disk images. When enabled, disks
-images will be loaded in memory when run and changes will not be saved. This
-allows a single disk image to be used for many VMs.
-`,
+			Enable or disable snapshot mode when using disk images. When enabled, disks
+			images will be loaded in memory when run and changes will not be saved. This
+			allows a single disk image to be used for many VMs.
+			`,
 			Record: true,
 			Clear: func() error {
 				info.Snapshot = true
@@ -951,9 +957,9 @@ allows a single disk image to be used for many VMs.
 			Call:      ksmCLI,
 			Helpshort: "enable or disable Kernel Samepage Merging",
 			Helplong: `
-Enable or disable Kernel Samepage Merging, which can vastly increase the
-density of VMs a node can run depending on how similar the VMs are.
-`,
+			Enable or disable Kernel Samepage Merging, which can vastly increase the
+			density of VMs a node can run depending on how similar the VMs are.
+			`,
 			Record: true,
 			Clear: func() error {
 				ksmDisable()
@@ -969,8 +975,8 @@ density of VMs a node can run depending on how similar the VMs are.
 			},
 			Helpshort: "display the version",
 			Helplong: `
-Display the version.
-`,
+			Display the version.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -981,8 +987,8 @@ Display the version.
 			Call:      cliVMConfig,
 			Helpshort: "display the current VM configuration",
 			Helplong: `
-Display the current VM configuration.
-`,
+			Display the current VM configuration.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -993,8 +999,8 @@ Display the current VM configuration.
 			Call:      cliDebug,
 			Helpshort: "display internal debug information",
 			Helplong: `
-Display internal debug information
-`,
+			Display internal debug information
+			`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -1005,8 +1011,8 @@ Display internal debug information
 			Call:      cliBridgeInfo,
 			Helpshort: "display information about the virtual bridge",
 			Helplong: `
-Display information about the virtual bridge.
-`,
+			Display information about the virtual bridge.
+			`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -1017,10 +1023,10 @@ Display information about the virtual bridge.
 			Call:      cliVMFlush,
 			Helpshort: "discard information about quit or failed VMs",
 			Helplong: `
-Discard information about VMs that have either quit or encountered an error.
-This will remove any VMs with a state of "quit" or "error" from vm_info. Names
-of VMs that have been flushed may be reused.
-`,
+			Discard information about VMs that have either quit or encountered an error.
+			This will remove any VMs with a state of "quit" or "error" from vm_info. Names
+			of VMs that have been flushed may be reused.
+			`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -1031,32 +1037,32 @@ of VMs that have been flushed may be reused.
 			Call:      cliFile,
 			Helpshort: "work with files served by minimega",
 			Helplong: `
-file allows you to transfer and manage files served by minimega in the
-directory set by the -filepath flag (default is <base directory>/files).
+			file allows you to transfer and manage files served by minimega in the
+			directory set by the -filepath flag (default is <base directory>/files).
 
-To list files currently being served, issue the list command with a directory
-relative to the served directory:
+			To list files currently being served, issue the list command with a directory
+			relative to the served directory:
 
-        file list /foo
+			file list /foo
 
-Issuing "file list /" will list the contents of the served directory.
+			Issuing "file list /" will list the contents of the served directory.
 
-Files can be deleted with the delete command:
+			Files can be deleted with the delete command:
 
-        file delete /foo
+			file delete /foo
 
-If a directory is given, the directory will be recursively deleted.
+			If a directory is given, the directory will be recursively deleted.
 
-Files are transferred using the get command. When a get command is issued, the
-node will begin searching for a file matching the path and name within the
-mesh. If the file exists, it will be transferred to the requesting node. If
-multiple different files exist with the same name, the behavior is undefined.
-When a file transfer begins, control will return to minimega while the
-transfer completes.
+			Files are transferred using the get command. When a get command is issued, the
+			node will begin searching for a file matching the path and name within the
+			mesh. If the file exists, it will be transferred to the requesting node. If
+			multiple different files exist with the same name, the behavior is undefined.
+			When a file transfer begins, control will return to minimega while the
+			transfer completes.
 
-To see files that are currently being transferred, use the status command:
+			To see files that are currently being transferred, use the status command:
 
-        file status`,
+			file status`,
 			Record: true,
 			Clear: func() error {
 				return nil
