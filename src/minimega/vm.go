@@ -1072,8 +1072,8 @@ func cliVMNet(c cliCommand) cliResponse {
 					Error: err.Error(),
 				}
 			}
-			err, ok := currentBridge.LanCreate(val)
-			if !ok {
+			err = currentBridge.LanCreate(val)
+			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
