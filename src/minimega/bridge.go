@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"ipmac"
@@ -84,23 +83,23 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 // create a new vlan. If this is the first vlan being allocated, then the
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
-func (b *bridge) LanCreate(lan int) (error, bool) {
+func (b *bridge) LanCreate(lan int) error {
 	err := b.create()
 	if err != nil {
-		return err, false
+		return err
 	}
 	// start the ipmaclearner if need be
 	err = b.startIML()
 	if err != nil {
-		return err, false
+		return err
 	}
 	if b.lans[lan] != nil {
-		return errors.New("lan already exists"), true
+		return nil
 	}
 	b.lans[lan] = &vlan{
 		Taps: make(map[string]*tap),
 	}
-	return nil, true
+	return nil
 }
 
 func (b *bridge) startIML() error {
@@ -556,8 +555,8 @@ func hostTapCreate(lan string, ip string) cliResponse {
 			Error: err.Error(),
 		}
 	}
-	lanErr, ok := currentBridge.LanCreate(r)
-	if !ok {
+	lanErr := currentBridge.LanCreate(r)
+	if lanErr != nil {
 		return cliResponse{
 			Error: lanErr.Error(),
 		}
