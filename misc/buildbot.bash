@@ -14,9 +14,9 @@ mkdir minimega-$DATE && cd minimega-$DATE
 mkdir bin
 mkdir src
 mkdir misc
-cp ../mega/bin/* bin
-cp -r ../mega/src/* src
-cp -r ../mega/misc/* misc
+cp ../minimega/bin/* bin
+cp -r ../minimega/src/* src
+cp -r ../minimega/misc/* misc
 cd ..
 tar cjf minimega-${DATE}.tar.bz2 minimega-$DATE
 rm /home/fritz/web/minimega.org/nightly/*
