@@ -37,9 +37,11 @@ install() {
     echo "Cannot find configuration at $REPLY/minimega.conf"
     return 1
   fi
+  # create minimega directories
+  mkdir -p /var/log/minimega/
+  mkdir -p /etc/minimega/saved_vms/
   # create sumlinks to 'install' the init script
   ln -s $REPLY/minimega.init /etc/init.d/minimega
-  mkdir -p /etc/minimega/
   ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
   update-rc.d minimega defaults # make 'start' run on boot
   return 0
@@ -49,6 +51,7 @@ uninstall() {
   unlink /etc/init.d/minimega
   unlink /etc/minimega/minimega.conf
   update-rc.d minimega remove
+  echo "Uninstallation complete. You may wish to remove /etc/minimega/ and /var/log/minimega/"
 }
 
 update() {
