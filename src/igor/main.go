@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -90,6 +91,7 @@ func (c *Command) Runnable() bool {
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
 var commands = []*Command{
+	cmdAddtime,
 	cmdDel,
 	cmdShow,
 	cmdSub,
@@ -119,6 +121,29 @@ func readConfig(path string) (c Config) {
 	return
 }
 
+// Read the reservations, delete any that are too old.
+func cleanOld() {
+	path := igorConfig.TFTPRoot + "/igor/reservations.json"
+	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
+	if err != nil {
+		fatalf("failed to open reservations file: %v", err)
+	}
+	defer resdb.Close()
+	// We lock to make sure it doesn't change from under us
+	// NOTE: not locking for now, haven't decided how important it is
+	//err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
+	reservations := getReservations(resdb)
+
+	now := time.Now().Unix()
+
+	for _, r := range reservations {
+		if r.Expiration < now {
+			deleteReservation(false, []string{r.ResName})
+		}
+	}
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -142,6 +167,9 @@ func main() {
 	if gopath := os.Getenv("GOPATH"); gopath == runtime.GOROOT() {
 		fmt.Fprintf(os.Stderr, "warning: GOPATH set to GOROOT (%s) has no effect\n", gopath)
 	}
+
+	// Here, we need to go through and delete any reservations which should be expired.
+	cleanOld()
 
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] && cmd.Run != nil {
