@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/user"
 	"syscall"
 )
 
@@ -25,6 +26,15 @@ func init() {
 
 // Remove the specified reservation.
 func runDel(cmd *Command, args []string) {
+	deleteReservation(true, args)
+}
+
+func deleteReservation(checkUser bool, args []string) {
+	if len(args) != 1 {
+		fatalf("Invalid arguments")
+	}
+
+	user, err := user.Current()
 	path := igorConfig.TFTPRoot + "/igor/reservations.json"
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
@@ -38,6 +48,13 @@ func runDel(cmd *Command, args []string) {
 	var newres []Reservation
 	var deletedReservation Reservation
 	found := false
+	if checkUser {
+		for _, r := range reservations {
+			if r.ResName == args[0] && r.Owner != user.Username {
+				fatalf("You are not the owner of %v", args[0])
+			}
+		}
+	}
 	for _, r := range reservations {
 		if r.ResName != args[0] {
 			newres = append(newres, r)
