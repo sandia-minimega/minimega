@@ -1,6 +1,8 @@
 #!/bin/bash
 
-source env.bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+source $SCRIPT_DIR/env.bash
 
 # set the version from the repo
 VERSION=`git rev-parse HEAD`
@@ -11,11 +13,11 @@ var (
 	Revision = \"$VERSION\"
 	Date = \"$DATE\"
 )
-" > src/version/version.go
+" > $SCRIPT_DIR/src/version/version.go
 
 # build packages
 echo BUILD PACKAGES
-for i in `ls src`
+for i in `ls $SCRIPT_DIR/src`
 do
 	echo $i
 	go install $i
@@ -24,7 +26,7 @@ echo
 
 # testing 
 echo TESTING
-for i in `ls src`
+for i in `ls $SCRIPT_DIR/src`
 do
 	go test $i
 done
