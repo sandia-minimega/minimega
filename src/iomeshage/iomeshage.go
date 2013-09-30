@@ -321,7 +321,7 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 		TID:      TID,
 		Part:     part,
 	}
-	err = iom.node.Set([]string{from}, meshage.UNORDERED, m)
+	_, err = iom.node.Set([]string{from}, meshage.UNORDERED, m)
 	if err != nil {
 		return err
 	}

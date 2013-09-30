@@ -27,7 +27,7 @@ func meshageHandler() {
 			r := <-ackChanMeshage
 			r.TID = m.Body.(cliCommand).TID
 			recipient := []string{m.Source}
-			err := meshageNode.Set(recipient, meshage.UNORDERED, r)
+			_, err := meshageNode.Set(recipient, meshage.UNORDERED, r)
 			if err != nil {
 				log.Errorln(err)
 			}
@@ -244,7 +244,7 @@ func meshageSet(c cliCommand) cliResponse {
 	r := rand.New(s)
 	TID := r.Int31()
 	command.TID = TID
-	err := meshageNode.Set(recipients, traversal, command)
+	n, err := meshageNode.Set(recipients, traversal, command)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
@@ -255,7 +255,7 @@ func meshageSet(c cliCommand) cliResponse {
 	var respString string
 	var respError string
 SET_WAIT_LOOP:
-	for i := 0; i < len(recipients); {
+	for i := 0; i < n; {
 		select {
 		case resp := <-meshageResponse:
 			body := resp.Body.(cliResponse)

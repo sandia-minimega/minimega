@@ -41,14 +41,14 @@ type Message struct {
 // Users will generally use the Set and Broadcast functions instead of Send.
 // The returned error is always nil if the message type is broadcast.
 // If an error is encountered, Send returns immediately.
-func (n *Node) Send(m *Message) error {
+func (n *Node) Send(m *Message) (int, error) {
 	log.Debug("Send: %v", m)
 	routeSlices := make(map[string][]string)
 	n.meshLock.Lock()
 	for _, v := range m.Recipients {
 		if v == n.name {
 			if len(m.Recipients) == 1 {
-				return fmt.Errorf("cannot mesh_set yourself")
+				return 0, fmt.Errorf("cannot mesh_set yourself")
 			}
 			continue
 		}
@@ -85,22 +85,25 @@ func (n *Node) Send(m *Message) error {
 
 	// wait on all of the client sends to complete
 	var ret string
+	var count int
 	for i := 0; i < len(routeSlices); i++ {
 		r := <-errChan
 		if r != nil {
 			ret += r.Error() + "\n"
+		} else {
+			count++
 		}
 	}
 	if ret == "" {
-		return nil
+		return count, nil
 	}
 
-	return fmt.Errorf("%v", ret)
+	return count, fmt.Errorf("%v", ret)
 }
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
 // from all recipient nodes, or until the timeout is reached.
-func (n *Node) Set(recipients []string, traversal int, body interface{}) error {
+func (n *Node) Set(recipients []string, traversal int, body interface{}) (int, error) {
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,
@@ -128,7 +131,7 @@ func (n *Node) Broadcast(traversal int, body interface{}) (int, error) {
 		Body:         body,
 		Traversal:    traversal,
 	}
-	return len(recipients), n.Send(m)
+	return n.Send(m)
 }
 
 // messageHandler accepts messages from all connected clients and forwards them to the
