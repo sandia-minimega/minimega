@@ -76,7 +76,7 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 		log.Debugln("handleInfo found file with parts: ", resp.Part)
 	}
 
-	err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+	_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
 	if err != nil {
 		log.Errorln("handleInfo: sending message: ", err)
 	}
@@ -147,7 +147,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	}
 
 	if resp.ACK {
-		err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+		_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
 		if err != nil {
 			log.Errorln("handlePart: sending message: ", err)
 		}
@@ -174,7 +174,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		}
 	}
 
-	err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+	_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
 	if err != nil {
 		log.Errorln("handlePart: sending message: ", err)
 	}

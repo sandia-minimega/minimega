@@ -1,22 +1,35 @@
 Igor is a tool for managing reservations on a cluster.
 
-Users make reservations with igor, requesting either a number of nodes or a specific set of nodes. They also specify a kernel and initial ramdisk which their nodes should boot. Igor assumes an environment of good faith--users can specify arbitrarily long reservations or delete another person's reservation. Although this behavior may change in the future, it is sufficient for our purposes.
+Users make reservations with igor, requesting either a number of nodes
+or a specific set of nodes. They also specify a kernel and initial
+ramdisk which their nodes should boot. Reservations are deleted when
+they run out of time, but users can add additional time to the
+reservation. Igor now only allows a reservation's owner to delete the
+reservation; experience with using igor in a real setting has shown
+that this is needed.
 
 SETUP
 ----------------
 
-You will need to have syslinux, specifically pxelinux, installed. Figure out where your TFTP root will be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and set up the default PXE configuration in /tftpboot/pxelinux.cfg/default. This setup is simple but is outside the scope of this document.
+You will need to have syslinux, specifically pxelinux,
+installed. Figure out where your TFTP root will be--whichever
+directory contains pxelinux.cfg, ours is /tftpboot--and set up the
+default PXE configuration in /tftpboot/pxelinux.cfg/default. This
+setup is simple but is outside the scope of this document.
 
-Compile igor; depending on your environment, the process may differ. Here's how we do it:
+Compile igor; depending on your environment, the process may
+differ. Here's how we do it:
 
 	$ cd ~/mega/
 	$ ./build.bash
 
-This will place the "igor" binary into bin/. Place it somewhere accessible, such as /usr/local/bin.
+This will place the "igor" binary into bin/. Place it somewhere
+accessible, such as /usr/local/bin.
 
 Run "setup.sh" to make some files and directories needed by igor.
 
-To configure igor, edit /etc/igor.conf, a JSON config file created by setup.sh. Here's what ours looks like:
+To configure igor, edit /etc/igor.conf, a JSON config file created by
+setup.sh. Here's what ours looks like:
 
 	{
 		"tftproot" : "/tftpboot/",
@@ -27,11 +40,20 @@ To configure igor, edit /etc/igor.conf, a JSON config file created by setup.sh. 
 		"rackheight" : 5
 	}
 
-N.B.: It is extremely important that the last entry ("rackheight" in this case) is not followed by a comma; this is a quirk of json.
+N.B.: It is extremely important that the last entry ("rackheight" in
+this case) is not followed by a comma; this is a quirk of json.
 
-The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" directory. The other options describe your cluster naming scheme. Our cluster nodes are named kn1 through kn520, so our "prefix" is "kn", "start" is 1, and "end" is 520. Note that the numbers are *not* in quotes.
+The "tftproot" setting should be whatever directory contains the
+"pxelinux.cfg" directory. The other options describe your cluster
+naming scheme. Our cluster nodes are named kn1 through kn520, so our
+"prefix" is "kn", "start" is 1, and "end" is 520. Note that the
+numbers are *not* in quotes.
 
-"Rackheight" and "rackwidth" define the physical dimensions of your cluster hardware, for use with "igor show". Our cluster is composed of 13 shelves, each containing 5 shelves of 8 PCs each. When "igor show" runs,  part of the information it gives is a diagram of "racks"; one "rack" from our cluster is shown below:
+"Rackheight" and "rackwidth" define the physical dimensions of your
+cluster hardware, for use with "igor show". Our cluster is composed of
+13 shelves, each containing 5 shelves of 8 PCs each. When "igor show"
+runs, part of the information it gives is a diagram of "racks"; one
+"rack" from our cluster is shown below:
 
 	---------------------------------
 	|281|282|283|284|285|286|287|288|
@@ -41,7 +63,9 @@ The "tftproot" setting should be whatever directory contains the "pxelinux.cfg" 
 	|313|314|315|316|317|318|319|320|
 	---------------------------------
 
-If you are running a cluster of 4x 1U servers, and they are all in a single rack, you would set rackheight = 4, and rackwidth = 1, to see something like this:
+If you are running a cluster of 4x 1U servers, and they are all in a
+single rack, you would set rackheight = 4, and rackwidth = 1, to see
+something like this:
 
 	---
 	|1|
@@ -50,19 +74,28 @@ If you are running a cluster of 4x 1U servers, and they are all in a single rack
 	|4|
 	---
 
-If the physical layout of your cluster is strange, or if you'd just prefer a big grid, you can set rackheight = sqrt(# nodes) and rackwidth = sqrt(# nodes). This will just show one big grid of all your nodes.
+If the physical layout of your cluster is strange, or if you'd just
+prefer a big grid, you can set rackheight = sqrt(# nodes) and
+rackwidth = sqrt(# nodes). This will just show one big grid of all
+your nodes.
 
 
 RUNNING
 -----------------
 
-Generally, to use igor you will check what nodes are reserved, make your own reservation with some un-used nodes, and then delete the reservation when you're done. When creating a reservation, you can specify a duration (default 12 hours); after this expires, your reservation is not automatically deleted, but it should be considered "fair game" for deletion by anyone else.
+Generally, to use igor you will check what nodes are reserved, make
+your own reservation with some un-used nodes, and then delete the
+reservation when you're done. When creating a reservation, you can
+specify a duration (default 12 hours); after this expires, your
+reservation is not automatically deleted, but it should be considered
+"fair game" for deletion by anyone else.
 
 To see what reservations exist:
 
 	$ igor show
 
-To make a reservation named "testing", using some kernel and initrd, with nodes 1-10:
+To make a reservation named "testing", using some kernel and initrd,
+with nodes 1-10:
 
 	$ igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w kn[1-10]
 
@@ -70,4 +103,10 @@ To remove your reservation:
 
 	$ igor del testing
 
-You can type "igor help" to access the built-in help, which gives more details on all the possible command line switches.
+If your reservation is about to run out of time, use the "addtime"
+command to increase the reservation duration:
+
+	$ igor addtime -r testing -t 2    # add 2 hours
+
+You can type "igor help" to access the built-in help, which gives more
+details on all the possible command line switches.
