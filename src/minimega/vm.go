@@ -111,7 +111,18 @@ func configToString() string {
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
-	fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
+	//fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
+	fmt.Fprintf(w, "Networks:\t[")
+	for i,vlan:=range info.Networks {
+		fmt.Fprintf(w,"%v",vlan)
+		if info.macs[i] != "" {
+			fmt.Fprintf(w,",%v",info.macs[i])
+		}
+		if i+1<len(info.Networks) {
+			fmt.Fprintf(w," ")
+		}
+	}
+	fmt.Fprintf(w, "]\n")
 	w.Flush()
 	return o.String()
 }
@@ -901,14 +912,15 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "once=d")
 	}
 
-	for _, tap := range vm.taps {
+	for i, tap := range vm.taps {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		mac := randomMac()
-		vm.macs = append(vm.macs, mac)
-		currentBridge.iml.AddMac(mac)
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, mac))
+		if vm.macs[i] == "" {
+			vm.macs[i] = randomMac()
+		}
+		currentBridge.iml.AddMac(vm.macs[i])
+		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, vm.macs[i]))
 	}
 
 	if len(vm.QemuAppend) > 0 {
@@ -1066,8 +1078,10 @@ func cliVMNet(c cliCommand) cliResponse {
 		}
 	} else {
 		info.Networks = []int{}
+		info.macs = []string{}
 		for _, lan := range c.Args {
-			lansplit := SplitN(lan,",",2) // split on comma into two strings, before and after the first comma
+			lansplit := strings.SplitN(lan,",",2) // split on comma into two strings, before and after the first comma
+			// VLAN ID
 			val, err := strconv.Atoi(lansplit[0]) // the vlan id
 			if err != nil {
 				return cliResponse{
@@ -1081,6 +1095,19 @@ func cliVMNet(c cliCommand) cliResponse {
 				}
 			}
 			info.Networks = append(info.Networks, val)
+			// (Optional) MAC ADDRESS
+			if len(lansplit) > 1 {
+				mac,err := verifyMac(lansplit[1])
+				if err != nil {
+					info.macs = append(info.macs, "")
+					r = cliResponse{ // not sure if this was an intended use of r, but I don't want to return early - I just want to make sure the error gets displayed
+						Error: err.Error(),
+					}
+				}
+				info.macs = append(info.macs, mac)
+			} else {
+				info.macs = append(info.macs, "")
+			}
 		}
 	}
 	return r

@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"regexp"
+	"errors"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -23,6 +25,18 @@ func randomMac() string {
 	mac := fmt.Sprintf("00:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
 	log.Info("generated mac: %v", mac)
 	return mac
+}
+
+func verifyMac(maybe_mac string) (mac string, err error) {
+	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$",maybe_mac)
+	if err != nil {
+		return "",err
+	}
+	if match {
+		return strings.ToLower(maybe_mac), nil
+	} else {
+		return "", errors.New("Not a valid mac address")
+	}
 }
 
 func hostid(s string) (string, int) {
