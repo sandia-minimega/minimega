@@ -112,19 +112,24 @@ func configToString() string {
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
 	//fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
-	fmt.Fprintf(w, "Networks:\t[")
-	for i,vlan:=range info.Networks {
-		fmt.Fprintf(w,"%v",vlan)
-		if info.macs[i] != "" {
-			fmt.Fprintf(w,",%v",info.macs[i])
-		}
-		if i+1<len(info.Networks) {
-			fmt.Fprintf(w," ")
-		}
-	}
-	fmt.Fprintf(w, "]\n")
+	fmt.Fprintf(w, "Networks:\t%v\n", networkString())
 	w.Flush()
 	return o.String()
+}
+
+func networkString() string {
+	s := "["
+	for i,vlan:=range info.Networks {
+		s += strconv.Itoa(vlan)
+		if info.macs[i] != "" {
+			s += "," + info.macs[i]
+		}
+		if i+1<len(info.Networks) {
+			s += " "
+		}
+	}
+	s += "]"
+	return s
 }
 
 func cliVMSnapshot(c cliCommand) cliResponse {
@@ -1074,7 +1079,7 @@ func cliVMNet(c cliCommand) cliResponse {
 	r := cliResponse{}
 	if len(c.Args) == 0 {
 		return cliResponse{
-			Response: fmt.Sprintf("%v\n", info.Networks),
+			Response: fmt.Sprintf("%v\n", networkString()),
 		}
 	} else {
 		info.Networks = []int{}
