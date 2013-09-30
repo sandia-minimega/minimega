@@ -25,7 +25,7 @@ const (
 )
 
 var (
-	f_loglevel  = flag.String("level", "error", "set log level: [debug, info, warn, error, fatal]")
+	f_loglevel  = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log       = flag.Bool("v", true, "log on stderr")
 	f_logfile   = flag.String("logfile", "", "also log to file")
 	f_base      = flag.String("base", BASE_PATH, "base path for minimega data")
