@@ -56,8 +56,8 @@ func (n *Node) Send(m *Message) error {
 		var route string
 		var ok bool
 		if route, ok = n.routes[v]; !ok {
-			n.meshLock.Unlock()
-			return fmt.Errorf("no route to host: %v", v)
+			log.Warn("no route to host: %v, skipping", v)
+			continue
 		}
 		routeSlices[route] = append(routeSlices[route], v)
 	}
