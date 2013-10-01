@@ -685,6 +685,77 @@ func (l *vmList) info(c cliCommand) cliResponse {
 func (vm *vmInfo) launchOne() {
 	log.Info("launching vm: %v", vm.Id)
 
+	// check if the vm has a conflict with the disk or mac address of another vm
+	// build state of currently running system
+	macMap := map[string]bool{}
+	selfMacMap := map[string]bool{}
+	diskSnapshotted := map[string]bool{}
+	diskPersistent := map[string]bool{}
+	// populate selfMacMap
+	for _,mac := range vm.macs {
+		if mac == "" { // don't worry about empty mac addresses
+			continue
+		}
+		_,exists := selfMacMap[mac]
+		if exists { // if this vm specified the same mac address for two interfaces
+			log.Errorln("Cannot specify the same mac address for two interfaces")
+			vm.state(VM_ERROR)
+			launchAck <- vm.Id // signal that this vm is "done" launching
+			return
+		}
+		selfMacMap[mac] = true
+	}
+	// populate macMap, diskSnapshotted, and diskPersistent
+	for _,vm2 := range vms.vms {
+		if vm == vm2 { // ignore this vm
+			continue
+		}
+		vmIsActive := vm2.State == VM_BUILDING || vm2.State == VM_RUNNING || vm2.State == VM_PAUSED
+		if vmIsActive {
+			// populate mac addresses set
+			for _,mac := range vm2.macs {
+				macMap[mac] = true
+			}
+			// populate disk sets
+			if vm2.Snapshot {
+				diskSnapshotted[vm2.DiskPath] = true
+			} else {
+				diskPersistent[vm2.DiskPath] = true
+			}
+		}
+	}
+	// check for mac address conflicts and fill in unspecified mac addresses without conflict
+	for i, mac := range vm.macs {
+		if mac == "" { // create mac addresses where unspecified
+			existsOther,existsSelf,newMac := true,true,"" // entry condition/initialization
+			for existsOther || existsSelf { // loop until we generate a random mac that doesn't conflict (already exist)
+				newMac = randomMac() // generate a new mac address
+				_,existsOther = macMap[newMac] // check it against the set of mac addresses from other vms
+				_,existsSelf  = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
+			}
+			vm.macs[i] = newMac // set the unspecified mac address
+			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
+		} else { // if mac is specified, check for mac address conflict
+			// we only need to check against macMap because selfMacMap is collision-free at this point
+			_,exists := macMap[mac]
+			if exists { // if another vm has this mac address already
+				log.Errorln("Mac address %v is already in use by another vm.", mac)
+				vm.state(VM_ERROR)
+				launchAck <- vm.Id
+				return
+			}
+		}
+	}
+	// check for disk conflict
+	_,existsSnapshotted := diskSnapshotted[vm.DiskPath] // check if another vm is using this disk in snapshot mode
+	_,existsPersistent := diskPersistent[vm.DiskPath] // check if another vm is using this disk in persistent mode (snapshot=false)
+	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
+		log.Errorln("Disk path %v is already in use by another vm.",vm.DiskPath)
+		vm.state(VM_ERROR)
+		launchAck <- vm.Id
+		return
+	}
+
 	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
 	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
 	if err != nil {
@@ -921,9 +992,6 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		if vm.macs[i] == "" {
-			vm.macs[i] = randomMac()
-		}
 		currentBridge.iml.AddMac(vm.macs[i])
 		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, vm.macs[i]))
 	}
