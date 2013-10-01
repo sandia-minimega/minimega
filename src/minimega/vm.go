@@ -327,11 +327,11 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 	// configuration in by value, as it may change for the next run.
 	log.Info("launching %v vms, name %v", numVms, name)
 	for i := 0; i < numVms; i++ {
-		vm := info
+		vm := info.Copy() // returns reference to deep-copy of info
 		vm.Id = <-vmIdChan
 		vm.Name = name
 		vm.Kill = make(chan bool)
-		l.vms[vm.Id] = &vm
+		l.vms[vm.Id] = vm
 		go vm.launchOne()
 	}
 	// get acknowledgements from each vm
@@ -339,6 +339,32 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		<-launchAck
 	}
 	return cliResponse{}
+}
+
+func (info *vmInfo) Copy() *vmInfo {
+	// makes deep copy of info and returns reference to new vmInfo struct
+	newInfo := new(vmInfo)
+	newInfo.Id = info.Id
+	newInfo.Name = info.Name
+	newInfo.Memory = info.Memory
+	newInfo.Vcpus = info.Vcpus
+	newInfo.DiskPath = info.DiskPath
+	newInfo.CdromPath = info.CdromPath
+	newInfo.KernelPath = info.KernelPath
+	newInfo.InitrdPath = info.InitrdPath
+	newInfo.Append = info.Append
+	copy(info.QemuAppend, newInfo.QemuAppend)
+	newInfo.State = info.State
+	// Kill isn't allocated until later in launch()
+	newInfo.instancePath = info.instancePath
+	// q isn't allocated until launchOne()
+	copy(info.taps, newInfo.taps)
+	copy(info.Networks, newInfo.Networks)
+	fmt.Printf("Networks: %v %v\n",info.Networks, newInfo.Networks)
+	copy(info.macs, newInfo.macs)
+	fmt.Printf("Macs: %v %v\n",info.macs, newInfo.macs)
+	newInfo.Snapshot = info.Snapshot
+	return newInfo
 }
 
 func (l *vmList) info(c cliCommand) cliResponse {
