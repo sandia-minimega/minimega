@@ -353,20 +353,18 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.KernelPath = info.KernelPath
 	newInfo.InitrdPath = info.InitrdPath
 	newInfo.Append = info.Append
-	newInfo.QemuAppend = []string{}
-	copy(info.QemuAppend, newInfo.QemuAppend)
+	newInfo.QemuAppend = make([]string,len(info.QemuAppend))
+	copy(newInfo.QemuAppend, info.QemuAppend)
 	newInfo.State = info.State
 	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
 	// q isn't allocated until launchOne()
-	newInfo.taps = []string{}
-	copy(info.taps, newInfo.taps)
-	newInfo.Networks = make([]int, len(info.Networks))
-	copy(info.Networks, newInfo.Networks)
-	fmt.Printf("Networks: %v %v\n",info.Networks, newInfo.Networks)
-	newInfo.macs = []string{}
-	copy(info.macs, newInfo.macs)
-	fmt.Printf("Macs: %v %v\n",info.macs, newInfo.macs)
+	newInfo.taps = make([]string,len(info.taps))
+	copy(newInfo.taps, info.taps)
+	newInfo.Networks = make([]int,len(info.Networks))
+	copy(newInfo.Networks, info.Networks)
+	newInfo.macs = make([]string,len(info.macs))
+	copy(newInfo.macs, info.macs)
 	newInfo.Snapshot = info.Snapshot
 	return newInfo
 }
@@ -769,7 +767,7 @@ func (vm *vmInfo) launchOne() {
 			// we only need to check against macMap because selfMacMap is collision-free at this point
 			_,exists := macMap[mac]
 			if exists { // if another vm has this mac address already
-				log.Errorln("Mac address %v is already in use by another vm.", mac)
+				log.Error("Mac address %v is already in use by another vm.\n", mac)
 				vm.state(VM_ERROR)
 				launchAck <- vm.Id
 				return
@@ -780,7 +778,7 @@ func (vm *vmInfo) launchOne() {
 	_,existsSnapshotted := diskSnapshotted[vm.DiskPath] // check if another vm is using this disk in snapshot mode
 	_,existsPersistent := diskPersistent[vm.DiskPath] // check if another vm is using this disk in persistent mode (snapshot=false)
 	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-		log.Errorln("Disk path %v is already in use by another vm.",vm.DiskPath)
+		log.Error("Disk path %v is already in use by another vm.\n",vm.DiskPath)
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
