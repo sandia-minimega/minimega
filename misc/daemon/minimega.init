@@ -10,6 +10,8 @@
 # Description: Auto-starts minimega on boot, allows more flexible monitoring and management of minimega daemon process.
 ### END INIT INFO
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 if [ "`id -un`" != "root" ]; then # if user running this script is not user 'root'
   echo "Must run as root"
   exit 1
@@ -23,10 +25,9 @@ fi
 
 install() {
   # ask for init script and conf file directory
-  cwd=`pwd`
-  read -p "Directory containing init script and configuration file: [$cwd] " -r
+  read -p "Directory containing init script and configuration file: [$SCRIPT_DIR] " -r
   if [[ $REPLY == "" ]]; then
-    REPLY=$cwd
+    REPLY=$SCRIPT_DIR
   fi
   # locate init script and conf file
   if [ ! -f "$REPLY/minimega.init" ]; then
