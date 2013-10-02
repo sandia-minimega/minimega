@@ -353,14 +353,18 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.KernelPath = info.KernelPath
 	newInfo.InitrdPath = info.InitrdPath
 	newInfo.Append = info.Append
+	newInfo.QemuAppend = []string{}
 	copy(info.QemuAppend, newInfo.QemuAppend)
 	newInfo.State = info.State
 	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
 	// q isn't allocated until launchOne()
+	newInfo.taps = []string{}
 	copy(info.taps, newInfo.taps)
+	newInfo.Networks = make([]int, len(info.Networks))
 	copy(info.Networks, newInfo.Networks)
 	fmt.Printf("Networks: %v %v\n",info.Networks, newInfo.Networks)
+	newInfo.macs = []string{}
 	copy(info.macs, newInfo.macs)
 	fmt.Printf("Macs: %v %v\n",info.macs, newInfo.macs)
 	newInfo.Snapshot = info.Snapshot
