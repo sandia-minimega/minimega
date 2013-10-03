@@ -35,7 +35,7 @@ func verifyMac(maybe_mac string) (mac string, err error) {
 	if match {
 		return strings.ToLower(maybe_mac), nil
 	} else {
-		return "", errors.New("Not a valid mac address")
+		return "", errors.New("Not a valid mac address: "+maybe_mac)
 	}
 }
 
