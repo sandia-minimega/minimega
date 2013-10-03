@@ -45,6 +45,7 @@ func (n *Node) Send(m *Message) (int, error) {
 	log.Debug("Send: %v", m)
 	routeSlices := make(map[string][]string)
 	n.meshLock.Lock()
+	count := 0
 	for _, v := range m.Recipients {
 		if v == n.name {
 			if len(m.Recipients) == 1 {
@@ -60,6 +61,7 @@ func (n *Node) Send(m *Message) (int, error) {
 			continue
 		}
 		routeSlices[route] = append(routeSlices[route], v)
+		count++
 	}
 	n.meshLock.Unlock()
 
@@ -85,13 +87,10 @@ func (n *Node) Send(m *Message) (int, error) {
 
 	// wait on all of the client sends to complete
 	var ret string
-	var count int
 	for i := 0; i < len(routeSlices); i++ {
 		r := <-errChan
 		if r != nil {
 			ret += r.Error() + "\n"
-		} else {
-			count++
 		}
 	}
 	if ret == "" {
