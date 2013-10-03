@@ -117,6 +117,21 @@ status() {
   fi
 }
 
+recover() {
+  check_if_running
+  if [ "$?" == "0" ]; then # if it is running
+    for save in /etc/minimega/saved_vms/*
+    do
+      echo "Recovering: "`basename "$save"`
+      $MINIMEGA_DIR/bin/minimega -e read $save
+    done
+    echo "Done."
+  else
+    echo "minimega is not running."
+    return 1
+  fi
+}
+
 check_if_running() {
   pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" == "0" ]; then # if it is supposed to be running
@@ -163,8 +178,12 @@ case "$1" in
     uninstall
     rtn=$?
     ;;
+  recover)
+    recover
+    rtn=$?
+    ;;
   *)
-    echo "Usage: $0{start|stop|restart|status|update|install|uninstall}"
+    echo "Usage: $0{start|stop|restart|status|update|install|uninstall|recover}"
     exit 1
     ;;
 esac
