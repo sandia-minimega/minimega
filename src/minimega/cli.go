@@ -227,6 +227,107 @@ func init() {
 			},
 		},
 
+		"vm_save": &command{
+			Call: func(c cliCommand) cliResponse {
+				if len(c.Args) < 2 {
+					return cliResponse{
+						Error: "Usage: vm_save <save name> <vm id> [<vm id> ...]",
+					}
+				}
+				file, err := os.Create("/etc/minimega/saved_vms/"+c.Args[0])
+				if err != nil {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+				for _,vmStr := range c.Args[1:] { // iterate over the vm id's specified
+					vmId,err := strconv.Atoi(vmStr)
+					if err != nil {
+						return cliResponse{
+							Error: err.Error(),
+						}
+					}
+					vm, ok := vms.vms[vmId]
+					if !ok {
+						log.Error("Not a valid id: "+vmStr)
+						continue
+					}
+					// build up the command list to re-launch this vm
+					cmds := []string{}
+					cmds = append(cmds, "vm_memory "+vm.Memory)
+					cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
+					if vm.DiskPath != "" {
+						cmds = append(cmds, "vm_disk "+vm.DiskPath)
+					} else {
+						cmds = append(cmds, "clear vm_disk")
+					}
+					if vm.CdromPath != "" {
+						cmds = append(cmds, "vm_cdrom "+vm.CdromPath)
+					} else {
+						cmds = append(cmds, "clear vm_cdrom")
+					}
+					if vm.KernelPath != "" {
+						cmds = append(cmds, "vm_kernel "+vm.KernelPath)
+					} else {
+						cmds = append(cmds, "clear vm_kernel")
+					}
+					if vm.InitrdPath != "" {
+						cmds = append(cmds, "vm_initrd "+vm.InitrdPath)
+					} else {
+						cmds = append(cmds, "clear vm_initrd")
+					}
+					if vm.Append != "" {
+						cmds = append(cmds, "vm_append "+vm.Append)
+					} else {
+						cmds = append(cmds, "clear vm_append")
+					}
+					if len(vm.QemuAppend) != 0 {
+						cmds = append(cmds, "vm_qemu_append "+strings.Join(vm.QemuAppend," "))
+					} else {
+						cmds = append(cmds, "clear vm_qemu_append")
+					}
+					cmds = append(cmds, "vm_snapshot "+strconv.FormatBool(vm.Snapshot))
+					if len(vm.Networks) != 0 {
+						netString := "vm_net "
+						for i,vlan := range(vm.Networks) {
+							netString += strconv.Itoa(vlan)+","+vm.macs[i]+" "
+						}
+						cmds = append(cmds, strings.TrimSpace(netString))
+					} else {
+						cmds = append(cmds, "clear vm_net")
+					}
+					if vm.Name != "" {
+						cmds = append(cmds, "vm_launch "+vm.Name)
+					} else {
+						cmds = append(cmds, "vm_launch 1")
+					}
+					// write commands to file
+					for _,cmd := range cmds {
+						_,err = file.WriteString(cmd+"\n")
+						if err != nil {
+							return cliResponse{
+								Error: err.Error(),
+							}
+						}
+					}
+				}
+				return cliResponse{}
+			},
+			Helpshort: "save a vm configuration for later use",
+			Helplong: `
+			Usage: vm_save <save name> <vm id> [<vm id> ...]
+			Saves the configuration of a running virtual machine or set of virtual 
+			machines so that it/they can be restarted/recovered later, such as after 
+			a system crash.
+			This command does not store the state of the virtual machine itself, 
+			only its launch configuration.
+			`,
+			Record: false,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 		"read": &command{
 			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
