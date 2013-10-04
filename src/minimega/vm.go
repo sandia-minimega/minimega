@@ -718,13 +718,15 @@ func (vm *vmInfo) launchOne() {
 	selfMacMap := map[string]bool{}
 	diskSnapshotted := map[string]bool{}
 	diskPersistent := map[string]bool{}
+
 	// populate selfMacMap
 	for _, mac := range vm.macs {
 		if mac == "" { // don't worry about empty mac addresses
 			continue
 		}
-		_, exists := selfMacMap[mac]
-		if exists { // if this vm specified the same mac address for two interfaces
+
+		_, ok := selfMacMap[mac]
+		if ok { // if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
 			launchAck <- vm.Id // signal that this vm is "done" launching
@@ -732,17 +734,20 @@ func (vm *vmInfo) launchOne() {
 		}
 		selfMacMap[mac] = true
 	}
+
 	// populate macMap, diskSnapshotted, and diskPersistent
 	for _, vm2 := range vms.vms {
 		if vm == vm2 { // ignore this vm
 			continue
 		}
+
 		vmIsActive := vm2.State == VM_BUILDING || vm2.State == VM_RUNNING || vm2.State == VM_PAUSED
 		if vmIsActive {
 			// populate mac addresses set
 			for _, mac := range vm2.macs {
 				macMap[mac] = true
 			}
+
 			// populate disk sets
 			if vm2.Snapshot {
 				diskSnapshotted[vm2.DiskPath] = true
@@ -751,6 +756,7 @@ func (vm *vmInfo) launchOne() {
 			}
 		}
 	}
+
 	// check for mac address conflicts and fill in unspecified mac addresses without conflict
 	for i, mac := range vm.macs {
 		if mac == "" { // create mac addresses where unspecified
@@ -760,12 +766,13 @@ func (vm *vmInfo) launchOne() {
 				_, existsOther = macMap[newMac]    // check it against the set of mac addresses from other vms
 				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
 			}
+
 			vm.macs[i] = newMac       // set the unspecified mac address
 			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
 		} else { // if mac is specified, check for mac address conflict
 			// we only need to check against macMap because selfMacMap is collision-free at this point
-			_, exists := macMap[mac]
-			if exists { // if another vm has this mac address already
+			_, ok := macMap[mac]
+			if ok { // if another vm has this mac address already
 				log.Error("Mac address %v is already in use by another vm.\n", mac)
 				vm.state(VM_ERROR)
 				launchAck <- vm.Id
@@ -773,9 +780,11 @@ func (vm *vmInfo) launchOne() {
 			}
 		}
 	}
+
 	// check for disk conflict
-	_, existsSnapshotted := diskSnapshotted[vm.DiskPath]                 // check if another vm is using this disk in snapshot mode
-	_, existsPersistent := diskPersistent[vm.DiskPath]                   // check if another vm is using this disk in persistent mode (snapshot=false)
+	_, existsSnapshotted := diskSnapshotted[vm.DiskPath] // check if another vm is using this disk in snapshot mode
+	_, existsPersistent := diskPersistent[vm.DiskPath]   // check if another vm is using this disk in persistent mode (snapshot=false)
+
 	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
 		log.Error("Disk path %v is already in use by another vm.\n", vm.DiskPath)
 		vm.state(VM_ERROR)
