@@ -7,15 +7,15 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	log "minilog"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"regexp"
-	"errors"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -27,15 +27,16 @@ func randomMac() string {
 	return mac
 }
 
-func verifyMac(maybe_mac string) (mac string, err error) {
-	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$",maybe_mac)
+func verifyMac(mac string) (string, error) {
+	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
 	if err != nil {
-		return "",err
+		return "", err
 	}
+
 	if match {
-		return strings.ToLower(maybe_mac), nil
+		return strings.ToLower(mac), nil
 	} else {
-		return "", errors.New("Not a valid mac address: "+maybe_mac)
+		return "", errors.New("Not a valid mac address: " + mac)
 	}
 }
 
