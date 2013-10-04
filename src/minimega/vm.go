@@ -1211,14 +1211,14 @@ func cliVMNet(c cliCommand) cliResponse {
 
 			// (optional) MAC ADDRESS
 			if len(d) > 1 {
-				mac, err := verifyMac(d[1])
-				if err != nil {
+				if isMac(d[1]) {
+					info.macs = append(info.macs, strings.ToLower(d[1]))
+				} else {
 					info.macs = append(info.macs, "")
 					r = cliResponse{
-						Error: err.Error(),
+						Error: "Not a valid mac address: "+d[1],
 					}
 				}
-				info.macs = append(info.macs, mac)
 			} else {
 				info.macs = append(info.macs, "")
 			}

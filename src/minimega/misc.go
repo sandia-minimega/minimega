@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"errors"
 	"fmt"
 	log "minilog"
 	"os"
@@ -27,17 +26,12 @@ func randomMac() string {
 	return mac
 }
 
-func verifyMac(mac string) (string, error) {
+func isMac(mac string) (bool) {
 	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
 	if err != nil {
-		return "", err
+		return false
 	}
-
-	if match {
-		return strings.ToLower(mac), nil
-	} else {
-		return "", errors.New("Not a valid mac address: " + mac)
-	}
+	return match
 }
 
 func hostid(s string) (string, int) {
