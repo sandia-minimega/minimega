@@ -111,7 +111,6 @@ func configToString() string {
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
-	//fmt.Fprintf(w, "Networks:\t%v\n", info.Networks)
 	fmt.Fprintf(w, "Networks:\t%v\n", networkString())
 	w.Flush()
 	return o.String()
@@ -119,12 +118,12 @@ func configToString() string {
 
 func networkString() string {
 	s := "["
-	for i,vlan:=range info.Networks {
+	for i, vlan := range info.Networks {
 		s += strconv.Itoa(vlan)
 		if info.macs[i] != "" {
 			s += "," + info.macs[i]
 		}
-		if i+1<len(info.Networks) {
+		if i+1 < len(info.Networks) {
 			s += " "
 		}
 	}
@@ -353,17 +352,17 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.KernelPath = info.KernelPath
 	newInfo.InitrdPath = info.InitrdPath
 	newInfo.Append = info.Append
-	newInfo.QemuAppend = make([]string,len(info.QemuAppend))
+	newInfo.QemuAppend = make([]string, len(info.QemuAppend))
 	copy(newInfo.QemuAppend, info.QemuAppend)
 	newInfo.State = info.State
 	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
 	// q isn't allocated until launchOne()
-	newInfo.taps = make([]string,len(info.taps))
+	newInfo.taps = make([]string, len(info.taps))
 	copy(newInfo.taps, info.taps)
-	newInfo.Networks = make([]int,len(info.Networks))
+	newInfo.Networks = make([]int, len(info.Networks))
 	copy(newInfo.Networks, info.Networks)
-	newInfo.macs = make([]string,len(info.macs))
+	newInfo.macs = make([]string, len(info.macs))
 	copy(newInfo.macs, info.macs)
 	newInfo.Snapshot = info.Snapshot
 	return newInfo
@@ -376,7 +375,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	var mask string
 	switch len(c.Args) {
 	case 0:
-		case 1: // search or mask
+	case 1: // search or mask
 		if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else if strings.HasPrefix(c.Args[0], "[") {
@@ -386,7 +385,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-		case 2: // first term MUST be search
+	case 2: // first term MUST be search
 		if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else {
@@ -504,7 +503,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 			}
 		case "tap":
-			VM_INFO_TAP_LOOP:
+		VM_INFO_TAP_LOOP:
 			for i, j := range l.vms {
 				for _, k := range j.taps {
 					if k == d[1] {
@@ -720,11 +719,11 @@ func (vm *vmInfo) launchOne() {
 	diskSnapshotted := map[string]bool{}
 	diskPersistent := map[string]bool{}
 	// populate selfMacMap
-	for _,mac := range vm.macs {
+	for _, mac := range vm.macs {
 		if mac == "" { // don't worry about empty mac addresses
 			continue
 		}
-		_,exists := selfMacMap[mac]
+		_, exists := selfMacMap[mac]
 		if exists { // if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
@@ -734,14 +733,14 @@ func (vm *vmInfo) launchOne() {
 		selfMacMap[mac] = true
 	}
 	// populate macMap, diskSnapshotted, and diskPersistent
-	for _,vm2 := range vms.vms {
+	for _, vm2 := range vms.vms {
 		if vm == vm2 { // ignore this vm
 			continue
 		}
 		vmIsActive := vm2.State == VM_BUILDING || vm2.State == VM_RUNNING || vm2.State == VM_PAUSED
 		if vmIsActive {
 			// populate mac addresses set
-			for _,mac := range vm2.macs {
+			for _, mac := range vm2.macs {
 				macMap[mac] = true
 			}
 			// populate disk sets
@@ -755,17 +754,17 @@ func (vm *vmInfo) launchOne() {
 	// check for mac address conflicts and fill in unspecified mac addresses without conflict
 	for i, mac := range vm.macs {
 		if mac == "" { // create mac addresses where unspecified
-			existsOther,existsSelf,newMac := true,true,"" // entry condition/initialization
-			for existsOther || existsSelf { // loop until we generate a random mac that doesn't conflict (already exist)
-				newMac = randomMac() // generate a new mac address
-				_,existsOther = macMap[newMac] // check it against the set of mac addresses from other vms
-				_,existsSelf  = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
+			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
+			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
+				newMac = randomMac()               // generate a new mac address
+				_, existsOther = macMap[newMac]    // check it against the set of mac addresses from other vms
+				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
 			}
-			vm.macs[i] = newMac // set the unspecified mac address
+			vm.macs[i] = newMac       // set the unspecified mac address
 			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
 		} else { // if mac is specified, check for mac address conflict
 			// we only need to check against macMap because selfMacMap is collision-free at this point
-			_,exists := macMap[mac]
+			_, exists := macMap[mac]
 			if exists { // if another vm has this mac address already
 				log.Error("Mac address %v is already in use by another vm.\n", mac)
 				vm.state(VM_ERROR)
@@ -775,10 +774,10 @@ func (vm *vmInfo) launchOne() {
 		}
 	}
 	// check for disk conflict
-	_,existsSnapshotted := diskSnapshotted[vm.DiskPath] // check if another vm is using this disk in snapshot mode
-	_,existsPersistent := diskPersistent[vm.DiskPath] // check if another vm is using this disk in persistent mode (snapshot=false)
+	_, existsSnapshotted := diskSnapshotted[vm.DiskPath]                 // check if another vm is using this disk in snapshot mode
+	_, existsPersistent := diskPersistent[vm.DiskPath]                   // check if another vm is using this disk in persistent mode (snapshot=false)
 	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-		log.Error("Disk path %v is already in use by another vm.\n",vm.DiskPath)
+		log.Error("Disk path %v is already in use by another vm.\n", vm.DiskPath)
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
@@ -1180,28 +1179,33 @@ func cliVMNet(c cliCommand) cliResponse {
 	} else {
 		info.Networks = []int{}
 		info.macs = []string{}
+
 		for _, lan := range c.Args {
-			lansplit := strings.SplitN(lan,",",2) // split on comma into two strings, before and after the first comma
+			d := strings.SplitN(lan, ",", 2) // split on comma into two strings, before and after the first comma
+
 			// VLAN ID
-			val, err := strconv.Atoi(lansplit[0]) // the vlan id
+			val, err := strconv.Atoi(d[0]) // the vlan id
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
 			}
+
 			err = currentBridge.LanCreate(val)
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
 			}
+
 			info.Networks = append(info.Networks, val)
-			// (Optional) MAC ADDRESS
-			if len(lansplit) > 1 {
-				mac,err := verifyMac(lansplit[1])
+
+			// (optional) MAC ADDRESS
+			if len(d) > 1 {
+				mac, err := verifyMac(d[1])
 				if err != nil {
 					info.macs = append(info.macs, "")
-					r = cliResponse{ // not sure if this was an intended use of r, but I don't want to return early - I just want to make sure the error gets displayed
+					r = cliResponse{
 						Error: err.Error(),
 					}
 				}
