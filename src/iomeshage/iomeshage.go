@@ -370,7 +370,7 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 	if strings.HasPrefix(dir, "/") {
 		dir = strings.TrimLeft(dir, "/")
 	}
-	log.Debug("dir is %v%v\n", iom.base, dir)
+	log.Debug("dir is %v%v", iom.base, dir)
 	return iom.base + dir
 }
 

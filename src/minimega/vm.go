@@ -773,7 +773,7 @@ func (vm *vmInfo) launchOne() {
 			// we only need to check against macMap because selfMacMap is collision-free at this point
 			_, ok := macMap[mac]
 			if ok { // if another vm has this mac address already
-				log.Error("Mac address %v is already in use by another vm.\n", mac)
+				log.Error("mac address %v is already in use by another vm.", mac)
 				vm.state(VM_ERROR)
 				launchAck <- vm.Id
 				return
@@ -786,7 +786,7 @@ func (vm *vmInfo) launchOne() {
 	_, existsPersistent := diskPersistent[vm.DiskPath]   // check if another vm is using this disk in persistent mode (snapshot=false)
 
 	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-		log.Error("Disk path %v is already in use by another vm.\n", vm.DiskPath)
+		log.Error("disk path %v is already in use by another vm.", vm.DiskPath)
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
