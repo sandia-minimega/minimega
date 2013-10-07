@@ -20,15 +20,16 @@ func (n *Node) generateEffectiveNetwork() {
 		emesh := make(mesh)
 		for k, v := range n.network {
 		effectiveNetworkLoop:
-			for _, i := range v {
-				for _, j := range emesh[i] {
+			for _, i := range v { // for each connection i to node k, see if i also reports being connected to k
+				for _, j := range emesh[i] { // do we already have this connection noted? if so, move on. This should happen zero or one times for each node.
 					if j == k {
 						continue effectiveNetworkLoop
 					}
 				}
-				for _, j := range n.network[i] {
+				for _, j := range n.network[i] { // go through all of node i's connections looking for k
 					if j == k {
 						log.Debug("found pair %v <-> %v", k, i)
+						// note the connection in the adjacency list for both i and k
 						emesh[k] = append(emesh[k], i)
 						emesh[i] = append(emesh[i], k)
 						break
@@ -37,13 +38,22 @@ func (n *Node) generateEffectiveNetwork() {
 			}
 		}
 		n.effectiveNetwork = emesh
+
+		// now generate routes to each of the nodes from us based on the effectiveNetwork
 		n.routes = make(map[string]string)
 
+		// attempt to learn routes to each node from this node,
+		// assuming that all nodes in the effective network are
+		// routable.  It's possible that the effective network
+		// represents partitioned meshes, so if we cannot find a route
+		// to a node, remove it from the known network and start this
+		// entire process over.
 		stable := true
 		for h, _ := range n.effectiveNetwork {
 			if _, ok := n.routes[h]; !ok {
 				n.updateRoute(h)
 				if _, ok := n.routes[h]; !ok {
+					log.Debug("removing unroutable node %v", h)
 					delete(n.network, h)
 					stable = false
 				}
@@ -58,8 +68,8 @@ func (n *Node) generateEffectiveNetwork() {
 }
 
 // find and record the next hop route for c.
-// Additionally, all hops along this route are also the shortest path, so record those as well to
-// save on effort.
+// Additionally, all hops along this route are also the shortest path, so
+// record those as well to save on effort.
 func (n *Node) updateRoute(c string) {
 	if len(n.effectiveNetwork) == 0 {
 		return
@@ -68,8 +78,12 @@ func (n *Node) updateRoute(c string) {
 	log.Debug("updating route for %v", c)
 
 	routes := make(map[string]string) // a key node has a value of the previous hop, the key exists if it's been visited
-	routes[n.name] = n.name
+	routes[n.name] = n.name           // the route to ourself is pretty easy to calculate
 
+	// dijkstra's algorithm is well suited in go - we can use a buffered
+	// channel of nodes to order our search. We start by putting ourselves
+	// in the queue (channel) and follow all nodes connected to it. If we
+	// haven't visited that node before, it goes in the queue.
 	q := make(chan string, len(n.effectiveNetwork))
 	q <- n.name
 
@@ -82,7 +96,7 @@ func (n *Node) updateRoute(c string) {
 			if _, ok := routes[a]; !ok {
 				q <- a
 				log.Debug("previous hop for %v is %v", a, v)
-				routes[a] = v
+				routes[a] = v // this is the route to node a from v
 			}
 		}
 
