@@ -5,8 +5,10 @@
 package meshage
 
 import (
+	"bytes"
 	"fmt"
 	log "minilog"
+	"text/tabwriter"
 )
 
 const (
@@ -35,6 +37,29 @@ type Message struct {
 	Command      int         // mesh state announcement, message
 	Body         interface{} // message body
 	Traversal    int         // order in which to process message and send to clients
+}
+
+func (m *Message) String() string {
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(&o, "\n")
+	fmt.Fprintf(w, "\tSource:\t%v\n", m.Source)
+	fmt.Fprintf(w, "\tRecipients:\t%v\n", m.Recipients)
+	fmt.Fprintf(w, "\tCurrent Route:\t%v\n", m.CurrentRoute)
+	fmt.Fprintf(w, "\tID:\t%v\n", m.ID)
+	switch m.Command {
+	case ACK:
+		fmt.Fprintf(w, "\tCommand:\tACK\n")
+	case MSA:
+		fmt.Fprintf(w, "\tCommand:\tMSA\n")
+	case MESSAGE:
+		fmt.Fprintf(w, "\tCommand:\tmessage\n")
+	}
+	fmt.Fprintf(w, "\tBody:\t%v\n", m.Body)
+	w.Flush()
+	return o.String()
 }
 
 // Send a message according to the parameters set in the message.
