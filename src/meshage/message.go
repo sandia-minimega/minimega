@@ -165,7 +165,7 @@ func (n *Node) messageHandler() {
 	log.Debugln("messageHandler")
 	for {
 		m := <-n.messagePump
-		log.Debug("messageHandler: %#v", m)
+		log.Debug("messageHandler: %v", m)
 		m.CurrentRoute = append(m.CurrentRoute, n.name)
 
 		switch m.Command {

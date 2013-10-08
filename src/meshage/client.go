@@ -63,7 +63,7 @@ func (c *client) clientMessagePump(p chan *Message) {
 			p <- nil
 			return
 		}
-		log.Debug("decoded message: %v: %#v", c.name, m)
+		log.Debug("decoded message: %v: %v", c.name, m)
 		p <- &m
 	}
 }
