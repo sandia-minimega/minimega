@@ -189,7 +189,7 @@ func (n *Node) messageHandler() {
 				go n.Send(m)
 			}
 		default:
-			log.Errorln(fmt.Errorf("invalid message command: %v", m.Command))
+			log.Errorln("invalid message command: ", m.Command)
 		}
 	}
 }

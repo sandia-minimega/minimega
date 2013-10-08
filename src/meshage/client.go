@@ -105,7 +105,7 @@ CLIENT_HANDLER_LOOP:
 				n.messagePump <- m
 			}
 		case <-time.After(2 * time.Duration(n.msaTimeout) * time.Second):
-			log.Errorln("client %v MSA timeout", host)
+			log.Error("client %v MSA timeout", host)
 			break CLIENT_HANDLER_LOOP
 		}
 	}

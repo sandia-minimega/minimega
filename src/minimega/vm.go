@@ -1230,7 +1230,7 @@ func cliVMNet(c cliCommand) cliResponse {
 func cliVMFlush(c cliCommand) cliResponse {
 	for i, vm := range vms.vms {
 		if vm.State == VM_QUIT || vm.State == VM_ERROR {
-			log.Infoln("deleting VM: %v", i)
+			log.Infoln("deleting VM: ", i)
 			delete(vms.vms, i)
 		}
 	}
