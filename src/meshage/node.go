@@ -194,12 +194,14 @@ func (n *Node) newConnection(conn net.Conn) {
 	err := c.enc.Encode(n.name)
 	if err != nil {
 		log.Errorln(err)
+		c.conn.Close()
 		return
 	}
 
 	err = c.enc.Encode(solicited)
 	if err != nil {
 		log.Errorln(err)
+		c.conn.Close()
 		return
 	}
 
@@ -209,6 +211,7 @@ func (n *Node) newConnection(conn net.Conn) {
 		if err != io.EOF {
 			log.Errorln(err)
 		}
+		c.conn.Close()
 		return
 	}
 
@@ -258,6 +261,19 @@ func (n *Node) broadcastListener() {
 			continue
 		}
 		log.Debug("got solicitation from %v", host)
+
+		// to avoid spamming the node with connections, only 1/8 of the
+		// nodes should try to connect. If there are < 16 nodes, then
+		// always try.
+		if len(n.clients) > 16 {
+			s := rand.NewSource(time.Now().UnixNano())
+			r := rand.New(s)
+			n := r.Intn(8)
+			if n != 0 {
+				log.Debugln("randomly skipping this solicitation")
+				continue
+			}
+		}
 		go n.dial(host, true)
 	}
 }

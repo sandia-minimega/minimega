@@ -228,7 +228,12 @@ floodLoop:
 				continue floodLoop
 			}
 		}
-		go n.clientSend(k, m)
+		go func(j string, m *Message) {
+			err := n.clientSend(j, m)
+			if err != nil {
+				log.Error("flood to client %v: %v", j, err)
+			}
+		}(k, m)
 	}
 }
 

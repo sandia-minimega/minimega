@@ -52,61 +52,43 @@ func (n *Node) clientSend(host string, m *Message) error {
 	return fmt.Errorf("no such client %s", host)
 }
 
-func (c *client) clientMessagePump(p chan *Message) {
-	for {
-		var m Message
-		err := c.dec.Decode(&m)
-		if err != nil {
-			if err != io.EOF {
-				log.Errorln(err)
-			}
-			p <- nil
-			return
-		}
-		log.Debug("decoded message: %v: %v", c.name, &m)
-		p <- &m
-	}
-}
-
-// clientHandler is called as a goroutine after a successful handshake. It begins
-// by issuing an MSA, and starting the receiver for the client. When the receiver
-// exits, another MSA is issued without the client.
+// clientHandler is called as a goroutine after a successful handshake. It
+// begins by issuing an MSA. When the receiver exits, another MSA is issued
+// without the client.
 func (n *Node) clientHandler(host string) {
 	log.Debug("clientHandler: %v", host)
 	c := n.clients[host]
 
 	n.MSA()
 
-	clientMessages := make(chan *Message)
-	go c.clientMessagePump(clientMessages)
-
-CLIENT_HANDLER_LOOP:
 	for {
-		select {
-		case m := <-clientMessages:
-			if m == nil {
-				break CLIENT_HANDLER_LOOP
+		var m Message
+		c.conn.SetReadDeadline(time.Now().Add(2 * n.msaTimeout))
+		err := c.dec.Decode(&m)
+		if err != nil {
+			if err != io.EOF {
+				log.Errorln(err)
 			}
-			if m.Command == ACK {
-				c.ack <- m.ID
-			} else {
-				// send an ack
-				a := Message{
-					Command: ACK,
-					ID:      m.ID,
-				}
-				err := c.enc.Encode(a)
-				if err != nil {
-					if err != io.EOF {
-						log.Errorln(err)
-					}
-					break CLIENT_HANDLER_LOOP
-				}
-				n.messagePump <- m
+			break
+		}
+		log.Debug("decoded message: %v: %v", c.name, &m)
+		if m.Command == ACK {
+			c.ack <- m.ID
+		} else {
+			// send an ack
+			a := Message{
+				Command: ACK,
+				ID:      m.ID,
 			}
-		case <-time.After(2 * time.Duration(n.msaTimeout) * time.Second):
-			log.Error("client %v MSA timeout", host)
-			break CLIENT_HANDLER_LOOP
+			c.conn.SetWriteDeadline(time.Now().Add(2 * n.msaTimeout))
+			err := c.enc.Encode(a)
+			if err != nil {
+				if err != io.EOF {
+					log.Errorln(err)
+				}
+				break
+			}
+			n.messagePump <- &m
 		}
 	}
 	log.Info("client %v disconnected", host)
