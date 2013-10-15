@@ -13,7 +13,9 @@ var (
 	f_ssh      = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
 	f_mean     = flag.Int("u", 100, "mean time, in milliseconds, between actions")
-	f_variance = flag.Int("s", 0, "standard deviation between actions")
+	f_stddev   = flag.Int("s", 0, "standard deviation between actions")
+	f_min      = flag.Int("min", 0, "minimum time allowable for events, in milliseconds")
+	f_max      = flag.Int("max", 60000, "maximum time allowable for events, in milliseconds")
 	f_loglevel = flag.String("loglevel", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("log", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
@@ -37,9 +39,27 @@ func main() {
 
 	logSetup()
 
+	// make sure at least one service is enabled
+	if !*f_http && !*f_ssh && !*f_smtp {
+		log.Fatalln("no enabled services")
+	}
+
+	// make sure mean and variance are > 0
+	if *f_mean < 0 || *f_stddev < 0 || *f_min < 0 || *f_max < 0 {
+		log.Fatalln("mean, standard deviation, min, and max must be > 0")
+	}
+
 	hosts, err := parseHosts(flag.Args())
 	if err != nil {
 		log.Fatalln(err)
 	}
+	if len(hosts) == 0 {
+		log.Fatalln("no hosts specified")
+	}
 	log.Infoln("hosts: ", hosts)
+
+	// start services
+	if *f_smtp {
+		smtpClient()
+	}
 }
