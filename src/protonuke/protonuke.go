@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	log "minilog"
 	"os"
 )
 
@@ -13,9 +14,10 @@ var (
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
 	f_mean     = flag.Int("u", 100, "mean time, in milliseconds, between actions")
 	f_variance = flag.Int("s", 0, "standard deviation between actions")
-	f_loglevel  = flag.String("loglevel", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log       = flag.Bool("log", true, "log on stderr")
-	f_logfile   = flag.String("logfile", "", "also log to file")
+	f_loglevel = flag.String("loglevel", "warn", "set log level: [debug, info, warn, error, fatal]")
+	f_log      = flag.Bool("log", true, "log on stderr")
+	f_logfile  = flag.String("logfile", "", "also log to file")
+	hosts      map[string]string
 )
 
 func usage() {
@@ -32,5 +34,12 @@ func usage() {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
-	fmt.Println("tumbleweed")
+
+	logSetup()
+
+	hosts, err := parseHosts(flag.Args())
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Infoln("hosts: ", hosts)
 }
