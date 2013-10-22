@@ -20,6 +20,7 @@ var (
 	f_log      = flag.Bool("log", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
 	hosts      map[string]string
+	keys       []string
 )
 
 func usage() {
@@ -49,7 +50,8 @@ func main() {
 		log.Fatalln("mean, standard deviation, min, and max must be > 0")
 	}
 
-	hosts, err := parseHosts(flag.Args())
+	var err error
+	hosts, keys, err = parseHosts(flag.Args())
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -61,5 +63,12 @@ func main() {
 	// start services
 	if *f_smtp {
 		smtpClient()
+	}
+	if *f_http {
+		if *f_serve {
+			httpServer()
+		} else {
+			httpClient()
+		}
 	}
 }

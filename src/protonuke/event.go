@@ -39,3 +39,15 @@ func (e *EventTicker) Tick() {
 
 	time.Sleep(time.Duration(t) * time.Millisecond)
 }
+
+// randomHost returns a host and the original specified text from the user
+// command line. Therefore, if the user specified 10.0.0.0/24, randomHost may
+// return (10.0.0.200, 10.0.0.0/24).
+func randomHost() (host string, original string) {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	v := r.Intn(len(hosts))
+	host = keys[v]
+	original = hosts[host]
+	return
+}

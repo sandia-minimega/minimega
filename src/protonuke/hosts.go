@@ -13,9 +13,10 @@ import (
 // parameter provided by the user. This way, if the user provides something
 // like 10.0.0.0/24, we can populate the map with 254 keys, all with the same
 // value, so we can pretty print things related to the user's input.
-func parseHosts(input []string) (map[string]string, error) {
+// Also return a []string of keys to facilitate random access.
+func parseHosts(input []string) (map[string]string, []string, error) {
 	log.Debugln("parseHosts")
-	ret := make(map[string]string)
+	retHosts := make(map[string]string)
 
 	for _, i := range input {
 		// input can be either a hostname/ip, a subnet, or a comma separated list of the two
@@ -24,30 +25,30 @@ func parseHosts(input []string) (map[string]string, error) {
 		if strings.Contains(i, ",") { // recursion on comma lists
 			d := strings.Split(i, ",")
 			log.Debugln("comma delimited: ", d)
-			o, err := parseHosts(d)
+			o, _, err := parseHosts(d)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			} else {
 				for k, v := range o {
-					ret[k] = v
+					retHosts[k] = v
 				}
 			}
 		} else if strings.Contains(i, "/") { // a subnet
 			d := strings.Split(i, "/")
 			log.Debugln("subnet ", d)
 			if len(d) != 2 {
-				return nil, fmt.Errorf("cannot parse %v", i)
+				return nil, nil, fmt.Errorf("cannot parse %v", i)
 			}
 			if !isIPv4(d[0]) {
-				return nil, fmt.Errorf("network %v is invalid", d[0])
+				return nil, nil, fmt.Errorf("network %v is invalid", d[0])
 			}
 			network := toInt32(d[0])
 			cidr, err := strconv.Atoi(d[1])
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if cidr < 0 || cidr > 32 {
-				return nil, fmt.Errorf("invalid subnet %v", cidr)
+				return nil, nil, fmt.Errorf("invalid subnet %v", cidr)
 			}
 
 			// we have a valid network and cidr, populate the map
@@ -64,20 +65,24 @@ func parseHosts(input []string) (map[string]string, error) {
 			for j := 0; j < count; j++ {
 				strIPv4 := toIPv4(ip)
 				log.Debug("adding key:value %v:%v", strIPv4, i)
-				ret[strIPv4] = i
+				retHosts[strIPv4] = i
 				ip++
 			}
 		} else { // host or ip
 			if !isIPv4(i) && !isValidDNS(i) {
-				return nil, fmt.Errorf("invalid host or ip %v", i)
+				return nil, nil, fmt.Errorf("invalid host or ip %v", i)
 			}
 
 			log.Debug("adding key:value %v:%v", i, i)
-			ret[i] = i
+			retHosts[i] = i
 		}
 	}
 
-	return ret, nil
+	var retKeys []string
+	for k, _ := range retHosts {
+		retKeys = append(retKeys, k)
+	}
+	return retHosts, retKeys, nil
 }
 
 func isIPv4(ip string) bool {
