@@ -55,7 +55,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if len(hosts) == 0 {
+	if len(hosts) == 0 && !*f_serve {
 		log.Fatalln("no hosts specified")
 	}
 	log.Infoln("hosts: ", hosts)
