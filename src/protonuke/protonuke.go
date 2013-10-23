@@ -91,5 +91,12 @@ func main() {
 			go httpTLSClient()
 		}
 	}
+	if *f_ssh {
+		if *f_serve {
+			go sshServer()
+		} else {
+			go sshClient()
+		}
+	}
 	<-sig
 }
