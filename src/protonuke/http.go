@@ -23,10 +23,10 @@ const (
 
 var (
 	htmlTemplate     *template.Template
-	hits             uint
-	hitsTLS          uint
-	hitChan          chan uint
-	hitTLSChan       chan uint
+	hits             uint64
+	hitsTLS          uint64
+	hitChan          chan uint64
+	hitTLSChan       chan uint64
 	httpSiteCache    []string
 	httpTLSSiteCache []string
 	httpImage        []byte
@@ -36,7 +36,7 @@ var (
 
 type HtmlContent struct {
 	URLs   []string
-	Hits   uint
+	Hits   uint64
 	URI    string
 	Secure bool
 	Host   string
@@ -51,6 +51,7 @@ func httpClient() {
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
 		httpClientRequest(h)
+		httpReportChan <- 1
 	}
 }
 
@@ -69,6 +70,7 @@ func httpTLSClient() {
 		h, o := randomHost()
 		log.Debug("https host %v from %v", h, o)
 		httpTLSClientRequest(h, client)
+		httpTLSReportChan <- 1
 	}
 }
 
@@ -223,14 +225,14 @@ func httpSetup() {
 
 func httpServer() {
 	httpSetup()
-	hitChan = make(chan uint, 1024)
+	hitChan = make(chan uint64, 1024)
 	go hitCounter()
 	log.Fatalln(http.ListenAndServe(":80", nil))
 }
 
 func httpTLSServer() {
 	httpSetup()
-	hitTLSChan = make(chan uint, 1024)
+	hitTLSChan = make(chan uint64, 1024)
 	go hitTLSCounter()
 	cert, key := generateCerts()
 	log.Fatalln(http.ListenAndServeTLS(":443", cert, key, nil))
@@ -254,6 +256,7 @@ func hitCounter() {
 	for {
 		c := <-hitChan
 		hits += c
+		httpReportChan <- c
 	}
 }
 
@@ -261,6 +264,7 @@ func hitTLSCounter() {
 	for {
 		c := <-hitTLSChan
 		hitsTLS += c
+		httpTLSReportChan <- c
 	}
 }
 
