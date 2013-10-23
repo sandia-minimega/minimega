@@ -5,11 +5,14 @@ import (
 	"fmt"
 	log "minilog"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 var (
 	f_serve    = flag.Bool("serve", false, "act as a server for enabled services")
 	f_http     = flag.Bool("http", false, "enable http service")
+	f_https    = flag.Bool("https", false, "enable https (TLS) service")
 	f_ssh      = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
 	f_mean     = flag.Int("u", 100, "mean time, in milliseconds, between actions")
@@ -38,10 +41,13 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
+	sig := make(chan os.Signal, 1024)
+	signal.Notify(sig, syscall.SIGINT)
+
 	logSetup()
 
 	// make sure at least one service is enabled
-	if !*f_http && !*f_ssh && !*f_smtp {
+	if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -61,14 +67,19 @@ func main() {
 	log.Infoln("hosts: ", hosts)
 
 	// start services
-	if *f_smtp {
-		smtpClient()
-	}
 	if *f_http {
 		if *f_serve {
-			httpServer()
+			go httpServer()
 		} else {
-			httpClient()
+			go httpClient()
 		}
 	}
+	if *f_https {
+		if *f_serve {
+			go httpTLSServer()
+		} else {
+			go httpTLSClient()
+		}
+	}
+	<-sig
 }
