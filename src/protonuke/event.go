@@ -7,14 +7,14 @@ import (
 )
 
 type EventTicker struct {
-	mean   int
-	stddev int
-	min    int
-	max    int
+	mean   time.Duration
+	stddev time.Duration
+	min    time.Duration
+	max    time.Duration
 	count  uint64
 }
 
-func NewEventTicker(mean, stddev, min, max int) *EventTicker {
+func NewEventTicker(mean, stddev, min, max time.Duration) *EventTicker {
 	return &EventTicker{
 		mean:   mean,
 		stddev: stddev,
@@ -23,10 +23,16 @@ func NewEventTicker(mean, stddev, min, max int) *EventTicker {
 	}
 }
 
+func Milliseconds(t time.Duration) float64 {
+	msec := t.Nanoseconds() / int64(time.Millisecond)
+	nsec := t.Nanoseconds() % int64(time.Millisecond)
+	return float64(msec) + float64(nsec)*(1e-9*1000)
+}
+
 func (e *EventTicker) Tick() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	t := int(r.NormFloat64()*float64(e.stddev) + float64(e.mean))
+	t := time.Duration(int64(r.NormFloat64()*Milliseconds(e.stddev)+Milliseconds(e.mean)) * int64(time.Millisecond))
 
 	// truncate to min and max
 	if t < e.min {
@@ -35,9 +41,9 @@ func (e *EventTicker) Tick() {
 		t = e.max
 	}
 
-	log.Debug("tick time %vms", t)
+	log.Debug("tick time %v", t)
 
-	time.Sleep(time.Duration(t) * time.Millisecond)
+	time.Sleep(time.Duration(t))
 }
 
 // randomHost returns a host and the original specified text from the user
