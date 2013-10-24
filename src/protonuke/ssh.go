@@ -114,6 +114,7 @@ func sshHandleConn(conn *ssh.ServerConn) {
 				if err != nil {
 					break
 				}
+				sshReportChan <- uint64(len(line))
 				// just echo the message
 				serverTerm.Write([]byte(line))
 				serverTerm.Write([]byte{'\r', '\n'})

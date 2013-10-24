@@ -11,26 +11,28 @@ import (
 var (
 	httpReportChan    chan uint64
 	httpTLSReportChan chan uint64
+	sshReportChan     chan uint64
 
 	httpReportHits    uint64
 	httpTLSReportHits uint64
+	sshReportBytes    uint64
 )
 
 func init() {
 	httpReportChan = make(chan uint64, 1024)
 	httpTLSReportChan = make(chan uint64, 1024)
+	sshReportChan = make(chan uint64, 1024)
 
 	go func() {
 		for {
-			i := <-httpReportChan
-			httpReportHits += i
-		}
-	}()
-
-	go func() {
-		for {
-			i := <-httpTLSReportChan
-			httpTLSReportHits += i
+			select {
+			case i := <-httpReportChan:
+				httpReportHits += i
+			case i := <-httpTLSReportChan:
+				httpTLSReportHits += i
+			case i := <-sshReportChan:
+				sshReportBytes += i
+			}
 		}
 	}()
 }
@@ -54,6 +56,9 @@ func report(reportWait time.Duration) {
 		}
 		if *f_https {
 			fmt.Fprintf(w, "https\t%v\t%.01f hits/min\n", httpTLSReportHits, float64(httpTLSReportHits)/elapsedTime.Minutes())
+		}
+		if *f_ssh {
+			fmt.Fprintf(w, "ssh\t%v\t%.01f bytes/min\n", sshReportBytes, float64(sshReportBytes)/elapsedTime.Minutes())
 		}
 		w.Flush()
 		fmt.Println(buf.String())
