@@ -1,10 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
+	"fmt"
 	"io"
+	"math/rand"
 	log "minilog"
 	"ssh"
 	"ssh/terminal"
+	"time"
 )
 
 var id_rsa = `-----BEGIN RSA PRIVATE KEY-----
@@ -36,15 +41,144 @@ Ju2wJ6nHR3zeAxwqnmhl3VPKTHjIQu0GkQ83Z9NcnYZsLSYnuz8=
 -----END RSA PRIVATE KEY-----
 `
 
+type sshConn struct {
+	Config    *ssh.ClientConfig
+	Client    *ssh.ClientConn
+	Session   *ssh.Session
+	Host      string
+	Stdin     io.Writer
+	StdoutBuf bytes.Buffer
+}
+
+type sshPassword string
+
+func (p sshPassword) Password(user string) (string, error) {
+	return string(p), nil
+}
+
+var (
+	sshConns []*sshConn
+	PORT     = ":2022"
+)
+
+// ssh client events include connecting, disconnecting, or typing in an
+// existing session.  it's not very representative to constantly connect and
+// disconnect, so the event pump will randomly choose to issue the listed
+// events with weights. 10% chance to connect/disconnect (100% to connect if no
+// connections exist), and 90% chance to issue commands on existing
+// connections.
 func sshClient() {
 	log.Debugln("sshClient")
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 	for {
 		t.Tick()
-		h, o := randomHost()
-		log.Debug("ssh host %v from %v", h, o)
+
+		// special case - if we have no connections, make a connection
+		if len(sshConns) == 0 {
+			h, o := randomHost()
+			log.Debug("ssh host %v from %v", h, o)
+			sshClientConnect(h)
+		} else {
+			s := rand.NewSource(time.Now().UnixNano())
+			r := rand.New(s)
+			switch r.Intn(10) {
+			case 0: // new connection
+				h, o := randomHost()
+				// make sure we're not already connected
+				for _, v := range sshConns {
+					if v.Host == h {
+						log.Debugln("ssh: already connected")
+						continue
+					}
+				}
+				log.Debug("ssh host %v from %v", h, o)
+				sshClientConnect(h)
+			case 1: // disconnect
+				i := r.Intn(len(sshConns))
+				log.Debug("ssh disconnect on %v", sshConns[i].Host)
+				sshClientDisconnect(i)
+			default: // event on one of the existing connections
+				i := r.Intn(len(sshConns))
+				log.Debug("ssh activity on %v", sshConns[i].Host)
+				sshClientActivity(i)
+			}
+		}
 	}
+}
+
+func sshClientConnect(host string) {
+	sc := &sshConn{}
+	sc.Config = &ssh.ClientConfig{
+		User: "protonuke",
+		Auth: []ssh.ClientAuth{
+			ssh.ClientAuthPassword(sshPassword("password")),
+		},
+	}
+
+	var err error
+	sc.Client, err = ssh.Dial("tcp", host+PORT, sc.Config)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	sc.Session, err = sc.Client.NewSession()
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	sc.Session.Stdout = &sc.StdoutBuf
+	sc.Stdin, err = sc.Session.StdinPipe()
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	if err := sc.Session.Shell(); err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	sc.Host = host
+
+	sshConns = append(sshConns, sc)
+}
+
+func sshClientDisconnect(index int) {
+	sshConns[index].Session.Close()
+	sshConns = append(sshConns[:index], sshConns[index+1:]...)
+}
+
+func sshClientActivity(index int) {
+	sc := sshConns[index]
+
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+
+	// generate a random byte slice
+	l := r.Intn(128)
+	b := make([]byte, l)
+	for i, _ := range b {
+		b[i] = byte(r.Int())
+	}
+
+	data := base64.StdEncoding.EncodeToString(b)
+	log.Debug("ssh activity to %v with %v", sc.Host, data)
+
+	sc.Stdin.Write([]byte(data))
+	sc.Stdin.Write([]byte{'\r', '\n'})
+	sshReportChan <- uint64(len(data))
+
+	expected := fmt.Sprintf("> %v\r\n%v\r\n> ", data, data)
+	for i := 0; i < 10 && sc.StdoutBuf.String() != expected; i++ {
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	log.Debugln("ssh: ", sc.StdoutBuf.String())
+
+	sc.StdoutBuf.Reset()
 }
 
 func sshServer() {
@@ -63,7 +197,7 @@ func sshServer() {
 
 	config.AddHostKey(private)
 
-	l, err := ssh.Listen("tcp", ":2022", config)
+	l, err := ssh.Listen("tcp", PORT, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -112,10 +246,14 @@ func sshHandleConn(conn *ssh.ServerConn) {
 			for {
 				line, err := serverTerm.ReadLine()
 				if err != nil {
-					break
+					if err != io.EOF {
+						log.Errorln(err)
+					}
+					return
 				}
 				sshReportChan <- uint64(len(line))
 				// just echo the message
+				log.Debugln("ssh received: ", line)
 				serverTerm.Write([]byte(line))
 				serverTerm.Write([]byte{'\r', '\n'})
 			}
