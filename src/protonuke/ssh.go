@@ -58,7 +58,7 @@ func (p sshPassword) Password(user string) (string, error) {
 
 var (
 	sshConns []*sshConn
-	PORT     = ":2022"
+	PORT     = ":22"
 )
 
 // ssh client events include connecting, disconnecting, or typing in an
