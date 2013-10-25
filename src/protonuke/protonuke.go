@@ -98,5 +98,12 @@ func main() {
 			go sshClient()
 		}
 	}
+	if *f_smtp {
+		if *f_serve {
+			go smtpServer()
+		} else {
+			go smtpClient()
+		}
+	}
 	<-sig
 }
