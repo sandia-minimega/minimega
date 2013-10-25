@@ -16,6 +16,7 @@ var (
 	f_https    = flag.Bool("https", false, "enable https (TLS) service")
 	f_ssh      = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
+	f_smtpUser = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
 	f_mean     = flag.Duration("u", time.Duration(1000*time.Millisecond), "mean time between actions")
 	f_stddev   = flag.Duration("s", time.Duration(0), "standard deviation between actions")
 	f_min      = flag.Duration("min", time.Duration(0), "minimum time allowable for events")
