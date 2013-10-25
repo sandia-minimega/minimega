@@ -2,7 +2,7 @@
 	"tftproot" : "/home/john/tftpboot/",
 	"prefix" : "kn",
 	"start" : 1,
-	"end" : 520,
+	"end" : 80,
 	"rackwidth" : 8,
 	"rackheight" : 5
 }
