@@ -1216,7 +1216,7 @@ func cliVMNet(c cliCommand) cliResponse {
 				} else {
 					info.macs = append(info.macs, "")
 					r = cliResponse{
-						Error: "Not a valid mac address: "+d[1],
+						Error: "Not a valid mac address: " + d[1],
 					}
 				}
 			} else {

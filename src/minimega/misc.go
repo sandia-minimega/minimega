@@ -26,7 +26,7 @@ func randomMac() string {
 	return mac
 }
 
-func isMac(mac string) (bool) {
+func isMac(mac string) bool {
 	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
 	if err != nil {
 		return false

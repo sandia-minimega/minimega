@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"os/user"
 	"strings"
 	"version"
 )
@@ -85,8 +86,17 @@ func main() {
 		return
 	}
 
+	// warn if we're not root
+	user, err := user.Current()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.Uid != 0 {
+		log.Warnln("not running as root")
+	}
+
 	// check for a running instance of minimega
-	_, err := os.Stat(*f_base + "minimega")
+	_, err = os.Stat(*f_base + "minimega")
 	if err == nil {
 		if !*f_force {
 			log.Fatalln("minimega appears to already be running, override with -force")
