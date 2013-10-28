@@ -1181,6 +1181,17 @@ To see files that are currently being transferred, use the status command:
 				return nil
 			},
 		},
+
+		"viz": &command{
+			Call:      cliDot,
+			Helpshort: "visualize the current experiment as a graph",
+			Helplong: `
+viz outputs the current experiment topology as a graphviz readable 'dot' file.`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
