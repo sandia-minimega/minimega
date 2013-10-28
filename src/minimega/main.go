@@ -91,7 +91,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	if user.Uid != 0 {
+	if user.Uid != "0" {
 		log.Warnln("not running as root")
 	}
 
