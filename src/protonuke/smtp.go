@@ -31,6 +31,38 @@ import (
 	"time"
 )
 
+type SMTPClientSession struct {
+	conn      net.Conn
+	bufin     *bufio.Reader
+	bufout    *bufio.Writer
+	state     int
+	response  string
+	mail_from string
+	rcpt_to   []string
+	data      string
+	tls_on    bool
+}
+
+const (
+	INIT = iota
+	COMMANDS
+	STARTTLS
+	DATA
+	QUIT
+)
+
+const (
+	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
+)
+
+var (
+	timeout   = time.Duration(100)
+	max_size  = 131072
+	myFQDN    = "protonuke.local"
+	TLSconfig *tls.Config
+	smtpPort  = ":25"
+)
+
 func smtpClient() {
 	log.Debugln("smtpClient")
 
@@ -88,38 +120,6 @@ func smtpSendMail(server, to, rcpt, body string) error {
 
 	return nil
 }
-
-type SMTPClientSession struct {
-	conn      net.Conn
-	bufin     *bufio.Reader
-	bufout    *bufio.Writer
-	state     int
-	response  string
-	mail_from string
-	rcpt_to   []string
-	data      string
-	tls_on    bool
-}
-
-const (
-	INIT = iota
-	COMMANDS
-	STARTTLS
-	DATA
-	QUIT
-)
-
-const (
-	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
-)
-
-var (
-	timeout   = time.Duration(100)
-	max_size  = 131072
-	myFQDN    = "protonuke.local"
-	TLSconfig *tls.Config
-	smtpPort  = ":2005"
-)
 
 func NewSMTPClientSession(c net.Conn) *SMTPClientSession {
 	ret := &SMTPClientSession{conn: c, state: INIT}
