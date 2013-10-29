@@ -60,6 +60,8 @@ func smtpClient() {
 		err := smtpSendMail(h, to, from, body)
 		if err != nil {
 			log.Errorln(err)
+		} else {
+			smtpReportChan <- 1
 		}
 	}
 }
@@ -219,6 +221,7 @@ func (s *SMTPClientSession) Handler() {
 			log.Debugln(s)
 			s.addResponse("250 Ok: Now that is a delivery service you can count on")
 			s.state = COMMANDS
+			smtpReportChan <- 1
 		case STARTTLS:
 			// I'm just going to pull this from GoGuerrilla, thanks guys
 			var tlsConn *tls.Conn

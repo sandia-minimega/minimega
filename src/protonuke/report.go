@@ -12,16 +12,19 @@ var (
 	httpReportChan    chan uint64
 	httpTLSReportChan chan uint64
 	sshReportChan     chan uint64
+	smtpReportChan    chan uint64
 
 	httpReportHits    uint64
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
+	smtpReportMail    uint64
 )
 
 func init() {
 	httpReportChan = make(chan uint64, 1024)
 	httpTLSReportChan = make(chan uint64, 1024)
 	sshReportChan = make(chan uint64, 1024)
+	smtpReportChan = make(chan uint64, 1024)
 
 	go func() {
 		for {
@@ -32,6 +35,8 @@ func init() {
 				httpTLSReportHits += i
 			case i := <-sshReportChan:
 				sshReportBytes += i
+			case i := <-smtpReportChan:
+				smtpReportMail += i
 			}
 		}
 	}()
@@ -59,6 +64,9 @@ func report(reportWait time.Duration) {
 		}
 		if *f_ssh {
 			fmt.Fprintf(w, "ssh\t%v\t%.01f bytes/min\n", sshReportBytes, float64(sshReportBytes)/elapsedTime.Minutes())
+		}
+		if *f_smtp {
+			fmt.Fprintf(w, "smtp\t%v\t%.01f mails/min\n", smtpReportMail, float64(smtpReportMail)/elapsedTime.Minutes())
 		}
 		w.Flush()
 		fmt.Println(buf.String())
