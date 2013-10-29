@@ -1,7 +1,26 @@
+/**
+Based largely on Go-Guerrilla SMTPd, whose license and copyright follows:
+Copyright (c) 2012 Flashmob, GuerrillaMail.com
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
+permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+**/
+
 package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"errors"
 	log "minilog"
 	"net"
@@ -30,6 +49,7 @@ type SMTPClientSession struct {
 	mail_from string
 	rcpt_to   []string
 	data      string
+	tls_on    bool
 }
 
 const (
@@ -37,12 +57,14 @@ const (
 	COMMANDS
 	STARTTLS
 	DATA
+	QUIT
 )
 
 var (
-	timeout  = time.Duration(100)
-	max_size = 131072
-	myFQDN   = "protonuke.local"
+	timeout   = time.Duration(100)
+	max_size  = 131072
+	myFQDN    = "protonuke.local"
+	TLSconfig *tls.Config
 )
 
 func NewSMTPClientSession(c net.Conn) *SMTPClientSession {
@@ -56,6 +78,12 @@ func NewSMTPClientSession(c net.Conn) *SMTPClientSession {
 func smtpServer() {
 	log.Debugln("smtpServer")
 
+	certfile, keyfile := generateCerts()
+	cert, err := tls.LoadX509KeyPair(certfile, keyfile)
+	if err != nil {
+		log.Fatalln("couldn't get cert: ", err)
+	}
+	TLSconfig = &tls.Config{Certificates: []tls.Certificate{cert}, ClientAuth: tls.VerifyClientCertIfGiven, ServerName: myFQDN}
 	listener, err := net.Listen("tcp", "0.0.0.0:2005")
 	if err != nil {
 		log.Debugln(err)
@@ -114,6 +142,20 @@ func (s *SMTPClientSession) Handler() {
 			case strings.HasPrefix(cmd, "DATA"):
 				s.addResponse("354 End data with <CR><LF>.<CR><LF>")
 				s.state = DATA
+			case strings.HasPrefix(cmd, "STARTTLS") && !s.tls_on:
+				s.addResponse("220 They asked what do you know about theoretical physics? I said I had a theoretical degree in physics.")
+				s.state = STARTTLS
+			case strings.HasPrefix(cmd, "QUIT"):
+				s.addResponse("221 Beware the Battle Cattle!")
+				s.state = QUIT
+			case strings.HasPrefix(cmd, "NOOP"):
+				s.addResponse("250 Is it time?")
+			case strings.HasPrefix(cmd, "RSET"):
+				s.mail_from = ""
+				s.rcpt_to = []string{}
+				s.addResponse("250 I forgot to remember to forget")
+			default:
+				s.addResponse("500 unrecognized command")
 			}
 		case DATA:
 			input, err := s.readSmtp()
@@ -121,9 +163,26 @@ func (s *SMTPClientSession) Handler() {
 				log.Debugln(err)
 			}
 			s.data = input
-			s.state = COMMANDS
 			log.Debugln("Got email message:")
 			log.Debugln(s)
+			s.addResponse("250 Ok: Now that is a delivery service you can count on")
+			s.state = COMMANDS
+		case STARTTLS:
+			// I'm just going to pull this from GoGuerrilla, thanks guys
+			var tlsConn *tls.Conn
+			tlsConn = tls.Server(s.conn, TLSconfig)
+			err := tlsConn.Handshake() // not necessary to call here, but might as well
+			if err == nil {
+				s.conn = net.Conn(tlsConn)
+				s.bufin = bufio.NewReader(s.conn)
+				s.bufout = bufio.NewWriter(s.conn)
+				s.tls_on = true
+			} else {
+				log.Debugln("Could not TLS handshake:", err)
+			}
+			s.state = COMMANDS
+		case QUIT:
+			return
 		}
 		size, _ := s.bufout.WriteString(s.response)
 		s.bufout.Flush()
