@@ -27,6 +27,7 @@ func cliDot(c cliCommand) cliResponse {
 	}
 	command := makeCommand("vm_info [host,name,id,state,ip,ip6,vlan]")
 	localInfo := vms.info(command)
+	command = makeCommand("mesh_broadcast vm_info [host,name,id,state,ip,ip6,vlan]")
 	remoteInfo := meshageBroadcast(command)
 
 	// any errors?
@@ -66,6 +67,7 @@ func cliDot(c cliCommand) cliResponse {
 
 	ret = "graph minimega {\n"
 	ret += "size=\"8,11\";\n"
+	ret += "overlap=false;\n"
 	//ret += fmt.Sprintf("Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
 	for _, v := range expVms {
@@ -110,10 +112,14 @@ func cliDot(c cliCommand) cliResponse {
 
 func dotProcessInfo(info []string) []*dotVM {
 	log.Debugln("dotProcessInfo: ", info)
-	// ditch the first line
+	// ditch the first line, blank lines, or
+	// host | name | id | state | ip | ip6 | vlan
 	var ret []*dotVM
 	info = info[1:]
 	for _, v := range info {
+		if v == "\n" {
+			continue
+		}
 		f := strings.Split(v, "|")
 		for i, w := range f {
 			f[i] = strings.TrimSpace(w)
@@ -121,6 +127,9 @@ func dotProcessInfo(info []string) []*dotVM {
 		log.Debugln(f)
 		// host name id state ip ip6 vlan
 		if len(f) != 7 {
+			continue
+		}
+		if f[2] == "id" { // checking this field is sufficient to find the header line, as the id will always be an int otherwise
 			continue
 		}
 		vlans := strings.Split(f[6][1:len(f[6])-1], " ")
