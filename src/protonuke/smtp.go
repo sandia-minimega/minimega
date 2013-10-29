@@ -21,10 +21,22 @@ func smtpClient() {
 		log.Debug("smtp host %v from %v", h, o)
 		to := []string{"johnnycakes@localhost"}
 		body := "joooooooohn"
-		err := smtp.SendMail("localhost", smtp.PlainAuth("", "fritzypoo@google.com", "foo", "localhost"), "fritzypoo@google.com", to, []byte(body))
+
+		c, err := smtp.Dial("localhost:2005")
 		if err != nil {
 			log.Errorln(err)
+			continue
 		}
+		c.Mail("johnnycakes@localhost")
+		c.Rcpt("fritz@localhost")
+		wc, err := c.Data()
+		if err != nil {
+			log.Errorln(err)
+			c.Close()
+			continue
+		}
+		defer wc.Close()
+		wc.Write([]byte(body))
 	}
 }
 
