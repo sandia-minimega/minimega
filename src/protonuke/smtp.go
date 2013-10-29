@@ -22,6 +22,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"errors"
+	"math/rand"
 	log "minilog"
 	"net"
 	"net/smtp"
@@ -38,25 +39,52 @@ func smtpClient() {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("smtp host %v from %v", h, o)
-		to := []string{"johnnycakes@localhost"}
-		body := "joooooooohn"
 
-		c, err := smtp.Dial("localhost:2005")
+		s := rand.NewSource(time.Now().UnixNano())
+		r := rand.New(s)
+		body := email[r.Intn(len(email))]
+
+		toLen := r.Intn(10) + 1
+		fromLen := r.Intn(10) + 1
+		var to string
+		var from string
+		for i := 0; i < toLen; i++ {
+			to += string(alphanum[r.Intn(len(alphanum))])
+		}
+		for i := 0; i < fromLen; i++ {
+			from += string(alphanum[r.Intn(len(alphanum))])
+		}
+
+		to += "@" + h
+
+		err := smtpSendMail(h, to, from, body)
 		if err != nil {
 			log.Errorln(err)
-			continue
 		}
-		c.Mail("johnnycakes@localhost")
-		c.Rcpt("fritz@localhost")
-		wc, err := c.Data()
-		if err != nil {
-			log.Errorln(err)
-			c.Close()
-			continue
-		}
-		defer wc.Close()
-		wc.Write([]byte(body))
 	}
+}
+
+func smtpSendMail(server, to, rcpt, body string) error {
+	c, err := smtp.Dial(server + smtpPort)
+	if err != nil {
+		return err
+	}
+
+	err = c.StartTLS(&tls.Config{InsecureSkipVerify: true})
+	if err != nil {
+		log.Warnln("could not start tls")
+	}
+
+	c.Mail(to)
+	c.Rcpt(rcpt)
+	wc, err := c.Data()
+	if err != nil {
+		return err
+	}
+	wc.Write([]byte(body))
+	wc.Close()
+
+	return nil
 }
 
 type SMTPClientSession struct {
@@ -79,11 +107,16 @@ const (
 	QUIT
 )
 
+const (
+	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
+)
+
 var (
 	timeout   = time.Duration(100)
 	max_size  = 131072
 	myFQDN    = "protonuke.local"
 	TLSconfig *tls.Config
+	smtpPort  = ":2005"
 )
 
 func NewSMTPClientSession(c net.Conn) *SMTPClientSession {
@@ -103,7 +136,7 @@ func smtpServer() {
 		log.Fatalln("couldn't get cert: ", err)
 	}
 	TLSconfig = &tls.Config{Certificates: []tls.Certificate{cert}, ClientAuth: tls.VerifyClientCertIfGiven, ServerName: myFQDN}
-	listener, err := net.Listen("tcp", "0.0.0.0:2005")
+	listener, err := net.Listen("tcp", "0.0.0.0"+smtpPort)
 	if err != nil {
 		log.Debugln(err)
 		return
@@ -139,7 +172,7 @@ func (s *SMTPClientSession) Handler() {
 			cmd := strings.ToUpper(input)
 			if err != nil {
 				log.Debugln(err)
-				continue
+				return
 			}
 			switch {
 			case strings.HasPrefix(cmd, "HELO"):
