@@ -5,6 +5,7 @@ import (
 	"errors"
 	log "minilog"
 	"net"
+	"net/smtp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,6 +19,12 @@ func smtpClient() {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("smtp host %v from %v", h, o)
+		to := []string{"johnnycakes@localhost"}
+		body := "joooooooohn"
+		err := smtp.SendMail("localhost", smtp.PlainAuth("", "fritzypoo@google.com", "foo", "localhost"), "fritzypoo@google.com", to, []byte(body))
+		if err != nil {
+			log.Errorln(err)
+		}
 	}
 }
 
