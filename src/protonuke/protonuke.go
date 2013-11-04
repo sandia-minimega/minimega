@@ -107,7 +107,7 @@ func main() {
 	}
 	if *f_ssh {
 		if *f_serve {
-			go sshServer()
+			go sshServer(protocol)
 		} else {
 			go sshClient()
 		}

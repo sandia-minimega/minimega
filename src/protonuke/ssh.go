@@ -116,8 +116,14 @@ func sshClientConnect(host string) {
 		},
 	}
 
+	// url notation requires leading and trailing [] on ipv6 addresses
+	dHost := host
+	if isIPv6(dHost) {
+		dHost = "[" + dHost + "]"
+	}
+
 	var err error
-	sc.Client, err = ssh.Dial("tcp", host+PORT, sc.Config)
+	sc.Client, err = ssh.Dial("tcp", dHost+PORT, sc.Config)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -181,7 +187,7 @@ func sshClientActivity(index int) {
 	sc.StdoutBuf.Reset()
 }
 
-func sshServer() {
+func sshServer(p string) {
 	log.Debugln("sshServer")
 
 	config := &ssh.ServerConfig{
@@ -197,7 +203,7 @@ func sshServer() {
 
 	config.AddHostKey(private)
 
-	l, err := ssh.Listen("tcp", PORT, config)
+	l, err := ssh.Listen(p, PORT, config)
 	if err != nil {
 		log.Fatalln(err)
 	}
