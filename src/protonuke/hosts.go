@@ -39,7 +39,7 @@ func parseHosts(input []string) (map[string]string, []string, error) {
 			if len(d) != 2 {
 				return nil, nil, fmt.Errorf("cannot parse %v", i)
 			}
-			if !isIPv4(d[0]) {
+			if !isIPv4(d[0]) && !isIPv6(d[0]) {
 				return nil, nil, fmt.Errorf("network %v is invalid", d[0])
 			}
 			network := toInt32(d[0])
@@ -69,7 +69,7 @@ func parseHosts(input []string) (map[string]string, []string, error) {
 				ip++
 			}
 		} else { // host or ip
-			if !isIPv4(i) && !isValidDNS(i) {
+			if !isIPv4(i) && !isIPv6(i) && !isValidDNS(i) {
 				return nil, nil, fmt.Errorf("invalid host or ip %v", i)
 			}
 
@@ -97,6 +97,39 @@ func isIPv4(ip string) bool {
 			return false
 		}
 		if octet < 0 || octet > 255 {
+			return false
+		}
+	}
+
+	return true
+}
+
+// no dotted quad thanks
+func isIPv6(ip string) bool {
+	d := strings.Split(ip, ":")
+	if len(d) > 8 {
+		return false
+	}
+
+	// if there are zero or one empty groups, and all the others are <= 16 bit hex, we're good.
+	// a special case is a leading ::, as in ::1, which will generate two empty groups.
+	empty := false
+	for i, v := range d {
+		if v == "" && i == 0 {
+			continue
+		}
+		if v == "" && !empty {
+			empty = true
+			continue
+		}
+		if v == "" {
+			return false
+		}
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return false
+		}
+		if octet < 0 || octet > 65535 {
 			return false
 		}
 	}

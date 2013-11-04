@@ -10,6 +10,7 @@ import (
 	"io/ioutil"
 	"math/rand"
 	log "minilog"
+	"net"
 	"net/http"
 	"regexp"
 	"strings"
@@ -86,6 +87,11 @@ func httpClientRequest(h string) {
 
 	log.Debugln("http using url: ", url)
 
+	// url notation requires leading and trailing [] on ipv6 addresses
+	if isIPv6(url) {
+		url = "[" + url + "]"
+	}
+
 	if !strings.HasPrefix(url, "http://") {
 		url = "http://" + url
 	}
@@ -126,6 +132,11 @@ func httpTLSClientRequest(h string, client *http.Client) {
 
 	log.Debugln("https using url: ", url)
 
+	// url notation requires leading and trailing [] on ipv6 addresses
+	if isIPv6(url) {
+		url = "[" + url + "]"
+	}
+
 	if !strings.HasPrefix(url, "https://") {
 		url = "https://" + url
 	}
@@ -156,6 +167,11 @@ func httpTLSClientRequest(h string, client *http.Client) {
 }
 
 func httpGet(url, file string, useTLS bool, client *http.Client) {
+	// url notation requires leading and trailing [] on ipv6 addresses
+	if isIPv6(url) {
+		url = "[" + url + "]"
+	}
+
 	if useTLS {
 		if !strings.HasPrefix(file, "https://") {
 			file = url + "/" + file
@@ -223,19 +239,54 @@ func httpSetup() {
 	}
 }
 
-func httpServer() {
+func httpServer(p string) {
 	httpSetup()
 	hitChan = make(chan uint64, 1024)
 	go hitCounter()
-	log.Fatalln(http.ListenAndServe(":80", nil))
+	//log.Fatalln(http.ListenAndServe(":80", nil))
+	server := &http.Server{
+		Addr:    ":http",
+		Handler: nil,
+	}
+
+	conn, err := net.Listen(p, ":http")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	log.Fatalln(server.Serve(conn))
 }
 
-func httpTLSServer() {
+func httpTLSServer(p string) {
 	httpSetup()
 	hitTLSChan = make(chan uint64, 1024)
 	go hitTLSCounter()
 	cert, key := generateCerts()
-	log.Fatalln(http.ListenAndServeTLS(":443", cert, key, nil))
+
+	//log.Fatalln(http.ListenAndServeTLS(":https", cert, key, nil))
+	server := &http.Server{
+		Addr:    ":https",
+		Handler: nil,
+	}
+	config := &tls.Config{}
+	if config.NextProtos == nil {
+		config.NextProtos = []string{"http/1.1"}
+	}
+
+	var err error
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0], err = tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	conn, err := net.Listen(p, ":https")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	tlsListener := tls.NewListener(conn, config)
+	log.Fatalln(server.Serve(tlsListener))
 }
 
 func httpMakeImage() {

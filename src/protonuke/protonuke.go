@@ -24,6 +24,8 @@ var (
 	f_loglevel = flag.String("loglevel", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("log", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_v4       = flag.Bool("ipv4", true, "use IPv4. Can be used together with -ipv6")
+	f_v6       = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
 	f_report   = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
 	hosts      map[string]string
 	keys       []string
@@ -77,17 +79,28 @@ func main() {
 		go report(*f_report)
 	}
 
+	var protocol string
+	if *f_v4 && *f_v6 {
+		protocol = "tcp"
+	} else if *f_v4 && !*f_v6 {
+		protocol = "tcp4"
+	} else if !*f_v4 && *f_v6 {
+		protocol = "tcp6"
+	} else {
+		log.Fatalln("you must enable at least one of IPv4 or IPv6")
+	}
+
 	// start services
 	if *f_http {
 		if *f_serve {
-			go httpServer()
+			go httpServer(protocol)
 		} else {
 			go httpClient()
 		}
 	}
 	if *f_https {
 		if *f_serve {
-			go httpTLSServer()
+			go httpTLSServer(protocol)
 		} else {
 			go httpTLSClient()
 		}
