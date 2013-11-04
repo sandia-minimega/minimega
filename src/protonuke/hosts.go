@@ -104,7 +104,6 @@ func isIPv4(ip string) bool {
 	return true
 }
 
-// no dotted quad thanks
 func isIPv6(ip string) bool {
 	d := strings.Split(ip, ":")
 	if len(d) > 8 {
@@ -124,6 +123,10 @@ func isIPv6(ip string) bool {
 		}
 		if v == "" {
 			return false
+		}
+		// check for dotted quad
+		if len(d) <= 6 && i == len(d)-1 && isIPv4(v) {
+			return true
 		}
 		octet, err := strconv.Atoi(v)
 		if err != nil {
