@@ -1192,6 +1192,14 @@ viz outputs the current experiment topology as a graphviz readable 'dot' file.`,
 				return nil
 			},
 		},
+
+		"vyatta": &command{
+			Call:      cliVyatta,
+			Helpshort: "define vyatta configuration images",
+			Helplong:  "",
+			Record:    true,
+			Clear:     cliVyattaClear,
+		},
 	}
 }
 
