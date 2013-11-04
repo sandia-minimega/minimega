@@ -99,6 +99,11 @@ func smtpClient() {
 }
 
 func smtpSendMail(server, to, rcpt, body string) error {
+	// url notation requires leading and trailing [] on ipv6 addresses
+	if isIPv6(server) {
+		server = "[" + server + "]"
+	}
+
 	c, err := smtp.Dial(server + smtpPort)
 	if err != nil {
 		return err
@@ -129,7 +134,7 @@ func NewSMTPClientSession(c net.Conn) *SMTPClientSession {
 	return ret
 }
 
-func smtpServer() {
+func smtpServer(p string) {
 	log.Debugln("smtpServer")
 
 	certfile, keyfile := generateCerts()
@@ -138,10 +143,9 @@ func smtpServer() {
 		log.Fatalln("couldn't get cert: ", err)
 	}
 	TLSconfig = &tls.Config{Certificates: []tls.Certificate{cert}, ClientAuth: tls.VerifyClientCertIfGiven, ServerName: myFQDN}
-	listener, err := net.Listen("tcp", "0.0.0.0"+smtpPort)
+	listener, err := net.Listen(p, "0.0.0.0"+smtpPort)
 	if err != nil {
-		log.Debugln(err)
-		return
+		log.Fatalln(err)
 	}
 
 	for {

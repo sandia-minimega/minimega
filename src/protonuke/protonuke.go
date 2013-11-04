@@ -114,7 +114,7 @@ func main() {
 	}
 	if *f_smtp {
 		if *f_serve {
-			go smtpServer()
+			go smtpServer(protocol)
 		} else {
 			go smtpClient()
 		}
