@@ -123,7 +123,7 @@ func main() {
 
 	r := externalCheck(cliCommand{})
 	if r.Error != "" {
-		log.Errorln(r.Error)
+		log.Warnln(r.Error)
 	}
 
 	// attempt to set up the base path
