@@ -229,7 +229,7 @@ func (b *bridge) Destroy() error {
 			if t != nil {
 				err := b.TapDestroy(name, tapName)
 				if err != nil {
-					log.Warnln(err)
+					log.Infoln(err)
 				}
 			}
 		}
