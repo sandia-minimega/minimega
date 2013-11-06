@@ -44,11 +44,25 @@ func init() {
 
 func report(reportWait time.Duration) {
 	lastTime := time.Now()
-	elapsedTime := time.Duration(0)
+
+	lasthttpReportHits := httpReportHits
+	lasthttpTLSReportHits := httpTLSReportHits
+	lastsshReportBytes := sshReportBytes
+	lastsmtpReportMail := smtpReportMail
+
 	for {
 		time.Sleep(reportWait)
-		elapsedTime += time.Since(lastTime)
+		elapsedTime := time.Since(lastTime)
 		lastTime = time.Now()
+
+		ehttp := httpReportHits - lasthttpReportHits
+		etls := httpTLSReportHits - lasthttpTLSReportHits
+		essh := sshReportBytes - lastsshReportBytes
+		esmtp := smtpReportMail - lastsmtpReportMail
+		lasthttpReportHits = httpReportHits
+		lasthttpTLSReportHits = httpTLSReportHits
+		lastsshReportBytes = sshReportBytes
+		lastsmtpReportMail = smtpReportMail
 
 		log.Debugln("total elapsed time: ", elapsedTime)
 
@@ -57,16 +71,16 @@ func report(reportWait time.Duration) {
 		w.Init(buf, 0, 8, 0, '\t', 0)
 
 		if *f_http {
-			fmt.Fprintf(w, "http\t%v\t%.01f hits/min\n", httpReportHits, float64(httpReportHits)/elapsedTime.Minutes())
+			fmt.Fprintf(w, "http\t%v\t%.01f hits/min\n", httpReportHits, float64(ehttp)/elapsedTime.Minutes())
 		}
 		if *f_https {
-			fmt.Fprintf(w, "https\t%v\t%.01f hits/min\n", httpTLSReportHits, float64(httpTLSReportHits)/elapsedTime.Minutes())
+			fmt.Fprintf(w, "https\t%v\t%.01f hits/min\n", httpTLSReportHits, float64(etls)/elapsedTime.Minutes())
 		}
 		if *f_ssh {
-			fmt.Fprintf(w, "ssh\t%v\t%.01f bytes/min\n", sshReportBytes, float64(sshReportBytes)/elapsedTime.Minutes())
+			fmt.Fprintf(w, "ssh\t%v\t%.01f bytes/min\n", sshReportBytes, float64(essh)/elapsedTime.Minutes())
 		}
 		if *f_smtp {
-			fmt.Fprintf(w, "smtp\t%v\t%.01f mails/min\n", smtpReportMail, float64(smtpReportMail)/elapsedTime.Minutes())
+			fmt.Fprintf(w, "smtp\t%v\t%.01f mails/min\n", smtpReportMail, float64(esmtp)/elapsedTime.Minutes())
 		}
 		w.Flush()
 		fmt.Println(buf.String())
