@@ -1196,9 +1196,39 @@ viz outputs the current experiment topology as a graphviz readable 'dot' file.`,
 		"vyatta": &command{
 			Call:      cliVyatta,
 			Helpshort: "define vyatta configuration images",
-			Helplong:  "",
-			Record:    true,
-			Clear:     cliVyattaClear,
+			Helplong: `
+Define and write out vyatta router floppy disk images. 
+
+vyatta takes a number of subcommands: 
+
+	'dhcp': Add DHCP service to a particular network by specifying the
+	network, default gateway, and start and stop addresses. For example, to
+	serve dhcp on 10.0.0.0/24, with a default gateway of 10.0.0.1:
+		
+		vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254
+
+	'interfaces': Add IPv4 addresses using CIDR notation. Optionally,
+	'dhcp' or 'none' may be specified. The order specified matches the
+	order of VLANs used in vm_net. This number of arguments must either be
+	0 or equal to the number of arguments in 'interfaces6' For example:
+
+		vyatta interfaces 10.0.0.1/24 dhcp
+
+	'interfaces6': Add IPv6 addresses similar to 'interfaces'. The number
+	of arguments must either be 0 or equal to the number of arguments in
+	'interfaces'.
+
+	'ospf': Route networks using OSPF. For example:
+
+		vyatta ospf 10.0.0.0/24 12.0.0.0/24
+
+	'ospf3': Route IPv6 networks using OSPF3. 
+
+	'write': Write the current configuration to file. If a filename is
+	omitted, a random filename will be used and the file placed in the path
+	specified by the -filepath flag. The filename will be returned.`,
+			Record: true,
+			Clear:  cliVyattaClear,
 		},
 	}
 }

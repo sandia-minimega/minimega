@@ -47,9 +47,9 @@ func cliVyatta(c cliCommand) cliResponse {
 	var ret cliResponse
 
 	if len(c.Args) == 0 {
-		var DhcpKeys []string
+		var dhcpKeys []string
 		for k, _ := range vyatta.Dhcp {
-			DhcpKeys = append(DhcpKeys, k)
+			dhcpKeys = append(dhcpKeys, k)
 		}
 
 		// print vyatta info
@@ -57,7 +57,7 @@ func cliVyatta(c cliCommand) cliResponse {
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
 		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tDHCP servers\tOSPF\tOSPF3\n")
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, DhcpKeys, vyatta.Ospf, vyatta.Ospf3)
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, dhcpKeys, vyatta.Ospf, vyatta.Ospf3)
 		w.Flush()
 		ret.Response = o.String()
 		return ret
@@ -90,6 +90,7 @@ func cliVyatta(c cliCommand) cliResponse {
 				Start: c.Args[4],
 				Stop:  c.Args[5],
 			}
+			log.Debug("vyatta add dhcp %v", vyatta.Dhcp[c.Args[2]])
 		case "delete":
 			if len(c.Args) != 3 {
 				ret.Error = "invalid number of arguments"
@@ -99,6 +100,7 @@ func cliVyatta(c cliCommand) cliResponse {
 				ret.Error = "no such Dhcp service"
 				return ret
 			}
+			log.Debug("vyatta delete dhcp %v", vyatta.Dhcp[c.Args[2]])
 			delete(vyatta.Dhcp, c.Args[2])
 		default:
 			ret.Error = "invalid vyatta Dhcp command"
@@ -116,7 +118,6 @@ func cliVyatta(c cliCommand) cliResponse {
 			break
 		}
 		vyatta.Ipv6 = c.Args[1:]
-	case "launch":
 	case "ospf":
 		if len(c.Args) == 1 {
 			ret.Response = fmt.Sprintf("%v", vyatta.Ospf)
@@ -149,9 +150,7 @@ func cliVyatta(c cliCommand) cliResponse {
 				return ret
 			}
 		}
-
 		f.Truncate(1474560)
-
 		f.Close()
 
 		// mkdosfs
@@ -165,30 +164,48 @@ func cliVyatta(c cliCommand) cliResponse {
 		// mount
 		td, err := ioutil.TempDir(*f_base, "vyatta_")
 		if err != nil {
-			log.Fatalln(err)
+			os.Remove(f.Name())
+			ret.Error = err.Error()
+			return ret
 		}
 		defer os.RemoveAll(td)
 		out, err = exec.Command(process("mount"), "-o", "loop", f.Name(), td).CombinedOutput()
 		if err != nil {
-			log.Fatalln(err)
+			os.Remove(f.Name())
+			ret.Error = string(out) + err.Error()
+			return ret
 		}
 
 		// create <floppy>/config/config.boot from vc
 		err = os.Mkdir(td+"/config", 0774)
 		if err != nil {
-			log.Fatalln(err)
+			ret.Error = err.Error()
+			out, err = exec.Command(process("umount"), td).CombinedOutput()
+			if err != nil {
+				log.Fatalln(string(out), err)
+			}
+			os.Remove(f.Name())
+			return ret
 		}
 		vc := vyattaGenConfig()
 
 		err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
 		if err != nil {
-			log.Fatalln(err)
+			ret.Error = err.Error()
+			out, err = exec.Command(process("umount"), td).CombinedOutput()
+			if err != nil {
+				log.Fatalln(string(out), err)
+			}
+			os.Remove(f.Name())
+			return ret
 		}
 
 		// umount
 		out, err = exec.Command(process("umount"), td).CombinedOutput()
 		if err != nil {
-			log.Fatalln(err)
+			os.Remove(f.Name())
+			ret.Error = string(out) + err.Error()
+			return ret
 		}
 
 		ret.Response = f.Name()
