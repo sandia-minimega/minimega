@@ -77,7 +77,7 @@ func init() {
 	}()
 
 	// default parameters at startup
-	info.Memory = "512"
+	info.Memory = "2048"
 	info.Vcpus = "1"
 	info.DiskPath = ""
 	info.KernelPath = ""
