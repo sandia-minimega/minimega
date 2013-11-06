@@ -18,6 +18,9 @@ var externalProcesses = map[string]string{
 	"kill":     "kill",
 	"dhcp":     "dhclient",
 	"openflow": "ovs-ofctl",
+	"mount":    "mount",
+	"umount":   "umount",
+	"mkdosfs":  "mkdosfs",
 }
 
 // check for the presence of each of the external processes we may call,
