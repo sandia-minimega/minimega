@@ -1218,6 +1218,11 @@ vyatta takes a number of subcommands:
 	of arguments must either be 0 or equal to the number of arguments in
 	'interfaces'.
 
+	'rad': Enable router advertisements for IPv6. Valid arguments are IPv6
+	prefixes or "none". Order matches that of interfaces6. For example:
+
+		vyatta rad 2001::/64 2002::/64
+
 	'ospf': Route networks using OSPF. For example:
 
 		vyatta ospf 10.0.0.0/24 12.0.0.0/24
