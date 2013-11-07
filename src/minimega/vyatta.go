@@ -19,6 +19,7 @@ import (
 type vyattaConfig struct {
 	Ipv4  []string
 	Ipv6  []string
+	Rad   []string
 	Dhcp  map[string]*vyattaDhcp
 	Ospf  []string
 	Ospf3 []string
@@ -56,8 +57,8 @@ func cliVyatta(c cliCommand) cliResponse {
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tDHCP servers\tOSPF\tOSPF3\n")
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, dhcpKeys, vyatta.Ospf, vyatta.Ospf3)
+		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tRAD\tDHCP servers\tOSPF\tOSPF3\n")
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, vyatta.Rad, dhcpKeys, vyatta.Ospf, vyatta.Ospf3)
 		w.Flush()
 		ret.Response = o.String()
 		return ret
@@ -130,7 +131,22 @@ func cliVyatta(c cliCommand) cliResponse {
 			break
 		}
 		vyatta.Ospf3 = c.Args[1:]
+	case "rad":
+		if len(c.Args) == 1 {
+			ret.Response = fmt.Sprintf("%v", vyatta.Rad)
+			break
+		}
+		vyatta.Rad = c.Args[1:]
 	case "write":
+		// make sure fields are sane
+		for len(vyatta.Ipv4) != len(vyatta.Ipv6) {
+			if len(vyatta.Ipv4) < len(vyatta.Ipv6) {
+				vyatta.Ipv4 = append(vyatta.Ipv4, "none")
+			} else {
+				vyatta.Ipv6 = append(vyatta.Ipv6, "none")
+			}
+		}
+
 		// create a 1.44MB file (1474560)
 		var f *os.File
 		var err error
@@ -244,6 +260,12 @@ func vyattaGenConfig() string {
 			}
 			return false
 		},
+		"rad": func(i int) bool {
+			if len(vyatta.Rad) > i && vyatta.Ipv6[i] != "none" {
+				return true
+			}
+			return false
+		},
 	}).Parse(vyattaConfigText)
 	if err != nil {
 		log.Fatalln(err)
@@ -263,6 +285,24 @@ interfaces {
     ethernet eth{{$i}} {
 	{{if ipv4 $i}}address {{index $.Ipv4 $i}}{{end}}
 	{{if ipv6 $i}}address {{index $.Ipv6 $i}}{{end}}
+	{{if rad $i}}ipv6 {
+		dup-addr-detect-transmits 1
+		router-advert {
+			cur-hop-limit 64
+			link-mtu 0
+			managed-flag false
+			max-interval 600
+			other-config-flag false
+			prefix {{index $.Rad $i}} {
+				autonomous-flag true
+				on-link-flag true
+				valid-lifetime 2592000
+			}
+			reachable-time 0
+			retrans-timer 0
+			send-advert true
+		}
+	}{{end}}
         duplex auto
         smp_affinity auto
         speed auto
