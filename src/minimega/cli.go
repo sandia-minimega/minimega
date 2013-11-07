@@ -1222,7 +1222,9 @@ vyatta takes a number of subcommands:
 
 		vyatta ospf 10.0.0.0/24 12.0.0.0/24
 
-	'ospf3': Route IPv6 networks using OSPF3. 
+	'ospf3': Route IPv6 interfaces using OSPF3. For example:
+
+		vyatta ospf3 eth0 eth1
 
 	'write': Write the current configuration to file. If a filename is
 	omitted, a random filename will be used and the file placed in the path

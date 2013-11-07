@@ -303,10 +303,10 @@ protocols {
     }
     {{end}}
     {{if ospf .Ospf3}}
-    ospf3 {
+    ospfv3 {
         area 0.0.0.0 {
 	    {{range $v := .Ospf3}}
-            network {{$v}}
+            interface {{$v}}
 	    {{end}}
         }
         parameters {
