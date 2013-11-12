@@ -442,9 +442,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		case "name":
 			id := l.findByName(d[1])
 			if id == -2 {
-				return cliResponse{
-					Error: fmt.Sprintf("cannot find VM %v", d[1]),
-				}
+				return cliResponse{}
 			}
 			if vm, ok := l.vms[id]; ok {
 				v = append(v, vm)
@@ -549,7 +547,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			vlan, err := strconv.Atoi(d[1])
 			if err != nil {
 				return cliResponse{
-					Error: fmt.Sprintf("invalid tap: %v", d[1]),
+					Error: fmt.Sprintf("invalid vlan: %v", d[1]),
 				}
 			}
 			for i, j := range l.vms {
