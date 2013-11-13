@@ -10,6 +10,8 @@ udevadm trigger
 udevadm settle
 chmod a+rx /
 
+ulimit -n 999999
+
 PROTONUKE=`/protoargs`
 
 ifconfig lo up
