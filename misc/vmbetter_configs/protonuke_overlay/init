@@ -9,6 +9,7 @@ udevd --daemon
 udevadm trigger
 udevadm settle
 chmod a+rx /
+modprobe loop
 
 ulimit -n 999999
 

@@ -11,6 +11,9 @@ udevd --daemon
 udevadm trigger
 udevadm settle
 chmod a+rx /
+modprobe loop
+
+ulimit -n 999999
 
 modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
