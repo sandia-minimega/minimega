@@ -822,10 +822,18 @@ ip/netmask:
 
 To delete a host tap, use the delete command and tap name from the host_tap list:
 
-	host_tap delete <id>`,
+	host_tap delete <id>
+	
+To delete all host taps, use id -1, or 'clear host_tap':
+	
+	host_tap delete -1`,
 			Record: true,
 			Clear: func() error {
-				return nil //perhaps calling this should remove all host taps
+				resp := hostTapDelete("-1")
+				if resp.Error == "" {
+					return nil
+				}
+				return fmt.Errorf("%v", resp.Error)
 			},
 		},
 

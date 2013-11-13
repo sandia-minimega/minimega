@@ -535,6 +535,16 @@ func hostTapList() cliResponse {
 
 func hostTapDelete(tap string) cliResponse {
 	for lan, t := range currentBridge.lans {
+		if tap == "-1" {
+			// remove all host taps on this vlan
+			for k, v := range t.Taps {
+				if v.host {
+					currentBridge.lans[lan].Taps[k].active = false
+					currentBridge.tapRemove(k)
+				}
+			}
+			continue
+		}
 		if tf, ok := t.Taps[tap]; ok {
 			if !tf.host {
 				return cliResponse{
