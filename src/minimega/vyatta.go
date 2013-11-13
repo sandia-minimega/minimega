@@ -11,24 +11,31 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"text/template"
 )
 
 type vyattaConfig struct {
-	Ipv4  []string
-	Ipv6  []string
-	Rad   []string
-	Dhcp  map[string]*vyattaDhcp
-	Ospf  []string
-	Ospf3 []string
+	Ipv4   []string
+	Ipv6   []string
+	Rad    []string
+	Dhcp   map[string]*vyattaDhcp
+	Ospf   []string
+	Ospf3  []string
+	Routes []*vyattaRoute
 }
 
 type vyattaDhcp struct {
 	Gw    string
 	Start string
 	Stop  string
+}
+
+type vyattaRoute struct {
+	Route   string
+	NextHop string
 }
 
 var vyatta vyattaConfig
@@ -53,12 +60,17 @@ func cliVyatta(c cliCommand) cliResponse {
 			dhcpKeys = append(dhcpKeys, k)
 		}
 
+		var routes []string
+		for _, k := range vyatta.Routes {
+			routes = append(routes, k.Route)
+		}
+
 		// print vyatta info
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tRAD\tDHCP servers\tOSPF\tOSPF3\n")
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, vyatta.Rad, dhcpKeys, vyatta.Ospf, vyatta.Ospf3)
+		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tRAD\tDHCP servers\tOSPF\tOSPF3\tRoutes\n")
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, vyatta.Rad, dhcpKeys, vyatta.Ospf, vyatta.Ospf3, routes)
 		w.Flush()
 		ret.Response = o.String()
 		return ret
@@ -137,6 +149,44 @@ func cliVyatta(c cliCommand) cliResponse {
 			break
 		}
 		vyatta.Rad = c.Args[1:]
+	case "routes":
+		var ret cliResponse
+		if len(c.Args) == 1 {
+			// print route info
+			var o bytes.Buffer
+			w := new(tabwriter.Writer)
+			w.Init(&o, 5, 0, 1, ' ', 0)
+			fmt.Fprintf(w, "Network\tRoute\n")
+			for _, v := range vyatta.Routes {
+				fmt.Fprintf(w, "%v\t%v\n", v.Route, v.NextHop)
+			}
+			w.Flush()
+			ret.Response = o.String()
+			return ret
+		}
+		var routes []*vyattaRoute
+		for _, v := range c.Args[1:] {
+			d := strings.Split(v, ",")
+			if len(d) != 2 {
+				ret.Error = "malformed route argument"
+				return ret
+			}
+			r := d[0]
+			n := d[1]
+			if !isIPv4N(r) && !isIPv6N(r) {
+				ret.Error = fmt.Sprintf("%v not a valid IPv4 or IPv6 network", r)
+				return ret
+			}
+			if !isIPv4(n) && !isIPv6(n) {
+				ret.Error = fmt.Sprintf("%v not a valid IPv4 or IPv6 address", n)
+				return ret
+			}
+			routes = append(routes, &vyattaRoute{
+				Route:   r,
+				NextHop: n,
+			})
+		}
+		vyatta.Routes = routes
 	case "write":
 		// make sure fields are sane
 		for len(vyatta.Ipv4) != len(vyatta.Ipv6) {
@@ -266,6 +316,24 @@ func vyattaGenConfig() string {
 			}
 			return false
 		},
+		"staticroutes": func() bool {
+			if len(vyatta.Routes) > 0 {
+				return true
+			}
+			return false
+		},
+		"route": func(r vyattaRoute) bool {
+			if isIPv4N(r.Route) {
+				return true
+			}
+			return false
+		},
+		"route6": func(r vyattaRoute) bool {
+			if isIPv6N(r.Route) {
+				return true
+			}
+			return false
+		},
 	}).Parse(vyattaConfigText)
 	if err != nil {
 		log.Fatalln(err)
@@ -277,6 +345,101 @@ func vyattaGenConfig() string {
 	}
 	log.Debugln("vyatta generated config: ", o.String())
 	return o.String()
+}
+
+func isIPv4N(n string) bool {
+	d := strings.Split(n, "/")
+
+	if len(d) != 2 {
+		return false
+	}
+
+	subnet, err := strconv.Atoi(d[1])
+	if err != nil {
+		log.Errorln(err)
+		return false
+	}
+
+	if subnet < 0 || subnet > 31 {
+		return false
+	}
+
+	return isIPv4(d[0])
+}
+
+func isIPv6N(n string) bool {
+	d := strings.Split(n, "/")
+
+	if len(d) != 2 {
+		return false
+	}
+
+	subnet, err := strconv.Atoi(d[1])
+	if err != nil {
+		log.Errorln(err)
+		return false
+	}
+
+	if subnet < 0 || subnet > 127 {
+		return false
+	}
+
+	return isIPv6(d[0])
+}
+
+func isIPv4(ip string) bool {
+	d := strings.Split(ip, ".")
+	if len(d) != 4 {
+		return false
+	}
+
+	for _, v := range d {
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return false
+		}
+		if octet < 0 || octet > 255 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isIPv6(ip string) bool {
+	d := strings.Split(ip, ":")
+	if len(d) > 8 {
+		return false
+	}
+
+	// if there are zero or one empty groups, and all the others are <= 16 bit hex, we're good.
+	// a special case is a leading ::, as in ::1, which will generate two empty groups.
+	empty := false
+	for i, v := range d {
+		if v == "" && i == 0 {
+			continue
+		}
+		if v == "" && !empty {
+			empty = true
+			continue
+		}
+		if v == "" {
+			return false
+		}
+		// check for dotted quad
+		if len(d) <= 6 && i == len(d)-1 && isIPv4(v) {
+			return true
+		}
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return false
+		}
+		if octet < 0 || octet > 65535 {
+			return false
+		}
+	}
+
+	return true
 }
 
 var vyattaConfigText = `
@@ -352,6 +515,15 @@ protocols {
         parameters {
             abr-type cisco
         }
+    }
+    {{end}}
+    {{if staticroutes}}static {
+    {{range $i, $v := .Routes}}
+    {{if route $v}}route{{end}}{{if route6 $v}}route6{{end}} {{$v.Route}} {
+	    next-hop {{$v.NextHop}} {
+	    }
+    }
+    {{end}}
     }
     {{end}}
 }
