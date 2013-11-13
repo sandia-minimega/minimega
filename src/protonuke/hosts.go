@@ -106,7 +106,7 @@ func isIPv4(ip string) bool {
 
 func isIPv6(ip string) bool {
 	d := strings.Split(ip, ":")
-	if len(d) > 8 {
+	if len(d) > 8 || len(d) < 2 {
 		return false
 	}
 
