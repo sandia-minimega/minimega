@@ -16,6 +16,7 @@ import "C"
 import (
 	"fmt"
 	log "minilog"
+	"strings"
 	"sync"
 	"unsafe"
 )
@@ -140,7 +141,11 @@ func (iml *IPMacLearner) learner() {
 		if ip != "" {
 			iml.pairs[mac].IP4 = ip
 		} else if ip6 != "" {
-			iml.pairs[mac].IP6 = ip6
+			if iml.pairs[mac].IP6 != "" && strings.HasPrefix(ip6, "fe80") {
+				log.Debugln("ignoring link-local over existing IPv6 address")
+			} else {
+				iml.pairs[mac].IP6 = ip6
+			}
 		}
 
 		iml.lock.Unlock()
