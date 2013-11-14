@@ -1215,6 +1215,12 @@ vyatta takes a number of subcommands:
 		
 		vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254
 
+		An optional DNS argument can be used to override the
+		nameserver. For example, to do the same as above with a
+		nameserver of 8.8.8.8:
+
+		vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254 8.8.8.8
+
 	'interfaces': Add IPv4 addresses using CIDR notation. Optionally,
 	'dhcp' or 'none' may be specified. The order specified matches the
 	order of VLANs used in vm_net. This number of arguments must either be

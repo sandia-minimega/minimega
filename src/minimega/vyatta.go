@@ -31,6 +31,7 @@ type vyattaDhcp struct {
 	Gw    string
 	Start string
 	Stop  string
+	Dns   string
 }
 
 type vyattaRoute struct {
@@ -83,9 +84,9 @@ func cliVyatta(c cliCommand) cliResponse {
 			var o bytes.Buffer
 			w := new(tabwriter.Writer)
 			w.Init(&o, 5, 0, 1, ' ', 0)
-			fmt.Fprintf(w, "Network\tGW\tStart address\tStop address\n")
+			fmt.Fprintf(w, "Network\tGW\tStart address\tStop address\tDNS\n")
 			for k, v := range vyatta.Dhcp {
-				fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", k, v.Gw, v.Start, v.Stop)
+				fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", k, v.Gw, v.Start, v.Stop, v.Dns)
 			}
 			w.Flush()
 			ret.Response = o.String()
@@ -94,7 +95,7 @@ func cliVyatta(c cliCommand) cliResponse {
 
 		switch c.Args[1] {
 		case "add":
-			if len(c.Args) != 6 {
+			if len(c.Args) != 6 && len(c.Args) != 7 {
 				ret.Error = "invalid number of arguments"
 				return ret
 			}
@@ -102,6 +103,10 @@ func cliVyatta(c cliCommand) cliResponse {
 				Gw:    c.Args[3],
 				Start: c.Args[4],
 				Stop:  c.Args[5],
+			}
+			// optional dns
+			if len(c.Args) == 7 {
+				vyatta.Dhcp[c.Args[2]].Dns = c.Args[6]
 			}
 			log.Debug("vyatta add dhcp %v", vyatta.Dhcp[c.Args[2]])
 		case "delete":
@@ -334,6 +339,12 @@ func vyattaGenConfig() string {
 			}
 			return false
 		},
+		"dns": func(d vyattaDhcp) bool {
+			if d.Dns != "" {
+				return true
+			}
+			return false
+		},
 	}).Parse(vyattaConfigText)
 	if err != nil {
 		log.Fatalln(err)
@@ -482,6 +493,7 @@ service {
             authoritative disable
             subnet {{$i}} {
                 default-router {{$v.Gw}}
+		{{if dns $v}}dns-server {{$v.Dns}}{{end}}
                 lease 86400
                 start {{$v.Start}} {
                     stop {{$v.Stop}}
