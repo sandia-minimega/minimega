@@ -344,13 +344,46 @@ BROADCAST_WAIT_LOOP:
 }
 
 func getRecipients(r string) []string {
-	index := strings.IndexRune(r, '[')
-	if index == -1 {
-		return []string{r}
+	f := strings.Split(r, ",")
+
+	// fix splits on things like kn[1-5,200,150]
+	var hosts []string
+	appendState := false
+	for _, v := range f {
+		if strings.Contains(v, "[") {
+			appendState = true
+			hosts = append(hosts, v)
+			if !strings.Contains(v, "]") {
+				hosts[len(hosts)-1] += ","
+			}
+			continue
+		}
+		if appendState == true {
+			hosts[len(hosts)-1] += v
+			if strings.Contains(v, "]") {
+				appendState = false
+			} else {
+				hosts[len(hosts)-1] += ","
+			}
+			continue
+		}
+		hosts = append(hosts, v)
 	}
-	prefix := r[:index]
-	rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0)>>1))
-	ret, _ := rangeObj.SplitRange(r)
-	log.Debug("expanded range: %v", ret)
-	return ret
+	log.Debugln("getRecipients first pass: ", hosts)
+
+	var hostsExpanded []string
+	for _, v := range hosts {
+		index := strings.IndexRune(v, '[')
+		if index == -1 {
+			hostsExpanded = append(hostsExpanded, v)
+			continue
+		}
+		prefix := v[:index]
+		rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0)>>1))
+		ret, _ := rangeObj.SplitRange(v)
+		log.Debug("expanded range: %v", ret)
+		hostsExpanded = append(hostsExpanded, ret...)
+	}
+	log.Debugln("getRecipients expanded pass: ", hostsExpanded)
+	return hostsExpanded
 }
