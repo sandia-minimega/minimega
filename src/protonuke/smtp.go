@@ -109,9 +109,11 @@ func smtpSendMail(server, to, rcpt, body string) error {
 		return err
 	}
 
-	err = c.StartTLS(&tls.Config{InsecureSkipVerify: true})
-	if err != nil {
-		log.Warnln("could not start tls")
+	if *f_smtpTls {
+		err = c.StartTLS(&tls.Config{InsecureSkipVerify: true})
+		if err != nil {
+			log.Warnln("could not start tls")
+		}
 	}
 
 	c.Mail(to)
