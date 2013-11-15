@@ -22,6 +22,6 @@ mkdir /var/run/sshd
 /usr/sbin/sshd
 
 # start protonuke
-/protonuke $PROTONUKE & > /protonuke.log
+/protonuke $PROTONUKE > /protonuke.log &
 
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
