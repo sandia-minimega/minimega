@@ -89,6 +89,8 @@ func smtpClient() {
 
 		to += "@" + h
 
+		from += "@protonuke.org"
+
 		err := smtpSendMail(h, to, from, body)
 		if err != nil {
 			log.Errorln(err)
@@ -98,7 +100,7 @@ func smtpClient() {
 	}
 }
 
-func smtpSendMail(server, to, rcpt, body string) error {
+func smtpSendMail(server, to, from, body string) error {
 	// url notation requires leading and trailing [] on ipv6 addresses
 	if isIPv6(server) {
 		server = "[" + server + "]"
@@ -116,8 +118,8 @@ func smtpSendMail(server, to, rcpt, body string) error {
 		}
 	}
 
-	c.Mail(to)
-	c.Rcpt(rcpt)
+	c.Mail(from)
+	c.Rcpt(to)
 	wc, err := c.Data()
 	if err != nil {
 		return err
