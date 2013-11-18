@@ -43,18 +43,22 @@ func (iom *IOMeshage) handleMessages() {
 		case TYPE_XFER:
 			go iom.handleXfer(m)
 		case TYPE_RESPONSE:
-			if c, ok := iom.TIDs[m.TID]; ok {
-				defer func() {
-					recover()
-					log.Debugln("send on closed channel recovered")
-				}()
-				c <- m
-			} else {
-				log.Errorln("dropping message for invalid TID: ", m.TID)
-			}
+			go iom.HandleResponse(m)
 		default:
 			log.Errorln("iomeshage: received invalid message type: ", m.Type)
 		}
+	}
+}
+
+func (iom *IOMeshage) handleResponse(m *IOMMessage) {
+	if c, ok := iom.TIDs[m.TID]; ok {
+		defer func() {
+			recover()
+			log.Debugln("send on closed channel recovered")
+		}()
+		c <- m
+	} else {
+		log.Errorln("dropping message for invalid TID: ", m.TID)
 	}
 }
 
