@@ -14,6 +14,7 @@ func (n *Node) Dot() string {
 
 	ret = fmt.Sprintf("graph %s {\n", n.name)
 	ret += "size=\"8,11\";\n"
+	ret += "overlap=false;\n"
 	ret += fmt.Sprintf("Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
 	// we avoid listing a connection twice by maintaining a list of visited nodes.
