@@ -43,7 +43,7 @@ func (iom *IOMeshage) handleMessages() {
 		case TYPE_XFER:
 			go iom.handleXfer(m)
 		case TYPE_RESPONSE:
-			go iom.HandleResponse(m)
+			go iom.handleResponse(m)
 		default:
 			log.Errorln("iomeshage: received invalid message type: ", m.Type)
 		}

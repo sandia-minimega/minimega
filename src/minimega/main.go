@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"os/user"
 	"strings"
+	"syscall"
 	"version"
 )
 
@@ -106,7 +107,7 @@ func main() {
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
-	signal.Notify(sig, os.Interrupt)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		first := true
 		for {
