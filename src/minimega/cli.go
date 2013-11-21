@@ -1269,9 +1269,9 @@ or name, and the name of the file to add. For example, to add foo.img to VM 5:
 
 	vm_hotplug add 5 foo.img
 
-The add command will return a disk ID. To remove media, use the 'remove'
-argument with the VM ID and the disk ID. For example, to remove the drive added
-above, named 0:
+The add command will assign a disk ID, shown in vm_hotplug show. To remove
+media, use the 'remove' argument with the VM ID and the disk ID. For example,
+to remove the drive added above, named 0:
 
 	vm_hotplug remove 5 0
 
