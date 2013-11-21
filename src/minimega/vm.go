@@ -1280,7 +1280,6 @@ func cliVMHotplug(c cliCommand) cliResponse {
 			}
 		}
 		disk := c.Args[2]
-		// TODO: catch iso for cdrom
 		// generate an id by adding 1 to the highest in the list for the Hotplug devices, 0 if it's empty
 		id := 0
 		for k, _ := range vm.Hotplug {
