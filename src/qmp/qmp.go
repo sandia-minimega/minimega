@@ -8,6 +8,8 @@ package qmp
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	log "minilog"
 	"net"
 )
 
@@ -94,10 +96,12 @@ func (q *Conn) read() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debugln("qmp read: %#v", v)
 	return v, nil
 }
 
 func (q *Conn) write(v map[string]interface{}) error {
+	log.Debugln("qmp write: %#v", v)
 	err := q.enc.Encode(&v)
 	return err
 }
@@ -186,6 +190,49 @@ func (q *Conn) BlockdevSnapshot(path, device string) error {
 		return errors.New("blockdev_snapshot")
 	}
 	return nil
+}
+
+func (q *Conn) HumanMonitorCommand(command string) (string, error) {
+	s := map[string]interface{}{
+		"execute": "human-monitor-command",
+		"arguments": map[string]interface{}{
+			"command-line": command,
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return "", err
+	}
+	v := <-q.messageSync
+	response := v["return"]
+	if response == nil {
+		return "", errors.New("received nil response")
+	}
+	return response.(string), nil
+}
+
+func (q *Conn) DriveAdd(id, file string) (string, error) {
+	arg := fmt.Sprintf("drive_add 0 id=%v,if=none,file=%v", id, file)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
+}
+
+func (q *Conn) USBDeviceAdd(id string) (string, error) {
+	arg := fmt.Sprintf("device_add usb-storage,id=%v,drive=%v", id, id)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
+}
+
+func (q *Conn) USBDeviceDel(id string) (string, error) {
+	arg := fmt.Sprintf("device_del %v", id)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
+}
+
+func (q *Conn) DriveDel(id string) (string, error) {
+	arg := fmt.Sprintf("drive_del %v", id)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
 }
 
 func (q *Conn) reader() {
