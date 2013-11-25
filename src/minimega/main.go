@@ -5,14 +5,11 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"goreadline"
-	"io"
 	"io/ioutil"
 	log "minilog"
-	"net"
 	"os"
 	"os/signal"
 	"os/user"
@@ -39,6 +36,7 @@ var (
 	f_version   = flag.Bool("version", false, "print the version and copyright notices")
 	f_namespace = flag.String("namespace", "minimega", "meshage namespace for discovery")
 	f_iomBase   = flag.String("filepath", IOM_PATH, "directory to serve files from")
+	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	vms         vmList
 	panicOnQuit bool
 )
@@ -84,6 +82,10 @@ func main() {
 	// minimega instance
 	if *f_e {
 		localCommand()
+		return
+	}
+	if *f_attach {
+		localAttach()
 		return
 	}
 
@@ -207,72 +209,4 @@ func teardown() {
 		log.Fatalln(err)
 	}
 	os.Exit(0)
-}
-
-func localCommand() {
-	a := flag.Args()
-	var command string
-	var args []string
-
-	log.Debugln("got args:", a)
-
-	if len(a) > 0 {
-		command = a[0]
-	}
-	if len(a) > 1 {
-		args = a[1:]
-	}
-
-	log.Infoln("got command:", command)
-	log.Infoln("got args:", args)
-
-	// try to connect to the local minimega
-	f := *f_base + "minimega"
-	conn, err := net.Dial("unix", f)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	enc := json.NewEncoder(conn)
-	dec := json.NewDecoder(conn)
-
-	c := cliCommand{
-		Command: command,
-		Args:    args,
-	}
-	err = enc.Encode(&c)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-	log.Debugln("encoded command:", c)
-
-	for {
-		var r cliResponse
-		err = dec.Decode(&r)
-		if err != nil {
-			if err == io.EOF {
-				log.Infoln("server disconnected")
-			} else {
-				log.Errorln(err)
-			}
-			return
-		}
-		if r.Error != "" {
-			log.Errorln(r.Error)
-		}
-		if r.Response != "" {
-			if strings.HasSuffix(r.Response, "\n") {
-				fmt.Print(r.Response)
-			} else {
-				fmt.Println(r.Response)
-			}
-		}
-		if !r.More {
-			log.Debugln("got last message")
-			break
-		} else {
-			log.Debugln("expecting more data")
-		}
-	}
 }
