@@ -561,7 +561,7 @@ call stop without the optional VM ID or name.
 			Helplong:  "Set the amount of physical memory to allocate in megabytes.",
 			Record:    true,
 			Clear: func() error {
-				info.Memory = "512"
+				info.Memory = VM_MEMORY_DEFAULT
 				return nil
 			},
 		},
@@ -1109,11 +1109,11 @@ Display the version.
 			Helpshort: "display the current VM configuration",
 			Helplong: `
 Display the current VM configuration.
+
+Calling clear vm_config will clear all VM configuration options.
 `,
 			Record: true,
-			Clear: func() error {
-				return nil
-			},
+			Clear: cliClearVMConfig,
 		},
 
 		"debug": &command{

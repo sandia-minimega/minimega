@@ -37,6 +37,10 @@ const (
 	VM_ERROR
 )
 
+const (
+	VM_MEMORY_DEFAULT = 2048
+)
+
 // total list of vms running on this host
 type vmList struct {
 	vms map[int]*vmInfo
@@ -78,7 +82,7 @@ func init() {
 	}()
 
 	// default parameters at startup
-	info.Memory = "2048"
+	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
 	info.DiskPath = ""
 	info.KernelPath = ""
@@ -1050,6 +1054,33 @@ func (vm *vmInfo) asyncLogger() {
 		}
 		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
 	}
+}
+
+// clear all vm_ arguments
+// which is currently:
+//	vm_qemu
+//	vm_memory
+//	vm_vcpus
+//	vm_disk
+//	vm_cdrom
+//	vm_kernel
+//	vm_initrd
+//	vm_qemu_append
+//	vm_append
+//	vm_net
+//	vm_snapshot
+func cliClearVMConfig() error {
+	externalProcesses["qemu"] = "qemu-system-x86_64"
+	info.Memory = VM_MEMORY_DEFAULT
+	info.Vcpus = 1
+	info.DiskPath = ""
+	info.CdromPath = ""
+	info.KernelPath = ""
+	info.InitrdPath = ""
+	info.QemuAppend = ""
+	info.Append = ""
+	info.Networks = []int{}
+	info.Snapshot = true
 }
 
 func cliVMQemu(c cliCommand) cliResponse {
