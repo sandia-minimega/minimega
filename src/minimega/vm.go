@@ -38,7 +38,7 @@ const (
 )
 
 const (
-	VM_MEMORY_DEFAULT = 2048
+	VM_MEMORY_DEFAULT = "2048"
 )
 
 // total list of vms running on this host
@@ -1072,15 +1072,16 @@ func (vm *vmInfo) asyncLogger() {
 func cliClearVMConfig() error {
 	externalProcesses["qemu"] = "qemu-system-x86_64"
 	info.Memory = VM_MEMORY_DEFAULT
-	info.Vcpus = 1
+	info.Vcpus = "1"
 	info.DiskPath = ""
 	info.CdromPath = ""
 	info.KernelPath = ""
 	info.InitrdPath = ""
-	info.QemuAppend = ""
+	info.QemuAppend = []string{}
 	info.Append = ""
 	info.Networks = []int{}
 	info.Snapshot = true
+	return nil
 }
 
 func cliVMQemu(c cliCommand) cliResponse {
