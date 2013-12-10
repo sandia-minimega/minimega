@@ -1070,7 +1070,7 @@ func (vm *vmInfo) asyncLogger() {
 //	vm_net
 //	vm_snapshot
 func cliClearVMConfig() error {
-	externalProcesses["qemu"] = "qemu-system-x86_64"
+	externalProcesses["qemu"] = "kvm"
 	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
 	info.DiskPath = ""
