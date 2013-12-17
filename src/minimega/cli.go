@@ -991,6 +991,10 @@ to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
 
 	dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
 
+To start only a from a config file:
+
+	dnsmasq start /path/to/config
+
 To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
 running dnsmasq server, specify its ID from the list of running servers: For
 example, to kill dnsmasq server 2:
@@ -1113,7 +1117,7 @@ Display the current VM configuration.
 Calling clear vm_config will clear all VM configuration options.
 `,
 			Record: true,
-			Clear: cliClearVMConfig,
+			Clear:  cliClearVMConfig,
 		},
 
 		"debug": &command{

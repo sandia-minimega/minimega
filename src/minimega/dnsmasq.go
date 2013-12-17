@@ -32,10 +32,6 @@ func init() {
 	dnsmasqServers = make(map[int]*dnsmasqServer)
 }
 
-// generate paths for the leases and pid files (should be unique) so we can support multiple dnsmasq servers
-// maintain a map of dnsmasq servers that can be listed
-// allow killing dnsmasq servers with dnsmasq kill
-
 func dnsmasqCLI(c cliCommand) cliResponse {
 	var ret cliResponse
 	switch len(c.Args) {
@@ -43,18 +39,24 @@ func dnsmasqCLI(c cliCommand) cliResponse {
 		// show the list of dnsmasq servers
 		ret.Response = dnsmasqList()
 	case 2:
-		if c.Args[0] != "kill" {
+		switch c.Args[0] {
+		case "start":
+			err := dnsmasqStart("", "", "", c.Args[1])
+			if err != nil {
+				ret.Error = err.Error()
+			}
+		case "kill":
+			val, err := strconv.Atoi(c.Args[1])
+			if err != nil {
+				ret.Error = err.Error()
+				break
+			}
+			err = dnsmasqKill(val)
+			if err != nil {
+				ret.Error = err.Error()
+			}
+		default:
 			ret.Error = "malformed command"
-			break
-		}
-		val, err := strconv.Atoi(c.Args[1])
-		if err != nil {
-			ret.Error = err.Error()
-			break
-		}
-		err = dnsmasqKill(val)
-		if err != nil {
-			ret.Error = err.Error()
 		}
 	case 4, 5:
 		if c.Args[0] != "start" {
@@ -153,16 +155,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		Path: p,
 		Args: []string{
 			p,
-			"--bind-interfaces",
 			fmt.Sprintf("--pid-file=%v/dnsmasq.pid", d.Path),
-			"--except-interface",
-			"lo",
-			"--listen-address",
-			ip,
-			"--dhcp-range",
-			fmt.Sprintf("%v,%v", min, max),
-			fmt.Sprintf("--dhcp-leasefile=%v/dnsmasq.leases", d.Path),
-			"--dhcp-lease-max=4294967295",
 			"-o",
 			"-k",
 		},
@@ -170,6 +163,17 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
+	}
+	if ip != "" {
+		cmd.Args = append(cmd.Args, "--except-interface")
+		cmd.Args = append(cmd.Args, "lo")
+		cmd.Args = append(cmd.Args, "--listen-address")
+		cmd.Args = append(cmd.Args, ip)
+		cmd.Args = append(cmd.Args, "--bind-interfaces")
+		cmd.Args = append(cmd.Args, "--dhcp-range")
+		cmd.Args = append(cmd.Args, fmt.Sprintf("%v,%v", min, max))
+		cmd.Args = append(cmd.Args, fmt.Sprintf("--dhcp-leasefile=%v/dnsmasq.leases", d.Path))
+		cmd.Args = append(cmd.Args, "--dhcp-lease-max=4294967295")
 	}
 	if hosts != "" {
 		cmd.Args = append(cmd.Args, fmt.Sprintf("--conf-file=%v", hosts))
