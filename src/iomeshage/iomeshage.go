@@ -227,6 +227,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 
 			var info *IOMMessage
 			var gotPart bool
+			var timeoutCount int
 			// wait for n responses, or a timeout
 			for i := 0; i < n; i++ {
 				select {
@@ -239,6 +240,11 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 					}
 				case <-time.After(timeout):
 					log.Errorln("timeout")
+					timeoutCount++
+					if timeoutCount == MAX_ATTEMPTS {
+						log.Debugln("too many timeouts")
+						break
+					}
 					continue
 				}
 			}
