@@ -105,8 +105,9 @@ func (n *Node) Send(m *Message) (int, error) {
 			err := n.clientSend(client, mOne)
 			if err != nil {
 				errChan <- err
+			} else {
+				errChan <- nil
 			}
-			errChan <- nil
 		}(k, v)
 	}
 
