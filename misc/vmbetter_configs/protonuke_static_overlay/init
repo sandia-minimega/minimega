@@ -16,8 +16,10 @@ ulimit -n 999999
 PROTONUKE=`/protoargs`
 
 ETH0=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "eth0") {print a[2]; }}' /proc/cmdline`
+GW=`awk 'BEGIN {RS = " "} ; {split($1,a,"="); if (a[1] == "gw") {print a[2]; }}' /proc/cmdline`
 ifconfig lo up
 ifconfig eth0 up $ETH0 netmask 255.255.255.0
+route add default gw $GW
 
 mkdir /var/run/sshd
 /usr/sbin/sshd
