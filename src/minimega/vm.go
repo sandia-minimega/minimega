@@ -754,7 +754,7 @@ func (vm *vmInfo) launchOne() {
 			}
 
 			// populate disk sets
-			if vm2.Snapshot {
+			if vm2.Snapshot && vm2.DiskPath != "" {
 				diskSnapshotted[vm2.DiskPath] = true
 			} else {
 				diskPersistent[vm2.DiskPath] = true
