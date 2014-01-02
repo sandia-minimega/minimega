@@ -460,6 +460,12 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					v = append(v, l.vms[i])
 				}
 			}
+		case "vcpus":
+			for i, j := range l.vms {
+				if j.Vcpus == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
 		case "disk":
 			for i, j := range l.vms {
 				if j.DiskPath == d[1] {
@@ -593,6 +599,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "name")
 			case "memory":
 				omask = append(omask, "memory")
+			case "vcpus":
+				omask = append(omask, "vcpus")
 			case "disk":
 				omask = append(omask, "disk")
 			case "initrd":
@@ -620,7 +628,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
@@ -653,6 +661,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				fmt.Fprintf(w, "%v", j.Name)
 			case "memory":
 				fmt.Fprintf(w, "%v", j.Memory)
+			case "vcpus":
+				fmt.Fprintf(w, "%v", j.Vcpus)
 			case "state":
 				switch j.State {
 				case VM_BUILDING:
