@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"os"
 	"os/signal"
+	"ron"
 	"strings"
 	"syscall"
 	"version"
@@ -26,6 +27,7 @@ var (
 	f_port     = flag.Int("port", 8967, "port to listen on")
 	f_version  = flag.Bool("version", false, "print the version")
 	f_role     = flag.String("role", "client", "role [master,relay,client]")
+	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_base     = flag.String("base", BASE_PATH, "directory to serve files from")
 )
 
@@ -60,11 +62,46 @@ func main() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	// attempt to set up the base path
+	log.Debugln("make base directories")
 	err := os.MkdirAll(*f_base, os.FileMode(0770))
 	if err != nil {
 		log.Fatalln(err)
 	}
+	err = os.MkdirAll((*f_base)+"files", os.FileMode(0770))
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = os.MkdirAll((*f_base)+"responses", os.FileMode(0770))
+	if err != nil {
+		log.Fatalln(err)
+	}
 
+	// start a ron node
+	var r *ron.Ron
+	switch *f_role {
+	case "client":
+		log.Debugln("starting in client mode")
+		r, err = ron.New(ron.MODE_CLIENT, *f_parent, *f_port)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	case "relay":
+		log.Debugln("starting in relay mode")
+		r, err = ron.New(ron.MODE_RELAY, *f_parent, *f_port)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	case "master":
+		log.Debugln("starting in master mode")
+		r, err = ron.New(ron.MODE_MASTER, "", *f_port)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	default:
+		log.Fatal("invalid role %v", *f_role)
+	}
+
+	fmt.Println("%x", r)
 	<-sig
 	// terminate
 }
