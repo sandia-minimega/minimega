@@ -10,7 +10,6 @@ import (
 	log "minilog"
 	"os"
 	"os/signal"
-	"ron"
 	"strings"
 	"syscall"
 	"version"
@@ -77,23 +76,24 @@ func main() {
 	}
 
 	// start a ron node
-	var r *ron.Ron
+	var r *ron
 	switch *f_role {
 	case "client":
 		log.Debugln("starting in client mode")
-		r, err = ron.New(ron.MODE_CLIENT, *f_parent, *f_port)
+		clientSetup()
+		r, err = NewRon(MODE_CLIENT, *f_parent, *f_port, clientHeartbeat)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "relay":
 		log.Debugln("starting in relay mode")
-		r, err = ron.New(ron.MODE_RELAY, *f_parent, *f_port)
+		r, err = NewRon(MODE_RELAY, *f_parent, *f_port, nil)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "master":
 		log.Debugln("starting in master mode")
-		r, err = ron.New(ron.MODE_MASTER, "", *f_port)
+		r, err = NewRon(MODE_MASTER, "", *f_port, nil)
 		if err != nil {
 			log.Fatalln(err)
 		}
