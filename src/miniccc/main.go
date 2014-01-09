@@ -76,24 +76,24 @@ func main() {
 	}
 
 	// start a ron node
-	var r *ron
+	r := new(ron)
 	switch *f_role {
 	case "client":
 		log.Debugln("starting in client mode")
 		clientSetup()
-		r, err = NewRon(MODE_CLIENT, *f_parent, *f_port, clientHeartbeat)
+		err = r.Start(MODE_CLIENT, *f_parent, *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "relay":
 		log.Debugln("starting in relay mode")
-		r, err = NewRon(MODE_RELAY, *f_parent, *f_port, nil)
+		err = r.Start(MODE_RELAY, *f_parent, *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "master":
 		log.Debugln("starting in master mode")
-		r, err = NewRon(MODE_MASTER, "", *f_port, nil)
+		err = r.Start(MODE_MASTER, "", *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -101,7 +101,6 @@ func main() {
 		log.Fatal("invalid role %v", *f_role)
 	}
 
-	fmt.Println("%x", r)
 	<-sig
 	// terminate
 }

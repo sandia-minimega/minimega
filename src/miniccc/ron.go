@@ -5,12 +5,9 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	log "minilog"
 	"net/http"
-	"time"
 )
 
 const (
@@ -20,110 +17,81 @@ const (
 )
 
 const (
-	DEFAULT_RATE = 5
+	HEARTBEAT_RATE = 5
+	REAPER_RATE    = 30
+	CLIENT_EXPIRED = 30
 )
 
 type ron struct {
-	mode          int
-	parent        string
-	port          int
-	buffer        bytes.Buffer
-	Enc           *gob.Encoder
-
-	rate          int
+	mode   int
+	parent string
+	port   int
+	host   string
+	rate   int
 }
 
 // New creates and returns a new ron object. Mode specifies if this object
 // should be a master, relay, or client.
-func NewRon(mode int, parent string, port int) (*ron, error) {
-	r := &ron{
-		mode:          mode,
-		parent:        parent,
-		port:          port,
-		userHeartbeat: heartbeat,
-		rate:          DEFAULT_RATE,
+func (r *ron) Start(mode int, parent string, port int) error {
+	r = &ron{
+		mode:   mode,
+		parent: parent,
+		port:   port,
+		rate:   HEARTBEAT_RATE,
+		host:   fmt.Sprintf("http://%v:%v/heartbeat", parent, port),
 	}
-
-	r.Enc = gob.NewEncoder(&r.buffer)
 
 	switch mode {
 	case MODE_MASTER:
 		// a master node is simply a relay with no parent
 		if parent != "" {
-			return nil, fmt.Errorf("master mode must have no parent")
+			return fmt.Errorf("master mode must have no parent")
 		}
 
 		err := r.newRelay()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	case MODE_RELAY:
 		if parent == "" {
-			return nil, fmt.Errorf("relay mode must have a parent")
+			return fmt.Errorf("relay mode must have a parent")
 		}
 
 		err := r.newRelay()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	case MODE_CLIENT:
 		if parent == "" {
-			return nil, fmt.Errorf("client mode must have a parent")
+			return fmt.Errorf("client mode must have a parent")
 		}
 
 		err := r.newClient()
 		if err != nil {
-			return nil, err
+			return err
 		}
 	default:
-		return nil, fmt.Errorf("invalid mode %v", mode)
+		return fmt.Errorf("invalid mode %v", mode)
 	}
 
 	log.Debug("registered new ron node: %v %v %v", mode, parent, port)
-	return r, nil
-}
-
-func (r *ron) heartbeat() {
-	for {
-		time.Sleep(time.Duration(r.rate) * time.Second)
-		r.userHeartbeat(r)
-		host := fmt.Sprintf("http://%v:%v/heartbeat", r.parent, r.port)
-		resp, err := http.Post(host, "ron/miniccc", &r.buffer)
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
-		log.Debugln(resp.Body)
-		resp.Body.Close()
-	}
+	return nil
 }
 
 func (r *ron) newRelay() error {
 	log.Debugln("newRelay")
 	http.HandleFunc("/ron", easter)
 	http.HandleFunc("/heartbeat", handleHeartbeat)
-	http.HandleFunc("/", http.NotFound)
+	http.HandleFunc("/", handleRoot)
 
 	host := fmt.Sprintf(":%v", r.port)
 	go func() {
 		log.Fatalln(http.ListenAndServe(host, nil))
 	}()
 
+	go r.heartbeat()
+
 	return nil
-}
-
-// heartbeat is the means of communication between clients and an upstream
-// parent. Clients will send status and any responses from completed commands
-// in a POST, while existing commands will be returned as the response.
-func handleHeartbeat(w http.ResponseWriter, r *http.Request) {
-	if r.Body == nil {
-		log.Error("no data received: %v %v", r.RemoteAddr, r.URL)
-		return
-	}
-	defer r.Body.Close()
-	var buf bytes.Buffer
-	io.Copy(&buf, r.Body)
-
 }
 
 func (r *ron) newClient() error {

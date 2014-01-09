@@ -322,7 +322,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 		active: true,
 		host:   false,
 	}
-	err = b.tapAdd(lan, tapName, false)
+	err = b.TapAdd(lan, tapName, false)
 	if err != nil {
 		return "", err
 	}
@@ -353,7 +353,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 // destroy and remove a tap from a bridge
 func (b *bridge) TapDestroy(lan int, tap string) error {
 	b.lans[lan].Taps[tap].active = false
-	err := b.tapRemove(tap)
+	err := b.TapRemove(tap)
 	if err != nil {
 		return err
 	}
@@ -413,7 +413,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 }
 
 // add a tap to the bridge
-func (b *bridge) tapAdd(lan int, tap string, host bool) error {
+func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("ovs")
@@ -450,7 +450,7 @@ func (b *bridge) tapAdd(lan int, tap string, host bool) error {
 }
 
 // remove a tap from a bridge
-func (b *bridge) tapRemove(tap string) error {
+func (b *bridge) TapRemove(tap string) error {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("ovs")
@@ -540,7 +540,7 @@ func hostTapDelete(tap string) cliResponse {
 			for k, v := range t.Taps {
 				if v.host {
 					currentBridge.lans[lan].Taps[k].active = false
-					currentBridge.tapRemove(k)
+					currentBridge.TapRemove(k)
 				}
 			}
 			continue
@@ -552,7 +552,7 @@ func hostTapDelete(tap string) cliResponse {
 				}
 			}
 			currentBridge.lans[lan].Taps[tap].active = false
-			currentBridge.tapRemove(tap)
+			currentBridge.TapRemove(tap)
 		}
 	}
 	return cliResponse{}
@@ -585,7 +585,7 @@ func hostTapCreate(lan string, ip string) cliResponse {
 		host:       true,
 		hostOption: ip,
 	}
-	err = currentBridge.tapAdd(r, tapName, true)
+	err = currentBridge.TapAdd(r, tapName, true)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
