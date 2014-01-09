@@ -899,6 +899,7 @@ func (vm *vmInfo) launchOne() {
 	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
 
 	time.Sleep(launchRate)
+	sendKillAck := false
 
 	// connect to qmp
 	vm.q, err = qmp.Dial(vm.qmpPath())
@@ -919,7 +920,8 @@ func (vm *vmInfo) launchOne() {
 		case <-vm.Kill:
 			log.Info("Killing VM %v", vm.Id)
 			cmd.Process.Kill()
-			killAck <- <-waitChan
+			<-waitChan
+			sendKillAck = true // wait to ack until we've cleaned up
 		}
 	}
 
@@ -930,6 +932,10 @@ func (vm *vmInfo) launchOne() {
 	err = os.RemoveAll(vm.instancePath)
 	if err != nil {
 		log.Errorln(err)
+	}
+
+	if sendKillAck {
+		killAck <- vm.Id
 	}
 }
 
