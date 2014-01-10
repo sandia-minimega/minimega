@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	log "minilog"
 	"net"
+	"os"
 	"runtime"
 	"time"
 )
@@ -29,10 +30,16 @@ func clientSetup() {
 func clientHeartbeat() *hb {
 	log.Debugln("clientHeartbeat")
 
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
 	c := &Client{
-		CID:  CID,
-		Arch: runtime.GOARCH,
-		OS:   runtime.GOOS,
+		CID:      CID,
+		Arch:     runtime.GOARCH,
+		OS:       runtime.GOOS,
+		Hostname: hostname,
 	}
 
 	// process network info

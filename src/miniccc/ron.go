@@ -82,6 +82,8 @@ func (r *ron) newRelay() error {
 	log.Debugln("newRelay")
 	http.HandleFunc("/ron", easter)
 	http.HandleFunc("/heartbeat", handleHeartbeat)
+	http.HandleFunc("/list", handleList)
+	http.HandleFunc("/list/raw", handleList)
 	http.HandleFunc("/", handleRoot)
 
 	host := fmt.Sprintf(":%v", r.port)

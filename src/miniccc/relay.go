@@ -4,17 +4,19 @@ import (
 	"fmt"
 	log "minilog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
 
 type Client struct {
-	CID     string
-	Arch    string
-	OS      string
-	IP      []string
-	MAC     []string
-	Checkin time.Time
+	CID      string
+	Hostname string
+	Arch     string
+	OS       string
+	IP       []string
+	MAC      []string
+	Checkin  time.Time
 }
 
 var (
@@ -70,10 +72,53 @@ func (c *Client) Reap(t time.Time) bool {
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
+	clientLock.Lock()
 	numClients := len(clients)
-
+	archMix := make(map[string]int)
+	osMix := make(map[string]int)
+	for _, v := range clients {
+		archMix[v.Arch]++
+		osMix[v.OS]++
+	}
+	clientLock.Unlock()
 	// TODO: html template
-	resp := fmt.Sprintf("<html>Active clients: %v<br>Expired clients: %v</html>", numClients, clientExpiredCount)
+	resp := fmt.Sprintf("<html>Active clients: %v<br>Expired clients: %v<br>", numClients, clientExpiredCount)
+	resp += "Architecture Mix:<br>"
+	for k, v := range archMix {
+		resp += fmt.Sprintf("%v (%.02f%%)<br>", k, 100*(float64(v)/float64(numClients)))
+	}
+	resp += "OS Mix:<br>"
+	for k, v := range osMix {
+		resp += fmt.Sprintf("%v (%.02f%%)<br>", k, 100*(float64(v)/float64(numClients)))
+	}
+	w.Write([]byte(resp))
+}
+
+func handleList(w http.ResponseWriter, r *http.Request) {
+	raw := false
+	if strings.HasSuffix(r.URL.Path, "raw") {
+		raw = true
+	}
+
+	var resp string
+	if !raw {
+		resp += "<html><table border=1><tr><td>CID</td><td>Hostname</td><td>Arch</td><td>OS</td><td>IP</td><td>MAC</td></tr>"
+	} else {
+		resp += "CID,Hostname,Arch,OS,IP,MAC\n"
+	}
+	clientLock.Lock()
+	for _, v := range clients {
+		if !raw {
+			resp += fmt.Sprintf("<tr><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td></tr>", v.CID, v.Hostname, v.Arch, v.OS, v.IP, v.MAC)
+		} else {
+			resp += fmt.Sprintf("%v,%v,%v,%v,%v,%v\n", v.CID, v.Hostname, v.Arch, v.OS, v.IP, v.MAC)
+		}
+	}
+	clientLock.Unlock()
+	if !raw {
+		resp += "</table></html>"
+	}
+
 	w.Write([]byte(resp))
 }
 
