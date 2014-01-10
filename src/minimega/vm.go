@@ -712,7 +712,15 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 				fmt.Fprintf(w, "%v", ips)
 			case "vlan":
-				fmt.Fprintf(w, "%v", j.Networks)
+				var vlans []string
+				for _, v := range j.Networks {
+					if v == -1 {
+						vlans = append(vlans, "disconnected")
+					} else {
+						vlans = append(vlans, fmt.Sprintf("%v", v))
+					}
+				}
+				fmt.Fprintf(w, "%v", vlans)
 			}
 		}
 		fmt.Fprintf(w, "\n")
@@ -764,10 +772,12 @@ func (vm *vmInfo) launchOne() {
 			}
 
 			// populate disk sets
-			if vm2.Snapshot && vm2.DiskPath != "" {
-				diskSnapshotted[vm2.DiskPath] = true
-			} else {
-				diskPersistent[vm2.DiskPath] = true
+			if vm2.DiskPath != "" {
+				if vm2.Snapshot {
+					diskSnapshotted[vm2.DiskPath] = true
+				} else {
+					diskPersistent[vm2.DiskPath] = true
+				}
 			}
 		}
 	}
@@ -889,6 +899,7 @@ func (vm *vmInfo) launchOne() {
 	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
 
 	time.Sleep(launchRate)
+	sendKillAck := false
 
 	// connect to qmp
 	vm.q, err = qmp.Dial(vm.qmpPath())
@@ -909,7 +920,8 @@ func (vm *vmInfo) launchOne() {
 		case <-vm.Kill:
 			log.Info("Killing VM %v", vm.Id)
 			cmd.Process.Kill()
-			killAck <- <-waitChan
+			<-waitChan
+			sendKillAck = true // wait to ack until we've cleaned up
 		}
 	}
 
@@ -920,6 +932,10 @@ func (vm *vmInfo) launchOne() {
 	err = os.RemoveAll(vm.instancePath)
 	if err != nil {
 		log.Errorln(err)
+	}
+
+	if sendKillAck {
+		killAck <- vm.Id
 	}
 }
 
@@ -1419,4 +1435,75 @@ func (l *vmList) getVM(idOrName string) *vmInfo {
 		return vm
 	}
 	return nil
+}
+
+func cliVMNetMod(c cliCommand) cliResponse {
+	if len(c.Args) != 3 {
+		return cliResponse{
+			Error: "vm_netmod takes three arguments",
+		}
+	}
+
+	// first arg is the vm name or id
+	vm := vms.getVM(c.Args[0])
+	if vm == nil {
+		return cliResponse{
+			Error: fmt.Sprintf("no such VM %v", c.Args[0]),
+		}
+	}
+
+	// second arg is the vm_net position, which must fit within vm.Networks and vm.taps
+	pos, err := strconv.Atoi(c.Args[1])
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
+	if len(vm.taps) < pos {
+		return cliResponse{
+			Error: fmt.Sprintf("no such netowrk %v, VM only has %v networks", pos, len(vm.taps)),
+		}
+	}
+
+	// last arg is a number 0 < x < 4096, or the word disconnect
+	if strings.ToLower(c.Args[2]) == "disconnect" {
+		// disconnect
+		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
+		err := currentBridge.TapRemove(vm.taps[pos])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		vm.Networks[pos] = -1
+	} else if net, err := strconv.Atoi(c.Args[2]); err == nil {
+		if net > 0 && net < 4096 {
+			// new network
+			log.Debug("moving network connection: %v %v %v -> %v", vm.Id, pos, vm.Networks[pos], net)
+			if vm.Networks[pos] != -1 {
+				err := currentBridge.TapRemove(vm.taps[pos])
+				if err != nil {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+			}
+			err = currentBridge.TapAdd(net, vm.taps[pos], false)
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			vm.Networks[pos] = net
+		} else {
+			return cliResponse{
+				Error: fmt.Sprintf("invalid vlan tag %v", net),
+			}
+		}
+	} else {
+		return cliResponse{
+			Error: fmt.Sprintf("must be 'disconnect' or a valid vlan tag"),
+		}
+	}
+	return cliResponse{}
 }

@@ -10,7 +10,6 @@ import (
 	log "minilog"
 	"os"
 	"os/signal"
-	"ron"
 	"strings"
 	"syscall"
 	"version"
@@ -77,23 +76,24 @@ func main() {
 	}
 
 	// start a ron node
-	var r *ron.Ron
+	r := new(ron)
 	switch *f_role {
 	case "client":
 		log.Debugln("starting in client mode")
-		r, err = ron.New(ron.MODE_CLIENT, *f_parent, *f_port)
+		clientSetup()
+		err = r.Start(MODE_CLIENT, *f_parent, *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "relay":
 		log.Debugln("starting in relay mode")
-		r, err = ron.New(ron.MODE_RELAY, *f_parent, *f_port)
+		err = r.Start(MODE_RELAY, *f_parent, *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
 	case "master":
 		log.Debugln("starting in master mode")
-		r, err = ron.New(ron.MODE_MASTER, "", *f_port)
+		err = r.Start(MODE_MASTER, "", *f_port)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -101,7 +101,6 @@ func main() {
 		log.Fatal("invalid role %v", *f_role)
 	}
 
-	fmt.Println("%x", r)
 	<-sig
 	// terminate
 }
