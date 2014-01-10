@@ -27,11 +27,10 @@ type bridge struct {
 }
 
 type vlan struct {
-	Taps map[string]*tap // named list of taps. If !tap.active, then the tap is destroyed
+	Taps map[string]*tap // named list of taps.
 }
 
 type tap struct {
-	active     bool
 	host       bool
 	hostOption string
 }
@@ -193,6 +192,10 @@ func (b *bridge) create() error {
 		}
 		b.exists = true
 		b.lans = make(map[int]*vlan)
+		// special vlan -1 is for disconnected taps
+		b.lans[-1] = &vlan{
+			Taps: make(map[string]*tap),
+		}
 
 		p = process("ip")
 		cmd = &exec.Cmd{
@@ -319,8 +322,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 
 	// the tap add was successful, so try to add it to the bridge
 	b.lans[lan].Taps[tapName] = &tap{
-		active: true,
-		host:   false,
+		host: false,
 	}
 	err = b.TapAdd(lan, tapName, false)
 	if err != nil {
@@ -352,14 +354,13 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 
 // destroy and remove a tap from a bridge
 func (b *bridge) TapDestroy(lan int, tap string) error {
-	b.lans[lan].Taps[tap].active = false
-	err := b.TapRemove(tap)
+	err := b.TapRemove(lan, tap)
 	if err != nil {
-		return err
+		log.Infoln(err)
 	}
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
-	if b.lans[lan].Taps[tap].host {
+	if b.lans[-1].Taps[tap].host {
 		return nil
 	}
 
@@ -414,6 +415,18 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 
 // add a tap to the bridge
 func (b *bridge) TapAdd(lan int, tap string, host bool) error {
+	// if this tap is in the disconnected list, move it out
+	if _, ok := b.lans[-1].Taps[tap]; ok {
+		if _, ok := b.lans[lan]; !ok {
+			err := currentBridge.LanCreate(lan)
+			if err != nil {
+				return err
+			}
+		}
+		b.lans[lan].Taps[tap] = b.lans[-1].Taps[tap]
+		delete(b.lans[-1].Taps, tap)
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("ovs")
@@ -450,7 +463,13 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 }
 
 // remove a tap from a bridge
-func (b *bridge) TapRemove(tap string) error {
+func (b *bridge) TapRemove(lan int, tap string) error {
+	// put this tap into the disconnected vlan
+	if lan != -1 {
+		b.lans[-1].Taps[tap] = b.lans[lan].Taps[tap]
+		delete(b.lans[lan].Taps, tap)
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("ovs")
@@ -510,7 +529,7 @@ func hostTapList() cliResponse {
 	// find all the host taps first
 	for lan, t := range currentBridge.lans {
 		for tap, ti := range t.Taps {
-			if ti.host && ti.active {
+			if ti.host {
 				lans = append(lans, lan)
 				taps = append(taps, tap)
 				options = append(options, ti.hostOption)
@@ -539,8 +558,7 @@ func hostTapDelete(tap string) cliResponse {
 			// remove all host taps on this vlan
 			for k, v := range t.Taps {
 				if v.host {
-					currentBridge.lans[lan].Taps[k].active = false
-					currentBridge.TapRemove(k)
+					currentBridge.TapRemove(lan, k)
 				}
 			}
 			continue
@@ -551,8 +569,7 @@ func hostTapDelete(tap string) cliResponse {
 					Error: "not a host tap",
 				}
 			}
-			currentBridge.lans[lan].Taps[tap].active = false
-			currentBridge.TapRemove(tap)
+			currentBridge.TapRemove(lan, tap)
 		}
 	}
 	return cliResponse{}
@@ -581,7 +598,6 @@ func hostTapCreate(lan string, ip string) cliResponse {
 
 	// create the tap
 	currentBridge.lans[r].Taps[tapName] = &tap{
-		active:     true,
 		host:       true,
 		hostOption: ip,
 	}

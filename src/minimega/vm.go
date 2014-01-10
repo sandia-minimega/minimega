@@ -1469,7 +1469,7 @@ func cliVMNetMod(c cliCommand) cliResponse {
 	if strings.ToLower(c.Args[2]) == "disconnect" {
 		// disconnect
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		err := currentBridge.TapRemove(vm.taps[pos])
+		err := currentBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
 		if err != nil {
 			return cliResponse{
 				Error: err.Error(),
@@ -1481,7 +1481,7 @@ func cliVMNetMod(c cliCommand) cliResponse {
 			// new network
 			log.Debug("moving network connection: %v %v %v -> %v", vm.Id, pos, vm.Networks[pos], net)
 			if vm.Networks[pos] != -1 {
-				err := currentBridge.TapRemove(vm.taps[pos])
+				err := currentBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
 				if err != nil {
 					return cliResponse{
 						Error: err.Error(),
