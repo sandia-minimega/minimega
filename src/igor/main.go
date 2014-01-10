@@ -339,6 +339,6 @@ func getReservations(f io.Reader) []Reservation {
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
 func toPXE(ip net.IP) string {
-	s := fmt.Sprintf("%02X%02X%02X%02X", ip[0], ip[1], ip[2], ip[3])
+	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
 	return s
 }
