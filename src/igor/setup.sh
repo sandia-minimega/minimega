@@ -14,7 +14,11 @@ useradd igor
 cp ../../bin/igor /usr/local/bin/
 chown igor:igor /usr/local/bin/igor
 chmod +s /usr/local/bin/igor
+chmod a+rw $1/pxelinux.cfg
 mkdir $1/igor
+chown igor:igor $1/igor
 mkdir $1/pxelinux.cfg/igor
+chown igor:igor $1/pxelinux.cfg/igor
 touch $1/igor/reservations.json
+chown igor:igor $1/igor/reservations.json
 cp sampleconfig.json /etc/igor.conf
