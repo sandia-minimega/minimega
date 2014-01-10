@@ -10,6 +10,10 @@ import (
 
 type Client struct {
 	CID     string
+	Arch    string
+	OS      string
+	IP      []string
+	MAC     []string
 	Checkin time.Time
 }
 
@@ -22,6 +26,9 @@ var (
 
 func init() {
 	clients = make(map[string]*Client)
+	upstreamQueue = &hb{
+		Clients: make(map[string]*Client),
+	}
 	go clientReaper()
 }
 
