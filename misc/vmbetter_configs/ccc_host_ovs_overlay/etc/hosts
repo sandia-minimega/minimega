@@ -1,0 +1,45 @@
+127.0.0.1	localhost
+#127.0.1.1	proshop.sandia.gov	proshop
+
+# 10g fiber connections
+172.16.0.254	proshop
+172.16.0.1	ccc1
+172.16.0.2	ccc2
+172.16.0.3	ccc3
+172.16.0.4	ccc4
+172.16.0.5	ccc5
+172.16.0.6	ccc6
+172.16.0.7	ccc7
+172.16.0.8	ccc8
+172.16.0.9	ccc9
+172.16.0.10	ccc10
+172.16.0.11	ccc11
+172.16.0.12	ccc12
+172.16.0.13	ccc13
+172.16.0.14	ccc14
+
+# 1gE backchannel connections
+172.17.0.254	back_proshop
+172.17.0.1	back_ccc1
+172.17.0.2	back_ccc2
+172.17.0.3	back_ccc3
+172.17.0.4	back_ccc4
+172.17.0.5	back_ccc5
+172.17.0.6	back_ccc6
+172.17.0.7	back_ccc7
+172.17.0.8	back_ccc8
+172.17.0.9	back_ccc9
+172.17.0.10	back_ccc10
+172.17.0.11	back_ccc11
+172.17.0.12	back_ccc12
+172.17.0.13	back_ccc13
+172.17.0.14	back_ccc14
+
+# 1gE management (also connected to backchannel switch)
+172.17.1.1	arista
+172.17.1.2	pdu
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters

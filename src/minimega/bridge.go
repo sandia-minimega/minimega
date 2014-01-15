@@ -466,7 +466,9 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 func (b *bridge) TapRemove(lan int, tap string) error {
 	// put this tap into the disconnected vlan
 	if lan != -1 {
-		b.lans[-1].Taps[tap] = b.lans[lan].Taps[tap]
+		if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
+			b.lans[-1].Taps[tap] = b.lans[lan].Taps[tap]
+		}
 		delete(b.lans[lan].Taps, tap)
 	}
 
