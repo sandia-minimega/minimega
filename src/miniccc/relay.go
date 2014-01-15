@@ -43,6 +43,7 @@ func processHeartbeat(h *hb) {
 		upstreamQueue.Clients[k] = clients[k]
 		log.Debug("added/updated client: %v", k)
 	}
+	checkMaxCommandID(h.MaxCommandID)
 	clientLock.Unlock()
 }
 
@@ -72,6 +73,7 @@ func (c *Client) Reap(t time.Time) bool {
 }
 
 func handleRoot(w http.ResponseWriter, r *http.Request) {
+	log.Debugln("handleRoot")
 	clientLock.Lock()
 	numClients := len(clients)
 	archMix := make(map[string]int)
@@ -81,6 +83,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 		osMix[v.OS]++
 	}
 	clientLock.Unlock()
+
 	// TODO: html template
 	resp := fmt.Sprintf("<html>Active clients: %v<br>Expired clients: %v<br>", numClients, clientExpiredCount)
 	resp += "Architecture Mix:<br>"
@@ -95,6 +98,7 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleList(w http.ResponseWriter, r *http.Request) {
+	log.Debugln("handleList")
 	raw := false
 	if strings.HasSuffix(r.URL.Path, "raw") {
 		raw = true
@@ -128,7 +132,8 @@ func relayHeartbeat() *hb {
 	clientLock.Lock()
 	defer clientLock.Unlock()
 	h := &hb{
-		Clients: upstreamQueue.Clients,
+		Clients:      upstreamQueue.Clients,
+		MaxCommandID: getMaxCommandID(),
 	}
 
 	// reset the upstream queue

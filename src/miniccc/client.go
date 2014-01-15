@@ -67,9 +67,15 @@ func clientHeartbeat() *hb {
 	me := make(map[string]*Client)
 	me[CID] = c
 	h := &hb{
-		ID:      CID,
-		Clients: me,
+		ID:           CID,
+		Clients:      me,
+		MaxCommandID: getMaxCommandID(),
 	}
 	log.Debug("client heartbeat %v", h)
 	return h
+}
+
+func clientCommands(newCommands map[int]*Command) {
+	// nothing for now
+
 }

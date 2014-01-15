@@ -80,10 +80,15 @@ func (r *ron) Start(mode int, parent string, port int) error {
 
 func (r *ron) newRelay() error {
 	log.Debugln("newRelay")
-	http.HandleFunc("/ron", easter)
+	http.HandleFunc("/ron/", easter)
 	http.HandleFunc("/heartbeat", handleHeartbeat)
-	http.HandleFunc("/list", handleList)
+	http.HandleFunc("/list/", handleList)
 	http.HandleFunc("/list/raw", handleList)
+	http.HandleFunc("/command/", handleCommands)
+	http.HandleFunc("/command/new", handleNewCommand)
+	http.HandleFunc("/command/delete", handleDeleteCommand)
+	http.HandleFunc("/command/deletefiles", handleDeleteFiles)
+	http.HandleFunc("/command/resubmit", handleResubmit)
 	http.HandleFunc("/", handleRoot)
 
 	host := fmt.Sprintf(":%v", r.port)
