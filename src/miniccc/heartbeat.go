@@ -3,16 +3,15 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"io"
 	log "minilog"
 	"net/http"
 	"time"
 )
 
 type hb struct {
-	ID      string
-	Clients map[string]*Client
-	//	S Stats
+	ID           string
+	Clients      map[string]*Client
+	MaxCommandID int // the highest command ID this node has seen
 	//	R []Responses
 }
 
@@ -40,7 +39,11 @@ func (r *ron) heartbeat() {
 		var buf bytes.Buffer
 		enc := gob.NewEncoder(&buf)
 
-		enc.Encode(h)
+		err := enc.Encode(h)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
 
 		resp, err := http.Post(r.host, "ron/miniccc", &buf)
 		if err != nil {
@@ -48,11 +51,24 @@ func (r *ron) heartbeat() {
 			continue
 		}
 
-		// debug
-		var buf2 bytes.Buffer
-		io.Copy(&buf2, resp.Body)
+		newCommands := make(map[int]*Command)
+		dec := gob.NewDecoder(resp.Body)
 
-		log.Debugln(buf2.String())
+		err = dec.Decode(newCommands)
+		if err != nil {
+			log.Errorln(err)
+			resp.Body.Close()
+			continue
+		}
+
+		switch r.mode {
+		case MODE_RELAY:
+			// replace the command list with this one, keeping the list of respondents
+			updateCommands(newCommands)
+		case MODE_CLIENT:
+			clientCommands(newCommands)
+		}
+
 		resp.Body.Close()
 	}
 }
@@ -79,4 +95,5 @@ func handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	go processHeartbeat(&h)
 
 	// send the command list back
+	w.Write(encodeCommands())
 }
