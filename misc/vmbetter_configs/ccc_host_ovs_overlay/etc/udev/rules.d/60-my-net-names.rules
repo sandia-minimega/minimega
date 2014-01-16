@@ -1,0 +1,1 @@
+SUBSYSTEM=="net", DRIVERS=="ixgbe", NAME="eth10G"
