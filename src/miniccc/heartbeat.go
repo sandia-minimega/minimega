@@ -12,7 +12,7 @@ type hb struct {
 	ID           string
 	Clients      map[string]*Client
 	MaxCommandID int // the highest command ID this node has seen
-	//	R []Responses
+	Responses    []*Response
 }
 
 func init() {

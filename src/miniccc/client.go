@@ -77,5 +77,4 @@ func clientHeartbeat() *hb {
 
 func clientCommands(newCommands map[int]*Command) {
 	// nothing for now
-
 }

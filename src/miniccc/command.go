@@ -52,6 +52,9 @@ type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
 
+	// Client ID that owns this response
+	CID string
+
 	// Names and data for uploaded files
 	Files map[string][]byte
 
@@ -270,11 +273,15 @@ func updateCommands(newCommands map[int]*Command) {
 	commandLock.Lock()
 	defer commandLock.Unlock()
 	for k, v := range newCommands {
-		if w, ok := commands[k]; ok {
-			v.checkedIn = w.checkedIn
+		if len(v.FilesSend) != 0 {
+			//go deferUpdateCommand(v)
 		} else {
-			log.Debug("new command %v", k)
+			if w, ok := commands[k]; ok {
+				v.checkedIn = w.checkedIn
+			} else {
+				log.Debug("new command %v", k)
+			}
+			commands[k] = v
 		}
-		commands[k] = v
 	}
 }
