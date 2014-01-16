@@ -3,19 +3,17 @@ package main
 import (
 	"bufio"
 	"errors"
-	"expect"
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"ranges"
 	"strings"
-	"time"
+	"telnet"
 )
 
 var (
-	f_config = flag.String("config", "", "path to config file")
+	f_config = flag.String("config", "/etc/powerbot.conf", "path to config file")
 	config   Config
 )
 
@@ -25,7 +23,6 @@ Usage, <arg> = required, [arg] = optional:
 	powerbot on <nodelist>
 	powerbot off <nodelist>
 	powerbot cycle <nodelist>
-	powerbot query [nodelist]
 
 Node lists are in standard range format, i.e. node[1-5,8-10,15]
 `)
@@ -39,16 +36,18 @@ type PDU interface {
 	Status(map[string]string) error
 }
 
-var PDUtypes = map[string]func(string, string) (PDU, error){
+var PDUtypes = map[string]func(string, string, string, string) (PDU, error){
 	"tripplite": NewTrippLitePDU,
 }
 
 type Device struct {
-	name    string
-	host    string
-	port    string
-	pdutype string
-	outlets map[string]string // map hostname -> outlet name
+	name     string
+	host     string
+	port     string
+	pdutype  string
+	username string
+	password string
+	outlets  map[string]string // map hostname -> outlet name
 }
 
 type Config struct {
@@ -78,7 +77,7 @@ func ReadConfig(filename string) (Config, error) {
 			}
 			ret.prefix = fields[1]
 		case "device":
-			if len(fields) != 5 {
+			if len(fields) != 7 {
 				continue
 			}
 			var d Device
@@ -86,6 +85,8 @@ func ReadConfig(filename string) (Config, error) {
 			d.pdutype = fields[2]
 			d.host = fields[3]
 			d.port = fields[4]
+			d.username = fields[5]
+			d.password = fields[6]
 			d.outlets = make(map[string]string)
 			for _, v := range ret.devices {
 				if v.name == d.name {
@@ -128,15 +129,6 @@ func main() {
 	// First argument is a command: "on", "off", etc.
 	command := args[0]
 
-	/*
-		var pdu PDU
-		pdu, err = PDUtypes["tripplite"]("pdu:5214")
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(pdu)
-	*/
-
 	// Find a list of what devices and ports are affected
 	// by the command
 	var nodes string
@@ -152,7 +144,7 @@ func main() {
 	// For each device affected, perform the command
 	for _, dev := range devs {
 		var pdu PDU
-		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port)
+		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
 		if err != nil {
 			log.Print(err)
 			continue
@@ -183,9 +175,6 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 		return ret, err
 	}
 
-	fmt.Printf("nodes = %#v\n", nodes)
-	fmt.Printf("config.devices = %#v\n", config.devices)
-
 	// This is really gross but you won't have a ton of devices anyway
 	// so it should be pretty fast.
 	for _, n := range nodes {
@@ -194,70 +183,144 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 				if _, ok := ret[d.name]; ok {
 					ret[d.name].outlets[n] = o
 				} else {
-					var tmp Device
+					tmp := Device{name: d.name, host: d.host, port: d.port, pdutype: d.pdutype, username: d.username, password: d.password}
 					tmp.outlets = make(map[string]string)
-					tmp.name = d.name
-					tmp.host = d.host
-					tmp.port = d.port
-					tmp.pdutype = d.pdutype
 					tmp.outlets[n] = o
 					ret[tmp.name] = tmp
 				}
 			}
 		}
 	}
-	fmt.Println(ret)
 	return ret, nil
 }
 
 type TrippLitePDU struct {
-	e *expect.Expecter
+	//	e *expect.Expecter
+	username string
+	password string
+	c        *telnet.Conn
 }
 
-func NewTrippLitePDU(host string, port string) (PDU, error) {
+func NewTrippLitePDU(host, port, username, password string) (PDU, error) {
 	var tp TrippLitePDU
-	conn, err := net.Dial("tcp", host+":"+port)
-	//	sc, err := sshClientConnect(host, port, "localadmin", "localadmin")
+	conn, err := telnet.Dial("tcp", host+":"+port)
 	if err != nil {
 		return tp, err
 	}
-	tp.e = expect.NewExpecter(conn)
-	tp.e.SetWriter(conn)
+	tp.c = conn
+	tp.username = username
+	tp.password = password
 	return tp, err
 }
 
-func (p TrippLitePDU) On(ports map[string]string) error {
-	p.e.Send(string([]byte{255, 251, 1}))
-	time.Sleep(500 * time.Millisecond)
-	fmt.Printf("waiting for login\n")
-	p.e.Expect("login: ")
-	fmt.Printf("got login\n")
-	p.e.Send("localadmin\r\n")
-	time.Sleep(1000 * time.Millisecond)
-	p.e.Expect("Password: ")
-	fmt.Printf("got password\n")
-	p.e.Send("localadmin\r\n")
-	time.Sleep(500 * time.Millisecond)
-	p.e.Expect("> ")
-	for _, port := range ports {
-		p.e.Send(fmt.Sprintf("loadctl on -o %s --force\r\n", port))
-		time.Sleep(500 * time.Millisecond)
-		p.e.Expect("> ")
-		fmt.Printf("turned on %s\n", port)
+func (p TrippLitePDU) login() error {
+	// wait for login prompt
+	_, err := p.c.ReadUntil("login: ")
+	if err != nil {
+		return err
 	}
-	time.Sleep(500 * time.Millisecond)
-	p.e.Send("exit")
+	cmd := fmt.Sprintf("%s\r\n", p.username)
+	_, err = p.c.Write([]byte(cmd))
+	if err != nil {
+		return err
+	}
+	_, err = p.c.ReadUntil("Password: ")
+	if err != nil {
+		return err
+	}
+	cmd = fmt.Sprintf("%s\r\n", p.password)
+	_, err = p.c.Write([]byte(cmd))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p TrippLitePDU) logout() error {
+	// send a blank line to make sure we get a prompt
+	_, err := p.c.Write([]byte("\r\n"))
+	if err != nil {
+		return err
+	}
+	_, err = p.c.ReadUntil("$> ")
+	if err != nil {
+		return err
+	}
+	_, err = p.c.Write([]byte("exit\r\n"))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p TrippLitePDU) On(ports map[string]string) error {
+	p.login()
+	for _, port := range ports {
+		_, err := p.c.ReadUntil("$> ")
+		if err != nil {
+			return err
+		}
+		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl on -o %s --force\r\n", port)))
+		if err != nil {
+			return err
+		}
+	}
+	p.logout()
 	return nil
 }
 
 func (p TrippLitePDU) Off(ports map[string]string) error {
+	p.login()
+	for _, port := range ports {
+		_, err := p.c.ReadUntil("$> ")
+		if err != nil {
+			return err
+		}
+		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl off -o %s --force\r\n", port)))
+		if err != nil {
+			return err
+		}
+	}
+	p.logout()
 	return nil
 }
 
 func (p TrippLitePDU) Cycle(ports map[string]string) error {
+	p.login()
+	for _, port := range ports {
+		_, err := p.c.ReadUntil("$> ")
+		if err != nil {
+			return err
+		}
+		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl cycle -o %s --force\r\n", port)))
+		if err != nil {
+			return err
+		}
+	}
+	p.logout()
 	return nil
 }
 
 func (p TrippLitePDU) Status(ports map[string]string) error {
+	fmt.Println("not yet implemented")
 	return nil
+	// doesn't work right
+	/*
+		p.login()
+		_, err := p.c.ReadUntil("$> ")
+		if err != nil {
+			return err
+		}
+		_, err = p.c.Write([]byte("loadctl status -o\r\n"))
+		if err != nil {
+			return err
+		}
+		result, err := p.c.ReadUntil("$> ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(result))
+		p.logout()
+		return nil
+	*/
 }
