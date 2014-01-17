@@ -2,28 +2,21 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
 )
 
-type Client struct {
-	CID      string
-	Hostname string
-	Arch     string
-	OS       string
-	IP       []string
-	MAC      []string
-	Checkin  time.Time
-}
-
 var (
-	clients            map[string]*Client
-	clientLock         sync.Mutex
-	clientExpiredCount int
-	upstreamQueue      *hb
+	clients             map[string]*Client
+	clientLock          sync.Mutex
+	clientExpiredCount  int
+	upstreamQueue       *hb
+	masterResponseQueue chan map[string][]*Response
 )
 
 func init() {
@@ -31,20 +24,62 @@ func init() {
 	upstreamQueue = &hb{
 		Clients: make(map[string]*Client),
 	}
+	masterResponseQueue = make(chan map[string][]*Response, 1024)
 	go clientReaper()
 }
 
 func processHeartbeat(h *hb) {
 	clientLock.Lock()
 	t := time.Now()
+	mrq := make(map[string][]*Response)
 	for k, v := range h.Clients {
 		clients[k] = v
 		clients[k].Checkin = t
-		upstreamQueue.Clients[k] = clients[k]
+		if ronMode == MODE_MASTER && len(v.Responses) > 0 {
+			mrq[k] = v.Responses
+		} else {
+			upstreamQueue.Clients[k] = clients[k]
+		}
 		log.Debug("added/updated client: %v", k)
 	}
 	checkMaxCommandID(h.MaxCommandID)
+	if ronMode == MODE_MASTER && len(mrq) > 0 {
+		masterResponseQueue <- mrq
+	}
 	clientLock.Unlock()
+}
+
+func masterResponseProcessor() {
+	for {
+		r := <-masterResponseQueue
+		for k, v := range r {
+			for _, c := range v {
+				log.Debug("got response %v : %v", k, c.ID)
+				path := fmt.Sprintf("%v/responses/%v/%v/", *f_base, c.ID, k)
+				err := os.MkdirAll(path, os.FileMode(0770))
+				if err != nil {
+					log.Errorln(err)
+					log.Error("could not record response %v : %v", k, c.ID)
+					continue
+				}
+				// generate stdout and stderr if they exist
+				if c.Stdout != "" {
+					err := ioutil.WriteFile(path+"stdout", []byte(c.Stdout), os.FileMode(0660))
+					if err != nil {
+						log.Errorln(err)
+						log.Error("could not record stdout %v : %v", k, c.ID)
+					}
+				}
+				if c.Stderr != "" {
+					err := ioutil.WriteFile(path+"stderr", []byte(c.Stderr), os.FileMode(0660))
+					if err != nil {
+						log.Errorln(err)
+						log.Error("could not record stderr %v : %v", k, c.ID)
+					}
+				}
+			}
+		}
+	}
 }
 
 // clientReaper periodically flushes old entries from the client list

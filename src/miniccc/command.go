@@ -52,9 +52,6 @@ type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
 
-	// Client ID that owns this response
-	CID string
-
 	// Names and data for uploaded files
 	Files map[string][]byte
 
@@ -77,8 +74,8 @@ func getCommandID() int {
 	log.Debugln("getCommandID")
 	commandLock.Lock()
 	defer commandLock.Unlock()
-	id := commandCounter
 	commandCounter++
+	id := commandCounter
 	return id
 }
 
@@ -91,9 +88,9 @@ func checkMaxCommandID(id int) {
 	log.Debugln("checkMaxCommandID")
 	commandLock.Lock()
 	defer commandLock.Unlock()
-	if id >= commandCounter {
+	if id > commandCounter {
 		log.Debug("found higher ID %v", id)
-		commandCounter = id + 1
+		commandCounter = id
 	}
 }
 

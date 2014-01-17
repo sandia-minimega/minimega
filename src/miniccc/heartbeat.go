@@ -19,12 +19,12 @@ func init() {
 	gob.Register(hb{})
 }
 
-func (r *ron) heartbeat() {
+func heartbeat() {
 	for {
-		time.Sleep(time.Duration(r.rate) * time.Second)
+		time.Sleep(time.Duration(ronRate) * time.Second)
 
 		var h *hb
-		switch r.mode {
+		switch ronMode {
 		case MODE_MASTER:
 			// do nothing
 			return
@@ -33,7 +33,7 @@ func (r *ron) heartbeat() {
 		case MODE_CLIENT:
 			h = clientHeartbeat()
 		default:
-			log.Fatal("invalid heartbeat mode %v", r.mode)
+			log.Fatal("invalid heartbeat mode %v", ronMode)
 		}
 
 		var buf bytes.Buffer
@@ -45,7 +45,7 @@ func (r *ron) heartbeat() {
 			continue
 		}
 
-		resp, err := http.Post(r.host, "ron/miniccc", &buf)
+		resp, err := http.Post(ronHost, "ron/miniccc", &buf)
 		if err != nil {
 			log.Errorln(err)
 			continue
@@ -54,14 +54,14 @@ func (r *ron) heartbeat() {
 		newCommands := make(map[int]*Command)
 		dec := gob.NewDecoder(resp.Body)
 
-		err = dec.Decode(newCommands)
+		err = dec.Decode(&newCommands)
 		if err != nil {
 			log.Errorln(err)
 			resp.Body.Close()
 			continue
 		}
 
-		switch r.mode {
+		switch ronMode {
 		case MODE_RELAY:
 			// replace the command list with this one, keeping the list of respondents
 			updateCommands(newCommands)
