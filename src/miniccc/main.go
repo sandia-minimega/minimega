@@ -108,4 +108,5 @@ func main() {
 
 	<-sig
 	// terminate
+	panic("debug")
 }

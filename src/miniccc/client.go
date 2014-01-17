@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -16,7 +15,7 @@ import (
 )
 
 type Client struct {
-	CID       string
+	CID       int64
 	Hostname  string
 	Arch      string
 	OS        string
@@ -27,7 +26,7 @@ type Client struct {
 }
 
 var (
-	CID                string
+	CID                int64
 	responseQueue      []*Response
 	responseQueueLock  sync.Mutex
 	clientCommandQueue chan []*Command
@@ -43,14 +42,10 @@ func clientSetup() {
 	// generate a random byte slice
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	b := make([]byte, 16)
-	for i, _ := range b {
-		b[i] = byte(r.Int())
-	}
+	CID = r.Int63()
 
 	go clientCommandProcessor()
 
-	CID = base64.StdEncoding.EncodeToString(b)
 	log.Debug("CID: %v", CID)
 }
 
@@ -97,7 +92,7 @@ func clientHeartbeat() *hb {
 		}
 	}
 
-	me := make(map[string]*Client)
+	me := make(map[int64]*Client)
 	me[CID] = c
 	h := &hb{
 		ID:           CID,
@@ -158,10 +153,6 @@ func clientCommandExec(c *Command) {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
-	var args []string
-	if len(c.Command) > 1 {
-		args = c.Command[1:]
-	}
 
 	path, err := exec.LookPath(c.Command[0])
 	if err != nil {
@@ -170,7 +161,7 @@ func clientCommandExec(c *Command) {
 	} else {
 		cmd := &exec.Cmd{
 			Path:   path,
-			Args:   args,
+			Args:   c.Command,
 			Env:    nil,
 			Dir:    "",
 			Stdout: &stdout,

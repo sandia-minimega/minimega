@@ -12,26 +12,26 @@ import (
 )
 
 var (
-	clients             map[string]*Client
+	clients             map[int64]*Client
 	clientLock          sync.Mutex
 	clientExpiredCount  int
 	upstreamQueue       *hb
-	masterResponseQueue chan map[string][]*Response
+	masterResponseQueue chan map[int64][]*Response
 )
 
 func init() {
-	clients = make(map[string]*Client)
+	clients = make(map[int64]*Client)
 	upstreamQueue = &hb{
-		Clients: make(map[string]*Client),
+		Clients: make(map[int64]*Client),
 	}
-	masterResponseQueue = make(chan map[string][]*Response, 1024)
+	masterResponseQueue = make(chan map[int64][]*Response, 1024)
 	go clientReaper()
 }
 
 func processHeartbeat(h *hb) {
 	clientLock.Lock()
 	t := time.Now()
-	mrq := make(map[string][]*Response)
+	mrq := make(map[int64][]*Response)
 	for k, v := range h.Clients {
 		clients[k] = v
 		clients[k].Checkin = t
@@ -55,6 +55,7 @@ func masterResponseProcessor() {
 		for k, v := range r {
 			for _, c := range v {
 				log.Debug("got response %v : %v", k, c.ID)
+				commandCheckIn(c.ID, k)
 				path := fmt.Sprintf("%v/responses/%v/%v/", *f_base, c.ID, k)
 				err := os.MkdirAll(path, os.FileMode(0770))
 				if err != nil {
@@ -172,7 +173,7 @@ func relayHeartbeat() *hb {
 	}
 
 	// reset the upstream queue
-	upstreamQueue.Clients = make(map[string]*Client)
+	upstreamQueue.Clients = make(map[int64]*Client)
 
 	return h
 }

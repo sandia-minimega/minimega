@@ -9,8 +9,8 @@ import (
 )
 
 type hb struct {
-	ID           string
-	Clients      map[string]*Client
+	ID           int64
+	Clients      map[int64]*Client
 	MaxCommandID int // the highest command ID this node has seen
 	Responses    []*Response
 }

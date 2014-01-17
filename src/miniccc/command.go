@@ -6,7 +6,9 @@ import (
 	"fmt"
 	log "minilog"
 	"net/http"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -45,7 +47,7 @@ type Command struct {
 	// clients that have responded to this command
 	// leave this private as we don't want to bother sending this
 	// downstream
-	checkedIn []string
+	checkedIn []int64
 }
 
 type Response struct {
@@ -61,19 +63,28 @@ type Response struct {
 }
 
 var (
-	commands       map[int]*Command
-	commandCounter int
-	commandLock    sync.Mutex
+	commands           map[int]*Command
+	commandCounter     int
+	commandLock        sync.Mutex
+	commandCounterLock sync.Mutex
 )
 
 func init() {
 	commands = make(map[int]*Command)
 }
 
+func commandCheckIn(id int, cid int64) {
+	commandLock.Lock()
+	if c, ok := commands[id]; ok {
+		c.checkedIn = append(c.checkedIn, cid)
+	}
+	commandLock.Unlock()
+}
+
 func getCommandID() int {
 	log.Debugln("getCommandID")
-	commandLock.Lock()
-	defer commandLock.Unlock()
+	commandCounterLock.Lock()
+	defer commandCounterLock.Unlock()
 	commandCounter++
 	id := commandCounter
 	return id
@@ -86,11 +97,58 @@ func getMaxCommandID() int {
 
 func checkMaxCommandID(id int) {
 	log.Debugln("checkMaxCommandID")
-	commandLock.Lock()
-	defer commandLock.Unlock()
+	commandCounterLock.Lock()
+	defer commandCounterLock.Unlock()
 	if id > commandCounter {
 		log.Debug("found higher ID %v", id)
 		commandCounter = id
+	}
+}
+
+func commandDelete(id int) string {
+	commandLock.Lock()
+	defer commandLock.Unlock()
+	if _, ok := commands[id]; ok {
+		delete(commands, id)
+		return fmt.Sprintf("command %v deleted", id)
+	} else {
+		return fmt.Sprintf("command %v not found", id)
+	}
+}
+
+func commandDeleteFiles(id int) string {
+	commandLock.Lock()
+	defer commandLock.Unlock()
+	if _, ok := commands[id]; ok {
+		path := fmt.Sprintf("%v/responses/%v", *f_base, id)
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Errorln(err)
+			return err.Error()
+		}
+		return fmt.Sprintf("command %v files deleted", id)
+	} else {
+		return fmt.Sprintf("command %v not found", id)
+	}
+}
+
+func commandResubmit(id int) string {
+	commandLock.Lock()
+	defer commandLock.Unlock()
+	if c, ok := commands[id]; ok {
+		newcommand := &Command{
+			ID:        getCommandID(),
+			Type:      c.Type,
+			Command:   c.Command,
+			FilesSend: c.FilesSend,
+			FilesRecv: c.FilesRecv,
+			LogLevel:  c.LogLevel,
+			LogPath:   c.LogPath,
+		}
+		commands[newcommand.ID] = newcommand
+		return fmt.Sprintf("command %v resubmitted as command %v", id, newcommand.ID)
+	} else {
+		return fmt.Sprintf("command %v not found", id)
 	}
 }
 
@@ -254,15 +312,45 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleDeleteCommand(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("not implemented"))
+	log.Debugln("handleDeleteCommand")
+	id := r.FormValue("id")
+	val, err := strconv.Atoi(id)
+	if err != nil {
+		log.Errorln(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	resp := commandDelete(val)
+	resp = fmt.Sprintf("<html>%v</html>", resp)
+	w.Write([]byte(resp))
 }
 
 func handleDeleteFiles(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("not implemented"))
+	log.Debugln("handleDeleteFiles")
+	id := r.FormValue("id")
+	val, err := strconv.Atoi(id)
+	if err != nil {
+		log.Errorln(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	resp := commandDeleteFiles(val)
+	resp = fmt.Sprintf("<html>%v</html>", resp)
+	w.Write([]byte(resp))
 }
 
 func handleResubmit(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("not implemented"))
+	log.Debugln("handleResubmit")
+	id := r.FormValue("id")
+	val, err := strconv.Atoi(id)
+	if err != nil {
+		log.Errorln(err)
+		w.Write([]byte(err.Error()))
+		return
+	}
+	resp := commandResubmit(val)
+	resp = fmt.Sprintf("<html>%v</html>", resp)
+	w.Write([]byte(resp))
 }
 
 func updateCommands(newCommands map[int]*Command) {
