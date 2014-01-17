@@ -20,9 +20,9 @@ modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
-ovs-vsctl add-port mega_bridge eth1
+ovs-vsctl add-port mega_bridge eth10G
 ifconfig lo up
-ifconfig eth1 up 0.0.0.0
+ifconfig eth10G up 0.0.0.0
 dhclient -v mega_bridge
 dhclient -v eth0
 
