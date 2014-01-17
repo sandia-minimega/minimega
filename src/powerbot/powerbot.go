@@ -9,7 +9,6 @@ import (
 	"os"
 	"ranges"
 	"strings"
-	"telnet"
 )
 
 var (
@@ -29,6 +28,8 @@ Node lists are in standard range format, i.e. node[1-5,8-10,15]
 	log.Fatal("invalid arguments")
 }
 
+// Implement your PDU however you like, just so long as
+// it acts like this
 type PDU interface {
 	On(map[string]string) error
 	Off(map[string]string) error
@@ -36,10 +37,13 @@ type PDU interface {
 	Status(map[string]string) error
 }
 
+// This maps the Device.pdutype variable to a function
+// The signature is func(host, port, username, password string)
 var PDUtypes = map[string]func(string, string, string, string) (PDU, error){
 	"tripplite": NewTrippLitePDU,
 }
 
+// One device as read from the config file
 type Device struct {
 	name     string
 	host     string
@@ -50,12 +54,14 @@ type Device struct {
 	outlets  map[string]string // map hostname -> outlet name
 }
 
+// This gets read from the config file
 type Config struct {
 	devices map[string]Device
 	prefix  string // node name prefix, e.g. "ccc" for "ccc[1-100]"
 }
 
-func ReadConfig(filename string) (Config, error) {
+// Parse the config file and store it in the global config
+func readConfig(filename string) (Config, error) {
 	var ret Config
 	ret.devices = make(map[string]Device)
 
@@ -121,7 +127,7 @@ func main() {
 	}
 
 	// Parse configuration file
-	config, err = ReadConfig(*f_config)
+	config, err = readConfig(*f_config)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -164,6 +170,12 @@ func main() {
 	}
 }
 
+// Takes a range specification like ccc[1-4,6,8-10], converts
+// it to a list of node names (ccc1 ccc2 and so on), then makes
+// a collection of Devices which contain only those corresponding
+// outlets in their outlet list.
+// This makes it handy because you'll generally be calling On(),
+// Off(), etc. a device at a time.
 func findOutletsAndDevs(s string) (map[string]Device, error) {
 	ret := make(map[string]Device)
 	var nodes []string
@@ -177,12 +189,19 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 
 	// This is really gross but you won't have a ton of devices anyway
 	// so it should be pretty fast.
+	// For each of the specified nodes...
 	for _, n := range nodes {
+		// Check in each device...
 		for _, d := range config.devices {
+			// If that node is connected to this device...
 			if o, ok := d.outlets[n]; ok {
 				if _, ok := ret[d.name]; ok {
+					// either add the outlet to an
+					// existing return device...
 					ret[d.name].outlets[n] = o
 				} else {
+					// or create a new device to
+					// return, and add the outlet
 					tmp := Device{name: d.name, host: d.host, port: d.port, pdutype: d.pdutype, username: d.username, password: d.password}
 					tmp.outlets = make(map[string]string)
 					tmp.outlets[n] = o
@@ -192,135 +211,4 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 		}
 	}
 	return ret, nil
-}
-
-type TrippLitePDU struct {
-	//	e *expect.Expecter
-	username string
-	password string
-	c        *telnet.Conn
-}
-
-func NewTrippLitePDU(host, port, username, password string) (PDU, error) {
-	var tp TrippLitePDU
-	conn, err := telnet.Dial("tcp", host+":"+port)
-	if err != nil {
-		return tp, err
-	}
-	tp.c = conn
-	tp.username = username
-	tp.password = password
-	return tp, err
-}
-
-func (p TrippLitePDU) login() error {
-	// wait for login prompt
-	_, err := p.c.ReadUntil("login: ")
-	if err != nil {
-		return err
-	}
-	cmd := fmt.Sprintf("%s\r\n", p.username)
-	_, err = p.c.Write([]byte(cmd))
-	if err != nil {
-		return err
-	}
-	_, err = p.c.ReadUntil("Password: ")
-	if err != nil {
-		return err
-	}
-	cmd = fmt.Sprintf("%s\r\n", p.password)
-	_, err = p.c.Write([]byte(cmd))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p TrippLitePDU) logout() error {
-	// send a blank line to make sure we get a prompt
-	_, err := p.c.Write([]byte("\r\n"))
-	if err != nil {
-		return err
-	}
-	_, err = p.c.ReadUntil("$> ")
-	if err != nil {
-		return err
-	}
-	_, err = p.c.Write([]byte("exit\r\n"))
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (p TrippLitePDU) On(ports map[string]string) error {
-	p.login()
-	for _, port := range ports {
-		_, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl on -o %s --force\r\n", port)))
-		if err != nil {
-			return err
-		}
-	}
-	p.logout()
-	return nil
-}
-
-func (p TrippLitePDU) Off(ports map[string]string) error {
-	p.login()
-	for _, port := range ports {
-		_, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl off -o %s --force\r\n", port)))
-		if err != nil {
-			return err
-		}
-	}
-	p.logout()
-	return nil
-}
-
-func (p TrippLitePDU) Cycle(ports map[string]string) error {
-	p.login()
-	for _, port := range ports {
-		_, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("loadctl cycle -o %s --force\r\n", port)))
-		if err != nil {
-			return err
-		}
-	}
-	p.logout()
-	return nil
-}
-
-func (p TrippLitePDU) Status(ports map[string]string) error {
-	fmt.Println("not yet implemented")
-	return nil
-	// doesn't work right
-	/*
-		p.login()
-		_, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		_, err = p.c.Write([]byte("loadctl status -o\r\n"))
-		if err != nil {
-			return err
-		}
-		result, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(result))
-		p.logout()
-		return nil
-	*/
 }
