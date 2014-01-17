@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -138,11 +139,39 @@ func clientCommandProcessor() {
 			case COMMAND_FILE_SEND:
 			case COMMAND_FILE_RECV:
 			case COMMAND_LOG:
+				clientCommandLog(v)
 			default:
 				log.Error("invalid command type %v", v.Type)
 			}
 		}
 	}
+}
+
+func queueResponse(r *Response) {
+	responseQueueLock.Lock()
+	responseQueue = append(responseQueue, r)
+	checkMaxCommandID(r.ID)
+	responseQueueLock.Unlock()
+}
+
+func clientCommandLog(c *Command) {
+	log.Debug("clientCommandExec %v", c.ID)
+	resp := &Response{
+		ID: c.ID,
+	}
+	err := logChange(c.LogLevel, c.LogPath)
+	if err != nil {
+		resp.Stderr = err.Error()
+	} else {
+		resp.Stdout = fmt.Sprintf("log level changed to %v", c.LogLevel)
+		if c.LogPath == "" {
+			resp.Stdout += fmt.Sprintf("\nlog path cleared\n")
+		} else {
+			resp.Stdout += fmt.Sprintf("\nlog path set to %v\n", c.LogPath)
+		}
+	}
+
+	queueResponse(resp)
 }
 
 func clientCommandExec(c *Command) {
@@ -177,8 +206,5 @@ func clientCommandExec(c *Command) {
 		resp.Stderr = stderr.String()
 	}
 
-	responseQueueLock.Lock()
-	responseQueue = append(responseQueue, resp)
-	checkMaxCommandID(c.ID)
-	responseQueueLock.Unlock()
+	queueResponse(resp)
 }

@@ -25,6 +25,9 @@ type Command struct {
 
 	Type int
 
+	// true if the master should record responses to disk
+	Record bool
+
 	// Command to run if type == COMMAND_EXEC
 	// The command is a slice of strings with the first element being the
 	// command, and any other elements as the arguments
@@ -139,6 +142,7 @@ func commandResubmit(id int) string {
 		newcommand := &Command{
 			ID:        getCommandID(),
 			Type:      c.Type,
+			Record:    c.Record,
 			Command:   c.Command,
 			FilesSend: c.FilesSend,
 			FilesRecv: c.FilesRecv,
@@ -183,14 +187,14 @@ func handleCommands(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// list the commands
-	resp := "<html><table border=1><tr><td>Command ID</td><td>Type</td><td>Command</td><td>Files -> client</td><td>Files <- client</td><td>Log level</td><td>Log Path</td><td>Number of responses</td><td>Delete Command</td><td>Delete Command Response Files</td><td>Resubmit</td></tr>"
+	resp := "<html><table border=1><tr><td>Command ID</td><td>Type</td><td>Command</td><td>Files -> client</td><td>Files <- client</td><td>Log level</td><td>Log Path</td><td>Record Responses</td><td>Number of responses</td><td>Delete Command</td><td>Delete Command Response Files</td><td>Resubmit</td></tr>"
 
 	for _, k := range ids {
 		c := commands[k]
 		deletePath := fmt.Sprintf("<a href=\"/command/delete?id=%v\">Delete Command</a>", c.ID)
 		deleteFilesPath := fmt.Sprintf("<a href=\"/command/deletefiles?id=%v\">Delete Command Files</a>", c.ID)
 		resubmitPath := fmt.Sprintf("<a href=\"/command/resubmit?id=%v\">Resubmit</a>", c.ID)
-		resp += fmt.Sprintf("<tr><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td></tr>", c.ID, c.Type, c.Command, c.FilesSend, c.FilesRecv, c.LogLevel, c.LogPath, len(c.checkedIn), deletePath, deleteFilesPath, resubmitPath)
+		resp += fmt.Sprintf("<tr><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td><td>%v</td></tr>", c.ID, c.Type, c.Command, c.FilesSend, c.FilesRecv, c.LogLevel, c.LogPath, c.Record, len(c.checkedIn), deletePath, deleteFilesPath, resubmitPath)
 	}
 
 	resp += "</table></html>"
@@ -215,8 +219,14 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 		} else {
 			commandFilesSend := r.FormValue("filesend")
 			commandFilesRecv := r.FormValue("filerecv")
+			commandRecord := r.FormValue("record")
+			var record bool
+			if commandRecord == "record" {
+				record = true
+			}
 			c := &Command{
 				Type:      COMMAND_EXEC,
+				Record:    record,
 				ID:        getCommandID(),
 				Command:   strings.Fields(commandCmd),
 				FilesSend: strings.Fields(commandFilesSend),
@@ -233,8 +243,14 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 		if commandFilesSend == "" {
 			resp = "<html>no files specified</html>"
 		} else {
+			commandRecord := r.FormValue("record")
+			var record bool
+			if commandRecord == "record" {
+				record = true
+			}
 			c := &Command{
 				Type:      COMMAND_FILE_SEND,
+				Record:    record,
 				ID:        getCommandID(),
 				FilesSend: strings.Fields(commandFilesSend),
 			}
@@ -249,8 +265,14 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 		if commandFilesRecv == "" {
 			resp = "<html>no files specified</html>"
 		} else {
+			commandRecord := r.FormValue("record")
+			var record bool
+			if commandRecord == "record" {
+				record = true
+			}
 			c := &Command{
 				Type:      COMMAND_FILE_RECV,
+				Record:    record,
 				ID:        getCommandID(),
 				FilesRecv: strings.Fields(commandFilesRecv),
 			}
@@ -265,8 +287,14 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 		if commandLogLevel == "" {
 			resp = "<html>no log level specified</html>"
 		} else {
+			commandRecord := r.FormValue("record")
+			var record bool
+			if commandRecord == "record" {
+				record = true
+			}
 			c := &Command{
 				Type:     COMMAND_LOG,
+				Record:   record,
 				ID:       getCommandID(),
 				LogLevel: commandLogLevel,
 				LogPath:  r.FormValue("logpath"),
@@ -287,6 +315,8 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 						<option value=filerecv>Receive Files</option>
 						<option value=log>Chane log level</option>
 					</select>
+					<br>
+					<input type=checkbox name=record value=record>Record Responses
 					<br>
 					Command: <input type=text name=command>
 					<br>
