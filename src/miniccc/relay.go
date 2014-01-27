@@ -6,6 +6,7 @@ import (
 	log "minilog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -56,6 +57,11 @@ func masterResponseProcessor() {
 			for _, c := range v {
 				log.Debug("got response %v : %v", k, c.ID)
 				commandCheckIn(c.ID, k)
+				if !shouldRecord(c.ID) {
+					log.Debug("ignoring non recording response")
+					continue
+				}
+
 				path := fmt.Sprintf("%v/responses/%v/%v/", *f_base, c.ID, k)
 				err := os.MkdirAll(path, os.FileMode(0770))
 				if err != nil {
@@ -76,6 +82,23 @@ func masterResponseProcessor() {
 					if err != nil {
 						log.Errorln(err)
 						log.Error("could not record stderr %v : %v", k, c.ID)
+					}
+				}
+
+				// write out files if they exist
+				for f, d := range c.Files {
+					path := fmt.Sprintf("%v/files/%v", *f_base, f)
+					log.Debug("writing file %v", path)
+					dir := filepath.Dir(path)
+					err := os.MkdirAll(dir, os.FileMode(0770))
+					if err != nil {
+						log.Errorln(err)
+						continue
+					}
+					err = ioutil.WriteFile(path, d, os.FileMode(0660))
+					if err != nil {
+						log.Errorln(err)
+						continue
 					}
 				}
 			}

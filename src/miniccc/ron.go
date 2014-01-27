@@ -75,6 +75,7 @@ func ronStart() error {
 
 func newRelay() error {
 	log.Debugln("newRelay")
+	http.Handle("/files/", http.StripPrefix("/files", http.FileServer(http.Dir(*f_base+"files"))))
 	http.HandleFunc("/ron/", easter)
 	http.HandleFunc("/heartbeat", handleHeartbeat)
 	http.HandleFunc("/list/", handleList)

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"io"
 	log "minilog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -47,6 +49,13 @@ type Command struct {
 	// File logging will be disabled if LogPath == ""
 	LogPath string
 
+	// Filter for clients to process commands. Not all fields in a client
+	// must be set (wildcards), but all set fields must match for a command
+	// to be processed. A client may match on one or more clients in the
+	// slice, which allows for filters to be processed as a logical sum of
+	// products.
+	Filter []*Client
+
 	// clients that have responded to this command
 	// leave this private as we don't want to bother sending this
 	// downstream
@@ -70,10 +79,12 @@ var (
 	commandCounter     int
 	commandLock        sync.Mutex
 	commandCounterLock sync.Mutex
+	updateCommandQueue chan map[int]*Command
 )
 
 func init() {
 	commands = make(map[int]*Command)
+	updateCommandQueue = make(chan map[int]*Command, 1024)
 }
 
 func commandCheckIn(id int, cid int64) {
@@ -117,6 +128,15 @@ func commandDelete(id int) string {
 	} else {
 		return fmt.Sprintf("command %v not found", id)
 	}
+}
+
+func shouldRecord(id int) bool {
+	commandLock.Lock()
+	defer commandLock.Unlock()
+	if c, ok := commands[id]; ok {
+		return c.Record
+	}
+	return false
 }
 
 func commandDeleteFiles(id int) string {
@@ -385,18 +405,63 @@ func handleResubmit(w http.ResponseWriter, r *http.Request) {
 
 func updateCommands(newCommands map[int]*Command) {
 	log.Debugln("updateCommands")
-	commandLock.Lock()
-	defer commandLock.Unlock()
-	for k, v := range newCommands {
-		if len(v.FilesSend) != 0 {
-			//go deferUpdateCommand(v)
-		} else {
+	updateCommandQueue <- newCommands
+}
+
+func updateCommandQueueProcessor() {
+	for {
+		c := <-updateCommandQueue
+		log.Debugln("updateCommandQueueProcessor")
+		for k, v := range c {
+			if len(v.FilesSend) != 0 {
+				commandGetFiles(v.FilesSend)
+			}
+
+			commandLock.Lock()
 			if w, ok := commands[k]; ok {
 				v.checkedIn = w.checkedIn
 			} else {
 				log.Debug("new command %v", k)
 			}
 			commands[k] = v
+			commandLock.Unlock()
 		}
+	}
+}
+
+func commandGetFiles(files []string) {
+	for _, v := range files {
+		log.Debug("get file %v", v)
+		path := fmt.Sprintf("%vfiles/%v", *f_base, v)
+
+		if _, err := os.Stat(path); err == nil {
+			// file exists
+			continue
+		}
+
+		url := fmt.Sprintf("http://%v:%v/files/%v", ronParent, ronPort, v)
+		log.Debug("file get url %v", url)
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+
+		dir := filepath.Dir(path)
+		err = os.MkdirAll(dir, os.FileMode(0770))
+		if err != nil {
+			log.Errorln(err)
+			resp.Body.Close()
+			continue
+		}
+		f, err := os.Create(path)
+		if err != nil {
+			log.Errorln(err)
+			resp.Body.Close()
+			continue
+		}
+		io.Copy(f, resp.Body)
+		f.Close()
+		resp.Body.Close()
 	}
 }

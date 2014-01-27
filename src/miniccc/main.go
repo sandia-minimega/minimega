@@ -94,6 +94,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
+		go updateCommandQueueProcessor()
 	case "master":
 		ronMode = MODE_MASTER
 		log.Debugln("starting in master mode")
