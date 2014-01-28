@@ -17,6 +17,7 @@ var (
 	clientLock          sync.Mutex
 	clientExpiredCount  int
 	upstreamQueue       *hb
+	upstreamQueueLock   sync.Mutex
 	masterResponseQueue chan map[int64][]*Response
 )
 
@@ -39,7 +40,9 @@ func processHeartbeat(h *hb) {
 		if ronMode == MODE_MASTER && len(v.Responses) > 0 {
 			mrq[k] = v.Responses
 		} else {
+			upstreamQueueLock.Lock()
 			upstreamQueue.Clients[k] = clients[k]
+			upstreamQueueLock.Unlock()
 		}
 		log.Debug("added/updated client: %v", k)
 	}
@@ -87,15 +90,15 @@ func masterResponseProcessor() {
 
 				// write out files if they exist
 				for f, d := range c.Files {
-					path := fmt.Sprintf("%v/files/%v", *f_base, f)
-					log.Debug("writing file %v", path)
-					dir := filepath.Dir(path)
+					fpath := fmt.Sprintf("%v/%v", path, f)
+					log.Debug("writing file %v", fpath)
+					dir := filepath.Dir(fpath)
 					err := os.MkdirAll(dir, os.FileMode(0770))
 					if err != nil {
 						log.Errorln(err)
 						continue
 					}
-					err = ioutil.WriteFile(path, d, os.FileMode(0660))
+					err = ioutil.WriteFile(fpath, d, os.FileMode(0660))
 					if err != nil {
 						log.Errorln(err)
 						continue
@@ -190,6 +193,8 @@ func relayHeartbeat() *hb {
 	// deep copy of the upstream queue
 	clientLock.Lock()
 	defer clientLock.Unlock()
+	upstreamQueueLock.Lock()
+	defer upstreamQueueLock.Unlock()
 	h := &hb{
 		Clients:      upstreamQueue.Clients,
 		MaxCommandID: getMaxCommandID(),

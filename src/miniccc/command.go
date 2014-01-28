@@ -251,6 +251,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				Command:   strings.Fields(commandCmd),
 				FilesSend: strings.Fields(commandFilesSend),
 				FilesRecv: strings.Fields(commandFilesRecv),
+				Filter:    getFilter(r),
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -273,6 +274,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				Record:    record,
 				ID:        getCommandID(),
 				FilesSend: strings.Fields(commandFilesSend),
+				Filter:    getFilter(r),
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -295,6 +297,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				Record:    record,
 				ID:        getCommandID(),
 				FilesRecv: strings.Fields(commandFilesRecv),
+				Filter:    getFilter(r),
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -318,6 +321,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				ID:       getCommandID(),
 				LogLevel: commandLogLevel,
 				LogPath:  r.FormValue("logpath"),
+				Filter:   getFilter(r),
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -340,9 +344,9 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					<br>
 					Command: <input type=text name=command>
 					<br>
-					Files -> client (comma delimited) <input type=text name=filesend>
+					Files -> client (space delimited) <input type=text name=filesend>
 					<br>
-					Files <- client (comma delimited) <input type=text name=filerecv>
+					Files <- client (space delimited) <input type=text name=filerecv>
 					<br>
 					New log level: <select name=loglevel>
 						<option value=debug>Debug</option>
@@ -354,11 +358,51 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					<br>
 					Log file path: <input type=text name=logpath>
 					<br>
+					Filter (blank fields are wildcard):
+					<br>
+					CID: <input type=text name=filter_cid>
+					<br>
+					Hostname: <input type=text name=filter_hostname>
+					<br>
+					Arch: <input type=text name=filter_arch>
+					<br>
+					OS: <input type=text name=filter_os>
+					<br>
+					IP (IP or CIDR list, space delimited): <input type=text name=filter_ip>
+					<br>
+					MAC (space delimited): <input type=text name=filter_mac>
+					<br>
 					<input type=submit value=Submit>
 				</form>
 			</html>`
 	}
+
 	w.Write([]byte(resp))
+}
+
+func getFilter(r *http.Request) []*Client {
+	cid := r.FormValue("filter_cid")
+	cidInt, err := strconv.ParseInt(cid, 10, 64)
+	if err != nil {
+		cidInt = 0
+	}
+	host := r.FormValue("filter_hostname")
+	arch := r.FormValue("filter_arch")
+	os := r.FormValue("filter_os")
+	ip := r.FormValue("filter_ip")
+	mac := r.FormValue("filter_mac")
+
+	ips := strings.Fields(ip)
+	macs := strings.Fields(mac)
+
+	return []*Client{&Client{
+		CID:      cidInt,
+		Hostname: host,
+		Arch:     arch,
+		OS:       os,
+		IP:       ips,
+		MAC:      macs,
+	}}
 }
 
 func handleDeleteCommand(w http.ResponseWriter, r *http.Request) {
