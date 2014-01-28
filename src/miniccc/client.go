@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -207,17 +208,36 @@ func matchCIDR(cidr string, ip string) bool {
 		return false
 	}
 
-	cidr, err := strconv.Atoi(d[1])
+	netmask, err := strconv.Atoi(d[1])
 	if err != nil {
 		return false
 	}
 	network := toInt32(d[0])
-	ipmask = toInt32(ip) & ^((1 << uint32(32-cidr)) - 1)
+	ipmask := toInt32(ip) & ^((1 << uint32(32-netmask)) - 1)
 	log.Debug("got network %v and ipmask %v", network, ipmask)
 	if ipmask == network {
 		return true
 	}
 	return false
+}
+
+func isIPv4(ip string) bool {
+	d := strings.Split(ip, ".")
+	if len(d) != 4 {
+		return false
+	}
+
+	for _, v := range d {
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return false
+		}
+		if octet < 0 || octet > 255 {
+			return false
+		}
+	}
+
+	return true
 }
 
 func toInt32(ip string) uint32 {
