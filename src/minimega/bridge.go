@@ -360,7 +360,11 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	}
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
-	if b.lans[-1].Taps[tap].host {
+	if v, ok := b.lans[-1]; ok {
+		if v.Taps[tap].host {
+			return nil
+		}
+	} else {
 		return nil
 	}
 
