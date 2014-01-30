@@ -156,6 +156,14 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	for k, v := range osMix {
 		resp += fmt.Sprintf("%v (%.02f%%)<br>", k, 100*(float64(v)/float64(numClients)))
 	}
+
+	resp += `
+Current capabilities:<br>
+<a href="/command">List Commands</a><br>
+<a href="/command/new">New Command</a><br>
+<a href="/list">HTML list of clients</a><br>
+<a href="/list/raw">CSV list of clients</a><br>
+`
 	w.Write([]byte(resp))
 }
 
