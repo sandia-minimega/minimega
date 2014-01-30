@@ -168,6 +168,7 @@ func commandResubmit(id int) string {
 			FilesRecv: c.FilesRecv,
 			LogLevel:  c.LogLevel,
 			LogPath:   c.LogPath,
+			Filter:    c.Filter,
 		}
 		commands[newcommand.ID] = newcommand
 		return fmt.Sprintf("command %v resubmitted as command %v", id, newcommand.ID)

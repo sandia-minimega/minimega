@@ -109,8 +109,14 @@ func getNetworkInfo() ([]string, []string) {
 			log.Fatalln(err)
 		}
 		for _, w := range addrs {
-			log.Debug("found ip: %v", w)
-			ips = append(ips, w.String())
+			// trim the cidr from the end
+			i := strings.Split(w.String(), "/")
+			if len(i) != 2 {
+				log.Error("malformed ip: %v", i, w)
+				continue
+			}
+			log.Debug("found ip: %v", i[0])
+			ips = append(ips, i[0])
 		}
 	}
 	return macs, ips
@@ -130,11 +136,10 @@ func clientCommands(newCommands map[int]*Command) {
 
 	maxCommandID := getMaxCommandID()
 	for _, c := range ids {
-		if !matchFilter(newCommands[c]) {
-			continue
-		}
-
 		if newCommands[c].ID > maxCommandID {
+			if !matchFilter(newCommands[c]) {
+				continue
+			}
 			myCommands = append(myCommands, newCommands[c])
 		}
 	}
@@ -154,15 +159,19 @@ func matchFilter(c *Command) bool {
 
 	for _, v := range c.Filter {
 		if v.CID != 0 && v.CID != CID {
+			log.Debug("failed match on CID %v %v", v.CID, CID)
 			continue
 		}
 		if v.Hostname != "" && v.Hostname != hostname {
+			log.Debug("failed match on hostname %v %v", v.Hostname, hostname)
 			continue
 		}
 		if v.Arch != "" && v.Arch != runtime.GOARCH {
+			log.Debug("failed match on arch %v %v", v.Arch, runtime.GOARCH)
 			continue
 		}
 		if v.OS != "" && v.OS != runtime.GOOS {
+			log.Debug("failed match on os %v %v", v.OS, runtime.GOOS)
 			continue
 		}
 
@@ -170,23 +179,37 @@ func matchFilter(c *Command) bool {
 
 		if len(v.IP) != 0 {
 			// special case, IPs can match on CIDRs as well as full IPs
+			match := false
 		MATCH_FILTER_IP:
 			for _, i := range v.IP {
 				for _, ip := range ips {
 					if i == ip || matchCIDR(i, ip) {
+						log.Debug("match on ip %v %v", i, ip)
+						match = true
 						break MATCH_FILTER_IP
 					}
+					log.Debug("failed match on ip %v %v", i, ip)
 				}
+			}
+			if !match {
+				continue
 			}
 		}
 		if len(v.MAC) != 0 {
+			match := false
 		MATCH_FILTER_MAC:
 			for _, m := range v.MAC {
 				for _, mac := range macs {
 					if mac == m {
+						log.Debug("match on mac %v %v", m, mac)
+						match = true
 						break MATCH_FILTER_MAC
 					}
+					log.Debug("failed match on mac %v %v", m, mac)
 				}
+			}
+			if !match {
+				continue
 			}
 		}
 		return true
@@ -195,11 +218,11 @@ func matchFilter(c *Command) bool {
 }
 
 func matchCIDR(cidr string, ip string) bool {
-	if !strings.Contains(ip, "/") {
+	if !strings.Contains(cidr, "/") {
 		return false
 	}
 
-	d := strings.Split(ip, "/")
+	d := strings.Split(cidr, "/")
 	log.Debugln("subnet ", d)
 	if len(d) != 2 {
 		return false
