@@ -16,12 +16,19 @@ var (
 " > $SCRIPT_DIR/src/version/version.go
 
 # build packages
-echo BUILD PACKAGES
+echo "BUILD PACKAGES (linux)"
 for i in `ls $SCRIPT_DIR/src`
 do
 	echo $i
 	go install $i
 done
+echo
+
+echo "BUILD PACKAGES (windows)"
+echo "protonuke"
+go install protonuke
+echo "miniccc"
+go install miniccc
 echo
 
 # testing 
