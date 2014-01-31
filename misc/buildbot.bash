@@ -14,7 +14,7 @@ mkdir minimega-$DATE && cd minimega-$DATE
 mkdir bin
 mkdir src
 mkdir misc
-cp ../minimega/bin/* bin
+cp -r ../minimega/bin/* bin
 cp -r ../minimega/src/* src
 cp -r ../minimega/misc/* misc
 cd ..
@@ -22,6 +22,5 @@ tar cjf minimega-${DATE}.tar.bz2 minimega-$DATE
 rm /home/fritz/web/minimega.org/nightly/*
 cp minimega-${DATE}.tar.bz2 /home/fritz/web/minimega.org/nightly
 cp minimega/build.log /home/fritz/web/minimega.org/nightly/minimega-${DATE}.log
-ln -s /home/fritz/web/minimega.org/nightly/minimega-${DATE}.tar.bz2 /home/fritz/web/minimega.org/nightly/minimega-latest.tar.bz2
 rm minimega-${DATE}.tar.bz2
 rm -rf minimega-${DATE}
