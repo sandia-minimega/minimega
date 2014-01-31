@@ -26,10 +26,11 @@ echo
 
 echo "BUILD PACKAGES (windows)"
 echo "protonuke"
-go install protonuke
+GOOS=windows go install protonuke
 echo "miniccc"
-go install miniccc
+GOOS=windows go install miniccc
 echo
+unset GOOS
 
 # testing 
 echo TESTING
