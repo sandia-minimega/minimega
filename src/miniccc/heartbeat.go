@@ -24,8 +24,7 @@ func heartbeat() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	for {
-		wait := r.Intn(ronRate)
-		time.Sleep(time.Duration(wait) * time.Second)
+		time.Sleep(time.Duration(ronRate) * time.Second)
 
 		var h *hb
 		switch ronMode {
