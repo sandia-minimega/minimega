@@ -35,7 +35,24 @@ func processHeartbeat(h *hb) {
 	t := time.Now()
 	mrq := make(map[int64][]*Response)
 	for k, v := range h.Clients {
-		clients[k] = v
+		if c, ok := clients[k]; ok {
+			if c.volatile {
+				// we already have client data, we need to append this client to the existing
+				c.Hostname = v.Hostname
+				c.Arch = v.Arch
+				c.OS = v.OS
+				c.IP = v.IP
+				c.MAC = v.MAC
+
+				// append responses
+				c.Responses = append(c.Responses, v.Responses...)
+			} else {
+				clients[k] = v
+			}
+		} else {
+			clients[k] = v
+		}
+		clients[k].volatile = true
 		clients[k].Checkin = t
 		if ronMode == MODE_MASTER && len(v.Responses) > 0 {
 			mrq[k] = v.Responses
@@ -206,6 +223,10 @@ func relayHeartbeat() *hb {
 	h := &hb{
 		Clients:      upstreamQueue.Clients,
 		MaxCommandID: getMaxCommandID(),
+	}
+
+	for _, c := range upstreamQueue.Clients {
+		c.volatile = false
 	}
 
 	// reset the upstream queue

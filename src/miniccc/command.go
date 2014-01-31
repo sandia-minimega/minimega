@@ -338,7 +338,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 						<option selected value=exec>Execute</option>
 						<option value=filesend>Send Files</option>
 						<option value=filerecv>Receive Files</option>
-						<option value=log>Chane log level</option>
+						<option value=log>Change log level</option>
 					</select>
 					<br>
 					<input type=checkbox name=record value=record>Record Responses

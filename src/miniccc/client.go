@@ -26,6 +26,7 @@ type Client struct {
 	MAC       []string
 	Checkin   time.Time
 	Responses []*Response
+	volatile  bool
 }
 
 var (
@@ -284,6 +285,13 @@ func clientCommandProcessor() {
 	for {
 		c := <-clientCommandQueue
 		for _, v := range c {
+			maxCommandID := getMaxCommandID()
+			if v.ID <= maxCommandID {
+				log.Info("processing (skipping) command %v again, is command still in flight?", v.ID)
+				continue
+			}
+
+			checkMaxCommandID(v.ID)
 			log.Debug("processing command %v", v.ID)
 			switch v.Type {
 			case COMMAND_EXEC:
@@ -304,7 +312,6 @@ func clientCommandProcessor() {
 func queueResponse(r *Response) {
 	responseQueueLock.Lock()
 	responseQueue = append(responseQueue, r)
-	checkMaxCommandID(r.ID)
 	responseQueueLock.Unlock()
 }
 

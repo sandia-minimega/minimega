@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"math/rand"
 	log "minilog"
 	"net/http"
 	"time"
@@ -20,8 +21,11 @@ func init() {
 }
 
 func heartbeat() {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
 	for {
-		time.Sleep(time.Duration(ronRate) * time.Second)
+		wait := r.Intn(ronRate)
+		time.Sleep(time.Duration(wait) * time.Second)
 
 		var h *hb
 		switch ronMode {
@@ -36,40 +40,52 @@ func heartbeat() {
 			log.Fatal("invalid heartbeat mode %v", ronMode)
 		}
 
-		var buf bytes.Buffer
-		enc := gob.NewEncoder(&buf)
+		first := true
+		for {
+			if !first {
+				wait := r.Intn(ronRate)
+				log.Debug("retry heartbeat after %v seconds", wait)
+				time.Sleep(time.Duration(wait) * time.Second)
+			} else {
+				first = false
+			}
 
-		err := enc.Encode(h)
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
+			var buf bytes.Buffer
+			enc := gob.NewEncoder(&buf)
 
-		resp, err := http.Post(ronHost, "ron/miniccc", &buf)
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
+			err := enc.Encode(h)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
 
-		newCommands := make(map[int]*Command)
-		dec := gob.NewDecoder(resp.Body)
+			resp, err := http.Post(ronHost, "ron/miniccc", &buf)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
 
-		err = dec.Decode(&newCommands)
-		if err != nil {
-			log.Errorln(err)
+			newCommands := make(map[int]*Command)
+			dec := gob.NewDecoder(resp.Body)
+
+			err = dec.Decode(&newCommands)
+			if err != nil {
+				log.Errorln(err)
+				resp.Body.Close()
+				break // break here because the post already happened
+			}
+
+			switch ronMode {
+			case MODE_RELAY:
+				// replace the command list with this one, keeping the list of respondents
+				updateCommands(newCommands)
+			case MODE_CLIENT:
+				clientCommands(newCommands)
+			}
+
 			resp.Body.Close()
-			continue
+			break
 		}
-
-		switch ronMode {
-		case MODE_RELAY:
-			// replace the command list with this one, keeping the list of respondents
-			updateCommands(newCommands)
-		case MODE_CLIENT:
-			clientCommands(newCommands)
-		}
-
-		resp.Body.Close()
 	}
 }
 
