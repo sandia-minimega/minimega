@@ -1249,10 +1249,16 @@ vyatta takes a number of subcommands:
 
 		vyatta ospf3 eth0 eth1
 
-	'routes': Set static routes. Routes are specified as <network>,<next-hop> ...
+	'routes': Set static routes. Routes are specified as
+	<network>,<next-hop> ... 
 	For example:
 
 		vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
+
+	'config': Override all other options and use a specified file as the
+	config file. For example:
+
+		vyatta config /tmp/myconfig.boot
 
 	'write': Write the current configuration to file. If a filename is
 	omitted, a random filename will be used and the file placed in the path

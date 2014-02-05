@@ -18,13 +18,14 @@ import (
 )
 
 type vyattaConfig struct {
-	Ipv4   []string
-	Ipv6   []string
-	Rad    []string
-	Dhcp   map[string]*vyattaDhcp
-	Ospf   []string
-	Ospf3  []string
-	Routes []*vyattaRoute
+	Ipv4       []string
+	Ipv6       []string
+	Rad        []string
+	Dhcp       map[string]*vyattaDhcp
+	Ospf       []string
+	Ospf3      []string
+	Routes     []*vyattaRoute
+	ConfigFile string
 }
 
 type vyattaDhcp struct {
@@ -192,6 +193,16 @@ func cliVyatta(c cliCommand) cliResponse {
 			})
 		}
 		vyatta.Routes = routes
+	case "config":
+		// override everything and just cram the listed file into the floppy image
+		switch len(c.Args[1:]) {
+		case 0:
+			ret.Response = vyatta.ConfigFile
+		case 1:
+			vyatta.ConfigFile = c.Args[1]
+		default:
+			ret.Error = "vyatta config takes 0 or 1 arguments"
+		}
 	case "write":
 		// make sure fields are sane
 		for len(vyatta.Ipv4) != len(vyatta.Ipv6) {
@@ -258,17 +269,41 @@ func cliVyatta(c cliCommand) cliResponse {
 			os.Remove(f.Name())
 			return ret
 		}
-		vc := vyattaGenConfig()
 
-		err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
-		if err != nil {
-			ret.Error = err.Error()
-			out, err = exec.Command(process("umount"), td).CombinedOutput()
+		if vyatta.ConfigFile == "" {
+			vc := vyattaGenConfig()
+
+			err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
 			if err != nil {
-				log.Fatalln(string(out), err)
+				ret.Error = err.Error()
+				out, err = exec.Command(process("umount"), td).CombinedOutput()
+				if err != nil {
+					log.Fatalln(string(out), err)
+				}
+				os.Remove(f.Name())
+				return ret
 			}
-			os.Remove(f.Name())
-			return ret
+		} else {
+			vc, err := ioutil.ReadFile(vyatta.ConfigFile)
+			if err != nil {
+				ret.Error = err.Error()
+				out, err = exec.Command(process("umount"), td).CombinedOutput()
+				if err != nil {
+					log.Fatalln(string(out), err)
+				}
+				os.Remove(f.Name())
+				return ret
+			}
+			err = ioutil.WriteFile(td+"/config/config.boot", vc, 0664)
+			if err != nil {
+				ret.Error = err.Error()
+				out, err = exec.Command(process("umount"), td).CombinedOutput()
+				if err != nil {
+					log.Fatalln(string(out), err)
+				}
+				os.Remove(f.Name())
+				return ret
+			}
 		}
 
 		// umount
