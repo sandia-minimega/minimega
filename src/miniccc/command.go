@@ -249,7 +249,7 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				Type:      COMMAND_EXEC,
 				Record:    record,
 				ID:        getCommandID(),
-				Command:   strings.Fields(commandCmd),
+				Command:   fieldsQuoteEscape(commandCmd),
 				FilesSend: strings.Fields(commandFilesSend),
 				FilesRecv: strings.Fields(commandFilesRecv),
 				Filter:    getFilter(r),
@@ -509,4 +509,33 @@ func commandGetFiles(files []string) {
 		f.Close()
 		resp.Body.Close()
 	}
+}
+
+// Return a slice of strings, split on whitespace, not unlike strings.Fields(),
+// except that quoted fields are grouped.
+// 	Example: a b "c d"
+// 	will return: ["a", "b", "c d"]
+func fieldsQuoteEscape(input string) []string {
+	f := strings.Fields(input)
+	var ret []string
+	trace := false
+	temp := ""
+	for _, v := range f {
+		if trace {
+			if strings.HasSuffix(v, "\"") {
+				trace = false
+				temp += " " + v[:len(v)-1]
+				ret = append(ret, temp)
+			} else {
+				temp += " " + v
+			}
+		} else if strings.HasPrefix(v, "\"") {
+			trace = true
+			temp = v[1:]
+
+		} else {
+			ret = append(ret, v)
+		}
+	}
+	return ret
 }
