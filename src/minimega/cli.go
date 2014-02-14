@@ -524,7 +524,9 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 			Helplong: `
 Usage: vm_start <optional VM id or name>
 Start all or one paused virtual machine. To start all paused virtual machines,
-call start without the optional VM ID or name.`,
+call start without the optional VM ID or name.
+
+Calling vm_start on a quit VM will restart the VM.`,
 			Record: true,
 			Clear: func() error {
 				return nil

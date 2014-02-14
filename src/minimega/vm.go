@@ -155,14 +155,17 @@ func cliVMSnapshot(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
-// start vms that are paused or building
+// start vms that are paused or building, or restart vms in the quit state
 func (l *vmList) start(c cliCommand) cliResponse {
 	errors := ""
 	if len(c.Args) == 0 { // start all paused vms
 		for _, i := range l.vms {
-			err := i.start()
-			if err != nil {
-				errors += fmt.Sprintln(err)
+			// only bulk start paused/building VMs
+			if i.State == VM_PAUSED || i.State == VM_BUILDING {
+				err := i.start()
+				if err != nil {
+					errors += fmt.Sprintln(err)
+				}
 			}
 		}
 	} else if len(c.Args) != 1 {
@@ -192,9 +195,15 @@ func (l *vmList) start(c cliCommand) cliResponse {
 }
 
 func (vm *vmInfo) start() error {
-	if vm.State != VM_PAUSED && vm.State != VM_BUILDING {
+	if vm.State != VM_PAUSED && vm.State != VM_BUILDING && vm.State != VM_QUIT {
 		return nil
 	}
+	if vm.State == VM_QUIT {
+		log.Info("restarting VM: %v", vm.Id)
+		go vm.launchOne()
+		<-launchAck
+	}
+
 	log.Info("starting VM: %v", vm.Id)
 	err := vm.q.Start()
 	if err != nil {
@@ -353,6 +362,7 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		vm.Name = name
 		vm.Kill = make(chan bool)
 		vm.Hotplug = make(map[int]string)
+		vm.State = VM_BUILDING
 		l.vms[vm.Id] = vm
 		go vm.launchOne()
 	}
@@ -749,9 +759,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	}
 }
 
-func (vm *vmInfo) launchOne() {
-	log.Info("launching vm: %v", vm.Id)
-
+func (vm *vmInfo) launchPreamble() bool {
 	// check if the vm has a conflict with the disk or mac address of another vm
 	// build state of currently running system
 	macMap := map[string]bool{}
@@ -770,7 +778,7 @@ func (vm *vmInfo) launchOne() {
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
 			launchAck <- vm.Id // signal that this vm is "done" launching
-			return
+			return false
 		}
 		selfMacMap[mac] = true
 	}
@@ -818,7 +826,7 @@ func (vm *vmInfo) launchOne() {
 				log.Error("mac address %v is already in use by another vm.", mac)
 				vm.state(VM_ERROR)
 				launchAck <- vm.Id
-				return
+				return false
 			}
 		}
 	}
@@ -831,7 +839,7 @@ func (vm *vmInfo) launchOne() {
 		log.Error("disk path %v is already in use by another vm.", vm.DiskPath)
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
-		return
+		return false
 	}
 
 	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
@@ -839,6 +847,19 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Errorln(err)
 		teardown()
+	}
+
+	return true
+}
+
+func (vm *vmInfo) launchOne() {
+	log.Info("launching vm: %v", vm.Id)
+
+	// don't repeat the preamble if we're just in the quit state
+	if vm.State != VM_QUIT {
+		if !vm.launchPreamble() {
+			return
+		}
 	}
 
 	vm.state(VM_BUILDING)
@@ -861,6 +882,9 @@ func (vm *vmInfo) launchOne() {
 	var sErr bytes.Buffer
 	var cmd *exec.Cmd
 	var waitChan = make(chan int)
+
+	// clear taps, we may have come from the quit state
+	vm.taps = []string{}
 
 	// create and add taps if we are associated with any networks
 	for _, lan := range vm.Networks {
@@ -944,11 +968,6 @@ func (vm *vmInfo) launchOne() {
 
 	for i, l := range vm.Networks {
 		currentBridge.TapDestroy(l, vm.taps[i])
-	}
-
-	err = os.RemoveAll(vm.instancePath)
-	if err != nil {
-		log.Errorln(err)
 	}
 
 	if sendKillAck {
