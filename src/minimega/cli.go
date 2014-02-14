@@ -34,6 +34,10 @@ import (
 	"version"
 )
 
+const (
+	COMMAND_TIMEOUT = 10
+)
+
 var (
 	commandBuf []string // command history for the write command
 

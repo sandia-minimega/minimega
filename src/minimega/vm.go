@@ -287,10 +287,27 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
 		}
 	} else if id == -1 {
+		killCount := 0
+		timedOut := 0
 		for _, i := range l.vms {
+
 			if i.State != VM_QUIT && i.State != VM_ERROR {
 				i.Kill <- true
-				log.Info("VM %v killed", <-killAck)
+				killCount++
+			}
+		}
+		for i := 0; i < killCount; i++ {
+			select {
+			case id := <-killAck:
+				log.Info("VM %v killed", id)
+			case <-time.After(COMMAND_TIMEOUT * time.Second):
+				log.Error("vm kill timeout")
+				timedOut++
+			}
+		}
+		if timedOut != 0 {
+			return cliResponse{
+				Error: fmt.Sprintf("%v killed VMs failed to acknowledge kill", timedOut),
 			}
 		}
 	} else {
