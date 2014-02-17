@@ -121,6 +121,18 @@ func configToString() string {
 	return o.String()
 }
 
+// cleanDirs removes all isntance directories in the minimega base directory
+func (l *vmList) cleanDirs() {
+	log.Debugln("cleanDirs")
+	for _, i := range l.vms {
+		log.Debug("cleaning instance path: %v", i.instancePath)
+		err := os.RemoveAll(i.instancePath)
+		if err != nil {
+			log.Errorln(err)
+		}
+	}
+}
+
 func networkString() string {
 	s := "["
 	for i, vlan := range info.Networks {
@@ -866,7 +878,7 @@ func (vm *vmInfo) launchOne() {
 
 	// write the config for this vm
 	config := configToString()
-	err = ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
+	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
 	if err != nil {
 		log.Errorln(err)
 		teardown()

@@ -202,6 +202,7 @@ func teardown() {
 		log.Errorln(err)
 	}
 	ksmDisable()
+	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
 	err = os.Remove(*f_base + "minimega.pid")
