@@ -115,7 +115,7 @@ func expireReaper() {
 				}
 			} else if !v.ExpireTime.IsZero() {
 				if now.After(v.ExpireTime) {
-					log.Debug("expiring command %v at time %v", k, v.ExpireTime)
+					log.Debug("expiring command %v at time %v, now is %v", k, v.ExpireTime, now)
 					delete(commands, k)
 				}
 			}
@@ -267,6 +267,26 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 	commandType := r.FormValue("type")
 	var resp string
 
+	ec := r.FormValue("expire_responses")
+	ed := r.FormValue("expire_duration")
+	et := r.FormValue("expire_time")
+	expireClients, err := strconv.Atoi(ec)
+	if err != nil && ec != "" {
+		log.Errorln(err)
+		expireClients = 0
+	}
+	expireDuration, err := time.ParseDuration(ed)
+	if err != nil && ed != "" {
+		log.Errorln(err)
+	}
+
+	now := time.Now()
+	expireTime, err := time.Parse(time.Kitchen, et)
+	expireTime = time.Date(now.Year(), now.Month(), now.Day(), expireTime.Hour(), expireTime.Minute(), expireTime.Second(), 0, now.Location())
+	if err != nil && et != "" {
+		log.Errorln(err)
+	}
+
 	log.Debug("got type %v", commandType)
 
 	switch commandType {
@@ -283,13 +303,17 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				record = true
 			}
 			c := &Command{
-				Type:      COMMAND_EXEC,
-				Record:    record,
-				ID:        getCommandID(),
-				Command:   fieldsQuoteEscape(commandCmd),
-				FilesSend: strings.Fields(commandFilesSend),
-				FilesRecv: strings.Fields(commandFilesRecv),
-				Filter:    getFilter(r),
+				Type:           COMMAND_EXEC,
+				Record:         record,
+				ID:             getCommandID(),
+				Command:        fieldsQuoteEscape(commandCmd),
+				FilesSend:      strings.Fields(commandFilesSend),
+				FilesRecv:      strings.Fields(commandFilesRecv),
+				Filter:         getFilter(r),
+				ExpireClients:  expireClients,
+				ExpireStarted:  time.Now(),
+				ExpireDuration: expireDuration,
+				ExpireTime:     expireTime,
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -308,11 +332,15 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				record = true
 			}
 			c := &Command{
-				Type:      COMMAND_FILE_SEND,
-				Record:    record,
-				ID:        getCommandID(),
-				FilesSend: strings.Fields(commandFilesSend),
-				Filter:    getFilter(r),
+				Type:           COMMAND_FILE_SEND,
+				Record:         record,
+				ID:             getCommandID(),
+				FilesSend:      strings.Fields(commandFilesSend),
+				Filter:         getFilter(r),
+				ExpireClients:  expireClients,
+				ExpireStarted:  time.Now(),
+				ExpireDuration: expireDuration,
+				ExpireTime:     expireTime,
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -331,11 +359,15 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				record = true
 			}
 			c := &Command{
-				Type:      COMMAND_FILE_RECV,
-				Record:    record,
-				ID:        getCommandID(),
-				FilesRecv: strings.Fields(commandFilesRecv),
-				Filter:    getFilter(r),
+				Type:           COMMAND_FILE_RECV,
+				Record:         record,
+				ID:             getCommandID(),
+				FilesRecv:      strings.Fields(commandFilesRecv),
+				Filter:         getFilter(r),
+				ExpireClients:  expireClients,
+				ExpireStarted:  time.Now(),
+				ExpireDuration: expireDuration,
+				ExpireTime:     expireTime,
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -354,12 +386,16 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 				record = true
 			}
 			c := &Command{
-				Type:     COMMAND_LOG,
-				Record:   record,
-				ID:       getCommandID(),
-				LogLevel: commandLogLevel,
-				LogPath:  r.FormValue("logpath"),
-				Filter:   getFilter(r),
+				Type:           COMMAND_LOG,
+				Record:         record,
+				ID:             getCommandID(),
+				LogLevel:       commandLogLevel,
+				LogPath:        r.FormValue("logpath"),
+				Filter:         getFilter(r),
+				ExpireClients:  expireClients,
+				ExpireStarted:  time.Now(),
+				ExpireDuration: expireDuration,
+				ExpireTime:     expireTime,
 			}
 			log.Debug("generated command %v", c)
 			commandLock.Lock()
@@ -411,6 +447,18 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					&nbsp;&nbsp;&nbsp;&nbsp;MAC (space delimited): <input type=text name=filter_mac>
 					<br>
 
+					Command Expiry (blank fields are unused):
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;Number of responses: <input type=text name=expire_responses>
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;Duration: <input type=text name=expire_duration>
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Duration examples: (300s, 2h45m). Valid units are "s", "m", "h"
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;Time: <input type=text name=expire_time>
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Time must be in the form of "3:04PM"
+					<br>
 					<input type=submit value=Submit>
 				</form>
 			</html>`
