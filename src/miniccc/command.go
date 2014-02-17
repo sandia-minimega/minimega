@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -60,6 +61,12 @@ type Command struct {
 	// leave this private as we don't want to bother sending this
 	// downstream
 	checkedIn []int64
+
+	// conditions on which commands can expire
+	ExpireClients  int
+	ExpireStarted  time.Time
+	ExpireDuration time.Duration
+	ExpireTime     time.Time
 }
 
 type Response struct {
@@ -85,6 +92,36 @@ var (
 func init() {
 	commands = make(map[int]*Command)
 	updateCommandQueue = make(chan map[int]*Command, 1024)
+	go expireReaper()
+}
+
+// periodically reap commands that meet expiry conditions
+func expireReaper() {
+	for {
+		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
+		log.Debugln("expireReaper")
+		now := time.Now()
+		commandLock.Lock()
+		for k, v := range commands {
+			if v.ExpireClients != 0 {
+				if len(v.checkedIn) >= v.ExpireClients {
+					log.Debug("expiring command %v after %v/%v checkins", k, len(v.checkedIn), v.ExpireClients)
+					delete(commands, k)
+				}
+			} else if v.ExpireDuration != 0 {
+				if time.Since(v.ExpireStarted) > v.ExpireDuration {
+					log.Debug("expiring command %v after %v", k, v.ExpireDuration)
+					delete(commands, k)
+				}
+			} else if !v.ExpireTime.IsZero() {
+				if now.After(v.ExpireTime) {
+					log.Debug("expiring command %v at time %v", k, v.ExpireTime)
+					delete(commands, k)
+				}
+			}
+		}
+		commandLock.Unlock()
+	}
 }
 
 func commandCheckIn(id int, cid int64) {
@@ -361,18 +398,19 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					<br>
 					Filter (blank fields are wildcard):
 					<br>
-					CID: <input type=text name=filter_cid>
+					&nbsp;&nbsp;&nbsp;&nbsp;CID: <input type=text name=filter_cid>
 					<br>
-					Hostname: <input type=text name=filter_hostname>
+					&nbsp;&nbsp;&nbsp;&nbsp;Hostname: <input type=text name=filter_hostname>
 					<br>
-					Arch: <input type=text name=filter_arch>
+					&nbsp;&nbsp;&nbsp;&nbsp;Arch: <input type=text name=filter_arch>
 					<br>
-					OS: <input type=text name=filter_os>
+					&nbsp;&nbsp;&nbsp;&nbsp;OS: <input type=text name=filter_os>
 					<br>
-					IP (IP or CIDR list, space delimited): <input type=text name=filter_ip>
+					&nbsp;&nbsp;&nbsp;&nbsp;IP (IP or CIDR list, space delimited): <input type=text name=filter_ip>
 					<br>
-					MAC (space delimited): <input type=text name=filter_mac>
+					&nbsp;&nbsp;&nbsp;&nbsp;MAC (space delimited): <input type=text name=filter_mac>
 					<br>
+
 					<input type=submit value=Submit>
 				</form>
 			</html>`
