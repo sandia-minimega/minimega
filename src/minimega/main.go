@@ -197,7 +197,7 @@ func teardown() {
 	}
 	vms.kill(makeCommand("vm_kill -1"))
 	dnsmasqKill(-1)
-	err := currentBridge.Destroy()
+	err := bridgesDestroy()
 	if err != nil {
 		log.Errorln(err)
 	}

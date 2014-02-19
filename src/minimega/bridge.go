@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"ipmac"
@@ -13,6 +14,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 )
 
@@ -35,17 +37,23 @@ type tap struct {
 	hostOption string
 }
 
+const (
+	DEFAULT_BRIDGE = "mega_bridge"
+)
+
 var (
-	currentBridge *bridge     // bridge for the current context, currently the *only* bridge
-	tapCount      int         // total number of allocated taps on this host
-	tapChan       chan string // atomic feeder of tap names, wraps tapCount
+	bridges    map[string]*bridge // all bridges. mega_bridge0 will be automatically added
+	bridgeLock sync.Mutex
+	tapCount   int         // total number of allocated taps on this host
+	tapChan    chan string // atomic feeder of tap names, wraps tapCount
 )
 
 // create the default bridge struct and create a goroutine to generate
 // tap names for this host.
 func init() {
-	currentBridge = &bridge{
-		Name: "mega_bridge",
+	bridges = make(map[string]*bridge)
+	bridges[DEFAULT_BRIDGE] = &bridge{
+		Name: DEFAULT_BRIDGE,
 	}
 	tapChan = make(chan string)
 	go func() {
@@ -57,20 +65,74 @@ func init() {
 	}()
 }
 
+// return a pointer to the specified bridge, creating it if it doesn't already
+// exist. If b == "", return the default bridge
+func getBridge(b string) *bridge {
+	if b == "" {
+		b = DEFAULT_BRIDGE
+	}
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	if v, ok := bridges[b]; ok {
+		return v
+	}
+	bridges[b] = &bridge{
+		Name: b,
+	}
+	return bridges[b]
+}
+
+// return a pointer to a bridge that has tap t attached to it, or error
+func getBridgeFromTap(t string) (*bridge, error) {
+	log.Debugln("getBridgeFromTap")
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	for k, b := range bridges {
+		for _, l := range b.lans {
+			for tap, _ := range l.Taps {
+				if tap == t {
+					log.Debug("found tap %v in bridge %v", t, k)
+					return b, nil
+				}
+			}
+		}
+	}
+	return nil, fmt.Errorf("tap %v not found", t)
+}
+
+// destroy all bridges
+func bridgesDestroy() error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	var e []string
+	for k, v := range bridges {
+		err := v.Destroy()
+		if err != nil {
+			e = append(e, err.Error())
+		}
+		delete(bridges, k)
+	}
+	if len(e) == 0 {
+		return nil
+	} else {
+		return errors.New(strings.Join(e, " : "))
+	}
+}
+
 func cliBridgeInfo(c cliCommand) cliResponse {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Bridge name:\t%v\n", currentBridge.Name)
-	fmt.Fprintf(w, "Exists:\t%v\n", currentBridge.exists)
-	fmt.Fprintf(w, "Existed before minimega:\t%v\n", currentBridge.preExist)
-
-	var vlans []int
-	for v, _ := range currentBridge.lans {
-		vlans = append(vlans, v)
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	fmt.Fprintf(w, "Bridge\tExists\tExisted before minimega\tActive VLANS\n")
+	for _, v := range bridges {
+		var vlans []int
+		for v, _ := range v.lans {
+			vlans = append(vlans, v)
+		}
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Name, v.exists, v.preExist, vlans)
 	}
-
-	fmt.Fprintf(w, "Active vlans:\t%v\n", vlans)
 
 	w.Flush()
 
@@ -426,7 +488,7 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	// if this tap is in the disconnected list, move it out
 	if _, ok := b.lans[-1].Taps[tap]; ok {
 		if _, ok := b.lans[lan]; !ok {
-			err := currentBridge.LanCreate(lan)
+			err := b.LanCreate(lan)
 			if err != nil {
 				return err
 			}
@@ -518,31 +580,45 @@ func hostTap(c cliCommand) cliResponse {
 			}
 		}
 		return hostTapDelete(c.Args[1])
-	case 3: // must be create
+	case 3: // must be create with the default bridge
 		if c.Args[0] != "create" {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
-		return hostTapCreate(c.Args[1], c.Args[2])
+		return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2])
+	case 4: // must be create with a specified bridge
+		if c.Args[0] != "create" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		return hostTapCreate(c.Args[1], c.Args[2], c.Args[3])
 	}
+
 	return cliResponse{
 		Error: "malformed command",
 	}
 }
 
 func hostTapList() cliResponse {
+	var hostBridge []string
 	var lans []int
 	var taps []string
 	var options []string
 
 	// find all the host taps first
-	for lan, t := range currentBridge.lans {
-		for tap, ti := range t.Taps {
-			if ti.host {
-				lans = append(lans, lan)
-				taps = append(taps, tap)
-				options = append(options, ti.hostOption)
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	for k, v := range bridges {
+		for lan, t := range v.lans {
+			for tap, ti := range t.Taps {
+				if ti.host {
+					hostBridge = append(hostBridge, k)
+					lans = append(lans, lan)
+					taps = append(taps, tap)
+					options = append(options, ti.hostOption)
+				}
 			}
 		}
 	}
@@ -550,9 +626,9 @@ func hostTapList() cliResponse {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "tap\tvlan\toption\n")
+	fmt.Fprintf(w, "bridge\ttap\tvlan\toption\n")
 	for i, _ := range lans {
-		fmt.Fprintf(w, "%v\t%v\t%v\n", taps[i], lans[i], options[i])
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", hostBridge[i], taps[i], lans[i], options[i])
 	}
 
 	w.Flush()
@@ -563,12 +639,18 @@ func hostTapList() cliResponse {
 }
 
 func hostTapDelete(tap string) cliResponse {
-	for lan, t := range currentBridge.lans {
+	b, err := getBridgeFromTap(tap)
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
+	for lan, t := range b.lans {
 		if tap == "-1" {
 			// remove all host taps on this vlan
 			for k, v := range t.Taps {
 				if v.host {
-					currentBridge.TapRemove(lan, k)
+					b.TapRemove(lan, k)
 				}
 			}
 			continue
@@ -579,20 +661,21 @@ func hostTapDelete(tap string) cliResponse {
 					Error: "not a host tap",
 				}
 			}
-			currentBridge.TapRemove(lan, tap)
+			b.TapRemove(lan, tap)
 		}
 	}
 	return cliResponse{}
 }
 
-func hostTapCreate(lan string, ip string) cliResponse {
+func hostTapCreate(bridge, lan, ip string) cliResponse {
+	b := getBridge(bridge)
 	r, err := strconv.Atoi(lan)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
 		}
 	}
-	lanErr := currentBridge.LanCreate(r)
+	lanErr := b.LanCreate(r)
 	if lanErr != nil {
 		return cliResponse{
 			Error: lanErr.Error(),
@@ -607,11 +690,11 @@ func hostTapCreate(lan string, ip string) cliResponse {
 	}
 
 	// create the tap
-	currentBridge.lans[r].Taps[tapName] = &tap{
+	b.lans[r].Taps[tapName] = &tap{
 		host:       true,
 		hostOption: ip,
 	}
-	err = currentBridge.TapAdd(r, tapName, true)
+	err = b.TapAdd(r, tapName, true)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
@@ -726,4 +809,18 @@ func getNewTap() (string, error) {
 		}
 	}
 	return t, nil
+}
+
+func GetIPFromMac(mac string) *ipmac.IP {
+	log.Debugln("GetIPFromMac")
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	for k, v := range bridges {
+		ip := v.iml.GetIPFromMac(mac)
+		if ip != nil {
+			log.Debug("found mac %v in bridge %v", mac, k)
+			return ip
+		}
+	}
+	return nil
 }

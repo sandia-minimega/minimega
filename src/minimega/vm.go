@@ -61,6 +61,7 @@ type vmInfo struct {
 	Kill         chan bool // kill channel to signal to shut a vm down
 	instancePath string
 	q            qmp.Conn // qmp connection for this vm
+	bridges      []string // list of bridges, if specified. Unspecified bridges will contain ""
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
 	macs         []string // ordered list of macs (matches 1-1 with Taps, Networks)
@@ -136,6 +137,9 @@ func (l *vmList) cleanDirs() {
 func networkString() string {
 	s := "["
 	for i, vlan := range info.Networks {
+		if info.bridges[i] != "" {
+			s += info.bridges[i] + ","
+		}
 		s += strconv.Itoa(vlan)
 		if info.macs[i] != "" {
 			s += "," + info.macs[i]
@@ -403,6 +407,8 @@ func (info *vmInfo) Copy() *vmInfo {
 	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
 	// q isn't allocated until launchOne()
+	newInfo.bridges = make([]string, len(info.bridges))
+	copy(newInfo.bridges, info.bridges)
 	newInfo.taps = make([]string, len(info.taps))
 	copy(newInfo.taps, info.taps)
 	newInfo.Networks = make([]int, len(info.Networks))
@@ -574,7 +580,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		case "ip":
 			for i, j := range l.vms {
 				for _, m := range j.macs {
-					ip := currentBridge.iml.GetMac(m)
+					ip := GetIPFromMac(m)
 					if ip != nil {
 						if ip.IP4 == d[1] {
 							v = append(v, l.vms[i])
@@ -586,7 +592,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		case "ip6":
 			for i, j := range l.vms {
 				for _, m := range j.macs {
-					ip := currentBridge.iml.GetMac(m)
+					ip := GetIPFromMac(m)
 					if ip != nil {
 						if ip.IP6 == d[1] {
 							v = append(v, l.vms[i])
@@ -735,7 +741,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			case "ip":
 				var ips []string
 				for _, m := range j.macs {
-					ip := currentBridge.iml.GetMac(m)
+					ip := GetIPFromMac(m)
 					if ip != nil {
 						ips = append(ips, ip.IP4)
 					}
@@ -744,7 +750,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			case "ip6":
 				var ips []string
 				for _, m := range j.macs {
-					ip := currentBridge.iml.GetMac(m)
+					ip := GetIPFromMac(m)
 					if ip != nil {
 						ips = append(ips, ip.IP6)
 					}
@@ -899,8 +905,9 @@ func (vm *vmInfo) launchOne() {
 	vm.taps = []string{}
 
 	// create and add taps if we are associated with any networks
-	for _, lan := range vm.Networks {
-		tap, err := currentBridge.TapCreate(lan)
+	for i, lan := range vm.Networks {
+		b := getBridge(vm.bridges[i])
+		tap, err := b.TapCreate(lan)
 		if err != nil {
 			log.Errorln(err)
 			vm.state(VM_ERROR)
@@ -979,7 +986,8 @@ func (vm *vmInfo) launchOne() {
 	}
 
 	for i, l := range vm.Networks {
-		currentBridge.TapDestroy(l, vm.taps[i])
+		b := getBridge(vm.bridges[i])
+		b.TapDestroy(l, vm.taps[i])
 	}
 
 	if sendKillAck {
@@ -1107,7 +1115,8 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		currentBridge.iml.AddMac(vm.macs[i])
+		b := getBridge(vm.bridges[i])
+		b.iml.AddMac(vm.macs[i])
 		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, vm.macs[i]))
 	}
 
@@ -1285,45 +1294,86 @@ func cliVMAppend(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
+// CLI vm_net
+// Allow specifying the bridge, vlan, and mac for one or more interfaces to a VM
 func cliVMNet(c cliCommand) cliResponse {
-	// example: vm_net 100,00:00:00:00:00:00 101,00:00:00:00:00:01
+	// example: vm_net my_bridge,100,00:00:00:00:00:00 101,00:00:00:00:00:01
 	r := cliResponse{}
 	if len(c.Args) == 0 {
 		return cliResponse{
 			Response: fmt.Sprintf("%v\n", networkString()),
 		}
 	} else {
+		info.bridges = []string{}
 		info.Networks = []int{}
 		info.macs = []string{}
 
 		for _, lan := range c.Args {
-			d := strings.SplitN(lan, ",", 2) // split on comma into two strings, before and after the first comma
+			d := strings.Split(lan, ",")
+			// this takes a bit of parsing, because the entry can be in a few forms:
+			// 	vlan
+			//	vlan,mac
+			//	bridge,vlan
+			//	bridge,vlan,mac
+			// If there are 2 or 3 fields, just the last field for the presence of a mac
 
-			// VLAN ID
-			val, err := strconv.Atoi(d[0]) // the vlan id
+			var b string
+			var v string
+			var m string
+			switch len(d) {
+			case 1:
+				v = d[0]
+			case 2:
+				if isMac(d[1]) {
+					v = d[0]
+					m = d[1]
+				} else {
+					b = d[0]
+					v = d[1]
+				}
+			case 3:
+				if isMac(d[2]) {
+					b = d[0]
+					v = d[1]
+					m = d[2]
+				} else {
+					return cliResponse{
+						Error: "invalid MAC address",
+					}
+				}
+			default:
+				return cliResponse{
+					Error: "malformed command",
+				}
+			}
+
+			// VLAN ID, with optional bridge
+			val, err := strconv.Atoi(v) // the vlan id
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
 			}
 
-			err = currentBridge.LanCreate(val)
+			currBridge := getBridge(b)
+			err = currBridge.LanCreate(val)
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
 			}
 
+			info.bridges = append(info.bridges, b)
 			info.Networks = append(info.Networks, val)
 
 			// (optional) MAC ADDRESS
-			if len(d) > 1 {
-				if isMac(d[1]) {
-					info.macs = append(info.macs, strings.ToLower(d[1]))
+			if m != "" {
+				if isMac(m) {
+					info.macs = append(info.macs, strings.ToLower(m))
 				} else {
-					info.macs = append(info.macs, "")
+					info.macs = append(info.macs, m)
 					r = cliResponse{
-						Error: "Not a valid mac address: " + d[1],
+						Error: "Not a valid mac address: " + m,
 					}
 				}
 			} else {
@@ -1517,7 +1567,8 @@ func cliVMNetMod(c cliCommand) cliResponse {
 	if strings.ToLower(c.Args[2]) == "disconnect" {
 		// disconnect
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		err := currentBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+		b := getBridge(vm.bridges[pos])
+		err := b.TapRemove(vm.Networks[pos], vm.taps[pos])
 		if err != nil {
 			return cliResponse{
 				Error: err.Error(),
@@ -1528,15 +1579,16 @@ func cliVMNetMod(c cliCommand) cliResponse {
 		if net > 0 && net < 4096 {
 			// new network
 			log.Debug("moving network connection: %v %v %v -> %v", vm.Id, pos, vm.Networks[pos], net)
+			b := getBridge(vm.bridges[pos])
 			if vm.Networks[pos] != -1 {
-				err := currentBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+				err := b.TapRemove(vm.Networks[pos], vm.taps[pos])
 				if err != nil {
 					return cliResponse{
 						Error: err.Error(),
 					}
 				}
 			}
-			err = currentBridge.TapAdd(net, vm.taps[pos], false)
+			err = b.TapAdd(net, vm.taps[pos], false)
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),

@@ -52,7 +52,7 @@ func NewLearner(dev string) (*IPMacLearner, error) {
 }
 
 // Lookup any known IPv4 or IPv6 addresses associated with a given MAC address.
-func (iml *IPMacLearner) GetMac(mac string) *IP {
+func (iml *IPMacLearner) GetIPFromMac(mac string) *IP {
 	return iml.pairs[mac]
 }
 
