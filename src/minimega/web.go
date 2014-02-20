@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"novnctun"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -148,8 +149,16 @@ func webHosts() string {
 		return "no hosts found"
 	}
 	body := ""
-	for h, c := range hosts {
-		body += fmt.Sprintf("<a href=\"/vnc/%v\">%v</a> (%v)<br>\n", h, h, c)
+
+	// sort hostnames
+	var sortedHosts []string
+	for h, _ := range hosts {
+		sortedHosts = append(sortedHosts, h)
+	}
+	sort.Strings(sortedHosts)
+
+	for _, h := range sortedHosts {
+		body += fmt.Sprintf("<a href=\"/vnc/%v\">%v</a> (%v)<br>\n", h, h, hosts[h])
 	}
 	return body
 }
