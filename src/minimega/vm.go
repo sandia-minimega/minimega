@@ -558,6 +558,16 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					v = append(v, l.vms[i])
 				}
 			}
+		case "bridge":
+		VM_INFO_BRIDGE_LOOP:
+			for i, j := range l.vms {
+				for _, k := range j.bridges {
+					if k == d[1] || (d[1] == DEFAULT_BRIDGE && k == "") {
+						v = append(v, l.vms[i])
+						break VM_INFO_BRIDGE_LOOP
+					}
+				}
+			}
 		case "tap":
 		VM_INFO_TAP_LOOP:
 			for i, j := range l.vms {
@@ -656,6 +666,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "cdrom")
 			case "state":
 				omask = append(omask, "state")
+			case "bridge":
+				omask = append(omask, "bridge")
 			case "tap":
 				omask = append(omask, "tap")
 			case "mac":
@@ -673,7 +685,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
@@ -734,6 +746,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				fmt.Fprintf(w, "%v", j.KernelPath)
 			case "cdrom":
 				fmt.Fprintf(w, "%v", j.CdromPath)
+			case "bridge":
+				fmt.Fprintf(w, "%v", j.bridges)
 			case "tap":
 				fmt.Fprintf(w, "%v", j.taps)
 			case "mac":
