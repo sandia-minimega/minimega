@@ -547,6 +547,7 @@ call stop without the optional VM ID or name.
 			Record: true,
 			Clear: func() error {
 				return nil
+
 			},
 		},
 
@@ -1331,6 +1332,48 @@ vm_netmod <vm name or id> 0 100
 				return nil
 			},
 		},
+
+		"vm_inject": &command{
+			Call: cliVMInject,
+			Helpshort: "inject files into a qcow image",
+			Helplong: `
+Creates a backed snapshot of a qcow2 image and injects one or more files into the new snapshot.
+
+Usage:
+
+   vm_inject <src qcow image>[:<partition>] [<dst qcow image name>] <src file1>:<dst file1> [<src file2>:<dst file2> ...]
+
+src qcow image - the name of the qcow to use as the backing image file.
+
+partition - the optional partition number in which the files should be injected.  partition defaults to 1, but
+if multiple partitions exist and partition is not explicitly specified, an error is thrown and files are not injected.
+
+dst qcow image name - the optional name of the snapshot image.  This should be a name only, if any extra path is
+specified, an error is thrown.  This file will be created at BASE/ which is /tmp/minimega by default.  A filename 
+will be generated if this optional parameter is omitted.
+
+src file - local file that should be injected onto the new qcow2 snapshot
+
+dst file - path where src file should be injected in the new qcow2 snapshot
+
+If the src file or dst file contains spaces, use double quotes (" ") as in the following example:
+
+vm_inject src.qc2 dst.qc2 "my file":"Program Files/my file"
+
+
+Alternatively, when given a single argument, this command supplies the name of the backing qcow image for a snapshot image.
+
+Usage:
+
+vm_inject snapshot.qc2
+
+`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
 	}
 }
 
