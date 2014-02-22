@@ -1329,7 +1329,7 @@ vm_netmod <vm name or id> 0 100
 		},
 
 		"vm_inject": &command{
-			Call: cliVMInject,
+			Call:      cliVMInject,
 			Helpshort: "inject files into a qcow image",
 			Helplong: `
 Creates a backed snapshot of a qcow2 image and injects one or more files into
@@ -1372,7 +1372,6 @@ vm_inject snapshot.qc2
 				return nil
 			},
 		},
-
 	}
 }
 
