@@ -535,6 +535,12 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					v = append(v, l.vms[i])
 				}
 			}
+		case "append":
+			for i, j := range l.vms {
+				if j.Append == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
 		case "state":
 			var s int
 			switch strings.ToLower(d[1]) {
@@ -664,6 +670,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "kernel")
 			case "cdrom":
 				omask = append(omask, "cdrom")
+			case "append":
+				omask = append(omask, "append")
 			case "state":
 				omask = append(omask, "state")
 			case "bridge":
@@ -685,7 +693,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
 	// create output
@@ -746,6 +754,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				fmt.Fprintf(w, "%v", j.KernelPath)
 			case "cdrom":
 				fmt.Fprintf(w, "%v", j.CdromPath)
+			case "append":
+				fmt.Fprintf(w, "%v", j.Append)
 			case "bridge":
 				fmt.Fprintf(w, "%v", j.bridges)
 			case "tap":
