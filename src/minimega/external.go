@@ -21,6 +21,10 @@ var externalProcesses = map[string]string{
 	"mount":    "mount",
 	"umount":   "umount",
 	"mkdosfs":  "mkdosfs",
+	"qemu-nbd": "qemu-nbd",
+	"rm":       "rm",
+	"qemu-img": "qemu-img",
+	"cp":       "cp",
 }
 
 // check for the presence of each of the external processes we may call,

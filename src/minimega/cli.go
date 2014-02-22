@@ -1268,14 +1268,7 @@ vyatta takes a number of subcommands:
 
 	'routes': Set static routes. Routes are specified as
 	<network>,<next-hop> ... 
-	For example:
-
-		vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
-
-	'config': Override all other options and use a specified file as the
-	config file. For example:
-
-		vyatta config /tmp/myconfig.boot
+	For example: vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1 'config': Override all other options and use a specified file as the config file. For example: vyatta config /tmp/myconfig.boot
 
 	'write': Write the current configuration to file. If a filename is
 	omitted, a random filename will be used and the file placed in the path
@@ -1315,7 +1308,9 @@ To remove all hotplug devices, use ID -1.`,
 			Helplong: `
 Disconnect or move existing network connections on a running VM. 
 
-Network connections are indicated by their position in vm_net (same order in vm_info) and are zero indexed. For example, to disconnect the first network connection from a VM with 4 network connections:
+Network connections are indicated by their position in vm_net (same order in
+vm_info) and are zero indexed. For example, to disconnect the first network
+connection from a VM with 4 network connections:
 
 vm_netmod <vm name or id> 0 disconnect
 
@@ -1337,7 +1332,8 @@ vm_netmod <vm name or id> 0 100
 			Call: cliVMInject,
 			Helpshort: "inject files into a qcow image",
 			Helplong: `
-Creates a backed snapshot of a qcow2 image and injects one or more files into the new snapshot.
+Creates a backed snapshot of a qcow2 image and injects one or more files into
+the new snapshot.
 
 Usage:
 
@@ -1345,28 +1341,31 @@ Usage:
 
 src qcow image - the name of the qcow to use as the backing image file.
 
-partition - the optional partition number in which the files should be injected.  partition defaults to 1, but
-if multiple partitions exist and partition is not explicitly specified, an error is thrown and files are not injected.
+partition - The optional partition number in which the files should be
+injected. Partition defaults to 1, but if multiple partitions exist and
+partition is not explicitly specified, an error is thrown and files are not
+injected.
 
-dst qcow image name - the optional name of the snapshot image.  This should be a name only, if any extra path is
-specified, an error is thrown.  This file will be created at BASE/ which is /tmp/minimega by default.  A filename 
-will be generated if this optional parameter is omitted.
+dst qcow image name - The optional name of the snapshot image. This should be a
+name only, if any extra path is specified, an error is thrown. This file will
+be created at <BASE>/files. A filename will be generated if this optional
+parameter is omitted.
 
-src file - local file that should be injected onto the new qcow2 snapshot
+src file - The local file that should be injected onto the new qcow2 snapshot.
 
-dst file - path where src file should be injected in the new qcow2 snapshot
+dst file - The path where src file should be injected in the new qcow2 snapshot.
 
-If the src file or dst file contains spaces, use double quotes (" ") as in the following example:
+If the src file or dst file contains spaces, use double quotes (" ") as in the
+following example:
 
-vm_inject src.qc2 dst.qc2 "my file":"Program Files/my file"
+	vm_inject src.qc2 dst.qc2 "my file":"Program Files/my file"
 
-
-Alternatively, when given a single argument, this command supplies the name of the backing qcow image for a snapshot image.
+Alternatively, when given a single argument, this command supplies the name of
+the backing qcow image for a snapshot image.
 
 Usage:
 
 vm_inject snapshot.qc2
-
 `,
 			Record: true,
 			Clear: func() error {
