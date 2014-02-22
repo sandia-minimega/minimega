@@ -7,6 +7,7 @@ package main
 import (
 	"errors"
 	"io/ioutil"
+	log "minilog"
 	"os"
 	"os/exec"
 	"path/filepath"
