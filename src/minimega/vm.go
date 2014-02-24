@@ -1135,13 +1135,24 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "once=d")
 	}
 
+	bus := 1
+	addr := 1
+	args = append(args, fmt.Sprintf("-device"))
+	args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
 	for i, tap := range vm.taps {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
 		b := getBridge(vm.bridges[i])
 		b.iml.AddMac(vm.macs[i])
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v", tap, vm.macs[i]))
+		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", tap, vm.macs[i], bus, addr))
+		addr++
+		if addr == 32 {
+			addr = 1
+			bus++
+			args = append(args, fmt.Sprintf("-device"))
+			args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+		}
 	}
 
 	if len(vm.QemuAppend) > 0 {
