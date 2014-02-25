@@ -1127,11 +1127,24 @@ Display the version.
 
 		"vm_config": &command{
 			Call:      cliVMConfig,
-			Helpshort: "display the current VM configuration",
+			Helpshort: "display, save, or restore the current VM configuration",
 			Helplong: `
-Display the current VM configuration.
+Display, save, or restore the current VM configuration.
 
-Calling clear vm_config will clear all VM configuration options.
+To display the current configuration, call vm_config with no arguments. 
+
+List the current saved configurations with 'vm_config show'
+
+To save a configuration:
+
+	vm_config save <config name>
+
+To restore a configuration:
+
+	vm_config restore <config name>
+
+Calling clear vm_config will clear all VM configuration options, but will not
+remove saved configurations.
 `,
 			Record: true,
 			Clear:  cliClearVMConfig,

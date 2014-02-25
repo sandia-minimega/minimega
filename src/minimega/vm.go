@@ -19,7 +19,8 @@ import (
 )
 
 var (
-	info       vmInfo        // current vm info, interfaced be the cli
+	info       *vmInfo // current vm info, interfaced be the cli
+	savedInfo  map[string]*vmInfo
 	launchRate time.Duration // launch/kill rate for vms
 
 	// each vm struct acknowledges that it launched. this way, we won't
@@ -74,6 +75,8 @@ func init() {
 	launchAck = make(chan int)
 	killAck = make(chan int)
 	vmIdChan = make(chan int)
+	info = &vmInfo{}
+	savedInfo = make(map[string]*vmInfo)
 	go func() {
 		count := 0
 		for {
@@ -92,13 +95,46 @@ func init() {
 	info.Snapshot = true
 }
 
+// vm_config
 // return a pretty printed list of the current configuration
 func cliVMConfig(c cliCommand) cliResponse {
-	config := configToString()
+	switch len(c.Args) {
+	case 0:
+		config := configToString()
 
-	return cliResponse{
-		Response: config,
+		return cliResponse{
+			Response: config,
+		}
+	case 1: // must be 'show'
+		if c.Args[0] != "show" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		var r string
+		for k, _ := range savedInfo {
+			r += k + "\n"
+		}
+		return cliResponse{
+			Response: r,
+		}
+	case 2: // must be 'save' 'restore'
+		switch strings.ToLower(c.Args[0]) {
+		case "save":
+			savedInfo[c.Args[1]] = info.Copy()
+		case "restore":
+			info = savedInfo[c.Args[1]].Copy()
+		default:
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+	default:
+		return cliResponse{
+			Error: "malformed command",
+		}
 	}
+	return cliResponse{}
 }
 
 func configToString() string {
