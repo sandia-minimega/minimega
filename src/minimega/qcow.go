@@ -253,6 +253,8 @@ func cliVMInject(c cliCommand) cliResponse {
 	//copy files/folders in
 	for i := 0; i < inject.nPairs; i++ {
 		p = process("cp")
+		dir := filepath.Dir(mntDir + "/" + inject.injPairs[i].dst)
+		os.MkdirAll(dir, 0775)
 		cmd = exec.Command(p, "-r", inject.injPairs[i].src, mntDir+"/"+inject.injPairs[i].dst)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
