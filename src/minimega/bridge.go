@@ -569,6 +569,7 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 
 // routines for interfacing bridge mechanisms with the cli
 
+// BUG(fritz): host_tap delete -1 / clear host_tap stopped working
 func hostTap(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:

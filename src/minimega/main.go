@@ -4,6 +4,10 @@
 
 package main
 
+// TODO(fritz): scheduler support
+// TODO(fritz): lxc support
+// TODO(evan): vnc record/replay
+
 import (
 	"flag"
 	"fmt"

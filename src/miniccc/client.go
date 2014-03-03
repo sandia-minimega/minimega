@@ -61,6 +61,8 @@ func clientHeartbeat() *hb {
 		log.Fatalln(err)
 	}
 
+	// TODO(evan): make client OS more specific
+	// TODO(evan): add intelligent filters for specific OS
 	c := &Client{
 		CID:      CID,
 		Arch:     runtime.GOARCH,
