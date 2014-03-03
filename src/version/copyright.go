@@ -13,5 +13,7 @@ for details.
 websocket and ssh packages Copyright The Go Authors. All rights reserved.
 
 noVNC Copyright 2011 Joel Martin <github@martintribe.org>
+
+gomacro Copyright 2014 David Fritz <david.jakob.fritz@gmail.com>
 `
 )
