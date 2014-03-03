@@ -1,15 +1,15 @@
 // Copyright 2014 David Fritz. All rights reserved.
-// 
+//
 // This program is free software: you can redistribute it and/or modify it
 // under the terms of the GNU General Public License as published by the Free
 // Software Foundation, either version 3 of the License, or (at your option)
 // any later version.
-// 
+//
 // This program is distributed in the hope that it will be useful, but WITHOUT
 // ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
 // FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
 // more details.
-// 
+//
 // You should have received a copy of the GNU General Public License along with
 // this program.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -32,6 +32,7 @@ type Macro struct {
 }
 
 type macro struct {
+	original  string
 	expansion string
 	args      []string
 	re        *regexp.Regexp
@@ -65,15 +66,20 @@ func (m *Macro) Define(key, expansion string) error {
 
 	if matchLiteral {
 		k = key
+		ret.original = key
 		ret.re, err = regexp.Compile(key)
 		if err != nil {
 			return err
 		}
 	} else if matchFunction {
 		f := strings.Split(key, "(")
-		f[len(f)-1] = strings.Trim(f[len(f)-1], ")")
-		ret.args = f[1:]
+		if len(f) != 2 {
+			return fmt.Errorf("malformed key %v", key)
+		}
+		f[1] = strings.Trim(f[1], ")")
+		ret.args = strings.Split(f[1], ",")
 		k = f[0]
+		ret.original = key
 		r := k + "\\("
 		for i, _ := range ret.args {
 			if i != 0 {
@@ -110,11 +116,11 @@ func (m *Macro) List() []string {
 }
 
 // Return the macro text for a given key.
-func (m *Macro) Macro(key string) string {
+func (m *Macro) Macro(key string) (string, string) {
 	if v, ok := m.macros[key]; ok {
-		return v.expansion
+		return v.original, v.expansion
 	}
-	return ""
+	return "", ""
 }
 
 // Parse input text with set macros.
@@ -130,13 +136,15 @@ func (m *Macro) Parse(input string) string {
 
 func (m *macro) expand(input string) string {
 	if len(m.args) == 0 {
-		fmt.Println(input)
 		return m.expansion
 	}
 	// create a new macro with the parametric args and parse it
 	f := strings.Split(input, "(")
-	f[len(f)-1] = strings.Trim(f[len(f)-1], ")")
-	args := f[1:]
+	if len(f) != 2 {
+		return ""
+	}
+	f[1] = strings.Trim(f[1], ")")
+	args := strings.Split(f[1], ",")
 	nm := NewMacro()
 	for i, v := range m.args {
 		err := nm.Define(v, args[i])
