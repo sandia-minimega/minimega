@@ -46,6 +46,11 @@ func NewLearner(dev string) (*IPMacLearner, error) {
 	}
 	ret.handle = unsafe.Pointer(handle)
 
+	filter := "(arp or (icmp6 and ip6[40] == 135))"
+	p = C.CString(filter)
+	C.pcapFilter(ret.handle, p)
+	C.free(unsafe.Pointer(p))
+
 	go ret.learner()
 
 	return ret, nil
@@ -63,7 +68,6 @@ func (iml *IPMacLearner) AddMac(mac string) {
 	defer iml.lock.Unlock()
 	log.Debugln("adding mac to filter:", mac)
 	iml.pairs[mac] = &IP{}
-	iml.updateFilter()
 }
 
 // Delete a MAC address from the list of addresses to search for.
@@ -71,7 +75,6 @@ func (iml *IPMacLearner) DelMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
 	delete(iml.pairs, mac)
-	iml.updateFilter()
 }
 
 // Remove all MAC addresses from the search list.
@@ -79,7 +82,6 @@ func (iml *IPMacLearner) Flush() {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
 	iml.pairs = make(map[string]*IP)
-	iml.updateFilter()
 }
 
 // Stop searching for IP addresses.
@@ -88,26 +90,6 @@ func (iml *IPMacLearner) Close() {
 	defer iml.lock.Unlock()
 	iml.closed = true
 	C.pcapClose(iml.handle)
-}
-
-func (iml *IPMacLearner) updateFilter() {
-	log.Debugln("updateFilter")
-	filter := "(arp or (icmp6 and ip6[40] == 135)) and ("
-	start := true
-	for mac, _ := range iml.pairs {
-		if !start {
-			filter += "or "
-		} else {
-			start = false
-		}
-		filter += fmt.Sprintf("ether src %v ", mac)
-	}
-	filter += ")"
-	log.Debugln("filter:", filter)
-
-	p := C.CString(filter)
-	C.pcapFilter(iml.handle, p)
-	C.free(unsafe.Pointer(p))
 }
 
 func (iml *IPMacLearner) learner() {
@@ -133,6 +115,7 @@ func (iml *IPMacLearner) learner() {
 
 		iml.lock.Lock()
 
+		// skip macs we aren't tracking
 		if _, ok := iml.pairs[mac]; !ok {
 			iml.lock.Unlock()
 			continue
