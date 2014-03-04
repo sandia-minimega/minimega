@@ -15,6 +15,7 @@ ulimit -n 999999
 
 ifconfig lo up
 dhclient -v eth0
+dhclient -v eth1
 
 mkdir /var/run/sshd
 /usr/sbin/sshd
