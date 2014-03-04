@@ -113,13 +113,19 @@ func getNetworkInfo() ([]string, []string) {
 		}
 		for _, w := range addrs {
 			// trim the cidr from the end
+			var ip string
 			i := strings.Split(w.String(), "/")
 			if len(i) != 2 {
-				log.Error("malformed ip: %v", i, w)
-				continue
+				if !isIPv4(w.String()) {
+					log.Error("malformed ip: %v", i, w)
+					continue
+				}
+				ip = w.String()
+			} else {
+				ip = i[0]
 			}
-			log.Debug("found ip: %v", i[0])
-			ips = append(ips, i[0])
+			log.Debug("found ip: %v", ip)
+			ips = append(ips, ip)
 		}
 	}
 	return macs, ips
