@@ -10,7 +10,7 @@ package main
 // TODO(evan): QoS support with global policy
 // TODO(fritz): python wrapper example
 // TODO(fritz); support other nic device types (virtio,etc)
-// TODO(fritz): filepath inconsistencies 
+// TODO(fritz): filepath inconsistencies
 
 import (
 	"flag"

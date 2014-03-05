@@ -1586,6 +1586,11 @@ func cliExec(c cliCommand) cliResponse {
 		return cliResponse{}
 	}
 
+	// super special case
+	if c.Command == "vm_vince" {
+		log.Fatalln(poeticDeath)
+	}
+
 	// special case, comments. Any line starting with # is a comment and WILL be
 	// recorded.
 	if strings.HasPrefix(c.Command, "#") {
@@ -1616,3 +1621,10 @@ func cliExec(c cliCommand) cliResponse {
 	}
 	return r
 }
+
+var poeticDeath = `
+Willst du immer weiterschweifen?
+Sieh, das Gute liegt so nah.
+Lerne nur das Glück ergreifen,
+denn das Glück ist immer da.
+`
