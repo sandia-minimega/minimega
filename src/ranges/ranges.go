@@ -9,6 +9,8 @@
 // host2, host5, host6] -> host[1-2,5-6].
 package ranges
 
+// TODO(fritz): support leading zeros in ranges (ie blue[01-15])
+
 import (
 	"errors"
 	"regexp"

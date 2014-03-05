@@ -456,6 +456,7 @@ func (info *vmInfo) Copy() *vmInfo {
 	return newInfo
 }
 
+// TODO(fritz): support quiet mode and json output
 func (l *vmList) info(c cliCommand) cliResponse {
 	var v []*vmInfo
 

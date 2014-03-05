@@ -238,6 +238,7 @@ failed, as well as some commands that do not impact the VM state, such as
 
 		// TODO(fritz): vm_save command doesn't save path to custom qemu
 		// TODO(fritz): vm_save belongs in vm.go
+		// TODO(fritz): review vm_save
 		"vm_save": &command{
 			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) < 2 {
