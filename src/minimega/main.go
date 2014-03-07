@@ -13,6 +13,7 @@ package main
 // TODO(fritz): filepath inconsistencies
 // TODO(fritz): implement optimizations - hugepages, affinity
 // TODO(fritz): more logging throughout
+// TODO(fritz): add documentation generation, with the api
 
 import (
 	"flag"
