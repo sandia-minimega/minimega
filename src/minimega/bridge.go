@@ -565,8 +565,6 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 }
 
 // routines for interfacing bridge mechanisms with the cli
-
-// BUG(fritz): host_tap delete -1 / clear host_tap stopped working
 func hostTap(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
@@ -637,29 +635,42 @@ func hostTapList() cliResponse {
 }
 
 func hostTapDelete(tap string) cliResponse {
-	b, err := getBridgeFromTap(tap)
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
+	var c []*bridge
+	// special case, -1, which should delete all host taps from all bridges
+	if tap == "-1" {
+		bridgeLock.Lock()
+		for _, v := range bridges {
+			c = append(c, v)
 		}
+		bridgeLock.Unlock()
+	} else {
+		b, err := getBridgeFromTap(tap)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		c = append(c, b)
 	}
-	for lan, t := range b.lans {
-		if tap == "-1" {
-			// remove all host taps on this vlan
-			for k, v := range t.Taps {
-				if v.host {
-					b.TapRemove(lan, k)
+	for _, b := range c {
+		for lan, t := range b.lans {
+			if tap == "-1" {
+				// remove all host taps on this vlan
+				for k, v := range t.Taps {
+					if v.host {
+						b.TapRemove(lan, k)
+					}
 				}
+				continue
 			}
-			continue
-		}
-		if tf, ok := t.Taps[tap]; ok {
-			if !tf.host {
-				return cliResponse{
-					Error: "not a host tap",
+			if tf, ok := t.Taps[tap]; ok {
+				if !tf.host {
+					return cliResponse{
+						Error: "not a host tap",
+					}
 				}
+				b.TapRemove(lan, tap)
 			}
-			b.TapRemove(lan, tap)
 		}
 	}
 	return cliResponse{}
