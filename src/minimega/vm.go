@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
@@ -68,6 +69,27 @@ type vmInfo struct {
 	macs         []string // ordered list of macs (matches 1-1 with Taps, Networks)
 	Snapshot     bool
 	Hotplug      map[int]string
+}
+
+type jsonInfo struct {
+	Id       int
+	Host     string
+	Name     string
+	Memory   string
+	Vcpus    string
+	Disk     string
+	Snapshot bool
+	Initrd   string
+	Kernel   string
+	Cdrom    string
+	Append   string
+	State    string
+	Bridges  []string
+	Taps     []string
+	Macs     []string
+	IP       []string
+	IP6      []string
+	Networks []int
 }
 
 func init() {
@@ -456,17 +478,19 @@ func (info *vmInfo) Copy() *vmInfo {
 	return newInfo
 }
 
-// TODO(fritz): support quiet mode and json output
 // TODO(fritz): always sort on the first column
 func (l *vmList) info(c cliCommand) cliResponse {
 	var v []*vmInfo
 
+	var output string
 	var search string
 	var mask string
 	switch len(c.Args) {
 	case 0:
-	case 1: // search or mask
-		if strings.Contains(c.Args[0], "=") {
+	case 1: // output, search, or mask
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else if strings.HasPrefix(c.Args[0], "[") {
 			mask = strings.Trim(c.Args[0], "[]")
@@ -475,16 +499,51 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-	case 2: // first term MUST be search
-		if strings.Contains(c.Args[0], "=") {
+	case 2:
+		// first arg must be output or search
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
-		if strings.HasPrefix(c.Args[1], "[") {
+
+		// second arg must be search or mask, and cannot be search if
+		// already set
+		if strings.Contains(c.Args[1], "=") {
+			if search != "" {
+				return cliResponse{
+					Error: "malformed command",
+				}
+			}
+			search = c.Args[1]
+		} else if strings.HasPrefix(c.Args[1], "[") {
 			mask = strings.Trim(c.Args[1], "[]")
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+	case 3: // must be output, search, mask
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		if strings.Contains(c.Args[1], "=") {
+			search = c.Args[1]
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		if strings.HasPrefix(c.Args[2], "[") {
+			mask = strings.Trim(c.Args[2], "[]")
 		} else {
 			return cliResponse{
 				Error: "malformed command",
@@ -496,16 +555,37 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		}
 	}
 
-	// vm_info takes a search term and an output mask, we'll start with the optional seach term
+	// vm_info takes an output mode, search term, and an output mask, we'll start with the optional output mode
+	if output != "" {
+		d := strings.Split(output, "=")
+		if len(d) != 2 {
+			return cliResponse{
+				Error: "malformed output mode",
+			}
+		}
+
+		output = d[1]
+		switch output {
+		case "quiet":
+			log.Debugln("vm_info quiet mode")
+		case "json":
+			log.Debugln("vm_info json mode")
+		default:
+			return cliResponse{
+				Error: "malformed output mode",
+			}
+		}
+	}
+
 	if search != "" {
-		d := strings.Split(c.Args[0], "=")
+		d := strings.Split(search, "=")
 		if len(d) != 2 {
 			return cliResponse{
 				Error: "malformed search term",
 			}
 		}
 
-		log.Debug("vm_info: search term: %v", d)
+		log.Debug("vm_info search term: %v", d[1])
 
 		switch strings.ToLower(d[0]) {
 		case "host":
@@ -684,6 +764,74 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		return cliResponse{}
 	}
 
+	// short circuit if output == json, as we won't set any output masks
+	if output == "json" {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+
+		var o []jsonInfo
+		host, err := os.Hostname()
+		if err != nil {
+			log.Errorln(err)
+			teardown()
+		}
+		for _, i := range v {
+			var state string
+			switch i.State {
+			case VM_BUILDING:
+				state = "building"
+			case VM_RUNNING:
+				state = "running"
+			case VM_PAUSED:
+				state = "paused"
+			case VM_QUIT:
+				state = "quit"
+			case VM_ERROR:
+				state = "error"
+			default:
+				state = "unknown"
+			}
+			var ips []string
+			var ip6 []string
+			for _, m := range i.macs {
+				ip := GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP4)
+					ip6 = append(ip6, ip.IP6)
+				}
+			}
+			o = append(o, jsonInfo{
+				Id:       i.Id,
+				Host:     host,
+				Name:     i.Name,
+				Memory:   i.Memory,
+				Vcpus:    i.Vcpus,
+				Disk:     i.DiskPath,
+				Snapshot: i.Snapshot,
+				Initrd:   i.InitrdPath,
+				Kernel:   i.KernelPath,
+				Cdrom:    i.CdromPath,
+				Append:   i.Append,
+				State:    state,
+				Bridges:  i.bridges,
+				Taps:     i.taps,
+				Macs:     i.macs,
+				IP:       ips,
+				IP6:      ip6,
+				Networks: i.Networks,
+			})
+		}
+		err = enc.Encode(&o)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		return cliResponse{
+			Response: buf.String(),
+		}
+	}
+
 	// output mask
 	var omask []string
 	if mask != "" {
@@ -734,21 +882,26 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
-	// create output
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	for i, k := range omask {
-		if i != 0 {
-			fmt.Fprintf(w, "\t| ")
-		}
-		fmt.Fprintf(w, k)
-	}
-	fmt.Fprintf(w, "\n")
-	for _, j := range v {
+	if output == "" {
 		for i, k := range omask {
 			if i != 0 {
 				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, k)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+	for _, j := range v {
+		for i, k := range omask {
+			if i != 0 {
+				if output == "quiet" {
+					fmt.Fprintf(w, "\t")
+				} else {
+					fmt.Fprintf(w, "\t| ")
+				}
 			}
 			switch k {
 			case "host":

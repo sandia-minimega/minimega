@@ -410,10 +410,17 @@ Print information about VMs. vm_info allows searching for VMs based on any VM
 parameter, and output some or all information about the VMs in question.
 Additionally, you can display information about all running VMs. 
 
-A vm_info command takes two optional arguments, a search term, and an output
-mask. If the search term is omitted, information about all VMs will be
-displayed. If the output mask is omitted, all information about the VMs will be
-displayed.
+A vm_info command takes three optional arguments, an output mode, a search
+term, and an output mask. If the search term is omitted, information about all
+VMs will be displayed. If the output mask is omitted, all information about the
+VMs will be displayed.
+
+The output mode has two options - quiet and json. Two use either, set the output using the following syntax:
+	vm_info output=quiet ...
+
+If the output mode is set to 'quiet', the header and "|" characters in the output formatting will be removed. The output will consist simply of tab delimited lines of VM info based on the search and mask terms.
+
+If the output mode is set to 'json', the output will be a json formatted string containing info on all VMs, or those matched by the search term. The mask will be ignored - all fields will be populated.
 
 The search term uses a single key=value argument. For example, if you want all
 information about VM 50: 
