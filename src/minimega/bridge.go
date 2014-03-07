@@ -76,6 +76,8 @@ func getBridge(b string) *bridge {
 	bridges[b] = &bridge{
 		Name: b,
 	}
+	bridges[b].create()
+	updateBridgeInfo()
 	return bridges[b]
 }
 
@@ -109,6 +111,7 @@ func bridgesDestroy() error {
 		}
 		delete(bridges, k)
 	}
+	updateBridgeInfo()
 	if len(e) == 0 {
 		return nil
 	} else {
@@ -116,12 +119,11 @@ func bridgesDestroy() error {
 	}
 }
 
-func cliBridgeInfo(c cliCommand) cliResponse {
+// return formatted bridge info. expected to be called with bridgeLock set
+func bridgeInfo() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
 	fmt.Fprintf(w, "Bridge\tExists\tExisted before minimega\tActive VLANS\n")
 	for _, v := range bridges {
 		var vlans []int
@@ -132,9 +134,24 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 	}
 
 	w.Flush()
+	return o.String()
+}
 
+func updateBridgeInfo() {
+	log.Debugln("updateBridgeInfo")
+	i := bridgeInfo()
+	path := *f_base + "bridges"
+	err := ioutil.WriteFile(path, []byte(i), 0644)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func cliBridgeInfo(c cliCommand) cliResponse {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
 	return cliResponse{
-		Response: o.String(),
+		Response: bridgeInfo(),
 	}
 }
 
@@ -142,12 +159,8 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
 func (b *bridge) LanCreate(lan int) error {
-	err := b.create()
-	if err != nil {
-		return err
-	}
 	// start the ipmaclearner if need be
-	err = b.startIML()
+	err := b.startIML()
 	if err != nil {
 		return err
 	}
