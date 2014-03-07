@@ -12,6 +12,7 @@ package main
 // TODO(fritz); support other nic device types (virtio,etc)
 // TODO(fritz): filepath inconsistencies
 // TODO(fritz): implement optimizations - hugepages, affinity
+// TODO(fritz): more logging throughout
 
 import (
 	"flag"
