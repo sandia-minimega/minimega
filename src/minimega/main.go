@@ -11,6 +11,7 @@ package main
 // TODO(fritz): python wrapper example
 // TODO(fritz); support other nic device types (virtio,etc)
 // TODO(fritz): filepath inconsistencies
+// TODO(fritz): implement optimizations - hugepages, affinity
 
 import (
 	"flag"

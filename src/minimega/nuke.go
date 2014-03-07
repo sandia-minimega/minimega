@@ -14,6 +14,8 @@ import (
 	"strings"
 )
 
+// BUG(fritz): nuke does not handle multiple bridges
+
 // clean up after an especially bad crash, hopefully we don't have to call
 // this one much :)
 // currently this will:

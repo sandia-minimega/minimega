@@ -4,6 +4,8 @@
 
 package main
 
+// TODO(fritz): check for minimum versions
+
 import (
 	"fmt"
 	log "minilog"
