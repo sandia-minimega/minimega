@@ -52,9 +52,6 @@ var (
 // tap names for this host.
 func init() {
 	bridges = make(map[string]*bridge)
-	bridges[DEFAULT_BRIDGE] = &bridge{
-		Name: DEFAULT_BRIDGE,
-	}
 	tapChan = make(chan string)
 	go func() {
 		for {

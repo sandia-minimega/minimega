@@ -457,6 +457,7 @@ func (info *vmInfo) Copy() *vmInfo {
 }
 
 // TODO(fritz): support quiet mode and json output
+// TODO(fritz): always sort on the first column
 func (l *vmList) info(c cliCommand) cliResponse {
 	var v []*vmInfo
 
@@ -1137,7 +1138,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 	args = append(args, "en-us")
 
 	args = append(args, "-cpu")
-	args = append(args, "qemu64")
+	args = append(args, "host")
 
 	args = append(args, "-net")
 	args = append(args, "none")
@@ -1146,7 +1147,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 
 	if vm.DiskPath != "" {
 		args = append(args, "-drive")
-		args = append(args, "file="+vm.DiskPath+",cache=writeback,media=disk")
+		args = append(args, "file="+vm.DiskPath+",cache=none,media=disk")
 		if vm.Snapshot {
 			args = append(args, "-snapshot")
 		}
