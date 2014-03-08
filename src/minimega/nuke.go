@@ -22,6 +22,7 @@ import (
 //	kill all taps
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we can fit in the cli model
+	// BUG(devin): running nuke with no configuration seems to crash minimega
 	if len(c.Args) != 0 {
 		return cliResponse{
 			Error: "nuke does not take any arguments",

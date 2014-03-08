@@ -227,7 +227,7 @@ removes the temporary minimega state on the harddisk.`,
 			Helplong: `
 Usage: write <file>
 Write the command history to <file>. This is useful for handcrafting configs
-on the minimega command line and then saving them for later use. Argss that
+on the minimega command line and then saving them for later use. Args that
 failed, as well as some commands that do not impact the VM state, such as
 'help', do not get recorded.`,
 			Record: false,
@@ -558,7 +558,7 @@ Usage: vm_stop <optional VM id or name>
 Stop all or one running virtual machine. To stop all running virtual machines,
 call stop without the optional VM ID or name.
 
-			Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
+Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -685,7 +685,7 @@ For example, to set a static IP for a linux VM:
 			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",
 			Helplong: `
-Usage: vm_net [bridge,]<id>[,<mac address>] [[bridge,]<id>[,<mac address] ...]
+Usage: vm_net [bridge,]<id>[,<mac address>] [[bridge,]<id>[,<mac address>] ...]
 Specify the network(s) that the VM is a member of by id. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
@@ -1028,7 +1028,7 @@ To start only a from a config file:
 	dnsmasq start /path/to/config
 
 To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
-running dnsmasq server, specify its ID from the list of running servers: For
+running dnsmasq server, specify its ID from the list of running servers. For
 example, to kill dnsmasq server 2:
 
 	dnsmasq kill 2
@@ -1089,6 +1089,7 @@ logged.
 Report statistics about the host including hostname, load averages, total and
 free memory, and current bandwidth usage",
 `,
+			// TODO(devin): quiet flag is not documented
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -1296,7 +1297,10 @@ vyatta takes a number of subcommands:
 
 	'routes': Set static routes. Routes are specified as
 	<network>,<next-hop> ... 
-	For example: vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1 'config': Override all other options and use a specified file as the config file. For example: vyatta config /tmp/myconfig.boot
+	For example: vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
+
+	'config': Override all other options and use a specified file as the
+	config file. For example: vyatta config /tmp/myconfig.boot
 
 	'write': Write the current configuration to file. If a filename is
 	omitted, a random filename will be used and the file placed in the path
@@ -1417,13 +1421,13 @@ You can also specify function like macros in a similar way to function like macr
 
 	define key(x,y) this is my x, this is my y
 
-Will replace all instances of x and y in the expansion wit the variable arguments. When used:
+Will replace all instances of x and y in the expansion with the variable arguments. When used:
 
 	key(foo,bar)
 
 Will expand to:
 
-	thi is mbar foo, this is mbar bar
+	this is mbar foo, this is mbar bar
 
 To show defined macros, invoke define with no arguments.
 `,

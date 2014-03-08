@@ -348,6 +348,7 @@ func (l *vmList) findByName(name string) int {
 			return i
 		}
 	}
+	// TODO(devin): this should probably be a named constant, shouldn't it?
 	return -2
 }
 
@@ -430,6 +431,7 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 	// to do here is fire off the vms in goroutines, passing the
 	// configuration in by value, as it may change for the next run.
 	log.Info("launching %v vms, name %v", numVms, name)
+	// BUG(devin): if the arg was an int, isn't name == ""?
 	for i := 0; i < numVms; i++ {
 		vm := info.Copy() // returns reference to deep-copy of info
 		vm.Id = <-vmIdChan
