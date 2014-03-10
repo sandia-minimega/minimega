@@ -1087,9 +1087,11 @@ logged.
 			Helpshort: "report statistics about the host",
 			Helplong: `
 Report statistics about the host including hostname, load averages, total and
-free memory, and current bandwidth usage",
+free memory, and current bandwidth usage.
+
+To output host statistics without the header, use the quiet argument:
+	host_stats quiet
 `,
-			// TODO(devin): quiet flag is not documented
 			Record: true,
 			Clear: func() error {
 				return nil

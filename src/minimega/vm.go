@@ -41,6 +41,7 @@ const (
 
 const (
 	VM_MEMORY_DEFAULT = "2048"
+	VM_NOT_FOUND      = -2
 )
 
 // total list of vms running on this host
@@ -341,15 +342,14 @@ func (vm *vmInfo) stop() error {
 }
 
 // findByName returns the id of a VM based on its name. If the VM doesn't exist
-// return -2, as -1 is reserved as the wildcard.
+// return VM_NOT_FOUND (-2), as -1 is reserved as the wildcard.
 func (l *vmList) findByName(name string) int {
 	for i, v := range l.vms {
 		if v.Name == name {
 			return i
 		}
 	}
-	// TODO(devin): this should probably be a named constant, shouldn't it?
-	return -2
+	return VM_NOT_FOUND
 }
 
 // kill one or all vms (-1 for all)
@@ -366,7 +366,7 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 		id = l.findByName(c.Args[0])
 	}
 
-	if id == -2 {
+	if id == VM_NOT_FOUND {
 		return cliResponse{
 			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
 		}
@@ -431,7 +431,6 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 	// to do here is fire off the vms in goroutines, passing the
 	// configuration in by value, as it may change for the next run.
 	log.Info("launching %v vms, name %v", numVms, name)
-	// BUG(devin): if the arg was an int, isn't name == ""?
 	for i := 0; i < numVms; i++ {
 		vm := info.Copy() // returns reference to deep-copy of info
 		vm.Id = <-vmIdChan
@@ -613,7 +612,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		case "name":
 			id := l.findByName(d[1])
-			if id == -2 {
+			if id == VM_NOT_FOUND {
 				return cliResponse{}
 			}
 			if vm, ok := l.vms[id]; ok {

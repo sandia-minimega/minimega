@@ -8,7 +8,6 @@ package main
 // TODO(fritz): lxc support
 // TODO(evan): vnc record/replay
 // TODO(evan): QoS support with global policy
-// TODO(fritz): python wrapper example
 // TODO(fritz); support other nic device types (virtio,etc)
 // TODO(fritz): filepath inconsistencies
 // TODO(fritz): implement optimizations - hugepages, affinity
