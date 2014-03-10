@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"qmp"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -116,6 +117,61 @@ func init() {
 	info.InitrdPath = ""
 	info.State = VM_BUILDING
 	info.Snapshot = true
+}
+
+// satisfy the sort interface for vmInfo
+func SortBy(by string, vms []*vmInfo) {
+	v := &vmSorter{
+		vms: vms,
+		by:  by,
+	}
+	sort.Sort(v)
+}
+
+type vmSorter struct {
+	vms []*vmInfo
+	by  string
+}
+
+func (vms *vmSorter) Len() int {
+	return len(vms.vms)
+}
+
+func (vms *vmSorter) Swap(i, j int) {
+	vms.vms[i], vms.vms[j] = vms.vms[j], vms.vms[i]
+}
+
+func (vms *vmSorter) Less(i, j int) bool {
+	switch vms.by {
+	case "id":
+		return vms.vms[i].Id < vms.vms[j].Id
+	case "host":
+		return true
+	case "name":
+		return vms.vms[i].Name < vms.vms[j].Name
+	case "state":
+		return vms.vms[i].State < vms.vms[j].State
+	case "memory":
+		return vms.vms[i].Memory < vms.vms[j].Memory
+	case "vcpus":
+		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
+	case "disk":
+		return vms.vms[i].DiskPath < vms.vms[j].DiskPath
+	case "initrd":
+		return vms.vms[i].InitrdPath < vms.vms[j].InitrdPath
+	case "kernel":
+		return vms.vms[i].KernelPath < vms.vms[j].KernelPath
+	case "cdrom":
+		return vms.vms[i].CdromPath < vms.vms[j].CdromPath
+	case "append":
+		return vms.vms[i].Append < vms.vms[j].Append
+	case "bridge", "tap", "mac", "ip", "ip6", "vlan":
+		// BUG(fritz); vm_info does not sort on bridge, mac, vlan, etc...
+		return true
+	default:
+		log.Fatal("invalid sort parameter %v", vms.by)
+		return false
+	}
 }
 
 // vm_config
@@ -479,7 +535,6 @@ func (info *vmInfo) Copy() *vmInfo {
 	return newInfo
 }
 
-// TODO(fritz): always sort on the first column
 func (l *vmList) info(c cliCommand) cliResponse {
 	var v []*vmInfo
 
@@ -845,6 +900,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "host")
 			case "name":
 				omask = append(omask, "name")
+			case "state":
+				omask = append(omask, "state")
 			case "memory":
 				omask = append(omask, "memory")
 			case "vcpus":
@@ -859,8 +916,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "cdrom")
 			case "append":
 				omask = append(omask, "append")
-			case "state":
-				omask = append(omask, "state")
 			case "bridge":
 				omask = append(omask, "bridge")
 			case "tap":
@@ -882,6 +937,14 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	} else { // print everything
 		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
 	}
+
+	// did someone do something silly?
+	if len(omask) == 0 {
+		return cliResponse{}
+	}
+
+	// create a sorted list of keys, based on the first column of the output mask
+	SortBy(omask[0], v)
 
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
