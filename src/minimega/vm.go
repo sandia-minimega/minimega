@@ -175,6 +175,114 @@ func (vms *vmSorter) Less(i, j int) bool {
 	}
 }
 
+func cliVMSave(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Error: "Usage: vm_save <save name> <vm id> [<vm id> ...]",
+		}
+	}
+
+	path := *f_base + "saved_vms"
+	err := os.MkdirAll(path, 0775)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	file, err := os.Create(fmt.Sprintf("%v/%v", path, c.Args[0]))
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
+
+	var toSave []string
+	if len(c.Args) == 1 {
+		// get all vms
+		for k, _ := range vms.vms {
+			toSave = append(toSave, fmt.Sprintf("%v", k))
+		}
+	} else {
+		toSave = c.Args[1:]
+	}
+	for _, vmStr := range toSave { // iterate over the vm id's specified
+		vm := vms.getVM(vmStr)
+		if vm == nil {
+			return cliResponse{
+				Error: fmt.Sprintf("no such vm %v", vmStr),
+			}
+		}
+
+		// build up the command list to re-launch this vm
+		cmds := []string{}
+		cmds = append(cmds, "vm_memory "+vm.Memory)
+		cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
+
+		if vm.DiskPath != "" {
+			cmds = append(cmds, "vm_disk "+vm.DiskPath)
+		} else {
+			cmds = append(cmds, "clear vm_disk")
+		}
+
+		if vm.CdromPath != "" {
+			cmds = append(cmds, "vm_cdrom "+vm.CdromPath)
+		} else {
+			cmds = append(cmds, "clear vm_cdrom")
+		}
+
+		if vm.KernelPath != "" {
+			cmds = append(cmds, "vm_kernel "+vm.KernelPath)
+		} else {
+			cmds = append(cmds, "clear vm_kernel")
+		}
+
+		if vm.InitrdPath != "" {
+			cmds = append(cmds, "vm_initrd "+vm.InitrdPath)
+		} else {
+			cmds = append(cmds, "clear vm_initrd")
+		}
+
+		if vm.Append != "" {
+			cmds = append(cmds, "vm_append "+vm.Append)
+		} else {
+			cmds = append(cmds, "clear vm_append")
+		}
+
+		if len(vm.QemuAppend) != 0 {
+			cmds = append(cmds, "vm_qemu_append "+strings.Join(vm.QemuAppend, " "))
+		} else {
+			cmds = append(cmds, "clear vm_qemu_append")
+		}
+
+		cmds = append(cmds, fmt.Sprintf("vm_snapshot %v", vm.Snapshot))
+		if len(vm.Networks) != 0 {
+			netString := "vm_net "
+			for i, vlan := range vm.Networks {
+				netString += fmt.Sprintf("%v,%v,%v,%v ", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+			}
+			cmds = append(cmds, strings.TrimSpace(netString))
+		} else {
+			cmds = append(cmds, "clear vm_net")
+		}
+
+		if vm.Name != "" {
+			cmds = append(cmds, "vm_launch "+vm.Name)
+		} else {
+			cmds = append(cmds, "vm_launch 1")
+		}
+
+		// write commands to file
+		for _, cmd := range cmds {
+			_, err = file.WriteString(cmd + "\n")
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+		}
+	}
+	return cliResponse{}
+}
+
 // vm_config
 // return a pretty printed list of the current configuration
 func cliVMConfig(c cliCommand) cliResponse {
@@ -1688,8 +1796,14 @@ func cliVMNet(c cliCommand) cliResponse {
 				}
 			}
 
-			info.bridges = append(info.bridges, b)
+			if b == "" {
+				info.bridges = append(info.bridges, DEFAULT_BRIDGE)
+			} else {
+				info.bridges = append(info.bridges, b)
+			}
+
 			info.Networks = append(info.Networks, val)
+
 			if d == "" {
 				info.netDrivers = append(info.netDrivers, "e1000")
 			} else {

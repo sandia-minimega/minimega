@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -112,6 +113,11 @@ func bridgesDestroy() error {
 		delete(bridges, k)
 	}
 	updateBridgeInfo()
+	bridgeFile := *f_base + "bridges"
+	err := os.Remove(bridgeFile)
+	if err != nil {
+		log.Errorln(err)
+	}
 	if len(e) == 0 {
 		return nil
 	} else {
