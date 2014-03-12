@@ -69,6 +69,7 @@ type vmInfo struct {
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
 	macs         []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	netDrivers   []string // optional non-e1000 driver
 	Snapshot     bool
 	Hotplug      map[int]string
 }
@@ -530,6 +531,8 @@ func (info *vmInfo) Copy() *vmInfo {
 	copy(newInfo.Networks, info.Networks)
 	newInfo.macs = make([]string, len(info.macs))
 	copy(newInfo.macs, info.macs)
+	newInfo.netDrivers = make([]string, len(info.netDrivers))
+	copy(newInfo.netDrivers, info.netDrivers)
 	newInfo.Snapshot = info.Snapshot
 	// Hotplug isn't allocated until later in launch()
 	return newInfo
@@ -1400,7 +1403,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-device")
 		b := getBridge(vm.bridges[i])
 		b.iml.AddMac(vm.macs[i])
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", tap, vm.macs[i], bus, addr))
+		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))
 		addr++
 		if addr == 32 {
 			addr = 1
@@ -1453,6 +1456,9 @@ func cliClearVMConfig() error {
 	info.QemuAppend = []string{}
 	info.Append = ""
 	info.Networks = []int{}
+	info.macs = []string{}
+	info.bridges = []string{}
+	info.netDrivers = []string{}
 	info.Snapshot = true
 	return nil
 }
@@ -1597,45 +1603,74 @@ func cliVMNet(c cliCommand) cliResponse {
 		info.bridges = []string{}
 		info.Networks = []int{}
 		info.macs = []string{}
+		info.netDrivers = []string{}
 
 		for _, lan := range c.Args {
-			d := strings.Split(lan, ",")
+			f := strings.Split(lan, ",")
 			// this takes a bit of parsing, because the entry can be in a few forms:
 			// 	vlan
+			//
 			//	vlan,mac
 			//	bridge,vlan
+			//	vlan,driver
+			//
 			//	bridge,vlan,mac
+			//	vlan,mac,driver
+			//	bridge,vlan,driver
+			//
+			//	bridge,vlan,mac,driver
 			// If there are 2 or 3 fields, just the last field for the presence of a mac
 
 			var b string
 			var v string
 			var m string
-			switch len(d) {
+			var d string
+			switch len(f) {
 			case 1:
-				v = d[0]
+				v = f[0]
 			case 2:
-				if isMac(d[1]) {
-					v = d[0]
-					m = d[1]
+				if isMac(f[1]) {
+					// vlan, mac
+					v = f[0]
+					m = f[1]
+				} else if _, err := strconv.Atoi(f[0]); err == nil {
+					// vlan, driver
+					v = f[0]
+					d = f[1]
 				} else {
-					b = d[0]
-					v = d[1]
+					// bridge, vlan
+					b = f[0]
+					v = f[1]
 				}
 			case 3:
-				if isMac(d[2]) {
-					b = d[0]
-					v = d[1]
-					m = d[2]
+				if isMac(f[2]) {
+					// bridge, vlan, mac
+					b = f[0]
+					v = f[1]
+					m = f[2]
+				} else if isMac(f[1]) {
+					// vlan, mac, driver
+					v = f[0]
+					m = f[1]
+					d = f[2]
 				} else {
-					return cliResponse{
-						Error: "invalid MAC address",
-					}
+					// bridge, vlan, driver
+					b = f[0]
+					v = f[1]
+					d = f[2]
 				}
+			case 4:
+				b = f[0]
+				v = f[1]
+				m = f[2]
+				d = f[3]
 			default:
 				return cliResponse{
 					Error: "malformed command",
 				}
 			}
+
+			log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
 			// VLAN ID, with optional bridge
 			val, err := strconv.Atoi(v) // the vlan id
@@ -1655,6 +1690,11 @@ func cliVMNet(c cliCommand) cliResponse {
 
 			info.bridges = append(info.bridges, b)
 			info.Networks = append(info.Networks, val)
+			if d == "" {
+				info.netDrivers = append(info.netDrivers, "e1000")
+			} else {
+				info.netDrivers = append(info.netDrivers, d)
+			}
 
 			// (optional) MAC ADDRESS
 			if m != "" {

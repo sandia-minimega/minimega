@@ -685,13 +685,14 @@ For example, to set a static IP for a linux VM:
 			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",
 			Helplong: `
-Usage: vm_net [bridge,]<id>[,<mac address>] [[bridge,]<id>[,<mac address>] ...]
+Usage: vm_net [bridge,]<id>[,<mac address>][,<driver>] [[bridge,]<id>[,<mac address>][,<driver>] ...]
 Specify the network(s) that the VM is a member of by id. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
-use the default 'mega_bridge'. Additionally, you can optionally specify the mac
+use the default 'mega_bridge'. You can also optionally specify the mac
 address of the interface to connect to that network. If not specifed, the mac
-address will be randomly generated.
+address will be randomly generated. Additionally, you can optionally specify a
+driver for qemu to use. By default, e1000 is used. 
 
 Examples:
 
@@ -703,6 +704,8 @@ To connect a VM to VLAN 1 on bridge0 and VLAN 2 on bridge1:
 	vm_net bridge0,1 bridge1,2
 To connect a VM to VLAN 100 on bridge0 with a specific mac:
 	vm_net bridge0,100,00:11:22:33:44:55
+To specify a specific driver, such as i82559c:
+	vm_net 100,i82559c
 
 Calling vm_net with no parameters will list the current networks for this VM.`,
 			Record: true,
