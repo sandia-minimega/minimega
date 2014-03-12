@@ -203,21 +203,6 @@ func meshageMSATimeout(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
-// Parse the first argument of the command and return the traveral type and true.
-// If the first argument is not a listed traveral type, return meshage.UNORDERED and false.
-// The boolean return is used to truncate the field from the passed message.
-func meshageTraversal(t string) (int, bool) {
-	switch strings.ToLower(t) {
-	case "unordered":
-		return meshage.UNORDERED, true
-	case "depth":
-		return meshage.DEPTH, true
-	case "breadth":
-		return meshage.BREADTH, true
-	}
-	return meshage.UNORDERED, false
-}
-
 func meshageSet(c cliCommand) cliResponse {
 	if len(c.Args) < 2 {
 		return cliResponse{
@@ -225,13 +210,19 @@ func meshageSet(c cliCommand) cliResponse {
 		}
 	}
 
-	traversal, truncate := meshageTraversal(c.Args[1])
+	traversal := meshage.UNORDERED
+
+	addHost := false
+	if c.Args[0] == "annotate" {
+		addHost = true
+	}
+
 	commandOffset := 1
-	if truncate {
+	if addHost {
 		commandOffset = 2
 	}
 
-	recipients := getRecipients(c.Args[0])
+	recipients := getRecipients(c.Args[commandOffset-1])
 	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
 
 	if command.Command == "mesh_broadcast" || command.Command == "mesh_set" {
@@ -263,10 +254,14 @@ SET_WAIT_LOOP:
 				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
 			} else {
 				if body.Response != "" {
-					respString += body.Response + "\n"
+					if addHost {
+						respString += fmt.Sprintf("[%v] %v\n", resp.Source, body.Response)
+					} else {
+						respString += fmt.Sprintf("%v\n", body.Response)
+					}
 				}
 				if body.Error != "" {
-					respError += body.Error + "\n"
+					respError += fmt.Sprintf("[%v] %v\n", resp.Source, body.Error)
 				}
 				i++
 			}
@@ -288,9 +283,15 @@ func meshageBroadcast(c cliCommand) cliResponse {
 		}
 	}
 
-	traversal, truncate := meshageTraversal(c.Args[0])
+	traversal := meshage.UNORDERED
+
+	addHost := false
+	if c.Args[0] == "annotate" {
+		addHost = true
+	}
+
 	commandOffset := 0
-	if truncate {
+	if addHost {
 		commandOffset = 1
 	}
 
@@ -325,10 +326,14 @@ BROADCAST_WAIT_LOOP:
 				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
 			} else {
 				if body.Response != "" {
-					respString += body.Response + "\n"
+					if addHost {
+						respString += fmt.Sprintf("[%v] %v\n", resp.Source, body.Response)
+					} else {
+						respString += fmt.Sprintf("%v\n", body.Response)
+					}
 				}
 				if body.Error != "" {
-					respError += body.Error + "\n"
+					respError += fmt.Sprintf("[%v] %v\n", resp.Source, body.Error)
 				}
 				i++
 			}

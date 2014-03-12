@@ -972,7 +972,11 @@ response.`,
 			Helplong: `
 Send a command to one or more connected clients.
 For example, to get the vm_info from nodes kn1 and kn2:
-	mesh_set kn[1-2] vm_info`,
+	mesh_set kn[1-2] vm_info
+	
+Optionally, you can annotate the output with the hostname of all responders by
+prepending the keyword 'annotate' to the command:
+	mesh_set annotate kn[1-2] vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -985,7 +989,11 @@ For example, to get the vm_info from nodes kn1 and kn2:
 			Helplong: `
 Send a command to all connected clients.
 For example, to get the vm_info from all nodes:
-	mesh_broadcast vm_info`,
+	mesh_broadcast vm_info
+
+Optionally, you can annotate the output with the hostname of all responders by
+prepending the keyword 'annotate' to the command:
+	mesh_broadcast annotate vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
