@@ -27,6 +27,9 @@ type Client struct {
 	Checkin   time.Time
 	Responses []*Response
 	volatile  bool
+	OSVer     string
+	CSDVer    string
+	EditionID string
 }
 
 var (
@@ -34,6 +37,9 @@ var (
 	responseQueue      []*Response
 	responseQueueLock  sync.Mutex
 	clientCommandQueue chan []*Command
+	OSVer              string
+	CSDVer             string
+	EditionID          string
 )
 
 func init() {
@@ -47,10 +53,238 @@ func clientSetup() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 	CID = r.Int63()
+	getVersion()
 
 	go clientCommandProcessor()
 
 	log.Debug("CID: %v", CID)
+}
+
+//Populate OSVer (e.g. "Windows 7")
+func getOSVer() {
+	var fullVersion string
+
+	//Get CurrentVersion
+	cmd := exec.Command("reg", "query",
+		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+		"/v", "CurrentVersion")
+	cvBytes, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Warnln("failed reg query: CurrentVersion")
+	}
+	cvStr := strings.Split(string(cvBytes), "    ")
+	currentVersion := strings.TrimSpace(cvStr[len(cvStr)-1])
+
+	//Get CurrentBuild
+	cmd = exec.Command("reg", "query",
+		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+		"/v", "CurrentBuild")
+
+	cbBytes, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Warnln("failed reg query: CurrentBuild")
+		fullVersion = currentVersion
+	} else {
+		cbStr := strings.Split(string(cbBytes), "    ")
+		currentBuild := strings.TrimSpace(cbStr[len(cbStr)-1])
+
+		fullVersion = currentVersion + "." + currentBuild
+	}
+
+	// BUG(evan) Server2003 resolves to XP, Server2008 to 7, Server2012 to 8
+	switch fullVersion {
+	case "1.04":
+		OSVer = "Windows 1.0"
+	case "2.11":
+		OSVer = "Windows 2.0"
+	case "3":
+		OSVer = "Windows 3.0"
+	case "3.11":
+		OSVer = "Windows for Workgroups 3.11"
+	case "2250":
+		OSVer = "Whistler Server"
+	case "2257":
+		OSVer = "Whistler Server"
+	case "2267":
+		OSVer = "Whistler Server"
+	case "2410":
+		OSVer = "Whistler Server"
+	case "3.10.528":
+		OSVer = "Windows NT 3.1"
+	case "3.5.807":
+		OSVer = "Windows NT Workstation 3.5"
+	case "3.51.1057":
+		OSVer = "Windows NT Workstation 3.51"
+	case "4.0.1381":
+		OSVer = "Windows Workstation 4.0"
+	case "4.0.950":
+		OSVer = "Windows 95"
+	case "4.00.950":
+		OSVer = "Windows 95"
+	case "4.00.1111":
+		OSVer = "Windows 95"
+	case "4.03.1212-1214":
+		OSVer = "Windows 95"
+	case "4.03.1214":
+		OSVer = "Windows 95"
+	case "4.1.1998":
+		OSVer = "Windows 98"
+	case "4.1.2222":
+		OSVer = "Windows 98"
+	case "4.90.2476":
+		OSVer = "Windows Millenium"
+	case "4.90.3000":
+		OSVer = "Windows Me"
+	case "5.00.1515":
+		OSVer = "Windows NT 5.00"
+	case "5.00.2031":
+		OSVer = "Windows 2000"
+	case "5.00.2128":
+		OSVer = "Windows 2000"
+	case "5.00.2183":
+		OSVer = "Windows 2000"
+	case "5.00.2195":
+		OSVer = "Windows 2000"
+	case "5.0.2195":
+		OSVer = "Windows 2000"
+		EditionID = "Professional"
+	case "5.1.2505":
+		OSVer = "Windows XP"
+	case "5.1.2600":
+		OSVer = "Windows XP"
+	case "5.2.3790":
+		OSVer = "Windows XP"
+		EditionID = "Professional"
+		//      Conflicts with Windows XP.
+		//	case "5.2.3790": OSVer = "Windows Home Server"
+		//	case "5.2.3790": OSVer = "Windows Server 2003"
+	case "5.2.3541":
+		OSVer = "Windows .NET Server"
+	case "5.2.3590":
+		OSVer = "Windows .NET Server"
+	case "5.2.3660":
+		OSVer = "Windows .NET Server"
+	case "5.2.3718":
+		OSVer = "Windows .NET Server 2003"
+	case "5.2.3763":
+		OSVer = "Windows Server 2003"
+	case "6.0.5048":
+		OSVer = "Windows Longhorn"
+	case "6.0.5112":
+		OSVer = "Windows Vista"
+	case "6.0.5219":
+		OSVer = "Windows Vista"
+	case "6.0.5259":
+		OSVer = "Windows Vista"
+	case "6.0.5270":
+		OSVer = "Windows Vista"
+	case "6.0.5308":
+		OSVer = "Windows Vista"
+	case "6.0.5342":
+		OSVer = "Windows Vista"
+	case "6.0.5381":
+		OSVer = "Windows Vista"
+	case "6.0.5384":
+		OSVer = "Windows Vista"
+	case "6.0.5456":
+		OSVer = "Windows Vista"
+	case "6.0.5472":
+		OSVer = "Windows Vista"
+	case "6.0.5536":
+		OSVer = "Windows Vista"
+	case "6.0.5600":
+		OSVer = "Windows Vista"
+	case "6.0.5700":
+		OSVer = "Windows Vista"
+	case "6.0.5728":
+		OSVer = "Windows Vista"
+	case "6.0.5744":
+		OSVer = "Windows Vista"
+	case "6.0.5808":
+		OSVer = "Windows Vista"
+	case "6.0.5824":
+		OSVer = "Windows Vista"
+	case "6.0.5840":
+		OSVer = "Windows Vista"
+	case "6.0.6000":
+		OSVer = "Windows Vista"
+	case "6.0.6001":
+		OSVer = "Windows Server 2008"
+	case "6.0.6002":
+		OSVer = "Windows Vista"
+	case "6.1.7600":
+		OSVer = "Windows 7"
+		//      Conflicts with Windows 7.  Need more granularity (.16385)
+		//	case "6.1.7600": OSVer = "Windows Server 2008 R2, RTM (Release to Manufacturing)"
+	case "6.1.7601":
+		OSVer = "Windows 7"
+		CSDVer = "Service Pack 1"
+	case "6.2.9200":
+		OSVer = "Windows 8"
+		//	Conflicts with Windows 8.  Not sure how to tell these apart
+		//	case "6.2.9200": OSVer = "Windows Server 2012"
+	case "6.2.8102":
+		OSVer = "Windows Server 2012"
+	case "6.3.9600":
+		OSVer = "Windows 8.1"
+	}
+}
+
+//Populate CSDVer (e.g. "Service Pack 1")
+func getCSDVer() {
+	//if CSDVer was set while getting OSVer, skip this function
+	if CSDVer != "" {
+		return
+	}
+
+	CSDVer = "none"
+
+	cmd := exec.Command("reg", "query",
+		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+		"/v", "CSDVersion")
+
+	csdBytes, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Warnln("failed reg query: CSDVersion")
+	} else {
+		csdStr := strings.Split(string(csdBytes), "    ")
+		CSDVer = strings.TrimSpace(csdStr[len(csdStr)-1])
+	}
+}
+
+//Populate EditionID (e.g. Enterprise)
+func getEditionID() {
+	//if EditionID was set while getting OSVer, skip this function
+	if EditionID != "" {
+		return
+	}
+	EditionID = "none"
+	cmd := exec.Command("reg", "query",
+		"HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion",
+		"/v", "EditionID")
+
+	eidBytes, err := cmd.CombinedOutput()
+
+	if err != nil {
+		log.Warnln("failed reg query: EditionID")
+	}
+	eidStr := strings.Split(string(eidBytes), "    ")
+	EditionID = strings.TrimSpace(eidStr[len(eidStr)-1])
+}
+
+func getWindowsVersion() {
+	getOSVer()
+	getCSDVer()
+	getEditionID()
+}
+
+func getVersion() {
+	switch runtime.GOOS {
+	case "windows":
+		getWindowsVersion()
+	}
 }
 
 func clientHeartbeat() *hb {
@@ -61,13 +295,14 @@ func clientHeartbeat() *hb {
 		log.Fatalln(err)
 	}
 
-	// TODO(evan): make client OS more specific
-	// TODO(evan): add intelligent filters for specific OS
 	c := &Client{
-		CID:      CID,
-		Arch:     runtime.GOARCH,
-		OS:       runtime.GOOS,
-		Hostname: hostname,
+		CID:       CID,
+		Arch:      runtime.GOARCH,
+		OS:        runtime.GOOS,
+		Hostname:  hostname,
+		OSVer:     OSVer,
+		CSDVer:    CSDVer,
+		EditionID: EditionID,
 	}
 
 	// attach any command responses and clear the response queue
@@ -182,6 +417,19 @@ func matchFilter(c *Command) bool {
 		if v.OS != "" && v.OS != runtime.GOOS {
 			log.Debug("failed match on os %v %v", v.OS, runtime.GOOS)
 			continue
+		} else if runtime.GOOS == "windows" {
+			if v.OSVer != "" && v.OSVer != OSVer {
+				log.Debug("failed match on os version %v %v", v.OSVer, OSVer)
+				continue
+			}
+			if v.CSDVer != "" && v.CSDVer != CSDVer {
+				log.Debug("failed match on CSDVersion %v %v", v.CSDVer, CSDVer)
+				continue
+			}
+			if v.EditionID != "" && v.EditionID != EditionID {
+				log.Debug("failed match on EditionID %v %v", v.EditionID, EditionID)
+				continue
+			}
 		}
 
 		macs, ips := getNetworkInfo()
