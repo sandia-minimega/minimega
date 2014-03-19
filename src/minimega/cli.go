@@ -1026,16 +1026,16 @@ allows a single disk image to be used for many VMs.
 			},
 		},
 
-		"ksm": &command{
-			Call:      ksmCLI,
-			Helpshort: "enable or disable Kernel Samepage Merging",
+		"optimize": &command{
+			Call:      optimizeCLI,
+			Helpshort: "enable or disable several virtualization optimizations",
 			Helplong: `
-Enable or disable Kernel Samepage Merging, which can vastly increase the
-density of VMs a node can run depending on how similar the VMs are.
+Enable or disable several virtualization optimizations, including Kernel
+Samepage Merging, CPU affinity for VMs, and the use of hugepages.
 `,
 			Record: true,
 			Clear: func() error {
-				ksmDisable()
+				clearOptimize()
 				return nil
 			},
 		},

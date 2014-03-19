@@ -5,12 +5,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
 	"os"
 	"strconv"
 	"strings"
+	"text/tabwriter"
 )
 
 var (
@@ -18,6 +20,8 @@ var (
 	ksmRun            int
 	ksmSleepMillisecs int
 	ksmEnabled        bool
+	hugepagesEnabled  bool
+	affinityEnabled   bool
 )
 
 const (
@@ -53,7 +57,7 @@ func ksmGetIntFromFile(filename string) int {
 func ksmEnable() {
 	if !ksmEnabled {
 		ksmSave()
-		log.Infoln("enabling ksm")
+		log.Debugln("enabling ksm")
 		ksmWrite(ksmPathRun, 1)
 		ksmWrite(ksmPathPagesToScan, ksmTunePagesToScan)
 		ksmWrite(ksmPathSleepMillisecs, ksmTuneSleepMillisecs)
@@ -63,7 +67,7 @@ func ksmEnable() {
 
 func ksmDisable() {
 	if ksmEnabled {
-		log.Infoln("restoring ksm values")
+		log.Debugln("restoring ksm values")
 		ksmWrite(ksmPathRun, ksmRun)
 		ksmWrite(ksmPathPagesToScan, ksmPagesToScan)
 		ksmWrite(ksmPathSleepMillisecs, ksmSleepMillisecs)
@@ -82,30 +86,77 @@ func ksmWrite(filename string, value int) {
 	file.WriteString(strconv.Itoa(value))
 }
 
-func ksmCLI(c cliCommand) cliResponse {
+func clearOptimize() {
+	ksmDisable()
+}
+
+func optimizeCLI(c cliCommand) cliResponse {
+	// must be in the form of
+	// 	optimize ksm [true,false]
+	//	optimize hugepages [true,false]
+	//	optimize affinity [true,false]
 	switch len(c.Args) {
-	case 0:
-		r := "disabled"
-		if ksmEnabled {
-			r = "enabled"
-		}
+	case 0: // summary of all optimizations
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "Subsystem\tEnabled\n")
+		fmt.Fprintf(w, "KSM\t%v\n", ksmEnabled)
+		fmt.Fprintf(w, "hugepages\t%v\n", hugepagesEnabled)
+		fmt.Fprintf(w, "CPU affinity\t%v\n", affinityEnabled)
+		w.Flush()
 		return cliResponse{
-			Response: fmt.Sprintf("%v", r),
+			Response: o.String(),
 		}
-	case 1:
-		switch strings.ToLower(c.Args[0]) {
-		case "disable":
-			ksmDisable()
-		case "enable":
-			ksmEnable()
+	case 1: // must be ksm, hugepages, affinity
+		switch c.Args[0] {
+		case "ksm":
+			return cliResponse{
+				Response: fmt.Sprintf("%v", ksmEnabled),
+			}
+		case "hugepages":
+			return cliResponse{
+				Response: fmt.Sprintf("%v", hugepagesEnabled),
+			}
+		case "affinity":
+			return cliResponse{
+				Response: fmt.Sprintf("%v", affinityEnabled),
+			}
 		default:
 			return cliResponse{
-				Error: "valid arguments are [enable, disable]",
+				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
+			}
+		}
+	case 2: // must be ksm, hugepages, affinity, with [true,false]
+		var set bool
+		switch strings.ToLower(c.Args[1]) {
+		case "true":
+			set = true
+		case "false":
+			set = false
+		default:
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
+			}
+		}
+
+		switch c.Args[0] {
+		case "ksm":
+			if set {
+				ksmEnable()
+			} else {
+				ksmDisable()
+			}
+		case "hugepages":
+		case "affinity":
+		default:
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
 			}
 		}
 	default:
 		return cliResponse{
-			Error: "ksm takes one argument",
+			Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
 		}
 	}
 	return cliResponse{}
