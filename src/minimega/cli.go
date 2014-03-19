@@ -1032,6 +1032,25 @@ allows a single disk image to be used for many VMs.
 			Helplong: `
 Enable or disable several virtualization optimizations, including Kernel
 Samepage Merging, CPU affinity for VMs, and the use of hugepages.
+
+To enable/disable Kernel Samepage Merging (KSM):
+	optimize ksm [true,false]
+
+To enable hugepage support:
+	optimize hugepages </path/to/hugepages_mount>
+
+To disable hugepage support:
+	optimize hugepages ""
+
+To enable/disable CPU affinity support:
+	optimize affinity [true,false]
+
+To set a CPU set filter for the affinity scheduler, for example (to use only
+CPUs 1, 2-20):
+	optimize affinity filter [1,2-20]
+
+To disable all optimizations
+	clear optimize
 `,
 			Record: true,
 			Clear: func() error {
