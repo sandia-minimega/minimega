@@ -9,7 +9,6 @@ package main
 // TODO(evan): vnc record/replay
 // TODO(evan): QoS support with global policy
 // TODO(fritz): filepath inconsistencies
-// TODO(fritz): implement optimizations - hugepages, affinity
 // TODO(fritz): more logging throughout
 // TODO(fritz): add documentation generation, with the api
 

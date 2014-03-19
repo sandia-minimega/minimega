@@ -1049,6 +1049,12 @@ To set a CPU set filter for the affinity scheduler, for example (to use only
 CPUs 1, 2-20):
 	optimize affinity filter [1,2-20]
 
+To clear a CPU set filter:
+	optimize affinity filter
+
+To view current CPU affinity mappings:
+	optimize affinity
+
 To disable all optimizations
 	clear optimize
 `,

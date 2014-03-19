@@ -72,6 +72,7 @@ type vmInfo struct {
 	netDrivers   []string // optional non-e1000 driver
 	Snapshot     bool
 	Hotplug      map[int]string
+	PID          int
 }
 
 type jsonInfo struct {
@@ -1327,13 +1328,18 @@ func (vm *vmInfo) launchOne() {
 		Stderr: &sErr,
 	}
 	err = cmd.Start()
-
 	if err != nil {
 		log.Error("%v %v", err, sErr.String())
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
 	}
+
+	vm.PID = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.Id, vm.PID)
+
+	vm.CheckAffinity()
+
 	go func() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
