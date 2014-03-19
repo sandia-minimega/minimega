@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	ksmPagesToScan    int
-	ksmRun            int
-	ksmSleepMillisecs int
-	ksmEnabled        bool
-	hugepagesEnabled  bool
-	affinityEnabled   bool
+	ksmPagesToScan     int
+	ksmRun             int
+	ksmSleepMillisecs  int
+	ksmEnabled         bool
+	affinityEnabled    bool
+	hugepagesMountPath string
 )
 
 const (
@@ -88,12 +88,13 @@ func ksmWrite(filename string, value int) {
 
 func clearOptimize() {
 	ksmDisable()
+	hugepagesMountPath = ""
 }
 
 func optimizeCLI(c cliCommand) cliResponse {
 	// must be in the form of
 	// 	optimize ksm [true,false]
-	//	optimize hugepages [true,false]
+	//	optimize hugepages <path>
 	//	optimize affinity [true,false]
 	switch len(c.Args) {
 	case 0: // summary of all optimizations
@@ -102,6 +103,10 @@ func optimizeCLI(c cliCommand) cliResponse {
 		w.Init(&o, 5, 0, 1, ' ', 0)
 		fmt.Fprintf(w, "Subsystem\tEnabled\n")
 		fmt.Fprintf(w, "KSM\t%v\n", ksmEnabled)
+		hugepagesEnabled := "false"
+		if hugepagesMountPath != "" {
+			hugepagesEnabled = fmt.Sprintf("true [%v]", hugepagesMountPath)
+		}
 		fmt.Fprintf(w, "hugepages\t%v\n", hugepagesEnabled)
 		fmt.Fprintf(w, "CPU affinity\t%v\n", affinityEnabled)
 		w.Flush()
@@ -116,7 +121,7 @@ func optimizeCLI(c cliCommand) cliResponse {
 			}
 		case "hugepages":
 			return cliResponse{
-				Response: fmt.Sprintf("%v", hugepagesEnabled),
+				Response: fmt.Sprintf("%v", hugepagesMountPath),
 			}
 		case "affinity":
 			return cliResponse{
@@ -127,28 +132,34 @@ func optimizeCLI(c cliCommand) cliResponse {
 				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
 			}
 		}
-	case 2: // must be ksm, hugepages, affinity, with [true,false]
-		var set bool
-		switch strings.ToLower(c.Args[1]) {
-		case "true":
-			set = true
-		case "false":
-			set = false
-		default:
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-			}
-		}
-
+	case 2: // must be ksm, hugepages, affininy
 		switch c.Args[0] {
 		case "ksm":
+			var set bool
+			switch strings.ToLower(c.Args[1]) {
+			case "true":
+				set = true
+			case "false":
+				set = false
+			default:
+				return cliResponse{
+					Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
+				}
+			}
+
 			if set {
 				ksmEnable()
 			} else {
 				ksmDisable()
 			}
 		case "hugepages":
+			if c.Args[1] == `""` {
+				hugepagesMountPath = ""
+			} else {
+				hugepagesMountPath = c.Args[1]
+			}
 		case "affinity":
+
 		default:
 			return cliResponse{
 				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),

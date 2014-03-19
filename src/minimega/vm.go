@@ -1521,6 +1521,12 @@ func (vm *vmInfo) vmGetArgs() []string {
 		}
 	}
 
+	// hook for hugepage support
+	if hugepagesMountPath != "" {
+		args = append(args, "-mem-info")
+		args = append(args, hugepagesMountPath)
+	}
+
 	if len(vm.QemuAppend) > 0 {
 		args = append(args, vm.QemuAppend...)
 	}
