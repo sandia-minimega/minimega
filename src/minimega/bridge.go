@@ -542,8 +542,19 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	log.Debug("adding tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		if strings.Contains(sErr.String(), "already exists") {
+			// special case - we own the tap, but it already exists
+			// on the bridge. simply remove and add it again
+			log.Info("tap %v is already on bridge, readding", tap)
+			err = b.TapRemove(lan, tap)
+			if err != nil {
+				return err
+			}
+			return b.TapAdd(lan, tap, host)
+		} else {
+			e := fmt.Errorf("%v: %v", err, sErr.String())
+			return e
+		}
 	}
 	return nil
 }
