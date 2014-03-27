@@ -14,7 +14,12 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+)
+
+var (
+	meshageCommandLock sync.Mutex
 )
 
 func meshageHandler() {
@@ -219,6 +224,9 @@ func meshageTraversal(t string) (int, bool) {
 }
 
 func meshageSet(c cliCommand) cliResponse {
+	meshageCommandLock.Lock()
+	defer meshageCommandLock.Unlock()
+
 	if len(c.Args) < 2 {
 		return cliResponse{
 			Error: "mesh_set takes at least two arguments",
@@ -282,6 +290,9 @@ SET_WAIT_LOOP:
 }
 
 func meshageBroadcast(c cliCommand) cliResponse {
+	meshageCommandLock.Lock()
+	defer meshageCommandLock.Unlock()
+
 	if len(c.Args) == 0 {
 		return cliResponse{
 			Error: "mesh_broadcast takes at least one argument",

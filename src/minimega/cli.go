@@ -1456,6 +1456,11 @@ Return the command after macro expansion and comment removal.
 	}
 }
 
+func (c cliCommand) String() string {
+	args := strings.Join(c.Args, " ")
+	return c.Command + " " + args
+}
+
 func cliDefine(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
