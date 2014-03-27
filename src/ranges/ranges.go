@@ -11,6 +11,7 @@ package ranges
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"sort"
 	"strconv"
@@ -56,6 +57,7 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 
 	parts := strings.Split(s, ",")
 
+	pad := -1
 	for _, part := range parts {
 		if strings.Contains(part, "-") {
 			tmp, err := subrange(part)
@@ -63,16 +65,24 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 				return nil, err
 			}
 			for _, n := range tmp {
-				//result = append(result, r.Prefix + n)
+				if pad == -1 {
+					pad = len(n)
+				} else if len(n) != pad {
+					pad = 0
+				}
 				t, _ := strconv.Atoi(n)
 				dedup[t] = t
 			}
 		} else {
+			if pad == -1 {
+				pad = len(part)
+			} else if len(part) != pad {
+				pad = 0
+			}
 			t, err := strconv.Atoi(part)
 			if err != nil {
 				return nil, err
 			}
-			//result = append(result, r.Prefix + t)
 			dedup[t] = t
 		}
 	}
@@ -85,7 +95,12 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	sort.Ints(tmp)
 
 	for _, n := range tmp {
-		result = append(result, r.Prefix+strconv.Itoa(n))
+		format := "%d"
+		if pad != 0 {
+			format = "%0" + fmt.Sprintf("%v", pad) + "d"
+		}
+		name := fmt.Sprintf(format, n)
+		result = append(result, r.Prefix+name)
 	}
 
 	return result, nil
@@ -149,6 +164,16 @@ func (r *Range) UnsplitRange(nodes []string) (string, error) {
 
 func subrange(s string) ([]string, error) {
 	limits := strings.Split(s, "-")
+	if len(limits) != 2 {
+		return nil, fmt.Errorf("invalid subrange %v", s)
+	}
+
+	// check for subrange padding
+	pad := 0
+	if len(limits[0]) == len(limits[1]) {
+		pad = len(limits[0])
+	}
+
 	start, err := strconv.Atoi(limits[0])
 	if err != nil {
 		return nil, err
@@ -160,7 +185,13 @@ func subrange(s string) ([]string, error) {
 
 	var nodes []string
 	for i := start; i <= end; i++ {
-		nodes = append(nodes, strconv.Itoa(i))
+		format := "%d"
+		if pad != 0 {
+			format = "%0" + fmt.Sprintf("%v", pad) + "d"
+		}
+		name := fmt.Sprintf(format, i)
+
+		nodes = append(nodes, name)
 	}
 
 	return nodes, nil

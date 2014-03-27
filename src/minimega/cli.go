@@ -227,7 +227,7 @@ removes the temporary minimega state on the harddisk.`,
 			Helplong: `
 Usage: write <file>
 Write the command history to <file>. This is useful for handcrafting configs
-on the minimega command line and then saving them for later use. Argss that
+on the minimega command line and then saving them for later use. Args that
 failed, as well as some commands that do not impact the VM state, such as
 'help', do not get recorded.`,
 			Record: false,
@@ -236,116 +236,19 @@ failed, as well as some commands that do not impact the VM state, such as
 			},
 		},
 
-		// TODO(fritz): vm_save command doesn't save path to custom qemu
-		// TODO(fritz): vm_save belongs in vm.go
 		"vm_save": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) < 2 {
-					return cliResponse{
-						Error: "Usage: vm_save <save name> <vm id> [<vm id> ...]",
-					}
-				}
-
-				file, err := os.Create("/etc/minimega/saved_vms/" + c.Args[0])
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-
-				for _, vmStr := range c.Args[1:] { // iterate over the vm id's specified
-					vmId, err := strconv.Atoi(vmStr)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-
-					vm, ok := vms.vms[vmId]
-					if !ok {
-						log.Error("Not a valid id: " + vmStr)
-						continue
-					}
-
-					// build up the command list to re-launch this vm
-					cmds := []string{}
-					cmds = append(cmds, "vm_memory "+vm.Memory)
-					cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
-
-					if vm.DiskPath != "" {
-						cmds = append(cmds, "vm_disk "+vm.DiskPath)
-					} else {
-						cmds = append(cmds, "clear vm_disk")
-					}
-
-					if vm.CdromPath != "" {
-						cmds = append(cmds, "vm_cdrom "+vm.CdromPath)
-					} else {
-						cmds = append(cmds, "clear vm_cdrom")
-					}
-
-					if vm.KernelPath != "" {
-						cmds = append(cmds, "vm_kernel "+vm.KernelPath)
-					} else {
-						cmds = append(cmds, "clear vm_kernel")
-					}
-
-					if vm.InitrdPath != "" {
-						cmds = append(cmds, "vm_initrd "+vm.InitrdPath)
-					} else {
-						cmds = append(cmds, "clear vm_initrd")
-					}
-
-					if vm.Append != "" {
-						cmds = append(cmds, "vm_append "+vm.Append)
-					} else {
-						cmds = append(cmds, "clear vm_append")
-					}
-
-					if len(vm.QemuAppend) != 0 {
-						cmds = append(cmds, "vm_qemu_append "+strings.Join(vm.QemuAppend, " "))
-					} else {
-						cmds = append(cmds, "clear vm_qemu_append")
-					}
-
-					cmds = append(cmds, "vm_snapshot "+strconv.FormatBool(vm.Snapshot))
-					if len(vm.Networks) != 0 {
-						netString := "vm_net "
-						for i, vlan := range vm.Networks {
-							netString += strconv.Itoa(vlan) + "," + vm.macs[i] + " "
-						}
-						cmds = append(cmds, strings.TrimSpace(netString))
-					} else {
-						cmds = append(cmds, "clear vm_net")
-					}
-
-					if vm.Name != "" {
-						cmds = append(cmds, "vm_launch "+vm.Name)
-					} else {
-						cmds = append(cmds, "vm_launch 1")
-					}
-
-					// write commands to file
-					for _, cmd := range cmds {
-						_, err = file.WriteString(cmd + "\n")
-						if err != nil {
-							return cliResponse{
-								Error: err.Error(),
-							}
-						}
-					}
-				}
-				return cliResponse{}
-			},
+			Call:      cliVMSave,
 			Helpshort: "save a vm configuration for later use",
 			Helplong: `
-Usage: vm_save <save name> <vm id> [<vm id> ...]
+Usage: vm_save <save name> <vm name/id> [<vm name/id> ...]
 Saves the configuration of a running virtual machine or set of virtual 
 machines so that it/they can be restarted/recovered later, such as after 
 a system crash.
+
+If no VM name or ID is given, all VMs (including those in the quit and error state) will be saved.
+
 This command does not store the state of the virtual machine itself, 
-only its launch configuration.
-			`,
+only its launch configuration.`,
 			Record: false,
 			Clear: func() error {
 				return nil
@@ -409,10 +312,17 @@ Print information about VMs. vm_info allows searching for VMs based on any VM
 parameter, and output some or all information about the VMs in question.
 Additionally, you can display information about all running VMs. 
 
-A vm_info command takes two optional arguments, a search term, and an output
-mask. If the search term is omitted, information about all VMs will be
-displayed. If the output mask is omitted, all information about the VMs will be
-displayed.
+A vm_info command takes three optional arguments, an output mode, a search
+term, and an output mask. If the search term is omitted, information about all
+VMs will be displayed. If the output mask is omitted, all information about the
+VMs will be displayed.
+
+The output mode has two options - quiet and json. Two use either, set the output using the following syntax:
+	vm_info output=quiet ...
+
+If the output mode is set to 'quiet', the header and "|" characters in the output formatting will be removed. The output will consist simply of tab delimited lines of VM info based on the search and mask terms.
+
+If the output mode is set to 'json', the output will be a json formatted string containing info on all VMs, or those matched by the search term. The mask will be ignored - all fields will be populated.
 
 The search term uses a single key=value argument. For example, if you want all
 information about VM 50: 
@@ -550,7 +460,7 @@ Usage: vm_stop <optional VM id or name>
 Stop all or one running virtual machine. To stop all running virtual machines,
 call stop without the optional VM ID or name.
 
-			Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
+Calling stop will put VMs in a paused state. Start stopped VMs with vm_start`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -677,13 +587,14 @@ For example, to set a static IP for a linux VM:
 			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",
 			Helplong: `
-Usage: vm_net [bridge,]<id>[,<mac address>] [[bridge,]<id>[,<mac address] ...]
+Usage: vm_net [bridge,]<id>[,<mac address>][,<driver>] [[bridge,]<id>[,<mac address>][,<driver>] ...]
 Specify the network(s) that the VM is a member of by id. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
-use the default 'mega_bridge'. Additionally, you can optionally specify the mac
+use the default 'mega_bridge'. You can also optionally specify the mac
 address of the interface to connect to that network. If not specifed, the mac
-address will be randomly generated.
+address will be randomly generated. Additionally, you can optionally specify a
+driver for qemu to use. By default, e1000 is used. 
 
 Examples:
 
@@ -695,6 +606,8 @@ To connect a VM to VLAN 1 on bridge0 and VLAN 2 on bridge1:
 	vm_net bridge0,1 bridge1,2
 To connect a VM to VLAN 100 on bridge0 with a specific mac:
 	vm_net bridge0,100,00:11:22:33:44:55
+To specify a specific driver, such as i82559c:
+	vm_net 100,i82559c
 
 Calling vm_net with no parameters will list the current networks for this VM.`,
 			Record: true,
@@ -964,7 +877,11 @@ response.`,
 			Helplong: `
 Send a command to one or more connected clients.
 For example, to get the vm_info from nodes kn1 and kn2:
-	mesh_set kn[1-2] vm_info`,
+	mesh_set kn[1-2] vm_info
+	
+Optionally, you can annotate the output with the hostname of all responders by
+prepending the keyword 'annotate' to the command:
+	mesh_set annotate kn[1-2] vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -977,7 +894,11 @@ For example, to get the vm_info from nodes kn1 and kn2:
 			Helplong: `
 Send a command to all connected clients.
 For example, to get the vm_info from all nodes:
-	mesh_broadcast vm_info`,
+	mesh_broadcast vm_info
+
+Optionally, you can annotate the output with the hostname of all responders by
+prepending the keyword 'annotate' to the command:
+	mesh_broadcast annotate vm_info`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -1020,7 +941,7 @@ To start only a from a config file:
 	dnsmasq start /path/to/config
 
 To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
-running dnsmasq server, specify its ID from the list of running servers: For
+running dnsmasq server, specify its ID from the list of running servers. For
 example, to kill dnsmasq server 2:
 
 	dnsmasq kill 2
@@ -1079,7 +1000,10 @@ logged.
 			Helpshort: "report statistics about the host",
 			Helplong: `
 Report statistics about the host including hostname, load averages, total and
-free memory, and current bandwidth usage",
+free memory, and current bandwidth usage.
+
+To output host statistics without the header, use the quiet argument:
+	host_stats quiet
 `,
 			Record: true,
 			Clear: func() error {
@@ -1102,16 +1026,41 @@ allows a single disk image to be used for many VMs.
 			},
 		},
 
-		"ksm": &command{
-			Call:      ksmCLI,
-			Helpshort: "enable or disable Kernel Samepage Merging",
+		"optimize": &command{
+			Call:      optimizeCLI,
+			Helpshort: "enable or disable several virtualization optimizations",
 			Helplong: `
-Enable or disable Kernel Samepage Merging, which can vastly increase the
-density of VMs a node can run depending on how similar the VMs are.
+Enable or disable several virtualization optimizations, including Kernel
+Samepage Merging, CPU affinity for VMs, and the use of hugepages.
+
+To enable/disable Kernel Samepage Merging (KSM):
+	optimize ksm [true,false]
+
+To enable hugepage support:
+	optimize hugepages </path/to/hugepages_mount>
+
+To disable hugepage support:
+	optimize hugepages ""
+
+To enable/disable CPU affinity support:
+	optimize affinity [true,false]
+
+To set a CPU set filter for the affinity scheduler, for example (to use only
+CPUs 1, 2-20):
+	optimize affinity filter [1,2-20]
+
+To clear a CPU set filter:
+	optimize affinity filter
+
+To view current CPU affinity mappings:
+	optimize affinity
+
+To disable all optimizations
+	clear optimize
 `,
 			Record: true,
 			Clear: func() error {
-				ksmDisable()
+				clearOptimize()
 				return nil
 			},
 		},
@@ -1288,7 +1237,10 @@ vyatta takes a number of subcommands:
 
 	'routes': Set static routes. Routes are specified as
 	<network>,<next-hop> ... 
-	For example: vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1 'config': Override all other options and use a specified file as the config file. For example: vyatta config /tmp/myconfig.boot
+	For example: vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
+
+	'config': Override all other options and use a specified file as the
+	config file. For example: vyatta config /tmp/myconfig.boot
 
 	'write': Write the current configuration to file. If a filename is
 	omitted, a random filename will be used and the file placed in the path
@@ -1409,13 +1361,13 @@ You can also specify function like macros in a similar way to function like macr
 
 	define key(x,y) this is my x, this is my y
 
-Will replace all instances of x and y in the expansion wit the variable arguments. When used:
+Will replace all instances of x and y in the expansion with the variable arguments. When used:
 
 	key(foo,bar)
 
 Will expand to:
 
-	thi is mbar foo, this is mbar bar
+	this is mbar foo, this is mbar bar
 
 To show defined macros, invoke define with no arguments.
 `,
@@ -1590,6 +1542,11 @@ func cliExec(c cliCommand) cliResponse {
 		return cliResponse{}
 	}
 
+	// super special case
+	if c.Command == "vm_vince" {
+		log.Fatalln(poeticDeath)
+	}
+
 	// special case, comments. Any line starting with # is a comment and WILL be
 	// recorded.
 	if strings.HasPrefix(c.Command, "#") {
@@ -1620,3 +1577,10 @@ func cliExec(c cliCommand) cliResponse {
 	}
 	return r
 }
+
+var poeticDeath = `
+Willst du immer weiterschweifen?
+Sieh, das Gute liegt so nah.
+Lerne nur das Glück ergreifen,
+denn das Glück ist immer da.
+`

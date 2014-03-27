@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"io/ioutil"
 	log "minilog"
@@ -34,6 +35,24 @@ func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we ca
 		log.Errorln(err)
 	}
 
+	// remove all mega_taps
+	bNames := nukeBridgeNames(true)
+	dirs, err := ioutil.ReadDir("/sys/class/net")
+	if err != nil {
+		log.Errorln(err)
+	} else {
+		for _, n := range dirs {
+			if strings.Contains(n.Name(), "mega_tap") {
+				for _, b := range bNames {
+					nukeTap(b, n.Name())
+				}
+			}
+		}
+	}
+
+	// remove bridges that have preExist == false
+	nukeBridges()
+
 	// clean up the base path
 	log.Info("cleaning up base path: %v", *f_base)
 	err = os.RemoveAll(*f_base)
@@ -41,20 +60,61 @@ func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we ca
 		log.Errorln(err)
 	}
 
-	// remove all mega_taps, but leave the mega_bridge
-	dirs, err := ioutil.ReadDir("/sys/class/net")
-	if err != nil {
-		log.Errorln(err)
-	} else {
-		for _, n := range dirs {
-			if strings.Contains(n.Name(), "mega_tap") {
-				nukeTap(n.Name())
-			}
-		}
-	}
-
 	teardown()
 	return cliResponse{}
+}
+
+// return names of bridges as shown in f_base/bridges. Optionally include
+// bridges that existed before minimega was launched
+func nukeBridgeNames(preExist bool) []string {
+	var ret []string
+	b, err := os.Open(*f_base + "bridges")
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
+	scanner := bufio.NewScanner(b)
+	// skip the first line
+	scanner.Scan()
+	for scanner.Scan() {
+		f := strings.Fields(scanner.Text())
+		log.Debugln(f)
+		if len(f) <= 3 {
+			continue
+		}
+		if (f[2] == "true" && preExist) || f[2] == "false" {
+			ret = append(ret, f[0])
+		}
+	}
+	log.Debug("nukeBridgeNames got: %v", ret)
+	return ret
+}
+
+func nukeBridges() {
+	bNames := nukeBridgeNames(false)
+	for _, b := range bNames {
+		var sOut bytes.Buffer
+		var sErr bytes.Buffer
+
+		p := process("ovs")
+		cmd := &exec.Cmd{
+			Path: p,
+			Args: []string{
+				p,
+				"del-br",
+				b,
+			},
+			Env:    nil,
+			Dir:    "",
+			Stdout: &sOut,
+			Stderr: &sErr,
+		}
+		log.Infoln("removing bridge:", b)
+		err := cmd.Run()
+		if err != nil {
+			log.Error("%v: %v", err, sErr.String())
+		}
+	}
 }
 
 func nukeWalker(path string, info os.FileInfo, err error) error {
@@ -92,22 +152,11 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			log.Error("%v: %v", err, sErr.String())
 		}
-	case "taps":
-		d, err := ioutil.ReadFile(path)
-		t := strings.TrimSpace(string(d))
-		if err != nil {
-			return err
-		}
-		f := strings.Fields(t)
-		log.Debugln("got taps:", f)
-		for _, v := range f {
-			nukeTap(v)
-		}
 	}
 	return nil
 }
 
-func nukeTap(tap string) {
+func nukeTap(b, tap string) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
@@ -159,7 +208,7 @@ func nukeTap(tap string) {
 		Args: []string{
 			p,
 			"del-port",
-			"mega_bridge",
+			b,
 			tap,
 		},
 		Env:    nil,

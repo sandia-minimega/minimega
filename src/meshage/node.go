@@ -29,6 +29,9 @@
 // recalculate the topology.
 package meshage
 
+// TODO(fritz): stress test meshage. Odd things keep cropping up that may be meshage related.
+// BUG(fritz): new meshage connections are slow. 
+
 import (
 	"encoding/gob"
 	"errors"

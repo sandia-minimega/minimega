@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -52,9 +53,6 @@ var (
 // tap names for this host.
 func init() {
 	bridges = make(map[string]*bridge)
-	bridges[DEFAULT_BRIDGE] = &bridge{
-		Name: DEFAULT_BRIDGE,
-	}
 	tapChan = make(chan string)
 	go func() {
 		for {
@@ -79,6 +77,8 @@ func getBridge(b string) *bridge {
 	bridges[b] = &bridge{
 		Name: b,
 	}
+	bridges[b].create()
+	updateBridgeInfo()
 	return bridges[b]
 }
 
@@ -112,6 +112,12 @@ func bridgesDestroy() error {
 		}
 		delete(bridges, k)
 	}
+	updateBridgeInfo()
+	bridgeFile := *f_base + "bridges"
+	err := os.Remove(bridgeFile)
+	if err != nil {
+		log.Errorln(err)
+	}
 	if len(e) == 0 {
 		return nil
 	} else {
@@ -119,12 +125,11 @@ func bridgesDestroy() error {
 	}
 }
 
-func cliBridgeInfo(c cliCommand) cliResponse {
+// return formatted bridge info. expected to be called with bridgeLock set
+func bridgeInfo() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
 	fmt.Fprintf(w, "Bridge\tExists\tExisted before minimega\tActive VLANS\n")
 	for _, v := range bridges {
 		var vlans []int
@@ -135,9 +140,24 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 	}
 
 	w.Flush()
+	return o.String()
+}
 
+func updateBridgeInfo() {
+	log.Debugln("updateBridgeInfo")
+	i := bridgeInfo()
+	path := *f_base + "bridges"
+	err := ioutil.WriteFile(path, []byte(i), 0644)
+	if err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func cliBridgeInfo(c cliCommand) cliResponse {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
 	return cliResponse{
-		Response: o.String(),
+		Response: bridgeInfo(),
 	}
 }
 
@@ -145,12 +165,8 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
 func (b *bridge) LanCreate(lan int) error {
-	err := b.create()
-	if err != nil {
-		return err
-	}
 	// start the ipmaclearner if need be
-	err = b.startIML()
+	err := b.startIML()
 	if err != nil {
 		return err
 	}
@@ -526,8 +542,19 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	log.Debug("adding tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		if strings.Contains(sErr.String(), "already exists") {
+			// special case - we own the tap, but it already exists
+			// on the bridge. simply remove and add it again
+			log.Info("tap %v is already on bridge, readding", tap)
+			err = b.TapRemove(lan, tap)
+			if err != nil {
+				return err
+			}
+			return b.TapAdd(lan, tap, host)
+		} else {
+			e := fmt.Errorf("%v: %v", err, sErr.String())
+			return e
+		}
 	}
 	return nil
 }
@@ -568,8 +595,6 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 }
 
 // routines for interfacing bridge mechanisms with the cli
-
-// BUG(fritz): host_tap delete -1 / clear host_tap stopped working
 func hostTap(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
@@ -640,29 +665,42 @@ func hostTapList() cliResponse {
 }
 
 func hostTapDelete(tap string) cliResponse {
-	b, err := getBridgeFromTap(tap)
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
+	var c []*bridge
+	// special case, -1, which should delete all host taps from all bridges
+	if tap == "-1" {
+		bridgeLock.Lock()
+		for _, v := range bridges {
+			c = append(c, v)
 		}
+		bridgeLock.Unlock()
+	} else {
+		b, err := getBridgeFromTap(tap)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		c = append(c, b)
 	}
-	for lan, t := range b.lans {
-		if tap == "-1" {
-			// remove all host taps on this vlan
-			for k, v := range t.Taps {
-				if v.host {
-					b.TapRemove(lan, k)
+	for _, b := range c {
+		for lan, t := range b.lans {
+			if tap == "-1" {
+				// remove all host taps on this vlan
+				for k, v := range t.Taps {
+					if v.host {
+						b.TapRemove(lan, k)
+					}
 				}
+				continue
 			}
-			continue
-		}
-		if tf, ok := t.Taps[tap]; ok {
-			if !tf.host {
-				return cliResponse{
-					Error: "not a host tap",
+			if tf, ok := t.Taps[tap]; ok {
+				if !tf.host {
+					return cliResponse{
+						Error: "not a host tap",
+					}
 				}
+				b.TapRemove(lan, tap)
 			}
-			b.TapRemove(lan, tap)
 		}
 	}
 	return cliResponse{}

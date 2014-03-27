@@ -6,12 +6,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
 	"os"
 	"os/exec"
 	"qmp"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -40,6 +42,7 @@ const (
 
 const (
 	VM_MEMORY_DEFAULT = "2048"
+	VM_NOT_FOUND      = -2
 )
 
 // total list of vms running on this host
@@ -66,8 +69,31 @@ type vmInfo struct {
 	taps         []string // list of taps associated with this vm
 	Networks     []int    // ordered list of networks (matches 1-1 with Taps)
 	macs         []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	netDrivers   []string // optional non-e1000 driver
 	Snapshot     bool
 	Hotplug      map[int]string
+	PID          int
+}
+
+type jsonInfo struct {
+	Id       int
+	Host     string
+	Name     string
+	Memory   string
+	Vcpus    string
+	Disk     string
+	Snapshot bool
+	Initrd   string
+	Kernel   string
+	Cdrom    string
+	Append   string
+	State    string
+	Bridges  []string
+	Taps     []string
+	Macs     []string
+	IP       []string
+	IP6      []string
+	Networks []int
 }
 
 func init() {
@@ -93,6 +119,169 @@ func init() {
 	info.InitrdPath = ""
 	info.State = VM_BUILDING
 	info.Snapshot = true
+}
+
+// satisfy the sort interface for vmInfo
+func SortBy(by string, vms []*vmInfo) {
+	v := &vmSorter{
+		vms: vms,
+		by:  by,
+	}
+	sort.Sort(v)
+}
+
+type vmSorter struct {
+	vms []*vmInfo
+	by  string
+}
+
+func (vms *vmSorter) Len() int {
+	return len(vms.vms)
+}
+
+func (vms *vmSorter) Swap(i, j int) {
+	vms.vms[i], vms.vms[j] = vms.vms[j], vms.vms[i]
+}
+
+func (vms *vmSorter) Less(i, j int) bool {
+	switch vms.by {
+	case "id":
+		return vms.vms[i].Id < vms.vms[j].Id
+	case "host":
+		return true
+	case "name":
+		return vms.vms[i].Name < vms.vms[j].Name
+	case "state":
+		return vms.vms[i].State < vms.vms[j].State
+	case "memory":
+		return vms.vms[i].Memory < vms.vms[j].Memory
+	case "vcpus":
+		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
+	case "disk":
+		return vms.vms[i].DiskPath < vms.vms[j].DiskPath
+	case "initrd":
+		return vms.vms[i].InitrdPath < vms.vms[j].InitrdPath
+	case "kernel":
+		return vms.vms[i].KernelPath < vms.vms[j].KernelPath
+	case "cdrom":
+		return vms.vms[i].CdromPath < vms.vms[j].CdromPath
+	case "append":
+		return vms.vms[i].Append < vms.vms[j].Append
+	case "bridge", "tap", "mac", "ip", "ip6", "vlan":
+		// BUG(fritz); vm_info does not sort on bridge, mac, vlan, etc...
+		return true
+	default:
+		log.Fatal("invalid sort parameter %v", vms.by)
+		return false
+	}
+}
+
+func cliVMSave(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Error: "Usage: vm_save <save name> <vm id> [<vm id> ...]",
+		}
+	}
+
+	path := *f_base + "saved_vms"
+	err := os.MkdirAll(path, 0775)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	file, err := os.Create(fmt.Sprintf("%v/%v", path, c.Args[0]))
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
+
+	var toSave []string
+	if len(c.Args) == 1 {
+		// get all vms
+		for k, _ := range vms.vms {
+			toSave = append(toSave, fmt.Sprintf("%v", k))
+		}
+	} else {
+		toSave = c.Args[1:]
+	}
+	for _, vmStr := range toSave { // iterate over the vm id's specified
+		vm := vms.getVM(vmStr)
+		if vm == nil {
+			return cliResponse{
+				Error: fmt.Sprintf("no such vm %v", vmStr),
+			}
+		}
+
+		// build up the command list to re-launch this vm
+		cmds := []string{}
+		cmds = append(cmds, "vm_memory "+vm.Memory)
+		cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
+
+		if vm.DiskPath != "" {
+			cmds = append(cmds, "vm_disk "+vm.DiskPath)
+		} else {
+			cmds = append(cmds, "clear vm_disk")
+		}
+
+		if vm.CdromPath != "" {
+			cmds = append(cmds, "vm_cdrom "+vm.CdromPath)
+		} else {
+			cmds = append(cmds, "clear vm_cdrom")
+		}
+
+		if vm.KernelPath != "" {
+			cmds = append(cmds, "vm_kernel "+vm.KernelPath)
+		} else {
+			cmds = append(cmds, "clear vm_kernel")
+		}
+
+		if vm.InitrdPath != "" {
+			cmds = append(cmds, "vm_initrd "+vm.InitrdPath)
+		} else {
+			cmds = append(cmds, "clear vm_initrd")
+		}
+
+		if vm.Append != "" {
+			cmds = append(cmds, "vm_append "+vm.Append)
+		} else {
+			cmds = append(cmds, "clear vm_append")
+		}
+
+		if len(vm.QemuAppend) != 0 {
+			cmds = append(cmds, "vm_qemu_append "+strings.Join(vm.QemuAppend, " "))
+		} else {
+			cmds = append(cmds, "clear vm_qemu_append")
+		}
+
+		cmds = append(cmds, fmt.Sprintf("vm_snapshot %v", vm.Snapshot))
+		if len(vm.Networks) != 0 {
+			netString := "vm_net "
+			for i, vlan := range vm.Networks {
+				netString += fmt.Sprintf("%v,%v,%v,%v ", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+			}
+			cmds = append(cmds, strings.TrimSpace(netString))
+		} else {
+			cmds = append(cmds, "clear vm_net")
+		}
+
+		if vm.Name != "" {
+			cmds = append(cmds, "vm_launch "+vm.Name)
+		} else {
+			cmds = append(cmds, "vm_launch 1")
+		}
+
+		// write commands to file
+		for _, cmd := range cmds {
+			_, err = file.WriteString(cmd + "\n")
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+		}
+	}
+	return cliResponse{}
 }
 
 // vm_config
@@ -319,14 +508,14 @@ func (vm *vmInfo) stop() error {
 }
 
 // findByName returns the id of a VM based on its name. If the VM doesn't exist
-// return -2, as -1 is reserved as the wildcard.
+// return VM_NOT_FOUND (-2), as -1 is reserved as the wildcard.
 func (l *vmList) findByName(name string) int {
 	for i, v := range l.vms {
 		if v.Name == name {
 			return i
 		}
 	}
-	return -2
+	return VM_NOT_FOUND
 }
 
 // kill one or all vms (-1 for all)
@@ -343,7 +532,7 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 		id = l.findByName(c.Args[0])
 	}
 
-	if id == -2 {
+	if id == VM_NOT_FOUND {
 		return cliResponse{
 			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
 		}
@@ -451,6 +640,8 @@ func (info *vmInfo) Copy() *vmInfo {
 	copy(newInfo.Networks, info.Networks)
 	newInfo.macs = make([]string, len(info.macs))
 	copy(newInfo.macs, info.macs)
+	newInfo.netDrivers = make([]string, len(info.netDrivers))
+	copy(newInfo.netDrivers, info.netDrivers)
 	newInfo.Snapshot = info.Snapshot
 	// Hotplug isn't allocated until later in launch()
 	return newInfo
@@ -459,12 +650,15 @@ func (info *vmInfo) Copy() *vmInfo {
 func (l *vmList) info(c cliCommand) cliResponse {
 	var v []*vmInfo
 
+	var output string
 	var search string
 	var mask string
 	switch len(c.Args) {
 	case 0:
-	case 1: // search or mask
-		if strings.Contains(c.Args[0], "=") {
+	case 1: // output, search, or mask
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else if strings.HasPrefix(c.Args[0], "[") {
 			mask = strings.Trim(c.Args[0], "[]")
@@ -473,16 +667,51 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-	case 2: // first term MUST be search
-		if strings.Contains(c.Args[0], "=") {
+	case 2:
+		// first arg must be output or search
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else if strings.Contains(c.Args[0], "=") {
 			search = c.Args[0]
 		} else {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
-		if strings.HasPrefix(c.Args[1], "[") {
+
+		// second arg must be search or mask, and cannot be search if
+		// already set
+		if strings.Contains(c.Args[1], "=") {
+			if search != "" {
+				return cliResponse{
+					Error: "malformed command",
+				}
+			}
+			search = c.Args[1]
+		} else if strings.HasPrefix(c.Args[1], "[") {
 			mask = strings.Trim(c.Args[1], "[]")
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+	case 3: // must be output, search, mask
+		if strings.Contains(c.Args[0], "output=") {
+			output = c.Args[0]
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		if strings.Contains(c.Args[1], "=") {
+			search = c.Args[1]
+		} else {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		if strings.HasPrefix(c.Args[2], "[") {
+			mask = strings.Trim(c.Args[2], "[]")
 		} else {
 			return cliResponse{
 				Error: "malformed command",
@@ -494,16 +723,37 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		}
 	}
 
-	// vm_info takes a search term and an output mask, we'll start with the optional seach term
+	// vm_info takes an output mode, search term, and an output mask, we'll start with the optional output mode
+	if output != "" {
+		d := strings.Split(output, "=")
+		if len(d) != 2 {
+			return cliResponse{
+				Error: "malformed output mode",
+			}
+		}
+
+		output = d[1]
+		switch output {
+		case "quiet":
+			log.Debugln("vm_info quiet mode")
+		case "json":
+			log.Debugln("vm_info json mode")
+		default:
+			return cliResponse{
+				Error: "malformed output mode",
+			}
+		}
+	}
+
 	if search != "" {
-		d := strings.Split(c.Args[0], "=")
+		d := strings.Split(search, "=")
 		if len(d) != 2 {
 			return cliResponse{
 				Error: "malformed search term",
 			}
 		}
 
-		log.Debug("vm_info: search term: %v", d)
+		log.Debug("vm_info search term: %v", d[1])
 
 		switch strings.ToLower(d[0]) {
 		case "host":
@@ -529,7 +779,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		case "name":
 			id := l.findByName(d[1])
-			if id == -2 {
+			if id == VM_NOT_FOUND {
 				return cliResponse{}
 			}
 			if vm, ok := l.vms[id]; ok {
@@ -682,6 +932,74 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		return cliResponse{}
 	}
 
+	// short circuit if output == json, as we won't set any output masks
+	if output == "json" {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+
+		var o []jsonInfo
+		host, err := os.Hostname()
+		if err != nil {
+			log.Errorln(err)
+			teardown()
+		}
+		for _, i := range v {
+			var state string
+			switch i.State {
+			case VM_BUILDING:
+				state = "building"
+			case VM_RUNNING:
+				state = "running"
+			case VM_PAUSED:
+				state = "paused"
+			case VM_QUIT:
+				state = "quit"
+			case VM_ERROR:
+				state = "error"
+			default:
+				state = "unknown"
+			}
+			var ips []string
+			var ip6 []string
+			for _, m := range i.macs {
+				ip := GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP4)
+					ip6 = append(ip6, ip.IP6)
+				}
+			}
+			o = append(o, jsonInfo{
+				Id:       i.Id,
+				Host:     host,
+				Name:     i.Name,
+				Memory:   i.Memory,
+				Vcpus:    i.Vcpus,
+				Disk:     i.DiskPath,
+				Snapshot: i.Snapshot,
+				Initrd:   i.InitrdPath,
+				Kernel:   i.KernelPath,
+				Cdrom:    i.CdromPath,
+				Append:   i.Append,
+				State:    state,
+				Bridges:  i.bridges,
+				Taps:     i.taps,
+				Macs:     i.macs,
+				IP:       ips,
+				IP6:      ip6,
+				Networks: i.Networks,
+			})
+		}
+		err = enc.Encode(&o)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		return cliResponse{
+			Response: buf.String(),
+		}
+	}
+
 	// output mask
 	var omask []string
 	if mask != "" {
@@ -694,6 +1012,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "host")
 			case "name":
 				omask = append(omask, "name")
+			case "state":
+				omask = append(omask, "state")
 			case "memory":
 				omask = append(omask, "memory")
 			case "vcpus":
@@ -708,8 +1028,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "cdrom")
 			case "append":
 				omask = append(omask, "append")
-			case "state":
-				omask = append(omask, "state")
 			case "bridge":
 				omask = append(omask, "bridge")
 			case "tap":
@@ -732,21 +1050,34 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
 	}
 
-	// create output
+	// did someone do something silly?
+	if len(omask) == 0 {
+		return cliResponse{}
+	}
+
+	// create a sorted list of keys, based on the first column of the output mask
+	SortBy(omask[0], v)
+
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	for i, k := range omask {
-		if i != 0 {
-			fmt.Fprintf(w, "\t| ")
-		}
-		fmt.Fprintf(w, k)
-	}
-	fmt.Fprintf(w, "\n")
-	for _, j := range v {
+	if output == "" {
 		for i, k := range omask {
 			if i != 0 {
 				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, k)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+	for _, j := range v {
+		for i, k := range omask {
+			if i != 0 {
+				if output == "quiet" {
+					fmt.Fprintf(w, "\t")
+				} else {
+					fmt.Fprintf(w, "\t| ")
+				}
 			}
 			switch k {
 			case "host":
@@ -997,13 +1328,18 @@ func (vm *vmInfo) launchOne() {
 		Stderr: &sErr,
 	}
 	err = cmd.Start()
-
 	if err != nil {
 		log.Error("%v %v", err, sErr.String())
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
 	}
+
+	vm.PID = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.Id, vm.PID)
+
+	vm.CheckAffinity()
+
 	go func() {
 		err = cmd.Wait()
 		vm.state(VM_QUIT)
@@ -1136,7 +1472,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 	args = append(args, "en-us")
 
 	args = append(args, "-cpu")
-	args = append(args, "qemu64")
+	args = append(args, "host")
 
 	args = append(args, "-net")
 	args = append(args, "none")
@@ -1145,7 +1481,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 
 	if vm.DiskPath != "" {
 		args = append(args, "-drive")
-		args = append(args, "file="+vm.DiskPath+",cache=writeback,media=disk")
+		args = append(args, "file="+vm.DiskPath+",cache=none,media=disk")
 		if vm.Snapshot {
 			args = append(args, "-snapshot")
 		}
@@ -1181,7 +1517,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-device")
 		b := getBridge(vm.bridges[i])
 		b.iml.AddMac(vm.macs[i])
-		args = append(args, fmt.Sprintf("e1000,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", tap, vm.macs[i], bus, addr))
+		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))
 		addr++
 		if addr == 32 {
 			addr = 1
@@ -1189,6 +1525,12 @@ func (vm *vmInfo) vmGetArgs() []string {
 			args = append(args, fmt.Sprintf("-device"))
 			args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
 		}
+	}
+
+	// hook for hugepage support
+	if hugepagesMountPath != "" {
+		args = append(args, "-mem-info")
+		args = append(args, hugepagesMountPath)
 	}
 
 	if len(vm.QemuAppend) > 0 {
@@ -1234,6 +1576,9 @@ func cliClearVMConfig() error {
 	info.QemuAppend = []string{}
 	info.Append = ""
 	info.Networks = []int{}
+	info.macs = []string{}
+	info.bridges = []string{}
+	info.netDrivers = []string{}
 	info.Snapshot = true
 	return nil
 }
@@ -1378,45 +1723,74 @@ func cliVMNet(c cliCommand) cliResponse {
 		info.bridges = []string{}
 		info.Networks = []int{}
 		info.macs = []string{}
+		info.netDrivers = []string{}
 
 		for _, lan := range c.Args {
-			d := strings.Split(lan, ",")
+			f := strings.Split(lan, ",")
 			// this takes a bit of parsing, because the entry can be in a few forms:
 			// 	vlan
+			//
 			//	vlan,mac
 			//	bridge,vlan
+			//	vlan,driver
+			//
 			//	bridge,vlan,mac
+			//	vlan,mac,driver
+			//	bridge,vlan,driver
+			//
+			//	bridge,vlan,mac,driver
 			// If there are 2 or 3 fields, just the last field for the presence of a mac
 
 			var b string
 			var v string
 			var m string
-			switch len(d) {
+			var d string
+			switch len(f) {
 			case 1:
-				v = d[0]
+				v = f[0]
 			case 2:
-				if isMac(d[1]) {
-					v = d[0]
-					m = d[1]
+				if isMac(f[1]) {
+					// vlan, mac
+					v = f[0]
+					m = f[1]
+				} else if _, err := strconv.Atoi(f[0]); err == nil {
+					// vlan, driver
+					v = f[0]
+					d = f[1]
 				} else {
-					b = d[0]
-					v = d[1]
+					// bridge, vlan
+					b = f[0]
+					v = f[1]
 				}
 			case 3:
-				if isMac(d[2]) {
-					b = d[0]
-					v = d[1]
-					m = d[2]
+				if isMac(f[2]) {
+					// bridge, vlan, mac
+					b = f[0]
+					v = f[1]
+					m = f[2]
+				} else if isMac(f[1]) {
+					// vlan, mac, driver
+					v = f[0]
+					m = f[1]
+					d = f[2]
 				} else {
-					return cliResponse{
-						Error: "invalid MAC address",
-					}
+					// bridge, vlan, driver
+					b = f[0]
+					v = f[1]
+					d = f[2]
 				}
+			case 4:
+				b = f[0]
+				v = f[1]
+				m = f[2]
+				d = f[3]
 			default:
 				return cliResponse{
 					Error: "malformed command",
 				}
 			}
+
+			log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
 			// VLAN ID, with optional bridge
 			val, err := strconv.Atoi(v) // the vlan id
@@ -1434,8 +1808,19 @@ func cliVMNet(c cliCommand) cliResponse {
 				}
 			}
 
-			info.bridges = append(info.bridges, b)
+			if b == "" {
+				info.bridges = append(info.bridges, DEFAULT_BRIDGE)
+			} else {
+				info.bridges = append(info.bridges, b)
+			}
+
 			info.Networks = append(info.Networks, val)
+
+			if d == "" {
+				info.netDrivers = append(info.netDrivers, "e1000")
+			} else {
+				info.netDrivers = append(info.netDrivers, d)
+			}
 
 			// (optional) MAC ADDRESS
 			if m != "" {

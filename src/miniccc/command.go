@@ -442,11 +442,47 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					<br>
 					&nbsp;&nbsp;&nbsp;&nbsp;OS: <input type=text name=filter_os>
 					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;OS Version: <select name=filter_osver>
+					<option value=""></option>
+					<option value="Windows 7">Windows 7</option>
+					<option value="Windows XP">Windows XP</option>
+					<option value="Windows Vista">Windows Vista</option>
+					<option value="Windows 8">Windows 8</option>
+					<option value="Windows 8.1">Windows 8.1</option>
+					<option value="Windows Server 2012">Windows Server 2012</option>
+					<option value="Windows Server 2008">Windows Server 2008</option>
+					<option value="Windows Server 2003">Windows Server 2003</option>
+					<option value="Windows 2000">Windows 2000</option>
+					<option value="Windows Longhorn">Windows Longhorn</option>
+					<option value="Windows .NET Server 2003">Windows .NET Server 2003</option>
+					<option value="Windows .NET Server">Windows .NET Server 2003</option>
+					<option value="Windows NT 5.00">Windows NT 5.00</option>
+					<option value="Windows Me">Windows Me</option>
+					<option value="Windows 98">Windows 98</option>
+					<option value="Windows 95">Windows 95</option>
+					</select>
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;CSD Version: <select name=filter_csdver>
+					<option value=""></option>
+					<option value="none">None</option>
+					<option value="Service Pack 1">Service Pack 1</option>
+					<option value="Service Pack 2">Service Pack 2</option>
+					<option value="Service Pack 3">Service Pack 3</option>
+					</select>
+					<br>
+					&nbsp;&nbsp;&nbsp;&nbsp;Edition ID: <select name=filter_editionid>
+					<option value=""></option>
+					<option value="Starter">Starter</option>
+					<option value="Home Basic">Home Basic</option>
+					<option value="Home Premium">Home Premium</option>
+					<option value="Professional">Professional</option>
+					<option value="Enterprise">Enterprise</option>
+					<option value="Ultimate">Ultimate</option>
+					</select>
+					<br>
 					&nbsp;&nbsp;&nbsp;&nbsp;IP (IP or CIDR list, space delimited): <input type=text name=filter_ip>
 					<br>
 					&nbsp;&nbsp;&nbsp;&nbsp;MAC (space delimited): <input type=text name=filter_mac>
-					<br>
-
 					Command Expiry (blank fields are unused):
 					<br>
 					&nbsp;&nbsp;&nbsp;&nbsp;Number of responses: <input type=text name=expire_responses>
@@ -476,6 +512,9 @@ func getFilter(r *http.Request) []*Client {
 	host := r.FormValue("filter_hostname")
 	arch := r.FormValue("filter_arch")
 	os := r.FormValue("filter_os")
+	osver := r.FormValue("filter_osver")
+	csdver := r.FormValue("filter_csdver")
+	editionid := r.FormValue("filter_editionid")
 	ip := r.FormValue("filter_ip")
 	mac := r.FormValue("filter_mac")
 
@@ -483,12 +522,15 @@ func getFilter(r *http.Request) []*Client {
 	macs := strings.Fields(mac)
 
 	return []*Client{&Client{
-		CID:      cidInt,
-		Hostname: host,
-		Arch:     arch,
-		OS:       os,
-		IP:       ips,
-		MAC:      macs,
+		CID:       cidInt,
+		Hostname:  host,
+		Arch:      arch,
+		OS:        os,
+		OSVer:     osver,
+		CSDVer:    csdver,
+		EditionID: editionid,
+		IP:        ips,
+		MAC:       macs,
 	}}
 }
 

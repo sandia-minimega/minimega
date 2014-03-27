@@ -7,6 +7,10 @@ package main
 // TODO(fritz): scheduler support
 // TODO(fritz): lxc support
 // TODO(evan): vnc record/replay
+// TODO(evan): QoS support with global policy
+// TODO(fritz): filepath inconsistencies
+// TODO(fritz): more logging throughout
+// TODO(fritz): add documentation generation, with the api
 
 import (
 	"flag"
@@ -109,6 +113,10 @@ func main() {
 			log.Fatalln("minimega appears to already be running, override with -force")
 		}
 		log.Warn("minimega may already be running, proceed with caution")
+		err = os.Remove(*f_base + "minimega")
+		if err != nil {
+			log.Fatalln(err)
+		}
 	}
 
 	// set up signal handling

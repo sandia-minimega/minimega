@@ -2,3 +2,5 @@ pkg
 bin
 volatile
 src/version/version.go
+*.swp
+__pycache__

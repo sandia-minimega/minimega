@@ -23,6 +23,38 @@ func TestSplitRange(t *testing.T) {
 	}
 }
 
+func TestSplitRangeNoPrefix(t *testing.T) {
+	r, _ := NewRange("", 1, 520)
+
+	expected := []string{"1", "2", "3", "100"}
+	input := "[1-3,100]"
+
+	res, _ := r.SplitRange(input)
+
+	es := fmt.Sprintf("%v", expected)
+	rs := fmt.Sprintf("%v", res)
+
+	if es != rs {
+		t.Fatal("SplitRange returned: ", res, ", expected: ", expected)
+	}
+}
+
+func TestSplitRangePadded(t *testing.T) {
+	r, _ := NewRange("kn", 1, 520)
+
+	expected := []string{"kn008", "kn009", "kn010", "kn011", "kn100"}
+	input := "kn[008-011,100]"
+
+	res, _ := r.SplitRange(input)
+
+	es := fmt.Sprintf("%v", expected)
+	rs := fmt.Sprintf("%v", res)
+
+	if es != rs {
+		t.Fatal("SplitRangePadded returned: ", res, ", expected: ", expected)
+	}
+}
+
 func TestUnsplitRange(t *testing.T) {
 	r, _ := NewRange("kn", 1, 520)
 
