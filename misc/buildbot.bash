@@ -19,8 +19,8 @@ cp -r ../minimega/src/* src
 cp -r ../minimega/misc/* misc
 cd ..
 tar cjf minimega-${DATE}.tar.bz2 minimega-$DATE
-rm /home/fritz/web/minimega.org/nightly/*
-cp minimega-${DATE}.tar.bz2 /home/fritz/web/minimega.org/nightly
-cp minimega/build.log /home/fritz/web/minimega.org/nightly/minimega-${DATE}.log
+rm /home/fritz/web/web/moustache.ran.sandia.gov/nightly/*
+cp minimega-${DATE}.tar.bz2 /home/fritz/web/web/moustache.ran.sandia.gov/nightly
+cp minimega/build.log /home/fritz/web/web/moustache.ran.sandia.gov/nightly/minimega-${DATE}.log
 rm minimega-${DATE}.tar.bz2
 rm -rf minimega-${DATE}
