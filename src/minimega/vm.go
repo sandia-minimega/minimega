@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -30,6 +31,7 @@ var (
 	launchAck chan int
 	killAck   chan int
 	vmIdChan  chan int
+	vmLock    sync.Mutex
 )
 
 const (
@@ -51,6 +53,7 @@ type vmList struct {
 }
 
 type vmInfo struct {
+	Lock         sync.Mutex
 	Id           int
 	Name         string
 	Memory       string // memory for the vm, in megabytes
@@ -540,8 +543,8 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 		killCount := 0
 		timedOut := 0
 		for _, i := range l.vms {
-
-			if i.State != VM_QUIT && i.State != VM_ERROR {
+			s := i.getState()
+			if s != VM_QUIT && s != VM_ERROR {
 				i.Kill <- true
 				killCount++
 			}
@@ -604,7 +607,9 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		vm.Kill = make(chan bool)
 		vm.Hotplug = make(map[int]string)
 		vm.State = VM_BUILDING
+		vmLock.Lock()
 		l.vms[vm.Id] = vm
+		vmLock.Unlock()
 		go vm.launchOne()
 	}
 	// get acknowledgements from each vm
@@ -1176,6 +1181,9 @@ func (vm *vmInfo) launchPreamble() bool {
 	diskSnapshotted := map[string]bool{}
 	diskPersistent := map[string]bool{}
 
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	// populate selfMacMap
 	for _, mac := range vm.macs {
 		if mac == "" { // don't worry about empty mac addresses
@@ -1198,7 +1206,9 @@ func (vm *vmInfo) launchPreamble() bool {
 			continue
 		}
 
-		vmIsActive := vm2.State == VM_BUILDING || vm2.State == VM_RUNNING || vm2.State == VM_PAUSED
+		s := vm2.getState()
+		vmIsActive := s == VM_BUILDING || s == VM_RUNNING || s == VM_PAUSED
+
 		if vmIsActive {
 			// populate mac addresses set
 			for _, mac := range vm2.macs {
@@ -1264,8 +1274,10 @@ func (vm *vmInfo) launchPreamble() bool {
 func (vm *vmInfo) launchOne() {
 	log.Info("launching vm: %v", vm.Id)
 
+	s := vm.getState()
+
 	// don't repeat the preamble if we're just in the quit state
-	if vm.State != VM_QUIT {
+	if s != VM_QUIT {
 		if !vm.launchPreamble() {
 			return
 		}
@@ -1341,7 +1353,7 @@ func (vm *vmInfo) launchOne() {
 	vm.CheckAffinity()
 
 	go func() {
-		err = cmd.Wait()
+		err := cmd.Wait()
 		vm.state(VM_QUIT)
 		if err != nil {
 			if err.Error() != "signal: killed" { // because we killed it
@@ -1391,8 +1403,16 @@ func (vm *vmInfo) launchOne() {
 	}
 }
 
+func (vm *vmInfo) getState() int {
+	vm.Lock.Lock()
+	defer vm.Lock.Unlock()
+	return vm.State
+}
+
 // update the vm state, and write the state to file
 func (vm *vmInfo) state(s int) {
+	vm.Lock.Lock()
+	defer vm.Lock.Unlock()
 	var stateString string
 	switch s {
 	case VM_BUILDING:

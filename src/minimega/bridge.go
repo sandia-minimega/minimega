@@ -27,6 +27,7 @@ type bridge struct {
 	exists   bool // false until the first usage, then true until destroyed.
 	preExist bool
 	iml      *ipmac.IPMacLearner
+	Lock     sync.Mutex
 }
 
 type vlan struct {
@@ -399,9 +400,11 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 	}
 
 	// the tap add was successful, so try to add it to the bridge
+	b.Lock.Lock()
 	b.lans[lan].Taps[tapName] = &tap{
 		host: false,
 	}
+	b.Lock.Unlock()
 	err = b.TapAdd(lan, tapName, false)
 	if err != nil {
 		return "", err
@@ -438,6 +441,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	}
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
+	b.Lock.Lock()
 	if v, ok := b.lans[-1]; ok {
 		if w, ok := v.Taps[tap]; ok {
 			if w.host {
@@ -449,6 +453,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	} else {
 		return nil
 	}
+	b.Lock.Unlock()
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -563,10 +568,12 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 func (b *bridge) TapRemove(lan int, tap string) error {
 	// put this tap into the disconnected vlan
 	if lan != -1 {
+		b.Lock.Lock()
 		if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
 			b.lans[-1].Taps[tap] = b.lans[lan].Taps[tap]
 		}
 		delete(b.lans[lan].Taps, tap)
+		b.Lock.Unlock()
 	}
 
 	var sOut bytes.Buffer
