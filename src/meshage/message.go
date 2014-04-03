@@ -143,11 +143,13 @@ func (n *Node) Set(recipients []string, traversal int, body interface{}) (int, e
 // Broadcast sends a message to all nodes on the mesh.
 func (n *Node) Broadcast(traversal int, body interface{}) (int, error) {
 	var recipients []string
+	n.meshLock.Lock()
 	for k, _ := range n.effectiveNetwork {
 		if k != n.name {
 			recipients = append(recipients, k)
 		}
 	}
+	n.meshLock.Unlock()
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,

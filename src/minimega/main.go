@@ -22,8 +22,10 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"version"
 )
 
@@ -223,4 +225,30 @@ func teardown() {
 		log.Fatalln(err)
 	}
 	os.Exit(0)
+}
+
+func cliQuit(c cliCommand) cliResponse {
+	switch len(c.Args) {
+	case 0:
+		teardown()
+		return cliResponse{}
+	case 1:
+		v, err := strconv.Atoi(c.Args[0])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		go func() {
+			time.Sleep(time.Duration(v) * time.Second)
+			teardown()
+		}()
+		return cliResponse{
+			Response: fmt.Sprintf("quitting after %v seconds", v),
+		}
+	default:
+		return cliResponse{
+			Error: fmt.Sprintf("malformed command %v", strings.Join(c.Args, " ")),
+		}
+	}
 }

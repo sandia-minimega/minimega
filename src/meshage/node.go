@@ -30,7 +30,7 @@
 package meshage
 
 // TODO(fritz): stress test meshage. Odd things keep cropping up that may be meshage related.
-// BUG(fritz): new meshage connections are slow. 
+// BUG(fritz): new meshage connections are slow.
 
 import (
 	"encoding/gob"
@@ -292,7 +292,10 @@ func (n *Node) checkDegree() {
 	var backoff uint = 1
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	for uint(len(n.clients)) < n.degree {
+	n.clientLock.Lock()
+	numClients := uint(len(n.clients))
+	n.clientLock.Unlock()
+	for numClients < n.degree {
 		log.Debugln("soliciting connections")
 		b := net.IPv4(255, 255, 255, 255)
 		addr := net.UDPAddr{
@@ -446,6 +449,9 @@ func (n *Node) sequence() uint64 {
 func (n *Node) handleMSA(m *Message) {
 	log.Debug("handleMSA: %v", m)
 
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
+
 	if len(n.network[m.Source]) == len(m.Body.([]string)) {
 		diff := false
 		for i, v := range n.network[m.Source] {
@@ -459,9 +465,6 @@ func (n *Node) handleMSA(m *Message) {
 			return
 		}
 	}
-
-	n.meshLock.Lock()
-	defer n.meshLock.Unlock()
 
 	n.routes = make(map[string]string)
 	n.network[m.Source] = m.Body.([]string)

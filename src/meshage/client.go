@@ -57,7 +57,10 @@ func (n *Node) clientSend(host string, m *Message) error {
 // without the client.
 func (n *Node) clientHandler(host string) {
 	log.Debug("clientHandler: %v", host)
+
+	n.clientLock.Lock()
 	c := n.clients[host]
+	n.clientLock.Unlock()
 
 	//n.MSA()
 

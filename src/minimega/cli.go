@@ -366,18 +366,12 @@ Display all information about all VMs:
 		},
 
 		"quit": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) != 0 {
-					return cliResponse{
-						Error: "quit takes no arguments",
-					}
-				}
-				teardown()
-				return cliResponse{}
-			},
+			Call:      cliQuit,
 			Helpshort: "quit",
-			Helplong:  "Quit",
-			Record:    true, // but how!?
+			Helplong: `
+Quit. An optional integer argument X allows deferring the quit call for X
+seconds. This is useful for telling a mesh of minimega nodes to quit.`,
+			Record: true, // but how!?
 			Clear: func() error {
 				return nil
 			},
