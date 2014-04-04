@@ -127,7 +127,7 @@ func (iom *IOMeshage) Get(file string) error {
 		Filename: file,
 		TID:      TID,
 	}
-	n, err := iom.node.Broadcast(meshage.UNORDERED, m)
+	n, err := iom.node.Broadcast(m)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				TID:      TID,
 				Part:     p,
 			}
-			n, err := iom.node.Broadcast(meshage.UNORDERED, m)
+			n, err := iom.node.Broadcast(m)
 			if err != nil {
 				log.Errorln(err)
 				continue
@@ -329,7 +329,7 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 		TID:      TID,
 		Part:     part,
 	}
-	_, err = iom.node.Set([]string{from}, meshage.UNORDERED, m)
+	_, err = iom.node.Set([]string{from}, m)
 	if err != nil {
 		return err
 	}

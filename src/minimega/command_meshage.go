@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"math/rand"
-	"meshage"
 	log "minilog"
 	"os"
 	"ranges"
@@ -32,7 +31,7 @@ func meshageHandler() {
 			r := <-ackChanMeshage
 			r.TID = m.Body.(cliCommand).TID
 			recipient := []string{m.Source}
-			_, err := meshageNode.Set(recipient, meshage.UNORDERED, r)
+			_, err := meshageNode.Set(recipient, r)
 			if err != nil {
 				log.Errorln(err)
 			}
@@ -218,8 +217,6 @@ func meshageSet(c cliCommand) cliResponse {
 		}
 	}
 
-	traversal := meshage.UNORDERED
-
 	addHost := false
 	if c.Args[0] == "annotate" {
 		addHost = true
@@ -243,7 +240,7 @@ func meshageSet(c cliCommand) cliResponse {
 	r := rand.New(s)
 	TID := r.Int31()
 	command.TID = TID
-	n, err := meshageNode.Set(recipients, traversal, command)
+	n, err := meshageNode.Set(recipients, command)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
@@ -294,8 +291,6 @@ func meshageBroadcast(c cliCommand) cliResponse {
 		}
 	}
 
-	traversal := meshage.UNORDERED
-
 	addHost := false
 	if c.Args[0] == "annotate" {
 		addHost = true
@@ -318,7 +313,7 @@ func meshageBroadcast(c cliCommand) cliResponse {
 	r := rand.New(s)
 	TID := r.Int31()
 	command.TID = TID
-	n, err := meshageNode.Broadcast(traversal, command)
+	n, err := meshageNode.Broadcast(command)
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),

@@ -3,7 +3,6 @@ package iomeshage
 import (
 	"fmt"
 	"io"
-	"meshage"
 	log "minilog"
 	"os"
 	"strings"
@@ -80,7 +79,7 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 		log.Debugln("handleInfo found file with parts: ", resp.Part)
 	}
 
-	_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+	_, err = iom.node.Set([]string{m.From}, resp)
 	if err != nil {
 		log.Errorln("handleInfo: sending message: ", err)
 	}
@@ -151,7 +150,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	}
 
 	if resp.ACK {
-		_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+		_, err = iom.node.Set([]string{m.From}, resp)
 		if err != nil {
 			log.Errorln("handlePart: sending message: ", err)
 		}
@@ -178,7 +177,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		}
 	}
 
-	_, err = iom.node.Set([]string{m.From}, meshage.UNORDERED, resp)
+	_, err = iom.node.Set([]string{m.From}, resp)
 	if err != nil {
 		log.Errorln("handlePart: sending message: ", err)
 	}

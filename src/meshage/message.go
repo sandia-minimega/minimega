@@ -21,12 +21,6 @@ const (
 	LOLLIPOP_LENGTH = 16
 )
 
-const (
-	UNORDERED = iota
-	DEPTH
-	BREADTH
-)
-
 // A message is the payload for all message passing, and contains the user
 // specified message in the body field.
 type Message struct {
@@ -36,7 +30,6 @@ type Message struct {
 	ID           uint64      // sequence ID, uses lollipop sequence numbering
 	Command      int         // mesh state announcement, message
 	Body         interface{} // message body
-	Traversal    int         // order in which to process message and send to clients
 }
 
 func (m *Message) String() string {
@@ -132,20 +125,19 @@ func (n *Node) Send(m *Message) (int, error) {
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
 // from all recipient nodes, or until the timeout is reached.
-func (n *Node) Set(recipients []string, traversal int, body interface{}) (int, error) {
+func (n *Node) Set(recipients []string, body interface{}) (int, error) {
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
-		Traversal:    traversal,
 	}
 	return n.Send(m)
 }
 
 // Broadcast sends a message to all nodes on the mesh.
-func (n *Node) Broadcast(traversal int, body interface{}) (int, error) {
+func (n *Node) Broadcast(body interface{}) (int, error) {
 	var recipients []string
 	n.meshLock.Lock()
 	for k, _ := range n.effectiveNetwork {
@@ -160,7 +152,6 @@ func (n *Node) Broadcast(traversal int, body interface{}) (int, error) {
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
-		Traversal:    traversal,
 	}
 	return n.Send(m)
 }
@@ -205,22 +196,9 @@ func (n *Node) messageHandler() {
 			}
 			m.Recipients = newRecipients
 
-			switch m.Traversal {
-			case UNORDERED:
-				go n.Send(m)
-				if runLocal {
-					go n.handleMessage(m)
-				}
-			case DEPTH:
-				n.Send(m)
-				if runLocal {
-					go n.handleMessage(m)
-				}
-			case BREADTH:
-				if runLocal {
-					n.handleMessage(m)
-				}
-				go n.Send(m)
+			go n.Send(m)
+			if runLocal {
+				go n.handleMessage(m)
 			}
 		default:
 			log.Errorln("invalid message command: ", m.Command)
