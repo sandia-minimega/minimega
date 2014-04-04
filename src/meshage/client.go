@@ -11,6 +11,7 @@ import (
 	"io"
 	log "minilog"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,7 +30,9 @@ type client struct {
 }
 
 func (n *Node) clientSend(host string, m *Message) error {
-	log.Debug("clientSend %s: %v", host, m)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("clientSend %s: %v", host, m)
+	}
 	if c, ok := n.clients[host]; ok {
 		c.lock.Lock()
 		defer c.lock.Unlock()
@@ -73,12 +76,14 @@ func (n *Node) clientHandler(host string) {
 		c.conn.SetReadDeadline(time.Now().Add(deadlineMultiplier * n.msaTimeout))
 		err := c.dec.Decode(&m)
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
 				log.Errorln(err)
 			}
 			break
 		}
-		log.Debug("decoded message: %v: %v", c.name, &m)
+		if log.WillLog(log.DEBUG) {
+			log.Debug("decoded message: %v: %v", c.name, &m)
+		}
 		if m.Command == ACK {
 			c.ack <- m.ID
 		} else {

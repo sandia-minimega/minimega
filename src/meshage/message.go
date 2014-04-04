@@ -67,7 +67,9 @@ func (m *Message) String() string {
 // The returned error is always nil if the message type is broadcast.
 // If an error is encountered, Send returns immediately.
 func (n *Node) Send(m *Message) (int, error) {
-	log.Debug("Send: %v", m)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("Send: %v", m)
+	}
 	routeSlices := make(map[string][]string)
 	n.meshLock.Lock()
 	count := 0
@@ -90,7 +92,9 @@ func (n *Node) Send(m *Message) (int, error) {
 	}
 	n.meshLock.Unlock()
 
-	log.Debug("routeSlices: %v", routeSlices)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("routeSlices: %v", routeSlices)
+	}
 
 	errChan := make(chan error)
 	for k, v := range routeSlices {
@@ -168,7 +172,9 @@ func (n *Node) messageHandler() {
 	log.Debugln("messageHandler")
 	for {
 		m := <-n.messagePump
-		log.Debug("messageHandler: %v", m)
+		if log.WillLog(log.DEBUG) {
+			log.Debug("messageHandler: %v", m)
+		}
 		m.CurrentRoute = append(m.CurrentRoute, n.name)
 
 		switch m.Command {
@@ -223,7 +229,9 @@ func (n *Node) messageHandler() {
 }
 
 func (n *Node) flood(m *Message) {
-	log.Debug("flood: %v", m)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("flood: %v", m)
+	}
 
 	n.clientLock.Lock()
 	defer n.clientLock.Unlock()

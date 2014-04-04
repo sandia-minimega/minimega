@@ -30,7 +30,6 @@
 package meshage
 
 // TODO(fritz): stress test meshage. Odd things keep cropping up that may be meshage related.
-// BUG(fritz): new meshage connections are slow.
 
 import (
 	"encoding/gob"
@@ -430,7 +429,9 @@ func (n *Node) MSA() {
 	}
 	n.meshLock.Unlock()
 
-	log.Debug("client list: %v", clients)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("client list: %v", clients)
+	}
 
 	m := &Message{
 		Source:       n.name,
@@ -474,7 +475,9 @@ func (n *Node) handleMSA(m *Message) {
 	n.routes = make(map[string]string)
 	n.network[m.Source] = m.Body.([]string)
 
-	log.Debug("new network is: %v", n.network)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("new network is: %v", n.network)
+	}
 
 	n.generateEffectiveNetwork()
 }

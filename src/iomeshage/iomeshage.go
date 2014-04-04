@@ -139,7 +139,9 @@ func (iom *IOMeshage) Get(file string) error {
 	for i := 0; i < n; i++ {
 		select {
 		case resp := <-c:
-			log.Debugln("got response: ", resp)
+			if log.WillLog(log.DEBUG) {
+				log.Debugln("got response: ", resp)
+			}
 			if resp.ACK {
 				log.Debugln("got info from: ", resp.From)
 				info = resp

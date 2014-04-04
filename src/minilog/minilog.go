@@ -65,6 +65,17 @@ func DelLogger(name string) {
 	delete(loggers, name)
 }
 
+// WillLog returns true if logging to a specific log level will result in
+// actual logging. Useful if the logging text itself is expensive to produce.
+func WillLog(level int) bool {
+	for _, v := range loggers {
+		if v.Level <= level {
+			return true
+		}
+	}
+	return false
+}
+
 // Change a log level for a named logger.
 func SetLevel(name string, level int) error {
 	if loggers[name] == nil {

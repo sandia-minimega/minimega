@@ -28,7 +28,9 @@ func (n *Node) generateEffectiveNetwork() {
 				}
 				for _, j := range n.network[i] { // go through all of node i's connections looking for k
 					if j == k {
-						log.Debug("found pair %v <-> %v", k, i)
+						if log.WillLog(log.DEBUG) {
+							log.Debug("found pair %v <-> %v", k, i)
+						}
 						// note the connection in the adjacency list for both i and k
 						emesh[k] = append(emesh[k], i)
 						emesh[i] = append(emesh[i], k)
@@ -64,7 +66,9 @@ func (n *Node) generateEffectiveNetwork() {
 		}
 	}
 
-	log.Debug("new effectiveNetwork: %v", n.effectiveNetwork)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("new effectiveNetwork: %v", n.effectiveNetwork)
+	}
 }
 
 // find and record the next hop route for c.
@@ -75,7 +79,9 @@ func (n *Node) updateRoute(c string) {
 		return
 	}
 
-	log.Debug("updating route for %v", c)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("updating route for %v", c)
+	}
 
 	routes := make(map[string]string) // a key node has a value of the previous hop, the key exists if it's been visited
 	routes[n.name] = n.name           // the route to ourself is pretty easy to calculate
@@ -90,12 +96,16 @@ func (n *Node) updateRoute(c string) {
 	for len(q) != 0 {
 		v := <-q
 
-		log.Debug("visiting %v", v)
+		if log.WillLog(log.DEBUG) {
+			log.Debug("visiting %v", v)
+		}
 
 		for _, a := range n.effectiveNetwork[v] {
 			if _, ok := routes[a]; !ok {
 				q <- a
-				log.Debug("previous hop for %v is %v", a, v)
+				if log.WillLog(log.DEBUG) {
+					log.Debug("previous hop for %v is %v", a, v)
+				}
 				routes[a] = v // this is the route to node a from v
 			}
 		}
@@ -115,7 +125,9 @@ func (n *Node) updateRoute(c string) {
 			r += "<-" + routes[curr]
 		}
 		r += "<-" + routes[curr]
-		log.Debug("full route for %v is %v", k, r)
+		if log.WillLog(log.DEBUG) {
+			log.Debug("full route for %v is %v", k, r)
+		}
 		n.routes[k] = prev
 	}
 }
