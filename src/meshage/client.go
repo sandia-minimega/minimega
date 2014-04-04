@@ -66,7 +66,7 @@ func (n *Node) clientHandler(host string) {
 	c := n.clients[host]
 	n.clientLock.Unlock()
 
-	//n.MSA()
+	n.MSA()
 
 	for {
 		var m Message
@@ -107,7 +107,7 @@ func (n *Node) clientHandler(host string) {
 	n.clientLock.Unlock()
 	go n.checkDegree()
 
-	//n.MSA()
+	n.MSA()
 }
 
 // Dicconnect from the specified host.

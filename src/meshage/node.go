@@ -404,6 +404,11 @@ func (n *Node) MSA() {
 	}
 	n.clientLock.Unlock()
 
+	if len(clients) == 0 {
+		log.Debugln("not issuing MSA, no connected clients")
+		return
+	}
+
 	sort.Strings(clients)
 
 	n.meshLock.Lock()

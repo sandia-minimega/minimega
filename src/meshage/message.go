@@ -224,6 +224,10 @@ func (n *Node) messageHandler() {
 
 func (n *Node) flood(m *Message) {
 	log.Debug("flood: %v", m)
+
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
+
 floodLoop:
 	for k, _ := range n.clients {
 		for _, j := range m.CurrentRoute {
@@ -234,7 +238,12 @@ floodLoop:
 		go func(j string, m *Message) {
 			err := n.clientSend(j, m)
 			if err != nil {
-				log.Error("flood to client %v: %v", j, err)
+				// is j still a client?
+				n.clientLock.Lock()
+				if _, ok := n.clients[j]; ok {
+					log.Error("flood to client %v: %v", j, err)
+				}
+				n.clientLock.Unlock()
 			}
 		}(k, m)
 	}
