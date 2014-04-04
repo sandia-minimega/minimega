@@ -13,13 +13,16 @@ import (
 	"time"
 )
 
+const (
+	MESH_TIMEOUT_DEFAULT = 10
+)
+
 var (
-	meshageNode           *meshage.Node
-	meshageMessages       chan *meshage.Message
-	meshageCommand        chan *meshage.Message
-	meshageResponse       chan *meshage.Message
-	meshageTimeout        time.Duration
-	meshageTimeoutDefault = time.Duration(10 * time.Second)
+	meshageNode     *meshage.Node
+	meshageMessages chan *meshage.Message
+	meshageCommand  chan *meshage.Message
+	meshageResponse chan *meshage.Message
+	meshageTimeout  time.Duration
 )
 
 func init() {
@@ -34,7 +37,7 @@ func meshageInit(host string, namespace string, degree uint, port int) {
 	meshageCommand = make(chan *meshage.Message, 1024)
 	meshageResponse = make(chan *meshage.Message, 1024)
 
-	meshageTimeout = time.Duration(10 * time.Second)
+	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 
 	go meshageMux()
 	go meshageHandler()

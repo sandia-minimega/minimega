@@ -860,7 +860,7 @@ command may still complete - but rather this node will stop waiting on a
 response.`,
 			Record: true,
 			Clear: func() error {
-				meshageTimeout = meshageTimeoutDefault
+				meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 				return nil
 			},
 		},
