@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -35,21 +36,22 @@ const (
 )
 
 var (
-	f_loglevel  = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log       = flag.Bool("v", true, "log on stderr")
-	f_logfile   = flag.String("logfile", "", "also log to file")
-	f_base      = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_e         = flag.Bool("e", false, "execute command on running minimega")
-	f_degree    = flag.Int("degree", 0, "meshage starting degree")
-	f_port      = flag.Int("port", 8966, "meshage port to listen on")
-	f_force     = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
-	f_nostdin   = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
-	f_version   = flag.Bool("version", false, "print the version and copyright notices")
-	f_namespace = flag.String("namespace", "minimega", "meshage namespace for discovery")
-	f_iomBase   = flag.String("filepath", IOM_PATH, "directory to serve files from")
-	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
-	vms         vmList
-	panicOnQuit bool
+	f_loglevel   = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
+	f_log        = flag.Bool("v", true, "log on stderr")
+	f_logfile    = flag.String("logfile", "", "also log to file")
+	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
+	f_e          = flag.Bool("e", false, "execute command on running minimega")
+	f_degree     = flag.Int("degree", 0, "meshage starting degree")
+	f_msaTimeout = flag.Int("msa", 10, "meshage MSA timeout")
+	f_port       = flag.Int("port", 8966, "meshage port to listen on")
+	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
+	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
+	f_version    = flag.Bool("version", false, "print the version and copyright notices")
+	f_namespace  = flag.String("namespace", "minimega", "meshage namespace for discovery")
+	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
+	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
+	vms          vmList
+	panicOnQuit  bool
 )
 
 var banner string = `minimega, Copyright (2013) Sandia Corporation. 

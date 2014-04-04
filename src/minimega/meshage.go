@@ -39,6 +39,8 @@ func meshageInit(host string, namespace string, degree uint, port int) {
 
 	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 
+	meshageNode.SetMSATimeout(uint(*f_msaTimeout))
+
 	go meshageMux()
 	go meshageHandler()
 

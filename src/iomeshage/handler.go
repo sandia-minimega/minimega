@@ -6,6 +6,7 @@ import (
 	log "minilog"
 	"os"
 	"strings"
+	"sync"
 )
 
 const (
@@ -17,6 +18,10 @@ const (
 
 const (
 	PART_SIZE = 10485760 // 10MB
+)
+
+var (
+	TIDLock sync.Mutex
 )
 
 type IOMMessage struct {
@@ -70,7 +75,7 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 		TID:      m.TID,
 	}
 
-	parts, err := iom.fileInfo(m.Filename)
+	parts, err := iom.fileInfo(iom.base + m.Filename)
 	if err != nil {
 		resp.ACK = false
 	} else {
@@ -86,7 +91,7 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 }
 
 func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
-	f, err := os.Open(iom.base + filename)
+	f, err := os.Open(filename)
 	if err != nil {
 		log.Debugln("fileInfo error opening file: ", err)
 		return 0, err
@@ -105,6 +110,8 @@ func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 }
 
 func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
+	TIDLock.Lock()
+	defer TIDLock.Unlock()
 	if _, ok := iom.TIDs[TID]; ok {
 		return fmt.Errorf("TID already exists, collision?")
 	}
@@ -113,6 +120,8 @@ func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
 }
 
 func (iom *IOMeshage) unregisterTID(TID int64) {
+	TIDLock.Lock()
+	defer TIDLock.Unlock()
 	if _, ok := iom.TIDs[TID]; !ok {
 		log.Errorln("TID does not exist")
 	} else {
@@ -137,7 +146,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	iom.drainLock.RLock()
 	defer iom.drainLock.RUnlock()
 
-	_, err := iom.fileInfo(m.Filename)
+	_, err := iom.fileInfo(iom.base + m.Filename)
 	if err != nil {
 		resp.ACK = false
 	} else {
@@ -159,12 +168,13 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 
 	// we don't have the file in a complete state at least, do we have that specific part in flight somewhere?
 	// we consider a part to be transferrable IFF it exists on disk and is marked as being fully received.
+	iom.transferLock.RLock()
 	if t, ok := iom.transfers[m.Filename]; ok {
 		// we are currently transferring parts of the file
 		if t.Parts[m.Part] {
 			partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, t.Filename, m.Part)
 			_, err := iom.fileInfo(partname)
-			if err != nil {
+			if err == nil {
 				// we have it
 				resp.ACK = true
 				resp.Part = m.Part
@@ -176,6 +186,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 			}
 		}
 	}
+	iom.transferLock.RUnlock()
 
 	_, err = iom.node.Set([]string{m.From}, resp)
 	if err != nil {

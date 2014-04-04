@@ -75,6 +75,7 @@ type Node struct {
 	sequenceLock     sync.Mutex
 	degreeLock       sync.Mutex
 	meshLock         sync.Mutex
+	updateNetwork    bool
 }
 
 func init() {
@@ -108,6 +109,7 @@ func NewNode(name string, namespace string, degree uint, port int) (*Node, chan 
 	go n.messageHandler()
 	go n.checkDegree()
 	go n.periodicMSA()
+	go n.periodicEffectiveNetwork()
 
 	return n, n.receive
 }
@@ -425,7 +427,7 @@ func (n *Node) MSA() {
 	if diff {
 		log.Debugln("client list changed, recalculating topology")
 		n.network[n.name] = clients
-		n.generateEffectiveNetwork()
+		n.updateNetwork = true
 	}
 	n.meshLock.Unlock()
 
@@ -479,7 +481,19 @@ func (n *Node) handleMSA(m *Message) {
 		log.Debug("new network is: %v", n.network)
 	}
 
-	n.generateEffectiveNetwork()
+	n.updateNetwork = true
+}
+
+func (n *Node) periodicEffectiveNetwork() {
+	for {
+		time.Sleep(n.msaTimeout)
+		n.meshLock.Lock()
+		if n.updateNetwork {
+			n.generateEffectiveNetwork()
+		}
+		n.updateNetwork = false
+		n.meshLock.Unlock()
+	}
 }
 
 func (n *Node) periodicMSA() {
