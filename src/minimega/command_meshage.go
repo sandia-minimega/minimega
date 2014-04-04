@@ -189,7 +189,7 @@ func meshageMSATimeout(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
 		return cliResponse{
-			Response: fmt.Sprintf("%d", meshageNode.GetMSATimeout()),
+			Response: fmt.Sprintf("%v", meshageNode.GetMSATimeout()),
 		}
 	case 1:
 		a, err := strconv.Atoi(c.Args[0])

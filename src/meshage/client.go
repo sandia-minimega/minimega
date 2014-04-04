@@ -15,6 +15,10 @@ import (
 	"time"
 )
 
+const (
+	deadlineMultiplier = 2
+)
+
 type client struct {
 	name string // name of client
 	conn net.Conn
@@ -66,7 +70,7 @@ func (n *Node) clientHandler(host string) {
 
 	for {
 		var m Message
-		c.conn.SetReadDeadline(time.Now().Add(2 * n.msaTimeout))
+		c.conn.SetReadDeadline(time.Now().Add(deadlineMultiplier * n.msaTimeout))
 		err := c.dec.Decode(&m)
 		if err != nil {
 			if err != io.EOF {
@@ -83,7 +87,7 @@ func (n *Node) clientHandler(host string) {
 				Command: ACK,
 				ID:      m.ID,
 			}
-			c.conn.SetWriteDeadline(time.Now().Add(2 * n.msaTimeout))
+			c.conn.SetWriteDeadline(time.Now().Add(deadlineMultiplier * n.msaTimeout))
 			err := c.enc.Encode(a)
 			if err != nil {
 				if err != io.EOF {
