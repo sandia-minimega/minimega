@@ -244,7 +244,6 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				Part:     p,
 			}
 
-			// instead of broadcasting for someone to serve up a single host as a time
 			n, err := iom.node.Broadcast(m)
 			if err != nil {
 				log.Errorln(err)
@@ -258,8 +257,8 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 			var info *IOMMessage
 			var gotPart bool
 			var timeoutCount int
-			var backoff uint = 3 // 8 seconds minimum
 			// wait for n responses, or a timeout
+		IOMESHAGE_WHOHAS_LOOP:
 			for i := 0; i < n; i++ {
 				select {
 				case resp := <-c:
@@ -272,19 +271,15 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 						}
 						info = resp
 						gotPart = true
+						break IOMESHAGE_WHOHAS_LOOP
 					}
 				case <-time.After(timeout):
 					log.Errorln("timeout")
 					timeoutCount++
 
-					// exponential backoff
-					wait := r.Intn(1 << backoff)
-					time.Sleep(time.Duration(wait) * time.Second)
-					backoff++
-
 					if timeoutCount == MAX_ATTEMPTS {
 						log.Debugln("too many timeouts")
-						break
+						break IOMESHAGE_WHOHAS_LOOP
 					}
 					continue
 				}
