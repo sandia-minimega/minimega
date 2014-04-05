@@ -39,6 +39,8 @@ func meshageInit(host string, namespace string, degree uint, port int) {
 
 	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 
+	meshageNode.Snoop = meshageSnooper
+
 	meshageNode.SetMSATimeout(uint(*f_msaTimeout))
 
 	go meshageMux()
@@ -63,5 +65,12 @@ func meshageMux() {
 		default:
 			log.Errorln("got invalid message!")
 		}
+	}
+}
+
+func meshageSnooper(m *meshage.Message) {
+	if reflect.TypeOf(m.Body) == reflect.TypeOf(iomeshage.IOMMessage{}) {
+		i := m.Body.(iomeshage.IOMMessage)
+		iom.MITM(&i)
 	}
 }

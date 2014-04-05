@@ -76,6 +76,7 @@ type Node struct {
 	degreeLock       sync.Mutex
 	meshLock         sync.Mutex
 	updateNetwork    bool
+	Snoop            func(m *Message)
 }
 
 func init() {

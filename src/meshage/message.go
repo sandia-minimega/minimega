@@ -189,7 +189,6 @@ func (n *Node) messageHandler() {
 			for _, i := range m.Recipients {
 				if i == n.name {
 					runLocal = true
-					//go n.handleMessage(m)
 				} else {
 					newRecipients = append(newRecipients, i)
 				}
@@ -199,6 +198,10 @@ func (n *Node) messageHandler() {
 			go n.Send(m)
 			if runLocal {
 				go n.handleMessage(m)
+			} else {
+				if n.Snoop != nil {
+					go n.Snoop(m)
+				}
 			}
 		default:
 			log.Errorln("invalid message command: ", m.Command)

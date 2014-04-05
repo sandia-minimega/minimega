@@ -22,7 +22,6 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
-	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"

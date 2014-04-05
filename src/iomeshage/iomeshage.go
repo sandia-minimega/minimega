@@ -46,7 +46,8 @@ type Transfer struct {
 	Dir      string         // temporary directory hold the file parts
 	Filename string         // file name
 	Parts    map[int64]bool // completed parts
-	NumParts int
+	NumParts int            // total number of parts for this file
+	Inflight int64          // currently in-flight part, -1 if none
 }
 
 var (
@@ -135,7 +136,9 @@ func (iom *IOMeshage) Get(file string) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("sent info request to %v nodes", n)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("sent info request to %v nodes", n)
+	}
 
 	var info *IOMMessage
 	var gotInfo bool
@@ -147,7 +150,9 @@ func (iom *IOMeshage) Get(file string) error {
 				log.Debugln("got response: ", resp)
 			}
 			if resp.ACK {
-				log.Debugln("got info from: ", resp.From)
+				if log.WillLog(log.DEBUG) {
+					log.Debugln("got info from: ", resp.From)
+				}
 				info = resp
 				gotInfo = true
 			}
@@ -159,7 +164,9 @@ func (iom *IOMeshage) Get(file string) error {
 		return fmt.Errorf("file not found")
 	}
 
-	log.Debug("found file on node %v with %v parts", info.From, info.Part)
+	if log.WillLog(log.DEBUG) {
+		log.Debug("found file on node %v with %v parts", info.From, info.Part)
+	}
 
 	go iom.getParts(info.Filename, info.Part)
 
@@ -196,18 +203,20 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 		Filename: filename,
 		Parts:    make(map[int64]bool),
 		NumParts: len(parts),
+		Inflight: -1,
 	}
 	iom.transferLock.Unlock()
 	defer iom.destroyTempTransfer(filename)
 
 	for _, p := range parts {
 		// did I already get this part via another node's request?
-		iom.transferLock.RLock()
+		iom.transferLock.Lock()
 		if iom.transfers[filename].Parts[p] {
-			iom.transferLock.RUnlock()
+			iom.transferLock.Unlock()
 			continue
 		}
-		iom.transferLock.RUnlock()
+		iom.transfers[filename].Inflight = p
+		iom.transferLock.Unlock()
 
 		// attempt to get this part up to MAX_ATTEMPTS attempts
 		for attempt := 0; attempt < MAX_ATTEMPTS; attempt++ {
@@ -220,7 +229,9 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				log.Fatalln(err)
 			}
 
-			log.Debug("transferring filepart %v:%v, attempt %v", filename, p, attempt)
+			if log.WillLog(log.DEBUG) {
+				log.Debug("transferring filepart %v:%v, attempt %v", filename, p, attempt)
+			}
 			if attempt > 0 {
 				// we're most likely issuing multiple attempts because of heavy traffic, wait a bit for things to calm down
 				time.Sleep(timeout)
@@ -232,36 +243,49 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				TID:      TID,
 				Part:     p,
 			}
+
+			// instead of broadcasting for someone to serve up a single host as a time
 			n, err := iom.node.Broadcast(m)
 			if err != nil {
 				log.Errorln(err)
 				iom.unregisterTID(TID)
 				continue
 			}
-			log.Debug("sent info request to %v nodes", n)
+			if log.WillLog(log.DEBUG) {
+				log.Debug("sent info request to %v nodes", n)
+			}
 
 			var info *IOMMessage
 			var gotPart bool
 			var timeoutCount int
+			var backoff uint = 3 // 8 seconds minimum
 			// wait for n responses, or a timeout
 			for i := 0; i < n; i++ {
 				select {
 				case resp := <-c:
-					log.Debugln("got response: ", resp)
+					if log.WillLog(log.DEBUG) {
+						log.Debugln("got response: ", resp)
+					}
 					if resp.ACK {
-						log.Debugln("got partInfo from: ", resp.From)
+						if log.WillLog(log.DEBUG) {
+							log.Debugln("got partInfo from: ", resp.From)
+						}
 						info = resp
 						gotPart = true
 					}
 				case <-time.After(timeout):
 					log.Errorln("timeout")
 					timeoutCount++
+
+					// exponential backoff
+					wait := r.Intn(1 << backoff)
+					time.Sleep(time.Duration(wait) * time.Second)
+					backoff++
+
 					if timeoutCount == MAX_ATTEMPTS {
 						log.Debugln("too many timeouts")
-						iom.unregisterTID(TID)
 						break
 					}
-					iom.unregisterTID(TID)
 					continue
 				}
 			}
@@ -271,7 +295,9 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				continue
 			}
 
-			log.Debug("found part %v on node %v", info.Part, info.From)
+			if log.WillLog(log.DEBUG) {
+				log.Debug("found part %v on node %v", info.Part, info.From)
+			}
 
 			// transfer this part
 			err = iom.Xfer(m.Filename, info.Part, info.From)
@@ -366,9 +392,13 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 	// wait for a response, or a timeout
 	select {
 	case resp := <-c:
-		log.Debugln("got part: ", resp.Part)
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("got part: ", resp.Part)
+		}
 		if resp.ACK {
-			log.Debugln("got part from: ", resp.From)
+			if log.WillLog(log.DEBUG) {
+				log.Debugln("got part from: ", resp.From)
+			}
 			// write the part out to disk
 			iom.transferLock.RLock()
 			defer iom.transferLock.RUnlock()
@@ -388,6 +418,33 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 		return fmt.Errorf("timeout")
 	}
 	return nil
+}
+
+// Check iom messages that are routing through us in case it's a filepart that
+// we're also looking for. If so, write it out. The message mux for meshage
+// should call this.
+func (iom *IOMeshage) MITM(m *IOMMessage) {
+	if m.Type != TYPE_RESPONSE || !m.ACK || len(m.Data) == 0 {
+		return
+	}
+
+	iom.transferLock.Lock()
+	defer iom.transferLock.Unlock()
+	if f, ok := iom.transfers[m.Filename]; ok {
+		if f.Inflight == m.Part {
+			return
+		}
+		if !f.Parts[m.Part] {
+			log.Debug("snooped filepart %v;%v", f.Filename, m.Part)
+			outfile := fmt.Sprintf("%v/%v.part_%v", f.Dir, f.Filename, m.Part)
+			err := ioutil.WriteFile(outfile, m.Data, 0664)
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
+			f.Parts[m.Part] = true
+		}
+	}
 }
 
 // Return status on in-flight file transfers

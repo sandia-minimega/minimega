@@ -38,7 +38,9 @@ func (iom *IOMeshage) handleMessages() {
 	for {
 		message := (<-iom.Messages).Body.(IOMMessage)
 		m := &message
-		log.Debug("got iomessage from %v, type %v", m.From, m.Type)
+		if log.WillLog(log.DEBUG) {
+			log.Debug("got iomessage from %v, type %v", m.From, m.Type)
+		}
 		switch m.Type {
 		case TYPE_INFO:
 			go iom.handleInfo(m)
@@ -58,7 +60,9 @@ func (iom *IOMeshage) handleResponse(m *IOMMessage) {
 	if c, ok := iom.TIDs[m.TID]; ok {
 		defer func() {
 			recover()
-			log.Debugln("send on closed channel recovered")
+			if log.WillLog(log.DEBUG) {
+				log.Debugln("send on closed channel recovered")
+			}
 		}()
 		c <- m
 	} else {
@@ -81,7 +85,9 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	} else {
 		resp.ACK = true
 		resp.Part = parts
-		log.Debugln("handleInfo found file with parts: ", resp.Part)
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("handleInfo found file with parts: ", resp.Part)
+		}
 	}
 
 	_, err = iom.node.Set([]string{m.From}, resp)
@@ -93,7 +99,6 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 	f, err := os.Open(filename)
 	if err != nil {
-		log.Debugln("fileInfo error opening file: ", err)
 		return 0, err
 	}
 	defer f.Close()
@@ -101,7 +106,9 @@ func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 	// we do have the file, calculate the number of parts
 	fi, err := f.Stat()
 	if err != nil {
-		log.Debugln("fileInfo error stat: ", err)
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("fileInfo error stat: ", err)
+		}
 		return 0, err
 	}
 
@@ -155,7 +162,9 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		if xfer {
 			resp.Data = iom.readPart(m.Filename, m.Part)
 		}
-		log.Debugln("handlePart found file with parts: ", resp.Part)
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("handlePart found file with parts: ", resp.Part)
+		}
 	}
 
 	if resp.ACK {
@@ -180,6 +189,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 				resp.Part = m.Part
 				if xfer {
 					resp.Data = iom.readPart(partname, 0)
+					log.Debug("sending partial %v", partname)
 				}
 			} else {
 				resp.ACK = false
