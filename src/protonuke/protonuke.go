@@ -14,6 +14,7 @@ var (
 	f_serve    = flag.Bool("serve", false, "act as a server for enabled services")
 	f_http     = flag.Bool("http", false, "enable http service")
 	f_https    = flag.Bool("https", false, "enable https (TLS) service")
+	f_httproot = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_ssh      = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")

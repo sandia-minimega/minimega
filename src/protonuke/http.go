@@ -228,9 +228,17 @@ func httpSetup() {
 	}
 	httpReady = true
 
-	http.HandleFunc("/", httpHandler)
-	httpMakeImage()
-	http.HandleFunc("/image.png", httpImageHandler)
+	if *f_httproot != "" {
+		if !strings.HasSuffix(*f_httproot, "/") {
+			*f_httproot = *f_httproot + "/"
+		}
+		fs := http.FileServer(http.Dir(*f_httproot))
+		http.Handle("/", fs)
+	} else {
+		http.HandleFunc("/", httpHandler)
+		httpMakeImage()
+		http.HandleFunc("/image.png", httpImageHandler)
+	}
 
 	var err error
 	htmlTemplate, err = template.New("output").Parse(htmlsrc)
