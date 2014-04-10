@@ -2,7 +2,7 @@
 	{
 		"To":"foo@mail.com",
 		"From":"bar@mail.com",
-		"Msg":"benign message",
+		"Msg":"benign message"
 	},
 	{
 		"To":"victim@mail.com",
