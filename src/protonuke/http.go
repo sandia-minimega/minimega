@@ -33,6 +33,7 @@ var (
 	httpImage        []byte
 	httpReady        bool
 	httpLock         sync.Mutex
+	httpFS           http.Handler
 )
 
 type HtmlContent struct {
@@ -229,16 +230,12 @@ func httpSetup() {
 	httpReady = true
 
 	if *f_httproot != "" {
-		if !strings.HasSuffix(*f_httproot, "/") {
-			*f_httproot = *f_httproot + "/"
-		}
-		fs := http.FileServer(http.Dir(*f_httproot))
-		http.Handle("/", fs)
-	} else {
-		http.HandleFunc("/", httpHandler)
-		httpMakeImage()
-		http.HandleFunc("/image.png", httpImageHandler)
+		httpFS = http.FileServer(http.Dir(*f_httproot))
 	}
+
+	http.HandleFunc("/", httpHandler)
+	httpMakeImage()
+	http.HandleFunc("/image.png", httpImageHandler)
 
 	var err error
 	htmlTemplate, err = template.New("output").Parse(htmlsrc)
@@ -248,10 +245,10 @@ func httpSetup() {
 }
 
 func httpServer(p string) {
+	log.Debugln("httpServer")
 	httpSetup()
 	hitChan = make(chan uint64, 1024)
 	go hitCounter()
-	//log.Fatalln(http.ListenAndServe(":80", nil))
 	server := &http.Server{
 		Addr:    ":http",
 		Handler: nil,
@@ -266,6 +263,7 @@ func httpServer(p string) {
 }
 
 func httpTLSServer(p string) {
+	log.Debugln("httpTLSServer")
 	httpSetup()
 	hitTLSChan = make(chan uint64, 1024)
 	go hitTLSCounter()
@@ -343,6 +341,12 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		hitChan <- 1
 	}
+
+	if httpFS != nil {
+		httpFS.ServeHTTP(w, r)
+		return
+	}
+
 	h := &HtmlContent{
 		URLs:   randomURLs(),
 		Hits:   hits,
