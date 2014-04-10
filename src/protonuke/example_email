@@ -2,12 +2,12 @@
 	{
 		"To":"foo@mail.com",
 		"From":"bar@mail.com",
-		"Msg":"message!"
+		"Msg":"benign message",
 	},
 	{
-		"To":"dave@google.com",
-		"From":"fallon@google.com",
-		"Msg":"message2"
+		"To":"victim@mail.com",
+		"From":"evil@minimega.org",
+		"Msg":"CONFIDENTIAL"
 	}
 ]
 
