@@ -1,6 +1,6 @@
 package main
 
-var email = []string{
+var builtinmail = []string{
 	`We all like praise, but a hike in our pay is the best kind of ways.
 `,
 	`Rule of the Great:

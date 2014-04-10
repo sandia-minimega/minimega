@@ -19,6 +19,7 @@ var (
 	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
 	f_smtpTls  = flag.Bool("smtptls", true, "enable or disable sending mail with TLS")
+	f_smtpmail = flag.String("smtpmail", "", "send email from a given file instead of the builtin email corpus")
 	f_mean     = flag.Duration("u", time.Duration(1000*time.Millisecond), "mean time between actions")
 	f_stddev   = flag.Duration("s", time.Duration(0), "standard deviation between actions")
 	f_min      = flag.Duration("min", time.Duration(0), "minimum time allowable for events")

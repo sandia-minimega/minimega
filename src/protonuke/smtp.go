@@ -21,11 +21,13 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"math/rand"
 	log "minilog"
 	"net"
 	"net/smtp"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -55,16 +57,43 @@ const (
 	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
 )
 
+type mail struct {
+	To   string
+	From string
+	Msg  string
+}
+
 var (
 	timeout   = time.Duration(100)
 	max_size  = 131072
 	myFQDN    = "protonuke.local"
 	TLSconfig *tls.Config
 	smtpPort  = ":25"
+	email     []mail
 )
 
 func smtpClient() {
 	log.Debugln("smtpClient")
+
+	// replace the email corpus if specified
+	if *f_smtpmail != "" {
+		f, err := os.Open(*f_smtpmail)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		dec := json.NewDecoder(f)
+		err = dec.Decode(&email)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		// populate the email list with the builtin list
+		for _, m := range builtinmail {
+			email = append(email, mail{
+				Msg: m,
+			})
+		}
+	}
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 	for {
@@ -74,24 +103,25 @@ func smtpClient() {
 
 		s := rand.NewSource(time.Now().UnixNano())
 		r := rand.New(s)
-		body := email[r.Intn(len(email))]
+		m := email[r.Intn(len(email))]
 
-		toLen := r.Intn(10) + 1
-		fromLen := r.Intn(10) + 1
-		var to string
-		var from string
-		for i := 0; i < toLen; i++ {
-			to += string(alphanum[r.Intn(len(alphanum))])
-		}
-		for i := 0; i < fromLen; i++ {
-			from += string(alphanum[r.Intn(len(alphanum))])
+		if m.To == "" {
+			toLen := r.Intn(10) + 1
+			for i := 0; i < toLen; i++ {
+				m.To += string(alphanum[r.Intn(len(alphanum))])
+			}
+			m.To += "@" + h
 		}
 
-		to += "@" + h
+		if m.From == "" {
+			fromLen := r.Intn(10) + 1
+			for i := 0; i < fromLen; i++ {
+				m.From += string(alphanum[r.Intn(len(alphanum))])
+			}
+			m.From += "@protonuke.org"
+		}
 
-		from += "@protonuke.org"
-
-		err := smtpSendMail(h, to, from, body)
+		err := smtpSendMail(h, m)
 		if err != nil {
 			log.Errorln(err)
 		} else {
@@ -100,7 +130,7 @@ func smtpClient() {
 	}
 }
 
-func smtpSendMail(server, to, from, body string) error {
+func smtpSendMail(server string, m mail) error {
 	// url notation requires leading and trailing [] on ipv6 addresses
 	if isIPv6(server) {
 		server = "[" + server + "]"
@@ -118,13 +148,13 @@ func smtpSendMail(server, to, from, body string) error {
 		}
 	}
 
-	c.Mail(from)
-	c.Rcpt(to)
+	c.Mail(m.From)
+	c.Rcpt(m.To)
 	wc, err := c.Data()
 	if err != nil {
 		return err
 	}
-	wc.Write([]byte(body))
+	wc.Write([]byte(m.Msg))
 	wc.Close()
 
 	return nil

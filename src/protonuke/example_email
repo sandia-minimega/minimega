@@ -1,0 +1,14 @@
+[
+	{
+		"To":"foo@mail.com",
+		"From":"bar@mail.com",
+		"Msg":"message!"
+	},
+	{
+		"To":"dave@google.com",
+		"From":"fallon@google.com",
+		"Msg":"message2"
+	}
+]
+
+
