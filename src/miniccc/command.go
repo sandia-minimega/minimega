@@ -270,22 +270,36 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 	ec := r.FormValue("expire_responses")
 	ed := r.FormValue("expire_duration")
 	et := r.FormValue("expire_time")
+
 	expireClients, err := strconv.Atoi(ec)
-	if err != nil && ec != "" {
-		log.Errorln(err)
+	if err != nil {
+		if ec != "" {
+			log.Errorln(err)
+		}
 		expireClients = 0
 	}
+	log.Debug("got expireClients %v", expireClients)
+
 	expireDuration, err := time.ParseDuration(ed)
-	if err != nil && ed != "" {
-		log.Errorln(err)
+	if err != nil {
+		if ed != "" {
+			log.Errorln(err)
+		}
+		expireDuration = time.Duration(0)
 	}
+	log.Debug("got expireDuration %v", expireDuration)
 
 	now := time.Now()
 	expireTime, err := time.Parse(time.Kitchen, et)
-	expireTime = time.Date(now.Year(), now.Month(), now.Day(), expireTime.Hour(), expireTime.Minute(), expireTime.Second(), 0, now.Location())
-	if err != nil && et != "" {
-		log.Errorln(err)
+	if err != nil {
+		if et != "" {
+			log.Errorln(err)
+		}
+		expireTime = time.Time{}
+	} else {
+		expireTime = time.Date(now.Year(), now.Month(), now.Day(), expireTime.Hour(), expireTime.Minute(), expireTime.Second(), 0, now.Location())
 	}
+	log.Debug("got expireTime %v", expireTime)
 
 	log.Debug("got type %v", commandType)
 
