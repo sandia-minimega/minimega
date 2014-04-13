@@ -79,6 +79,10 @@ func dnsmasqCLI(c cliCommand) cliResponse {
 }
 
 func dnsmasqList() string {
+	if len(dnsmasqServers) == 0 {
+		return ""
+	}
+
 	w := new(tabwriter.Writer)
 	buf := new(bytes.Buffer)
 	w.Init(buf, 0, 8, 1, ' ', 0)

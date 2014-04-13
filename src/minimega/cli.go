@@ -779,7 +779,7 @@ commands.`,
 		},
 
 		"host_tap": &command{
-			Call:      hostTap,
+			Call:      cliHostTap,
 			Helpshort: "control host taps for communicating between hosts and VMs",
 			Helplong: `
 	Usage: host_tap [<create [bridge] vlan <A.B.C.D/MASK,dhcp,none>, delete <tap name>]
@@ -1520,6 +1520,11 @@ func (c cliCommand) String() string {
 }
 
 func cliDefine(c cliCommand) cliResponse {
+	m := macro.List()
+	if len(m) == 0 {
+		return cliResponse{}
+	}
+
 	switch len(c.Args) {
 	case 0:
 		// create output
@@ -1527,7 +1532,6 @@ func cliDefine(c cliCommand) cliResponse {
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
 		fmt.Fprintln(&o, "macro\texpansion")
-		m := macro.List()
 		for _, v := range m {
 			k, e := macro.Macro(v)
 			fmt.Fprintf(&o, "%v\t%v\n", k, e)

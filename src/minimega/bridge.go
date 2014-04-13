@@ -128,6 +128,10 @@ func bridgesDestroy() error {
 
 // return formatted bridge info. expected to be called with bridgeLock set
 func bridgeInfo() string {
+	if len(bridges) == 0 {
+		return ""
+	}
+
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
@@ -602,7 +606,7 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func hostTap(c cliCommand) cliResponse {
+func cliHostTap(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
 		return hostTapList()
@@ -654,6 +658,10 @@ func hostTapList() cliResponse {
 				}
 			}
 		}
+	}
+
+	if len(lans) == 0 {
+		return cliResponse{}
 	}
 
 	var o bytes.Buffer
