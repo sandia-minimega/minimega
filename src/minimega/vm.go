@@ -171,7 +171,6 @@ func (vms *vmSorter) Less(i, j int) bool {
 	case "append":
 		return vms.vms[i].Append < vms.vms[j].Append
 	case "bridge", "tap", "mac", "ip", "ip6", "vlan":
-		// BUG(fritz); vm_info does not sort on bridge, mac, vlan, etc...
 		return true
 	default:
 		log.Fatal("invalid sort parameter %v", vms.by)
