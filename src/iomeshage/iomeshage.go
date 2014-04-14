@@ -1,3 +1,7 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 // iomeshage is a file transfer layer for meshage
 //
 // Files are stored in a predetermined directory structure. When a particular
@@ -35,13 +39,14 @@ type IOMeshage struct {
 	transferLock sync.RWMutex
 }
 
+// FileInfo object. Used by the calling API to describe existing files.
 type FileInfo struct {
 	Name string
 	Dir  bool
 	Size int64
 }
 
-// Transfer describes an in-flight transfer
+// Transfer describes an in-flight transfer.
 type Transfer struct {
 	Dir      string         // temporary directory hold the file parts
 	Filename string         // file name
@@ -173,6 +178,9 @@ func (iom *IOMeshage) Get(file string) error {
 	return nil
 }
 
+// Get a file with numParts parts. getParts will randomize the order of the
+// parts to maximize the distributed transfer behavior of iomeshage when used
+// at scale.
 func (iom *IOMeshage) getParts(filename string, numParts int64) {
 	// create a random list of parts to grab
 	var parts []int64
@@ -341,6 +349,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 	os.Rename(name, iom.base+filename)
 }
 
+// Remove a temporary transfer directory and any transferred parts.
 func (iom *IOMeshage) destroyTempTransfer(filename string) {
 	iom.transferLock.RLock()
 	t, ok := iom.transfers[filename]
@@ -361,6 +370,7 @@ func (iom *IOMeshage) destroyTempTransfer(filename string) {
 	iom.transferLock.Unlock()
 }
 
+// Transfer a single filepart to a temporary transfer directory.
 func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 	TID := genTID()
 	c := make(chan *IOMMessage)
@@ -459,6 +469,7 @@ func (iom *IOMeshage) Delete(file string) error {
 	return os.RemoveAll(file)
 }
 
+// Get a full path, with the iom base directory and any trailing "/".
 func (iom *IOMeshage) dirPrep(dir string) string {
 	if strings.HasPrefix(dir, "/") {
 		dir = strings.TrimLeft(dir, "/")
@@ -467,6 +478,7 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 	return iom.base + dir
 }
 
+// Generate a random 63 bit TID (positive int64). 
 func genTID() int64 {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)

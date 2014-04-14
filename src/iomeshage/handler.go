@@ -1,3 +1,7 @@
+// Copyright (2012) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package iomeshage
 
 import (
@@ -24,6 +28,8 @@ var (
 	TIDLock sync.Mutex
 )
 
+// IOMessage is the only structure sent between iomeshage nodes (including
+// ACKS). It is used as the body of a meshage message.
 type IOMMessage struct {
 	From     string
 	Type     int
@@ -34,6 +40,7 @@ type IOMMessage struct {
 	Data     []byte
 }
 
+// Message pump for incoming iomeshage messages.
 func (iom *IOMeshage) handleMessages() {
 	for {
 		message := (<-iom.Messages).Body.(IOMMessage)
@@ -56,6 +63,12 @@ func (iom *IOMeshage) handleMessages() {
 	}
 }
 
+// Handle incoming responses (ACK, file transfer, etc.). It's possible for an
+// incoming response to be invalid, such as when a message times out and the
+// receiver is no longer expecting the message to arrive. If so, drop the
+// message. Responses are sent along registered channels, which are closed when
+// the receiver gives up. If we try to send on a closed channel, recover and
+// move on.
 func (iom *IOMeshage) handleResponse(m *IOMMessage) {
 	if c, ok := iom.TIDs[m.TID]; ok {
 		defer func() {
@@ -70,6 +83,8 @@ func (iom *IOMeshage) handleResponse(m *IOMMessage) {
 	}
 }
 
+// Handle incoming "get file info" messages by looking up if we have the file
+// and responding with the number of parts or a NACK.
 func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	// do we have this file, rooted at iom.base?
 	resp := IOMMessage{
@@ -96,6 +111,7 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	}
 }
 
+// Get file info and return the number of parts in the file.
 func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 	f, err := os.Open(filename)
 	if err != nil {
@@ -116,6 +132,8 @@ func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
 	return parts, nil
 }
 
+// Transactions need unique TIDs, and a corresponing channel to return
+// responses along. Register a TID and channel for the mux to respond along.
 func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
 	TIDLock.Lock()
 	defer TIDLock.Unlock()
@@ -126,6 +144,7 @@ func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
 	return nil
 }
 
+// Unregister TIDs from the mux.
 func (iom *IOMeshage) unregisterTID(TID int64) {
 	TIDLock.Lock()
 	defer TIDLock.Unlock()
@@ -137,10 +156,13 @@ func (iom *IOMeshage) unregisterTID(TID int64) {
 	}
 }
 
+// handle "who has this filepart" messages by returning an ACK if we have the file.
 func (iom *IOMeshage) handleWhohas(m *IOMMessage) {
 	iom.handlePart(m, false)
 }
 
+// Respond to message m with an ACK if a filepart exists, and optionally the
+// contents of that filepart.
 func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	// do we have this file, rooted at iom.base?
 	resp := IOMMessage{
@@ -204,10 +226,12 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	}
 }
 
+// Transfer a filepart.
 func (iom *IOMeshage) handleXfer(m *IOMMessage) {
 	iom.handlePart(m, true)
 }
 
+// Read a filepart and return a byteslice.
 func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 	if !strings.HasPrefix(filename, iom.base) {
 		filename = iom.base + filename
