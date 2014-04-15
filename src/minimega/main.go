@@ -12,6 +12,7 @@ package main
 // TODO(fritz): more logging throughout
 // TODO(fritz): add documentation generation, with the api
 // TODO(fritz): start full audit
+// TODO(fritz): minidash
 
 import (
 	"flag"
