@@ -64,7 +64,10 @@ func webStart(p string) {
 	webRunning = true
 	http.HandleFunc("/vnc/", vncRoot)
 	http.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(vncNovnc))))
-	http.ListenAndServe(p, nil)
+	err := http.ListenAndServe(p, nil)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 func vncRoot(w http.ResponseWriter, r *http.Request) {
