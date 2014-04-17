@@ -28,6 +28,8 @@ var (
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
 	f_branch        = flag.String("branch", "testing", "debian branch to use")
+	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
+	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -42,6 +44,8 @@ func usage() {
 	fmt.Println("usage: vmbetter [option]... [config]")
 	flag.PrintDefaults()
 }
+
+// TODO(fritz): make vmbetter use external.go style process lookups throughout
 
 func main() {
 	flag.Usage = usage
@@ -139,7 +143,11 @@ func main() {
 
 		// build the image file
 		fmt.Println("building target files")
-		err = BuildTargets(buildPath, config)
+		if *f_qcow {
+			err = Buildqcow2(buildPath, config)
+		} else {
+			err = BuildTargets(buildPath, config)
+		}
 		if err != nil {
 			log.Fatalln(err)
 		}
