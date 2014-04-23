@@ -75,9 +75,8 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 }
 
 // Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, fdisk, mkfs.ext4,
-// cp, and extlinux. SHEESH
+// cp, and extlinux.
 func Buildqcow2(buildPath string, c vmconfig.Config) error {
-	// TODO(fritz): cleanup on error
 	// TODO(fritz): use logall to get debug output during disk creation
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
@@ -89,6 +88,132 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 
 	targetqcow2 := fmt.Sprintf("%v/%v.qcow2", wd, targetName)
 
+	err = createQcow2(targetqcow2, *f_qcowsize)
+	if err != nil {
+		return err
+	}
+
+	dev, err := nbdConnectQcow2(targetqcow2)
+	if err != nil {
+		e2 := os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = partitionQcow2(dev)
+	if err != nil {
+		e2 := nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = formatQcow2(dev + "p1")
+	if err != nil {
+		e2 := nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	mountPath, err := mountQcow2(dev + "p1")
+	if err != nil {
+		e2 := nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = copyQcow2(buildPath, mountPath)
+	if err != nil {
+		e2 := umountQcow2(mountPath)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = extlinux(mountPath)
+	if err != nil {
+		e2 := umountQcow2(mountPath)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = umountQcow2(mountPath)
+	if err != nil {
+		e2 := nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = extlinuxMBR(dev)
+	if err != nil {
+		e2 := nbdDisconnectQcow2(dev)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		e2 = os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	err = nbdDisconnectQcow2(dev)
+	if err != nil {
+		e2 := os.Remove(targetqcow2)
+		if e2 != nil {
+			log.Errorln(e2)
+		}
+		return err
+	}
+
+	return nil
+}
+
+func createQcow2(target, size string) error {
 	// create our qcow image
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -100,8 +225,8 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 			"create",
 			"-f",
 			"qcow2",
-			targetqcow2,
-			*f_qcowsize,
+			target,
+			size,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -109,24 +234,27 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("creating disk image with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func nbdConnectQcow2(target string) (string, error) {
 	// connect it to qemu-nbd
-	p = process("qemu-nbd")
-	sOut.Reset()
-	sErr.Reset()
+	p := process("qemu-nbd")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	// TODO(fritz): don't hardcode nbd0
-	cmd = &exec.Cmd{
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"-c",
 			"/dev/nbd0",
-			targetqcow2,
+			target,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -134,22 +262,24 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("connecting to nbd with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return "", e
 	}
+	return "/dev/nbd0", nil
+}
 
+func partitionQcow2(dev string) error {
 	// partition with fdisk
-	p = process("fdisk")
-	sOut.Reset()
-	sErr.Reset()
-	// TODO(fritz): don't hardcode nbd0
-	cmd = &exec.Cmd{
+	p := process("fdisk")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"/dev/nbd0",
+			dev,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -172,17 +302,19 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func formatQcow2(dev string) error {
 	// make an ext4 filesystem
-	p = process("mkfs")
-	sOut.Reset()
-	sErr.Reset()
-	// TODO(fritz): don't hardcode nbd0
-	cmd = &exec.Cmd{
+	p := process("mkfs")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"/dev/nbd0p1",
+			dev,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -190,26 +322,29 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("formatting with with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func mountQcow2(dev string) (string, error) {
 	// mount the filesystem
 	mountPath, err := ioutil.TempDir("", "vmbetter_mount_")
 	if err != nil {
 		log.Fatalln("cannot create temporary directory:", err)
 	}
 	log.Debugln("using mount path:", mountPath)
-	p = process("mount")
-	sOut.Reset()
-	sErr.Reset()
-	cmd = &exec.Cmd{
+	p := process("mount")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"/dev/nbd0p1",
+			dev,
 			mountPath,
 		},
 		Env:    nil,
@@ -221,20 +356,23 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	err = cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return "", e
 	}
+	return mountPath, nil
+}
 
+func copyQcow2(src, dst string) error {
 	// copy everything over
-	p = process("cp")
-	sOut.Reset()
-	sErr.Reset()
-	cmd = &exec.Cmd{
+	p := process("cp")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"-a",
-			buildPath + "/.",
-			mountPath,
+			src + "/.",
+			dst,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -242,22 +380,25 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("copy with with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func extlinux(path string) error {
 	// install extlinux
-	p = process("extlinux")
-	sOut.Reset()
-	sErr.Reset()
-	cmd = &exec.Cmd{
+	p := process("extlinux")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"--install",
-			mountPath + "/boot",
+			path + "/boot",
 		},
 		Env:    nil,
 		Dir:    "",
@@ -265,7 +406,7 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("installing bootloader with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
@@ -273,7 +414,7 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 
 	// write out the bootloader config, but first figure out the kernel and
 	// initrd files in /boot
-	filepath.Walk(buildPath+"/boot", kernelWalker)
+	filepath.Walk(path+"/boot", kernelWalker)
 	if kernelName == "" {
 		return fmt.Errorf("could not find kernel name")
 	}
@@ -283,20 +424,23 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 
 	extlinuxConfig := fmt.Sprintf("DEFAULT minimegalinux\nLABEL minimegalinux\nSAY booting minimegalinux\nLINUX /boot/%v\nAPPEND root=/dev/sda1\nINITRD /boot/%v", kernelName, initrdName)
 
-	err = ioutil.WriteFile(mountPath+"/boot/extlinux.conf", []byte(extlinuxConfig), os.FileMode(0660))
+	err = ioutil.WriteFile(path+"/boot/extlinux.conf", []byte(extlinuxConfig), os.FileMode(0660))
 	if err != nil {
 		return err
 	}
+	return nil
+}
 
+func umountQcow2(path string) error {
 	// unmount
-	p = process("umount")
-	sOut.Reset()
-	sErr.Reset()
-	cmd = &exec.Cmd{
+	p := process("umount")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			mountPath,
+			path,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -304,18 +448,21 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("unmounting with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func extlinuxMBR(dev string) error {
 	// dd the mbr image
-	p = process("dd")
-	sOut.Reset()
-	sErr.Reset()
+	p := process("dd")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 	// TODO(fritz): add flag for mbr.bin
-	cmd = &exec.Cmd{
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
@@ -323,7 +470,7 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 			"conv=notrunc",
 			"bs=440",
 			"count=1",
-			fmt.Sprintf("of=/dev/nbd0"),
+			fmt.Sprintf("of=%v", dev),
 		},
 		Env:    nil,
 		Dir:    "",
@@ -331,22 +478,25 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("installing mbr with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
 
+func nbdDisconnectQcow2(dev string) error {
 	// disconnect nbd
-	p = process("qemu-nbd")
-	sOut.Reset()
-	sErr.Reset()
-	cmd = &exec.Cmd{
+	p := process("qemu-nbd")
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"-d",
-			"/dev/nbd0",
+			dev,
 		},
 		Env:    nil,
 		Dir:    "",
@@ -354,12 +504,11 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		Stderr: &sErr,
 	}
 	log.Debug("disconnecting nbd with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
 		return e
 	}
-
 	return nil
 }
 
