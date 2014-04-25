@@ -44,28 +44,47 @@ type HtmlContent struct {
 	Host   string
 }
 
-func httpClient() {
+func httpClient(protocol string) {
 	log.Debugln("httpClient")
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
+
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		Dial: func(network, addr string) (net.Conn, error) {
+			return net.Dial(protocol, addr)
+		},
+	}
+
+	client := &http.Client{
+		Transport: transport,
+	}
+
 	for {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
-		httpClientRequest(h)
+		httpClientRequest(h, client)
 		httpReportChan <- 1
 	}
 }
 
-func httpTLSClient() {
+func httpTLSClient(protocol string) {
 	log.Debugln("httpTLSClient")
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 
-	tr := &http.Transport{
+	transport := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		Proxy:           http.ProxyFromEnvironment,
+		Dial: func(network, addr string) (net.Conn, error) {
+			return net.Dial(protocol, addr)
+		},
 	}
-	client := &http.Client{Transport: tr}
+
+	client := &http.Client{
+		Transport: transport,
+	}
 
 	for {
 		t.Tick()
@@ -76,7 +95,7 @@ func httpTLSClient() {
 	}
 }
 
-func httpClientRequest(h string) {
+func httpClientRequest(h string, client *http.Client) {
 	httpSiteCache = append(httpSiteCache, h)
 	if len(httpSiteCache) > MAX_CACHE {
 		httpSiteCache = httpSiteCache[len(httpSiteCache)-MAX_CACHE:]
@@ -96,7 +115,8 @@ func httpClientRequest(h string) {
 	if !strings.HasPrefix(url, "http://") {
 		url = "http://" + url
 	}
-	resp, err := http.Get(url)
+
+	resp, err := client.Get(url)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -109,7 +129,7 @@ func httpClientRequest(h string) {
 	extraFiles := parseBody(string(body))
 	for _, v := range extraFiles {
 		log.Debugln("grabbing extra file: ", v)
-		httpGet(url, v, false, nil)
+		httpGet(url, v, false, client)
 	}
 
 	links := parseLinks(string(body))
@@ -185,7 +205,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if !strings.HasPrefix(file, "http://") {
 			file = url + "/" + file
 		}
-		resp, err := http.Get(file)
+		resp, err := client.Get(file)
 		if err == nil {
 			resp.Body.Close()
 		}

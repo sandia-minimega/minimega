@@ -67,7 +67,7 @@ var (
 // events with weights. 10% chance to connect/disconnect (100% to connect if no
 // connections exist), and 90% chance to issue commands on existing
 // connections.
-func sshClient() {
+func sshClient(protocol string) {
 	log.Debugln("sshClient")
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
@@ -78,7 +78,7 @@ func sshClient() {
 		if len(sshConns) == 0 {
 			h, o := randomHost()
 			log.Debug("ssh host %v from %v", h, o)
-			sshClientConnect(h)
+			sshClientConnect(h, protocol)
 		} else {
 			s := rand.NewSource(time.Now().UnixNano())
 			r := rand.New(s)
@@ -93,7 +93,7 @@ func sshClient() {
 					}
 				}
 				log.Debug("ssh host %v from %v", h, o)
-				sshClientConnect(h)
+				sshClientConnect(h, protocol)
 			case 1: // disconnect
 				i := r.Intn(len(sshConns))
 				log.Debug("ssh disconnect on %v", sshConns[i].Host)
@@ -107,7 +107,7 @@ func sshClient() {
 	}
 }
 
-func sshClientConnect(host string) {
+func sshClientConnect(host string, protocol string) {
 	sc := &sshConn{}
 	sc.Config = &ssh.ClientConfig{
 		User: "protonuke",
@@ -123,7 +123,7 @@ func sshClientConnect(host string) {
 	}
 
 	var err error
-	sc.Client, err = ssh.Dial("tcp", dHost+PORT, sc.Config)
+	sc.Client, err = ssh.Dial(protocol, dHost+PORT, sc.Config)
 	if err != nil {
 		log.Errorln(err)
 		return

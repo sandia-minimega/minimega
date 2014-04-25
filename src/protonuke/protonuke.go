@@ -98,28 +98,28 @@ func main() {
 		if *f_serve {
 			go httpServer(protocol)
 		} else {
-			go httpClient()
+			go httpClient(protocol)
 		}
 	}
 	if *f_https {
 		if *f_serve {
 			go httpTLSServer(protocol)
 		} else {
-			go httpTLSClient()
+			go httpTLSClient(protocol)
 		}
 	}
 	if *f_ssh {
 		if *f_serve {
 			go sshServer(protocol)
 		} else {
-			go sshClient()
+			go sshClient(protocol)
 		}
 	}
 	if *f_smtp {
 		if *f_serve {
 			go smtpServer(protocol)
 		} else {
-			go smtpClient()
+			go smtpClient(protocol)
 		}
 	}
 	<-sig

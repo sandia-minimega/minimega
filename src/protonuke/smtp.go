@@ -72,7 +72,7 @@ var (
 	email     []mail
 )
 
-func smtpClient() {
+func smtpClient(protocol string) {
 	log.Debugln("smtpClient")
 
 	// replace the email corpus if specified
@@ -121,7 +121,7 @@ func smtpClient() {
 			m.From += "@protonuke.org"
 		}
 
-		err := smtpSendMail(h, m)
+		err := smtpSendMail(h, m, protocol)
 		if err != nil {
 			log.Errorln(err)
 		} else {
@@ -130,13 +130,17 @@ func smtpClient() {
 	}
 }
 
-func smtpSendMail(server string, m mail) error {
+func smtpSendMail(server string, m mail, protocol string) error {
 	// url notation requires leading and trailing [] on ipv6 addresses
 	if isIPv6(server) {
 		server = "[" + server + "]"
 	}
 
-	c, err := smtp.Dial(server + smtpPort)
+	conn, err := net.Dial(protocol, server+smtpPort)
+	if err != nil {
+		return err
+	}
+	c, err := smtp.NewClient(conn, server)
 	if err != nil {
 		return err
 	}
