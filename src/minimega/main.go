@@ -13,6 +13,11 @@ package main
 // TODO(fritz): add documentation generation, with the api
 // TODO(fritz): start full audit
 // TODO(fritz): minidash
+// TODO: fully repeatable schedule with scheduler
+// TODO: migration file support
+// TODO: megadoc
+// TODO: web interface
+// TODO: netflow support
 
 import (
 	"flag"
