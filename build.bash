@@ -2,7 +2,7 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-source $SCRIPT_DIR/env.bash
+. $SCRIPT_DIR/env.bash
 
 # set the version from the repo
 VERSION=`git rev-parse HEAD`
