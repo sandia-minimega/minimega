@@ -45,8 +45,6 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-// TODO(fritz): make vmbetter use external.go style process lookups throughout
-
 func main() {
 	flag.Usage = usage
 	flag.Parse()

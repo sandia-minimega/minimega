@@ -4,8 +4,6 @@
 
 package main
 
-// TODO(fritz): miniccc: add cli
-
 import (
 	"flag"
 	"fmt"

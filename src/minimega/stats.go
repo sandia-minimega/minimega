@@ -110,7 +110,6 @@ func hostStats(quiet bool) (string, error) {
 	}
 	outputMemUsed := fmt.Sprintf("%d", (memTotal-(memFree+memBuffers+memCached))/1024)
 
-	// BUG(fritz): host_stats bandwidth measure is wrong
 	// bandwidth ( megabytes / second ) for all interfaces in aggregate
 	// again, a big hack, this time we look for a string with a ":" suffix, and offset from there
 	f = strings.Fields(string(band1))

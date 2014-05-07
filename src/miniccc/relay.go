@@ -163,7 +163,6 @@ func handleRoot(w http.ResponseWriter, r *http.Request) {
 	}
 	clientLock.Unlock()
 
-	// TODO: html template
 	resp := fmt.Sprintf("<html>Active clients: %v<br>Expired clients: %v<br>", numClients, clientExpiredCount)
 	resp += "Architecture Mix:<br>"
 	for k, v := range archMix {

@@ -92,7 +92,6 @@ func getOSVer() {
 		fullVersion = currentVersion + "." + currentBuild
 	}
 
-	// BUG(evan) Server2003 resolves to XP, Server2008 to 7, Server2012 to 8
 	switch fullVersion {
 	case "1.04":
 		OSVer = "Windows 1.0"

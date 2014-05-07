@@ -77,7 +77,6 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 // Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, fdisk, mkfs.ext4,
 // cp, and extlinux.
 func Buildqcow2(buildPath string, c vmconfig.Config) error {
-	// TODO(fritz): use logall to get debug output during disk creation
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
 
@@ -247,7 +246,6 @@ func nbdConnectQcow2(target string) (string, error) {
 	p := process("qemu-nbd")
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
-	// TODO(fritz): don't hardcode nbd0
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -461,7 +459,6 @@ func extlinuxMBR(dev string) error {
 	p := process("dd")
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
-	// TODO(fritz): add flag for mbr.bin
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{

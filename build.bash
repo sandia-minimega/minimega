@@ -57,19 +57,3 @@ do
 done
 echo
 
-DIRS="gomacro goreadline igor iomeshage ipmac meshage miniccc minilog minimega novnctun powerbot protonuke qmp ranger ranges version vmbetter vmconfig"
-
-# bugs
-echo BUGS
-for i in $DIRS
-do
-	grep -rHsi '//[ ]*BUG' src/$i
-done
-echo
-
-# todos
-echo TODO
-for i in $DIRS
-do
-	grep -rHsi '//[ ]*TODO' src/$i
-done

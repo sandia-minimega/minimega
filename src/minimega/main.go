@@ -4,21 +4,6 @@
 
 package main
 
-// TODO(fritz): scheduler support
-// TODO(fritz): lxc support
-// TODO(evan): vnc record/replay
-// TODO(evan): QoS support with global policy
-// TODO(fritz): filepath inconsistencies
-// TODO(fritz): more logging throughout
-// TODO(fritz): add documentation generation, with the api
-// TODO(fritz): start full audit
-// TODO(fritz): minidash
-// TODO: fully repeatable schedule with scheduler
-// TODO: migration file support
-// TODO: megadoc
-// TODO: web interface
-// TODO: netflow support
-
 import (
 	"flag"
 	"fmt"
