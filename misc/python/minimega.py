@@ -1,5 +1,5 @@
 '''
-Copyright (2012) Sandia Corporation.
+Copyright (2014) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 
@@ -19,14 +19,17 @@ import socket
 import json
 import re
 
+from os import path
 
-__version__ = 'minimega.py 9d5cd411baaaef9abefdfdbe39bada5454ee382d 2014-05-07'
+
+__version__ = 'minimega.py 9d5cd411baaaef9abefdfdbe39bada5454ee382d 2014-05-09'
 
 
 class Error(Exception): pass
 
 
 NET_RE = re.compile(r'((?P<bridge>\w+),)?(?P<id>\d+)(,(?P<mac>([0-9A-Fa-f]:?){6}))?')
+FILE_RE = re.compile(r'(?P<name>.*?)(?P<dir> <dir>)?\s+(?P<size>\d+)')
 DEFAULT_TIMEOUT = 60
 MSG_BLOCK_SIZE = 4096
 
@@ -37,6 +40,64 @@ def connect(path):
     a new minimega API object.
     '''
     return minimega(path)
+
+
+class FileStore(dict):
+    '''
+    This is an internal class that is used to provide access to the minimega
+    file API. It should not need to be invoked manually.
+
+    This class behaves like a dictionary of filename -> size mappings. These
+    files can be deleted using del, new files can be downloaded using get(),
+    and the status of transferring files can be obtained with status().
+    '''
+
+    def __init__(self, mm, cwd='/'):
+        super(FileStore, self).__init__()
+        self._mm = mm
+        self._cwd = cwd
+
+        self.list()
+
+    def __setitem__(self, key, value):
+        # TODO(devin): this could actually be useful, store a file from python?
+        raise NotImplementedError
+
+    def update(self, D):
+        raise NotImplementedError
+
+    def __delitem__(self, key):
+        if key not in self:
+            raise KeyError
+        self._mm._send('file', 'delete', path.join(self._cwd, key))
+        super(FileStore, self).__delitem__(key)
+
+    def status(self):
+        return self._mm._send('file', 'status')
+
+    def get(self, key):
+        self._mm._send('file', 'get', path.join(self._cwd, key))
+
+    def list(self):
+        '''
+        This function updates the internal file listing from minimega and
+        returns a list of files.
+        '''
+        self.clear()
+        setitem = super(FileStore, self).__setitem__
+
+        for file in self._mm._send('file', 'list', self._cwd).splitlines():
+            m = FILE_RE.match(file)
+            if not m:
+                raise Error('Failure parsing file listing in ' + self._cwd)
+            name = m.group('name')
+            if m.group('dir'):
+                #recurse
+                setitem(name, FileStore(self._mm, path.join(self._cwd, name)))
+            else:
+                setitem(name, int(m.group('size')))
+
+        return self.keys()
 
 
 class minimega(object):
@@ -57,6 +118,7 @@ class minimega(object):
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._socket.settimeout(timeout if timeout != None else DEFAULT_TIMEOUT)
         self._socket.connect(path)
+        self.files = FileStore(self)
 
     def _reconnect(self):
         try:
@@ -1046,54 +1108,6 @@ class minimega(object):
         vm_info. Names of VMs that have been flushed may be reused.
         '''
         return self._send('vm_flush')
-
-    def file(self, cmd, filename=None):
-        '''
-        work with files served by minimega
-
-        file allows you to transfer and manage files served by minimega in the
-        directory set by the -filepath flag (default is 'base'/files).
-
-        To list files currently being served, issue the list command with a
-        directory relative to the served directory:
-
-            mm.file('list', '/foo')
-
-        Issuing mm.file('list', '/') will list the contents of the served
-        directory.
-
-        Files can be deleted with the delete command:
-
-            mm.file('delete', '/foo')
-
-        If a directory is given, the directory will be recursively deleted.
-
-        Files are transferred using the get command. When a get command is
-        issued, the node will begin searching for a file matching the path and
-        name within the mesh. If the file exists, it will be transferred to the
-        requesting node. If multiple different files exist with the same name,
-        the behavior is undefined. When a file transfer begins, control will
-        return to minimega while the transfer completes.
-
-        To see files that are currently being transferred, use the status
-        command:
-
-            mm.file('status')
-        '''
-        # TODO(devin): there's probably a way to avoid making the user pass
-        #              all the args as strings
-        options = ('list', 'status', 'delete', 'get')
-
-        if cmd not in options:
-            raise ValueError('cmd must be one of: ' + str(options))
-
-        if filename is None:
-            return self._send('file', cmd)
-
-        if not isinstance(filename, str):
-            raise TypeError('filename must be a string')
-
-        return self._send('file', cmd, filename)
 
     def viz(self, filename):
         '''

@@ -101,6 +101,7 @@ func iomList(dir string) (string, error) {
 	for _, f := range files {
 		n := f.Name
 		if f.Dir {
+			// BUG(devin): what about files named "foo <dir>"?
 			n += " <dir>"
 		}
 		fmt.Fprintf(w, "%v\t%v\n", n, f.Size)
