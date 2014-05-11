@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"image"
 	"image/png"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	log "minilog"
@@ -199,6 +200,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		}
 		resp, err := client.Get(file)
 		if err == nil {
+			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
 		}
 	} else {
@@ -207,6 +209,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		}
 		resp, err := client.Get(file)
 		if err == nil {
+			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
 		}
 	}
