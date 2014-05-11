@@ -100,10 +100,11 @@ func iomList(dir string) (string, error) {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	for _, f := range files {
 		n := f.Name
+		dir := " "
 		if f.Dir {
-			n += " <dir>"
+			dir = "<dir>"
 		}
-		fmt.Fprintf(w, "%v\t%v\n", n, f.Size)
+		fmt.Fprintf(w, "%v\t%v\t%v\n", dir, n, f.Size)
 	}
 	w.Flush()
 	return o.String(), nil
