@@ -19,16 +19,16 @@ var (
 echo "BUILD RACE PACKAGES (linux)"
 echo "protonuke"
 go install -race protonuke
-cp $SCRIPT_DIR/bin/protonuke $SCRIPT_DIR/bin/protonuke_race
+mv $SCRIPT_DIR/bin/protonuke $SCRIPT_DIR/bin/protonuke_race
 echo "minimega"
 go install -race minimega
-cp $SCRIPT_DIR/bin/minimega $SCRIPT_DIR/bin/minimega_race
+mv $SCRIPT_DIR/bin/minimega $SCRIPT_DIR/bin/minimega_race
 echo "miniccc"
 go install -race miniccc
-cp $SCRIPT_DIR/bin/miniccc $SCRIPT_DIR/bin/miniccc_race
+mv $SCRIPT_DIR/bin/miniccc $SCRIPT_DIR/bin/miniccc_race
 echo "vmbetter"
 go install -race vmbetter
-cp $SCRIPT_DIR/bin/vmbetter $SCRIPT_DIR/bin/vmbetter_race
+mv $SCRIPT_DIR/bin/vmbetter $SCRIPT_DIR/bin/vmbetter_race
 echo
 
 # build packages
