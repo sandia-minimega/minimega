@@ -1,5 +1,5 @@
 '''
-Copyright (2012) Sandia Corporation.
+Copyright (2014) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 
@@ -19,14 +19,17 @@ import socket
 import json
 import re
 
+from os import path
 
-__version__ = 'minimega.py 27d6533c86361aa46e416c562261fcaaa27f0ba0 2014-03-08'
+
+__version__ = 'minimega.py 9d5cd411baaaef9abefdfdbe39bada5454ee382d 2014-05-09'
 
 
 class Error(Exception): pass
 
 
 NET_RE = re.compile(r'((?P<bridge>\w+),)?(?P<id>\d+)(,(?P<mac>([0-9A-Fa-f]:?){6}))?')
+FILE_RE = re.compile(r'(?P<name>.*?)(?P<dir> <dir>)?\s+(?P<size>\d+)')
 DEFAULT_TIMEOUT = 60
 MSG_BLOCK_SIZE = 4096
 
@@ -37,6 +40,64 @@ def connect(path):
     a new minimega API object.
     '''
     return minimega(path)
+
+
+class FileStore(dict):
+    '''
+    This is an internal class that is used to provide access to the minimega
+    file API. It should not need to be invoked manually.
+
+    This class behaves like a dictionary of filename -> size mappings. These
+    files can be deleted using del, new files can be downloaded using get(),
+    and the status of transferring files can be obtained with status().
+    '''
+
+    def __init__(self, mm, cwd='/'):
+        super(FileStore, self).__init__()
+        self._mm = mm
+        self._cwd = cwd
+
+        self.list()
+
+    def __setitem__(self, key, value):
+        # TODO(devin): this could actually be useful, store a file from python?
+        raise NotImplementedError
+
+    def update(self, D):
+        raise NotImplementedError
+
+    def __delitem__(self, key):
+        if key not in self:
+            raise KeyError
+        self._mm._send('file', 'delete', path.join(self._cwd, key))
+        super(FileStore, self).__delitem__(key)
+
+    def status(self):
+        return self._mm._send('file', 'status')
+
+    def get(self, key):
+        self._mm._send('file', 'get', path.join(self._cwd, key))
+
+    def list(self):
+        '''
+        This function updates the internal file listing from minimega and
+        returns a list of files.
+        '''
+        self.clear()
+        setitem = super(FileStore, self).__setitem__
+
+        for file in self._mm._send('file', 'list', self._cwd).splitlines():
+            m = FILE_RE.match(file)
+            if not m:
+                raise Error('Failure parsing file listing in ' + self._cwd)
+            name = m.group('name')
+            if m.group('dir'):
+                #recurse
+                setitem(name, FileStore(self._mm, path.join(self._cwd, name)))
+            else:
+                setitem(name, int(m.group('size')))
+
+        return self.keys()
 
 
 class minimega(object):
@@ -57,6 +118,7 @@ class minimega(object):
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._socket.settimeout(timeout if timeout != None else DEFAULT_TIMEOUT)
         self._socket.connect(path)
+        self.files = FileStore(self)
 
     def _reconnect(self):
         try:
@@ -109,13 +171,13 @@ class minimega(object):
         '''
         set the log level
 
-        Set the log level to one of [debug, info, warn, error, fatal, off]. Log
+        Set the log level to one of [debug, info, warn, error, fatal]. Log
         levels inherit lower levels, so setting the level to error will also
         log fatal, and setting the mode to debug will log everything.
 
         If called with no argument, it returns the current log level.
         '''
-        options = ('debug', 'info', 'warn', 'error', 'fatal', 'off')
+        options = ('debug', 'info', 'warn', 'error', 'fatal')
 
         if level is None:
             return self._send('log_level')
@@ -188,7 +250,7 @@ class minimega(object):
         '''
         write the command history to a file
 
-        Write the command history to <file>. This is useful for handcrafting
+        Write the command history to file. This is useful for handcrafting
         configs on the minimega command line and then saving them for later
         use. Args that failed, as well as some commands that do not impact the
         VM state, such as 'help', do not get recorded.
@@ -198,7 +260,7 @@ class minimega(object):
 
         return self._send('write', filename)
 
-    def vm_save(self, name, *ids):
+    def vm_save(self, name, *idsOrNames):
         '''
         save a vm configuration for later use
 
@@ -206,20 +268,20 @@ class minimega(object):
         machines so that it/they can be restarted/recovered later, such as
         after a system crash.
 
+        If no VM name or ID is given, all VMs (including those in the quit and
+        error state) will be saved.
+
         This command does not store the state of the virtual machine itself,
         only its launch configuration.
         '''
         if not isinstance(name, str):
             raise TypeError('name must be a string')
 
-        if not ids:
-            raise Error('at least one VM ID must be specified')
+        for id in idsOrNames:
+            if not (isinstance(id, int) or isinstance(id, str)):
+                raise TypeError('id must be an integer or string')
 
-        for id in ids:
-            if not isinstance(id, int):
-                raise TypeError('all ids must be specified as integers')
-
-        return self._send('vm_save', name, *map(str, ids))
+        return self._send('vm_save', name, *map(str, idsOrNames))
 
     def read(self, filename):
         '''
@@ -268,20 +330,23 @@ class minimega(object):
             vm_info vlan=100 [id,ip]
 
         Searchable and maskable fields are:
-            host	: The host that the VM is running on
-            id	: The VM ID, as an integer
-            name	: The VM name, if it exists
-            memory  : Allocated memory, in megabytes
+            host    : the host that the VM is running on
+            id      : the VM ID, as an integer
+            name    : the VM name, if it exists
+            memory  : allocated memory, in megabytes
+            vcpus   : the number of allocated CPUs
             disk    : disk image
             initrd  : initrd image
             kernel  : kernel image
             cdrom   : cdrom image
             state   : one of (building, running, paused, quit, error)
-            tap	: tap name
-            mac	: mac address
-            ip	: IPv4 address
-            ip6	: IPv6 address
-            vlan	: vlan, as an integer
+            tap     : tap name
+            mac     : mac address
+            ip      : IPv4 address
+            ip6     : IPv6 address
+            vlan    : vlan, as an integer
+            bridge  : bridge name
+            append  : kernel command line string
 
         Examples:
         Display a list of all IPs for all VMs:
@@ -318,11 +383,22 @@ class minimega(object):
 
         return self._send('vm_info', *args)
 
-    def quit(self):
-        return self._send('quit')
+    def quit(self, delay=None):
+        '''
+        Quit. An optional integer argument X allows deferring the quit call for
+        X seconds. This is useful for telling a mesh of minimega nodes to quit.
+        '''
+        if not delay:
+            return self._send('quit')
 
-    def exit(self):
-        return self._send('exit')
+        if not isinstance(delay, int):
+            raise TypeError('delay must be an integer')
+
+        return self._send('quit', str(delay))
+
+    def exit(self, delay=None):
+        '''An alias to 'quit'.'''
+        return self.quit(delay)
 
     def vm_launch(self, numOrName):
         '''
@@ -554,9 +630,10 @@ class minimega(object):
         corresponding VLAN will be created for each network. Optionally, you
         may specify the bridge the interface will be connected on. If the
         bridge name is omitted, minimega will use the default 'mega_bridge'.
-        Additionally, you can optionally specify the mac address of the
-        interface to connect to that network. If not specifed, the mac address
-        will be randomly generated.
+        You can also optionally specify the mac address of the interface to
+        connect to that network. If not specifed, the mac address will be
+        randomly generated. Additionally, you can also specify a driver for
+        qemu to use. By default, e1000 is used.
 
         Examples:
 
@@ -568,6 +645,8 @@ class minimega(object):
             mm.vm_net('bridge0,1', 'bridge1,2')
         To connect a VM to VLAN 100 on bridge0 with a specific mac:
             mm.vm_net('bridge0,100,00:11:22:33:44:55')
+        To specify a specific driver, such as i82559c:
+            mm.vm_net('100,i82559c')
 
         Calling vm_net with no parameters will list the current networks for
         this VM.
@@ -753,12 +832,15 @@ class minimega(object):
 
         return self._send('mesh_timeout', str(timeout))
 
-    def mesh_set(self, nodes, cmd):
+    def mesh_set(self, nodes, cmd, annotate=False):
         '''
         send a command to one or more connected clients
 
         For example, to get the vm_info from nodes kn1 and kn2:
             mm.mesh_set('kn[1-2]', 'vm_info')
+
+        Optionally, you can annotate the output with the hostname of all
+        responders by setting annotate=True.
         '''
         # TODO(devin): there's probably a way to avoid making the user pass cmd
         #              in as a string
@@ -766,19 +848,28 @@ class minimega(object):
         if not (isinstance(nodes, str) and isinstance(cmd, str)):
             raise TypeError('nodes and cmd must both be strings')
 
+        if annotate:
+            return self._send('mesh_set', 'annotate', nodes, cmd)
+
         return self._send('mesh_set', nodes, cmd)
 
-    def mesh_broadcast(self, cmd):
+    def mesh_broadcast(self, cmd, annotate=False):
         '''
         Send a command to all connected clients.
         For example, to get the vm_info from all nodes:
             mm.mesh_broadcast('vm_info')
+
+        Optionally, you can annotate the output with the hostname of all
+        responders by setting annotate=True.
         '''
         # TODO(devin): there's probably a way to avoid making the user pass cmd
         #              in as a string
         # BUG(devin): this is a hack. cmd is really supposed to be a list
         if not isinstance(cmd, str):
             raise TypeError('cmd must be a string')
+
+        if annotate:
+            return self._send('mesh_broadcast', 'annotate', cmd)
 
         return self._send('mesh_broadcast', cmd)
 
@@ -866,8 +957,15 @@ class minimega(object):
 
         Report statistics about the host including hostname, load averages,
         total and free memory, and current bandwidth usage.
+
+        To output host statistics without the header, set quiet=True.
         '''
-        # BUG(devin): quiet flag is not documented, so not sure how it works
+        if not isinstance(quiet, bool):
+            raise TypeError('quiet must be a bool')
+
+        if quiet:
+            return self._send('host_stats', 'quiet')
+
         return self._send('host_stats')
 
     def vm_snapshot(self, state=None):
@@ -886,20 +984,71 @@ class minimega(object):
 
         return self._send('vm_snapshot', str(state).lower())
 
-    def ksm(self, state=None):
+    def optimize(self, ksm=None, hugepages=None, affinity=None,
+        affinity_filter=None):
         '''
-        enable or disable Kernel Samepage Merging
+        enable or disable several virtualization optimizations
 
-        Enable or disable Kernel Samepage Merging, which can vastly increase
-        the density of VMs a node can run depending on how similar the VMs are.
+        Enable or disable several virtualization optimizations, including
+        Kernel Samepage Merging, CPU affinity for VMs, and the use of
+        hugepages.
+
+        To enable Kernel Samepage Merging (KSM):
+            mm.optimize(ksm=True)
+
+        To enable hugepage support:
+            mm.optimize(hugepages='/path/to/hugepages_mount')
+
+        To disable hugepage support:
+            mm.optimize(hugepages=False)
+
+        To enable CPU affinity support:
+            mm.optimize(affinity=True)
+
+        To set a CPU set filter for the affinity scheduler (for example, to use
+        only CPUs 1, 2-20):
+            mm.optimize(affinity_filter='[1,2-20]')
+
+        To clear a CPU set filter:
+            mm.optimize(affinity_filter=False)
         '''
-        if state is None:
-            return True if self._send('ksm') == 'enabled' else False
+        # TODO(devin): figure out how to enable viewing of CPU affinity mapping
+        # TODO(devin): refactor me, I'm hideous
+        numSet = 0
+        if ksm != None:
+            numSet += 1
+        if hugepages != None:
+            numSet += 1
+        if affinity != None:
+            numSet += 1
+        if affinity_filter != None:
+            numSet += 1
 
-        if not isinstance(state, bool):
-            raise TypeError('state must be a bool')
+        if numSet != 1:
+            raise Error('only one optimization may be set at a time')
 
-        return self._send('ksm', 'enable' if state else 'disable')
+        if ksm != None:
+            if not isinstance(ksm, bool):
+                raise TypeError('ksm must be a bool')
+            return self._send('optimize', 'ksm', 'true' if ksm else 'false')
+
+        if hugepages != None:
+            if not hugepages:
+                return self._send('optimize', 'hugepages', '')
+            if not isinstance(hugepages, str):
+                raise TypeError('hugepages must be a string or False')
+            return self._send('optimize', 'hugepages', hugepages)
+
+        if affinity != None:
+            if not isinstance(affinity, bool):
+                raise TypeError('affinity must be a bool')
+            return self._send('optimize', 'affinity', 'true' if affinity else
+                              'false')
+
+        #only thing left is affinity_filter
+        if not isinstance(affinity_filter, str):
+            raise TypeError('affinity_filter must be a string')
+        return self._send('optimize', 'affinity_filter', affinity_filter)
 
     def version(self):
         '''display the version of minimega'''
@@ -938,13 +1087,16 @@ class minimega(object):
         return self._send('vm_config', cmd, filename)
 
     def debug(self, panic=False):
-        '''display internal debug information'''
+        '''
+        Display internal debug information. Invoking with the panic=True will
+        force minimega to dump a stacktrace upon crash or exit.
+        '''
         if panic:
             return self._send('debug', 'panic')
         return self._send('debug')
 
     def bridge_info(self):
-        '''display information about the virtual bridge'''
+        '''display information about virtual bridges'''
         return self._send('bridge_info')
 
     def vm_flush(self):
@@ -957,61 +1109,11 @@ class minimega(object):
         '''
         return self._send('vm_flush')
 
-    def file(self, cmd, filename=None):
-        '''
-        work with files served by minimega
-
-        file allows you to transfer and manage files served by minimega in the
-        directory set by the -filepath flag (default is
-        <base directory>/files).
-
-        To list files currently being served, issue the list command with a
-        directory relative to the served directory:
-
-            mm.file('list', '/foo')
-
-        Issuing mm.file('list', '/') will list the contents of the served
-        directory.
-
-        Files can be deleted with the delete command:
-
-            mm.file('delete', '/foo')
-
-        If a directory is given, the directory will be recursively deleted.
-
-        Files are transferred using the get command. When a get command is
-        issued, the node will begin searching for a file matching the path and
-        name within the mesh. If the file exists, it will be transferred to the
-        requesting node. If multiple different files exist with the same name,
-        the behavior is undefined. When a file transfer begins, control will
-        return to minimega while the transfer completes.
-
-        To see files that are currently being transferred, use the status
-        command:
-
-            mm.file('status')
-        '''
-        # TODO(devin): there's probably a way to avoid making the user pass
-        #              all the args as strings
-        options = ('list', 'status', 'delete', 'get')
-
-        if cmd not in options:
-            raise ValueError('cmd must be one of: ' + str(options))
-
-        if filename is None:
-            return self._send('file', cmd)
-
-        if not isinstance(filename, str):
-            raise TypeError('filename must be a string')
-
-        return self._send('file', cmd, filename)
-
     def viz(self, filename):
         '''
         visualize the current experiment as a graph
 
-        viz outputs the current experiment topology as a graphviz readable
-        'dot' file.
+        Output the current experiment topology as a graphviz readable dot file.
         '''
         if not isinstance(filename, str):
             raise TypeError('filename must be a string')
@@ -1150,8 +1252,8 @@ class minimega(object):
         '''
         inject files into a qcow image
 
-        Creates a backed snapshot of a qcow2 image and injects one or more
-        files into the new snapshot.
+        Create a backed snapshot of a qcow2 image and injects one or more files
+        into the new snapshot.
 
         Usage:
 
@@ -1166,7 +1268,7 @@ class minimega(object):
 
         dst qcow image name - The optional name of the snapshot image. This
         should be a name only, if any extra path is specified, an error is
-        thrown. This file will be created at <BASE>/files. A filename will be
+        thrown. This file will be created at 'base'/files. A filename will be
         generated if this optional parameter is omitted.
 
         src file - The local file that should be injected onto the new qcow2

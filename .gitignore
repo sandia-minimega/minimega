@@ -3,4 +3,5 @@ bin
 volatile
 src/version/version.go
 *.swp
+*.pyc
 __pycache__
