@@ -22,14 +22,14 @@ import re
 from os import path
 
 
-__version__ = 'minimega.py 9d5cd411baaaef9abefdfdbe39bada5454ee382d 2014-05-09'
+__version__ = 'minimega.py 9d5cd411baaaef9abefdfdbe39bada5454ee382d 2014-05-12'
 
 
 class Error(Exception): pass
 
 
 NET_RE = re.compile(r'((?P<bridge>\w+),)?(?P<id>\d+)(,(?P<mac>([0-9A-Fa-f]:?){6}))?')
-FILE_RE = re.compile(r'(?P<name>.*?)(?P<dir> <dir>)?\s+(?P<size>\d+)')
+FILE_RE = re.compile(r'^(?:(?P<dir><dir> )| {6})(?P<name>.*?)\s+(?P<size>\d+)$')
 DEFAULT_TIMEOUT = 60
 MSG_BLOCK_SIZE = 4096
 
@@ -108,6 +108,30 @@ class minimega(object):
 
     Each minimega command can be called from this object, and the response will
     be returned unless an Exception is thrown.
+
+    Attributes:
+
+    files - minimega "file" API
+            This object behaves like a dictionary of filename -> size mappings.
+            Note that getting a file via get() does not make the file
+            immediately accessible. After it has completed downloading, you need
+            to call list() to refresh the file list.
+
+            To list the files available:
+                >>> mm.files
+                {'dir1': {'file3': 1024}, 'file1': 42, 'file2': 1337}
+                >>> mm.files.list()
+                ['dir1', 'file1', 'file2']
+
+            To delete a file or recursively delete a directory:
+                >>> del mm.files['file1']
+                >>> del mm.files['dir1']
+
+            To download a new file from the mesh:
+                >>> mm.files.get('newfile')
+
+            To get the status of transferring files:
+                >>> mm.files.status()
     '''
 
     def __init__(self, path, timeout=None):
@@ -134,15 +158,20 @@ class minimega(object):
         if len(msg) != self._socket.send(msg.encode('utf-8')):
             raise Error('failed to write message to minimega')
 
-        msg = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+        msg = ''
+        more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
         response = None
-        while response is None:
+        while response is None and more:
+            msg += more
             try:
                 response = json.loads(msg)
             except ValueError as e:
                 if self._debug:
                     print(e)
-                msg += self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+                more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+
+        if not msg:
+            raise Error('Expected response, socket closed')
 
         if response['Error']:
             raise Error(response['Error'])
