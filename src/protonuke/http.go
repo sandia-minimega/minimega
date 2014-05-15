@@ -199,18 +199,24 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 			file = url + "/" + file
 		}
 		resp, err := client.Get(file)
-		if err == nil {
+		if err != nil {
+			log.Errorln(err)
+		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
+			httpTLSReportChan <- 1
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
 			file = url + "/" + file
 		}
 		resp, err := client.Get(file)
-		if err == nil {
+		if err != nil {
+			log.Errorln(err)
+		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
+			httpReportChan <- 1
 		}
 	}
 }
