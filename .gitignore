@@ -6,4 +6,6 @@ src/version/version.go
 *.pyc
 __pycache__
 doc/api.html
+doc/usage.html
+doc/installing.html
 doc/markdown/api
