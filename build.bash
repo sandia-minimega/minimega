@@ -57,3 +57,6 @@ do
 done
 echo
 
+# build doc
+echo "BUILD DOCUMENTATION"
+bash misc/gendoc.bash 
