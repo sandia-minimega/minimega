@@ -5,3 +5,5 @@ src/version/version.go
 *.swp
 *.pyc
 __pycache__
+doc/api.html
+doc/markdown/api
