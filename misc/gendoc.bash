@@ -20,3 +20,9 @@ do
 	markdown doc/markdown/$i >> doc/$i.html
 	cat doc/template/footer.html >> doc/$i.html
 done
+
+# build index.html
+
+cat doc/template/header.html > doc/index.html
+cat doc/template/index.html >> doc/index.html
+cat doc/template/footer.html >> doc/index.html
