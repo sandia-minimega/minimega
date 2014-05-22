@@ -392,7 +392,12 @@ Display all information about all VMs:
 	Usage: quit [delay]
 
 Quit. An optional integer argument X allows deferring the quit call for X
-seconds. This is useful for telling a mesh of minimega nodes to quit.`,
+seconds. This is useful for telling a mesh of minimega nodes to quit.
+
+quit will not return a response to the cli, control socket, or meshage, it will
+simply exit. meshage connected nodes catch this and will remove the quit node
+from the mesh. External tools interfacing minimega must check for EOF on stdout
+or the control socket as an indication that minimega has quit.`,
 			Record: true, // but how!?
 			Clear: func() error {
 				return nil
