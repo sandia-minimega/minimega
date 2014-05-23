@@ -14,6 +14,9 @@ var (
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
 
+	httpTimeBuffer    chan uint64
+	httpTLSTimeBuffer chan uint64
+
 	httpReportHits    uint64
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
@@ -26,13 +29,18 @@ func init() {
 	sshReportChan = make(chan uint64, 1024)
 	smtpReportChan = make(chan uint64, 1024)
 
+	httpTimeBuffer = make(chan uint64, 1000000)
+	httpTLSTimeBuffer = make(chan uint64, 1000000)
+
 	go func() {
 		for {
 			select {
 			case i := <-httpReportChan:
-				httpReportHits += i
+				httpTimeBuffer <- i
+				httpReportHits++
 			case i := <-httpTLSReportChan:
-				httpTLSReportHits += i
+				httpTLSTimeBuffer <- i
+				httpTLSReportHits++
 			case i := <-sshReportChan:
 				sshReportBytes += i
 			case i := <-smtpReportChan:
@@ -65,6 +73,18 @@ func report(reportWait time.Duration) {
 		lastsmtpReportMail = smtpReportMail
 
 		log.Debugln("total elapsed time: ", elapsedTime)
+
+		fmt.Printf("HTTP timing:\t")
+		for i := uint64(0); i < ehttp; i++ {
+			fmt.Printf("%d ", <-httpTimeBuffer)
+		}
+		fmt.Printf("\n")
+
+		fmt.Printf("HTTPS timing:\t")
+		for i := uint64(0); i < etls; i++ {
+			fmt.Printf("%d ", <-httpTLSTimeBuffer)
+		}
+		fmt.Printf("\n")
 
 		buf := new(bytes.Buffer)
 		w := new(tabwriter.Writer)

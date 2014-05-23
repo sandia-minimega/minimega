@@ -65,8 +65,7 @@ func httpClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
-		httpClientRequest(h, client)
-		httpReportChan <- 1
+		httpReportChan <- httpClientRequest(h, client)
 	}
 }
 
@@ -91,12 +90,11 @@ func httpTLSClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("https host %v from %v", h, o)
-		httpTLSClientRequest(h, client)
-		httpTLSReportChan <- 1
+		httpTLSReportChan <- httpTLSClientRequest(h, client)
 	}
 }
 
-func httpClientRequest(h string, client *http.Client) {
+func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 	httpSiteCache = append(httpSiteCache, h)
 	if len(httpSiteCache) > MAX_CACHE {
 		httpSiteCache = httpSiteCache[len(httpSiteCache)-MAX_CACHE:]
@@ -117,7 +115,10 @@ func httpClientRequest(h string, client *http.Client) {
 		url = "http://" + url
 	}
 
+	start := time.Now().UnixNano()
 	resp, err := client.Get(url)
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -140,9 +141,10 @@ func httpClientRequest(h string, client *http.Client) {
 			httpSiteCache = httpSiteCache[len(httpSiteCache)-MAX_CACHE:]
 		}
 	}
+	return
 }
 
-func httpTLSClientRequest(h string, client *http.Client) {
+func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 	httpTLSSiteCache = append(httpTLSSiteCache, h)
 	if len(httpTLSSiteCache) > MAX_CACHE {
 		httpTLSSiteCache = httpTLSSiteCache[len(httpTLSSiteCache)-MAX_CACHE:]
@@ -163,7 +165,10 @@ func httpTLSClientRequest(h string, client *http.Client) {
 		url = "https://" + url
 	}
 
+	start := time.Now().UnixNano()
 	resp, err := client.Get(url)
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -186,6 +191,8 @@ func httpTLSClientRequest(h string, client *http.Client) {
 			httpTLSSiteCache = httpTLSSiteCache[len(httpTLSSiteCache)-MAX_CACHE:]
 		}
 	}
+
+	return
 }
 
 func httpGet(url, file string, useTLS bool, client *http.Client) {
@@ -198,25 +205,31 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if !strings.HasPrefix(file, "https://") {
 			file = url + "/" + file
 		}
+		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
+		stop := time.Now().UnixNano()
+		elapsed := uint64(stop - start)
 		if err != nil {
 			log.Errorln(err)
 		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
-			httpTLSReportChan <- 1
+			httpTLSReportChan <- elapsed
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
 			file = url + "/" + file
 		}
+		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
+		stop := time.Now().UnixNano()
+		elapsed := uint64(stop - start)
 		if err != nil {
 			log.Errorln(err)
 		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
-			httpReportChan <- 1
+			httpReportChan <- elapsed
 		}
 	}
 }
@@ -341,7 +354,7 @@ func httpMakeImage() {
 func hitCounter() {
 	for {
 		c := <-hitChan
-		hits += c
+		hits++
 		httpReportChan <- c
 	}
 }
@@ -349,13 +362,20 @@ func hitCounter() {
 func hitTLSCounter() {
 	for {
 		c := <-hitTLSChan
-		hitsTLS += c
+		hitsTLS++
 		httpTLSReportChan <- c
 	}
 }
 
 func httpImageHandler(w http.ResponseWriter, r *http.Request) {
+	start := time.Now().UnixNano()
 	w.Write(httpImage)
+	stop := time.Now().UnixNano()
+	if r.TLS != nil {
+		hitTLSChan <- uint64(stop - start)
+	} else {
+		hitChan <- uint64(stop - start)
+	}
 }
 
 func httpHandler(w http.ResponseWriter, r *http.Request) {
@@ -365,17 +385,13 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 		log.Debugln("request using tls")
 		usingTLS = true
 	}
-	if usingTLS {
-		hitTLSChan <- 1
-	} else {
-		hitChan <- 1
-	}
 
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
 		return
 	}
 
+	start := time.Now().UnixNano()
 	h := &HtmlContent{
 		URLs:   randomURLs(),
 		Hits:   hits,
@@ -386,6 +402,14 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	err := htmlTemplate.Execute(w, h)
 	if err != nil {
 		log.Errorln(err)
+	}
+	stop := time.Now().UnixNano()
+	elapsed := uint64(stop - start)
+
+	if usingTLS {
+		hitTLSChan <- elapsed
+	} else {
+		hitChan <- elapsed
 	}
 }
 
