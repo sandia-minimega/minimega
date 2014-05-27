@@ -121,11 +121,13 @@ func smtpClient(protocol string) {
 			m.From += "@protonuke.org"
 		}
 
+		start := time.Now().UnixNano()
 		err := smtpSendMail(h, m, protocol)
+		stop := time.Now().UnixNano()
 		if err != nil {
 			log.Errorln(err)
 		} else {
-			smtpReportChan <- 1
+			smtpReportChan <- uint64(stop - start)
 		}
 	}
 }
@@ -254,7 +256,9 @@ func (s *SMTPClientSession) Handler() {
 				s.addResponse("500 unrecognized command")
 			}
 		case DATA:
+			start := time.Now().UnixNano()
 			input, err := s.readSmtp()
+			stop := time.Now().UnixNano()
 			if err != nil {
 				log.Debugln(err)
 			}
@@ -263,7 +267,7 @@ func (s *SMTPClientSession) Handler() {
 			log.Debugln(s)
 			s.addResponse("250 Ok: Now that is a delivery service you can count on")
 			s.state = COMMANDS
-			smtpReportChan <- 1
+			smtpReportChan <- uint64(stop - start)
 		case STARTTLS:
 			// I'm just going to pull this from GoGuerrilla, thanks guys
 			var tlsConn *tls.Conn
