@@ -14,14 +14,19 @@ var (
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
 
+	httpTimeReportChan    chan uint64
+	httpTLSTimeReportChan chan uint64
+
 	httpTimeBuffer    chan uint64
 	httpTLSTimeBuffer chan uint64
 	smtpTimeBuffer    chan uint64
 
-	httpReportHits    uint64
-	httpTLSReportHits uint64
-	sshReportBytes    uint64
-	smtpReportMail    uint64
+	httpReportHits     uint64
+	httpTLSReportHits  uint64
+	sshReportBytes     uint64
+	smtpReportMail     uint64
+	httpTimeReports    uint64
+	httpTLSTimeReports uint64
 )
 
 func init() {
@@ -34,14 +39,21 @@ func init() {
 	httpTLSTimeBuffer = make(chan uint64, 1000000)
 	smtpTimeBuffer = make(chan uint64, 1000000)
 
+	httpTimeReportChan = make(chan uint64, 1000000)
+	httpTLSTimeReportChan = make(chan uint64, 1000000)
+
 	go func() {
 		for {
 			select {
-			case i := <-httpReportChan:
+			case i := <-httpTimeReportChan:
 				httpTimeBuffer <- i
-				httpReportHits++
-			case i := <-httpTLSReportChan:
+				httpTimeReports++
+			case i := <-httpTLSTimeReportChan:
 				httpTLSTimeBuffer <- i
+				httpTLSTimeReports++
+			case <-httpReportChan:
+				httpReportHits++
+			case <-httpTLSReportChan:
 				httpTLSReportHits++
 			case i := <-sshReportChan:
 				sshReportBytes += i
@@ -61,6 +73,9 @@ func report(reportWait time.Duration) {
 	lastsshReportBytes := sshReportBytes
 	lastsmtpReportMail := smtpReportMail
 
+	lasthttpTimes := httpTimeReports
+	lasthttpTLSTimes := httpTLSTimeReports
+
 	for {
 		time.Sleep(reportWait)
 		elapsedTime := time.Since(lastTime)
@@ -70,30 +85,35 @@ func report(reportWait time.Duration) {
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
 		esmtp := smtpReportMail - lastsmtpReportMail
+		ehttptimes := httpTimeReports - lasthttpTimes
+		etlstimes := httpTLSTimeReports - lasthttpTLSTimes
 		lasthttpReportHits = httpReportHits
 		lasthttpTLSReportHits = httpTLSReportHits
 		lastsshReportBytes = sshReportBytes
 		lastsmtpReportMail = smtpReportMail
+		lasthttpTimes = httpTimeReports
+		lasthttpTLSTimes = httpTLSTimeReports
 
 		log.Debugln("total elapsed time: ", elapsedTime)
 
-		if *f_http {
+		if *f_http && !*f_serve {
 			fmt.Printf("HTTP timing:\t")
-			for i := uint64(0); i < ehttp; i++ {
+			for i := uint64(0); i < ehttptimes; i++ {
 				fmt.Printf("%d ", <-httpTimeBuffer)
+
 			}
 			fmt.Printf("\n")
 		}
 
-		if *f_https {
+		if *f_https && !*f_serve {
 			fmt.Printf("HTTPS timing:\t")
-			for i := uint64(0); i < etls; i++ {
+			for i := uint64(0); i < etlstimes; i++ {
 				fmt.Printf("%d ", <-httpTLSTimeBuffer)
 			}
 			fmt.Printf("\n")
 		}
 
-		if *f_smtp {
+		if *f_smtp && !*f_serve {
 			fmt.Printf("SMTP timing:\t")
 			for i := uint64(0); i < esmtp; i++ {
 				fmt.Printf("%d ", <-smtpTimeBuffer)

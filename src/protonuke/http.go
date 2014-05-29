@@ -65,7 +65,8 @@ func httpClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
-		httpReportChan <- httpClientRequest(h, client)
+		httpTimeReportChan <- httpClientRequest(h, client)
+		httpReportChan <- 1
 	}
 }
 
@@ -90,7 +91,8 @@ func httpTLSClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("https host %v from %v", h, o)
-		httpTLSReportChan <- httpTLSClientRequest(h, client)
+		httpTLSTimeReportChan <- httpTLSClientRequest(h, client)
+		httpTLSReportChan <- 1
 	}
 }
 
@@ -167,8 +169,6 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 
 	start := time.Now().UnixNano()
 	resp, err := client.Get(url)
-	stop := time.Now().UnixNano()
-	elapsed = uint64(stop - start)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -191,7 +191,8 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 			httpTLSSiteCache = httpTLSSiteCache[len(httpTLSSiteCache)-MAX_CACHE:]
 		}
 	}
-
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
 	return
 }
 
@@ -205,31 +206,25 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if !strings.HasPrefix(file, "https://") {
 			file = url + "/" + file
 		}
-		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
-		stop := time.Now().UnixNano()
-		elapsed := uint64(stop - start)
 		if err != nil {
 			log.Errorln(err)
 		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
-			httpTLSReportChan <- elapsed
+			httpTLSReportChan <- 1
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
 			file = url + "/" + file
 		}
-		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
-		stop := time.Now().UnixNano()
-		elapsed := uint64(stop - start)
 		if err != nil {
 			log.Errorln(err)
 		} else {
 			io.Copy(ioutil.Discard, resp.Body)
 			resp.Body.Close()
-			httpReportChan <- elapsed
+			httpReportChan <- 1
 		}
 	}
 }
@@ -372,9 +367,11 @@ func httpImageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(httpImage)
 	stop := time.Now().UnixNano()
 	if r.TLS != nil {
-		hitTLSChan <- uint64(stop - start)
+		hitTLSChan <- 1
+		httpTLSTimeReportChan <- uint64(stop - start)
 	} else {
-		hitChan <- uint64(stop - start)
+		hitChan <- 1
+		httpTimeReportChan <- uint64(stop - start)
 	}
 }
 
@@ -407,9 +404,11 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	elapsed := uint64(stop - start)
 
 	if usingTLS {
-		hitTLSChan <- elapsed
+		hitTLSChan <- 1
+		httpTLSTimeReportChan <- elapsed
 	} else {
-		hitChan <- elapsed
+		hitChan <- 1
+		httpTimeReportChan <- elapsed
 	}
 }
 
