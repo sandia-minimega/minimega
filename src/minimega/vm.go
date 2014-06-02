@@ -178,6 +178,42 @@ func (vms *vmSorter) Less(i, j int) bool {
 	}
 }
 
+func cliVMQMP(c cliCommand) cliResponse {
+	if len(c.Args) < 2 {
+		return cliResponse{
+			Error: "vm_qmp takes 2 arguments",
+		}
+	}
+
+	id, err := strconv.Atoi(c.Args[0])
+	if err != nil {
+		id = vms.findByName(c.Args[0])
+	}
+
+	var ret string
+	if vm, ok := vms.vms[id]; ok {
+		input := strings.Join(c.Args[1:], " ")
+		ret, err = vm.QMPRaw(input)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+	} else {
+		return cliResponse{
+			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+		}
+	}
+
+	return cliResponse{
+		Response: ret,
+	}
+}
+
+func (vm *vmInfo) QMPRaw(input string) (string, error) {
+	return vm.q.Raw(input)
+}
+
 func cliVMSave(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		return cliResponse{

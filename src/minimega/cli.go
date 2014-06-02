@@ -1516,6 +1516,22 @@ Return the command after macro expansion and comment removal.`,
 				return nil
 			},
 		},
+
+		"vm_qmp": &command{
+			Call:      cliVMQMP,
+			Helpshort: "issue a JSON-encoded QMP command",
+			Helplong: `
+Issue a JSON-encoded QMP command. This is a convenience function for accessing
+the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
+name, and a JSON string, and returns the JSON encoded response. For example:
+
+minimega$ vm_qmp 0 { "execute": "query-status" }
+{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 

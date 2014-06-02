@@ -6,6 +6,7 @@
 package qmp
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -104,6 +105,27 @@ func (q *Conn) write(v map[string]interface{}) error {
 	log.Debugln("qmp write: %#v", v)
 	err := q.enc.Encode(&v)
 	return err
+}
+
+func (q *Conn) Raw(input string) (string, error) {
+	log.Debugln("qmp write: %v", input)
+	_, err := q.conn.Write([]byte(input))
+	if err != nil {
+		return "", err
+	}
+	v := <-q.messageSync
+	status := v["return"]
+	if status == nil {
+		return "", errors.New("received nil status")
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	err = enc.Encode(&v)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
 }
 
 func (q *Conn) Status() (map[string]interface{}, error) {
