@@ -28,7 +28,6 @@ import (
 	log "minilog"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -93,41 +92,6 @@ func init() {
 	// list of commands the cli supports. some commands have small callbacks, which
 	// are defined inline.
 	cliCommands = map[string]*command{
-		"rate": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) == 0 {
-					return cliResponse{
-						Response: fmt.Sprintf("%v", launchRate),
-					}
-				} else if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "rate takes one argument",
-					}
-				} else {
-					r, err := strconv.Atoi(c.Args[0])
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					launchRate = time.Millisecond * time.Duration(r)
-				}
-				return cliResponse{}
-			},
-			Helpshort: "set the launch/kill rate in milliseconds",
-			Helplong: `
-	Usage: rate [launch rate in milliseconds]
-
-Set the launch and kill rate in milliseconds. Some calls to external tools can
-take some time to respond, causing errors if you try to launch or kill VMs too
-quickly. The default value is 100 milliseconds.`,
-			Record: true,
-			Clear: func() error {
-				launchRate = time.Millisecond * 100
-				return nil
-			},
-		},
-
 		"log_level": &command{
 			Call:      cliLogLevel,
 			Helpshort: "set the log level",
