@@ -22,9 +22,8 @@ import (
 )
 
 var (
-	info       *vmInfo // current vm info, interfaced be the cli
-	savedInfo  map[string]*vmInfo
-	launchRate time.Duration // launch/kill rate for vms
+	info      *vmInfo // current vm info, interfaced be the cli
+	savedInfo map[string]*vmInfo
 
 	// each vm struct acknowledges that it launched. this way, we won't
 	// return from a vm_launch command until all have actually launched.
@@ -45,6 +44,8 @@ const (
 const (
 	VM_MEMORY_DEFAULT = "2048"
 	VM_NOT_FOUND      = -2
+	QMP_CONNECT_RETRY = 50
+	QMP_CONNECT_DELAY = 100
 )
 
 // total list of vms running on this host
@@ -100,7 +101,6 @@ type jsonInfo struct {
 }
 
 func init() {
-	launchRate = time.Millisecond * 1000
 	launchAck = make(chan int)
 	killAck = make(chan int)
 	vmIdChan = make(chan int)
@@ -176,6 +176,42 @@ func (vms *vmSorter) Less(i, j int) bool {
 		log.Fatal("invalid sort parameter %v", vms.by)
 		return false
 	}
+}
+
+func cliVMQMP(c cliCommand) cliResponse {
+	if len(c.Args) < 2 {
+		return cliResponse{
+			Error: "vm_qmp takes 2 arguments",
+		}
+	}
+
+	id, err := strconv.Atoi(c.Args[0])
+	if err != nil {
+		id = vms.findByName(c.Args[0])
+	}
+
+	var ret string
+	if vm, ok := vms.vms[id]; ok {
+		input := strings.Join(c.Args[1:], " ")
+		ret, err = vm.QMPRaw(input)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+	} else {
+		return cliResponse{
+			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+		}
+	}
+
+	return cliResponse{
+		Response: ret,
+	}
+}
+
+func (vm *vmInfo) QMPRaw(input string) (string, error) {
+	return vm.q.Raw(input)
 }
 
 func cliVMSave(c cliCommand) cliResponse {
@@ -1364,13 +1400,20 @@ func (vm *vmInfo) launchOne() {
 	}()
 
 	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
-
-	time.Sleep(launchRate)
 	sendKillAck := false
 
 	// connect to qmp
-	vm.q, err = qmp.Dial(vm.qmpPath())
-	if err != nil {
+	connected := false
+	for count := 0; count < QMP_CONNECT_RETRY; count++ {
+		vm.q, err = qmp.Dial(vm.qmpPath())
+		if err == nil {
+			connected = true
+			break
+		}
+		time.Sleep(QMP_CONNECT_DELAY * time.Millisecond)
+	}
+
+	if !connected {
 		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
 		vm.state(VM_ERROR)
 		cmd.Process.Kill()
