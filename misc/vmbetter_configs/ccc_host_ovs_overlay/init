@@ -16,13 +16,21 @@ modprobe loop
 
 ulimit -n 999999
 
+modprobe bonding
+for i in `ls /sys/class/net | grep eth10G`;
+do
+	ifenslave bond0 $i
+done
+
 modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
-ovs-vsctl add-port mega_bridge eth10G
+#ovs-vsctl add-port mega_bridge eth10G
+ovs-vsctl add-port mega_bridge bond0
 ifconfig lo up
-ifconfig eth10G up 0.0.0.0
+#ifconfig eth10G up 0.0.0.0
+ifconfig bond0 up 0.0.0.0
 dhclient -v mega_bridge
 dhclient -v eth0
 
