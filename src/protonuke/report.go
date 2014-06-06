@@ -46,10 +46,14 @@ func init() {
 		for {
 			select {
 			case i := <-httpTimeReportChan:
-				httpTimeBuffer <- i
+				if !*f_serve {
+					httpTimeBuffer <- i
+				}
 				httpTimeReports++
 			case i := <-httpTLSTimeReportChan:
-				httpTLSTimeBuffer <- i
+				if !*f_serve {
+					httpTLSTimeBuffer <- i
+				}
 				httpTLSTimeReports++
 			case <-httpReportChan:
 				httpReportHits++
@@ -58,7 +62,9 @@ func init() {
 			case i := <-sshReportChan:
 				sshReportBytes += i
 			case i := <-smtpReportChan:
-				smtpTimeBuffer <- i
+				if !*f_serve {
+					smtpTimeBuffer <- i
+				}
 				smtpReportMail++
 			}
 		}
