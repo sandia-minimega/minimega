@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"gonetflow"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
@@ -28,6 +29,7 @@ type bridge struct {
 	preExist bool
 	iml      *ipmac.IPMacLearner
 	Lock     sync.Mutex
+	nf       *gonetflow.Netflow
 }
 
 type vlan struct {
@@ -66,21 +68,38 @@ func init() {
 
 // return a pointer to the specified bridge, creating it if it doesn't already
 // exist. If b == "", return the default bridge
-func getBridge(b string) *bridge {
+func getBridge(b string) (*bridge, error) {
 	if b == "" {
 		b = DEFAULT_BRIDGE
 	}
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 	if v, ok := bridges[b]; ok {
-		return v
+		return v, nil
 	}
 	bridges[b] = &bridge{
 		Name: b,
 	}
-	bridges[b].create()
+	err := bridges[b].create()
+	if err != nil {
+		return nil, err
+	}
 	updateBridgeInfo()
-	return bridges[b]
+	return bridges[b], nil
+}
+
+// return the netflow object of a current bridge
+func getNetflowFromBridge(b string) (*gonetflow.Netflow, error) {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	if v, ok := bridges[b]; ok {
+		if v.nf == nil {
+			return nil, fmt.Errorf("bridge %v has no netflow object", b)
+		}
+		return v.nf, nil
+	} else {
+		return nil, fmt.Errorf("no such bridge %v", b)
+	}
 }
 
 // return a pointer to a bridge that has tap t attached to it, or error
@@ -182,6 +201,49 @@ func (b *bridge) LanCreate(lan int) error {
 		Taps: make(map[string]*tap),
 	}
 	return nil
+}
+
+// create a new netflow object for the specified bridge
+func (b *bridge) NewNetflow() (*gonetflow.Netflow, error) {
+	nf, port, err := gonetflow.NewNetflow()
+	if err != nil {
+		return nil, err
+	}
+
+	// connect openvswitch to our new netflow object
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"--",
+			"set",
+			"Bridge",
+			b.Name,
+			"netflow=@nf",
+			"--",
+			"--id=@nf",
+			"create",
+			"NetFlow",
+			fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
+			"active-timeout=10",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("creating netflow to bridge with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return nil, e
+	}
+
+	b.nf = nf
+	return nf, nil
 }
 
 func (b *bridge) startIML() error {
@@ -722,7 +784,12 @@ func hostTapDelete(tap string) cliResponse {
 }
 
 func hostTapCreate(bridge, lan, ip string) cliResponse {
-	b := getBridge(bridge)
+	b, err := getBridge(bridge)
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
+		}
+	}
 	r, err := strconv.Atoi(lan)
 	if err != nil {
 		return cliResponse{

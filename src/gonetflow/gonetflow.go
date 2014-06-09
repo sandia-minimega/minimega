@@ -1,8 +1,10 @@
 package gonetflow
 
 import (
+	"compress/gzip"
 	"fmt"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -12,16 +14,23 @@ const (
 	UDP                = 17
 	NETFLOW_HEADER_LEN = 24
 	NETFLOW_RECORD_LEN = 48
+	BUFFER_DEPTH       = 1024
+)
+
+const (
+	ASCII = iota
+	RAW
 )
 
 type Netflow struct {
-	Port int
-	conn *net.UDPConn
+	conn    *net.UDPConn
+	writers map[string]chan *Packet
 }
 
 type Packet struct {
 	Header  *Header
 	Records []*Record
+	Raw     []byte
 }
 
 type Header struct {
@@ -59,29 +68,120 @@ func (p Packet) GoString() string {
 }
 
 // NewNetflow returns a netflow object listening on port Netflow.Port
-func NewNetflow() (*Netflow, error) {
+func NewNetflow() (*Netflow, int, error) {
 	nf := &Netflow{}
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
 	nf.conn = conn
 
 	addr := nf.conn.LocalAddr()
 	f := strings.SplitAfter(addr.String(), ":")
 	if len(f) < 2 {
-		return nil, fmt.Errorf("invalid LocalAddr %v", addr)
+		return nil, -1, fmt.Errorf("invalid LocalAddr %v", addr)
 	}
 	p, err := strconv.Atoi(f[len(f)-1])
 	if err != nil {
-		return nil, err
+		return nil, -1, err
 	}
-	nf.Port = p
 
 	go nf.reader()
 
-	return nf, nil
+	return nf, p, nil
+}
+
+func (nf *Netflow) NewSocketWriter(network string, server string, mode int) error {
+	if _, ok := nf.writers[server]; ok {
+		return fmt.Errorf("netflow writer %v already exists", server)
+	}
+
+	conn, err := net.Dial(network, server)
+	if err != nil {
+		return err
+	}
+
+	c := make(chan *Packet, BUFFER_DEPTH)
+	go func() {
+		for {
+			d := <-c
+			if d == nil {
+				break
+			}
+			if mode == ASCII {
+				conn.Write([]byte(d.GoString()))
+			} else {
+				conn.Write(d.Raw)
+			}
+		}
+		conn.Close()
+	}()
+
+	nf.registerWriter(server, c)
+	return nil
+}
+
+func (nf *Netflow) NewFileWriter(filename string, mode int, compress bool) error {
+	if _, ok := nf.writers[filename]; ok {
+		return fmt.Errorf("netflow writer %v already exists", filename)
+	}
+
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	c := make(chan *Packet, BUFFER_DEPTH)
+	go func() {
+		var w *gzip.Writer
+		if compress {
+			w = gzip.NewWriter(f)
+		}
+		for {
+			d := <-c
+			if d == nil {
+				break
+			}
+			if mode == ASCII {
+				if compress {
+					w.Write([]byte(d.GoString()))
+				} else {
+					f.Write([]byte(d.GoString()))
+				}
+			} else {
+				if compress {
+					w.Write(d.Raw)
+				} else {
+					f.Write(d.Raw)
+				}
+			}
+		}
+		if compress {
+			w.Close()
+		}
+		f.Close()
+	}()
+
+	nf.registerWriter(filename, c)
+	return nil
+}
+
+func (nf *Netflow) RemoveWriter(path string) error {
+	if _, ok := nf.writers[path]; !ok {
+		return fmt.Errorf("netflow writer %v does not exist", path)
+	}
+	nf.unregisterWriter(path)
+	return nil
+}
+
+func (nf *Netflow) unregisterWriter(path string) {
+	close(nf.writers[path])
+	delete(nf.writers, path)
+}
+
+func (nf *Netflow) registerWriter(path string, c chan *Packet) {
+	nf.writers[path] = c
 }
 
 func (nf *Netflow) reader() {

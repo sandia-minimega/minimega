@@ -1344,7 +1344,13 @@ func (vm *vmInfo) launchOne() {
 
 	// create and add taps if we are associated with any networks
 	for i, lan := range vm.Networks {
-		b := getBridge(vm.bridges[i])
+		b, err := getBridge(vm.bridges[i])
+		if err != nil {
+			log.Errorln(err)
+			vm.state(VM_ERROR)
+			launchAck <- vm.Id
+			return
+		}
 		tap, err := b.TapCreate(lan)
 		if err != nil {
 			log.Errorln(err)
@@ -1436,8 +1442,12 @@ func (vm *vmInfo) launchOne() {
 	}
 
 	for i, l := range vm.Networks {
-		b := getBridge(vm.bridges[i])
-		b.TapDestroy(l, vm.taps[i])
+		b, err := getBridge(vm.bridges[i])
+		if err != nil {
+			log.Errorln(err)
+		} else {
+			b.TapDestroy(l, vm.taps[i])
+		}
 	}
 
 	if sendKillAck {
@@ -1577,7 +1587,10 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		b := getBridge(vm.bridges[i])
+		b, err := getBridge(vm.bridges[i])
+		if err != nil {
+			log.Errorln(err)
+		}
 		b.iml.AddMac(vm.macs[i])
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))
 		addr++
@@ -1862,7 +1875,12 @@ func cliVMNet(c cliCommand) cliResponse {
 				}
 			}
 
-			currBridge := getBridge(b)
+			currBridge, err := getBridge(b)
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
 			err = currBridge.LanCreate(val)
 			if err != nil {
 				return cliResponse{
@@ -2085,8 +2103,13 @@ func cliVMNetMod(c cliCommand) cliResponse {
 	if strings.ToLower(c.Args[2]) == "disconnect" {
 		// disconnect
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		b := getBridge(vm.bridges[pos])
-		err := b.TapRemove(vm.Networks[pos], vm.taps[pos])
+		b, err := getBridge(vm.bridges[pos])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
 		if err != nil {
 			return cliResponse{
 				Error: err.Error(),
@@ -2097,7 +2120,12 @@ func cliVMNetMod(c cliCommand) cliResponse {
 		if net > 0 && net < 4096 {
 			// new network
 			log.Debug("moving network connection: %v %v %v -> %v", vm.Id, pos, vm.Networks[pos], net)
-			b := getBridge(vm.bridges[pos])
+			b, err := getBridge(vm.bridges[pos])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
 			if vm.Networks[pos] != -1 {
 				err := b.TapRemove(vm.Networks[pos], vm.taps[pos])
 				if err != nil {

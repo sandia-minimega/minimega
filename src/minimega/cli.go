@@ -1485,12 +1485,36 @@ Return the command after macro expansion and comment removal.`,
 			Call:      cliVMQMP,
 			Helpshort: "issue a JSON-encoded QMP command",
 			Helplong: `
+	Usage: vm_qmp <JSON qmp command>
+
 Issue a JSON-encoded QMP command. This is a convenience function for accessing
 the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
-minimega$ vm_qmp 0 { "execute": "query-status" }
-{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
+	minimega$ vm_qmp 0 { "execute": "query-status" }
+	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
+			Record: true,
+			Clear: func() error {
+				return nil
+			},
+		},
+
+		"capture": &command{
+			Call:      cliCapture,
+			Helpshort: "capture experiment data",
+			Helplong: `
+			Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>]]
+			Usage: capture clear netflow <id,-1>
+
+Capture experiment data including netflow. Netflow capture obtains netflow data
+from any local openvswitch switch, and can write to file, another socket, or
+both. Netflow data can be written out in raw or ascii format, and file output
+can be compressed on the fly. Multiple netflow writers can be configured.
+
+For example, to capture netflow data on all associated bridges to file in ascii
+mode and with gzip compression:
+
+	minimega$ capture netflow file foo.netflow ascii gzip`,
 			Record: true,
 			Clear: func() error {
 				return nil
