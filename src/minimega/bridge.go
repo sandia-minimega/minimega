@@ -88,6 +88,16 @@ func getBridge(b string) (*bridge, error) {
 	return bridges[b], nil
 }
 
+func enumerateBridges() []string {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	var ret []string
+	for k, _ := range bridges {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
 // return the netflow object of a current bridge
 func getNetflowFromBridge(b string) (*gonetflow.Netflow, error) {
 	bridgeLock.Lock()
@@ -201,6 +211,45 @@ func (b *bridge) LanCreate(lan int) error {
 		Taps: make(map[string]*tap),
 	}
 	return nil
+}
+
+// remove an active netflow object
+func (b *bridge) DestroyNetflow() error {
+	if b.nf == nil {
+		return fmt.Errorf("bridge %v has no netflow object", b.Name)
+	}
+
+	b.nf.Stop()
+
+	// connect openvswitch to our new netflow object
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"clear",
+			"Bridge",
+			b.Name,
+			"netflow",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("creating netflow to bridge with cmd: %v", cmd)
+	err := cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return e
+	}
+
+	b.nf = nil
+
+	return nil
+
 }
 
 // create a new netflow object for the specified bridge

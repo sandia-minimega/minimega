@@ -5,10 +5,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"gonetflow"
 	log "minilog"
 	"strconv"
+	"strings"
 	"sync"
+	"text/tabwriter"
 )
 
 type capture struct {
@@ -27,12 +31,15 @@ var (
 )
 
 func init() {
+	captureEntries = make(map[int]*capture)
 	captureIDCount = make(chan int)
-	for {
-		count := 0
-		captureIDCount <- count
-		count++
-	}
+	count := 0
+	go func() {
+		for {
+			captureIDCount <- count
+			count++
+		}
+	}()
 }
 
 func cliCapture(c cliCommand) cliResponse {
@@ -45,7 +52,46 @@ func cliCapture(c cliCommand) cliResponse {
 
 	switch len(c.Args) {
 	case 0:
-		// print all info on all capture services
+		// create output
+		captureLock.Lock()
+		defer captureLock.Unlock()
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "ID\tType\tBridge\tPath\tMode\tCompress\n")
+		for _, v := range captureEntries {
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Type, v.Bridge, v.Path, v.Mode, v.Compress)
+		}
+		w.Flush()
+
+		// get netflow stats for each bridge
+		var p bytes.Buffer
+		w = new(tabwriter.Writer)
+		w.Init(&p, 5, 0, 1, ' ', 0)
+		fmt.Fprintln(&p, "Netflow statistics")
+		fmt.Fprintf(w, "Bridge\tBytes RX\tRecords RX\n")
+
+		b := enumerateBridges()
+		for _, v := range b {
+			nf, err := getNetflowFromBridge(v)
+			if err != nil {
+				if !strings.Contains(err.Error(), "has no netflow object") {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+				continue
+			}
+			bytes, records := nf.GetStats()
+			fmt.Fprintf(w, "%v\t%v\t%v\n", v, bytes, records)
+		}
+		w.Flush()
+
+		out := o.String() + "\n" + p.String()
+
+		return cliResponse{
+			Response: out,
+		}
 	case 5, 6:
 		// new netflow capture
 		if c.Args[0] != "netflow" {
@@ -53,17 +99,29 @@ func cliCapture(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-		if c.Args[2] != "file" && c.Args[2] != "socket" {
-			return cliResponse{
-				Error: "malformed command",
+		if c.Args[2] == "file" {
+			if c.Args[4] != "raw" && c.Args[4] != "ascii" {
+				return cliResponse{
+					Error: "malformed command",
+				}
 			}
-		}
-		if c.Args[4] != "raw" && c.Args[4] != "ascii" {
-			return cliResponse{
-				Error: "malformed command",
+			if len(c.Args) == 6 && c.Args[5] != "gzip" {
+				return cliResponse{
+					Error: "malformed command",
+				}
 			}
-		}
-		if len(c.Args) == 6 && c.Args[5] != "gzip" {
+		} else if c.Args[2] == "socket" {
+			if c.Args[3] != "tcp" && c.Args[3] != "udp" {
+				return cliResponse{
+					Error: "malformed command",
+				}
+			}
+			if c.Args[5] != "raw" && c.Args[5] != "ascii" {
+				return cliResponse{
+					Error: "malformed command",
+				}
+			}
+		} else {
 			return cliResponse{
 				Error: "malformed command",
 			}
@@ -79,8 +137,10 @@ func cliCapture(c cliCommand) cliResponse {
 
 		nf, err := getNetflowFromBridge(c.Args[1])
 		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
+			if !strings.Contains(err.Error(), "has no netflow object") {
+				return cliResponse{
+					Error: err.Error(),
+				}
 			}
 		}
 		if nf == nil {
@@ -100,11 +160,11 @@ func cliCapture(c cliCommand) cliResponse {
 			if len(c.Args) == 6 {
 				compress = true
 			}
-			mode, err := strconv.Atoi(c.Args[4])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
+			var mode int
+			if c.Args[4] == "ascii" {
+				mode = gonetflow.ASCII
+			} else {
+				mode = gonetflow.RAW
 			}
 			err = nf.NewFileWriter(c.Args[3], mode, compress)
 			if err != nil {
@@ -126,13 +186,13 @@ func cliCapture(c cliCommand) cliResponse {
 			captureEntries[ce.ID] = ce
 			captureLock.Unlock()
 		case "socket":
-			mode, err := strconv.Atoi(c.Args[5])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
+			var mode int
+			if c.Args[5] == "ascii" {
+				mode = gonetflow.ASCII
+			} else {
+				mode = gonetflow.RAW
 			}
-			err = nf.NewSocketWriter(c.Args[3], c.Args[4], mode)
+			err := nf.NewSocketWriter(c.Args[3], c.Args[4], mode)
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
@@ -208,7 +268,36 @@ func cliCapture(c cliCommand) cliResponse {
 				delete(captureEntries, val)
 			}
 		}
-		// TODO: remove nf object if no more netflow writers exist
+
+		// check if we need to remove the nf object
+		b := enumerateBridges()
+		for _, v := range b {
+			empty := true
+			for _, n := range captureEntries {
+				if n.Bridge == v {
+					empty = false
+					break
+				}
+			}
+
+			if !empty {
+				continue
+			}
+
+			b, err := getBridge(v)
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+
+			err = b.DestroyNetflow()
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+		}
 	default:
 		return cliResponse{
 			Error: "malformed command",

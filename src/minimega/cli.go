@@ -1503,8 +1503,8 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 			Call:      cliCapture,
 			Helpshort: "capture experiment data",
 			Helplong: `
-			Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>]]
-			Usage: capture clear netflow <id,-1>
+	Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>]]
+	Usage: capture clear netflow <id,-1>
 
 Capture experiment data including netflow. Netflow capture obtains netflow data
 from any local openvswitch switch, and can write to file, another socket, or
@@ -1517,6 +1517,11 @@ mode and with gzip compression:
 	minimega$ capture netflow file foo.netflow ascii gzip`,
 			Record: true,
 			Clear: func() error {
+				c := makeCommand("capture clear netflow -1")
+				r := cliCapture(c)
+				if r.Error != "" {
+					return fmt.Errorf("%v", r.Error)
+				}
 				return nil
 			},
 		},

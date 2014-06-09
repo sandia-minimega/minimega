@@ -3,6 +3,7 @@ package gonetflow
 import (
 	"compress/gzip"
 	"fmt"
+	log "minilog"
 	"net"
 	"os"
 	"strconv"
@@ -15,6 +16,7 @@ const (
 	NETFLOW_HEADER_LEN = 24
 	NETFLOW_RECORD_LEN = 48
 	BUFFER_DEPTH       = 1024
+	UDP_BUFFER_DEPTH   = 65536
 )
 
 const (
@@ -23,8 +25,10 @@ const (
 )
 
 type Netflow struct {
-	conn    *net.UDPConn
-	writers map[string]chan *Packet
+	conn        *net.UDPConn
+	writers     map[string]chan *Packet
+	statBytes   uint64
+	statRecords uint64
 }
 
 type Packet struct {
@@ -69,7 +73,9 @@ func (p Packet) GoString() string {
 
 // NewNetflow returns a netflow object listening on port Netflow.Port
 func NewNetflow() (*Netflow, int, error) {
-	nf := &Netflow{}
+	nf := &Netflow{
+		writers: make(map[string]chan *Packet),
+	}
 
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
@@ -90,6 +96,18 @@ func NewNetflow() (*Netflow, int, error) {
 	go nf.reader()
 
 	return nf, p, nil
+}
+
+// stop and exit the reader goroutine for this object
+func (nf *Netflow) Stop() {
+	for k, _ := range nf.writers {
+		nf.unregisterWriter(k)
+	}
+	nf.conn.Close()
+}
+
+func (nf *Netflow) GetStats() (uint64, uint64) {
+	return nf.statBytes, nf.statRecords
 }
 
 func (nf *Netflow) NewSocketWriter(network string, server string, mode int) error {
@@ -118,7 +136,8 @@ func (nf *Netflow) NewSocketWriter(network string, server string, mode int) erro
 		conn.Close()
 	}()
 
-	nf.registerWriter(server, c)
+	name := fmt.Sprintf("%v:%v", network, server)
+	nf.registerWriter(name, c)
 	return nil
 }
 
@@ -185,19 +204,30 @@ func (nf *Netflow) registerWriter(path string, c chan *Packet) {
 }
 
 func (nf *Netflow) reader() {
-	var b = make([]byte, 1024)
+	var b = make([]byte, UDP_BUFFER_DEPTH)
 	for {
 		n, _, err := nf.conn.ReadFromUDP(b)
 		if err != nil {
-			fmt.Println(err)
+			if strings.Contains(err.Error(), "closed") {
+				return
+			}
+			log.Errorln(err)
+			continue
 		}
-		nf.process(n, b)
+		p, err := nf.process(n, b)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		for _, v := range nf.writers {
+			v <- p
+		}
 	}
 }
 
-func (nf *Netflow) process(n int, b []byte) {
+func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 	if (n-NETFLOW_HEADER_LEN)%NETFLOW_RECORD_LEN != 0 {
-		fmt.Printf("oops %v", n)
+		return nil, fmt.Errorf("invalid packet size %v", n)
 	}
 	numRecords := (n - NETFLOW_HEADER_LEN) / NETFLOW_RECORD_LEN
 
@@ -207,6 +237,7 @@ func (nf *Netflow) process(n int, b []byte) {
 			Count:    int(b[3]),
 			Sequence: (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
 		},
+		Raw: b,
 	}
 
 	for i := 0; i < numRecords; i++ {
@@ -231,5 +262,8 @@ func (nf *Netflow) process(n int, b []byte) {
 		p.Records = append(p.Records, r)
 	}
 
-	fmt.Printf("got packet %#v", p)
+	nf.statBytes += uint64(n)
+	nf.statRecords += uint64(len(p.Records))
+
+	return p, nil
 }
