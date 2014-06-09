@@ -73,6 +73,7 @@ func (p Packet) GoString() string {
 
 // NewNetflow returns a netflow object listening on port Netflow.Port
 func NewNetflow() (*Netflow, int, error) {
+	log.Debugln("NewNetflow")
 	nf := &Netflow{
 		writers: make(map[string]chan *Packet),
 	}
@@ -100,6 +101,7 @@ func NewNetflow() (*Netflow, int, error) {
 
 // stop and exit the reader goroutine for this object
 func (nf *Netflow) Stop() {
+	log.Debugln("Stop")
 	for k, _ := range nf.writers {
 		nf.unregisterWriter(k)
 	}
@@ -107,10 +109,12 @@ func (nf *Netflow) Stop() {
 }
 
 func (nf *Netflow) GetStats() (uint64, uint64) {
+	log.Debugln("GetStats")
 	return nf.statBytes, nf.statRecords
 }
 
 func (nf *Netflow) NewSocketWriter(network string, server string, mode int) error {
+	log.Debugln("NewSocketWriter")
 	if _, ok := nf.writers[server]; ok {
 		return fmt.Errorf("netflow writer %v already exists", server)
 	}
@@ -142,6 +146,7 @@ func (nf *Netflow) NewSocketWriter(network string, server string, mode int) erro
 }
 
 func (nf *Netflow) NewFileWriter(filename string, mode int, compress bool) error {
+	log.Debugln("NewFileWriter")
 	if _, ok := nf.writers[filename]; ok {
 		return fmt.Errorf("netflow writer %v already exists", filename)
 	}
@@ -155,6 +160,7 @@ func (nf *Netflow) NewFileWriter(filename string, mode int, compress bool) error
 	go func() {
 		var w *gzip.Writer
 		if compress {
+			log.Debugln("using compression")
 			w = gzip.NewWriter(f)
 		}
 		for {
@@ -187,6 +193,7 @@ func (nf *Netflow) NewFileWriter(filename string, mode int, compress bool) error
 }
 
 func (nf *Netflow) RemoveWriter(path string) error {
+	log.Debug("RemoveWriter %v", path)
 	if _, ok := nf.writers[path]; !ok {
 		return fmt.Errorf("netflow writer %v does not exist", path)
 	}
@@ -195,11 +202,13 @@ func (nf *Netflow) RemoveWriter(path string) error {
 }
 
 func (nf *Netflow) unregisterWriter(path string) {
+	log.Debug("unregisterWriter %v", path)
 	close(nf.writers[path])
 	delete(nf.writers, path)
 }
 
 func (nf *Netflow) registerWriter(path string, c chan *Packet) {
+	log.Debug("registerWriter %v", path)
 	nf.writers[path] = c
 }
 
