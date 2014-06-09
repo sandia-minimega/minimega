@@ -66,7 +66,8 @@ func (p Packet) GoString() string {
 	var ret string
 	ret = fmt.Sprintf("Version: %v\nCount: %v\nSequence: %v\n", p.Header.Version, p.Header.Count, p.Header.Sequence)
 	for _, r := range p.Records {
-		ret += fmt.Sprintf("\tSrc: %v\n\tDst: %v\n\n", r.Src, r.Dst)
+		ret += fmt.Sprintf("\tSrc: %v:%v\n\tDst: %v:%v\n", r.Src, r.SrcPort, r.Dst, r.DstPort)
+		ret += fmt.Sprintf("\tNumPackets: %v\n\n", r.NumPackets)
 	}
 	return ret
 }
@@ -246,7 +247,7 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 			Count:    int(b[3]),
 			Sequence: (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
 		},
-		Raw: b,
+		Raw: b[:n-1],
 	}
 
 	for i := 0; i < numRecords; i++ {
