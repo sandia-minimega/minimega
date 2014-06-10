@@ -28,10 +28,35 @@ func meshageHandler() {
 			commandChanMeshage <- m.Body.(cliCommand)
 
 			//generate a response
-			r := <-ackChanMeshage
-			r.TID = m.Body.(cliCommand).TID
+			var bufError string
+			var bufResponse string
+			var ret cliResponse
+			for {
+				r := <-ackChanMeshage
+				if r.Error != "" {
+					bufError += r.Error
+					if !strings.HasSuffix(r.Error, "\n") && r.More {
+						bufError += "\n"
+					}
+				}
+				if r.Response != "" {
+					bufResponse += r.Response
+					if !strings.HasSuffix(r.Response, "\n") && r.More {
+						bufResponse += "\n"
+					}
+				}
+				if !r.More {
+					log.Debugln("got last message")
+					break
+				} else {
+					log.Debugln("expecting more data")
+				}
+			}
+			ret.TID = m.Body.(cliCommand).TID
+			ret.Error = bufError
+			ret.Response = bufResponse
 			recipient := []string{m.Source}
-			_, err := meshageNode.Set(recipient, r)
+			_, err := meshageNode.Set(recipient, ret)
 			if err != nil {
 				log.Errorln(err)
 			}
