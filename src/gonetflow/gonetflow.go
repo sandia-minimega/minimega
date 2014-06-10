@@ -28,6 +28,7 @@ const (
 )
 
 type Netflow struct {
+	port          int
 	conn          *net.UDPConn
 	writers       map[string]chan *Packet
 	statFlows     uint64
@@ -109,7 +110,13 @@ func NewNetflow() (*Netflow, int, error) {
 
 	go nf.reader()
 
+	nf.port = p
+
 	return nf, p, nil
+}
+
+func (nf *Netflow) GetPort() int {
+	return nf.port
 }
 
 // stop and exit the reader goroutine for this object

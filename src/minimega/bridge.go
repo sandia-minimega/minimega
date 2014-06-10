@@ -242,7 +242,7 @@ func (b *bridge) DestroyNetflow() error {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Debug("creating netflow to bridge with cmd: %v", cmd)
+	log.Debug("removing netflow on bridge with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("%v: %v", err, sErr.String())
@@ -252,11 +252,43 @@ func (b *bridge) DestroyNetflow() error {
 	b.nf = nil
 
 	return nil
+}
 
+// update the active timeout on a nf object
+func (b *bridge) UpdateNFTimeout(t int) error {
+	if b.nf == nil {
+		return fmt.Errorf("bridge %v has no netflow object", b.Name)
+	}
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"set",
+			"NetFlow",
+			b.Name,
+			fmt.Sprintf("active_timeout=%v", t),
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
+	err := cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return e
+	}
+
+	return nil
 }
 
 // create a new netflow object for the specified bridge
-func (b *bridge) NewNetflow() (*gonetflow.Netflow, error) {
+func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 	nf, port, err := gonetflow.NewNetflow()
 	if err != nil {
 		return nil, err
@@ -280,7 +312,7 @@ func (b *bridge) NewNetflow() (*gonetflow.Netflow, error) {
 			"create",
 			"NetFlow",
 			fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
-			"active-timeout=10",
+			fmt.Sprintf("active-timeout=%v", timeout),
 		},
 		Env:    nil,
 		Dir:    "",

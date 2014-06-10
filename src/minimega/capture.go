@@ -25,12 +25,14 @@ type capture struct {
 }
 
 var (
-	captureEntries map[int]*capture
-	captureIDCount chan int
-	captureLock    sync.Mutex
+	captureEntries   map[int]*capture
+	captureIDCount   chan int
+	captureLock      sync.Mutex
+	captureNFTimeout int
 )
 
 func init() {
+	captureNFTimeout = 10
 	captureEntries = make(map[int]*capture)
 	captureIDCount = make(chan int)
 	count := 0
@@ -47,7 +49,8 @@ func cliCapture(c cliCommand) cliResponse {
 	// capture
 	// capture netflow <bridge> file <filename> <raw,ascii> [gzip]
 	// capture netflow <bridge> socket <tcp,udp> <hostname:port> <raw,ascii>
-	// capture clear netflow bridge <id,-1>
+	// capture clear netflow <id,-1>
+	// capture netflow timeout [time]
 	log.Debugln("cliCapture")
 
 	switch len(c.Args) {
@@ -78,6 +81,7 @@ func cliCapture(c cliCommand) cliResponse {
 				continue
 			}
 			nfstats += fmt.Sprintf("Bridge %v:\n", v)
+			nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
 			nfstats += nf.GetStats()
 		}
 
@@ -85,6 +89,15 @@ func cliCapture(c cliCommand) cliResponse {
 
 		return cliResponse{
 			Response: out,
+		}
+	case 2:
+		if c.Args[0] != "netflow" || c.Args[1] != "timeout" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		return cliResponse{
+			Response: fmt.Sprintf("%v", captureNFTimeout),
 		}
 	case 5, 6:
 		// new netflow capture
@@ -139,7 +152,7 @@ func cliCapture(c cliCommand) cliResponse {
 		}
 		if nf == nil {
 			// create a new netflow object
-			nf, err = b.NewNetflow()
+			nf, err = b.NewNetflow(captureNFTimeout)
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
@@ -206,6 +219,19 @@ func cliCapture(c cliCommand) cliResponse {
 			captureLock.Unlock()
 		}
 	case 3:
+		if c.Args[0] == "netflow" && c.Args[1] == "timeout" {
+			val, err := strconv.Atoi(c.Args[2])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+
+			captureNFTimeout = val
+			captureUpdateNFTimeouts()
+			return cliResponse{}
+		}
+
 		if c.Args[0] != "clear" || c.Args[1] != "netflow" {
 			return cliResponse{
 				Error: "malformed command",
@@ -299,4 +325,26 @@ func cliCapture(c cliCommand) cliResponse {
 	}
 
 	return cliResponse{}
+}
+
+func captureUpdateNFTimeouts() {
+	b := enumerateBridges()
+	for _, v := range b {
+		br, err := getBridge(v)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		_, err = getNetflowFromBridge(v)
+		if err != nil {
+			if !strings.Contains(err.Error(), "has no netflow object") {
+				log.Errorln(err)
+			}
+			continue
+		}
+		err = br.UpdateNFTimeout(captureNFTimeout)
+		if err != nil {
+			log.Errorln(err)
+		}
+	}
 }
