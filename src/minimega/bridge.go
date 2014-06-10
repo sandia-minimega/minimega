@@ -168,6 +168,9 @@ func bridgeInfo() string {
 	for _, v := range bridges {
 		var vlans []int
 		for v, _ := range v.lans {
+			if v == -1 {
+				continue
+			}
 			vlans = append(vlans, v)
 		}
 		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Name, v.exists, v.preExist, vlans)
