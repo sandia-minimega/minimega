@@ -65,12 +65,7 @@ func cliCapture(c cliCommand) cliResponse {
 		w.Flush()
 
 		// get netflow stats for each bridge
-		var p bytes.Buffer
-		w = new(tabwriter.Writer)
-		w.Init(&p, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&p, "Netflow statistics")
-		fmt.Fprintf(w, "Bridge\tBytes RX\tRecords RX\n")
-
+		var nfstats string
 		b := enumerateBridges()
 		for _, v := range b {
 			nf, err := getNetflowFromBridge(v)
@@ -82,12 +77,11 @@ func cliCapture(c cliCommand) cliResponse {
 				}
 				continue
 			}
-			bytes, records := nf.GetStats()
-			fmt.Fprintf(w, "%v\t%v\t%v\n", v, bytes, records)
+			nfstats += fmt.Sprintf("Bridge %v:\n", v)
+			nfstats += nf.GetStats()
 		}
-		w.Flush()
 
-		out := o.String() + "\n" + p.String()
+		out := o.String() + "\n" + nfstats
 
 		return cliResponse{
 			Response: out,

@@ -1,6 +1,7 @@
 package gonetflow
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	log "minilog"
@@ -8,6 +9,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"text/tabwriter"
+	"time"
 )
 
 const (
@@ -25,10 +28,13 @@ const (
 )
 
 type Netflow struct {
-	conn        *net.UDPConn
-	writers     map[string]chan *Packet
-	statBytes   uint64
-	statRecords uint64
+	conn          *net.UDPConn
+	writers       map[string]chan *Packet
+	statFlows     uint64
+	statBytes     uint64
+	statPackets   uint64
+	statNFBytes   uint64
+	statNFRecords uint64
 }
 
 type Packet struct {
@@ -38,22 +44,24 @@ type Packet struct {
 }
 
 type Header struct {
-	Version int
-	Count   int
-	// Uptime time.Time
-	// EpochSeconds time.Time
-	// EpochNanoSeconds time.Time
-	Sequence int32
+	Version   int
+	Count     int
+	Uptime    uint32
+	EpochSec  uint32
+	EpochNsec uint32
+	Sequence  int32
 }
 
 type Record struct {
 	Src        net.IP
 	Dst        net.IP
 	Nexthop    net.IP
-	Input      int
-	Output     int
-	NumPackets int32
-	NumOctets  int32
+	Input      uint
+	Output     uint
+	NumPackets uint32
+	NumOctets  uint32
+	First      uint32
+	Last       uint32
 	SrcPort    int
 	DstPort    int
 	Protocol   int
@@ -64,10 +72,14 @@ type Record struct {
 
 func (p Packet) GoString() string {
 	var ret string
-	ret = fmt.Sprintf("Version: %v\nCount: %v\nSequence: %v\n", p.Header.Version, p.Header.Count, p.Header.Sequence)
 	for _, r := range p.Records {
-		ret += fmt.Sprintf("\tSrc: %v:%v\n\tDst: %v:%v\n", r.Src, r.SrcPort, r.Dst, r.DstPort)
-		ret += fmt.Sprintf("\tNumPackets: %v\n\n", r.NumPackets)
+		offsetFirst := int64(p.Header.Uptime) - int64(r.First)
+		offsetLast := int64(p.Header.Uptime) - int64(r.Last)
+		f := (((int64(p.Header.EpochSec) * 1000) - offsetFirst) * 1000000) + int64(p.Header.EpochNsec)
+		l := (((int64(p.Header.EpochSec) * 1000) - offsetLast) * 1000000) + int64(p.Header.EpochNsec)
+		start := time.Unix(0, f)
+		stop := time.Unix(0, l)
+		ret += fmt.Sprintf("%v\t%v\t%v\t%v:%v\t<->\t%v:%v\t%v\t%v\n", start.Format(time.RFC3339), stop.Sub(start), r.Protocol, r.Src, r.SrcPort, r.Dst, r.DstPort, r.NumPackets, r.NumOctets)
 	}
 	return ret
 }
@@ -109,9 +121,26 @@ func (nf *Netflow) Stop() {
 	nf.conn.Close()
 }
 
-func (nf *Netflow) GetStats() (uint64, uint64) {
+// Date flow start          Duration Proto      Src IP Addr:Port           Dst IP Addr:Port   Out Pkt   In Pkt Out Byte  In Byte Flows
+// Summary: total flows: 290, total bytes: 24.5 G, total packets: 17.1 M, avg bps: 1493, avg pps: 0, avg bpp: 1436
+// Time window: 2014-04-20 16:43:25 - 2010-04-13 01:09:07
+// Total flows processed: 290, Blocks skipped: 0, Bytes read: 15108
+// Sys: 0.000s flows/second: 0.0        Wall: 0.000s flows/second: 665137.6
+
+func (nf *Netflow) GetStats() string {
 	log.Debugln("GetStats")
-	return nf.statBytes, nf.statRecords
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintln(&o, "Netflow summary:")
+	fmt.Fprintf(w, "\tTotal flows:\t%v\n", nf.statFlows)
+	fmt.Fprintf(w, "\tTotal bytes:\t%v\n", nf.statBytes)
+	fmt.Fprintf(w, "\tTotal packets:\t%v\n", nf.statPackets)
+	fmt.Fprintf(w, "\tTotal netflow monitor bytes:\t%v\n", nf.statNFBytes)
+	fmt.Fprintf(w, "\tTotal netflow monitor records:\t%v\n", nf.statNFRecords)
+	w.Flush()
+	return o.String()
 }
 
 func (nf *Netflow) NewSocketWriter(network string, server string, mode int) error {
@@ -236,6 +265,9 @@ func (nf *Netflow) reader() {
 }
 
 func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
+	if int(b[1]) != 5 {
+		return nil, fmt.Errorf("invalid netflow record version %v", int(b[1]))
+	}
 	if (n-NETFLOW_HEADER_LEN)%NETFLOW_RECORD_LEN != 0 {
 		return nil, fmt.Errorf("invalid packet size %v", n)
 	}
@@ -243,9 +275,12 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 
 	p := &Packet{
 		Header: &Header{
-			Version:  int(b[1]), // skip the first byte
-			Count:    int(b[3]),
-			Sequence: (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
+			Version:   int(b[1]), // skip the first byte
+			Count:     int(b[3]),
+			Sequence:  (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
+			Uptime:    (uint32(b[4]) << 24) + (uint32(b[5]) << 16) + (uint32(b[6]) << 8) + (uint32(b[7])),
+			EpochSec:  (uint32(b[8]) << 24) + (uint32(b[9]) << 16) + (uint32(b[10]) << 8) + (uint32(b[11])),
+			EpochNsec: (uint32(b[12]) << 24) + (uint32(b[13]) << 16) + (uint32(b[14]) << 8) + (uint32(b[15])),
 		},
 		Raw: b[:n-1],
 	}
@@ -258,10 +293,12 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 			Src:        net.IP([]byte{c[0], c[1], c[2], c[3]}),
 			Dst:        net.IP([]byte{c[4], c[5], c[6], c[7]}),
 			Nexthop:    net.IP([]byte{c[8], c[9], c[10], c[11]}),
-			Input:      (int(c[12]) << 8) + int(c[13]),
-			Output:     (int(c[14]) << 8) + int(c[15]),
-			NumPackets: (int32(c[16]) << 24) + (int32(c[17]) << 16) + (int32(c[18]) << 8) + (int32(c[19])),
-			NumOctets:  (int32(c[20]) << 24) + (int32(c[21]) << 16) + (int32(c[22]) << 8) + (int32(c[23])),
+			Input:      (uint(c[12]) << 8) + uint(c[13]),
+			Output:     (uint(c[14]) << 8) + uint(c[15]),
+			NumPackets: (uint32(c[16]) << 24) + (uint32(c[17]) << 16) + (uint32(c[18]) << 8) + (uint32(c[19])),
+			NumOctets:  (uint32(c[20]) << 24) + (uint32(c[21]) << 16) + (uint32(c[22]) << 8) + (uint32(c[23])),
+			First:      (uint32(c[24]) << 24) + (uint32(c[25]) << 16) + (uint32(c[26]) << 8) + (uint32(c[27])),
+			Last:       (uint32(c[28]) << 24) + (uint32(c[29]) << 16) + (uint32(c[30]) << 8) + (uint32(c[31])),
 			SrcPort:    (int(c[32]) << 8) + int(c[33]),
 			DstPort:    (int(c[34]) << 8) + int(c[35]),
 			Protocol:   int(c[38]),
@@ -270,10 +307,14 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 			DstAS:      (int(c[42]) << 8) + int(c[43]),
 		}
 		p.Records = append(p.Records, r)
+
+		nf.statBytes += uint64(r.NumOctets)
+		nf.statPackets += uint64(r.NumPackets)
 	}
 
-	nf.statBytes += uint64(n)
-	nf.statRecords += uint64(len(p.Records))
+	nf.statFlows += uint64(p.Header.Count)
+	nf.statNFBytes += uint64(n)
+	nf.statNFRecords += uint64(len(p.Records))
 
 	return p, nil
 }
