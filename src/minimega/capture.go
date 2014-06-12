@@ -313,8 +313,10 @@ func cliCapture(c cliCommand) cliResponse {
 
 			err = b.DestroyNetflow()
 			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
+				if !strings.Contains(err.Error(), "has no netflow object") {
+					return cliResponse{
+						Error: err.Error(),
+					}
 				}
 			}
 		}
