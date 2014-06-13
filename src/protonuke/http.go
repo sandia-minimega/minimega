@@ -65,7 +65,10 @@ func httpClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
-		httpTimeReportChan <- httpClientRequest(h, client)
+		elapsed := httpClientRequest(h, client)
+		if elapsed != 0 {
+			log.Info("http %v %vns", h, elapsed)
+		}
 		httpReportChan <- 1
 	}
 }
@@ -91,7 +94,10 @@ func httpTLSClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("https host %v from %v", h, o)
-		httpTLSTimeReportChan <- httpTLSClientRequest(h, client)
+		elapsed := httpTLSClientRequest(h, client)
+		if elapsed != 0 {
+			log.Info("https %v %vns", client, elapsed)
+		}
 		httpTLSReportChan <- 1
 	}
 }
@@ -119,8 +125,6 @@ func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 
 	start := time.Now().UnixNano()
 	resp, err := client.Get(url)
-	stop := time.Now().UnixNano()
-	elapsed = uint64(stop - start)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -143,6 +147,10 @@ func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 			httpSiteCache = httpSiteCache[len(httpSiteCache)-MAX_CACHE:]
 		}
 	}
+
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
+
 	return
 }
 
@@ -191,8 +199,10 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 			httpTLSSiteCache = httpTLSSiteCache[len(httpTLSSiteCache)-MAX_CACHE:]
 		}
 	}
+
 	stop := time.Now().UnixNano()
 	elapsed = uint64(stop - start)
+
 	return
 }
 
@@ -366,12 +376,13 @@ func httpImageHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now().UnixNano()
 	w.Write(httpImage)
 	stop := time.Now().UnixNano()
+	elapsed := uint64(stop - start)
 	if r.TLS != nil {
+		log.Info("https %v %v %vns", r.RemoteAddr, r.URL, elapsed)
 		hitTLSChan <- 1
-		httpTLSTimeReportChan <- uint64(stop - start)
 	} else {
+		log.Info("http %v %v %vns", r.RemoteAddr, r.URL, elapsed)
 		hitChan <- 1
-		httpTimeReportChan <- uint64(stop - start)
 	}
 }
 
@@ -404,11 +415,11 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	elapsed := uint64(stop - start)
 
 	if usingTLS {
+		log.Info("https %v %v %vns", r.RemoteAddr, r.URL, elapsed)
 		hitTLSChan <- 1
-		httpTLSTimeReportChan <- elapsed
 	} else {
+		log.Info("http %v %v %vns", r.RemoteAddr, r.URL, elapsed)
 		hitChan <- 1
-		httpTimeReportChan <- elapsed
 	}
 }
 

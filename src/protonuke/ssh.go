@@ -173,6 +173,8 @@ func sshClientActivity(index int) {
 	data := base64.StdEncoding.EncodeToString(b)
 	log.Debug("ssh activity to %v with %v", sc.Host, data)
 
+	start := time.Now().UnixNano()
+
 	sc.Stdin.Write([]byte(data))
 	sc.Stdin.Write([]byte{'\r', '\n'})
 	sshReportChan <- uint64(len(data))
@@ -181,6 +183,9 @@ func sshClientActivity(index int) {
 	for i := 0; i < 10 && sc.StdoutBuf.String() != expected; i++ {
 		time.Sleep(100 * time.Millisecond)
 	}
+
+	stop := time.Now().UnixNano()
+	log.Info("ssh %v %vns", sc.Host, uint64(stop-start))
 
 	log.Debugln("ssh: ", sc.StdoutBuf.String())
 
@@ -251,6 +256,7 @@ func sshHandleConn(conn *ssh.ServerConn) {
 			defer channel.Close()
 			for {
 				line, err := serverTerm.ReadLine()
+				start := time.Now().UnixNano()
 				if err != nil {
 					if err != io.EOF {
 						log.Errorln(err)
@@ -262,6 +268,9 @@ func sshHandleConn(conn *ssh.ServerConn) {
 				log.Debugln("ssh received: ", line)
 				serverTerm.Write([]byte(line))
 				serverTerm.Write([]byte{'\r', '\n'})
+
+				stop := time.Now().UnixNano()
+				log.Info("ssh %v %vns", conn.RemoteAddr(), uint64(stop-start))
 			}
 		}()
 	}

@@ -72,7 +72,7 @@ func main() {
 	if len(hosts) == 0 && !*f_serve {
 		log.Fatalln("no hosts specified")
 	}
-	log.Infoln("hosts: ", hosts)
+	log.Debugln("hosts: ", hosts)
 
 	// start the reporter
 	if *f_report == 0 {
