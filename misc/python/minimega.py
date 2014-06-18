@@ -1388,3 +1388,68 @@ class minimega(object):
 
         return self._send('echo', *map(str, cmd))
 
+    def vm_qmp(self, vm_id, cmd):
+        '''
+        Issue a JSON-encoded QMP command. This is a convenience function for accessing
+        the QMP socket of a VM via minimega. 
+
+        Arguments:
+        vm_id -- the integer ID of the VM to run the QMP command
+        cmd -- a dictionary that represents the QMP command to be run
+
+        Returns:
+        The JSON-encoded result of running the QMP command
+
+        Example:
+            mm.vm_qmp(0, { "execute": "query-status" })
+
+        Returns:
+            {"return":{"running":false,"singlestep":false,"status":"prelaunch"}}
+        '''
+        if not isinstance(vm_id, int):
+            raise TypeError('vm_id must be an integer')
+
+        if not isinstance(cmd, dict):
+            raise TypeError('cmd must be a dictionary')
+
+        return self._send('vm_qmp', str(vm_id), json.dumps(cmd))
+
+    def capture(self, cmd=None, *args):
+        '''
+        capture experiment data
+
+        Capture experiment data including netflow. Netflow capture obtains netflow data
+        from any local openvswitch switch, and can write to file, another socket, or
+        both. Netflow data can be written out in raw or ascii format, and file output
+        can be compressed on the fly. Multiple netflow writers can be configured.
+        Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>]]
+        Usage: capture clear netflow <id,-1>
+        Usage: capture netflow timeout <new timeout in seconds>
+
+        Arguments:
+        cmd -- the capture command to be run
+        args -- arguments for the capture command
+
+        Examples:
+        To capture netflow data on all associated bridges to file in ascii
+        mode and with gzip compression:
+
+            mm.capture('netflow', 'file', 'foo.netflow', 'ascii', 'gzip')
+
+        To clear captures on all bridges:
+
+            mm.capture('clear', 'netflow', -1)
+
+        You can change the active flow timeout with:
+
+            mm.capture('netflow', 'timeout', <new timeout in seconds>)
+        '''
+        options = ('clear','netflow')
+
+        if cmd is None:
+            return self._send('capture')
+
+        if cmd not in options:
+            raise ValueError('cmd must be one of: ' + str(options))
+
+        return self._send('capture', cmd, *map(str,args))
