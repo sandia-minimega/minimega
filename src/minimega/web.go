@@ -16,6 +16,10 @@ import (
 	"strings"
 )
 
+const (
+	GOVNC_PORT = 9001
+)
+
 var (
 	webRunning bool
 	vncNovnc   string = "misc/novnc"
@@ -25,7 +29,7 @@ func WebCLI(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
 		if !webRunning {
-			go webStart(":8080")
+			go webStart(fmt.Sprintf(":%v", GOVNC_PORT))
 		} else {
 			return cliResponse{
 				Error: "web interface already running",

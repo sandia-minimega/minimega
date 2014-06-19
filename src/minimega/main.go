@@ -33,7 +33,7 @@ var (
 	f_e          = flag.Bool("e", false, "execute command on running minimega")
 	f_degree     = flag.Int("degree", 0, "meshage starting degree")
 	f_msaTimeout = flag.Int("msa", 10, "meshage MSA timeout")
-	f_port       = flag.Int("port", 8966, "meshage port to listen on")
+	f_port       = flag.Int("port", 9000, "meshage port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
