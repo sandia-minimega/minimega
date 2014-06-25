@@ -265,5 +265,8 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	vmInjectCleanup(mntDir)
+
+	r.Response = inject.dstImg
+
 	return r
 }
