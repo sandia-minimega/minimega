@@ -145,12 +145,12 @@ func main() {
 	// attempt to set up the base path
 	err = os.MkdirAll(*f_base, os.FileMode(0770))
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal("mkdir base path: %v", err)
 	}
 	pid := os.Getpid()
 	err = ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("write minimega pid: %v", err)
 		teardown()
 	}
 	go commandSocketStart()

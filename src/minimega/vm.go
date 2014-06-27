@@ -224,7 +224,8 @@ func cliVMSave(c cliCommand) cliResponse {
 	path := *f_base + "saved_vms"
 	err := os.MkdirAll(path, 0775)
 	if err != nil {
-		log.Fatalln(err)
+		log.Error("mkdir: %v", err)
+		teardown()
 	}
 
 	file, err := os.Create(fmt.Sprintf("%v/%v", path, c.Args[0]))
@@ -392,7 +393,7 @@ func (l *vmList) cleanDirs() {
 		log.Debug("cleaning instance path: %v", i.instancePath)
 		err := os.RemoveAll(i.instancePath)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("clearDirs: %v", err)
 		}
 	}
 }
@@ -1346,14 +1347,14 @@ func (vm *vmInfo) launchOne() {
 	for i, lan := range vm.Networks {
 		b, err := getBridge(vm.bridges[i])
 		if err != nil {
-			log.Errorln(err)
+			log.Error("get bridge: %v", err)
 			vm.state(VM_ERROR)
 			launchAck <- vm.Id
 			return
 		}
 		tap, err := b.TapCreate(lan)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("create tap: %v", err)
 			vm.state(VM_ERROR)
 			launchAck <- vm.Id
 			return
@@ -1364,7 +1365,7 @@ func (vm *vmInfo) launchOne() {
 	if len(vm.Networks) > 0 {
 		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("write instance taps file: %v", err)
 			vm.state(VM_ERROR)
 			launchAck <- vm.Id
 			return
@@ -1382,7 +1383,7 @@ func (vm *vmInfo) launchOne() {
 	}
 	err = cmd.Start()
 	if err != nil {
-		log.Error("%v %v", err, sErr.String())
+		log.Error("start qemu: %v %v", err, sErr.String())
 		vm.state(VM_ERROR)
 		launchAck <- vm.Id
 		return
@@ -1398,7 +1399,7 @@ func (vm *vmInfo) launchOne() {
 		vm.state(VM_QUIT)
 		if err != nil {
 			if err.Error() != "signal: killed" { // because we killed it
-				log.Error("%v %v", err, sErr.String())
+				log.Error("kill qemu: %v %v", err, sErr.String())
 				vm.state(VM_ERROR)
 			}
 		}
@@ -1444,7 +1445,7 @@ func (vm *vmInfo) launchOne() {
 	for i, l := range vm.Networks {
 		b, err := getBridge(vm.bridges[i])
 		if err != nil {
-			log.Errorln(err)
+			log.Error("get bridge: %v", err)
 		} else {
 			b.TapDestroy(l, vm.taps[i])
 		}
@@ -1483,7 +1484,7 @@ func (vm *vmInfo) state(s int) {
 	vm.State = s
 	err := ioutil.WriteFile(vm.instancePath+"state", []byte(stateString), 0666)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("write instance state file: %v", err)
 	}
 }
 
@@ -1589,7 +1590,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-device")
 		b, err := getBridge(vm.bridges[i])
 		if err != nil {
-			log.Errorln(err)
+			log.Error("get bridge: %v", err)
 		}
 		b.iml.AddMac(vm.macs[i])
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))

@@ -219,7 +219,8 @@ func cliVyatta(c cliCommand) cliResponse {
 		if len(c.Args) == 1 { // temporary file
 			f, err = ioutil.TempFile(*f_iomBase, "vyatta_")
 			if err != nil {
-				log.Fatalln(err)
+				log.Errorln(err)
+				teardown()
 			}
 		} else if len(c.Args) == 2 { // named file
 			filename := c.Args[1]
@@ -264,7 +265,8 @@ func cliVyatta(c cliCommand) cliResponse {
 			ret.Error = err.Error()
 			out, err = exec.Command(process("umount"), td).CombinedOutput()
 			if err != nil {
-				log.Fatalln(string(out), err)
+				log.Errorln(string(out), err)
+				teardown()
 			}
 			os.Remove(f.Name())
 			return ret
@@ -278,7 +280,8 @@ func cliVyatta(c cliCommand) cliResponse {
 				ret.Error = err.Error()
 				out, err = exec.Command(process("umount"), td).CombinedOutput()
 				if err != nil {
-					log.Fatalln(string(out), err)
+					log.Errorln(string(out), err)
+					teardown()
 				}
 				os.Remove(f.Name())
 				return ret
@@ -289,7 +292,8 @@ func cliVyatta(c cliCommand) cliResponse {
 				ret.Error = err.Error()
 				out, err = exec.Command(process("umount"), td).CombinedOutput()
 				if err != nil {
-					log.Fatalln(string(out), err)
+					log.Errorln(string(out), err)
+					teardown()
 				}
 				os.Remove(f.Name())
 				return ret
@@ -299,7 +303,8 @@ func cliVyatta(c cliCommand) cliResponse {
 				ret.Error = err.Error()
 				out, err = exec.Command(process("umount"), td).CombinedOutput()
 				if err != nil {
-					log.Fatalln(string(out), err)
+					log.Errorln(string(out), err)
+					teardown()
 				}
 				os.Remove(f.Name())
 				return ret
@@ -382,12 +387,14 @@ func vyattaGenConfig() string {
 		},
 	}).Parse(vyattaConfigText)
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
+		teardown()
 	}
 	var o bytes.Buffer
 	err = tmpl.Execute(&o, vyatta)
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
+		teardown()
 	}
 	log.Debugln("vyatta generated config: ", o.String())
 	return o.String()

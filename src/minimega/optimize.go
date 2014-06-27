@@ -57,7 +57,8 @@ func ksmGetIntFromFile(filename string) int {
 	log.Info("read: %v", b)
 	run, err := strconv.Atoi(b)
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
+		teardown()
 	}
 	log.Info("got %v from %v", int(run), filename)
 	return int(run)
@@ -363,7 +364,7 @@ func (vm *vmInfo) CheckAffinity() {
 		cpu := affinitySelectCPU(vm)
 		err := vm.AffinitySet(cpu)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("AffinitySet: %v", err)
 		}
 	}
 }

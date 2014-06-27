@@ -70,7 +70,7 @@ func webStart(p string) {
 	http.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(vncNovnc))))
 	err := http.ListenAndServe(p, nil)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("webStart: %v", err)
 	}
 }
 
@@ -107,7 +107,7 @@ func webHosts() string {
 	host, err := os.Hostname()
 	if err != nil {
 		log.Errorln(err)
-		return ""
+		teardown()
 	}
 	count := 0
 	for _, vm := range vms.vms {
@@ -175,7 +175,7 @@ func webHostVMs(host string) string {
 	localhost, err := os.Hostname()
 	if err != nil {
 		log.Errorln(err)
-		return ""
+		teardown()
 	}
 
 	var d string

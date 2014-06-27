@@ -334,19 +334,19 @@ func captureUpdateNFTimeouts() {
 	for _, v := range b {
 		br, err := getBridge(v)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("could not get bridge: %v", err)
 			continue
 		}
 		_, err = getNetflowFromBridge(v)
 		if err != nil {
 			if !strings.Contains(err.Error(), "has no netflow object") {
-				log.Errorln(err)
+				log.Error("get netflow object from bridge: %v", err)
 			}
 			continue
 		}
 		err = br.UpdateNFTimeout(captureNFTimeout)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("update netflow timeout: %v", err)
 		}
 	}
 }

@@ -197,7 +197,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		err = cmd.Wait()
 		if err != nil {
 			if err.Error() != "signal 9" { // because we killed it
-				log.Error("%v %v", err, sErr.String())
+				log.Error("killing dnsmasq: %v %v", err, sErr.String())
 			}
 		}
 		// remove it from the list of dnsmasq servers
@@ -206,7 +206,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		// and clean up the directory
 		err = os.RemoveAll(d.Path)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("removing dnsmasq directory: %v", err)
 		}
 		log.Info("dnsmasq server %v quit", id)
 	}()
@@ -228,7 +228,7 @@ func dnsmasqPID(id int) int {
 
 	buf, err := ioutil.ReadFile(path + "/dnsmasq.pid")
 	if err != nil {
-		log.Errorln(err)
+		log.Error("read dnsmasq pidfile: %v", err)
 		return -1
 	}
 
@@ -236,7 +236,7 @@ func dnsmasqPID(id int) int {
 
 	val, err := strconv.Atoi(valString)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("parse dnsmasq pid: %v", err)
 		return -1
 	}
 

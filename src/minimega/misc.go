@@ -42,7 +42,7 @@ func hostid(s string) (string, int) {
 	}
 	val, err := strconv.Atoi(k[1])
 	if err != nil {
-		log.Errorln(err)
+		log.Error("parse hostid: %v", err)
 		return "", -1
 	}
 	return k[0], val

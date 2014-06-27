@@ -146,7 +146,7 @@ func bridgesDestroy() error {
 	bridgeFile := *f_base + "bridges"
 	err := os.Remove(bridgeFile)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("bridgesDestroy: could not remove bridge file: %v", err)
 	}
 	if len(e) == 0 {
 		return nil
@@ -245,7 +245,7 @@ func (b *bridge) DestroyNetflow() error {
 	log.Debug("removing netflow on bridge with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -280,7 +280,7 @@ func (b *bridge) UpdateNFTimeout(t int) error {
 	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -322,7 +322,7 @@ func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 	log.Debug("creating netflow to bridge with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr.String())
 		return nil, e
 	}
 
@@ -356,7 +356,7 @@ func (b *bridge) startIML() error {
 	log.Debug("adding arp flow with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openflow: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -376,7 +376,7 @@ func (b *bridge) startIML() error {
 	log.Debug("adding icmp6 ND flow with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openflow: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -415,7 +415,7 @@ func (b *bridge) create() error {
 			if strings.Contains(es, "already exists") {
 				b.preExist = true
 			} else {
-				e := fmt.Errorf("%v: %v", err, sErr.String())
+				e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 				return e
 			}
 		}
@@ -444,7 +444,7 @@ func (b *bridge) create() error {
 		log.Debug("bringing bridge up with cmd: %v", cmd)
 		err = cmd.Run()
 		if err != nil {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
+			e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 			return e
 		}
 	}
@@ -461,7 +461,7 @@ func (b *bridge) Destroy() error {
 			if t != nil {
 				err := b.TapDestroy(name, tapName)
 				if err != nil {
-					log.Infoln(err)
+					log.Info("Destroy: could not destroy tap: %v", err)
 				}
 			}
 		}
@@ -492,7 +492,7 @@ func (b *bridge) Destroy() error {
 	log.Debug("bringing bridge down with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -512,7 +512,7 @@ func (b *bridge) Destroy() error {
 	log.Debug("destroying bridge with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
 	}
 	return nil
@@ -545,7 +545,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 	log.Debug("creating tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return "", e
 	}
 
@@ -577,7 +577,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 	log.Debug("bringing tap up with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return "", e
 	}
 	return tapName, nil
@@ -587,7 +587,7 @@ func (b *bridge) TapCreate(lan int) (string, error) {
 func (b *bridge) TapDestroy(lan int, tap string) error {
 	err := b.TapRemove(lan, tap)
 	if err != nil {
-		log.Infoln(err)
+		log.Info("TapDestroy: could not remove tap: %v", err)
 	}
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
@@ -626,7 +626,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	log.Debug("bringing tap down with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return e
 	}
 
@@ -648,7 +648,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	log.Debug("destroying tap with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return e
 	}
 	return nil
@@ -707,7 +707,7 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 			}
 			return b.TapAdd(lan, tap, host)
 		} else {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
+			e := fmt.Errorf("TapAdd: %v: %v", err, sErr.String())
 			return e
 		}
 	}
@@ -745,7 +745,7 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 	log.Debug("removing tap with cmd: %v", cmd)
 	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
 	}
 	return nil

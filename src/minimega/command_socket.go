@@ -15,14 +15,14 @@ import (
 func commandSocketStart() {
 	l, err := net.Listen("unix", *f_base+"minimega")
 	if err != nil {
-		log.Errorln(err)
+		log.Error("commandSocketStart: %v", err)
 		teardown()
 	}
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			log.Errorln(err)
+			log.Error("commandSocketStart: accept: %v", err)
 		}
 		log.Infoln("client connected")
 		commandSocketHandle(conn) // don't allow multiple connections

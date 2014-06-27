@@ -144,21 +144,21 @@ func vmInjectCleanup(mntDir string) {
 	cmd := exec.Command(p, mntDir)
 	err := cmd.Run()
 	if err != nil {
-		log.Errorln(err)
+		log.Error("vmInjectCleanup: %v", err)
 	}
 
 	p = process("qemu-nbd")
 	cmd = exec.Command(p, "-d", "/dev/nbd0")
 	err = cmd.Run()
 	if err != nil {
-		log.Errorln(err)
+		log.Error("qemu nbd disconnect: %v", err)
 	}
 
 	p = process("rm")
 	cmd = exec.Command(p, "-r", mntDir)
 	err = cmd.Run()
 	if err != nil {
-		log.Errorln(err)
+		log.Error("rm mount dir: %v", err)
 	}
 }
 

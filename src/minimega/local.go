@@ -61,7 +61,7 @@ func localAttach() {
 
 		err = enc.Encode(&c)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("local command gob encode: %v", err)
 			return
 		}
 		log.Debugln("encoded command:", c)
@@ -73,7 +73,7 @@ func localAttach() {
 				if err == io.EOF {
 					log.Infoln("server disconnected")
 				} else {
-					log.Errorln(err)
+					log.Error("local command gob decode: %v", err)
 				}
 				return
 			}
@@ -131,7 +131,7 @@ func localCommand() {
 	}
 	err = enc.Encode(&c)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("local command gob encode: %v", err)
 		return
 	}
 	log.Debugln("encoded command:", c)
@@ -143,7 +143,7 @@ func localCommand() {
 			if err == io.EOF {
 				log.Infoln("server disconnected")
 			} else {
-				log.Errorln(err)
+				log.Error("local command gob decode: %v", err)
 			}
 			return
 		}
