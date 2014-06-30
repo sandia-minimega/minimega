@@ -25,12 +25,9 @@ var (
 	info      *vmInfo // current vm info, interfaced be the cli
 	savedInfo map[string]*vmInfo
 
-	// each vm struct acknowledges that it launched. this way, we won't
-	// return from a vm_launch command until all have actually launched.
-	launchAck chan int
-	killAck   chan int
-	vmIdChan  chan int
-	vmLock    sync.Mutex
+	killAck  chan int
+	vmIdChan chan int
+	vmLock   sync.Mutex
 )
 
 const (
@@ -101,7 +98,6 @@ type jsonInfo struct {
 }
 
 func init() {
-	launchAck = make(chan int)
 	killAck = make(chan int)
 	vmIdChan = make(chan int)
 	info = &vmInfo{}
@@ -480,8 +476,9 @@ func (vm *vmInfo) start() error {
 	}
 	if vm.State == VM_QUIT {
 		log.Info("restarting VM: %v", vm.Id)
-		go vm.launchOne()
-		<-launchAck
+		ack := make(chan int)
+		go vm.launchOne(ack)
+		log.Debugln("ack restarted VM %v", <-ack)
 	}
 
 	log.Info("starting VM: %v", vm.Id)
@@ -618,11 +615,22 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
 func (l *vmList) launch(c cliCommand) cliResponse {
-	if len(c.Args) != 1 {
+	if len(c.Args) != 1 && len(c.Args) != 2 {
 		return cliResponse{
-			Error: "vm_launch takes one argument",
+			Error: fmt.Sprintf("vm_launch malformed command: %v", c.Args),
 		}
 	}
+
+	block := true
+	if len(c.Args) == 2 {
+		if c.Args[1] != "noblock" {
+			return cliResponse{
+				Error: fmt.Sprintf("vm_launch malformed command: %v", c.Args),
+			}
+		}
+		block = false
+	}
+
 	// if the argument is a number, then launch that many VMs
 	// if it's a string, launch one with that name
 	var name string
@@ -631,6 +639,8 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		numVms = 1
 		name = c.Args[0]
 	}
+
+	ack := make(chan int)
 
 	// we have some configuration from the cli (right?), all we need
 	// to do here is fire off the vms in goroutines, passing the
@@ -646,12 +656,22 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 		vmLock.Lock()
 		l.vms[vm.Id] = vm
 		vmLock.Unlock()
-		go vm.launchOne()
+		go vm.launchOne(ack)
 	}
+
 	// get acknowledgements from each vm
-	for i := 0; i < numVms; i++ {
-		<-launchAck
+	if !block {
+		go func() {
+			for i := 0; i < numVms; i++ {
+				log.Debug("launch ack from VM %v", <-ack)
+			}
+		}()
+	} else {
+		for i := 0; i < numVms; i++ {
+			log.Debug("launch ack from VM %v", <-ack)
+		}
 	}
+
 	return cliResponse{}
 }
 
@@ -1209,7 +1229,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	}
 }
 
-func (vm *vmInfo) launchPreamble() bool {
+func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	// check if the vm has a conflict with the disk or mac address of another vm
 	// build state of currently running system
 	macMap := map[string]bool{}
@@ -1230,7 +1250,7 @@ func (vm *vmInfo) launchPreamble() bool {
 		if ok { // if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
-			launchAck <- vm.Id // signal that this vm is "done" launching
+			ack <- vm.Id // signal that this vm is "done" launching
 			return false
 		}
 		selfMacMap[mac] = true
@@ -1280,7 +1300,7 @@ func (vm *vmInfo) launchPreamble() bool {
 			if ok { // if another vm has this mac address already
 				log.Error("mac address %v is already in use by another vm.", mac)
 				vm.state(VM_ERROR)
-				launchAck <- vm.Id
+				ack <- vm.Id
 				return false
 			}
 		}
@@ -1293,7 +1313,7 @@ func (vm *vmInfo) launchPreamble() bool {
 	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
 		log.Error("disk path %v is already in use by another vm.", vm.DiskPath)
 		vm.state(VM_ERROR)
-		launchAck <- vm.Id
+		ack <- vm.Id
 		return false
 	}
 
@@ -1307,14 +1327,14 @@ func (vm *vmInfo) launchPreamble() bool {
 	return true
 }
 
-func (vm *vmInfo) launchOne() {
+func (vm *vmInfo) launchOne(ack chan int) {
 	log.Info("launching vm: %v", vm.Id)
 
 	s := vm.getState()
 
 	// don't repeat the preamble if we're just in the quit state
 	if s != VM_QUIT {
-		if !vm.launchPreamble() {
+		if !vm.launchPreamble(ack) {
 			return
 		}
 	}
@@ -1349,14 +1369,14 @@ func (vm *vmInfo) launchOne() {
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.state(VM_ERROR)
-			launchAck <- vm.Id
+			ack <- vm.Id
 			return
 		}
 		tap, err := b.TapCreate(lan)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.state(VM_ERROR)
-			launchAck <- vm.Id
+			ack <- vm.Id
 			return
 		}
 		vm.taps = append(vm.taps, tap)
@@ -1367,7 +1387,7 @@ func (vm *vmInfo) launchOne() {
 		if err != nil {
 			log.Error("write instance taps file: %v", err)
 			vm.state(VM_ERROR)
-			launchAck <- vm.Id
+			ack <- vm.Id
 			return
 		}
 	}
@@ -1385,7 +1405,7 @@ func (vm *vmInfo) launchOne() {
 	if err != nil {
 		log.Error("start qemu: %v %v", err, sErr.String())
 		vm.state(VM_ERROR)
-		launchAck <- vm.Id
+		ack <- vm.Id
 		return
 	}
 
@@ -1425,11 +1445,11 @@ func (vm *vmInfo) launchOne() {
 		vm.state(VM_ERROR)
 		cmd.Process.Kill()
 		<-waitChan
-		launchAck <- vm.Id
+		ack <- vm.Id
 	} else {
 		go vm.asyncLogger()
 
-		launchAck <- vm.Id
+		ack <- vm.Id
 
 		select {
 		case <-waitChan:
