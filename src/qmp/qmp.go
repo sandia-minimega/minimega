@@ -21,6 +21,7 @@ type Conn struct {
 	enc          *json.Encoder
 	messageSync  chan map[string]interface{}
 	messageAsync chan map[string]interface{}
+	ready        bool
 }
 
 // return an asynchronous message, blocking until one shows up
@@ -56,7 +57,7 @@ func (q *Conn) connect(s string) error {
 	v = map[string]interface{}{
 		"execute": "qmp_capabilities",
 	}
-	err = q.write(v)
+	err = q.enc.Encode(&v)
 	if err != nil {
 		return err
 	}
@@ -70,6 +71,8 @@ func (q *Conn) connect(s string) error {
 	}
 
 	go q.reader()
+
+	q.ready = true
 
 	return nil
 }
@@ -103,12 +106,18 @@ func (q *Conn) read() (map[string]interface{}, error) {
 
 func (q *Conn) write(v map[string]interface{}) error {
 	log.Debugln("qmp write: %#v", v)
+	if !q.ready {
+		return fmt.Errorf("qmp is not ready")
+	}
 	err := q.enc.Encode(&v)
 	return err
 }
 
 func (q *Conn) Raw(input string) (string, error) {
 	log.Debugln("qmp write: %v", input)
+	if !q.ready {
+		return "", fmt.Errorf("qmp is not ready")
+	}
 	_, err := q.conn.Write([]byte(input))
 	if err != nil {
 		return "", err

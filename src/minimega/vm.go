@@ -484,7 +484,6 @@ func (vm *vmInfo) start() error {
 	log.Info("starting VM: %v", vm.Id)
 	err := vm.q.Start()
 	if err != nil {
-		vm.state(VM_ERROR)
 		return err
 	} else {
 		vm.state(VM_RUNNING)
@@ -535,7 +534,6 @@ func (vm *vmInfo) stop() error {
 	log.Info("stopping VM: %v", vm.Id)
 	err := vm.q.Stop()
 	if err != nil {
-		vm.state(VM_ERROR)
 		return err
 	} else {
 		vm.state(VM_PAUSED)
