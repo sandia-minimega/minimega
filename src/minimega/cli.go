@@ -387,13 +387,19 @@ An alias to 'quit'.`,
 			},
 			Helpshort: "launch virtual machines in a paused state",
 			Helplong: `
-	Usage: vm_launch <number of vms or vm name>
+	Usage: vm_launch <number of vms or vm name> [noblock]
 
-Launch virtual machines in a paused state, using the parameters
-defined leading up to the launch command. Any changes to the VM parameters 
-after launching will have no effect on launched VMs.
+Launch virtual machines in a paused state, using the parameters defined
+leading up to the launch command. Any changes to the VM parameters after
+launching will have no effect on launched VMs.
 
-If you supply a name instead of a number of VMs, one VM with that name will be launched.`,
+If you supply a name instead of a number of VMs, one VM with that name
+will be launched.
+
+The optional 'noblock' suffix forces minimega to return control of the
+command line immediately instead of waiting on potential errors from
+launching the VM(s). The user must check logs or error states from
+vm_info.`,
 			Record: true,
 			Clear: func() error {
 				return nil
