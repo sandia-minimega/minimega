@@ -31,6 +31,7 @@ type injectData struct {
 	dstImg    string
 	partition string
 	nPairs    int
+	nbdpath	  string
 	injPairs  []injectPair
 }
 
@@ -148,6 +149,7 @@ func vmInjectCleanup(mntDir string) {
 	}
 
 	p = process("qemu-nbd")
+	//TODO FIX
 	cmd = exec.Command(p, "-d", "/dev/nbd0")
 	err = cmd.Run()
 	if err != nil {
@@ -202,9 +204,41 @@ func cliVMInject(c cliCommand) cliResponse {
 		return r
 	}
 
+	//check for nbds
+	devFiles, err := ioutil.ReadDir("/dev")
+	if err != nil {
+		r.Error = err.Error()
+		return r
+	}
+
+	nbds := make([]string, len(devFiles)) // bigger than needed
+
+	for _, file := range(devFiles) {
+		if strings.Contains(file.Name(), "nbd") {
+			nbds = append(nbds, file.Name())
+		}
+	}
+
+	//use first available nbd
+	for _, nbd := range(nbds) {
+		p = process("nbd-client")
+		cmd = exec.Command(p, "-c", "/dev/" + nbd)
+		_, err := cmd.CombinedOutput()
+		if err != nil {
+			continue
+		} else {
+			inject.nbdpath = "/dev/" + nbd
+		}
+	}
+
+	if &inject.nbdpath == nil {
+		r.Error = "no nbds found"
+		return r
+	}
+
 	//connect new img to nbd
 	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-c", "/dev/nbd0", inject.dstImg)
+	cmd = exec.Command(p, "-c", inject.nbdpath, inject.dstImg)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
 		vmInjectCleanup(mntDir)
@@ -216,14 +250,14 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//decide on a partition
 	if inject.partition == "" {
-		_, err = os.Stat("/dev/nbd0p1")
+		_, err = os.Stat(inject.nbdpath + "p1")
 		if err != nil {
 			vmInjectCleanup(mntDir)
 			r.Error = "no partitions found"
 			return r
 		}
 
-		_, err = os.Stat("/dev/nbd0p2")
+		_, err = os.Stat(inject.nbdpath + "p2")
 		if err == nil {
 			vmInjectCleanup(mntDir)
 			r.Error = "please specify a partition; multiple found"
@@ -235,13 +269,13 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//mount new img
 	p = process("mount")
-	cmd = exec.Command(p, "-w", "/dev/nbd0p"+inject.partition,
+	cmd = exec.Command(p, "-w", inject.nbdpath + "p" + inject.partition,
 		mntDir)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
 		//if mount failed, try ntfs-3g
 		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", "/dev/nbd0p"+inject.partition, mntDir)
+		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdpath + "p" + inject.partition, mntDir)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
 			vmInjectCleanup(mntDir)
