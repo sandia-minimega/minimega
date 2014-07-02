@@ -347,7 +347,13 @@ func cliVMConfig(c cliCommand) cliResponse {
 		case "save":
 			savedInfo[c.Args[1]] = info.Copy()
 		case "restore":
-			info = savedInfo[c.Args[1]].Copy()
+			if s, ok := savedInfo[c.Args[1]]; ok {
+				info = s.Copy()
+			} else {
+				return cliResponse{
+					Error: fmt.Sprintf("config %v does not exist", c.Args[1]),
+				}
+			}
 		default:
 			return cliResponse{
 				Error: "malformed command",
