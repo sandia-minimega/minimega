@@ -2097,9 +2097,9 @@ func (l *vmList) getVM(idOrName string) *vmInfo {
 }
 
 func cliVMNetMod(c cliCommand) cliResponse {
-	if len(c.Args) != 3 {
+	if len(c.Args) != 3 && len(c.Args) != 4 {
 		return cliResponse{
-			Error: "vm_netmod takes three arguments",
+			Error: fmt.Sprintf("malformed command: %v", c.Args),
 		}
 	}
 
@@ -2124,7 +2124,8 @@ func cliVMNetMod(c cliCommand) cliResponse {
 		}
 	}
 
-	// last arg is a number 0 < x < 4096, or the word disconnect
+	// third arg is the new bridge or "disconnect"
+	// last arg is a vlan number 0 < x < 4096
 	if strings.ToLower(c.Args[2]) == "disconnect" {
 		// disconnect
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
@@ -2141,18 +2142,32 @@ func cliVMNetMod(c cliCommand) cliResponse {
 			}
 		}
 		vm.Networks[pos] = -1
-	} else if net, err := strconv.Atoi(c.Args[2]); err == nil {
+	} else {
+		b, err := getBridge(c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("vm_netmod getBridge: %v", err),
+			}
+		}
+
+		net, err := strconv.Atoi(c.Args[3])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("vm_netmod invalid vlan: %v", err),
+			}
+		}
+
 		if net > 0 && net < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v", vm.Id, pos, vm.Networks[pos], net)
-			b, err := getBridge(vm.bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
+			oldBridge, err := getBridge(vm.bridges[pos])
 			if err != nil {
 				return cliResponse{
 					Error: err.Error(),
 				}
 			}
 			if vm.Networks[pos] != -1 {
-				err := b.TapRemove(vm.Networks[pos], vm.taps[pos])
+				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
 				if err != nil {
 					return cliResponse{
 						Error: err.Error(),
@@ -2166,14 +2181,11 @@ func cliVMNetMod(c cliCommand) cliResponse {
 				}
 			}
 			vm.Networks[pos] = net
+			vm.bridges[pos] = b.Name
 		} else {
 			return cliResponse{
 				Error: fmt.Sprintf("invalid vlan tag %v", net),
 			}
-		}
-	} else {
-		return cliResponse{
-			Error: fmt.Sprintf("must be 'disconnect' or a valid vlan tag"),
 		}
 	}
 	return cliResponse{}

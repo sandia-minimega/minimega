@@ -46,10 +46,11 @@ const (
 )
 
 var (
-	bridges    map[string]*bridge // all bridges. mega_bridge0 will be automatically added
-	bridgeLock sync.Mutex
-	tapCount   int         // total number of allocated taps on this host
-	tapChan    chan string // atomic feeder of tap names, wraps tapCount
+	bridges          map[string]*bridge // all bridges. mega_bridge0 will be automatically added
+	bridgeLock       sync.Mutex
+	tapCount         int         // total number of allocated taps on this host
+	tapChan          chan string // atomic feeder of tap names, wraps tapCount
+	disconnectedTaps map[string]*tap
 )
 
 // create the default bridge struct and create a goroutine to generate
@@ -57,6 +58,7 @@ var (
 func init() {
 	bridges = make(map[string]*bridge)
 	tapChan = make(chan string)
+	disconnectedTaps = make(map[string]*tap)
 	go func() {
 		for {
 			tapChan <- fmt.Sprintf("mega_tap%v", tapCount)
@@ -168,9 +170,6 @@ func bridgeInfo() string {
 	for _, v := range bridges {
 		var vlans []int
 		for v, _ := range v.lans {
-			if v == -1 {
-				continue
-			}
 			vlans = append(vlans, v)
 		}
 		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Name, v.exists, v.preExist, vlans)
@@ -421,10 +420,6 @@ func (b *bridge) create() error {
 		}
 		b.exists = true
 		b.lans = make(map[int]*vlan)
-		// special vlan -1 is for disconnected taps
-		b.lans[-1] = &vlan{
-			Taps: make(map[string]*tap),
-		}
 
 		p = process("ip")
 		cmd = &exec.Cmd{
@@ -592,15 +587,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
 	b.Lock.Lock()
-	if v, ok := b.lans[-1]; ok {
-		if w, ok := v.Taps[tap]; ok {
-			if w.host {
-				return nil
-			}
-		} else {
-			return nil
-		}
-	} else {
+	if _, ok := disconnectedTaps[tap]; !ok {
 		return nil
 	}
 	b.Lock.Unlock()
@@ -656,16 +643,9 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 
 // add a tap to the bridge
 func (b *bridge) TapAdd(lan int, tap string, host bool) error {
-	// if this tap is in the disconnected list, move it out
-	if _, ok := b.lans[-1].Taps[tap]; ok {
-		if _, ok := b.lans[lan]; !ok {
-			err := b.LanCreate(lan)
-			if err != nil {
-				return err
-			}
-		}
-		b.lans[lan].Taps[tap] = b.lans[-1].Taps[tap]
-		delete(b.lans[-1].Taps, tap)
+	err := b.LanCreate(lan)
+	if err != nil {
+		return err
 	}
 
 	var sOut bytes.Buffer
@@ -695,7 +675,7 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	}
 
 	log.Debug("adding tap with cmd: %v", cmd)
-	err := cmd.Run()
+	err = cmd.Run()
 	if err != nil {
 		if strings.Contains(sErr.String(), "already exists") {
 			// special case - we own the tap, but it already exists
@@ -711,20 +691,25 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 			return e
 		}
 	}
+
+	// if this tap is in the disconnected list, move it out
+	if _, ok := disconnectedTaps[tap]; ok {
+		b.lans[lan].Taps[tap] = disconnectedTaps[tap]
+		delete(disconnectedTaps, tap)
+	}
+
 	return nil
 }
 
 // remove a tap from a bridge
 func (b *bridge) TapRemove(lan int, tap string) error {
 	// put this tap into the disconnected vlan
-	if lan != -1 {
-		b.Lock.Lock()
-		if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
-			b.lans[-1].Taps[tap] = b.lans[lan].Taps[tap]
-		}
-		delete(b.lans[lan].Taps, tap)
-		b.Lock.Unlock()
+	b.Lock.Lock()
+	if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
+		disconnectedTaps[tap] = b.lans[lan].Taps[tap]
 	}
+	delete(b.lans[lan].Taps, tap)
+	b.Lock.Unlock()
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
