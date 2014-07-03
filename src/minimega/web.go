@@ -72,6 +72,7 @@ func webStart(p string) {
 	if err != nil {
 		log.Error("webStart: %v", err)
 	}
+	webRunning = false
 }
 
 func vncRoot(w http.ResponseWriter, r *http.Request) {
