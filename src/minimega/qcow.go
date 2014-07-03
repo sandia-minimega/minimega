@@ -170,10 +170,11 @@ func cliVMInject(c cliCommand) cliResponse {
 	r := cliResponse{}
 	inject := injectData{}
 
-	// load nbd for the user
+	// TODO for some reason this wasn't working with process()
+	// hardcoded location of modprobe
 	// p := process("modprobe")
 
-	// TODO for some reason this wasn't working with process()
+	// load nbd for the user
 	cmd := exec.Command("/sbin/modprobe", "nbd")
 	result, err := cmd.CombinedOutput()
 	if err != nil {
@@ -227,9 +228,8 @@ func cliVMInject(c cliCommand) cliResponse {
 	for _, file := range devFiles {
 		if strings.Contains(file.Name(), "nbd") {
 
-			// I totally tried appending to the array here
+			// I tried below to no avail
 			// nbds = append(nbds, file.Name())
-			// did I do this wrong?
 			nbds[i] = file.Name()
 			i += 1
 		}
@@ -237,11 +237,6 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	// use first available nbd
 	for _, nbd := range nbds {
-
-		// TODO
-		// am I doing something wrong here? process isn't finding this stuff
-		// p = process("/sbin/nbd-client")
-		// cmd = exec.Command(p, "-c", "/dev/" + nbd)
 
 		// this is a kind of hacky way to check if an nbd is not in use
 		// but it's the same thing nbd-client -c does
@@ -314,7 +309,7 @@ func cliVMInject(c cliCommand) cliResponse {
 		p = process("cp")
 		dir := filepath.Dir(mntDir + "/" + inject.injPairs[i].dst)
 		os.MkdirAll(dir, 0775)
-		cmd = exec.Command(p, "-r", inject.injPairs[i].src, mntDir+"/"+inject.injPairs[i].dst)
+		cmd = exec.Command(p, "-fr", inject.injPairs[i].src, mntDir+"/"+inject.injPairs[i].dst)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
 			vmInjectCleanup(mntDir)
