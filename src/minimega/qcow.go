@@ -149,7 +149,7 @@ func vmInjectCleanup(mntDir string) {
 	}
 
 	p = process("qemu-nbd")
-	//TODO FIX
+	// TODO FIX
 	cmd = exec.Command(p, "-d", "/dev/nbd0")
 	err = cmd.Run()
 	if err != nil {
@@ -170,7 +170,18 @@ func cliVMInject(c cliCommand) cliResponse {
 	r := cliResponse{}
 	inject := injectData{}
 
-	err := inject.parseInject(c)
+	// load nbd for the user
+	// p := process("modprobe")
+
+	// TODO for some reason this wasn't working with process()
+	cmd := exec.Command("/sbin/modprobe", "nbd")
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		r.Error = "unable to insert module 'nbd'" + err.Error()
+		return r
+	}
+
+	err = inject.parseInject(c)
 	if err != nil {
 		r.Error = err.Error()
 		return r
@@ -190,8 +201,8 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//create the new img
 	p := process("qemu-img")
-	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
-	result, err := cmd.CombinedOutput()
+	cmd = exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
+	result, err = cmd.CombinedOutput()
 	if err != nil {
 		r.Error = string(result[:]) + "\n" + err.Error()
 		return r
@@ -212,27 +223,41 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	nbds := make([]string, len(devFiles)) // bigger than needed
-
+	i := 0
 	for _, file := range(devFiles) {
 		if strings.Contains(file.Name(), "nbd") {
-			nbds = append(nbds, file.Name())
+
+			// I totally tried appending to the array here
+			// nbds = append(nbds, file.Name())
+			// did I do this wrong?
+			nbds[i] = file.Name()
+			i += 1
 		}
 	}
 
-	//use first available nbd
+	// use first available nbd
 	for _, nbd := range(nbds) {
-		p = process("nbd-client")
-		cmd = exec.Command(p, "-c", "/dev/" + nbd)
-		_, err := cmd.CombinedOutput()
+
+		// TODO
+		// am I doing something wrong here? process isn't finding this stuff
+		// p = process("/sbin/nbd-client")
+		// cmd = exec.Command(p, "-c", "/dev/" + nbd)
+
+		// this is a kind of hacky way to check if an nbd is not in use
+		// but it's the same thing nbd-client -c does
+		cmd = exec.Command("stat", "/sys/block/" + nbd + "/pid")
+		err := cmd.Run()
 		if err != nil {
-			continue
-		} else {
+			log.Info("trying: " + nbd)
 			inject.nbdpath = "/dev/" + nbd
+			break
+		} else {
+			continue
 		}
 	}
 
-	if &inject.nbdpath == nil {
-		r.Error = "no nbds found"
+	if inject.nbdpath == "" {
+		r.Error = "no available nbds found"
 		return r
 	}
 
