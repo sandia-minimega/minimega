@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	injectCommand = iota
-	getBackingImageCommand
+	INJECT_COMMAND = iota
+	GET_BACKING_IMAGE_COMMAND
 )
 
 type injectPair struct {
@@ -31,7 +31,7 @@ type injectData struct {
 	dstImg    string
 	partition string
 	nPairs    int
-	nbdpath	  string
+	nbdpath   string
 	injPairs  []injectPair
 }
 
@@ -224,7 +224,7 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	nbds := make([]string, len(devFiles)) // bigger than needed
 	i := 0
-	for _, file := range(devFiles) {
+	for _, file := range devFiles {
 		if strings.Contains(file.Name(), "nbd") {
 
 			// I totally tried appending to the array here
@@ -236,7 +236,7 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	// use first available nbd
-	for _, nbd := range(nbds) {
+	for _, nbd := range nbds {
 
 		// TODO
 		// am I doing something wrong here? process isn't finding this stuff
@@ -245,7 +245,7 @@ func cliVMInject(c cliCommand) cliResponse {
 
 		// this is a kind of hacky way to check if an nbd is not in use
 		// but it's the same thing nbd-client -c does
-		cmd = exec.Command("stat", "/sys/block/" + nbd + "/pid")
+		cmd = exec.Command("stat", "/sys/block/"+nbd+"/pid")
 		err := cmd.Run()
 		if err != nil {
 			log.Info("trying: " + nbd)
@@ -294,13 +294,13 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//mount new img
 	p = process("mount")
-	cmd = exec.Command(p, "-w", inject.nbdpath + "p" + inject.partition,
+	cmd = exec.Command(p, "-w", inject.nbdpath+"p"+inject.partition,
 		mntDir)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
 		//if mount failed, try ntfs-3g
 		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdpath + "p" + inject.partition, mntDir)
+		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdpath+"p"+inject.partition, mntDir)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
 			vmInjectCleanup(mntDir)
