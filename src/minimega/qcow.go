@@ -149,11 +149,11 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 	}
 
 	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-d", "/dev/"+nbdPath)
+	cmd = exec.Command(p, "-d", nbdPath)
 	err = cmd.Run()
 	if err != nil {
 		log.Error("qemu nbd disconnect: %v", err)
-		log.Warnln("minimega was unable to disconnect %v", nbdPath)
+		log.Warn("minimega was unable to disconnect %v", nbdPath)
 	}
 
 	p = process("rm")
@@ -314,7 +314,7 @@ func cliVMInject(c cliCommand) cliResponse {
 		}
 	}
 
-	log.Info("Cleaning up vm_inject")
+	log.Debug("Cleaning up vm_inject")
 	vmInjectCleanup(mntDir, inject.nbdPath)
 
 	r.Response = inject.dstImg
