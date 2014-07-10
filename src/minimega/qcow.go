@@ -153,6 +153,7 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 	err = cmd.Run()
 	if err != nil {
 		log.Error("qemu nbd disconnect: %v", err)
+		log.Warnln("minimega was unable to disconnect %v", nbdPath)
 	}
 
 	p = process("rm")
