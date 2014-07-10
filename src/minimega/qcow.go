@@ -210,14 +210,14 @@ func cliVMInject(c cliCommand) cliResponse {
 		return r
 	}
 
-	//create a tmp mount point
+	// create a tmp mount point
 	mntDir, err := ioutil.TempDir(*f_base, "dstImg")
 	if err != nil {
 		r.Error = err.Error()
 		return r
 	}
 
-	//check for nbds
+	// check for nbds
 	devFiles, err := ioutil.ReadDir("/dev")
 	if err != nil {
 		r.Error = err.Error()
@@ -225,14 +225,10 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	nbds := []string{}
-	//i := 0
 	for _, file := range devFiles {
-		if strings.Contains(file.Name(), "nbd") {
-
-			// I tried below to no avail
+		// we don't want to include partitions here
+		if strings.Contains(file.Name(), "nbd") && !strings.Contains(file.Name(), "p") {
 			nbds = append(nbds, file.Name())
-			//nbds[i] = file.Name()
-			//i += 1
 		}
 	}
 
@@ -246,7 +242,7 @@ func cliVMInject(c cliCommand) cliResponse {
 			inject.nbdPath = "/dev/" + nbd
 			break
 		} else {
-			log.Debug("nbd %v could not be used: %v", nbd, result)
+			log.Debug("nbd %v could not be used", nbd)
 		}
 	}
 
@@ -317,6 +313,7 @@ func cliVMInject(c cliCommand) cliResponse {
 		}
 	}
 
+	log.Info("Cleaning up vm_inject")
 	vmInjectCleanup(mntDir, inject.nbdPath)
 
 	r.Response = inject.dstImg
