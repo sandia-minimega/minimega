@@ -149,7 +149,7 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 	}
 
 	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-d", "/dev/" + nbdPath)
+	cmd = exec.Command(p, "-d", "/dev/"+nbdPath)
 	err = cmd.Run()
 	if err != nil {
 		log.Error("qemu nbd disconnect: %v", err)
@@ -240,7 +240,7 @@ func cliVMInject(c cliCommand) cliResponse {
 	for _, nbd := range nbds {
 
 		// check whether a pid exists for the current nbd
-		_, err = os.Stat("/sys/block/"+nbd+"/pid")
+		_, err = os.Stat("/sys/block/" + nbd + "/pid")
 		if err != nil {
 			log.Debug("trying: " + nbd)
 			inject.nbdPath = "/dev/" + nbd
