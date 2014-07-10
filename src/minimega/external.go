@@ -34,6 +34,7 @@ var externalProcesses = map[string]string{
 	"qemu-img": "qemu-img",
 	"cp":       "cp",
 	"taskset":  "taskset",
+	"lsmod":	"lsmod",
 }
 
 // check for the presence of each of the external processes we may call,

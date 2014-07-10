@@ -31,7 +31,7 @@ type injectData struct {
 	dstImg    string
 	partition string
 	nPairs    int
-	nbdpath   string
+	nbdPath   string
 	injPairs  []injectPair
 }
 
@@ -140,7 +140,7 @@ func (inject *injectData) parseInject(c cliCommand) error {
 }
 
 //Unmount, disconnect nbd, and remove mount directory
-func vmInjectCleanup(mntDir string) {
+func vmInjectCleanup(mntDir, nbdPath string) {
 	p := process("umount")
 	cmd := exec.Command(p, mntDir)
 	err := cmd.Run()
@@ -149,8 +149,7 @@ func vmInjectCleanup(mntDir string) {
 	}
 
 	p = process("qemu-nbd")
-	// TODO FIX
-	cmd = exec.Command(p, "-d", "/dev/nbd0")
+	cmd = exec.Command(p, "-d", "/dev/" + nbdPath)
 	err = cmd.Run()
 	if err != nil {
 		log.Error("qemu nbd disconnect: %v", err)
@@ -170,15 +169,17 @@ func cliVMInject(c cliCommand) cliResponse {
 	r := cliResponse{}
 	inject := injectData{}
 
-	// TODO for some reason this wasn't working with process()
-	// hardcoded location of modprobe
-	// p := process("modprobe")
-
-	// load nbd for the user
-	cmd := exec.Command("/sbin/modprobe", "nbd")
+	// yell at user to load nbd
+	p := process("lsmod")
+	cmd := exec.Command(p)
 	result, err := cmd.CombinedOutput()
 	if err != nil {
-		r.Error = "unable to insert module 'nbd'" + err.Error()
+		r.Error = err.Error()
+		return r
+	}
+
+	if !strings.Contains(string(result), "nbd ") {
+		r.Error = "insert module 'nbd'"
 		return r
 	}
 
@@ -201,7 +202,7 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	//create the new img
-	p := process("qemu-img")
+	p = process("qemu-img")
 	cmd = exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
@@ -223,45 +224,43 @@ func cliVMInject(c cliCommand) cliResponse {
 		return r
 	}
 
-	nbds := make([]string, len(devFiles)) // bigger than needed
-	i := 0
+	nbds := []string{}
+	//i := 0
 	for _, file := range devFiles {
 		if strings.Contains(file.Name(), "nbd") {
 
 			// I tried below to no avail
-			// nbds = append(nbds, file.Name())
-			nbds[i] = file.Name()
-			i += 1
+			nbds = append(nbds, file.Name())
+			//nbds[i] = file.Name()
+			//i += 1
 		}
 	}
 
-	// use first available nbd
+	// select first available nbd
 	for _, nbd := range nbds {
 
-		// this is a kind of hacky way to check if an nbd is not in use
-		// but it's the same thing nbd-client -c does
-		cmd = exec.Command("stat", "/sys/block/"+nbd+"/pid")
-		err := cmd.Run()
+		// check whether a pid exists for the current nbd
+		_, err = os.Stat("/sys/block/"+nbd+"/pid")
 		if err != nil {
-			log.Info("trying: " + nbd)
-			inject.nbdpath = "/dev/" + nbd
+			log.Debug("trying: " + nbd)
+			inject.nbdPath = "/dev/" + nbd
 			break
 		} else {
-			continue
+			log.Debug("nbd %v could not be used: %v", nbd, result)
 		}
 	}
 
-	if inject.nbdpath == "" {
+	if inject.nbdPath == "" {
 		r.Error = "no available nbds found"
 		return r
 	}
 
 	//connect new img to nbd
 	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-c", inject.nbdpath, inject.dstImg)
+	cmd = exec.Command(p, "-c", inject.nbdPath, inject.dstImg)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
-		vmInjectCleanup(mntDir)
+		vmInjectCleanup(mntDir, inject.nbdPath)
 		r.Error = string(result[:]) + "\n" + err.Error()
 		return r
 	}
@@ -270,16 +269,16 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//decide on a partition
 	if inject.partition == "" {
-		_, err = os.Stat(inject.nbdpath + "p1")
+		_, err = os.Stat(inject.nbdPath + "p1")
 		if err != nil {
-			vmInjectCleanup(mntDir)
+			vmInjectCleanup(mntDir, inject.nbdPath)
 			r.Error = "no partitions found"
 			return r
 		}
 
-		_, err = os.Stat(inject.nbdpath + "p2")
+		_, err = os.Stat(inject.nbdPath + "p2")
 		if err == nil {
-			vmInjectCleanup(mntDir)
+			vmInjectCleanup(mntDir, inject.nbdPath)
 			r.Error = "please specify a partition; multiple found"
 			return r
 		}
@@ -289,16 +288,16 @@ func cliVMInject(c cliCommand) cliResponse {
 
 	//mount new img
 	p = process("mount")
-	cmd = exec.Command(p, "-w", inject.nbdpath+"p"+inject.partition,
+	cmd = exec.Command(p, "-w", inject.nbdPath+"p"+inject.partition,
 		mntDir)
 	result, err = cmd.CombinedOutput()
 	if err != nil {
 		//if mount failed, try ntfs-3g
 		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdpath+"p"+inject.partition, mntDir)
+		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
-			vmInjectCleanup(mntDir)
+			vmInjectCleanup(mntDir, inject.nbdPath)
 			r.Error = string(result[:]) + "\n" + err.Error()
 			return r
 		}
@@ -312,13 +311,13 @@ func cliVMInject(c cliCommand) cliResponse {
 		cmd = exec.Command(p, "-fr", inject.injPairs[i].src, mntDir+"/"+inject.injPairs[i].dst)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
-			vmInjectCleanup(mntDir)
+			vmInjectCleanup(mntDir, inject.nbdPath)
 			r.Error = string(result[:]) + "\n" + err.Error()
 			return r
 		}
 	}
 
-	vmInjectCleanup(mntDir)
+	vmInjectCleanup(mntDir, inject.nbdPath)
 
 	r.Response = inject.dstImg
 
