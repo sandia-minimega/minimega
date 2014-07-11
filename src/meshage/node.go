@@ -31,7 +31,6 @@ package meshage
 
 import (
 	"encoding/gob"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -47,6 +46,8 @@ const (
 	DEFAULT_TIMEOUT     = 10
 	RECEIVE_BUFFER      = 1024
 	DEFAULT_MSA_TIMEOUT = 10
+	SOLICIT_LIMIT       = 16 // If fewer than SOLICIT_LIMIT nodes exist in the mesh, everyone tries to connect on solicitations
+	SOLICIT_RATIO       = 8  // If greater than SOLICIT_LIMIT nodes exist in the mesh, 1/SOLICIT_RATIO nodes try to connect
 )
 
 type mesh map[string][]string
@@ -196,14 +197,14 @@ func (n *Node) newConnection(conn net.Conn) {
 	// 4.  The remote node does the same as 3.
 	err := c.enc.Encode(n.name)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("newConnection encode name: %v: %v", n.name, err)
 		c.conn.Close()
 		return
 	}
 
 	err = c.enc.Encode(solicited)
 	if err != nil {
-		log.Errorln(err)
+		log.Error("newConnection encode solicited: %v: %v", n.name, err)
 		c.conn.Close()
 		return
 	}
@@ -212,7 +213,7 @@ func (n *Node) newConnection(conn net.Conn) {
 	err = c.dec.Decode(&resp)
 	if err != nil {
 		if err != io.EOF {
-			log.Errorln(err)
+			log.Error("newConnection decode name: %v: %v", n.name, err)
 		}
 		c.conn.Close()
 		return
@@ -237,26 +238,28 @@ func (n *Node) broadcastListener() {
 	}
 	ln, err := net.ListenUDP("udp4", &listenAddr)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal("broadcastListener: %v", err)
 	}
 	for {
 		d := make([]byte, 1024)
 		read, _, err := ln.ReadFromUDP(d)
+		if err != nil {
+			log.Error("broadcastListener ReadFromUDP: %v", err)
+			continue
+		}
 		data := strings.Split(string(d[:read]), ":")
 		if len(data) != 3 {
-			err = fmt.Errorf("got malformed udp data: %v\n", data)
-			log.Warnln(err)
+			log.Warn("got malformed udp data: %v", data)
 			continue
 		}
 		if data[0] != "meshage" {
-			err = fmt.Errorf("got malformed udp data: %v\n", data)
-			log.Warnln(err)
+			log.Warn("got malformed udp data: %v", data)
 			continue
 		}
 		namespace := data[1]
 		host := data[2]
 		if namespace != n.namespace {
-			log.Debugln("got solicitation from another namespace, dropping")
+			log.Debug("got solicitation from namespace %v, dropping", namespace)
 			continue
 		}
 		if host == n.name {
@@ -268,10 +271,10 @@ func (n *Node) broadcastListener() {
 		// to avoid spamming the node with connections, only 1/8 of the
 		// nodes should try to connect. If there are < 16 nodes, then
 		// always try.
-		if len(n.clients) > 16 {
+		if len(n.clients) > SOLICIT_LIMIT {
 			s := rand.NewSource(time.Now().UnixNano())
 			r := rand.New(s)
-			n := r.Intn(8)
+			n := r.Intn(SOLICIT_RATIO)
 			if n != 0 {
 				log.Debugln("randomly skipping this solicitation")
 				continue
@@ -304,13 +307,13 @@ func (n *Node) checkDegree() {
 		}
 		socket, err := net.DialUDP("udp4", nil, &addr)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("checkDegree: %v", err)
 			break
 		}
 		message := fmt.Sprintf("meshage:%s:%s", n.namespace, n.name)
 		_, err = socket.Write([]byte(message))
 		if err != nil {
-			log.Errorln(err)
+			log.Error("checkDegree: %v", err)
 			break
 		}
 		wait := r.Intn(1 << backoff)
@@ -329,9 +332,9 @@ func (n *Node) dial(host string, solicited bool) error {
 	conn, err := net.DialTimeout("tcp", addr, DEFAULT_TIMEOUT*time.Second)
 	if err != nil {
 		if solicited {
-			log.Errorln(err)
+			log.Error("dial %v: %v", host, err)
 		}
-		return err
+		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
 	c := &client{
@@ -345,26 +348,25 @@ func (n *Node) dial(host string, solicited bool) error {
 	err = c.dec.Decode(&remoteHost)
 	if err != nil {
 		if solicited {
-			log.Errorln(err)
+			log.Error("dial %v: %v", host, err)
 		}
-		return err
+		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
 	var remoteSolicited bool
 	err = c.dec.Decode(&remoteSolicited)
 	if err != nil {
 		if solicited {
-			log.Errorln(err)
+			log.Error("dial %v: %v", host, err)
 		}
-		return err
+		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
 	// are we already connected to this node?
 	for k, _ := range n.clients {
 		if k == remoteHost {
 			conn.Close()
-			err = errors.New("already connected")
-			return err
+			return fmt.Errorf("already connected to %v", remoteHost)
 		}
 	}
 
@@ -377,9 +379,9 @@ func (n *Node) dial(host string, solicited bool) error {
 	err = c.enc.Encode(n.name)
 	if err != nil {
 		if solicited {
-			log.Errorln(err)
+			log.Error("dial %v: %v", host, err)
 		}
-		return err
+		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
 	c.name = remoteHost

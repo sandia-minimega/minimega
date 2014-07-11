@@ -77,7 +77,7 @@ func (n *Node) clientHandler(host string) {
 		err := c.dec.Decode(&m)
 		if err != nil {
 			if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
-				log.Errorln(err)
+				log.Error("client %v decode: %v", host, err)
 			}
 			break
 		}
@@ -96,7 +96,7 @@ func (n *Node) clientHandler(host string) {
 			err := c.enc.Encode(a)
 			if err != nil {
 				if err != io.EOF {
-					log.Errorln(err)
+					log.Error("client %v encode ACK: %v", host, err)
 				}
 				break
 			}
