@@ -56,7 +56,7 @@ type vmInfo struct {
 	Name         string
 	Memory       string // memory for the vm, in megabytes
 	Vcpus        string // number of virtual cpus
-	DiskPath     string
+	DiskPaths    []string
 	CdromPath    string
 	KernelPath   string
 	InitrdPath   string
@@ -82,7 +82,7 @@ type jsonInfo struct {
 	Name     string
 	Memory   string
 	Vcpus    string
-	Disk     string
+	Disk     []string
 	Snapshot bool
 	Initrd   string
 	Kernel   string
@@ -113,7 +113,7 @@ func init() {
 	// default parameters at startup
 	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
-	info.DiskPath = ""
+	info.DiskPaths = []string{}
 	info.KernelPath = ""
 	info.InitrdPath = ""
 	info.State = VM_BUILDING
@@ -157,7 +157,10 @@ func (vms *vmSorter) Less(i, j int) bool {
 	case "vcpus":
 		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
 	case "disk":
-		return vms.vms[i].DiskPath < vms.vms[j].DiskPath
+		fallthrough
+	case "disks":
+		// not sure the idea behind this
+		return len(vms.vms[i].DiskPaths) < len(vms.vms[j].DiskPaths)
 	case "initrd":
 		return vms.vms[i].InitrdPath < vms.vms[j].InitrdPath
 	case "kernel":
@@ -253,8 +256,8 @@ func cliVMSave(c cliCommand) cliResponse {
 		cmds = append(cmds, "vm_memory "+vm.Memory)
 		cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
 
-		if vm.DiskPath != "" {
-			cmds = append(cmds, "vm_disk "+vm.DiskPath)
+		if len(vm.DiskPaths) != 0 {
+			cmds = append(cmds, "vm_disk "+strings.Join(vm.DiskPaths, " "))
 		} else {
 			cmds = append(cmds, "clear vm_disk")
 		}
@@ -375,7 +378,11 @@ func configToString() string {
 	fmt.Fprintln(&o, "Current VM configuration:")
 	fmt.Fprintf(w, "Memory:\t%v\n", info.Memory)
 	fmt.Fprintf(w, "VCPUS:\t%v\n", info.Vcpus)
-	fmt.Fprintf(w, "Disk Path:\t%v\n", info.DiskPath)
+	if len(info.DiskPaths) > 1 {
+		fmt.Fprintf(w, "Disk Paths:\t%v\n", info.DiskPaths)
+	} else {
+		fmt.Fprintf(w, "Disk Path:\t%v\n", info.DiskPaths)
+	}
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", info.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", info.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", info.InitrdPath)
@@ -686,7 +693,8 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.Name = info.Name
 	newInfo.Memory = info.Memory
 	newInfo.Vcpus = info.Vcpus
-	newInfo.DiskPath = info.DiskPath
+	newInfo.DiskPaths = make([]string, len(info.DiskPaths))
+	copy(newInfo.DiskPaths, info.DiskPaths)
 	newInfo.CdromPath = info.CdromPath
 	newInfo.KernelPath = info.KernelPath
 	newInfo.InitrdPath = info.InitrdPath
@@ -863,9 +871,13 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 			}
 		case "disk":
+			fallthrough
+		case "disks":
 			for i, j := range l.vms {
-				if j.DiskPath == d[1] {
-					v = append(v, l.vms[i])
+				for k := range j.DiskPaths {
+					if j.DiskPaths[k] == d[1] {
+						v = append(v, l.vms[i])
+					}
 				}
 			}
 		case "initrd":
@@ -1039,7 +1051,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				Name:     i.Name,
 				Memory:   i.Memory,
 				Vcpus:    i.Vcpus,
-				Disk:     i.DiskPath,
+				Disk:     i.DiskPaths,
 				Snapshot: i.Snapshot,
 				Initrd:   i.InitrdPath,
 				Kernel:   i.KernelPath,
@@ -1176,8 +1188,10 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					fmt.Fprintf(w, "unknown")
 				}
 			case "disk":
-				fmt.Fprintf(w, "%v", j.DiskPath)
-				if j.Snapshot && j.DiskPath != "" {
+				fallthrough
+			case "disks":
+				fmt.Fprintf(w, "%v", j.DiskPaths)
+				if j.Snapshot && len(j.DiskPaths) != 0 {
 					fmt.Fprintf(w, " [snapshot]")
 				}
 			case "initrd":
@@ -1276,11 +1290,13 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 			}
 
 			// populate disk sets
-			if vm2.DiskPath != "" {
-				if vm2.Snapshot {
-					diskSnapshotted[vm2.DiskPath] = true
-				} else {
-					diskPersistent[vm2.DiskPath] = true
+			if len(vm2.DiskPaths) != 0 {
+				for _, diskpath := range vm2.DiskPaths {
+					if vm2.Snapshot {
+						diskSnapshotted[diskpath] = true
+					} else {
+						diskPersistent[diskpath] = true
+					}
 				}
 			}
 		}
@@ -1311,14 +1327,20 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// check for disk conflict
-	_, existsSnapshotted := diskSnapshotted[vm.DiskPath] // check if another vm is using this disk in snapshot mode
-	_, existsPersistent := diskPersistent[vm.DiskPath]   // check if another vm is using this disk in persistent mode (snapshot=false)
+	var existsSnapshotted = []bool{}
+	var existsPersistent = []bool{}
+	for i, diskPath := range vm.DiskPaths {
+		_, existsSnapshotted[i] = diskSnapshotted[diskPath] // check if another vm is using this disk in snapshot mode
+		_, existsPersistent[i] = diskPersistent[diskPath]   // check if another vm is using this disk in persistent mode (snapshot=false)
+	}
 
-	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-		log.Error("disk path %v is already in use by another vm.", vm.DiskPath)
-		vm.state(VM_ERROR)
-		ack <- vm.Id
-		return false
+	for i, _ := range vm.DiskPaths {
+		if existsPersistent[i] || (vm.Snapshot == false && existsSnapshotted[i]) { // if we have a disk conflict
+			log.Error("disk path %v is already in use by another vm.", vm.DiskPaths[i])
+			vm.state(VM_ERROR)
+			ack <- vm.Id
+			return false
+		}
 	}
 
 	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
@@ -1576,11 +1598,13 @@ func (vm *vmInfo) vmGetArgs() []string {
 
 	args = append(args, "-S")
 
-	if vm.DiskPath != "" {
-		args = append(args, "-drive")
-		args = append(args, "file="+vm.DiskPath+",cache=none,media=disk")
-		if vm.Snapshot {
-			args = append(args, "-snapshot")
+	if len(vm.DiskPaths) != 0 {
+		for _, diskPath := range vm.DiskPaths {
+			args = append(args, "-drive")
+			args = append(args, "file="+diskPath+",cache=none,media=disk")
+			if vm.Snapshot {
+				args = append(args, "-snapshot")
+			}
 		}
 	}
 
@@ -1669,7 +1693,7 @@ func cliClearVMConfig() error {
 	externalProcesses["qemu"] = "kvm"
 	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
-	info.DiskPath = ""
+	info.DiskPaths = []string{}
 	info.CdromPath = ""
 	info.KernelPath = ""
 	info.InitrdPath = ""
@@ -1731,13 +1755,11 @@ func cliVMVCPUs(c cliCommand) cliResponse {
 func cliVMDisk(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
 		return cliResponse{
-			Response: info.DiskPath,
+			Response: strings.Join(info.DiskPaths, " "),
 		}
-	} else if len(c.Args) == 1 {
-		info.DiskPath = c.Args[0]
 	} else {
-		return cliResponse{
-			Error: "vm_disk takes only one argument",
+		for _, v := range c.Args {
+			info.DiskPaths = append(info.DiskPaths, v)
 		}
 	}
 	return cliResponse{}

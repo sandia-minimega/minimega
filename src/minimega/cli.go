@@ -502,15 +502,15 @@ Set the number of virtual CPUs to allocate a VM.`,
 
 		"vm_disk": &command{
 			Call:      cliVMDisk,
-			Helpshort: "set a disk image to attach to a VM",
+			Helpshort: "set disk images to attach to a VM",
 			Helplong: `
-	Usage: vm_disk [path to disk image]
+	Usage: vm_disk [path to disk image [...]]
 
-Attach a disk to a VM. Any disk image supported by QEMU is a valid parameter.
+Attach one or more disks to a vm. Any disk image supported by QEMU is a valid parameter.
 Disk images launched in snapshot mode may safely be used for multiple VMs.`,
 			Record: true,
 			Clear: func() error {
-				info.DiskPath = ""
+				info.DiskPaths = []string{}
 				return nil
 			},
 		},
