@@ -506,8 +506,9 @@ Set the number of virtual CPUs to allocate a VM.`,
 			Helplong: `
 	Usage: vm_disk [path to disk image [...]]
 
-Attach one or more disks to a vm. Any disk image supported by QEMU is a valid parameter.
-Disk images launched in snapshot mode may safely be used for multiple VMs.`,
+Attach one or more disks to a vm. Any disk image supported by QEMU is a valid
+parameter.  Disk images launched in snapshot mode may safely be used for
+multiple VMs.`,
 			Record: true,
 			Clear: func() error {
 				info.DiskPaths = []string{}
