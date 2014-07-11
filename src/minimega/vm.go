@@ -157,8 +157,6 @@ func (vms *vmSorter) Less(i, j int) bool {
 	case "vcpus":
 		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
 	case "disk":
-		fallthrough
-	case "disks":
 		// not sure the idea behind this
 		return len(vms.vms[i].DiskPaths) < len(vms.vms[j].DiskPaths)
 	case "initrd":
@@ -871,8 +869,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 			}
 		case "disk":
-			fallthrough
-		case "disks":
 			for i, j := range l.vms {
 				for k := range j.DiskPaths {
 					if j.DiskPaths[k] == d[1] {
@@ -1188,8 +1184,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					fmt.Fprintf(w, "unknown")
 				}
 			case "disk":
-				fallthrough
-			case "disks":
 				fmt.Fprintf(w, "%v", j.DiskPaths)
 				if j.Snapshot && len(j.DiskPaths) != 0 {
 					fmt.Fprintf(w, " [snapshot]")
