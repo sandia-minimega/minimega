@@ -5,8 +5,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io/ioutil"
+	log "minilog"
 	"os"
 	"strconv"
 	"strings"
@@ -34,17 +36,82 @@ func hostStatsCLI(c cliCommand) cliResponse {
 	}
 }
 
-func hostStats(quiet bool) (string, error) {
+func hostStatsLoad() (string, error) {
 	load, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
 		return "", err
 	}
 
-	memory, err := ioutil.ReadFile("/proc/meminfo")
+	// loadavg should look something like
+	// 	0.31 0.28 0.24 1/309 21658
+	f := strings.Fields(string(load))
+	if len(f) != 5 {
+		return "", fmt.Errorf("could not read loadavg")
+	}
+	outputLoad := strings.Join(f[0:3], " ")
+
+	return outputLoad, nil
+}
+
+func hostStatsMemory() (int, int, error) {
+	memory, err := os.Open("/proc/meminfo")
 	if err != nil {
-		return "", err
+		return 0, 0, err
+	}
+	defer memory.Close()
+
+	scanner := bufio.NewScanner(memory)
+
+	var memTotal int
+	var memFree int
+	var memCached int
+	var memBuffers int
+
+	for scanner.Scan() {
+		d := strings.Fields(scanner.Text())
+		switch d[0] {
+		case "MemTotal:":
+			m, err := strconv.Atoi(d[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("cannot parse meminfo MemTotal: %v", err)
+			}
+			memTotal = m
+			log.Debugln("got memTotal %v", memTotal)
+		case "MemFree:":
+			m, err := strconv.Atoi(d[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("cannot parse meminfo MemFree: %v", err)
+			}
+			memFree = m
+			log.Debugln("got memFree %v", memFree)
+		case "Buffers:":
+			m, err := strconv.Atoi(d[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("cannot parse meminfo Buffers: %v", err)
+			}
+			memBuffers = m
+			log.Debugln("got memBuffers %v", memBuffers)
+		case "Cached:":
+			m, err := strconv.Atoi(d[1])
+			if err != nil {
+				return 0, 0, fmt.Errorf("cannot parse meminfo Cached: %v", err)
+			}
+			memCached = m
+			log.Debugln("got memCached %v", memCached)
+		}
 	}
 
+	if err := scanner.Err(); err != nil {
+		log.Error("reading meminfo:", err)
+	}
+
+	outputMemUsed := (memTotal - (memFree + memBuffers + memCached)) / 1024
+	outputMemTotal := memTotal / 1024
+
+	return outputMemTotal, outputMemUsed, nil
+}
+
+func hostStatsBandwidth() (string, error) {
 	band1, err := ioutil.ReadFile("/proc/net/dev")
 	if err != nil {
 		return "", err
@@ -58,61 +125,9 @@ func hostStats(quiet bool) (string, error) {
 	}
 	now := time.Now().Unix()
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	// format the data
-
-	// loadavg should look something like
-	// 	0.31 0.28 0.24 1/309 21658
-	f := strings.Fields(string(load))
-	if len(f) != 5 {
-		return "", fmt.Errorf("could not read loadavg")
-	}
-	outputLoad := strings.Join(f[0:3], " ")
-
-	// meminfo - we're interested in MemTotal and MemFree+Cached+Buffers
-	// we're doing this in a hacky way, and hoping the meminfo format is stable
-	f = strings.Fields(string(memory))
-	if len(f) < 12 {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	if f[0] != "MemTotal:" {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	memTotal, err := strconv.Atoi(f[1])
-	if err != nil {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	outputMemTotal := fmt.Sprintf("%d", memTotal/1024)
-	if f[3] != "MemFree:" {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	memFree, err := strconv.Atoi(f[4])
-	if err != nil {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	if f[6] != "Buffers:" {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	memBuffers, err := strconv.Atoi(f[7])
-	if err != nil {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	if f[9] != "Cached:" {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	memCached, err := strconv.Atoi(f[10])
-	if err != nil {
-		return "", fmt.Errorf("could not read meminfo")
-	}
-	outputMemUsed := fmt.Sprintf("%d", (memTotal-(memFree+memBuffers+memCached))/1024)
-
 	// bandwidth ( megabytes / second ) for all interfaces in aggregate
 	// again, a big hack, this time we look for a string with a ":" suffix, and offset from there
-	f = strings.Fields(string(band1))
+	f := strings.Fields(string(band1))
 	var total1 int64
 	var elapsed int64
 	if bandwidthLast == 0 {
@@ -162,11 +177,35 @@ func hostStats(quiet bool) (string, error) {
 	bandwidthLast = total2
 	bandwidthLastTime = now
 
+	return outputBandwidth, nil
+}
+
+func hostStats(quiet bool) (string, error) {
+	load, err := hostStatsLoad()
+	if err != nil {
+		return "", err
+	}
+
+	memoryTotal, memoryUsed, err := hostStatsMemory()
+	if err != nil {
+		return "", err
+	}
+
+	bandwidth, err := hostStatsBandwidth()
+	if err != nil {
+		return "", err
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+
 	var output string
 	if quiet {
-		output = fmt.Sprintf("%v %v %v %v %v", hostname, outputLoad, outputMemTotal, outputMemUsed, outputBandwidth)
+		output = fmt.Sprintf("%v %v %v %v %v", hostname, load, memoryTotal, memoryUsed, bandwidth)
 	} else {
-		output = fmt.Sprintf("hostname:\t%v\tload average:\t%v\tmemtotal:\t%v\tmemused:\t%v\tbandwidth:\t%v (MB/s)", hostname, outputLoad, outputMemTotal, outputMemUsed, outputBandwidth)
+		output = fmt.Sprintf("hostname:\t%v\tload average:\t%v\tmemtotal:\t%v\tmemused:\t%v\tbandwidth:\t%v (MB/s)", hostname, load, memoryTotal, memoryUsed, bandwidth)
 	}
 	return output, nil
 }
