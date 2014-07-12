@@ -593,6 +593,21 @@ For example, to set a static IP for a linux VM:
 			},
 		},
 
+		"vm_uuid": &command{
+			Call:      cliVMUUID,
+			Helpshort: "set the UUID for a VM",
+			Helplong: `
+	Usage: vm_uuid [uuid]
+
+Set the UUID for a virtual machine. If not set, minimega will create a random
+one when the VM is launched.`,
+			Record: true,
+			Clear: func() error {
+				info.UUID = ""
+				return nil
+			},
+		},
+
 		"vm_net": &command{
 			Call:      cliVMNet,
 			Helpshort: "specify the networks the VM is a member of",

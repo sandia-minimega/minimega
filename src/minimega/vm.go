@@ -74,6 +74,7 @@ type vmInfo struct {
 	Snapshot     bool
 	Hotplug      map[int]string
 	PID          int
+	UUID         string
 }
 
 type jsonInfo struct {
@@ -95,6 +96,7 @@ type jsonInfo struct {
 	IP       []string
 	IP6      []string
 	Networks []int
+	UUID     string
 }
 
 func init() {
@@ -113,8 +115,6 @@ func init() {
 	// default parameters at startup
 	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
-	info.KernelPath = ""
-	info.InitrdPath = ""
 	info.State = VM_BUILDING
 	info.Snapshot = true
 }
@@ -167,6 +167,8 @@ func (vms *vmSorter) Less(i, j int) bool {
 		return vms.vms[i].Append < vms.vms[j].Append
 	case "bridge", "tap", "mac", "ip", "ip6", "vlan":
 		return true
+	case "uuid":
+		return vms.vms[i].UUID < vms.vms[j].UUID
 	default:
 		log.Fatal("invalid sort parameter %v", vms.by)
 		return false
@@ -299,6 +301,8 @@ func cliVMSave(c cliCommand) cliResponse {
 			cmds = append(cmds, "clear vm_net")
 		}
 
+		cmds = append(cmds, "vm_uuid "+vm.UUID)
+
 		if vm.Name != "" {
 			cmds = append(cmds, "vm_launch "+vm.Name)
 		} else {
@@ -383,6 +387,7 @@ func configToString() string {
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
 	fmt.Fprintf(w, "Networks:\t%v\n", networkString())
+	fmt.Fprintf(w, "UUID:\t%v\n", info.UUID)
 	w.Flush()
 	return o.String()
 }
@@ -708,6 +713,7 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.netDrivers = make([]string, len(info.netDrivers))
 	copy(newInfo.netDrivers, info.netDrivers)
 	newInfo.Snapshot = info.Snapshot
+	newInfo.UUID = info.UUID
 	// Hotplug isn't allocated until later in launch()
 	return newInfo
 }
@@ -985,6 +991,12 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					}
 				}
 			}
+		case "uuid":
+			for i, j := range l.vms {
+				if j.UUID == d[1] {
+					v = append(v, l.vms[i])
+				}
+			}
 		default:
 			return cliResponse{
 				Error: fmt.Sprintf("invalid search term: %v", d[0]),
@@ -1054,6 +1066,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				IP:       ips,
 				IP6:      ip6,
 				Networks: i.Networks,
+				UUID:     i.UUID,
 			})
 		}
 		err = enc.Encode(&o)
@@ -1107,6 +1120,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "ip6")
 			case "vlan":
 				omask = append(omask, "vlan")
+			case "uuid":
+				omask = append(omask, "uuid")
 			default:
 				return cliResponse{
 					Error: fmt.Sprintf("invalid output mask: %v", j),
@@ -1114,7 +1129,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan"}
+		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan", "uuid"}
 	}
 
 	// did someone do something silly?
@@ -1224,6 +1239,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					}
 				}
 				fmt.Fprintf(w, "%v", vlans)
+			case "uuid":
+				fmt.Fprintf(w, "%v", j.UUID)
 			}
 		}
 		fmt.Fprintf(w, "\n")
@@ -1245,6 +1262,11 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 
 	vmLock.Lock()
 	defer vmLock.Unlock()
+
+	// generate a UUID if we don't have one
+	if vm.UUID == "" {
+		vm.UUID = generateUUID()
+	}
 
 	// populate selfMacMap
 	for _, mac := range vm.macs {
@@ -1645,6 +1667,9 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, vm.QemuAppend...)
 	}
 
+	args = append(args, "-uuid")
+	args = append(args, vm.UUID)
+
 	log.Info("args for vm %v is: %v", vm.Id, strings.Join(args, " "))
 	return args
 }
@@ -1688,6 +1713,7 @@ func cliClearVMConfig() error {
 	info.bridges = []string{}
 	info.netDrivers = []string{}
 	info.Snapshot = true
+	info.UUID = ""
 	return nil
 }
 
@@ -1731,6 +1757,21 @@ func cliVMVCPUs(c cliCommand) cliResponse {
 	} else {
 		return cliResponse{
 			Error: "vm_vcpus takes only one argument",
+		}
+	}
+	return cliResponse{}
+}
+
+func cliVMUUID(c cliCommand) cliResponse {
+	if len(c.Args) == 0 {
+		return cliResponse{
+			Response: info.UUID,
+		}
+	} else if len(c.Args) == 1 {
+		info.UUID = c.Args[0]
+	} else {
+		return cliResponse{
+			Error: "vm_uuid takes only one argument",
 		}
 	}
 	return cliResponse{}

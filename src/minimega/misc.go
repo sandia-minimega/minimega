@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"os"
 	"regexp"
@@ -24,6 +25,18 @@ func randomMac() string {
 	mac := fmt.Sprintf("00:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
 	log.Info("generated mac: %v", mac)
 	return mac
+}
+
+func generateUUID() string {
+	log.Debugln("generateUUID")
+	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
+	if err != nil {
+		log.Error("generateUUID: %v", err)
+		return "00000000-0000-0000-0000-000000000000"
+	}
+	uuid = uuid[:len(uuid)-1]
+	log.Debug("generated UUID: %v", string(uuid))
+	return string(uuid)
 }
 
 func isMac(mac string) bool {
