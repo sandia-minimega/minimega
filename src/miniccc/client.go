@@ -661,13 +661,31 @@ func clientCommandExec(c *Command) {
 			Stderr: &stderr,
 		}
 		log.Debug("executing %v", strings.Join(c.Command, " "))
-		err := cmd.Run()
-		if err != nil {
-			log.Errorln(err)
-			return
+
+		if c.Background {
+			log.Debug("starting command %v in background", c.Command)
+			err = cmd.Start()
+			if err != nil {
+				log.Errorln(err)
+				resp.Stderr = stderr.String()
+				return
+			}
+
+			go func() {
+				cmd.Wait()
+				log.Info("command %v exited", strings.Join(c.Command, " "))
+				log.Info(stdout.String())
+				log.Info(stderr.String())
+			}()
+		} else {
+			err := cmd.Run()
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
+			resp.Stdout = stdout.String()
+			resp.Stderr = stderr.String()
 		}
-		resp.Stdout = stdout.String()
-		resp.Stderr = stderr.String()
 	}
 
 	if len(c.FilesRecv) != 0 {

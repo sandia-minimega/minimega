@@ -31,6 +31,9 @@ type Command struct {
 	// true if the master should record responses to disk
 	Record bool
 
+	// run the command in the background if true
+	Background bool
+
 	// Command to run if type == COMMAND_EXEC
 	// The command is a slice of strings with the first element being the
 	// command, and any other elements as the arguments
@@ -312,13 +315,19 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 			commandFilesSend := r.FormValue("filesend")
 			commandFilesRecv := r.FormValue("filerecv")
 			commandRecord := r.FormValue("record")
+			commandBackground := r.FormValue("background")
 			var record bool
 			if commandRecord == "record" {
 				record = true
 			}
+			var background bool
+			if commandBackground == "background" {
+				background = true
+			}
 			c := &Command{
 				Type:           COMMAND_EXEC,
 				Record:         record,
+				Background:     background,
 				ID:             getCommandID(),
 				Command:        fieldsQuoteEscape(commandCmd),
 				FilesSend:      strings.Fields(commandFilesSend),
@@ -429,6 +438,8 @@ func handleNewCommand(w http.ResponseWriter, r *http.Request) {
 					</select>
 					<br>
 					<input type=checkbox name=record value=record>Record Responses
+					<br>
+					<input type=checkbox name=background value=background>Run in background
 					<br>
 					Command: <input type=text name=command>
 					<br>
