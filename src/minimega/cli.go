@@ -1676,13 +1676,19 @@ func cliMux() {
 		select {
 		case c := <-commandChanLocal:
 			c.ackChan = ackChanLocal
-			ackChanLocal <- cliExec(c)
+			r := cliExec(c)
+			r.TID = c.TID
+			ackChanLocal <- r
 		case c := <-commandChanSocket:
 			c.ackChan = ackChanSocket
-			ackChanSocket <- cliExec(c)
+			r := cliExec(c)
+			r.TID = c.TID
+			ackChanSocket <- r
 		case c := <-commandChanMeshage:
 			c.ackChan = ackChanMeshage
-			ackChanMeshage <- cliExec(c)
+			r := cliExec(c)
+			r.TID = c.TID
+			ackChanMeshage <- r
 		}
 	}
 }
