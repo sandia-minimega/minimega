@@ -1723,6 +1723,36 @@ func cliExec(c cliCommand) cliResponse {
 			Error: e,
 		}
 	}
+
+	// special case, catch "mesh_set" on localhost
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if c.Command == "mesh_set" && (c.Args[0] == hostname || (c.Args[0] == "annotate" && c.Args[1] == hostname)) {
+		log.Debug("rewriting mesh_set %v as local command", hostname)
+		if c.Args[0] == "annotate" {
+			if len(c.Args) > 2 {
+				c.Command = c.Args[2]
+				if len(c.Args) > 3 {
+					c.Args = c.Args[3:]
+				} else {
+					c.Args = []string{}
+				}
+			}
+		} else {
+			if len(c.Args) > 1 {
+				c.Command = c.Args[1]
+				if len(c.Args) > 2 {
+					c.Args = c.Args[2:]
+				} else {
+					c.Args = []string{}
+				}
+			}
+		}
+		log.Debug("new command is %v", c)
+	}
+
 	r := cliCommands[c.Command].Call(c)
 	if r.Error == "" {
 		if cliCommands[c.Command].Record {
