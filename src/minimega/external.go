@@ -35,6 +35,7 @@ var externalProcesses = map[string]string{
 	"cp":       "cp",
 	"taskset":  "taskset",
 	"lsmod":    "lsmod",
+	"which":    "which",
 }
 
 // check for the presence of each of the external processes we may call,
