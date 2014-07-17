@@ -147,8 +147,8 @@ func (r *Ron) clientHeartbeat() *hb {
 
 	// attach any command responses and clear the response queue
 	r.responseQueueLock.Lock()
-	c.Responses = r.responseQueue
-	r.responseQueue = []*Response{}
+	c.Responses = r.clientResponseQueue
+	r.clientResponseQueue = []*Response{}
 	r.responseQueueLock.Unlock()
 
 	macs, ips := getNetworkInfo()

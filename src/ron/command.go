@@ -61,7 +61,7 @@ type Command struct {
 	// clients that have responded to this command
 	// leave this private as we don't want to bother sending this
 	// downstream
-	checkedIn []int64
+	checkedIn []string
 
 	// conditions on which commands can expire
 	ExpireClients  int
@@ -74,12 +74,23 @@ type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
 
+	UUID string
+
 	// Names and data for uploaded files
 	Files map[string][]byte
 
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+}
+
+func (r *Ron) shouldRecord(id int) bool {
+	r.commandLock.Lock()
+	defer r.commandLock.Unlock()
+	if c, ok := r.commands[id]; ok {
+		return c.Record
+	}
+	return false
 }
 
 // periodically reap commands that meet expiry conditions
@@ -111,12 +122,12 @@ func (r *Ron) expireReaper() {
 	}
 }
 
-func (r *Ron) commandCheckIn(id int, cid int64) {
-	log.Debug("commandCheckIn %v %v", id, cid)
+func (r *Ron) commandCheckIn(id int, uuid string) {
+	log.Debug("commandCheckIn %v %v", id, uuid)
 
 	r.commandLock.Lock()
 	if c, ok := r.commands[id]; ok {
-		c.checkedIn = append(c.checkedIn, cid)
+		c.checkedIn = append(c.checkedIn, uuid)
 	}
 	r.commandLock.Unlock()
 }

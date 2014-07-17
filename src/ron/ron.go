@@ -24,6 +24,7 @@ const (
 	HEARTBEAT_RATE = 5
 	REAPER_RATE    = 30
 	CLIENT_EXPIRED = 30
+	RESPONSE_PATH  = "/miniccc_responses"
 )
 
 type Ron struct {
@@ -37,17 +38,18 @@ type Ron struct {
 
 	clients map[string]*Client
 
-	commands            map[int]*Command
-	commandCounter      int
-	commandLock         sync.Mutex
-	commandCounterLock  sync.Mutex
-	clientCommandQueue  chan map[int]*Command
+	commands           map[int]*Command
+	commandCounter     int
+	commandLock        sync.Mutex
+	commandCounterLock sync.Mutex
+
 	masterResponseQueue chan []*Response
-	responseQueue       []*Response
 
-	responseQueueLock sync.Mutex
-
-	clientLock sync.Mutex
+	responseQueueLock   sync.Mutex
+	clientLock          sync.Mutex
+	clientResponseQueue []*Response
+	clientCommandQueue  chan map[int]*Command
+	clientExpiredCount  int
 
 	OSVer     string
 	CSDVer    string
@@ -102,6 +104,8 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 			return nil, err
 		}
 		go r.expireReaper()
+		go r.clientReaper()
+		go r.masterResponseProcessor()
 	case MODE_CLIENT:
 		if parent == "" {
 			return nil, fmt.Errorf("client mode must have parent")
@@ -144,7 +148,7 @@ func (r *Ron) startMaster() error {
 		return err
 	}
 
-	err = os.MkdirAll(r.path+"/miniccc_responses", 0775)
+	err = os.MkdirAll(r.path+RESPONSE_PATH, 0775)
 	if err != nil {
 		return err
 	}
