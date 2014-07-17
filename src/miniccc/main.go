@@ -10,24 +10,19 @@ import (
 	log "minilog"
 	"os"
 	"os/signal"
-	"strings"
+	"ron"
 	"syscall"
 	"version"
-)
-
-const (
-	BASE_PATH = "/tmp/miniccc"
 )
 
 var (
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_port     = flag.Int("port", 8967, "port to listen on")
+	f_port     = flag.Int("port", 9001, "port to connect to")
 	f_version  = flag.Bool("version", false, "print the version")
-	f_role     = flag.String("role", "client", "role [master,relay,client]")
 	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
-	f_base     = flag.String("base", BASE_PATH, "directory to serve files from")
+	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
 )
 
 var banner string = `miniccc, Copyright (2014) Sandia Corporation. 
@@ -44,9 +39,6 @@ func usage() {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
-	if !strings.HasSuffix(*f_base, "/") {
-		*f_base += "/"
-	}
 
 	if *f_version {
 		fmt.Println("miniccc", version.Revision, version.Date)
@@ -60,52 +52,13 @@ func main() {
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
-	// attempt to set up the base path
-	log.Debugln("make base directories")
-	err := os.MkdirAll(*f_base, os.FileMode(0770))
+	// start a ron client
+	r, err := ron.New(*f_port, ron.MODE_CLIENT, *f_parent, *f_path)
 	if err != nil {
-		log.Fatalln(err)
-	}
-	err = os.MkdirAll((*f_base)+"files", os.FileMode(0770))
-	if err != nil {
-		log.Fatalln(err)
-	}
-	err = os.MkdirAll((*f_base)+"responses", os.FileMode(0770))
-	if err != nil {
-		log.Fatalln(err)
+		log.Fatal("creating ron node: %v", err)
 	}
 
-	// start a ron node
-	ronPort = *f_port
-	ronParent = *f_parent
-	switch *f_role {
-	case "client":
-		ronMode = MODE_CLIENT
-		log.Debugln("starting in client mode")
-		clientSetup()
-		err = ronStart()
-		if err != nil {
-			log.Fatalln(err)
-		}
-	case "relay":
-		ronMode = MODE_RELAY
-		log.Debugln("starting in relay mode")
-		err = ronStart()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		go updateCommandQueueProcessor()
-	case "master":
-		ronMode = MODE_MASTER
-		log.Debugln("starting in master mode")
-		err = ronStart()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		go masterResponseProcessor()
-	default:
-		log.Fatal("invalid role %v", *f_role)
-	}
+	log.Debug("starting ron client with UUID: %v", r.UUID)
 
 	<-sig
 	// terminate

@@ -1553,6 +1553,16 @@ With <timeout> in seconds.`,
 				return nil
 			},
 		},
+
+		"cc": &command{
+			Call:      cliCC,
+			Helpshort: "command and control commands",
+			Helplong:  ``,
+			Record:    true,
+			Clear: func() error {
+				return nil
+			},
+		},
 	}
 }
 
