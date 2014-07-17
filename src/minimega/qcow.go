@@ -184,6 +184,12 @@ func cliVMInject(c cliCommand) cliResponse {
 		return r
 	}
 
+	// yell at user to load nbd with a max_part parameter
+	_, err = os.Stat("/sys/module/nbd/parameters/max_part")
+	if err != nil {
+		log.Warnln("no max_part parameter set for module nbd")
+	}
+
 	err = inject.parseInject(c)
 	if err != nil {
 		r.Error = err.Error()
@@ -290,10 +296,21 @@ func cliVMInject(c cliCommand) cliResponse {
 	result, err = cmd.CombinedOutput()
 	if err != nil {
 		//if mount failed, try ntfs-3g
+
+		// check that ntfs-3g is installed
+		p = process("ntfs-3g")
+		cmd = exec.Command(p, "--version")
+		_, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Error("ntfs-3g not found, ntfs images unwriteable")
+		}
+
+		// mount with ntfs-3g
 		p = process("mount")
 		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
+			log.Error("failed to mount")
 			vmInjectCleanup(mntDir, inject.nbdPath)
 			r.Error = string(result[:]) + "\n" + err.Error()
 			return r
@@ -314,7 +331,7 @@ func cliVMInject(c cliCommand) cliResponse {
 		}
 	}
 
-	log.Debug("Cleaning up vm_inject")
+	log.Debug("cleaning up vm_inject")
 	vmInjectCleanup(mntDir, inject.nbdPath)
 
 	r.Response = inject.dstImg
