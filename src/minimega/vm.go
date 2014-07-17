@@ -78,25 +78,26 @@ type vmInfo struct {
 }
 
 type jsonInfo struct {
-	Id       int
-	Host     string
-	Name     string
-	Memory   string
-	Vcpus    string
-	Disk     []string
-	Snapshot bool
-	Initrd   string
-	Kernel   string
-	Cdrom    string
-	Append   string
-	State    string
-	Bridges  []string
-	Taps     []string
-	Macs     []string
-	IP       []string
-	IP6      []string
-	Networks []int
-	UUID     string
+	Id        int
+	Host      string
+	Name      string
+	Memory    string
+	Vcpus     string
+	Disk      []string
+	Snapshot  bool
+	Initrd    string
+	Kernel    string
+	Cdrom     string
+	Append    string
+	State     string
+	Bridges   []string
+	Taps      []string
+	Macs      []string
+	IP        []string
+	IP6       []string
+	Networks  []int
+	UUID      string
+	CC_Active bool
 }
 
 func init() {
@@ -169,8 +170,10 @@ func (vms *vmSorter) Less(i, j int) bool {
 		return true
 	case "uuid":
 		return vms.vms[i].UUID < vms.vms[j].UUID
+	case "cc_active":
+		return true
 	default:
-		log.Fatal("invalid sort parameter %v", vms.by)
+		log.Error("invalid sort parameter %v", vms.by)
 		return false
 	}
 }
@@ -997,6 +1000,15 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					v = append(v, l.vms[i])
 				}
 			}
+		case "cc_active":
+			activeClients := ccClients()
+			for i, j := range l.vms {
+				if activeClients[j.UUID] && d[1] == "true" {
+					v = append(v, l.vms[i])
+				} else if !activeClients[j.UUID] && d[1] == "false" {
+					v = append(v, l.vms[i])
+				}
+			}
 		default:
 			return cliResponse{
 				Error: fmt.Sprintf("invalid search term: %v", d[0]),
@@ -1047,26 +1059,28 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					ip6 = append(ip6, ip.IP6)
 				}
 			}
+			activeClients := ccClients()
 			o = append(o, jsonInfo{
-				Id:       i.Id,
-				Host:     host,
-				Name:     i.Name,
-				Memory:   i.Memory,
-				Vcpus:    i.Vcpus,
-				Disk:     i.DiskPaths,
-				Snapshot: i.Snapshot,
-				Initrd:   i.InitrdPath,
-				Kernel:   i.KernelPath,
-				Cdrom:    i.CdromPath,
-				Append:   i.Append,
-				State:    state,
-				Bridges:  i.bridges,
-				Taps:     i.taps,
-				Macs:     i.macs,
-				IP:       ips,
-				IP6:      ip6,
-				Networks: i.Networks,
-				UUID:     i.UUID,
+				Id:        i.Id,
+				Host:      host,
+				Name:      i.Name,
+				Memory:    i.Memory,
+				Vcpus:     i.Vcpus,
+				Disk:      i.DiskPaths,
+				Snapshot:  i.Snapshot,
+				Initrd:    i.InitrdPath,
+				Kernel:    i.KernelPath,
+				Cdrom:     i.CdromPath,
+				Append:    i.Append,
+				State:     state,
+				Bridges:   i.bridges,
+				Taps:      i.taps,
+				Macs:      i.macs,
+				IP:        ips,
+				IP6:       ip6,
+				Networks:  i.Networks,
+				UUID:      i.UUID,
+				CC_Active: activeClients[i.UUID],
 			})
 		}
 		err = enc.Encode(&o)
@@ -1122,6 +1136,8 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				omask = append(omask, "vlan")
 			case "uuid":
 				omask = append(omask, "uuid")
+			case "cc_active":
+				omask = append(omask, "cc_active")
 			default:
 				return cliResponse{
 					Error: fmt.Sprintf("invalid output mask: %v", j),
@@ -1129,7 +1145,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			}
 		}
 	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan", "uuid"}
+		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan", "uuid", "cc_active"}
 	}
 
 	// did someone do something silly?
@@ -1241,6 +1257,9 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				fmt.Fprintf(w, "%v", vlans)
 			case "uuid":
 				fmt.Fprintf(w, "%v", j.UUID)
+			case "cc_active":
+				activeClients := ccClients()
+				fmt.Fprintf(w, "%v", activeClients[j.UUID])
 			}
 		}
 		fmt.Fprintf(w, "\n")

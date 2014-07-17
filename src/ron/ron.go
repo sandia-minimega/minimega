@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,8 +37,6 @@ type Ron struct {
 	rate   int
 	path   string
 
-	clients map[string]*Client
-
 	commands           map[int]*Command
 	commandCounter     int
 	commandLock        sync.Mutex
@@ -47,6 +46,7 @@ type Ron struct {
 
 	responseQueueLock   sync.Mutex
 	clientLock          sync.Mutex
+	clients             map[string]*Client
 	clientResponseQueue []*Response
 	clientCommandQueue  chan map[int]*Command
 	clientExpiredCount  int
@@ -125,6 +125,20 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 	return r, nil
 }
 
+func (r *Ron) GetActiveClients() []string {
+	var clients []string
+
+	r.clientLock.Lock()
+	defer r.clientLock.Unlock()
+
+	for c, _ := range r.clients {
+		clients = append(clients, c)
+	}
+
+	log.Debug("active clients: %v", clients)
+	return clients
+}
+
 func getUUID() (string, error) {
 	switch runtime.GOOS {
 	case "linux":
@@ -133,6 +147,7 @@ func getUUID() (string, error) {
 			return "", err
 		}
 		uuid := string(d[:len(d)-1])
+		uuid = strings.ToLower(uuid)
 		log.Debug("got UUID: %v", uuid)
 		return uuid, nil
 	default:

@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	CC_PORT = 9001
+	CC_PORT = 9002
 )
 
 var (
@@ -49,17 +49,30 @@ func cliCC(c cliCommand) cliResponse {
 			port = p
 		}
 
-		ccNode, err := ron.New(port, ron.MODE_MASTER, "", *f_base)
+		var err error
+		ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_base)
 		if err != nil {
 			return cliResponse{
 				Error: fmt.Sprintf("creating cc node %v", err),
 			}
 		}
-		log.Debug("created ron node at %v %v with UUID %v", port, *f_base, ccNode.UUID)
+		log.Debug("created ron node at %v %v", port, *f_base)
 	default:
 		return cliResponse{
 			Error: fmt.Sprintf("malformed command: %v", c),
 		}
 	}
 	return cliResponse{}
+}
+
+func ccClients() map[string]bool {
+	clients := make(map[string]bool)
+	if ccNode != nil {
+		c := ccNode.GetActiveClients()
+		for _, v := range c {
+			clients[v] = true
+		}
+		return clients
+	}
+	return nil
 }
