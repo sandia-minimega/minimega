@@ -65,9 +65,6 @@ type Client struct {
 	MAC       []string
 	Checkin   time.Time
 	Responses []*Response
-	OSVer     string
-	CSDVer    string
-	EditionID string
 }
 
 // New creates and returns a new ron object. Mode specifies if this object

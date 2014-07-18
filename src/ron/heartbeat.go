@@ -136,24 +136,21 @@ func (r *Ron) clientHeartbeat() *hb {
 	}
 
 	c := &Client{
-		UUID:      r.UUID,
-		Arch:      runtime.GOARCH,
-		OS:        runtime.GOOS,
-		Hostname:  hostname,
-		OSVer:     r.OSVer,
-		CSDVer:    r.CSDVer,
-		EditionID: r.EditionID,
+		UUID:     r.UUID,
+		Arch:     runtime.GOARCH,
+		OS:       runtime.GOOS,
+		Hostname: hostname,
 	}
+
+	macs, ips := getNetworkInfo()
+	c.MAC = macs
+	c.IP = ips
 
 	// attach any command responses and clear the response queue
 	r.responseQueueLock.Lock()
 	c.Responses = r.clientResponseQueue
 	r.clientResponseQueue = []*Response{}
 	r.responseQueueLock.Unlock()
-
-	macs, ips := getNetworkInfo()
-	c.MAC = macs
-	c.IP = ips
 
 	h := &hb{
 		UUID:         c.UUID,

@@ -9,7 +9,9 @@ import (
 	"fmt"
 	log "minilog"
 	"ron"
+	"sort"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -18,7 +20,9 @@ const (
 )
 
 var (
-	ccNode *ron.Ron
+	ccNode        *ron.Ron
+	ccFilters     map[int]*ron.Client
+	ccFilterCount int
 )
 
 //cc layer syntax should look like:
@@ -29,6 +33,16 @@ var (
 //cc filter [add [uuid=<uuid>,...], delete <filter id>, clear]
 //cc responses [command id]
 //...
+//UUID      string
+//Hostname  string
+//Arch      string
+//OS        string
+//IP        []string
+//MAC       []string
+
+func init() {
+	ccFilters = make(map[int]*ron.Client)
+}
 
 func cliCC(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
@@ -114,6 +128,110 @@ func cliCC(c cliCommand) cliResponse {
 				Error: fmt.Sprintf("malformed command: %v", c),
 			}
 		}
+	case "filter":
+		return ccProcessFilters(c)
+	default:
+		return cliResponse{
+			Error: fmt.Sprintf("malformed command: %v", c),
+		}
+	}
+	return cliResponse{}
+}
+
+func ccProcessFilters(c cliCommand) cliResponse {
+	if len(c.Args) == 1 {
+		// summary
+		var ids []int
+		for i, _ := range ccFilters {
+			ids = append(ids, i)
+		}
+		sort.Ints(ids)
+
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "ID\tUUID\thostname\tarch\tOS\tIP\tMAC\n")
+		for _, i := range ids {
+			cl := ccFilters[i]
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", i, cl.UUID, cl.Hostname, cl.Arch, cl.OS, cl.IP, cl.MAC)
+		}
+
+		w.Flush()
+
+		return cliResponse{
+			Response: o.String(),
+		}
+	}
+
+	if len(c.Args) < 2 {
+		return cliResponse{
+			Error: fmt.Sprintf("malformed command: %v", c),
+		}
+	}
+
+	switch c.Args[1] {
+	case "add":
+		if len(c.Args) < 3 {
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command: %v", c),
+			}
+		}
+
+		// the rest of the fields should id=value pairs
+		client := &ron.Client{}
+		for _, v := range c.Args[2:] {
+			s := strings.Split(v, "=")
+			if len(s) != 2 {
+				return cliResponse{
+					Error: fmt.Sprintf("malformed id=value pair: %v", v),
+				}
+			}
+
+			switch strings.ToLower(s[0]) {
+			case "uuid":
+				client.UUID = strings.ToLower(s[1])
+			case "hostname":
+				client.Hostname = s[1]
+			case "arch":
+				client.Arch = s[1]
+			case "os":
+				client.OS = s[1]
+			case "ip":
+				client.IP = append(client.IP, s[1])
+			case "mac":
+				client.MAC = append(client.MAC, s[1])
+			default:
+				return cliResponse{
+					Error: fmt.Sprintf("no such filter field %v", s[0]),
+				}
+			}
+		}
+		id := ccFilterCount
+		ccFilterCount++
+		ccFilters[id] = client
+	case "delete":
+		if len(c.Args) < 3 {
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command: %v", c),
+			}
+		}
+
+		val, err := strconv.Atoi(c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("malformed id: %v : %v", c.Args[2], err),
+			}
+		}
+
+		if _, ok := ccFilters[val]; !ok {
+			return cliResponse{
+				Error: fmt.Sprintf("invalid filter id: %v", val),
+			}
+		}
+
+		delete(ccFilters, val)
+	case "clear":
+		ccFilters = make(map[int]*ron.Client)
 	default:
 		return cliResponse{
 			Error: fmt.Sprintf("malformed command: %v", c),
