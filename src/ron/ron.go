@@ -125,6 +125,10 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 	return r, nil
 }
 
+func (r *Ron) GetPort() int {
+	return r.port
+}
+
 func (r *Ron) GetActiveClients() []string {
 	var clients []string
 

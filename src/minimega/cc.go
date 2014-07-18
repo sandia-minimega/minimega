@@ -5,10 +5,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	log "minilog"
 	"ron"
 	"strconv"
+	"text/tabwriter"
 )
 
 const (
@@ -22,17 +24,42 @@ var (
 //cc layer syntax should look like:
 //
 //cc start [port]
-//cc command new ...
-//cc command list
-//cc command delete ...
+//cc command [new <command> [norecord] [background], delete <command id>]
+//cc file <send,receive> <file> [<file>,...]
+//cc filter [add [uuid=<uuid>,...], delete <filter id>, clear]
 //cc responses [command id]
 //...
 
 func cliCC(c cliCommand) cliResponse {
 	if len(c.Args) == 0 {
-		// TODO: summary?
+		if ccNode == nil {
+			return cliResponse{
+				Response: "running: false",
+			}
+		}
+
+		port := ccNode.GetPort()
+		clients := ccNode.GetActiveClients()
+
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "running:\ttrue\n")
+		fmt.Fprintf(w, "port:\t%v\n", port)
+		fmt.Fprintf(w, "clients:\t%v\n", len(clients))
+
+		w.Flush()
+
 		return cliResponse{
-			Response: "not implemented",
+			Response: o.String(),
+		}
+	}
+
+	if c.Args[0] != "start" {
+		if ccNode == nil {
+			return cliResponse{
+				Error: "cc service not running",
+			}
 		}
 	}
 
@@ -57,6 +84,36 @@ func cliCC(c cliCommand) cliResponse {
 			}
 		}
 		log.Debug("created ron node at %v %v", port, *f_base)
+	case "command":
+		if len(c.Args) == 1 {
+			// command summary
+		}
+
+		switch c.Args[1] {
+		case "new":
+		case "delete":
+			if len(c.Args) != 2 {
+				return cliResponse{
+					Error: fmt.Sprintf("malformed command: %v", c),
+				}
+			}
+			cid, err := strconv.Atoi(c.Args[2])
+			if err != nil {
+				return cliResponse{
+					Error: fmt.Sprintf("invalid command id %v : %v", c.Args[2], err),
+				}
+			}
+			err = ccNode.DeleteCommand(cid)
+			if err != nil {
+				return cliResponse{
+					Error: fmt.Sprintf("deleting command %v: %v", cid, err),
+				}
+			}
+		default:
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command: %v", c),
+			}
+		}
 	default:
 		return cliResponse{
 			Error: fmt.Sprintf("malformed command: %v", c),

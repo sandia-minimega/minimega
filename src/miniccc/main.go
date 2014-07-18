@@ -19,7 +19,7 @@ var (
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_port     = flag.Int("port", 9001, "port to connect to")
+	f_port     = flag.Int("port", 9002, "port to connect to")
 	f_version  = flag.Bool("version", false, "print the version")
 	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")

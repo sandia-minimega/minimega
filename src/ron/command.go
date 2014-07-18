@@ -156,7 +156,7 @@ func (r *Ron) checkMaxCommandID(id int) {
 	}
 }
 
-func (r *Ron) commandDelete(id int) error {
+func (r *Ron) DeleteCommand(id int) error {
 	r.commandLock.Lock()
 	defer r.commandLock.Unlock()
 	if _, ok := r.commands[id]; ok {
