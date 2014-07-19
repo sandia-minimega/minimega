@@ -28,8 +28,7 @@ var (
 //cc layer syntax should look like:
 //
 //cc start [port]
-//cc command [new <command> [norecord] [background], delete <command id>]
-//cc file <send,receive> <file> [<file>,...]
+//cc command [new [norecord] [background] [command=<command>] [filesend=<filename>, ...] [filerecv=<filename>, ...], delete <command id>]
 //cc filter [add [uuid=<uuid>,...], delete <filter id>, clear]
 //cc responses [command id]
 //...
@@ -99,37 +98,98 @@ func cliCC(c cliCommand) cliResponse {
 		}
 		log.Debug("created ron node at %v %v", port, *f_base)
 	case "command":
-		if len(c.Args) == 1 {
-			// command summary
+		return ccProcessCommand(c)
+	case "filter":
+		return ccProcessFilters(c)
+	default:
+		return cliResponse{
+			Error: fmt.Sprintf("malformed command: %v", c),
 		}
+	}
+	return cliResponse{}
+}
 
-		switch c.Args[1] {
-		case "new":
-		case "delete":
-			if len(c.Args) != 2 {
-				return cliResponse{
-					Error: fmt.Sprintf("malformed command: %v", c),
-				}
-			}
-			cid, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("invalid command id %v : %v", c.Args[2], err),
-				}
-			}
-			err = ccNode.DeleteCommand(cid)
-			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("deleting command %v: %v", cid, err),
-				}
-			}
-		default:
+func ccProcessCommand(c cliCommand) cliResponse {
+	if len(c.Args) == 1 {
+		// command summary
+		return cliResponse{
+			Response: ccNode.CommandSummary(),
+		}
+	}
+
+	switch c.Args[1] {
+	case "new":
+		if len(c.Args) < 3 {
 			return cliResponse{
 				Error: fmt.Sprintf("malformed command: %v", c),
 			}
 		}
-	case "filter":
-		return ccProcessFilters(c)
+
+		cmd := &ron.Command{
+			Record: true,
+		}
+		for _, cl := range ccFilters {
+			cmd.Filter = append(cmd.Filter, cl)
+		}
+
+		fields := fieldsQuoteEscape(strings.Join(c.Args[2:], " "))
+		log.Debug("got new cc command args: %#v", fields)
+
+		for _, v := range fields {
+			if v == "norecord" {
+				cmd.Record = false
+				continue
+			}
+			if v == "background" {
+				cmd.Background = true
+				continue
+			}
+
+			// everything else should be an id=value pair
+			s := strings.Split(v, "=")
+			if len(s) != 2 {
+				return cliResponse{
+					Error: fmt.Sprintf("malformed id=value pair: %v", v),
+				}
+			}
+
+			switch strings.ToLower(s[0]) {
+			case "command":
+				cmdFields := strings.Trim(s[1], `"`)
+				f := strings.Fields(cmdFields)
+				log.Debug("command: %v", f)
+				cmd.Command = f
+			case "filesend":
+				cmd.FilesSend = append(cmd.FilesSend, s[1])
+			case "filerecv":
+				cmd.FilesRecv = append(cmd.FilesRecv, s[1])
+			default:
+				return cliResponse{
+					Error: fmt.Sprintf("no such filter field %v", s[0]),
+				}
+			}
+		}
+
+		id := ccNode.NewCommand(cmd)
+		log.Debug("generated command %v : %v", id, cmd)
+	case "delete":
+		if len(c.Args) != 2 {
+			return cliResponse{
+				Error: fmt.Sprintf("malformed command: %v", c),
+			}
+		}
+		cid, err := strconv.Atoi(c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("invalid command id %v : %v", c.Args[2], err),
+			}
+		}
+		err = ccNode.DeleteCommand(cid)
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("deleting command %v: %v", cid, err),
+			}
+		}
 	default:
 		return cliResponse{
 			Error: fmt.Sprintf("malformed command: %v", c),

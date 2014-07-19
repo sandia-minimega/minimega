@@ -14,25 +14,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/tabwriter"
 	"time"
-)
-
-const (
-	COMMAND_EXEC = iota
-	COMMAND_FILE_SEND
-	COMMAND_FILE_RECV
-	COMMAND_LOG
 )
 
 type Command struct {
 	ID int
 
-	Type int
-
 	// true if the master should record responses to disk
 	Record bool
 
-	// Command to run if type == COMMAND_EXEC
+	// run command in the background and return immediately
+	Background bool
+
 	// The command is a slice of strings with the first element being the
 	// command, and any other elements as the arguments
 	Command []string
@@ -43,13 +37,6 @@ type Command struct {
 
 	// Files to transfer back to the master if type == COMMAND_EXEC | COMMAND_FILE_RECV
 	FilesRecv []string
-
-	// Log level to set if type == COMMAND_LOG
-	LogLevel string
-
-	// File to output logging to if type == COMMAND_LOG
-	// File logging will be disabled if LogPath == ""
-	LogPath string
 
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
@@ -82,6 +69,42 @@ type Response struct {
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+}
+
+func filterString(filter []*Client) string {
+	var ret string
+	for _, f := range filter {
+		if len(ret) != 0 {
+			ret += " || "
+		}
+		ret += "( "
+		var j []string
+		if f.UUID != "" {
+			j = append(j, "uuid="+f.UUID)
+		}
+		if f.Hostname != "" {
+			j = append(j, "hostname="+f.Hostname)
+		}
+		if f.Arch != "" {
+			j = append(j, "arch="+f.Arch)
+		}
+		if f.OS != "" {
+			j = append(j, "os="+f.OS)
+		}
+		if len(f.IP) != 0 {
+			for _, y := range f.IP {
+				j = append(j, "ip="+y)
+			}
+		}
+		if len(f.MAC) != 0 {
+			for _, y := range f.MAC {
+				j = append(j, "mac="+y)
+			}
+		}
+		ret += strings.Join(j, " && ")
+		ret += " )"
+	}
+	return ret
 }
 
 func (r *Ron) shouldRecord(id int) bool {
@@ -183,26 +206,51 @@ func (r *Ron) DeleteFiles(id int) error {
 	}
 }
 
+func (r *Ron) NewCommand(c *Command) int {
+	c.ID = r.getCommandID()
+	r.commandLock.Lock()
+	r.commands[c.ID] = c
+	r.commandLock.Unlock()
+	return c.ID
+}
+
 func (r *Ron) Resubmit(id int) error {
 	r.commandLock.Lock()
 	defer r.commandLock.Unlock()
 	if c, ok := r.commands[id]; ok {
 		newcommand := &Command{
-			ID:        r.getCommandID(),
-			Type:      c.Type,
-			Record:    c.Record,
-			Command:   c.Command,
-			FilesSend: c.FilesSend,
-			FilesRecv: c.FilesRecv,
-			LogLevel:  c.LogLevel,
-			LogPath:   c.LogPath,
-			Filter:    c.Filter,
+			ID:         r.getCommandID(),
+			Record:     c.Record,
+			Background: c.Background,
+			Command:    c.Command,
+			FilesSend:  c.FilesSend,
+			FilesRecv:  c.FilesRecv,
+			Filter:     c.Filter,
 		}
 		r.commands[newcommand.ID] = newcommand
 		return nil
 	} else {
 		return fmt.Errorf("command %v not found", id)
 	}
+}
+
+func (r *Ron) CommandSummary() string {
+	r.commandLock.Lock()
+	defer r.commandLock.Unlock()
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+
+	fmt.Fprintf(w, "ID\tcommand\trecord\tbackground\tsend files\treceive files\tfilter\n")
+	for _, v := range r.commands {
+		filter := filterString(v.Filter)
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Command, v.Record, v.Background, v.FilesSend, v.FilesRecv, filter)
+	}
+
+	w.Flush()
+
+	return o.String()
 }
 
 func (r *Ron) encodeCommands() ([]byte, error) {

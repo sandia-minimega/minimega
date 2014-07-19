@@ -94,3 +94,41 @@ func cliDebug(c cliCommand) cliResponse {
 		}
 	}
 }
+
+// Return a slice of strings, split on whitespace, not unlike strings.Fields(),
+// except that quoted fields are grouped.
+// 	Example: a b "c d"
+// 	will return: ["a", "b", "c d"]
+func fieldsQuoteEscape(input string) []string {
+	f := strings.Fields(input)
+	var ret []string
+	trace := false
+	temp := ""
+	for _, v := range f {
+		if trace {
+			if strings.Contains(v, "\"") {
+				trace = false
+				temp += " " + trimQuote(v)
+				ret = append(ret, temp)
+			} else {
+				temp += " " + v
+			}
+		} else if strings.Contains(v, "\"") {
+			trace = true
+			temp = trimQuote(v)
+		} else {
+			ret = append(ret, v)
+		}
+	}
+	return ret
+}
+
+func trimQuote(input string) string {
+	var ret string
+	for _, v := range input {
+		if v != '"' {
+			ret += string(v)
+		}
+	}
+	return ret
+}
