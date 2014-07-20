@@ -13,6 +13,9 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -242,10 +245,10 @@ func (r *Ron) CommandSummary() string {
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 
-	fmt.Fprintf(w, "ID\tcommand\trecord\tbackground\tsend files\treceive files\tfilter\n")
+	fmt.Fprintf(w, "ID\tcommand\tclients checked in\trecord\tbackground\tsend files\treceive files\tfilter\n")
 	for _, v := range r.commands {
 		filter := filterString(v.Filter)
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Command, v.Record, v.Background, v.FilesSend, v.FilesRecv, filter)
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Command, len(v.checkedIn), v.Record, v.Background, v.FilesSend, v.FilesRecv, filter)
 	}
 
 	w.Flush()
@@ -597,7 +600,26 @@ func (r *Ron) encodeCommands() ([]byte, error) {
 
 func (r *Ron) clientCommands(newCommands map[int]*Command) {
 	log.Debugln("clientCommands")
-	r.clientCommandQueue <- newCommands
+	cmds := make(map[int]*Command)
+
+	var ids []int
+	for k, _ := range newCommands {
+		ids = append(ids, k)
+	}
+	sort.Ints(ids)
+
+	maxCommandID := r.getMaxCommandID()
+	for _, c := range ids {
+		if newCommands[c].ID > maxCommandID {
+			if !r.matchFilter(newCommands[c]) {
+				continue
+			}
+			r.checkMaxCommandID(newCommands[c].ID)
+			cmds[c] = newCommands[c]
+		}
+	}
+
+	r.clientCommandQueue <- cmds
 }
 
 func (r *Ron) getFiles(files []string) {
@@ -636,6 +658,138 @@ func (r *Ron) getFiles(files []string) {
 		f.Close()
 		resp.Body.Close()
 	}
+}
+
+func (r *Ron) matchFilter(c *Command) bool {
+	if len(c.Filter) == 0 {
+		return true
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for _, v := range c.Filter {
+		if v.UUID != "" && v.UUID != r.UUID {
+			log.Debug("failed match on UUID %v %v", v.UUID, r.UUID)
+			continue
+		}
+		if v.Hostname != "" && v.Hostname != hostname {
+			log.Debug("failed match on hostname %v %v", v.Hostname, hostname)
+			continue
+		}
+		if v.Arch != "" && v.Arch != runtime.GOARCH {
+			log.Debug("failed match on arch %v %v", v.Arch, runtime.GOARCH)
+			continue
+		}
+		if v.OS != "" && v.OS != runtime.GOOS {
+			log.Debug("failed match on os %v %v", v.OS, runtime.GOOS)
+			continue
+		}
+
+		macs, ips := getNetworkInfo()
+
+		if len(v.IP) != 0 {
+			// special case, IPs can match on CIDRs as well as full IPs
+			match := false
+		MATCH_FILTER_IP:
+			for _, i := range v.IP {
+				for _, ip := range ips {
+					if i == ip || matchCIDR(i, ip) {
+						log.Debug("match on ip %v %v", i, ip)
+						match = true
+						break MATCH_FILTER_IP
+					}
+					log.Debug("failed match on ip %v %v", i, ip)
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+		if len(v.MAC) != 0 {
+			match := false
+		MATCH_FILTER_MAC:
+			for _, m := range v.MAC {
+				for _, mac := range macs {
+					if mac == m {
+						log.Debug("match on mac %v %v", m, mac)
+						match = true
+						break MATCH_FILTER_MAC
+					}
+					log.Debug("failed match on mac %v %v", m, mac)
+				}
+			}
+			if !match {
+				continue
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func matchCIDR(cidr string, ip string) bool {
+	if !strings.Contains(cidr, "/") {
+		return false
+	}
+
+	d := strings.Split(cidr, "/")
+	log.Debugln("subnet ", d)
+	if len(d) != 2 {
+		return false
+	}
+	if !isIPv4(d[0]) {
+		return false
+	}
+
+	netmask, err := strconv.Atoi(d[1])
+	if err != nil {
+		return false
+	}
+	network := toInt32(d[0])
+	ipmask := toInt32(ip) & ^((1 << uint32(32-netmask)) - 1)
+	log.Debug("got network %v and ipmask %v", network, ipmask)
+	if ipmask == network {
+		return true
+	}
+	return false
+}
+
+func isIPv4(ip string) bool {
+	d := strings.Split(ip, ".")
+	if len(d) != 4 {
+		return false
+	}
+
+	for _, v := range d {
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return false
+		}
+		if octet < 0 || octet > 255 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func toInt32(ip string) uint32 {
+	d := strings.Split(ip, ".")
+
+	var ret uint32
+	for _, v := range d {
+		octet, err := strconv.Atoi(v)
+		if err != nil {
+			return 0
+		}
+
+		ret <<= 8
+		ret |= uint32(octet) & 0x000000ff
+	}
+	return ret
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),

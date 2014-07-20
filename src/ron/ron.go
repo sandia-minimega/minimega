@@ -122,6 +122,16 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 	return r, nil
 }
 
+func (r *Ron) PostResponse(response *Response) {
+	r.responseQueueLock.Lock()
+	defer r.responseQueueLock.Unlock()
+	r.clientResponseQueue = append(r.clientResponseQueue, response)
+}
+
+func (r *Ron) GetCommands() map[int]*Command {
+	return <-r.clientCommandQueue
+}
+
 func (r *Ron) GetPort() int {
 	return r.port
 }

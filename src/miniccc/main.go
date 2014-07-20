@@ -23,6 +23,7 @@ var (
 	f_version  = flag.Bool("version", false, "print the version")
 	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
+	r          *ron.Ron
 )
 
 var banner string = `miniccc, Copyright (2014) Sandia Corporation. 
@@ -53,12 +54,15 @@ func main() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
 	// start a ron client
-	r, err := ron.New(*f_port, ron.MODE_CLIENT, *f_parent, *f_path)
+	var err error
+	r, err = ron.New(*f_port, ron.MODE_CLIENT, *f_parent, *f_path)
 	if err != nil {
 		log.Fatal("creating ron node: %v", err)
 	}
 
 	log.Debug("starting ron client with UUID: %v", r.UUID)
+
+	go client()
 
 	<-sig
 	// terminate

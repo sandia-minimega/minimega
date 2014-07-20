@@ -90,7 +90,7 @@ func cliCC(c cliCommand) cliResponse {
 		}
 
 		var err error
-		ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_base)
+		ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_iomBase)
 		if err != nil {
 			return cliResponse{
 				Error: fmt.Sprintf("creating cc node %v", err),

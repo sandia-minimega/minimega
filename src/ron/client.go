@@ -3,7 +3,6 @@ package ron
 import (
 	log "minilog"
 	"net"
-	"strconv"
 	"strings"
 )
 
@@ -45,23 +44,4 @@ func getNetworkInfo() ([]string, []string) {
 		}
 	}
 	return macs, ips
-}
-
-func isIPv4(ip string) bool {
-	d := strings.Split(ip, ".")
-	if len(d) != 4 {
-		return false
-	}
-
-	for _, v := range d {
-		octet, err := strconv.Atoi(v)
-		if err != nil {
-			return false
-		}
-		if octet < 0 || octet > 255 {
-			return false
-		}
-	}
-
-	return true
 }
