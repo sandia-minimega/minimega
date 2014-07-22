@@ -13,6 +13,9 @@ udevadm settle
 chmod a+rx /
 mount /dev/sda1 /scratch
 modprobe loop
+modprobe tun
+modprobe nbd max_part=10
+modprobe kvm-intel
 
 ulimit -n 999999
 
@@ -36,8 +39,6 @@ dhclient -v eth0
 
 mkdir /var/run/sshd
 /usr/sbin/sshd
-
-modprobe kvm-intel
 
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2
