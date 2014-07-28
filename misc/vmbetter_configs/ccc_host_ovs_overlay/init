@@ -2,44 +2,70 @@
 
 export PATH
 
+# mount volatile filesystems
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
 mkdir /dev/pts
 mount -n -t devpts -o gid=5,mode=620 none /dev/pts
+
+# enumerate devices, autoload modules where needed
 udevd --daemon
 udevadm trigger
 udevadm settle
+
+# / needs permissions!?
 chmod a+rx /
+
+# local disk for scratch
 mount /dev/sda1 /scratch
+
+# minimega needs
 modprobe loop
 modprobe tun
 modprobe nbd max_part=10
 modprobe kvm-intel
 
+# bump open file handle limits
 ulimit -n 999999
 
-modprobe bonding
+# bond all 10G interfaces
+#modprobe bonding
 for i in `ls /sys/class/net | grep eth10G`;
 do
-	ifenslave bond0 $i
+	#ifenslave bond0 $i
+	NETS="${NETS} $i"
+	ifconfig $i up
 done
 
+echo "bonding nets $NETS"
+
+# setup a minimega bridge with the 10G interface trunked and bring up other interfaces
 modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
 #ovs-vsctl add-port mega_bridge eth10G
-ovs-vsctl add-port mega_bridge bond0
+#ovs-vsctl add-port mega_bridge bond0
+numnets=`ls /sys/class/net | grep eth10G | wc -l`
+if [ $numnets -eq 1 ]
+then
+	ovs-vsctl add-port mega_bridge $NETS
+else
+	ovs-vsctl add-bond mega_bridge bond0 $NETS lacp=active
+	ovs-vsctl set port bond0 bond_mode=balance-tcp  
+fi
+
 ifconfig lo up
 #ifconfig eth10G up 0.0.0.0
-ifconfig bond0 up 0.0.0.0
 dhclient -v mega_bridge
 dhclient -v eth0
 
+# ssh
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
+# arp tuning
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2
 echo 65536 > /proc/sys/net/ipv4/neigh/default/gc_thresh3
@@ -47,5 +73,5 @@ echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh1
 echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh2
 echo 65536 > /proc/sys/net/ipv6/neigh/default/gc_thresh3
 
-
+# attach a real tty to the console
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
