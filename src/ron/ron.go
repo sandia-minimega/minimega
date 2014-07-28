@@ -6,12 +6,9 @@ package ron
 
 import (
 	"fmt"
-	"io/ioutil"
 	log "minilog"
 	"net/http"
 	"os"
-	"runtime"
-	"strings"
 	"sync"
 	"time"
 )
@@ -148,22 +145,6 @@ func (r *Ron) GetActiveClients() []string {
 
 	log.Debug("active clients: %v", clients)
 	return clients
-}
-
-func getUUID() (string, error) {
-	switch runtime.GOOS {
-	case "linux":
-		d, err := ioutil.ReadFile("/sys/devices/virtual/dmi/id/product_uuid")
-		if err != nil {
-			return "", err
-		}
-		uuid := string(d[:len(d)-1])
-		uuid = strings.ToLower(uuid)
-		log.Debug("got UUID: %v", uuid)
-		return uuid, nil
-	default:
-		return "", fmt.Errorf("OS %v UUID not supported yet", runtime.GOOS)
-	}
 }
 
 func (r *Ron) startMaster() error {
