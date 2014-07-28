@@ -173,7 +173,7 @@ func ccProcessCommand(c cliCommand) cliResponse {
 		id := ccNode.NewCommand(cmd)
 		log.Debug("generated command %v : %v", id, cmd)
 	case "delete":
-		if len(c.Args) != 2 {
+		if len(c.Args) != 3 {
 			return cliResponse{
 				Error: fmt.Sprintf("malformed command: %v", c),
 			}
