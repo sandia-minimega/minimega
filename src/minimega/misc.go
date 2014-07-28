@@ -99,21 +99,21 @@ func cliDebug(c cliCommand) cliResponse {
 // except that quoted fields are grouped.
 // 	Example: a b "c d"
 // 	will return: ["a", "b", "c d"]
-func fieldsQuoteEscape(input string) []string {
+func fieldsQuoteEscape(c string, input string) []string {
 	f := strings.Fields(input)
 	var ret []string
 	trace := false
 	temp := ""
 	for _, v := range f {
 		if trace {
-			if strings.Contains(v, "\"") {
+			if strings.Contains(v, c) {
 				trace = false
 				temp += " " + trimQuote(v)
 				ret = append(ret, temp)
 			} else {
 				temp += " " + v
 			}
-		} else if strings.Contains(v, "\"") {
+		} else if strings.Contains(v, c) {
 			trace = true
 			temp = trimQuote(v)
 		} else {

@@ -27,7 +27,7 @@ func shellCLI(c cliCommand) cliResponse {
 		}
 	}
 
-	fields := fieldsQuoteEscape(strings.Join(c.Args, " "))
+	fields := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
 
 	cmd := &exec.Cmd{
 		Path:   p,
@@ -66,7 +66,7 @@ func backgroundCLI(c cliCommand) cliResponse {
 		}
 	}
 
-	fields := fieldsQuoteEscape(strings.Join(c.Args, " "))
+	fields := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
 
 	cmd := &exec.Cmd{
 		Path:   p,

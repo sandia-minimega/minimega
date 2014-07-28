@@ -132,7 +132,7 @@ func ccProcessCommand(c cliCommand) cliResponse {
 			cmd.Filter = append(cmd.Filter, cl)
 		}
 
-		fields := fieldsQuoteEscape(strings.Join(c.Args[2:], " "))
+		fields := fieldsQuoteEscape("\"", strings.Join(c.Args[2:], " "))
 		log.Debug("got new cc command args: %#v", fields)
 
 		for _, v := range fields {
@@ -156,9 +156,13 @@ func ccProcessCommand(c cliCommand) cliResponse {
 			switch strings.ToLower(s[0]) {
 			case "command":
 				cmdFields := strings.Trim(s[1], `"`)
-				f := strings.Fields(cmdFields)
-				log.Debug("command: %v", f)
-				cmd.Command = f
+				f := fieldsQuoteEscape("'", cmdFields)
+				var c []string
+				for _, w := range f {
+					c = append(c, strings.Trim(w, "'"))
+				}
+				log.Debug("command: %#v", c)
+				cmd.Command = c
 			case "filesend":
 				cmd.FilesSend = append(cmd.FilesSend, s[1])
 			case "filerecv":
