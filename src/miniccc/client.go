@@ -55,44 +55,46 @@ func clientCommandExec(c *ron.Command) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	path, err := exec.LookPath(c.Command[0])
-	if err != nil {
-		log.Errorln(err)
-		resp.Stderr = err.Error()
-	} else {
-		cmd := &exec.Cmd{
-			Path:   path,
-			Args:   c.Command,
-			Env:    nil,
-			Dir:    "",
-			Stdout: &stdout,
-			Stderr: &stderr,
-		}
-		log.Debug("executing %v", strings.Join(c.Command, " "))
-
-		if c.Background {
-			log.Debug("starting command %v in background", c.Command)
-			err = cmd.Start()
-			if err != nil {
-				log.Errorln(err)
-				resp.Stderr = stderr.String()
-				return
-			}
-
-			go func() {
-				cmd.Wait()
-				log.Info("command %v exited", strings.Join(c.Command, " "))
-				log.Info(stdout.String())
-				log.Info(stderr.String())
-			}()
+	if len(c.Command) != 0 {
+		path, err := exec.LookPath(c.Command[0])
+		if err != nil {
+			log.Errorln(err)
+			resp.Stderr = err.Error()
 		} else {
-			err := cmd.Run()
-			if err != nil {
-				log.Errorln(err)
-				return
+			cmd := &exec.Cmd{
+				Path:   path,
+				Args:   c.Command,
+				Env:    nil,
+				Dir:    "",
+				Stdout: &stdout,
+				Stderr: &stderr,
 			}
-			resp.Stdout = stdout.String()
-			resp.Stderr = stderr.String()
+			log.Debug("executing %v", strings.Join(c.Command, " "))
+
+			if c.Background {
+				log.Debug("starting command %v in background", c.Command)
+				err = cmd.Start()
+				if err != nil {
+					log.Errorln(err)
+					resp.Stderr = stderr.String()
+					return
+				}
+
+				go func() {
+					cmd.Wait()
+					log.Info("command %v exited", strings.Join(c.Command, " "))
+					log.Info(stdout.String())
+					log.Info(stderr.String())
+				}()
+			} else {
+				err := cmd.Run()
+				if err != nil {
+					log.Errorln(err)
+					return
+				}
+				resp.Stdout = stdout.String()
+				resp.Stderr = stderr.String()
+			}
 		}
 	}
 
