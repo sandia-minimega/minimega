@@ -1,12 +1,9 @@
 #!/bin/bash
 
-echo -n "API generation"
-bin/minimega -doc > doc/markdown/api && echo " ok" || echo " fail"
+bin/minimega -doc > doc/markdown/api && echo -e "ok\tAPI generation" || echo -e "fail\tAPI generation"
 
 for i in `ls doc/markdown`
 do
-	echo -n "$i"
-
 	cat doc/template/header.html > doc/$i.html
 
 	# special magic for a TOC for the API
@@ -22,12 +19,12 @@ do
 		echo "</div>" >> doc/$i.html
 	fi
 
-	markdown doc/markdown/$i >> doc/$i.html && echo " ok" || echo " fail"
+	markdown doc/markdown/$i >> doc/$i.html && echo -e "ok\t$i" || echo -e "fail\t$i"
 	cat doc/template/footer.html >> doc/$i.html
 done
 
 # build index.html
-echo "index"
+echo -e "ok\tindex"
 cat doc/template/header.html > doc/index.html
 cat doc/template/index.html >> doc/index.html
 cat doc/template/footer.html >> doc/index.html
