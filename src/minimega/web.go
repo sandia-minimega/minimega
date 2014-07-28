@@ -32,7 +32,7 @@ func WebCLI(c cliCommand) cliResponse {
 			go webStart(fmt.Sprintf(":%v", GOVNC_PORT))
 		} else {
 			return cliResponse{
-				Error: "web interface already running",
+				Response: "web interface already running",
 			}
 		}
 	case 1:
