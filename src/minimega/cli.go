@@ -1557,8 +1557,34 @@ With <timeout> in seconds.`,
 		"cc": &command{
 			Call:      cliCC,
 			Helpshort: "command and control commands",
-			Helplong:  ``,
-			Record:    true,
+			Helplong: `
+	Usage: cc [start [port]]
+	Usage: cc filter [add <filter>=<arg> [<filter>=<arg>]..., delete <filter id>, clear]
+	Usage: cc command [new [command=<command>] [filesend=<file>]... [filerecv=<file>]... [norecord] [background], delete <command id>]
+
+Command and control virtual machines running the miniccc client. Commands may
+include regular commands, backgrounded commands, and any number of sent and/or
+received files. Commands will be executed in command creation order. For
+example, to send a file 'foo' and display the contents on a remote VM:
+
+	cc command new command="cat foo" filesend=foo
+
+Responses are generated (unless the 'norecord' flag is set) and written out to
+'<filebase>/miniccc_responses/<command id>/<client UUID>'. Files to be sent
+must be in '<filebase>'. 
+
+Filters may be set to limit which clients may execute a posted command. Filters
+are the logical sum of products of every filter added. That is, a single given
+filter must match all given fields for the command to be executed. Multiple
+filters are allowed, in which case any matched filter will allow the command to
+execute. For example, to filter on VMs that are running windows AND have a
+specific IP, OR nodes that have a range of IPs:
+
+	cc filter add os=windows ip=10.0.0.1 cc filter add ip=12.0.0.0/24
+
+New commands assign any current filters. 
+`,
+			Record: true,
 			Clear: func() error {
 				return nil
 			},
