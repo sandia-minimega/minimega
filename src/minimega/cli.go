@@ -687,6 +687,7 @@ To start the webserver on a specific port, issue the web command with the port:
 Show the command history`,
 			Record: false,
 			Clear: func() error {
+				commandBuf = []string{}
 				return nil
 			},
 		},
@@ -1796,7 +1797,10 @@ func cliExec(c cliCommand) cliResponse {
 			if len(c.Args) > 0 {
 				s += " " + strings.Join(c.Args, " ")
 			}
-			commandBuf = append(commandBuf, s)
+			// special case, don't record "clear history"
+			if s != "clear history" {
+				commandBuf = append(commandBuf, s)
+			}
 		}
 	}
 	return r
