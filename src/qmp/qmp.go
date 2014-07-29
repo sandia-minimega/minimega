@@ -100,12 +100,12 @@ func (q *Conn) read() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Debugln("qmp read: %#v", v)
+	log.Debug("qmp read: %#v", v)
 	return v, nil
 }
 
 func (q *Conn) write(v map[string]interface{}) error {
-	log.Debugln("qmp write: %#v", v)
+	log.Debug("qmp write: %#v", v)
 	if !q.ready {
 		return fmt.Errorf("qmp is not ready")
 	}
@@ -114,7 +114,7 @@ func (q *Conn) write(v map[string]interface{}) error {
 }
 
 func (q *Conn) Raw(input string) (string, error) {
-	log.Debugln("qmp write: %v", input)
+	log.Debug("qmp write: %v", input)
 	if !q.ready {
 		return "", fmt.Errorf("qmp is not ready")
 	}

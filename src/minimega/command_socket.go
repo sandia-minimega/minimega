@@ -113,6 +113,8 @@ func commandSocketHandle(c net.Conn) {
 
 		c.TID = TID
 
+		log.Debug("got command over socket: %v", c)
+
 		// just shove it in the cli command channel
 		commandChanSocket <- c
 		for {
