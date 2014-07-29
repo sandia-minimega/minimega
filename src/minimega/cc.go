@@ -194,6 +194,14 @@ func ccProcessCommand(c cliCommand) cliResponse {
 				Error: fmt.Sprintf("deleting command %v: %v", cid, err),
 			}
 		}
+	case "clear":
+		c := ccNode.GetCommands()
+		for _, v := range c {
+			err := ccNode.DeleteCommand(v.ID)
+			if err != nil {
+				log.Warn("cc delete command %v : %v", v.ID, err)
+			}
+		}
 	default:
 		return cliResponse{
 			Error: fmt.Sprintf("malformed command: %v", c),
@@ -312,6 +320,18 @@ func ccClients() map[string]bool {
 			clients[v] = true
 		}
 		return clients
+	}
+	return nil
+}
+
+func cliClearCC() error {
+	ccFilters = make(map[int]*ron.Client)
+	c := ccNode.GetCommands()
+	for _, v := range c {
+		err := ccNode.DeleteCommand(v.ID)
+		if err != nil {
+			log.Warn("cc delete command %v : %v", v.ID, err)
+		}
 	}
 	return nil
 }

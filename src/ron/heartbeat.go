@@ -101,7 +101,7 @@ func (r *Ron) handleHeartbeat(w http.ResponseWriter, req *http.Request) {
 	log.Debug("heartbeat from %v", h.UUID)
 
 	// process the heartbeat in a goroutine so we can send the command list back faster
-	go r.processHeartbeat(&h)
+	go r.masterHeartbeat(&h)
 
 	// send the command list back
 	buf, err := r.encodeCommands()
@@ -112,7 +112,7 @@ func (r *Ron) handleHeartbeat(w http.ResponseWriter, req *http.Request) {
 	w.Write(buf)
 }
 
-func (r *Ron) processHeartbeat(h *hb) {
+func (r *Ron) masterHeartbeat(h *hb) {
 	r.clientLock.Lock()
 	t := time.Now()
 	r.clients[h.Client.UUID] = h.Client
@@ -123,6 +123,9 @@ func (r *Ron) processHeartbeat(h *hb) {
 	if len(h.Client.Responses) > 0 {
 		r.masterResponseQueue <- h.Client.Responses
 	}
+
+	// don't track responses in our client list
+	r.clients[h.Client.UUID].Responses = []*Response{}
 
 	r.clientLock.Unlock()
 }

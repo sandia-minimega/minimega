@@ -126,6 +126,33 @@ func (r *Ron) PostResponse(response *Response) {
 }
 
 func (r *Ron) GetCommands() map[int]*Command {
+	// return a deep copy of the command list
+	ret := make(map[int]*Command)
+	r.commandLock.Lock()
+	defer r.commandLock.Unlock()
+
+	for k, v := range r.commands {
+		ret[k] = &Command{
+			ID:             v.ID,
+			Record:         v.Record,
+			Background:     v.Background,
+			Command:        v.Command,
+			FilesSend:      v.FilesSend,
+			FilesRecv:      v.FilesRecv,
+			checkedIn:      v.checkedIn,
+			ExpireClients:  v.ExpireClients,
+			ExpireStarted:  v.ExpireStarted,
+			ExpireDuration: v.ExpireDuration,
+			ExpireTime:     v.ExpireTime,
+		}
+		for _, y := range v.Filter {
+			ret[k].Filter = append(ret[k].Filter, y)
+		}
+	}
+	return ret
+}
+
+func (r *Ron) GetNewCommands() map[int]*Command {
 	return <-r.clientCommandQueue
 }
 

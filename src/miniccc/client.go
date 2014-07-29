@@ -17,7 +17,7 @@ import (
 func client() {
 	log.Debugln("client")
 	for {
-		c := r.GetCommands()
+		c := r.GetNewCommands()
 		for _, v := range c {
 			log.Debug("processing command %v", v.ID)
 

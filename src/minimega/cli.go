@@ -1586,9 +1586,7 @@ specific IP, OR nodes that have a range of IPs:
 New commands assign any current filters. 
 `,
 			Record: true,
-			Clear: func() error {
-				return nil
-			},
+			Clear:  cliClearCC,
 		},
 	}
 }
