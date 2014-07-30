@@ -132,7 +132,7 @@ func ccProcessCommand(c cliCommand) cliResponse {
 			cmd.Filter = append(cmd.Filter, cl)
 		}
 
-		fields := fieldsQuoteEscape(strings.Join(c.Args[2:], " "))
+		fields := fieldsQuoteEscape("\"", strings.Join(c.Args[2:], " "))
 		log.Debug("got new cc command args: %#v", fields)
 
 		for _, v := range fields {
@@ -156,9 +156,13 @@ func ccProcessCommand(c cliCommand) cliResponse {
 			switch strings.ToLower(s[0]) {
 			case "command":
 				cmdFields := strings.Trim(s[1], `"`)
-				f := strings.Fields(cmdFields)
-				log.Debug("command: %v", f)
-				cmd.Command = f
+				f := fieldsQuoteEscape("'", cmdFields)
+				var c []string
+				for _, w := range f {
+					c = append(c, strings.Trim(w, "'"))
+				}
+				log.Debug("command: %#v", c)
+				cmd.Command = c
 			case "filesend":
 				cmd.FilesSend = append(cmd.FilesSend, s[1])
 			case "filerecv":
@@ -173,7 +177,7 @@ func ccProcessCommand(c cliCommand) cliResponse {
 		id := ccNode.NewCommand(cmd)
 		log.Debug("generated command %v : %v", id, cmd)
 	case "delete":
-		if len(c.Args) != 2 {
+		if len(c.Args) != 3 {
 			return cliResponse{
 				Error: fmt.Sprintf("malformed command: %v", c),
 			}
@@ -188,6 +192,14 @@ func ccProcessCommand(c cliCommand) cliResponse {
 		if err != nil {
 			return cliResponse{
 				Error: fmt.Sprintf("deleting command %v: %v", cid, err),
+			}
+		}
+	case "clear":
+		c := ccNode.GetCommands()
+		for _, v := range c {
+			err := ccNode.DeleteCommand(v.ID)
+			if err != nil {
+				log.Warn("cc delete command %v : %v", v.ID, err)
 			}
 		}
 	default:
@@ -308,6 +320,18 @@ func ccClients() map[string]bool {
 			clients[v] = true
 		}
 		return clients
+	}
+	return nil
+}
+
+func cliClearCC() error {
+	ccFilters = make(map[int]*ron.Client)
+	c := ccNode.GetCommands()
+	for _, v := range c {
+		err := ccNode.DeleteCommand(v.ID)
+		if err != nil {
+			log.Warn("cc delete command %v : %v", v.ID, err)
+		}
 	}
 	return nil
 }
