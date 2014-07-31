@@ -63,6 +63,10 @@ func (n *Node) Send(m *Message) (int, error) {
 	if log.WillLog(log.DEBUG) {
 		log.Debug("Send: %v", m)
 	}
+
+	// force updating the network if needed on Send()
+	n.checkUpdateNetwork()
+
 	routeSlices := make(map[string][]string)
 	n.meshLock.Lock()
 	count := 0
@@ -138,6 +142,10 @@ func (n *Node) Set(recipients []string, body interface{}) (int, error) {
 
 // Broadcast sends a message to all nodes on the mesh.
 func (n *Node) Broadcast(body interface{}) (int, error) {
+	// force updating the network if needed on Broadcast before looking at
+	// the effective network
+	n.checkUpdateNetwork()
+
 	var recipients []string
 	n.meshLock.Lock()
 	for k, _ := range n.effectiveNetwork {

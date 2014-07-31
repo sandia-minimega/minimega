@@ -475,7 +475,6 @@ func (n *Node) handleMSA(m *Message) {
 		}
 	}
 
-	n.routes = make(map[string]string)
 	n.network[m.Source] = m.Body.([]string)
 
 	if log.WillLog(log.DEBUG) {
@@ -488,13 +487,17 @@ func (n *Node) handleMSA(m *Message) {
 func (n *Node) periodicEffectiveNetwork() {
 	for {
 		time.Sleep(n.msaTimeout)
-		n.meshLock.Lock()
-		if n.updateNetwork {
-			n.generateEffectiveNetwork()
-		}
-		n.updateNetwork = false
-		n.meshLock.Unlock()
+		n.checkUpdateNetwork()
 	}
+}
+
+func (n *Node) checkUpdateNetwork() {
+	n.meshLock.Lock()
+	if n.updateNetwork {
+		n.generateEffectiveNetwork()
+		n.updateNetwork = false
+	}
+	n.meshLock.Unlock()
 }
 
 func (n *Node) periodicMSA() {
