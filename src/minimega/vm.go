@@ -1282,6 +1282,13 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
+	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
+	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
 		vm.UUID = generateUUID()
@@ -1365,13 +1372,6 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 			ack <- vm.Id
 			return false
 		}
-	}
-
-	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
-	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
-	if err != nil {
-		log.Errorln(err)
-		teardown()
 	}
 
 	return true
@@ -1625,7 +1625,7 @@ func (vm *vmInfo) vmGetArgs() []string {
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {
 			args = append(args, "-drive")
-			args = append(args, "file="+diskPath+",cache=none,media=disk")
+			args = append(args, "file="+diskPath+",media=disk")
 		}
 	}
 
