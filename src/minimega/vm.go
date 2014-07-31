@@ -1802,9 +1802,7 @@ func cliVMDisk(c cliCommand) cliResponse {
 			Response: fmt.Sprintf("%v", info.DiskPaths),
 		}
 	} else {
-		for _, v := range c.Args {
-			info.DiskPaths = append(info.DiskPaths, v)
-		}
+		info.DiskPaths = c.Args
 	}
 	return cliResponse{}
 }
