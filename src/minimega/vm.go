@@ -1266,8 +1266,11 @@ func (l *vmList) info(c cliCommand) cliResponse {
 	}
 	w.Flush()
 
+	resp := o.String()
+	resp = resp[:len(resp)-1] // trim the final \n
+
 	return cliResponse{
-		Response: o.String(),
+		Response: resp,
 	}
 }
 
