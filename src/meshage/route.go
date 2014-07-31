@@ -119,12 +119,14 @@ func (n *Node) updateRoute(c string) {
 		curr := v
 		prev := k
 		r := k
+		if curr == n.name {
+			r += "<-" + routes[curr]
+		}
 		for curr != n.name {
 			prev = curr
 			curr = routes[curr]
 			r += "<-" + routes[curr]
 		}
-		r += "<-" + routes[curr]
 		if log.WillLog(log.DEBUG) {
 			log.Debug("full route for %v is %v", k, r)
 		}
