@@ -78,6 +78,12 @@ func cliCC(c cliCommand) cliResponse {
 
 	switch c.Args[0] {
 	case "start":
+		if ccNode != nil {
+			return cliResponse{
+				Error: "cc service already running",
+			}
+		}
+
 		port := CC_PORT
 		if len(c.Args) > 1 {
 			p, err := strconv.Atoi(c.Args[1])
