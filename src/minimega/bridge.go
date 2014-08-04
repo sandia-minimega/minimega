@@ -1015,10 +1015,12 @@ func GetIPFromMac(mac string) *ipmac.IP {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 	for k, v := range bridges {
-		ip := v.iml.GetIPFromMac(mac)
-		if ip != nil {
-			log.Debug("found mac %v in bridge %v", mac, k)
-			return ip
+		if v.iml != nil {
+			ip := v.iml.GetIPFromMac(mac)
+			if ip != nil {
+				log.Debug("found mac %v in bridge %v", mac, k)
+				return ip
+			}
 		}
 	}
 	return nil
