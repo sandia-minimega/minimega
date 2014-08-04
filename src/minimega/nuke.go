@@ -110,7 +110,8 @@ func nukeBridges() {
 			Stderr: &sErr,
 		}
 		log.Infoln("removing bridge:", b)
-		err := cmd.Run()
+		//err := cmd.Run()
+		err := cmdTimeout(cmd, OVS_TIMEOUT)
 		if err != nil {
 			log.Error("%v: %v", err, sErr.String())
 		}

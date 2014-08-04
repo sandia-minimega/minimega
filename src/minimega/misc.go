@@ -11,11 +11,13 @@ import (
 	"io/ioutil"
 	log "minilog"
 	"os"
+	"os/exec"
 	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"time"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -131,4 +133,30 @@ func trimQuote(input string) string {
 		}
 	}
 	return ret
+}
+
+// cmdTimeout runs the command c and returns a timeout if it doesn't complete
+// after time t. If a timeout occurs, cmdTimeout will kill the process.
+func cmdTimeout(c *exec.Cmd, t time.Duration) error {
+	log.Debug("cmdTimeout: %v", c)
+	err := c.Start()
+	if err != nil {
+		return fmt.Errorf("cmd start: %v", err)
+	}
+
+	done := make(chan error)
+	go func() {
+		done <- c.Wait()
+	}()
+
+	select {
+	case <-time.After(t):
+		err = c.Process.Kill()
+		if err != nil {
+			return err
+		}
+		return nil
+	case err = <-done:
+		return err
+	}
 }

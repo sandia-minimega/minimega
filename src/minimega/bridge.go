@@ -18,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
+	"time"
 )
 
 // a bridge representation that includes a list of vlans and their respective
@@ -43,6 +44,7 @@ type tap struct {
 
 const (
 	DEFAULT_BRIDGE = "mega_bridge"
+	OVS_TIMEOUT    = time.Duration(10 * time.Second)
 )
 
 var (
@@ -242,7 +244,8 @@ func (b *bridge) DestroyNetflow() error {
 		Stderr: &sErr,
 	}
 	log.Debug("removing netflow on bridge with cmd: %v", cmd)
-	err := cmd.Run()
+	//err := cmd.Run()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
@@ -277,7 +280,8 @@ func (b *bridge) UpdateNFTimeout(t int) error {
 		Stderr: &sErr,
 	}
 	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
-	err := cmd.Run()
+	//err := cmd.Run()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
@@ -319,7 +323,8 @@ func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 		Stderr: &sErr,
 	}
 	log.Debug("creating netflow to bridge with cmd: %v", cmd)
-	err = cmd.Run()
+	//err = cmd.Run()
+	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr.String())
 		return nil, e
@@ -408,7 +413,8 @@ func (b *bridge) create() error {
 			Stderr: &sErr,
 		}
 		log.Debug("creating bridge with cmd: %v", cmd)
-		err := cmd.Run()
+		//err := cmd.Run()
+		err := cmdTimeout(cmd, OVS_TIMEOUT)
 		if err != nil {
 			es := sErr.String()
 			if strings.Contains(es, "already exists") {
@@ -505,7 +511,8 @@ func (b *bridge) Destroy() error {
 		Stderr: &sErr,
 	}
 	log.Debug("destroying bridge with cmd: %v", cmd)
-	err = cmd.Run()
+	//err = cmd.Run()
+	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
@@ -675,7 +682,8 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	}
 
 	log.Debug("adding tap with cmd: %v", cmd)
-	err = cmd.Run()
+	//err = cmd.Run()
+	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		if strings.Contains(sErr.String(), "already exists") {
 			// special case - we own the tap, but it already exists
@@ -728,7 +736,8 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 		Stderr: &sErr,
 	}
 	log.Debug("removing tap with cmd: %v", cmd)
-	err := cmd.Run()
+	//err := cmd.Run()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
 		return e
