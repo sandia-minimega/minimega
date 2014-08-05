@@ -29,7 +29,7 @@ class Error(Exception): pass
 
 
 NET_RE = re.compile(r'((?P<bridge>\w+),)?(?P<id>\d+)(,(?P<mac>([0-9A-Fa-f]:?){6}))?')
-FILE_RE = re.compile(r'^(?:(?P<dir><dir> )| {6})(?P<name>.*?)\s+(?P<size>\d+)$')
+FILE_RE = re.compile(r'^(?:(?P<dir><dir> )|\s+)(?P<name>.*?)\s+(?P<size>\d+)$')
 DEFAULT_TIMEOUT = 60
 MSG_BLOCK_SIZE = 4096
 
@@ -1406,8 +1406,8 @@ class minimega(object):
         Returns:
             {"return":{"running":false,"singlestep":false,"status":"prelaunch"}}
         '''
-        if not isinstance(vm_id, int):
-            raise TypeError('vm_id must be an integer')
+        if not isinstance(vm_id, int) and not isinstance(vm_id, str):
+            raise TypeError('vm_id must be an integer or a string')
 
         if not isinstance(cmd, dict):
             raise TypeError('cmd must be a dictionary')
@@ -1453,3 +1453,56 @@ class minimega(object):
             raise ValueError('cmd must be one of: ' + str(options))
 
         return self._send('capture', cmd, *map(str,args))
+
+    def vm_uuid(self, uuid=None):
+        '''
+        Set the UUID for a VM. When called with no arguments, this will return the
+        UUID for the current VM configuration.
+
+        Arguments:
+        uuid -- the UUID of the VM
+        '''
+        if uuid is None:
+            return self._send('vm_uuid')
+
+        if not isinstance(uuid, int) and not isinstance(uuid, str):
+            raise TypeError('uuid must be an integer or string')
+
+        return self._send('vm_uuid',str(uuid))
+
+    def cc(self, cmd=None, *args):
+        '''
+        Command and control layer for minimega
+
+        Arguments:
+        cmd -- the cc command to be run
+        args -- arguments for the cc command
+
+        Examples:
+        To senda file 'foo' and display the contents on a remove VM:
+        
+            mm.cc('command', 'new', 'command="cat foo"', 'filesend=foo')
+
+        To filter on VMs that are running windows AND have a specific IP,
+        OR nodes that have a range of IPs:
+
+            mm.cc('filter', 'add', 'os=windows', 'ip=10.0.0.1')
+            mm.cc('filter', 'add', 'ip=12.0.0.0/24')
+
+        To clear commands:
+
+            mm.cc('command', 'clear')
+
+        To clear filters:
+
+            mm.cc('filter', 'clear')
+        '''
+        options = ('start', 'filter', 'command')
+
+        if cmd is None:
+            return self._send('cc')
+
+        if cmd not in options:
+            raise ValueError('cmd must be one of: ' + str(options))
+
+        return self._send('cc', cmd, *map(str,args))
