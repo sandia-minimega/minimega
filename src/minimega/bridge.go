@@ -44,7 +44,7 @@ type tap struct {
 
 const (
 	DEFAULT_BRIDGE = "mega_bridge"
-	OVS_TIMEOUT    = time.Duration(10 * time.Second)
+	OVS_TIMEOUT    = time.Duration(5 * time.Second)
 )
 
 var (
