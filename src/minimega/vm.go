@@ -2192,7 +2192,7 @@ func cliVMNetMod(c cliCommand) cliResponse {
 	}
 
 	// third arg is the new bridge or "disconnect"
-	// last arg is a vlan number 0 < x < 4096
+	// last arg is a vlan number 0 <= x < 4096
 	if strings.ToLower(c.Args[2]) == "disconnect" {
 		// disconnect
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
@@ -2224,7 +2224,7 @@ func cliVMNetMod(c cliCommand) cliResponse {
 			}
 		}
 
-		if net > 0 && net < 4096 {
+		if net >= 0 && net < 4096 {
 			// new network
 			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
 			oldBridge, err := getBridge(vm.bridges[pos])
