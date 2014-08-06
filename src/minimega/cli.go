@@ -1186,10 +1186,13 @@ remove saved configurations.`,
 			Call:      cliDebug,
 			Helpshort: "display internal debug information",
 			Helplong: `
-	Usage: debug [panic]
+	Usage: debug [panic, numcpus [cpus]]
 
 Display internal debug information. Invoking with the 'panic' keyword will
-force minimega to dump a stacktrace upon crash or exit.`,
+force minimega to dump a stacktrace upon crash or exit.
+
+You can also set the number of logical CPUs minimega should fan out to with
+'numcpus', which is by default the number of logical CPUs on the system.`,
 			Record: false,
 			Clear: func() error {
 				return nil

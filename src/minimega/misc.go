@@ -90,6 +90,20 @@ func cliDebug(c cliCommand) cliResponse {
 		return cliResponse{
 			Response: fmt.Sprintf("%v wonders what you're up to...", host),
 		}
+	case "numcpus":
+		if len(c.Args) == 1 {
+			return cliResponse{
+				Response: fmt.Sprintf("%v", runtime.GOMAXPROCS(0)),
+			}
+		}
+		cpus, err := strconv.Atoi(c.Args[1])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("numcpus: %v", err),
+			}
+		}
+		runtime.GOMAXPROCS(cpus)
+		return cliResponse{}
 	default:
 		return cliResponse{
 			Error: "usage: debug [panic]",
