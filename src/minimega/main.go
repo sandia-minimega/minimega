@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"os/user"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -166,6 +167,10 @@ func main() {
 	go cliMux()
 
 	fmt.Println(banner)
+
+	// fan out to the number of cpus on the system
+	cpus := runtime.NumCPU()
+	runtime.GOMAXPROCS(cpus)
 
 	// check for a script on the command line, and invoke it as a read command
 	for _, a := range flag.Args() {
