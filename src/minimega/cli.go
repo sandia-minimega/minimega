@@ -661,7 +661,7 @@ To start the webserver on a specific port, issue the web command with the port:
 
 	web 7000
 
-8080 is the default port.`,
+9001 is the default port.`,
 			Record: true,
 			Clear: func() error {
 				vncNovnc = "misc/novnc"
