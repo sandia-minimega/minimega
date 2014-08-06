@@ -1547,14 +1547,7 @@ You can change the active flow timeout with:
 
 With <timeout> in seconds.`,
 			Record: true,
-			Clear: func() error {
-				c := makeCommand("capture clear netflow -1")
-				r := cliCapture(c)
-				if r.Error != "" {
-					return fmt.Errorf("%v", r.Error)
-				}
-				return nil
-			},
+			Clear:  cliCaptureClear,
 		},
 
 		"cc": &command{

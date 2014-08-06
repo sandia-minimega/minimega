@@ -220,6 +220,7 @@ func teardown() {
 		log.Errorln(err)
 	}
 	ksmDisable()
+	cliCaptureClear()
 	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()

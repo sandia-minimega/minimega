@@ -188,6 +188,57 @@ func capturePcap(c cliCommand) cliResponse {
 			}
 		}
 	case "vm":
+		if len(c.Args) != 5 {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		// get the vm
+		v := vms.getVM(c.Args[2])
+		if v == nil {
+			return cliResponse{
+				Error: fmt.Sprintf("no such vm %v", c.Args[2]),
+			}
+		}
+
+		// get the interface by index
+		val, err := strconv.Atoi(c.Args[3])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("vm id %v : %v", c.Args[3], err),
+			}
+		}
+
+		if len(v.taps) < val {
+			return cliResponse{
+				Error: fmt.Sprintf("no such interface %v", val),
+			}
+		}
+
+		tap := v.taps[val]
+
+		// attempt to start pcap on the bridge
+		p, err := gopcap.NewPCAP(tap, c.Args[4])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+
+		// success! add it to the list
+		ce := &capture{
+			ID:        <-captureIDCount,
+			Type:      "pcap",
+			VM:        v.Id,
+			Interface: val,
+			Path:      c.Args[4],
+			pcap:      p,
+		}
+
+		captureLock.Lock()
+		captureEntries[ce.ID] = ce
+		captureLock.Unlock()
 	case "bridge":
 		if len(c.Args) != 4 {
 			return cliResponse{
@@ -213,11 +264,13 @@ func capturePcap(c cliCommand) cliResponse {
 
 		// success! add it to the list
 		ce := &capture{
-			ID:     <-captureIDCount,
-			Type:   "pcap",
-			Bridge: c.Args[2],
-			Path:   c.Args[3],
-			pcap:   p,
+			ID:        <-captureIDCount,
+			Type:      "pcap",
+			Bridge:    c.Args[2],
+			VM:        -1,
+			Interface: -1,
+			Path:      c.Args[3],
+			pcap:      p,
 		}
 
 		captureLock.Lock()
@@ -537,4 +590,18 @@ func captureUpdateNFTimeouts() {
 			log.Error("update netflow timeout: %v", err)
 		}
 	}
+}
+
+func cliCaptureClear() error {
+	c := makeCommand("capture netflow clear -1")
+	r := cliCapture(c)
+	if r.Error != "" {
+		return fmt.Errorf("%v", r.Error)
+	}
+	c = makeCommand("capture pcap clear -1")
+	r = cliCapture(c)
+	if r.Error != "" {
+		return fmt.Errorf("%v", r.Error)
+	}
+	return nil
 }
