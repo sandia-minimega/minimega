@@ -16,12 +16,14 @@ import (
 )
 
 type capture struct {
-	ID       int
-	Type     string
-	Bridge   string
-	Path     string
-	Mode     string
-	Compress bool
+	ID        int
+	Type      string
+	Bridge    string
+	VM        int
+	Interface int
+	Path      string
+	Mode      string
+	Compress  bool
 }
 
 var (
@@ -76,6 +78,32 @@ func cliCapture(c cliCommand) cliResponse {
 }
 
 func capturePcap(c cliCommand) cliResponse {
+	// capture pcap <bridge> <bridge name> <filename>
+	// capture pcap <vm> <vm id> <tap> <filename>
+	// capture pcap [clear]
+	// capture pcap clear <id, -1>
+	if len(c.Args) == 1 {
+		// capture pcap, generate output
+		captureLock.Lock()
+		defer captureLock.Unlock()
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "ID\tBridge\tVM/interface\tPath\tCompress\n")
+		for _, v := range captureEntries {
+			if v.Type == "pcap" {
+				fmt.Fprintf(w, "%v\t%v\t%v/%v\t%v\t%v\n", v.ID, v.Bridge, v.VM, v.Interface, v.Path, v.Compress)
+			}
+		}
+		w.Flush()
+
+		out := o.String()
+
+		return cliResponse{
+			Response: out,
+		}
+	}
+
 	return cliResponse{}
 }
 
@@ -90,7 +118,9 @@ func captureNetflow(c cliCommand) cliResponse {
 		w.Init(&o, 5, 0, 1, ' ', 0)
 		fmt.Fprintf(w, "ID\tBridge\tPath\tMode\tCompress\n")
 		for _, v := range captureEntries {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
+			if v.Type == "netflow" {
+				fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
+			}
 		}
 		w.Flush()
 
