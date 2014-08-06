@@ -10,7 +10,7 @@
 
 #include "pcap.h"
 
-pcap_t *pcapInit(char *dev) {
+pcap_t *gopcapInit(char *dev) {
 	pcap_t *handle;			/* session handle */
 	char errbuf[PCAP_ERRBUF_SIZE]; 	/* error string */
 
@@ -18,17 +18,17 @@ pcap_t *pcapInit(char *dev) {
 	return handle;
 }
 
-pcap_dumper_t *pcapPrepare(pcap_t *dev, char *filename) {
+pcap_dumper_t *gopcapPrepare(pcap_t *dev, char *filename) {
 	pcap_dumper_t *handle;
 	handle = pcap_dump_open(dev, filename);
 	return handle;
 }
 
-void pcapCapture(pcap_t *dev, pcap_dumper_t *handle) {
+void gopcapCapture(pcap_t *dev, pcap_dumper_t *handle) {
 	pcap_loop(dev, 0, &pcap_dump, (u_char *)handle);
 }
 
-int pcapClose(void *handle, void *dumper_handle) {
+int gopcapClose(void *handle, void *dumper_handle) {
 	if (handle == NULL) {
 		return -1;
 	}

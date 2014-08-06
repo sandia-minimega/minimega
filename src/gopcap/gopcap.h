@@ -9,9 +9,9 @@
 
 #include <pcap.h>
 
-pcap_t *pcapInit(char *dev);
-pcap_dumper_t *pcapPrepare(pcap_t *dev, char *filename);
-void pcapCapture(pcap_t *dev, pcap_dumper_t *handle);
-int pcapClose(void *handle, void *dumper_handle);
+pcap_t *gopcapInit(char *dev);
+pcap_dumper_t *gopcapPrepare(pcap_t *dev, char *filename);
+void gopcapCapture(pcap_t *dev, pcap_dumper_t *handle);
+int gopcapClose(void *handle, void *dumper_handle);
 
 #endif

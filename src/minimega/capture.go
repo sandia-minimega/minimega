@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"gonetflow"
+	"gopcap"
 	log "minilog"
 	"strconv"
 	"strings"
@@ -24,6 +25,7 @@ type capture struct {
 	Path      string
 	Mode      string
 	Compress  bool
+	pcap      *gopcap.Pcap
 }
 
 var (
@@ -62,6 +64,40 @@ func cliCapture(c cliCommand) cliResponse {
 
 	if len(c.Args) == 0 {
 		// create output for all capture types
+		captureLock.Lock()
+		defer captureLock.Unlock()
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintf(w, "ID\tBridge\tPath\tMode\tCompress\n")
+		for _, v := range captureEntries {
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
+		}
+		w.Flush()
+
+		// get netflow stats for each bridge
+		var nfstats string
+		b := enumerateBridges()
+		for _, v := range b {
+			nf, err := getNetflowFromBridge(v)
+			if err != nil {
+				if !strings.Contains(err.Error(), "has no netflow object") {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+				continue
+			}
+			nfstats += fmt.Sprintf("Bridge %v:\n", v)
+			nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
+			nfstats += nf.GetStats()
+		}
+
+		out := o.String() + "\n" + nfstats
+
+		return cliResponse{
+			Response: out,
+		}
 		return cliResponse{}
 	}
 
@@ -80,7 +116,6 @@ func cliCapture(c cliCommand) cliResponse {
 func capturePcap(c cliCommand) cliResponse {
 	// capture pcap <bridge> <bridge name> <filename>
 	// capture pcap <vm> <vm id> <tap> <filename>
-	// capture pcap [clear]
 	// capture pcap clear <id, -1>
 	if len(c.Args) == 1 {
 		// capture pcap, generate output
@@ -89,10 +124,10 @@ func capturePcap(c cliCommand) cliResponse {
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tBridge\tVM/interface\tPath\tCompress\n")
+		fmt.Fprintf(w, "ID\tBridge\tVM/interface\tPath\n")
 		for _, v := range captureEntries {
 			if v.Type == "pcap" {
-				fmt.Fprintf(w, "%v\t%v\t%v/%v\t%v\t%v\n", v.ID, v.Bridge, v.VM, v.Interface, v.Path, v.Compress)
+				fmt.Fprintf(w, "%v\t%v\t%v/%v\t%v\n", v.ID, v.Bridge, v.VM, v.Interface, v.Path)
 			}
 		}
 		w.Flush()
@@ -101,6 +136,96 @@ func capturePcap(c cliCommand) cliResponse {
 
 		return cliResponse{
 			Response: out,
+		}
+	}
+
+	switch c.Args[1] {
+	case "clear":
+		if len(c.Args) != 3 {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		// delete by id or -1 for all netflow writers
+		captureLock.Lock()
+		defer captureLock.Unlock()
+		if c.Args[2] == "-1" {
+			for k, v := range captureEntries {
+				if v.Type == "pcap" {
+					if v.pcap != nil {
+						v.pcap.Close()
+					} else {
+						log.Error("capture %v has no valid pcap interface", k)
+					}
+					delete(captureEntries, k)
+				}
+			}
+		} else {
+			val, err := strconv.Atoi(c.Args[2])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			if v, ok := captureEntries[val]; !ok {
+				return cliResponse{
+					Error: fmt.Sprintf("entry %v does not exist", val),
+				}
+			} else {
+				if v.Type == "pcap" {
+					if v.pcap != nil {
+						v.pcap.Close()
+					} else {
+						log.Error("capture %v has no valid pcap interface", val)
+					}
+					delete(captureEntries, val)
+				} else {
+					return cliResponse{
+						Error: fmt.Sprintf("entry %v is not a pcap capture", val),
+					}
+				}
+			}
+		}
+	case "vm":
+	case "bridge":
+		if len(c.Args) != 4 {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		// create the bridge if necessary
+		b, err := getBridge(c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+
+		// attempt to start pcap on the bridge
+		p, err := gopcap.NewPCAP(b.Name, c.Args[3])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+
+		// success! add it to the list
+		ce := &capture{
+			ID:     <-captureIDCount,
+			Type:   "pcap",
+			Bridge: c.Args[2],
+			Path:   c.Args[3],
+			pcap:   p,
+		}
+
+		captureLock.Lock()
+		captureEntries[ce.ID] = ce
+		captureLock.Unlock()
+	default:
+		return cliResponse{
+			Error: "malformed command",
 		}
 	}
 
@@ -210,20 +335,26 @@ func captureNetflow(c cliCommand) cliResponse {
 					Error: fmt.Sprintf("entry %v does not exist", val),
 				}
 			} else {
-				// get the netflow object associated with this bridge
-				nf, err := getNetflowFromBridge(v.Bridge)
-				if err != nil {
+				if v.Type == "netflow" {
+					// get the netflow object associated with this bridge
+					nf, err := getNetflowFromBridge(v.Bridge)
+					if err != nil {
+						return cliResponse{
+							Error: err.Error(),
+						}
+					}
+					err = nf.RemoveWriter(v.Path)
+					if err != nil {
+						return cliResponse{
+							Error: err.Error(),
+						}
+					}
+					delete(captureEntries, val)
+				} else {
 					return cliResponse{
-						Error: err.Error(),
+						Error: fmt.Sprintf("entry %v is not a netflow capture", val),
 					}
 				}
-				err = nf.RemoveWriter(v.Path)
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				delete(captureEntries, val)
 			}
 		}
 
