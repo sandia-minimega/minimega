@@ -47,23 +47,50 @@ func init() {
 func cliCapture(c cliCommand) cliResponse {
 	// capture must be:
 	// capture
+	// capture pcap <bridge> <bridge name> <filename>
+	// capture pcap <vm> <vm id> <tap> <filename>
+	// capture pcap [clear]
+	// capture pcap clear <id, -1>
 	// capture netflow <bridge> file <filename> <raw,ascii> [gzip]
 	// capture netflow <bridge> socket <tcp,udp> <hostname:port> <raw,ascii>
-	// capture clear netflow <id,-1>
+	// capture netflow clear <id,-1>
 	// capture netflow timeout [time]
+	// capture netflow
 	log.Debugln("cliCapture")
 
+	if len(c.Args) == 0 {
+		// create output for all capture types
+		return cliResponse{}
+	}
+
+	switch c.Args[0] {
+	case "pcap":
+		return capturePcap(c)
+	case "netflow":
+		return captureNetflow(c)
+	default:
+		return cliResponse{
+			Error: "malformed command",
+		}
+	}
+}
+
+func capturePcap(c cliCommand) cliResponse {
+	return cliResponse{}
+}
+
+func captureNetflow(c cliCommand) cliResponse {
 	switch len(c.Args) {
-	case 0:
+	case 1:
 		// create output
 		captureLock.Lock()
 		defer captureLock.Unlock()
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tType\tBridge\tPath\tMode\tCompress\n")
+		fmt.Fprintf(w, "ID\tBridge\tPath\tMode\tCompress\n")
 		for _, v := range captureEntries {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Type, v.Bridge, v.Path, v.Mode, v.Compress)
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
 		}
 		w.Flush()
 
@@ -98,6 +125,108 @@ func cliCapture(c cliCommand) cliResponse {
 		}
 		return cliResponse{
 			Response: fmt.Sprintf("%v", captureNFTimeout),
+		}
+	case 3:
+		if c.Args[0] == "netflow" && c.Args[1] == "timeout" {
+			val, err := strconv.Atoi(c.Args[2])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+
+			captureNFTimeout = val
+			captureUpdateNFTimeouts()
+			return cliResponse{}
+		}
+
+		if c.Args[0] != "netflow" || c.Args[1] != "clear" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		// delete by id or -1 for all netflow writers
+		captureLock.Lock()
+		defer captureLock.Unlock()
+		if c.Args[2] == "-1" {
+			for k, v := range captureEntries {
+				if v.Type == "netflow" {
+					// get the netflow object associated with this bridge
+					nf, err := getNetflowFromBridge(v.Bridge)
+					if err != nil {
+						return cliResponse{
+							Error: err.Error(),
+						}
+					}
+					err = nf.RemoveWriter(v.Path)
+					if err != nil {
+						return cliResponse{
+							Error: err.Error(),
+						}
+					}
+					delete(captureEntries, k)
+				}
+			}
+		} else {
+			val, err := strconv.Atoi(c.Args[2])
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+			if v, ok := captureEntries[val]; !ok {
+				return cliResponse{
+					Error: fmt.Sprintf("entry %v does not exist", val),
+				}
+			} else {
+				// get the netflow object associated with this bridge
+				nf, err := getNetflowFromBridge(v.Bridge)
+				if err != nil {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+				err = nf.RemoveWriter(v.Path)
+				if err != nil {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+				delete(captureEntries, val)
+			}
+		}
+
+		// check if we need to remove the nf object
+		b := enumerateBridges()
+		for _, v := range b {
+			empty := true
+			for _, n := range captureEntries {
+				if n.Bridge == v {
+					empty = false
+					break
+				}
+			}
+
+			if !empty {
+				continue
+			}
+
+			b, err := getBridge(v)
+			if err != nil {
+				return cliResponse{
+					Error: err.Error(),
+				}
+			}
+
+			err = b.DestroyNetflow()
+			if err != nil {
+				if !strings.Contains(err.Error(), "has no netflow object") {
+					return cliResponse{
+						Error: err.Error(),
+					}
+				}
+			}
 		}
 	case 5, 6:
 		// new netflow capture
@@ -217,108 +346,6 @@ func cliCapture(c cliCommand) cliResponse {
 			captureLock.Lock()
 			captureEntries[ce.ID] = ce
 			captureLock.Unlock()
-		}
-	case 3:
-		if c.Args[0] == "netflow" && c.Args[1] == "timeout" {
-			val, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			captureNFTimeout = val
-			captureUpdateNFTimeouts()
-			return cliResponse{}
-		}
-
-		if c.Args[0] != "clear" || c.Args[1] != "netflow" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// delete by id or -1 for all netflow writers
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		if c.Args[2] == "-1" {
-			for k, v := range captureEntries {
-				if v.Type == "netflow" {
-					// get the netflow object associated with this bridge
-					nf, err := getNetflowFromBridge(v.Bridge)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					err = nf.RemoveWriter(v.Path)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					delete(captureEntries, k)
-				}
-			}
-		} else {
-			val, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			if v, ok := captureEntries[val]; !ok {
-				return cliResponse{
-					Error: fmt.Sprintf("entry %v does not exist", val),
-				}
-			} else {
-				// get the netflow object associated with this bridge
-				nf, err := getNetflowFromBridge(v.Bridge)
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				err = nf.RemoveWriter(v.Path)
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				delete(captureEntries, val)
-			}
-		}
-
-		// check if we need to remove the nf object
-		b := enumerateBridges()
-		for _, v := range b {
-			empty := true
-			for _, n := range captureEntries {
-				if n.Bridge == v {
-					empty = false
-					break
-				}
-			}
-
-			if !empty {
-				continue
-			}
-
-			b, err := getBridge(v)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			err = b.DestroyNetflow()
-			if err != nil {
-				if !strings.Contains(err.Error(), "has no netflow object") {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-			}
 		}
 	default:
 		return cliResponse{
