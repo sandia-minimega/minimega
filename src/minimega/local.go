@@ -64,7 +64,7 @@ func localAttach() {
 		if c.Command == "quit" || c.Command == "exit" {
 			if !exitNext {
 				fmt.Println("CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit")
-				fmt.Println("If you really want to make the minimega daemon exit, enter quit/exit again.")
+				fmt.Println("If you really want to make the minimega daemon exit, enter quit/exit again")
 				exitNext = true
 				continue
 			}
