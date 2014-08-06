@@ -1526,8 +1526,7 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 			Call:      cliCapture,
 			Helpshort: "capture experiment data",
 			Helplong: `
-	Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>]]
-	Usage: capture clear netflow <id,-1>
+	Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>], clear <id, -1>]
 
 Capture experiment data including netflow. Netflow capture obtains netflow data
 from any local openvswitch switch, and can write to file, another socket, or
