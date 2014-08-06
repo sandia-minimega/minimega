@@ -1530,11 +1530,15 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 			Helpshort: "capture experiment data",
 			Helplong: `
 	Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>], clear <id, -1>]
+	Usage: capture [pcap [bridge <bridge name> <filename>, vm <vm id or name> <vm interface index> <filename, clear <id, -1>]]
 
-Capture experiment data including netflow. Netflow capture obtains netflow data
+Capture experiment data including netflow and PCAP. Netflow capture obtains netflow data
 from any local openvswitch switch, and can write to file, another socket, or
 both. Netflow data can be written out in raw or ascii format, and file output
 can be compressed on the fly. Multiple netflow writers can be configured.
+
+PCAP capture can be from a bridge or VM interface. No filters are applied, and
+all data seen on that interface is captured to file.
 
 For example, to capture netflow data on all associated bridges to file in ascii
 mode and with gzip compression:
@@ -1545,7 +1549,16 @@ You can change the active flow timeout with:
 
 	minimega$ capture netflow timeout <timeout>
 
-With <timeout> in seconds.`,
+With <timeout> in seconds.
+
+To capture pcap on bridge 'foo' to file 'foo.pcap':
+	
+	minimega$ capture pcap bridge foo foo.pcap
+
+To capture pcap on VM 'foo' to file 'foo.pcap', using the 2nd interface on that
+VM:
+
+	minimega$ capture pcap vm foo 0 foo.pcap`,
 			Record: true,
 			Clear:  cliCaptureClear,
 		},
