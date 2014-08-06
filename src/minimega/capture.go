@@ -69,9 +69,9 @@ func cliCapture(c cliCommand) cliResponse {
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tBridge\tPath\tMode\tCompress\n")
+		fmt.Fprintf(w, "ID\tType\tBridge\tVM/interface\tPath\tMode\tCompress\n")
 		for _, v := range captureEntries {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v/%v\t%v\t%v\t%v\n", v.ID, v.Type, v.Bridge, v.VM, v.Interface, v.Path, v.Mode, v.Compress)
 		}
 		w.Flush()
 
