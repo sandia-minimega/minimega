@@ -44,6 +44,8 @@ func localAttach() {
 	fmt.Println("use 'disconnect' or ^d to exit just the minimega command line")
 	fmt.Println()
 	defer goreadline.Rlcleanup()
+
+	var exitNext bool
 	for {
 		prompt := fmt.Sprintf("minimega:%v$ ", f)
 		line, err := goreadline.Rlwrap(prompt)
@@ -58,6 +60,17 @@ func localAttach() {
 			log.Debugln("disconnecting")
 			return
 		}
+
+		if c.Command == "quit" || c.Command == "exit" {
+			if !exitNext {
+				fmt.Println("CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit")
+				fmt.Println("If you really want to make the minimega daemon exit, enter quit/exit again.")
+				exitNext = true
+				continue
+			}
+		}
+
+		exitNext = false
 
 		err = enc.Encode(&c)
 		if err != nil {
