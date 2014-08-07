@@ -447,24 +447,76 @@ func cliVMSnapshot(c cliCommand) cliResponse {
 // start vms that are paused or building, or restart vms in the quit state
 func (l *vmList) start(c cliCommand) cliResponse {
 	errors := ""
-	if len(c.Args) == 0 { // start all paused vms
+	switch len(c.Args) {
+	case 0:
+		// start all paused vms
+		count := 0
+		errAck := make(chan error)
 		for _, i := range l.vms {
 			// only bulk start paused/building VMs
 			if i.State == VM_PAUSED || i.State == VM_BUILDING {
-				err := i.start()
+				count++
+				go func(v *vmInfo) {
+					err := v.start()
+					errAck <- err
+				}(i)
+			}
+		}
+		// get all of the acks
+		for j := 0; j < count; j++ {
+			err := <-errAck
+			if err != nil {
+				errors += fmt.Sprintln(err)
+			}
+		}
+	case 1:
+		if c.Args[0] == "quit=true" {
+			// start all paused or quit vms
+			count := 0
+			errAck := make(chan error)
+			for _, i := range l.vms {
+				if i.State == VM_QUIT || i.State == VM_PAUSED || i.State == VM_BUILDING {
+					count++
+					go func(v *vmInfo) {
+						err := v.start()
+						errAck <- err
+					}(i)
+				}
+			}
+			// get all of the acks
+			for j := 0; j < count; j++ {
+				err := <-errAck
 				if err != nil {
 					errors += fmt.Sprintln(err)
 				}
 			}
+		} else {
+			id, err := strconv.Atoi(c.Args[0])
+			if err != nil {
+				id = l.findByName(c.Args[0])
+			}
+
+			if vm, ok := l.vms[id]; ok {
+				err := vm.start()
+				if err != nil {
+					errors += fmt.Sprintln(err)
+				}
+			} else {
+				return cliResponse{
+					Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+				}
+			}
 		}
-	} else if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "vm_start takes zero or one argument",
+	case 2:
+		if c.Args[0] != "quit=true" {
+			return cliResponse{
+				Error: "malformed command",
+			}
 		}
-	} else {
-		id, err := strconv.Atoi(c.Args[0])
+
+		id, err := strconv.Atoi(c.Args[1])
 		if err != nil {
-			id = l.findByName(c.Args[0])
+			id = l.findByName(c.Args[1])
 		}
 
 		if vm, ok := l.vms[id]; ok {
@@ -474,8 +526,12 @@ func (l *vmList) start(c cliCommand) cliResponse {
 			}
 		} else {
 			return cliResponse{
-				Error: fmt.Sprintf("VM %v not found", c.Args[0]),
+				Error: fmt.Sprintf("VM %v not found", c.Args[1]),
 			}
+		}
+	default:
+		return cliResponse{
+			Error: "malformed command",
 		}
 	}
 	return cliResponse{
@@ -497,6 +553,7 @@ func (vm *vmInfo) start() error {
 	log.Info("starting VM: %v", vm.Id)
 	err := vm.q.Start()
 	if err != nil {
+		vm.state(VM_ERROR)
 		return err
 	} else {
 		vm.state(VM_RUNNING)
