@@ -104,55 +104,11 @@ not be indented like this.)
 
 Here follows a description of the functions:
 
-code:
+mega:
 
-Injects program source into the output by extracting code from files
-and injecting them as HTML-escaped <pre> blocks.  The argument is
-a file name followed by an optional address that specifies what
-section of the file to display. The address syntax is similar in
-its simplest form to that of ed, but comes from sam and is more
-general. See
-	http://plan9.bell-labs.com/sys/doc/sam/sam.html Table II
-for full details. The displayed block is always rounded out to a
-full line at both ends.
-
-If no pattern is present, the entire file is displayed.
-
-Any line in the program that ends with the four characters
-	OMIT
-is deleted from the source before inclusion, making it easy
-to write things like
-	.code test.go /START OMIT/,/END OMIT/
-to find snippets like this
-	tedious_code = boring_function()
-	// START OMIT
-	interesting_code = fascinating_function()
-	// END OMIT
-and see only this:
-	interesting_code = fascinating_function()
-
-Also, inside the displayed text a line that ends
-	// HL
-will be highlighted in the display; the 'h' key in the browser will
-toggle extra emphasis of any highlighted lines. A highlighting mark
-may have a suffix word, such as
-	// HLxxx
-Such highlights are enabled only if the code invocation ends with
-"HL" followed by the word:
-	.code test.go /^type Foo/,/^}/ HLxxx
-
-The .code function may take one or more flags immediately preceding
-the filename. This command shows test.go in an editable text area:
-	.code -edit test.go
-This command shows test.go with line numbers:
-	.code -numbers test.go
-
-play:
-
-The function "play" is the same as "code" but puts a button
-on the displayed source so the program can be run from the browser.
-Although only the selected text is shown, all the source is included
-in the HTML output so it can be presented to the compiler.
+Load a minimega script:
+	
+	.mega foo.mm
 
 link:
 
