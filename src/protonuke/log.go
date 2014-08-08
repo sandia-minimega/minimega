@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "minilog"
 	"os"
+	"runtime"
 )
 
 func logSetup() {
@@ -17,8 +18,13 @@ func logSetup() {
 		os.Exit(1)
 	}
 
+	color := true
+	if runtime.GOOS == "windows" {
+		color = false
+	}
+
 	if *f_log {
-		log.AddLogger("stdio", os.Stderr, level, true)
+		log.AddLogger("stdio", os.Stderr, level, color)
 	}
 
 	if *f_logfile != "" {
