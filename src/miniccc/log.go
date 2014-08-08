@@ -36,25 +36,3 @@ func logSetup() {
 		log.AddLogger("file", logfile, level, color)
 	}
 }
-
-func logChange(level string, file string) error {
-	l, err := log.LevelInt(level)
-	if err != nil {
-		return err
-	}
-
-	log.SetLevel("stdio", l)
-	log.SetLevel("file", l)
-
-	_, err = log.GetLevel("file")
-	if err == nil && file == "" {
-		log.DelLogger("file")
-	} else if file != "" {
-		logfile, err := os.OpenFile(file, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
-		if err != nil {
-			return err
-		}
-		log.AddLogger("file", logfile, l, false)
-	}
-	return nil
-}
