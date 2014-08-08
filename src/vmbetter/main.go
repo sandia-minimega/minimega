@@ -49,7 +49,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	LogSetup()
+	logSetup()
 
 	if flag.NArg() != 1 {
 		usage()
@@ -160,26 +160,4 @@ func main() {
 		}
 	}
 	fmt.Println("done")
-}
-
-// LogSetup creates loggers on stderr or to file, based on input flags.
-func LogSetup() {
-	level, err := log.LevelInt(*f_loglevel)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	if *f_log {
-		log.AddLogger("stdio", os.Stderr, level, true)
-	}
-
-	if *f_logfile != "" {
-		logfile, err := os.OpenFile(*f_logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		log.AddLogger("file", logfile, level, false)
-	}
 }
