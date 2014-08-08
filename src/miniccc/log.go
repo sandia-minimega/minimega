@@ -33,6 +33,6 @@ func logSetup() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		log.AddLogger("file", logfile, level, color)
+		log.AddLogger("file", logfile, level, false)
 	}
 }
