@@ -14,7 +14,7 @@ import (
 
 var (
 	f_port     = flag.Int("port", 9003, "HTTP port")
-	f_base     = flag.String("base", "misc/minipresent", "base path for static content and templates")
+	f_base     = flag.String("base", "misc/minidoc", "base path for static content and templates")
 	f_exec     = flag.Bool("exec", true, "allow minimega commands")
 	f_loglevel = flag.String("level", "warn", "log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
