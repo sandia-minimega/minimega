@@ -67,10 +67,6 @@ function initPlayground(transport) {
 		run2.className = 'run';
 		run2.innerHTML = 'Run';
 		run2.addEventListener("click", onRun, false);
-		var kill = document.createElement('button');
-		kill.className = 'kill';
-		kill.innerHTML = 'Kill';
-		kill.addEventListener("click", onKill, false);
 		var close = document.createElement('button');
 		close.className = 'close';
 		close.innerHTML = 'Close';
@@ -85,7 +81,6 @@ function initPlayground(transport) {
 		var buttons = document.createElement('div');
 		buttons.classList.add('buttons');
 		buttons.appendChild(run2);
-		buttons.appendChild(kill);
 		buttons.appendChild(close);
 
 		output.classList.add('output');

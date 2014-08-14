@@ -170,7 +170,7 @@ function PlaygroundOutput(el) {
 
 		var m = write.Body;
 		if (write.Kind == 'end') 
-			m = '\nProgram exited' + (m?(': '+m):'.');
+			m = '\ndone' + (m?(': '+m):'.');
 
 		if (m.indexOf('IMAGE:') === 0) {
 			// TODO(adg): buffer all writes before creating image
