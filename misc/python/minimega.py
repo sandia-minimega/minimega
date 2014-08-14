@@ -18,6 +18,7 @@ src/minimega/cli.go.
 import socket
 import json
 import re
+from threading import Lock
 
 from os import path
 
@@ -136,6 +137,7 @@ class minimega(object):
 
     def __init__(self, path, timeout=None):
         '''Connects to the minimega instance with Unix socket at <path>.'''
+        self.lock = Lock()
         self._debug = False
         self._path = path
         self._timeout = timeout
@@ -153,30 +155,31 @@ class minimega(object):
         self.__init__(self._path, self._timeout)
 
     def _send(self, cmd, *args):
-        msg = json.dumps({'Command': cmd, 'Args': args},
-                         separators=(',', ':'))
-        if len(msg) != self._socket.send(msg.encode('utf-8')):
-            raise Error('failed to write message to minimega')
+        with self.lock:
+            msg = json.dumps({'Command': cmd, 'Args': args},
+                             separators=(',', ':'))
+            if len(msg) != self._socket.send(msg.encode('utf-8')):
+                raise Error('failed to write message to minimega')
 
-        msg = ''
-        more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
-        response = None
-        while response is None and more:
-            msg += more
-            try:
-                response = json.loads(msg)
-            except ValueError as e:
-                if self._debug:
-                    print(e)
-                more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+            msg = ''
+            more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+            response = None
+            while response is None and more:
+                msg += more
+                try:
+                    response = json.loads(msg)
+                except ValueError as e:
+                    if self._debug:
+                        print(e)
+                    more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
 
-        if not msg:
-            raise Error('Expected response, socket closed')
+            if not msg:
+                raise Error('Expected response, socket closed')
 
-        if response['Error']:
-            raise Error(response['Error'])
+            if response['Error']:
+                raise Error(response['Error'])
 
-        return response['Response']
+            return response['Response']
 
     def rate(self, ms=None):
         '''
