@@ -1542,14 +1542,14 @@ can be compressed on the fly. Multiple netflow writers can be configured.
 PCAP capture can be from a bridge or VM interface. No filters are applied, and
 all data seen on that interface is captured to file.
 
-For example, to capture netflow data on all associated bridges to file in ascii
+For example, to capture netflow data on bridge mega_bridge to file in ascii
 mode and with gzip compression:
 
-	minimega$ capture netflow file foo.netflow ascii gzip
+	minimega$ capture netflow mega_bridge file foo.netflow ascii gzip
 
 You can change the active flow timeout with:
 
-	minimega$ capture netflow timeout <timeout>
+	minimega$ capture netflow mega_bridge timeout <timeout>
 
 With <timeout> in seconds.
 
