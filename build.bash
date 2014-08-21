@@ -56,7 +56,3 @@ do
 	go test $i
 done
 echo
-
-# build doc
-echo "BUILD DOCUMENTATION"
-bash misc/gendoc.bash 
