@@ -220,7 +220,10 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if err != nil {
 			log.Errorln(err)
 		} else {
-			io.Copy(ioutil.Discard, resp.Body)
+			n, err := io.Copy(ioutil.Discard, resp.Body)
+			if err != nil {
+				log.Error("httpGet: %v, only copied %v bytes", err, n)
+			}
 			resp.Body.Close()
 			httpTLSReportChan <- 1
 		}
@@ -232,7 +235,10 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if err != nil {
 			log.Errorln(err)
 		} else {
-			io.Copy(ioutil.Discard, resp.Body)
+			n, err := io.Copy(ioutil.Discard, resp.Body)
+			if err != nil {
+				log.Error("httpGet: %v, only copied %v bytes", err, n)
+			}
 			resp.Body.Close()
 			httpReportChan <- 1
 		}
