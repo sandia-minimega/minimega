@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	MIN_QEMU = 1.1
+	MIN_QEMU = 1.6
 	MIN_OVS  = 1.4
 )
 
