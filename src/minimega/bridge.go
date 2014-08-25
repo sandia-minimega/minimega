@@ -86,6 +86,7 @@ func getBridge(b string) (*bridge, error) {
 	}
 	err := bridges[b].create()
 	if err != nil {
+		delete(bridges, b)
 		return nil, err
 	}
 	updateBridgeInfo()
