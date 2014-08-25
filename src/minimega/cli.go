@@ -776,7 +776,7 @@ commands.`,
 			Call:      cliHostTap,
 			Helpshort: "control host taps for communicating between hosts and VMs",
 			Helplong: `
-	Usage: host_tap [<create [bridge] vlan <A.B.C.D/MASK,dhcp,none>, delete <tap name>]
+	Usage: host_tap [<create [bridge] vlan <A.B.C.D/MASK,dhcp,none> [tap name], delete <tap name>]
 
 Control host taps on a named vlan for communicating between a host and any VMs
 on that vlan. 
@@ -795,6 +795,9 @@ For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 Optionally, you can specify the bridge to create the host tap on:
 
 	host_tap create <bridge> <vlan> <ip/dhcp>
+
+You can also optionally specify the tap name, otherwise the tap will be in the
+form of mega_tapX.
 
 Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
 ip/netmask:

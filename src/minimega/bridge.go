@@ -511,7 +511,6 @@ func (b *bridge) Destroy() error {
 		Stderr: &sErr,
 	}
 	log.Debug("destroying bridge with cmd: %v", cmd)
-	//err = cmd.Run()
 	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
@@ -763,14 +762,28 @@ func cliHostTap(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-		return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2])
-	case 4: // must be create with a specified bridge
+		return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], "")
+	case 4: // must be create with a specified bridge or a specified tap name
 		if c.Args[0] != "create" {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
-		return hostTapCreate(c.Args[1], c.Args[2], c.Args[3])
+		_, err := strconv.Atoi(c.Args[1])
+		if err == nil {
+			// specified tap name
+			return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], c.Args[3])
+		} else {
+			// specified bridge name
+			return hostTapCreate(c.Args[1], c.Args[2], c.Args[3], "")
+		}
+	case 5: // must be create with a specified bridge AND tap name
+		if c.Args[0] != "create" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+		return hostTapCreate(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
 	}
 
 	return cliResponse{
@@ -861,7 +874,7 @@ func hostTapDelete(tap string) cliResponse {
 	return cliResponse{}
 }
 
-func hostTapCreate(bridge, lan, ip string) cliResponse {
+func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
 	b, err := getBridge(bridge)
 	if err != nil {
 		return cliResponse{
@@ -881,10 +894,12 @@ func hostTapCreate(bridge, lan, ip string) cliResponse {
 		}
 	}
 
-	tapName, err := getNewTap()
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
+	if tapName == "" {
+		tapName, err = getNewTap()
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
 		}
 	}
 
