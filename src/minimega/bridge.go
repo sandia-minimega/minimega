@@ -244,7 +244,6 @@ func (b *bridge) DestroyNetflow() error {
 		Stderr: &sErr,
 	}
 	log.Debug("removing netflow on bridge with cmd: %v", cmd)
-	//err := cmd.Run()
 	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
@@ -280,7 +279,6 @@ func (b *bridge) UpdateNFTimeout(t int) error {
 		Stderr: &sErr,
 	}
 	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
-	//err := cmd.Run()
 	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
@@ -323,7 +321,6 @@ func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 		Stderr: &sErr,
 	}
 	log.Debug("creating netflow to bridge with cmd: %v", cmd)
-	//err = cmd.Run()
 	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr.String())
@@ -413,7 +410,6 @@ func (b *bridge) create() error {
 			Stderr: &sErr,
 		}
 		log.Debug("creating bridge with cmd: %v", cmd)
-		//err := cmd.Run()
 		err := cmdTimeout(cmd, OVS_TIMEOUT)
 		if err != nil {
 			es := sErr.String()
@@ -681,7 +677,6 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	}
 
 	log.Debug("adding tap with cmd: %v", cmd)
-	//err = cmd.Run()
 	err = cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		if strings.Contains(sErr.String(), "already exists") {
@@ -735,7 +730,6 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 		Stderr: &sErr,
 	}
 	log.Debug("removing tap with cmd: %v", cmd)
-	//err := cmd.Run()
 	err := cmdTimeout(cmd, OVS_TIMEOUT)
 	if err != nil {
 		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
