@@ -128,6 +128,9 @@ func main() {
 		first := true
 		for {
 			<-sig
+			if panicOnQuit {
+				panic("teardown")
+			}
 			if first {
 				log.Info("caught signal, tearing down, ctrl-c again will force quit")
 				go teardown()
@@ -205,14 +208,14 @@ func main() {
 		cli()
 	} else {
 		<-sig
+		if panicOnQuit {
+			panic("teardown")
+		}
 	}
 	teardown()
 }
 
 func teardown() {
-	if panicOnQuit {
-		panic("teardown")
-	}
 	vms.kill(makeCommand("vm_kill -1"))
 	dnsmasqKill(-1)
 	err := bridgesDestroy()
