@@ -590,6 +590,7 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
 	b.Lock.Lock()
 	if _, ok := disconnectedTaps[tap]; !ok {
+		b.Lock.Unlock()
 		return nil
 	}
 	b.Lock.Unlock()
