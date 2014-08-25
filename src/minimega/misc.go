@@ -169,7 +169,7 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 		if err != nil {
 			return err
 		}
-		return nil
+		return <-done
 	case err = <-done:
 		return err
 	}
