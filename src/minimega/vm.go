@@ -1340,7 +1340,6 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	diskPersistent := map[string]bool{}
 
 	vmLock.Lock()
-	defer vmLock.Unlock()
 
 	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
 	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
@@ -1364,6 +1363,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		if ok { // if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
+			vmLock.Unlock()
 			ack <- vm.Id // signal that this vm is "done" launching
 			return false
 		}
@@ -1416,6 +1416,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 			if ok { // if another vm has this mac address already
 				log.Error("mac address %v is already in use by another vm.", mac)
 				vm.state(VM_ERROR)
+				vmLock.Unlock()
 				ack <- vm.Id
 				return false
 			}
@@ -1429,11 +1430,13 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
 			log.Error("disk path %v is already in use by another vm.", diskPath)
 			vm.state(VM_ERROR)
+			vmLock.Unlock()
 			ack <- vm.Id
 			return false
 		}
 	}
 
+	vmLock.Unlock()
 	return true
 }
 
