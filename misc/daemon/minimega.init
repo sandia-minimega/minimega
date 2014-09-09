@@ -57,20 +57,20 @@ uninstall() {
 
 update() {
   # update minimega
-  read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
-  echo ""
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    # dev code here
-    wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
-    if [ "$?" != "0" ]; then
-      echo "Failed to download latest minimega build"
-      return 1
-    fi
-    tar xjf /tmp/latest.tar.bz2 -C /tmp >>/dev/null 2>&1
-    rm /tmp/latest.tar.bz2 >>/dev/null 2>&1
-    rm -rf /mega >>/dev/null 2>&1
-    mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
-  fi
+  #read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
+  #echo ""
+  #if [[ $REPLY =~ ^[Yy]$ ]]; then
+  #  # dev code here
+  #  wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
+  #  if [ "$?" != "0" ]; then
+  #    echo "Failed to download latest minimega build"
+  #    return 1
+  #  fi
+  #  tar xjf /tmp/latest.tar.bz2 -C /tmp >>/dev/null 2>&1
+  #  rm /tmp/latest.tar.bz2 >>/dev/null 2>&1
+  #  rm -rf /mega >>/dev/null 2>&1
+  #  mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
+  #fi
   return 0
 }
 
@@ -101,6 +101,7 @@ stop() {
   pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   kill $pid
   rm $MM_RUN_PATH/minimega.pid
+  rm $MM_RUN_PATH/minimega
   echo "minimega stopped"
   return 0
 }
