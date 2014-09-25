@@ -82,10 +82,10 @@ func read(path string, c *Config) error {
 		d := strings.Fields(v)
 		switch k {
 		case "parents":
-			c.Parents = append(c.Parents, d...)
 			for _, i := range d {
 				log.Infoln("reading config:", i)
 				err = read(i, c)
+				c.Parents = append(c.Parents, i)
 				if err != nil {
 					return err
 				}
