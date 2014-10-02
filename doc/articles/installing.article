@@ -5,9 +5,9 @@ Installing minimega
 
 minimega does not currently have an official release. You can obtain nightly builds of the most recent source code [[http://minimega.org/nightly/][here]]. The nightly build is for gnu/linux-amd64. 
 
-You can obtain source code by cloning the git repo:
+** System requirements
 
-	git clone https://code.google.com/p/minimega
+minimega requires at least qemu-kvm version 1.6 and openvswitch version 1.4.
 
 ** Building from source
 
@@ -63,3 +63,9 @@ For example, if you have only one physical interface, eth0, on your node which i
 	dhclient -v mega_bridge
 
 The above adds eth0 to the default minimega bridge `mega_bridge` as a trunk port, and then obtains an IP on `mega_bridge`, which has the same MAC as eth0 and will behave as eth0 did before you added it to the bridge. Do this on each node running minimega.
+
+* Getting help
+
+The mailing list is the primary resource for both developers and users. 
+
+.link https://groups.google.com/forum/#!forum/minimega-dev minimega mailing list
