@@ -41,6 +41,7 @@ type PDU interface {
 // The signature is func(host, port, username, password string)
 var PDUtypes = map[string]func(string, string, string, string) (PDU, error){
 	"tripplite": NewTrippLitePDU,
+	"servertech": NewServerTechPDU,
 }
 
 // One device as read from the config file
