@@ -218,7 +218,7 @@ overlay = "/path4"
 
 	expected := Config{
 		Path:     path1,
-		Parents:  []string{path2, path4, path3},
+		Parents:  []string{path3, path2, path4},
 		Packages: []string{"path3_package1", "path2_package1", "path2_package2", "path4_package1", "path4_package2", "linux-headers", "openvswitch-switch"},
 		Overlays: []string{"/path3", "/path4", "/home/foo/bar"},
 	}
