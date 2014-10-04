@@ -626,7 +626,7 @@ func (l *vmList) findByName(name string) int {
 // return VM_NOT_FOUND (-2), as -1 is reserved as the wildcard.
 func (l *vmList) findRunningByName(name string) int {
 	for i, v := range l.vms {
-		if v.Name == name  && v.State == VM_RUNNING {
+		if v.Name == name && v.State == VM_RUNNING {
 			return i
 		}
 	}
