@@ -622,6 +622,17 @@ func (l *vmList) findByName(name string) int {
 	return VM_NOT_FOUND
 }
 
+// findByName returns the id of a VM based on its name. If the VM doesn't exist
+// return VM_NOT_FOUND (-2), as -1 is reserved as the wildcard.
+func (l *vmList) findRunningByName(name string) int {
+	for i, v := range l.vms {
+		if v.Name == name  && v.State == VM_RUNNING {
+			return i
+		}
+	}
+	return VM_NOT_FOUND
+}
+
 // kill one or all vms (-1 for all)
 func (l *vmList) kill(c cliCommand) cliResponse {
 	if len(c.Args) != 1 {
@@ -633,7 +644,7 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 	// if it's a string, kill the one with that name
 	id, err := strconv.Atoi(c.Args[0])
 	if err != nil {
-		id = l.findByName(c.Args[0])
+		id = l.findRunningByName(c.Args[0])
 	}
 
 	if id == VM_NOT_FOUND {
