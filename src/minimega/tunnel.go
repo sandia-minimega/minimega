@@ -8,7 +8,7 @@
 // user does not have direct access to cluster nodes. novnctun runs on the
 // routable head node of the cluster, the user connects to it, and tunnels are
 // created to connect to virtual machines.
-package novnctun
+package main
 
 import (
 	"encoding/base64"
