@@ -11,13 +11,98 @@
 package main
 
 import (
+	"bufio"
 	"encoding/base64"
 	"fmt"
+	log "minilog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 	"websocket"
 )
+
+// Global variables rulez
+var (
+	recording map[string]*vmrecord
+	playing   map[string]*vmplayback
+)
+
+type vmrecord struct {
+	start  time.Time
+	output *bufio.Writer
+	file   *os.File
+}
+
+type vmplayback struct {
+	input *bufio.Reader
+	file  *os.File
+
+	nextevent chan []byte
+	done      chan bool
+}
+
+func init() {
+	recording = make(map[string]*vmrecord)
+	playing = make(map[string]*vmplayback)
+}
+
+func NewVMPlayback(filename string) (*vmplayback, error) {
+	ret := &vmplayback{}
+	fi, err := os.Open(filename)
+	if err != nil {
+		return ret, err
+	}
+	ret.file = fi
+	ret.input = bufio.NewReader(fi)
+	return ret, nil
+}
+
+func (v *vmplayback) Run() {
+	scanner := bufio.NewScanner(v.input)
+	for scanner.Scan() {
+		s := strings.Split(scanner.Text(), " ")
+		if len(s) != 2 {
+			continue
+		}
+		ns := s[0] + "ns"
+		duration, err := time.ParseDuration(ns)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		fmt.Printf("about to sleep for %s\n", ns)
+		time.After(duration)
+		fmt.Printf("Run() sending %s\n", s[1])
+		v.nextevent <- []byte(s[1])
+	}
+}
+
+func NewVMRecord(filename string) (*vmrecord, error) {
+	ret := &vmrecord{}
+	fi, err := os.Create(filename)
+	if err != nil {
+		return ret, err
+	}
+	ret.file = fi
+	ret.output = bufio.NewWriter(fi)
+	ret.start = time.Now()
+	return ret, nil
+}
+
+// Input ought to be a base64-encoded string as read from the websocket
+// connected to NoVNC. If not, well, oops.
+func (v *vmrecord) AddAction(s string) {
+	record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.start)).Nanoseconds(), s)
+	fmt.Printf("writing %s", record)
+	v.output.WriteString(record)
+}
+
+func (v *vmrecord) Close() {
+	v.output.Flush()
+	v.file.Close()
+}
 
 const BUF = 32768
 
@@ -45,12 +130,34 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
-			sbuf := make([]byte, BUF)
+			var n int
+			var sbuf []byte
+			//sbuf := make([]byte, BUF)
 			dbuf := make([]byte, BUF)
+			gotevent := make(chan []byte)
+			go func() {
+				buf := make([]byte, BUF)
+				for {
+					n, err = ws.Read(buf)
+					if err != nil {
+						break
+					}
+					gotevent <- buf
+				}
+			}()
 			for {
-				n, err := ws.Read(sbuf)
-				if err != nil {
-					break
+				var pbchan chan []byte
+				if pb, ok := playing[rhost]; ok {
+					fmt.Println("we're doing a playback!")
+					pbchan = pb.nextevent
+				}
+				select {
+				case sbuf = <-pbchan:
+					fmt.Println("got from playback")
+				case sbuf = <-gotevent:
+					if r, ok := recording[rhost]; ok {
+						r.AddAction(string(sbuf))
+					}
 				}
 				n, err = base64.StdEncoding.Decode(dbuf, sbuf[0:n])
 				if err != nil {
