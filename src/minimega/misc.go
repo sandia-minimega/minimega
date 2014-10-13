@@ -116,22 +116,29 @@ func cliDebug(c cliCommand) cliResponse {
 // 	Example: a b "c d"
 // 	will return: ["a", "b", "c d"]
 func fieldsQuoteEscape(c string, input string) []string {
+	log.Debug("fieldsQuoteEscape splitting on %v: %v", c, input)
 	f := strings.Fields(input)
 	var ret []string
 	trace := false
 	temp := ""
+
+	if len(f) == 1 {
+		r := trimQuote(c, input)
+		return []string{r}
+	}
+
 	for _, v := range f {
 		if trace {
 			if strings.Contains(v, c) {
 				trace = false
-				temp += " " + trimQuote(v)
+				temp += " " + trimQuote(c, v)
 				ret = append(ret, temp)
 			} else {
 				temp += " " + v
 			}
 		} else if strings.Contains(v, c) {
 			trace = true
-			temp = trimQuote(v)
+			temp = trimQuote(c, v)
 		} else {
 			ret = append(ret, v)
 		}
@@ -139,10 +146,14 @@ func fieldsQuoteEscape(c string, input string) []string {
 	return ret
 }
 
-func trimQuote(input string) string {
+func trimQuote(c string, input string) string {
+	if c == "" {
+		log.Errorln("cannot trim empty space")
+		return ""
+	}
 	var ret string
 	for _, v := range input {
-		if v != '"' {
+		if v != rune(c[0]) {
 			ret += string(v)
 		}
 	}
