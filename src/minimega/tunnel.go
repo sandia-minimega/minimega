@@ -30,7 +30,7 @@ var (
 )
 
 type vmrecord struct {
-	start  time.Time
+	last   time.Time
 	output *bufio.Writer
 	file   *os.File
 }
@@ -50,6 +50,8 @@ func init() {
 
 func NewVMPlayback(filename string) (*vmplayback, error) {
 	ret := &vmplayback{}
+	ret.nextevent = make(chan []byte)
+	ret.done = make(chan bool)
 	fi, err := os.Open(filename)
 	if err != nil {
 		return ret, err
@@ -72,11 +74,21 @@ func (v *vmplayback) Run() {
 			log.Errorln(err)
 			continue
 		}
-		fmt.Printf("about to sleep for %s\n", ns)
-		time.After(duration)
-		fmt.Printf("Run() sending %s\n", s[1])
+		wait := time.After(duration)
+		select {
+		case <-wait:
+		case <-v.done:
+			return
+		}
 		v.nextevent <- []byte(s[1])
 	}
+	v.Stop()
+}
+
+func (v *vmplayback) Stop() {
+	v.file.Close()
+	close(v.done) // this should cause the select in Run() to come back
+	close(v.nextevent)
 }
 
 func NewVMRecord(filename string) (*vmrecord, error) {
@@ -87,16 +99,16 @@ func NewVMRecord(filename string) (*vmrecord, error) {
 	}
 	ret.file = fi
 	ret.output = bufio.NewWriter(fi)
-	ret.start = time.Now()
+	ret.last = time.Now()
 	return ret, nil
 }
 
 // Input ought to be a base64-encoded string as read from the websocket
 // connected to NoVNC. If not, well, oops.
 func (v *vmrecord) AddAction(s string) {
-	record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.start)).Nanoseconds(), s)
-	fmt.Printf("writing %s", record)
+	record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), s)
 	v.output.WriteString(record)
+	v.last = time.Now()
 }
 
 func (v *vmrecord) Close() {
@@ -130,6 +142,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
+			var ok bool
 			var n int
 			var sbuf []byte
 			//sbuf := make([]byte, BUF)
@@ -142,23 +155,26 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 					if err != nil {
 						break
 					}
-					gotevent <- buf
+					gotevent <- buf[0:n]
 				}
 			}()
 			for {
 				var pbchan chan []byte
 				if pb, ok := playing[rhost]; ok {
-					fmt.Println("we're doing a playback!")
 					pbchan = pb.nextevent
 				}
 				select {
-				case sbuf = <-pbchan:
-					fmt.Println("got from playback")
+				case sbuf, ok = <-pbchan:
+					if !ok {
+						// channel closed, stop playback
+						delete(playing, rhost)
+					}
 				case sbuf = <-gotevent:
 					if r, ok := recording[rhost]; ok {
 						r.AddAction(string(sbuf))
 					}
 				}
+				n = len(sbuf)
 				n, err = base64.StdEncoding.Decode(dbuf, sbuf[0:n])
 				if err != nil {
 					break
