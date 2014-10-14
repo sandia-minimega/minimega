@@ -112,6 +112,8 @@ func hostStatsMemory() (int, int, error) {
 }
 
 func hostStatsBandwidth() (string, error) {
+	bridges := enumerateBridges()
+
 	band1, err := ioutil.ReadFile("/proc/net/dev")
 	if err != nil {
 		return "", err
@@ -133,6 +135,17 @@ func hostStatsBandwidth() (string, error) {
 	if bandwidthLast == 0 {
 		for i, v := range f {
 			if strings.HasSuffix(v, ":") {
+				track := false
+				for _, b := range bridges {
+					if b == v[:len(v)-1] {
+						log.Debug("host_stats tracking bridge %v", b)
+						track = true
+						break
+					}
+				}
+				if !track {
+					continue
+				}
 				if len(f) < (i + 16) {
 					return "", fmt.Errorf("could not read netdev")
 				}
@@ -157,6 +170,17 @@ func hostStatsBandwidth() (string, error) {
 	var total2 int64
 	for i, v := range f {
 		if strings.HasSuffix(v, ":") {
+			track := false
+			for _, b := range bridges {
+				if b == v[:len(v)-1] {
+					log.Debug("host_stats tracking bridge %v", b)
+					track = true
+					break
+				}
+			}
+			if !track {
+				continue
+			}
 			if len(f) < (i + 16) {
 				return "", fmt.Errorf("could not read netdev")
 			}
