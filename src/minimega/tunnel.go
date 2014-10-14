@@ -143,7 +143,6 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
 			var ok bool
-			var n int
 			var sbuf []byte
 			//sbuf := make([]byte, BUF)
 			dbuf := make([]byte, BUF)
@@ -151,6 +150,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 			go func() {
 				buf := make([]byte, BUF)
 				for {
+					var n int
 					n, err = ws.Read(buf)
 					if err != nil {
 						break
@@ -174,8 +174,7 @@ func WsHandler(w http.ResponseWriter, r *http.Request) {
 						r.AddAction(string(sbuf))
 					}
 				}
-				n = len(sbuf)
-				n, err = base64.StdEncoding.Decode(dbuf, sbuf[0:n])
+				n, err := base64.StdEncoding.Decode(dbuf, sbuf)
 				if err != nil {
 					break
 				}

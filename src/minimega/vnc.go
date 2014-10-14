@@ -25,11 +25,15 @@ func cliVNC(c cliCommand) cliResponse {
 		rhost := fmt.Sprintf("%v:%v", host, 5900+vm)
 		switch {
 		case c.Args[0] == "norecord":
-			recording[rhost].Close()
-			delete(recording, rhost)
+			if _, ok := recording[rhost]; ok {
+				recording[rhost].Close()
+				delete(recording, rhost)
+			}
 		case c.Args[0] == "noplayback":
-			playing[rhost].Stop()
-			// will be deleted elsewhere
+			if _, ok := playing[rhost]; ok {
+				playing[rhost].Stop()
+				// will be deleted elsewhere
+			}
 		}
 	case 4: // [record|playback] <host> <vm> <file>
 		if c.Args[0] != "record" && c.Args[0] != "playback" {
