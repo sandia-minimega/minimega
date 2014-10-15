@@ -717,6 +717,15 @@ func (l *vmList) launch(c cliCommand) cliResponse {
 	if err != nil {
 		numVms = 1
 		name = c.Args[0]
+
+		// Make sure that there isn't another VM with the same name
+		for _, vm := range l.vms {
+			if vm.Name == name {
+				return cliResponse{
+					Error: fmt.Sprintf("vm_launch duplicate VM name: %s", name),
+				}
+			}
+		}
 	}
 
 	ack := make(chan int)
