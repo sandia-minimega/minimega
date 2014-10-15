@@ -122,11 +122,6 @@ func fieldsQuoteEscape(c string, input string) []string {
 	trace := false
 	temp := ""
 
-	if len(f) == 1 {
-		r := trimQuote(c, input)
-		return []string{r}
-	}
-
 	for _, v := range f {
 		if trace {
 			if strings.Contains(v, c) {
@@ -137,8 +132,13 @@ func fieldsQuoteEscape(c string, input string) []string {
 				temp += " " + v
 			}
 		} else if strings.Contains(v, c) {
-			trace = true
 			temp = trimQuote(c, v)
+			if strings.HasSuffix(v, c) {
+				// special case, single word like 'foo'
+				ret = append(ret, temp)
+			} else {
+				trace = true
+			}
 		} else {
 			ret = append(ret, v)
 		}
