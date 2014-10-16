@@ -17,6 +17,7 @@ package gomacro_test
 
 import (
 	. "gomacro"
+	"sort"
 	"testing"
 )
 
@@ -57,7 +58,12 @@ func TestList(t *testing.T) {
 	m.Define("foo", "value")
 	m.Define("bar", "value")
 	got := m.List()
-	want := []string{"key", "foo", "bar"}
+	// Need to sort the keys because we can't know how the macros are stored
+	// internally and whether they will be returned in the order that they were
+	// added or not
+	sort.Strings(got)
+	// Also needs to be sorted
+	want := []string{"bar", "foo", "key"}
 	for i, v := range got {
 		if v != want[i] {
 			t.Errorf("List got \"%v\", wanted \"%v\"", got, want)
