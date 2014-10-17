@@ -14,6 +14,7 @@ package main
 import (
 	"encoding/base64"
 	"fmt"
+	"io"
 	log "minilog"
 	"net"
 	"net/http"
@@ -58,7 +59,9 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 					var n int
 					n, err = ws.Read(buf)
 					if err != nil {
-						log.Errorln(err)
+						if !strings.Contains(err.Error(), "closed network connection") {
+							log.Errorln(err)
+						}
 						break
 					}
 					log.Debugln(string(buf[0:n]))
@@ -100,7 +103,9 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 			for {
 				n, err := remote.Read(sbuf)
 				if err != nil {
-					log.Errorln(err)
+					if err != io.EOF {
+						log.Errorln(err)
+					}
 					break
 				}
 				base64.StdEncoding.Encode(dbuf, sbuf[0:n])
