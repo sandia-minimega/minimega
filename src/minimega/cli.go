@@ -645,6 +645,33 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			},
 		},
 
+		"vnc": &command{
+			Call:      cliVNC,
+			Helpshort: "record or playback VNC kbd/mouse input",
+			Helplong: `
+	Usage: 
+		vnc 
+		vnc [record <host> <vm id or name> <filename>, playback <host> <vm id or name> <filename>]
+		vnc [norecord <host> <vm id or name>, noplayback <host> <vm id or name>]
+		vnc clear
+
+Record or playback keyboard and mouse events sent via the web interface to
+the selected VM.
+
+With no arguments, vnc will list currently recording or playing VNC sessions.
+
+If record is selected, a file will be created containing a record of mouse and
+keyboard actions by the user.
+
+If playback is selected, the specified file (created using vnc record) will be
+read and processed as a sequence of time-stamped mouse/keyboard events to send
+to the specified VM.`,
+			Record: false,
+			Clear: func() error {
+				return vncClear()
+			},
+		},
+
 		"web": &command{
 			Call:      WebCLI,
 			Helpshort: "start the minimega web interface",

@@ -216,6 +216,8 @@ func main() {
 }
 
 func teardown() {
+	vncClear()
+	cliCaptureClear()
 	vms.kill(makeCommand("vm_kill -1"))
 	dnsmasqKill(-1)
 	err := bridgesDestroy()
@@ -223,7 +225,6 @@ func teardown() {
 		log.Errorln(err)
 	}
 	ksmDisable()
-	cliCaptureClear()
 	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()

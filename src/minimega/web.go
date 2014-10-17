@@ -9,7 +9,6 @@ import (
 	"html"
 	log "minilog"
 	"net/http"
-	"novnctun"
 	"os"
 	"sort"
 	"strconv"
@@ -96,7 +95,7 @@ func vncRoot(w http.ResponseWriter, r *http.Request) {
 		path := fmt.Sprintf("/novnc/vnc_auto.html?title=%v&path=vnc/ws/%v/%v", title, fields[2], fields[3])
 		http.Redirect(w, r, path, http.StatusTemporaryRedirect)
 	case 6: // "/ws/<host>/<port>"
-		novnctun.WsHandler(w, r)
+		vncWsHandler(w, r)
 	default:
 		http.NotFound(w, r)
 	}

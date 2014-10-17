@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"log"
 
-	"websocket"
+	"code.google.com/p/go.net/websocket"
 )
 
 // This example demonstrates a trivial client.
