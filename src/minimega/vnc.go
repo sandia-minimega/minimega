@@ -25,13 +25,13 @@ func cliVNC(c cliCommand) cliResponse {
 		rhost := fmt.Sprintf("%v:%v", host, 5900+vm)
 		switch {
 		case c.Args[0] == "norecord":
-			if _, ok := recording[rhost]; ok {
-				recording[rhost].Close()
-				delete(recording, rhost)
+			if _, ok := vncRecording[rhost]; ok {
+				vncRecording[rhost].Close()
+				delete(vncRecording, rhost)
 			}
 		case c.Args[0] == "noplayback":
-			if _, ok := playing[rhost]; ok {
-				playing[rhost].Stop()
+			if _, ok := vncPlaying[rhost]; ok {
+				vncPlaying[rhost].Stop()
 				// will be deleted elsewhere
 			}
 		}
@@ -61,7 +61,7 @@ func cliVNC(c cliCommand) cliResponse {
 					Error: err.Error(),
 				}
 			}
-			recording[rhost] = vmr
+			vncRecording[rhost] = vmr
 		case c.Args[0] == "playback":
 			vmp, err := NewVMPlayback(filename)
 			if err != nil {
@@ -70,7 +70,7 @@ func cliVNC(c cliCommand) cliResponse {
 					Error: err.Error(),
 				}
 			}
-			playing[rhost] = vmp
+			vncPlaying[rhost] = vmp
 			go vmp.Run()
 		}
 	default:
