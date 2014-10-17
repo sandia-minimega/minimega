@@ -22,12 +22,13 @@ import (
 )
 
 var (
-	info      *vmInfo // current vm info, interfaced be the cli
-	savedInfo map[string]*vmInfo
-
-	killAck  chan int
-	vmIdChan chan int
-	vmLock   sync.Mutex
+	info               *vmInfo // current vm info, interfaced be the cli
+	savedInfo          map[string]*vmInfo
+	killAck            chan int
+	vmIdChan           chan int
+	qemuOverrideIdChan chan int
+	vmLock             sync.Mutex
+	QemuOverrides      map[int]*qemuOverride
 )
 
 const (
@@ -44,6 +45,11 @@ const (
 	QMP_CONNECT_RETRY = 50
 	QMP_CONNECT_DELAY = 100
 )
+
+type qemuOverride struct {
+	match string
+	repl  string
+}
 
 // total list of vms running on this host
 type vmList struct {
@@ -101,14 +107,23 @@ type jsonInfo struct {
 }
 
 func init() {
+	QemuOverrides = make(map[int]*qemuOverride)
 	killAck = make(chan int)
 	vmIdChan = make(chan int)
+	qemuOverrideIdChan = make(chan int)
 	info = &vmInfo{}
 	savedInfo = make(map[string]*vmInfo)
 	go func() {
 		count := 0
 		for {
 			vmIdChan <- count
+			count++
+		}
+	}()
+	go func() {
+		count := 0
+		for {
+			qemuOverrideIdChan <- count
 			count++
 		}
 	}()
@@ -1525,7 +1540,9 @@ func (vm *vmInfo) launchOne(ack chan int) {
 		}
 	}
 
-	args = vm.vmGetArgs()
+	args = vm.vmGetArgs(true)
+	args = ParseQemuOverrides(args)
+
 	cmd = &exec.Cmd{
 		Path:   process("qemu"),
 		Args:   args,
@@ -1647,7 +1664,7 @@ func (vm *vmInfo) qmpPath() string {
 }
 
 // build the horribly long qemu argument string
-func (vm *vmInfo) vmGetArgs() []string {
+func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	var args []string
 
 	sId := strconv.Itoa(vm.Id)
@@ -1744,11 +1761,13 @@ func (vm *vmInfo) vmGetArgs() []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
-		b, err := getBridge(vm.bridges[i])
-		if err != nil {
-			log.Error("get bridge: %v", err)
+		if commit {
+			b, err := getBridge(vm.bridges[i])
+			if err != nil {
+				log.Error("get bridge: %v", err)
+			}
+			b.iml.AddMac(vm.macs[i])
 		}
-		b.iml.AddMac(vm.macs[i])
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))
 		addr++
 		if addr == 32 {
@@ -1785,6 +1804,76 @@ func (vm *vmInfo) asyncLogger() {
 		}
 		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
 	}
+}
+
+func ParseQemuOverrides(input []string) []string {
+	ret := strings.Join(input, " ")
+	for _, v := range QemuOverrides {
+		ret = strings.Replace(ret, v.match, v.repl, -1)
+	}
+	return strings.Fields(ret)
+}
+
+func cliVMQemuOverride(c cliCommand) cliResponse {
+	newArgs := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
+
+	switch len(newArgs) {
+	case 0: // show current overrides and the arg string
+		// create output
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintln(&o, "id\tmatch\treplacement")
+		for i, v := range QemuOverrides {
+			fmt.Fprintf(&o, "%v\t\"%v\"\t\"%v\"\n", i, v.match, v.repl)
+		}
+		w.Flush()
+
+		args := info.vmGetArgs(false)
+		preArgs := strings.Join(args, " ")
+		postArgs := strings.Join(ParseQemuOverrides(args), " ")
+
+		r := o.String()
+		r += fmt.Sprintf("\nBefore overrides:\n%v\n", preArgs)
+		r += fmt.Sprintf("\nAfter overrides:\n%v\n", postArgs)
+
+		return cliResponse{
+			Response: r,
+		}
+	case 2:
+		if newArgs[0] != "del" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		id, err := strconv.Atoi(newArgs[1])
+		if err != nil {
+			return cliResponse{
+				Error: fmt.Sprintf("invalid id %v", newArgs[1]),
+			}
+		}
+
+		delete(QemuOverrides, id)
+	case 3:
+		if newArgs[0] != "add" {
+			return cliResponse{
+				Error: "malformed command",
+			}
+		}
+
+		id := <-qemuOverrideIdChan
+
+		QemuOverrides[id] = &qemuOverride{
+			match: newArgs[1],
+			repl:  newArgs[2],
+		}
+	default:
+		return cliResponse{
+			Error: "malformed command",
+		}
+	}
+	return cliResponse{}
 }
 
 // clear all vm_ arguments

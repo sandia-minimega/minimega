@@ -211,6 +211,21 @@ failed, as well as some commands that do not impact the VM state, such as
 			},
 		},
 
+		"vm_qemu_override": &command{
+			Call:      cliVMQemuOverride,
+			Helpshort: "override parts of the qemu launch string",
+			Helplong: `
+	Usage: vm_qemu_override [add "<match>" "<replacement>", del <id>]
+
+Override parts of the qemu launch string by supplying a string to match, and a
+replacement string.`,
+			Record: true,
+			Clear: func() error {
+				QemuOverrides = make(map[int]*qemuOverride)
+				return nil
+			},
+		},
+
 		"vm_save": &command{
 			Call:      cliVMSave,
 			Helpshort: "save a vm configuration for later use",
@@ -667,9 +682,7 @@ If playback is selected, the specified file (created using vnc record) will be
 read and processed as a sequence of time-stamped mouse/keyboard events to send
 to the specified VM.`,
 			Record: false,
-			Clear: func() error {
-				return vncClear()
-			},
+			Clear:  vncClear,
 		},
 
 		"web": &command{
