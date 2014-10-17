@@ -400,23 +400,23 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 		usingTLS = true
 	}
 
+	start := time.Now().UnixNano()
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
-		return
+	} else {
+		h := &HtmlContent{
+			URLs:   randomURLs(),
+			Hits:   hits,
+			URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
+			Host:   r.Host,
+			Secure: usingTLS,
+		}
+		err := htmlTemplate.Execute(w, h)
+		if err != nil {
+			log.Errorln(err)
+		}
 	}
 
-	start := time.Now().UnixNano()
-	h := &HtmlContent{
-		URLs:   randomURLs(),
-		Hits:   hits,
-		URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
-		Host:   r.Host,
-		Secure: usingTLS,
-	}
-	err := htmlTemplate.Execute(w, h)
-	if err != nil {
-		log.Errorln(err)
-	}
 	stop := time.Now().UnixNano()
 	elapsed := uint64(stop - start)
 
