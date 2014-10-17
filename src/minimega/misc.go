@@ -174,3 +174,76 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 		return err
 	}
 }
+
+// findRemoteVM attempts to find the VM ID of a VM by name or ID on a remote
+// minimega node. It returns the ID of the VM on the remote host or an error,
+// which may also be an error communicating with the remote node.
+func findRemoteVM(host, vm string) (int, string, error) {
+	log.Debug("findRemoteVM: %v %v", host, vm)
+
+	// check for our own host
+	hostname, _ := os.Hostname()
+	if host == hostname {
+		log.Debugln("host is local node")
+		id := vms.findByName(vm)
+		if id == VM_NOT_FOUND {
+			// check for VM id
+			id, err := strconv.Atoi(vm)
+			if err != nil {
+				return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
+			}
+			if v, ok := vms.vms[id]; ok {
+				log.Debug("got vm: %v %v %v", host, id, v.Name)
+				return id, v.Name, nil
+			}
+		} else {
+			log.Debug("got vm: %v %v %v", host, id, vm)
+			return id, vm, nil
+		}
+	} else {
+		// message the remote node for this info with:
+		// 	vm_info name=<vm> [id]
+		// if that doesn't work, then try:
+		//	vm_info id=<vm> [name]
+		// if that doesn't work, return not found
+		log.Debugln("remote host")
+
+		cmd := cliCommand{
+			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("name=%v", vm), "[id]"},
+		}
+		r := meshageSet(cmd)
+		if r.Error != "" {
+			e := strings.TrimSpace(r.Error)
+			return VM_NOT_FOUND, "", fmt.Errorf(e)
+		}
+		d := strings.TrimSpace(r.Response)
+
+		log.Debug("got response %v", d)
+
+		v, err := strconv.Atoi(d)
+		if err == nil {
+			log.Debug("got vm: %v %v %v", host, v, vm)
+			return v, vm, nil
+		}
+
+		// nope, try the vm id instead
+		cmd = cliCommand{
+			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("id=%v", vm), "[name]"},
+		}
+		r = meshageSet(cmd)
+		if r.Error != "" {
+			e := strings.TrimSpace(r.Error)
+			return VM_NOT_FOUND, "", fmt.Errorf(e)
+		}
+		d = strings.TrimSpace(r.Response)
+
+		log.Debug("got response %v", d)
+
+		d = strings.TrimSpace(d)
+		if d != "" {
+			log.Debug("got vm: %v %v %v", host, v, d)
+			return v, d, nil
+		}
+	}
+	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
+}

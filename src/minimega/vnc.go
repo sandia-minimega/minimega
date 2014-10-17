@@ -157,14 +157,50 @@ func cliVNC(c cliCommand) cliResponse {
 			}
 		}
 		host := c.Args[1]
-		vm, err := strconv.Atoi(c.Args[2])
+		vm := c.Args[2]
+		vmID, err := strconv.Atoi(vm)
 		if err != nil {
-			log.Errorln(err)
-			return cliResponse{
-				Error: err.Error(),
+			vmID = -1
+		}
+
+		var rhost string
+		id := -1
+
+		// attempt to find a match
+		for _, v := range vncPlaying {
+			if v.Host == host {
+				if v.Name == vm {
+					id = v.ID
+					break
+				}
+				if vmID != -1 && v.ID == vmID {
+					id = vmID
+					break
+				}
 			}
 		}
-		rhost := fmt.Sprintf("%v:%v", host, 5900+vm)
+		if id == -1 { // check in recordings
+			for _, v := range vncRecording {
+				if v.Host == host {
+					if v.Name == vm {
+						id = v.ID
+						break
+					}
+					if vmID != -1 && v.ID == vmID {
+						id = vmID
+						break
+					}
+				}
+			}
+		}
+
+		if id == -1 {
+			return cliResponse{
+				Error: fmt.Sprintf("recording/playback %v %v not found", host, vm),
+			}
+		}
+
+		rhost = fmt.Sprintf("%v:%v", host, 5900+id)
 		switch {
 		case c.Args[0] == "norecord":
 			if _, ok := vncRecording[rhost]; ok {
@@ -184,16 +220,23 @@ func cliVNC(c cliCommand) cliResponse {
 			}
 		}
 		host := c.Args[1]
-		vmID, err := strconv.Atoi(c.Args[2])
-		vmName := "" // placeholder
+		vm := c.Args[2]
+
+		vmID, vmName, err := findRemoteVM(host, vm)
 		if err != nil {
-			log.Errorln(err)
 			return cliResponse{
 				Error: err.Error(),
 			}
 		}
 		filename := c.Args[3]
 		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+		// is this rhost already being recorded?
+		if _, ok := vncRecording[rhost]; ok {
+			return cliResponse{
+				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
+			}
+		}
 
 		switch {
 		case c.Args[0] == "record":
@@ -230,4 +273,18 @@ func cliVNC(c cliCommand) cliResponse {
 		}
 	}
 	return cliResponse{}
+}
+
+func vncClear() error {
+	log.Debugln("vncClear")
+	for k, v := range vncRecording {
+		log.Debug("stopping recording for %v", k)
+		v.Close()
+		delete(vncRecording, k)
+	}
+	for k, v := range vncPlaying {
+		log.Debug("stopping playback for %v", k)
+		v.Stop()
+	}
+	return nil
 }
