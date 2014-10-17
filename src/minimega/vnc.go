@@ -51,6 +51,7 @@ func init() {
 }
 
 func NewVMPlayback(filename string) (*vncVMPlayback, error) {
+	log.Debug("NewVMPlayback: %v", filename)
 	ret := &vncVMPlayback{}
 	ret.nextEvent = make(chan []byte)
 	ret.done = make(chan bool)
@@ -94,6 +95,7 @@ func (v *vncVMPlayback) Stop() {
 }
 
 func NewVMRecord(filename string) (*vncVMRecord, error) {
+	log.Debug("NewVMRecord: %v", filename)
 	ret := &vncVMRecord{}
 	fi, err := os.Create(filename)
 	if err != nil {
