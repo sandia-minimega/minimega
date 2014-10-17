@@ -5,13 +5,151 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	log "minilog"
+	"os"
 	"strconv"
+	"strings"
+	"text/tabwriter"
+	"time"
 )
+
+var (
+	vncRecording map[string]*vncVMRecord
+	vncPlaying   map[string]*vncVMPlayback
+)
+
+type vncVMRecord struct {
+	Host     string
+	Name     string
+	ID       int
+	Filename string
+
+	last   time.Time
+	output *bufio.Writer
+	file   *os.File
+}
+
+type vncVMPlayback struct {
+	Host     string
+	Name     string
+	ID       int
+	Filename string
+
+	input *bufio.Reader
+	file  *os.File
+
+	nextEvent chan []byte
+	done      chan bool
+}
+
+func init() {
+	vncRecording = make(map[string]*vncVMRecord)
+	vncPlaying = make(map[string]*vncVMPlayback)
+}
+
+func NewVMPlayback(filename string) (*vncVMPlayback, error) {
+	ret := &vncVMPlayback{}
+	ret.nextEvent = make(chan []byte)
+	ret.done = make(chan bool)
+	fi, err := os.Open(filename)
+	if err != nil {
+		return ret, err
+	}
+	ret.file = fi
+	ret.input = bufio.NewReader(fi)
+	return ret, nil
+}
+
+func (v *vncVMPlayback) Run() {
+	scanner := bufio.NewScanner(v.input)
+	for scanner.Scan() {
+		s := strings.Split(scanner.Text(), " ")
+		if len(s) != 2 {
+			continue
+		}
+		ns := s[0] + "ns"
+		duration, err := time.ParseDuration(ns)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		wait := time.After(duration)
+		select {
+		case <-wait:
+		case <-v.done:
+			return
+		}
+		v.nextEvent <- []byte(s[1])
+	}
+	v.Stop()
+}
+
+func (v *vncVMPlayback) Stop() {
+	v.file.Close()
+	close(v.done) // this should cause the select in Run() to come back
+	close(v.nextEvent)
+}
+
+func NewVMRecord(filename string) (*vncVMRecord, error) {
+	ret := &vncVMRecord{}
+	fi, err := os.Create(filename)
+	if err != nil {
+		return ret, err
+	}
+	ret.file = fi
+	ret.output = bufio.NewWriter(fi)
+	ret.last = time.Now()
+	return ret, nil
+}
+
+// Input ought to be a base64-encoded string as read from the websocket
+// connected to NoVNC. If not, well, oops.
+func (v *vncVMRecord) AddAction(s string) {
+	record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), s)
+	v.output.WriteString(record)
+	v.last = time.Now()
+}
+
+func (v *vncVMRecord) Close() {
+	v.output.Flush()
+	v.file.Close()
+}
 
 func cliVNC(c cliCommand) cliResponse {
 	switch len(c.Args) {
+	case 0: // show current recordings/playbacks
+		var recordings string
+		var playbacks string
+		var o bytes.Buffer
+
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintln(&o, "Recordings:\n")
+		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
+		for _, v := range vncRecording {
+			fmt.Fprintf(w, "%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
+		}
+		w.Flush()
+		recordings = o.String()
+
+		o.Reset()
+
+		w = new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintln(&o, "Playbacks:\n")
+		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
+		for _, v := range vncPlaying {
+			fmt.Fprintf(w, "%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
+		}
+		w.Flush()
+		playbacks = o.String()
+
+		return cliResponse{
+			Response: fmt.Sprintf("%v%v", recordings, playbacks),
+		}
 	case 3: // [norecord|noplayback] <host> <vm>
 		if c.Args[0] != "norecord" && c.Args[0] != "noplayback" {
 			return cliResponse{
@@ -46,7 +184,8 @@ func cliVNC(c cliCommand) cliResponse {
 			}
 		}
 		host := c.Args[1]
-		vm, err := strconv.Atoi(c.Args[2])
+		vmID, err := strconv.Atoi(c.Args[2])
+		vmName := "" // placeholder
 		if err != nil {
 			log.Errorln(err)
 			return cliResponse{
@@ -54,7 +193,7 @@ func cliVNC(c cliCommand) cliResponse {
 			}
 		}
 		filename := c.Args[3]
-		rhost := fmt.Sprintf("%v:%v", host, 5900+vm)
+		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
 
 		switch {
 		case c.Args[0] == "record":
@@ -65,6 +204,10 @@ func cliVNC(c cliCommand) cliResponse {
 					Error: err.Error(),
 				}
 			}
+			vmr.Filename = filename
+			vmr.Host = host
+			vmr.Name = vmName
+			vmr.ID = vmID
 			vncRecording[rhost] = vmr
 		case c.Args[0] == "playback":
 			vmp, err := NewVMPlayback(filename)
@@ -74,6 +217,10 @@ func cliVNC(c cliCommand) cliResponse {
 					Error: err.Error(),
 				}
 			}
+			vmp.Filename = filename
+			vmp.Host = host
+			vmp.Name = vmName
+			vmp.ID = vmID
 			vncPlaying[rhost] = vmp
 			go vmp.Run()
 		}

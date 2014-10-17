@@ -649,11 +649,15 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			Call:      cliVNC,
 			Helpshort: "record or playback VNC kbd/mouse input",
 			Helplong: `
-	Usage: vnc [record <host> <vm id or name> <filename>, playback <host> <vm id or name> <filename>]
-	       vnc [norecord <host> <vm id or name>, noplayback <host> <vm id or name>]
+	Usage: 
+		vnc 
+		vnc [record <host> <vm id or name> <filename>, playback <host> <vm id or name> <filename>]
+		vnc [norecord <host> <vm id or name>, noplayback <host> <vm id or name>]
 
 Record or playback keyboard and mouse events sent via the web interface to
 the selected VM.
+
+With no arguments, vnc will list currently recording or playing VNC sessions.
 
 If record is selected, a file will be created containing a record of mouse and
 keyboard actions by the user.
