@@ -127,10 +127,10 @@ func cliVNC(c cliCommand) cliResponse {
 
 		w := new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "Recordings:\n")
+		fmt.Fprintln(&o, "Recordings:")
 		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
 		for _, v := range vncRecording {
-			fmt.Fprintf(w, "%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
 		}
 		w.Flush()
 		recordings = o.String()
@@ -139,16 +139,16 @@ func cliVNC(c cliCommand) cliResponse {
 
 		w = new(tabwriter.Writer)
 		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "Playbacks:\n")
+		fmt.Fprintln(&o, "Playbacks:")
 		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
 		for _, v := range vncPlaying {
-			fmt.Fprintf(w, "%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
 		}
 		w.Flush()
 		playbacks = o.String()
 
 		return cliResponse{
-			Response: fmt.Sprintf("%v%v", recordings, playbacks),
+			Response: fmt.Sprintf("%v\n%v", recordings, playbacks),
 		}
 	case 3: // [norecord|noplayback] <host> <vm>
 		if c.Args[0] != "norecord" && c.Args[0] != "noplayback" {
