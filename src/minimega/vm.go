@@ -345,7 +345,7 @@ func cliVMSave(c cliCommand) cliResponse {
 func cliVMConfig(c cliCommand) cliResponse {
 	switch len(c.Args) {
 	case 0:
-		config := configToString()
+		config := info.configToString()
 
 		return cliResponse{
 			Response: config,
@@ -388,24 +388,24 @@ func cliVMConfig(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
-func configToString() string {
+func (vm *vmInfo) configToString() string {
 	// create output
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "Current VM configuration:")
-	fmt.Fprintf(w, "Memory:\t%v\n", info.Memory)
-	fmt.Fprintf(w, "VCPUS:\t%v\n", info.Vcpus)
-	fmt.Fprintf(w, "Disk Paths:\t%v\n", info.DiskPaths)
-	fmt.Fprintf(w, "CDROM Path:\t%v\n", info.CdromPath)
-	fmt.Fprintf(w, "Kernel Path:\t%v\n", info.KernelPath)
-	fmt.Fprintf(w, "Initrd Path:\t%v\n", info.InitrdPath)
-	fmt.Fprintf(w, "Kernel Append:\t%v\n", info.Append)
+	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
+	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
+	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
+	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
+	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
+	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
-	fmt.Fprintf(w, "QEMU Append:\t%v\n", info.QemuAppend)
-	fmt.Fprintf(w, "Snapshot:\t%v\n", info.Snapshot)
-	fmt.Fprintf(w, "Networks:\t%v\n", networkString())
-	fmt.Fprintf(w, "UUID:\t%v\n", info.UUID)
+	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
+	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
+	fmt.Fprintf(w, "Networks:\t%v\n", vm.networkString())
+	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
 	return o.String()
 }
@@ -422,17 +422,17 @@ func (l *vmList) cleanDirs() {
 	}
 }
 
-func networkString() string {
+func (vm *vmInfo) networkString() string {
 	s := "["
-	for i, vlan := range info.Networks {
-		if info.bridges[i] != "" {
-			s += info.bridges[i] + ","
+	for i, vlan := range vm.Networks {
+		if vm.bridges[i] != "" {
+			s += vm.bridges[i] + ","
 		}
 		s += strconv.Itoa(vlan)
-		if info.macs[i] != "" {
-			s += "," + info.macs[i]
+		if vm.macs[i] != "" {
+			s += "," + vm.macs[i]
 		}
-		if i+1 < len(info.Networks) {
+		if i+1 < len(vm.Networks) {
 			s += " "
 		}
 	}
@@ -1490,7 +1490,7 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	vm.state(VM_BUILDING)
 
 	// write the config for this vm
-	config := configToString()
+	config := vm.configToString()
 	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
 	if err != nil {
 		log.Errorln(err)
@@ -2053,7 +2053,7 @@ func cliVMNet(c cliCommand) cliResponse {
 	r := cliResponse{}
 	if len(c.Args) == 0 {
 		return cliResponse{
-			Response: fmt.Sprintf("%v\n", networkString()),
+			Response: fmt.Sprintf("%v\n", info.networkString()),
 		}
 	} else {
 		info.bridges = []string{}
