@@ -396,7 +396,7 @@ func extlinux(path string) error {
 		Args: []string{
 			p,
 			"--install",
-			path + "/boot",
+			filepath.Join(path, "/boot"),
 		},
 		Env:    nil,
 		Dir:    "",
@@ -412,7 +412,7 @@ func extlinux(path string) error {
 
 	// write out the bootloader config, but first figure out the kernel and
 	// initrd files in /boot
-	filepath.Walk(path+"/boot", kernelWalker)
+	filepath.Walk(filepath.Join(path, "/boot"), kernelWalker)
 	if kernelName == "" {
 		return fmt.Errorf("could not find kernel name")
 	}
@@ -422,7 +422,7 @@ func extlinux(path string) error {
 
 	extlinuxConfig := fmt.Sprintf("DEFAULT minimegalinux\nLABEL minimegalinux\nSAY booting minimegalinux\nLINUX /boot/%v\nAPPEND root=/dev/sda1\nINITRD /boot/%v", kernelName, initrdName)
 
-	err = ioutil.WriteFile(path+"/boot/extlinux.conf", []byte(extlinuxConfig), os.FileMode(0660))
+	err = ioutil.WriteFile(filepath.Join(path, "/boot/extlinux.conf"), []byte(extlinuxConfig), os.FileMode(0660))
 	if err != nil {
 		return err
 	}

@@ -30,10 +30,10 @@ func Overlays(buildPath string, c vmconfig.Config) error {
 			base := filepath.Base(o)    // get base path of overlay directory
 			if i == len(c.Overlays)-1 { // if this is the last overlay, we'll check relative to c.Path
 				log.Debugln("non-parent overlay")
-				path = filepath.Dir(c.Path) + "/" + base
+				path = filepath.Join(filepath.Dir(c.Path), base)
 			} else { // if not, it's a parent overlay and we'll check relative to c.Parents[i]
 				log.Debugln("parent overlay")
-				path = filepath.Dir(c.Parents[i]) + "/" + base
+				path = filepath.Join(filepath.Dir(c.Parents[i]), base)
 			}
 			log.Debugln("checking path relative to config location: '%v'", path)
 			if _, err := os.Stat(path); os.IsNotExist(err) { // check if we can find overlay relative to config file
