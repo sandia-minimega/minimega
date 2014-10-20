@@ -1445,16 +1445,6 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 
 			vm.macs[i] = newMac       // set the unspecified mac address
 			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
-		} else { // if mac is specified, check for mac address conflict
-			// we only need to check against macMap because selfMacMap is collision-free at this point
-			_, ok := macMap[mac]
-			if ok { // if another vm has this mac address already
-				log.Error("mac address %v is already in use by another vm.", mac)
-				vm.state(VM_ERROR)
-				vmLock.Unlock()
-				ack <- vm.Id
-				return false
-			}
 		}
 	}
 
