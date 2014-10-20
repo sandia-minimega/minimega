@@ -243,7 +243,7 @@ func cliVMSave(c cliCommand) cliResponse {
 		teardown()
 	}
 
-	file, err := os.Create(fmt.Sprintf("%v/%v", path, c.Args[0]))
+	file, err := os.Create(filepath.Join(path, c.Args[0]))
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),
