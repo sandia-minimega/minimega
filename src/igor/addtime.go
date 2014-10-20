@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/user"
+	"path/filepath"
 	"syscall"
 )
 
@@ -44,7 +45,7 @@ func runAddtime(cmd *Command, args []string) {
 	}
 
 	user, err := user.Current()
-	path := igorConfig.TFTPRoot + "/igor/reservations.json"
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)

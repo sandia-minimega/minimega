@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"ranges"
 	"text/tabwriter"
 	"time"
@@ -76,7 +77,7 @@ func isAlive(host string) bool {
 // Ping every node (concurrently), then show which nodes are up
 // and which nodes are in which reservation
 func runShow(cmd *Command, args []string) {
-	path := igorConfig.TFTPRoot + "/igor/reservations.json"
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)
