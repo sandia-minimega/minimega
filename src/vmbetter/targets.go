@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -214,8 +213,6 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 
 func createQcow2(target, size string) error {
 	// create our qcow image
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	p := process("qemu-img")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -227,16 +224,27 @@ func createQcow2(target, size string) error {
 			target,
 			size,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
 	log.Debug("creating disk image with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "qemu-img")
+	log.LogAll(stderr, log.ERROR, "qemu-img")
+
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -244,8 +252,6 @@ func createQcow2(target, size string) error {
 func nbdConnectQcow2(target string) (string, error) {
 	// connect it to qemu-nbd
 	p := process("qemu-nbd")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -254,16 +260,27 @@ func nbdConnectQcow2(target string) (string, error) {
 			"/dev/nbd0",
 			target,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
 	log.Debug("connecting to nbd with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return "", e
+		return "", err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	log.LogAll(stdout, log.INFO, "qemu-nbd")
+	log.LogAll(stderr, log.ERROR, "qemu-nbd")
+
+	err = cmd.Run()
+	if err != nil {
+		return "", err
 	}
 	return "/dev/nbd0", nil
 }
@@ -271,34 +288,42 @@ func nbdConnectQcow2(target string) (string, error) {
 func partitionQcow2(dev string) error {
 	// partition with fdisk
 	p := process("fdisk")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			dev,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
 	sIn, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "fdisk")
+	log.LogAll(stderr, log.INFO, "fdisk")
+
 	log.Debug("partitioning with cmd: %v", cmd)
 	err = cmd.Start()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
 	}
 	io.WriteString(sIn, "n\np\n1\n\n\na\n1\nw\n")
 	err = cmd.Wait()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
 	}
 	return nil
 }
@@ -306,24 +331,33 @@ func partitionQcow2(dev string) error {
 func formatQcow2(dev string) error {
 	// make an ext4 filesystem
 	p := process("mkfs")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			dev,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("formatting with with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "mkfs")
+	log.LogAll(stderr, log.INFO, "mkfs")
+
+	log.Debug("formatting with with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -336,8 +370,6 @@ func mountQcow2(dev string) (string, error) {
 	}
 	log.Debugln("using mount path:", mountPath)
 	p := process("mount")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -345,16 +377,27 @@ func mountQcow2(dev string) (string, error) {
 			dev,
 			mountPath,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return "", err
+	}
+
+	log.LogAll(stdout, log.INFO, "mount")
+	log.LogAll(stderr, log.ERROR, "mount")
+
 	log.Debug("mounting with with cmd: %v", cmd)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return "", e
+		return "", err
 	}
 	return mountPath, nil
 }
@@ -362,26 +405,36 @@ func mountQcow2(dev string) (string, error) {
 func copyQcow2(src, dst string) error {
 	// copy everything over
 	p := process("cp")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"-a",
+			"-v",
 			src + "/.",
 			dst,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("copy with with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stderr, log.ERROR, "cp")
+
+	log.Debug("copy with with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -389,8 +442,6 @@ func copyQcow2(src, dst string) error {
 func extlinux(path string) error {
 	// install extlinux
 	p := process("extlinux")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -398,16 +449,27 @@ func extlinux(path string) error {
 			"--install",
 			path + "/boot",
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("installing bootloader with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "extlinux")
+	log.LogAll(stderr, log.INFO, "extlinux")
+
+	log.Debug("installing bootloader with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 
 	// write out the bootloader config, but first figure out the kernel and
@@ -432,24 +494,33 @@ func extlinux(path string) error {
 func umountQcow2(path string) error {
 	// unmount
 	p := process("umount")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			path,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("unmounting with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "umount")
+	log.LogAll(stderr, log.ERROR, "umount")
+
+	log.Debug("unmounting with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -457,8 +528,6 @@ func umountQcow2(path string) error {
 func extlinuxMBR(dev string) error {
 	// dd the mbr image
 	p := process("dd")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -469,16 +538,27 @@ func extlinuxMBR(dev string) error {
 			"count=1",
 			fmt.Sprintf("of=%v", dev),
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("installing mbr with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "dd")
+	log.LogAll(stderr, log.INFO, "dd")
+
+	log.Debug("installing mbr with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
@@ -486,8 +566,6 @@ func extlinuxMBR(dev string) error {
 func nbdDisconnectQcow2(dev string) error {
 	// disconnect nbd
 	p := process("qemu-nbd")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -495,16 +573,27 @@ func nbdDisconnectQcow2(dev string) error {
 			"-d",
 			dev,
 		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Env: nil,
+		Dir: "",
 	}
-	log.Debug("disconnecting nbd with cmd: %v", cmd)
-	err := cmd.Run()
+
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return e
+		return err
+	}
+
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+
+	log.LogAll(stdout, log.INFO, "qemu-nbd")
+	log.LogAll(stderr, log.ERROR, "qemu-nbd")
+
+	log.Debug("disconnecting nbd with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		return err
 	}
 	return nil
 }
