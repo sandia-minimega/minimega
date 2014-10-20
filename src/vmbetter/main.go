@@ -30,6 +30,7 @@ var (
 	f_branch        = flag.String("branch", "testing", "debian branch to use")
 	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
 	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
+	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.

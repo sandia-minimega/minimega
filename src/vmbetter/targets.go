@@ -463,7 +463,7 @@ func extlinuxMBR(dev string) error {
 		Path: p,
 		Args: []string{
 			p,
-			"if=/usr/lib/syslinux/mbr.bin",
+			fmt.Sprintf("if=%v", *f_mbr),
 			"conv=notrunc",
 			"bs=440",
 			"count=1",
