@@ -152,7 +152,7 @@ func ccProcessCommand(c cliCommand) cliResponse {
 			}
 
 			// everything else should be an id=value pair
-			s := strings.Split(v, "=")
+			s := strings.SplitN(v, "=", 2)
 			if len(s) != 2 {
 				return cliResponse{
 					Error: fmt.Sprintf("malformed id=value pair: %v", v),
@@ -258,7 +258,7 @@ func ccProcessFilters(c cliCommand) cliResponse {
 		// the rest of the fields should id=value pairs
 		client := &ron.Client{}
 		for _, v := range c.Args[2:] {
-			s := strings.Split(v, "=")
+			s := strings.SplitN(v, "=", 2)
 			if len(s) != 2 {
 				return cliResponse{
 					Error: fmt.Sprintf("malformed id=value pair: %v", v),
