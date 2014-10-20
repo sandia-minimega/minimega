@@ -84,131 +84,74 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		return err
 	}
 
+	// Final qcow2 target
 	targetqcow2 := fmt.Sprintf("%v/%v.qcow2", wd, targetName)
+	// Temporary file for building qcow2 file, will be renamed to targetqcow2
+	tmpqcow2 := fmt.Sprintf("%v/%v.qcow2.tmp", wd, targetName)
 
-	err = createQcow2(targetqcow2, *f_qcowsize)
+	err = createQcow2(tmpqcow2, *f_qcowsize)
 	if err != nil {
 		return err
 	}
 
-	dev, err := nbdConnectQcow2(targetqcow2)
-	if err != nil {
-		e2 := os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+	// Cleanup our temporary building file
+	defer func() {
+		// Check if file exists
+		if _, err := os.Stat(tmpqcow2); err == nil {
+			if err = os.Remove(tmpqcow2); err != nil {
+				log.Errorln(err)
+			}
 		}
+	}()
+
+	dev, err := nbdConnectQcow2(tmpqcow2)
+	if err != nil {
 		return err
 	}
 
-	err = partitionQcow2(dev)
-	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
+	// Disconnect from the nbd device
+	defer func() {
+		if err := nbdDisconnectQcow2(dev); err != nil {
+			log.Errorln(err)
 		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
+	}()
+
+	if err := partitionQcow2(dev); err != nil {
 		return err
 	}
 
-	err = formatQcow2(dev + "p1")
-	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
+	if err := formatQcow2(dev + "p1"); err != nil {
 		return err
 	}
 
 	mountPath, err := mountQcow2(dev + "p1")
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+		return err
+	}
+
+	if err := copyQcow2(buildPath, mountPath); err != nil {
+		if err := umountQcow2(mountPath); err != nil {
+			log.Errorln(err)
 		}
 		return err
 	}
 
-	err = copyQcow2(buildPath, mountPath)
-	if err != nil {
-		e2 := umountQcow2(mountPath)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+	if err := extlinux(mountPath); err != nil {
+		if err := umountQcow2(mountPath); err != nil {
+			log.Errorln(err)
 		}
 		return err
 	}
 
-	err = extlinux(mountPath)
-	if err != nil {
-		e2 := umountQcow2(mountPath)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
+	if err := umountQcow2(mountPath); err != nil {
 		return err
 	}
 
-	err = umountQcow2(mountPath)
-	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
+	if err := extlinuxMBR(dev); err != nil {
 		return err
 	}
 
-	err = extlinuxMBR(dev)
-	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		return err
-	}
-
-	err = nbdDisconnectQcow2(dev)
-	if err != nil {
-		e2 := os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		return err
-	}
-
-	return nil
+	return os.Rename(tmpqcow2, targetqcow2)
 }
 
 func createQcow2(target, size string) error {
