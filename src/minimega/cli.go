@@ -1650,13 +1650,13 @@ func (c cliCommand) String() string {
 }
 
 func cliDefine(c cliCommand) cliResponse {
-	m := macro.List()
-	if len(m) == 0 {
-		return cliResponse{}
-	}
-
 	switch len(c.Args) {
 	case 0:
+		m := macro.List()
+		if len(m) == 0 {
+			return cliResponse{}
+		}
+
 		// create output
 		var o bytes.Buffer
 		w := new(tabwriter.Writer)
