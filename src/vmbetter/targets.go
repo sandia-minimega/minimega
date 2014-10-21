@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -193,6 +194,22 @@ func createQcow2(target, size string) error {
 }
 
 func nbdConnectQcow2(target string) (string, error) {
+	// Find the first available nbd, there is a race condition here.
+	nbdPath := ""
+
+	// Have 128 as the upper bound as it used to be the arbitrary limit on the
+	// number of NBD devices.
+	for i := 0; i < 128; i++ {
+		path := fmt.Sprintf("/dev/nbd%d", i)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			nbdPath = path
+		}
+	}
+
+	if nbdPath == "" {
+		return "", errors.New("unable to find available nbd device")
+	}
+
 	// connect it to qemu-nbd
 	p := process("qemu-nbd")
 	cmd := &exec.Cmd{
@@ -200,7 +217,7 @@ func nbdConnectQcow2(target string) (string, error) {
 		Args: []string{
 			p,
 			"-c",
-			"/dev/nbd0",
+			nbdPath,
 			target,
 		},
 		Env: nil,
@@ -225,7 +242,7 @@ func nbdConnectQcow2(target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return "/dev/nbd0", nil
+	return nbdPath, nil
 }
 
 func partitionQcow2(dev string) error {
