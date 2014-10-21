@@ -21,7 +21,7 @@ func (r *Ron) masterResponseProcessor() {
 				continue
 			}
 
-			path := filepath.Join(r.path+RESPONSE_PATH, strconv.Itoa(v.ID), uuid)
+			path := filepath.Join(r.path, RESPONSE_PATH, strconv.Itoa(v.ID), uuid)
 			err := os.MkdirAll(path, os.FileMode(0770))
 			if err != nil {
 				log.Errorln(err)

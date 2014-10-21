@@ -40,7 +40,7 @@ type PDU interface {
 // This maps the Device.pdutype variable to a function
 // The signature is func(host, port, username, password string)
 var PDUtypes = map[string]func(string, string, string, string) (PDU, error){
-	"tripplite": NewTrippLitePDU,
+	"tripplite":  NewTrippLitePDU,
 	"servertech": NewServerTechPDU,
 }
 

@@ -197,7 +197,7 @@ func (r *Ron) DeleteFiles(id int) error {
 	r.commandLock.Lock()
 	defer r.commandLock.Unlock()
 	if _, ok := r.commands[id]; ok {
-		path := filepath.Join(r.path, "/responses/", strconv.Itoa(id))
+		path := filepath.Join(r.path, "responses", strconv.Itoa(id))
 		err := os.RemoveAll(path)
 		if err != nil {
 			log.Errorln(err)

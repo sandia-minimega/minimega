@@ -9,6 +9,7 @@ import (
 	log "minilog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -22,7 +23,7 @@ const (
 	HEARTBEAT_RATE = 5
 	REAPER_RATE    = 30
 	CLIENT_EXPIRED = 30
-	RESPONSE_PATH  = "/miniccc_responses"
+	RESPONSE_PATH  = "miniccc_responses"
 )
 
 type Ron struct {
@@ -182,7 +183,7 @@ func (r *Ron) startMaster() error {
 		return err
 	}
 
-	err = os.MkdirAll(r.path+RESPONSE_PATH, 0775)
+	err = os.MkdirAll(filepath.Join(r.path, RESPONSE_PATH), 0775)
 	if err != nil {
 		return err
 	}
