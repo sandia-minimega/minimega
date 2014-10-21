@@ -5,11 +5,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"nbd"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,6 +80,11 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
 
+	err := nbd.Ready()
+	if err != nil {
+		return err
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
@@ -105,14 +110,14 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		}
 	}()
 
-	dev, err := nbdConnectQcow2(tmpqcow2)
+	dev, err := nbd.ConnectImage(tmpqcow2)
 	if err != nil {
 		return err
 	}
 
 	// Disconnect from the nbd device
 	defer func() {
-		if err := nbdDisconnectQcow2(dev); err != nil {
+		if err := nbd.DisconnectDevice(dev); err != nil {
 			log.Errorln(err)
 		}
 	}()
@@ -198,60 +203,6 @@ func createQcow2(target, size string) error {
 	log.LogAll(stderr, log.ERROR, "qemu-img")
 
 	return cmd.Run()
-}
-
-// nbdConnectQcow2 exports a target image using the NBD protocol using the
-// qemu-nbd. If successful, returns the NBD device.
-func nbdConnectQcow2(target string) (string, error) {
-	// Find the first available nbd, there is a race condition here.
-	nbdPath := ""
-
-	// Have 128 as the upper bound as it used to be the arbitrary limit on the
-	// number of NBD devices.
-	for i := 0; i < 128; i++ {
-		path := fmt.Sprintf("/dev/nbd%d", i)
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			nbdPath = path
-		}
-	}
-
-	if nbdPath == "" {
-		return "", errors.New("unable to find available nbd device")
-	}
-
-	// connect it to qemu-nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-c",
-			nbdPath,
-			target,
-		},
-		Env: nil,
-		Dir: "",
-	}
-	log.Debug("connecting to nbd with cmd: %v", cmd)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	err = cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return nbdPath, nil
 }
 
 // partitionQcow2 partitions the provided device creating one primary partition
@@ -518,38 +469,6 @@ func extlinuxMBR(dev, mbr string) error {
 	log.LogAll(stderr, log.INFO, "dd")
 
 	log.Debug("installing mbr with cmd: %v", cmd)
-	return cmd.Run()
-}
-
-// nbdDisconnectQcow2 disconnects a given NBD using qemu-nbd.
-func nbdDisconnectQcow2(dev string) error {
-	// disconnect nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-d",
-			dev,
-		},
-		Env: nil,
-		Dir: "",
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	log.Debug("disconnecting nbd with cmd: %v", cmd)
 	return cmd.Run()
 }
 
