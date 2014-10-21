@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
@@ -650,23 +651,16 @@ func (l *vmList) findRunningByName(name string) int {
 }
 
 // kill one or all vms (-1 for all)
-func (l *vmList) kill(c cliCommand) cliResponse {
-	if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "vm_kill takes one argument",
-		}
-	}
+func (l *vmList) kill(name string) error {
 	// if the argument is a number, then kill that vm (or all vms on -1)
 	// if it's a string, kill the one with that name
-	id, err := strconv.Atoi(c.Args[0])
+	id, err := strconv.Atoi(name)
 	if err != nil {
-		id = l.findRunningByName(c.Args[0])
+		id = l.findRunningByName(name)
 	}
 
 	if id == VM_NOT_FOUND {
-		return cliResponse{
-			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
-		}
+		return errors.New(fmt.Sprintf("VM %v not found", name))
 	} else if id == -1 {
 		killCount := 0
 		timedOut := 0
@@ -687,9 +681,7 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 			}
 		}
 		if timedOut != 0 {
-			return cliResponse{
-				Error: fmt.Sprintf("%v killed VMs failed to acknowledge kill", timedOut),
-			}
+			return errors.New(fmt.Sprintf("%v killed VMs failed to acknowledge kill", timedOut))
 		}
 	} else {
 		if vm, ok := l.vms[id]; ok {
@@ -698,9 +690,22 @@ func (l *vmList) kill(c cliCommand) cliResponse {
 				log.Info("VM %v killed", <-killAck)
 			}
 		} else {
-			return cliResponse{
-				Error: fmt.Sprintf("invalid VM id: %v", id),
-			}
+			return errors.New(fmt.Sprintf("invalid VM id: %v", id))
+		}
+	}
+	return nil
+}
+
+func (l *vmList) cliKill(c cliCommand) cliResponse {
+	if len(c.Args) != 1 {
+		return cliResponse{
+			Error: "vm_kill takes one argument",
+		}
+	}
+	err := l.kill(c.Args[0])
+	if err != nil {
+		return cliResponse{
+			Error: err.Error(),
 		}
 	}
 	return cliResponse{}
