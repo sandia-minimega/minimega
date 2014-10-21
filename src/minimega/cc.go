@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	log "minilog"
+	"path/filepath"
 	"ron"
 	"sort"
 	"strconv"
@@ -170,7 +171,15 @@ func ccProcessCommand(c cliCommand) cliResponse {
 				log.Debug("command: %#v", c)
 				cmd.Command = c
 			case "filesend":
-				cmd.FilesSend = append(cmd.FilesSend, s[1])
+				files, err := filepath.Glob(s[1])
+				if err != nil {
+					return cliResponse{
+						Error: fmt.Sprintf("non-existent files %v", s[1]),
+					}
+				}
+				for _, f := range files {
+					cmd.FilesSend = append(cmd.FilesSend, f)
+				}
 			case "filerecv":
 				cmd.FilesRecv = append(cmd.FilesRecv, s[1])
 			default:
