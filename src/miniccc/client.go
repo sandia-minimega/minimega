@@ -108,7 +108,7 @@ func clientCommandExec(c *ron.Command) {
 func commandGetFiles(files []string) {
 	for _, v := range files {
 		log.Debug("get file %v", v)
-		path := fmt.Sprintf("%v/files/%v", *f_path, v)
+		path := filepath.Join(*f_path, "/files/", v)
 
 		if _, err := os.Stat(path); err == nil {
 			// file exists

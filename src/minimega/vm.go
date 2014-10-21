@@ -12,6 +12,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"qmp"
 	"sort"
 	"strconv"
@@ -236,14 +237,14 @@ func cliVMSave(c cliCommand) cliResponse {
 		}
 	}
 
-	path := *f_base + "saved_vms"
+	path := filepath.Join(*f_base, "saved_vms")
 	err := os.MkdirAll(path, 0775)
 	if err != nil {
 		log.Error("mkdir: %v", err)
 		teardown()
 	}
 
-	file, err := os.Create(fmt.Sprintf("%v/%v", path, c.Args[0]))
+	file, err := os.Create(filepath.Join(path, c.Args[0]))
 	if err != nil {
 		return cliResponse{
 			Error: err.Error(),

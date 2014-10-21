@@ -11,6 +11,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -226,7 +227,7 @@ func dnsmasqPID(id int) int {
 	}
 	path := c.Path
 
-	buf, err := ioutil.ReadFile(path + "/dnsmasq.pid")
+	buf, err := ioutil.ReadFile(filepath.Join(path, "/dnsmasq.pid"))
 	if err != nil {
 		log.Error("read dnsmasq pidfile: %v", err)
 		return -1

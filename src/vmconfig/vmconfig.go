@@ -45,7 +45,7 @@ func read(path string, c *Config) error {
 			if path == c.Path {
 				return err
 			}
-			newpath := filepath.Dir(c.Path) + "/" + filepath.Base(path)
+			newpath := filepath.Join(filepath.Dir(c.Path), filepath.Base(path))
 			f, err = os.Open(newpath)
 			if err != nil {
 				return err

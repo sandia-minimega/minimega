@@ -14,6 +14,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -186,7 +187,7 @@ func bridgeInfo() string {
 func updateBridgeInfo() {
 	log.Debugln("updateBridgeInfo")
 	i := bridgeInfo()
-	path := *f_base + "bridges"
+	path := filepath.Join(*f_base, "bridges")
 	err := ioutil.WriteFile(path, []byte(i), 0644)
 	if err != nil {
 		log.Fatalln(err)

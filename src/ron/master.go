@@ -1,11 +1,11 @@
 package ron
 
 import (
-	"fmt"
 	"io/ioutil"
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -21,7 +21,7 @@ func (r *Ron) masterResponseProcessor() {
 				continue
 			}
 
-			path := fmt.Sprintf("%v/%v/%v/", r.path+RESPONSE_PATH, v.ID, uuid)
+			path := filepath.Join(r.path+RESPONSE_PATH, strconv.Itoa(v.ID), uuid)
 			err := os.MkdirAll(path, os.FileMode(0770))
 			if err != nil {
 				log.Errorln(err)
@@ -30,14 +30,14 @@ func (r *Ron) masterResponseProcessor() {
 			}
 			// generate stdout and stderr if they exist
 			if v.Stdout != "" {
-				err := ioutil.WriteFile(path+"stdout", []byte(v.Stdout), os.FileMode(0660))
+				err := ioutil.WriteFile(filepath.Join(path, "stdout"), []byte(v.Stdout), os.FileMode(0660))
 				if err != nil {
 					log.Errorln(err)
 					log.Error("could not record stdout %v : %v", uuid, v.ID)
 				}
 			}
 			if v.Stderr != "" {
-				err := ioutil.WriteFile(path+"stderr", []byte(v.Stderr), os.FileMode(0660))
+				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
 				if err != nil {
 					log.Errorln(err)
 					log.Error("could not record stderr %v : %v", uuid, v.ID)
@@ -46,7 +46,7 @@ func (r *Ron) masterResponseProcessor() {
 
 			// write out files if they exist
 			for f, d := range v.Files {
-				fpath := fmt.Sprintf("%v/%v", path, f)
+				fpath := filepath.Join(path, f)
 				log.Debug("writing file %v", fpath)
 				dir := filepath.Dir(fpath)
 				err := os.MkdirAll(dir, os.FileMode(0770))

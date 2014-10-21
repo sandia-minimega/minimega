@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"ranges"
 	"syscall"
 	"time"
@@ -77,7 +78,7 @@ func runSub(cmd *Command, args []string) {
 	var pxefiles []string
 
 	// Open and lock the reservation file
-	path := igorConfig.TFTPRoot + "/igor/reservations.json"
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)

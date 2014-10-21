@@ -197,7 +197,7 @@ func (r *Ron) DeleteFiles(id int) error {
 	r.commandLock.Lock()
 	defer r.commandLock.Unlock()
 	if _, ok := r.commands[id]; ok {
-		path := fmt.Sprintf("%v/responses/%v", r.path, id)
+		path := filepath.Join(r.path, "/responses/", strconv.Itoa(id))
 		err := os.RemoveAll(path)
 		if err != nil {
 			log.Errorln(err)
@@ -295,7 +295,7 @@ func (r *Ron) clientCommands(newCommands map[int]*Command) {
 func (r *Ron) getFiles(files []string) {
 	for _, v := range files {
 		log.Debug("get file %v", v)
-		path := fmt.Sprintf("%v/%v", r.path, v)
+		path := filepath.Join(r.path, v)
 
 		if _, err := os.Stat(path); err == nil {
 			log.Debug("file %v already exists", v)

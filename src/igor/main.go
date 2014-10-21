@@ -17,6 +17,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -123,7 +124,7 @@ func readConfig(path string) (c Config) {
 
 // Read the reservations, delete any that are too old.
 func cleanOld() {
-	path := igorConfig.TFTPRoot + "/igor/reservations.json"
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
 		fatalf("failed to open reservations file: %v", err)
