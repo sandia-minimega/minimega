@@ -2,10 +2,10 @@ package main
 
 import (
 	"io"
-	"ssh"
-	"strings"
-	"strconv"
 	"log"
+	"ssh"
+	"strconv"
+	"strings"
 )
 
 func isIPv6(ip string) bool {
@@ -45,12 +45,12 @@ func isIPv6(ip string) bool {
 }
 
 type sshConn struct {
-	Config    *ssh.ClientConfig
-	Client    *ssh.ClientConn
-	Session   *ssh.Session
-	Host      string
-	Stdin     io.Writer
-	Stdout io.Reader
+	Config  *ssh.ClientConfig
+	Client  *ssh.ClientConn
+	Session *ssh.Session
+	Host    string
+	Stdin   io.Writer
+	Stdout  io.Reader
 }
 
 type sshPassword string
@@ -87,7 +87,7 @@ func sshClientConnect(host, port, user, password string) (*sshConn, error) {
 		return nil, err
 	}
 
-//	sc.Session.Stdout = &sc.StdoutBuf
+	//	sc.Session.Stdout = &sc.StdoutBuf
 	sc.Stdout, err = sc.Session.StdoutPipe()
 	if err != nil {
 		log.Print(err)

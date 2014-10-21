@@ -107,7 +107,7 @@ Here follows a description of the functions:
 mega:
 
 Load a minimega script:
-	
+
 	.mega foo.mm
 
 link:

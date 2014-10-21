@@ -396,7 +396,7 @@ func extlinux(path string) error {
 		Args: []string{
 			p,
 			"--install",
-			filepath.Join(path, "/boot"),
+			filepath.Join(path, "boot"),
 		},
 		Env:    nil,
 		Dir:    "",
@@ -412,7 +412,7 @@ func extlinux(path string) error {
 
 	// write out the bootloader config, but first figure out the kernel and
 	// initrd files in /boot
-	filepath.Walk(filepath.Join(path, "/boot"), kernelWalker)
+	filepath.Walk(filepath.Join(path, "boot"), kernelWalker)
 	if kernelName == "" {
 		return fmt.Errorf("could not find kernel name")
 	}

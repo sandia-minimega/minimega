@@ -478,7 +478,7 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 	return iom.base + dir
 }
 
-// Generate a random 63 bit TID (positive int64). 
+// Generate a random 63 bit TID (positive int64).
 func genTID() int64 {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
