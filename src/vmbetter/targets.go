@@ -117,11 +117,13 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		}
 	}()
 
-	if err := partitionQcow2(dev); err != nil {
+	err = partitionQcow2(dev)
+	if err != nil {
 		return err
 	}
 
-	if err := formatQcow2(dev + "p1"); err != nil {
+	err = formatQcow2(dev + "p1")
+	if err != nil {
 		return err
 	}
 
@@ -130,25 +132,31 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		return err
 	}
 
-	if err := copyQcow2(buildPath, mountPath); err != nil {
-		if err := umountQcow2(mountPath); err != nil {
-			log.Errorln(err)
+	err = copyQcow2(buildPath, mountPath)
+	if err != nil {
+		err2 := umountQcow2(mountPath)
+		if err2 != nil {
+			log.Errorln(err2)
 		}
 		return err
 	}
 
-	if err := extlinux(mountPath); err != nil {
-		if err := umountQcow2(mountPath); err != nil {
-			log.Errorln(err)
+	err = extlinux(mountPath)
+	if err != nil {
+		err2 := umountQcow2(mountPath)
+		if err2 != nil {
+			log.Errorln(err2)
 		}
 		return err
 	}
 
-	if err := umountQcow2(mountPath); err != nil {
+	err = umountQcow2(mountPath)
+	if err != nil {
 		return err
 	}
 
-	if err := extlinuxMBR(dev, *f_mbr); err != nil {
+	err = extlinuxMBR(dev, *f_mbr)
+	if err != nil {
 		return err
 	}
 
@@ -189,11 +197,7 @@ func createQcow2(target, size string) error {
 	log.LogAll(stdout, log.INFO, "qemu-img")
 	log.LogAll(stderr, log.ERROR, "qemu-img")
 
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // nbdConnectQcow2 exports a target image using the NBD protocol using the
@@ -288,11 +292,7 @@ func partitionQcow2(dev string) error {
 		return err
 	}
 	io.WriteString(sIn, "n\np\n1\n\n\na\n1\nw\n")
-	err = cmd.Wait()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Wait()
 }
 
 // formatQcow2 formats a partition with the default linux filesystem type.
@@ -323,11 +323,7 @@ func formatQcow2(dev string) error {
 	log.LogAll(stderr, log.INFO, "mkfs")
 
 	log.Debug("formatting with with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // mountQcow2 mounts a partition to a temporary directory. If successful,
@@ -403,11 +399,7 @@ func copyQcow2(src, dst string) error {
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	log.Debug("copy with with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // extlinux installs the SYSLINUX bootloader using extlinux. Path should be the
@@ -458,11 +450,7 @@ func extlinux(path string) error {
 
 	extlinuxConfig := fmt.Sprintf("DEFAULT minimegalinux\nLABEL minimegalinux\nSAY booting minimegalinux\nLINUX /boot/%v\nAPPEND root=/dev/sda1\nINITRD /boot/%v", kernelName, initrdName)
 
-	err = ioutil.WriteFile(path+"/boot/extlinux.conf", []byte(extlinuxConfig), os.FileMode(0660))
-	if err != nil {
-		return err
-	}
-	return nil
+	return ioutil.WriteFile(path+"/boot/extlinux.conf", []byte(extlinuxConfig), os.FileMode(0660))
 }
 
 // umountQcow2 unmounts qcow2 image that was previously mounted with
@@ -494,11 +482,7 @@ func umountQcow2(path string) error {
 	log.LogAll(stderr, log.ERROR, "umount")
 
 	log.Debug("unmounting with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // extlinuxMBR installs the specified master boot record in the partition table
@@ -534,11 +518,7 @@ func extlinuxMBR(dev, mbr string) error {
 	log.LogAll(stderr, log.INFO, "dd")
 
 	log.Debug("installing mbr with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 // nbdDisconnectQcow2 disconnects a given NBD using qemu-nbd.
@@ -570,11 +550,7 @@ func nbdDisconnectQcow2(dev string) error {
 	log.LogAll(stderr, log.ERROR, "qemu-nbd")
 
 	log.Debug("disconnecting nbd with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 func kernelWalker(path string, info os.FileInfo, err error) error {
