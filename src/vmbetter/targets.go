@@ -148,13 +148,16 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		return err
 	}
 
-	if err := extlinuxMBR(dev); err != nil {
+	if err := extlinuxMBR(dev, *f_mbr); err != nil {
 		return err
 	}
 
 	return os.Rename(tmpqcow2, targetqcow2)
 }
 
+// createQcow2 creates a target qcow2 image using qemu-img. Size specifies the
+// size of the image in bytes but optional suffixes such as "K" and "G" can be
+// used. See qemu-img(8) for details.
 func createQcow2(target, size string) error {
 	// create our qcow image
 	p := process("qemu-img")
@@ -193,6 +196,8 @@ func createQcow2(target, size string) error {
 	return nil
 }
 
+// nbdConnectQcow2 exports a target image using the NBD protocol using the
+// qemu-nbd. If successful, returns the NBD device.
 func nbdConnectQcow2(target string) (string, error) {
 	// Find the first available nbd, there is a race condition here.
 	nbdPath := ""
@@ -245,6 +250,8 @@ func nbdConnectQcow2(target string) (string, error) {
 	return nbdPath, nil
 }
 
+// partitionQcow2 partitions the provided device creating one primary partition
+// that is the size of the whole device and bootable.
 func partitionQcow2(dev string) error {
 	// partition with fdisk
 	p := process("fdisk")
@@ -288,6 +295,7 @@ func partitionQcow2(dev string) error {
 	return nil
 }
 
+// formatQcow2 formats a partition with the default linux filesystem type.
 func formatQcow2(dev string) error {
 	// make an ext4 filesystem
 	p := process("mkfs")
@@ -322,6 +330,8 @@ func formatQcow2(dev string) error {
 	return nil
 }
 
+// mountQcow2 mounts a partition to a temporary directory. If successful,
+// returns the path to that temporary directory.
 func mountQcow2(dev string) (string, error) {
 	// mount the filesystem
 	mountPath, err := ioutil.TempDir("", "vmbetter_mount_")
@@ -362,6 +372,7 @@ func mountQcow2(dev string) (string, error) {
 	return mountPath, nil
 }
 
+// copyQcow2 recursively copies files from src to dst using cp.
 func copyQcow2(src, dst string) error {
 	// copy everything over
 	p := process("cp")
@@ -399,6 +410,9 @@ func copyQcow2(src, dst string) error {
 	return nil
 }
 
+// extlinux installs the SYSLINUX bootloader using extlinux. Path should be the
+// root directory for the filesystem. extlinux also writes out a
+// minimega-specific configuration file for SYSLINUX.
 func extlinux(path string) error {
 	// install extlinux
 	p := process("extlinux")
@@ -451,6 +465,8 @@ func extlinux(path string) error {
 	return nil
 }
 
+// umountQcow2 unmounts qcow2 image that was previously mounted with
+// mountQcow2.
 func umountQcow2(path string) error {
 	// unmount
 	p := process("umount")
@@ -485,14 +501,16 @@ func umountQcow2(path string) error {
 	return nil
 }
 
-func extlinuxMBR(dev string) error {
+// extlinuxMBR installs the specified master boot record in the partition table
+// for the provided device.
+func extlinuxMBR(dev, mbr string) error {
 	// dd the mbr image
 	p := process("dd")
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			fmt.Sprintf("if=%v", *f_mbr),
+			fmt.Sprintf("if=%v", mbr),
 			"conv=notrunc",
 			"bs=440",
 			"count=1",
@@ -523,6 +541,7 @@ func extlinuxMBR(dev string) error {
 	return nil
 }
 
+// nbdDisconnectQcow2 disconnects a given NBD using qemu-nbd.
 func nbdDisconnectQcow2(dev string) error {
 	// disconnect nbd
 	p := process("qemu-nbd")
