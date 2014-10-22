@@ -51,7 +51,8 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 
 	log.Debugln("initrd command:", initrdCommand)
 
-	cmd := exec.Command("bash", eName)
+	p := process("bash")
+	cmd := exec.Command(p, eName)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

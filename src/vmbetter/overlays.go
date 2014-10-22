@@ -44,7 +44,9 @@ func Overlays(buildPath string, c vmconfig.Config) error {
 		} else {
 			sourcePath = o
 		}
-		cmd := exec.Command("cp", "-r", "-v", sourcePath+"/.", buildPath)
+
+		p := process("cp")
+		cmd := exec.Command(p, "-r", "-v", sourcePath+"/.", buildPath)
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			return err

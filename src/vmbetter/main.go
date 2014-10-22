@@ -57,6 +57,8 @@ func main() {
 		os.Exit(1)
 	}
 
+	externalCheck()
+
 	// stage 1 and stage 2 flags are mutually exclusive
 	if *f_stage1 && *f_stage2 != "" {
 		log.Fatalln("-1 cannot be used with -2")
@@ -110,7 +112,8 @@ func main() {
 				log.Fatalln(err)
 			}
 
-			cmd := exec.Command("cp", "-r", "-v", buildPath+"/.", stage1Target)
+			p := process("cp")
+			cmd := exec.Command(p, "-r", "-v", buildPath+"/.", stage1Target)
 			stdout, err := cmd.StdoutPipe()
 			if err != nil {
 				log.Fatalln(err)
