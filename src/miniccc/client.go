@@ -29,7 +29,18 @@ func client() {
 func prepareRecvFiles(files []string) map[string][]byte {
 	log.Debug("prepareRecvFiles %v", files)
 	r := make(map[string][]byte)
+	// expand everything
+	var nfiles []string
 	for _, f := range files {
+		tmp, err := filepath.Glob(f)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		nfiles = append(nfiles, tmp...)
+	}
+	for _, f := range nfiles {
+		log.Debug("reading file %v", f)
 		d, err := ioutil.ReadFile(f)
 		if err != nil {
 			log.Errorln(err)
