@@ -1533,6 +1533,7 @@ func (vm *vmInfo) launchOne(ack chan int) {
 
 	args = vm.vmGetArgs(true)
 	args = ParseQemuOverrides(args)
+	log.Debug("final qemu args: %#v", args)
 
 	cmd = &exec.Cmd{
 		Path:   process("qemu"),
@@ -1782,7 +1783,7 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "-uuid")
 	args = append(args, vm.UUID)
 
-	log.Info("args for vm %v is: %v", vm.Id, strings.Join(args, " "))
+	log.Info("args for vm %v is: %#v", vm.Id, args)
 	return args
 }
 
@@ -1798,11 +1799,11 @@ func (vm *vmInfo) asyncLogger() {
 }
 
 func ParseQemuOverrides(input []string) []string {
-	ret := strings.Join(input, " ")
+	ret := unescapeString(input)
 	for _, v := range QemuOverrides {
 		ret = strings.Replace(ret, v.match, v.repl, -1)
 	}
-	return strings.Fields(ret)
+	return fieldsQuoteEscape("\"", ret)
 }
 
 func cliVMQemuOverride(c cliCommand) cliResponse {
@@ -1821,7 +1822,7 @@ func cliVMQemuOverride(c cliCommand) cliResponse {
 		w.Flush()
 
 		args := info.vmGetArgs(false)
-		preArgs := strings.Join(args, " ")
+		preArgs := unescapeString(args)
 		postArgs := strings.Join(ParseQemuOverrides(args), " ")
 
 		r := o.String()

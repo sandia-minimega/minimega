@@ -18,6 +18,7 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+	"unicode"
 )
 
 // generate a random ipv4 mac address and return as a string
@@ -158,6 +159,26 @@ func trimQuote(c string, input string) string {
 			ret += string(v)
 		}
 	}
+	return ret
+}
+
+func unescapeString(input []string) string {
+	var ret string
+	for _, v := range input {
+		containsWhite := false
+		for _, x := range v {
+			if unicode.IsSpace(x) {
+				containsWhite = true
+				break
+			}
+		}
+		if containsWhite {
+			ret += fmt.Sprintf(" \"%v\"", v)
+		} else {
+			ret += fmt.Sprintf(" %v", v)
+		}
+	}
+	log.Debug("unescapeString generated: %v", ret)
 	return ret
 }
 
