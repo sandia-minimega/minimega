@@ -18,14 +18,15 @@ import (
 // executing it with bash inside of a chroot. Post build commands are executed
 // in depth-first order.
 func PostBuildCommands(buildPath string, c vmconfig.Config) error {
-	for _, p := range c.Postbuilds {
-		log.Debugln("postbuild:", p)
+	for _, pb := range c.Postbuilds {
+		log.Debugln("postbuild:", pb)
 
 		tmpfile := buildPath + "/tmp/postbuild.bash"
 
-		ioutil.WriteFile(tmpfile, []byte(p), 0770)
+		ioutil.WriteFile(tmpfile, []byte(pb), 0770)
 
-		cmd := exec.Command("chroot", buildPath, "/bin/bash", "/tmp/postbuild.bash")
+		p := process("chroot")
+		cmd := exec.Command(p, buildPath, "/bin/bash", "/tmp/postbuild.bash")
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			return err

@@ -15,10 +15,7 @@ import (
 // Debootstrap will invoke the debootstrap tool with a target build directory
 // in build_path, using configuration from c.
 func Debootstrap(buildPath string, c vmconfig.Config) error {
-	path, err := exec.LookPath("debootstrap")
-	if err != nil {
-		return fmt.Errorf("cannot find debootstrap: %v", err)
-	}
+	p := process("debootstrap")
 
 	// build debootstrap parameters
 	var args []string
@@ -30,7 +27,7 @@ func Debootstrap(buildPath string, c vmconfig.Config) error {
 
 	log.Debugln("args:", args)
 
-	cmd := exec.Command(path, args...)
+	cmd := exec.Command(p, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

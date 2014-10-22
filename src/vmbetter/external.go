@@ -11,15 +11,18 @@ import (
 )
 
 var externalProcesses = map[string]string{
-	"mount":    "mount",
-	"qemu-nbd": "qemu-nbd",
-	"qemu-img": "qemu-img",
-	"umount":   "umount",
-	"dd":       "dd",
-	"mkfs":     "mkfs.ext4",
-	"extlinux": "extlinux",
-	"cp":       "cp",
-	"fdisk":    "fdisk",
+	"mount":       "mount",
+	"qemu-nbd":    "qemu-nbd",
+	"qemu-img":    "qemu-img",
+	"umount":      "umount",
+	"dd":          "dd",
+	"mkfs":        "mkfs.ext4",
+	"extlinux":    "extlinux",
+	"cp":          "cp",
+	"fdisk":       "fdisk",
+	"debootstrap": "debootstrap",
+	"chroot":      "chroot",
+	"bash":        "bash",
 }
 
 // check for the presence of each of the external processes we may call,
@@ -39,7 +42,7 @@ func externalCheck() {
 func process(p string) string {
 	path, err := exec.LookPath(externalProcesses[p])
 	if err != nil {
-		log.Errorln(err)
+		log.Fatalln(err)
 		return ""
 	}
 	return path
