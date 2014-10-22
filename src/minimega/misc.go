@@ -143,6 +143,7 @@ func fieldsQuoteEscape(c string, input string) []string {
 			ret = append(ret, v)
 		}
 	}
+	log.Debug("generated: %#v", ret)
 	return ret
 }
 

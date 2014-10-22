@@ -2021,7 +2021,7 @@ func cliVMQemuAppend(c cliCommand) cliResponse {
 			Response: strings.Join(info.QemuAppend, " "),
 		}
 	} else {
-		info.QemuAppend = c.Args
+		info.QemuAppend = fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
 	}
 	return cliResponse{}
 }
