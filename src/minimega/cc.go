@@ -171,14 +171,20 @@ func ccProcessCommand(c cliCommand) cliResponse {
 				log.Debug("command: %#v", c)
 				cmd.Command = c
 			case "filesend":
-				files, err := filepath.Glob(s[1])
+				files, err := filepath.Glob(filepath.Join(*f_iomBase, s[1]))
 				if err != nil {
 					return cliResponse{
 						Error: fmt.Sprintf("non-existent files %v", s[1]),
 					}
 				}
 				for _, f := range files {
-					cmd.FilesSend = append(cmd.FilesSend, f)
+					file, err := filepath.Rel(*f_iomBase, f)
+					if err != nil {
+						return cliResponse{
+							Error: fmt.Sprintf("parsing filesend: %v", err),
+						}
+					}
+					cmd.FilesSend = append(cmd.FilesSend, file)
 				}
 			case "filerecv":
 				cmd.FilesRecv = append(cmd.FilesRecv, s[1])
