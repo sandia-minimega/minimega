@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"gonetflow"
 	"gopcap"
@@ -113,6 +114,96 @@ func cliCapture(c cliCommand) cliResponse {
 	}
 }
 
+func clearCapture(captureType, id string) error {
+	captureLock.Lock()
+	defer captureLock.Unlock()
+	if id == "-1" {
+		for k, v := range captureEntries {
+			if v.Type == "pcap" && captureType == "pcap" {
+				if v.pcap != nil {
+					v.pcap.Close()
+				} else {
+					log.Error("capture %v has no valid pcap interface", k)
+				}
+				delete(captureEntries, k)
+			} else if v.Type == "netflow" && captureType == "netflow" {
+				// get the netflow object associated with this bridge
+				nf, err := getNetflowFromBridge(v.Bridge)
+				if err != nil {
+					return err
+				}
+				err = nf.RemoveWriter(v.Path)
+				if err != nil {
+					return err
+				}
+				delete(captureEntries, k)
+			}
+		}
+	} else {
+		val, err := strconv.Atoi(id)
+		if err != nil {
+			return err
+		}
+		if v, ok := captureEntries[val]; !ok {
+			return errors.New(fmt.Sprintf("entry %v does not exist", val))
+		} else {
+			if v.Type == "pcap" && captureType == "pcap" {
+				if v.pcap != nil {
+					v.pcap.Close()
+				} else {
+					log.Error("capture %v has no valid pcap interface", val)
+				}
+				delete(captureEntries, val)
+			} else if v.Type == "netflow" && captureType == "netflow" {
+				// get the netflow object associated with this bridge
+				nf, err := getNetflowFromBridge(v.Bridge)
+				if err != nil {
+					return err
+				}
+				err = nf.RemoveWriter(v.Path)
+				if err != nil {
+					return err
+				}
+				delete(captureEntries, val)
+			} else {
+				return errors.New(fmt.Sprintf("entry %v is not a pcap capture", val))
+			}
+		}
+	}
+
+	if captureType == "netflow" {
+		// check if we need to remove the nf object
+		b := enumerateBridges()
+		for _, v := range b {
+			empty := true
+			for _, n := range captureEntries {
+				if n.Bridge == v {
+					empty = false
+					break
+				}
+			}
+
+			if !empty {
+				continue
+			}
+
+			b, err := getBridge(v)
+			if err != nil {
+				return err
+			}
+
+			err = b.DestroyNetflow()
+			if err != nil {
+				if !strings.Contains(err.Error(), "has no netflow object") {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 func capturePcap(c cliCommand) cliResponse {
 	// capture pcap <bridge> <bridge name> <filename>
 	// capture pcap <vm> <vm id> <tap> <filename>
@@ -147,44 +238,10 @@ func capturePcap(c cliCommand) cliResponse {
 			}
 		}
 
-		// delete by id or -1 for all netflow writers
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		if c.Args[2] == "-1" {
-			for k, v := range captureEntries {
-				if v.Type == "pcap" {
-					if v.pcap != nil {
-						v.pcap.Close()
-					} else {
-						log.Error("capture %v has no valid pcap interface", k)
-					}
-					delete(captureEntries, k)
-				}
-			}
-		} else {
-			val, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			if v, ok := captureEntries[val]; !ok {
-				return cliResponse{
-					Error: fmt.Sprintf("entry %v does not exist", val),
-				}
-			} else {
-				if v.Type == "pcap" {
-					if v.pcap != nil {
-						v.pcap.Close()
-					} else {
-						log.Error("capture %v has no valid pcap interface", val)
-					}
-					delete(captureEntries, val)
-				} else {
-					return cliResponse{
-						Error: fmt.Sprintf("entry %v is not a pcap capture", val),
-					}
-				}
+		err := clearCapture("pcap", c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
 			}
 		}
 	case "vm":
@@ -355,91 +412,10 @@ func captureNetflow(c cliCommand) cliResponse {
 		}
 
 		// delete by id or -1 for all netflow writers
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		if c.Args[2] == "-1" {
-			for k, v := range captureEntries {
-				if v.Type == "netflow" {
-					// get the netflow object associated with this bridge
-					nf, err := getNetflowFromBridge(v.Bridge)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					err = nf.RemoveWriter(v.Path)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					delete(captureEntries, k)
-				}
-			}
-		} else {
-			val, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			if v, ok := captureEntries[val]; !ok {
-				return cliResponse{
-					Error: fmt.Sprintf("entry %v does not exist", val),
-				}
-			} else {
-				if v.Type == "netflow" {
-					// get the netflow object associated with this bridge
-					nf, err := getNetflowFromBridge(v.Bridge)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					err = nf.RemoveWriter(v.Path)
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-					delete(captureEntries, val)
-				} else {
-					return cliResponse{
-						Error: fmt.Sprintf("entry %v is not a netflow capture", val),
-					}
-				}
-			}
-		}
-
-		// check if we need to remove the nf object
-		b := enumerateBridges()
-		for _, v := range b {
-			empty := true
-			for _, n := range captureEntries {
-				if n.Bridge == v {
-					empty = false
-					break
-				}
-			}
-
-			if !empty {
-				continue
-			}
-
-			b, err := getBridge(v)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			err = b.DestroyNetflow()
-			if err != nil {
-				if !strings.Contains(err.Error(), "has no netflow object") {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
+		err := clearCapture("netflow", c.Args[2])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
 			}
 		}
 	case 5, 6:
@@ -593,15 +569,13 @@ func captureUpdateNFTimeouts() {
 }
 
 func cliCaptureClear() error {
-	c := makeCommand("capture netflow clear -1")
-	r := cliCapture(c)
-	if r.Error != "" {
-		return fmt.Errorf("%v", r.Error)
+	err := clearCapture("netflow", "-1")
+	if err != nil {
+		return err
 	}
-	c = makeCommand("capture pcap clear -1")
-	r = cliCapture(c)
-	if r.Error != "" {
-		return fmt.Errorf("%v", r.Error)
+	err = clearCapture("pcap", "-1")
+	if err != nil {
+		return err
 	}
 	return nil
 }
