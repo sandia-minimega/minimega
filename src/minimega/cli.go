@@ -423,7 +423,7 @@ vm_info.`,
 
 		"vm_kill": &command{
 			Call: func(c cliCommand) cliResponse {
-				return vms.kill(c)
+				return vms.cliKill(c)
 			},
 			Helpshort: "kill running virtual machines",
 			Helplong: `

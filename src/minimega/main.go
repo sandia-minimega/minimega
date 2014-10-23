@@ -218,7 +218,7 @@ func main() {
 func teardown() {
 	vncClear()
 	cliCaptureClear()
-	vms.kill(makeCommand("vm_kill -1"))
+	vms.kill("-1")
 	dnsmasqKill(-1)
 	err := bridgesDestroy()
 	if err != nil {
