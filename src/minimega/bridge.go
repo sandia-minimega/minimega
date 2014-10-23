@@ -202,6 +202,92 @@ func cliBridgeInfo(c cliCommand) cliResponse {
 	}
 }
 
+func (b *bridge) CreateBridgeMirror() (string, error) {
+	// get a host tap
+	tapName, err := hostTapCreate(b.Name, "0", "none", "")
+	if err != nil {
+		return "", err
+	}
+
+	// create the mirror for this bridge
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"--",
+			"--id=@p",
+			"get",
+			"port",
+			tapName,
+			"--",
+			"--id=@m",
+			"create",
+			"mirror",
+			"name=m0",
+			"select-all=true",
+			"output-port=@p",
+			"--",
+			"set",
+			"bridge",
+			b.Name,
+			"mirrors=@m",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("creating bridge mirror with cmd: %v", cmd)
+	ovsLock.Lock()
+	err = cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
+		return "", e
+	}
+	return tapName, nil
+}
+
+func (b *bridge) DeleteBridgeMirror(tap string) error {
+	// delete the mirror for this bridge
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"clear",
+			"bridge",
+			b.Name,
+			"mirrors",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("deleting bridge mirror with cmd: %v", cmd)
+	ovsLock.Lock()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
+		return e
+	}
+
+	// delete the associated host tap
+	err = hostTapDelete(tap)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // create a new vlan. If this is the first vlan being allocated, then the
 // bridge will need to be created as well. this allows us to avoid using the
 // bridge utils when we create vms with no network.
@@ -771,14 +857,30 @@ func cliHostTap(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-		return hostTapDelete(c.Args[1])
+		err := hostTapDelete(c.Args[1])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		} else {
+			return cliResponse{}
+		}
 	case 3: // must be create with the default bridge
 		if c.Args[0] != "create" {
 			return cliResponse{
 				Error: "malformed command",
 			}
 		}
-		return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], "")
+		tapName, err := hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], "")
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		} else {
+			return cliResponse{
+				Response: tapName,
+			}
+		}
 	case 4: // must be create with a specified bridge or a specified tap name
 		if c.Args[0] != "create" {
 			return cliResponse{
@@ -786,12 +888,22 @@ func cliHostTap(c cliCommand) cliResponse {
 			}
 		}
 		_, err := strconv.Atoi(c.Args[1])
+		var tapName string
 		if err == nil {
 			// specified tap name
-			return hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], c.Args[3])
+			tapName, err = hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], c.Args[3])
 		} else {
 			// specified bridge name
-			return hostTapCreate(c.Args[1], c.Args[2], c.Args[3], "")
+			tapName, err = hostTapCreate(c.Args[1], c.Args[2], c.Args[3], "")
+		}
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		} else {
+			return cliResponse{
+				Response: tapName,
+			}
 		}
 	case 5: // must be create with a specified bridge AND tap name
 		if c.Args[0] != "create" {
@@ -799,7 +911,16 @@ func cliHostTap(c cliCommand) cliResponse {
 				Error: "malformed command",
 			}
 		}
-		return hostTapCreate(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
+		tapName, err := hostTapCreate(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		} else {
+			return cliResponse{
+				Response: tapName,
+			}
+		}
 	}
 
 	return cliResponse{
@@ -848,7 +969,7 @@ func hostTapList() cliResponse {
 	}
 }
 
-func hostTapDelete(tap string) cliResponse {
+func hostTapDelete(tap string) error {
 	var c []*bridge
 	// special case, -1, which should delete all host taps from all bridges
 	if tap == "-1" {
@@ -860,9 +981,7 @@ func hostTapDelete(tap string) cliResponse {
 	} else {
 		b, err := getBridgeFromTap(tap)
 		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
+			return err
 		}
 		c = append(c, b)
 	}
@@ -879,43 +998,33 @@ func hostTapDelete(tap string) cliResponse {
 			}
 			if tf, ok := t.Taps[tap]; ok {
 				if !tf.host {
-					return cliResponse{
-						Error: "not a host tap",
-					}
+					return fmt.Errorf("not a host tap")
 				}
 				b.TapRemove(lan, tap)
 			}
 		}
 	}
-	return cliResponse{}
+	return nil
 }
 
-func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
+func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 	b, err := getBridge(bridge)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		return "", err
 	}
 	r, err := strconv.Atoi(lan)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		return "", err
 	}
-	lanErr := b.LanCreate(r)
-	if lanErr != nil {
-		return cliResponse{
-			Error: lanErr.Error(),
-		}
+	err = b.LanCreate(r)
+	if err != nil {
+		return "", err
 	}
 
 	if tapName == "" {
 		tapName, err = getNewTap()
 		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
+			return "", err
 		}
 	}
 
@@ -926,9 +1035,7 @@ func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
 	}
 	err = b.TapAdd(r, tapName, true)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		return "", err
 	}
 
 	// bring the tap up
@@ -954,16 +1061,12 @@ func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
 	log.Debug("bringing up host tap %v", tapName)
 	err = cmd.Run()
 	if err != nil {
-		e := fmt.Sprintf("%v: %v", err, sErr.String())
-		return cliResponse{
-			Error: e,
-		}
+		e := fmt.Errorf("%v: %v", err, sErr.String())
+		return "", e
 	}
 
 	if strings.ToLower(ip) == "none" {
-		return cliResponse{
-			Response: tapName,
-		}
+		return tapName, nil
 	}
 
 	if strings.ToLower(ip) == "dhcp" {
@@ -982,10 +1085,8 @@ func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
 		log.Debug("obtaining dhcp on tap %v", tapName)
 		err = cmd.Run()
 		if err != nil {
-			e := fmt.Sprintf("%v: %v", err, sErr.String())
-			return cliResponse{
-				Error: e,
-			}
+			e := fmt.Errorf("%v: %v", err, sErr.String())
+			return "", e
 		}
 	} else {
 		cmd = &exec.Cmd{
@@ -1006,16 +1107,12 @@ func hostTapCreate(bridge, lan, ip, tapName string) cliResponse {
 		log.Debug("setting ip on tap %v", tapName)
 		err = cmd.Run()
 		if err != nil {
-			e := fmt.Sprintf("%v: %v", err, sErr.String())
-			return cliResponse{
-				Error: e,
-			}
+			e := fmt.Errorf("%v: %v", err, sErr.String())
+			return "", e
 		}
 	}
 
-	return cliResponse{
-		Response: tapName,
-	}
+	return tapName, nil
 }
 
 // gets a new tap from tapChan and verifies that it doesn't already exist

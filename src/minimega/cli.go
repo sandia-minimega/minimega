@@ -853,11 +853,7 @@ To delete all host taps, use id -1, or 'clear host_tap':
 	host_tap delete -1`,
 			Record: true,
 			Clear: func() error {
-				resp := hostTapDelete("-1")
-				if resp.Error == "" {
-					return nil
-				}
-				return fmt.Errorf("%v", resp.Error)
+				return hostTapDelete("-1")
 			},
 		},
 

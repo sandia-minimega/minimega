@@ -26,6 +26,7 @@ type capture struct {
 	Path      string
 	Mode      string
 	Compress  bool
+	tap       string
 	pcap      *gopcap.Pcap
 }
 
@@ -52,8 +53,8 @@ func init() {
 func cliCapture(c cliCommand) cliResponse {
 	// capture must be:
 	// capture
-	// capture pcap <bridge> <bridge name> <filename>
-	// capture pcap <vm> <vm id> <tap> <filename>
+	// capture pcap bridge <bridge name> <filename>
+	// capture pcap vm <vm id> <tap> <filename>
 	// capture pcap [clear]
 	// capture pcap clear <id, -1>
 	// capture netflow <bridge> file <filename> <raw,ascii> [gzip]
@@ -125,6 +126,16 @@ func clearCapture(captureType, id string) error {
 				} else {
 					log.Error("capture %v has no valid pcap interface", k)
 				}
+				if v.tap != "" && v.Bridge != "" {
+					b, err := getBridge(v.Bridge)
+					if err != nil {
+						return err
+					}
+					err = b.DeleteBridgeMirror(v.tap)
+					if err != nil {
+						return err
+					}
+				}
 				delete(captureEntries, k)
 			} else if v.Type == "netflow" && captureType == "netflow" {
 				// get the netflow object associated with this bridge
@@ -152,6 +163,16 @@ func clearCapture(captureType, id string) error {
 					v.pcap.Close()
 				} else {
 					log.Error("capture %v has no valid pcap interface", val)
+				}
+				if v.tap != "" && v.Bridge != "" {
+					b, err := getBridge(v.Bridge)
+					if err != nil {
+						return err
+					}
+					err = b.DeleteBridgeMirror(v.tap)
+					if err != nil {
+						return err
+					}
 				}
 				delete(captureEntries, val)
 			} else if v.Type == "netflow" && captureType == "netflow" {
@@ -205,8 +226,8 @@ func clearCapture(captureType, id string) error {
 }
 
 func capturePcap(c cliCommand) cliResponse {
-	// capture pcap <bridge> <bridge name> <filename>
-	// capture pcap <vm> <vm id> <tap> <filename>
+	// capture pcap bridge <bridge name> <filename>
+	// capture pcap vm <vm id> <tap> <filename>
 	// capture pcap clear <id, -1>
 	if len(c.Args) == 1 {
 		// capture pcap, generate output
@@ -311,8 +332,15 @@ func capturePcap(c cliCommand) cliResponse {
 			}
 		}
 
-		// attempt to start pcap on the bridge
-		p, err := gopcap.NewPCAP(b.Name, c.Args[3])
+		tap, err := b.CreateBridgeMirror()
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+
+		// attempt to start pcap on the mirrored tap
+		p, err := gopcap.NewPCAP(tap, c.Args[3])
 		if err != nil {
 			return cliResponse{
 				Error: err.Error(),
@@ -328,6 +356,7 @@ func capturePcap(c cliCommand) cliResponse {
 			Interface: -1,
 			Path:      c.Args[3],
 			pcap:      p,
+			tap:       tap,
 		}
 
 		captureLock.Lock()
