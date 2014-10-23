@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io/ioutil"
 	log "minilog"
+	"nbd"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -148,9 +149,7 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 		log.Error("vmInjectCleanup: %v", err)
 	}
 
-	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-d", nbdPath)
-	err = cmd.Run()
+	err = nbd.DisconnectDevice(nbdPath)
 	if err != nil {
 		log.Error("qemu nbd disconnect: %v", err)
 		log.Warn("minimega was unable to disconnect %v", nbdPath)
@@ -171,23 +170,10 @@ func cliVMInject(c cliCommand) cliResponse {
 	inject := injectData{}
 
 	// yell at user to load nbd
-	p := process("lsmod")
-	cmd := exec.Command(p)
-	result, err := cmd.CombinedOutput()
+	err := nbd.Ready()
 	if err != nil {
 		r.Error = err.Error()
 		return r
-	}
-
-	if !strings.Contains(string(result), "nbd ") {
-		r.Error = "insert module 'nbd'"
-		return r
-	}
-
-	// yell at user to load nbd with a max_part parameter
-	_, err = os.Stat("/sys/module/nbd/parameters/max_part")
-	if err != nil {
-		log.Warnln("no max_part parameter set for module nbd")
 	}
 
 	err = inject.parseInject(c)
@@ -209,9 +195,9 @@ func cliVMInject(c cliCommand) cliResponse {
 	}
 
 	//create the new img
-	p = process("qemu-img")
-	cmd = exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
-	result, err = cmd.CombinedOutput()
+	p := process("qemu-img")
+	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
+	result, err := cmd.CombinedOutput()
 	if err != nil {
 		r.Error = string(result[:]) + "\n" + err.Error()
 		return r
@@ -224,47 +210,10 @@ func cliVMInject(c cliCommand) cliResponse {
 		return r
 	}
 
-	// check for nbds
-	devFiles, err := ioutil.ReadDir("/dev")
-	if err != nil {
-		r.Error = err.Error()
-		return r
-	}
-
-	nbds := []string{}
-	for _, file := range devFiles {
-		// we don't want to include partitions here
-		if strings.Contains(file.Name(), "nbd") && !strings.Contains(file.Name(), "p") {
-			nbds = append(nbds, file.Name())
-		}
-	}
-
-	// select first available nbd
-	for _, nbd := range nbds {
-
-		// check whether a pid exists for the current nbd
-		_, err = os.Stat("/sys/block/" + nbd + "/pid")
-		if err != nil {
-			log.Debug("trying: " + nbd)
-			inject.nbdPath = "/dev/" + nbd
-			break
-		} else {
-			log.Debug("nbd %v could not be used", nbd)
-		}
-	}
-
-	if inject.nbdPath == "" {
-		r.Error = "no available nbds found"
-		return r
-	}
-
-	//connect new img to nbd
-	p = process("qemu-nbd")
-	cmd = exec.Command(p, "-c", inject.nbdPath, inject.dstImg)
-	result, err = cmd.CombinedOutput()
+	inject.nbdPath, err = nbd.ConnectImage(inject.dstImg)
 	if err != nil {
 		vmInjectCleanup(mntDir, inject.nbdPath)
-		r.Error = string(result[:]) + "\n" + err.Error()
+		r.Error = err.Error()
 		return r
 	}
 

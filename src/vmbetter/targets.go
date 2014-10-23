@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"nbd"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -80,138 +81,97 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
 
+	err := nbd.Ready()
+	if err != nil {
+		return err
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
 	}
 
+	// Final qcow2 target
 	targetqcow2 := fmt.Sprintf("%v/%v.qcow2", wd, targetName)
+	// Temporary file for building qcow2 file, will be renamed to targetqcow2
+	tmpqcow2 := fmt.Sprintf("%v/%v.qcow2.tmp", wd, targetName)
 
-	err = createQcow2(targetqcow2, *f_qcowsize)
+	err = createQcow2(tmpqcow2, *f_qcowsize)
 	if err != nil {
 		return err
 	}
 
-	dev, err := nbdConnectQcow2(targetqcow2)
-	if err != nil {
-		e2 := os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+	// Cleanup our temporary building file
+	defer func() {
+		// Check if file exists
+		if _, err := os.Stat(tmpqcow2); err == nil {
+			if err = os.Remove(tmpqcow2); err != nil {
+				log.Errorln(err)
+			}
 		}
+	}()
+
+	dev, err := nbd.ConnectImage(tmpqcow2)
+	if err != nil {
 		return err
 	}
+
+	// Disconnect from the nbd device
+	defer func() {
+		if err := nbd.DisconnectDevice(dev); err != nil {
+			log.Errorln(err)
+		}
+	}()
 
 	err = partitionQcow2(dev)
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
 		return err
 	}
 
 	err = formatQcow2(dev + "p1")
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
 		return err
 	}
 
 	mountPath, err := mountQcow2(dev + "p1")
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
 		return err
 	}
 
 	err = copyQcow2(buildPath, mountPath)
 	if err != nil {
-		e2 := umountQcow2(mountPath)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+		err2 := umountQcow2(mountPath)
+		if err2 != nil {
+			log.Errorln(err2)
 		}
 		return err
 	}
 
 	err = extlinux(mountPath)
 	if err != nil {
-		e2 := umountQcow2(mountPath)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
+		err2 := umountQcow2(mountPath)
+		if err2 != nil {
+			log.Errorln(err2)
 		}
 		return err
 	}
 
 	err = umountQcow2(mountPath)
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
 		return err
 	}
 
-	err = extlinuxMBR(dev)
+	err = extlinuxMBR(dev, *f_mbr)
 	if err != nil {
-		e2 := nbdDisconnectQcow2(dev)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		e2 = os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
 		return err
 	}
 
-	err = nbdDisconnectQcow2(dev)
-	if err != nil {
-		e2 := os.Remove(targetqcow2)
-		if e2 != nil {
-			log.Errorln(e2)
-		}
-		return err
-	}
-
-	return nil
+	return os.Rename(tmpqcow2, targetqcow2)
 }
 
+// createQcow2 creates a target qcow2 image using qemu-img. Size specifies the
+// size of the image in bytes but optional suffixes such as "K" and "G" can be
+// used. See qemu-img(8) for details.
 func createQcow2(target, size string) error {
 	// create our qcow image
 	p := process("qemu-img")
@@ -243,49 +203,11 @@ func createQcow2(target, size string) error {
 	log.LogAll(stdout, log.INFO, "qemu-img")
 	log.LogAll(stderr, log.ERROR, "qemu-img")
 
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
-func nbdConnectQcow2(target string) (string, error) {
-	// connect it to qemu-nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-c",
-			"/dev/nbd0",
-			target,
-		},
-		Env: nil,
-		Dir: "",
-	}
-	log.Debug("connecting to nbd with cmd: %v", cmd)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return "", err
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	err = cmd.Run()
-	if err != nil {
-		return "", err
-	}
-	return "/dev/nbd0", nil
-}
-
+// partitionQcow2 partitions the provided device creating one primary partition
+// that is the size of the whole device and bootable.
 func partitionQcow2(dev string) error {
 	// partition with fdisk
 	p := process("fdisk")
@@ -322,13 +244,10 @@ func partitionQcow2(dev string) error {
 		return err
 	}
 	io.WriteString(sIn, "n\np\n1\n\n\na\n1\nw\n")
-	err = cmd.Wait()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Wait()
 }
 
+// formatQcow2 formats a partition with the default linux filesystem type.
 func formatQcow2(dev string) error {
 	// make an ext4 filesystem
 	p := process("mkfs")
@@ -356,13 +275,11 @@ func formatQcow2(dev string) error {
 	log.LogAll(stderr, log.INFO, "mkfs")
 
 	log.Debug("formatting with with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
+// mountQcow2 mounts a partition to a temporary directory. If successful,
+// returns the path to that temporary directory.
 func mountQcow2(dev string) (string, error) {
 	// mount the filesystem
 	mountPath, err := ioutil.TempDir("", "vmbetter_mount_")
@@ -403,6 +320,7 @@ func mountQcow2(dev string) (string, error) {
 	return mountPath, nil
 }
 
+// copyQcow2 recursively copies files from src to dst using cp.
 func copyQcow2(src, dst string) error {
 	// copy everything over
 	p := process("cp")
@@ -433,13 +351,12 @@ func copyQcow2(src, dst string) error {
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	log.Debug("copy with with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
+// extlinux installs the SYSLINUX bootloader using extlinux. Path should be the
+// root directory for the filesystem. extlinux also writes out a
+// minimega-specific configuration file for SYSLINUX.
 func extlinux(path string) error {
 	// install extlinux
 	p := process("extlinux")
@@ -485,13 +402,11 @@ func extlinux(path string) error {
 
 	extlinuxConfig := fmt.Sprintf("DEFAULT minimegalinux\nLABEL minimegalinux\nSAY booting minimegalinux\nLINUX /boot/%v\nAPPEND root=/dev/sda1\nINITRD /boot/%v", kernelName, initrdName)
 
-	err = ioutil.WriteFile(filepath.Join(path, "/boot/extlinux.conf"), []byte(extlinuxConfig), os.FileMode(0660))
-	if err != nil {
-		return err
-	}
-	return nil
+	return ioutil.WriteFile(filepath.Join(path, "/boot/extlinux.conf"), []byte(extlinuxConfig), os.FileMode(0660))
 }
 
+// umountQcow2 unmounts qcow2 image that was previously mounted with
+// mountQcow2.
 func umountQcow2(path string) error {
 	// unmount
 	p := process("umount")
@@ -519,21 +434,19 @@ func umountQcow2(path string) error {
 	log.LogAll(stderr, log.ERROR, "umount")
 
 	log.Debug("unmounting with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
-func extlinuxMBR(dev string) error {
+// extlinuxMBR installs the specified master boot record in the partition table
+// for the provided device.
+func extlinuxMBR(dev, mbr string) error {
 	// dd the mbr image
 	p := process("dd")
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			fmt.Sprintf("if=%v", *f_mbr),
+			fmt.Sprintf("if=%v", mbr),
 			"conv=notrunc",
 			"bs=440",
 			"count=1",
@@ -557,46 +470,7 @@ func extlinuxMBR(dev string) error {
 	log.LogAll(stderr, log.INFO, "dd")
 
 	log.Debug("installing mbr with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func nbdDisconnectQcow2(dev string) error {
-	// disconnect nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-d",
-			dev,
-		},
-		Env: nil,
-		Dir: "",
-	}
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	log.Debug("disconnecting nbd with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	return nil
+	return cmd.Run()
 }
 
 func kernelWalker(path string, info os.FileInfo, err error) error {
