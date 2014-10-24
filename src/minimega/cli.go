@@ -1638,6 +1638,13 @@ New commands assign any current filters.
 			Clear:  cliClearCC,
 		},
 	}
+
+	var completionCandidates []string
+	// set readline completion commands
+	for k, _ := range cliCommands {
+		completionCandidates = append(completionCandidates, k)
+	}
+	goreadline.SetCompletionCandidates(completionCandidates)
 }
 
 func (c cliCommand) String() string {
