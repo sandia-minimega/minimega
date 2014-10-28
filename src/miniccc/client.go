@@ -88,20 +88,18 @@ func clientCommandExec(c *ron.Command) {
 				if err != nil {
 					log.Errorln(err)
 					resp.Stderr = stderr.String()
-					return
+				} else {
+					go func() {
+						cmd.Wait()
+						log.Info("command %v exited", strings.Join(c.Command, " "))
+						log.Info(stdout.String())
+						log.Info(stderr.String())
+					}()
 				}
-
-				go func() {
-					cmd.Wait()
-					log.Info("command %v exited", strings.Join(c.Command, " "))
-					log.Info(stdout.String())
-					log.Info(stderr.String())
-				}()
 			} else {
 				err := cmd.Run()
 				if err != nil {
 					log.Errorln(err)
-					return
 				}
 				resp.Stdout = stdout.String()
 				resp.Stderr = stderr.String()
