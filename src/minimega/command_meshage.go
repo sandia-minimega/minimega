@@ -34,15 +34,23 @@ func meshageHandler() {
 			for {
 				r := <-ackChanMeshage
 				if r.Error != "" {
-					bufError += r.Error
-					if !strings.HasSuffix(r.Error, "\n") && r.More {
-						bufError += "\n"
+					if bufError == "" {
+						bufError = r.Error
+					} else {
+						if !strings.HasSuffix(bufError, "\n") {
+							bufError += "\n"
+						}
+						bufError += r.Error
 					}
 				}
 				if r.Response != "" {
-					bufResponse += r.Response
-					if !strings.HasSuffix(r.Response, "\n") && r.More {
-						bufResponse += "\n"
+					if bufResponse == "" {
+						bufResponse = r.Response
+					} else {
+						if !strings.HasSuffix(bufResponse, "\n") {
+							bufResponse += "\n"
+						}
+						bufResponse += r.Response
 					}
 				}
 				if !r.More {

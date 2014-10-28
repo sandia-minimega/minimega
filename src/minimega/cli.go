@@ -1743,14 +1743,12 @@ func cli() {
 		for {
 			r := <-ackChanLocal
 			if r.Error != "" {
-				log.Errorln(r.Error)
+				x := strings.TrimSpace(r.Error)
+				log.Errorln(x)
 			}
 			if r.Response != "" {
-				if strings.HasSuffix(r.Response, "\n") {
-					fmt.Print(r.Response)
-				} else {
-					fmt.Println(r.Response)
-				}
+				x := strings.TrimSpace(r.Response)
+				fmt.Println(x)
 			}
 			if !r.More {
 				log.Debugln("got last message")
@@ -1849,6 +1847,7 @@ func cliExec(c cliCommand) cliResponse {
 		if cliCommands[c.Command].Record {
 			s := c.Command
 			if len(c.Args) > 0 {
+				// BUG: need quote unescape in the new cli
 				s += " " + strings.Join(c.Args, " ")
 			}
 			// special case, don't record "clear history"
