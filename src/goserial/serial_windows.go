@@ -35,23 +35,34 @@ type structTimeouts struct {
 	WriteTotalTimeoutConstant   uint32
 }
 
-func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
+var (
+	modkernel32 = syscall.NewLazyDLL("kernel32.dll")
+
+	nSetCommState        = modkernel32.NewProc("SetCommState")
+	nSetCommTimeouts     = modkernel32.NewProc("SetCommTimeouts")
+	nSetCommMask         = modkernel32.NewProc("SetCommMask")
+	nSetupComm           = modkernel32.NewProc("SetupComm")
+	nGetOverlappedResult = modkernel32.NewProc("GetOverlappedResult")
+	nCreateEvent         = modkernel32.NewProc("CreateEventW")
+	nResetEvent          = modkernel32.NewProc("ResetEvent")
+)
+
+func openPort(name string, baud int) (rwc io.ReadWriteCloser, err error) {
 	if len(name) > 0 && name[0] != '\\' {
 		name = "\\\\.\\" + name
 	}
 
-	const FILE_FLAGS_OVERLAPPED = 0x40000000
-	h, e := syscall.CreateFile(syscall.StringToUTF16Ptr(name),
+	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(name),
 		syscall.GENERIC_READ|syscall.GENERIC_WRITE,
 		0,
 		nil,
 		syscall.OPEN_EXISTING,
-		syscall.FILE_ATTRIBUTE_NORMAL|FILE_FLAGS_OVERLAPPED,
+		syscall.FILE_ATTRIBUTE_NORMAL|syscall.FILE_FLAGS_OVERLAPPED,
 		0)
-	if e != 0 {
-		err = &os.PathError{"open", name, os.Errno(e)}
+	if err != nil {
 		return
 	}
+
 	f := os.NewFile(h, name)
 	defer func() {
 		if err != nil {
@@ -80,20 +91,17 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
 	if err != nil {
 		return
 	}
-	port := new(serialPort)
-	port.f = f
-	port.fd = h
-	port.ro = ro
-	port.wo = wo
 
-	return port, nil
+	port := serialPort{f: f, fd: h, ro: ro, wo: wo}
+
+	return &port, nil
 }
 
-func (p *serialPort) Close() os.Error {
+func (p *serialPort) Close() error {
 	return p.f.Close()
 }
 
-func (p *serialPort) Write(buf []byte) (int, os.Error) {
+func (p *serialPort) Write(buf []byte) (int, error) {
 	p.wl.Lock()
 	defer p.wl.Unlock()
 
@@ -108,7 +116,7 @@ func (p *serialPort) Write(buf []byte) (int, os.Error) {
 	return getOverlappedResult(p.fd, p.wo)
 }
 
-func (p *serialPort) Read(buf []byte) (int, os.Error) {
+func (p *serialPort) Read(buf []byte) (int, error) {
 	if p == nil || p.f == nil {
 		return 0, fmt.Errorf("Invalid port on read %v %v", p, p.f)
 	}
@@ -127,48 +135,14 @@ func (p *serialPort) Read(buf []byte) (int, os.Error) {
 	return getOverlappedResult(p.fd, p.ro)
 }
 
-var (
-	nSetCommState,
-	nSetCommTimeouts,
-	nSetCommMask,
-	nSetupComm,
-	nGetOverlappedResult,
-	nCreateEvent,
-	nResetEvent uintptr
-)
-
-func init() {
-	k32, err := syscall.LoadLibrary("kernel32.dll")
-	if err != 0 {
-		panic("LoadLibrary " + syscall.Errstr(err))
-	}
-	defer syscall.FreeLibrary(k32)
-
-	nSetCommState = getProcAddr(k32, "SetCommState")
-	nSetCommTimeouts = getProcAddr(k32, "SetCommTimeouts")
-	nSetCommMask = getProcAddr(k32, "SetCommMask")
-	nSetupComm = getProcAddr(k32, "SetupComm")
-	nGetOverlappedResult = getProcAddr(k32, "GetOverlappedResult")
-	nCreateEvent = getProcAddr(k32, "CreateEventW")
-	nResetEvent = getProcAddr(k32, "ResetEvent")
-}
-
-func getProcAddr(lib syscall.Handle, name string) uintptr {
-	addr, err := syscall.GetProcAddress(lib, name)
-	if err != 0 {
-		panic(name + " " + syscall.Errstr(err))
-	}
-	return addr
-}
-
-func errno(e uintptr) os.Error {
+func errno(e uintptr) error {
 	if e != 0 {
-		return os.Errno(e)
+		return error(e)
 	}
-	return os.Errno(syscall.EINVAL)
+	return error(syscall.EINVAL)
 }
 
-func setCommState(h syscall.Handle, baud int) os.Error {
+func setCommState(h syscall.Handle, baud int) error {
 	var params structDCB
 	params.DCBlength = uint32(unsafe.Sizeof(params))
 
@@ -178,14 +152,14 @@ func setCommState(h syscall.Handle, baud int) os.Error {
 	params.BaudRate = uint32(baud)
 	params.ByteSize = 8
 
-	r, _, e := syscall.Syscall(nSetCommState, 2, uintptr(h), uintptr(unsafe.Pointer(&params)), 0)
-	if r == 0 {
-		return errno(e)
+	r1, _, e1 := nSetCommState.Call(uintptr(h), uintptr(unsafe.Pointer(&params)))
+	if r1 == 0 {
+		return errno(e1)
 	}
 	return nil
 }
 
-func setCommTimeouts(h syscall.Handle) os.Error {
+func setCommTimeouts(h syscall.Handle) error {
 	var timeouts structTimeouts
 	const MAXDWORD = 1<<32 - 1
 	timeouts.ReadIntervalTimeout = MAXDWORD
@@ -194,76 +168,77 @@ func setCommTimeouts(h syscall.Handle) os.Error {
 
 	/* From http://msdn.microsoft.com/en-us/library/aa363190(v=VS.85).aspx
 
-	 For blocking I/O see below:
+		 For blocking I/O see below:
 
-	 Remarks:
+		 Remarks:
 
-	 If an application sets ReadIntervalTimeout and
-	 ReadTotalTimeoutMultiplier to MAXDWORD and sets
-	 ReadTotalTimeoutConstant to a value greater than zero and
-	 less than MAXDWORD, one of the following occurs when the
-	 ReadFile function is called:
+		 If an application sets ReadIntervalTimeout and
+		 ReadTotalTimeoutMultiplier to MAXDWORD and sets
+		 ReadTotalTimeoutConstant to a value greater than zero and
+		 less than MAXDWORD, one of the following occurs when the
+		 ReadFile function is called:
 
-	 If there are any bytes in the input buffer, ReadFile returns
-	       immediately with the bytes in the buffer.
+		 If there are any bytes in the input buffer, ReadFile returns
+		       immediately with the bytes in the buffer.
 
-	 If there are no bytes in the input buffer, ReadFile waits
-               until a byte arrives and then returns immediately.
+		 If there are no bytes in the input buffer, ReadFile waits
+	               until a byte arrives and then returns immediately.
 
-	 If no bytes arrive within the time specified by
-	       ReadTotalTimeoutConstant, ReadFile times out.
+		 If no bytes arrive within the time specified by
+		       ReadTotalTimeoutConstant, ReadFile times out.
 	*/
 
-	r, _, e := syscall.Syscall(nSetCommTimeouts, 2, uintptr(h), uintptr(unsafe.Pointer(&timeouts)), 0)
-	if r == 0 {
-		return errno(e)
+	r1, _, e1 := nSetCommTimeouts.Call(uintptr(h), uintptr(unsafe.Pointer(&timeouts)))
+	if r1 == 0 {
+		return errno(e1)
 	}
 	return nil
 }
 
-func setupComm(h syscall.Handle, in, out int) os.Error {
-	r, _, e := syscall.Syscall(nSetupComm, 3, uintptr(h), uintptr(in), uintptr(out))
-	if r == 0 {
-		return errno(e)
+func setupComm(h syscall.Handle, in, out int) error {
+	r1, _, e1 := nSetupComm.Call(uintptr(h), uintptr(in), uintptr(out))
+	if r1 == 0 {
+		return errno(e1)
 	}
 	return nil
 }
 
-func setCommMask(h syscall.Handle) os.Error {
+func setCommMask(h syscall.Handle) error {
 	const EV_RXCHAR = 0x0001
-	r, _, e := syscall.Syscall(nSetCommMask, 2, uintptr(h), EV_RXCHAR, 0)
-	if r == 0 {
-		return errno(e)
+	r1, _, e1 := nSetCommMask.Call(uintptr(h), EV_RXCHAR)
+	if r1 == 0 {
+		return errno(e1)
 	}
 	return nil
 }
 
-func resetEvent(h syscall.Handle) os.Error {
-	r, _, e := syscall.Syscall(nResetEvent, 1, uintptr(h), 0, 0)
-	if r == 0 {
-		return errno(e)
+func resetEvent(h syscall.Handle) error {
+	r1, _, e1 := nResetEvent.Call(uintptr(h))
+	if r1 == 0 {
+		return errno(e1)
 	}
 	return nil
 }
 
-func newOverlapped() (*syscall.Overlapped, os.Error) {
+func newOverlapped() (*syscall.Overlapped, error) {
 	var overlapped syscall.Overlapped
-	r, _, e := syscall.Syscall6(nCreateEvent, 4, 0, 1, 0, 0, 0, 0)
-	if r == 0 {
-		return nil, errno(e)
+	r1, _, e1 := nCreateEvent.Call(0, 1, 0, 0)
+	if r1 == 0 {
+		return nil, errno(e1)
 	}
+
 	overlapped.HEvent = syscall.Handle(r)
 	return &overlapped, nil
 }
 
-func getOverlappedResult(h syscall.Handle, overlapped *syscall.Overlapped) (int, os.Error) {
+func getOverlappedResult(h syscall.Handle, overlapped *syscall.Overlapped) (int, error) {
 	var n int
-	r, _, e := syscall.Syscall6(nGetOverlappedResult, 4,
+	r1, _, e1 := nGetOverlappedResult.Call(
 		uintptr(h),
 		uintptr(unsafe.Pointer(overlapped)),
-		uintptr(unsafe.Pointer(&n)), 1, 0, 0)
-	if r == 0 {
-		return n, errno(e)
+		uintptr(unsafe.Pointer(&n)), 1)
+	if r1 == 0 {
+		return n, errno(e1)
 	}
 
 	return n, nil
