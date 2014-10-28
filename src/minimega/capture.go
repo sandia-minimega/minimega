@@ -121,10 +121,11 @@ func clearCapture(captureType, id string) error {
 	if id == "-1" {
 		for k, v := range captureEntries {
 			if v.Type == "pcap" && captureType == "pcap" {
+				delete(captureEntries, k)
 				if v.pcap != nil {
 					v.pcap.Close()
 				} else {
-					log.Error("capture %v has no valid pcap interface", k)
+					return fmt.Errorf("capture %v has no valid pcap interface", k)
 				}
 				if v.tap != "" && v.Bridge != "" {
 					b, err := getBridge(v.Bridge)
@@ -136,8 +137,8 @@ func clearCapture(captureType, id string) error {
 						return err
 					}
 				}
-				delete(captureEntries, k)
 			} else if v.Type == "netflow" && captureType == "netflow" {
+				delete(captureEntries, k)
 				// get the netflow object associated with this bridge
 				nf, err := getNetflowFromBridge(v.Bridge)
 				if err != nil {
@@ -147,7 +148,6 @@ func clearCapture(captureType, id string) error {
 				if err != nil {
 					return err
 				}
-				delete(captureEntries, k)
 			}
 		}
 	} else {
@@ -159,10 +159,11 @@ func clearCapture(captureType, id string) error {
 			return errors.New(fmt.Sprintf("entry %v does not exist", val))
 		} else {
 			if v.Type == "pcap" && captureType == "pcap" {
+				delete(captureEntries, val)
 				if v.pcap != nil {
 					v.pcap.Close()
 				} else {
-					log.Error("capture %v has no valid pcap interface", val)
+					return fmt.Errorf("capture %v has no valid pcap interface", val)
 				}
 				if v.tap != "" && v.Bridge != "" {
 					b, err := getBridge(v.Bridge)
@@ -174,8 +175,8 @@ func clearCapture(captureType, id string) error {
 						return err
 					}
 				}
-				delete(captureEntries, val)
 			} else if v.Type == "netflow" && captureType == "netflow" {
+				delete(captureEntries, val)
 				// get the netflow object associated with this bridge
 				nf, err := getNetflowFromBridge(v.Bridge)
 				if err != nil {
@@ -185,9 +186,8 @@ func clearCapture(captureType, id string) error {
 				if err != nil {
 					return err
 				}
-				delete(captureEntries, val)
 			} else {
-				return errors.New(fmt.Sprintf("entry %v is not a pcap capture", val))
+				return fmt.Errorf("entry %v is not a pcap capture", val)
 			}
 		}
 	}
