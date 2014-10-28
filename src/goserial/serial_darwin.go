@@ -3,18 +3,20 @@ package serial
 // #include <termios.h>
 // #include <unistd.h>
 import "C"
+
 // TODO: Maybe change to using syscall package + ioctl instead of cgo
 
 import (
-	"os"
-	"io"
+	"errors"
 	"fmt"
+	"io"
+	"os"
 	"syscall"
 	//"unsafe"
 )
 
-func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
-	f, err := os.OpenFile(name, os.O_RDWR|os.O_NOCTTY|os.O_NONBLOCK, 0666)
+func openPort(name string, baud int) (rwc io.ReadWriteCloser, err error) {
+	f, err := os.OpenFile(name, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
 	if err != nil {
 		return
 	}
@@ -22,7 +24,7 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
 	fd := C.int(f.Fd())
 	if C.isatty(fd) != 1 {
 		f.Close()
-		return nil, os.NewError("File is not a tty")
+		return nil, errors.New("file is not a tty")
 	}
 
 	var st C.struct_termios
@@ -35,8 +37,8 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
 	switch baud {
 	case 115200:
 		speed = C.B115200
-	case 76800:
-		speed = C.B76800
+	//case 76800:
+	//	speed = C.B76800
 	case 57600:
 		speed = C.B57600
 	case 38400:
@@ -47,7 +49,7 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
 		speed = C.B9600
 	default:
 		f.Close()
-		return nil, fmt.Errorf("Unknown baud rate %v", baud)
+		return nil, fmt.Errorf("unknown baud rate %v", baud)
 	}
 
 	_, err = C.cfsetispeed(&st, speed)
@@ -80,9 +82,9 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err os.Error) {
 		uintptr(syscall.F_SETFL),
 		uintptr(0))
 	if e != 0 || r1 != 0 {
-		s := fmt.Sprint("Clearing NONBLOCK syscall error:", e, r1)
+		s := fmt.Sprint("clearing NONBLOCK syscall error:", e, r1)
 		f.Close()
-		return nil, os.NewError(s)
+		return nil, errors.New(s)
 	}
 
 	/*
