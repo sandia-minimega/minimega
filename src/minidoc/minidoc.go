@@ -14,7 +14,7 @@ import (
 
 var (
 	f_port     = flag.Int("port", 9003, "HTTP port")
-	f_base     = flag.String("base", "misc/minidoc", "base path for static content and templates")
+	f_base     = flag.String("base", "doc/template", "base path for static content and templates")
 	f_exec     = flag.Bool("exec", true, "allow minimega commands")
 	f_loglevel = flag.String("level", "warn", "log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
@@ -40,7 +40,7 @@ func main() {
 		http.Handle("/socket", NewSocketHandler())
 	}
 
-	http.Handle("/static/", http.FileServer(http.Dir(*f_base)))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*f_base))))
 
 	host := fmt.Sprintf(":%v", *f_port)
 	log.Fatalln(http.ListenAndServe(host, nil))

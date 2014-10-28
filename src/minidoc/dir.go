@@ -60,7 +60,7 @@ var (
 
 func initTemplates(base string) error {
 	// Locate the template file.
-	actionTmpl := filepath.Join(base, "templates/action.tmpl")
+	actionTmpl := filepath.Join(base, "action.tmpl")
 
 	contentTemplate = make(map[string]*template.Template)
 
@@ -68,7 +68,7 @@ func initTemplates(base string) error {
 		".slide":   "slides.tmpl",
 		".article": "article.tmpl",
 	} {
-		contentTmpl = filepath.Join(base, "templates", contentTmpl)
+		contentTmpl = filepath.Join(base, contentTmpl)
 
 		// Read and parse the input.
 		tmpl := Template()
@@ -80,7 +80,7 @@ func initTemplates(base string) error {
 	}
 
 	var err error
-	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "templates/dir.tmpl"))
+	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "dir.tmpl"))
 	if err != nil {
 		return err
 	}
