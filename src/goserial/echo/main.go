@@ -13,7 +13,7 @@ var (
 )
 
 func usage() {
-	fmt.Printf("USAGE: %s [OPTION]... PORT", os.Args[0])
+	fmt.Printf("USAGE: %s [OPTION]... PORT\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
