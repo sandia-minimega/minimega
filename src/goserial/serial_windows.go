@@ -57,13 +57,13 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err error) {
 		0,
 		nil,
 		syscall.OPEN_EXISTING,
-		syscall.FILE_ATTRIBUTE_NORMAL|syscall.FILE_FLAGS_OVERLAPPED,
+		syscall.FILE_ATTRIBUTE_NORMAL|syscall.FILE_FLAG_OVERLAPPED,
 		0)
 	if err != nil {
 		return
 	}
 
-	f := os.NewFile(h, name)
+	f := os.NewFile(uintptr(h), name)
 	defer func() {
 		if err != nil {
 			f.Close()
@@ -108,11 +108,13 @@ func (p *serialPort) Write(buf []byte) (int, error) {
 	if err := resetEvent(p.wo.HEvent); err != nil {
 		return 0, err
 	}
+
 	var n uint32
-	e := syscall.WriteFile(p.fd, buf, &n, p.wo)
-	if e != 0 && e != syscall.ERROR_IO_PENDING {
-		return int(n), errno(uintptr(e))
+	err := syscall.WriteFile(p.fd, buf, &n, p.wo)
+	if err != nil && err != syscall.ERROR_IO_PENDING {
+		return int(n), err
 	}
+
 	return getOverlappedResult(p.fd, p.wo)
 }
 
@@ -127,19 +129,14 @@ func (p *serialPort) Read(buf []byte) (int, error) {
 	if err := resetEvent(p.ro.HEvent); err != nil {
 		return 0, err
 	}
-	var done uint32
-	e := syscall.ReadFile(p.fd, buf, &done, p.ro)
-	if e != 0 && e != syscall.ERROR_IO_PENDING {
-		return int(done), errno(uintptr(e))
-	}
-	return getOverlappedResult(p.fd, p.ro)
-}
 
-func errno(e uintptr) error {
-	if e != 0 {
-		return error(e)
+	var n uint32
+	err := syscall.ReadFile(p.fd, buf, &n, p.ro)
+	if err != nil && err != syscall.ERROR_IO_PENDING {
+		return int(n), err
 	}
-	return error(syscall.EINVAL)
+
+	return getOverlappedResult(p.fd, p.ro)
 }
 
 func setCommState(h syscall.Handle, baud int) error {
@@ -152,10 +149,15 @@ func setCommState(h syscall.Handle, baud int) error {
 	params.BaudRate = uint32(baud)
 	params.ByteSize = 8
 
-	r1, _, e1 := nSetCommState.Call(uintptr(h), uintptr(unsafe.Pointer(&params)))
+	r1, _, err := nSetCommState.Call(uintptr(h), uintptr(unsafe.Pointer(&params)))
 	if r1 == 0 {
-		return errno(e1)
+		if err == nil {
+			return syscall.EINVAL
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 
@@ -188,57 +190,85 @@ func setCommTimeouts(h syscall.Handle) error {
 		       ReadTotalTimeoutConstant, ReadFile times out.
 	*/
 
-	r1, _, e1 := nSetCommTimeouts.Call(uintptr(h), uintptr(unsafe.Pointer(&timeouts)))
+	r1, _, err := nSetCommTimeouts.Call(uintptr(h), uintptr(unsafe.Pointer(&timeouts)))
 	if r1 == 0 {
-		return errno(e1)
+		if err == nil {
+			return syscall.EINVAL
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 
 func setupComm(h syscall.Handle, in, out int) error {
-	r1, _, e1 := nSetupComm.Call(uintptr(h), uintptr(in), uintptr(out))
+	r1, _, err := nSetupComm.Call(uintptr(h), uintptr(in), uintptr(out))
 	if r1 == 0 {
-		return errno(e1)
+		if err == nil {
+			return syscall.EINVAL
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 
 func setCommMask(h syscall.Handle) error {
 	const EV_RXCHAR = 0x0001
-	r1, _, e1 := nSetCommMask.Call(uintptr(h), EV_RXCHAR)
+	r1, _, err := nSetCommMask.Call(uintptr(h), EV_RXCHAR)
 	if r1 == 0 {
-		return errno(e1)
+		if err == nil {
+			return syscall.EINVAL
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 
 func resetEvent(h syscall.Handle) error {
-	r1, _, e1 := nResetEvent.Call(uintptr(h))
+	r1, _, err := nResetEvent.Call(uintptr(h))
 	if r1 == 0 {
-		return errno(e1)
+		if err == nil {
+			return syscall.EINVAL
+		} else {
+			return err
+		}
 	}
+
 	return nil
 }
 
 func newOverlapped() (*syscall.Overlapped, error) {
 	var overlapped syscall.Overlapped
-	r1, _, e1 := nCreateEvent.Call(0, 1, 0, 0)
+	r1, _, err := nCreateEvent.Call(0, 1, 0, 0)
 	if r1 == 0 {
-		return nil, errno(e1)
+		if err == nil {
+			return nil, syscall.EINVAL
+		} else {
+			return nil, err
+		}
 	}
 
-	overlapped.HEvent = syscall.Handle(r)
+	overlapped.HEvent = syscall.Handle(r1)
 	return &overlapped, nil
 }
 
 func getOverlappedResult(h syscall.Handle, overlapped *syscall.Overlapped) (int, error) {
 	var n int
-	r1, _, e1 := nGetOverlappedResult.Call(
+	r1, _, err := nGetOverlappedResult.Call(
 		uintptr(h),
 		uintptr(unsafe.Pointer(overlapped)),
 		uintptr(unsafe.Pointer(&n)), 1)
 	if r1 == 0 {
-		return n, errno(e1)
+		if err == nil {
+			return 0, syscall.EINVAL
+		} else {
+			return 0, err
+		}
 	}
 
 	return n, nil
