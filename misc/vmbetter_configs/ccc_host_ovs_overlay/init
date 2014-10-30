@@ -65,6 +65,9 @@ dhclient -v eth0
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
+# ntp
+/etc/init.d/ntp start
+
 # arp tuning
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
 echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2

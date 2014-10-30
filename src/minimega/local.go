@@ -91,14 +91,12 @@ func localAttach() {
 				return
 			}
 			if r.Error != "" {
-				log.Errorln(r.Error)
+				x := strings.TrimSpace(r.Error)
+				log.Errorln(x)
 			}
 			if r.Response != "" {
-				if strings.HasSuffix(r.Response, "\n") {
-					fmt.Print(r.Response)
-				} else {
-					fmt.Println(r.Response)
-				}
+				x := strings.TrimSpace(r.Response)
+				fmt.Println(x)
 			}
 			if !r.More {
 				log.Debugln("got last message")
@@ -161,14 +159,12 @@ func localCommand() {
 			return
 		}
 		if r.Error != "" {
-			log.Errorln(r.Error)
+			x := strings.TrimSpace(r.Error)
+			log.Errorln(x)
 		}
 		if r.Response != "" {
-			if strings.HasSuffix(r.Response, "\n") {
-				fmt.Print(r.Response)
-			} else {
-				fmt.Println(r.Response)
-			}
+			x := strings.TrimSpace(r.Response)
+			fmt.Println(x)
 		}
 		if !r.More {
 			log.Debugln("got last message")
