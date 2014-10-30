@@ -385,6 +385,12 @@ func vyattaGenConfig() string {
 			}
 			return false
 		},
+		"gateway": func(d vyattaDhcp) bool {
+			if d.Gw == "none" {
+				return false
+			}
+			return true
+		},
 	}).Parse(vyattaConfigText)
 	if err != nil {
 		log.Errorln(err)
@@ -534,7 +540,7 @@ service {
         shared-network-name minimega_{{$v.Gw}} {
             authoritative disable
             subnet {{$i}} {
-                default-router {{$v.Gw}}
+		{{if gateway $v}}default-router {{$v.Gw}}{{end}}
 		{{if dns $v}}dns-server {{$v.Dns}}{{end}}
                 lease 86400
                 start {{$v.Start}} {

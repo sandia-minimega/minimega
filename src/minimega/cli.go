@@ -1322,17 +1322,17 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 			Call:      cliVyatta,
 			Helpshort: "define vyatta configuration images",
 			Helplong: `
-	Usage: vyatta
->> vyatta dhcp add <network> <listen address> <DHCP low range> <DHCP high range>
->> vyatta dhcp delete <network>
->> vyatta interfaces <A.B.C.D/MASK,dhcp,none>[,<A.B.C.D/MASK,dhcp,none>...]
->> vyatta interfaces6 <IPv6 address/MASK,none>[,<IPv6 address/MASK,none>...]
->> vyatta rad <prefix>[,<prefix>...]
->> vyatta ospf <network>[,<network>...]
->> vyatta ospf3 <interface>[,<interface>...]
->> vyatta routes <network>,<next-hop>[ <network>,<next-hop> ...]
->> vyatta config <filename>
->> vyatta write [filename]
+	Usage:  vyatta
+		vyatta dhcp add <network> <default gateway/none> <DHCP low range> <DHCP high range>
+		vyatta dhcp delete <network>
+		vyatta interfaces <A.B.C.D/MASK,dhcp,none>[,<A.B.C.D/MASK,dhcp,none>...]
+		vyatta interfaces6 <IPv6 address/MASK,none>[,<IPv6 address/MASK,none>...]
+		vyatta rad <prefix>[,<prefix>...]
+		vyatta ospf <network>[,<network>...]
+		vyatta ospf3 <interface>[,<interface>...]
+		vyatta routes <network>,<next-hop>[ <network>,<next-hop> ...]
+		vyatta config <filename>
+		vyatta write [filename]
 
 Define and write out vyatta router floppy disk images. 
 
@@ -1349,6 +1349,8 @@ nameserver. For example, to do the same as above with a
 nameserver of 8.8.8.8:
 
 	vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254 8.8.8.8
+
+Optionally, you can specify "none" for the default gateway.
 
 - 'interfaces': Add IPv4 addresses using CIDR notation. Optionally,
 'dhcp' or 'none' may be specified. The order specified matches the
