@@ -365,7 +365,7 @@ func cliVMConfig(c cliCommand) cliResponse {
 		return cliResponse{
 			Response: r,
 		}
-	case 2: // must be 'save' 'restore'
+	case 2: // must be 'save' 'restore' 'clone'
 		switch strings.ToLower(c.Args[0]) {
 		case "save":
 			savedInfo[c.Args[1]] = info.Copy()
@@ -375,6 +375,19 @@ func cliVMConfig(c cliCommand) cliResponse {
 			} else {
 				return cliResponse{
 					Error: fmt.Sprintf("config %v does not exist", c.Args[1]),
+				}
+			}
+		case "clone":
+			id, err := strconv.Atoi(c.Args[1])
+			if err != nil {
+				id = vms.findByName(c.Args[1])
+			}
+
+			if vm, ok := vms.vms[id]; ok {
+				info = vm.Copy()
+			} else {
+				return cliResponse{
+					Error: fmt.Sprintf("VM %v not found", c.Args[1]),
 				}
 			}
 		default:

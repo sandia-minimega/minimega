@@ -1201,7 +1201,7 @@ Display the version.`,
 			Call:      cliVMConfig,
 			Helpshort: "display, save, or restore the current VM configuration",
 			Helplong: `
-	Usage: vm_config [save <name>, restore <name>]
+	Usage: vm_config [save <name>, restore <name>, clone <name>]
 
 Display, save, or restore the current VM configuration.
 
@@ -1216,6 +1216,10 @@ To save a configuration:
 To restore a configuration:
 
 	vm_config restore <config name>
+
+To clone the configuration of an existing VM:
+
+	vm_config clone <VM ID, name>
 
 Calling clear vm_config will clear all VM configuration options, but will not
 remove saved configurations.`,
