@@ -484,7 +484,7 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
 Set the qemu process to invoke. Relative paths are ok.`,
 			Record: true,
 			Clear: func() error {
-				externalProcesses["qemu"] = "qemu-system-x86_64"
+				delete(customExternalProcesses, "qemu")
 				return nil
 			},
 		},

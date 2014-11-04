@@ -1900,7 +1900,8 @@ func cliVMQemuOverride(c cliCommand) cliResponse {
 //	vm_net
 //	vm_snapshot
 func cliClearVMConfig() error {
-	externalProcesses["qemu"] = "kvm"
+	delete(customExternalProcesses, "qemu")
+
 	info.Memory = VM_MEMORY_DEFAULT
 	info.Vcpus = "1"
 	info.DiskPaths = []string{}
@@ -1924,7 +1925,7 @@ func cliVMQemu(c cliCommand) cliResponse {
 			Response: process("qemu"),
 		}
 	} else if len(c.Args) == 1 {
-		externalProcesses["qemu"] = c.Args[0]
+		customExternalProcesses["qemu"] = c.Args[0]
 	} else {
 		return cliResponse{
 			Error: "vm_qemu takes only one argument",
