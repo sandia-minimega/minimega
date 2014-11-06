@@ -274,6 +274,7 @@ only its launch configuration.`,
 					log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
 					resp := cliExec(makeCommand(string(l)))
 					resp.More = true
+					resp.TID = c.TID
 					c.ackChan <- resp
 					if resp.Error != "" {
 						break // stop on errors
