@@ -6,6 +6,10 @@
 // compression.
 package minicli
 
+import (
+	"errors"
+)
+
 // Output modes
 const (
 	MODE_NORMAL = iota
@@ -50,8 +54,8 @@ type Response struct {
 // 		the argmap
 // [foo]...	an optional list of strings, zero or more, with the key "foo" in
 // 		the argmap. This is the only way to support multiple optional fields.
-func Register(pattern string, handler func(*Command) *Responses) {
-
+func Register(pattern string, handler func(*Command) *Responses) error {
+	return errors.New("not implemented")
 }
 
 // Process raw input text. An error is returned if parsing the input text
@@ -66,18 +70,18 @@ func ProcessString(input string) (*Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) *Responses {
-
+	return nil
 }
 
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
-
+	return nil, errors.New("not implemented")
 }
 
 // List installed patterns and handlers
 func Handlers() string {
-
+	return ""
 }
 
 // Enable or disable response compression
@@ -105,7 +109,7 @@ func (r Responses) GoString() {
 // errors, the returned slice will be padded with nil errors to align the error
 // with the response.
 func (r Responses) Errors() []error {
-
+	return nil
 }
 
 // Set the output mode for String()
