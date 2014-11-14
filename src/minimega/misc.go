@@ -260,6 +260,10 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		}
 
 		// nope, try the vm id instead
+		v, err = strconv.Atoi(vm)
+		if err != nil {
+			return VM_NOT_FOUND, "", err
+		}
 		cmd = cliCommand{
 			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("id=%v", vm), "[name]"},
 		}
