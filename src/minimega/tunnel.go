@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 	"websocket"
 )
 
@@ -98,6 +99,8 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 			remote.Close()
 		}()
 		func() {
+			start := time.Now().UnixNano() / 1000000
+
 			sbuf := make([]byte, VNC_WS_BUF)
 			dbuf := make([]byte, 2*VNC_WS_BUF)
 			for {
@@ -110,6 +113,15 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				base64.StdEncoding.Encode(dbuf, sbuf[0:n])
 				n = base64.StdEncoding.EncodedLen(n)
+
+				if r, ok := vncRecording[rhost]; ok {
+					now := time.Now().UnixNano() / 1000000
+					tdelta := now - start
+					if r.fb != nil {
+						r.fb.WriteString(fmt.Sprintf("'{%v{%v',\n", tdelta, string(dbuf[0:n])))
+					}
+				}
+
 				_, err = ws.Write(dbuf[0:n])
 				if err != nil {
 					log.Errorln(err)

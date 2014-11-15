@@ -22,14 +22,16 @@ var (
 )
 
 type vncVMRecord struct {
-	Host     string
-	Name     string
-	ID       int
-	Filename string
+	Host            string
+	Name            string
+	ID              int
+	Filename        string
+	Framebuffername string
 
 	last   time.Time
 	output *bufio.Writer
 	file   *os.File
+	fb     *os.File
 }
 
 type vncVMPlayback struct {
@@ -94,7 +96,7 @@ func (v *vncVMPlayback) Stop() {
 	close(v.nextEvent)
 }
 
-func NewVMRecord(filename string) (*vncVMRecord, error) {
+func NewVMRecord(filename string, framebuffername string) (*vncVMRecord, error) {
 	log.Debug("NewVMRecord: %v", filename)
 	ret := &vncVMRecord{}
 	fi, err := os.Create(filename)
@@ -104,6 +106,17 @@ func NewVMRecord(filename string) (*vncVMRecord, error) {
 	ret.file = fi
 	ret.output = bufio.NewWriter(fi)
 	ret.last = time.Now()
+
+	if framebuffername != "" {
+		fb, err := os.Create(framebuffername)
+		if err != nil {
+			return ret, err
+		}
+		ret.fb = fb
+
+		// the fb file preamble
+		fb.WriteString("var VNC_frame_data = [\n")
+	}
 	return ret, nil
 }
 
@@ -118,6 +131,8 @@ func (v *vncVMRecord) AddAction(s string) {
 func (v *vncVMRecord) Close() {
 	v.output.Flush()
 	v.file.Close()
+	v.fb.WriteString("'EOF']\n")
+	v.fb.Close()
 }
 
 func cliVNC(c cliCommand) cliResponse {
@@ -242,7 +257,7 @@ func cliVNC(c cliCommand) cliResponse {
 
 		switch {
 		case c.Args[0] == "record":
-			vmr, err := NewVMRecord(filename)
+			vmr, err := NewVMRecord(filename, "")
 			if err != nil {
 				log.Errorln(err)
 				return cliResponse{
@@ -269,6 +284,40 @@ func cliVNC(c cliCommand) cliResponse {
 			vncPlaying[rhost] = vmp
 			go vmp.Run()
 		}
+	case 5: // record <host> <vm> <input file> <framebuffer file>
+		host := c.Args[1]
+		vm := c.Args[2]
+
+		vmID, vmName, err := findRemoteVM(host, vm)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		filename := c.Args[3]
+		framebuffername := c.Args[4]
+		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+		// is this rhost already being recorded?
+		if _, ok := vncRecording[rhost]; ok {
+			return cliResponse{
+				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
+			}
+		}
+
+		vmr, err := NewVMRecord(filename, framebuffername)
+		if err != nil {
+			log.Errorln(err)
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		vmr.Filename = filename
+		vmr.Framebuffername = framebuffername
+		vmr.Host = host
+		vmr.Name = vmName
+		vmr.ID = vmID
+		vncRecording[rhost] = vmr
 	default:
 		return cliResponse{
 			Error: "malformed command",
