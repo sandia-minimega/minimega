@@ -54,15 +54,21 @@ func externalCheck(c cliCommand) cliResponse {
 			Error: "check does not take any arguments",
 		}
 	}
+	var e string
 	for _, i := range defaultExternalProcesses {
 		path, err := exec.LookPath(i)
 		if err != nil {
-			e := fmt.Sprintf("%v not found", i)
-			return cliResponse{
-				Error: e,
+			if e != "" {
+				e += "\n"
 			}
+			e += fmt.Sprintf("%v not found", i)
 		} else {
 			log.Info("%v found at: %v", i, path)
+		}
+	}
+	if e != "" {
+		return cliResponse{
+			Error: e,
 		}
 	}
 
