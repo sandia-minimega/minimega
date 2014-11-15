@@ -22,6 +22,8 @@ Usage, <arg> = required, [arg] = optional:
 	powerbot on <nodelist>
 	powerbot off <nodelist>
 	powerbot cycle <nodelist>
+        powerbot status [nodelist]
+        powerbot                    # equivalent to "powerbot status"
 
 Node lists are in standard range format, i.e. node[1-5,8-10,15]
 `)
@@ -118,13 +120,15 @@ func readConfig(filename string) (Config, error) {
 
 func main() {
 	var err error
+	var command string
+	var nodes string
 
 	// Get flags and arguments
 	flag.Parse()
 	args := flag.Args()
 
 	if len(args) == 0 {
-		usage()
+		command = "status"
 	}
 
 	// Parse configuration file
@@ -133,19 +137,35 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	// First argument is a command: "on", "off", etc.
-	command := args[0]
+	if len(args) == 2 {
+		// First argument is a command: "on", "off", etc.
+		// second arg is node list
+		command = args[0]
+		nodes = args[1]
+	} else if len(args) == 1 {
+		// If they said "powerbot status", show status for all nodes
+		if args[0] == "status" {
+			command = "status"
+			// Leave nodes unset, we want everything
+		} else {
+			// Assume they gave a list of nodes for status
+			nodes = args[0]
+		}
+	} else {
+		// Assume they want status of everything
+		command = "status"
+	}
 
 	// Find a list of what devices and ports are affected
 	// by the command
-	var nodes string
 	devs := make(map[string]Device)
-	if len(args) == 2 {
-		nodes = args[1]
+	if nodes != "" {
 		devs, err = findOutletsAndDevs(nodes)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
+	} else {
+		devs = config.devices
 	}
 
 	// For each device affected, perform the command

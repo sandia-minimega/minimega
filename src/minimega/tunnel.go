@@ -60,7 +60,7 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 					var n int
 					n, err = ws.Read(buf)
 					if err != nil {
-						if !strings.Contains(err.Error(), "closed network connection") {
+						if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
 							log.Errorln(err)
 						}
 						break
