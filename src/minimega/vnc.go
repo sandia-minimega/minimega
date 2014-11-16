@@ -72,6 +72,7 @@ func NewVMPlayback(filename string) (*vncVMPlayback, error) {
 func (v *vncVMPlayback) Run() {
 	scanner := bufio.NewScanner(v.input)
 	defer v.conn.Close()
+	defer v.Stop()
 	for scanner.Scan() {
 		s := strings.Split(scanner.Text(), " ")
 		if len(s) != 2 {
@@ -100,7 +101,6 @@ func (v *vncVMPlayback) Run() {
 			return
 		}
 	}
-	v.Stop()
 }
 
 // dial the vm in question, complete a handshake, and discard incoming
@@ -170,6 +170,11 @@ func (v *vncVMPlayback) Dial() error {
 	//			}
 	//		}
 	//	}()
+	buf = []byte{0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0, 2, 0, 0, 11, 0, 0, 0, 1, 0, 0, 0, 7, 255, 255, 254, 252, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 0, 255, 255, 255, 33, 255, 255, 255, 17, 255, 255, 255, 230, 255, 255, 255, 9, 255, 255, 255, 32, 3, 0, 0, 0, 0, 0, 3, 32, 2, 88}
+	_, err = v.conn.Write(buf)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -179,6 +184,7 @@ func (v *vncVMPlayback) Stop() {
 	defer v.lock.Unlock()
 	if !v.finished {
 		v.file.Close()
+		v.conn.Close()
 		close(v.done) // this should cause the select in Run() to come back
 		v.finished = true
 		delete(vncPlaying, v.Rhost)
@@ -202,52 +208,16 @@ func NewVMRecord(filename string) (*vncVMRecord, error) {
 // Input ought to be a base64-encoded string as read from the websocket
 // connected to NoVNC. If not, well, oops.
 func (v *vncVMRecord) AddAction(s string) {
-	// split up the record based on the type. All I've ever seen are
-	// client messages 3, 4, and 5.
-	records := vncSplitClientCommands(s)
-	if records == nil {
+	d, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		log.Errorln(err)
 		return
 	}
-	for i, r := range records {
-		var record string
-		if i == 0 {
-			record = fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), r)
-		} else {
-			record = fmt.Sprintf("1 %s\n", r)
-		}
+	if d[0] == 4 || d[0] == 5 {
+		record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), s)
 		v.output.WriteString(record)
 	}
 	v.last = time.Now()
-}
-
-func vncSplitClientCommands(s string) []string {
-	data, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		log.Errorln(err)
-		return nil
-	}
-
-	var ret []string
-
-	pos := 0
-	for pos < len(data) {
-		switch data[pos] {
-		case 0x03: // fb update request, which we can discard
-			pos += 10
-		case 0x04: // kb event
-			e := base64.StdEncoding.EncodeToString(data[pos : pos+8])
-			ret = append(ret, e)
-			pos += 8
-		case 0x05: // mouse event
-			e := base64.StdEncoding.EncodeToString(data[pos : pos+6])
-			ret = append(ret, e)
-			pos += 6
-		default:
-			log.Debug("invalid vnc client event type: %v, dropping", data[pos])
-			return nil
-		}
-	}
-	return ret
 }
 
 func (v *vncVMRecord) Close() {
