@@ -7,11 +7,14 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	log "minilog"
+	"net"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -22,16 +25,14 @@ var (
 )
 
 type vncVMRecord struct {
-	Host            string
-	Name            string
-	ID              int
-	Filename        string
-	Framebuffername string
+	Host     string
+	Name     string
+	ID       int
+	Filename string
 
 	last   time.Time
 	output *bufio.Writer
 	file   *os.File
-	fb     *os.File
 }
 
 type vncVMPlayback struct {
@@ -39,12 +40,15 @@ type vncVMPlayback struct {
 	Name     string
 	ID       int
 	Filename string
+	Rhost    string
 
 	input *bufio.Reader
 	file  *os.File
+	conn  net.Conn
 
-	nextEvent chan []byte
-	done      chan bool
+	done     chan bool
+	finished bool
+	lock     sync.Mutex
 }
 
 func init() {
@@ -55,7 +59,6 @@ func init() {
 func NewVMPlayback(filename string) (*vncVMPlayback, error) {
 	log.Debug("NewVMPlayback: %v", filename)
 	ret := &vncVMPlayback{}
-	ret.nextEvent = make(chan []byte)
 	ret.done = make(chan bool)
 	fi, err := os.Open(filename)
 	if err != nil {
@@ -68,6 +71,7 @@ func NewVMPlayback(filename string) (*vncVMPlayback, error) {
 
 func (v *vncVMPlayback) Run() {
 	scanner := bufio.NewScanner(v.input)
+	defer v.conn.Close()
 	for scanner.Scan() {
 		s := strings.Split(scanner.Text(), " ")
 		if len(s) != 2 {
@@ -85,18 +89,103 @@ func (v *vncVMPlayback) Run() {
 		case <-v.done:
 			return
 		}
-		v.nextEvent <- []byte(s[1])
+		b, err := base64.StdEncoding.DecodeString(s[1])
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		_, err = v.conn.Write(b)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
 	}
 	v.Stop()
 }
 
-func (v *vncVMPlayback) Stop() {
-	v.file.Close()
-	close(v.done) // this should cause the select in Run() to come back
-	close(v.nextEvent)
+// dial the vm in question, complete a handshake, and discard incoming
+// messages.
+func (v *vncVMPlayback) Dial() error {
+	conn, err := net.Dial("tcp", v.Rhost)
+	if err != nil {
+		return err
+	}
+
+	v.conn = conn
+
+	// handshake, receive 12 bytes from the server
+	buf := make([]byte, 12)
+	n, err := v.conn.Read(buf)
+	if err != nil {
+		return err
+	}
+	if n != 12 {
+		return fmt.Errorf("invalid server version: %v", string(buf[:n]))
+	}
+	// respond with version 3.3
+	buf = []byte("RFB 003.003\n")
+	_, err = v.conn.Write(buf)
+	if err != nil {
+		return err
+	}
+
+	// the server sends a 4 byte security type
+	buf = make([]byte, 4)
+	n, err = v.conn.Read(buf)
+	if err != nil {
+		return err
+	}
+	if n != 4 {
+		return fmt.Errorf("invalid server security message: %v", string(buf[:n]))
+	}
+	// the security type must be 1
+	if buf[3] != 0x01 {
+		return fmt.Errorf("invalid server security type: %v", string(buf[:n]))
+	}
+
+	// client sends an initialization message, non-zero here to indicate
+	// we will allow a shared desktop.
+	_, err = v.conn.Write([]byte{0x01})
+	if err != nil {
+		return err
+	}
+
+	// receive the server initialization
+	buf = make([]byte, 32768)
+	n, err = v.conn.Read(buf)
+	if err != nil {
+		return err
+	}
+	log.Debug("got server initialization length %v", n)
+
+	// success!
+	//	go func() {
+	//		for {
+	//			_, err := v.conn.Read(buf)
+	//			if err != nil {
+	//				if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
+	//					log.Errorln(err)
+	//				}
+	//				return
+	//			}
+	//		}
+	//	}()
+
+	return nil
 }
 
-func NewVMRecord(filename string, framebuffername string) (*vncVMRecord, error) {
+func (v *vncVMPlayback) Stop() {
+	v.lock.Lock()
+	defer v.lock.Unlock()
+	if !v.finished {
+		v.file.Close()
+		close(v.done) // this should cause the select in Run() to come back
+		v.finished = true
+		delete(vncPlaying, v.Rhost)
+	}
+}
+
+func NewVMRecord(filename string) (*vncVMRecord, error) {
 	log.Debug("NewVMRecord: %v", filename)
 	ret := &vncVMRecord{}
 	fi, err := os.Create(filename)
@@ -107,32 +196,63 @@ func NewVMRecord(filename string, framebuffername string) (*vncVMRecord, error) 
 	ret.output = bufio.NewWriter(fi)
 	ret.last = time.Now()
 
-	if framebuffername != "" {
-		fb, err := os.Create(framebuffername)
-		if err != nil {
-			return ret, err
-		}
-		ret.fb = fb
-
-		// the fb file preamble
-		fb.WriteString("var VNC_frame_data = [\n")
-	}
 	return ret, nil
 }
 
 // Input ought to be a base64-encoded string as read from the websocket
 // connected to NoVNC. If not, well, oops.
 func (v *vncVMRecord) AddAction(s string) {
-	record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), s)
-	v.output.WriteString(record)
+	// split up the record based on the type. All I've ever seen are
+	// client messages 3, 4, and 5.
+	records := vncSplitClientCommands(s)
+	if records == nil {
+		return
+	}
+	for i, r := range records {
+		var record string
+		if i == 0 {
+			record = fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), r)
+		} else {
+			record = fmt.Sprintf("1 %s\n", r)
+		}
+		v.output.WriteString(record)
+	}
 	v.last = time.Now()
+}
+
+func vncSplitClientCommands(s string) []string {
+	data, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
+
+	var ret []string
+
+	pos := 0
+	for pos < len(data) {
+		switch data[pos] {
+		case 0x03: // fb update request, which we can discard
+			pos += 10
+		case 0x04: // kb event
+			e := base64.StdEncoding.EncodeToString(data[pos : pos+8])
+			ret = append(ret, e)
+			pos += 8
+		case 0x05: // mouse event
+			e := base64.StdEncoding.EncodeToString(data[pos : pos+6])
+			ret = append(ret, e)
+			pos += 6
+		default:
+			log.Debug("invalid vnc client event type: %v, dropping", data[pos])
+			return nil
+		}
+	}
+	return ret
 }
 
 func (v *vncVMRecord) Close() {
 	v.output.Flush()
 	v.file.Close()
-	v.fb.WriteString("'EOF']\n")
-	v.fb.Close()
 }
 
 func cliVNC(c cliCommand) cliResponse {
@@ -227,7 +347,6 @@ func cliVNC(c cliCommand) cliResponse {
 		case c.Args[0] == "noplayback":
 			if _, ok := vncPlaying[rhost]; ok {
 				vncPlaying[rhost].Stop()
-				// will be deleted elsewhere
 			}
 		}
 	case 4: // [record|playback] <host> <vm> <file>
@@ -257,7 +376,7 @@ func cliVNC(c cliCommand) cliResponse {
 
 		switch {
 		case c.Args[0] == "record":
-			vmr, err := NewVMRecord(filename, "")
+			vmr, err := NewVMRecord(filename)
 			if err != nil {
 				log.Errorln(err)
 				return cliResponse{
@@ -281,43 +400,17 @@ func cliVNC(c cliCommand) cliResponse {
 			vmp.Host = host
 			vmp.Name = vmName
 			vmp.ID = vmID
+			vmp.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
+			err = vmp.Dial()
+			if err != nil {
+				vmp.conn.Close()
+				return cliResponse{
+					Error: fmt.Sprintf("vnc handshake: %v", err),
+				}
+			}
 			vncPlaying[rhost] = vmp
 			go vmp.Run()
 		}
-	case 5: // record <host> <vm> <input file> <framebuffer file>
-		host := c.Args[1]
-		vm := c.Args[2]
-
-		vmID, vmName, err := findRemoteVM(host, vm)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		filename := c.Args[3]
-		framebuffername := c.Args[4]
-		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
-
-		// is this rhost already being recorded?
-		if _, ok := vncRecording[rhost]; ok {
-			return cliResponse{
-				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
-			}
-		}
-
-		vmr, err := NewVMRecord(filename, framebuffername)
-		if err != nil {
-			log.Errorln(err)
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		vmr.Filename = filename
-		vmr.Framebuffername = framebuffername
-		vmr.Host = host
-		vmr.Name = vmName
-		vmr.ID = vmID
-		vncRecording[rhost] = vmr
 	default:
 		return cliResponse{
 			Error: "malformed command",
