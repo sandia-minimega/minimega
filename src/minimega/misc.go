@@ -237,7 +237,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		// message the remote node for this info with:
 		// 	vm_info name=<vm> [id]
 		// if that doesn't work, then try:
-		//	vm_info id=<vm> [name]
+		//	vm_info id=<vm> [id,name]
 		// if that doesn't work, return not found
 		log.Debugln("remote host")
 
@@ -265,7 +265,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 			return VM_NOT_FOUND, "", err
 		}
 		cmd = cliCommand{
-			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("id=%v", vm), "[name]"},
+			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("id=%v", vm), "[id,name]"},
 		}
 		r = meshageSet(cmd)
 		if r.Error != "" {
@@ -276,8 +276,14 @@ func findRemoteVM(host, vm string) (int, string, error) {
 
 		log.Debug("got response %v", d)
 
-		d = strings.TrimSpace(d)
-		if d != "" {
+		f := strings.Fields(d)
+		switch len(f) {
+		case 1:
+			// no name
+			log.Debug("got vm: %v %v %v", host, v, "")
+			return v, "", nil
+		case 2:
+			d = strings.TrimSpace(f[1])
 			log.Debug("got vm: %v %v %v", host, v, d)
 			return v, d, nil
 		}
