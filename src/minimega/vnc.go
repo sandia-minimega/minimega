@@ -216,8 +216,8 @@ func (v *vncVMRecord) AddAction(s string) {
 	if d[0] == 4 || d[0] == 5 {
 		record := fmt.Sprintf("%d %s\n", (time.Now().Sub(v.last)).Nanoseconds(), s)
 		v.output.WriteString(record)
+		v.last = time.Now()
 	}
-	v.last = time.Now()
 }
 
 func (v *vncVMRecord) Close() {
