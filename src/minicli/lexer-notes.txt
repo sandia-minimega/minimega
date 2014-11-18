@@ -1,0 +1,38 @@
+At init, we lex the pattern strings and build representations
+
+Split it into strings, which are separated by spaces or contained in double quotes.
+
+Analyze the sigils in each string to determine what type it is:
+
+LITERAL a string literal
+RSTRING a required string
+OSTRING an optional string
+RCHOICE a required multiple-choice
+OCHOICE an optional multiple-choice
+RLIST a required list of strings
+OLIST an optional list of strings
+
+We can then describe each lexical item as a struct:
+
+type Item struct {
+     Itype ItemType // RSTRING, etc
+     Key string // the actual text from the pattern
+     Options []string //for multiple choice
+}
+
+So we might see this:
+
+vm kill <id>
+
+map to this:
+
+{LITERAL, "vm", nil}, {LITERAL, "kill", nil}, {RSTRING, "id", nil}
+
+or
+
+log level <debug,warn,error>
+
+map to:
+
+{LITERAL, "log", nil}, {LITERAL, "level", nil}, {RCHOICE, "debug,warn,error", {"debug", "warn", "error}}
+
