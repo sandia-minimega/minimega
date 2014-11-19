@@ -9,7 +9,7 @@ var validTestPatterns = map[string][]string{
 	// Optional list of strings
 	"ls [files]...": []string{"ls", "ls a", "ls a b", "ls a \"b c\" d"},
 	// Required list of strings plus required string
-	"mv <src>... <dest>": []string{"mv a b", "mv a b c", "mv a \"b c\" d"},
+	"mv <dest> <src>...": []string{"mv a b", "mv a b c", "mv a \"b c\" d"},
 	// String literal
 	"pwd": []string{"pwd"},
 	// String literal with spaces
@@ -26,17 +26,56 @@ var validTestPatterns = map[string][]string{
 	"foo [bar,zap]": []string{"foo", "foo bar", "foo zap"},
 }
 
+var invalidTestPatterns = []string{
+	// Unterminated
+	"ls (foo", "ls [foo", "ls <foo",
+	// Weird nesting
+	"ls (foo <bar>)", "ls [foo (bar)]", "ls <foo [bar]>",
+	// Ambiguous optional fields
+	"ls [foo] [bar]", "ls [foo,bar] [car]",
+	// Messed up ellipsis
+	"ls [foo].", "ls [foo]..", "ls [foo]....",
+	// Weird trailing characters
+	"ls [foo]bar", "ls <foo>bar", "ls (foo)bar",
+	// Lists not at the end of pattern
+	"ls [foo]... <bar>", "ls <foo>... <bar>",
+	"ls [foo]... <bar>...", "ls <foo>... <bar>...",
+	// Command not at the end of pattern
+	"ls (foo) bar",
+	// Spaces in multiple choices args
+	"ls <foo, bar>", "ls <foo,bar baz,car>",
+	// Quote in the pattern
+	`ls "foo"`, `ls <foo bar "">`, `ls [foo 'bar']`, `ls (foo "roar")`,
+}
+
 func TestParse(t *testing.T) {
 	for k, v := range validTestPatterns {
+		t.Logf("Testing pattern: `%s`", k)
+
+		// Ensure that we can register the pattern without error
 		err := Register(k, nil)
 		if err != nil {
 			t.Errorf(err.Error())
+			continue
 		}
+
 		for _, s := range v {
 			_, err := ProcessString(s)
 			if err != nil {
 				t.Errorf(err.Error())
 			}
+		}
+	}
+}
+
+func TestInvalidPatterns(t *testing.T) {
+	for _, p := range invalidTestPatterns {
+		t.Logf("Testing pattern: `%s`", p)
+
+		// Ensure that we can register the pattern without error
+		err := Register(p, nil)
+		if err == nil {
+			t.Errorf("accepting invalid pattern: `%s`", p)
 		}
 	}
 }

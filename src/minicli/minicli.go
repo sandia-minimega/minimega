@@ -7,7 +7,9 @@
 package minicli
 
 import (
+	"bufio"
 	"errors"
+	"strings"
 )
 
 // Output modes
@@ -54,8 +56,20 @@ type Response struct {
 // 		the argmap
 // [foo]...	an optional list of strings, zero or more, with the key "foo" in
 // 		the argmap. This is the only way to support multiple optional fields.
+// (foo) a subcommand that must also be valid. Must be at the end of pattern.
 func Register(pattern string, handler func(*Command) *Responses) error {
-	return errors.New("not implemented")
+	s := bufio.NewScanner(strings.NewReader(pattern))
+	s.Split(bufio.ScanRunes)
+	l := patternLexer{s: s, state: lexOutside, items: make([]PatternItem, 0)}
+
+	err := l.Run()
+	if err != nil {
+		return err
+	}
+
+	// TODO: Store items
+
+	return nil
 }
 
 // Process raw input text. An error is returned if parsing the input text
