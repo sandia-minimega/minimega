@@ -25,9 +25,14 @@ var (
 	mode     int  // output mode
 )
 
+var registeredPatterns [][]PatternItem
+
 type Command struct {
-	Original string            // original raw input
-	Args     map[string]string // map of arguments
+	Original   string              // original raw input
+	StringArgs map[string]string   // map of arguments
+	BoolArgs   map[string]bool     // map of arguments
+	ListArgs   map[string][]string // map of arguments
+	Subcommand *Command            // parsed command
 }
 
 type Responses []*Response
@@ -40,6 +45,10 @@ type Response struct {
 	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
 	Error    string      // Because you can't gob/json encode an error type
 	Data     interface{} // Optional user data
+}
+
+func init() {
+	registeredPatterns = make([][]PatternItem, 0)
 }
 
 // Register a new API based on pattern. Patterns consist of required text, required and optional fields, multiple choice arguments, and variable number of arguments. The pattern syntax is as follows:
@@ -60,14 +69,14 @@ type Response struct {
 func Register(pattern string, handler func(*Command) *Responses) error {
 	s := bufio.NewScanner(strings.NewReader(pattern))
 	s.Split(bufio.ScanRunes)
-	l := patternLexer{s: s, state: lexOutside, items: make([]PatternItem, 0)}
+	l := patternLexer{s: s, items: make([]PatternItem, 0)}
 
 	err := l.Run()
 	if err != nil {
 		return err
 	}
 
-	// TODO: Store items
+	registeredPatterns = append(registeredPatterns, l.items)
 
 	return nil
 }
@@ -90,7 +99,87 @@ func ProcessCommand(c *Command) *Responses {
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
-	return nil, errors.New("not implemented")
+	s := bufio.NewScanner(strings.NewReader(input))
+	s.Split(bufio.ScanRunes)
+	l := inputLexer{s: s, items: make([]InputItem, 0)}
+
+	err := l.Run()
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := Command{Original: input,
+		StringArgs: make(map[string]string),
+		BoolArgs:   make(map[string]bool),
+		ListArgs:   make(map[string][]string)}
+
+	// Keep track of what was the closest
+	var closestPattern []PatternItem
+	var longestMatch int
+
+outer:
+	for _, pattern := range registeredPatterns {
+		for i, pItem := range pattern {
+			// We ran out of items before matching all the items in the pattern
+			if len(l.items) <= i {
+				// Check if the remaining item is optional
+				if pItem.Type == optString || pItem.Type == optList || pItem.Type == optChoice {
+					// Matched!
+					return &cmd, nil
+				}
+
+				continue outer
+			}
+
+			switch pItem.Type {
+			case literalString:
+				if l.items[i].Value != pItem.Key {
+					continue outer
+				}
+			case reqString, optString:
+				cmd.StringArgs[pItem.Key] = l.items[i].Value
+			case reqChoice, optChoice:
+				var found bool
+				for _, choice := range pItem.Options {
+					if choice == l.items[i].Value {
+						cmd.BoolArgs[choice] = true
+						found = true
+					}
+				}
+
+				if !found {
+					// Invalid choice
+					continue outer
+				}
+			case reqList, optList:
+				res := make([]string, len(l.items))
+				for _, v := range l.items {
+					res = append(res, v.Value)
+				}
+				cmd.ListArgs[pItem.Key] = res
+			case cmdString:
+				// Parse the subcommand
+				subCmd, err := CompileCommand(PrintInput(l.items[i:]))
+				if err != nil {
+					return nil, err
+				}
+
+				cmd.Subcommand = subCmd
+			}
+
+			if i > longestMatch {
+				closestPattern = pattern
+				longestMatch = i
+			}
+		}
+
+		return &cmd, nil
+	}
+
+	// TODO: Do something with closestPattern
+	_ = closestPattern
+
+	return nil, errors.New("no matching commands found")
 }
 
 // List installed patterns and handlers

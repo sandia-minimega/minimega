@@ -8,38 +8,38 @@ import (
 	"unicode/utf8"
 )
 
-type ItemType int
+type itemType int
 
 const (
-	NoType ItemType = iota
-	Literal
-	ReqString
-	OptString
-	ReqChoice
-	OptChoice
-	ReqList
-	OptList
-	CmdString
+	noType itemType = iota
+	literalString
+	reqString
+	optString
+	reqChoice
+	optChoice
+	reqList
+	optList
+	cmdString
 )
 
-var terminalsToTypes = map[string]ItemType{
-	">": ReqString,
-	"]": OptString,
-	")": CmdString,
+var terminalsToTypes = map[string]itemType{
+	">": reqString,
+	"]": optString,
+	")": cmdString,
 }
 
-var listTerminalsToTypes = map[string]ItemType{
-	">": ReqList,
-	"]": OptList,
+var listTerminalsToTypes = map[string]itemType{
+	">": reqList,
+	"]": optList,
 }
 
-var requireEndOfLine = []ItemType{
-	OptString, OptChoice, ReqList, OptList, OptString, CmdString,
+var requireEndOfLine = []itemType{
+	optString, optChoice, reqList, optList, optString, cmdString,
 }
 
 type PatternItem struct {
 	// The item type e.g. string literal, required string
-	Type ItemType
+	Type itemType
 	// Key is usually the first word, so "<foo bar>"->"foo"
 	Key string
 	// The original full text of the token
@@ -48,19 +48,18 @@ type PatternItem struct {
 	Options []string
 }
 
-type stateFn func(*patternLexer) (stateFn, error)
+type stateFn func() (stateFn, error)
 
 type patternLexer struct {
 	s        *bufio.Scanner
-	state    stateFn
 	items    []PatternItem
 	newItem  PatternItem
 	terminal string
 }
 
 func (l *patternLexer) Run() (err error) {
-	for state := l.state; state != nil && err == nil; {
-		state, err = state(l)
+	for state := l.lexOutside; state != nil && err == nil; {
+		state, err = state()
 	}
 
 	return err
@@ -69,7 +68,7 @@ func (l *patternLexer) Run() (err error) {
 // lexOutside is our starting state. When we're in this state, we look for the
 // start of an optional or required string (or list). While scanning, we
 // may produce a string literal.
-func lexOutside(l *patternLexer) (stateFn, error) {
+func (l *patternLexer) lexOutside() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
@@ -79,24 +78,24 @@ func lexOutside(l *patternLexer) (stateFn, error) {
 		case "<":
 			// Found the start of a required string (or list of strings)
 			l.terminal = ">"
-			return lexVariable, nil
+			return l.lexVariable, nil
 		case "[":
 			// Found the start of an optional string (or list of strings)
 			l.terminal = "]"
-			return lexVariable, nil
+			return l.lexVariable, nil
 		case "(":
 			// Found the start of a nested command
 			l.terminal = ")"
-			return lexVariable, nil
+			return l.lexVariable, nil
 		case `"`, `'`:
 			return nil, errors.New("single and double quotes are not allowed")
 		default:
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				item := PatternItem{Type: Literal, Text: content}
+				item := PatternItem{Type: literalString, Text: content}
 				l.items = append(l.items, item)
-				return lexOutside, nil
+				return l.lexOutside, nil
 			}
 
 			content += token
@@ -110,7 +109,7 @@ func lexOutside(l *patternLexer) (stateFn, error) {
 // lexVariable is the state where we've encountered a "<", "[", or "(" and are
 // scanning for the terminating ">", "]", or ")". Switches to lexMulti or
 // lexComment if we find a comma or a space, respectively.
-func lexVariable(l *patternLexer) (stateFn, error) {
+func (l *patternLexer) lexVariable() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
@@ -125,7 +124,7 @@ func lexVariable(l *patternLexer) (stateFn, error) {
 			l.newItem.Options = []string{content}
 			content += token
 			l.newItem.Text = content
-			return lexMulti, nil
+			return l.lexMulti, nil
 		case "<", "[", "(":
 			// Pattern seems to be trying to use nesting which is not allowed
 			return nil, errors.New("cannot nest items")
@@ -152,7 +151,7 @@ func lexVariable(l *patternLexer) (stateFn, error) {
 
 			// Emit Item
 			l.items = append(l.items, l.newItem)
-			return lexOutside, nil
+			return l.lexOutside, nil
 		default:
 			// If there's a space, we've found the end of the key
 			r, _ := utf8.DecodeRuneInString(token)
@@ -160,7 +159,7 @@ func lexVariable(l *patternLexer) (stateFn, error) {
 				l.newItem.Key = content
 				content += token
 				l.newItem.Text = content
-				return lexComment, nil
+				return l.lexComment, nil
 			}
 
 			content += token
@@ -173,7 +172,7 @@ func lexVariable(l *patternLexer) (stateFn, error) {
 
 // lexMulti scans the pattern and figures out what multiple choice options the
 // command accepts. It keeps scanning until it hits the terminal character.
-func lexMulti(l *patternLexer) (stateFn, error) {
+func (l *patternLexer) lexMulti() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
@@ -186,7 +185,7 @@ func lexMulti(l *patternLexer) (stateFn, error) {
 			l.newItem.Options = append(l.newItem.Options, content)
 			content += token
 			l.newItem.Text += content
-			return lexMulti, nil
+			return l.lexMulti, nil
 		case "<", "[", "(":
 			// Pattern seems to be trying to use nesting which is not allowed
 			return nil, errors.New("cannot nest items")
@@ -199,9 +198,9 @@ func lexMulti(l *patternLexer) (stateFn, error) {
 
 			switch l.terminal {
 			case ">":
-				l.newItem.Type = ReqChoice
+				l.newItem.Type = reqChoice
 			case "]":
-				l.newItem.Type = OptChoice
+				l.newItem.Type = optChoice
 			default:
 				// Should never happen
 				return nil, errors.New("something wicked happened")
@@ -214,7 +213,7 @@ func lexMulti(l *patternLexer) (stateFn, error) {
 
 			// Emit Item
 			l.items = append(l.items, l.newItem)
-			return lexOutside, nil
+			return l.lexOutside, nil
 		default:
 			// Ensure that the current token is not whitespace
 			r, _ := utf8.DecodeRuneInString(token)
@@ -233,7 +232,7 @@ func lexMulti(l *patternLexer) (stateFn, error) {
 
 // lexComment is used to consume a comment that comes after the key. Will
 // consume tokens until it hits the terminal character.
-func lexComment(l *patternLexer) (stateFn, error) {
+func (l *patternLexer) lexComment() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
@@ -263,7 +262,7 @@ func lexComment(l *patternLexer) (stateFn, error) {
 
 			// Emit item
 			l.items = append(l.items, l.newItem)
-			return lexOutside, nil
+			return l.lexOutside, nil
 		default:
 			// Update content scanned so far
 			content += token
@@ -277,7 +276,7 @@ func lexComment(l *patternLexer) (stateFn, error) {
 // enforceEOF makes sure that we are at the end of the line if the item we're
 // building requires it.
 func (l *patternLexer) enforceEOF() error {
-	if l.newItem.Type == NoType {
+	if l.newItem.Type == noType {
 		panic(errors.New("cannot enforce EOF when item type not specified"))
 	}
 
