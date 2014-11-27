@@ -1,9 +1,3 @@
-// minicli is a command line interface backend for minimega. It allows
-// registering handlers and function callbacks for command line arguments that
-// match defined patterns.
-//
-// minicli also supports multiple output rendering modes and stream and tabular
-// compression.
 package minicli
 
 import (
@@ -12,17 +6,19 @@ import (
 	"strings"
 )
 
+type OutputMode int
+
 // Output modes
 const (
-	MODE_NORMAL = iota
-	MODE_JSON
-	MODE_QUIET
+	DefaultMode OutputMode = iota
+	JsonMode
+	QuietMode
 )
 
 var (
-	compress bool // compress output
-	tabular  bool // tabularize output
-	mode     int  // output mode
+	compress bool       // compress output
+	tabular  bool       // tabularize output
+	mode     OutputMode // output mode
 )
 
 var registeredPatterns [][]patternItem
@@ -52,21 +48,8 @@ func init() {
 	registeredPatterns = make([][]patternItem, 0)
 }
 
-// Register a new API based on pattern. Patterns consist of required text, required and optional fields, multiple choice arguments, and variable number of arguments. The pattern syntax is as follows:
-// <foo> 	a required string, returned in the arg map with key "foo"
-// <foo bar> 	a required string, still returned in the arg map with key "foo".
-//	 	The extra is just documentation
-// foo bar	literal required text, as in "capture netflow <foo>"
-// [foo]	optional string, returned in the arg map with key "foo". There can
-// 		be only one optional arg and it must be at the end of the pattern.
-// <foo,bar>	a required multiple choice argument. Returned as whichever
-// 		choice is made in the argmap (the argmap key is simply created).
-// [foo,bar]	an optional multiple choice argument.
-// <foo>...	a required list of strings, one or more, with the key "foo" in
-// 		the argmap
-// [foo]...	an optional list of strings, zero or more, with the key "foo" in
-// 		the argmap. This is the only way to support multiple optional fields.
-// (foo) a subcommand that must also be valid. Must be at the end of pattern.
+// Register a new API based on pattern. See package documentation for details
+// about supported patterns.
 func Register(pattern string, handler func(*Command) *Responses) error {
 	s := bufio.NewScanner(strings.NewReader(pattern))
 	s.Split(bufio.ScanRunes)
@@ -191,13 +174,13 @@ func Handlers() string {
 }
 
 // Enable or disable response compression
-func CompressOutput(compress bool) {
-
+func CompressOutput(flag bool) {
+	compress = flag
 }
 
 // Enable or disable tabular aggregation
-func TabularOutput(tabular bool) {
-
+func TabularOutput(flag bool) {
+	tabular = flag
 }
 
 // Return a string representation using the current output mode
@@ -219,6 +202,6 @@ func (r Responses) Errors() []error {
 }
 
 // Set the output mode for String()
-func OutputMode(mode int) {
-
+func SetOutputMode(newMode OutputMode) {
+	mode = newMode
 }
