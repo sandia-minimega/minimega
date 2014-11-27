@@ -21,8 +21,8 @@ type InputItem struct {
 
 func PrintInput(items []InputItem) string {
 	parts := make([]string, len(items))
-	for _, i := range items {
-		parts = append(parts, i.Quote+i.Value+i.Quote)
+	for i, v := range items {
+		parts[i] = v.Quote + v.Value + v.Quote
 	}
 
 	return strings.Join(parts, " ")
@@ -58,6 +58,11 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 
 			content += token
 		}
+	}
+
+	// Emit the last item on the line
+	if len(content) > 0 {
+		l.items = append(l.items, InputItem{Value: content})
 	}
 
 	// Finished parsing pattern with no errors... Yippie kay yay

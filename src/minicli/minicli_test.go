@@ -24,6 +24,8 @@ var validTestPatterns = map[string][]string{
 	"ip <addr,link>": []string{"ip addr", "ip link"},
 	// Optional multiple choice (we couldn't think of a real command
 	"foo [bar,zap]": []string{"foo", "foo bar", "foo zap"},
+	// Subcommand
+	"test (foo)": []string{"test cd", "test ping minimega.org", "test foo bar"},
 }
 
 var invalidTestPatterns = []string{
@@ -60,9 +62,13 @@ func TestParse(t *testing.T) {
 		}
 
 		for _, s := range v {
-			_, err := ProcessString(s)
+			t.Logf("Testing input: `%s`", s)
+
+			cmd, err := CompileCommand(s)
 			if err != nil {
-				t.Errorf(err.Error())
+				t.Errorf("unable to compile command, %s", err.Error())
+			} else if cmd.Pattern != k {
+				t.Errorf("unexpected match, `%s` != `%s`", k, cmd.Pattern)
 			}
 		}
 	}

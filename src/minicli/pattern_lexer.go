@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode"
 	"unicode/utf8"
 )
@@ -46,6 +47,32 @@ type PatternItem struct {
 	Text string
 	// A list of the options in the case of multiple choice
 	Options []string
+}
+
+func PrintPattern(items []PatternItem) string {
+	parts := make([]string, len(items))
+
+	for i, v := range items {
+		var prefix, suffix string
+		switch v.Type {
+		case literalString:
+			// Nada
+		case reqString, reqChoice:
+			prefix, suffix = "<", ">"
+		case optString, optChoice:
+			prefix, suffix = "[", "]"
+		case reqList:
+			prefix, suffix = "<", ">..."
+		case optList:
+			prefix, suffix = "[", "]..."
+		case cmdString:
+			prefix, suffix = "(", ")"
+		}
+
+		parts[i] = prefix + v.Text + suffix
+	}
+
+	return strings.Join(parts, " ")
 }
 
 type stateFn func() (stateFn, error)
@@ -100,6 +127,12 @@ func (l *patternLexer) lexOutside() (stateFn, error) {
 
 			content += token
 		}
+	}
+
+	// Emit the last item on the line
+	if len(content) > 0 {
+		item := PatternItem{Type: literalString, Text: content}
+		l.items = append(l.items, item)
 	}
 
 	// Finished parsing pattern with no errors... Yippie kay yay

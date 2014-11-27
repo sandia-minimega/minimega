@@ -29,6 +29,7 @@ var registeredPatterns [][]PatternItem
 
 type Command struct {
 	Original   string              // original raw input
+	Pattern    string              // the pattern we matched
 	StringArgs map[string]string   // map of arguments
 	BoolArgs   map[string]bool     // map of arguments
 	ListArgs   map[string][]string // map of arguments
@@ -125,7 +126,7 @@ outer:
 				// Check if the remaining item is optional
 				if pItem.Type == optString || pItem.Type == optList || pItem.Type == optChoice {
 					// Matched!
-					return &cmd, nil
+					break
 				}
 
 				continue outer
@@ -133,7 +134,7 @@ outer:
 
 			switch pItem.Type {
 			case literalString:
-				if l.items[i].Value != pItem.Key {
+				if l.items[i].Value != pItem.Text {
 					continue outer
 				}
 			case reqString, optString:
@@ -153,9 +154,10 @@ outer:
 				}
 			case reqList, optList:
 				res := make([]string, len(l.items))
-				for _, v := range l.items {
-					res = append(res, v.Value)
+				for i, v := range l.items {
+					res[i] = v.Value
 				}
+
 				cmd.ListArgs[pItem.Key] = res
 			case cmdString:
 				// Parse the subcommand
@@ -173,6 +175,7 @@ outer:
 			}
 		}
 
+		cmd.Pattern = PrintPattern(pattern)
 		return &cmd, nil
 	}
 
