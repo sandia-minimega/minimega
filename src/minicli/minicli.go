@@ -25,7 +25,7 @@ var (
 	mode     int  // output mode
 )
 
-var registeredPatterns [][]PatternItem
+var registeredPatterns [][]patternItem
 
 type Command struct {
 	Original   string              // original raw input
@@ -49,7 +49,7 @@ type Response struct {
 }
 
 func init() {
-	registeredPatterns = make([][]PatternItem, 0)
+	registeredPatterns = make([][]patternItem, 0)
 }
 
 // Register a new API based on pattern. Patterns consist of required text, required and optional fields, multiple choice arguments, and variable number of arguments. The pattern syntax is as follows:
@@ -70,7 +70,7 @@ func init() {
 func Register(pattern string, handler func(*Command) *Responses) error {
 	s := bufio.NewScanner(strings.NewReader(pattern))
 	s.Split(bufio.ScanRunes)
-	l := patternLexer{s: s, items: make([]PatternItem, 0)}
+	l := patternLexer{s: s, items: make([]patternItem, 0)}
 
 	err := l.Run()
 	if err != nil {
@@ -102,7 +102,7 @@ func ProcessCommand(c *Command) *Responses {
 func CompileCommand(input string) (*Command, error) {
 	s := bufio.NewScanner(strings.NewReader(input))
 	s.Split(bufio.ScanRunes)
-	l := inputLexer{s: s, items: make([]InputItem, 0)}
+	l := inputLexer{s: s, items: make([]inputItem, 0)}
 
 	err := l.Run()
 	if err != nil {
@@ -115,7 +115,7 @@ func CompileCommand(input string) (*Command, error) {
 		ListArgs:   make(map[string][]string)}
 
 	// Keep track of what was the closest
-	var closestPattern []PatternItem
+	var closestPattern []patternItem
 	var longestMatch int
 
 outer:
@@ -161,7 +161,7 @@ outer:
 				cmd.ListArgs[pItem.Key] = res
 			case cmdString:
 				// Parse the subcommand
-				subCmd, err := CompileCommand(PrintInput(l.items[i:]))
+				subCmd, err := CompileCommand(printInput(l.items[i:]))
 				if err != nil {
 					return nil, err
 				}
@@ -175,7 +175,7 @@ outer:
 			}
 		}
 
-		cmd.Pattern = PrintPattern(pattern)
+		cmd.Pattern = printPattern(pattern)
 		return &cmd, nil
 	}
 

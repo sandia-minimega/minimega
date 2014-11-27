@@ -10,16 +10,16 @@ import (
 
 type inputLexer struct {
 	s        *bufio.Scanner
-	items    []InputItem
+	items    []inputItem
 	terminal string
 }
 
-type InputItem struct {
+type inputItem struct {
 	Value string
 	Quote string // will be `"`, `'`, or ``
 }
 
-func PrintInput(items []InputItem) string {
+func printInput(items []inputItem) string {
 	parts := make([]string, len(items))
 	for i, v := range items {
 		parts[i] = v.Quote + v.Value + v.Quote
@@ -52,7 +52,7 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				l.items = append(l.items, InputItem{Value: content})
+				l.items = append(l.items, inputItem{Value: content})
 				return l.lexOutside, nil
 			}
 
@@ -62,7 +62,7 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 
 	// Emit the last item on the line
 	if len(content) > 0 {
-		l.items = append(l.items, InputItem{Value: content})
+		l.items = append(l.items, inputItem{Value: content})
 	}
 
 	// Finished parsing pattern with no errors... Yippie kay yay
@@ -80,7 +80,7 @@ func (l *inputLexer) lexQuote() (stateFn, error) {
 		token := l.s.Text()
 		switch token {
 		case l.terminal:
-			l.items = append(l.items, InputItem{Value: content, Quote: l.terminal})
+			l.items = append(l.items, inputItem{Value: content, Quote: l.terminal})
 			return l.lexOutside, nil
 		default:
 			content += token

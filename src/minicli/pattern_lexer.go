@@ -38,7 +38,7 @@ var requireEndOfLine = []itemType{
 	optString, optChoice, reqList, optList, optString, cmdString,
 }
 
-type PatternItem struct {
+type patternItem struct {
 	// The item type e.g. string literal, required string
 	Type itemType
 	// Key is usually the first word, so "<foo bar>"->"foo"
@@ -49,7 +49,7 @@ type PatternItem struct {
 	Options []string
 }
 
-func PrintPattern(items []PatternItem) string {
+func printPattern(items []patternItem) string {
 	parts := make([]string, len(items))
 
 	for i, v := range items {
@@ -79,8 +79,8 @@ type stateFn func() (stateFn, error)
 
 type patternLexer struct {
 	s        *bufio.Scanner
-	items    []PatternItem
-	newItem  PatternItem
+	items    []patternItem
+	newItem  patternItem
 	terminal string
 }
 
@@ -120,7 +120,7 @@ func (l *patternLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				item := PatternItem{Type: literalString, Text: content}
+				item := patternItem{Type: literalString, Text: content}
 				l.items = append(l.items, item)
 				return l.lexOutside, nil
 			}
@@ -131,7 +131,7 @@ func (l *patternLexer) lexOutside() (stateFn, error) {
 
 	// Emit the last item on the line
 	if len(content) > 0 {
-		item := PatternItem{Type: literalString, Text: content}
+		item := patternItem{Type: literalString, Text: content}
 		l.items = append(l.items, item)
 	}
 
@@ -146,7 +146,7 @@ func (l *patternLexer) lexVariable() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
-	l.newItem = PatternItem{Type: terminalsToTypes[l.terminal]}
+	l.newItem = patternItem{Type: terminalsToTypes[l.terminal]}
 
 	// Scan until EOF, checking each token
 	for l.s.Scan() {

@@ -5,27 +5,33 @@ import (
 	"testing"
 )
 
-var validTestPatterns = map[string][]string{
+// Valid patterns and inputs that should be acceptable, this is a list rather
+// than a map because we need to ensure that some patterns are registered
+// before others (specifically, those that support a subcommand).
+var validTestPatterns = []struct {
+	pattern string
+	inputs  []string
+}{
 	// Optional list of strings
-	"ls [files]...": []string{"ls", "ls a", "ls a b", "ls a \"b c\" d"},
+	{"ls [files]...", []string{"ls", "ls a", "ls a b", "ls a \"b c\" d"}},
 	// Required list of strings plus required string
-	"mv <dest> <src>...": []string{"mv a b", "mv a b c", "mv a \"b c\" d"},
+	{"mv <dest> <src>...", []string{"mv a b", "mv a b c", "mv a \"b c\" d"}},
 	// String literal
-	"pwd": []string{"pwd"},
+	{"pwd", []string{"pwd"}},
 	// String literal with spaces
-	"vm info": []string{"vm info"},
+	{"vm info", []string{"vm info"}},
 	// Optional string
-	"cd [dir]": []string{"cd", "cd a"},
+	{"cd [dir]", []string{"cd", "cd a"}},
 	// Required string
-	"ping <host>": []string{"ping minimega.org"},
+	{"ping <host>", []string{"ping minimega.org"}},
 	// Required string w/ comment
-	"ping6 <host hostname>": []string{"ping6 minimega.org"},
+	{"ping6 <host hostname>", []string{"ping6 minimega.org"}},
 	// Required multiple choice
-	"ip <addr,link>": []string{"ip addr", "ip link"},
+	{"ip <addr,link>", []string{"ip addr", "ip link"}},
 	// Optional multiple choice (we couldn't think of a real command
-	"foo [bar,zap]": []string{"foo", "foo bar", "foo zap"},
-	// Subcommand
-	"test (foo)": []string{"test cd", "test ping minimega.org", "test foo bar"},
+	{"foo [bar,zap]", []string{"foo", "foo bar", "foo zap"}},
+	// Subcommand, must come last
+	{"test (foo)", []string{"test cd", "test ping minimega.org", "test foo bar"}},
 }
 
 var invalidTestPatterns = []string{
@@ -51,24 +57,24 @@ var invalidTestPatterns = []string{
 }
 
 func TestParse(t *testing.T) {
-	for k, v := range validTestPatterns {
-		t.Logf("Testing pattern: `%s`", k)
+	for _, v := range validTestPatterns {
+		t.Logf("Testing pattern: `%s`", v.pattern)
 
 		// Ensure that we can register the pattern without error
-		err := Register(k, nil)
+		err := Register(v.pattern, nil)
 		if err != nil {
 			t.Errorf(err.Error())
 			continue
 		}
 
-		for _, s := range v {
-			t.Logf("Testing input: `%s`", s)
+		for _, i := range v.inputs {
+			t.Logf("Testing input: `%s`", i)
 
-			cmd, err := CompileCommand(s)
+			cmd, err := CompileCommand(i)
 			if err != nil {
 				t.Errorf("unable to compile command, %s", err.Error())
-			} else if cmd.Pattern != k {
-				t.Errorf("unexpected match, `%s` != `%s`", k, cmd.Pattern)
+			} else if cmd.Pattern != v.pattern {
+				t.Errorf("unexpected match, `%s` != `%s`", v.pattern, cmd.Pattern)
 			}
 		}
 	}
