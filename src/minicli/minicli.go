@@ -1,10 +1,6 @@
 package minicli
 
-import (
-	"bufio"
-	"errors"
-	"strings"
-)
+import "errors"
 
 type OutputMode int
 
@@ -21,7 +17,7 @@ var (
 	mode     OutputMode // output mode
 )
 
-var registeredPatterns [][]patternItem
+var handlers []Handler
 
 type Command struct {
 	Original   string              // original raw input
@@ -45,22 +41,19 @@ type Response struct {
 }
 
 func init() {
-	registeredPatterns = make([][]patternItem, 0)
+	handlers = make([]Handler, 0)
 }
 
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
-func Register(pattern string, handler func(*Command) *Responses) error {
-	s := bufio.NewScanner(strings.NewReader(pattern))
-	s.Split(bufio.ScanRunes)
-	l := patternLexer{s: s, items: make([]patternItem, 0)}
-
-	err := l.Run()
+func Register(h Handler) error {
+	items, err := lexPattern(h.Pattern)
 	if err != nil {
 		return err
 	}
 
-	registeredPatterns = append(registeredPatterns, l.items)
+	h.patternItems = items
+	handlers = append(handlers, h)
 
 	return nil
 }
@@ -83,87 +76,30 @@ func ProcessCommand(c *Command) *Responses {
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
-	s := bufio.NewScanner(strings.NewReader(input))
-	s.Split(bufio.ScanRunes)
-	l := inputLexer{s: s, items: make([]inputItem, 0)}
-
-	err := l.Run()
+	inputItems, err := lexInput(input)
 	if err != nil {
 		return nil, err
 	}
 
-	cmd := Command{Original: input,
-		StringArgs: make(map[string]string),
-		BoolArgs:   make(map[string]bool),
-		ListArgs:   make(map[string][]string)}
-
 	// Keep track of what was the closest
-	var closestPattern []patternItem
+	var closestHandler Handler
 	var longestMatch int
 
-outer:
-	for _, pattern := range registeredPatterns {
-		for i, pItem := range pattern {
-			// We ran out of items before matching all the items in the pattern
-			if len(l.items) <= i {
-				// Check if the remaining item is optional
-				if pItem.Type == optString || pItem.Type == optList || pItem.Type == optChoice {
-					// Matched!
-					break
-				}
-
-				continue outer
-			}
-
-			switch pItem.Type {
-			case literalString:
-				if l.items[i].Value != pItem.Text {
-					continue outer
-				}
-			case reqString, optString:
-				cmd.StringArgs[pItem.Key] = l.items[i].Value
-			case reqChoice, optChoice:
-				var found bool
-				for _, choice := range pItem.Options {
-					if choice == l.items[i].Value {
-						cmd.BoolArgs[choice] = true
-						found = true
-					}
-				}
-
-				if !found {
-					// Invalid choice
-					continue outer
-				}
-			case reqList, optList:
-				res := make([]string, len(l.items))
-				for i, v := range l.items {
-					res[i] = v.Value
-				}
-
-				cmd.ListArgs[pItem.Key] = res
-			case cmdString:
-				// Parse the subcommand
-				subCmd, err := CompileCommand(printInput(l.items[i:]))
-				if err != nil {
-					return nil, err
-				}
-
-				cmd.Subcommand = subCmd
-			}
-
-			if i > longestMatch {
-				closestPattern = pattern
-				longestMatch = i
-			}
+	for _, h := range handlers {
+		cmd, matchLen := h.compileCommand(inputItems)
+		if cmd != nil {
+			cmd.Original = input
+			return cmd, nil
 		}
 
-		cmd.Pattern = printPattern(pattern)
-		return &cmd, nil
+		if matchLen > longestMatch {
+			closestHandler = h
+			longestMatch = matchLen
+		}
 	}
 
-	// TODO: Do something with closestPattern
-	_ = closestPattern
+	// TODO: Do something with closestHandler
+	_ = closestHandler
 
 	return nil, errors.New("no matching commands found")
 }

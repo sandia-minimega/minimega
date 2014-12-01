@@ -28,6 +28,18 @@ func printInput(items []inputItem) string {
 	return strings.Join(parts, " ")
 }
 
+func lexInput(input string) ([]inputItem, error) {
+	s := bufio.NewScanner(strings.NewReader(input))
+	s.Split(bufio.ScanRunes)
+	l := inputLexer{s: s, items: make([]inputItem, 0)}
+
+	if err := l.Run(); err != nil {
+		return nil, err
+	}
+
+	return l.items, nil
+}
+
 func (l *inputLexer) Run() (err error) {
 	for state := l.lexOutside; state != nil && err == nil; {
 		state, err = state()
@@ -52,8 +64,14 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				l.items = append(l.items, inputItem{Value: content})
-				return l.lexOutside, nil
+				if len(content) > 0 {
+					// Emit item
+					l.items = append(l.items, inputItem{Value: content})
+					return l.lexOutside, nil
+				} else {
+					// Strip off leading space
+					continue
+				}
 			}
 
 			content += token

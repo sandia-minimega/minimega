@@ -61,7 +61,7 @@ func TestParse(t *testing.T) {
 		t.Logf("Testing pattern: `%s`", v.pattern)
 
 		// Ensure that we can register the pattern without error
-		err := Register(v.pattern, nil)
+		err := Register(Handler{Pattern: v.pattern})
 		if err != nil {
 			t.Errorf(err.Error())
 			continue
@@ -85,7 +85,7 @@ func TestInvalidPatterns(t *testing.T) {
 		t.Logf("Testing pattern: `%s`", p)
 
 		// Ensure that we can register the pattern without error
-		err := Register(p, nil)
+		err := Register(Handler{Pattern: p})
 		if err == nil {
 			t.Errorf("accepting invalid pattern: `%s`", p)
 		}

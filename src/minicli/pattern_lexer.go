@@ -84,6 +84,18 @@ type patternLexer struct {
 	terminal string
 }
 
+func lexPattern(pattern string) ([]patternItem, error) {
+	s := bufio.NewScanner(strings.NewReader(pattern))
+	s.Split(bufio.ScanRunes)
+	l := patternLexer{s: s, items: make([]patternItem, 0)}
+
+	if err := l.Run(); err != nil {
+		return nil, err
+	}
+
+	return l.items, nil
+}
+
 func (l *patternLexer) Run() (err error) {
 	for state := l.lexOutside; state != nil && err == nil; {
 		state, err = state()
