@@ -20,8 +20,9 @@ var (
 var handlers []Handler
 
 type Command struct {
+	Handler // Embeds the handler that was matched by the raw input
+
 	Original   string              // original raw input
-	Pattern    string              // the pattern we matched
 	StringArgs map[string]string   // map of arguments
 	BoolArgs   map[string]bool     // map of arguments
 	ListArgs   map[string][]string // map of arguments
@@ -42,6 +43,33 @@ type Response struct {
 
 func init() {
 	handlers = make([]Handler, 0)
+}
+
+// Enable or disable response compression
+func CompressOutput(flag bool) {
+	compress = flag
+}
+
+// Enable or disable tabular aggregation
+func TabularOutput(flag bool) {
+	tabular = flag
+}
+
+// Set the output mode for String()
+func SetOutputMode(newMode OutputMode) {
+	mode = newMode
+}
+
+// Return any errors contained in the responses, or nil. If any responses have
+// errors, the returned slice will be padded with nil errors to align the error
+// with the response.
+func (r Responses) Errors() []error {
+	errs := make([]error, len(r))
+	for i := range r {
+		errs[i] = errors.New(r[i].Error)
+	}
+
+	return errs
 }
 
 // Register a new API based on pattern. See package documentation for details
@@ -70,7 +98,7 @@ func ProcessString(input string) (*Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) *Responses {
-	return nil
+	return c.Call(c)
 }
 
 // Create a command from raw input text. An error is returned if parsing the
@@ -81,42 +109,80 @@ func CompileCommand(input string) (*Command, error) {
 		return nil, err
 	}
 
-	// Keep track of what was the closest
-	var closestHandler Handler
-	var longestMatch int
-
-	for _, h := range handlers {
-		cmd, matchLen := h.compileCommand(inputItems)
-		if cmd != nil {
-			cmd.Original = input
-			return cmd, nil
-		}
-
-		if matchLen > longestMatch {
-			closestHandler = h
-			longestMatch = matchLen
-		}
+	_, cmd := closestMatch(inputItems)
+	if cmd != nil {
+		return cmd, nil
 	}
-
-	// TODO: Do something with closestHandler
-	_ = closestHandler
 
 	return nil, errors.New("no matching commands found")
 }
 
-// List installed patterns and handlers
-func Handlers() string {
-	return ""
-}
+//
+func Help(input string) string {
+	helpShort := make(map[string]string)
 
-// Enable or disable response compression
-func CompressOutput(flag bool) {
-	compress = flag
-}
+	inputItems, err := lexInput(input)
+	if err != nil {
+		return "Error parsing help input: " + err.Error()
+	}
 
-// Enable or disable tabular aggregation
-func TabularOutput(flag bool) {
-	tabular = flag
+	// Figure out the literal string prefixes for each handler
+	groups := make(map[string][]Handler)
+	for _, handler := range handlers {
+		prefix := handler.literalPrefix()
+		if _, ok := groups[prefix]; !ok {
+			groups[prefix] = make([]Handler, 0)
+		}
+
+		groups[prefix] = append(groups[prefix], handler)
+	}
+
+	// User entered a valid command prefix as the argument to help, display help
+	// for that group of handlers.
+	if handlers, ok := groups[input]; input != "" && ok {
+		if identicalHelp(handlers) {
+			res := "Usage:\n"
+			for _, handler := range handlers {
+				res += "\t" + handler.Pattern + "\n"
+			}
+			res += "\n"
+			res += handlers[0].HelpLong
+			return res
+		}
+
+		// Weird case, share prefix but the help is not all the same. Print short
+		// help for each except with full pattern in the left column.
+		for _, handler := range handlers {
+			helpShort[handler.Pattern] = handler.HelpShort
+		}
+
+		return printHelpShort(helpShort)
+	}
+
+	// Find the closest match for the input line, display the long help for it.
+	handler, _ := closestMatch(inputItems)
+	if handler != nil {
+		res := "Usage: " + handler.Pattern
+		res += "\n\n"
+		res += handler.HelpLong
+		return res
+	}
+
+	// List help for all the commands. Collapse handlers with the same string
+	// literal prefix and help text into a single line.
+	for prefix, handlers := range groups {
+		if identicalHelp(handlers) {
+			// Only append one help message for commands with the same prefix
+			helpShort[prefix] = handlers[0].HelpShort
+			continue
+		}
+
+		for _, handler := range handlers {
+			helpShort[handler.Pattern] = handler.HelpShort
+		}
+	}
+
+	return printHelpShort(helpShort)
 }
 
 // Return a string representation using the current output mode
@@ -128,16 +194,4 @@ func (r Responses) String() {
 // Return a verbose output representation for use with the %#v verb in pkg fmt
 func (r Responses) GoString() {
 
-}
-
-// Return any errors contained in the responses, or nil. If any responses have
-// errors, the returned slice will be padded with nil errors to align the error
-// with the response.
-func (r Responses) Errors() []error {
-	return nil
-}
-
-// Set the output mode for String()
-func SetOutputMode(newMode OutputMode) {
-	mode = newMode
 }

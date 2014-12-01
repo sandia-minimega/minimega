@@ -1,11 +1,15 @@
 package minicli
 
+import "strings"
+
 type Handler struct {
-	Pattern      string //
-	patternItems []patternItem
-	HelpShort    string
-	HelpLong     string
-	Call         func(*Command) *Responses
+	Pattern   string // the pattern that the input should match
+	HelpShort string // a brief (one line) help message
+	HelpLong  string // a descriptive help message
+	// call back to invoke when the raw input matches the pattern
+	Call func(*Command) *Responses
+
+	patternItems []patternItem // the processed pattern, used for matching
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
@@ -15,17 +19,17 @@ type Handler struct {
 // handler was the closest match.
 func (h *Handler) compileCommand(input []inputItem) (*Command, int) {
 	cmd := Command{
-		Pattern:    h.Pattern,
+		Handler:    *h,
 		StringArgs: make(map[string]string),
 		BoolArgs:   make(map[string]bool),
 		ListArgs:   make(map[string][]string)}
 
 outer:
-	for i, pItem := range h.patternItems {
+	for i, item := range h.patternItems {
 		// We ran out of items before matching all the items in the pattern
 		if len(input) <= i {
 			// Check if the remaining item is optional
-			if pItem.Type == optString || pItem.Type == optList || pItem.Type == optChoice {
+			if item.Type == optString || item.Type == optList || item.Type == optChoice {
 				// Matched!
 				return &cmd, i
 			}
@@ -33,15 +37,15 @@ outer:
 			return nil, i
 		}
 
-		switch pItem.Type {
+		switch item.Type {
 		case literalString:
-			if input[i].Value != pItem.Text {
+			if input[i].Value != item.Text {
 				return nil, i
 			}
 		case reqString, optString:
-			cmd.StringArgs[pItem.Key] = input[i].Value
+			cmd.StringArgs[item.Key] = input[i].Value
 		case reqChoice, optChoice:
-			for _, choice := range pItem.Options {
+			for _, choice := range item.Options {
 				if choice == input[i].Value {
 					cmd.BoolArgs[choice] = true
 					continue outer
@@ -56,7 +60,7 @@ outer:
 				res[i] = v.Value
 			}
 
-			cmd.ListArgs[pItem.Key] = res
+			cmd.ListArgs[item.Key] = res
 		case cmdString:
 			// Parse the subcommand
 			subCmd, err := CompileCommand(printInput(input[i:]))
@@ -69,4 +73,17 @@ outer:
 	}
 
 	return &cmd, len(h.Pattern) - 1
+}
+
+func (h *Handler) literalPrefix() string {
+	literals := make([]string, 0)
+	for _, item := range h.patternItems {
+		if item.Type != literalString {
+			break
+		}
+
+		literals = append(literals, item.Text)
+	}
+
+	return strings.Join(literals, " ")
 }
