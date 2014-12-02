@@ -17,7 +17,7 @@ var (
 	mode     OutputMode // output mode
 )
 
-var handlers []Handler
+var handlers []*Handler
 
 type Command struct {
 	Handler // Embeds the handler that was matched by the raw input
@@ -42,7 +42,7 @@ type Response struct {
 }
 
 func init() {
-	handlers = make([]Handler, 0)
+	handlers = make([]*Handler, 0)
 }
 
 // Enable or disable response compression
@@ -74,7 +74,7 @@ func (r Responses) Errors() []error {
 
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
-func Register(h Handler) error {
+func Register(h *Handler) error {
 	items, err := lexPattern(h.Pattern)
 	if err != nil {
 		return err
@@ -127,11 +127,11 @@ func Help(input string) string {
 	}
 
 	// Figure out the literal string prefixes for each handler
-	groups := make(map[string][]Handler)
+	groups := make(map[string][]*Handler)
 	for _, handler := range handlers {
 		prefix := handler.literalPrefix()
 		if _, ok := groups[prefix]; !ok {
-			groups[prefix] = make([]Handler, 0)
+			groups[prefix] = make([]*Handler, 0)
 		}
 
 		groups[prefix] = append(groups[prefix], handler)

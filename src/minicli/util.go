@@ -9,7 +9,7 @@ import (
 
 // identicalHelp checks whether the short and long help are identical for all
 // handlers in the provided slice.
-func identicalHelp(handlers []Handler) bool {
+func identicalHelp(handlers []*Handler) bool {
 	for i := 1; i < len(handlers); i++ {
 		if handlers[i-1].HelpShort != handlers[i].HelpShort ||
 			handlers[i-1].HelpLong != handlers[i].HelpLong {
@@ -51,11 +51,11 @@ func closestMatch(input []inputItem) (*Handler, *Command) {
 		cmd, matchLen := h.compileCommand(input)
 		if cmd != nil {
 			cmd.Original = printInput(input)
-			return &h, cmd
+			return h, cmd
 		}
 
 		if matchLen > longestMatch {
-			closestHandler = &h
+			closestHandler = h
 			longestMatch = matchLen
 		}
 	}

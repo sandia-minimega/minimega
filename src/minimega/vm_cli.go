@@ -110,7 +110,7 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`
 )
 
 func init() {
-	handler := minicli.Handler{
+	handler := &minicli.Handler{
 		Pattern:   "vm info",
 		HelpShort: vmInfoHelpShort,
 		HelpLong:  vmInfoHelpLong,
@@ -124,15 +124,15 @@ func init() {
 	handler.Pattern = "vm info mask <masks>"
 	minicli.Register(handler)
 
-	minicli.Register(minicli.Handler{
+	minicli.Register(&minicli.Handler{
 		Pattern:   "vm kill <vm id or name or *>",
 		HelpShort: vmKillHelpShort,
 		HelpLong:  vmKillHelpLong})
-	minicli.Register(minicli.Handler{
+	minicli.Register(&minicli.Handler{
 		Pattern:   "vm start <vm id or name or *>",
 		HelpShort: vmStartHelpShort,
 		HelpLong:  vmStartHelpLong})
-	minicli.Register(minicli.Handler{
+	minicli.Register(&minicli.Handler{
 		Pattern:   "vm stop <vm id or name or *>",
 		HelpShort: vmStopHelpShort,
 		HelpLong:  vmStopHelpLong})
