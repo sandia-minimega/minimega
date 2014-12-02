@@ -2,19 +2,17 @@ package minicli
 
 import "errors"
 
-type OutputMode int
-
 // Output modes
 const (
-	DefaultMode OutputMode = iota
+	DefaultMode = iota
 	JsonMode
 	QuietMode
 )
 
 var (
-	compress bool       // compress output
-	tabular  bool       // tabularize output
-	mode     OutputMode // output mode
+	compress bool // compress output
+	tabular  bool // tabularize output
+	mode     int  // output mode
 )
 
 var handlers []*Handler
@@ -56,7 +54,7 @@ func TabularOutput(flag bool) {
 }
 
 // Set the output mode for String()
-func SetOutputMode(newMode OutputMode) {
+func SetOutputMode(newMode int) {
 	mode = newMode
 }
 
