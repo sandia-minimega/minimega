@@ -166,9 +166,6 @@ func main() {
 	}
 	meshageInit(host, *f_namespace, uint(*f_degree), *f_port)
 
-	// invoke the cli
-	go cliMux()
-
 	fmt.Println(banner)
 
 	// fan out to the number of cpus on the system
@@ -205,7 +202,7 @@ func main() {
 	}
 
 	if !*f_nostdin {
-		cli()
+		cliLocal()
 	} else {
 		<-sig
 		if panicOnQuit {

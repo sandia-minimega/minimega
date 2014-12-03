@@ -25,6 +25,7 @@ import (
 	"gomacro"
 	"goreadline"
 	"io"
+	"minicli"
 	log "minilog"
 	"os"
 	"sort"
@@ -1730,57 +1731,24 @@ func makeCommand(s string) cliCommand {
 }
 
 // local command line interface, wrapping readline
-func cli() {
+func cliLocal() {
 	for {
 		prompt := "minimega$ "
 		line, err := goreadline.Rlwrap(prompt)
 		if err != nil {
 			break // EOF
 		}
-		log.Debug("got from stdin:", line)
+		command := string(line)
+		log.Debug("got from stdin:", command)
 
-		c := makeCommand(string(line))
-
-		commandChanLocal <- c
-		for {
-			r := <-ackChanLocal
-			if r.Error != "" {
-				x := strings.TrimSpace(r.Error)
-				log.Errorln(x)
-			}
-			if r.Response != "" {
-				x := strings.TrimSpace(r.Response)
-				fmt.Println(x)
-			}
-			if !r.More {
-				log.Debugln("got last message")
-				break
-			} else {
-				log.Debugln("expecting more data")
-			}
+		r, err := minicli.ProcessString(command)
+		if err != nil {
+			log.Errorln(err)
+			continue
 		}
-	}
-}
 
-func cliMux() {
-	for {
-		select {
-		case c := <-commandChanLocal:
-			c.ackChan = ackChanLocal
-			r := cliExec(c)
-			r.TID = c.TID
-			ackChanLocal <- r
-		case c := <-commandChanSocket:
-			c.ackChan = ackChanSocket
-			r := cliExec(c)
-			r.TID = c.TID
-			ackChanSocket <- r
-		case c := <-commandChanMeshage:
-			c.ackChan = ackChanMeshage
-			r := cliExec(c)
-			r.TID = c.TID
-			ackChanMeshage <- r
-		}
+		// print the responses
+		fmt.Println(r)
 	}
 }
 

@@ -1,6 +1,9 @@
 package minicli
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Output modes
 const (
@@ -91,12 +94,15 @@ func ProcessString(input string) (*Responses, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ProcessCommand(c), nil
+	return ProcessCommand(c)
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command) *Responses {
-	return c.Call(c)
+func ProcessCommand(c *Command) (*Responses, error) {
+	if c.Call == nil {
+		return nil, fmt.Errorf("command %v has no callback!", c)
+	}
+	return c.Call(c), nil
 }
 
 // Create a command from raw input text. An error is returned if parsing the
@@ -181,6 +187,10 @@ func Help(input string) string {
 	}
 
 	return printHelpShort(helpShort)
+}
+
+func (c Command) String() string {
+	return c.Original
 }
 
 // Return a string representation using the current output mode
