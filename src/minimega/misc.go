@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -20,6 +21,26 @@ import (
 	"time"
 	"unicode"
 )
+
+var HelpLongQuit = `
+	Usage: quit [delay]
+
+Quit. An optional integer argument X allows deferring the quit call for X
+seconds. This is useful for telling a mesh of minimega nodes to quit.
+
+quit will not return a response to the cli, control socket, or meshage, it will
+simply exit. meshage connected nodes catch this and will remove the quit node
+from the mesh. External tools interfacing minimega must check for EOF on stdout
+or the control socket as an indication that minimega has quit.`
+
+func init() {
+	minicli.Register(&minicli.Handler{
+		Pattern:   "quit [delay]",
+		HelpShort: "quit",
+		HelpLong:  HelpLongQuit,
+		Call:      cliQuit,
+	})
+}
 
 // generate a random ipv4 mac address and return as a string
 func randomMac() string {
@@ -279,4 +300,26 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		}
 	}
 	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
+}
+
+func cliQuit(c *minicli.Command) minicli.Responses {
+	log.Debugln("cliQuit")
+
+	r := &minicli.Response{}
+
+	if v, ok := c.StringArgs["delay"]; ok {
+		delay, err := strconv.Atoi(v)
+		if err != nil {
+			r.Error = err.Error()
+		} else {
+			go func() {
+				time.Sleep(time.Duration(delay) * time.Second)
+				teardown()
+			}()
+			r.Response = fmt.Sprintf("quitting after %v seconds", delay)
+		}
+	} else {
+		teardown()
+	}
+	return minicli.Responses{r}
 }
