@@ -20,6 +20,8 @@ var validTestPatterns = []struct {
 	{"pwd", []string{"pwd"}},
 	// String literal with spaces
 	{"vm info", []string{"vm info"}},
+	// Command that shares the same prefix with another command
+	{"vm info search <terms>", []string{"vm info search foo"}},
 	// Optional string
 	{"cd [dir]", []string{"cd", "cd a"}},
 	// Required string
@@ -61,7 +63,7 @@ func TestParse(t *testing.T) {
 		t.Logf("Testing pattern: `%s`", v.pattern)
 
 		// Ensure that we can register the pattern without error
-		err := Register(Handler{Pattern: v.pattern})
+		err := Register(&Handler{Pattern: v.pattern})
 		if err != nil {
 			t.Errorf(err.Error())
 			continue
@@ -85,7 +87,7 @@ func TestInvalidPatterns(t *testing.T) {
 		t.Logf("Testing pattern: `%s`", p)
 
 		// Ensure that we can register the pattern without error
-		err := Register(Handler{Pattern: p})
+		err := Register(&Handler{Pattern: p})
 		if err == nil {
 			t.Errorf("accepting invalid pattern: `%s`", p)
 		}

@@ -62,7 +62,6 @@ func closestMatch(input []inputItem) (*Handler, *Command) {
 
 	if longestMatch == 0 {
 		return nil, nil
-
 	}
 
 	return closestHandler, nil

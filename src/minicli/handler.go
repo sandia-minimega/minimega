@@ -61,6 +61,7 @@ outer:
 			}
 
 			cmd.ListArgs[item.Key] = res
+			return &cmd, i
 		case cmdString:
 			// Parse the subcommand
 			subCmd, err := CompileCommand(printInput(input[i:]))
@@ -69,7 +70,16 @@ outer:
 			}
 
 			cmd.Subcommand = subCmd
+			return &cmd, i
 		}
+	}
+
+	// Check whether we consumed all the items from the input or not. If there
+	// are extra inputItems, we only matched a prefix of the input. This is
+	// problematic as we have commands: "vm info" and "vm info search <terms>"
+	// that share the same prefix.
+	if len(h.patternItems) != len(input) {
+		return nil, len(h.patternItems) - 1
 	}
 
 	return &cmd, len(h.Pattern) - 1
