@@ -89,7 +89,7 @@ func Register(h *Handler) error {
 
 // Process raw input text. An error is returned if parsing the input text
 // failed.
-func ProcessString(input string) (*Responses, error) {
+func ProcessString(input string) (Responses, error) {
 	c, err := CompileCommand(input)
 	if err != nil {
 		return nil, err
@@ -98,7 +98,7 @@ func ProcessString(input string) (*Responses, error) {
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command) (*Responses, error) {
+func ProcessCommand(c *Command) (Responses, error) {
 	if c.Call == nil {
 		return nil, fmt.Errorf("command %v has no callback!", c)
 	}

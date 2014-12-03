@@ -7,7 +7,7 @@ type Handler struct {
 	HelpShort string // a brief (one line) help message
 	HelpLong  string // a descriptive help message
 	// call back to invoke when the raw input matches the pattern
-	Call func(*Command) *Responses
+	Call func(*Command) Responses
 
 	patternItems []patternItem // the processed pattern, used for matching
 }
