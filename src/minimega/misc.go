@@ -35,7 +35,7 @@ or the control socket as an indication that minimega has quit.`
 
 func init() {
 	minicli.Register(&minicli.Handler{
-		Pattern:   "quit [delay]",
+		Patterns:  []string{"quit [delay]"},
 		HelpShort: "quit",
 		HelpLong:  HelpLongQuit,
 		Call:      cliQuit,

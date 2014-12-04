@@ -23,6 +23,7 @@ var handlers []*Handler
 type Command struct {
 	Handler // Embeds the handler that was matched by the raw input
 
+	Pattern    string              // the specific pattern that was matched
 	Original   string              // original raw input
 	StringArgs map[string]string   // map of arguments
 	BoolArgs   map[string]bool     // map of arguments
@@ -76,12 +77,17 @@ func (r Responses) Errors() []error {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	items, err := lexPattern(h.Pattern)
-	if err != nil {
-		return err
+	h.patternItems = make([][]patternItem, len(h.Patterns))
+
+	for i, pattern := range h.Patterns {
+		items, err := lexPattern(pattern)
+		if err != nil {
+			return err
+		}
+
+		h.patternItems[i] = items
 	}
 
-	h.patternItems = items
 	handlers = append(handlers, h)
 
 	return nil
@@ -133,7 +139,7 @@ func Help(input string) string {
 	// Figure out the literal string prefixes for each handler
 	groups := make(map[string][]*Handler)
 	for _, handler := range handlers {
-		prefix := handler.literalPrefix()
+		prefix := handler.Prefix()
 		if _, ok := groups[prefix]; !ok {
 			groups[prefix] = make([]*Handler, 0)
 		}
@@ -144,45 +150,41 @@ func Help(input string) string {
 	// User entered a valid command prefix as the argument to help, display help
 	// for that group of handlers.
 	if handlers, ok := groups[input]; input != "" && ok {
-		if identicalHelp(handlers) {
-			res := "Usage:\n"
-			for _, handler := range handlers {
-				res += "\t" + handler.Pattern + "\n"
-			}
-			res += "\n"
-			res += handlers[0].HelpLong
-			return res
+		// Only one handler with a given pattern prefix, give the long help message
+		if len(handlers) == 1 {
+			return handlers[0].helpLong()
 		}
 
-		// Weird case, share prefix but the help is not all the same. Print short
-		// help for each except with full pattern in the left column.
+		// Weird case, multiple handlers share the same prefix. Print the short
+		// help for each handler for each pattern registered.
+		// TODO: Is there something better we can do?
 		for _, handler := range handlers {
-			helpShort[handler.Pattern] = handler.HelpShort
+			for _, pattern := range handler.Patterns {
+				helpShort[pattern] = handler.helpShort()
+			}
 		}
 
 		return printHelpShort(helpShort)
 	}
 
-	// Find the closest match for the input line, display the long help for it.
+	// If there's a closest match, display the long help for it
 	handler, _ := closestMatch(inputItems)
 	if handler != nil {
-		res := "Usage: " + handler.Pattern
-		res += "\n\n"
-		res += handler.HelpLong
-		return res
+		return handler.helpLong()
 	}
 
-	// List help for all the commands. Collapse handlers with the same string
-	// literal prefix and help text into a single line.
+	// List help for all the commands. Collapse handlers with the same prefix and
+	// into a single line. If there's multiple handlers that share the same
+	// prefix, use the full pattern instead of the prefix.
 	for prefix, handlers := range groups {
-		if identicalHelp(handlers) {
-			// Only append one help message for commands with the same prefix
-			helpShort[prefix] = handlers[0].HelpShort
-			continue
+		if len(handlers) == 1 {
+			helpShort[prefix] = handlers[0].helpShort()
 		}
 
 		for _, handler := range handlers {
-			helpShort[handler.Pattern] = handler.HelpShort
+			for _, pattern := range handler.Patterns {
+				helpShort[pattern] = handler.helpShort()
+			}
 		}
 	}
 

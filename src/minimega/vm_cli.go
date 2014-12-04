@@ -5,15 +5,10 @@ import (
 	"minicli"
 )
 
-var vmCommands = []struct {
-	HelpShort string
-	HelpLong  string
-	Patterns  []string
-	Call      func(*minicli.Command) *minicli.Responses
-}{
+var vmCLIHandlers = []minicli.Handler{
 	{ // vm info
-		"print information about VMs",
-		`
+		HelpShort: "print information about VMs",
+		HelpLong: `
 Print information about VMs. vm_info allows searching for VMs based on any VM
 parameter, and output some or all information about the VMs in question.
 Additionally, you can display information about all running VMs.
@@ -71,17 +66,17 @@ Display all information about VMs with the disk image foo.qc2:
 
 Display all information about all VMs:
 	vm_info`,
-		[]string{
+		Patterns: []string{
 			"vm info",
 			"vm info search <terms>",
 			"vm info search <terms> mask <masks>",
 			"vm info mask <masks>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm save
-		"save a vm configuration for later use",
-		`
+		HelpShort: "save a vm configuration for later use",
+		HelpLong: `
 Saves the configuration of a running virtual machine or set of virtual
 machines so that it/they can be restarted/recovered later, such as after
 a system crash.
@@ -90,14 +85,14 @@ If no VM name or ID is given, all VMs (including those in the quit and error sta
 
 This command does not store the state of the virtual machine itself,
 only its launch configuration.`,
-		[]string{
+		Patterns: []string{
 			"vm save <name> <vm id or name>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm launch
-		"launch virtual machines in a paused state",
-		`
+		HelpShort: "launch virtual machines in a paused state",
+		HelpLong: `
 Launch virtual machines in a paused state, using the parameters defined
 leading up to the launch command. Any changes to the VM parameters after
 launching will have no effect on launched VMs.
@@ -109,61 +104,61 @@ The optional 'noblock' suffix forces minimega to return control of the
 command line immediately instead of waiting on potential errors from
 launching the VM(s). The user must check logs or error states from
 vm_info.`,
-		[]string{
+		Patterns: []string{
 			"vm launch name <namespec> [noblock,]",
 			"vm launch count <count> [noblock,]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm kill
-		"kill running virtual machines",
-		`
+		HelpShort: "kill running virtual machines",
+		HelpLong: `
 Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
-		[]string{
+		Patterns: []string{
 			"vm kill <vm id or name or *>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm start
-		"start paused virtual machines",
-		`
+		HelpShort: "start paused virtual machines",
+		HelpLong: `
 Start all or one paused virtual machine. To start all paused virtual machines,
 call start without the optional VM ID or name.
 
 Calling vm_start specifically on a quit VM will restart the VM. If the
 'quit=true' argument is passed when using vm_start with no specific VM, all VMs
 in the quit state will also be restarted.`,
-		[]string{
+		Patterns: []string{
 			"vm start <vm id or name or *>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm stop
-		"stop/pause virtual machines",
-		`
+		HelpShort: "stop/pause virtual machines",
+		HelpLong: `
 Stop all or one running virtual machine. To stop all running virtual machines,
 call stop without the optional VM ID or name.
 
 Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
-		[]string{
+		Patterns: []string{
 			"vm stop <vm id or name or *>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm flush
-		"discard information about quit or failed VMs",
-		`
+		HelpShort: "discard information about quit or failed VMs",
+		HelpLong: `
 Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm_info. Names
 of VMs that have been flushed may be reused.`,
-		[]string{
+		Patterns: []string{
 			"vm flush",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm hotplug
-		"add and remove USB drives",
-		`
+		HelpShort: "add and remove USB drives",
+		HelpLong: `
 Add and remove USB drives to a launched VM.
 
 To view currently attached media, call vm_hotplug with the 'show' argument and
@@ -179,17 +174,17 @@ to remove the drive added above, named 0:
 	vm_hotplug remove 5 0
 
 To remove all hotplug devices, use ID -1.`,
-		[]string{
+		Patterns: []string{
 			"vm hotplug show <vm id or name>",
 			"vm hotplug add <vm id or name> <filename>",
 			"vm hotplug remove <vm id or name> <disk id>",
 			"clear vm hotplug", // TODO: where does this belong?
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm net
-		"disconnect or move network connections",
-		`
+		HelpShort: "disconnect or move network connections",
+		HelpLong: `
 Disconnect or move existing network connections on a running VM.
 
 Network connections are indicated by their position in vm_net (same order in
@@ -205,17 +200,17 @@ To disconnect the second connection:
 To move a connection, specify the new VLAN tag and bridge:
 
 	vm_netmod <vm name or id> 0 bridgeX 100`,
-		[]string{
+		Patterns: []string{
 			"vm net <vm id or name>",
 			"vm net connect <vm id or name> <tap position> <bridge> <vlan>",
 			"vm net disconnect <vm id or name> <tap position>",
 			"clear vm net", // TODO: where does this belong?
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm inject
-		"inject files into a qcow image",
-		`
+		HelpShort: "inject files into a qcow image",
+		HelpLong: `
 Create a backed snapshot of a qcow2 image and injects one or more files into
 the new snapshot.
 
@@ -242,29 +237,29 @@ following example:
 
 Alternatively, when given a single argument, this command supplies the name of
 the backing qcow image for a snapshot image.`,
-		[]string{
+		Patterns: []string{
 			`vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...`,
 			`vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...`,
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm qmp
-		"issue a JSON-encoded QMP command",
-		`
+		HelpShort: "issue a JSON-encoded QMP command",
+		HelpLong: `
 Issue a JSON-encoded QMP command. This is a convenience function for accessing
 the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
 	minimega$ vm_qmp 0 { "execute": "query-status" }
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
-		[]string{
+		Patterns: []string{
 			"vm qmp <qmp command>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config
-		"display, save, or restore the current VM configuration",
-		`
+		HelpShort: "display, save, or restore the current VM configuration",
+		HelpLong: `
 Display, save, or restore the current VM configuration.
 
 To display the current configuration, call vm_config with no arguments.
@@ -281,119 +276,119 @@ To restore a configuration:
 
 Calling clear vm_config will clear all VM configuration options, but will not
 remove saved configurations.`,
-		[]string{
+		Patterns: []string{
 			"vm config",
 			"vm config save <name>",
 			"vm config restore <name>",
 			"vm config clone <vm id or name>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config qemu
-		"set the QEMU process to invoke. Relative paths are ok.",
-		"Set the QEMU process to invoke. Relative paths are ok.",
-		[]string{
+		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
+		HelpLong:  "Set the QEMU process to invoke. Relative paths are ok.",
+		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config qemu-override
-		"override parts of the QEMU launch string",
-		`
+		HelpShort: "override parts of the QEMU launch string",
+		HelpLong: `
 Override parts of the QEMU launch string by supplying a string to match, and a
 replacement string.`,
-		[]string{
+		Patterns: []string{
 			"vm config qemu-override",
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or *>",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config qemu-append
-		"add additional arguments to the QEMU command",
-		`
+		HelpShort: "add additional arguments to the QEMU command",
+		HelpLong: `
 Add additional arguments to be passed to the QEMU instance. For example:
 	vm config qemu-append -serial tcp:localhost:4001`,
-		[]string{
+		Patterns: []string{
 			"vm config qemu-append <argument>...",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config memory
-		"set the amount of physical memory for a VM",
-		`
+		HelpShort: "set the amount of physical memory for a VM",
+		HelpLong: `
 Set the amount of physical memory to allocate in megabytes.`,
-		[]string{
+		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config vcpus
-		"set the number of virtual CPUs for a VM",
-		`
+		HelpShort: "set the number of virtual CPUs for a VM",
+		HelpLong: `
 Set the number of virtual CPUs to allocate for a VM.`,
-		[]string{
+		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config disk
-		"set disk images to attach to a VM",
-		`
+		HelpShort: "set disk images to attach to a VM",
+		HelpLong: `
 Attach one or more disks to a vm. Any disk image supported by QEMU is a valid
 parameter.  Disk images launched in snapshot mode may safely be used for
 multiple VMs.`,
-		[]string{
+		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config cdrom
-		"set a cdrom image to attach to a VM",
-		`
+		HelpShort: "set a cdrom image to attach to a VM",
+		HelpLong: `
 Attach a cdrom to a VM. When using a cdrom, it will automatically be set
 to be the boot device.`,
-		[]string{
+		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config kernel
-		"set a kernel image to attach to a VM",
-		`
+		HelpShort: "set a kernel image to attach to a VM",
+		HelpLong: `
 Attach a kernel image to a VM. If set, QEMU will boot from this image instead
 of any disk image.`,
-		[]string{
+		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config append
-		"set an append string to pass to a kernel set with vm kernel",
-		`
+		HelpShort: "set an append string to pass to a kernel set with vm kernel",
+		HelpLong: `
 Add an append string to a kernel set with vm kernel. Setting vm append without
 using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
 	vm append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
-		[]string{
+		Patterns: []string{
 			"vm config append <argument>...",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config uuid
-		"set the UUID for a VM",
-		`
+		HelpShort: "set the UUID for a VM",
+		HelpLong: `
 Set the UUID for a virtual machine. If not set, minimega will create a random
 one when the VM is launched.`,
-		[]string{
+		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config net
-		"specific the networks a VM is a member of",
-		`
+		HelpShort: "specific the networks a VM is a member of",
+		HelpLong: `
 Specify the network(s) that the VM is a member of by VLAN. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
@@ -416,28 +411,28 @@ To specify a specific driver, such as i82559c:
 	vm_net 100,i82559c
 
 Calling vm_net with no parameters will list the current networks for this VM.`,
-		[]string{
+		Patterns: []string{
 			"vm config net <netspec>...",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // vm config snapshot
-		"enable or disable snapshot mode when using disk images",
-		`
+		HelpShort: "enable or disable snapshot mode when using disk images",
+		HelpLong: `
 Enable or disable snapshot mode when using disk images. When enabled, disks
 images will be loaded in memory when run and changes will not be saved. This
 allows a single disk image to be used for many VMs.`,
-		[]string{
+		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 	{ // clear vm config
-		"reset vm config to the default value",
-		`
+		HelpShort: "reset vm config to the default value",
+		HelpLong: `
 Resets the configuration for a provided field (or the whole configuration) back
 to the default value.`,
-		[]string{
+		Patterns: []string{
 			"clear vm config",
 			"clear vm config qemu",
 			"clear vm config qemu-override",
@@ -452,23 +447,14 @@ to the default value.`,
 			"clear vm config net",
 			"clear vm config snapshot",
 		},
-		nil, // TODO
+		Call: nil, // TODO
 	},
 }
 
 func init() {
-	for _, cmd := range vmCommands {
-		for _, pattern := range cmd.Patterns {
-			handler := &minicli.Handler{
-				Pattern:   pattern,
-				HelpShort: cmd.HelpShort,
-				HelpLong:  cmd.HelpLong,
-				Call:      cmd.Call}
-
-			err := minicli.Register(handler)
-			if err != nil {
-				log.Fatalf("invalid pattern: %s -- %s", pattern, err.Error())
-			}
+	for _, handler := range vmCLIHandlers {
+		if err := minicli.Register(&handler); err != nil {
+			log.Fatalf("invalid handler: %#v", handler, err.Error())
 		}
 	}
 }

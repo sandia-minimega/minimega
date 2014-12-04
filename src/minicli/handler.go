@@ -3,13 +3,13 @@ package minicli
 import "strings"
 
 type Handler struct {
-	Pattern   string // the pattern that the input should match
-	HelpShort string // a brief (one line) help message
-	HelpLong  string // a descriptive help message
+	HelpShort string   // a brief (one line) help message
+	HelpLong  string   // a descriptive help message
+	Patterns  []string // the pattern that the input should match
 	// call back to invoke when the raw input matches the pattern
 	Call func(*Command) Responses
 
-	patternItems []patternItem // the processed pattern, used for matching
+	patternItems [][]patternItem // the processed patterns, used for matching
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
@@ -18,14 +18,32 @@ type Handler struct {
 // Handler's pattern that were matched. This can be used to determine which
 // handler was the closest match.
 func (h *Handler) compileCommand(input []inputItem) (*Command, int) {
+	var maxMatchLen int
+	for i := range h.patternItems {
+		cmd, matchLen := h.compileCommandWithPattern(i, input)
+		if cmd != nil {
+			return cmd, matchLen
+		}
+
+		if matchLen > maxMatchLen {
+			maxMatchLen = matchLen
+		}
+	}
+
+	return nil, maxMatchLen
+}
+
+// compileCommandWithPattern attempts to compile a command using the pattern at index idx.
+func (h *Handler) compileCommandWithPattern(idx int, input []inputItem) (*Command, int) {
 	cmd := Command{
 		Handler:    *h,
+		Pattern:    h.Patterns[idx],
 		StringArgs: make(map[string]string),
 		BoolArgs:   make(map[string]bool),
 		ListArgs:   make(map[string][]string)}
 
 outer:
-	for i, item := range h.patternItems {
+	for i, item := range h.patternItems[idx] {
 		// We ran out of items before matching all the items in the pattern
 		if len(input) <= i {
 			// Check if the remaining item is optional
@@ -78,22 +96,56 @@ outer:
 	// are extra inputItems, we only matched a prefix of the input. This is
 	// problematic as we have commands: "vm info" and "vm info search <terms>"
 	// that share the same prefix.
-	if len(h.patternItems) != len(input) {
-		return nil, len(h.patternItems) - 1
+	if len(h.patternItems[idx]) != len(input) {
+		return nil, len(h.patternItems[idx]) - 1
 	}
 
-	return &cmd, len(h.Pattern) - 1
+	return &cmd, len(h.patternItems[idx]) - 1
 }
 
-func (h *Handler) literalPrefix() string {
-	literals := make([]string, 0)
-	for _, item := range h.patternItems {
-		if item.Type != literalString {
-			break
+// Prefix finds the shortest literal string prefix that is shared by all
+// patterns associated with this handler. May be the empty string if there is
+// no common prefix.
+func (h *Handler) Prefix() string {
+	sharedPrefix := ""
+
+	for i, patternItems := range h.patternItems {
+		literals := make([]string, 0)
+		for _, item := range patternItems {
+			if item.Type != literalString {
+				break
+			}
+
+			literals = append(literals, item.Text)
 		}
 
-		literals = append(literals, item.Text)
+		prefix := strings.Join(literals, " ")
+
+		if i == 0 {
+			sharedPrefix = prefix
+		} else if strings.HasPrefix(sharedPrefix, prefix) {
+			sharedPrefix = sharedPrefix[:len(prefix)]
+		} else if strings.HasPrefix(prefix, sharedPrefix) {
+			sharedPrefix = prefix[:len(sharedPrefix)]
+		} else {
+			sharedPrefix = ""
+		}
 	}
 
-	return strings.Join(literals, " ")
+	return sharedPrefix
+}
+
+func (h *Handler) helpShort() string {
+	return h.HelpShort
+}
+
+func (h *Handler) helpLong() string {
+	res := "Usage:\n"
+	for _, pattern := range h.Patterns {
+		res += "\t" + pattern + "\n"
+	}
+	res += "\n"
+	res += h.HelpLong
+
+	return res
 }
