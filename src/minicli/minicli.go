@@ -1,8 +1,11 @@
 package minicli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"strings"
+	"text/tabwriter"
 )
 
 // Output modes
@@ -168,6 +171,8 @@ func Help(input string) string {
 	}
 
 	// If there's a closest match, display the long help for it
+	// TODO: Maybe we want to allow for partial matches here... there's a weird
+	// bug when you type in the suffix of several handlers (e.g. "help vm")
 	handler, _ := closestMatch(inputItems)
 	if handler != nil {
 		return handler.helpLong()
@@ -179,11 +184,11 @@ func Help(input string) string {
 	for prefix, handlers := range groups {
 		if len(handlers) == 1 {
 			helpShort[prefix] = handlers[0].helpShort()
-		}
-
-		for _, handler := range handlers {
-			for _, pattern := range handler.Patterns {
-				helpShort[pattern] = handler.helpShort()
+		} else {
+			for _, handler := range handlers {
+				for _, pattern := range handler.Patterns {
+					helpShort[pattern] = handler.helpShort()
+				}
 			}
 		}
 	}
@@ -197,8 +202,60 @@ func (c Command) String() string {
 
 // Return a string representation using the current output mode
 // using the %v verb in pkg fmt
-func (r Responses) String() {
+func (r Responses) String() string {
+	if len(r) == 0 {
+		return ""
+	}
 
+	header, err := r.getHeader()
+	if err != nil {
+		return err.Error()
+	}
+
+	// TODO: What is Header for simple responses?
+
+	tabular, err := r.validTabular(header)
+	if err != nil {
+		return err.Error()
+	}
+
+	var buf bytes.Buffer
+
+	if tabular {
+		w := new(tabwriter.Writer)
+		w.Init(&buf, 5, 0, 1, ' ', 0)
+		for i, h := range header {
+			if i != 0 {
+				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, h)
+		}
+
+		// Print out the tabular data for all responses that don't have an error
+		for i := range r {
+			for j := range r[i].Tabular {
+				for k, val := range r[i].Tabular[j] {
+					if k != 0 {
+						fmt.Fprintf(w, "\t| ")
+					}
+					fmt.Fprintf(w, val)
+				}
+				fmt.Fprintf(w, "\n")
+			}
+		}
+	} else {
+		for i := range r {
+			if r[i].Error == "" {
+				buf.WriteString(r[i].Response)
+				buf.WriteString("\n")
+			}
+		}
+	}
+
+	// TODO: Append errors from hosts
+
+	resp := buf.String()
+	return strings.TrimSpace(resp)
 }
 
 // Return a verbose output representation for use with the %#v verb in pkg fmt
