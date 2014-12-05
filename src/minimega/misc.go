@@ -40,6 +40,13 @@ func init() {
 		HelpLong:  HelpLongQuit,
 		Call:      cliQuit,
 	})
+
+	minicli.Register(&minicli.Handler{
+		Patterns:  []string{"help [command]..."},
+		HelpShort: "help",
+		HelpLong:  "get help", // TODO
+		Call:      cliHelp,
+	})
 }
 
 // generate a random ipv4 mac address and return as a string
@@ -321,5 +328,19 @@ func cliQuit(c *minicli.Command) minicli.Responses {
 	} else {
 		teardown()
 	}
+	return minicli.Responses{r}
+}
+
+func cliHelp(c *minicli.Command) minicli.Responses {
+	log.Debugln("cliHelp")
+
+	r := &minicli.Response{}
+
+	input := ""
+	if args, ok := c.ListArgs["command"]; ok {
+		input = strings.Join(args, " ")
+	}
+
+	r.Response = minicli.Help(input)
 	return minicli.Responses{r}
 }
