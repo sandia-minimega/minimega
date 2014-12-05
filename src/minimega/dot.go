@@ -25,8 +25,9 @@ func cliDot(c cliCommand) cliResponse {
 			Error: "viz takes one argument",
 		}
 	}
+	// TODO
 	command := makeCommand("vm_info [host,name,id,state,ip,ip6,vlan]")
-	localInfo := vms.info(command)
+	localInfo := cliResponse{} // TODO: vms.info(command)
 	command = makeCommand("mesh_broadcast vm_info [host,name,id,state,ip,ip6,vlan]")
 	remoteInfo := meshageBroadcast(command)
 

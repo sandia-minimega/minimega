@@ -1,8 +1,11 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"minicli"
+	log "minilog"
+	"os"
+	"strings"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -72,7 +75,7 @@ Display all information about all VMs:
 			"vm info search <terms> mask <masks>",
 			"vm info mask <masks>",
 		},
-		Call: nil, // TODO
+		Call: cliVmInfo, // TODO
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -452,9 +455,50 @@ to the default value.`,
 }
 
 func init() {
-	for _, handler := range vmCLIHandlers {
-		if err := minicli.Register(&handler); err != nil {
-			log.Fatalf("invalid handler: %#v", handler, err.Error())
+	for i := range vmCLIHandlers {
+		if err := minicli.Register(&vmCLIHandlers[i]); err != nil {
+			fmt.Println("invalid handler: %#v -- %s", vmCLIHandlers[i], err.Error())
 		}
 	}
+}
+
+func cliVmInfo(c *minicli.Command) minicli.Responses {
+	// TODO: Shouldn't this be a global variable set during init?
+	host, err := os.Hostname()
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+	resp := &minicli.Response{Host: host, Header: make([]string, 0)}
+
+	search := c.StringArgs["search"]
+	mask := c.StringArgs["mask"]
+
+	// output mask
+	if mask != "" {
+		d := strings.Split(mask, ",")
+		for _, j := range d {
+			name := strings.ToLower(j)
+			if _, ok := vmMasks[name]; ok {
+				resp.Header = append(resp.Header, name)
+			} else {
+				resp.Error = fmt.Sprintf("invalid output mask: %v", j)
+				resp.Header = nil
+				return minicli.Responses{resp}
+			}
+		}
+	} else { // print everything
+		for name := range vmMasks {
+			resp.Header = append(resp.Header, name)
+		}
+	}
+
+	resp.Tabular, err = vms.info(resp.Header, search)
+	if err != nil {
+		resp.Error = err.Error()
+		resp.Header = nil
+		return minicli.Responses{resp}
+	}
+
+	return minicli.Responses{resp}
 }

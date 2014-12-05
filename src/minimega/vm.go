@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -85,27 +84,72 @@ type vmInfo struct {
 	UUID         string
 }
 
-type jsonInfo struct {
-	Id        int
-	Host      string
-	Name      string
-	Memory    string
-	Vcpus     string
-	Disk      []string
-	Snapshot  bool
-	Initrd    string
-	Kernel    string
-	Cdrom     string
-	Append    string
-	State     string
-	Bridges   []string
-	Taps      []string
-	Macs      []string
-	IP        []string
-	IP6       []string
-	Networks  []int
-	UUID      string
-	CC_Active bool
+// Valid names for output masks for vm info
+var vmMasks = map[string]bool{
+	"id":        true,
+	"host":      true,
+	"name":      true,
+	"state":     true,
+	"memory":    true,
+	"vcpus":     true,
+	"disk":      true,
+	"initrd":    true,
+	"kernel":    true,
+	"cdrom":     true,
+	"append":    true,
+	"bridge":    true,
+	"tap":       true,
+	"mac":       true,
+	"ip":        true,
+	"ip6":       true,
+	"vlan":      true,
+	"uuid":      true,
+	"cc_active": true,
+}
+
+// Valid search patterns for vm info
+var vmSearchFn = map[string]func(*vmInfo, string) bool{
+	"append": func(v *vmInfo, q string) bool { return v.Append == q },
+	"cdrom":  func(v *vmInfo, q string) bool { return v.CdromPath == q },
+	"initrd": func(v *vmInfo, q string) bool { return v.InitrdPath == q },
+	"kernel": func(v *vmInfo, q string) bool { return v.KernelPath == q },
+	"memory": func(v *vmInfo, q string) bool { return v.Memory == q },
+	"uuid":   func(v *vmInfo, q string) bool { return v.UUID == q },
+	"vcpus":  func(v *vmInfo, q string) bool { return v.Vcpus == q },
+	"disk": func(v *vmInfo, q string) bool {
+		for _, disk := range v.DiskPaths {
+			if disk == q {
+				return true
+			}
+		}
+		return false
+	},
+	"mac": func(v *vmInfo, q string) bool {
+		for _, mac := range v.macs {
+			if mac == q {
+				return true
+			}
+		}
+		return false
+	},
+	"ip": func(v *vmInfo, q string) bool {
+		for _, mac := range v.macs {
+			ip := GetIPFromMac(mac)
+			if ip != nil && ip.IP4 == q {
+				return true
+			}
+		}
+		return false
+	},
+	"ip6": func(v *vmInfo, q string) bool {
+		for _, mac := range v.macs {
+			ip := GetIPFromMac(mac)
+			if ip != nil && ip.IP6 == q {
+				return true
+			}
+		}
+		return false
+	},
 }
 
 func init() {
@@ -819,115 +863,25 @@ func (info *vmInfo) Copy() *vmInfo {
 	return newInfo
 }
 
-func (l *vmList) info(c cliCommand) cliResponse {
+func (l *vmList) info(omask []string, search string) ([][]string, error) {
 	var v []*vmInfo
 
-	var output string
-	var search string
-	var mask string
-	switch len(c.Args) {
-	case 0:
-	case 1: // output, search, or mask
-		if strings.Contains(c.Args[0], "output=") {
-			output = c.Args[0]
-		} else if strings.Contains(c.Args[0], "=") {
-			search = c.Args[0]
-		} else if strings.HasPrefix(c.Args[0], "[") {
-			mask = strings.Trim(c.Args[0], "[]")
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-	case 2:
-		// first arg must be output or search
-		if strings.Contains(c.Args[0], "output=") {
-			output = c.Args[0]
-		} else if strings.Contains(c.Args[0], "=") {
-			search = c.Args[0]
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// second arg must be search or mask, and cannot be search if
-		// already set
-		if strings.Contains(c.Args[1], "=") {
-			if search != "" {
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-			search = c.Args[1]
-		} else if strings.HasPrefix(c.Args[1], "[") {
-			mask = strings.Trim(c.Args[1], "[]")
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-	case 3: // must be output, search, mask
-		if strings.Contains(c.Args[0], "output=") {
-			output = c.Args[0]
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		if strings.Contains(c.Args[1], "=") {
-			search = c.Args[1]
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		if strings.HasPrefix(c.Args[2], "[") {
-			mask = strings.Trim(c.Args[2], "[]")
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-	default:
-		return cliResponse{
-			Error: "too many arguments",
-		}
-	}
-
-	// vm_info takes an output mode, search term, and an output mask, we'll start with the optional output mode
-	if output != "" {
-		d := strings.Split(output, "=")
-		if len(d) != 2 {
-			return cliResponse{
-				Error: "malformed output mode",
-			}
-		}
-
-		output = d[1]
-		switch output {
-		case "quiet":
-			log.Debugln("vm_info quiet mode")
-		case "json":
-			log.Debugln("vm_info json mode")
-		default:
-			return cliResponse{
-				Error: "malformed output mode",
-			}
-		}
+	// did someone do something silly?
+	if len(omask) == 0 {
+		return make([][]string, 0), nil
 	}
 
 	if search != "" {
 		d := strings.Split(search, "=")
 		if len(d) != 2 {
-			return cliResponse{
-				Error: "malformed search term",
-			}
+			return nil, errors.New("malformed search term")
 		}
 
 		log.Debug("vm_info search term: %v", d[1])
 
-		switch strings.ToLower(d[0]) {
+		key := strings.ToLower(d[0])
+
+		switch key {
 		case "host":
 			host, err := os.Hostname()
 			if err != nil {
@@ -942,9 +896,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		case "id":
 			id, err := strconv.Atoi(d[1])
 			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("invalid ID: %v", d[1]),
-				}
+				return nil, fmt.Errorf("invalid ID: %v", d[1])
 			}
 			if vm, ok := l.vms[id]; ok {
 				v = append(v, vm)
@@ -952,54 +904,10 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		case "name":
 			id := l.findByName(d[1])
 			if id == VM_NOT_FOUND {
-				return cliResponse{}
+				return make([][]string, 0), nil
 			}
 			if vm, ok := l.vms[id]; ok {
 				v = append(v, vm)
-			}
-		case "memory":
-			for i, j := range l.vms {
-				if j.Memory == d[1] {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "vcpus":
-			for i, j := range l.vms {
-				if j.Vcpus == d[1] {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "disk":
-			for i, j := range l.vms {
-				for k := range j.DiskPaths {
-					if j.DiskPaths[k] == d[1] {
-						v = append(v, l.vms[i])
-					}
-				}
-			}
-		case "initrd":
-			for i, j := range l.vms {
-				if j.InitrdPath == d[1] {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "kernel":
-			for i, j := range l.vms {
-				if j.KernelPath == d[1] {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "cdrom":
-			for i, j := range l.vms {
-				if j.CdromPath == d[1] {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "append":
-			for i, j := range l.vms {
-				if j.Append == d[1] {
-					v = append(v, l.vms[i])
-				}
 			}
 		case "state":
 			var s int
@@ -1015,9 +923,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 			case "error":
 				s = VM_ERROR
 			default:
-				return cliResponse{
-					Error: fmt.Sprintf("invalid state: %v", d[1]),
-				}
+				return nil, fmt.Errorf("invalid state: %v", d[1])
 			}
 			for i, j := range l.vms {
 				if j.State == s {
@@ -1044,45 +950,10 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					}
 				}
 			}
-		case "mac":
-			for i, j := range l.vms {
-				for _, k := range j.macs {
-					if k == d[1] {
-						v = append(v, l.vms[i])
-						break
-					}
-				}
-			}
-		case "ip":
-			for i, j := range l.vms {
-				for _, m := range j.macs {
-					ip := GetIPFromMac(m)
-					if ip != nil {
-						if ip.IP4 == d[1] {
-							v = append(v, l.vms[i])
-							break
-						}
-					}
-				}
-			}
-		case "ip6":
-			for i, j := range l.vms {
-				for _, m := range j.macs {
-					ip := GetIPFromMac(m)
-					if ip != nil {
-						if ip.IP6 == d[1] {
-							v = append(v, l.vms[i])
-							break
-						}
-					}
-				}
-			}
 		case "vlan":
 			vlan, err := strconv.Atoi(d[1])
 			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("invalid vlan: %v", d[1]),
-				}
+				return nil, fmt.Errorf("invalid vlan: %v", d[1])
 			}
 			for i, j := range l.vms {
 				for _, k := range j.Networks {
@@ -1090,12 +961,6 @@ func (l *vmList) info(c cliCommand) cliResponse {
 						v = append(v, l.vms[i])
 						break
 					}
-				}
-			}
-		case "uuid":
-			for i, j := range l.vms {
-				if j.UUID == d[1] {
-					v = append(v, l.vms[i])
 				}
 			}
 		case "cc_active":
@@ -1108,8 +973,14 @@ func (l *vmList) info(c cliCommand) cliResponse {
 				}
 			}
 		default:
-			return cliResponse{
-				Error: fmt.Sprintf("invalid search term: %v", d[0]),
+			if fn, ok := vmSearchFn[key]; ok {
+				for i := range l.vms {
+					if fn(l.vms[i], d[1]) {
+						v = append(v, l.vms[i])
+					}
+				}
+			} else {
+				return nil, fmt.Errorf("invalid search term: %v", d[0])
 			}
 		}
 	} else { // all vms
@@ -1118,163 +989,17 @@ func (l *vmList) info(c cliCommand) cliResponse {
 		}
 	}
 	if len(v) == 0 {
-		return cliResponse{}
-	}
-
-	// short circuit if output == json, as we won't set any output masks
-	if output == "json" {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-
-		var o []jsonInfo
-		host, err := os.Hostname()
-		if err != nil {
-			log.Errorln(err)
-			teardown()
-		}
-		for _, i := range v {
-			var state string
-			switch i.State {
-			case VM_BUILDING:
-				state = "building"
-			case VM_RUNNING:
-				state = "running"
-			case VM_PAUSED:
-				state = "paused"
-			case VM_QUIT:
-				state = "quit"
-			case VM_ERROR:
-				state = "error"
-			default:
-				state = "unknown"
-			}
-			var ips []string
-			var ip6 []string
-			for _, m := range i.macs {
-				ip := GetIPFromMac(m)
-				if ip != nil {
-					ips = append(ips, ip.IP4)
-					ip6 = append(ip6, ip.IP6)
-				}
-			}
-			activeClients := ccClients()
-			o = append(o, jsonInfo{
-				Id:        i.Id,
-				Host:      host,
-				Name:      i.Name,
-				Memory:    i.Memory,
-				Vcpus:     i.Vcpus,
-				Disk:      i.DiskPaths,
-				Snapshot:  i.Snapshot,
-				Initrd:    i.InitrdPath,
-				Kernel:    i.KernelPath,
-				Cdrom:     i.CdromPath,
-				Append:    i.Append,
-				State:     state,
-				Bridges:   i.bridges,
-				Taps:      i.taps,
-				Macs:      i.macs,
-				IP:        ips,
-				IP6:       ip6,
-				Networks:  i.Networks,
-				UUID:      i.UUID,
-				CC_Active: activeClients[i.UUID],
-			})
-		}
-		err = enc.Encode(&o)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		return cliResponse{
-			Response: buf.String(),
-		}
-	}
-
-	// output mask
-	var omask []string
-	if mask != "" {
-		d := strings.Split(mask, ",")
-		for _, j := range d {
-			switch strings.ToLower(j) {
-			case "id":
-				omask = append(omask, "id")
-			case "host":
-				omask = append(omask, "host")
-			case "name":
-				omask = append(omask, "name")
-			case "state":
-				omask = append(omask, "state")
-			case "memory":
-				omask = append(omask, "memory")
-			case "vcpus":
-				omask = append(omask, "vcpus")
-			case "disk":
-				omask = append(omask, "disk")
-			case "initrd":
-				omask = append(omask, "initrd")
-			case "kernel":
-				omask = append(omask, "kernel")
-			case "cdrom":
-				omask = append(omask, "cdrom")
-			case "append":
-				omask = append(omask, "append")
-			case "bridge":
-				omask = append(omask, "bridge")
-			case "tap":
-				omask = append(omask, "tap")
-			case "mac":
-				omask = append(omask, "mac")
-			case "ip":
-				omask = append(omask, "ip")
-			case "ip6":
-				omask = append(omask, "ip6")
-			case "vlan":
-				omask = append(omask, "vlan")
-			case "uuid":
-				omask = append(omask, "uuid")
-			case "cc_active":
-				omask = append(omask, "cc_active")
-			default:
-				return cliResponse{
-					Error: fmt.Sprintf("invalid output mask: %v", j),
-				}
-			}
-		}
-	} else { // print everything
-		omask = []string{"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd", "kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan", "uuid", "cc_active"}
-	}
-
-	// did someone do something silly?
-	if len(omask) == 0 {
-		return cliResponse{}
+		return make([][]string, 0), nil
 	}
 
 	// create a sorted list of keys, based on the first column of the output mask
 	SortBy(omask[0], v)
 
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	if output == "" {
-		for i, k := range omask {
-			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
-			}
-			fmt.Fprintf(w, k)
-		}
-		fmt.Fprintf(w, "\n")
-	}
+	table := make([][]string, 0, len(v))
 	for _, j := range v {
-		for i, k := range omask {
-			if i != 0 {
-				if output == "quiet" {
-					fmt.Fprintf(w, "\t")
-				} else {
-					fmt.Fprintf(w, "\t| ")
-				}
-			}
+		row := make([]string, 0, len(omask))
+
+		for _, k := range omask {
 			switch k {
 			case "host":
 				host, err := os.Hostname()
@@ -1282,49 +1007,50 @@ func (l *vmList) info(c cliCommand) cliResponse {
 					log.Errorln(err)
 					teardown()
 				}
-				fmt.Fprintf(w, "%v", host)
+				row = append(row, fmt.Sprintf("%v", host))
 			case "id":
-				fmt.Fprintf(w, "%v", j.Id)
+				row = append(row, fmt.Sprintf("%v", j.Id))
 			case "name":
-				fmt.Fprintf(w, "%v", j.Name)
+				row = append(row, fmt.Sprintf("%v", j.Name))
 			case "memory":
-				fmt.Fprintf(w, "%v", j.Memory)
+				row = append(row, fmt.Sprintf("%v", j.Memory))
 			case "vcpus":
-				fmt.Fprintf(w, "%v", j.Vcpus)
+				row = append(row, fmt.Sprintf("%v", j.Vcpus))
 			case "state":
 				switch j.State {
 				case VM_BUILDING:
-					fmt.Fprintf(w, "building")
+					row = append(row, "building")
 				case VM_RUNNING:
-					fmt.Fprintf(w, "running")
+					row = append(row, "running")
 				case VM_PAUSED:
-					fmt.Fprintf(w, "paused")
+					row = append(row, "paused")
 				case VM_QUIT:
-					fmt.Fprintf(w, "quit")
+					row = append(row, "quit")
 				case VM_ERROR:
-					fmt.Fprintf(w, "error")
+					row = append(row, "error")
 				default:
-					fmt.Fprintf(w, "unknown")
+					row = append(row, "unknown")
 				}
 			case "disk":
-				fmt.Fprintf(w, "%v", j.DiskPaths)
+				field := fmt.Sprintf("%v", j.DiskPaths)
 				if j.Snapshot && len(j.DiskPaths) != 0 {
-					fmt.Fprintf(w, " [snapshot]")
+					field += " [snapshot]"
 				}
+				row = append(row, field)
 			case "initrd":
-				fmt.Fprintf(w, "%v", j.InitrdPath)
+				row = append(row, fmt.Sprintf("%v", j.InitrdPath))
 			case "kernel":
-				fmt.Fprintf(w, "%v", j.KernelPath)
+				row = append(row, fmt.Sprintf("%v", j.KernelPath))
 			case "cdrom":
-				fmt.Fprintf(w, "%v", j.CdromPath)
+				row = append(row, fmt.Sprintf("%v", j.CdromPath))
 			case "append":
-				fmt.Fprintf(w, "%v", j.Append)
+				row = append(row, fmt.Sprintf("%v", j.Append))
 			case "bridge":
-				fmt.Fprintf(w, "%v", j.bridges)
+				row = append(row, fmt.Sprintf("%v", j.bridges))
 			case "tap":
-				fmt.Fprintf(w, "%v", j.taps)
+				row = append(row, fmt.Sprintf("%v", j.taps))
 			case "mac":
-				fmt.Fprintf(w, "%v", j.macs)
+				row = append(row, fmt.Sprintf("%v", j.macs))
 			case "ip":
 				var ips []string
 				for _, m := range j.macs {
@@ -1333,7 +1059,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 						ips = append(ips, ip.IP4)
 					}
 				}
-				fmt.Fprintf(w, "%v", ips)
+				row = append(row, fmt.Sprintf("%v", ips))
 			case "ip6":
 				var ips []string
 				for _, m := range j.macs {
@@ -1342,7 +1068,7 @@ func (l *vmList) info(c cliCommand) cliResponse {
 						ips = append(ips, ip.IP6)
 					}
 				}
-				fmt.Fprintf(w, "%v", ips)
+				row = append(row, fmt.Sprintf("%v", ips))
 			case "vlan":
 				var vlans []string
 				for _, v := range j.Networks {
@@ -1352,24 +1078,19 @@ func (l *vmList) info(c cliCommand) cliResponse {
 						vlans = append(vlans, fmt.Sprintf("%v", v))
 					}
 				}
-				fmt.Fprintf(w, "%v", vlans)
+				row = append(row, fmt.Sprintf("%v", vlans))
 			case "uuid":
-				fmt.Fprintf(w, "%v", j.UUID)
+				row = append(row, fmt.Sprintf("%v", j.UUID))
 			case "cc_active":
 				activeClients := ccClients()
-				fmt.Fprintf(w, "%v", activeClients[j.UUID])
+				row = append(row, fmt.Sprintf("%v", activeClients[j.UUID]))
 			}
 		}
-		fmt.Fprintf(w, "\n")
-	}
-	w.Flush()
 
-	resp := o.String()
-	resp = resp[:len(resp)-1] // trim the final \n
-
-	return cliResponse{
-		Response: resp,
+		table = append(table, row)
 	}
+
+	return table, nil
 }
 
 func (vm *vmInfo) launchPreamble(ack chan int) bool {

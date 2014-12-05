@@ -181,8 +181,8 @@ func webHostVMs(host string) string {
 	var d string
 
 	if localhost == host {
-		cmd := cliCommand{}
-		r := vms.info(cmd)
+		//cmd := cliCommand{}
+		r := cliResponse{} // TODO: vms.info(cmd)
 		if r.Error != "" {
 			log.Errorln(r.Error)
 			return r.Error
