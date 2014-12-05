@@ -58,6 +58,32 @@ var invalidTestPatterns = []string{
 	`ls "foo"`, `ls <foo bar "">`, `ls [foo 'bar']`, `ls (foo "roar")`,
 }
 
+var testPrefixes = []struct {
+	Patterns []string
+	Prefix   string
+}{
+	{
+		Prefix: "vm info",
+		Patterns: []string{
+			"vm info",
+			"vm info search",
+			"vm info mask",
+		}},
+	{
+		Prefix: "vm info",
+		Patterns: []string{
+			"vm info search",
+			"vm info mask",
+		}},
+	{
+		Prefix: "",
+		Patterns: []string{
+			"foo",
+			"bar",
+			"zombie",
+		}},
+}
+
 func TestParse(t *testing.T) {
 	for _, v := range validTestPatterns {
 		t.Logf("Testing pattern: `%s`", v.pattern)
@@ -94,47 +120,29 @@ func TestInvalidPatterns(t *testing.T) {
 	}
 }
 
-// Should have the expected "vm info" prefix
-func TestVmInfoPrefix(t *testing.T) {
-	patterns := []string{
-		"vm info",
-		"vm info search",
-		"vm info mask",
-	}
-	expected := patterns[0]
+func TestPrefix(t *testing.T) {
+	for i := range testPrefixes {
+		expected := testPrefixes[i].Prefix
+		patterns := testPrefixes[i].Patterns
 
-	for i := range patterns {
-		// Shuffle the patterns left one place
-		first := patterns[0]
-		for j := 0; j < len(patterns)-1; j++ {
-			patterns[i] = patterns[(i+1)%len(patterns)]
+		t.Logf("Testing patterns: %q", patterns)
+
+		for _ = range patterns {
+			// Shuffle the patterns left one place
+			first := patterns[0]
+			for j := 0; j < len(patterns)-1; j++ {
+				patterns[j] = patterns[(j+1)%len(patterns)]
+			}
+			patterns[len(patterns)-1] = first
+
+			handler := &Handler{Patterns: patterns}
+			Register(handler) // populate patternItems
+
+			prefix := handler.Prefix()
+			if prefix != expected {
+				t.Errorf("`%s` != `%s`", prefix, expected)
+				break
+			}
 		}
-		patterns[len(patterns)-1] = first
-
-		handler := &Handler{Patterns: patterns}
-		Register(handler) // populate patternItems
-
-		prefix := handler.Prefix()
-		if prefix != expected {
-			t.Errorf("`%s` != `%s`", prefix, expected)
-		}
-	}
-}
-
-// Should have an empty string for the Prefix
-func TestNoPrefix(t *testing.T) {
-	handler := &Handler{
-		Patterns: []string{
-			"vm info",
-			"vm info search",
-			"info mask",
-			"foo",
-		},
-	}
-	Register(handler) // populate patternItems
-
-	prefix := handler.Prefix()
-	if prefix != "" {
-		t.Errorf("`%s` != ``", prefix)
 	}
 }

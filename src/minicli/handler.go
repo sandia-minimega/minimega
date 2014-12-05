@@ -107,7 +107,7 @@ outer:
 // patterns associated with this handler. May be the empty string if there is
 // no common prefix.
 func (h *Handler) Prefix() string {
-	sharedPrefix := ""
+	prefixes := make([]string, len(h.patternItems))
 
 	for i, patternItems := range h.patternItems {
 		literals := make([]string, 0)
@@ -120,19 +120,25 @@ func (h *Handler) Prefix() string {
 		}
 
 		prefix := strings.Join(literals, " ")
-
-		if i == 0 {
-			sharedPrefix = prefix
-		} else if strings.HasPrefix(sharedPrefix, prefix) {
-			sharedPrefix = sharedPrefix[:len(prefix)]
-		} else if strings.HasPrefix(prefix, sharedPrefix) {
-			sharedPrefix = prefix[:len(sharedPrefix)]
-		} else {
-			sharedPrefix = ""
+		if len(prefix) == 0 {
+			return ""
 		}
+
+		prefixes[i] = prefix
 	}
 
-	return sharedPrefix
+	shared := prefixes[0]
+	for i := 1; i < len(prefixes) && len(shared) > 0; i++ {
+		prefix := prefixes[i]
+
+		var j int
+		for ; j < len(shared) && j < len(prefix) && shared[j] == prefix[j]; j++ {
+			// Do nothing... just increment j
+		}
+		shared = shared[:j]
+	}
+
+	return strings.TrimSpace(shared)
 }
 
 func (h *Handler) helpShort() string {
