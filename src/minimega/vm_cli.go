@@ -293,7 +293,9 @@ remove saved configurations.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "qemu")
+		},
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -305,7 +307,9 @@ replacement string.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or *>",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "qemu-override")
+		},
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -313,9 +317,11 @@ replacement string.`,
 Add additional arguments to be passed to the QEMU instance. For example:
 	vm config qemu-append -serial tcp:localhost:4001`,
 		Patterns: []string{
-			"vm config qemu-append <argument>...",
+			"vm config qemu-append [argument]...",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "qemu-append")
+		},
 	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
@@ -324,7 +330,9 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "memory")
+		},
 	},
 	{ // vm config vcpus
 		HelpShort: "set the number of virtual CPUs for a VM",
@@ -333,7 +341,9 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "vcpus")
+		},
 	},
 	{ // vm config disk
 		HelpShort: "set disk images to attach to a VM",
@@ -344,7 +354,9 @@ multiple VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "disk")
+		},
 	},
 	{ // vm config cdrom
 		HelpShort: "set a cdrom image to attach to a VM",
@@ -354,7 +366,9 @@ to be the boot device.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "cdrom")
+		},
 	},
 	{ // vm config kernel
 		HelpShort: "set a kernel image to attach to a VM",
@@ -364,7 +378,9 @@ of any disk image.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "kernel")
+		},
 	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
@@ -375,9 +391,11 @@ using vm kernel will result in an error.
 For example, to set a static IP for a linux VM:
 	vm append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
-			"vm config append <argument>...",
+			"vm config append [argument]...",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "append")
+		},
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -387,7 +405,9 @@ one when the VM is launched.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "uuid")
+		},
 	},
 	{ // vm config net
 		HelpShort: "specific the networks a VM is a member of",
@@ -430,27 +450,46 @@ allows a single disk image to be used for many VMs.`,
 		},
 		Call: nil, // TODO
 	},
+	{ // vm config initrd
+		HelpShort: "set a initrd image to attach to a VM",
+		HelpLong: `
+Attach an initrd image to a VM. Passed along with the kernel image at
+boot time.`,
+		Patterns: []string{
+			"vm config initrd [path to initrd]",
+		},
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "initrd")
+		},
+	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
 		HelpLong: `
 Resets the configuration for a provided field (or the whole configuration) back
 to the default value.`,
+		// HACK: These patterns could be reduced to a single pattern with all
+		// the different config fields as one multiple choice, however, to make
+		// it easier to read, we split them into separate patterns. We could
+		// use string literals for the field names but then we'd have to
+		// process the Original string within the Command struct to figure out
+		// what field we're supposed to clear. Instead, we can leverage the
+		// magic of single-choice fields to set the field name in BoolArgs.
 		Patterns: []string{
 			"clear vm config",
-			"clear vm config qemu",
-			"clear vm config qemu-override",
-			"clear vm config qemu-append",
-			"clear vm config memory",
-			"clear vm config vcpus",
-			"clear vm config disk",
-			"clear vm config cdrom",
-			"clear vm config kernel",
-			"clear vm config append",
-			"clear vm config uuid",
-			"clear vm config net",
-			"clear vm config snapshot",
+			"clear vm config <append,>",
+			"clear vm config <cdrom,>",
+			"clear vm config <disk,>",
+			"clear vm config <kernel,>",
+			"clear vm config <memory,>",
+			"clear vm config <net,>",
+			"clear vm config <qemu,>",
+			"clear vm config <qemu-append,>",
+			"clear vm config <qemu-override,>",
+			"clear vm config <snapshot,>",
+			"clear vm config <uuid,>",
+			"clear vm config <vcpus,>",
 		},
-		Call: nil, // TODO
+		Call: cliClearVmConfig,
 	},
 }
 
@@ -498,6 +537,84 @@ func cliVmInfo(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 		resp.Header = nil
 		return minicli.Responses{resp}
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
+	// TODO: Shouldn't this be a global variable set during init?
+	host, err := os.Hostname()
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+	resp := &minicli.Response{Host: host}
+
+	fns, ok := vmConfigFns[field]
+	if !ok {
+		// This should never happen unless we messed something up in the code
+		resp.Error = "unexpected... someone goofed on the field names"
+		return minicli.Responses{resp}
+	}
+
+	// If there are no args it means that we want to display the current value
+	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 {
+		resp.Response = fns.Print()
+		return minicli.Responses{resp}
+	}
+
+	// We expect exactly one key in either the list or string args. If it's
+	// in the StringArgs, we only need to call update once. If it's in the
+	// ListArgs, we call update for each of the values for that key.
+	if len(c.StringArgs) == 1 && !fns.MultiArg {
+		for _, arg := range c.StringArgs {
+			if err := fns.Update(arg); err != nil {
+				resp.Error = err.Error()
+			}
+		}
+	} else if len(c.ListArgs) == 1 && fns.MultiArg {
+		// Clear out the old value, only needed for list fields
+		fns.Clear()
+
+		for _, args := range c.ListArgs {
+			for _, arg := range args {
+				if err := fns.Update(arg); err != nil {
+					resp.Error = err.Error()
+					break
+				}
+			}
+		}
+	} else {
+		// This should never happen unless we messed something up in the code
+		resp.Error = "unexpected... someone goofed on the patterns"
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliClearVmConfig(c *minicli.Command) minicli.Responses {
+	// TODO: Shouldn't this be a global variable set during init?
+	host, err := os.Hostname()
+	if err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+	resp := &minicli.Response{Host: host}
+
+	var clearAll = len(c.BoolArgs) == 0
+	var cleared bool
+
+	for k, fns := range vmConfigFns {
+		if clearAll || c.BoolArgs[k] {
+			fns.Clear()
+			cleared = true
+		}
+	}
+
+	if !cleared {
+		// This should never happen unless we messed something up in the code
+		resp.Error = "unexpected... no callback defined for clear"
 	}
 
 	return minicli.Responses{resp}

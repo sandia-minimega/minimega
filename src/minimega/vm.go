@@ -152,6 +152,97 @@ var vmSearchFn = map[string]func(*vmInfo, string) bool{
 	},
 }
 
+var vmConfigFns = map[string]struct {
+	Update   func(string) error
+	Clear    func()
+	Print    func() string
+	MultiArg bool // Whether this field expects multiple args or not
+}{
+	"append": {
+		Update: func(v string) error {
+			info.Append += v + " "
+			return nil
+		},
+		Clear:    func() { info.Append = "" },
+		Print:    func() string { return info.Append },
+		MultiArg: true,
+	},
+	"cdrom": {
+		Update: func(v string) error {
+			info.CdromPath = v
+			return nil
+		},
+		Clear: func() { info.CdromPath = "" },
+		Print: func() string { return info.CdromPath },
+	},
+	"disk": {
+		Update: func(v string) error {
+			info.DiskPaths = append(info.DiskPaths, v)
+			return nil
+		},
+		Clear:    func() { info.DiskPaths = []string{} },
+		Print:    func() string { return fmt.Sprintf("%v", info.DiskPaths) },
+		MultiArg: true,
+	},
+	"initrd": {
+		Update: func(v string) error {
+			info.InitrdPath = v
+			return nil
+		},
+		Clear: func() { info.InitrdPath = "" },
+		Print: func() string { return info.InitrdPath },
+	},
+	"kernel": {
+		Update: func(v string) error {
+			info.KernelPath = v
+			return nil
+		},
+		Clear: func() { info.KernelPath = "" },
+		Print: func() string { return info.KernelPath },
+	},
+	"memory": {
+		Update: func(v string) error {
+			info.Memory = v
+			return nil
+		},
+		Clear: func() { info.Memory = VM_MEMORY_DEFAULT },
+		Print: func() string { return info.Memory },
+	},
+	"qemu": { // TODO
+		Update: func(v string) error {
+			externalProcesses["qemu"] = v
+			return nil
+		},
+		Clear: func() { externalProcesses["qemu"] = "kvm" },
+		Print: func() string { return process("qemu") },
+	},
+	"qemu-append": { // TODO
+		Update: func(v string) error {
+			info.QemuAppend = append(info.QemuAppend, fieldsQuoteEscape("\"", v)...)
+			return nil
+		},
+		Clear:    func() { info.QemuAppend = []string{} },
+		Print:    func() string { return fmt.Sprintf("%v", info.QemuAppend) },
+		MultiArg: true,
+	},
+	"uuid": {
+		Update: func(v string) error {
+			info.UUID = v
+			return nil
+		},
+		Clear: func() { info.UUID = "" },
+		Print: func() string { return info.UUID },
+	},
+	"vcpus": {
+		Update: func(v string) error {
+			info.Vcpus = v
+			return nil
+		},
+		Clear: func() { info.Vcpus = "1" },
+		Print: func() string { return info.Vcpus },
+	},
+}
+
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	killAck = make(chan int)
@@ -1624,144 +1715,6 @@ func cliClearVMConfig() error {
 	info.Snapshot = true
 	info.UUID = ""
 	return nil
-}
-
-func cliVMQemu(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: process("qemu"),
-		}
-	} else if len(c.Args) == 1 {
-		externalProcesses["qemu"] = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_qemu takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMMemory(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.Memory,
-		}
-	} else if len(c.Args) == 1 {
-		info.Memory = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_memory takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMVCPUs(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.Vcpus,
-		}
-	} else if len(c.Args) == 1 {
-		info.Vcpus = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_vcpus takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMUUID(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.UUID,
-		}
-	} else if len(c.Args) == 1 {
-		info.UUID = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_uuid takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMDisk(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: fmt.Sprintf("%v", info.DiskPaths),
-		}
-	} else {
-		info.DiskPaths = c.Args
-	}
-	return cliResponse{}
-}
-
-func cliVMCdrom(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.CdromPath,
-		}
-	} else if len(c.Args) == 1 {
-		info.CdromPath = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_cdrom takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMKernel(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.KernelPath,
-		}
-	} else if len(c.Args) == 1 {
-		info.KernelPath = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_kernel takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMInitrd(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.InitrdPath,
-		}
-	} else if len(c.Args) == 1 {
-		info.InitrdPath = c.Args[0]
-	} else {
-		return cliResponse{
-			Error: "vm_initrd takes only one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func cliVMQemuAppend(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: strings.Join(info.QemuAppend, " "),
-		}
-	} else {
-		info.QemuAppend = fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
-	}
-	return cliResponse{}
-}
-
-func cliVMAppend(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: info.Append,
-		}
-	} else {
-		info.Append = strings.Join(c.Args, " ")
-	}
-	return cliResponse{}
 }
 
 // CLI vm_net
