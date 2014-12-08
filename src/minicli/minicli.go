@@ -252,7 +252,26 @@ func (r Responses) String() string {
 		}
 	}
 
-	// TODO: Append errors from hosts
+	// Append errors from hosts
+	var hasErrors bool
+	for i := range r {
+		if r[i].Error != "" {
+			// Found first error
+			if !hasErrors {
+				buf.WriteString("\n")
+				buf.WriteString("Errors:")
+				buf.WriteString("\n")
+				hasErrors = true
+			}
+
+			// TODO: Use tabwriter?
+			buf.WriteString("\t")
+			buf.WriteString(r[i].Host)
+			buf.WriteString("\t")
+			buf.WriteString(r[i].Error)
+			buf.WriteString("\n")
+		}
+	}
 
 	resp := buf.String()
 	return strings.TrimSpace(resp)
