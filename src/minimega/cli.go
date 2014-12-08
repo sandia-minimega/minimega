@@ -233,13 +233,13 @@ replacement string.`,
 			Helplong: `
 	Usage: vm_save <save name> <vm name/id> [<vm name/id> ...]
 
-Saves the configuration of a running virtual machine or set of virtual 
-machines so that it/they can be restarted/recovered later, such as after 
+Saves the configuration of a running virtual machine or set of virtual
+machines so that it/they can be restarted/recovered later, such as after
 a system crash.
 
 If no VM name or ID is given, all VMs (including those in the quit and error state) will be saved.
 
-This command does not store the state of the virtual machine itself, 
+This command does not store the state of the virtual machine itself,
 only its launch configuration.`,
 			Record: false,
 			Clear: func() error {
@@ -535,7 +535,7 @@ interface will be connected on. If the bridge name is omitted, minimega will
 use the default 'mega_bridge'. You can also optionally specify the mac
 address of the interface to connect to that network. If not specifed, the mac
 address will be randomly generated. Additionally, you can optionally specify a
-driver for qemu to use. By default, e1000 is used. 
+driver for qemu to use. By default, e1000 is used.
 
 Examples:
 
@@ -562,8 +562,8 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 			Call:      cliVNC,
 			Helpshort: "record or playback VNC kbd/mouse input",
 			Helplong: `
-	Usage: 
-		vnc 
+	Usage:
+		vnc
 		vnc [record <host> <vm id or name> <filename>, playback <host> <vm id or name> <filename>]
 		vnc [norecord <host> <vm id or name>, noplayback <host> <vm id or name>]
 		vnc clear
@@ -589,7 +589,7 @@ to the specified VM.`,
 			Helplong: `
 	Usage: web [port, novnc <novnc path>]
 
-Launch a webserver that allows you to browse the connected minimega hosts and 
+Launch a webserver that allows you to browse the connected minimega hosts and
 VMs, and connect to any VM in the pool.
 
 This command requires access to an installation of novnc. By default minimega
@@ -622,7 +622,7 @@ To start the webserver on a specific port, issue the web command with the port:
 			},
 			Helpshort: "show the command history",
 			Helplong: `
-	Usage: history 
+	Usage: history
 
 Show the command history`,
 			Record: false,
@@ -717,7 +717,7 @@ commands.`,
 	Usage: host_tap [<create [bridge] vlan <A.B.C.D/MASK,dhcp,none> [tap name], delete <tap name>]
 
 Control host taps on a named vlan for communicating between a host and any VMs
-on that vlan. 
+on that vlan.
 
 Calling host_tap with no arguments will list all created host_taps.
 
@@ -745,9 +745,9 @@ ip/netmask:
 To delete a host tap, use the delete command and tap name from the host_tap list:
 
 	host_tap delete <id>
-	
+
 To delete all host taps, use id -1, or 'clear host_tap':
-	
+
 	host_tap delete -1`,
 			Record: true,
 			Clear: func() error {
@@ -812,7 +812,7 @@ Display a short status report of the mesh.`,
 			Call:      meshageList,
 			Helpshort: "display the mesh adjacency list",
 			Helplong: `
-	Usage: mesh_list 
+	Usage: mesh_list
 
 Display the mesh adjacency list.`,
 			Record: false,
@@ -878,7 +878,7 @@ Send a command to one or more connected clients.
 For example, to get the vm_info from nodes kn1 and kn2:
 
 	mesh_set kn[1-2] vm_info
-	
+
 Optionally, you can annotate the output with the hostname of all responders by
 prepending the keyword 'annotate' to the command:
 
@@ -959,7 +959,7 @@ To kill all running dnsmasq servers, pass -1 as the ID:
 
 	dnsmasq kill -1
 
-dnsmasq will provide DNS service from the host, as well as from /etc/hosts. 
+dnsmasq will provide DNS service from the host, as well as from /etc/hosts.
 You can specify an additional config file for dnsmasq by providing a file as an
 additional argument.
 
@@ -979,7 +979,7 @@ the file.`,
 			Helplong: `
 	Usage: shell <command>
 
-Execute a command under the credentials of the running user. 
+Execute a command under the credentials of the running user.
 
 Commands run until they complete or error, so take care not to execute a command
 that does not return.`,
@@ -995,7 +995,7 @@ that does not return.`,
 			Helplong: `
 	Usage: background <command>
 
-Execute a command under the credentials of the running user. 
+Execute a command under the credentials of the running user.
 
 Commands run in the background and control returns immediately. Any output is
 logged.`,
@@ -1103,7 +1103,7 @@ Display the version.`,
 
 Display, save, or restore the current VM configuration.
 
-To display the current configuration, call vm_config with no arguments. 
+To display the current configuration, call vm_config with no arguments.
 
 List the current saved configurations with 'vm_config show'
 
@@ -1155,7 +1155,7 @@ Display information about virtual bridges.`,
 			Call:      cliVMFlush,
 			Helpshort: "discard information about quit or failed VMs",
 			Helplong: `
-	Usage: vm_flush 
+	Usage: vm_flush
 
 Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm_info. Names
@@ -1232,14 +1232,14 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 		vyatta config <filename>
 		vyatta write [filename]
 
-Define and write out vyatta router floppy disk images. 
+Define and write out vyatta router floppy disk images.
 
-vyatta takes a number of subcommands: 
+vyatta takes a number of subcommands:
 
 - 'dhcp': Add DHCP service to a particular network by specifying the
 network, default gateway, and start and stop addresses. For example, to
 serve dhcp on 10.0.0.0/24, with a default gateway of 10.0.0.1:
-	
+
 	vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254
 
 An optional DNS argument can be used to override the
@@ -1276,10 +1276,10 @@ prefixes or "none". Order matches that of interfaces6. For example:
 
 - 'routes': Set static routes. Routes are specified as
 
-	<network>,<next-hop> ... 
+	<network>,<next-hop> ...
 
-For example: 
-	
+For example:
+
 	vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
 
 - 'config': Override all other options and use a specified file as the
@@ -1298,7 +1298,7 @@ specified by the -filepath flag. The filename will be returned.`,
 			Helplong: `
 	Usage: vm_hotplug [add <id> <filename>, remove <id> <file id>]
 
-Add and remove USB drives to a launched VM. 
+Add and remove USB drives to a launched VM.
 
 To view currently attached media, call vm_hotplug with the 'show' argument and
 a VM ID or name. To add a device, use the 'add' argument followed by the VM ID
@@ -1325,7 +1325,7 @@ To remove all hotplug devices, use ID -1.`,
 			Helplong: `
 	Usage: vm_netmod <vm name or id> <tap position> <disconnect, <bridge <vlan>>>
 
-Disconnect or move existing network connections on a running VM. 
+Disconnect or move existing network connections on a running VM.
 
 Network connections are indicated by their position in vm_net (same order in
 vm_info) and are zero indexed. For example, to disconnect the first network
@@ -1493,7 +1493,7 @@ You can change the active flow timeout with:
 With <timeout> in seconds.
 
 To capture pcap on bridge 'foo' to file 'foo.pcap':
-	
+
 	minimega$ capture pcap bridge foo foo.pcap
 
 To capture pcap on VM 'foo' to file 'foo.pcap', using the 2nd interface on that
@@ -1521,7 +1521,7 @@ example, to send a file 'foo' and display the contents on a remote VM:
 
 Responses are generated (unless the 'norecord' flag is set) and written out to
 '<filebase>/miniccc_responses/<command id>/<client UUID>'. Files to be sent
-must be in '<filebase>'. 
+must be in '<filebase>'.
 
 Filters may be set to limit which clients may execute a posted command. Filters
 are the logical sum of products of every filter added. That is, a single given
@@ -1532,7 +1532,7 @@ specific IP, OR nodes that have a range of IPs:
 
 	cc filter add os=windows ip=10.0.0.1 cc filter add ip=12.0.0.0/24
 
-New commands assign any current filters. 
+New commands assign any current filters.
 `,
 			Record: true,
 			Clear:  cliClearCC,
