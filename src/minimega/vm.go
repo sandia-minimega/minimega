@@ -1708,38 +1708,6 @@ func cliVMQemuOverride(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
-// clear all vm_ arguments
-// which is currently:
-//	vm_qemu
-//	vm_memory
-//	vm_vcpus
-//	vm_disk
-//	vm_cdrom
-//	vm_kernel
-//	vm_initrd
-//	vm_qemu_append
-//	vm_append
-//	vm_net
-//	vm_snapshot
-func cliClearVMConfig() error {
-	externalProcesses["qemu"] = "kvm"
-	info.Memory = VM_MEMORY_DEFAULT
-	info.Vcpus = "1"
-	info.DiskPaths = []string{}
-	info.CdromPath = ""
-	info.KernelPath = ""
-	info.InitrdPath = ""
-	info.QemuAppend = []string{}
-	info.Append = ""
-	info.Networks = []int{}
-	info.macs = []string{}
-	info.bridges = []string{}
-	info.netDrivers = []string{}
-	info.Snapshot = true
-	info.UUID = ""
-	return nil
-}
-
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
 // bit of parsing, because the entry can be in a few forms:

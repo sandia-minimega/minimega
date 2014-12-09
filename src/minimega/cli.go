@@ -212,21 +212,6 @@ failed, as well as some commands that do not impact the VM state, such as
 			},
 		},
 
-		"vm_qemu_override": &command{
-			Call:      cliVMQemuOverride,
-			Helpshort: "override parts of the qemu launch string",
-			Helplong: `
-	Usage: vm_qemu_override [add "<match>" "<replacement>", del <id>]
-
-Override parts of the qemu launch string by supplying a string to match, and a
-replacement string.`,
-			Record: true,
-			Clear: func() error {
-				QemuOverrides = make(map[int]*qemuOverride)
-				return nil
-			},
-		},
-
 		"vm_save": &command{
 			Call:      cliVMSave,
 			Helpshort: "save a vm configuration for later use",
@@ -837,22 +822,6 @@ To output host statistics without the header, use the quiet argument:
 			},
 		},
 
-		"vm_snapshot": &command{
-			Call:      cliVMSnapshot,
-			Helpshort: "enable or disable snapshot mode when using disk images",
-			Helplong: `
-	Usage: vm_snapshot [true,false]
-
-Enable or disable snapshot mode when using disk images. When enabled, disks
-images will be loaded in memory when run and changes will not be saved. This
-allows a single disk image to be used for many VMs.`,
-			Record: true,
-			Clear: func() error {
-				info.Snapshot = true
-				return nil
-			},
-		},
-
 		"optimize": &command{
 			Call:      optimizeCLI,
 			Helpshort: "enable or disable several virtualization optimizations",
@@ -933,7 +902,6 @@ To restore a configuration:
 Calling clear vm_config will clear all VM configuration options, but will not
 remove saved configurations.`,
 			Record: true,
-			Clear:  cliClearVMConfig,
 		},
 
 		"debug": &command{
