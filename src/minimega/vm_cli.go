@@ -569,34 +569,39 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 		return minicli.Responses{resp}
 	}
 
-	// We expect exactly one key in either the list or string args. If it's
-	// in the StringArgs, we only need to call update once. If it's in the
-	// ListArgs, we call update for each of the values for that key.
-	if len(c.StringArgs) == 1 && !fns.MultiArg {
+	// We expect exactly one key in either the String, List, or Bool Args for
+	// most configs. For some, there is more complex processing and they need
+	// the whole command.
+	if fns.UpdateCommand != nil {
+		err = fns.UpdateCommand(c)
+	} else if len(c.StringArgs) == 1 && fns.Update != nil {
 		for _, arg := range c.StringArgs {
-			if err := fns.Update(arg); err != nil {
-				resp.Error = err.Error()
-			}
+			err = fns.Update(arg)
 		}
-	} else if len(c.ListArgs) == 1 && fns.MultiArg {
-		// Clear out the old value, only needed for list fields
+	} else if len(c.ListArgs) == 1 && fns.Update != nil {
+		// Lists need to be cleared first since they process each arg
+		// individually to build state
 		fns.Clear()
 
 		for _, args := range c.ListArgs {
 			for _, arg := range args {
-				if err := fns.Update(arg); err != nil {
-					resp.Error = err.Error()
+				err = fns.Update(arg)
+				if err != nil {
 					break
 				}
 			}
 		}
-	} else if len(c.BoolArgs) == 1 && !fns.MultiArg {
+	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
 		// Special case, look for key "true" (there should only be two options,
 		// "true" or "false" and, therefore, not "true" implies "false").
-		fns.UpdateBool(c.BoolArgs["true"])
+		err = fns.UpdateBool(c.BoolArgs["true"])
 	} else {
 		// This should never happen unless we messed something up in the code
 		resp.Error = "unexpected... someone goofed on the patterns"
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
 	return minicli.Responses{resp}

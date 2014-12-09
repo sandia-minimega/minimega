@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -154,20 +155,19 @@ var vmSearchFn = map[string]func(*vmInfo, string) bool{
 }
 
 var vmConfigFns = map[string]struct {
-	Update     func(string) error
-	UpdateBool func(bool) error
-	Clear      func()
-	Print      func() string
-	MultiArg   bool // Whether this field expects multiple args or not
+	Update        func(string) error
+	UpdateBool    func(bool) error
+	UpdateCommand func(*minicli.Command) error
+	Clear         func()
+	Print         func() string
 }{
 	"append": {
 		Update: func(v string) error {
 			info.Append += v + " "
 			return nil
 		},
-		Clear:    func() { info.Append = "" },
-		Print:    func() string { return info.Append },
-		MultiArg: true,
+		Clear: func() { info.Append = "" },
+		Print: func() string { return info.Append },
 	},
 	"cdrom": {
 		Update: func(v string) error {
@@ -182,9 +182,8 @@ var vmConfigFns = map[string]struct {
 			info.DiskPaths = append(info.DiskPaths, v)
 			return nil
 		},
-		Clear:    func() { info.DiskPaths = []string{} },
-		Print:    func() string { return fmt.Sprintf("%v", info.DiskPaths) },
-		MultiArg: true,
+		Clear: func() { info.DiskPaths = []string{} },
+		Print: func() string { return fmt.Sprintf("%v", info.DiskPaths) },
 	},
 	"initrd": {
 		Update: func(v string) error {
@@ -221,7 +220,6 @@ var vmConfigFns = map[string]struct {
 		Print: func() string {
 			return info.networkString()
 		},
-		MultiArg: true,
 	},
 	"qemu": { // TODO
 		Update: func(v string) error {
@@ -233,12 +231,26 @@ var vmConfigFns = map[string]struct {
 	},
 	"qemu-append": { // TODO
 		Update: func(v string) error {
-			info.QemuAppend = append(info.QemuAppend, fieldsQuoteEscape("\"", v)...)
+			info.QemuAppend = append(info.QemuAppend, fieldsQuoteEscape(`"`, v)...)
 			return nil
 		},
-		Clear:    func() { info.QemuAppend = []string{} },
-		Print:    func() string { return fmt.Sprintf("%v", info.QemuAppend) },
-		MultiArg: true,
+		Clear: func() { info.QemuAppend = []string{} },
+		Print: func() string { return fmt.Sprintf("%v", info.QemuAppend) },
+	},
+	"qemu-override": {
+		UpdateCommand: func(c *minicli.Command) error {
+			if c.StringArgs["match"] != "" {
+				return addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
+			} else if c.StringArgs["id"] != "" {
+				return delVMQemuOverride(c.StringArgs["id"])
+			}
+
+			return errors.New("unexpected... someone goofed the qemu-override patterns")
+		},
+		Clear: func() { QemuOverrides = make(map[int]*qemuOverride) },
+		Print: func() string {
+			return qemuOverrideString()
+		},
 	},
 	"snapshot": {
 		UpdateBool: func(v bool) error {
@@ -1646,66 +1658,52 @@ func ParseQemuOverrides(input []string) []string {
 	return fieldsQuoteEscape("\"", ret)
 }
 
-func cliVMQemuOverride(c cliCommand) cliResponse {
-	newArgs := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
-
-	switch len(newArgs) {
-	case 0: // show current overrides and the arg string
-		// create output
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "id\tmatch\treplacement")
-		for i, v := range QemuOverrides {
-			fmt.Fprintf(&o, "%v\t\"%v\"\t\"%v\"\n", i, v.match, v.repl)
-		}
-		w.Flush()
-
-		args := info.vmGetArgs(false)
-		preArgs := unescapeString(args)
-		postArgs := strings.Join(ParseQemuOverrides(args), " ")
-
-		r := o.String()
-		r += fmt.Sprintf("\nBefore overrides:\n%v\n", preArgs)
-		r += fmt.Sprintf("\nAfter overrides:\n%v\n", postArgs)
-
-		return cliResponse{
-			Response: r,
-		}
-	case 2:
-		if newArgs[0] != "del" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		id, err := strconv.Atoi(newArgs[1])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("invalid id %v", newArgs[1]),
-			}
-		}
-
-		delete(QemuOverrides, id)
-	case 3:
-		if newArgs[0] != "add" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		id := <-qemuOverrideIdChan
-
-		QemuOverrides[id] = &qemuOverride{
-			match: newArgs[1],
-			repl:  newArgs[2],
-		}
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
+func qemuOverrideString() string {
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintln(&o, "id\tmatch\treplacement")
+	for i, v := range QemuOverrides {
+		fmt.Fprintf(&o, "%v\t\"%v\"\t\"%v\"\n", i, v.match, v.repl)
 	}
-	return cliResponse{}
+	w.Flush()
+
+	args := info.vmGetArgs(false)
+	preArgs := unescapeString(args)
+	postArgs := strings.Join(ParseQemuOverrides(args), " ")
+
+	r := o.String()
+	r += fmt.Sprintf("\nBefore overrides:\n%v\n", preArgs)
+	r += fmt.Sprintf("\nAfter overrides:\n%v\n", postArgs)
+
+	return r
+}
+
+func delVMQemuOverride(arg string) error {
+	if arg == "*" {
+		QemuOverrides = make(map[int]*qemuOverride)
+		return nil
+	}
+
+	id, err := strconv.Atoi(arg)
+	if err != nil {
+		return fmt.Errorf("invalid id %v", arg)
+	}
+
+	delete(QemuOverrides, id)
+	return nil
+}
+
+func addVMQemuOverride(match, repl string) error {
+	id := <-qemuOverrideIdChan
+
+	QemuOverrides[id] = &qemuOverride{
+		match: match,
+		repl:  repl,
+	}
+
+	return nil
 }
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for
