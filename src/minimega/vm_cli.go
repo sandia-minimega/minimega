@@ -435,9 +435,11 @@ To specify a specific driver, such as i82559c:
 
 Calling vm_net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
-			"vm config net <netspec>...",
+			"vm config net [netspec]...",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "net")
+		},
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",

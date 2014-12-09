@@ -41,10 +41,11 @@ const (
 )
 
 const (
-	VM_MEMORY_DEFAULT = "2048"
-	VM_NOT_FOUND      = -2
-	QMP_CONNECT_RETRY = 50
-	QMP_CONNECT_DELAY = 100
+	VM_MEMORY_DEFAULT     = "2048"
+	VM_NET_DRIVER_DEFAULT = "e1000"
+	VM_NOT_FOUND          = -2
+	QMP_CONNECT_RETRY     = 50
+	QMP_CONNECT_DELAY     = 100
 )
 
 type qemuOverride struct {
@@ -208,6 +209,19 @@ var vmConfigFns = map[string]struct {
 		},
 		Clear: func() { info.Memory = VM_MEMORY_DEFAULT },
 		Print: func() string { return info.Memory },
+	},
+	"net": {
+		Update: processVMNet,
+		Clear: func() {
+			info.Networks = []int{}
+			info.bridges = []string{}
+			info.macs = []string{}
+			info.netDrivers = []string{}
+		},
+		Print: func() string {
+			return info.networkString()
+		},
+		MultiArg: true,
 	},
 	"qemu": { // TODO
 		Update: func(v string) error {
@@ -1726,139 +1740,108 @@ func cliClearVMConfig() error {
 	return nil
 }
 
-// CLI vm_net
-// Allow specifying the bridge, vlan, and mac for one or more interfaces to a VM
-func cliVMNet(c cliCommand) cliResponse {
-	// example: vm_net my_bridge,100,00:00:00:00:00:00 101,00:00:00:00:00:01
-	r := cliResponse{}
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: fmt.Sprintf("%v\n", info.networkString()),
+// processVMNet processes the input specifying the bridge, vlan, and mac for
+// one interface to a VM and updates the vm config accordingly. This takes a
+// bit of parsing, because the entry can be in a few forms:
+// 	vlan
+//
+//	vlan,mac
+//	bridge,vlan
+//	vlan,driver
+//
+//	bridge,vlan,mac
+//	vlan,mac,driver
+//	bridge,vlan,driver
+//
+//	bridge,vlan,mac,driver
+// If there are 2 or 3 fields, just the last field for the presence of a mac
+func processVMNet(lan string) error {
+	// example: my_bridge,100,00:00:00:00:00:00
+	f := strings.Split(lan, ",")
+
+	var b string
+	var v string
+	var m string
+	var d string
+	switch len(f) {
+	case 1:
+		v = f[0]
+	case 2:
+		if isMac(f[1]) {
+			// vlan, mac
+			v = f[0]
+			m = f[1]
+		} else if _, err := strconv.Atoi(f[0]); err == nil {
+			// vlan, driver
+			v = f[0]
+			d = f[1]
+		} else {
+			// bridge, vlan
+			b = f[0]
+			v = f[1]
 		}
-	} else {
-		info.bridges = []string{}
-		info.Networks = []int{}
-		info.macs = []string{}
-		info.netDrivers = []string{}
-
-		for _, lan := range c.Args {
-			f := strings.Split(lan, ",")
-			// this takes a bit of parsing, because the entry can be in a few forms:
-			// 	vlan
-			//
-			//	vlan,mac
-			//	bridge,vlan
-			//	vlan,driver
-			//
-			//	bridge,vlan,mac
-			//	vlan,mac,driver
-			//	bridge,vlan,driver
-			//
-			//	bridge,vlan,mac,driver
-			// If there are 2 or 3 fields, just the last field for the presence of a mac
-
-			var b string
-			var v string
-			var m string
-			var d string
-			switch len(f) {
-			case 1:
-				v = f[0]
-			case 2:
-				if isMac(f[1]) {
-					// vlan, mac
-					v = f[0]
-					m = f[1]
-				} else if _, err := strconv.Atoi(f[0]); err == nil {
-					// vlan, driver
-					v = f[0]
-					d = f[1]
-				} else {
-					// bridge, vlan
-					b = f[0]
-					v = f[1]
-				}
-			case 3:
-				if isMac(f[2]) {
-					// bridge, vlan, mac
-					b = f[0]
-					v = f[1]
-					m = f[2]
-				} else if isMac(f[1]) {
-					// vlan, mac, driver
-					v = f[0]
-					m = f[1]
-					d = f[2]
-				} else {
-					// bridge, vlan, driver
-					b = f[0]
-					v = f[1]
-					d = f[2]
-				}
-			case 4:
-				b = f[0]
-				v = f[1]
-				m = f[2]
-				d = f[3]
-			default:
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-
-			log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
-
-			// VLAN ID, with optional bridge
-			val, err := strconv.Atoi(v) // the vlan id
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			currBridge, err := getBridge(b)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			err = currBridge.LanCreate(val)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			if b == "" {
-				info.bridges = append(info.bridges, DEFAULT_BRIDGE)
-			} else {
-				info.bridges = append(info.bridges, b)
-			}
-
-			info.Networks = append(info.Networks, val)
-
-			if d == "" {
-				info.netDrivers = append(info.netDrivers, "e1000")
-			} else {
-				info.netDrivers = append(info.netDrivers, d)
-			}
-
-			// (optional) MAC ADDRESS
-			if m != "" {
-				if isMac(m) {
-					info.macs = append(info.macs, strings.ToLower(m))
-				} else {
-					info.macs = append(info.macs, m)
-					r = cliResponse{
-						Error: "Not a valid mac address: " + m,
-					}
-				}
-			} else {
-				info.macs = append(info.macs, "")
-			}
+	case 3:
+		if isMac(f[2]) {
+			// bridge, vlan, mac
+			b = f[0]
+			v = f[1]
+			m = f[2]
+		} else if isMac(f[1]) {
+			// vlan, mac, driver
+			v = f[0]
+			m = f[1]
+			d = f[2]
+		} else {
+			// bridge, vlan, driver
+			b = f[0]
+			v = f[1]
+			d = f[2]
 		}
+	case 4:
+		b = f[0]
+		v = f[1]
+		m = f[2]
+		d = f[3]
+	default:
+		return errors.New("malformed netspec")
 	}
-	return r
+
+	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+
+	// VLAN ID, with optional bridge
+	vlan, err := strconv.Atoi(v) // the vlan id
+	if err != nil {
+		return errors.New("malformed netspec, vlan must be an integer")
+	}
+
+	if m != "" && !isMac(m) {
+		return errors.New("malformed netspec, invalid mac address: " + m)
+	}
+
+	currBridge, err := getBridge(b)
+	if err != nil {
+		return err
+	}
+
+	err = currBridge.LanCreate(vlan)
+	if err != nil {
+		return err
+	}
+
+	info.Networks = append(info.Networks, vlan)
+
+	if b == "" {
+		b = DEFAULT_BRIDGE
+	}
+	if d == "" {
+		d = VM_NET_DRIVER_DEFAULT
+	}
+
+	info.bridges = append(info.bridges, b)
+	info.netDrivers = append(info.netDrivers, d)
+	info.macs = append(info.macs, strings.ToLower(m))
+
+	return nil
 }
 
 func cliVMFlush(c cliCommand) cliResponse {
