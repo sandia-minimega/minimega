@@ -8,6 +8,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"fmt"
 	log "minilog"
 	"net"
@@ -49,6 +51,22 @@ type vncVMPlayback struct {
 	done     chan bool
 	finished bool
 	lock     sync.Mutex
+}
+
+type vncFBRecord struct {
+	vncVMRecord
+}
+
+type vncServerInit struct {
+	Width, Height uint16
+	PixelFormat   vncPixelFormat
+}
+
+type vncPixelFormat struct {
+	BitsPerPixel, Depth, BigEndianFlag, TrueColorFlag uint8
+	RedMax, GreenMax, BlueMax                         uint16
+	RedShift, GreenShift, BlueShift                   uint16
+	Padding                                           [3]byte
 }
 
 func init() {
@@ -105,58 +123,79 @@ func (v *vncVMPlayback) Run() {
 
 // dial the vm in question, complete a handshake, and discard incoming
 // messages.
-func (v *vncVMPlayback) Dial() error {
-	conn, err := net.Dial("tcp", v.Rhost)
+func vncDial(rhost string) (conn net.Conn, serverInit *vncServerInit, err error) {
+	var n int
+
+	conn, err = net.Dial("tcp", rhost)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	v.conn = conn
+	defer func() {
+		if err != nil && conn != nil {
+			conn.Close()
+		}
+	}()
 
 	// handshake, receive 12 bytes from the server
 	buf := make([]byte, 12)
-	n, err := v.conn.Read(buf)
+	n, err = conn.Read(buf)
+	if err != nil && n != 12 {
+		err = fmt.Errorf("invalid server version: %v", string(buf[:n]))
+	}
+
 	if err != nil {
-		return err
+		return
 	}
-	if n != 12 {
-		return fmt.Errorf("invalid server version: %v", string(buf[:n]))
-	}
+
 	// respond with version 3.3
 	buf = []byte("RFB 003.003\n")
-	_, err = v.conn.Write(buf)
+	_, err = conn.Write(buf)
 	if err != nil {
-		return err
+		return
 	}
 
 	// the server sends a 4 byte security type
 	buf = make([]byte, 4)
-	n, err = v.conn.Read(buf)
+	n, err = conn.Read(buf)
+	if err != nil && n != 4 {
+		err = fmt.Errorf("invalid server security message: %v", string(buf[:n]))
+	} else if err != nil && buf[3] != 0x01 { // the security type must be 1
+		err = fmt.Errorf("invalid server security type: %v", string(buf[:n]))
+	}
+
 	if err != nil {
-		return err
-	}
-	if n != 4 {
-		return fmt.Errorf("invalid server security message: %v", string(buf[:n]))
-	}
-	// the security type must be 1
-	if buf[3] != 0x01 {
-		return fmt.Errorf("invalid server security type: %v", string(buf[:n]))
+		return
 	}
 
 	// client sends an initialization message, non-zero here to indicate
 	// we will allow a shared desktop.
-	_, err = v.conn.Write([]byte{0x01})
+	_, err = conn.Write([]byte{0x01})
 	if err != nil {
-		return err
+		return
 	}
 
 	// receive the server initialization
 	buf = make([]byte, 32768)
-	n, err = v.conn.Read(buf)
+	n, err = conn.Read(buf)
 	if err != nil {
-		return err
+		return
 	}
 	log.Debug("got server initialization length %v", n)
+
+	reader := bytes.NewReader(buf)
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.Width); err != nil {
+		err = errors.New("unable to decode width")
+		return
+	}
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.Height); err != nil {
+		err = errors.New("unable to decode height")
+		return
+	}
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.PixelFormat); err != nil {
+		err = errors.New("unable to decode pixel format")
+		return
+	}
 
 	// success!
 	//	go func() {
@@ -171,12 +210,9 @@ func (v *vncVMPlayback) Dial() error {
 	//		}
 	//	}()
 	buf = []byte{0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0, 2, 0, 0, 11, 0, 0, 0, 1, 0, 0, 0, 7, 255, 255, 254, 252, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 0, 255, 255, 255, 33, 255, 255, 255, 17, 255, 255, 255, 230, 255, 255, 255, 9, 255, 255, 255, 32, 3, 0, 0, 0, 0, 0, 3, 32, 2, 88}
-	_, err = v.conn.Write(buf)
-	if err != nil {
-		return err
-	}
+	_, err = conn.Write(buf)
 
-	return nil
+	return
 }
 
 func (v *vncVMPlayback) Stop() {
@@ -371,7 +407,7 @@ func cliVNC(c cliCommand) cliResponse {
 			vmp.Name = vmName
 			vmp.ID = vmID
 			vmp.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
-			err = vmp.Dial()
+			vmp.conn, _, err = vncDial(vmp.Rhost)
 			if err != nil {
 				vmp.conn.Close()
 				return cliResponse{
