@@ -153,10 +153,11 @@ var vmSearchFn = map[string]func(*vmInfo, string) bool{
 }
 
 var vmConfigFns = map[string]struct {
-	Update   func(string) error
-	Clear    func()
-	Print    func() string
-	MultiArg bool // Whether this field expects multiple args or not
+	Update     func(string) error
+	UpdateBool func(bool) error
+	Clear      func()
+	Print      func() string
+	MultiArg   bool // Whether this field expects multiple args or not
 }{
 	"append": {
 		Update: func(v string) error {
@@ -224,6 +225,14 @@ var vmConfigFns = map[string]struct {
 		Clear:    func() { info.QemuAppend = []string{} },
 		Print:    func() string { return fmt.Sprintf("%v", info.QemuAppend) },
 		MultiArg: true,
+	},
+	"snapshot": {
+		UpdateBool: func(v bool) error {
+			info.Snapshot = v
+			return nil
+		},
+		Clear: func() { info.Snapshot = true },
+		Print: func() string { return fmt.Sprintf("%v", info.Snapshot) },
 	},
 	"uuid": {
 		Update: func(v string) error {

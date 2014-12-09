@@ -448,7 +448,9 @@ allows a single disk image to be used for many VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmConfigField(c, "snapshot")
+		},
 	},
 	{ // vm config initrd
 		HelpShort: "set a initrd image to attach to a VM",
@@ -559,7 +561,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 	}
 
 	// If there are no args it means that we want to display the current value
-	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 {
+	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
 		resp.Response = fns.Print()
 		return minicli.Responses{resp}
 	}
@@ -585,6 +587,10 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 				}
 			}
 		}
+	} else if len(c.BoolArgs) == 1 && !fns.MultiArg {
+		// Special case, look for key "true" (there should only be two options,
+		// "true" or "false" and, therefore, not "true" implies "false").
+		fns.UpdateBool(c.BoolArgs["true"])
 	} else {
 		// This should never happen unless we messed something up in the code
 		resp.Error = "unexpected... someone goofed on the patterns"
