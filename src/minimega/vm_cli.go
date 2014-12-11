@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"minicli"
-
+	log "minilog"
+	"ranges"
+	"strconv"
 	"strings"
 )
 
@@ -110,7 +113,7 @@ vm_info.`,
 			"vm launch name <namespec> [noblock,]",
 			"vm launch count <count> [noblock,]",
 		},
-		Call: nil, // TODO
+		Call: cliVmLaunch,
 	},
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
@@ -131,9 +134,9 @@ Calling vm_start specifically on a quit VM will restart the VM. If the
 'quit=true' argument is passed when using vm_start with no specific VM, all VMs
 in the quit state will also be restarted.`,
 		Patterns: []string{
-			"vm start <vm id or name or *>",
+			"vm start <vm id or name or *> [quit,]",
 		},
-		Call: nil, // TODO
+		Call: cliVmStart,
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -604,6 +607,87 @@ func cliClearVmConfig(c *minicli.Command) minicli.Responses {
 
 	if !cleared {
 		panic("no callback defined for clear")
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmLaunch(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	vmNames := []string{}
+
+	if namespec, ok := c.StringArgs["namespec"]; ok {
+		index := strings.IndexRune(namespec, '[')
+		if index == -1 {
+			vmNames = append(vmNames, namespec)
+		} else {
+			r, err := ranges.NewRange(namespec[:index], 0, int(math.MaxInt32))
+			if err != nil {
+				panic(err)
+			}
+
+			names, err := r.SplitRange(namespec)
+			if err != nil {
+				resp.Error = err.Error()
+				return minicli.Responses{resp}
+			}
+			vmNames = append(vmNames, names...)
+		}
+	} else if countStr, ok := c.StringArgs["count"]; ok {
+		count, err := strconv.ParseUint(countStr, 10, 32)
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		for i := uint64(0); i < count; i++ {
+			vmNames = append(vmNames, "")
+		}
+	}
+
+	if len(vmNames) == 0 {
+		resp.Error = "No VMs to launch"
+		return minicli.Responses{resp}
+	}
+
+	log.Info("launching %v vms", len(vmNames))
+
+	ack := make(chan int)
+	waitForAcks := func(count int) {
+		// get acknowledgements from each vm
+		for i := 0; i < count; i++ {
+			log.Debug("launch ack from VM %v", <-ack)
+		}
+	}
+
+	numVMs := len(vmNames)
+	for _, vmName := range vmNames {
+		if err := vms.launch(vmName, ack); err != nil {
+			resp.Error += fmt.Sprintln(err)
+			numVMs -= 1
+		}
+	}
+
+	resp.Response = fmt.Sprintf("launching %d vms", numVMs)
+
+	if c.BoolArgs["noblock"] {
+		go waitForAcks(numVMs)
+	} else {
+		waitForAcks(numVMs)
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmStart(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := c.StringArgs["vm"]
+	quit := c.BoolArgs["quit"]
+
+	for _, err := range vms.start(vm, quit) {
+		resp.Error += fmt.Sprintln(err)
 	}
 
 	return minicli.Responses{resp}

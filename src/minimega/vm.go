@@ -34,7 +34,7 @@ var (
 )
 
 const (
-	VM_BUILDING = iota
+	VM_BUILDING = 1 << iota
 	VM_RUNNING
 	VM_PAUSED
 	VM_QUIT
@@ -632,98 +632,49 @@ func cliVMSnapshot(c cliCommand) cliResponse {
 }
 
 // start vms that are paused or building, or restart vms in the quit state
-func (l *vmList) start(c cliCommand) cliResponse {
-	errors := ""
-	switch len(c.Args) {
-	case 0:
-		// start all paused vms
-		count := 0
-		errAck := make(chan error)
-		for _, i := range l.vms {
-			// only bulk start paused/building VMs
-			if i.State == VM_PAUSED || i.State == VM_BUILDING {
-				count++
-				go func(v *vmInfo) {
-					err := v.start()
-					errAck <- err
-				}(i)
-			}
-		}
-		// get all of the acks
-		for j := 0; j < count; j++ {
-			err := <-errAck
-			if err != nil {
-				errors += fmt.Sprintln(err)
-			}
-		}
-	case 1:
-		if c.Args[0] == "quit=true" {
-			// start all paused or quit vms
-			count := 0
-			errAck := make(chan error)
-			for _, i := range l.vms {
-				if i.State == VM_QUIT || i.State == VM_PAUSED || i.State == VM_BUILDING {
-					count++
-					go func(v *vmInfo) {
-						err := v.start()
-						errAck <- err
-					}(i)
-				}
-			}
-			// get all of the acks
-			for j := 0; j < count; j++ {
-				err := <-errAck
-				if err != nil {
-					errors += fmt.Sprintln(err)
-				}
-			}
-		} else {
-			id, err := strconv.Atoi(c.Args[0])
-			if err != nil {
-				id = l.findByName(c.Args[0])
-			}
-
-			if vm, ok := l.vms[id]; ok {
-				err := vm.start()
-				if err != nil {
-					errors += fmt.Sprintln(err)
-				}
-			} else {
-				return cliResponse{
-					Error: fmt.Sprintf("VM %v not found", c.Args[0]),
-				}
-			}
-		}
-	case 2:
-		if c.Args[0] != "quit=true" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		id, err := strconv.Atoi(c.Args[1])
+func (l *vmList) start(vm string, quit bool) []error {
+	if vm != "*" {
+		id, err := strconv.Atoi(vm)
 		if err != nil {
-			id = l.findByName(c.Args[1])
+			id = l.findByName(vm)
 		}
 
 		if vm, ok := l.vms[id]; ok {
-			err := vm.start()
-			if err != nil {
-				errors += fmt.Sprintln(err)
-			}
-		} else {
-			return cliResponse{
-				Error: fmt.Sprintf("VM %v not found", c.Args[1]),
-			}
+			return []error{vm.start()}
 		}
-	default:
-		return cliResponse{
-			Error: "malformed command",
+		return []error{fmt.Errorf("vm %v not found", vm)}
+	}
+
+	stateMask := VM_PAUSED + VM_BUILDING
+	if quit {
+		stateMask += VM_QUIT
+	}
+
+	// start all paused vms
+	count := 0
+	errAck := make(chan error)
+
+	for _, i := range l.vms {
+		// only bulk start VMs matching our state mask
+		if i.State&stateMask != 0 {
+			count++
+			go func(v *vmInfo) {
+				err := v.start()
+				errAck <- err
+			}(i)
 		}
 	}
-	return cliResponse{
-		Error: errors,
+
+	errors := []error{}
+
+	// get all of the acks
+	for j := 0; j < count; j++ {
+		if err := <-errAck; err != nil {
+			errors = append(errors, err)
+		}
 	}
+
+	return errors
 }
 
 func (vm *vmInfo) start() error {
@@ -884,74 +835,31 @@ func (l *vmList) cliKill(c cliCommand) cliResponse {
 // launch one or more vms. this will copy the info struct, one per vm
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
-func (l *vmList) launch(c cliCommand) cliResponse {
-	if len(c.Args) != 1 && len(c.Args) != 2 {
-		return cliResponse{
-			Error: fmt.Sprintf("vm_launch malformed command: %v", c.Args),
-		}
-	}
-
-	block := true
-	if len(c.Args) == 2 {
-		if c.Args[1] != "noblock" {
-			return cliResponse{
-				Error: fmt.Sprintf("vm_launch malformed command: %v", c.Args),
-			}
-		}
-		block = false
-	}
-
-	// if the argument is a number, then launch that many VMs
-	// if it's a string, launch one with that name
-	var name string
-	numVms, err := strconv.Atoi(c.Args[0])
-	if err != nil {
-		numVms = 1
-		name = c.Args[0]
-
-		// Make sure that there isn't another VM with the same name
+func (l *vmList) launch(name string, ack chan int) error {
+	// Make sure that there isn't another VM with the same name
+	if name != "" {
 		for _, vm := range l.vms {
 			if vm.Name == name {
-				return cliResponse{
-					Error: fmt.Sprintf("vm_launch duplicate VM name: %s", name),
-				}
+				return fmt.Errorf("vm_launch duplicate VM name: %s", name)
 			}
 		}
 	}
 
-	ack := make(chan int)
-
-	// we have some configuration from the cli (right?), all we need
-	// to do here is fire off the vms in goroutines, passing the
-	// configuration in by value, as it may change for the next run.
-	log.Info("launching %v vms, name %v", numVms, name)
-	for i := 0; i < numVms; i++ {
-		vm := info.Copy() // returns reference to deep-copy of info
-		vm.Id = <-vmIdChan
-		vm.Name = name
-		vm.Kill = make(chan bool)
-		vm.Hotplug = make(map[int]string)
-		vm.State = VM_BUILDING
-		vmLock.Lock()
-		l.vms[vm.Id] = vm
-		vmLock.Unlock()
-		go vm.launchOne(ack)
+	vm := info.Copy() // returns reference to deep-copy of info
+	vm.Id = <-vmIdChan
+	vm.Name = name
+	if vm.Name == "" {
+		vm.Name = fmt.Sprintf("vm-%d", vm.Id)
 	}
+	vm.Kill = make(chan bool)
+	vm.Hotplug = make(map[int]string)
+	vm.State = VM_BUILDING
+	vmLock.Lock()
+	l.vms[vm.Id] = vm
+	vmLock.Unlock()
+	go vm.launchOne(ack)
 
-	// get acknowledgements from each vm
-	if !block {
-		go func() {
-			for i := 0; i < numVms; i++ {
-				log.Debug("launch ack from VM %v", <-ack)
-			}
-		}()
-	} else {
-		for i := 0; i < numVms; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
-		}
-	}
-
-	return cliResponse{}
+	return nil
 }
 
 func (info *vmInfo) Copy() *vmInfo {

@@ -279,31 +279,6 @@ the file in manually.`,
 			},
 		},
 
-		"vm_launch": &command{
-			Call: func(c cliCommand) cliResponse {
-				return vms.launch(c)
-			},
-			Helpshort: "launch virtual machines in a paused state",
-			Helplong: `
-	Usage: vm_launch <number of vms or vm name> [noblock]
-
-Launch virtual machines in a paused state, using the parameters defined
-leading up to the launch command. Any changes to the VM parameters after
-launching will have no effect on launched VMs.
-
-If you supply a name instead of a number of VMs, one VM with that name
-will be launched.
-
-The optional 'noblock' suffix forces minimega to return control of the
-command line immediately instead of waiting on potential errors from
-launching the VM(s). The user must check logs or error states from
-vm_info.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"vm_kill": &command{
 			Call: func(c cliCommand) cliResponse {
 				return vms.cliKill(c)
@@ -313,26 +288,6 @@ vm_info.`,
 	Usage: vm_kill <vm id or name>
 
 Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"vm_start": &command{
-			Call: func(c cliCommand) cliResponse {
-				return vms.start(c)
-			},
-			Helpshort: "start paused virtual machines",
-			Helplong: `
-	Usage: vm_start [quit=true] [VM ID, name]
-
-Start all or one paused virtual machine. To start all paused virtual machines,
-call start without the optional VM ID or name.
-
-Calling vm_start specifically on a quit VM will restart the VM. If the
-'quit=true' argument is passed when using vm_start with no specific VM, all VMs
-in the quit state will also be restarted.`,
 			Record: true,
 			Clear: func() error {
 				return nil
