@@ -243,6 +243,7 @@ func (r Responses) String() string {
 				fmt.Fprintf(w, "\n")
 			}
 		}
+		w.Flush()
 	} else {
 		for i := range r {
 			if r[i].Error == "" {
