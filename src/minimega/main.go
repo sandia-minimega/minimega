@@ -42,10 +42,11 @@ var (
 	f_doc        = flag.Bool("doc", false, "print the minimega api, in markdown, to stdout and exit")
 	vms          vmList
 	panicOnQuit  bool
+	hostname     string
 )
 
-var banner string = `minimega, Copyright (2014) Sandia Corporation. 
-Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+var banner string = `minimega, Copyright (2014) Sandia Corporation.
+Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 `
 
@@ -56,6 +57,8 @@ func usage() {
 }
 
 func main() {
+	var err error
+
 	flag.Usage = usage
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
@@ -83,6 +86,11 @@ func main() {
 	}
 
 	logSetup()
+
+	hostname, err = os.Hostname()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	vms.vms = make(map[int]*vmInfo)
 
