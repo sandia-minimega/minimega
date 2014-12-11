@@ -3,8 +3,7 @@ package main
 import (
 	"fmt"
 	"minicli"
-	log "minilog"
-	"os"
+
 	"strings"
 )
 
@@ -507,13 +506,8 @@ func init() {
 }
 
 func cliVmInfo(c *minicli.Command) minicli.Responses {
-	// TODO: Shouldn't this be a global variable set during init?
-	host, err := os.Hostname()
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-	resp := &minicli.Response{Host: host, Header: make([]string, 0)}
+	var err error
+	resp := &minicli.Response{Host: hostname}
 
 	search := c.StringArgs["search"]
 	mask := c.StringArgs["mask"]
@@ -548,20 +542,10 @@ func cliVmInfo(c *minicli.Command) minicli.Responses {
 }
 
 func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
-	// TODO: Shouldn't this be a global variable set during init?
-	host, err := os.Hostname()
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-	resp := &minicli.Response{Host: host}
+	var err error
+	resp := &minicli.Response{Host: hostname}
 
-	fns, ok := vmConfigFns[field]
-	if !ok {
-		// This should never happen unless we messed something up in the code
-		resp.Error = "unexpected... someone goofed on the field names"
-		return minicli.Responses{resp}
-	}
+	fns := vmConfigFns[field]
 
 	// If there are no args it means that we want to display the current value
 	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
@@ -585,8 +569,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 
 		for _, args := range c.ListArgs {
 			for _, arg := range args {
-				err = fns.Update(arg)
-				if err != nil {
+				if err = fns.Update(arg); err != nil {
 					break
 				}
 			}
@@ -596,8 +579,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 		// "true" or "false" and, therefore, not "true" implies "false").
 		err = fns.UpdateBool(c.BoolArgs["true"])
 	} else {
-		// This should never happen unless we messed something up in the code
-		resp.Error = "unexpected... someone goofed on the patterns"
+		panic("someone goofed on the patterns")
 	}
 
 	if err != nil {
@@ -608,13 +590,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 }
 
 func cliClearVmConfig(c *minicli.Command) minicli.Responses {
-	// TODO: Shouldn't this be a global variable set during init?
-	host, err := os.Hostname()
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-	resp := &minicli.Response{Host: host}
+	resp := &minicli.Response{Host: hostname}
 
 	var clearAll = len(c.BoolArgs) == 0
 	var cleared bool
@@ -627,8 +603,7 @@ func cliClearVmConfig(c *minicli.Command) minicli.Responses {
 	}
 
 	if !cleared {
-		// This should never happen unless we messed something up in the code
-		resp.Error = "unexpected... no callback defined for clear"
+		panic("no callback defined for clear")
 	}
 
 	return minicli.Responses{resp}

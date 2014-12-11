@@ -245,7 +245,7 @@ var vmConfigFns = map[string]struct {
 				return delVMQemuOverride(c.StringArgs["id"])
 			}
 
-			return errors.New("unexpected... someone goofed the qemu-override patterns")
+			panic("someone goofed the qemu-override patterns")
 		},
 		Clear: func() { QemuOverrides = make(map[int]*qemuOverride) },
 		Print: func() string {
