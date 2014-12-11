@@ -71,7 +71,7 @@ type vncServerInit struct {
 type vncPixelFormat struct {
 	BitsPerPixel, Depth, BigEndianFlag, TrueColorFlag uint8
 	RedMax, GreenMax, BlueMax                         uint16
-	RedShift, GreenShift, BlueShift                   uint16
+	RedShift, GreenShift, BlueShift                   uint8
 	Padding                                           [3]byte
 }
 
