@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
@@ -277,41 +278,56 @@ func (v *vncFBRecord) Run() {
 	defer v.file.Close()
 
 	// Only accept raw encoding
-	n, err := v.conn.Write([]byte{0x02, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00})
+	n, err := v.conn.Write([]byte{0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x21})
 	if err != nil {
 		log.Debug("vnc handshake failed: %v", err)
 		return
-	} else if n != 8 {
+	} else if n != 12 {
 		log.Debug("vnc handshake failed: couldn't write bytes")
 		return
 	}
 
-	//	pixelFormat := vncPixelFormat{
-	//		BitsPerPixel:  8,
-	//		Depth:         8,
-	//		BigEndianFlag: 1,
-	//		TrueColorFlag: 1,
-	//		RedMax:        256,
-	//		BlueMax:       256,
-	//		GreenMax:      256,
-	//	}
-	//
-	//	err = binary.Write(v.conn, binary.BigEndian, &pixelFormat)
-	//	if err != nil {
-	//		log.Debug("vnc set pixel format failed: %v", err)
-	//		return
-	//	}
+	go func() {
+		prev := time.Now()
+		buf := make([]byte, 4096)
+		writer := gzip.NewWriter(v.file)
+		defer writer.Close()
 
-	prev := time.Now()
+		for {
+			n, err := v.conn.Read(buf)
+			if err != nil {
+				log.Debug("vnc fb response read failed: %v", err)
+				break
+			}
+
+			if n > 0 {
+				offset := time.Now().Sub(prev).Nanoseconds()
+				header := fmt.Sprintf("%d %d\r\n", offset, n)
+
+				if _, err := io.WriteString(writer, header); err != nil {
+					log.Debug("vnc fb write chunk header failed: %v", err)
+					break
+				}
+				if _, err := writer.Write(buf[:n]); err != nil {
+					log.Debug("vnc fb write chunk failed: %v", err)
+					break
+				}
+				if _, err := io.WriteString(writer, "\r\n"); err != nil {
+					log.Debug("vnc fb write chunk tailer failed: %v", err)
+					break
+				}
+
+				prev = time.Now()
+
+				log.Debug("vnc fb wrote %d bytes", n)
+			}
+		}
+	}()
 
 	// fall into a loop issuing periodic fb update requests and dump to file
 	// check if we need to quit
 	for {
-		buf := []byte{0x03, 0x00, 0x00, 0x00, 0x00, 0x00}
-		buf = append(buf, byte((v.sInit.Width>>8)&0xff))
-		buf = append(buf, byte(v.sInit.Width&0xff))
-		buf = append(buf, byte((v.sInit.Height>>8)&0xff))
-		buf = append(buf, byte(v.sInit.Height&0xff))
+		buf := []byte{0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 
 		// Send fb update request
 		n, err := v.conn.Write(buf)
@@ -323,27 +339,7 @@ func (v *vncFBRecord) Run() {
 			return
 		}
 
-		v.conn.SetReadDeadline(time.Now().Add(5 * time.Second))
-
-		v.file.WriteString(fmt.Sprintf("%v ", time.Now().Sub(prev).Nanoseconds()))
-		encoder := base64.NewEncoder(base64.StdEncoding, v.file)
-		written, err := io.Copy(encoder, v.conn)
-		if err != nil {
-			e, ok := err.(net.Error)
-			if !ok || !e.Timeout() {
-				// Error is not a timeout, not good
-				log.Debug("vnc fb response read failed: %v", err)
-				return
-			}
-		}
-
-		log.Debug("wrote %d bytes for framebuffer update", written)
-		encoder.Close()
-		v.file.WriteString("\n")
-
-		prev = time.Now()
-
-		time.Sleep(time.Second)
+		time.Sleep(100 * time.Millisecond)
 	}
 }
 
