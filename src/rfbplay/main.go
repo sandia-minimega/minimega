@@ -2,22 +2,17 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
 	"image"
-	"image/draw"
-	"image/jpeg"
 	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
-	"net/textproto"
 	"os"
-	"time"
+	"strconv"
 )
 
 type Rectangle struct {
@@ -47,6 +42,10 @@ type vncPixelFormat struct {
 	Padding                                           [3]byte
 }
 
+var (
+	port = flag.Int("port", 7777, "port to listen for jobs on")
+)
+
 var pixelFormat = vncPixelFormat{
 	BitsPerPixel:  0x20,
 	Depth:         0x18,
@@ -60,12 +59,7 @@ var pixelFormat = vncPixelFormat{
 	BlueShift:     0x0,
 }
 
-func readFile(fname string) (chan *FramebufferUpdate, error) {
-	f, err := os.Open(fname)
-	if err != nil {
-		return nil, err
-	}
-
+func readFile(f http.File) (chan *FramebufferUpdate, error) {
 	gzipReader, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, err
@@ -169,90 +163,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	http.HandleFunc("/", handler)
-	http.ListenAndServe(":7777", nil)
-}
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	updateChan, _ := readFile(flag.Arg(0))
-	imageChan := make(chan image.Image, 10)
-
-	// gorountine to rebuild the images
-	go func() {
-		var X, Y int
-
-		prev := time.Now()
-		img := image.NewRGBA(image.Rect(0, 0, X, Y))
-
-		// for each jpeg image
-		for update := range updateChan {
-			// Check if the resolution has changed
-			last := update.Rectangles[len(update.Rectangles)-1]
-			if last.EncodingType == DesktopSize {
-				X = last.Rect.Max.X
-				Y = last.Rect.Max.Y
-			}
-
-			nimg := image.NewRGBA(image.Rect(0, 0, X, Y))
-
-			// Copy in the previous image
-			dr := image.Rectangle{img.Rect.Min, img.Rect.Max}
-			draw.Draw(nimg, dr, img, img.Rect.Min, draw.Src)
-
-			for _, r := range update.Rectangles {
-				dr := image.Rectangle{r.Rect.Min, r.Rect.Max}
-				//log.Printf("drawing in rectangle at %#v\n", dr)
-				draw.Draw(nimg, dr, r, r.Rect.Min, draw.Src)
-			}
-
-			offset := time.Now().Sub(prev).Nanoseconds()
-			prev = time.Now()
-
-			if offset < update.Offset {
-				// Sleep until the next image should be served
-				time.Sleep(time.Duration(update.Offset - offset))
-			} else {
-				//log.Println("warning: longer to replay images than record them")
-			}
-
-			imageChan <- nimg
-			img = nimg
-		}
-
-		close(imageChan)
-	}()
-
-	mh := make(textproto.MIMEHeader)
-	mh.Set("Content-Type", "image/jpeg")
-
-	m := multipart.NewWriter(w)
-
-	h := w.Header()
-	boundary := m.Boundary()
-	h.Set("Content-type", fmt.Sprintf("multipart/x-mixed-replace; boundary=%s", boundary))
-
-	// encode and send the image
-	var buf bytes.Buffer
-	for image := range imageChan {
-		buf.Reset()
-
-		//log.Printf("writing image: %v", image.Bounds())
-		err := jpeg.Encode(&buf, image, nil)
-		if err != nil {
-			log.Printf("unable to encode jpeg: %v", err)
-			break
-		}
-
-		mh.Set("Content-length", fmt.Sprintf("%d", buf.Len()))
-		fm, err := m.CreatePart(mh)
-		if err != nil {
-			log.Printf("unable to create multipart: %v", err)
-			return
-		}
-		_, err = io.Copy(fm, &buf)
-		if err != nil {
-			log.Printf("unable to write multipart: %v", err)
-			break
-		}
+	// Ensure that the first arg is an existent directory
+	if fi, err := os.Stat(flag.Arg(0)); err != nil || !fi.IsDir() {
+		fmt.Print("Invalid argument: must be an existent directory\n\n")
+		usage()
+		os.Exit(1)
 	}
+
+	addr := ":" + strconv.Itoa(*port)
+	log.Printf("serving recordings from %s on %s", flag.Arg(0), addr)
+
+	http.Handle("/", &playbackServer{http.Dir(flag.Arg(0))})
+	http.ListenAndServe(addr, nil)
 }
