@@ -800,31 +800,6 @@ Display the version.`,
 			},
 		},
 
-		"vm_config": &command{
-			Call:      cliVMConfig,
-			Helpshort: "display, save, or restore the current VM configuration",
-			Helplong: `
-	Usage: vm_config [save <name>, restore <name>]
-
-Display, save, or restore the current VM configuration.
-
-To display the current configuration, call vm_config with no arguments.
-
-List the current saved configurations with 'vm_config show'
-
-To save a configuration:
-
-	vm_config save <config name>
-
-To restore a configuration:
-
-	vm_config restore <config name>
-
-Calling clear vm_config will clear all VM configuration options, but will not
-remove saved configurations.`,
-			Record: true,
-		},
-
 		"debug": &command{
 			Call:      cliDebug,
 			Helpshort: "display internal debug information",

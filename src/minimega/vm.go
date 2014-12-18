@@ -493,54 +493,6 @@ func cliVMSave(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
-// vm_config
-// return a pretty printed list of the current configuration
-func cliVMConfig(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		config := info.configToString()
-
-		return cliResponse{
-			Response: config,
-		}
-	case 1: // must be 'show'
-		if c.Args[0] != "show" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		var r string
-		for k, _ := range savedInfo {
-			r += k + "\n"
-		}
-		return cliResponse{
-			Response: r,
-		}
-	case 2: // must be 'save' 'restore'
-		switch strings.ToLower(c.Args[0]) {
-		case "save":
-			savedInfo[c.Args[1]] = info.Copy()
-		case "restore":
-			if s, ok := savedInfo[c.Args[1]]; ok {
-				info = s.Copy()
-			} else {
-				return cliResponse{
-					Error: fmt.Sprintf("config %v does not exist", c.Args[1]),
-				}
-			}
-		default:
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
-	}
-	return cliResponse{}
-}
-
 func (vm *vmInfo) configToString() string {
 	// create output
 	var o bytes.Buffer

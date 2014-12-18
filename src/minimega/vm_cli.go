@@ -295,11 +295,11 @@ Calling clear vm_config will clear all VM configuration options, but will not
 remove saved configurations.`,
 		Patterns: []string{
 			"vm config",
-			"vm config save <name>",
-			"vm config restore <name>",
-			"vm config clone <vm id or name>",
+			"vm config <save,> <name>",
+			"vm config <restore,> [name]",
+			"vm config <clone,> <vm id or name>",
 		},
-		Call: nil, // TODO
+		Call: cliVmConfig,
 	},
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
@@ -551,6 +551,50 @@ func cliVmInfo(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 		resp.Header = nil
 		return minicli.Responses{resp}
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmConfig(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	if c.BoolArgs["save"] {
+		// Save the current config
+		savedInfo[c.StringArgs["name"]] = info.Copy()
+	} else if c.BoolArgs["restore"] {
+		if name, ok := c.StringArgs["name"]; ok {
+			// Try to restore an existing config
+			if s, ok := savedInfo[name]; ok {
+				info = s.Copy()
+			} else {
+				resp.Error = fmt.Sprintf("config %v does not exist", name)
+			}
+		} else if len(savedInfo) == 0 {
+			resp.Error = "no vm configs saved"
+		} else {
+			// List the save configs
+			for k := range savedInfo {
+				resp.Response += fmt.Sprintln(k)
+			}
+		}
+	} else if c.BoolArgs["clone"] {
+		// Clone the config of an existing vm
+		name := c.StringArgs["vm"]
+
+		id, err := strconv.Atoi(name)
+		if err != nil {
+			id = vms.findByName(name)
+		}
+
+		if vm, ok := vms.vms[id]; ok {
+			info = vm.Copy()
+		} else {
+			resp.Error = fmt.Sprintf("vm %v not found", name)
+		}
+	} else {
+		// Print the full config
+		resp.Response = info.configToString()
 	}
 
 	return minicli.Responses{resp}
