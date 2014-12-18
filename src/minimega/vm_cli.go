@@ -122,7 +122,11 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 		Patterns: []string{
 			"vm kill <vm id or name or *>",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmApply(c, func() []error {
+				return vms.kill(c.StringArgs["vm"])
+			})
+		},
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -136,7 +140,11 @@ in the quit state will also be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or *> [quit,]",
 		},
-		Call: cliVmStart,
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmApply(c, func() []error {
+				return vms.start(c.StringArgs["vm"], c.BoolArgs["quit"])
+			})
+		},
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -148,7 +156,11 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
 		Patterns: []string{
 			"vm stop <vm id or name or *>",
 		},
-		Call: nil, // TODO
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliVmApply(c, func() []error {
+				return vms.stop(c.StringArgs["vm"])
+			})
+		},
 	},
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
@@ -159,7 +171,7 @@ of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
 		},
-		Call: nil, // TODO
+		Call: cliVmFlush,
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -255,12 +267,12 @@ Issue a JSON-encoded QMP command. This is a convenience function for accessing
 the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
-	minimega$ vm_qmp 0 { "execute": "query-status" }
+	minimega$ vm_qmp 0 '{ "execute": "query-status" }'
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 		Patterns: []string{
-			"vm qmp <qmp command>",
+			"vm qmp <vm id or name> <qmp command>",
 		},
-		Call: nil, // TODO
+		Call: cliVmQmp,
 	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
@@ -680,14 +692,33 @@ func cliVmLaunch(c *minicli.Command) minicli.Responses {
 	return minicli.Responses{resp}
 }
 
-func cliVmStart(c *minicli.Command) minicli.Responses {
+func cliVmApply(c *minicli.Command, fn func() []error) minicli.Responses {
 	resp := &minicli.Response{Host: hostname}
 
-	vm := c.StringArgs["vm"]
-	quit := c.BoolArgs["quit"]
+	for _, err := range fn() {
+		if err != nil {
+			resp.Error += fmt.Sprintln(err)
+		}
+	}
 
-	for _, err := range vms.start(vm, quit) {
-		resp.Error += fmt.Sprintln(err)
+	return minicli.Responses{resp}
+}
+
+func cliVmFlush(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	vms.flush()
+
+	return minicli.Responses{resp}
+}
+
+func cliVmQmp(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	var err error
+	resp.Response, err = vms.qmp(c.StringArgs["vm"], c.StringArgs["qmp"])
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
 	return minicli.Responses{resp}

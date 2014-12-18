@@ -279,40 +279,6 @@ the file in manually.`,
 			},
 		},
 
-		"vm_kill": &command{
-			Call: func(c cliCommand) cliResponse {
-				return vms.cliKill(c)
-			},
-			Helpshort: "kill running virtual machines",
-			Helplong: `
-	Usage: vm_kill <vm id or name>
-
-Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"vm_stop": &command{
-			Call: func(c cliCommand) cliResponse {
-				return vms.stop(c)
-			},
-			Helpshort: "stop/pause virtual machines",
-			Helplong: `
-	Usage: vm_stop [VM ID, name]
-
-Stop all or one running virtual machine. To stop all running virtual machines,
-call stop without the optional VM ID or name.
-
-Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-
-			},
-		},
-
 		"vnc": &command{
 			Call:      cliVNC,
 			Helpshort: "record or playback VNC kbd/mouse input",
@@ -889,21 +855,6 @@ Display information about virtual bridges.`,
 			},
 		},
 
-		"vm_flush": &command{
-			Call:      cliVMFlush,
-			Helpshort: "discard information about quit or failed VMs",
-			Helplong: `
-	Usage: vm_flush
-
-Discard information about VMs that have either quit or encountered an error.
-This will remove any VMs with a state of "quit" or "error" from vm_info. Names
-of VMs that have been flushed may be reused.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"file": &command{
 			Call:      cliFile,
 			Helpshort: "work with files served by minimega",
@@ -1180,24 +1131,6 @@ Undefine macros by name.`,
 	Usage: echo [<string>]
 
 Return the command after macro expansion and comment removal.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"vm_qmp": &command{
-			Call:      cliVMQMP,
-			Helpshort: "issue a JSON-encoded QMP command",
-			Helplong: `
-	Usage: vm_qmp <JSON qmp command>
-
-Issue a JSON-encoded QMP command. This is a convenience function for accessing
-the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
-name, and a JSON string, and returns the JSON encoded response. For example:
-
-	minimega$ vm_qmp 0 { "execute": "query-status" }
-	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 			Record: true,
 			Clear: func() error {
 				return nil

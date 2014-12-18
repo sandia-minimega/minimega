@@ -365,36 +365,17 @@ func (vms *vmSorter) Less(i, j int) bool {
 	}
 }
 
-func cliVMQMP(c cliCommand) cliResponse {
-	if len(c.Args) < 2 {
-		return cliResponse{
-			Error: "vm_qmp takes 2 arguments",
-		}
-	}
-
-	id, err := strconv.Atoi(c.Args[0])
+func (l *vmList) qmp(vm, qmp string) (string, error) {
+	id, err := strconv.Atoi(vm)
 	if err != nil {
-		id = vms.findByName(c.Args[0])
+		id = l.findByName(vm)
 	}
 
-	var ret string
-	if vm, ok := vms.vms[id]; ok {
-		input := strings.Join(c.Args[1:], " ")
-		ret, err = vm.QMPRaw(input)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-	} else {
-		return cliResponse{
-			Error: fmt.Sprintf("VM %v not found", c.Args[0]),
-		}
+	if vm, ok := l.vms[id]; ok {
+		return vm.QMPRaw(qmp)
 	}
 
-	return cliResponse{
-		Response: ret,
-	}
+	return "", fmt.Errorf("vm %v not found", vm)
 }
 
 func (vm *vmInfo) QMPRaw(input string) (string, error) {
@@ -631,18 +612,26 @@ func cliVMSnapshot(c cliCommand) cliResponse {
 	return cliResponse{}
 }
 
+// apply applies the provided function to the vm in vmList whose name or ID
+// matches the provided vm parameter.
+func (l *vmList) apply(vm string, fn func(*vmInfo) error) error {
+	id, err := strconv.Atoi(vm)
+	if err != nil {
+		id = l.findByName(vm)
+	}
+
+	if vm, ok := l.vms[id]; ok {
+		return fn(vm)
+	}
+
+	return fmt.Errorf("vm %v not found", vm)
+}
+
 // start vms that are paused or building, or restart vms in the quit state
 func (l *vmList) start(vm string, quit bool) []error {
 	if vm != "*" {
-		id, err := strconv.Atoi(vm)
-		if err != nil {
-			id = l.findByName(vm)
-		}
-
-		if vm, ok := l.vms[id]; ok {
-			return []error{vm.start()}
-		}
-		return []error{fmt.Errorf("vm %v not found", vm)}
+		err := l.apply(vm, func(vm *vmInfo) error { return vm.start() })
+		return []error{err}
 	}
 
 	stateMask := VM_PAUSED + VM_BUILDING
@@ -700,39 +689,21 @@ func (vm *vmInfo) start() error {
 }
 
 // stop vms that are paused or building
-func (l *vmList) stop(c cliCommand) cliResponse {
-	errors := ""
-	if len(c.Args) == 0 { // start all paused vms
-		for _, i := range l.vms {
-			err := i.stop()
-			if err != nil {
-				errors += fmt.Sprintln(err)
-			}
-		}
-	} else if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "vm_stop takes zero or one argument",
-		}
-	} else {
-		id, err := strconv.Atoi(c.Args[0])
-		if err != nil {
-			id = l.findByName(c.Args[0])
-		}
+func (l *vmList) stop(vm string) []error {
+	if vm != "*" {
+		err := l.apply(vm, func(vm *vmInfo) error { return vm.stop() })
+		return []error{err}
+	}
 
-		if vm, ok := l.vms[id]; ok {
-			err := vm.stop()
-			if err != nil {
-				errors += fmt.Sprintln(err)
-			}
-		} else {
-			return cliResponse{
-				Error: fmt.Sprintf("VM %v not found", c.Args[0]),
-			}
+	errors := []error{}
+	for _, i := range l.vms {
+		err := i.stop()
+		if err != nil {
+			errors = append(errors, err)
 		}
 	}
-	return cliResponse{
-		Error: errors,
-	}
+
+	return errors
 }
 
 func (vm *vmInfo) stop() error {
@@ -772,64 +743,58 @@ func (l *vmList) findRunningByName(name string) int {
 }
 
 // kill one or all vms (-1 for all)
-func (l *vmList) kill(name string) error {
-	// if the argument is a number, then kill that vm (or all vms on -1)
-	// if it's a string, kill the one with that name
-	id, err := strconv.Atoi(name)
-	if err != nil {
-		id = l.findRunningByName(name)
+func (l *vmList) kill(vm string) []error {
+	if vm != "*" {
+		err := l.apply(vm, func(vm *vmInfo) error {
+			if vm.State != VM_RUNNING {
+				return fmt.Errorf("vm %v is not running", vm.Name)
+			}
+
+			vm.Kill <- true
+			log.Info("VM %v killed", <-killAck)
+			return nil
+		})
+
+		return []error{err}
 	}
 
-	if id == VM_NOT_FOUND {
-		return errors.New(fmt.Sprintf("VM %v not found", name))
-	} else if id == -1 {
-		killCount := 0
-		timedOut := 0
-		for _, i := range l.vms {
-			s := i.getState()
-			if s != VM_QUIT && s != VM_ERROR {
-				i.Kill <- true
-				killCount++
-			}
-		}
-		for i := 0; i < killCount; i++ {
-			select {
-			case id := <-killAck:
-				log.Info("VM %v killed", id)
-			case <-time.After(COMMAND_TIMEOUT * time.Second):
-				log.Error("vm kill timeout")
-				timedOut++
-			}
-		}
-		if timedOut != 0 {
-			return errors.New(fmt.Sprintf("%v killed VMs failed to acknowledge kill", timedOut))
-		}
-	} else {
-		if vm, ok := l.vms[id]; ok {
-			if vm.State != VM_QUIT && vm.State != VM_ERROR {
-				vm.Kill <- true
-				log.Info("VM %v killed", <-killAck)
-			}
-		} else {
-			return errors.New(fmt.Sprintf("invalid VM id: %v", id))
+	killCount := 0
+	timedOut := 0
+
+	for _, i := range l.vms {
+		s := i.getState()
+		if s != VM_QUIT && s != VM_ERROR {
+			i.Kill <- true
+			killCount++
 		}
 	}
+
+	// TODO: This isn't quite right... we will wait for killCount *
+	// COMMAND_TIMEOUT seconds rather than COMMAND_TIMEOUT seconds.
+	for i := 0; i < killCount; i++ {
+		select {
+		case id := <-killAck:
+			log.Info("VM %v killed", id)
+		case <-time.After(COMMAND_TIMEOUT * time.Second):
+			log.Error("vm kill timeout")
+			timedOut++
+		}
+	}
+
+	if timedOut != 0 {
+		return []error{fmt.Errorf("%v killed VMs failed to acknowledge kill", timedOut)}
+	}
+
 	return nil
 }
 
-func (l *vmList) cliKill(c cliCommand) cliResponse {
-	if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "vm_kill takes one argument",
+func (l *vmList) flush() {
+	for i, vm := range vms.vms {
+		if vm.State == VM_QUIT || vm.State == VM_ERROR {
+			log.Infoln("deleting VM: ", i)
+			delete(vms.vms, i)
 		}
 	}
-	err := l.kill(c.Args[0])
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-	return cliResponse{}
 }
 
 // launch one or more vms. this will copy the info struct, one per vm
@@ -1716,16 +1681,6 @@ func processVMNet(lan string) error {
 	info.macs = append(info.macs, strings.ToLower(m))
 
 	return nil
-}
-
-func cliVMFlush(c cliCommand) cliResponse {
-	for i, vm := range vms.vms {
-		if vm.State == VM_QUIT || vm.State == VM_ERROR {
-			log.Infoln("deleting VM: ", i)
-			delete(vms.vms, i)
-		}
-	}
-	return cliResponse{}
 }
 
 func cliVMHotplug(c cliCommand) cliResponse {
