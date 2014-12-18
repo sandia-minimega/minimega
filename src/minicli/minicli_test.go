@@ -30,6 +30,8 @@ var validTestPatterns = []struct {
 	{"ping6 <host hostname>", []string{"ping6 minimega.org"}},
 	// Required multiple choice
 	{"ip <addr,link>", []string{"ip addr", "ip link"}},
+	// Required multiple choice followed by required string
+	{"ip <addr,link> <command>...", []string{"ip addr add foo"}},
 	// Optional multiple choice (we couldn't think of a real command
 	{"foo [bar,zap]", []string{"foo", "foo bar", "foo zap"}},
 	// Subcommand, must come last

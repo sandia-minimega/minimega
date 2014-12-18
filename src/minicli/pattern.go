@@ -132,8 +132,11 @@ func (l *patternLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				item := patternItem{Type: literalString, Text: content}
-				l.items = append(l.items, item)
+				if len(content) > 0 {
+					item := patternItem{Type: literalString, Text: content}
+					l.items = append(l.items, item)
+				}
+
 				return l.lexOutside, nil
 			}
 
