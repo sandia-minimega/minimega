@@ -13,7 +13,6 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"qmp"
 	"sort"
 	"strconv"
@@ -154,88 +153,116 @@ var vmSearchFn = map[string]func(*vmInfo, string) bool{
 	},
 }
 
+// TODO: This has become a mess... there must be a better way. Perhaps we can
+// add an Update, UpdateBool, ... method to the vmInfo struct and then have the
+// logic in there to handle the different config types.
 var vmConfigFns = map[string]struct {
-	Update        func(string) error
-	UpdateBool    func(bool) error
+	Update        func(*vmInfo, string) error
+	UpdateBool    func(*vmInfo, bool) error
 	UpdateCommand func(*minicli.Command) error
-	Clear         func()
-	Print         func() string
+	Clear         func(*vmInfo)
+	Print         func(*vmInfo) string
+	PrintCLI      func(*vmInfo) string // If not specified, Print is used
 }{
 	"append": {
-		Update: func(v string) error {
-			info.Append += v + " "
+		Update: func(vm *vmInfo, v string) error {
+			vm.Append += v + " "
 			return nil
 		},
-		Clear: func() { info.Append = "" },
-		Print: func() string { return info.Append },
+		Clear: func(vm *vmInfo) { vm.Append = "" },
+		Print: func(vm *vmInfo) string { return vm.Append },
 	},
 	"cdrom": {
-		Update: func(v string) error {
-			info.CdromPath = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.CdromPath = v
 			return nil
 		},
-		Clear: func() { info.CdromPath = "" },
-		Print: func() string { return info.CdromPath },
+		Clear: func(vm *vmInfo) { vm.CdromPath = "" },
+		Print: func(vm *vmInfo) string { return vm.CdromPath },
 	},
 	"disk": {
-		Update: func(v string) error {
-			info.DiskPaths = append(info.DiskPaths, v)
+		Update: func(vm *vmInfo, v string) error {
+			vm.DiskPaths = append(vm.DiskPaths, v)
 			return nil
 		},
-		Clear: func() { info.DiskPaths = []string{} },
-		Print: func() string { return fmt.Sprintf("%v", info.DiskPaths) },
+		Clear: func(vm *vmInfo) { vm.DiskPaths = []string{} },
+		Print: func(vm *vmInfo) string { return fmt.Sprintf("%v", vm.DiskPaths) },
+		PrintCLI: func(vm *vmInfo) string {
+			if len(vm.DiskPaths) == 0 {
+				return ""
+			}
+			return "vm config disk " + strings.Join(vm.DiskPaths, " ")
+		},
 	},
 	"initrd": {
-		Update: func(v string) error {
-			info.InitrdPath = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.InitrdPath = v
 			return nil
 		},
-		Clear: func() { info.InitrdPath = "" },
-		Print: func() string { return info.InitrdPath },
+		Clear: func(vm *vmInfo) { vm.InitrdPath = "" },
+		Print: func(vm *vmInfo) string { return vm.InitrdPath },
 	},
 	"kernel": {
-		Update: func(v string) error {
-			info.KernelPath = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.KernelPath = v
 			return nil
 		},
-		Clear: func() { info.KernelPath = "" },
-		Print: func() string { return info.KernelPath },
+		Clear: func(vm *vmInfo) { vm.KernelPath = "" },
+		Print: func(vm *vmInfo) string { return vm.KernelPath },
 	},
 	"memory": {
-		Update: func(v string) error {
-			info.Memory = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.Memory = v
 			return nil
 		},
-		Clear: func() { info.Memory = VM_MEMORY_DEFAULT },
-		Print: func() string { return info.Memory },
+		Clear: func(vm *vmInfo) { vm.Memory = VM_MEMORY_DEFAULT },
+		Print: func(vm *vmInfo) string { return vm.Memory },
 	},
 	"net": {
 		Update: processVMNet,
-		Clear: func() {
-			info.Networks = []int{}
-			info.bridges = []string{}
-			info.macs = []string{}
-			info.netDrivers = []string{}
+		Clear: func(vm *vmInfo) {
+			vm.Networks = []int{}
+			vm.bridges = []string{}
+			vm.macs = []string{}
+			vm.netDrivers = []string{}
 		},
-		Print: func() string {
-			return info.networkString()
+		Print: func(vm *vmInfo) string {
+			return vm.networkString()
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			if len(vm.Networks) == 0 {
+				return ""
+			}
+
+			nics := []string{}
+			for i, vlan := range vm.Networks {
+				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+				nics = append(nics, nic)
+			}
+			return "vm config net " + strings.Join(nics, " ")
 		},
 	},
 	"qemu": { // TODO
-		Update: func(v string) error {
+		Update: func(vm *vmInfo, v string) error {
 			externalProcesses["qemu"] = v
 			return nil
 		},
-		Clear: func() { externalProcesses["qemu"] = "kvm" },
-		Print: func() string { return process("qemu") },
+		Clear: func(vm *vmInfo) { externalProcesses["qemu"] = "kvm" },
+		Print: func(vm *vmInfo) string { return process("qemu") },
 	},
 	"qemu-append": { // TODO
-		Update: func(v string) error {
-			info.QemuAppend = append(info.QemuAppend, fieldsQuoteEscape(`"`, v)...)
+		Update: func(vm *vmInfo, v string) error {
+			vm.QemuAppend = append(vm.QemuAppend, fieldsQuoteEscape(`"`, v)...)
 			return nil
 		},
-		Clear: func() { info.QemuAppend = []string{} },
-		Print: func() string { return fmt.Sprintf("%v", info.QemuAppend) },
+		Clear: func(vm *vmInfo) { vm.QemuAppend = []string{} },
+		Print: func(vm *vmInfo) string { return fmt.Sprintf("%v", vm.QemuAppend) },
+		PrintCLI: func(vm *vmInfo) string {
+			if len(vm.QemuAppend) == 0 {
+				return ""
+			}
+			return "vm config qemu-append " + strings.Join(vm.QemuAppend, " ")
+		},
 	},
 	"qemu-override": {
 		UpdateCommand: func(c *minicli.Command) error {
@@ -247,34 +274,42 @@ var vmConfigFns = map[string]struct {
 
 			panic("someone goofed the qemu-override patterns")
 		},
-		Clear: func() { QemuOverrides = make(map[int]*qemuOverride) },
-		Print: func() string {
+		Clear: func(vm *vmInfo) { QemuOverrides = make(map[int]*qemuOverride) },
+		Print: func(vm *vmInfo) string {
 			return qemuOverrideString()
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			overrides := []string{}
+			for _, q := range QemuOverrides {
+				override := fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl)
+				overrides = append(overrides, override)
+			}
+			return strings.Join(overrides, "\n")
 		},
 	},
 	"snapshot": {
-		UpdateBool: func(v bool) error {
-			info.Snapshot = v
+		UpdateBool: func(vm *vmInfo, v bool) error {
+			vm.Snapshot = v
 			return nil
 		},
-		Clear: func() { info.Snapshot = true },
-		Print: func() string { return fmt.Sprintf("%v", info.Snapshot) },
+		Clear: func(vm *vmInfo) { vm.Snapshot = true },
+		Print: func(vm *vmInfo) string { return fmt.Sprintf("%v", vm.Snapshot) },
 	},
 	"uuid": {
-		Update: func(v string) error {
-			info.UUID = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.UUID = v
 			return nil
 		},
-		Clear: func() { info.UUID = "" },
-		Print: func() string { return info.UUID },
+		Clear: func(vm *vmInfo) { vm.UUID = "" },
+		Print: func(vm *vmInfo) string { return vm.UUID },
 	},
 	"vcpus": {
-		Update: func(v string) error {
-			info.Vcpus = v
+		Update: func(vm *vmInfo, v string) error {
+			vm.Vcpus = v
 			return nil
 		},
-		Clear: func() { info.Vcpus = "1" },
-		Print: func() string { return info.Vcpus },
+		Clear: func(vm *vmInfo) { vm.Vcpus = "1" },
+		Print: func(vm *vmInfo) string { return vm.Vcpus },
 	},
 }
 
@@ -382,115 +417,71 @@ func (vm *vmInfo) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
 }
 
-func cliVMSave(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Error: "Usage: vm_save <save name> <vm id> [<vm id> ...]",
+func (l *vmList) save(file *os.File, vms []string) error {
+	var allVms bool
+	for _, vm := range vms {
+		if vm == "*" {
+			allVms = true
+			break
 		}
 	}
 
-	path := filepath.Join(*f_base, "saved_vms")
-	err := os.MkdirAll(path, 0775)
-	if err != nil {
-		log.Error("mkdir: %v", err)
-		teardown()
-	}
-
-	file, err := os.Create(filepath.Join(path, c.Args[0]))
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+	if allVms && len(vms) != 1 {
+		log.Info("ignoring vm names, wildcard is present")
 	}
 
 	var toSave []string
-	if len(c.Args) == 1 {
-		// get all vms
-		for k, _ := range vms.vms {
+	if allVms {
+		for k, _ := range l.vms {
 			toSave = append(toSave, fmt.Sprintf("%v", k))
 		}
 	} else {
-		toSave = c.Args[1:]
+		toSave = vms
 	}
+
 	for _, vmStr := range toSave { // iterate over the vm id's specified
-		vm := vms.getVM(vmStr)
+		vm := l.getVM(vmStr)
 		if vm == nil {
-			return cliResponse{
-				Error: fmt.Sprintf("no such vm %v", vmStr),
-			}
+			return fmt.Errorf("vm %v not found", vm)
 		}
 
 		// build up the command list to re-launch this vm
 		cmds := []string{}
-		cmds = append(cmds, "vm_memory "+vm.Memory)
-		cmds = append(cmds, "vm_vcpus "+vm.Vcpus)
 
-		if len(vm.DiskPaths) != 0 {
-			cmds = append(cmds, "vm_disk "+strings.Join(vm.DiskPaths, " "))
-		} else {
-			cmds = append(cmds, "clear vm_disk")
-		}
-
-		if vm.CdromPath != "" {
-			cmds = append(cmds, "vm_cdrom "+vm.CdromPath)
-		} else {
-			cmds = append(cmds, "clear vm_cdrom")
-		}
-
-		if vm.KernelPath != "" {
-			cmds = append(cmds, "vm_kernel "+vm.KernelPath)
-		} else {
-			cmds = append(cmds, "clear vm_kernel")
-		}
-
-		if vm.InitrdPath != "" {
-			cmds = append(cmds, "vm_initrd "+vm.InitrdPath)
-		} else {
-			cmds = append(cmds, "clear vm_initrd")
-		}
-
-		if vm.Append != "" {
-			cmds = append(cmds, "vm_append "+vm.Append)
-		} else {
-			cmds = append(cmds, "clear vm_append")
-		}
-
-		if len(vm.QemuAppend) != 0 {
-			cmds = append(cmds, "vm_qemu_append "+strings.Join(vm.QemuAppend, " "))
-		} else {
-			cmds = append(cmds, "clear vm_qemu_append")
-		}
-
-		cmds = append(cmds, fmt.Sprintf("vm_snapshot %v", vm.Snapshot))
-		if len(vm.Networks) != 0 {
-			netString := "vm_net "
-			for i, vlan := range vm.Networks {
-				netString += fmt.Sprintf("%v,%v,%v,%v ", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+		for k, fns := range vmConfigFns {
+			var value string
+			if fns.PrintCLI != nil {
+				value = fns.PrintCLI(vm)
+			} else {
+				value = fns.Print(vm)
+				if len(value) > 0 {
+					value = fmt.Sprintf("vm config %s %s", k, value)
+				}
 			}
-			cmds = append(cmds, strings.TrimSpace(netString))
-		} else {
-			cmds = append(cmds, "clear vm_net")
-		}
 
-		cmds = append(cmds, "vm_uuid "+vm.UUID)
+			if len(value) != 0 {
+				cmds = append(cmds, value)
+			} else {
+				cmds = append(cmds, fmt.Sprintf("clear vm config %s", k))
+			}
+		}
 
 		if vm.Name != "" {
-			cmds = append(cmds, "vm_launch "+vm.Name)
+			cmds = append(cmds, "vm launch name "+vm.Name)
 		} else {
-			cmds = append(cmds, "vm_launch 1")
+			cmds = append(cmds, "vm launch count 1")
 		}
 
 		// write commands to file
 		for _, cmd := range cmds {
-			_, err = file.WriteString(cmd + "\n")
+			_, err := file.WriteString(cmd + "\n")
 			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
+				return err
 			}
 		}
 	}
-	return cliResponse{}
+
+	return nil
 }
 
 func (vm *vmInfo) configToString() string {
@@ -1546,7 +1537,7 @@ func addVMQemuOverride(match, repl string) error {
 //
 //	bridge,vlan,mac,driver
 // If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(lan string) error {
+func processVMNet(vm *vmInfo, lan string) error {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(lan, ",")
 
@@ -1619,7 +1610,7 @@ func processVMNet(lan string) error {
 		return err
 	}
 
-	info.Networks = append(info.Networks, vlan)
+	vm.Networks = append(vm.Networks, vlan)
 
 	if b == "" {
 		b = DEFAULT_BRIDGE
@@ -1628,9 +1619,9 @@ func processVMNet(lan string) error {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	info.bridges = append(info.bridges, b)
-	info.netDrivers = append(info.netDrivers, d)
-	info.macs = append(info.macs, strings.ToLower(m))
+	vm.bridges = append(vm.bridges, b)
+	vm.netDrivers = append(vm.netDrivers, d)
+	vm.macs = append(vm.macs, strings.ToLower(m))
 
 	return nil
 }

@@ -5,6 +5,8 @@ import (
 	"math"
 	"minicli"
 	log "minilog"
+	"os"
+	"path/filepath"
 	"ranges"
 	"strconv"
 	"strings"
@@ -91,9 +93,9 @@ If no VM name or ID is given, all VMs (including those in the quit and error sta
 This command does not store the state of the virtual machine itself,
 only its launch configuration.`,
 		Patterns: []string{
-			"vm save <name> <vm id or name>",
+			"vm save <name> <vm id or name or *>...",
 		},
-		Call: nil, // TODO
+		Call: cliVmSave,
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
@@ -608,7 +610,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 
 	// If there are no args it means that we want to display the current value
 	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
-		resp.Response = fns.Print()
+		resp.Response = fns.Print(info)
 		return minicli.Responses{resp}
 	}
 
@@ -619,16 +621,16 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 		err = fns.UpdateCommand(c)
 	} else if len(c.StringArgs) == 1 && fns.Update != nil {
 		for _, arg := range c.StringArgs {
-			err = fns.Update(arg)
+			err = fns.Update(info, arg)
 		}
 	} else if len(c.ListArgs) == 1 && fns.Update != nil {
 		// Lists need to be cleared first since they process each arg
 		// individually to build state
-		fns.Clear()
+		fns.Clear(info)
 
 		for _, args := range c.ListArgs {
 			for _, arg := range args {
-				if err = fns.Update(arg); err != nil {
+				if err = fns.Update(info, arg); err != nil {
 					break
 				}
 			}
@@ -636,7 +638,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
 		// Special case, look for key "true" (there should only be two options,
 		// "true" or "false" and, therefore, not "true" implies "false").
-		err = fns.UpdateBool(c.BoolArgs["true"])
+		err = fns.UpdateBool(info, c.BoolArgs["true"])
 	} else {
 		panic("someone goofed on the patterns")
 	}
@@ -656,7 +658,7 @@ func cliClearVmConfig(c *minicli.Command) minicli.Responses {
 
 	for k, fns := range vmConfigFns {
 		if clearAll || c.BoolArgs[k] {
-			fns.Clear()
+			fns.Clear(info)
 			cleared = true
 		}
 	}
@@ -761,6 +763,32 @@ func cliVmQmp(c *minicli.Command) minicli.Responses {
 
 	var err error
 	resp.Response, err = vms.qmp(c.StringArgs["vm"], c.StringArgs["qmp"])
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmSave(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	path := filepath.Join(*f_base, "saved_vms")
+	err := os.MkdirAll(path, 0775)
+	if err != nil {
+		log.Error("mkdir: %v", err)
+		// TODO: do we really want to teardown minimega?
+		teardown()
+	}
+
+	name := c.StringArgs["name"]
+	file, err := os.Create(filepath.Join(path, name))
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
+	}
+
+	err = vms.save(file, c.ListArgs["vm"])
 	if err != nil {
 		resp.Error = err.Error()
 	}

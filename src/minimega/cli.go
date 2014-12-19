@@ -212,26 +212,6 @@ failed, as well as some commands that do not impact the VM state, such as
 			},
 		},
 
-		"vm_save": &command{
-			Call:      cliVMSave,
-			Helpshort: "save a vm configuration for later use",
-			Helplong: `
-	Usage: vm_save <save name> <vm name/id> [<vm name/id> ...]
-
-Saves the configuration of a running virtual machine or set of virtual
-machines so that it/they can be restarted/recovered later, such as after
-a system crash.
-
-If no VM name or ID is given, all VMs (including those in the quit and error state) will be saved.
-
-This command does not store the state of the virtual machine itself,
-only its launch configuration.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"read": &command{
 			Call: func(c cliCommand) cliResponse {
 				if len(c.Args) != 1 {
