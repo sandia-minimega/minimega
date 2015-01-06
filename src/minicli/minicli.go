@@ -22,6 +22,7 @@ var (
 )
 
 var handlers []*Handler
+var history []string // command history for the write command
 
 type Command struct {
 	Handler // Embeds the handler that was matched by the raw input
@@ -48,6 +49,7 @@ type Response struct {
 
 func init() {
 	handlers = make([]*Handler, 0)
+	history = make([]string, 0)
 }
 
 // Enable or disable response compression
@@ -111,6 +113,12 @@ func ProcessCommand(c *Command) (Responses, error) {
 	if c.Call == nil {
 		return nil, fmt.Errorf("command %v has no callback!", c)
 	}
+
+	// Append the command to the history
+	if c.Record {
+		history = append(history, c.Original)
+	}
+
 	return c.Call(c), nil
 }
 
@@ -281,4 +289,16 @@ func (r Responses) String() string {
 // Return a verbose output representation for use with the %#v verb in pkg fmt
 func (r Responses) GoString() {
 
+}
+
+// History returns a newline-separated string of all the commands that have
+// been run by minicli since it started or the last time that ClearHistory was
+// called.
+func History() string {
+	return strings.Join(history, "\n")
+}
+
+// ClearHistory clears the command history.
+func ClearHistory() {
+	history = make([]string, 0)
 }
