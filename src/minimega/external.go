@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"minicli"
 	log "minilog"
 	"os/exec"
 	"strconv"
@@ -38,27 +39,84 @@ var externalProcesses = map[string]string{
 	"ntfs-3g":  "ntfs-3g",
 }
 
-// check for the presence of each of the external processes we may call,
-// and error if any aren't in our path
-func externalCheck(c cliCommand) cliResponse {
-	if len(c.Args) != 0 {
-		return cliResponse{
-			Error: "check does not take any arguments",
-		}
-	}
+var externalCLIHandlers = []minicli.Handler{
+	{ // check
+		HelpShort: "check that all external executables dependencies exist",
+		HelpLong: `
+Minimega maintains a list of external packages that it depends on, such as
+qemu. Calling check will attempt to find each of these executables in the
+avaiable path, and returns an error on the first one not found.`,
+		Patterns: []string{
+			"check",
+		},
+		Record: true,
+		Call:   cliCheckExternal,
+	},
+}
+
+func init() {
+	registerHandlers("external", externalCLIHandlers)
+}
+
+// checkExternal checks for the presence of each of the external processes we
+// may call, and error if any aren't in our path.
+func checkExternal() error {
 	for _, i := range externalProcesses {
 		path, err := exec.LookPath(i)
 		if err != nil {
-			e := fmt.Sprintf("%v not found", i)
-			return cliResponse{
-				Error: e,
-			}
+			return fmt.Errorf("%v not found", i)
 		} else {
 			log.Info("%v found at: %v", i, path)
 		}
 	}
 
 	// everything we want exists, but we have a few minimum versions to check
+	version, err := qemuVersion()
+	if err != nil {
+		return err
+	}
+
+	log.Debug("got kvm version %v", version)
+	if version < MIN_QEMU {
+		return fmt.Errorf("kvm version %v does not meet minimum version %v", version, MIN_QEMU)
+	}
+
+	version, err = ovsVersion()
+	if err != nil {
+		return err
+	}
+
+	log.Debug("got ovs version %v", version)
+	if version < MIN_OVS {
+		return fmt.Errorf("ovs version %v does not meet minimum version %v", version, MIN_OVS)
+	}
+
+	return nil
+}
+
+func cliCheckExternal(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	err := checkExternal()
+	if err != nil {
+		resp.Error = err.Error()
+	} else {
+		resp.Response = "all external dependencies met"
+	}
+
+	return minicli.Responses{resp}
+}
+
+func process(p string) string {
+	path, err := exec.LookPath(externalProcesses[p])
+	if err != nil {
+		log.Error("process: %v", err)
+		return ""
+	}
+	return path
+}
+
+func qemuVersion() (float64, error) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("qemu")
@@ -73,43 +131,36 @@ func externalCheck(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
+
 	log.Debug("checking qemu version with cmd: %v", cmd)
-	err := cmd.Run()
-	if err != nil {
-		return cliResponse{
-			Error: fmt.Sprintf("checking kvm version: %v %v", err, sErr.String()),
-		}
+	if err := cmd.Run(); err != nil {
+		return 0.0, fmt.Errorf("error checking kvm version: %v %v", err, sErr.String())
 	}
+
 	f := strings.Fields(sOut.String())
 	if len(f) < 4 {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse kvm version: %v", sOut.String()),
-		}
+		return 0.0, fmt.Errorf("cannot parse kvm version: %v", sOut.String())
 	}
+
 	qemuVersionFields := strings.Split(f[3], ".")
 	if len(qemuVersionFields) < 2 {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse kvm version: %v", sOut.String()),
-		}
+		return 0.0, fmt.Errorf("cannot parse kvm version: %v", sOut.String())
 	}
+
 	log.Debugln(qemuVersionFields)
 	qemuVersion, err := strconv.ParseFloat(strings.Join(qemuVersionFields[:2], "."), 64)
 	if err != nil {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse kvm version: %v %v", sOut.String(), err),
-		}
-	}
-	log.Debug("got kvm version %v", qemuVersion)
-	if qemuVersion < MIN_QEMU {
-		return cliResponse{
-			Error: fmt.Sprintf("kvm version %v does not meet minimum version %v", qemuVersion, MIN_QEMU),
-		}
+		return 0.0, fmt.Errorf("cannot parse kvm version: %v %v", sOut.String(), err)
 	}
 
-	sErr.Reset()
-	sOut.Reset()
-	p = process("ovs")
-	cmd = &exec.Cmd{
+	return qemuVersion, nil
+}
+
+func ovsVersion() (float64, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
@@ -120,47 +171,27 @@ func externalCheck(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
+
 	log.Debug("checking ovs version with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		return cliResponse{
-			Error: fmt.Sprintf("checking ovs version: %v %v", err, sErr.String()),
-		}
+	if err := cmd.Run(); err != nil {
+		return 0.0, fmt.Errorf("checking ovs version: %v %v", err, sErr.String())
 	}
-	f = strings.Fields(sOut.String())
+
+	f := strings.Fields(sOut.String())
 	if len(f) < 4 {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse ovs version: %v", sOut.String()),
-		}
+		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
 	}
+
 	ovsVersionFields := strings.Split(f[3], ".")
 	if len(ovsVersionFields) < 2 {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse ovs version: %v", sOut.String()),
-		}
+		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
 	}
+
 	log.Debugln(ovsVersionFields)
 	ovsVersion, err := strconv.ParseFloat(strings.Join(ovsVersionFields[:2], "."), 64)
 	if err != nil {
-		return cliResponse{
-			Error: fmt.Sprintf("cannot parse ovs version: %v %v", sOut.String(), err),
-		}
-	}
-	log.Debug("got ovs version %v", ovsVersion)
-	if ovsVersion < MIN_OVS {
-		return cliResponse{
-			Error: fmt.Sprintf("ovs version %v does not meet minimum version %v", ovsVersion, MIN_OVS),
-		}
+		return 0.0, fmt.Errorf("cannot parse ovs version: %v %v", sOut.String(), err)
 	}
 
-	return cliResponse{}
-}
-
-func process(p string) string {
-	path, err := exec.LookPath(externalProcesses[p])
-	if err != nil {
-		log.Error("process: %v", err)
-		return ""
-	}
-	return path
+	return ovsVersion, nil
 }

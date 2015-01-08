@@ -147,9 +147,9 @@ func main() {
 		}
 	}()
 
-	r := externalCheck(cliCommand{})
-	if r.Error != "" {
-		log.Warnln(r.Error)
+	err = checkExternal()
+	if err != nil {
+		log.Warnln(err.Error())
 	}
 
 	// attempt to set up the base path

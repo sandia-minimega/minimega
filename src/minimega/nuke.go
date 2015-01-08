@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -15,19 +16,32 @@ import (
 	"strings"
 )
 
+var nukeCLIHandlers = []minicli.Handler{
+	{ // nuke
+		HelpShort: "attempt to clean up after a crash",
+		HelpLong: `
+After a crash, the VM state on the machine can be difficult to recover from.
+Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
+removes the temporary minimega state on the harddisk.`,
+		Patterns: []string{
+			"nuke",
+		},
+		Record: true,
+		Call:   cliNuke,
+	},
+}
+
+func init() {
+	registerHandlers("nuke", nukeCLIHandlers)
+}
+
 // clean up after an especially bad crash, hopefully we don't have to call
 // this one much :)
 // currently this will:
 // 	kill all qemu instances
 //	kill all taps
 //	remove everything inside of info.BasePath (careful, that's dangerous)
-func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we can fit in the cli model
-	if len(c.Args) != 0 {
-		return cliResponse{
-			Error: "nuke does not take any arguments",
-		}
-	}
-
+func cliNuke(c *minicli.Command) minicli.Responses {
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
 	err := filepath.Walk(*f_base, nukeWalker)
@@ -61,7 +75,7 @@ func nuke(c cliCommand) cliResponse { // the cliResponse return is just so we ca
 	}
 
 	teardown()
-	return cliResponse{}
+	return nil
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include

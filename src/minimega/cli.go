@@ -19,12 +19,10 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"gomacro"
 	"goreadline"
-	"io"
 	"minicli"
 	log "minilog"
 	"os"
@@ -32,7 +30,6 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
-	"version"
 )
 
 const (
@@ -93,172 +90,6 @@ func init() {
 	// list of commands the cli supports. some commands have small callbacks, which
 	// are defined inline.
 	cliCommands = map[string]*command{
-		"log_level": &command{
-			Call:      cliLogLevel,
-			Helpshort: "set the log level",
-			Helplong: `
-	Usage: log_level [debug, info, warn, error, fatal]
-
-Set the log level to one of [debug, info, warn, error, fatal]. Log levels
-inherit lower levels, so setting the level to error will also log fatal, and
-setting the mode to debug will log everything.`,
-			Record: true,
-			Clear: func() error {
-				*f_loglevel = "error"
-				log.SetLevel("stdio", log.ERROR)
-				log.SetLevel("file", log.ERROR)
-				return nil
-			},
-		},
-
-		"log_stderr": &command{
-			Call:      cliLogStderr,
-			Helpshort: "enable/disable logging to stderr",
-			Helplong: `
-	Usage: log_stderr [true, false]
-
-Enable or disable logging to stderr. Valid options are [true, false].`,
-			Record: true,
-			Clear: func() error {
-				_, err := log.GetLevel("stdio")
-				if err == nil {
-					log.DelLogger("stdio")
-				}
-				return nil
-			},
-		},
-
-		"log_file": &command{
-			Call:      cliLogFile,
-			Helpshort: "enable logging to a file",
-			Helplong: `
-	Usage: log_file [filename]
-
-Log to a file. To disable file logging, call "clear log_file".`,
-			Record: true,
-			Clear: func() error {
-				_, err := log.GetLevel("file")
-				if err == nil {
-					log.DelLogger("file")
-				}
-				return nil
-			},
-		},
-
-		"check": &command{
-			Call:      externalCheck,
-			Helpshort: "check for the presence of all external executables minimega uses",
-			Helplong: `
-	Usage: check
-
-Minimega maintains a list of external packages that it depends on, such as qemu.
-Calling check will attempt to find each of these executables in the avaiable
-path, and returns an error on the first one not found.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"nuke": &command{
-			Call:      nuke,
-			Helpshort: "attempt to clean up after a crash",
-			Helplong: `
-	Usage: nuke
-
-After a crash, the VM state on the machine can be difficult to recover from.
-Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
-removes the temporary minimega state on the harddisk.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"write": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "write takes a single argument",
-					}
-				}
-				file, err := os.Create(c.Args[0])
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				for _, i := range commandBuf {
-					_, err = file.WriteString(i + "\n")
-					if err != nil {
-						return cliResponse{
-							Error: err.Error(),
-						}
-					}
-				}
-				return cliResponse{}
-			},
-			Helpshort: "write the command history to a file",
-			Helplong: `
-	Usage: write <file>
-
-Write the command history to file. This is useful for handcrafting configs
-on the minimega command line and then saving them for later use. Args that
-failed, as well as some commands that do not impact the VM state, such as
-'help', do not get recorded.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"read": &command{
-			Call: func(c cliCommand) cliResponse {
-				if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "read takes a single argument",
-					}
-				}
-				file, err := os.Open(c.Args[0])
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				r := bufio.NewReader(file)
-				for {
-					l, _, err := r.ReadLine()
-					if err != nil {
-						if err == io.EOF {
-							break
-						} else {
-							return cliResponse{
-								Error: err.Error(),
-							}
-						}
-					}
-					log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
-					resp := cliExec(makeCommand(string(l)))
-					resp.More = true
-					c.ackChan <- resp
-					if resp.Error != "" {
-						break // stop on errors
-					}
-				}
-				return cliResponse{}
-			},
-			Helpshort: "read and execute a command file",
-			Helplong: `
-	Usage: read <file>
-
-Read a command file and execute it. This has the same behavior as if you typed
-the file in manually.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"vnc": &command{
 			Call:      cliVNC,
 			Helpshort: "record or playback VNC kbd/mouse input",
@@ -306,107 +137,6 @@ To start the webserver on a specific port, issue the web command with the port:
 			Record: true,
 			Clear: func() error {
 				vncNovnc = "misc/novnc"
-				return nil
-			},
-		},
-
-		"history": &command{
-			Call: func(c cliCommand) cliResponse {
-				r := cliResponse{}
-				if len(c.Args) != 0 {
-					r.Error = "history takes no arguments"
-				} else {
-					r.Response = strings.Join(commandBuf, "\n")
-
-				}
-				return r
-			},
-			Helpshort: "show the command history",
-			Helplong: `
-	Usage: history
-
-Show the command history`,
-			Record: false,
-			Clear: func() error {
-				commandBuf = []string{}
-				return nil
-			},
-		},
-
-		"clear": &command{
-			Call: func(c cliCommand) cliResponse {
-				var r cliResponse
-				if len(c.Args) != 1 {
-					return cliResponse{
-						Error: "clear takes one argument",
-					}
-				}
-				cc := c.Args[0]
-				if cliCommands[cc] == nil {
-					e := fmt.Sprintf("invalid command: %v", cc)
-					r.Error = e
-				} else {
-					e := cliCommands[cc].Clear()
-					if e != nil {
-						r.Error = e.Error()
-					}
-				}
-				return r
-			},
-			Helpshort: "restore a variable to its default state",
-			Helplong: `
-	Usage: clear <command>
-
-Restore a variable to its default state or clears it. For example:
-
-	clear net
-
-will clear the list of associated networks.`,
-			Record: true,
-			Clear: func() error {
-				return fmt.Errorf("it's unclear how to clear clear")
-			},
-		},
-
-		"help": &command{
-			Call: func(c cliCommand) cliResponse {
-				r := cliResponse{}
-				if len(c.Args) == 0 { // display help on help, and list the short helps
-					r.Response = "Display help on a command. Here is a list of commands:\n"
-					var sortedNames []string
-					for c, _ := range cliCommands {
-						sortedNames = append(sortedNames, c)
-					}
-					sort.Strings(sortedNames)
-					w := new(tabwriter.Writer)
-					buf := bytes.NewBufferString(r.Response)
-					w.Init(buf, 0, 8, 0, '\t', 0)
-					for _, c := range sortedNames {
-						fmt.Fprintln(w, c, "\t", ":\t", cliCommands[c].Helpshort, "\t")
-					}
-					w.Flush()
-					r.Response = buf.String()
-				} else if len(c.Args) == 1 { // try to display help on args[0]
-					if cliCommands[c.Args[0]] != nil {
-						r.Response = fmt.Sprintln(c.Args[0], ":", cliCommands[c.Args[0]].Helpshort)
-						r.Response += fmt.Sprintln(cliCommands[c.Args[0]].Helplong)
-					} else {
-						e := fmt.Sprintf("no help on command: %v", c.Args[0])
-						r.Error = e
-					}
-				} else {
-					r.Error = "help takes one argument"
-				}
-				return r
-			},
-			Helpshort: "show this help message",
-			Helplong: `
-	Usage: help [command]
-
-Show help on a command. If called with no arguments, show a summary of all
-commands.`,
-			Record: false,
-			Clear: func() error {
 				return nil
 			},
 		},
@@ -763,40 +493,6 @@ To disable all optimizations
 			},
 		},
 
-		"version": &command{
-			Call: func(c cliCommand) cliResponse {
-				return cliResponse{
-					Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
-				}
-			},
-			Helpshort: "display the version",
-			Helplong: `
-	Usage: version
-
-Display the version.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"debug": &command{
-			Call:      cliDebug,
-			Helpshort: "display internal debug information",
-			Helplong: `
-	Usage: debug [panic, numcpus [cpus]]
-
-Display internal debug information. Invoking with the 'panic' keyword will
-force minimega to dump a stacktrace upon crash or exit.
-
-You can also set the number of logical CPUs minimega should fan out to with
-'numcpus', which is by default the number of logical CPUs on the system.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"bridge_info": &command{
 			Call:      cliBridgeInfo,
 			Helpshort: "display information about virtual bridges",
@@ -1069,23 +765,6 @@ To show defined macros, invoke define with no arguments.`,
 	Usage: undefine <macro>
 
 Undefine macros by name.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"echo": &command{
-			Call: func(c cliCommand) cliResponse {
-				return cliResponse{
-					Response: strings.Join(c.Args, " "),
-				}
-			},
-			Helpshort: "display a line of text",
-			Helplong: `
-	Usage: echo [<string>]
-
-Return the command after macro expansion and comment removal.`,
 			Record: true,
 			Clear: func() error {
 				return nil

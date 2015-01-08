@@ -532,16 +532,13 @@ to the default value.`,
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
 		},
-		Call: cliClearVmConfig,
+		Record: true,
+		Call:   cliClearVmConfig,
 	},
 }
 
 func init() {
-	for i := range vmCLIHandlers {
-		if err := minicli.Register(&vmCLIHandlers[i]); err != nil {
-			fmt.Println("invalid handler: %#v -- %s", vmCLIHandlers[i], err.Error())
-		}
-	}
+	registerHandlers("vm", vmCLIHandlers)
 }
 
 func cliVmInfo(c *minicli.Command) minicli.Responses {

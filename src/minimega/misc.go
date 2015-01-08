@@ -5,9 +5,10 @@
 package main
 
 import (
-	"bytes"
+	"bufio"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
@@ -17,36 +18,76 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 	"unicode"
+	"version"
 )
 
-var HelpLongQuit = `
-	Usage: quit [delay]
-
+var miscCLIHandlers = []minicli.Handler{
+	{ // quit
+		HelpShort: "quit minimega",
+		HelpLong: `
 Quit. An optional integer argument X allows deferring the quit call for X
 seconds. This is useful for telling a mesh of minimega nodes to quit.
 
 quit will not return a response to the cli, control socket, or meshage, it will
 simply exit. meshage connected nodes catch this and will remove the quit node
 from the mesh. External tools interfacing minimega must check for EOF on stdout
-or the control socket as an indication that minimega has quit.`
+or the control socket as an indication that minimega has quit.`,
+		Patterns: []string{
+			"quit [delay]",
+		},
+		Record: true,
+		Call:   cliQuit,
+	},
+	{ // help
+		HelpShort: "show command help",
+		HelpLong: `
+Show help on a command. If called with no arguments, show a summary of all
+commands.`,
+		Patterns: []string{
+			"help [command]...",
+		},
+		Call: cliHelp,
+	},
+	{ // read
+		HelpShort: "read and execute a command file",
+		HelpLong: `
+Read a command file and execute it. This has the same behavior as if you typed
+the file in manually.`,
+		Patterns: []string{
+			"read <file>",
+		},
+		Record: true,
+		Call:   cliRead,
+	},
+	{ // debug
+		HelpShort: "display internal debug information",
+		Patterns: []string{
+			"debug",
+		},
+		Call: cliDebug,
+	},
+	{ // version
+		HelpShort: "display the minimega version",
+		Patterns: []string{
+			"version",
+		},
+		Record: true,
+		Call:   cliVersion,
+	},
+	{ // echo
+		HelpShort: "display text after macro expansion and comment removal",
+		Patterns: []string{
+			"echo [args]...",
+		},
+		Record: true,
+		Call:   cliEcho,
+	},
+}
 
 func init() {
-	minicli.Register(&minicli.Handler{
-		Patterns:  []string{"quit [delay]"},
-		HelpShort: "quit",
-		HelpLong:  HelpLongQuit,
-		Call:      cliQuit,
-	})
-
-	minicli.Register(&minicli.Handler{
-		Patterns:  []string{"help [command]..."},
-		HelpShort: "help",
-		HelpLong:  "get help", // TODO
-		Call:      cliHelp,
-	})
+	registerHandlers("misc", miscCLIHandlers)
 }
 
 // generate a random ipv4 mac address and return as a string
@@ -90,54 +131,6 @@ func hostid(s string) (string, int) {
 		return "", -1
 	}
 	return k[0], val
-}
-
-func cliDebug(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		// create output
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "Go Version:\t%v\n", runtime.Version)
-		fmt.Fprintf(w, "Goroutines:\t%v\n", runtime.NumGoroutine())
-		fmt.Fprintf(w, "CGO calls:\t%v\n", runtime.NumCgoCall())
-		w.Flush()
-
-		return cliResponse{
-			Response: o.String(),
-		}
-	}
-
-	switch strings.ToLower(c.Args[0]) {
-	case "panic":
-		panicOnQuit = true
-		host, err := os.Hostname()
-		if err != nil {
-			log.Errorln(err)
-			teardown()
-		}
-		return cliResponse{
-			Response: fmt.Sprintf("%v wonders what you're up to...", host),
-		}
-	case "numcpus":
-		if len(c.Args) == 1 {
-			return cliResponse{
-				Response: fmt.Sprintf("%v", runtime.GOMAXPROCS(0)),
-			}
-		}
-		cpus, err := strconv.Atoi(c.Args[1])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("numcpus: %v", err),
-			}
-		}
-		runtime.GOMAXPROCS(cpus)
-		return cliResponse{}
-	default:
-		return cliResponse{
-			Error: "usage: debug [panic]",
-		}
-	}
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
@@ -309,38 +302,118 @@ func findRemoteVM(host, vm string) (int, string, error) {
 	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
 }
 
-func cliQuit(c *minicli.Command) minicli.Responses {
-	log.Debugln("cliQuit")
+// isClearCommand checks whether the command starts with "clear".
+func isClearCommand(c *minicli.Command) bool {
+	return strings.HasPrefix(c.Original, "clear")
+}
 
-	r := &minicli.Response{}
+// registerHandlers registers all the provided handlers with minicli, panicking
+// if any of the handlers fail to register.
+func registerHandlers(name string, handlers []minicli.Handler) {
+	for i := range handlers {
+		err := minicli.Register(&handlers[i])
+		if err != nil {
+			panic(fmt.Sprintf("invalid handler, %s:%d -- %v", name, i, err))
+		}
+	}
+}
+
+func cliQuit(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
 
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
-			r.Error = err.Error()
+			resp.Error = err.Error()
 		} else {
 			go func() {
 				time.Sleep(time.Duration(delay) * time.Second)
 				teardown()
 			}()
-			r.Response = fmt.Sprintf("quitting after %v seconds", delay)
+			resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
 		}
 	} else {
 		teardown()
 	}
-	return minicli.Responses{r}
+
+	return minicli.Responses{resp}
 }
 
 func cliHelp(c *minicli.Command) minicli.Responses {
-	log.Debugln("cliHelp")
-
-	r := &minicli.Response{}
+	resp := &minicli.Response{Host: hostname}
 
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
 	}
 
-	r.Response = minicli.Help(input)
-	return minicli.Responses{r}
+	resp.Response = minicli.Help(input)
+	return minicli.Responses{resp}
+}
+
+func cliRead(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	file, err := os.Open(c.StringArgs["file"])
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
+	}
+	defer file.Close()
+
+	r := bufio.NewReader(file)
+	for {
+		l, _, err := r.ReadLine()
+		if err != nil {
+			if err != io.EOF {
+				resp.Error = err.Error()
+			}
+			break
+		}
+		log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
+		// TODO: this is wrong for minicli
+		//resp := cliExec(makeCommand(string(l)))
+		//resp.More = true
+		//c.ackChan <- resp
+		//if resp.Error != "" {
+		//	break // stop on errors
+		//}
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliDebug(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{
+		Host:   hostname,
+		Header: []string{"Go version", "Goroutines", "CGO calls"},
+		Tabular: [][]string{
+			[]string{
+				runtime.Version(),
+				strconv.Itoa(runtime.NumGoroutine()),
+				strconv.FormatInt(runtime.NumCgoCall(), 10),
+			},
+		},
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVersion(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{
+		Host:     hostname,
+		Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliEcho(c *minicli.Command) minicli.Responses {
+	// TODO: Where does the macro expansion happen?
+	resp := &minicli.Response{
+		Host:     hostname,
+		Response: strings.Join(c.ListArgs["args"], " "),
+	}
+
+	return minicli.Responses{resp}
 }
