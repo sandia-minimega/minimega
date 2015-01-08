@@ -404,38 +404,6 @@ the file.`,
 			},
 		},
 
-		"shell": &command{
-			Call:      shellCLI,
-			Helpshort: "execute a command",
-			Helplong: `
-	Usage: shell <command>
-
-Execute a command under the credentials of the running user.
-
-Commands run until they complete or error, so take care not to execute a command
-that does not return.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"background": &command{
-			Call:      backgroundCLI,
-			Helpshort: "execute a command in the background",
-			Helplong: `
-	Usage: background <command>
-
-Execute a command under the credentials of the running user.
-
-Commands run in the background and control returns immediately. Any output is
-logged.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"host_stats": &command{
 			Call:      hostStatsCLI,
 			Helpshort: "report statistics about the host",

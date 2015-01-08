@@ -6,67 +6,64 @@ package main
 
 import (
 	"bytes"
+	"minicli"
 	log "minilog"
 	"os/exec"
 	"strings"
 )
 
-func shellCLI(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Error: "shell takes one or more arguments",
-		}
-	}
+var shellCLIHandlers = []minicli.Handler{
+	{ // shell
+		HelpShort: "execute a command",
+		HelpLong: `
+Execute a command under the credentials of the running user.
 
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p, err := exec.LookPath(c.Args[0])
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
+Commands run until they complete or error, so take care not to execute a command
+that does not return.`,
+		Patterns: []string{
+			"shell <command>...",
+		},
+		Record: true,
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliShell(c, false)
+		},
+	},
+	{ // background
+		HelpShort: "execute a command in the background",
+		HelpLong: `
+Execute a command under the credentials of the running user.
 
-	fields := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
-
-	cmd := &exec.Cmd{
-		Path:   p,
-		Args:   fields,
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Info("shell: %v", strings.Join(c.Args, " "))
-	err = cmd.Run()
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-	return cliResponse{
-		Response: sOut.String(),
-		Error:    sErr.String(),
-	}
+Commands run in the background and control returns immediately. Any output is
+logged.`,
+		Patterns: []string{
+			"background <command>...",
+		},
+		Record: true,
+		Call: func(c *minicli.Command) minicli.Responses {
+			return cliShell(c, true)
+		},
+	},
 }
 
-func backgroundCLI(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Error: "shell takes one or more arguments",
-		}
-	}
+func init() {
+	registerHandlers("shell", shellCLIHandlers)
+}
+
+func cliShell(c *minicli.Command, background bool) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
-	p, err := exec.LookPath(c.Args[0])
+
+	command := strings.Join(c.ListArgs["command"], " ")
+
+	p, err := exec.LookPath(c.ListArgs["command"][0])
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
 	}
 
-	fields := fieldsQuoteEscape("\"", strings.Join(c.Args, " "))
+	fields := fieldsQuoteEscape("\"", command)
 
 	cmd := &exec.Cmd{
 		Path:   p,
@@ -76,20 +73,35 @@ func backgroundCLI(c cliCommand) cliResponse {
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("shell: %v", strings.Join(c.Args, " "))
+	log.Info("starting: %v", command)
 	err = cmd.Start()
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
 	}
 
-	go func() {
-		cmd.Wait()
-		log.Info("command %v exited", strings.Join(c.Args, " "))
-		log.Info(sOut.String())
-		log.Info(sErr.String())
-	}()
+	if background {
+		go func() {
+			err = cmd.Wait()
+			if err != nil {
+				log.Error(err.Error())
+				return
+			}
 
-	return cliResponse{}
+			log.Info("command %v exited", command)
+			log.Info(sOut.String())
+			log.Info(sErr.String())
+		}()
+	} else {
+		err = cmd.Wait()
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		resp.Response = sOut.String()
+		resp.Error = sErr.String()
+	}
+
+	return minicli.Responses{resp}
 }
