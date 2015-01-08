@@ -115,51 +115,6 @@ to the specified VM.`,
 			Clear:  vncClear,
 		},
 
-		"host_tap": &command{
-			Call:      cliHostTap,
-			Helpshort: "control host taps for communicating between hosts and VMs",
-			Helplong: `
-	Usage: host_tap [<create [bridge] vlan <A.B.C.D/MASK,dhcp,none> [tap name], delete <tap name>]
-
-Control host taps on a named vlan for communicating between a host and any VMs
-on that vlan.
-
-Calling host_tap with no arguments will list all created host_taps.
-
-To create a host_tap on a particular vlan, invoke host_tap with the create
-command:
-
-	host_tap create <vlan> <ip/dhcp>
-
-For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
-
-	host_tap create 5 10.0.0.1/24
-
-Optionally, you can specify the bridge to create the host tap on:
-
-	host_tap create <bridge> <vlan> <ip/dhcp>
-
-You can also optionally specify the tap name, otherwise the tap will be in the
-form of mega_tapX.
-
-Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
-ip/netmask:
-
-	host_tap create 5 dhcp
-
-To delete a host tap, use the delete command and tap name from the host_tap list:
-
-	host_tap delete <id>
-
-To delete all host taps, use id -1, or 'clear host_tap':
-
-	host_tap delete -1`,
-			Record: true,
-			Clear: func() error {
-				return hostTapDelete("-1")
-			},
-		},
-
 		"mesh_degree": &command{
 			Call:      meshageDegree,
 			Helpshort: "view or set the current degree for this mesh node",

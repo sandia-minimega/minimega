@@ -11,6 +11,7 @@ import (
 	"gonetflow"
 	"io/ioutil"
 	"ipmac"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -57,9 +58,110 @@ var (
 	ovsLock          sync.Mutex
 )
 
+var bridgeCLIHandlers = []minicli.Handler{
+	{ // tap
+		HelpShort: "control host taps for communicating between hosts and VMs",
+		HelpLong: `
+Control host taps on a named vlan for communicating between a host and any VMs
+on that vlan.
+
+Calling tap with no arguments will list all created taps.
+
+To create a tap on a particular vlan, invoke tap with the create command:
+
+	tap create <vlan> <ip/dhcp>
+
+For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
+
+	tap create 5 10.0.0.1/24
+
+Optionally, you can specify the bridge to create the host tap on:
+
+	tap create <bridge> <vlan> <ip/dhcp>
+
+You can also optionally specify the tap name, otherwise the tap will be in the
+form of mega_tapX.
+
+Additionally, you can bring the tap up with DHCP by using "dhcp" instead of a
+ip/netmask:
+
+	tap create 5 dhcp
+
+To delete a host tap, use the delete command and tap name from the tap list:
+
+	tap delete <id>
+
+To delete all host taps, use id -1, or 'clear tap':
+
+	tap delete -1`,
+		Patterns: []string{
+			"tap",
+			"tap create <vlan> [tap name]",
+			"tap create <vlan> bridge <bridge> [tap name]",
+			"tap create <vlan> <dhcp,> [tap name]",
+			"tap create <vlan> ip <ip> [tap name]",
+			"tap create <vlan> bridge <bridge> <dhcp,> [tap name]",
+			"tap create <vlan> bridge <bridge> ip <ip> [tap name]",
+			"tap delete <id or *>",
+			"clear tap",
+		},
+		Record: true,
+		Call:   cliHostTap,
+	},
+}
+
+// routines for interfacing bridge mechanisms with the cli
+func cliHostTap(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	if isClearCommand(c) {
+		err := hostTapDelete("*")
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	} else if c.StringArgs["vlan"] != "" {
+		// Must be one of the create commands
+		vlan := c.StringArgs["vlan"]
+
+		bridge := c.StringArgs["bridge"]
+		if bridge == "" {
+			bridge = DEFAULT_BRIDGE
+		}
+
+		ip := c.StringArgs["ip"]
+		if c.BoolArgs["dhcp"] {
+			ip = "dhcp"
+		} else if ip == "" {
+			ip = "none"
+		}
+
+		tapName := c.StringArgs["tap"]
+
+		tapName, err := hostTapCreate(bridge, vlan, ip, tapName)
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Response = tapName
+		}
+	} else if c.StringArgs["id"] != "" {
+		// Must be the delete command
+		err := hostTapDelete(c.StringArgs["id"])
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	} else {
+		// Must be the list command
+		hostTapList(resp)
+	}
+
+	return minicli.Responses{resp}
+}
+
 // create the default bridge struct and create a goroutine to generate
 // tap names for this host.
 func init() {
+	registerHandlers("bridge", bridgeCLIHandlers)
+
 	bridges = make(map[string]*bridge)
 	tapChan = make(chan string)
 	disconnectedTaps = make(map[string]*tap)
@@ -846,93 +948,9 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 	return nil
 }
 
-// routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		return hostTapList()
-	case 2: // must be delete
-		if c.Args[0] != "delete" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		err := hostTapDelete(c.Args[1])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		} else {
-			return cliResponse{}
-		}
-	case 3: // must be create with the default bridge
-		if c.Args[0] != "create" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		tapName, err := hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], "")
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		} else {
-			return cliResponse{
-				Response: tapName,
-			}
-		}
-	case 4: // must be create with a specified bridge or a specified tap name
-		if c.Args[0] != "create" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		_, err := strconv.Atoi(c.Args[1])
-		var tapName string
-		if err == nil {
-			// specified tap name
-			tapName, err = hostTapCreate(DEFAULT_BRIDGE, c.Args[1], c.Args[2], c.Args[3])
-		} else {
-			// specified bridge name
-			tapName, err = hostTapCreate(c.Args[1], c.Args[2], c.Args[3], "")
-		}
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		} else {
-			return cliResponse{
-				Response: tapName,
-			}
-		}
-	case 5: // must be create with a specified bridge AND tap name
-		if c.Args[0] != "create" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		tapName, err := hostTapCreate(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		} else {
-			return cliResponse{
-				Response: tapName,
-			}
-		}
-	}
-
-	return cliResponse{
-		Error: "malformed command",
-	}
-}
-
-func hostTapList() cliResponse {
-	var hostBridge []string
-	var lans []int
-	var taps []string
-	var options []string
+func hostTapList(resp *minicli.Response) {
+	resp.Header = []string{"bridge", "tap", "vlan", "option"}
+	resp.Tabular = [][]string{}
 
 	// find all the host taps first
 	bridgeLock.Lock()
@@ -941,38 +959,19 @@ func hostTapList() cliResponse {
 		for lan, t := range v.lans {
 			for tap, ti := range t.Taps {
 				if ti.host {
-					hostBridge = append(hostBridge, k)
-					lans = append(lans, lan)
-					taps = append(taps, tap)
-					options = append(options, ti.hostOption)
+					resp.Tabular = append(resp.Tabular, []string{
+						k, tap, strconv.Itoa(lan), ti.hostOption,
+					})
 				}
 			}
 		}
-	}
-
-	if len(lans) == 0 {
-		return cliResponse{}
-	}
-
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "bridge\ttap\tvlan\toption\n")
-	for i, _ := range lans {
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", hostBridge[i], taps[i], lans[i], options[i])
-	}
-
-	w.Flush()
-
-	return cliResponse{
-		Response: o.String(),
 	}
 }
 
 func hostTapDelete(tap string) error {
 	var c []*bridge
-	// special case, -1, which should delete all host taps from all bridges
-	if tap == "-1" {
+	// special case, *, which should delete all host taps from all bridges
+	if tap == "*" {
 		bridgeLock.Lock()
 		for _, v := range bridges {
 			c = append(c, v)
