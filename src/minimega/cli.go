@@ -315,29 +315,6 @@ prepending the keyword 'annotate' to the command:
 			},
 		},
 
-		"hostname": &command{
-			Call: func(c cliCommand) cliResponse {
-				host, err := os.Hostname()
-				if err != nil {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				return cliResponse{
-					Response: host,
-				}
-			},
-			Helpshort: "return the hostname",
-			Helplong: `
-	Usage: hostname
-
-Return the hostname.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"dnsmasq": &command{
 			Call:      dnsmasqCLI,
 			Helpshort: "start a dhcp/dns server on a specified ip",
@@ -372,23 +349,6 @@ additional argument.
 
 NOTE: If specifying an additional config file, you must provide the full path to
 the file.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"host_stats": &command{
-			Call:      hostStatsCLI,
-			Helpshort: "report statistics about the host",
-			Helplong: `
-	Usage: host_stats
-
-Report statistics about the host including hostname, load averages, total and
-free memory, and current bandwidth usage.
-
-To output host statistics without the header, use the quiet argument:
-	host_stats quiet`,
 			Record: true,
 			Clear: func() error {
 				return nil

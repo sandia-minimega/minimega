@@ -8,8 +8,10 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -20,20 +22,74 @@ var (
 	bandwidthLastTime int64
 )
 
-func hostStatsCLI(c cliCommand) cliResponse {
-	var quiet bool
-	if len(c.Args) != 0 {
-		quiet = true
-	}
-	s, err := hostStats(quiet)
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
+var hostCLIHandlers = []minicli.Handler{
+	{ // host
+		HelpShort: "report information about the host",
+		Patterns: []string{
+			"host [name,]",
+			"host [memused,]",
+			"host [memtotal,]",
+			"host [load,]",
+			"host [bandwidth,]",
+			"host [cpus]",
+		},
+		Record: true,
+		Call:   cliHost,
+	},
+}
+
+func init() {
+	registerHandlers("host", hostCLIHandlers)
+}
+
+var hostInfoFns = map[string]func() (string, error){
+	"name": func() (string, error) { return hostname, nil },
+	"memused": func() (string, error) {
+		_, used, err := hostStatsMemory()
+		return fmt.Sprintf("%v MB", used), err
+	},
+	"memtotal": func() (string, error) {
+		total, _, err := hostStatsMemory()
+		return fmt.Sprintf("%v MB", total), err
+	},
+	"cpus": func() (string, error) {
+		return fmt.Sprintf("%v", runtime.NumCPU()), nil
+	},
+	"bandwidth": hostStatsBandwidth,
+	"load":      hostStatsLoad,
+}
+
+func cliHost(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	// If they selected one of the fields to display
+	for k := range c.BoolArgs {
+		val, err := hostInfoFns[k]()
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Response = val
 		}
+
+		return minicli.Responses{resp}
 	}
-	return cliResponse{
-		Response: s,
+
+	// Must want all fields
+	resp.Header = []string{}
+	row := []string{}
+	for k, fn := range hostInfoFns {
+		resp.Header = append(resp.Header, k)
+		val, err := fn()
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		row = append(row, val)
 	}
+	resp.Tabular = [][]string{row}
+
+	return minicli.Responses{resp}
 }
 
 func hostStatsLoad() (string, error) {
@@ -197,39 +253,9 @@ func hostStatsBandwidth() (string, error) {
 	}
 
 	bandwidth := (float32(total2-total1) / 1048576.0) / float32(elapsed)
-	outputBandwidth := fmt.Sprintf("%.1f", bandwidth)
+	outputBandwidth := fmt.Sprintf("%.1f (MB/s)", bandwidth)
 	bandwidthLast = total2
 	bandwidthLastTime = now
 
 	return outputBandwidth, nil
-}
-
-func hostStats(quiet bool) (string, error) {
-	load, err := hostStatsLoad()
-	if err != nil {
-		return "", err
-	}
-
-	memoryTotal, memoryUsed, err := hostStatsMemory()
-	if err != nil {
-		return "", err
-	}
-
-	bandwidth, err := hostStatsBandwidth()
-	if err != nil {
-		return "", err
-	}
-
-	hostname, err := os.Hostname()
-	if err != nil {
-		return "", err
-	}
-
-	var output string
-	if quiet {
-		output = fmt.Sprintf("%v %v %v %v %v", hostname, load, memoryTotal, memoryUsed, bandwidth)
-	} else {
-		output = fmt.Sprintf("hostname:\t%v\tload average:\t%v\tmemtotal:\t%v\tmemused:\t%v\tbandwidth:\t%v (MB/s)", hostname, load, memoryTotal, memoryUsed, bandwidth)
-	}
-	return output, nil
 }
