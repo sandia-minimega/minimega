@@ -115,32 +115,6 @@ to the specified VM.`,
 			Clear:  vncClear,
 		},
 
-		"web": &command{
-			Call:      WebCLI,
-			Helpshort: "start the minimega web interface",
-			Helplong: `
-	Usage: web [port, novnc <novnc path>]
-
-Launch a webserver that allows you to browse the connected minimega hosts and
-VMs, and connect to any VM in the pool.
-
-This command requires access to an installation of novnc. By default minimega
-looks in 'pwd'/misc/novnc. To set a different path, invoke:
-
-	web novnc <path to novnc>
-
-To start the webserver on a specific port, issue the web command with the port:
-
-	web 7000
-
-9001 is the default port.`,
-			Record: true,
-			Clear: func() error {
-				vncNovnc = "misc/novnc"
-				return nil
-			},
-		},
-
 		"host_tap": &command{
 			Call:      cliHostTap,
 			Helpshort: "control host taps for communicating between hosts and VMs",

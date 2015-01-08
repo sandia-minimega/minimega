@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"html"
+	"minicli"
 	log "minilog"
 	"net/http"
 	"os"
@@ -16,58 +17,82 @@ import (
 )
 
 const (
-	GOVNC_PORT = 9001
+	GOVNC_PORT          = 9001
+	defaultNoVNC string = "misc/novnc"
 )
 
 var (
 	webRunning bool
-	vncNovnc   string = "misc/novnc"
 )
 
-func WebCLI(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		if !webRunning {
-			go webStart(fmt.Sprintf(":%v", GOVNC_PORT))
-		} else {
-			return cliResponse{
-				Response: "web interface already running",
-			}
-		}
-	case 1:
-		if c.Args[0] == "novnc" {
-			return cliResponse{
-				Response: vncNovnc,
-			}
-		}
-		if !webRunning {
-			port := fmt.Sprintf(":%v", c.Args[0])
-			go webStart(port)
-		} else {
-			return cliResponse{
-				Error: "web interface already running",
-			}
-		}
-	case 2:
-		if c.Args[0] != "novnc" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		vncNovnc = c.Args[1]
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
-	}
-	return cliResponse{}
+var webCLIHandlers = []minicli.Handler{
+	{ // web
+		HelpShort: "start the minimega web interface",
+		HelpLong: `
+Launch a webserver that allows you to browse the connected minimega hosts and
+VMs, and connect to any VM in the pool.
+
+This command requires access to an installation of novnc. By default minimega
+looks in 'pwd'/misc/novnc. To set a different path, invoke:
+
+	web novnc <path to novnc>
+
+To start the webserver on a specific port, issue the web command with the port:
+
+	web 7000
+
+9001 is the default port.`,
+		Patterns: []string{
+			"web [port]",
+			"web novnc <path to novnc> [port]",
+		},
+		Record: true,
+		Call:   cliWeb,
+	},
 }
 
-func webStart(p string) {
+func init() {
+	registerHandlers("web", webCLIHandlers)
+}
+
+// TODO: I changed how this command works to make it more intuitive (at least
+// for me). I removed the ability to configure/clear novnc independent of
+// starting the web server. There currently isn't a way to stop
+// http.ListenAndServe so "clear web" doesn't make sense.
+func cliWeb(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	port := fmt.Sprintf(":%v", GOVNC_PORT)
+	if c.StringArgs["port"] != "" {
+		// Check if port is an integer
+		p, err := strconv.Atoi(c.StringArgs["port"])
+		if err != nil {
+			resp.Error = fmt.Sprintf("'%v' is not a valid port", c.StringArgs["port"])
+			return minicli.Responses{resp}
+		}
+
+		port = fmt.Sprintf(":%v", p)
+	}
+
+	noVNC := defaultNoVNC
+	if c.StringArgs["path"] != "" {
+		noVNC = c.StringArgs["path"]
+	}
+
+	if webRunning {
+		resp.Error = "web interface is already running"
+	} else {
+		go webStart(port, noVNC)
+	}
+
+	return minicli.Responses{resp}
+}
+
+func webStart(port, noVNC string) {
 	webRunning = true
 	http.HandleFunc("/vnc/", vncRoot)
-	http.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(vncNovnc))))
-	err := http.ListenAndServe(p, nil)
+	http.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(noVNC))))
+	err := http.ListenAndServe(port, nil)
 	if err != nil {
 		log.Error("webStart: %v", err)
 	}
