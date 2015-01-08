@@ -350,19 +350,6 @@ To disable all optimizations
 			},
 		},
 
-		"bridge_info": &command{
-			Call:      cliBridgeInfo,
-			Helpshort: "display information about virtual bridges",
-			Helplong: `
-	Usage: bridge_info
-
-Display information about virtual bridges.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"file": &command{
 			Call:      cliFile,
 			Helpshort: "work with files served by minimega",

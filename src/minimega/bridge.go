@@ -108,6 +108,14 @@ To delete all host taps, use id -1, or 'clear tap':
 		Record: true,
 		Call:   cliHostTap,
 	},
+	{ // bridge
+		HelpShort: "display information about virtual bridges",
+		Patterns: []string{
+			"bridge",
+		},
+		Record: false,
+		Call:   cliBridgeInfo,
+	},
 }
 
 // routines for interfacing bridge mechanisms with the cli
@@ -152,6 +160,18 @@ func cliHostTap(c *minicli.Command) minicli.Responses {
 	} else {
 		// Must be the list command
 		hostTapList(resp)
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliBridgeInfo(c *minicli.Command) minicli.Responses {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	resp := &minicli.Response{
+		Host:     hostname,
+		Response: bridgeInfo(),
 	}
 
 	return minicli.Responses{resp}
@@ -293,14 +313,6 @@ func updateBridgeInfo() {
 	err := ioutil.WriteFile(path, []byte(i), 0644)
 	if err != nil {
 		log.Fatalln(err)
-	}
-}
-
-func cliBridgeInfo(c cliCommand) cliResponse {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-	return cliResponse{
-		Response: bridgeInfo(),
 	}
 }
 
