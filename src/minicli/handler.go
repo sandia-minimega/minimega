@@ -157,7 +157,12 @@ func (h *Handler) helpLong() string {
 		res += "\t" + pattern + "\n"
 	}
 	res += "\n"
-	res += h.HelpLong
+	// Fallback on HelpShort if there's no HelpLong
+	if len(h.HelpLong) > 0 {
+		res += h.HelpLong
+	} else {
+		res += h.HelpShort
+	}
 
 	return res
 }
