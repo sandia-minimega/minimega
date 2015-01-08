@@ -79,7 +79,7 @@ Display all information about all VMs:
 			"vm info search <terms> mask <masks>",
 			"vm info mask <masks>",
 		},
-		Call: cliVmInfo, // TODO
+		Call: cliVmInfo,
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -115,7 +115,8 @@ vm_info.`,
 			"vm launch name <namespec> [noblock,]",
 			"vm launch count <count> [noblock,]",
 		},
-		Call: cliVmLaunch,
+		Record: true,
+		Call:   cliVmLaunch,
 	},
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
@@ -124,6 +125,7 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 		Patterns: []string{
 			"vm kill <vm id or name or *>",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmApply(c, func() []error {
 				return vms.kill(c.StringArgs["vm"])
@@ -142,6 +144,7 @@ in the quit state will also be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or *> [quit,]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmApply(c, func() []error {
 				return vms.start(c.StringArgs["vm"], c.BoolArgs["quit"])
@@ -158,6 +161,7 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
 		Patterns: []string{
 			"vm stop <vm id or name or *>",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmApply(c, func() []error {
 				return vms.stop(c.StringArgs["vm"])
@@ -173,7 +177,8 @@ of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
 		},
-		Call: cliVmFlush,
+		Record: true,
+		Call:   cliVmFlush,
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -199,7 +204,8 @@ To remove all hotplug devices, use ID -1.`,
 			"vm hotplug remove <vm id or name> <disk id>",
 			"clear vm hotplug", // TODO: where does this belong?
 		},
-		Call: nil, // TODO
+		Record: true,
+		Call:   nil, // TODO
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
@@ -225,7 +231,8 @@ To move a connection, specify the new VLAN tag and bridge:
 			"vm net disconnect <vm id or name> <tap position>",
 			"clear vm net", // TODO: where does this belong?
 		},
-		Call: nil, // TODO
+		Record: true,
+		Call:   nil, // TODO
 	},
 	{ // vm inject
 		HelpShort: "inject files into a qcow image",
@@ -260,7 +267,8 @@ the backing qcow image for a snapshot image.`,
 			`vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...`,
 			`vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...`,
 		},
-		Call: nil, // TODO
+		Record: true,
+		Call:   nil, // TODO
 	},
 	{ // vm qmp
 		HelpShort: "issue a JSON-encoded QMP command",
@@ -274,7 +282,8 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
 		},
-		Call: cliVmQmp,
+		Record: true,
+		Call:   cliVmQmp,
 	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
@@ -301,14 +310,15 @@ remove saved configurations.`,
 			"vm config <restore,> [name]",
 			"vm config <clone,> <vm id or name>",
 		},
-		Call: cliVmConfig,
+		Record: true,
+		Call:   cliVmConfig,
 	},
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
-		HelpLong:  "Set the QEMU process to invoke. Relative paths are ok.",
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "qemu")
 		},
@@ -323,6 +333,7 @@ replacement string.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or *>",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "qemu-override")
 		},
@@ -335,6 +346,7 @@ Add additional arguments to be passed to the QEMU instance. For example:
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "qemu-append")
 		},
@@ -346,6 +358,7 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "memory")
 		},
@@ -357,6 +370,7 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "vcpus")
 		},
@@ -370,6 +384,7 @@ multiple VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "disk")
 		},
@@ -382,6 +397,7 @@ to be the boot device.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "cdrom")
 		},
@@ -394,6 +410,7 @@ of any disk image.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "kernel")
 		},
@@ -409,6 +426,7 @@ For example, to set a static IP for a linux VM:
 		Patterns: []string{
 			"vm config append [argument]...",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "append")
 		},
@@ -421,6 +439,7 @@ one when the VM is launched.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "uuid")
 		},
@@ -453,6 +472,7 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "net")
 		},
@@ -466,6 +486,7 @@ allows a single disk image to be used for many VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "snapshot")
 		},
@@ -478,6 +499,7 @@ boot time.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
+		Record: true,
 		Call: func(c *minicli.Command) minicli.Responses {
 			return cliVmConfigField(c, "initrd")
 		},
