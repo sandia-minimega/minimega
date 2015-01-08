@@ -40,8 +40,8 @@ var (
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_doc        = flag.Bool("doc", false, "print the minimega api, in markdown, to stdout and exit")
+	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	vms          vmList
-	panicOnQuit  bool
 	hostname     string
 )
 
@@ -134,7 +134,7 @@ func main() {
 		first := true
 		for {
 			<-sig
-			if panicOnQuit {
+			if *f_panic {
 				panic("teardown")
 			}
 			if first {
@@ -174,9 +174,12 @@ func main() {
 
 	fmt.Println(banner)
 
-	// fan out to the number of cpus on the system
-	cpus := runtime.NumCPU()
-	runtime.GOMAXPROCS(cpus)
+	// fan out to the number of cpus on the system if GOMAXPROCS env variable is
+	// not set.
+	if os.Getenv("GOMAXPROCS") == "" {
+		cpus := runtime.NumCPU()
+		runtime.GOMAXPROCS(cpus)
+	}
 
 	// check for a script on the command line, and invoke it as a read command
 	for _, a := range flag.Args() {
@@ -211,7 +214,7 @@ func main() {
 		cliLocal()
 	} else {
 		<-sig
-		if panicOnQuit {
+		if *f_panic {
 			panic("teardown")
 		}
 	}
