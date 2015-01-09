@@ -29,7 +29,6 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
-	"time"
 )
 
 const (
@@ -115,85 +114,6 @@ to the specified VM.`,
 			Clear:  vncClear,
 		},
 
-		"mesh_degree": &command{
-			Call:      meshageDegree,
-			Helpshort: "view or set the current degree for this mesh node",
-			Helplong: `
-	Usage: mesh_degree [degree]
-
-View or set the current degree for this mesh node.`,
-			Record: true,
-			Clear: func() error {
-				meshageNode.SetDegree(0)
-				return nil
-			},
-		},
-
-		"mesh_dial": &command{
-			Call:      meshageDial,
-			Helpshort: "connect this node to another",
-			Helplong: `
-	Usage: mesh_dial <hostname>
-
-Attempt to connect to another listening node.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"mesh_dot": &command{
-			Call:      meshageDot,
-			Helpshort: "output a graphviz formatted dot file",
-			Helplong: `
-	Usage: mesh_dot <filename>
-
-Output a graphviz formatted dot file representing the connected topology.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"mesh_status": &command{
-			Call:      meshageStatus,
-			Helpshort: "display a short status report of the mesh",
-			Helplong: `
-	Usage: mesh_status
-
-Display a short status report of the mesh.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"mesh_list": &command{
-			Call:      meshageList,
-			Helpshort: "display the mesh adjacency list",
-			Helplong: `
-	Usage: mesh_list
-
-Display the mesh adjacency list.`,
-			Record: false,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"mesh_hangup": &command{
-			Call:      meshageHangup,
-			Helpshort: "disconnect from a client",
-			Helplong: `
-	Usage: mesh_hangup <hostname>
-
-Disconnect from a client.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"mesh_msa_timeout": &command{
 			Call:      meshageMSATimeout,
 			Helpshort: "view or set the MSA timeout",
@@ -204,26 +124,6 @@ View or the the Meshage State Announcement timeout.`,
 			Record: true,
 			Clear: func() error {
 				meshageNode.SetMSATimeout(60)
-				return nil
-			},
-		},
-
-		"mesh_timeout": &command{
-			Call:      meshageTimeoutCLI,
-			Helpshort: "view or set the mesh timeout",
-			Helplong: `
-	Usage: mesh_timeout [timeout]
-
-View or set the timeout on sending mesh commands.
-
-When a mesh command is issued, if a response isn't sent within mesh_timeout
-seconds, the command will be dropped and any future response will be discarded.
-Note that this does not cancel the outstanding command - the node receiving the
-command may still complete - but rather this node will stop waiting on a
-response.`,
-			Record: true,
-			Clear: func() error {
-				meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 				return nil
 			},
 		},
