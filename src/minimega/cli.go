@@ -376,33 +376,6 @@ specified by the -filepath flag. The filename will be returned.`,
 			Clear:  cliVyattaClear,
 		},
 
-		"vm_hotplug": &command{
-			Call:      cliVMHotplug,
-			Helpshort: "add and remove USB drives",
-			Helplong: `
-	Usage: vm_hotplug [add <id> <filename>, remove <id> <file id>]
-
-Add and remove USB drives to a launched VM.
-
-To view currently attached media, call vm_hotplug with the 'show' argument and
-a VM ID or name. To add a device, use the 'add' argument followed by the VM ID
-or name, and the name of the file to add. For example, to add foo.img to VM 5:
-
-	vm_hotplug add 5 foo.img
-
-The add command will assign a disk ID, shown in vm_hotplug show. To remove
-media, use the 'remove' argument with the VM ID and the disk ID. For example,
-to remove the drive added above, named 0:
-
-	vm_hotplug remove 5 0
-
-To remove all hotplug devices, use ID -1.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"vm_netmod": &command{
 			Call:      cliVMNetMod,
 			Helpshort: "disconnect or move network connections",

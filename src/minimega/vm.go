@@ -1626,133 +1626,27 @@ func processVMNet(vm *vmInfo, lan string) error {
 	return nil
 }
 
-func cliVMHotplug(c cliCommand) cliResponse {
-	if len(c.Args) < 2 {
-		return cliResponse{
-			Error: "vm_hotplug takes at least two arguments",
-		}
-	}
-
-	switch c.Args[0] {
-	case "show":
-		vm := vms.getVM(c.Args[1])
-		if vm == nil {
-			return cliResponse{
-				Error: fmt.Sprintf("no such VM %v", c.Args[1]),
-			}
-		}
-		if len(vm.Hotplug) == 0 {
-			return cliResponse{}
-		}
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(w, "Hotplug ID\tFile")
-		for k, v := range vm.Hotplug {
-			fmt.Fprintf(w, "%v\t%v\n", k, v)
-		}
-		w.Flush()
-		return cliResponse{
-			Response: o.String(),
-		}
-	case "add":
-		if len(c.Args) != 3 {
-			return cliResponse{
-				Error: "invalid arguments",
-			}
-		}
-		vm := vms.getVM(c.Args[1])
-		if vm == nil {
-			return cliResponse{
-				Error: fmt.Sprintf("no such VM %v", c.Args[1]),
-			}
-		}
-		disk := c.Args[2]
-		// generate an id by adding 1 to the highest in the list for the Hotplug devices, 0 if it's empty
-		id := 0
-		for k, _ := range vm.Hotplug {
-			if k >= id {
-				id = k + 1
-			}
-		}
-		hid := fmt.Sprintf("hotplug%v", id)
-		log.Debugln("hotplug generated id:", hid)
-		resp, err := vm.q.DriveAdd(hid, disk)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		log.Debugln("hotplug drive_add response:", resp)
-		resp, err = vm.q.USBDeviceAdd(hid)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		log.Debugln("hotplug usb device add response:", resp)
-		vm.Hotplug[id] = disk
-	case "remove":
-		if len(c.Args) != 3 {
-			return cliResponse{
-				Error: "invalid arguments",
-			}
-		}
-		vm := vms.getVM(c.Args[1])
-		if vm == nil {
-			return cliResponse{
-				Error: fmt.Sprintf("no such VM %v", c.Args[1]),
-			}
-		}
-		id, err := strconv.Atoi(c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		if id == -1 {
-			// remove all hotplug devices
-			for k, _ := range vm.Hotplug {
-				r := vm.hotplugRemove(k)
-				if r.Error != "" {
-					return r
-				}
-			}
-		} else {
-			return vm.hotplugRemove(id)
-		}
-	default:
-		return cliResponse{
-			Error: fmt.Sprintf("invalid argument %v", c.Args[0]),
-		}
-	}
-	return cliResponse{}
-}
-
-func (vm *vmInfo) hotplugRemove(id int) cliResponse {
+func (vm *vmInfo) hotplugRemove(id int) error {
 	hid := fmt.Sprintf("hotplug%v", id)
 	log.Debugln("hotplug id:", hid)
 	if _, ok := vm.Hotplug[id]; !ok {
-		return cliResponse{
-			Error: "no such hotplug device id",
-		}
+		return errors.New("no such hotplug device id")
 	}
+
 	resp, err := vm.q.USBDeviceDel(hid)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		return err
 	}
+
 	log.Debugln("hotplug usb device del response:", resp)
 	resp, err = vm.q.DriveDel(hid)
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		return err
 	}
+
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.Hotplug, id)
-	return cliResponse{}
+	return nil
 }
 
 func (l *vmList) getVM(idOrName string) *vmInfo {

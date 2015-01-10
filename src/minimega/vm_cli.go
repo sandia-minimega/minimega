@@ -201,11 +201,10 @@ To remove all hotplug devices, use ID -1.`,
 		Patterns: []string{
 			"vm hotplug show <vm id or name>",
 			"vm hotplug add <vm id or name> <filename>",
-			"vm hotplug remove <vm id or name> <disk id>",
-			"clear vm hotplug", // TODO: where does this belong?
+			"vm hotplug remove <vm id or name> <disk id or *>",
 		},
 		Record: true,
-		Call:   nil, // TODO
+		Call:   cliVmHotplug,
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
@@ -810,6 +809,75 @@ func cliVmSave(c *minicli.Command) minicli.Responses {
 	err = vms.save(file, c.ListArgs["vm"])
 	if err != nil {
 		resp.Error = err.Error()
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmHotplug(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := vms.getVM(c.StringArgs["vm"])
+	if vm == nil {
+		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
+		return minicli.Responses{resp}
+	}
+
+	if c.StringArgs["filename"] != "" { // Must be "add"
+		// generate an id by adding 1 to the highest in the list for the
+		// Hotplug devices, 0 if it's empty
+		id := 0
+		for k, _ := range vm.Hotplug {
+			if k >= id {
+				id = k + 1
+			}
+		}
+		hid := fmt.Sprintf("hotplug%v", id)
+		log.Debugln("hotplug generated id:", hid)
+
+		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		log.Debugln("hotplug drive_add response:", r)
+		r, err = vm.q.USBDeviceAdd(hid)
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		log.Debugln("hotplug usb device add response:", r)
+		vm.Hotplug[id] = c.StringArgs["filename"]
+	} else if c.StringArgs["disk"] != "" { // Must be "remove"
+		if c.StringArgs["disk"] == "*" {
+			for k := range vm.Hotplug {
+				if err := vm.hotplugRemove(k); err != nil {
+					resp.Error = err.Error()
+					// TODO: try to remove the rest if there's an error?
+					break
+				}
+			}
+
+			return minicli.Responses{resp}
+		}
+
+		id, err := strconv.Atoi(c.StringArgs["disk"])
+		if err != nil {
+			resp.Error = err.Error()
+		} else if err := vm.hotplugRemove(id); err != nil {
+			resp.Error = err.Error()
+		}
+	} else { // Must be "show"
+		if len(vm.Hotplug) > 0 {
+			resp.Header = []string{"Hotplug ID", "File"}
+			resp.Tabular = [][]string{}
+
+			for k, v := range vm.Hotplug {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
+			}
+		}
 	}
 
 	return minicli.Responses{resp}
