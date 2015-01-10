@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"image"
 	"io"
-	"log"
+	log "minilog"
 	"net/http"
 	"os"
 	"strconv"
@@ -43,7 +43,10 @@ type vncPixelFormat struct {
 }
 
 var (
-	port = flag.Int("port", 7777, "port to listen for jobs on")
+	f_port     = flag.Int("port", 9003, "port to start rfbplay webservice")
+	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
+	f_log      = flag.Bool("v", true, "log on stderr")
+	f_logfile  = flag.String("logfile", "", "log to file")
 )
 
 var pixelFormat = vncPixelFormat{
@@ -78,7 +81,7 @@ func readFile(f http.File) (chan *FramebufferUpdate, error) {
 		}
 
 		if err != nil && err != io.EOF {
-			log.Println("error decoding recording:", err)
+			log.Errorln("error decoding recording:", err)
 		}
 	}()
 
@@ -95,7 +98,7 @@ func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
 		return errors.New("unable to decode message type")
 	}
 
-	//log.Println("message type:", mType)
+	log.Debugln("message type:", mType)
 
 	// Skip message that aren't framebuffer updates
 	if mType != 0 {
@@ -116,7 +119,7 @@ func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
 		return errors.New("unable to decode number of rectangles")
 	}
 
-	//log.Println("number of rectangles:", numRects)
+	log.Debugln("number of rectangles:", numRects)
 
 	// Read all the rectangles
 	for len(update.Rectangles) < int(numRects) {
@@ -150,7 +153,7 @@ func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
 }
 
 func usage() {
-	fmt.Printf("USAGE: %s [OPTION]... DIR\n", os.Args[0])
+	fmt.Printf("USAGE: %s [OPTION]... <directory to serve>\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
@@ -170,8 +173,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	addr := ":" + strconv.Itoa(*port)
-	log.Printf("serving recordings from %s on %s", flag.Arg(0), addr)
+	logSetup()
+
+	addr := ":" + strconv.Itoa(*f_port)
+	log.Info("serving recordings from %s on %s", flag.Arg(0), addr)
 
 	http.Handle("/", &playbackServer{http.Dir(flag.Arg(0))})
 	http.ListenAndServe(addr, nil)

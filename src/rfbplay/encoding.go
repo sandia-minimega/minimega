@@ -7,7 +7,7 @@ import (
 	"errors"
 	"image/color"
 	"io"
-	"log"
+	log "minilog"
 )
 
 const (
@@ -29,7 +29,7 @@ func DecodeRawEncoding(buf io.Reader, rect *Rectangle) error {
 		for x := rect.Rect.Min.X; x < rect.Rect.Max.X; x++ {
 			pixel, err := ReadPixel(buf)
 			if err != nil {
-				log.Printf("error reading pixel %d, %d", x, y)
+				log.Error("error reading pixel %d, %d", x, y)
 				return err
 			}
 			rect.Set(x, y, pixel)
@@ -40,7 +40,7 @@ func DecodeRawEncoding(buf io.Reader, rect *Rectangle) error {
 }
 
 func DecodeDesktopSizeEncoding(buf io.Reader, rect *Rectangle) error {
-	log.Printf("new desktop size: %d x %d", rect.Rect.Dx(), rect.Rect.Dy())
+	log.Debug("new desktop size: %d x %d", rect.Rect.Dx(), rect.Rect.Dy())
 
 	return nil
 }
@@ -56,7 +56,7 @@ func DecodeTightEncoding(buf io.Reader, rect *Rectangle) (err error) {
 	// Figure out whether we need to reset any streams or not
 	for i := 0; i < 4; i++ {
 		if control&byte(i) != 0 {
-			log.Println("reset stream", i)
+			log.Debugln("reset stream", i)
 			resetStream(i)
 		}
 	}
@@ -76,14 +76,14 @@ func DecodeTightEncoding(buf io.Reader, rect *Rectangle) (err error) {
 }
 
 func DecodeFillCompression(buf io.Reader, rect *Rectangle) error {
-	log.Println("decoding fill compression")
+	log.Debugln("decoding fill compression")
 
 	pixel, err := ReadPixel(buf)
 	if err != nil {
 		return err
 	}
 
-	log.Printf("pixel: %q", pixel)
+	log.Debug("pixel: %q", pixel)
 
 	for y := rect.Rect.Min.Y; y < rect.Rect.Max.Y; y++ {
 		for x := rect.Rect.Min.X; x < rect.Rect.Max.X; x++ {
@@ -95,25 +95,25 @@ func DecodeFillCompression(buf io.Reader, rect *Rectangle) error {
 }
 
 func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error {
-	log.Println("decoding basic compression")
+	log.Debugln("decoding basic compression")
 
 	var filter PixelFilter
 	var palette []color.RGBA
 
 	// Figure out what stream we should write to
 	stream := control >> 4 & 0x30
-	log.Println("write stream", stream)
+	log.Debugln("write stream", stream)
 
 	if control&0x40 != 0 {
-		log.Println("filter-id set")
+		log.Debugln("filter-id set")
 
 		var filterID byte
 		if err := binary.Read(buf, binary.BigEndian, &filterID); err != nil {
-			log.Println(err)
+			log.Errorln(err)
 			return errors.New("unable to decode filter ID")
 		}
 
-		log.Printf("filter-id: %d", filterID)
+		log.Debug("filter-id: %d", filterID)
 
 		if filterID == 1 {
 			filter = PaletteFilter
@@ -127,7 +127,7 @@ func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error 
 			}
 			numColors += 1
 
-			log.Println("color palette size:", numColors)
+			log.Debugln("color palette size:", numColors)
 
 			palette = make([]color.RGBA, numColors)
 
@@ -167,7 +167,7 @@ func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error 
 			return errors.New("unable to decompress")
 		}
 
-		log.Printf("wrote %d/%d compressed bytes to buffer", n, clen)
+		log.Debug("wrote %d/%d compressed bytes to buffer", n, clen)
 
 		if Streams[stream] == nil {
 			reader, err := zlib.NewReader(Buffers[stream])
@@ -182,7 +182,7 @@ func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error 
 
 	switch filter {
 	case CopyFilter:
-		log.Println("reading copy filtered pixels")
+		log.Debugln("reading copy filtered pixels")
 		for y := rect.Rect.Min.Y; y < rect.Rect.Max.Y; y++ {
 			for x := rect.Rect.Min.X; x < rect.Rect.Max.X; x++ {
 				pixel, err := ReadPixel(pixelReader)
@@ -193,7 +193,7 @@ func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error 
 			}
 		}
 	case PaletteFilter:
-		log.Println("reading palette filtered pixels")
+		log.Debugln("reading palette filtered pixels")
 		if len(palette) == 2 {
 			var k byte
 			var count int
@@ -225,7 +225,7 @@ func DecodeBasicCompression(buf io.Reader, control byte, rect *Rectangle) error 
 		}
 	case GradientFilter:
 		// TODO: Implement
-		log.Printf("unimplemented: gradient filter")
+		log.Debugln("unimplemented: gradient filter")
 	}
 
 	return nil

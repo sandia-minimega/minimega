@@ -8,8 +8,8 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"io"
-	"log"
 	"mime/multipart"
+	log "minilog"
 	"net/http"
 	"net/textproto"
 	"net/url"
@@ -112,7 +112,7 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 
 			for _, r := range update.Rectangles {
 				dr := image.Rectangle{r.Rect.Min, r.Rect.Max}
-				//log.Printf("drawing in rectangle at %#v\n", dr)
+				log.Debug("drawing in rectangle at %#v\n", dr)
 				draw.Draw(nimg, dr, r, r.Rect.Min, draw.Src)
 			}
 
@@ -123,7 +123,7 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 				// Sleep until the next image should be served
 				time.Sleep(time.Duration(update.Offset - offset))
 			} else {
-				//log.Println("warning: longer to replay images than record them")
+				log.Debugln("warning: longer to replay images than record them")
 			}
 
 			imageChan <- nimg
@@ -148,22 +148,22 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 	for image := range imageChan {
 		buf.Reset()
 
-		//log.Printf("writing image: %v", image.Bounds())
+		log.Debug("writing image: %v", image.Bounds())
 		err := jpeg.Encode(&buf, image, nil)
 		if err != nil {
-			log.Printf("unable to encode jpeg: %v", err)
+			log.Error("unable to encode jpeg: %v", err)
 			break
 		}
 
 		mh.Set("Content-length", fmt.Sprintf("%d", buf.Len()))
 		fm, err := m.CreatePart(mh)
 		if err != nil {
-			log.Printf("unable to create multipart: %v", err)
+			log.Error("unable to create multipart: %v", err)
 			return
 		}
 		_, err = io.Copy(fm, &buf)
 		if err != nil {
-			log.Printf("unable to write multipart: %v", err)
+			log.Error("unable to write multipart: %v", err)
 			break
 		}
 	}

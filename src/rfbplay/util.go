@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/color"
 	"io"
+	log "minilog"
 )
 
 func ReadPixel(reader io.Reader) (pixel color.RGBA, err error) {
@@ -61,7 +62,7 @@ func ReadRectangle(buf io.Reader) (rect Rectangle, err error) {
 		return
 	}
 
-	//log.Printf("rectangle: %d x %d at (%d, %d)", Width, Height, X, Y)
+	log.Debug("rectangle: %d x %d at (%d, %d)", Width, Height, X, Y)
 
 	rect.RGBA = image.NewRGBA(image.Rectangle{
 		image.Point{int(X), int(Y)},
