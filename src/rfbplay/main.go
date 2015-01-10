@@ -43,7 +43,7 @@ type vncPixelFormat struct {
 }
 
 var (
-	f_port     = flag.Int("port", 9003, "port to start rfbplay webservice")
+	f_port     = flag.Int("port", 9004, "port to start rfbplay webservice")
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "log to file")
