@@ -99,7 +99,7 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 		for update := range updateChan {
 			// Check if the resolution has changed
 			last := update.Rectangles[len(update.Rectangles)-1]
-			if last.EncodingType == DesktopSize {
+			if last.EncodingType == DesktopSize || X == 0 || Y == 0 {
 				X = last.Rect.Max.X
 				Y = last.Rect.Max.Y
 			}
