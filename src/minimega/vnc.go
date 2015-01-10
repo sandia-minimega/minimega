@@ -7,8 +7,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	log "minilog"
 	"net"
 	"os"
@@ -20,8 +24,9 @@ import (
 )
 
 var (
-	vncRecording map[string]*vncVMRecord
-	vncPlaying   map[string]*vncVMPlayback
+	vncRecording   map[string]*vncVMRecord
+	vncFBRecording map[string]*vncFBRecord
+	vncPlaying     map[string]*vncVMPlayback
 )
 
 type vncVMRecord struct {
@@ -51,8 +56,29 @@ type vncVMPlayback struct {
 	lock     sync.Mutex
 }
 
+type vncFBRecord struct {
+	vncVMRecord
+
+	Rhost string
+	conn  net.Conn
+	sInit *vncServerInit
+}
+
+type vncServerInit struct {
+	Width, Height uint16
+	PixelFormat   vncPixelFormat
+}
+
+type vncPixelFormat struct {
+	BitsPerPixel, Depth, BigEndianFlag, TrueColorFlag uint8
+	RedMax, GreenMax, BlueMax                         uint16
+	RedShift, GreenShift, BlueShift                   uint8
+	Padding                                           [3]byte
+}
+
 func init() {
 	vncRecording = make(map[string]*vncVMRecord)
+	vncFBRecording = make(map[string]*vncFBRecord)
 	vncPlaying = make(map[string]*vncVMPlayback)
 }
 
@@ -105,58 +131,81 @@ func (v *vncVMPlayback) Run() {
 
 // dial the vm in question, complete a handshake, and discard incoming
 // messages.
-func (v *vncVMPlayback) Dial() error {
-	conn, err := net.Dial("tcp", v.Rhost)
+func vncDial(rhost string) (conn net.Conn, serverInit *vncServerInit, err error) {
+	var n int
+
+	serverInit = &vncServerInit{}
+
+	conn, err = net.Dial("tcp", rhost)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	v.conn = conn
+	defer func() {
+		if err != nil && conn != nil {
+			conn.Close()
+		}
+	}()
 
 	// handshake, receive 12 bytes from the server
 	buf := make([]byte, 12)
-	n, err := v.conn.Read(buf)
+	n, err = conn.Read(buf)
+	if err != nil && n != 12 {
+		err = fmt.Errorf("invalid server version: %v", string(buf[:n]))
+	}
+
 	if err != nil {
-		return err
+		return
 	}
-	if n != 12 {
-		return fmt.Errorf("invalid server version: %v", string(buf[:n]))
-	}
+
 	// respond with version 3.3
 	buf = []byte("RFB 003.003\n")
-	_, err = v.conn.Write(buf)
+	_, err = conn.Write(buf)
 	if err != nil {
-		return err
+		return
 	}
 
 	// the server sends a 4 byte security type
 	buf = make([]byte, 4)
-	n, err = v.conn.Read(buf)
+	n, err = conn.Read(buf)
+	if err != nil && n != 4 {
+		err = fmt.Errorf("invalid server security message: %v", string(buf[:n]))
+	} else if err != nil && buf[3] != 0x01 { // the security type must be 1
+		err = fmt.Errorf("invalid server security type: %v", string(buf[:n]))
+	}
+
 	if err != nil {
-		return err
-	}
-	if n != 4 {
-		return fmt.Errorf("invalid server security message: %v", string(buf[:n]))
-	}
-	// the security type must be 1
-	if buf[3] != 0x01 {
-		return fmt.Errorf("invalid server security type: %v", string(buf[:n]))
+		return
 	}
 
 	// client sends an initialization message, non-zero here to indicate
 	// we will allow a shared desktop.
-	_, err = v.conn.Write([]byte{0x01})
+	_, err = conn.Write([]byte{0x01})
 	if err != nil {
-		return err
+		return
 	}
 
 	// receive the server initialization
 	buf = make([]byte, 32768)
-	n, err = v.conn.Read(buf)
+	n, err = conn.Read(buf)
 	if err != nil {
-		return err
+		return
 	}
 	log.Debug("got server initialization length %v", n)
+
+	reader := bytes.NewReader(buf)
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.Width); err != nil {
+		err = errors.New("unable to decode width")
+		return
+	}
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.Height); err != nil {
+		err = errors.New("unable to decode height")
+		return
+	}
+	if err = binary.Read(reader, binary.BigEndian, &serverInit.PixelFormat); err != nil {
+		err = errors.New("unable to decode pixel format")
+		return
+	}
 
 	// success!
 	//	go func() {
@@ -171,12 +220,9 @@ func (v *vncVMPlayback) Dial() error {
 	//		}
 	//	}()
 	buf = []byte{0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0, 0, 0, 2, 0, 0, 11, 0, 0, 0, 1, 0, 0, 0, 7, 255, 255, 254, 252, 0, 0, 0, 5, 0, 0, 0, 2, 0, 0, 0, 0, 255, 255, 255, 33, 255, 255, 255, 17, 255, 255, 255, 230, 255, 255, 255, 9, 255, 255, 255, 32, 3, 0, 0, 0, 0, 0, 3, 32, 2, 88}
-	_, err = v.conn.Write(buf)
-	if err != nil {
-		return err
-	}
+	_, err = conn.Write(buf)
 
-	return nil
+	return
 }
 
 func (v *vncVMPlayback) Stop() {
@@ -203,6 +249,98 @@ func NewVMRecord(filename string) (*vncVMRecord, error) {
 	ret.last = time.Now()
 
 	return ret, nil
+}
+
+func NewFBRecord(filename string) (*vncFBRecord, error) {
+	log.Debug("NewFBRecord: %v", filename)
+	ret := &vncFBRecord{}
+	fi, err := os.Create(filename)
+	if err != nil {
+		return ret, err
+	}
+	ret.file = fi
+	ret.last = time.Now()
+
+	return ret, nil
+}
+
+func (v *vncFBRecord) Dial() error {
+	var err error
+	v.conn, v.sInit, err = vncDial(v.Rhost)
+	if err == nil {
+		log.Debug("got server init: %#v", v.sInit)
+	}
+
+	return err
+}
+
+func (v *vncFBRecord) Run() {
+	defer v.file.Close()
+
+	// Only accept raw encoding
+	n, err := v.conn.Write([]byte{0x02, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0x21})
+	if err != nil {
+		log.Debug("vnc handshake failed: %v", err)
+		return
+	} else if n != 12 {
+		log.Debug("vnc handshake failed: couldn't write bytes")
+		return
+	}
+
+	go func() {
+		prev := time.Now()
+		buf := make([]byte, 4096)
+		writer := gzip.NewWriter(v.file)
+		defer writer.Close()
+
+		for {
+			n, err := v.conn.Read(buf)
+			if err != nil {
+				log.Debug("vnc fb response read failed: %v", err)
+				break
+			}
+
+			if n > 0 {
+				offset := time.Now().Sub(prev).Nanoseconds()
+				header := fmt.Sprintf("%d %d\r\n", offset, n)
+
+				if _, err := io.WriteString(writer, header); err != nil {
+					log.Debug("vnc fb write chunk header failed: %v", err)
+					break
+				}
+				if _, err := writer.Write(buf[:n]); err != nil {
+					log.Debug("vnc fb write chunk failed: %v", err)
+					break
+				}
+				if _, err := io.WriteString(writer, "\r\n"); err != nil {
+					log.Debug("vnc fb write chunk tailer failed: %v", err)
+					break
+				}
+
+				prev = time.Now()
+
+				log.Debug("vnc fb wrote %d bytes", n)
+			}
+		}
+	}()
+
+	// fall into a loop issuing periodic fb update requests and dump to file
+	// check if we need to quit
+	for {
+		buf := []byte{0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+
+		// Send fb update request
+		n, err := v.conn.Write(buf)
+		if err != nil {
+			log.Debug("vnc fb request failed: %v", err)
+			return
+		} else if n != len(buf) {
+			log.Debug("vnc fb request failed: couldn't write bytes")
+			return
+		}
+
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // Input ought to be a base64-encoded string as read from the websocket
@@ -314,6 +452,10 @@ func cliVNC(c cliCommand) cliResponse {
 				vncRecording[rhost].Close()
 				delete(vncRecording, rhost)
 			}
+			if _, ok := vncFBRecording[rhost]; ok {
+				vncFBRecording[rhost].conn.Close()
+				delete(vncFBRecording, rhost)
+			}
 		case c.Args[0] == "noplayback":
 			if _, ok := vncPlaying[rhost]; ok {
 				vncPlaying[rhost].Stop()
@@ -371,9 +513,8 @@ func cliVNC(c cliCommand) cliResponse {
 			vmp.Name = vmName
 			vmp.ID = vmID
 			vmp.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
-			err = vmp.Dial()
+			vmp.conn, _, err = vncDial(vmp.Rhost)
 			if err != nil {
-				vmp.conn.Close()
 				return cliResponse{
 					Error: fmt.Sprintf("vnc handshake: %v", err),
 				}
@@ -381,6 +522,68 @@ func cliVNC(c cliCommand) cliResponse {
 			vncPlaying[rhost] = vmp
 			go vmp.Run()
 		}
+	case 5:
+		// must be vnc record <node> <id/name> <kbd/mouse file> <fb file>
+		// don't even sanity check...
+		host := c.Args[1]
+		vm := c.Args[2]
+
+		vmID, vmName, err := findRemoteVM(host, vm)
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		filename := c.Args[3]
+		fbFilename := c.Args[4]
+		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+		// is this rhost already being recorded?
+		if _, ok := vncRecording[rhost]; ok {
+			return cliResponse{
+				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
+			}
+		}
+
+		vmr, err := NewVMRecord(filename)
+		if err != nil {
+			log.Errorln(err)
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		vmr.Filename = filename
+		vmr.Host = host
+		vmr.Name = vmName
+		vmr.ID = vmID
+		vncRecording[rhost] = vmr
+
+		// fb recording
+		fbr, err := NewFBRecord(fbFilename)
+		if err != nil {
+			log.Errorln(err)
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+		fbr.Filename = fbFilename
+		fbr.Host = host
+		fbr.Name = vmName
+		fbr.ID = vmID
+		fbr.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+		// attempt to connect
+		err = fbr.Dial()
+		if err != nil {
+			return cliResponse{
+				Error: err.Error(),
+			}
+		}
+
+		go fbr.Run()
+
+		vncFBRecording[rhost] = fbr
+
 	default:
 		return cliResponse{
 			Error: "malformed command",
