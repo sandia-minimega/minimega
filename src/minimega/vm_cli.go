@@ -225,13 +225,11 @@ To move a connection, specify the new VLAN tag and bridge:
 
 	vm_netmod <vm name or id> 0 bridgeX 100`,
 		Patterns: []string{
-			"vm net <vm id or name>",
 			"vm net connect <vm id or name> <tap position> <bridge> <vlan>",
 			"vm net disconnect <vm id or name> <tap position>",
-			"clear vm net", // TODO: where does this belong?
 		},
 		Record: true,
-		Call:   nil, // TODO
+		Call:   cliVmNetMod,
 	},
 	{ // vm inject
 		HelpShort: "inject files into a qcow image",
@@ -877,6 +875,84 @@ func cliVmHotplug(c *minicli.Command) minicli.Responses {
 			for k, v := range vm.Hotplug {
 				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
 			}
+		}
+	}
+
+	return minicli.Responses{resp}
+}
+
+func cliVmNetMod(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := vms.getVM(c.StringArgs["vm"])
+	if vm == nil {
+		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
+		return minicli.Responses{resp}
+	}
+
+	pos, err := strconv.Atoi(c.StringArgs["tap"])
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
+	}
+	if len(vm.taps) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.taps))
+		return minicli.Responses{resp}
+	}
+
+	var b *bridge
+	if c.StringArgs["bridge"] != "" {
+		b, err = getBridge(c.StringArgs["bridge"])
+	} else {
+		b, err = getBridge(vm.bridges[pos])
+	}
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
+	}
+
+	if c.StringArgs["bridge"] == "" { // Must be "disconnect"
+		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
+		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			vm.Networks[pos] = -1
+		}
+	} else { // Must be "connect"
+		net, err := strconv.Atoi(c.StringArgs["vlan"])
+		if err != nil {
+			resp.Error = err.Error()
+			return minicli.Responses{resp}
+		}
+
+		if net >= 0 && net < 4096 {
+			// new network
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
+			oldBridge, err := getBridge(vm.bridges[pos])
+			if err != nil {
+				resp.Error = err.Error()
+				return minicli.Responses{resp}
+			}
+
+			if vm.Networks[pos] != -1 {
+				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+				if err != nil {
+					resp.Error = err.Error()
+					return minicli.Responses{resp}
+				}
+			}
+
+			err = b.TapAdd(net, vm.taps[pos], false)
+			if err != nil {
+				resp.Error = err.Error()
+				return minicli.Responses{resp}
+			}
+
+			vm.Networks[pos] = net
+			vm.bridges[pos] = b.Name
+		} else {
+			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}
 	}
 

@@ -376,33 +376,6 @@ specified by the -filepath flag. The filename will be returned.`,
 			Clear:  cliVyattaClear,
 		},
 
-		"vm_netmod": &command{
-			Call:      cliVMNetMod,
-			Helpshort: "disconnect or move network connections",
-			Helplong: `
-	Usage: vm_netmod <vm name or id> <tap position> <disconnect, <bridge <vlan>>>
-
-Disconnect or move existing network connections on a running VM.
-
-Network connections are indicated by their position in vm_net (same order in
-vm_info) and are zero indexed. For example, to disconnect the first network
-connection from a VM with 4 network connections:
-
-	vm_netmod <vm name or id> 0 disconnect
-
-To disconnect the second connection:
-
-	vm_netmod <vm name or id> 1 disconnect
-
-To move a connection, specify the new VLAN tag and bridge:
-
-	vm_netmod <vm name or id> 0 bridgeX 100`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"vm_inject": &command{
 			Call:      cliVMInject,
 			Helpshort: "inject files into a qcow image",
