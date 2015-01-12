@@ -51,10 +51,3 @@ GOOS=windows go install goserial
 echo
 unset GOOS
 
-# testing
-echo TESTING
-for i in `ls $SCRIPT_DIR/src`
-do
-	go test $i
-done
-echo
