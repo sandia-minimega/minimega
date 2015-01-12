@@ -536,25 +536,6 @@ func (vm *vmInfo) networkString() string {
 	return s
 }
 
-func cliVMSnapshot(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Response: fmt.Sprintf("%v", info.Snapshot),
-		}
-	}
-	switch strings.ToLower(c.Args[0]) {
-	case "true":
-		info.Snapshot = true
-	case "false":
-		info.Snapshot = false
-	default:
-		return cliResponse{
-			Error: "usage: vm_snapshot [true,false]",
-		}
-	}
-	return cliResponse{}
-}
-
 // apply applies the provided function to the vm in vmList whose name or ID
 // matches the provided vm parameter.
 func (l *vmList) apply(vm string, fn func(*vmInfo) error) error {
