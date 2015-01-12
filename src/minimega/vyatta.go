@@ -6,14 +6,15 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"text/template"
 )
 
@@ -42,21 +43,206 @@ type vyattaRoute struct {
 
 var vyatta vyattaConfig
 
+var vyattaCLIHandlers = []minicli.Handler{
+	{ // vyatta
+		HelpShort: "define vyatta configuration images",
+		HelpLong: `
+Define and write out vyatta router floppy disk images.
+
+vyatta takes a number of subcommands:
+
+- 'dhcp': Add DHCP service to a particular network by specifying the network,
+default gateway, and start and stop addresses. For example, to serve dhcp on
+10.0.0.0/24, with a default gateway of 10.0.0.1:
+
+	vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254
+
+An optional DNS argument can be used to override the nameserver. For example,
+to do the same as above with a nameserver of 8.8.8.8:
+
+	vyatta dhcp add 10.0.0.0/24 10.0.0.1 10.0.0.2 10.0.0.254 8.8.8.8
+
+Optionally, you can specify "none" for the default gateway.
+
+- 'interfaces': Add IPv4 addresses using CIDR notation. Optionally, 'dhcp' or
+'none' may be specified. The order specified matches the order of VLANs used in
+vm_net. This number of arguments must either be 0 or equal to the number of
+arguments in 'interfaces6' For example:
+
+	vyatta interfaces 10.0.0.1/24 dhcp
+
+- 'interfaces6': Add IPv6 addresses similar to 'interfaces'. The number of
+arguments must either be 0 or equal to the number of arguments in 'interfaces'.
+
+- 'rad': Enable router advertisements for IPv6. Valid arguments are IPv6
+prefixes or "none". Order matches that of interfaces6. For example:
+
+	vyatta rad 2001::/64 2002::/64
+
+- 'ospf': Route networks using OSPF. For example:
+
+	vyatta ospf 10.0.0.0/24 12.0.0.0/24
+
+- 'ospf3': Route IPv6 interfaces using OSPF3. For example:
+
+	vyatta ospf3 eth0 eth1
+
+- 'routes': Set static routes. Routes are specified as
+
+	<network>,<next-hop> ...
+
+For example:
+
+	vyatta routes 2001::0/64,123::1 10.0.0.0/24,12.0.0.1
+
+- 'config': Override all other options and use a specified file as the config
+file. For example: vyatta config /tmp/myconfig.boot
+
+- 'write': Write the current configuration to file. If a filename is omitted, a
+random filename will be used and the file placed in the path specified by the
+-filepath flag. The filename will be returned.`,
+		/*
+			Usage:  vyatta
+				vyatta dhcp add <network> <default gateway/none> <DHCP low range> <DHCP high range>
+				vyatta dhcp delete <network>
+				vyatta interfaces <A.B.C.D/MASK,dhcp,none>[,<A.B.C.D/MASK,dhcp,none>...]
+				vyatta interfaces6 <IPv6 address/MASK,none>[,<IPv6 address/MASK,none>...]
+				vyatta rad <prefix>[,<prefix>...]
+				vyatta ospf <network>[,<network>...]
+				vyatta ospf3 <interface>[,<interface>...]
+				vyatta routes <network>,<next-hop>[ <network>,<next-hop> ...]
+				vyatta config <filename>
+				vyatta write [filename]
+		*/
+
+		Patterns: []string{
+			"vyatta",
+			"vyatta <dhcp,>",
+			"vyatta <dhcp,> add <network> <gateway or none> <low dhcp range> <high dhcp range> [dns server]",
+			"vyatta <dhcp,> delete <network>",
+			"vyatta <interfaces,> [net A.B.C.D/MASK or dhcp or none]...",
+			"vyatta <interfaces6,> [net IPv6 address/MASK or none]...",
+			"vyatta <rad,> [prefix]...",
+			"vyatta <ospf,> [network]...",
+			"vyatta <ospf3,> [network]...",
+			"vyatta <routes,> [network and next-hop separated by comma]...",
+			"vyatta <config,> [filename]",
+			"vyatta <write,> [filename]",
+
+			"clear vyatta",
+		},
+		Record: true,
+		Call:   cliVyatta,
+	},
+}
+
 func init() {
+	registerHandlers("vyatta", vyattaCLIHandlers)
+
 	vyatta.Dhcp = make(map[string]*vyattaDhcp)
 }
 
-func cliVyattaClear() error {
-	vyatta = vyattaConfig{
-		Dhcp: make(map[string]*vyattaDhcp),
-	}
-	return nil
-}
+func cliVyatta(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
 
-func cliVyatta(c cliCommand) cliResponse {
-	var ret cliResponse
+	if isClearCommand(c) {
+		vyatta = vyattaConfig{
+			Dhcp: make(map[string]*vyattaDhcp),
+		}
+	} else if c.BoolArgs["dhcp"] {
+		net := c.StringArgs["network"]
 
-	if len(c.Args) == 0 {
+		if len(c.StringArgs) == 0 {
+			// List the existing DHCP services
+			resp.Header = []string{"Network", "GW", "Start address", "Stop address", "DNS"}
+			resp.Tabular = [][]string{}
+			for k, v := range vyatta.Dhcp {
+				resp.Tabular = append(resp.Tabular, []string{k, v.Gw, v.Start, v.Stop, v.Dns})
+			}
+		} else if c.StringArgs["gateway"] != "" {
+			// Add a new DHCP service
+			vyatta.Dhcp[net] = &vyattaDhcp{
+				Gw:    c.StringArgs["gateway"],
+				Start: c.StringArgs["low"],
+				Stop:  c.StringArgs["high"],
+				Dns:   c.StringArgs["dns"],
+			}
+
+			log.Debug("vyatta add dhcp %v", vyatta.Dhcp[net])
+		} else {
+			// Deleting a DHCP service
+			if _, ok := vyatta.Dhcp[net]; !ok {
+				resp.Error = "no such Dhcp service"
+			} else {
+				log.Debug("vyatta delete dhcp %v", net)
+				delete(vyatta.Dhcp, net)
+			}
+		}
+	} else if c.BoolArgs["interfaces"] {
+		// Get or update IPv4 interfaces
+		if len(c.ListArgs) == 0 {
+			resp.Response = fmt.Sprintf("%v", vyatta.Ipv4)
+		} else {
+			vyatta.Ipv4 = c.ListArgs["net"]
+		}
+	} else if c.BoolArgs["interfaces6"] {
+		// Get or update IPv6 interfaces
+		if len(c.ListArgs) == 0 {
+			resp.Response = fmt.Sprintf("%v", vyatta.Ipv6)
+		} else {
+			vyatta.Ipv6 = c.ListArgs["net"]
+		}
+	} else if c.BoolArgs["rad"] {
+		// Get or update rad
+		if len(c.ListArgs) == 0 {
+			resp.Response = fmt.Sprintf("%v", vyatta.Rad)
+		} else {
+			vyatta.Rad = c.ListArgs["prefix"]
+		}
+	} else if c.BoolArgs["ospf"] {
+		// Get or update ospf
+		if len(c.ListArgs) == 0 {
+			resp.Response = fmt.Sprintf("%v", vyatta.Ospf)
+		} else {
+			vyatta.Ospf = c.ListArgs["network"]
+		}
+	} else if c.BoolArgs["ospf3"] {
+		// Get or update ospf
+		if len(c.ListArgs) == 0 {
+			resp.Response = fmt.Sprintf("%v", vyatta.Ospf3)
+		} else {
+			vyatta.Ospf3 = c.ListArgs["network"]
+		}
+	} else if c.BoolArgs["routes"] {
+		if len(c.ListArgs) == 0 {
+			resp.Header = []string{"Network", "Route"}
+			resp.Tabular = [][]string{}
+
+			for _, v := range vyatta.Routes {
+				resp.Tabular = append(resp.Tabular, []string{v.Route, v.NextHop})
+			}
+		} else {
+			err := vyattaUpdateRoutes(c.ListArgs["network"])
+			if err != nil {
+				resp.Error = err.Error()
+			}
+		}
+	} else if c.BoolArgs["config"] {
+		// override everything and just cram the listed file into the floppy
+		// image
+		if len(c.StringArgs) == 0 {
+			resp.Response = vyatta.ConfigFile
+		} else {
+			vyatta.ConfigFile = c.StringArgs["filename"]
+		}
+	} else if c.BoolArgs["write"] {
+		var err error
+		resp.Response, err = vyattaWrite(c.StringArgs["filename"])
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	} else {
+		// Display info about running services
 		var dhcpKeys []string
 		for k, _ := range vyatta.Dhcp {
 			dhcpKeys = append(dhcpKeys, k)
@@ -67,266 +253,53 @@ func cliVyatta(c cliCommand) cliResponse {
 			routes = append(routes, k.Route)
 		}
 
-		// print vyatta info
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "IPv4 addresses\tIPv6 addresses\tRAD\tDHCP servers\tOSPF\tOSPF3\tRoutes\n")
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", vyatta.Ipv4, vyatta.Ipv6, vyatta.Rad, dhcpKeys, vyatta.Ospf, vyatta.Ospf3, routes)
-		w.Flush()
-		ret.Response = o.String()
-		return ret
+		resp.Header = []string{
+			"IPv4 addresses",
+			"IPv6 addresses",
+			"RAD",
+			"DHCP servers",
+			"OSPF",
+			"OSPF3",
+			"Routes",
+		}
+		resp.Tabular = [][]string{[]string{
+			fmt.Sprintf("%v", vyatta.Ipv4),
+			fmt.Sprintf("%v", vyatta.Ipv6),
+			fmt.Sprintf("%v", vyatta.Rad),
+			fmt.Sprintf("%v", dhcpKeys),
+			fmt.Sprintf("%v", vyatta.Ospf),
+			fmt.Sprintf("%v", vyatta.Ospf3),
+			fmt.Sprintf("%v", routes),
+		}}
 	}
 
-	switch c.Args[0] {
-	case "dhcp":
-		if len(c.Args) == 1 {
-			// print Dhcp info
-			var o bytes.Buffer
-			w := new(tabwriter.Writer)
-			w.Init(&o, 5, 0, 1, ' ', 0)
-			fmt.Fprintf(w, "Network\tGW\tStart address\tStop address\tDNS\n")
-			for k, v := range vyatta.Dhcp {
-				fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", k, v.Gw, v.Start, v.Stop, v.Dns)
-			}
-			w.Flush()
-			ret.Response = o.String()
-			return ret
+	return minicli.Responses{resp}
+}
+
+func vyattaUpdateRoutes(routes []string) error {
+	var newRoutes []*vyattaRoute
+
+	for _, route := range routes {
+		parts := strings.Split(route, ",")
+		if len(parts) != 2 {
+			return errors.New(`malformed route argument, expected "<network>,<next hop>"`)
 		}
 
-		switch c.Args[1] {
-		case "add":
-			if len(c.Args) != 6 && len(c.Args) != 7 {
-				ret.Error = "invalid number of arguments"
-				return ret
+		for _, part := range parts {
+			if !isIPv4N(part) && !isIPv6N(part) {
+				return fmt.Errorf("%v not a valid IPv4 or IPv6 network", part)
 			}
-			vyatta.Dhcp[c.Args[2]] = &vyattaDhcp{
-				Gw:    c.Args[3],
-				Start: c.Args[4],
-				Stop:  c.Args[5],
-			}
-			// optional dns
-			if len(c.Args) == 7 {
-				vyatta.Dhcp[c.Args[2]].Dns = c.Args[6]
-			}
-			log.Debug("vyatta add dhcp %v", vyatta.Dhcp[c.Args[2]])
-		case "delete":
-			if len(c.Args) != 3 {
-				ret.Error = "invalid number of arguments"
-				return ret
-			}
-			if _, ok := vyatta.Dhcp[c.Args[2]]; !ok {
-				ret.Error = "no such Dhcp service"
-				return ret
-			}
-			log.Debug("vyatta delete dhcp %v", vyatta.Dhcp[c.Args[2]])
-			delete(vyatta.Dhcp, c.Args[2])
-		default:
-			ret.Error = "invalid vyatta Dhcp command"
-			return ret
-		}
-	case "interfaces":
-		if len(c.Args) == 1 {
-			ret.Response = fmt.Sprintf("%v", vyatta.Ipv4)
-			break
-		}
-		vyatta.Ipv4 = c.Args[1:]
-	case "interfaces6":
-		if len(c.Args) == 1 {
-			ret.Response = fmt.Sprintf("%v", vyatta.Ipv6)
-			break
-		}
-		vyatta.Ipv6 = c.Args[1:]
-	case "ospf":
-		if len(c.Args) == 1 {
-			ret.Response = fmt.Sprintf("%v", vyatta.Ospf)
-			break
-		}
-		vyatta.Ospf = c.Args[1:]
-	case "ospf3":
-		if len(c.Args) == 1 {
-			ret.Response = fmt.Sprintf("%v", vyatta.Ospf3)
-			break
-		}
-		vyatta.Ospf3 = c.Args[1:]
-	case "rad":
-		if len(c.Args) == 1 {
-			ret.Response = fmt.Sprintf("%v", vyatta.Rad)
-			break
-		}
-		vyatta.Rad = c.Args[1:]
-	case "routes":
-		var ret cliResponse
-		if len(c.Args) == 1 {
-			// print route info
-			var o bytes.Buffer
-			w := new(tabwriter.Writer)
-			w.Init(&o, 5, 0, 1, ' ', 0)
-			fmt.Fprintf(w, "Network\tRoute\n")
-			for _, v := range vyatta.Routes {
-				fmt.Fprintf(w, "%v\t%v\n", v.Route, v.NextHop)
-			}
-			w.Flush()
-			ret.Response = o.String()
-			return ret
-		}
-		var routes []*vyattaRoute
-		for _, v := range c.Args[1:] {
-			d := strings.Split(v, ",")
-			if len(d) != 2 {
-				ret.Error = "malformed route argument"
-				return ret
-			}
-			r := d[0]
-			n := d[1]
-			if !isIPv4N(r) && !isIPv6N(r) {
-				ret.Error = fmt.Sprintf("%v not a valid IPv4 or IPv6 network", r)
-				return ret
-			}
-			if !isIPv4(n) && !isIPv6(n) {
-				ret.Error = fmt.Sprintf("%v not a valid IPv4 or IPv6 address", n)
-				return ret
-			}
-			routes = append(routes, &vyattaRoute{
-				Route:   r,
-				NextHop: n,
-			})
-		}
-		vyatta.Routes = routes
-	case "config":
-		// override everything and just cram the listed file into the floppy image
-		switch len(c.Args[1:]) {
-		case 0:
-			ret.Response = vyatta.ConfigFile
-		case 1:
-			vyatta.ConfigFile = c.Args[1]
-		default:
-			ret.Error = "vyatta config takes 0 or 1 arguments"
-		}
-	case "write":
-		// make sure fields are sane
-		for len(vyatta.Ipv4) != len(vyatta.Ipv6) {
-			if len(vyatta.Ipv4) < len(vyatta.Ipv6) {
-				vyatta.Ipv4 = append(vyatta.Ipv4, "none")
-			} else {
-				vyatta.Ipv6 = append(vyatta.Ipv6, "none")
-			}
+
 		}
 
-		// create a 1.44MB file (1474560)
-		var f *os.File
-		var err error
-		if len(c.Args) == 1 { // temporary file
-			f, err = ioutil.TempFile(*f_iomBase, "vyatta_")
-			if err != nil {
-				log.Errorln(err)
-				teardown()
-			}
-		} else if len(c.Args) == 2 { // named file
-			filename := c.Args[1]
-			if !strings.Contains(filename, "/") {
-				filename = *f_iomBase + filename
-			}
-			f, err = os.Create(filename)
-			if err != nil {
-				ret.Error = err.Error()
-				return ret
-			}
-		}
-		f.Truncate(1474560)
-		f.Close()
-
-		// mkdosfs
-		out, err := exec.Command(process("mkdosfs"), f.Name(), "1440").CombinedOutput()
-		if err != nil {
-			os.Remove(f.Name())
-			ret.Error = string(out) + err.Error()
-			return ret
-		}
-
-		// mount
-		td, err := ioutil.TempDir(*f_base, "vyatta_")
-		if err != nil {
-			os.Remove(f.Name())
-			ret.Error = err.Error()
-			return ret
-		}
-		defer os.RemoveAll(td)
-		out, err = exec.Command(process("mount"), "-o", "loop", f.Name(), td).CombinedOutput()
-		if err != nil {
-			os.Remove(f.Name())
-			ret.Error = string(out) + err.Error()
-			return ret
-		}
-
-		// create <floppy>/config/config.boot from vc
-		err = os.Mkdir(td+"/config", 0774)
-		if err != nil {
-			ret.Error = err.Error()
-			out, err = exec.Command(process("umount"), td).CombinedOutput()
-			if err != nil {
-				log.Errorln(string(out), err)
-				teardown()
-			}
-			os.Remove(f.Name())
-			return ret
-		}
-
-		if vyatta.ConfigFile == "" {
-			vc := vyattaGenConfig()
-
-			err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
-			if err != nil {
-				ret.Error = err.Error()
-				out, err = exec.Command(process("umount"), td).CombinedOutput()
-				if err != nil {
-					log.Errorln(string(out), err)
-					teardown()
-				}
-				os.Remove(f.Name())
-				return ret
-			}
-		} else {
-			vc, err := ioutil.ReadFile(vyatta.ConfigFile)
-			if err != nil {
-				ret.Error = err.Error()
-				out, err = exec.Command(process("umount"), td).CombinedOutput()
-				if err != nil {
-					log.Errorln(string(out), err)
-					teardown()
-				}
-				os.Remove(f.Name())
-				return ret
-			}
-			err = ioutil.WriteFile(td+"/config/config.boot", vc, 0664)
-			if err != nil {
-				ret.Error = err.Error()
-				out, err = exec.Command(process("umount"), td).CombinedOutput()
-				if err != nil {
-					log.Errorln(string(out), err)
-					teardown()
-				}
-				os.Remove(f.Name())
-				return ret
-			}
-		}
-
-		// umount
-		out, err = exec.Command(process("umount"), td).CombinedOutput()
-		if err != nil {
-			os.Remove(f.Name())
-			ret.Error = string(out) + err.Error()
-			return ret
-		}
-
-		ret.Response = f.Name()
-
-	default:
-		ret.Error = "invalid vyatta command"
-		return ret
+		newRoutes = append(newRoutes, &vyattaRoute{
+			Route:   parts[0],
+			NextHop: parts[1],
+		})
 	}
 
-	return ret
+	vyatta.Routes = newRoutes
+	return nil
 }
 
 func vyattaGenConfig() string {
@@ -499,6 +472,118 @@ func isIPv6(ip string) bool {
 	}
 
 	return true
+}
+
+func vyattaWrite(filename string) (string, error) {
+	var err, err2 error
+
+	// make sure fields are sane
+	for len(vyatta.Ipv4) != len(vyatta.Ipv6) {
+		if len(vyatta.Ipv4) < len(vyatta.Ipv6) {
+			vyatta.Ipv4 = append(vyatta.Ipv4, "none")
+		} else {
+			vyatta.Ipv6 = append(vyatta.Ipv6, "none")
+		}
+	}
+
+	// create a 1.44MB file (1474560)
+	var f *os.File
+	if filename == "" { // temporary file
+		f, err = ioutil.TempFile(*f_iomBase, "vyatta_")
+		if err != nil {
+			log.Errorln(err)
+			teardown()
+		}
+	} else { // named file
+		if !strings.Contains(filename, "/") {
+			filename = *f_iomBase + filename
+		}
+		f, err = os.Create(filename)
+		if err != nil {
+			return "", err
+		}
+	}
+	f.Truncate(1474560)
+	f.Close()
+
+	// mkdosfs
+	out, err := exec.Command(process("mkdosfs"), f.Name(), "1440").CombinedOutput()
+	if err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("%v %v", string(out), err.Error())
+	}
+
+	// mount
+	td, err := ioutil.TempDir(*f_base, "vyatta_")
+	if err != nil {
+		os.Remove(f.Name())
+		return "", err
+	}
+	defer os.RemoveAll(td)
+
+	out, err = exec.Command(process("mount"), "-o", "loop", f.Name(), td).CombinedOutput()
+	if err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("%v %v", string(out), err.Error())
+	}
+
+	// create <floppy>/config/config.boot from vc
+	err = os.Mkdir(td+"/config", 0774)
+	if err != nil {
+		out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+		if err2 != nil {
+			log.Errorln(string(out), err)
+			teardown()
+		}
+		os.Remove(f.Name())
+		return "", err
+	}
+
+	if vyatta.ConfigFile == "" {
+		vc := vyattaGenConfig()
+
+		err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
+		if err != nil {
+			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			if err2 != nil {
+				log.Errorln(string(out), err)
+				teardown()
+			}
+			os.Remove(f.Name())
+			return "", err
+		}
+	} else {
+		vc, err := ioutil.ReadFile(vyatta.ConfigFile)
+		if err != nil {
+			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			if err2 != nil {
+				log.Errorln(string(out), err)
+				teardown()
+			}
+			os.Remove(f.Name())
+			return "", err
+		}
+
+		err = ioutil.WriteFile(td+"/config/config.boot", vc, 0664)
+		if err != nil {
+			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			if err2 != nil {
+				log.Errorln(string(out), err)
+				teardown()
+			}
+			os.Remove(f.Name())
+			return "", err
+		}
+	}
+
+	// umount
+	out, err = exec.Command(process("umount"), td).CombinedOutput()
+	if err != nil {
+		os.Remove(f.Name())
+		return "", fmt.Errorf("%v %v", string(out), err.Error())
+	}
+
+	return f.Name(), nil
 }
 
 var vyattaConfigText = `
