@@ -6,15 +6,16 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 )
 
 type dnsmasqServer struct {
@@ -29,89 +30,118 @@ var (
 	dnsmasqServerCount int
 )
 
+var dnsmasqCLIHandlers = []minicli.Handler{
+	{ // dnsmasq
+		HelpShort: "start a dhcp/dns server on a specified ip",
+		HelpLong: `
+Start a dhcp/dns server on a specified IP with a specified range.  For example,
+to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
+10.0.254.254:
+
+	dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
+
+To start only a from a config file:
+
+	dnsmasq start /path/to/config
+
+To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
+running dnsmasq server, specify its ID from the list of running servers. For
+example, to kill dnsmasq server 2:
+
+	dnsmasq kill 2
+
+To kill all running dnsmasq servers, pass * as the ID:
+
+	dnsmasq kill *
+
+dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You
+can specify an additional config file for dnsmasq by providing a file as an
+additional argument.
+
+	dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/dnsmasq-extra.conf
+
+NOTE: If specifying an additional config file, you must provide the full path
+to the file.`,
+		Patterns: []string{
+			"dnsmasq",
+			"dnsmasq start <listen address> <low dhcp range> <high dhcp range> [config]",
+			"dnsmasq start <config>",
+			"dnsmasq kill <id or *>",
+		},
+		Record: true,
+		Call:   cliDnsmasq,
+	},
+}
+
 func init() {
+	registerHandlers("dnsmasq", dnsmasqCLIHandlers)
+
 	dnsmasqServers = make(map[int]*dnsmasqServer)
 }
 
-func dnsmasqCLI(c cliCommand) cliResponse {
-	var ret cliResponse
-	switch len(c.Args) {
-	case 0:
-		// show the list of dnsmasq servers
-		ret.Response = dnsmasqList()
-	case 2:
-		switch c.Args[0] {
-		case "start":
-			err := dnsmasqStart("", "", "", c.Args[1])
-			if err != nil {
-				ret.Error = err.Error()
-			}
-		case "kill":
-			val, err := strconv.Atoi(c.Args[1])
-			if err != nil {
-				ret.Error = err.Error()
-				break
-			}
-			err = dnsmasqKill(val)
-			if err != nil {
-				ret.Error = err.Error()
-			}
-		default:
-			ret.Error = "malformed command"
+func cliDnsmasq(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	if c.StringArgs["id"] == "*" {
+		// Must be "kill *"
+		err = dnsmasqKillAll()
+	} else if c.StringArgs["id"] != "" {
+		// Must be "kill <id>"
+		var id int
+		id, err = strconv.Atoi(c.StringArgs["id"])
+		if err == nil {
+			err = dnsmasqKill(id)
 		}
-	case 4, 5:
-		if c.Args[0] != "start" {
-			ret.Error = "malformed command"
-			break
+	} else if c.StringArgs["listen"] != "" || c.StringArgs["config"] != "" {
+		// Must be "start"
+		// We don't need to differentiate between the two start commands
+		// because dnsmasqStart expects the zero string value when values
+		// are not specified.
+		err = dnsmasqStart(
+			c.StringArgs["listen"],
+			c.StringArgs["low"],
+			c.StringArgs["high"],
+			c.StringArgs["config"])
+	} else {
+		// Must be "list"
+		resp.Header = []string{"ID", "Listening Address", "Min", "Max", "Path", "PID"}
+		resp.Tabular = [][]string{}
+		for id, c := range dnsmasqServers {
+			pid := dnsmasqPID(id)
+			resp.Tabular = append(resp.Tabular, []string{
+				strconv.Itoa(id),
+				c.Addr,
+				c.MinRange,
+				c.MaxRange,
+				c.Path,
+				strconv.Itoa(pid)})
 		}
-		var err error
-		if len(c.Args) == 4 {
-			err = dnsmasqStart(c.Args[1], c.Args[2], c.Args[3], "")
-		} else {
-			err = dnsmasqStart(c.Args[1], c.Args[2], c.Args[3], c.Args[4])
-		}
-		if err != nil {
-			ret.Error = err.Error()
-		}
-	default:
-		ret.Error = "malformed command"
 	}
-	return ret
+
+	if err != nil {
+		resp.Error = err.Error()
+	}
+	return minicli.Responses{resp}
 }
 
-func dnsmasqList() string {
-	if len(dnsmasqServers) == 0 {
-		return ""
+func dnsmasqKillAll() error {
+	errs := []string{}
+
+	for c, _ := range dnsmasqServers {
+		err := dnsmasqKill(c)
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("%v", err))
+		}
 	}
 
-	w := new(tabwriter.Writer)
-	buf := new(bytes.Buffer)
-	w.Init(buf, 0, 8, 1, ' ', 0)
-	fmt.Fprintf(w, "ID\t:\tListening Address\tMin\tMax\tPath\tPID\n")
-	for id, c := range dnsmasqServers {
-		pid := dnsmasqPID(id)
-		fmt.Fprintf(w, "%v\t:\t%v\t%v\t%v\t%v\t%v\n", id, c.Addr, c.MinRange, c.MaxRange, c.Path, pid)
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
 	}
-	w.Flush()
-	return buf.String()
+	return nil
 }
 
 func dnsmasqKill(id int) error {
-	if id == -1 {
-		var e string
-		for c, _ := range dnsmasqServers {
-			err := dnsmasqKill(c)
-			if err != nil {
-				e = fmt.Sprintf("%v\n%v", e, err)
-			}
-		}
-		if e == "" {
-			return nil
-		} else {
-			return fmt.Errorf("%v", e)
-		}
-	}
-
 	pid := dnsmasqPID(id)
 	log.Debug("dnsmasq id %v has pid %v", id, pid)
 	if pid == -1 {

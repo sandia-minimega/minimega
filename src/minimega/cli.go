@@ -170,46 +170,6 @@ prepending the keyword 'annotate' to the command:
 			},
 		},
 
-		"dnsmasq": &command{
-			Call:      dnsmasqCLI,
-			Helpshort: "start a dhcp/dns server on a specified ip",
-			Helplong: `
-	Usage: dnsmasq [start [<listen address> <DHCP low range> <DHCP high range> [config file], config file], kill <id>]
-
-Start a dhcp/dns server on a specified IP with a specified range.  For example,
-to start a DHCP server on IP 10.0.0.1 serving the range 10.0.0.2 -
-10.0.254.254:
-
-	dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254
-
-To start only a from a config file:
-
-	dnsmasq start /path/to/config
-
-To list running dnsmasq servers, invoke dnsmasq with no arguments.  To kill a
-running dnsmasq server, specify its ID from the list of running servers. For
-example, to kill dnsmasq server 2:
-
-	dnsmasq kill 2
-
-To kill all running dnsmasq servers, pass -1 as the ID:
-
-	dnsmasq kill -1
-
-dnsmasq will provide DNS service from the host, as well as from /etc/hosts.
-You can specify an additional config file for dnsmasq by providing a file as an
-additional argument.
-
-	dnsmasq start 10.0.0.1 10.0.0.2 10.0.254.254 /tmp/dnsmasq-extra.conf
-
-NOTE: If specifying an additional config file, you must provide the full path to
-the file.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"optimize": &command{
 			Call:      optimizeCLI,
 			Helpshort: "enable or disable several virtualization optimizations",
