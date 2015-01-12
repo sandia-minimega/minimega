@@ -170,46 +170,6 @@ prepending the keyword 'annotate' to the command:
 			},
 		},
 
-		"optimize": &command{
-			Call:      optimizeCLI,
-			Helpshort: "enable or disable several virtualization optimizations",
-			Helplong: `
-	Usage: optimize [ksm [true,false], hugepages [path], affinity [true,false]]
-
-Enable or disable several virtualization optimizations, including Kernel
-Samepage Merging, CPU affinity for VMs, and the use of hugepages.
-
-To enable/disable Kernel Samepage Merging (KSM):
-	optimize ksm [true,false]
-
-To enable hugepage support:
-	optimize hugepages </path/to/hugepages_mount>
-
-To disable hugepage support:
-	optimize hugepages ""
-
-To enable/disable CPU affinity support:
-	optimize affinity [true,false]
-
-To set a CPU set filter for the affinity scheduler, for example (to use only
-CPUs 1, 2-20):
-	optimize affinity filter [1,2-20]
-
-To clear a CPU set filter:
-	optimize affinity filter
-
-To view current CPU affinity mappings:
-	optimize affinity
-
-To disable all optimizations
-	clear optimize`,
-			Record: true,
-			Clear: func() error {
-				clearOptimize()
-				return nil
-			},
-		},
-
 		"file": &command{
 			Call:      cliFile,
 			Helpshort: "work with files served by minimega",

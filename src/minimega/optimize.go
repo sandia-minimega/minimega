@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -37,8 +38,186 @@ const (
 	ksmTuneSleepMillisecs = 10
 )
 
+var optimizeCLIHandlers = []minicli.Handler{
+	{ // optimize
+		HelpShort: "enable or disable several virtualization optimizations",
+		HelpLong: `
+Enable or disable several virtualization optimizations, including Kernel
+Samepage Merging, CPU affinity for VMs, and the use of hugepages.
+
+To enable/disable Kernel Samepage Merging (KSM):
+	optimize ksm [true,false]
+
+To enable hugepage support:
+	optimize hugepages </path/to/hugepages_mount>
+
+To disable hugepage support:
+	optimize hugepages ""
+
+To enable/disable CPU affinity support:
+	optimize affinity [true,false]
+
+To set a CPU set filter for the affinity scheduler, for example (to use only
+CPUs 1, 2-20):
+	optimize affinity filter [1,2-20]
+
+To clear a CPU set filter:
+	optimize affinity filter
+
+To view current CPU affinity mappings:
+	optimize affinity
+
+To disable all optimizations
+	clear optimize`,
+		Patterns: []string{
+			"optimize",
+			"optimize <ksm,> [true,false]",
+			"optimize <hugepages,> [path]",
+			"optimize <affinity,> [true,false]",
+			"optimize <affinity,> filter <filter>",
+			"clear optimize [affinity,]",
+		},
+		Record: true,
+		Call:   cliOptimize,
+	},
+}
+
 func init() {
+	registerHandlers("optimize", optimizeCLIHandlers)
+
 	affinityClearFilter()
+}
+
+func cliOptimize(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+
+	if isClearCommand(c) {
+		// Reset optimizations
+		if c.BoolArgs["affinity"] {
+			affinityClearFilter()
+		} else {
+			clearOptimize()
+		}
+	} else if c.BoolArgs["ksm"] {
+		if len(c.BoolArgs) == 1 {
+			// Must want to print ksm status
+			resp.Response = fmt.Sprintf("%v", ksmEnabled)
+		} else if c.BoolArgs["true"] {
+			// Must want to update ksm status to true
+			ksmEnable()
+		} else {
+			// Must want to update ksm status to false
+			ksmDisable()
+		}
+	} else if c.BoolArgs["hugepages"] {
+		if len(c.BoolArgs) == 1 {
+			// Must want to print hugepage path
+			resp.Response = fmt.Sprintf("%v", hugepagesMountPath)
+		} else if c.StringArgs["path"] == `""` {
+			// TODO: Shouldn't this be handled by a "clear" command?
+			hugepagesMountPath = ""
+		} else {
+			hugepagesMountPath = c.StringArgs["path"]
+		}
+	} else if c.BoolArgs["affinity"] {
+		if len(c.BoolArgs) == 1 {
+			// Must want to print affinity status
+			resp.Header = []string{"CPU", "VMs"}
+			resp.Tabular = [][]string{}
+
+			var cpus []string
+			for k, _ := range affinityCPUSets {
+				cpus = append(cpus, k)
+			}
+
+			sort.Strings(cpus)
+
+			for _, cpu := range cpus {
+				var ids []int
+				for _, vm := range affinityCPUSets[cpu] {
+					ids = append(ids, vm.Id)
+				}
+				resp.Tabular = append(resp.Tabular, []string{
+					cpu,
+					fmt.Sprintf("%v", ids)})
+			}
+		} else if c.BoolArgs["filter"] {
+			r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
+			if err != nil {
+				resp.Error = fmt.Sprintf("cpu affinity ranges: %v", err)
+				return minicli.Responses{resp}
+			}
+
+			cpus, err := r.SplitRange(c.StringArgs["filter"])
+			if err != nil {
+				resp.Error = fmt.Sprintf("cannot expand CPU range: %v", err)
+				return minicli.Responses{resp}
+			}
+
+			affinityCPUSets = make(map[string][]*vmInfo)
+			for _, v := range cpus {
+				affinityCPUSets[v] = []*vmInfo{}
+			}
+
+			if affinityEnabled {
+				affinityEnable()
+			}
+
+		} else if c.BoolArgs["true"] && !affinityEnabled {
+			// Enabling affinity
+			affinityEnable()
+		} else if c.BoolArgs["false"] && affinityEnabled {
+			// Disabling affinity
+			affinityDisable()
+		}
+	} else {
+		// Summary of optimizations
+		var err error
+		resp.Response, err = optimizeStatus()
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	}
+
+	return minicli.Responses{resp}
+}
+
+// TODO: Rewrite this to use Header/Tabular.
+func optimizeStatus() (string, error) {
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Subsystem\tEnabled\n")
+	fmt.Fprintf(w, "KSM\t%v\n", ksmEnabled)
+
+	hugepagesEnabled := "false"
+	if hugepagesMountPath != "" {
+		hugepagesEnabled = fmt.Sprintf("true [%v]", hugepagesMountPath)
+	}
+	fmt.Fprintf(w, "hugepages\t%v\n", hugepagesEnabled)
+
+	r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
+	if err != nil {
+		return "", fmt.Errorf("cpu affinity ranges: %v", err)
+	}
+
+	var cpus []string
+	for k, _ := range affinityCPUSets {
+		cpus = append(cpus, k)
+	}
+	cpuRange, err := r.UnsplitRange(cpus)
+	if err != nil {
+		return "", fmt.Errorf("cannot compress CPU range: %v", err)
+	}
+
+	if affinityEnabled {
+		fmt.Fprintf(w, "CPU affinity\ttrue with cpus %v\n", cpuRange)
+	} else {
+		fmt.Fprintf(w, "CPU affinity\tfalse\n")
+	}
+
+	w.Flush()
+	return o.String(), nil
 }
 
 func ksmSave() {
@@ -101,185 +280,6 @@ func clearOptimize() {
 	hugepagesMountPath = ""
 	affinityDisable()
 	affinityClearFilter()
-}
-
-func optimizeCLI(c cliCommand) cliResponse {
-	// must be in the form of
-	// 	optimize ksm [true,false]
-	//	optimize hugepages <path>
-	//	optimize affinity [true,false]
-	switch len(c.Args) {
-	case 0: // summary of all optimizations
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "Subsystem\tEnabled\n")
-		fmt.Fprintf(w, "KSM\t%v\n", ksmEnabled)
-
-		hugepagesEnabled := "false"
-		if hugepagesMountPath != "" {
-			hugepagesEnabled = fmt.Sprintf("true [%v]", hugepagesMountPath)
-		}
-		fmt.Fprintf(w, "hugepages\t%v\n", hugepagesEnabled)
-
-		r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("cpu affinity ranges: %v", err),
-			}
-		}
-
-		var cpus []string
-		for k, _ := range affinityCPUSets {
-			cpus = append(cpus, k)
-		}
-		cpuRange, err := r.UnsplitRange(cpus)
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("cannot compress CPU range: %v", err),
-			}
-		}
-
-		if affinityEnabled {
-			fmt.Fprintf(w, "CPU affinity\ttrue with cpus %v\n", cpuRange)
-		} else {
-			fmt.Fprintf(w, "CPU affinity\tfalse\n")
-		}
-
-		w.Flush()
-		return cliResponse{
-			Response: o.String(),
-		}
-	case 1: // must be ksm, hugepages, affinity
-		switch c.Args[0] {
-		case "ksm":
-			return cliResponse{
-				Response: fmt.Sprintf("%v", ksmEnabled),
-			}
-		case "hugepages":
-			return cliResponse{
-				Response: fmt.Sprintf("%v", hugepagesMountPath),
-			}
-		case "affinity":
-			var o bytes.Buffer
-			w := new(tabwriter.Writer)
-			w.Init(&o, 5, 0, 1, ' ', 0)
-			fmt.Fprintf(w, "CPU\tVMs\n")
-
-			var cpus []string
-			for k, _ := range affinityCPUSets {
-				cpus = append(cpus, k)
-			}
-
-			sort.Strings(cpus)
-
-			for _, cpu := range cpus {
-				var ids []int
-				for _, vm := range affinityCPUSets[cpu] {
-					ids = append(ids, vm.Id)
-				}
-				fmt.Fprintf(w, "%v\t%v\n", cpu, ids)
-			}
-
-			w.Flush()
-			return cliResponse{
-				Response: o.String(),
-			}
-		default:
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-			}
-		}
-	case 2: // must be ksm, hugepages, affininy
-		switch c.Args[0] {
-		case "ksm":
-			var set bool
-			switch strings.ToLower(c.Args[1]) {
-			case "true":
-				set = true
-			case "false":
-				set = false
-			default:
-				return cliResponse{
-					Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-				}
-			}
-
-			if set {
-				ksmEnable()
-			} else {
-				ksmDisable()
-			}
-		case "hugepages":
-			if c.Args[1] == `""` {
-				hugepagesMountPath = ""
-			} else {
-				hugepagesMountPath = c.Args[1]
-			}
-		case "affinity":
-			// must be:
-			//	[true,false]
-			switch strings.ToLower(c.Args[1]) {
-			case "true":
-				if !affinityEnabled {
-					affinityEnable()
-				}
-			case "false":
-				if affinityEnabled {
-					affinityDisable()
-				}
-			default:
-				return cliResponse{
-					Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-				}
-			}
-		default:
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-			}
-		}
-	case 3:
-		// must be:
-		//	affinity filter [...]
-		//	affinity filter clear
-		if c.Args[0] != "affinity" || c.Args[1] != "filter" {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-			}
-		}
-
-		if c.Args[2] == "clear" {
-			affinityClearFilter()
-			return cliResponse{}
-		}
-
-		r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("cpu affinity ranges: %v", err),
-			}
-		}
-		cpus, err := r.SplitRange(c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("cannot expand CPU range: %v", err),
-			}
-		}
-
-		affinityCPUSets = make(map[string][]*vmInfo)
-		for _, v := range cpus {
-			affinityCPUSets[v] = []*vmInfo{}
-		}
-
-		if affinityEnabled {
-			affinityEnable()
-		}
-	default:
-		return cliResponse{
-			Error: fmt.Sprintf("malformed command %v %v", c.Command, strings.Join(c.Args, " ")),
-		}
-	}
-	return cliResponse{}
 }
 
 func affinityEnable() error {
