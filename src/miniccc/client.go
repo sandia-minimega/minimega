@@ -1,3 +1,7 @@
+// Copyright (2014) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package main
 
 import (
@@ -115,6 +119,11 @@ func clientCommandExec(c *ron.Command) {
 }
 
 func commandGetFiles(files []string) {
+	if *f_serial != "" {
+		log.Errorln("file get not implemented on serial c2 yet!")
+		return
+	}
+
 	for _, v := range files {
 		log.Debug("get file %v", v)
 		path := filepath.Join(*f_path, "files", v)
