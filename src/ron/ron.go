@@ -40,6 +40,7 @@ type Ron struct {
 	serialPath         string
 	serialClientHandle io.ReadWriteCloser
 	masterSerialConns  map[string]io.ReadWriteCloser
+	serialLock         sync.Mutex
 
 	commands           map[int]*Command
 	commandCounter     int
