@@ -3,6 +3,7 @@ package minicli
 import (
 	"bufio"
 	"fmt"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -12,17 +13,21 @@ type inputLexer struct {
 	s        *bufio.Scanner
 	items    []inputItem
 	terminal string
+	content  string
 }
 
 type inputItem struct {
 	Value string
-	Quote string // will be `"`, `'`, or ``
 }
 
 func printInput(items []inputItem) string {
 	parts := make([]string, len(items))
 	for i, v := range items {
-		parts[i] = v.Quote + v.Value + v.Quote
+		if strings.Contains(v.Value, ` `) {
+			parts[i] = strconv.Quote(v.Value)
+		} else {
+			parts[i] = v.Value
+		}
 	}
 
 	return strings.Join(parts, " ")
@@ -51,8 +56,13 @@ func (l *inputLexer) Run() (err error) {
 // lexOutside is our starting state. When we're in this state, we look for the
 // start of a quote string or regular strings.
 func (l *inputLexer) lexOutside() (stateFn, error) {
-	// Content scanned so far
-	var content string
+	emitContent := func() {
+		// Emit item from processed content, if non-empty
+		if len(l.content) > 0 {
+			l.items = append(l.items, inputItem{Value: l.content})
+			l.content = ""
+		}
+	}
 
 	for l.s.Scan() {
 		token := l.s.Text()
@@ -64,24 +74,15 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				if len(content) > 0 {
-					// Emit item
-					l.items = append(l.items, inputItem{Value: content})
-					return l.lexOutside, nil
-				} else {
-					// Strip off leading space
-					continue
-				}
+				emitContent()
+				return l.lexOutside, nil
 			}
 
-			content += token
+			l.content += token
 		}
 	}
 
-	// Emit the last item on the line
-	if len(content) > 0 {
-		l.items = append(l.items, inputItem{Value: content})
-	}
+	emitContent()
 
 	// Finished parsing pattern with no errors... Yippie kay yay
 	return nil, nil
@@ -90,18 +91,14 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 // lexQuote is the state where we've encountered a " or ' and we are scanning
 // for the terminating " or '.
 func (l *inputLexer) lexQuote() (stateFn, error) {
-	// Content scanned so far
-	var content string
-
 	// Scan until EOF, checking each token
 	for l.s.Scan() {
 		token := l.s.Text()
 		switch token {
 		case l.terminal:
-			l.items = append(l.items, inputItem{Value: content, Quote: l.terminal})
 			return l.lexOutside, nil
 		default:
-			content += token
+			l.content += token
 		}
 	}
 
