@@ -57,7 +57,7 @@ func main() {
 	// start a ron client
 	var err error
 
-	if f_serial != "" {
+	if *f_serial != "" {
 		r, err = ron.NewSerial(*f_serial, ron.MODE_CLIENT, *f_path)
 	} else {
 		r, err = ron.New(*f_port, ron.MODE_CLIENT, *f_parent, *f_path)
