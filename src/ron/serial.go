@@ -106,7 +106,7 @@ func (r *Ron) serialClientHandler(path string) {
 		err := dec.Decode(&h)
 		if err != nil {
 			log.Errorln(err)
-			return
+			break
 		}
 		log.Debug("heartbeat from %v", h.UUID)
 
@@ -117,8 +117,15 @@ func (r *Ron) serialClientHandler(path string) {
 		buf, err := r.encodeCommands()
 		if err != nil {
 			log.Errorln(err)
-			return
+			break
 		}
 		c.Write(buf)
 	}
+
+	// remove this path from the list of connected serial ports
+	log.Debug("disconnecting serial client: %v", path)
+
+	r.serialLock.Lock()
+	delete(r.masterSerialConns, path)
+	r.serialLock.Unlock()
 }
