@@ -19,16 +19,13 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"gomacro"
 	"goreadline"
 	"minicli"
 	log "minilog"
 	"os"
 	"sort"
 	"strings"
-	"text/tabwriter"
 )
 
 const (
@@ -50,8 +47,6 @@ var (
 	ackChanMeshage chan cliResponse
 
 	cliCommands map[string]*command
-
-	macro *gomacro.Macro
 )
 
 type cliCommand struct {
@@ -83,8 +78,6 @@ func init() {
 	ackChanLocal = make(chan cliResponse)
 	ackChanSocket = make(chan cliResponse)
 	ackChanMeshage = make(chan cliResponse)
-
-	macro = gomacro.NewMacro()
 
 	// list of commands the cli supports. some commands have small callbacks, which
 	// are defined inline.
@@ -258,53 +251,6 @@ the backing qcow image for a snapshot image.`,
 			},
 		},
 
-		"define": &command{
-			Call:      cliDefine,
-			Helpshort: "define macros",
-			Helplong: `
-	Usage: define [macro[(<var1>[,<var2>...])] <command>]
-
-Define literal and function like macros.
-
-Macro keywords are in the form [a-zA-z0-9]+. When defining a macro, all text after the key is the macro expansion. For example:
-
-	define key foo bar
-
-Will replace "key" with "foo bar" in all command line arguments.
-
-You can also specify function like macros in a similar way to function like macros in C. For example:
-
-	define key(x,y) this is my x, this is my y
-
-Will replace all instances of x and y in the expansion with the variable arguments. When used:
-
-	key(foo,bar)
-
-Will expand to:
-
-	this is mbar foo, this is mbar bar
-
-To show defined macros, invoke define with no arguments.`,
-			Record: true,
-			Clear: func() error {
-				macro = gomacro.NewMacro()
-				return nil
-			},
-		},
-
-		"undefine": &command{
-			Call:      cliUndefine,
-			Helpshort: "undefine macros",
-			Helplong: `
-	Usage: undefine <macro>
-
-Undefine macros by name.`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"capture": &command{
 			Call:      cliCapture,
 			Helpshort: "capture experiment data",
@@ -391,79 +337,8 @@ func (c cliCommand) String() string {
 	return c.Command + " " + args
 }
 
-func cliDefine(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		m := macro.List()
-		if len(m) == 0 {
-			return cliResponse{}
-		}
-
-		// create output
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "macro\texpansion")
-		for _, v := range m {
-			k, e := macro.Macro(v)
-			fmt.Fprintf(&o, "%v\t%v\n", k, e)
-		}
-		w.Flush()
-		return cliResponse{
-			Response: o.String(),
-		}
-	case 1:
-		return cliResponse{
-			Error: "define requires at least 2 arguments",
-		}
-	default:
-		err := macro.Define(c.Args[0], strings.Join(c.Args[1:], " "))
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-	}
-	return cliResponse{}
-}
-
-func cliUndefine(c cliCommand) cliResponse {
-	if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "undefine takes exactly one argument",
-		}
-	}
-	log.Debug("undefine %v", c.Args[0])
-	macro.Undefine(c.Args[0])
-	return cliResponse{}
-}
-
 func makeCommand(s string) cliCommand {
-	// macro expansion
-	// special case - don't expand 'define' or 'undefine'
-	var input string
-	f := strings.Fields(s)
-	if len(f) > 0 {
-		if f[0] != "define" && f[0] != "undefine" {
-			input = macro.Parse(s)
-		} else {
-			input = s
-		}
-	}
-	log.Debug("macro expansion %v -> %v", s, input)
-	f = strings.Fields(input)
-	var command string
-	var args []string
-	if len(f) > 0 {
-		command = f[0]
-	}
-	if len(f) > 1 {
-		args = f[1:]
-	}
-	return cliCommand{
-		Command: command,
-		Args:    args,
-	}
+	return cliCommand{}
 }
 
 // local command line interface, wrapping readline
