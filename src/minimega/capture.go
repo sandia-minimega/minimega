@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"gonetflow"
 	"gopcap"
+	"minicli"
 	log "minilog"
 	"strconv"
 	"strings"
@@ -37,7 +38,66 @@ var (
 	captureNFTimeout int
 )
 
+var captureCLIHandlers = []minicli.Handler{
+	{ // capture
+		HelpShort: "capture experiment data",
+		HelpLong: `
+Capture experiment data including netflow and PCAP. Netflow capture obtains
+netflow data from any local openvswitch switch, and can write to file, another
+socket, or both. Netflow data can be written out in raw or ascii format, and
+file output can be compressed on the fly. Multiple netflow writers can be
+configured.
+
+PCAP capture can be from a bridge or VM interface. No filters are applied, and
+all data seen on that interface is captured to file.
+
+For example, to capture netflow data on bridge mega_bridge to file in ascii
+mode and with gzip compression:
+
+	minimega$ capture netflow mega_bridge file foo.netflow ascii gzip
+
+You can change the active flow timeout with:
+
+	minimega$ capture netflow mega_bridge timeout <timeout>
+
+With <timeout> in seconds.
+
+To capture pcap on bridge 'foo' to file 'foo.pcap':
+
+	minimega$ capture pcap bridge foo foo.pcap
+
+To capture pcap on VM 'foo' to file 'foo.pcap', using the 2nd interface on that
+VM:
+
+	minimega$ capture pcap vm foo 0 foo.pcap`,
+		Patterns: []string{
+			"capture",
+			"clear capture",
+
+			"capture netflow",
+			"capture netflow <bridge>",
+			"capture netflow <bridge> file <filename>",
+			"capture netflow <bridge> file <filename> <raw,ascii>",
+			"capture netflow <bridge> file <filename> <raw,ascii> [gzip]",
+			"capture netflow <bridge> socket <tcp,udp> <hostname:port> <raw,ascii>",
+			"capture netflow delete <bridge>",
+			"capture netflow delete <bridge> <id or *>",
+			"clear capture netflow",
+
+			"capture pcap",
+			"capture pcap bridge <bridge> <filename>",
+			"capture pcap vm <vm id or name> <interface index> <filename>",
+			"capture pcap delete <id or *>",
+			"clear capture pcap",
+		},
+		Record: true,
+		Call:   nil, // TODO cliCapture,
+	},
+}
+
 func init() {
+	registerHandlers("capture", captureCLIHandlers)
+
 	captureNFTimeout = 10
 	captureEntries = make(map[int]*capture)
 	captureIDCount = make(chan int)

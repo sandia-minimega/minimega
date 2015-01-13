@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"strings"
 )
@@ -15,6 +16,23 @@ type dotVM struct {
 	Vlans []string
 	State string
 	Text  string
+}
+
+var dotCLIHandlers = []minicli.Handler{
+	{ // viz
+		HelpShort: "visualize the current experiment as a graph",
+		HelpLong: `
+Output the current experiment topology as a graphviz readable 'dot' file.`,
+		Patterns: []string{
+			"viz <filename>",
+		},
+		Record: true,
+		Call:   nil, // TODO: cliDot,
+	},
+}
+
+func init() {
+	registerHandlers("dot", dotCLIHandlers)
 }
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology

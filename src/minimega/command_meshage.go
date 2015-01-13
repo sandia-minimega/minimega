@@ -90,6 +90,21 @@ response.`,
 		Record: true,
 		Call:   cliMeshageTimeout,
 	},
+	{ // mesh set
+		HelpShort: "send a command to one or more connected clients",
+		HelpLong: `
+Send a command to one or more connected clients. For example, to get the
+vm info from nodes kn1 and kn2:
+
+	mesh_set kn[1-2] vm info
+
+You can use * to send a command to all connected clients.`,
+		Patterns: []string{
+			"mesh set <vms or *> (command)",
+		},
+		Record: true,
+		Call:   nil, // TODO: meshageSet,
+	},
 }
 
 func init() {

@@ -107,62 +107,6 @@ to the specified VM.`,
 			Clear:  vncClear,
 		},
 
-		"mesh_msa_timeout": &command{
-			Call:      meshageMSATimeout,
-			Helpshort: "view or set the MSA timeout",
-			Helplong: `
-	Usage: mesh_msa_timeout [timeout]
-
-View or the the Meshage State Announcement timeout.`,
-			Record: true,
-			Clear: func() error {
-				meshageNode.SetMSATimeout(60)
-				return nil
-			},
-		},
-
-		"mesh_set": &command{
-			Call:      meshageSet,
-			Helpshort: "send a command to one or more connected clients",
-			Helplong: `
-	Usage: mesh_set [annotate] <recipients> <command>
-
-Send a command to one or more connected clients.
-For example, to get the vm_info from nodes kn1 and kn2:
-
-	mesh_set kn[1-2] vm_info
-
-Optionally, you can annotate the output with the hostname of all responders by
-prepending the keyword 'annotate' to the command:
-
-	mesh_set annotate kn[1-2] vm_info`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"mesh_broadcast": &command{
-			Call:      meshageBroadcast,
-			Helpshort: "send a command to all connected clients",
-			Helplong: `
-	Usage: mesh_broadcast [annotate] <command>
-
-Send a command to all connected clients.
-For example, to get the vm_info from all nodes:
-
-	mesh_broadcast vm_info
-
-Optionally, you can annotate the output with the hostname of all responders by
-prepending the keyword 'annotate' to the command:
-
-	mesh_broadcast annotate vm_info`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
 		"file": &command{
 			Call:      cliFile,
 			Helpshort: "work with files served by minimega",
@@ -194,19 +138,6 @@ transfer completes.
 To see files that are currently being transferred, use the status command:
 
 	file status`,
-			Record: true,
-			Clear: func() error {
-				return nil
-			},
-		},
-
-		"viz": &command{
-			Call:      cliDot,
-			Helpshort: "visualize the current experiment as a graph",
-			Helplong: `
-	Usage: viz <filename>
-
-Output the current experiment topology as a graphviz readable 'dot' file.`,
 			Record: true,
 			Clear: func() error {
 				return nil
@@ -250,91 +181,7 @@ the backing qcow image for a snapshot image.`,
 				return nil
 			},
 		},
-
-		"capture": &command{
-			Call:      cliCapture,
-			Helpshort: "capture experiment data",
-			Helplong: `
-	Usage: capture [netflow <bridge> [file <filename> <raw,ascii> [gzip], socket <tcp,udp> <hostname:port> <raw,ascii>], clear <id, -1>]
-	Usage: capture [pcap [bridge <bridge name> <filename>, vm <vm id or name> <vm interface index> <filename, clear <id, -1>]]
-
-Capture experiment data including netflow and PCAP. Netflow capture obtains netflow data
-from any local openvswitch switch, and can write to file, another socket, or
-both. Netflow data can be written out in raw or ascii format, and file output
-can be compressed on the fly. Multiple netflow writers can be configured.
-
-PCAP capture can be from a bridge or VM interface. No filters are applied, and
-all data seen on that interface is captured to file.
-
-For example, to capture netflow data on bridge mega_bridge to file in ascii
-mode and with gzip compression:
-
-	minimega$ capture netflow mega_bridge file foo.netflow ascii gzip
-
-You can change the active flow timeout with:
-
-	minimega$ capture netflow mega_bridge timeout <timeout>
-
-With <timeout> in seconds.
-
-To capture pcap on bridge 'foo' to file 'foo.pcap':
-
-	minimega$ capture pcap bridge foo foo.pcap
-
-To capture pcap on VM 'foo' to file 'foo.pcap', using the 2nd interface on that
-VM:
-
-	minimega$ capture pcap vm foo 0 foo.pcap`,
-			Record: true,
-			Clear:  cliCaptureClear,
-		},
-
-		"cc": &command{
-			Call:      cliCC,
-			Helpshort: "command and control commands",
-			Helplong: `
-	Usage: cc [start [port]]
-	Usage: cc filter [add <filter>=<arg> [<filter>=<arg>]..., delete <filter id>, clear]
-	Usage: cc command [new [command=<command>] [filesend=<file>]... [filerecv=<file>]... [norecord] [background], delete <command id>]
-
-Command and control virtual machines running the miniccc client. Commands may
-include regular commands, backgrounded commands, and any number of sent and/or
-received files. Commands will be executed in command creation order. For
-example, to send a file 'foo' and display the contents on a remote VM:
-
-	cc command new command="cat foo" filesend=foo
-
-Responses are generated (unless the 'norecord' flag is set) and written out to
-'<filebase>/miniccc_responses/<command id>/<client UUID>'. Files to be sent
-must be in '<filebase>'.
-
-Filters may be set to limit which clients may execute a posted command. Filters
-are the logical sum of products of every filter added. That is, a single given
-filter must match all given fields for the command to be executed. Multiple
-filters are allowed, in which case any matched filter will allow the command to
-execute. For example, to filter on VMs that are running windows AND have a
-specific IP, OR nodes that have a range of IPs:
-
-	cc filter add os=windows ip=10.0.0.1 cc filter add ip=12.0.0.0/24
-
-New commands assign any current filters.
-`,
-			Record: true,
-			Clear:  cliClearCC,
-		},
 	}
-
-	var completionCandidates []string
-	// set readline completion commands
-	for k, _ := range cliCommands {
-		completionCandidates = append(completionCandidates, k)
-	}
-	goreadline.SetCompletionCandidates(completionCandidates)
-}
-
-func (c cliCommand) String() string {
-	args := strings.Join(c.Args, " ")
-	return c.Command + " " + args
 }
 
 func makeCommand(s string) cliCommand {
