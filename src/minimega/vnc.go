@@ -13,13 +13,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"minicli"
 	log "minilog"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
-	"text/tabwriter"
 	"time"
 )
 
@@ -76,7 +76,37 @@ type vncPixelFormat struct {
 	Padding                                           [3]byte
 }
 
+var vncCLIHandlers = []minicli.Handler{
+	{ // vnc
+		HelpShort: "record or playback VNC kbd/mouse input",
+		HelpLong: `
+Record or playback keyboard and mouse events sent via the web interface to the
+selected VM.
+
+With no arguments, vnc will list currently recording or playing VNC sessions.
+
+If record is selected, a file will be created containing a record of mouse and
+keyboard actions by the user.
+
+If playback is selected, the specified file (created using vnc record) will be
+read and processed as a sequence of time-stamped mouse/keyboard events to send
+to the specified VM.`,
+		Patterns: []string{
+			"vnc",
+			"vnc <kb,fb> <record,> <host> <vm id or name> <filename>",
+			"vnc <kb,fb> <norecord,> <host> <vm id or name>",
+			"vnc <playback,> <host> <vm id or name> <filename>",
+			"vnc <noplayback,> <host> <vm id or name>",
+			"clear vnc",
+		},
+		Record: false,
+		Call:   cliVNC,
+	},
+}
+
 func init() {
+	registerHandlers("vnc", vncCLIHandlers)
+
 	vncRecording = make(map[string]*vncVMRecord)
 	vncFBRecording = make(map[string]*vncFBRecord)
 	vncPlaying = make(map[string]*vncVMPlayback)
@@ -363,233 +393,208 @@ func (v *vncVMRecord) Close() {
 	v.file.Close()
 }
 
-func cliVNC(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0: // show current recordings/playbacks
-		var recordings string
-		var playbacks string
-		var o bytes.Buffer
+func vncRecordKB(host, vm, filename string) error {
+	vmID, vmName, err := findRemoteVM(host, vm)
+	if err != nil {
+		return err
+	}
 
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "Recordings:")
-		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
+	rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+	// is this rhost already being recorded?
+	if _, ok := vncRecording[rhost]; ok {
+		return fmt.Errorf("kb recording for %v %v already running", host, vm)
+	}
+
+	vmr, err := NewVMRecord(filename)
+	if err != nil {
+		log.Errorln(err)
+		return err
+	}
+
+	vmr.Filename = filename
+	vmr.Host = host
+	vmr.Name = vmName
+	vmr.ID = vmID
+
+	vncRecording[rhost] = vmr
+
+	return nil
+}
+
+func vncRecordFB(host, vm, filename string) error {
+	vmID, vmName, err := findRemoteVM(host, vm)
+	if err != nil {
+		return err
+	}
+
+	rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+	// is this rhost already being recorded?
+	if _, ok := vncFBRecording[rhost]; ok {
+		return fmt.Errorf("fb recording for %v %v already running", host, vm)
+	}
+
+	// fb recording
+	fbr, err := NewFBRecord(filename)
+	if err != nil {
+		log.Errorln(err)
+		return err
+	}
+
+	fbr.Filename = filename
+	fbr.Host = host
+	fbr.Name = vmName
+	fbr.ID = vmID
+	fbr.Rhost = rhost
+
+	// attempt to connect
+	err = fbr.Dial()
+	if err != nil {
+		return err
+	}
+
+	go fbr.Run()
+
+	vncFBRecording[rhost] = fbr
+
+	return nil
+}
+
+func vncPlayback(host, vm, filename string) error {
+	vmID, vmName, err := findRemoteVM(host, vm)
+	if err != nil {
+		return err
+	}
+
+	rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+
+	// is this rhost already being recorded?
+	if _, ok := vncPlaying[rhost]; ok {
+		return fmt.Errorf("fb playback for %v %v already running", host, vm)
+	}
+
+	vmp, err := NewVMPlayback(filename)
+	if err != nil {
+		log.Errorln(err)
+		return err
+	}
+
+	vmp.Filename = filename
+	vmp.Host = host
+	vmp.Name = vmName
+	vmp.ID = vmID
+	vmp.Rhost = rhost
+
+	vmp.conn, _, err = vncDial(vmp.Rhost)
+	if err != nil {
+		return fmt.Errorf("vnc handshake: %v", err)
+	}
+
+	vncPlaying[rhost] = vmp
+	go vmp.Run()
+
+	return nil
+}
+
+func cliVNC(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	host := c.StringArgs["host"]
+	vm := c.StringArgs["vm"]
+	fname := c.StringArgs["filename"]
+
+	if isClearCommand(c) {
+		err = vncClear()
+	} else if c.BoolArgs["record"] && c.BoolArgs["kb"] {
+		// Starting keyboard recording
+		err = vncRecordKB(host, vm, fname)
+	} else if c.BoolArgs["record"] && c.BoolArgs["fb"] {
+		// Starting framebuffer recording
+		err = vncRecordFB(host, vm, fname)
+	} else if c.BoolArgs["norecord"] && c.BoolArgs["kb"] {
+		// Stopping keyboard recording
+		var found bool
+		for k, vmr := range vncRecording {
+			if vmr.Host == host && (vmr.Name == vm || strconv.Itoa(vmr.ID) == vm) {
+				vmr.Close()
+				delete(vncRecording, k)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err = fmt.Errorf("kb recording %v %v not found", host, vm)
+		}
+	} else if c.BoolArgs["norecord"] && c.BoolArgs["fb"] {
+		// Stopping framebuffer recording
+		var found bool
+		for k, vmr := range vncFBRecording {
+			if vmr.Host == host && (vmr.Name == vm || strconv.Itoa(vmr.ID) == vm) {
+				vmr.conn.Close()
+				delete(vncFBRecording, k)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err = fmt.Errorf("fb recording %v %v not found", host, vm)
+		}
+	} else if c.BoolArgs["playback"] {
+		// Start keyboard playback
+		err = vncPlayback(host, vm, fname)
+	} else if c.BoolArgs["noplayback"] {
+		// Stop keyboard playback
+		var found bool
+		for k, vmp := range vncPlaying {
+			if vmp.Host == host && (vmp.Name == vm || strconv.Itoa(vmp.ID) == vm) {
+				vmp.Stop()
+				delete(vncPlaying, k)
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			err = fmt.Errorf("recording %v %v not found", host, vm)
+		}
+	} else {
+		// List all active recordings and playbacks
+		resp.Header = []string{"Host", "VM name", "VM id", "Type", "Filename"}
+		resp.Tabular = [][]string{}
+
 		for _, v := range vncRecording {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
+			resp.Tabular = append(resp.Tabular, []string{
+				v.Host, v.Name, strconv.Itoa(v.ID),
+				"record kb",
+				v.Filename,
+			})
 		}
-		w.Flush()
-		recordings = o.String()
 
-		o.Reset()
+		for _, v := range vncFBRecording {
+			resp.Tabular = append(resp.Tabular, []string{
+				v.Host, v.Name, strconv.Itoa(v.ID),
+				"record fb",
+				v.Filename,
+			})
+		}
 
-		w = new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(&o, "Playbacks:")
-		fmt.Fprintf(w, "Host\tVM name\tVM id\tFile\n")
 		for _, v := range vncPlaying {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Host, v.Name, v.ID, v.Filename)
-		}
-		w.Flush()
-		playbacks = o.String()
-
-		return cliResponse{
-			Response: fmt.Sprintf("%v\n%v", recordings, playbacks),
-		}
-	case 3: // [norecord|noplayback] <host> <vm>
-		if c.Args[0] != "norecord" && c.Args[0] != "noplayback" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		host := c.Args[1]
-		vm := c.Args[2]
-		vmID, err := strconv.Atoi(vm)
-		if err != nil {
-			vmID = -1
-		}
-
-		var rhost string
-		id := -1
-
-		// attempt to find a match
-		for _, v := range vncPlaying {
-			if v.Host == host {
-				if v.Name == vm {
-					id = v.ID
-					break
-				}
-				if vmID != -1 && v.ID == vmID {
-					id = vmID
-					break
-				}
-			}
-		}
-		if id == -1 { // check in recordings
-			for _, v := range vncRecording {
-				if v.Host == host {
-					if v.Name == vm {
-						id = v.ID
-						break
-					}
-					if vmID != -1 && v.ID == vmID {
-						id = vmID
-						break
-					}
-				}
-			}
-		}
-
-		if id == -1 {
-			return cliResponse{
-				Error: fmt.Sprintf("recording/playback %v %v not found", host, vm),
-			}
-		}
-
-		rhost = fmt.Sprintf("%v:%v", host, 5900+id)
-		switch {
-		case c.Args[0] == "norecord":
-			if _, ok := vncRecording[rhost]; ok {
-				vncRecording[rhost].Close()
-				delete(vncRecording, rhost)
-			}
-			if _, ok := vncFBRecording[rhost]; ok {
-				vncFBRecording[rhost].conn.Close()
-				delete(vncFBRecording, rhost)
-			}
-		case c.Args[0] == "noplayback":
-			if _, ok := vncPlaying[rhost]; ok {
-				vncPlaying[rhost].Stop()
-			}
-		}
-	case 4: // [record|playback] <host> <vm> <file>
-		if c.Args[0] != "record" && c.Args[0] != "playback" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		host := c.Args[1]
-		vm := c.Args[2]
-
-		vmID, vmName, err := findRemoteVM(host, vm)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		filename := c.Args[3]
-		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
-
-		// is this rhost already being recorded?
-		if _, ok := vncRecording[rhost]; ok {
-			return cliResponse{
-				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
-			}
-		}
-
-		switch {
-		case c.Args[0] == "record":
-			vmr, err := NewVMRecord(filename)
-			if err != nil {
-				log.Errorln(err)
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			vmr.Filename = filename
-			vmr.Host = host
-			vmr.Name = vmName
-			vmr.ID = vmID
-			vncRecording[rhost] = vmr
-		case c.Args[0] == "playback":
-			vmp, err := NewVMPlayback(filename)
-			if err != nil {
-				log.Errorln(err)
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			vmp.Filename = filename
-			vmp.Host = host
-			vmp.Name = vmName
-			vmp.ID = vmID
-			vmp.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
-			vmp.conn, _, err = vncDial(vmp.Rhost)
-			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("vnc handshake: %v", err),
-				}
-			}
-			vncPlaying[rhost] = vmp
-			go vmp.Run()
-		}
-	case 5:
-		// must be vnc record <node> <id/name> <kbd/mouse file> <fb file>
-		// don't even sanity check...
-		host := c.Args[1]
-		vm := c.Args[2]
-
-		vmID, vmName, err := findRemoteVM(host, vm)
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		filename := c.Args[3]
-		fbFilename := c.Args[4]
-		rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
-
-		// is this rhost already being recorded?
-		if _, ok := vncRecording[rhost]; ok {
-			return cliResponse{
-				Error: fmt.Sprintf("recording for %v %v already running", host, vm),
-			}
-		}
-
-		vmr, err := NewVMRecord(filename)
-		if err != nil {
-			log.Errorln(err)
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		vmr.Filename = filename
-		vmr.Host = host
-		vmr.Name = vmName
-		vmr.ID = vmID
-		vncRecording[rhost] = vmr
-
-		// fb recording
-		fbr, err := NewFBRecord(fbFilename)
-		if err != nil {
-			log.Errorln(err)
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		fbr.Filename = fbFilename
-		fbr.Host = host
-		fbr.Name = vmName
-		fbr.ID = vmID
-		fbr.Rhost = fmt.Sprintf("%v:%v", host, 5900+vmID)
-
-		// attempt to connect
-		err = fbr.Dial()
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		go fbr.Run()
-
-		vncFBRecording[rhost] = fbr
-
-	default:
-		return cliResponse{
-			Error: "malformed command",
+			resp.Tabular = append(resp.Tabular, []string{
+				v.Host, v.Name, strconv.Itoa(v.ID),
+				"playback kb",
+				v.Filename,
+			})
 		}
 	}
-	return cliResponse{}
+
+	if err != nil {
+		resp.Error = err.Error()
+	}
+	return minicli.Responses{resp}
 }
 
 func vncClear() error {
