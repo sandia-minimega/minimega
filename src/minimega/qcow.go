@@ -6,11 +6,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"nbd"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -27,126 +30,202 @@ type injectPair struct {
 }
 
 type injectData struct {
-	childImg  string
+	err       error
 	srcImg    string
 	dstImg    string
 	partition string
-	nPairs    int
 	nbdPath   string
-	injPairs  []injectPair
+	pairs     []injectPair
+}
+
+var qcowCLIHandlers = []minicli.Handler{
+	{ // vm inject
+		HelpShort: "inject files into a qcow image",
+		HelpLong: `
+Create a backed snapshot of a qcow2 image and injects one or more files into
+the new snapshot.
+
+src qcow image - the name of the qcow to use as the backing image file.
+
+partition - The optional partition number in which the files should be
+injected. Partition defaults to 1, but if multiple partitions exist and
+partition is not explicitly specified, an error is thrown and files are not
+injected.
+
+dst qcow image name - The optional name of the snapshot image. This should be a
+name only, if any extra path is specified, an error is thrown. This file will
+be created at 'base'/files. A filename will be generated if this optional
+parameter is omitted.
+
+src file - The local file that should be injected onto the new qcow2 snapshot.
+
+dst file - The path where src file should be injected in the new qcow2 snapshot.
+
+If the src file or dst file contains spaces, use double quotes (" ") as in the
+following example:
+
+	vm inject src src.qc2 dst.qc2 "my file":"Program Files/my file"
+
+Alternatively, when given a single argument, this command supplies the name of
+the backing qcow image for a snapshot image.`,
+		Patterns: []string{
+			"vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...",
+			"vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...",
+		},
+		Record: true,
+		Call:   cliVmInject,
+	},
+}
+
+func init() {
+	registerHandlers("qcow", qcowCLIHandlers)
 }
 
 //Parse the source-file:destination pairs
-func (inject *injectData) parseInjectPairs(c cliCommand, argIdx int) error {
-	var args string
-	parseSrc := true
-	injIdx := 0
-
-	//parse inject pairs
-	args = strings.Join(c.Args[argIdx:], " ")
-	quotedTokens := strings.Split(args, "\"")
-	for _, quotedTok := range quotedTokens {
-		if quotedTok == "" || quotedTok == " " {
-			continue
-		}
-
-		//if there is no ":", path is quoted
-		if !strings.Contains(quotedTok, ":") {
-			if parseSrc {
-				inject.injPairs[injIdx].src = quotedTok
-				parseSrc = false
-			} else {
-				inject.injPairs[injIdx].dst = quotedTok
-				parseSrc = true
-				injIdx++
-			}
-			continue
-		} else {
-			//nothing in this token was quoted,
-			//so both spaces and : split arguments
-			st := strings.Replace(quotedTok, ":", " ", -1)
-			toks := strings.Split(st, " ")
-			for _, tok := range toks {
-				if tok == "" || tok == " " {
-					continue
-				}
-
-				if parseSrc {
-					inject.injPairs[injIdx].src = tok
-					parseSrc = false
-				} else {
-					inject.injPairs[injIdx].dst = tok
-					parseSrc = true
-					injIdx++
-				}
-			}
-		}
+func (inject *injectData) parseInjectPairs(c *minicli.Command) {
+	if inject.err != nil {
+		return
 	}
 
-	inject.nPairs = injIdx
+	inject.pairs = []injectPair{}
 
-	if !parseSrc {
-		return errors.New("malformed command")
+	// parse inject pairs
+	for _, arg := range c.ListArgs["files"] {
+		parts := strings.Split(arg, ":")
+		if len(parts) != 2 {
+			inject.err = errors.New("malformed command; expected src:dst pairs")
+			return
+		}
+
+		inject.pairs = append(inject.pairs, injectPair{src: parts[0], dst: parts[1]})
 	}
-
-	return nil
 }
 
 //Parse the command line to get the arguments for vm_inject
-func (inject *injectData) parseInject(c cliCommand) error {
-	argIdx := 1
-	var dstImgStr string
-	var dstImg *os.File
-	var err error
+func parseInject(c *minicli.Command) *injectData {
+	inject := &injectData{}
 
-	switch {
-	case len(c.Args) == 0:
-		return errors.New("malformed command")
-	case len(c.Args) == 1:
-		inject.childImg = c.Args[0]
-		return nil
-	case len(c.Args) > 1:
-		inject.injPairs = make([]injectPair, len(c.Args)-1)
-
-		//parse source image
-		srcPair := strings.Split(c.Args[0], ":")
-		inject.srcImg, err = filepath.Abs(srcPair[0])
-		if err != nil {
-			return err
-		}
-		if len(srcPair) == 2 {
-			inject.partition = srcPair[1]
-		}
-
-		//parse destination image
-		if !strings.Contains(c.Args[1], ":") {
-			if strings.Contains(c.Args[1], "/") {
-				return errors.New("dst image path must not be absolute")
-			}
-			dstImgStr = *f_iomBase + c.Args[1]
-			argIdx++
-		} else {
-			dstImg, err = ioutil.TempFile(*f_iomBase, "snapshot")
-			dstImgStr = dstImg.Name()
-			if err != nil {
-				return errors.New("could not create a dst image")
-			}
-		}
-		inject.dstImg = dstImgStr
-
-		return inject.parseInjectPairs(c, argIdx)
-
+	// parse source image
+	srcPair := strings.Split(c.StringArgs["srcimg"], ":")
+	inject.srcImg, inject.err = filepath.Abs(srcPair[0])
+	if inject.err != nil {
+		return inject
 	}
-	return nil
+	if len(srcPair) == 2 {
+		inject.partition = srcPair[1]
+	}
+
+	// parse destination image
+	if strings.Contains(c.StringArgs["dstimg"], "/") {
+		inject.err = errors.New("dst image must filename without path")
+	} else if c.StringArgs["dstimg"] != "" {
+		inject.dstImg = path.Join(*f_iomBase, c.StringArgs["dstimg"])
+	} else {
+		dstImg, err := ioutil.TempFile(*f_iomBase, "snapshot")
+		if err != nil {
+			inject.err = errors.New("could not create a dst image")
+		} else {
+			inject.dstImg = dstImg.Name()
+		}
+	}
+
+	inject.parseInjectPairs(c)
+
+	return inject
 }
 
-//Unmount, disconnect nbd, and remove mount directory
+// TODO: (JC) I removed an undocumented command (vm inject <image>) which
+// returned the output from qemu-img info <image>. If users actually are using
+// it, it should be documented and probably not part of the vm inject command.
+func (inject *injectData) run() (string, error) {
+	if inject.err != nil {
+		return "", inject.err
+	}
+
+	// create the new img
+	p := process("qemu-img")
+	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
+	result, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+	}
+
+	// create a tmp mount point
+	mntDir, err := ioutil.TempDir(*f_base, "dstImg")
+	if err != nil {
+		return "", err
+	}
+	defer vmInjectCleanup(mntDir, inject.nbdPath)
+
+	inject.nbdPath, err = nbd.ConnectImage(inject.dstImg)
+	if err != nil {
+		return "", err
+	}
+
+	time.Sleep(100 * time.Millisecond) // give time to create partitions
+
+	// decide on a partition
+	if inject.partition == "" {
+		_, err = os.Stat(inject.nbdPath + "p1")
+		if err != nil {
+			return "", errors.New("no partitions found")
+		}
+
+		_, err = os.Stat(inject.nbdPath + "p2")
+		if err == nil {
+			return "", errors.New("please specify a partition; multiple found")
+		}
+
+		inject.partition = "1"
+	}
+
+	// mount new img
+	p = process("mount")
+	cmd = exec.Command(p, "-w", inject.nbdPath+"p"+inject.partition, mntDir)
+	result, err = cmd.CombinedOutput()
+	if err != nil {
+		// check that ntfs-3g is installed
+		p = process("ntfs-3g")
+		cmd = exec.Command(p, "--version")
+		_, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Error("ntfs-3g not found, ntfs images unwriteable")
+		}
+
+		// mount with ntfs-3g
+		p = process("mount")
+		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
+		result, err = cmd.CombinedOutput()
+		if err != nil {
+			log.Error("failed to mount partition")
+			return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+		}
+	}
+
+	// copy files/folders into mntDir
+	p = process("cp")
+	for _, pair := range inject.pairs {
+		dir := filepath.Dir(filepath.Join(mntDir, pair.dst))
+		os.MkdirAll(dir, 0775)
+		cmd = exec.Command(p, "-fr", pair.src, mntDir+"/"+pair.dst)
+		result, err = cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+		}
+	}
+
+	return inject.dstImg, nil
+}
+
+// Unmount, disconnect nbd, and remove mount directory
 func vmInjectCleanup(mntDir, nbdPath string) {
+	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
+
 	p := process("umount")
 	cmd := exec.Command(p, mntDir)
 	err := cmd.Run()
 	if err != nil {
-		log.Error("vmInjectCleanup: %v", err)
+		log.Error("injectCleanup: %v", err)
 	}
 
 	err = nbd.DisconnectDevice(nbdPath)
@@ -163,127 +242,23 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 	}
 }
 
-//Inject files into a qcow
-//Alternatively, this function can also return a qcow2 backing file's name
-func cliVMInject(c cliCommand) cliResponse {
-	r := cliResponse{}
-	inject := injectData{}
+// Inject files into a qcow
+// Alternatively, this function can also return a qcow2 backing file's name
+func cliVmInject(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
 
 	// yell at user to load nbd
 	err := nbd.Ready()
 	if err != nil {
-		r.Error = err.Error()
-		return r
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
 	}
 
-	err = inject.parseInject(c)
+	inject := parseInject(c)
+	resp.Response, err = inject.run()
 	if err != nil {
-		r.Error = err.Error()
-		return r
+		resp.Error = err.Error()
 	}
 
-	if inject.childImg != "" {
-		p := process("qemu-img")
-		cmd := exec.Command(p, "info", inject.childImg)
-		parent, err := cmd.Output()
-		if err != nil {
-			r.Error = err.Error()
-		} else {
-			r.Response = string(parent[:])
-		}
-		return r
-	}
-
-	//create the new img
-	p := process("qemu-img")
-	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
-	result, err := cmd.CombinedOutput()
-	if err != nil {
-		r.Error = string(result[:]) + "\n" + err.Error()
-		return r
-	}
-
-	// create a tmp mount point
-	mntDir, err := ioutil.TempDir(*f_base, "dstImg")
-	if err != nil {
-		r.Error = err.Error()
-		return r
-	}
-
-	inject.nbdPath, err = nbd.ConnectImage(inject.dstImg)
-	if err != nil {
-		vmInjectCleanup(mntDir, inject.nbdPath)
-		r.Error = err.Error()
-		return r
-	}
-
-	time.Sleep(100 * time.Millisecond) //give time to create partitions
-
-	//decide on a partition
-	if inject.partition == "" {
-		_, err = os.Stat(inject.nbdPath + "p1")
-		if err != nil {
-			vmInjectCleanup(mntDir, inject.nbdPath)
-			r.Error = "no partitions found"
-			return r
-		}
-
-		_, err = os.Stat(inject.nbdPath + "p2")
-		if err == nil {
-			vmInjectCleanup(mntDir, inject.nbdPath)
-			r.Error = "please specify a partition; multiple found"
-			return r
-		}
-
-		inject.partition = "1"
-	}
-
-	//mount new img
-	p = process("mount")
-	cmd = exec.Command(p, "-w", inject.nbdPath+"p"+inject.partition,
-		mntDir)
-	result, err = cmd.CombinedOutput()
-	if err != nil {
-		//if mount failed, try ntfs-3g
-
-		// check that ntfs-3g is installed
-		p = process("ntfs-3g")
-		cmd = exec.Command(p, "--version")
-		_, err = cmd.CombinedOutput()
-		if err != nil {
-			log.Error("ntfs-3g not found, ntfs images unwriteable")
-		}
-
-		// mount with ntfs-3g
-		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
-		result, err = cmd.CombinedOutput()
-		if err != nil {
-			log.Error("failed to mount")
-			vmInjectCleanup(mntDir, inject.nbdPath)
-			r.Error = string(result[:]) + "\n" + err.Error()
-			return r
-		}
-	}
-
-	//copy files/folders in
-	for i := 0; i < inject.nPairs; i++ {
-		p = process("cp")
-		dir := filepath.Dir(filepath.Join(mntDir, inject.injPairs[i].dst))
-		os.MkdirAll(dir, 0775)
-		cmd = exec.Command(p, "-fr", inject.injPairs[i].src, mntDir+"/"+inject.injPairs[i].dst)
-		result, err = cmd.CombinedOutput()
-		if err != nil {
-			vmInjectCleanup(mntDir, inject.nbdPath)
-			r.Error = string(result[:]) + "\n" + err.Error()
-			return r
-		}
-	}
-
-	log.Debug("cleaning up vm_inject")
-	vmInjectCleanup(mntDir, inject.nbdPath)
-
-	r.Response = inject.dstImg
-
-	return r
+	return minicli.Responses{resp}
 }
