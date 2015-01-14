@@ -46,39 +46,53 @@ func (r *Ron) heartbeat() {
 				first = false
 			}
 
-			var buf bytes.Buffer
-			enc := gob.NewEncoder(&buf)
-
-			err := enc.Encode(h)
+			newCommands, err, posted := r.submitHeartbeat(h)
 			if err != nil {
 				log.Errorln(err)
-				continue
-			}
-
-			host := fmt.Sprintf("http://%v:%v/heartbeat", r.parent, r.port)
-			log.Debug("ron host %v", host)
-
-			resp, err := http.Post(host, "ron/miniccc", &buf)
-			if err != nil {
-				log.Errorln(err)
-				continue
-			}
-
-			newCommands := make(map[int]*Command)
-			dec := gob.NewDecoder(resp.Body)
-
-			err = dec.Decode(&newCommands)
-			if err != nil {
-				log.Errorln(err)
-				resp.Body.Close()
-				break // break here because the post already happened
+				if posted {
+					break
+				} else {
+					continue
+				}
 			}
 
 			r.clientCommands(newCommands)
 
-			resp.Body.Close()
 			break
 		}
+	}
+}
+
+func (r *Ron) submitHeartbeat(h *hb) (map[int]*Command, error, bool) {
+	if r.serialPath != "" {
+		return r.serialHeartbeat(h)
+	} else {
+		var buf bytes.Buffer
+		enc := gob.NewEncoder(&buf)
+
+		err := enc.Encode(h)
+		if err != nil {
+			return nil, err, false
+		}
+
+		host := fmt.Sprintf("http://%v:%v/heartbeat", r.parent, r.port)
+		log.Debug("ron host %v", host)
+
+		resp, err := http.Post(host, "ron/miniccc", &buf)
+		if err != nil {
+			return nil, err, false
+		}
+
+		newCommands := make(map[int]*Command)
+		dec := gob.NewDecoder(resp.Body)
+
+		err = dec.Decode(&newCommands)
+		if err != nil {
+			resp.Body.Close()
+			return nil, err, true
+		}
+		resp.Body.Close()
+		return newCommands, nil, true
 	}
 }
 

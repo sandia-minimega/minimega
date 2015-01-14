@@ -49,44 +49,23 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
-			var ok bool
-			var sbuf []byte
-			dbuf := make([]byte, VNC_WS_BUF)
-			gotevent := make(chan []byte)
-			go func() {
-				for {
-					buf := make([]byte, VNC_WS_BUF)
-					var n int
-					n, err = ws.Read(buf)
-					if err != nil {
-						if !strings.Contains(err.Error(), "closed network connection") {
-							log.Errorln(err)
-						}
-						break
-					}
-					log.Debugln(string(buf[0:n]))
-					gotevent <- buf[0:n]
-				}
-			}()
 			for {
-				var pbchan chan []byte
-				if pb, ok := vncPlaying[rhost]; ok {
-					pbchan = pb.nextEvent
-				}
-				select {
-				case sbuf, ok = <-pbchan:
-					if !ok {
-						// channel closed, stop playback
-						delete(vncPlaying, rhost)
-					}
-				case sbuf = <-gotevent:
-					if r, ok := vncRecording[rhost]; ok {
-						r.AddAction(string(sbuf))
-					}
-				}
-				n, err := base64.StdEncoding.Decode(dbuf, sbuf)
+				sbuf := make([]byte, VNC_WS_BUF)
+				dbuf := make([]byte, VNC_WS_BUF)
+
+				n, err := ws.Read(sbuf)
 				if err != nil {
-					log.Errorln(err, string(sbuf))
+					if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
+						log.Errorln(err)
+					}
+					break
+				}
+				if r, ok := vncRecording[rhost]; ok {
+					r.AddAction(string(sbuf[:n]))
+				}
+				n, err = base64.StdEncoding.Decode(dbuf, sbuf[:n])
+				if err != nil {
+					log.Errorln(err, string(sbuf[:n]))
 					break
 				}
 				_, err = remote.Write(dbuf[0:n])
@@ -103,13 +82,14 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 			for {
 				n, err := remote.Read(sbuf)
 				if err != nil {
-					if err != io.EOF {
+					if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
 						log.Errorln(err)
 					}
 					break
 				}
 				base64.StdEncoding.Encode(dbuf, sbuf[0:n])
 				n = base64.StdEncoding.EncodedLen(n)
+
 				_, err = ws.Write(dbuf[0:n])
 				if err != nil {
 					log.Errorln(err)

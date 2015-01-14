@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -19,7 +20,10 @@ const (
 	MIN_OVS  = 1.4
 )
 
-var externalProcesses = map[string]string{
+// defaultExternalProcesses is the default mapping between a command and the
+// actual binary name. This should *never* be modified. If the user needs to
+// update customExternalProcesses.
+var defaultExternalProcesses = map[string]string{
 	"qemu":     "kvm",
 	"ip":       "ip",
 	"ovs":      "ovs-vsctl",
@@ -38,6 +42,11 @@ var externalProcesses = map[string]string{
 	"lsmod":    "lsmod",
 	"ntfs-3g":  "ntfs-3g",
 }
+
+// customExternalProcesses contains user-specified mappings between command
+// names. This mapping is checked first before using defaultExternalProcesses
+// to resolve a command.
+var customExternalProcesses = map[string]string{}
 
 var externalCLIHandlers = []minicli.Handler{
 	{ // check
@@ -61,13 +70,17 @@ func init() {
 // checkExternal checks for the presence of each of the external processes we
 // may call, and error if any aren't in our path.
 func checkExternal() error {
-	for _, i := range externalProcesses {
+	var errs []string
+	for _, i := range defaultExternalProcesses {
 		path, err := exec.LookPath(i)
 		if err != nil {
-			return fmt.Errorf("%v not found", i)
+			errs = append(errs, fmt.Sprintf("%v not found", err.Error()))
 		} else {
 			log.Info("%v found at: %v", i, path)
 		}
+	}
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
 	}
 
 	// everything we want exists, but we have a few minimum versions to check
@@ -108,7 +121,12 @@ func cliCheckExternal(c *minicli.Command) minicli.Responses {
 }
 
 func process(p string) string {
-	path, err := exec.LookPath(externalProcesses[p])
+	name, ok := customExternalProcesses[p]
+	if !ok {
+		name = defaultExternalProcesses[p]
+	}
+
+	path, err := exec.LookPath(name)
 	if err != nil {
 		log.Error("process: %v", err)
 		return ""

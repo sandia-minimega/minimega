@@ -261,17 +261,19 @@ func getBridgeFromTap(t string) (*bridge, error) {
 
 // destroy all bridges
 func bridgesDestroy() error {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
 	var e []string
 	for k, v := range bridges {
 		err := v.Destroy()
 		if err != nil {
 			e = append(e, err.Error())
 		}
+		bridgeLock.Lock()
 		delete(bridges, k)
+		bridgeLock.Unlock()
 	}
+	bridgeLock.Lock()
 	updateBridgeInfo()
+	bridgeLock.Unlock()
 	bridgeFile := *f_base + "bridges"
 	err := os.Remove(bridgeFile)
 	if err != nil {
@@ -306,6 +308,7 @@ func bridgeInfo() string {
 	return o.String()
 }
 
+// called with bridgeLock set
 func updateBridgeInfo() {
 	log.Debugln("updateBridgeInfo")
 	i := bridgeInfo()
@@ -414,9 +417,11 @@ func (b *bridge) LanCreate(lan int) error {
 	if b.lans[lan] != nil {
 		return nil
 	}
+	b.Lock.Lock()
 	b.lans[lan] = &vlan{
 		Taps: make(map[string]*tap),
 	}
+	b.Lock.Unlock()
 	return nil
 }
 
@@ -455,7 +460,9 @@ func (b *bridge) DestroyNetflow() error {
 		return e
 	}
 
+	b.Lock.Lock()
 	b.nf = nil
+	b.Lock.Unlock()
 
 	return nil
 }
@@ -536,7 +543,9 @@ func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 		return nil, e
 	}
 
+	b.Lock.Lock()
 	b.nf = nf
+	b.Lock.Unlock()
 	return nf, nil
 }
 
@@ -598,7 +607,9 @@ func (b *bridge) startIML() error {
 	if err != nil {
 		return fmt.Errorf("cannot start ip learner on bridge: %v", err)
 	}
+	b.Lock.Lock()
 	b.iml = iml
+	b.Lock.Unlock()
 	return nil
 }
 
@@ -635,8 +646,10 @@ func (b *bridge) create() error {
 				return e
 			}
 		}
+		b.Lock.Lock()
 		b.exists = true
 		b.lans = make(map[int]*vlan)
+		b.Lock.Unlock()
 
 		p = process("ip")
 		cmd = &exec.Cmd{
@@ -805,12 +818,12 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 	}
 
 	// if it's a host tap, then ovs removed it for us and we don't need to continue
-	b.Lock.Lock()
+	bridgeLock.Lock()
 	if _, ok := disconnectedTaps[tap]; !ok {
-		b.Lock.Unlock()
+		bridgeLock.Unlock()
 		return nil
 	}
-	b.Lock.Unlock()
+	bridgeLock.Unlock()
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -915,10 +928,14 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 	}
 
 	// if this tap is in the disconnected list, move it out
+	bridgeLock.Lock()
+	b.Lock.Lock()
 	if _, ok := disconnectedTaps[tap]; ok {
 		b.lans[lan].Taps[tap] = disconnectedTaps[tap]
 		delete(disconnectedTaps, tap)
 	}
+	b.Lock.Unlock()
+	bridgeLock.Unlock()
 
 	return nil
 }
@@ -926,12 +943,14 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 // remove a tap from a bridge
 func (b *bridge) TapRemove(lan int, tap string) error {
 	// put this tap into the disconnected vlan
+	bridgeLock.Lock()
 	b.Lock.Lock()
 	if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
 		disconnectedTaps[tap] = b.lans[lan].Taps[tap]
 	}
 	delete(b.lans[lan].Taps, tap)
 	b.Lock.Unlock()
+	bridgeLock.Unlock()
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -965,8 +984,6 @@ func hostTapList(resp *minicli.Response) {
 	resp.Tabular = [][]string{}
 
 	// find all the host taps first
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
 	for k, v := range bridges {
 		for lan, t := range v.lans {
 			for tap, ti := range t.Taps {
@@ -984,11 +1001,9 @@ func hostTapDelete(tap string) error {
 	var c []*bridge
 	// special case, *, which should delete all host taps from all bridges
 	if tap == "*" {
-		bridgeLock.Lock()
 		for _, v := range bridges {
 			c = append(c, v)
 		}
-		bridgeLock.Unlock()
 	} else {
 		b, err := getBridgeFromTap(tap)
 		if err != nil {
@@ -1040,10 +1055,12 @@ func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 	}
 
 	// create the tap
+	b.Lock.Lock()
 	b.lans[r].Taps[tapName] = &tap{
 		host:       true,
 		hostOption: ip,
 	}
+	b.Lock.Unlock()
 	err = b.TapAdd(r, tapName, true)
 	if err != nil {
 		return "", err

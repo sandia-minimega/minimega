@@ -6,6 +6,7 @@ package ron
 
 import (
 	"fmt"
+	"io"
 	log "minilog"
 	"net/http"
 	"os"
@@ -34,6 +35,12 @@ type Ron struct {
 	parent string
 	rate   int
 	path   string
+
+	// serial port support
+	serialPath         string
+	serialClientHandle io.ReadWriteCloser
+	masterSerialConns  map[string]io.ReadWriteCloser
+	serialLock         sync.Mutex
 
 	commands           map[int]*Command
 	commandCounter     int
@@ -66,7 +73,7 @@ type Client struct {
 }
 
 // New creates and returns a new ron object. Mode specifies if this object
-// should be a master, relay, or client.
+// should be a master, or client.
 func New(port int, mode int, parent string, path string) (*Ron, error) {
 	uuid, err := getUUID()
 	if err != nil {
@@ -88,10 +95,11 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 
 	switch mode {
 	case MODE_MASTER:
-		// a master node is a relay with no parent
 		if parent != "" {
 			return nil, fmt.Errorf("master mode must have no parent")
 		}
+
+		r.masterSerialConns = make(map[string]io.ReadWriteCloser)
 
 		err := r.startMaster()
 		if err != nil {
@@ -106,6 +114,44 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 			return nil, fmt.Errorf("client mode must have parent")
 		}
 
+		err := r.startClient()
+		if err != nil {
+			log.Errorln(err)
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("invalid mode %v", mode)
+	}
+
+	log.Debug("registered new ron node: %#v", r)
+
+	return r, nil
+}
+
+// NewSerial is a special New for clients only that connects on a serial port
+// instead of over tcp.
+func NewSerial(serialPath string, mode int, path string) (*Ron, error) {
+	uuid, err := getUUID()
+	if err != nil {
+		return nil, err
+	}
+
+	r := &Ron{
+		UUID:                uuid,
+		mode:                mode,
+		rate:                HEARTBEAT_RATE,
+		path:                path,
+		serialPath:          serialPath,
+		commands:            make(map[int]*Command),
+		clients:             make(map[string]*Client),
+		clientCommandQueue:  make(chan map[int]*Command, 1024),
+		masterResponseQueue: make(chan []*Response, 1024),
+	}
+
+	switch mode {
+	case MODE_MASTER:
+		return nil, fmt.Errorf("NewSerial can only be invoked as a client")
+	case MODE_CLIENT:
 		err := r.startClient()
 		if err != nil {
 			log.Errorln(err)
@@ -204,6 +250,13 @@ func (r *Ron) startMaster() error {
 
 func (r *Ron) startClient() error {
 	log.Debugln("startClient")
+
+	if r.serialPath != "" {
+		err := r.serialDial()
+		if err != nil {
+			return err
+		}
+	}
 
 	// start the periodic query to the parent
 	go r.heartbeat()

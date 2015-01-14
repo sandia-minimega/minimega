@@ -8,9 +8,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"io"
 	log "minilog"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -290,44 +288,6 @@ func (r *Ron) clientCommands(newCommands map[int]*Command) {
 	}
 
 	r.clientCommandQueue <- cmds
-}
-
-func (r *Ron) getFiles(files []string) {
-	for _, v := range files {
-		log.Debug("get file %v", v)
-		path := filepath.Join(r.path, v)
-
-		if _, err := os.Stat(path); err == nil {
-			log.Debug("file %v already exists", v)
-			continue
-		}
-
-		url := fmt.Sprintf("http://%v:%v/files/%v", r.parent, r.port, v)
-		log.Debug("file get url %v", url)
-		resp, err := http.Get(url)
-		if err != nil {
-			// TODO: should we retry?
-			log.Errorln(err)
-			continue
-		}
-
-		dir := filepath.Dir(path)
-		err = os.MkdirAll(dir, os.FileMode(0770))
-		if err != nil {
-			log.Errorln(err)
-			resp.Body.Close()
-			continue
-		}
-		f, err := os.Create(path)
-		if err != nil {
-			log.Errorln(err)
-			resp.Body.Close()
-			continue
-		}
-		io.Copy(f, resp.Body)
-		f.Close()
-		resp.Body.Close()
-	}
 }
 
 func (r *Ron) matchFilter(c *Command) bool {

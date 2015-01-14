@@ -312,6 +312,7 @@ func (n *Node) checkDegree() {
 		}
 		message := fmt.Sprintf("meshage:%s:%s", n.namespace, n.name)
 		_, err = socket.Write([]byte(message))
+		socket.Close()
 		if err != nil {
 			log.Error("checkDegree: %v", err)
 			break
@@ -321,6 +322,9 @@ func (n *Node) checkDegree() {
 		if backoff < 7 { // maximum wait won't exceed 128 seconds
 			backoff++
 		}
+		n.clientLock.Lock()
+		numClients = uint(len(n.clients))
+		n.clientLock.Unlock()
 	}
 }
 
@@ -350,6 +354,7 @@ func (n *Node) dial(host string, solicited bool) error {
 		if solicited {
 			log.Error("dial %v: %v", host, err)
 		}
+		conn.Close()
 		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
@@ -359,6 +364,7 @@ func (n *Node) dial(host string, solicited bool) error {
 		if solicited {
 			log.Error("dial %v: %v", host, err)
 		}
+		conn.Close()
 		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
@@ -381,6 +387,7 @@ func (n *Node) dial(host string, solicited bool) error {
 		if solicited {
 			log.Error("dial %v: %v", host, err)
 		}
+		conn.Close()
 		return fmt.Errorf("dial %v: %v", host, err)
 	}
 

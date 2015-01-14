@@ -1,7 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"sort"
+	"strings"
 	"telnet"
 )
 
@@ -128,30 +132,38 @@ func (p ServerTechPDU) Cycle(ports map[string]string) error {
 	return nil
 }
 
-// This isn't done yet because I don't want to parse that crap yet.
-// Should be pretty easy really, call "loadctl status -o" and then
-// look for the lines corresponding to the listed nodes. Print only
-// those lines.
 func (p ServerTechPDU) Status(ports map[string]string) error {
-	fmt.Println("not yet implemented")
+	p.login()
+	_, err := p.c.ReadUntil(prompt)
+	if err != nil {
+		return err
+	}
+	_, err = p.c.Write([]byte("status\r\n"))
+	if err != nil {
+		return err
+	}
+	result, err := p.c.ReadUntil(prompt)
+	scanner := bufio.NewScanner(bytes.NewReader(result))
+	var output []string
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) == 0 {
+			continue
+		}
+		outlet := fields[0]
+		for p, o := range ports {
+			if o == outlet {
+				output = append(output, fmt.Sprintf("%s: %s", p, fields[2]))
+			}
+		}
+	}
+	sort.Sort(ByNumber(output))
+	for _, s := range output {
+		fmt.Println(s)
+	}
+	if err != nil {
+		return err
+	}
+	p.logout()
 	return nil
-	// doesn't work right
-	/*
-		p.login()
-		_, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		_, err = p.c.Write([]byte("loadctl status -o\r\n"))
-		if err != nil {
-			return err
-		}
-		result, err := p.c.ReadUntil("$> ")
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(result))
-		p.logout()
-		return nil
-	*/
 }

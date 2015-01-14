@@ -244,10 +244,10 @@ var vmConfigFns = map[string]struct {
 	},
 	"qemu": { // TODO
 		Update: func(vm *vmInfo, v string) error {
-			externalProcesses["qemu"] = v
+			customExternalProcesses["qemu"] = v
 			return nil
 		},
-		Clear: func(vm *vmInfo) { externalProcesses["qemu"] = "kvm" },
+		Clear: func(vm *vmInfo) { delete(customExternalProcesses, "qemu") },
 		Print: func(vm *vmInfo) string { return process("qemu") },
 	},
 	"qemu-append": { // TODO
