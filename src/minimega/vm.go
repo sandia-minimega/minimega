@@ -242,7 +242,7 @@ var vmConfigFns = map[string]struct {
 			return "vm config net " + strings.Join(nics, " ")
 		},
 	},
-	"qemu": { // TODO
+	"qemu": {
 		Update: func(vm *vmInfo, v string) error {
 			customExternalProcesses["qemu"] = v
 			return nil
@@ -250,7 +250,7 @@ var vmConfigFns = map[string]struct {
 		Clear: func(vm *vmInfo) { delete(customExternalProcesses, "qemu") },
 		Print: func(vm *vmInfo) string { return process("qemu") },
 	},
-	"qemu-append": { // TODO
+	"qemu-append": {
 		Update: func(vm *vmInfo, v string) error {
 			vm.QemuAppend = append(vm.QemuAppend, fieldsQuoteEscape(`"`, v)...)
 			return nil

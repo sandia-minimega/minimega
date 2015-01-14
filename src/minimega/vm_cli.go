@@ -231,42 +231,6 @@ To move a connection, specify the new VLAN tag and bridge:
 		Record: true,
 		Call:   cliVmNetMod,
 	},
-	{ // vm inject
-		HelpShort: "inject files into a qcow image",
-		HelpLong: `
-Create a backed snapshot of a qcow2 image and injects one or more files into
-the new snapshot.
-
-src qcow image - the name of the qcow to use as the backing image file.
-
-partition - The optional partition number in which the files should be
-injected. Partition defaults to 1, but if multiple partitions exist and
-partition is not explicitly specified, an error is thrown and files are not
-injected.
-
-dst qcow image name - The optional name of the snapshot image. This should be a
-name only, if any extra path is specified, an error is thrown. This file will
-be created at 'base'/files. A filename will be generated if this optional
-parameter is omitted.
-
-src file - The local file that should be injected onto the new qcow2 snapshot.
-
-dst file - The path where src file should be injected in the new qcow2 snapshot.
-
-If the src file or dst file contains spaces, use double quotes (" ") as in the
-following example:
-
-	vm_inject src.qc2 dst.qc2 "my file":"Program Files/my file"
-
-Alternatively, when given a single argument, this command supplies the name of
-the backing qcow image for a snapshot image.`,
-		Patterns: []string{
-			`vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...`,
-			`vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...`,
-		},
-		Record: true,
-		Call:   nil, // TODO
-	},
 	{ // vm qmp
 		HelpShort: "issue a JSON-encoded QMP command",
 		HelpLong: `

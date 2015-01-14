@@ -100,7 +100,7 @@ func cliDot(c *minicli.Command) minicli.Responses {
 	}
 
 	for k, _ := range vlans {
-		fmt.Fprintf(writer, "%s;\n\n", k)
+		fmt.Fprintf(writer, "%s;\n", k)
 	}
 
 	fmt.Fprint(writer, "}")
