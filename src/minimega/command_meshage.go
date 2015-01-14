@@ -377,6 +377,11 @@ SET_WAIT_LOOP:
 	}
 }
 
+func meshageBroadcastTwo(c *minicli.Command, hosts string) (minicli.Responses, error) {
+	// TODO
+	return nil, nil
+}
+
 func meshageBroadcast(c cliCommand) cliResponse {
 	meshageCommandLock.Lock()
 	defer meshageCommandLock.Unlock()

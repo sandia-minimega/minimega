@@ -5,10 +5,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
 	"minicli"
-	log "minilog"
+	"os"
 	"strings"
 )
 
@@ -16,6 +16,14 @@ type dotVM struct {
 	Vlans []string
 	State string
 	Text  string
+}
+
+var stateToColor = map[string]string{
+	"building": "yellow",
+	"running":  "green",
+	"paused":   "yellow",
+	"quit":     "blue",
+	"error":    "red",
 }
 
 var dotCLIHandlers = []minicli.Handler{
@@ -27,7 +35,7 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 			"viz <filename>",
 		},
 		Record: true,
-		Call:   nil, // TODO: cliDot,
+		Call:   cliDot,
 	},
 }
 
@@ -37,127 +45,84 @@ func init() {
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
-func cliDot(c cliCommand) cliResponse {
-	if len(c.Args) != 1 {
-		return cliResponse{
-			Error: "viz takes one argument",
-		}
-	}
-	// TODO
-	command := makeCommand("vm_info [host,name,id,state,ip,ip6,vlan]")
-	localInfo := cliResponse{} // TODO: vms.info(command)
-	command = makeCommand("mesh_broadcast vm_info [host,name,id,state,ip,ip6,vlan]")
-	remoteInfo := meshageBroadcast(command)
+func cliDot(c *minicli.Command) minicli.Responses {
+	resp := &minicli.Response{Host: hostname}
 
-	// any errors?
-	if localInfo.Error != "" {
-		return cliResponse{
-			Error: localInfo.Error,
-		}
+	// Create the file before running any commands incase there is an error
+	fout, err := os.Create(c.StringArgs["filename"])
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
 	}
-	if remoteInfo.Error != "" {
-		return cliResponse{
-			Error: remoteInfo.Error,
-		}
+	defer fout.Close()
+
+	cmd, err := minicli.CompileCommand("vm info mask host,name,id,ip,ip6,state,vlan")
+	if err != nil {
+		// Should never happen
+		panic(err)
+	}
+	localInfo, err := minicli.ProcessCommand(c)
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
+	}
+	remoteInfo, err := meshageBroadcastTwo(cmd, "*")
+	if err != nil {
+		resp.Error = err.Error()
+		return minicli.Responses{resp}
 	}
 
-	// build data
-	// ditch the first 'header' line
+	writer := bufio.NewWriter(fout)
+
+	fmt.Fprintln(writer, "graph minimega {")
+	fmt.Fprintln(writer, `size=\"8,11\";`)
+	fmt.Fprintln(writer, "overlap=false;")
+	//fmt.Fprintf(fout, "Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
+
 	var expVms []*dotVM
-	lines := strings.Split(localInfo.Response, "\n")
-	log.Debug("dot local vms: %v", len(lines))
-	if len(lines) >= 2 {
-		e := dotProcessInfo(lines)
-		if len(e) > 0 {
-			expVms = append(expVms, e...)
-		}
+	for _, resp := range localInfo {
+		expVms = append(expVms, dotProcessInfo(resp))
 	}
-	lines = strings.Split(remoteInfo.Response, "\n")
-	log.Debug("dot remote vms: %v", len(lines))
-	if len(lines) >= 2 {
-		e := dotProcessInfo(lines)
-		if len(e) > 0 {
-			expVms = append(expVms, e...)
-		}
+	for _, resp := range remoteInfo {
+		expVms = append(expVms, dotProcessInfo(resp))
 	}
 
-	var ret string
 	vlans := make(map[string]bool)
 
-	ret = "graph minimega {\n"
-	ret += "size=\"8,11\";\n"
-	ret += "overlap=false;\n"
-	//ret += fmt.Sprintf("Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
-
 	for _, v := range expVms {
-		var color string
-		switch v.State {
-		case "building":
-			color = "yellow"
-		case "running":
-			color = "green"
-		case "paused":
-			color = "yellow"
-		case "quit":
-			color = "blue"
-		case "error":
-			color = "red"
-		}
+		color := stateToColor[v.State]
+		fmt.Fprintf(writer, "%s [style=filled, color=%s];\n", v.Text, color)
 
-		ret += fmt.Sprintf("%s [style=filled, color=%s];\n", v.Text, color)
 		for _, c := range v.Vlans {
-			ret += fmt.Sprintf("%s -- %s\n", v.Text, c)
+			fmt.Fprintf(writer, "%s -- %s\n", v.Text, c)
 			vlans[c] = true
 		}
-		ret += "\n"
 	}
 
 	for k, _ := range vlans {
-		ret += fmt.Sprintf("%s;\n\n", k)
+		fmt.Fprintf(writer, "%s;\n\n", k)
 	}
 
-	ret += "}"
-
-	err := ioutil.WriteFile(c.Args[0], []byte(ret), 0664)
+	fmt.Fprint(writer, "}")
+	err = writer.Flush()
 	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
+		resp.Error = err.Error()
 	}
 
-	return cliResponse{}
-
+	return minicli.Responses{resp}
 }
 
-func dotProcessInfo(info []string) []*dotVM {
-	log.Debugln("dotProcessInfo: ", info)
-	// ditch the first line, blank lines, or
-	// host | name | id | state | ip | ip6 | vlan
-	var ret []*dotVM
-	info = info[1:]
-	for _, v := range info {
-		if v == "\n" {
-			continue
-		}
-		f := strings.Split(v, "|")
-		for i, w := range f {
-			f[i] = strings.TrimSpace(w)
-		}
-		log.Debugln(f)
-		// host name id state ip ip6 vlan
-		if len(f) != 7 {
-			continue
-		}
-		if f[2] == "id" { // checking this field is sufficient to find the header line, as the id will always be an int otherwise
-			continue
-		}
-		vlans := strings.Split(f[6][1:len(f[6])-1], " ")
-		log.Debugln(vlans)
-		ret = append(ret, &dotVM{
-			Vlans: vlans,
-			State: f[3],
-			Text:  fmt.Sprintf("\"%v:%v:%v:%v:%v\"", f[0], f[1], f[2], f[4], f[5]),
-		})
+func dotProcessInfo(resp *minicli.Response) *dotVM {
+	// Process Tabular data, order is:
+	//   host,name,id,ip,ip6,state,vlan
+	row := resp.Tabular[0]
+
+	s := strings.Trim(row[6], "[]")
+	vlans := strings.Split(s, ", ")
+
+	return &dotVM{
+		Vlans: vlans,
+		State: row[5],
+		Text:  strings.Join(row[0:5], ":"),
 	}
-	return ret
 }
