@@ -9,14 +9,13 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"syscall"
 	//"unsafe"
 )
 
-func openPort(name string, baud int) (rwc io.ReadWriteCloser, err error) {
-	f, err := os.OpenFile(name, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0666)
+func openPort(name string, baud int) (f *os.File, err error) {
+	f, err = os.OpenFile(name, os.O_RDWR|syscall.O_NOCTTY|syscall.O_NDELAY, 0666)
 	if err != nil {
 		return
 	}
@@ -64,11 +63,17 @@ func openPort(name string, baud int) (rwc io.ReadWriteCloser, err error) {
 	}
 
 	// Select local mode
-	st.c_cflag |= (C.CLOCAL | C.CREAD)
+	st.c_cflag &= ^C.tcflag_t(C.CSIZE | C.PARENB)
+	st.c_cflag |= (C.CLOCAL | C.CREAD | C.CS8)
 
 	// Select raw mode
-	st.c_lflag &= ^C.tcflag_t(C.ICANON | C.ECHO | C.ECHOE | C.ISIG)
-	st.c_oflag &= ^C.tcflag_t(C.OPOST)
+	st.c_lflag &= ^C.tcflag_t(C.ICANON | C.ECHO | C.ECHOE | C.ISIG | C.ECHONL | C.IEXTEN)
+	//st.c_oflag &= ^C.tcflag_t(C.OPOST)
+	st.c_oflag = 0
+	st.c_iflag &= ^C.tcflag_t(C.IGNBRK | C.BRKINT | C.ICRNL | C.INLCR | C.PARMRK | C.INPCK | C.ISTRIP | C.IXON)
+
+	st.c_cc[C.VMIN] = 1
+	st.c_cc[C.VTIME] = 0
 
 	_, err = C.tcsetattr(fd, C.TCSANOW, &st)
 	if err != nil {
