@@ -227,6 +227,17 @@ func cliVMQMP(c cliCommand) cliResponse {
 	}
 }
 
+func vmGetAllSerialPorts() []string {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	var ret []string
+	for _, v := range vms.vms {
+		ret = append(ret, v.instancePath+"serial")
+	}
+	return ret
+}
+
 func (vm *vmInfo) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
 }
