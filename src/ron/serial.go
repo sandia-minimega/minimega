@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"goserial"
 	log "minilog"
+	"net"
 )
 
 const (
@@ -32,11 +33,8 @@ func (r *Ron) serialDial() error {
 }
 
 func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
-	if r.serialClientHandle == nil {
-		log.Fatalln("no serial handle!")
-	}
-
 	enc := gob.NewEncoder(r.serialClientHandle)
+	dec := gob.NewDecoder(r.serialClientHandle)
 
 	err := enc.Encode(h)
 	if err != nil {
@@ -44,7 +42,6 @@ func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
 	}
 
 	newCommands := make(map[int]*Command)
-	dec := gob.NewDecoder(r.serialClientHandle)
 
 	err = dec.Decode(&newCommands)
 	if err != nil {
@@ -52,6 +49,18 @@ func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
 	}
 
 	return newCommands, nil, true
+}
+
+func (r *Ron) GetActiveSerialPorts() []string {
+	r.serialLock.Lock()
+	defer r.serialLock.Unlock()
+
+	var ret []string
+	for k, _ := range r.masterSerialConns {
+		ret = append(ret, k)
+	}
+
+	return ret
 }
 
 // Dial a client serial port. Used by a master ron node only.
@@ -71,12 +80,7 @@ func (r *Ron) SerialDialClient(path string) error {
 	}
 
 	// connect!
-	c := &serial.Config{
-		Name: r.serialPath,
-		Baud: BAUDRATE,
-	}
-
-	s, err := serial.OpenPort(c)
+	s, err := net.Dial("unix", path)
 	if err != nil {
 		return err
 	}
@@ -99,9 +103,9 @@ func (r *Ron) serialClientHandler(path string) {
 		log.Fatal("could not access client: %v", path)
 	}
 
-	dec := gob.NewDecoder(c)
-
 	for {
+		enc := gob.NewEncoder(c)
+		dec := gob.NewDecoder(c)
 		var h hb
 		err := dec.Decode(&h)
 		if err != nil {
@@ -114,12 +118,11 @@ func (r *Ron) serialClientHandler(path string) {
 		go r.masterHeartbeat(&h)
 
 		// send the command list back
-		buf, err := r.encodeCommands()
+		err = enc.Encode(r.commands)
 		if err != nil {
 			log.Errorln(err)
 			break
 		}
-		c.Write(buf)
 	}
 
 	// remove this path from the list of connected serial ports

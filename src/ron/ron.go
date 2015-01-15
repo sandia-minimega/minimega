@@ -5,9 +5,10 @@
 package ron
 
 import (
+	"encoding/gob"
 	"fmt"
-	"io"
 	log "minilog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -38,8 +39,8 @@ type Ron struct {
 
 	// serial port support
 	serialPath         string
-	serialClientHandle io.ReadWriteCloser
-	masterSerialConns  map[string]io.ReadWriteCloser
+	serialClientHandle *os.File
+	masterSerialConns  map[string]net.Conn
 	serialLock         sync.Mutex
 
 	commands           map[int]*Command
@@ -99,7 +100,7 @@ func New(port int, mode int, parent string, path string) (*Ron, error) {
 			return nil, fmt.Errorf("master mode must have no parent")
 		}
 
-		r.masterSerialConns = make(map[string]io.ReadWriteCloser)
+		r.masterSerialConns = make(map[string]net.Conn)
 
 		err := r.startMaster()
 		if err != nil {
