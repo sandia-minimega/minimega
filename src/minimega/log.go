@@ -24,8 +24,7 @@ setting the mode to debug will log everything.`,
 			"log level [debug,info,warn,error,fatal]",
 			"clear log level",
 		},
-		Record: true,
-		Call:   cliLogLevel,
+		Call: wrapSimpleCLI(cliLogLevel),
 	},
 	{ // log stderr
 		HelpShort: "enable or disable logging to stderr",
@@ -34,8 +33,7 @@ setting the mode to debug will log everything.`,
 			"log stderr [true,false]",
 			"clear log stderr",
 		},
-		Record: true,
-		Call:   cliLogStderr,
+		Call: wrapSimpleCLI(cliLogStderr),
 	},
 	{ // log file
 		HelpShort: "enable logging to a file",
@@ -45,8 +43,7 @@ Log to a file. To disable file logging, call "clear log file".`,
 			"log file <file>",
 			"clear log file",
 		},
-		Record: true,
-		Call:   cliLogFile,
+		Call: wrapSimpleCLI(cliLogFile),
 	},
 }
 
@@ -80,7 +77,7 @@ func logSetup() {
 	}
 }
 
-func cliLogLevel(c *minicli.Command) minicli.Responses {
+func cliLogLevel(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -107,10 +104,10 @@ func cliLogLevel(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliLogStderr(c *minicli.Command) minicli.Responses {
+func cliLogStderr(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) || c.BoolArgs["false"] {
@@ -133,10 +130,10 @@ func cliLogStderr(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliLogFile(c *minicli.Command) minicli.Responses {
+func cliLogFile(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	// TODO: In the old implementation, if the provided file was "false" we
@@ -163,5 +160,5 @@ func cliLogFile(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }

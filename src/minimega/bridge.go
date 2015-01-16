@@ -105,21 +105,19 @@ To delete all host taps, use id -1, or 'clear tap':
 			"tap delete <id or *>",
 			"clear tap",
 		},
-		Record: true,
-		Call:   cliHostTap,
+		Call: wrapSimpleCLI(cliHostTap),
 	},
 	{ // bridge
 		HelpShort: "display information about virtual bridges",
 		Patterns: []string{
 			"bridge",
 		},
-		Record: false,
-		Call:   cliBridgeInfo,
+		Call: wrapSimpleCLI(cliBridgeInfo),
 	},
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c *minicli.Command) minicli.Responses {
+func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -162,10 +160,10 @@ func cliHostTap(c *minicli.Command) minicli.Responses {
 		hostTapList(resp)
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliBridgeInfo(c *minicli.Command) minicli.Responses {
+func cliBridgeInfo(c *minicli.Command) *minicli.Response {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -174,7 +172,7 @@ func cliBridgeInfo(c *minicli.Command) minicli.Responses {
 		Response: bridgeInfo(),
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 // create the default bridge struct and create a goroutine to generate

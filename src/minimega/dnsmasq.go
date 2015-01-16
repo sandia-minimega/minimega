@@ -68,8 +68,7 @@ to the file.`,
 			"dnsmasq start <config>",
 			"dnsmasq kill <id or *>",
 		},
-		Record: true,
-		Call:   cliDnsmasq,
+		Call: wrapSimpleCLI(cliDnsmasq),
 	},
 }
 
@@ -79,7 +78,7 @@ func init() {
 	dnsmasqServers = make(map[int]*dnsmasqServer)
 }
 
-func cliDnsmasq(c *minicli.Command) minicli.Responses {
+func cliDnsmasq(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error
 
@@ -122,7 +121,7 @@ func cliDnsmasq(c *minicli.Command) minicli.Responses {
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return minicli.Responses{resp}
+	return resp
 }
 
 func dnsmasqKillAll() error {

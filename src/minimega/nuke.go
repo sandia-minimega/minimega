@@ -26,8 +26,7 @@ removes the temporary minimega state on the harddisk.`,
 		Patterns: []string{
 			"nuke",
 		},
-		Record: true,
-		Call:   cliNuke,
+		Call: wrapSimpleCLI(cliNuke),
 	},
 }
 
@@ -41,7 +40,7 @@ func init() {
 // 	kill all qemu instances
 //	kill all taps
 //	remove everything inside of info.BasePath (careful, that's dangerous)
-func cliNuke(c *minicli.Command) minicli.Responses {
+func cliNuke(c *minicli.Command) *minicli.Response {
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
 	err := filepath.Walk(*f_base, nukeWalker)

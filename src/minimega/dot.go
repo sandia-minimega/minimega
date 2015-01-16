@@ -34,8 +34,7 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 		Patterns: []string{
 			"viz <filename>",
 		},
-		Record: true,
-		Call:   cliDot,
+		Call: wrapSimpleCLI(cliDot),
 	},
 }
 
@@ -45,14 +44,14 @@ func init() {
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
-func cliDot(c *minicli.Command) minicli.Responses {
+func cliDot(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	// Create the file before running any commands incase there is an error
 	fout, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 	defer fout.Close()
 
@@ -61,16 +60,8 @@ func cliDot(c *minicli.Command) minicli.Responses {
 		// Should never happen
 		panic(err)
 	}
-	localInfo, err := minicli.ProcessCommand(c)
-	if err != nil {
-		resp.Error = err.Error()
-		return minicli.Responses{resp}
-	}
-	remoteInfo, err := meshageBroadcastTwo(cmd, "*")
-	if err != nil {
-		resp.Error = err.Error()
-		return minicli.Responses{resp}
-	}
+	localInfo := minicli.ProcessCommand(c, false)
+	remoteInfo := meshageBroadcastTwo(cmd, "*")
 
 	writer := bufio.NewWriter(fout)
 
@@ -80,11 +71,11 @@ func cliDot(c *minicli.Command) minicli.Responses {
 	//fmt.Fprintf(fout, "Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
 	var expVms []*dotVM
-	for _, resp := range localInfo {
-		expVms = append(expVms, dotProcessInfo(resp))
+	for resp := range localInfo {
+		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
-	for _, resp := range remoteInfo {
-		expVms = append(expVms, dotProcessInfo(resp))
+	for resp := range remoteInfo {
+		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
 
 	vlans := make(map[string]bool)
@@ -109,20 +100,26 @@ func cliDot(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func dotProcessInfo(resp *minicli.Response) *dotVM {
-	// Process Tabular data, order is:
-	//   host,name,id,ip,ip6,state,vlan
-	row := resp.Tabular[0]
+func dotProcessInfo(resp minicli.Responses) []*dotVM {
+	res := []*dotVM{}
 
-	s := strings.Trim(row[6], "[]")
-	vlans := strings.Split(s, ", ")
+	for _, r := range resp {
+		// Process Tabular data, order is:
+		//   host,name,id,ip,ip6,state,vlan
+		row := r.Tabular[0]
 
-	return &dotVM{
-		Vlans: vlans,
-		State: row[5],
-		Text:  strings.Join(row[0:5], ":"),
+		s := strings.Trim(row[6], "[]")
+		vlans := strings.Split(s, ", ")
+
+		res = append(res, &dotVM{
+			Vlans: vlans,
+			State: row[5],
+			Text:  strings.Join(row[0:5], ":"),
+		})
 	}
+
+	return res
 }

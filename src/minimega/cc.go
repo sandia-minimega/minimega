@@ -88,8 +88,7 @@ New commands assign any current filters.`,
 			"clear cc <filerecv,>",
 			"clear cc <command,>",
 		},
-		Record: true,
-		Call:   nil, // TODO: cliCC,
+		Call: nil, // TODO: cliCC,
 	},
 }
 

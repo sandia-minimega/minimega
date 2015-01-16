@@ -33,8 +33,7 @@ var hostCLIHandlers = []minicli.Handler{
 			"host [bandwidth,]",
 			"host [cpus]",
 		},
-		Record: true,
-		Call:   cliHost,
+		Call: wrapSimpleCLI(cliHost),
 	},
 }
 
@@ -59,7 +58,7 @@ var hostInfoFns = map[string]func() (string, error){
 	"load":      hostStatsLoad,
 }
 
-func cliHost(c *minicli.Command) minicli.Responses {
+func cliHost(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	// If they selected one of the fields to display
@@ -71,7 +70,7 @@ func cliHost(c *minicli.Command) minicli.Responses {
 			resp.Response = val
 		}
 
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	// Must want all fields
@@ -82,14 +81,14 @@ func cliHost(c *minicli.Command) minicli.Responses {
 		val, err := fn()
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		row = append(row, val)
 	}
 	resp.Tabular = [][]string{row}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 func hostStatsLoad() (string, error) {

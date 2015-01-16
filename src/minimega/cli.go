@@ -26,6 +26,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 )
 
 const (
@@ -47,6 +48,9 @@ var (
 	ackChanMeshage chan cliResponse
 
 	cliCommands map[string]*command
+
+	// Prevents multiple commands from running at the same time
+	cmdLock sync.Mutex
 )
 
 type cliCommand struct {
@@ -125,6 +129,15 @@ func makeCommand(s string) cliCommand {
 	return cliCommand{}
 }
 
+// Wrapper for minicli.ProcessString. Ensures that the command execution lock
+// is acquired before running the command.
+func runCommand(cmd *minicli.Command, record bool) chan minicli.Responses {
+	cmdLock.Lock()
+	defer cmdLock.Unlock()
+
+	return minicli.ProcessCommand(cmd, record)
+}
+
 // local command line interface, wrapping readline
 func cliLocal() {
 	for {
@@ -136,14 +149,20 @@ func cliLocal() {
 		command := string(line)
 		log.Debug("got from stdin:", command)
 
-		r, err := minicli.ProcessString(command)
+		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			log.Errorln(err)
+			fmt.Println("closest match: TODO")
 			continue
 		}
 
-		// print the responses
-		fmt.Println(r)
+		// HAX: Don't record the read command
+		record := !strings.HasPrefix(command, "read")
+
+		for resp := range runCommand(cmd, record) {
+			log.Debug("cli resp: %v", resp)
+			// print the responses
+			fmt.Println(resp)
+		}
 	}
 }
 

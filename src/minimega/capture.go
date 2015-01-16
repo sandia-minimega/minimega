@@ -90,8 +90,7 @@ VM:
 			"capture pcap delete <id or *>",
 			"clear capture pcap",
 		},
-		Record: true,
-		Call:   nil, // TODO cliCapture,
+		Call: nil, // TODO cliCapture,
 	},
 }
 

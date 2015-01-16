@@ -25,20 +25,18 @@ var (
 var meshageCLIHandlers = []minicli.Handler{
 	{ // mesh degree
 		HelpShort: "view or set the current degree for this mesh node",
-		Record:    true,
 		Patterns: []string{
 			"mesh degree [degree]",
 			"clear mesh degree",
 		},
-		Call: cliMeshageDegree,
+		Call: wrapSimpleCLI(cliMeshageDegree),
 	},
 	{ // mesh dial
 		HelpShort: "attempt to connect this node to another node",
 		Patterns: []string{
 			"mesh dial <hostname>",
 		},
-		Record: true,
-		Call:   cliMeshageDial,
+		Call: wrapSimpleCLI(cliMeshageDial),
 	},
 	{ // mesh dot
 		HelpShort: "output a graphviz formatted dot file",
@@ -47,32 +45,28 @@ Output a graphviz formatted dot file representing the connected topology.`,
 		Patterns: []string{
 			"mesh dot <filename>",
 		},
-		Record: true,
-		Call:   cliMeshageDot,
+		Call: wrapSimpleCLI(cliMeshageDot),
 	},
 	{ // mesh hangup
 		HelpShort: "disconnect from a client",
 		Patterns: []string{
 			"mesh hangup <hostname>",
 		},
-		Record: true,
-		Call:   cliMeshageHangup,
+		Call: wrapSimpleCLI(cliMeshageHangup),
 	},
 	{ // mesh list
 		HelpShort: "display the mesh adjacency list",
 		Patterns: []string{
 			"mesh list",
 		},
-		Record: false,
-		Call:   cliMeshageList,
+		Call: wrapSimpleCLI(cliMeshageList),
 	},
 	{ // mesh status
 		HelpShort: "display a short status report of the mesh",
 		Patterns: []string{
 			"mesh status",
 		},
-		Record: false,
-		Call:   cliMeshageStatus,
+		Call: wrapSimpleCLI(cliMeshageStatus),
 	},
 	{ // mesh timeout
 		HelpShort: "view or set the mesh timeout",
@@ -87,8 +81,7 @@ response.`,
 		Patterns: []string{
 			"mesh timeout [timeout]",
 		},
-		Record: true,
-		Call:   cliMeshageTimeout,
+		Call: wrapSimpleCLI(cliMeshageTimeout),
 	},
 	{ // mesh set
 		HelpShort: "send a command to one or more connected clients",
@@ -102,8 +95,7 @@ You can use * to send a command to all connected clients.`,
 		Patterns: []string{
 			"mesh set <vms or *> (command)",
 		},
-		Record: true,
-		Call:   nil, // TODO: meshageSet,
+		Call: nil, // TODO: meshageSet,
 	},
 }
 
@@ -163,7 +155,7 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func cliMeshageDegree(c *minicli.Command) minicli.Responses {
+func cliMeshageDegree(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -179,10 +171,10 @@ func cliMeshageDegree(c *minicli.Command) minicli.Responses {
 		resp.Response = fmt.Sprintf("%d", meshageNode.GetDegree())
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageDial(c *minicli.Command) minicli.Responses {
+func cliMeshageDial(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	err := meshageNode.Dial(c.StringArgs["hostname"])
@@ -190,25 +182,25 @@ func cliMeshageDial(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageDot(c *minicli.Command) minicli.Responses {
+func cliMeshageDot(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	f, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 	defer f.Close()
 
 	f.WriteString(meshageNode.Dot())
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageHangup(c *minicli.Command) minicli.Responses {
+func cliMeshageHangup(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	err := meshageNode.Hangup(c.StringArgs["hostname"])
@@ -216,10 +208,10 @@ func cliMeshageHangup(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageList(c *minicli.Command) minicli.Responses {
+func cliMeshageList(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	mesh := meshageNode.Mesh()
@@ -239,10 +231,10 @@ func cliMeshageList(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageStatus(c *minicli.Command) minicli.Responses {
+func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	mesh := meshageNode.Mesh()
@@ -258,10 +250,10 @@ func cliMeshageStatus(c *minicli.Command) minicli.Responses {
 		},
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliMeshageTimeout(c *minicli.Command) minicli.Responses {
+func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -277,7 +269,7 @@ func cliMeshageTimeout(c *minicli.Command) minicli.Responses {
 		resp.Response = fmt.Sprintf("%v", meshageTimeout)
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 func meshageMSATimeout(c cliCommand) cliResponse {
@@ -377,9 +369,9 @@ SET_WAIT_LOOP:
 	}
 }
 
-func meshageBroadcastTwo(c *minicli.Command, hosts string) (minicli.Responses, error) {
+func meshageBroadcastTwo(c *minicli.Command, hosts string) chan minicli.Responses {
 	// TODO
-	return nil, nil
+	return nil
 }
 
 func meshageBroadcast(c cliCommand) cliResponse {

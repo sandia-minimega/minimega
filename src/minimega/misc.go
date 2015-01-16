@@ -37,8 +37,7 @@ or the control socket as an indication that minimega has quit.`,
 		Patterns: []string{
 			"quit [delay]",
 		},
-		Record: true,
-		Call:   cliQuit,
+		Call: wrapSimpleCLI(cliQuit),
 	},
 	{ // help
 		HelpShort: "show command help",
@@ -48,7 +47,7 @@ commands.`,
 		Patterns: []string{
 			"help [command]...",
 		},
-		Call: cliHelp,
+		Call: wrapSimpleCLI(cliHelp),
 	},
 	{ // read
 		HelpShort: "read and execute a command file",
@@ -58,31 +57,28 @@ the file in manually.`,
 		Patterns: []string{
 			"read <file>",
 		},
-		Record: true,
-		Call:   cliRead,
+		Call: cliRead,
 	},
 	{ // debug
 		HelpShort: "display internal debug information",
 		Patterns: []string{
 			"debug",
 		},
-		Call: cliDebug,
+		Call: wrapSimpleCLI(cliDebug),
 	},
 	{ // version
 		HelpShort: "display the minimega version",
 		Patterns: []string{
 			"version",
 		},
-		Record: true,
-		Call:   cliVersion,
+		Call: wrapSimpleCLI(cliVersion),
 	},
 	{ // echo
 		HelpShort: "display text after macro expansion and comment removal",
 		Patterns: []string{
 			"echo [args]...",
 		},
-		Record: true,
-		Call:   cliEcho,
+		Call: wrapSimpleCLI(cliEcho),
 	},
 }
 
@@ -328,7 +324,14 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-func cliQuit(c *minicli.Command) minicli.Responses {
+func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.HandlerFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		resp := fn(c)
+		respChan <- minicli.Responses{resp}
+	}
+}
+
+func cliQuit(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if v, ok := c.StringArgs["delay"]; ok {
@@ -346,10 +349,10 @@ func cliQuit(c *minicli.Command) minicli.Responses {
 		teardown()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliHelp(c *minicli.Command) minicli.Responses {
+func cliHelp(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	input := ""
@@ -358,44 +361,67 @@ func cliHelp(c *minicli.Command) minicli.Responses {
 	}
 
 	resp.Response = minicli.Help(input)
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliRead(c *minicli.Command) minicli.Responses {
+func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	file, err := os.Open(c.StringArgs["file"])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		respChan <- minicli.Responses{resp}
+		return
 	}
 	defer file.Close()
 
+	count := 0
+
 	r := bufio.NewReader(file)
-	for {
-		l, _, err := r.ReadLine()
-		if err != nil {
-			if err != io.EOF {
-				resp.Error = err.Error()
-			}
+	for ; ; count++ {
+		line, _, err := r.ReadLine()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			resp.Error = err.Error()
 			break
 		}
-		log.Debug("read command: %v", string(l)) // commands don't have their newlines removed
-		// TODO: this is wrong for minicli
-		//resp := cliExec(makeCommand(string(l)))
-		//resp.More = true
-		//resp.TID = c.TID
-		//c.ackChan <- resp
-		//if resp.Error != "" {
-		//	break // stop on errors
-		//}
+		command := string(line)
+		log.Debug("read command: %v", command) // commands don't have their newlines removed
+
+		// HAX: Make sure we don't have a recursive read command
+		if strings.HasPrefix(command, "read") {
+			resp.Error = "read cannot run other read commands"
+			break
+		}
+
+		// TODO: Should we run a write command?
+
+		cmd, err := minicli.CompileCommand(command)
+		if err != nil {
+			resp.Error = err.Error()
+			break
+		}
+
+		for resp := range minicli.ProcessCommand(cmd, true) {
+			respChan <- resp
+
+			// Stop processing at the first error if there is one response.
+			// TODO: What should we do if the command was mesh send and there
+			// is a mixture of success and failure?
+			if len(resp) == 1 && resp[0].Error != "" {
+				break
+			}
+		}
 	}
 
-	return minicli.Responses{resp}
+	// TODO: Should we send the response from read?
+	resp.Response = fmt.Sprintf("read processed %d commands", count)
+	respChan <- minicli.Responses{resp}
 }
 
-func cliDebug(c *minicli.Command) minicli.Responses {
-	resp := &minicli.Response{
+func cliDebug(c *minicli.Command) *minicli.Response {
+	return &minicli.Response{
 		Host:   hostname,
 		Header: []string{"Go version", "Goroutines", "CGO calls"},
 		Tabular: [][]string{
@@ -406,25 +432,18 @@ func cliDebug(c *minicli.Command) minicli.Responses {
 			},
 		},
 	}
-
-	return minicli.Responses{resp}
 }
 
-func cliVersion(c *minicli.Command) minicli.Responses {
-	resp := &minicli.Response{
+func cliVersion(c *minicli.Command) *minicli.Response {
+	return &minicli.Response{
 		Host:     hostname,
 		Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
 	}
-
-	return minicli.Responses{resp}
 }
 
-func cliEcho(c *minicli.Command) minicli.Responses {
-	// TODO: Where does the macro expansion happen?
-	resp := &minicli.Response{
+func cliEcho(c *minicli.Command) *minicli.Response {
+	return &minicli.Response{
 		Host:     hostname,
 		Response: strings.Join(c.ListArgs["args"], " "),
 	}
-
-	return minicli.Responses{resp}
 }

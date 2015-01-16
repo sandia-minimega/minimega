@@ -72,8 +72,7 @@ the backing qcow image for a snapshot image.`,
 			"vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...",
 			"vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...",
 		},
-		Record: true,
-		Call:   cliVmInject,
+		Call: wrapSimpleCLI(cliVmInject),
 	},
 }
 
@@ -244,14 +243,14 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 
 // Inject files into a qcow
 // Alternatively, this function can also return a qcow2 backing file's name
-func cliVmInject(c *minicli.Command) minicli.Responses {
+func cliVmInject(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	// yell at user to load nbd
 	err := nbd.Ready()
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	inject := parseInject(c)
@@ -260,5 +259,5 @@ func cliVmInject(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }

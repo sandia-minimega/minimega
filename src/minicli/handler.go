@@ -2,18 +2,14 @@ package minicli
 
 import "strings"
 
+type HandlerFunc func(*Command, chan Responses)
+
 type Handler struct {
 	HelpShort string   // a brief (one line) help message
 	HelpLong  string   // a descriptive help message
 	Patterns  []string // the pattern that the input should match
 	// call back to invoke when the raw input matches the pattern
-	Call func(*Command) Responses
-	// whether the command should be recorded in the command history or not.
-	// This allows us to differentiate between commands to that can be used to
-	// rebuild the experiment and commands that display information about the
-	// current experiment. Note: all lines will be recorded in readline's
-	// history, regardless of the value of the record flag.
-	Record bool
+	Call HandlerFunc
 
 	patternItems [][]patternItem // the processed patterns, used for matching
 }

@@ -58,8 +58,7 @@ avaiable path, and returns an error on the first one not found.`,
 		Patterns: []string{
 			"check",
 		},
-		Record: true,
-		Call:   cliCheckExternal,
+		Call: wrapSimpleCLI(cliCheckExternal),
 	},
 }
 
@@ -107,7 +106,7 @@ func checkExternal() error {
 	return nil
 }
 
-func cliCheckExternal(c *minicli.Command) minicli.Responses {
+func cliCheckExternal(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	err := checkExternal()
@@ -117,7 +116,7 @@ func cliCheckExternal(c *minicli.Command) minicli.Responses {
 		resp.Response = "all external dependencies met"
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 func process(p string) string {

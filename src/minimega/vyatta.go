@@ -131,8 +131,7 @@ random filename will be used and the file placed in the path specified by the
 
 			"clear vyatta",
 		},
-		Record: true,
-		Call:   cliVyatta,
+		Call: wrapSimpleCLI(cliVyatta),
 	},
 }
 
@@ -142,7 +141,7 @@ func init() {
 	vyatta.Dhcp = make(map[string]*vyattaDhcp)
 }
 
-func cliVyatta(c *minicli.Command) minicli.Responses {
+func cliVyatta(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -273,7 +272,7 @@ func cliVyatta(c *minicli.Command) minicli.Responses {
 		}}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 func vyattaUpdateRoutes(routes []string) error {

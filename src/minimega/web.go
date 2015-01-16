@@ -46,8 +46,7 @@ To start the webserver on a specific port, issue the web command with the port:
 			"web [port]",
 			"web novnc <path to novnc> [port]",
 		},
-		Record: true,
-		Call:   cliWeb,
+		Call: wrapSimpleCLI(cliWeb),
 	},
 }
 
@@ -59,7 +58,7 @@ func init() {
 // for me). I removed the ability to configure/clear novnc independent of
 // starting the web server. There currently isn't a way to stop
 // http.ListenAndServe so "clear web" doesn't make sense.
-func cliWeb(c *minicli.Command) minicli.Responses {
+func cliWeb(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	port := fmt.Sprintf(":%v", GOVNC_PORT)
@@ -68,7 +67,7 @@ func cliWeb(c *minicli.Command) minicli.Responses {
 		p, err := strconv.Atoi(c.StringArgs["port"])
 		if err != nil {
 			resp.Error = fmt.Sprintf("'%v' is not a valid port", c.StringArgs["port"])
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		port = fmt.Sprintf(":%v", p)
@@ -85,7 +84,7 @@ func cliWeb(c *minicli.Command) minicli.Responses {
 		go webStart(port, noVNC)
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 func webStart(port, noVNC string) {

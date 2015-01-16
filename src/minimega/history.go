@@ -16,7 +16,7 @@ var historyCLIHandlers = []minicli.Handler{
 			"history",
 			"clear history",
 		},
-		Call: cliHistory,
+		Call: wrapSimpleCLI(cliHistory),
 	},
 	{ // write
 		HelpShort: "write the command history to a file",
@@ -28,7 +28,7 @@ not get recorded.`,
 		Patterns: []string{
 			"write <file>",
 		},
-		Call: cliWrite,
+		Call: wrapSimpleCLI(cliWrite),
 	},
 }
 
@@ -36,7 +36,7 @@ func init() {
 	registerHandlers("history", historyCLIHandlers)
 }
 
-func cliHistory(c *minicli.Command) minicli.Responses {
+func cliHistory(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -45,16 +45,16 @@ func cliHistory(c *minicli.Command) minicli.Responses {
 		resp.Response = minicli.History()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliWrite(c *minicli.Command) minicli.Responses {
+func cliWrite(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	file, err := os.Create(c.StringArgs["file"])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 	defer file.Close()
 
@@ -63,5 +63,5 @@ func cliWrite(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }

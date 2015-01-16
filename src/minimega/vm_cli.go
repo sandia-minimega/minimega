@@ -79,7 +79,7 @@ Display all information about all VMs:
 			"vm info search <terms> mask <masks>",
 			"vm info mask <masks>",
 		},
-		Call: cliVmInfo,
+		Call: wrapSimpleCLI(cliVmInfo),
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -95,7 +95,7 @@ only its launch configuration.`,
 		Patterns: []string{
 			"vm save <name> <vm id or name or *>...",
 		},
-		Call: cliVmSave,
+		Call: wrapSimpleCLI(cliVmSave),
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
@@ -115,8 +115,7 @@ vm_info.`,
 			"vm launch name <namespec> [noblock,]",
 			"vm launch count <count> [noblock,]",
 		},
-		Record: true,
-		Call:   cliVmLaunch,
+		Call: wrapSimpleCLI(cliVmLaunch),
 	},
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
@@ -125,12 +124,11 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 		Patterns: []string{
 			"vm kill <vm id or name or *>",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
 				return vms.kill(c.StringArgs["vm"])
 			})
-		},
+		}),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -144,12 +142,11 @@ in the quit state will also be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or *> [quit,]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
 				return vms.start(c.StringArgs["vm"], c.BoolArgs["quit"])
 			})
-		},
+		}),
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -161,12 +158,11 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
 		Patterns: []string{
 			"vm stop <vm id or name or *>",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
 				return vms.stop(c.StringArgs["vm"])
 			})
-		},
+		}),
 	},
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
@@ -177,8 +173,7 @@ of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
 		},
-		Record: true,
-		Call:   cliVmFlush,
+		Call: wrapSimpleCLI(cliVmFlush),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -203,8 +198,7 @@ To remove all hotplug devices, use ID -1.`,
 			"vm hotplug add <vm id or name> <filename>",
 			"vm hotplug remove <vm id or name> <disk id or *>",
 		},
-		Record: true,
-		Call:   cliVmHotplug,
+		Call: wrapSimpleCLI(cliVmHotplug),
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
@@ -228,8 +222,7 @@ To move a connection, specify the new VLAN tag and bridge:
 			"vm net connect <vm id or name> <tap position> <bridge> <vlan>",
 			"vm net disconnect <vm id or name> <tap position>",
 		},
-		Record: true,
-		Call:   cliVmNetMod,
+		Call: wrapSimpleCLI(cliVmNetMod),
 	},
 	{ // vm qmp
 		HelpShort: "issue a JSON-encoded QMP command",
@@ -243,8 +236,7 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
 		},
-		Record: true,
-		Call:   cliVmQmp,
+		Call: wrapSimpleCLI(cliVmQmp),
 	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
@@ -271,18 +263,16 @@ remove saved configurations.`,
 			"vm config <restore,> [name]",
 			"vm config <clone,> <vm id or name>",
 		},
-		Record: true,
-		Call:   cliVmConfig,
+		Call: wrapSimpleCLI(cliVmConfig),
 	},
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu")
-		},
+		}),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -294,10 +284,9 @@ replacement string.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or *>",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
-		},
+		}),
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -307,10 +296,9 @@ Add additional arguments to be passed to the QEMU instance. For example:
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-append")
-		},
+		}),
 	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
@@ -319,10 +307,9 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "memory")
-		},
+		}),
 	},
 	{ // vm config vcpus
 		HelpShort: "set the number of virtual CPUs for a VM",
@@ -331,10 +318,9 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "vcpus")
-		},
+		}),
 	},
 	{ // vm config disk
 		HelpShort: "set disk images to attach to a VM",
@@ -345,10 +331,9 @@ multiple VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "disk")
-		},
+		}),
 	},
 	{ // vm config cdrom
 		HelpShort: "set a cdrom image to attach to a VM",
@@ -358,10 +343,9 @@ to be the boot device.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "cdrom")
-		},
+		}),
 	},
 	{ // vm config kernel
 		HelpShort: "set a kernel image to attach to a VM",
@@ -371,10 +355,9 @@ of any disk image.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "kernel")
-		},
+		}),
 	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
@@ -387,10 +370,9 @@ For example, to set a static IP for a linux VM:
 		Patterns: []string{
 			"vm config append [argument]...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "append")
-		},
+		}),
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -400,10 +382,9 @@ one when the VM is launched.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "uuid")
-		},
+		}),
 	},
 	{ // vm config net
 		HelpShort: "specific the networks a VM is a member of",
@@ -433,10 +414,9 @@ Calling vm_net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "net")
-		},
+		}),
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",
@@ -447,10 +427,9 @@ allows a single disk image to be used for many VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "snapshot")
-		},
+		}),
 	},
 	{ // vm config initrd
 		HelpShort: "set a initrd image to attach to a VM",
@@ -460,10 +439,9 @@ boot time.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "initrd")
-		},
+		}),
 	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
@@ -493,8 +471,7 @@ to the default value.`,
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
 		},
-		Record: true,
-		Call:   cliClearVmConfig,
+		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
 }
 
@@ -502,7 +479,7 @@ func init() {
 	registerHandlers("vm", vmCLIHandlers)
 }
 
-func cliVmInfo(c *minicli.Command) minicli.Responses {
+func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
@@ -519,7 +496,7 @@ func cliVmInfo(c *minicli.Command) minicli.Responses {
 			} else {
 				resp.Error = fmt.Sprintf("invalid output mask: %v", j)
 				resp.Header = nil
-				return minicli.Responses{resp}
+				return resp
 			}
 		}
 	} else { // print everything
@@ -532,13 +509,13 @@ func cliVmInfo(c *minicli.Command) minicli.Responses {
 	if err != nil {
 		resp.Error = err.Error()
 		resp.Header = nil
-		return minicli.Responses{resp}
+		return resp
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmConfig(c *minicli.Command) minicli.Responses {
+func cliVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["save"] {
@@ -579,10 +556,10 @@ func cliVmConfig(c *minicli.Command) minicli.Responses {
 		resp.Response = info.configToString()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
+func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
@@ -591,7 +568,7 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 	// If there are no args it means that we want to display the current value
 	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
 		resp.Response = fns.Print(info)
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	// We expect exactly one key in either the String, List, or Bool Args for
@@ -627,10 +604,10 @@ func cliVmConfigField(c *minicli.Command, field string) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliClearVmConfig(c *minicli.Command) minicli.Responses {
+func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	var clearAll = len(c.BoolArgs) == 0
@@ -647,10 +624,10 @@ func cliClearVmConfig(c *minicli.Command) minicli.Responses {
 		panic("no callback defined for clear")
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmLaunch(c *minicli.Command) minicli.Responses {
+func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmNames := []string{}
@@ -668,7 +645,7 @@ func cliVmLaunch(c *minicli.Command) minicli.Responses {
 			names, err := r.SplitRange(namespec)
 			if err != nil {
 				resp.Error = err.Error()
-				return minicli.Responses{resp}
+				return resp
 			}
 			vmNames = append(vmNames, names...)
 		}
@@ -676,7 +653,7 @@ func cliVmLaunch(c *minicli.Command) minicli.Responses {
 		count, err := strconv.ParseUint(countStr, 10, 32)
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		for i := uint64(0); i < count; i++ {
@@ -686,7 +663,7 @@ func cliVmLaunch(c *minicli.Command) minicli.Responses {
 
 	if len(vmNames) == 0 {
 		resp.Error = "No VMs to launch"
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	log.Info("launching %v vms", len(vmNames))
@@ -715,10 +692,10 @@ func cliVmLaunch(c *minicli.Command) minicli.Responses {
 		waitForAcks(numVMs)
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmApply(c *minicli.Command, fn func() []error) minicli.Responses {
+func cliVmApply(c *minicli.Command, fn func() []error) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	for _, err := range fn() {
@@ -727,18 +704,18 @@ func cliVmApply(c *minicli.Command, fn func() []error) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmFlush(c *minicli.Command) minicli.Responses {
+func cliVmFlush(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vms.flush()
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmQmp(c *minicli.Command) minicli.Responses {
+func cliVmQmp(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	var err error
@@ -747,10 +724,10 @@ func cliVmQmp(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmSave(c *minicli.Command) minicli.Responses {
+func cliVmSave(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	path := filepath.Join(*f_base, "saved_vms")
@@ -765,7 +742,7 @@ func cliVmSave(c *minicli.Command) minicli.Responses {
 	file, err := os.Create(filepath.Join(path, name))
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	err = vms.save(file, c.ListArgs["vm"])
@@ -773,16 +750,16 @@ func cliVmSave(c *minicli.Command) minicli.Responses {
 		resp.Error = err.Error()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmHotplug(c *minicli.Command) minicli.Responses {
+func cliVmHotplug(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vm := vms.getVM(c.StringArgs["vm"])
 	if vm == nil {
 		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	if c.StringArgs["filename"] != "" { // Must be "add"
@@ -800,14 +777,14 @@ func cliVmHotplug(c *minicli.Command) minicli.Responses {
 		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		log.Debugln("hotplug drive_add response:", r)
 		r, err = vm.q.USBDeviceAdd(hid)
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		log.Debugln("hotplug usb device add response:", r)
@@ -822,7 +799,7 @@ func cliVmHotplug(c *minicli.Command) minicli.Responses {
 				}
 			}
 
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		id, err := strconv.Atoi(c.StringArgs["disk"])
@@ -842,26 +819,26 @@ func cliVmHotplug(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
-func cliVmNetMod(c *minicli.Command) minicli.Responses {
+func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vm := vms.getVM(c.StringArgs["vm"])
 	if vm == nil {
 		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 	if len(vm.taps) < pos {
 		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.taps))
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	var b *bridge
@@ -872,7 +849,7 @@ func cliVmNetMod(c *minicli.Command) minicli.Responses {
 	}
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	if c.StringArgs["bridge"] == "" { // Must be "disconnect"
@@ -887,7 +864,7 @@ func cliVmNetMod(c *minicli.Command) minicli.Responses {
 		net, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		if net >= 0 && net < 4096 {
@@ -896,21 +873,21 @@ func cliVmNetMod(c *minicli.Command) minicli.Responses {
 			oldBridge, err := getBridge(vm.bridges[pos])
 			if err != nil {
 				resp.Error = err.Error()
-				return minicli.Responses{resp}
+				return resp
 			}
 
 			if vm.Networks[pos] != -1 {
 				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
 				if err != nil {
 					resp.Error = err.Error()
-					return minicli.Responses{resp}
+					return resp
 				}
 			}
 
 			err = b.TapAdd(net, vm.taps[pos], false)
 			if err != nil {
 				resp.Error = err.Error()
-				return minicli.Responses{resp}
+				return resp
 			}
 
 			vm.Networks[pos] = net
@@ -920,5 +897,5 @@ func cliVmNetMod(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }

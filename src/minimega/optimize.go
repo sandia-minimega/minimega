@@ -77,8 +77,7 @@ To disable all optimizations
 			"optimize <affinity,> filter <filter>",
 			"clear optimize [affinity,]",
 		},
-		Record: true,
-		Call:   cliOptimize,
+		Call: wrapSimpleCLI(cliOptimize),
 	},
 }
 
@@ -88,7 +87,7 @@ func init() {
 	affinityClearFilter()
 }
 
-func cliOptimize(c *minicli.Command) minicli.Responses {
+func cliOptimize(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if isClearCommand(c) {
@@ -145,13 +144,13 @@ func cliOptimize(c *minicli.Command) minicli.Responses {
 			r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
 			if err != nil {
 				resp.Error = fmt.Sprintf("cpu affinity ranges: %v", err)
-				return minicli.Responses{resp}
+				return resp
 			}
 
 			cpus, err := r.SplitRange(c.StringArgs["filter"])
 			if err != nil {
 				resp.Error = fmt.Sprintf("cannot expand CPU range: %v", err)
-				return minicli.Responses{resp}
+				return resp
 			}
 
 			affinityCPUSets = make(map[string][]*vmInfo)
@@ -179,7 +178,7 @@ func cliOptimize(c *minicli.Command) minicli.Responses {
 		}
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
 
 // TODO: Rewrite this to use Header/Tabular.

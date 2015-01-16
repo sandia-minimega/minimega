@@ -100,26 +100,35 @@ func Register(h *Handler) error {
 
 // Process raw input text. An error is returned if parsing the input text
 // failed.
-func ProcessString(input string) (Responses, error) {
+func ProcessString(input string, record bool) (chan Responses, error) {
 	c, err := CompileCommand(input)
 	if err != nil {
 		return nil, err
 	}
-	return ProcessCommand(c)
+
+	return ProcessCommand(c, record), nil
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command) (Responses, error) {
+func ProcessCommand(c *Command, record bool) chan Responses {
 	if c.Call == nil {
-		return nil, fmt.Errorf("command %v has no callback!", c)
+		panic(fmt.Errorf("command %v has no callback!", c))
 	}
 
-	// Append the command to the history
-	if c.Record {
-		history = append(history, c.Original)
-	}
+	respChan := make(chan Responses)
 
-	return c.Call(c), nil
+	go func() {
+		c.Call(c, respChan)
+
+		// Append the command to the history
+		if record {
+			history = append(history, c.Original)
+		}
+
+		close(respChan)
+	}()
+
+	return respChan
 }
 
 // Create a command from raw input text. An error is returned if parsing the

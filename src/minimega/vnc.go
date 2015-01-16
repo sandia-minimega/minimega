@@ -99,8 +99,7 @@ to the specified VM.`,
 			"vnc <noplayback,> <host> <vm id or name>",
 			"clear vnc",
 		},
-		Record: false,
-		Call:   cliVNC,
+		Call: wrapSimpleCLI(cliVNC),
 	},
 }
 
@@ -497,7 +496,7 @@ func vncPlayback(host, vm, filename string) error {
 	return nil
 }
 
-func cliVNC(c *minicli.Command) minicli.Responses {
+func cliVNC(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error
 
@@ -594,7 +593,7 @@ func cliVNC(c *minicli.Command) minicli.Responses {
 	if err != nil {
 		resp.Error = err.Error()
 	}
-	return minicli.Responses{resp}
+	return resp
 }
 
 func vncClear() error {

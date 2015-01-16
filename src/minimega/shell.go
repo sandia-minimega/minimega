@@ -23,10 +23,9 @@ that does not return.`,
 		Patterns: []string{
 			"shell <command>...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliShell(c, false)
-		},
+		}),
 	},
 	{ // background
 		HelpShort: "execute a command in the background",
@@ -38,10 +37,9 @@ logged.`,
 		Patterns: []string{
 			"background <command>...",
 		},
-		Record: true,
-		Call: func(c *minicli.Command) minicli.Responses {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliShell(c, true)
-		},
+		}),
 	},
 }
 
@@ -49,7 +47,7 @@ func init() {
 	registerHandlers("shell", shellCLIHandlers)
 }
 
-func cliShell(c *minicli.Command, background bool) minicli.Responses {
+func cliShell(c *minicli.Command, background bool) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	var sOut bytes.Buffer
@@ -60,7 +58,7 @@ func cliShell(c *minicli.Command, background bool) minicli.Responses {
 	p, err := exec.LookPath(c.ListArgs["command"][0])
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	fields := fieldsQuoteEscape("\"", command)
@@ -77,7 +75,7 @@ func cliShell(c *minicli.Command, background bool) minicli.Responses {
 	err = cmd.Start()
 	if err != nil {
 		resp.Error = err.Error()
-		return minicli.Responses{resp}
+		return resp
 	}
 
 	if background {
@@ -96,12 +94,12 @@ func cliShell(c *minicli.Command, background bool) minicli.Responses {
 		err = cmd.Wait()
 		if err != nil {
 			resp.Error = err.Error()
-			return minicli.Responses{resp}
+			return resp
 		}
 
 		resp.Response = sOut.String()
 		resp.Error = sErr.String()
 	}
 
-	return minicli.Responses{resp}
+	return resp
 }
