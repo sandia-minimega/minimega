@@ -60,8 +60,6 @@ func cliDot(c *minicli.Command) *minicli.Response {
 		// Should never happen
 		panic(err)
 	}
-	localInfo := minicli.ProcessCommand(c, false)
-	remoteInfo := meshageBroadcastTwo(cmd, "*")
 
 	writer := bufio.NewWriter(fout)
 
@@ -71,10 +69,16 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	//fmt.Fprintf(fout, "Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
 	var expVms []*dotVM
-	for resp := range localInfo {
+
+	// Get info from local hosts by invoking command directly
+	for resp := range minicli.ProcessCommand(c, false) {
 		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
-	for resp := range remoteInfo {
+
+	// Get info from remote hosts over meshage
+	remoteRespChan := make(chan minicli.Responses)
+	go meshageBroadcast(cmd, remoteRespChan)
+	for resp := range remoteRespChan {
 		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
 

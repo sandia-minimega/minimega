@@ -144,24 +144,33 @@ func (n *Node) Set(recipients []string, body interface{}) (int, error) {
 func (n *Node) Broadcast(body interface{}) (int, error) {
 	// force updating the network if needed on Broadcast before looking at
 	// the effective network
-	n.checkUpdateNetwork()
-
-	var recipients []string
-	n.meshLock.Lock()
-	for k, _ := range n.effectiveNetwork {
-		if k != n.name {
-			recipients = append(recipients, k)
-		}
-	}
-	n.meshLock.Unlock()
 	m := &Message{
-		Recipients:   recipients,
+		Recipients:   n.BroadcastRecipients(),
 		Source:       n.name,
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
 	}
 	return n.Send(m)
+}
+
+// Determine all the nodes on the mesh that would receive a broadcast message
+// from this node. This excludes the node itself as nodes cannot send messages
+// to themselves.
+func (n *Node) BroadcastRecipients() []string {
+	n.checkUpdateNetwork()
+
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
+
+	var recipients []string
+	for k, _ := range n.effectiveNetwork {
+		if k != n.name {
+			recipients = append(recipients, k)
+		}
+	}
+
+	return recipients
 }
 
 // messageHandler accepts messages from all connected clients and forwards them to the

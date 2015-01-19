@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"minicli"
 	log "minilog"
 	"os"
@@ -89,13 +88,13 @@ response.`,
 Send a command to one or more connected clients. For example, to get the
 vm info from nodes kn1 and kn2:
 
-	mesh_set kn[1-2] vm info
+	mesh send kn[1-2] vm info
 
 You can use * to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh set <vms or *> (command)",
+			"mesh send <vms or *> (command)",
 		},
-		Call: nil, // TODO: meshageSet,
+		Call: cliMeshageSend,
 	},
 }
 
@@ -105,48 +104,32 @@ func init() {
 
 func meshageHandler() {
 	for {
-		m := <-meshageCommand
+		m := <-meshageCommandChan
 		go func() {
-			commandChanMeshage <- m.Body.(cliCommand)
+			mCmd := m.Body.(meshageCommand)
 
-			//generate a response
-			var bufError string
-			var bufResponse string
-			var ret cliResponse
-			for {
-				r := <-ackChanMeshage
-				if r.Error != "" {
-					if bufError == "" {
-						bufError = r.Error
-					} else {
-						if !strings.HasSuffix(bufError, "\n") {
-							bufError += "\n"
-						}
-						bufError += r.Error
-					}
-				}
-				if r.Response != "" {
-					if bufResponse == "" {
-						bufResponse = r.Response
-					} else {
-						if !strings.HasSuffix(bufResponse, "\n") {
-							bufResponse += "\n"
-						}
-						bufResponse += r.Response
-					}
-				}
-				if !r.More {
-					log.Debugln("got last message")
-					break
-				} else {
-					log.Debugln("expecting more data")
-				}
+			cmd, err := minicli.CompileCommand(mCmd.Original)
+			if err != nil {
+				log.Error("invalid command from mesh: `%s`", mCmd.Original)
+				return
 			}
-			ret.TID = m.Body.(cliCommand).TID
-			ret.Error = bufError
-			ret.Response = bufResponse
+
+			resps := []minicli.Responses{}
+			for resp := range runCommand(cmd, true) {
+				resps = append(resps, resp)
+			}
+
+			if len(resps) > 1 || len(resps[0]) > 1 {
+				// This should never happen because the only commands that
+				// return multiple responses are `read` and `mesh send` which
+				// aren't supposed to be sent across meshage.
+				log.Error("unsure how to process multiple responses!!")
+			}
+
+			resp := meshageResponse{Response: *resps[0][0], TID: mCmd.TID}
 			recipient := []string{m.Source}
-			_, err := meshageNode.Set(recipient, ret)
+
+			_, err = meshageNode.Set(recipient, resp)
 			if err != nil {
 				log.Errorln(err)
 			}
@@ -272,179 +255,8 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func meshageMSATimeout(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 0:
-		return cliResponse{
-			Response: fmt.Sprintf("%v", meshageNode.GetMSATimeout()),
-		}
-	case 1:
-		a, err := strconv.Atoi(c.Args[0])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-		meshageNode.SetMSATimeout(uint(a))
-		return cliResponse{}
-	default:
-		return cliResponse{
-			Error: "mesh_msa_timeout takes zero or one argument",
-		}
-	}
-	return cliResponse{}
-}
-
-func meshageSet(c cliCommand) cliResponse {
-	meshageCommandLock.Lock()
-	defer meshageCommandLock.Unlock()
-
-	if len(c.Args) < 2 {
-		return cliResponse{
-			Error: "mesh_set takes at least two arguments",
-		}
-	}
-
-	addHost := false
-	if c.Args[0] == "annotate" {
-		addHost = true
-	}
-
-	commandOffset := 1
-	if addHost {
-		commandOffset = 2
-	}
-
-	recipients := getRecipients(c.Args[commandOffset-1])
-	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
-
-	if command.Command == "mesh_broadcast" || command.Command == "mesh_set" {
-		return cliResponse{
-			Error: "compound mesh commands are not allowed",
-		}
-	}
-
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	TID := r.Int31()
-	command.TID = TID
-	n, err := meshageNode.Set(recipients, command)
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-
-	// wait on a response from the recipient
-	var respString string
-	var respError string
-SET_WAIT_LOOP:
-	for i := 0; i < n; {
-		select {
-		case resp := <-meshageResponse:
-			body := resp.Body.(cliResponse)
-			if body.TID != TID {
-				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
-			} else {
-				if body.Response != "" {
-					if addHost {
-						respString += fmt.Sprintf("[%v] %v\n", resp.Source, body.Response)
-					} else {
-						respString += fmt.Sprintf("%v\n", body.Response)
-					}
-				}
-				if body.Error != "" {
-					respError += fmt.Sprintf("[%v] %v\n", resp.Source, body.Error)
-				}
-				i++
-			}
-		case <-time.After(meshageTimeout):
-			respError += fmt.Sprintf("meshage timeout: %v", command)
-			break SET_WAIT_LOOP
-		}
-	}
-	return cliResponse{
-		Response: respString,
-		Error:    respError,
-	}
-}
-
-func meshageBroadcastTwo(c *minicli.Command, hosts string) chan minicli.Responses {
-	// TODO
-	return nil
-}
-
-func meshageBroadcast(c cliCommand) cliResponse {
-	meshageCommandLock.Lock()
-	defer meshageCommandLock.Unlock()
-
-	if len(c.Args) == 0 {
-		return cliResponse{
-			Error: "mesh_broadcast takes at least one argument",
-		}
-	}
-
-	addHost := false
-	if c.Args[0] == "annotate" {
-		addHost = true
-	}
-
-	commandOffset := 0
-	if addHost {
-		commandOffset = 1
-	}
-
-	command := makeCommand(strings.Join(c.Args[commandOffset:], " "))
-
-	if command.Command == "mesh_broadcast" || command.Command == "mesh_set" {
-		return cliResponse{
-			Error: "compound mesh commands are not allowed",
-		}
-	}
-
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	TID := r.Int31()
-	command.TID = TID
-	n, err := meshageNode.Broadcast(command)
-	if err != nil {
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-
-	// wait on a response from the recipient
-	var respString string
-	var respError string
-BROADCAST_WAIT_LOOP:
-	for i := 0; i < n; {
-		select {
-		case resp := <-meshageResponse:
-			body := resp.Body.(cliResponse)
-			if body.TID != TID {
-				log.Warn("invalid TID from response channel: %d", resp.Body.(cliResponse).TID)
-			} else {
-				if body.Response != "" {
-					if addHost {
-						respString += fmt.Sprintf("[%v] %v\n", resp.Source, body.Response)
-					} else {
-						respString += fmt.Sprintf("%v\n", body.Response)
-					}
-				}
-				if body.Error != "" {
-					respError += fmt.Sprintf("[%v] %v\n", resp.Source, body.Error)
-				}
-				i++
-			}
-		case <-time.After(meshageTimeout):
-			respError += fmt.Sprintf("meshage timeout: %v", command)
-			break BROADCAST_WAIT_LOOP
-		}
-	}
-	return cliResponse{
-		Response: respString,
-		Error:    respError,
-	}
+func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
+	meshageSend(c, c.StringArgs["vms"], respChan)
 }
 
 func getRecipients(r string) []string {

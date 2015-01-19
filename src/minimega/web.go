@@ -5,12 +5,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"html"
 	"minicli"
 	log "minilog"
 	"net/http"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -128,58 +128,39 @@ func vncRoot(w http.ResponseWriter, r *http.Request) {
 func webHosts() string {
 	hosts := make(map[string]int)
 	// first grab our own list of hosts
-	host, err := os.Hostname()
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
 	count := 0
 	for _, vm := range vms.vms {
 		if vm.State != VM_QUIT && vm.State != VM_ERROR {
 			count++
 		}
 	}
-	hosts[host] = count
+	hosts[hostname] = count
 
-	// get a list of the other hosts on the network
-	cmd := cliCommand{
-		Args: []string{"hostname"},
-	}
-	resp := meshageBroadcast(cmd)
-	if resp.Error != "" {
-		log.Errorln(resp.Error)
-		return ""
+	cmd, err := minicli.CompileCommand("vm info mask id,state")
+	if err != nil {
+		// Should never happen
+		panic(err)
 	}
 
-	otherHosts := strings.Fields(resp.Response)
+	remoteRespChan := make(chan minicli.Responses)
+	go meshageBroadcast(cmd, remoteRespChan)
 
-	for _, h := range otherHosts {
-		// get a list of vms from that host
-		cmd := cliCommand{
-			Args: []string{h, "vm_info", "[id,state]"},
-		}
-		resp := meshageSet(cmd)
-		if resp.Error != "" {
-			log.Errorln(resp.Error)
-			continue // don't error out if just one host fails us
-		}
+	for resps := range remoteRespChan {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
 
-		lines := strings.Split(resp.Response, "\n")
-		count := 0
-		for _, l := range lines[1:] {
-			f := strings.Fields(l)
-			if len(f) == 3 {
-				if f[2] != "quit" && f[2] != "error" {
+			count := 0
+			for _, row := range resp.Tabular {
+				if row[1] != "quit" && row[1] != "error" {
 					count++
 				}
 			}
+			hosts[resp.Host] = count
 		}
-		hosts[h] = count
 	}
-	if len(hosts) == 0 {
-		return "no hosts found"
-	}
-	body := ""
 
 	// sort hostnames
 	var sortedHosts []string
@@ -188,40 +169,37 @@ func webHosts() string {
 	}
 	sort.Strings(sortedHosts)
 
+	var body bytes.Buffer
 	for _, h := range sortedHosts {
-		body += fmt.Sprintf("<a href=\"/vnc/%v\">%v</a> (%v)<br>\n", h, h, hosts[h])
+		fmt.Fprintf(&body, "<a href=\"/vnc/%v\">%v</a> (%v)<br>\n", h, h, hosts[h])
 	}
-	return body
+
+	return body.String()
 }
 
 // this whole block is UGLY, please rewrite
 func webHostVMs(host string) string {
-	localhost, err := os.Hostname()
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-
 	var d string
 
-	if localhost == host {
+	// TODO
+	if host == hostname {
 		//cmd := cliCommand{}
-		r := cliResponse{} // TODO: vms.info(cmd)
-		if r.Error != "" {
-			log.Errorln(r.Error)
-			return r.Error
-		}
-		d = r.Response
+		//r := cliResponse{} // TODO: vms.info(cmd)
+		//if r.Error != "" {
+		//	log.Errorln(r.Error)
+		//	return r.Error
+		//}
+		//d = r.Response
 	} else {
-		cmd := cliCommand{
-			Args: []string{host, "vm_info"},
-		}
-		r := meshageSet(cmd)
-		if r.Error != "" {
-			log.Errorln(r.Error)
-			return r.Error
-		}
-		d = r.Response
+		//cmd := cliCommand{
+		//	Args: []string{host, "vm_info"},
+		//}
+		//r := meshageSet(cmd)
+		//if r.Error != "" {
+		//	log.Errorln(r.Error)
+		//	return r.Error
+		//}
+		//d = r.Response
 	}
 
 	body := `

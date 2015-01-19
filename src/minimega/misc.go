@@ -258,53 +258,41 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		// if that doesn't work, return not found
 		log.Debugln("remote host")
 
-		cmd := cliCommand{
-			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("name=%v", vm), "[id]"},
-		}
-		r := meshageSet(cmd)
-		if r.Error != "" {
-			e := strings.TrimSpace(r.Error)
-			return VM_NOT_FOUND, "", fmt.Errorf(e)
-		}
-		d := strings.TrimSpace(r.Response)
-
-		log.Debug("got response %v", d)
-
-		v, err := strconv.Atoi(d)
+		var cmdStr string
+		v, err := strconv.Atoi(vm)
 		if err == nil {
-			log.Debug("got vm: %v %v %v", host, v, vm)
-			return v, vm, nil
+			cmdStr = fmt.Sprintf("vm info search id=%v mask name,id", v)
+		} else {
+			cmdStr = fmt.Sprintf("vm info search id=%v mask name,id", v)
 		}
 
-		// nope, try the vm id instead
-		v, err = strconv.Atoi(vm)
+		cmd, err := minicli.CompileCommand(cmdStr)
 		if err != nil {
-			return VM_NOT_FOUND, "", err
+			// Should never happen
+			panic(err)
 		}
-		cmd = cliCommand{
-			Args: []string{host, "vm_info", "output=quiet", fmt.Sprintf("id=%v", vm), "[id,name]"},
-		}
-		r = meshageSet(cmd)
-		if r.Error != "" {
-			e := strings.TrimSpace(r.Error)
-			return VM_NOT_FOUND, "", fmt.Errorf(e)
-		}
-		d = strings.TrimSpace(r.Response)
 
-		log.Debug("got response %v", d)
+		remoteRespChan := make(chan minicli.Responses)
+		go meshageBroadcast(cmd, remoteRespChan)
 
-		f := strings.Fields(d)
-		switch len(f) {
-		case 1:
-			// no name
-			log.Debug("got vm: %v %v %v", host, v, "")
-			return v, "", nil
-		case 2:
-			d = strings.TrimSpace(f[1])
-			log.Debug("got vm: %v %v %v", host, v, d)
-			return v, d, nil
+		for resps := range remoteRespChan {
+			// Find a response that is not an error
+			for _, resp := range resps {
+				if resp.Error == "" && len(resp.Tabular) > 0 {
+					// Found it!
+					row := resp.Tabular[0] // should be name,id
+					name := row[0]
+					id, err := strconv.Atoi(row[1])
+					if err != nil {
+						log.Debug("malformed response: %#v", resp)
+					} else {
+						return id, name, nil
+					}
+				}
+			}
 		}
 	}
+
 	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
 }
 
