@@ -63,6 +63,7 @@ func cliCC(c cliCommand) cliResponse {
 		w.Init(&o, 5, 0, 1, ' ', 0)
 		fmt.Fprintf(w, "running:\ttrue\n")
 		fmt.Fprintf(w, "port:\t%v\n", port)
+		fmt.Fprintf(w, "serial active:\t%v\n", ccSerial)
 		fmt.Fprintf(w, "clients:\t%v\n", len(clients))
 
 		w.Flush()
@@ -88,6 +89,7 @@ func cliCC(c cliCommand) cliResponse {
 			}
 		}
 
+		ccSerial = true
 		go ccSerialWatcher()
 	case "start":
 		if ccNode != nil {
