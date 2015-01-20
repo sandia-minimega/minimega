@@ -5,8 +5,8 @@
 package ron
 
 import (
-	"encoding/gob"
 	"fmt"
+	"io"
 	log "minilog"
 	"net"
 	"net/http"
@@ -39,7 +39,7 @@ type Ron struct {
 
 	// serial port support
 	serialPath         string
-	serialClientHandle *os.File
+	serialClientHandle io.ReadWriteCloser
 	masterSerialConns  map[string]net.Conn
 	serialLock         sync.Mutex
 

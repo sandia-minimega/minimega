@@ -8,12 +8,13 @@ import (
 	"encoding/gob"
 	"fmt"
 	"goserial"
+	"io"
 	log "minilog"
 	"net"
 )
 
 const (
-	BAUDRATE = 115200
+	BAUDRATE       = 115200
 )
 
 func (r *Ron) serialDial() error {
@@ -45,6 +46,19 @@ func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
 
 	err = dec.Decode(&newCommands)
 	if err != nil {
+		log.Errorln("error decoding response over serial, reconnecting")
+
+		closeErr := r.serialClientHandle.Close()
+		if closeErr != nil {
+			log.Fatalln(closeErr)
+		}
+
+		r.serialClientHandle = nil
+		redialErr := r.serialDial()
+		if redialErr != nil {
+			log.Fatalln(redialErr)
+		}
+
 		return nil, err, true
 	}
 
@@ -109,7 +123,9 @@ func (r *Ron) serialClientHandler(path string) {
 		var h hb
 		err := dec.Decode(&h)
 		if err != nil {
-			log.Errorln(err)
+			if err != io.EOF {
+				log.Errorln(err)
+			}
 			break
 		}
 		log.Debug("heartbeat from %v", h.UUID)
@@ -120,7 +136,9 @@ func (r *Ron) serialClientHandler(path string) {
 		// send the command list back
 		err = enc.Encode(r.commands)
 		if err != nil {
-			log.Errorln(err)
+			if err != io.EOF {
+				log.Errorln(err)
+			}
 			break
 		}
 	}
