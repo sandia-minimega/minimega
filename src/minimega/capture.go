@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"gonetflow"
@@ -15,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"text/tabwriter"
 )
 
 type capture struct {
@@ -72,25 +70,22 @@ VM:
 	minimega$ capture pcap vm foo 0 foo.pcap`,
 		Patterns: []string{
 			"capture",
-			"clear capture",
+			"clear capture [netflow,pcap]",
 
-			"capture netflow",
-			"capture netflow <bridge>",
-			"capture netflow <bridge> file <filename>",
-			"capture netflow <bridge> file <filename> <raw,ascii>",
-			"capture netflow <bridge> file <filename> <raw,ascii> [gzip]",
-			"capture netflow <bridge> socket <tcp,udp> <hostname:port> <raw,ascii>",
-			"capture netflow delete <bridge>",
-			"capture netflow delete <bridge> <id or *>",
-			"clear capture netflow",
+			"capture <netflow,>",
+			"capture <netflow,> <timeout,> [timeout]",
+			"capture <netflow,> <bridge>",
+			"capture <netflow,> <bridge> <file,> <filename>",
+			"capture <netflow,> <bridge> <file,> <filename> <raw,ascii> [gzip]",
+			"capture <netflow,> <bridge> <socket,> <tcp,udp> <hostname:port> <raw,ascii>",
+			"capture <netflow,> <delete,> <id or *>",
 
-			"capture pcap",
-			"capture pcap bridge <bridge> <filename>",
-			"capture pcap vm <vm id or name> <interface index> <filename>",
-			"capture pcap delete <id or *>",
-			"clear capture pcap",
+			"capture <pcap,>",
+			"capture <pcap,> bridge <bridge> <filename>",
+			"capture <pcap,> vm <vm id or name> <interface index> <filename>",
+			"capture <pcap,> <delete,> <id or *>",
 		},
-		Call: nil, // TODO cliCapture,
+		Call: wrapSimpleCLI(cliCapture),
 	},
 }
 
@@ -109,104 +104,99 @@ func init() {
 	}()
 }
 
-func cliCapture(c cliCommand) cliResponse {
-	// capture must be:
-	// capture
-	// capture pcap bridge <bridge name> <filename>
-	// capture pcap vm <vm id> <tap> <filename>
-	// capture pcap [clear]
-	// capture pcap clear <id, -1>
-	// capture netflow <bridge> file <filename> <raw,ascii> [gzip]
-	// capture netflow <bridge> socket <tcp,udp> <hostname:port> <raw,ascii>
-	// capture netflow clear <id,-1>
-	// capture netflow timeout [time]
-	// capture netflow
-	log.Debugln("cliCapture")
-
-	if len(c.Args) == 0 {
-		// create output for all capture types
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tType\tBridge\tVM/interface\tPath\tMode\tCompress\n")
-		for _, v := range captureEntries {
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v/%v\t%v\t%v\t%v\n", v.ID, v.Type, v.Bridge, v.VM, v.Interface, v.Path, v.Mode, v.Compress)
+func cliCapture(c *minicli.Command) *minicli.Response {
+	if isClearCommand(c) {
+		resp := &minicli.Response{Host: hostname}
+		if err := clearAllCaptures(); err != nil {
+			resp.Error = err.Error()
 		}
-		w.Flush()
-
-		// get netflow stats for each bridge
-		var nfstats string
-		b := enumerateBridges()
-		for _, v := range b {
-			nf, err := getNetflowFromBridge(v)
-			if err != nil {
-				if !strings.Contains(err.Error(), "has no netflow object") {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				continue
-			}
-			nfstats += fmt.Sprintf("Bridge %v:\n", v)
-			nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
-			nfstats += nf.GetStats()
-		}
-
-		out := o.String() + "\n" + nfstats
-
-		return cliResponse{
-			Response: out,
-		}
-		return cliResponse{}
+		return resp
+	} else if c.BoolArgs["netflow"] {
+		// Capture to netflow
+		return cliCaptureNetflow(c)
+	} else if c.BoolArgs["pcap"] {
+		// Capture to pcap
+		return cliCapturePcap(c)
 	}
 
-	switch c.Args[0] {
-	case "pcap":
-		return capturePcap(c)
-	case "netflow":
-		return captureNetflow(c)
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
+	resp := &minicli.Response{Host: hostname}
+
+	// Print capture info
+	resp.Header = []string{
+		"ID",
+		"Type",
+		"Bridge",
+		"VM/interface",
+		"Path",
+		"Mode",
+		"Compress",
 	}
+
+	resp.Tabular = [][]string{}
+	for _, v := range captureEntries {
+		row := []string{
+			strconv.Itoa(v.ID),
+			v.Type,
+			v.Bridge,
+			fmt.Sprintf("%v/%v", v.VM, v.Interface),
+			v.Path,
+			v.Mode,
+			strconv.FormatBool(v.Compress),
+		}
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	// TODO: How does this fit in?
+	//
+	// get netflow stats for each bridge
+	//var nfstats string
+	//b := enumerateBridges()
+	//for _, v := range b {
+	//	nf, err := getNetflowFromBridge(v)
+	//	if err != nil {
+	//		if !strings.Contains(err.Error(), "has no netflow object") {
+	//			return cliResponse{
+	//				Error: err.Error(),
+	//			}
+	//		}
+	//		continue
+	//	}
+	//	nfstats += fmt.Sprintf("Bridge %v:\n", v)
+	//	nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
+	//	nfstats += nf.GetStats()
+	//}
+
+	//out := o.String() + "\n" + nfstats
+
+	return resp
 }
 
-func clearCapture(captureType, id string) error {
+func clearAllCaptures() (err error) {
+	err = clearCapture("netflow", "*")
+	if err == nil {
+		err = clearCapture("pcap", "*")
+	}
+
+	return
+}
+
+func clearCapture(captureType, id string) (err error) {
 	captureLock.Lock()
 	defer captureLock.Unlock()
-	if id == "-1" {
-		for k, v := range captureEntries {
+
+	defer func() {
+		// check if we need to remove the nf object
+		if err != nil && captureType == "netflow" {
+			err = cleanupNetflow()
+		}
+	}()
+
+	if id == "*" {
+		for _, v := range captureEntries {
 			if v.Type == "pcap" && captureType == "pcap" {
-				delete(captureEntries, k)
-				if v.pcap != nil {
-					v.pcap.Close()
-				} else {
-					return fmt.Errorf("capture %v has no valid pcap interface", k)
-				}
-				if v.tap != "" && v.Bridge != "" {
-					b, err := getBridge(v.Bridge)
-					if err != nil {
-						return err
-					}
-					err = b.DeleteBridgeMirror(v.tap)
-					if err != nil {
-						return err
-					}
-				}
+				return stopPcapCapture(v)
 			} else if v.Type == "netflow" && captureType == "netflow" {
-				delete(captureEntries, k)
-				// get the netflow object associated with this bridge
-				nf, err := getNetflowFromBridge(v.Bridge)
-				if err != nil {
-					return err
-				}
-				err = nf.RemoveWriter(v.Path)
-				if err != nil {
-					return err
-				}
+				return stopNetflowCapture(v)
 			}
 		}
 	} else {
@@ -214,69 +204,364 @@ func clearCapture(captureType, id string) error {
 		if err != nil {
 			return err
 		}
-		if v, ok := captureEntries[val]; !ok {
-			return errors.New(fmt.Sprintf("entry %v does not exist", val))
+
+		entry, ok := captureEntries[val]
+		if !ok {
+			return fmt.Errorf("entry %v does not exist", val)
+		}
+
+		if entry.Type != captureType {
+			return fmt.Errorf("invalid id/capture type, `%s` != `%s`", entry.Type, captureType)
+		} else if entry.Type == "pcap" {
+			return stopPcapCapture(captureEntries[val])
+		} else if entry.Type == "netflow" {
+			return stopNetflowCapture(captureEntries[val])
+		}
+	}
+
+	return nil
+}
+
+// cliCapturePcap manages the CLI for starting and stopping captures to pcap.
+func cliCapturePcap(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	if c.BoolArgs["delete"] {
+		// Stop a capture
+		err = clearCapture("pcap", c.StringArgs["id"])
+	} else if c.StringArgs["bridge"] != "" {
+		// Capture bridge -> pcap
+		err = startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
+	} else if c.StringArgs["vm"] != "" {
+		// Capture VM:interface -> pcap
+		var iface int
+		iface, err = strconv.Atoi(c.StringArgs["interface"])
+		if err != nil {
+			err = fmt.Errorf("invalid interface: `%v`", c.StringArgs["interface"])
 		} else {
-			if v.Type == "pcap" && captureType == "pcap" {
-				delete(captureEntries, val)
-				if v.pcap != nil {
-					v.pcap.Close()
-				} else {
-					return fmt.Errorf("capture %v has no valid pcap interface", val)
+			err = startCapturePcap(c.StringArgs["vm"], iface, c.StringArgs["filename"])
+		}
+	} else {
+		// List captures
+		resp.Header = []string{"ID", "Bridge", "VM/interface", "Path"}
+
+		resp.Tabular = [][]string{}
+		for _, v := range captureEntries {
+			if v.Type == "pcap" {
+				iface := fmt.Sprintf("%v/%v", v.VM, v.Interface)
+				row := []string{
+					strconv.Itoa(v.ID),
+					v.Bridge,
+					iface,
+					v.Path,
 				}
-				if v.tap != "" && v.Bridge != "" {
-					b, err := getBridge(v.Bridge)
-					if err != nil {
-						return err
-					}
-					err = b.DeleteBridgeMirror(v.tap)
-					if err != nil {
-						return err
-					}
-				}
-			} else if v.Type == "netflow" && captureType == "netflow" {
-				delete(captureEntries, val)
-				// get the netflow object associated with this bridge
-				nf, err := getNetflowFromBridge(v.Bridge)
-				if err != nil {
-					return err
-				}
-				err = nf.RemoveWriter(v.Path)
-				if err != nil {
-					return err
-				}
-			} else {
-				return fmt.Errorf("entry %v is not a pcap capture", val)
+				resp.Tabular = append(resp.Tabular, row)
 			}
 		}
 	}
 
-	if captureType == "netflow" {
-		// check if we need to remove the nf object
-		b := enumerateBridges()
-		for _, v := range b {
-			empty := true
-			for _, n := range captureEntries {
-				if n.Bridge == v {
-					empty = false
-					break
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+}
+
+// cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.
+func cliCaptureNetflow(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	if c.BoolArgs["delete"] {
+		// Stop a capture
+		err = clearCapture("netflow", c.StringArgs["id"])
+	} else if c.BoolArgs["timeout"] {
+		// Set or get the netflow timeout
+		timeout := c.StringArgs["timeout"]
+		val, err := strconv.Atoi(timeout)
+		if timeout != "" {
+			resp.Response = strconv.Itoa(captureNFTimeout)
+		} else if err != nil {
+			resp.Error = fmt.Sprintf("invalid timeout parameter: `%v`", timeout)
+		} else {
+			captureNFTimeout = val
+			captureUpdateNFTimeouts()
+		}
+	} else if c.BoolArgs["file"] {
+		// Capture -> netflow (file)
+		err = startCaptureNetflowFile(
+			c.StringArgs["bridge"],
+			c.StringArgs["filename"],
+			c.BoolArgs["ascii"],
+			c.BoolArgs["gzip"],
+		)
+	} else if c.BoolArgs["socket"] {
+		// Capture -> netflow (socket)
+		transport := "tcp"
+		if c.BoolArgs["udp"] {
+			transport = "udp"
+		}
+		err = startCaptureNetflowSocket(
+			c.StringArgs["bridge"],
+			transport,
+			c.StringArgs["hostname:port"],
+			c.BoolArgs["ascii"],
+		)
+	} else {
+		captureLock.Lock()
+		defer captureLock.Unlock()
+
+		// List captures
+		resp.Header = []string{"ID", "Bridge", "Path", "Mode", "Compress"}
+
+		for _, v := range captureEntries {
+			if v.Type == "netflow" {
+				row := []string{
+					strconv.Itoa(v.ID),
+					v.Bridge,
+					v.Path,
+					v.Mode,
+					strconv.FormatBool(v.Compress),
 				}
+				resp.Tabular = append(resp.Tabular, row)
 			}
+		}
 
-			if !empty {
-				continue
+		// TODO: netflow stats?
+
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+}
+
+// startCapturePcap starts a new capture for a specified interface on a VM,
+// writing the packets to the specified filename in PCAP format.
+func startCapturePcap(vm string, iface int, filename string) error {
+	// get the vm
+	v := vms.getVM(vm)
+	if v == nil {
+		return fmt.Errorf("no such vm %v", vm)
+	}
+
+	if len(v.taps) <= iface {
+		return fmt.Errorf("no such interface %v", iface)
+	}
+
+	tap := v.taps[iface]
+
+	// attempt to start pcap on the bridge
+	p, err := gopcap.NewPCAP(tap, filename)
+	if err != nil {
+		return err
+	}
+
+	// success! add it to the list
+	ce := &capture{
+		ID:        <-captureIDCount,
+		Type:      "pcap",
+		VM:        v.Id,
+		Interface: iface,
+		Path:      filename,
+		pcap:      p,
+	}
+
+	captureLock.Lock()
+	captureEntries[ce.ID] = ce
+	captureLock.Unlock()
+
+	return nil
+}
+
+// startBridgeCapturePcap starts a new capture for all the traffic on the
+// specified bridge, writing all packets to the specified filename in PCAP
+// format.
+func startBridgeCapturePcap(bridge, filename string) error {
+	// create the bridge if necessary
+	b, err := getBridge(bridge)
+	if err != nil {
+		return err
+	}
+
+	tap, err := b.CreateBridgeMirror()
+	if err != nil {
+		return err
+	}
+
+	// attempt to start pcap on the mirrored tap
+	p, err := gopcap.NewPCAP(tap, filename)
+	if err != nil {
+		return err
+	}
+
+	// success! add it to the list
+	ce := &capture{
+		ID:        <-captureIDCount,
+		Type:      "pcap",
+		Bridge:    bridge,
+		VM:        -1,
+		Interface: -1,
+		Path:      filename,
+		pcap:      p,
+		tap:       tap,
+	}
+
+	captureLock.Lock()
+	captureEntries[ce.ID] = ce
+	captureLock.Unlock()
+
+	return nil
+}
+
+// startCaptureNetflowFile starts a new netflow recorder for all the traffic on
+// the specified bridge, writing the netflow records to the specified filename.
+// Flags control whether the format is raw or ascii, and whether the logs will
+// be compressed.
+func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) error {
+	nf, err := getOrCreateNetflow(bridge)
+	if err != nil {
+		return err
+	}
+
+	mode := gonetflow.RAW
+	modeStr := "raw"
+	if ascii {
+		mode = gonetflow.ASCII
+		modeStr = "ascii"
+	}
+
+	err = nf.NewFileWriter(filename, mode, compress)
+	if err != nil {
+		return err
+	}
+
+	ce := &capture{
+		ID:       <-captureIDCount,
+		Type:     "netflow",
+		Bridge:   bridge,
+		Path:     filename,
+		Mode:     modeStr,
+		Compress: compress,
+	}
+
+	captureLock.Lock()
+	captureEntries[ce.ID] = ce
+	captureLock.Unlock()
+
+	return nil
+}
+
+// startCaptureNetflowSocket starts a new netflow recorder for all the traffic
+// on the specified bridge, writing the netflow record across the network to a
+// remote host. The ascii flag controls whether the record format is raw or
+// ascii.
+func startCaptureNetflowSocket(bridge, transport, host string, ascii bool) error {
+	nf, err := getOrCreateNetflow(bridge)
+	if err != nil {
+		return err
+	}
+
+	mode := gonetflow.RAW
+	modeStr := "raw"
+	if ascii {
+		mode = gonetflow.ASCII
+		modeStr = "ascii"
+	}
+
+	err = nf.NewSocketWriter(transport, host, mode)
+	if err != nil {
+		return err
+	}
+
+	ce := &capture{
+		ID:     <-captureIDCount,
+		Type:   "netflow",
+		Bridge: bridge,
+		Path:   fmt.Sprintf("%v:%v", transport, host),
+		Mode:   modeStr,
+	}
+
+	captureLock.Lock()
+	captureEntries[ce.ID] = ce
+	captureLock.Unlock()
+
+	return nil
+}
+
+// stopPcapCapture stops the specified pcap capture. Assumes that captureLock
+// has been acquired by the caller.
+func stopPcapCapture(entry *capture) error {
+	if entry.Type != "pcap" {
+		return errors.New("called stop pcap capture on capture of wrong type")
+	}
+
+	delete(captureEntries, entry.ID)
+
+	if entry.pcap == nil {
+		return fmt.Errorf("capture %v has no valid pcap interface", entry.ID)
+	}
+	entry.pcap.Close()
+
+	if entry.tap != "" && entry.Bridge != "" {
+		b, err := getBridge(entry.Bridge)
+		if err != nil {
+			return err
+		}
+
+		return b.DeleteBridgeMirror(entry.tap)
+	}
+
+	return nil
+}
+
+// stopNetflowCapture stops the specified netflow capture. Assumes that
+// captureLock has been acquired by the caller.
+func stopNetflowCapture(entry *capture) error {
+	if entry.Type != "netflow" {
+		return errors.New("called stop netflow capture on capture of wrong type")
+	}
+
+	delete(captureEntries, entry.ID)
+
+	// get the netflow object associated with this bridge
+	nf, err := getNetflowFromBridge(entry.Bridge)
+	if err != nil {
+		return err
+	}
+
+	return nf.RemoveWriter(entry.Path)
+}
+
+// cleanupNetflow destroys any netflow objects that are not currently
+// capturing. This should be invoked after calling stopNetflowCapture.
+func cleanupNetflow() error {
+	b := enumerateBridges()
+	for _, v := range b {
+		empty := true
+		for _, n := range captureEntries {
+			if n.Bridge == v {
+				empty = false
+				break
 			}
+		}
 
-			b, err := getBridge(v)
-			if err != nil {
+		if !empty {
+			continue
+		}
+
+		b, err := getBridge(v)
+		if err != nil {
+			return err
+		}
+
+		err = b.DestroyNetflow()
+		if err != nil {
+			if !strings.Contains(err.Error(), "has no netflow object") {
 				return err
-			}
-
-			err = b.DestroyNetflow()
-			if err != nil {
-				if !strings.Contains(err.Error(), "has no netflow object") {
-					return err
-				}
 			}
 		}
 	}
@@ -284,354 +569,26 @@ func clearCapture(captureType, id string) error {
 	return nil
 }
 
-func capturePcap(c cliCommand) cliResponse {
-	// capture pcap bridge <bridge name> <filename>
-	// capture pcap vm <vm id> <tap> <filename>
-	// capture pcap clear <id, -1>
-	if len(c.Args) == 1 {
-		// capture pcap, generate output
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tBridge\tVM/interface\tPath\n")
-		for _, v := range captureEntries {
-			if v.Type == "pcap" {
-				fmt.Fprintf(w, "%v\t%v\t%v/%v\t%v\n", v.ID, v.Bridge, v.VM, v.Interface, v.Path)
-			}
-		}
-		w.Flush()
-
-		out := o.String()
-
-		return cliResponse{
-			Response: out,
-		}
+// getOrCreateNetflow wraps calls to getBridge and getNetflowFromBridge,
+// creating each, if needed.
+func getOrCreateNetflow(bridge string) (*gonetflow.Netflow, error) {
+	// create the bridge if necessary
+	b, err := getBridge(bridge)
+	if err != nil {
+		return nil, err
 	}
 
-	switch c.Args[1] {
-	case "clear":
-		if len(c.Args) != 3 {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		err := clearCapture("pcap", c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-	case "vm":
-		if len(c.Args) != 5 {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// get the vm
-		v := vms.getVM(c.Args[2])
-		if v == nil {
-			return cliResponse{
-				Error: fmt.Sprintf("no such vm %v", c.Args[2]),
-			}
-		}
-
-		// get the interface by index
-		val, err := strconv.Atoi(c.Args[3])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("vm id %v : %v", c.Args[3], err),
-			}
-		}
-
-		if len(v.taps) < val {
-			return cliResponse{
-				Error: fmt.Sprintf("no such interface %v", val),
-			}
-		}
-
-		tap := v.taps[val]
-
-		// attempt to start pcap on the bridge
-		p, err := gopcap.NewPCAP(tap, c.Args[4])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		// success! add it to the list
-		ce := &capture{
-			ID:        <-captureIDCount,
-			Type:      "pcap",
-			VM:        v.Id,
-			Interface: val,
-			Path:      c.Args[4],
-			pcap:      p,
-		}
-
-		captureLock.Lock()
-		captureEntries[ce.ID] = ce
-		captureLock.Unlock()
-	case "bridge":
-		if len(c.Args) != 4 {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// create the bridge if necessary
-		b, err := getBridge(c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		tap, err := b.CreateBridgeMirror()
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		// attempt to start pcap on the mirrored tap
-		p, err := gopcap.NewPCAP(tap, c.Args[3])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		// success! add it to the list
-		ce := &capture{
-			ID:        <-captureIDCount,
-			Type:      "pcap",
-			Bridge:    c.Args[2],
-			VM:        -1,
-			Interface: -1,
-			Path:      c.Args[3],
-			pcap:      p,
-			tap:       tap,
-		}
-
-		captureLock.Lock()
-		captureEntries[ce.ID] = ce
-		captureLock.Unlock()
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
+	nf, err := getNetflowFromBridge(bridge)
+	if err != nil && !strings.Contains(err.Error(), "has no netflow object") {
+		return nil, err
 	}
 
-	return cliResponse{}
-}
-
-func captureNetflow(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 1:
-		// create output
-		captureLock.Lock()
-		defer captureLock.Unlock()
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tBridge\tPath\tMode\tCompress\n")
-		for _, v := range captureEntries {
-			if v.Type == "netflow" {
-				fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\n", v.ID, v.Bridge, v.Path, v.Mode, v.Compress)
-			}
-		}
-		w.Flush()
-
-		// get netflow stats for each bridge
-		var nfstats string
-		b := enumerateBridges()
-		for _, v := range b {
-			nf, err := getNetflowFromBridge(v)
-			if err != nil {
-				if !strings.Contains(err.Error(), "has no netflow object") {
-					return cliResponse{
-						Error: err.Error(),
-					}
-				}
-				continue
-			}
-			nfstats += fmt.Sprintf("Bridge %v:\n", v)
-			nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
-			nfstats += nf.GetStats()
-		}
-
-		out := o.String() + "\n" + nfstats
-
-		return cliResponse{
-			Response: out,
-		}
-	case 2:
-		if c.Args[0] != "netflow" || c.Args[1] != "timeout" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		return cliResponse{
-			Response: fmt.Sprintf("%v", captureNFTimeout),
-		}
-	case 3:
-		if c.Args[0] == "netflow" && c.Args[1] == "timeout" {
-			val, err := strconv.Atoi(c.Args[2])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			captureNFTimeout = val
-			captureUpdateNFTimeouts()
-			return cliResponse{}
-		}
-
-		if c.Args[0] != "netflow" || c.Args[1] != "clear" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// delete by id or -1 for all netflow writers
-		err := clearCapture("netflow", c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-	case 5, 6:
-		// new netflow capture
-		if c.Args[0] != "netflow" {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-		if c.Args[2] == "file" {
-			if c.Args[4] != "raw" && c.Args[4] != "ascii" {
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-			if len(c.Args) == 6 && c.Args[5] != "gzip" {
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-		} else if c.Args[2] == "socket" {
-			if c.Args[3] != "tcp" && c.Args[3] != "udp" {
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-			if c.Args[5] != "raw" && c.Args[5] != "ascii" {
-				return cliResponse{
-					Error: "malformed command",
-				}
-			}
-		} else {
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-
-		// create the bridge if necessary
-		b, err := getBridge(c.Args[1])
-		if err != nil {
-			return cliResponse{
-				Error: err.Error(),
-			}
-		}
-
-		nf, err := getNetflowFromBridge(c.Args[1])
-		if err != nil {
-			if !strings.Contains(err.Error(), "has no netflow object") {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-		}
-		if nf == nil {
-			// create a new netflow object
-			nf, err = b.NewNetflow(captureNFTimeout)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-		}
-
-		// create the writer for this entry
-		switch c.Args[2] {
-		case "file":
-			var compress bool
-			if len(c.Args) == 6 {
-				compress = true
-			}
-			var mode int
-			if c.Args[4] == "ascii" {
-				mode = gonetflow.ASCII
-			} else {
-				mode = gonetflow.RAW
-			}
-			err = nf.NewFileWriter(c.Args[3], mode, compress)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			ce := &capture{
-				ID:       <-captureIDCount,
-				Type:     "netflow",
-				Bridge:   c.Args[1],
-				Path:     c.Args[3],
-				Mode:     c.Args[4],
-				Compress: compress,
-			}
-
-			captureLock.Lock()
-			captureEntries[ce.ID] = ce
-			captureLock.Unlock()
-		case "socket":
-			var mode int
-			if c.Args[5] == "ascii" {
-				mode = gonetflow.ASCII
-			} else {
-				mode = gonetflow.RAW
-			}
-			err := nf.NewSocketWriter(c.Args[3], c.Args[4], mode)
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-
-			ce := &capture{
-				ID:     <-captureIDCount,
-				Type:   "netflow",
-				Bridge: c.Args[1],
-				Path:   fmt.Sprintf("%v:%v", c.Args[3], c.Args[4]),
-				Mode:   c.Args[5],
-			}
-
-			captureLock.Lock()
-			captureEntries[ce.ID] = ce
-			captureLock.Unlock()
-		}
-	default:
-		return cliResponse{
-			Error: "malformed command",
-		}
+	if nf == nil {
+		// create a new netflow object
+		nf, err = b.NewNetflow(captureNFTimeout)
 	}
 
-	return cliResponse{}
+	return nf, err
 }
 
 func captureUpdateNFTimeouts() {
@@ -654,16 +611,4 @@ func captureUpdateNFTimeouts() {
 			log.Error("update netflow timeout: %v", err)
 		}
 	}
-}
-
-func cliCaptureClear() error {
-	err := clearCapture("netflow", "-1")
-	if err != nil {
-		return err
-	}
-	err = clearCapture("pcap", "-1")
-	if err != nil {
-		return err
-	}
-	return nil
 }
