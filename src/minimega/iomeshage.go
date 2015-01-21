@@ -5,13 +5,59 @@ import (
 	"fmt"
 	"iomeshage"
 	"meshage"
+	"minicli"
 	log "minilog"
+	"strconv"
 	"text/tabwriter"
 )
 
 var (
 	iom *iomeshage.IOMeshage
 )
+
+var ioCLIHandlers = []minicli.Handler{
+	{ // file
+		HelpShort: "work with files served by minimega",
+		HelpLong: `
+File allows you to transfer and manage files served by minimega in the
+directory set by the -filepath flag (default is 'base'/files).
+
+To list files currently being served, issue the list command with a directory
+relative to the served directory:
+
+	file list /foo
+
+Issuing "file list /" will list the contents of the served directory.
+
+Files can be deleted with the delete command:
+
+	file delete /foo
+
+If a directory is given, the directory will be recursively deleted.
+
+Files are transferred using the get command. When a get command is issued, the
+node will begin searching for a file matching the path and name within the
+mesh. If the file exists, it will be transferred to the requesting node. If
+multiple different files exist with the same name, the behavior is undefined.
+When a file transfer begins, control will return to minimega while the transfer
+completes.
+
+To see files that are currently being transferred, use the status command:
+
+	file status`,
+		Patterns: []string{
+			"file <list,> [path]",
+			"file <get,> <file>",
+			"file <delete,> <file>",
+			"file <status,>",
+		},
+		Call: wrapSimpleCLI(cliFile),
+	},
+}
+
+func init() {
+	registerHandlers("io", ioCLIHandlers)
+}
 
 func iomeshageInit(node *meshage.Node) {
 	var err error
@@ -22,92 +68,44 @@ func iomeshageInit(node *meshage.Node) {
 	}
 }
 
-func cliFile(c cliCommand) cliResponse {
-	switch len(c.Args) {
-	case 1: // list, status
-		switch c.Args[0] {
-		case "list":
-			l, err := iomList("/")
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			return cliResponse{
-				Response: l,
-			}
-		case "status":
-			s := iomStatus()
-			return cliResponse{
-				Response: s,
-			}
-		default:
-			return cliResponse{
-				Error: "malformed command",
-			}
+func cliFile(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	if c.BoolArgs["get"] {
+		err = iom.Get(c.StringArgs["file"])
+	} else if c.BoolArgs["delete"] {
+		err = iom.Delete(c.StringArgs["file"])
+	} else if c.BoolArgs["status"] {
+		resp.Response = iomStatus()
+	} else if c.BoolArgs["list"] {
+		path := c.StringArgs["path"]
+		if path == "" {
+			path = "/"
 		}
-	case 2: // list, delete, get
-		switch c.Args[0] {
-		case "list":
-			l, err := iomList(c.Args[1])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
+
+		resp.Header = []string{"dir", "name", "size"}
+		resp.Tabular = [][]string{}
+
+		files, err := iom.List(path)
+		if err == nil && files != nil {
+			for _, f := range files {
+				var dir string
+				if f.Dir {
+					dir = "<dir>"
 				}
+
+				row := []string{dir, f.Name, strconv.FormatInt(f.Size, 10)}
+				resp.Tabular = append(resp.Tabular, row)
 			}
-			return cliResponse{
-				Response: l,
-			}
-		case "delete":
-			err := iom.Delete(c.Args[1])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			return cliResponse{}
-		case "get":
-			err := iom.Get(c.Args[1])
-			if err != nil {
-				return cliResponse{
-					Error: err.Error(),
-				}
-			}
-			return cliResponse{}
-		default:
-			return cliResponse{
-				Error: "malformed command",
-			}
-		}
-	default:
-		return cliResponse{
-			Error: "file takes at least one argument",
 		}
 	}
-}
 
-func iomList(dir string) (string, error) {
-	files, err := iom.List(dir)
 	if err != nil {
-		return "", err
-	}
-	if files == nil {
-		return "", nil
+		resp.Error = err.Error()
 	}
 
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	for _, f := range files {
-		n := f.Name
-		dir := " "
-		if f.Dir {
-			dir = "<dir>"
-		}
-		fmt.Fprintf(w, "%v\t%v\t%v\n", dir, n, f.Size)
-	}
-	w.Flush()
-	return o.String(), nil
+	return resp
 }
 
 func iomStatus() string {
