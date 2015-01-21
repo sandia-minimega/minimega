@@ -53,12 +53,21 @@ func printPattern(items []patternItem) string {
 	parts := make([]string, len(items))
 
 	for i, v := range items {
-		var prefix, suffix string
+		var prefix, text, suffix string
+		text = v.Text
+
 		switch v.Type {
 		case literalString:
 			// Nada
 		case reqString, reqChoice:
-			prefix, suffix = "<", ">"
+			// Special case, required choice with one option which collapses to
+			// just a required string (with some extra semantics to help in the
+			// CLI handler).
+			if len(v.Options) == 1 {
+				text = v.Options[0]
+			} else {
+				prefix, suffix = "<", ">"
+			}
 		case optString, optChoice:
 			prefix, suffix = "[", "]"
 		case reqList:
@@ -69,7 +78,7 @@ func printPattern(items []patternItem) string {
 			prefix, suffix = "(", ")"
 		}
 
-		parts[i] = prefix + v.Text + suffix
+		parts[i] = prefix + text + suffix
 	}
 
 	return strings.Join(parts, " ")
@@ -240,9 +249,11 @@ func (l *patternLexer) lexMulti() (stateFn, error) {
 		case `"`, `'`:
 			return nil, errors.New("single and double quotes are not allowed")
 		case l.terminal:
-			// Found terminal token, prepare to emit item
-			l.newItem.Options = append(l.newItem.Options, content)
-			l.newItem.Text += content
+			if len(content) > 0 {
+				// Found terminal token, prepare to emit item
+				l.newItem.Options = append(l.newItem.Options, content)
+				l.newItem.Text += content
+			}
 
 			switch l.terminal {
 			case ">":

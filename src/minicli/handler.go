@@ -149,8 +149,8 @@ func (h *Handler) helpShort() string {
 
 func (h *Handler) helpLong() string {
 	res := "Usage:\n"
-	for _, pattern := range h.Patterns {
-		res += "\t" + pattern + "\n"
+	for _, pattern := range h.patternItems {
+		res += "\t" + printPattern(pattern) + "\n"
 	}
 	res += "\n"
 	// Fallback on HelpShort if there's no HelpLong
