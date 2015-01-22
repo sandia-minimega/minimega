@@ -5,7 +5,7 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -14,7 +14,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 )
 
 const (
@@ -22,24 +21,16 @@ const (
 )
 
 var (
-	ccNode        *ron.Ron
-	ccFilters     map[int]*ron.Client
-	ccFilterCount int
-)
+	ccNode       *ron.Ron
+	ccBackground bool
+	ccFileRecv   map[int]string
+	ccFileSend   map[int]string
+	ccFilters    map[int]*ron.Client
 
-//cc layer syntax should look like:
-//
-//cc start [port]
-//cc command [new [norecord] [background] [command=<command>] [filesend=<filename>, ...] [filerecv=<filename>, ...], delete <command id>]
-//cc filter [add [uuid=<uuid>,...], delete <filter id>, clear]
-//cc responses [command id]
-//...
-//UUID      string
-//Hostname  string
-//Arch      string
-//OS        string
-//IP        []string
-//MAC       []string
+	ccFileRecvIDChan chan int
+	ccFileSendIDChan chan int
+	ccFilerIDChan    chan int
+)
 
 var ccCLIHandlers = []minicli.Handler{
 	{ // cc
@@ -68,323 +59,380 @@ specific IP, OR nodes that have a range of IPs:
 New commands assign any current filters.`,
 		Patterns: []string{
 			"cc",
-			"clear cc",
+			"cc <start,> [port]",
 
-			"cc start [port]",
-
-			"cc <filter,> <filters>...",
-			"cc <filesend,> <file>...",
-			"cc <filerecv,> <file>...",
+			"cc <background,> [true,false]",
+			"cc <filerecv,> [file]...",
+			"cc <filesend,> [file]...",
+			"cc <filter,> [filter]...",
 			"cc <command,> <command>...",
-			"cc <exec,> [background,]",
 
-			"cc <delete,> <filter,> <id or *>",
-			"cc <delete,> <filesend,> <id or *>",
 			"cc <delete,> <filerecv,> <id or *>",
+			"cc <delete,> <filesend,> <id or *>",
+			"cc <delete,> <filter,> <id or *>",
 			"cc <delete,> <command,> <id or *>",
 
-			"clear cc <filter,>",
-			"clear cc <filesend,>",
-			"clear cc <filerecv,>",
+			"clear cc",
+			"clear cc <background,>",
 			"clear cc <command,>",
+			"clear cc <filerecv,>",
+			"clear cc <filesend,>",
+			"clear cc <filter,>",
 		},
-		Call: nil, // TODO: cliCC,
+		Call: wrapSimpleCLI(cliCC),
 	},
 }
 
 func init() {
 	registerHandlers("cc", ccCLIHandlers)
 
-	ccFilters = make(map[int]*ron.Client)
+	ccFileRecvIDChan = makeIDChan()
+	ccFileSendIDChan = makeIDChan()
+	ccFilerIDChan = makeIDChan()
 }
 
-func cliCC(c cliCommand) cliResponse {
-	if len(c.Args) == 0 {
-		if ccNode == nil {
-			return cliResponse{
-				Response: "running: false",
-			}
+func cliCC(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	if c.BoolArgs["start"] {
+		err = ccStart(c.StringArgs["port"])
+		if err != nil {
+			resp.Error = err.Error()
 		}
 
+		return resp
+	}
+
+	// Ensure that cc is running before proceeding
+	if ccNode == nil {
+		resp.Error = "cc service not running"
+		return resp
+	}
+
+	// Functions pointers to the various handlers for the subcommands
+	handlers := map[string]func(*minicli.Command) *minicli.Response{
+		"filter":     cliCCFilter,
+		"filesend":   cliCCFileSend,
+		"filerecv":   cliCCFileRecv,
+		"command":    cliCCCommand,
+		"background": cliCCBackground,
+	}
+
+	if isClearCommand(c) {
+		for k := range handlers {
+			// We only want to clear something if it was specified on the
+			// command line or if we're clearing everything (nothing was
+			// specified).
+			if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
+				err = ccClear(k, "*")
+				if err != nil {
+					break
+				}
+			}
+		}
+	} else if c.BoolArgs["delete"] {
+		delete(c.BoolArgs, "delete")
+		// Deleting a specific ID, only one other BoolArgs should be set
+		for k := range c.BoolArgs {
+			err = ccClear(k, c.StringArgs["id"])
+		}
+	} else if len(c.BoolArgs) > 0 {
+		// Invoke a particular handler
+		for k, fn := range handlers {
+			if c.BoolArgs[k] {
+				return fn(c)
+			}
+		}
+	} else {
+		// Getting status
 		port := ccNode.GetPort()
 		clients := ccNode.GetActiveClients()
 
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "running:\ttrue\n")
-		fmt.Fprintf(w, "port:\t%v\n", port)
-		fmt.Fprintf(w, "clients:\t%v\n", len(clients))
-
-		w.Flush()
-
-		return cliResponse{
-			Response: o.String(),
+		resp.Header = []string{"port", "clients"}
+		resp.Tabular = [][]string{
+			[]string{
+				strconv.Itoa(port),
+				fmt.Sprintf("%v", clients),
+			},
 		}
 	}
 
-	if c.Args[0] != "start" {
-		if ccNode == nil {
-			return cliResponse{
-				Error: "cc service not running",
-			}
-		}
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
-	switch c.Args[0] {
-	case "start":
-		if ccNode != nil {
-			return cliResponse{
-				Error: "cc service already running",
-			}
-		}
-
-		port := CC_PORT
-		if len(c.Args) > 1 {
-			p, err := strconv.Atoi(c.Args[1])
-			if err != nil {
-				return cliResponse{
-					Error: fmt.Sprintf("invalid port %v : %v", c.Args[1], err),
-				}
-			}
-			port = p
-		}
-
-		var err error
-		ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_iomBase)
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("creating cc node %v", err),
-			}
-		}
-		log.Debug("created ron node at %v %v", port, *f_base)
-	case "command":
-		return ccProcessCommand(c)
-	case "filter":
-		return ccProcessFilters(c)
-	default:
-		return cliResponse{
-			Error: fmt.Sprintf("malformed command: %v", c),
-		}
-	}
-	return cliResponse{}
+	return resp
 }
 
-func ccProcessCommand(c cliCommand) cliResponse {
-	if len(c.Args) == 1 {
-		// command summary
-		return cliResponse{
-			Response: ccNode.CommandSummary(),
+func ccStart(portStr string) (err error) {
+	port := CC_PORT
+	if portStr != "" {
+		port, err = strconv.Atoi(portStr)
+		if err != nil {
+			return fmt.Errorf("invalid port: %v", portStr)
 		}
 	}
 
-	switch c.Args[1] {
-	case "new":
-		if len(c.Args) < 3 {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command: %v", c),
-			}
+	ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_iomBase)
+	if err != nil {
+		return fmt.Errorf("creating cc node %v", err)
+	}
+
+	log.Debug("created ron node at %v %v", port, *f_base)
+	return nil
+}
+
+func ccClear(what, idStr string) (err error) {
+	log.Debug("cc clear -- %v:%v", what, idStr)
+	var id int
+
+	deleteAll := (idStr == "*")
+	if !deleteAll {
+		id, err = strconv.Atoi(idStr)
+		if err != nil {
+			return fmt.Errorf("invalid id %v", idStr)
 		}
+	}
 
-		cmd := &ron.Command{
-			Record: true,
-		}
-		for _, cl := range ccFilters {
-			cmd.Filter = append(cmd.Filter, cl)
-		}
-
-		fields := fieldsQuoteEscape("\"", strings.Join(c.Args[2:], " "))
-		log.Debug("got new cc command args: %#v", fields)
-
-		for _, v := range fields {
-			if v == "norecord" {
-				cmd.Record = false
-				continue
-			}
-			if v == "background" {
-				cmd.Background = true
-				continue
-			}
-
-			// everything else should be an id=value pair
-			s := strings.SplitN(v, "=", 2)
-			if len(s) != 2 {
-				return cliResponse{
-					Error: fmt.Sprintf("malformed id=value pair: %v", v),
-				}
-			}
-
-			switch strings.ToLower(s[0]) {
-			case "command":
-				cmdFields := strings.Trim(s[1], `"`)
-				f := fieldsQuoteEscape("'", cmdFields)
-				var c []string
-				for _, w := range f {
-					c = append(c, strings.Trim(w, "'"))
-				}
-				log.Debug("command: %#v", c)
-				cmd.Command = c
-			case "filesend":
-				files, err := filepath.Glob(filepath.Join(*f_iomBase, s[1]))
+	if deleteAll {
+		switch what {
+		case "filter":
+			ccFilters = make(map[int]*ron.Client)
+		case "filesend":
+			ccFileSend = make(map[int]string)
+		case "filerecv":
+			ccFileRecv = make(map[int]string)
+		case "background":
+			ccBackground = false
+		case "command":
+			errs := []string{}
+			for _, v := range ccNode.GetCommands() {
+				err := ccNode.DeleteCommand(v.ID)
 				if err != nil {
-					return cliResponse{
-						Error: fmt.Sprintf("non-existent files %v", s[1]),
-					}
-				}
-				for _, f := range files {
-					file, err := filepath.Rel(*f_iomBase, f)
-					if err != nil {
-						return cliResponse{
-							Error: fmt.Sprintf("parsing filesend: %v", err),
-						}
-					}
-					cmd.FilesSend = append(cmd.FilesSend, file)
-				}
-			case "filerecv":
-				cmd.FilesRecv = append(cmd.FilesRecv, s[1])
-			default:
-				return cliResponse{
-					Error: fmt.Sprintf("no such filter field %v", s[0]),
+					errMsg := fmt.Sprintf("cc delete command %v : %v", v.ID, err)
+					errs = append(errs, errMsg)
 				}
 			}
+			err = errors.New(strings.Join(errs, "\n"))
 		}
-
-		id := ccNode.NewCommand(cmd)
-		log.Debug("generated command %v : %v", id, cmd)
-	case "delete":
-		if len(c.Args) != 3 {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command: %v", c),
+	} else {
+		switch what {
+		case "filter":
+			if _, ok := ccFilters[id]; !ok {
+				return fmt.Errorf("invalid filter id: %v", id)
 			}
-		}
-		cid, err := strconv.Atoi(c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("invalid command id %v : %v", c.Args[2], err),
+			delete(ccFilters, id)
+		case "filesend":
+			if _, ok := ccFileSend[id]; !ok {
+				return fmt.Errorf("invalid file send id: %v", id)
 			}
-		}
-		err = ccNode.DeleteCommand(cid)
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("deleting command %v: %v", cid, err),
+			delete(ccFileSend, id)
+		case "filerecv":
+			if _, ok := ccFileRecv[id]; !ok {
+				return fmt.Errorf("invalid file recv id: %v", id)
 			}
-		}
-	case "clear":
-		c := ccNode.GetCommands()
-		for _, v := range c {
-			err := ccNode.DeleteCommand(v.ID)
-			if err != nil {
-				log.Warn("cc delete command %v : %v", v.ID, err)
-			}
-		}
-	default:
-		return cliResponse{
-			Error: fmt.Sprintf("malformed command: %v", c),
+			delete(ccFileRecv, id)
+		case "background":
+			ccBackground = false
+		case "command":
+			err = ccNode.DeleteCommand(id)
 		}
 	}
-	return cliResponse{}
+
+	return
 }
 
-func ccProcessFilters(c cliCommand) cliResponse {
-	if len(c.Args) == 1 {
-		// summary
+// Adding filter
+func cliCCFilter(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.ListArgs["filter"]) == 0 {
+		// Summary of current filters
 		var ids []int
-		for i, _ := range ccFilters {
-			ids = append(ids, i)
+		for id := range ccFilters {
+			ids = append(ids, id)
 		}
 		sort.Ints(ids)
 
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintf(w, "ID\tUUID\thostname\tarch\tOS\tIP\tMAC\n")
-		for _, i := range ids {
-			cl := ccFilters[i]
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n", i, cl.UUID, cl.Hostname, cl.Arch, cl.OS, cl.IP, cl.MAC)
-		}
-
-		w.Flush()
-
-		return cliResponse{
-			Response: o.String(),
-		}
-	}
-
-	if len(c.Args) < 2 {
-		return cliResponse{
-			Error: fmt.Sprintf("malformed command: %v", c),
-		}
-	}
-
-	switch c.Args[1] {
-	case "add":
-		if len(c.Args) < 3 {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command: %v", c),
+		resp.Header = []string{"ID", "UUID", "hostname", "arch", "OS", "IP", "MAC"}
+		resp.Tabular = [][]string{}
+		for _, id := range ids {
+			filter := ccFilters[id]
+			row := []string{
+				strconv.Itoa(id),
+				filter.UUID,
+				filter.Hostname,
+				filter.Arch,
+				filter.OS,
+				fmt.Sprintf("%v", filter.IP),
+				fmt.Sprintf("%v", filter.MAC),
 			}
+			resp.Tabular = append(resp.Tabular, row)
+		}
+	} else {
+		if ccFilters == nil {
+			ccFilters = make(map[int]*ron.Client)
 		}
 
-		// the rest of the fields should id=value pairs
-		client := &ron.Client{}
-		for _, v := range c.Args[2:] {
-			s := strings.SplitN(v, "=", 2)
-			if len(s) != 2 {
-				return cliResponse{
-					Error: fmt.Sprintf("malformed id=value pair: %v", v),
-				}
+		filter := &ron.Client{}
+		// Process the id=value pairs
+		for _, v := range c.ListArgs["filter"] {
+			parts := strings.SplitN(v, "=", 2)
+			if len(parts) != 2 {
+				resp.Error = fmt.Sprintf("malformed id=value pair: %v", v)
+				return resp
 			}
 
-			switch strings.ToLower(s[0]) {
+			switch strings.ToLower(parts[0]) {
 			case "uuid":
-				client.UUID = strings.ToLower(s[1])
+				filter.UUID = strings.ToLower(parts[1])
 			case "hostname":
-				client.Hostname = s[1]
+				filter.Hostname = parts[1]
 			case "arch":
-				client.Arch = s[1]
+				filter.Arch = parts[1]
 			case "os":
-				client.OS = s[1]
+				filter.OS = parts[1]
 			case "ip":
-				client.IP = append(client.IP, s[1])
+				filter.IP = append(filter.IP, parts[1])
 			case "mac":
-				client.MAC = append(client.MAC, s[1])
+				filter.MAC = append(filter.MAC, parts[1])
 			default:
-				return cliResponse{
-					Error: fmt.Sprintf("no such filter field %v", s[0]),
+				resp.Error = fmt.Sprintf("no such filter field %v", parts[0])
+				return resp
+			}
+		}
+
+		ccFilters[<-ccFilerIDChan] = filter
+	}
+
+	return resp
+}
+
+// Adding filesend
+func cliCCFileSend(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.ListArgs["file"]) == 0 {
+		// Summary of current file sends
+		var ids []int
+		for id := range ccFileSend {
+			ids = append(ids, id)
+		}
+		sort.Ints(ids)
+
+		resp.Header = []string{"ID", "File"}
+		resp.Tabular = [][]string{}
+		for _, id := range ids {
+			row := []string{
+				strconv.Itoa(id),
+				ccFileSend[id],
+			}
+			resp.Tabular = append(resp.Tabular, row)
+		}
+	} else {
+		if ccFileSend == nil {
+			ccFileSend = make(map[int]string)
+		}
+
+		// Add new files to send, expand globs
+		for _, fglob := range c.ListArgs["file"] {
+			files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
+			if err != nil {
+				resp.Error = fmt.Sprintf("non-existent files %v", fglob)
+				return resp
+			}
+
+			for _, f := range files {
+				file, err := filepath.Rel(*f_iomBase, f)
+				if err != nil {
+					resp.Error = fmt.Sprintf("parsing filesend: %v", err)
+					return resp
 				}
+				ccFileSend[<-ccFileSendIDChan] = file
 			}
-		}
-		id := ccFilterCount
-		ccFilterCount++
-		ccFilters[id] = client
-	case "delete":
-		if len(c.Args) < 3 {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed command: %v", c),
-			}
-		}
-
-		val, err := strconv.Atoi(c.Args[2])
-		if err != nil {
-			return cliResponse{
-				Error: fmt.Sprintf("malformed id: %v : %v", c.Args[2], err),
-			}
-		}
-
-		if _, ok := ccFilters[val]; !ok {
-			return cliResponse{
-				Error: fmt.Sprintf("invalid filter id: %v", val),
-			}
-		}
-
-		delete(ccFilters, val)
-	case "clear":
-		ccFilters = make(map[int]*ron.Client)
-	default:
-		return cliResponse{
-			Error: fmt.Sprintf("malformed command: %v", c),
 		}
 	}
-	return cliResponse{}
+
+	return resp
+}
+
+// Adding filerecv
+func cliCCFileRecv(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.ListArgs["file"]) == 0 {
+		// Summary of current file recvs
+		var ids []int
+		for id := range ccFileSend {
+			ids = append(ids, id)
+		}
+		sort.Ints(ids)
+
+		resp.Header = []string{"ID", "File"}
+		resp.Tabular = [][]string{}
+		for _, id := range ids {
+			row := []string{
+				strconv.Itoa(id),
+				ccFileSend[id],
+			}
+			resp.Tabular = append(resp.Tabular, row)
+		}
+	} else {
+		if ccFileRecv == nil {
+			ccFileRecv = make(map[int]string)
+		}
+
+		// Add new files to receive
+		for _, file := range c.ListArgs["file"] {
+			ccFileRecv[<-ccFileRecvIDChan] = file
+		}
+	}
+
+	return resp
+}
+
+// Get/set whether cc command runs in the background
+func cliCCBackground(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if !c.BoolArgs["true"] && !c.BoolArgs["false"] {
+		resp.Response = strconv.FormatBool(ccBackground)
+	} else {
+		ccBackground = c.BoolArgs["true"]
+	}
+
+	return resp
+}
+
+// Setting command
+func cliCCCommand(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	cmd := &ron.Command{
+		Record:  true,
+		Command: c.ListArgs["command"],
+	}
+
+	// Copy fields into cmd
+	for _, filter := range ccFilters {
+		cmd.Filter = append(cmd.Filter, filter)
+	}
+	for _, fsend := range ccFileSend {
+		cmd.FilesSend = append(cmd.FilesSend, fsend)
+	}
+	for _, frecv := range ccFileRecv {
+		cmd.FilesRecv = append(cmd.FilesRecv, frecv)
+	}
+
+	// TODO: Record flag?
+	cmd.Background = ccBackground
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+
+	resp.Response = fmt.Sprintf("started command, id: %v", id)
+	return resp
 }
 
 func ccClients() map[string]bool {
@@ -395,18 +443,6 @@ func ccClients() map[string]bool {
 			clients[v] = true
 		}
 		return clients
-	}
-	return nil
-}
-
-func cliClearCC() error {
-	ccFilters = make(map[int]*ron.Client)
-	c := ccNode.GetCommands()
-	for _, v := range c {
-		err := ccNode.DeleteCommand(v.ID)
-		if err != nil {
-			log.Warn("cc delete command %v : %v", v.ID, err)
-		}
 	}
 	return nil
 }

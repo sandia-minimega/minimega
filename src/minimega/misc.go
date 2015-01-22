@@ -319,6 +319,21 @@ func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.HandlerF
 	}
 }
 
+// makeIDChan creates a channel of IDs and a goroutine to populate the channel
+// with a counter. This is useful for assigning UIDs to fields since the
+// goroutine will (almost) never repeat the same value (unless we hit IntMax).
+func makeIDChan() chan int {
+	idChan := make(chan int)
+
+	go func() {
+		for i := 0; ; i++ {
+			idChan <- i
+		}
+	}()
+
+	return idChan
+}
+
 func cliQuit(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
