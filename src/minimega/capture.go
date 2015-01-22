@@ -38,14 +38,7 @@ var (
 func init() {
 	captureNFTimeout = 10
 	captureEntries = make(map[int]*capture)
-	captureIDCount = make(chan int)
-	count := 0
-	go func() {
-		for {
-			captureIDCount <- count
-			count++
-		}
-	}()
+	captureIDCount = makeIDChan()
 }
 
 func clearAllCaptures() (err error) {

@@ -316,24 +316,11 @@ var vmConfigFns = map[string]struct {
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	killAck = make(chan int)
-	vmIdChan = make(chan int)
-	qemuOverrideIdChan = make(chan int)
 	info = &vmInfo{}
 	savedInfo = make(map[string]*vmInfo)
-	go func() {
-		count := 0
-		for {
-			vmIdChan <- count
-			count++
-		}
-	}()
-	go func() {
-		count := 0
-		for {
-			qemuOverrideIdChan <- count
-			count++
-		}
-	}()
+
+	vmIdChan = makeIDChan()
+	qemuOverrideIdChan = makeIDChan()
 
 	// default parameters at startup
 	info.Memory = VM_MEMORY_DEFAULT
