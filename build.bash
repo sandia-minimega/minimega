@@ -46,8 +46,6 @@ echo "protonuke"
 GOOS=windows go install protonuke
 echo "miniccc"
 GOOS=windows go install miniccc
-echo "goserial"
-GOOS=windows go install goserial
 echo
 unset GOOS
 
