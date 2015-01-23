@@ -119,10 +119,6 @@ func clientCommandExec(c *ron.Command) {
 }
 
 func commandGetFiles(files []string) {
-	if *f_serial != "" {
-		log.Errorln("file get not implemented on serial c2 yet!")
-		return
-	}
 
 	for _, v := range files {
 		log.Debug("get file %v", v)
@@ -133,29 +129,50 @@ func commandGetFiles(files []string) {
 			continue
 		}
 
-		url := fmt.Sprintf("http://%v:%v/files/%v", *f_parent, *f_port, v)
-		log.Debug("file get url %v", url)
-		resp, err := http.Get(url)
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
+		if *f_serial != "" {
+			file, err := r.SerialGetFile(v)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			dir := filepath.Dir(path)
+			err = os.MkdirAll(dir, os.FileMode(0770))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			f, err := os.Create(path)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			f.Write(file)
+			f.Close()
+		} else {
+			url := fmt.Sprintf("http://%v:%v/files/%v", *f_parent, *f_port, v)
+			log.Debug("file get url %v", url)
+			resp, err := http.Get(url)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
 
-		dir := filepath.Dir(path)
-		err = os.MkdirAll(dir, os.FileMode(0770))
-		if err != nil {
-			log.Errorln(err)
+			dir := filepath.Dir(path)
+			err = os.MkdirAll(dir, os.FileMode(0770))
+			if err != nil {
+				log.Errorln(err)
+				resp.Body.Close()
+				continue
+			}
+			f, err := os.Create(path)
+			if err != nil {
+				log.Errorln(err)
+				resp.Body.Close()
+				continue
+			}
+			io.Copy(f, resp.Body)
+			f.Close()
 			resp.Body.Close()
-			continue
 		}
-		f, err := os.Create(path)
-		if err != nil {
-			log.Errorln(err)
-			resp.Body.Close()
-			continue
-		}
-		io.Copy(f, resp.Body)
-		f.Close()
-		resp.Body.Close()
 	}
 }

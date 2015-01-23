@@ -19,7 +19,8 @@ import (
 type hb struct {
 	UUID         string
 	Client       *Client
-	MaxCommandID int // the highest command ID this node has seen
+	MaxCommandID int    // the highest command ID this node has seen
+	File         string // used by serial connections to initiate file get operations instead of a true heartbeat
 }
 
 func init() {
