@@ -7,17 +7,12 @@ package ron
 import (
 	"encoding/gob"
 	"fmt"
-	"goserial"
 	"io"
 	"io/ioutil"
 	log "minilog"
 	"net"
 	"os"
 	"path/filepath"
-)
-
-const (
-	BAUDRATE = 115200
 )
 
 type serialFile struct {
@@ -30,17 +25,12 @@ func init() {
 }
 
 func (r *Ron) serialDial() error {
-	c := &serial.Config{
-		Name: r.serialPath,
-		Baud: BAUDRATE,
-	}
-
-	s, err := serial.OpenPort(c)
+	f, err := os.OpenFile(r.serialPath, os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
 
-	r.serialClientHandle = s
+	r.serialClientHandle = f
 
 	return nil
 }

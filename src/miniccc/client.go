@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"ron"
 	"strings"
+	"time"
 )
 
 func client() {
@@ -119,7 +120,8 @@ func clientCommandExec(c *ron.Command) {
 }
 
 func commandGetFiles(files []string) {
-
+	start := time.Now()
+	var byteCount int64
 	for _, v := range files {
 		log.Debug("get file %v", v)
 		path := filepath.Join(*f_path, "files", v)
@@ -148,6 +150,7 @@ func commandGetFiles(files []string) {
 			}
 			f.Write(file)
 			f.Close()
+			byteCount += int64(len(file))
 		} else {
 			url := fmt.Sprintf("http://%v:%v/files/%v", *f_parent, *f_port, v)
 			log.Debug("file get url %v", url)
@@ -170,9 +173,17 @@ func commandGetFiles(files []string) {
 				resp.Body.Close()
 				continue
 			}
-			io.Copy(f, resp.Body)
+			n, err := io.Copy(f, resp.Body)
+			if err != nil {
+				log.Errorln(err)
+			}
+			byteCount += n
 			f.Close()
 			resp.Body.Close()
 		}
 	}
+	end := time.Now()
+	elapsed := end.Sub(start)
+	kbytesPerSecond := (float64(byteCount) / 1024.0) / elapsed.Seconds()
+	log.Debug("received %v bytes in %v (%v kbytes/second)", byteCount, elapsed, kbytesPerSecond)
 }
