@@ -14,9 +14,17 @@ var historyCLIHandlers = []minicli.Handler{
 		HelpShort: "show command history",
 		Patterns: []string{
 			"history",
-			"clear history",
 		},
 		Call: wrapSimpleCLI(cliHistory),
+	},
+	{ // clear history
+		HelpShort: "reset history",
+		HelpLong: `
+Reset the command history. See "help history" for more information.`,
+		Patterns: []string{
+			"clear history",
+		},
+		Call: wrapSimpleCLI(cliHistoryClear),
 	},
 	{ // write
 		HelpShort: "write the command history to a file",
@@ -37,13 +45,18 @@ func init() {
 }
 
 func cliHistory(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{
+		Host:     hostname,
+		Response: minicli.History(),
+	}
+
+	return resp
+}
+
+func cliHistoryClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		minicli.ClearHistory()
-	} else {
-		resp.Response = minicli.History()
-	}
+	minicli.ClearHistory()
 
 	return resp
 }

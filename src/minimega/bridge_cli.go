@@ -51,9 +51,17 @@ To delete all host taps, use id -1, or 'clear tap':
 			"tap create <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap create <vlan> bridge <bridge> ip <ip> [tap name]",
 			"tap delete <id or *>",
-			"clear tap",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
+	},
+	{ // clear tap
+		HelpShort: "reset tap state",
+		HelpLong: `
+Resets state for taps. See "help tap" for more information.`,
+		Patterns: []string{
+			"clear tap",
+		},
+		Call: wrapSimpleCLI(cliHostTapClear),
 	},
 	{ // bridge
 		HelpShort: "display information about virtual bridges",
@@ -72,12 +80,7 @@ func init() {
 func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		err := hostTapDelete("*")
-		if err != nil {
-			resp.Error = err.Error()
-		}
-	} else if c.StringArgs["vlan"] != "" {
+	if c.StringArgs["vlan"] != "" {
 		// Must be one of the create commands
 		vlan := c.StringArgs["vlan"]
 
@@ -110,6 +113,17 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	} else {
 		// Must be the list command
 		hostTapList(resp)
+	}
+
+	return resp
+}
+
+func cliHostTapClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	err := hostTapDelete("*")
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
 	return resp

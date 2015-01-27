@@ -128,10 +128,17 @@ random filename will be used and the file placed in the path specified by the
 			"vyatta <routes,> [network and next-hop separated by comma]...",
 			"vyatta <config,> [filename]",
 			"vyatta <write,> [filename]",
-
-			"clear vyatta",
 		},
 		Call: wrapSimpleCLI(cliVyatta),
+	},
+	{ // clear vyatta
+		HelpShort: "reset vyatta state",
+		HelpLong: `
+Resets state for vyatta. See "help vyatta" for more information.`,
+		Patterns: []string{
+			"clear vyatta",
+		},
+		Call: wrapSimpleCLI(cliVyattaClear),
 	},
 }
 
@@ -144,11 +151,7 @@ func init() {
 func cliVyatta(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		vyatta = vyattaConfig{
-			Dhcp: make(map[string]*vyattaDhcp),
-		}
-	} else if c.BoolArgs["dhcp"] {
+	if c.BoolArgs["dhcp"] {
 		net := c.StringArgs["network"]
 
 		if len(c.StringArgs) == 0 {
@@ -270,6 +273,16 @@ func cliVyatta(c *minicli.Command) *minicli.Response {
 			fmt.Sprintf("%v", vyatta.Ospf3),
 			fmt.Sprintf("%v", routes),
 		}}
+	}
+
+	return resp
+}
+
+func cliVyattaClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vyatta = vyattaConfig{
+		Dhcp: make(map[string]*vyattaDhcp),
 	}
 
 	return resp

@@ -44,7 +44,6 @@ VM:
 	minimega$ capture pcap vm foo 0 foo.pcap`,
 		Patterns: []string{
 			"capture",
-			"clear capture [netflow,pcap]",
 
 			"capture <netflow,>",
 			"capture <netflow,> <timeout,> [timeout]",
@@ -61,6 +60,15 @@ VM:
 		},
 		Call: wrapSimpleCLI(cliCapture),
 	},
+	{ // clear capture
+		HelpShort: "reset capture state",
+		HelpLong: `
+Resets state for captures. See "help capture" for more information.`,
+		Patterns: []string{
+			"clear capture [netflow,pcap]",
+		},
+		Call: wrapSimpleCLI(cliCaptureClear),
+	},
 }
 
 func init() {
@@ -68,13 +76,7 @@ func init() {
 }
 
 func cliCapture(c *minicli.Command) *minicli.Response {
-	if isClearCommand(c) {
-		resp := &minicli.Response{Host: hostname}
-		if err := clearAllCaptures(); err != nil {
-			resp.Error = err.Error()
-		}
-		return resp
-	} else if c.BoolArgs["netflow"] {
+	if c.BoolArgs["netflow"] {
 		// Capture to netflow
 		return cliCaptureNetflow(c)
 	} else if c.BoolArgs["pcap"] {
@@ -132,6 +134,18 @@ func cliCapture(c *minicli.Command) *minicli.Response {
 	//out := o.String() + "\n" + nfstats
 
 	return resp
+}
+
+func cliCaptureClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	err := clearAllCaptures()
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+
 }
 
 // cliCapturePcap manages the CLI for starting and stopping captures to pcap.

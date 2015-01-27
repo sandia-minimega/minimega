@@ -97,9 +97,17 @@ to the specified VM.`,
 			"vnc <kb,fb> <norecord,> <host> <vm id or name>",
 			"vnc <playback,> <host> <vm id or name> <filename>",
 			"vnc <noplayback,> <host> <vm id or name>",
-			"clear vnc",
 		},
 		Call: wrapSimpleCLI(cliVNC),
+	},
+	{ // clear vnc
+		HelpShort: "reset VNC state",
+		HelpLong: `
+Resets the state for VNC recordings. See "help vnc" for more information.`,
+		Patterns: []string{
+			"clear vnc",
+		},
+		Call: wrapSimpleCLI(cliVNCClear),
 	},
 }
 
@@ -504,9 +512,7 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 	vm := c.StringArgs["vm"]
 	fname := c.StringArgs["filename"]
 
-	if isClearCommand(c) {
-		err = vncClear()
-	} else if c.BoolArgs["record"] && c.BoolArgs["kb"] {
+	if c.BoolArgs["record"] && c.BoolArgs["kb"] {
 		// Starting keyboard recording
 		err = vncRecordKB(host, vm, fname)
 	} else if c.BoolArgs["record"] && c.BoolArgs["fb"] {
@@ -596,16 +602,28 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+func cliVNCClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	err := vncClear()
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+}
+
 func vncClear() error {
-	log.Debugln("vncClear")
 	for k, v := range vncRecording {
 		log.Debug("stopping recording for %v", k)
 		v.Close()
 		delete(vncRecording, k)
 	}
+
 	for k, v := range vncPlaying {
 		log.Debug("stopping playback for %v", k)
 		v.Stop()
 	}
+
 	return nil
 }

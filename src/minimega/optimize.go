@@ -67,17 +67,25 @@ To clear a CPU set filter:
 To view current CPU affinity mappings:
 	optimize affinity
 
-To disable all optimizations
-	clear optimize`,
+To disable all optimizations see "clear optimize".`,
 		Patterns: []string{
 			"optimize",
 			"optimize <ksm,> [true,false]",
 			"optimize <hugepages,> [path]",
 			"optimize <affinity,> [true,false]",
 			"optimize <affinity,> filter <filter>",
-			"clear optimize [affinity,]",
 		},
 		Call: wrapSimpleCLI(cliOptimize),
+	},
+	{ // clear optimize
+		HelpShort: "reset virtualization optimization state",
+		HelpLong: `
+Resets state for virtualization optimizations. See "help optimize" for more
+information.`,
+		Patterns: []string{
+			"clear optimize [affinity,]",
+		},
+		Call: wrapSimpleCLI(cliOptimizeClear),
 	},
 }
 
@@ -90,14 +98,7 @@ func init() {
 func cliOptimize(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		// Reset optimizations
-		if c.BoolArgs["affinity"] {
-			affinityClearFilter()
-		} else {
-			clearOptimize()
-		}
-	} else if c.BoolArgs["ksm"] {
+	if c.BoolArgs["ksm"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print ksm status
 			resp.Response = fmt.Sprintf("%v", ksmEnabled)
@@ -176,6 +177,19 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 		if err != nil {
 			resp.Error = err.Error()
 		}
+	}
+
+	return resp
+}
+
+func cliOptimizeClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	// Reset optimizations
+	if c.BoolArgs["affinity"] {
+		affinityClearFilter()
+	} else {
+		clearOptimize()
 	}
 
 	return resp

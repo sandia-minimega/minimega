@@ -26,7 +26,6 @@ var meshageCLIHandlers = []minicli.Handler{
 		HelpShort: "view or set the current degree for this mesh node",
 		Patterns: []string{
 			"mesh degree [degree]",
-			"clear mesh degree",
 		},
 		Call: wrapSimpleCLI(cliMeshageDegree),
 	},
@@ -141,9 +140,7 @@ func meshageHandler() {
 func cliMeshageDegree(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		meshageNode.SetDegree(0)
-	} else if c.StringArgs["degree"] != "" {
+	if c.StringArgs["degree"] != "" {
 		degree, err := strconv.ParseUint(c.StringArgs["degree"], 0, 10)
 		if err != nil {
 			resp.Error = err.Error()
@@ -239,9 +236,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
-	} else if c.StringArgs["timeout"] != "" {
+	if c.StringArgs["timeout"] != "" {
 		timeout, err := strconv.Atoi(c.StringArgs["timeout"])
 		if err != nil {
 			resp.Error = err.Error()

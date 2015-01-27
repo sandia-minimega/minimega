@@ -20,7 +20,6 @@ inherit lower levels, so setting the level to error will also log fatal, and
 setting the mode to debug will log everything.`,
 		Patterns: []string{
 			"log level [debug,info,warn,error,fatal]",
-			"clear log level",
 		},
 		Call: wrapSimpleCLI(cliLogLevel),
 	},
@@ -29,7 +28,6 @@ setting the mode to debug will log everything.`,
 		HelpLong:  "enable or disable logging to stderr",
 		Patterns: []string{
 			"log stderr [true,false]",
-			"clear log stderr",
 		},
 		Call: wrapSimpleCLI(cliLogStderr),
 	},
@@ -39,9 +37,20 @@ setting the mode to debug will log everything.`,
 Log to a file. To disable file logging, call "clear log file".`,
 		Patterns: []string{
 			"log file <file>",
-			"clear log file",
 		},
 		Call: wrapSimpleCLI(cliLogFile),
+	},
+	{ // clear log
+		HelpShort: "reset state for logging",
+		HelpLong: `
+Resets state for logging. See "help log ..." for more information.`,
+		Patterns: []string{
+			"clear log",
+			"clear log <file,>",
+			"clear log <level,>",
+			"clear log <stderr,>",
+		},
+		Call: wrapSimpleCLI(cliLogClear),
 	},
 }
 
@@ -52,12 +61,7 @@ func init() {
 func cliLogLevel(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) {
-		// Reset the level to default
-		*f_loglevel = "error"
-		log.SetLevel("stdio", log.ERROR)
-		log.SetLevel("file", log.ERROR)
-	} else if len(c.BoolArgs) == 0 {
+	if len(c.BoolArgs) == 0 {
 		// Print the level
 		resp.Response = *f_loglevel
 	} else {
@@ -82,7 +86,7 @@ func cliLogLevel(c *minicli.Command) *minicli.Response {
 func cliLogStderr(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if isClearCommand(c) || c.BoolArgs["false"] {
+	if c.BoolArgs["false"] {
 		// Turn off logging to stderr
 		log.DelLogger("stdio")
 	} else if len(c.BoolArgs) == 0 {
@@ -112,10 +116,7 @@ func cliLogFile(c *minicli.Command) *minicli.Response {
 	// would disable logging to file. This wasn't documented in the help text
 	// and, therefore, it's not implemented here. Double check with Fritz about
 	// this change.
-	if isClearCommand(c) {
-		// Turn of logging to file
-		log.DelLogger("file")
-	} else if len(c.StringArgs) == 0 {
+	if len(c.StringArgs) == 0 {
 		// Print true or false depending on whether file is enabled
 		_, err := log.GetLevel("file")
 		resp.Response = strconv.FormatBool(err == nil)
@@ -130,6 +131,32 @@ func cliLogFile(c *minicli.Command) *minicli.Response {
 		} else {
 			log.AddLogger("file", logfile, level, false)
 		}
+	}
+
+	return resp
+}
+
+func cliLogClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	// Reset file if explicitly cleared or we're clearing everything
+	if c.BoolArgs["file"] || len(c.BoolArgs) == 0 {
+		// Delete logger to file
+		log.DelLogger("file")
+	}
+
+	// Reset level if explicitly cleared or we're clearing everything
+	if c.BoolArgs["level"] || len(c.BoolArgs) == 0 {
+		// Reset to default level
+		*f_loglevel = "error"
+		log.SetLevel("stdio", log.ERROR)
+		log.SetLevel("file", log.ERROR)
+	}
+
+	// Reset stderr if explicitly cleared or we're clearing everything
+	if c.BoolArgs["stderr"] || len(c.BoolArgs) == 0 {
+		// Delete logger to stdout
+		log.DelLogger("stdio")
 	}
 
 	return resp

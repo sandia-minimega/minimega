@@ -229,11 +229,6 @@ func findRemoteVM(host, vm string) (int, string, error) {
 	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
 }
 
-// isClearCommand checks whether the command starts with "clear".
-func isClearCommand(c *minicli.Command) bool {
-	return strings.HasPrefix(c.Original, "clear")
-}
-
 // registerHandlers registers all the provided handlers with minicli, panicking
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {

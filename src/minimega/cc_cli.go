@@ -71,7 +71,15 @@ New commands assign any current filters.`,
 			"cc <delete,> <filesend,> <id or *>",
 			"cc <delete,> <filter,> <id or *>",
 			"cc <delete,> <command,> <id or *>",
-
+		},
+		Call: wrapSimpleCLI(cliCC),
+	},
+	{ // clear cc
+		HelpShort: "reset command and control state",
+		HelpLong: `
+Resets state for the command and control infrastructure provided by minimega.
+See "help cc" for more information.`,
+		Patterns: []string{
 			"clear cc",
 			"clear cc <background,>",
 			"clear cc <command,>",
@@ -79,8 +87,17 @@ New commands assign any current filters.`,
 			"clear cc <filesend,>",
 			"clear cc <filter,>",
 		},
-		Call: wrapSimpleCLI(cliCC),
+		Call: wrapSimpleCLI(cliCCClear),
 	},
+}
+
+// Functions pointers to the various handlers for the subcommands
+var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
+	"filter":     cliCCFilter,
+	"filesend":   cliCCFileSend,
+	"filerecv":   cliCCFileRecv,
+	"command":    cliCCCommand,
+	"background": cliCCBackground,
 }
 
 func init() {
@@ -106,28 +123,7 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	// Functions pointers to the various handlers for the subcommands
-	handlers := map[string]func(*minicli.Command) *minicli.Response{
-		"filter":     cliCCFilter,
-		"filesend":   cliCCFileSend,
-		"filerecv":   cliCCFileRecv,
-		"command":    cliCCCommand,
-		"background": cliCCBackground,
-	}
-
-	if isClearCommand(c) {
-		for k := range handlers {
-			// We only want to clear something if it was specified on the
-			// command line or if we're clearing everything (nothing was
-			// specified).
-			if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
-				err = ccClear(k, "*")
-				if err != nil {
-					break
-				}
-			}
-		}
-	} else if c.BoolArgs["delete"] {
+	if c.BoolArgs["delete"] {
 		delete(c.BoolArgs, "delete")
 		// Deleting a specific ID, only one other BoolArgs should be set
 		for k := range c.BoolArgs {
@@ -135,7 +131,7 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		}
 	} else if len(c.BoolArgs) > 0 {
 		// Invoke a particular handler
-		for k, fn := range handlers {
+		for k, fn := range ccCliSubHandlers {
 			if c.BoolArgs[k] {
 				return fn(c)
 			}
@@ -350,5 +346,34 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 	log.Debug("generated command %v : %v", id, cmd)
 
 	resp.Response = fmt.Sprintf("started command, id: %v", id)
+	return resp
+}
+
+func cliCCClear(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+	var err error
+
+	// Ensure that cc is running before proceeding
+	if ccNode == nil {
+		resp.Error = "cc service not running"
+		return resp
+	}
+
+	for k := range ccCliSubHandlers {
+		// We only want to clear something if it was specified on the
+		// command line or if we're clearing everything (nothing was
+		// specified).
+		if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
+			err = ccClear(k, "*")
+			if err != nil {
+				break
+			}
+		}
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
 	return resp
 }
