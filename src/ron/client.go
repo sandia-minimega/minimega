@@ -13,7 +13,7 @@ func getNetworkInfo() ([]string, []string) {
 
 	ints, err := net.Interfaces()
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
 	}
 	for _, v := range ints {
 		if v.HardwareAddr.String() == "" {

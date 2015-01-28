@@ -7,36 +7,37 @@ package ron
 import (
 	"encoding/gob"
 	"fmt"
-	"goserial"
+	"io"
+	"io/ioutil"
 	log "minilog"
+	"net"
+	"os"
+	"path/filepath"
 )
 
-const (
-	BAUDRATE = 115200
-)
+type serialFile struct {
+	Error string
+	File  []byte
+}
+
+func init() {
+	gob.Register(serialFile{})
+}
 
 func (r *Ron) serialDial() error {
-	c := &serial.Config{
-		Name: r.serialPath,
-		Baud: BAUDRATE,
-	}
-
-	s, err := serial.OpenPort(c)
+	f, err := os.OpenFile(r.serialPath, os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
 
-	r.serialClientHandle = s
+	r.serialClientHandle = f
 
 	return nil
 }
 
 func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
-	if r.serialClientHandle == nil {
-		log.Fatalln("no serial handle!")
-	}
-
 	enc := gob.NewEncoder(r.serialClientHandle)
+	dec := gob.NewDecoder(r.serialClientHandle)
 
 	err := enc.Encode(h)
 	if err != nil {
@@ -44,14 +45,65 @@ func (r *Ron) serialHeartbeat(h *hb) (map[int]*Command, error, bool) {
 	}
 
 	newCommands := make(map[int]*Command)
-	dec := gob.NewDecoder(r.serialClientHandle)
 
 	err = dec.Decode(&newCommands)
 	if err != nil {
+		log.Errorln("error decoding response over serial, reconnecting")
+
+		closeErr := r.serialClientHandle.Close()
+		if closeErr != nil {
+			log.Fatalln(closeErr)
+		}
+
+		r.serialClientHandle = nil
+		redialErr := r.serialDial()
+		if redialErr != nil {
+			log.Fatalln(redialErr)
+		}
+
 		return nil, err, true
 	}
 
 	return newCommands, nil, true
+}
+
+func (r *Ron) GetActiveSerialPorts() []string {
+	r.serialLock.Lock()
+	defer r.serialLock.Unlock()
+
+	var ret []string
+	for k, _ := range r.masterSerialConns {
+		ret = append(ret, k)
+	}
+
+	return ret
+}
+
+func (r *Ron) SerialGetFile(filename string) ([]byte, error) {
+	log.Debug("SerialGetFile: %v", filename)
+
+	enc := gob.NewEncoder(r.serialClientHandle)
+	dec := gob.NewDecoder(r.serialClientHandle)
+
+	h := hb{File: filename}
+
+	err := enc.Encode(&h)
+	if err != nil {
+		return nil, err
+	}
+
+	var sf serialFile
+	err = dec.Decode(&sf)
+	if err != nil {
+		return nil, err
+	}
+
+	var errRet error
+	if sf.Error != "" {
+		errRet = fmt.Errorf(sf.Error)
+	}
+
+	return sf.File, errRet
 }
 
 // Dial a client serial port. Used by a master ron node only.
@@ -71,12 +123,7 @@ func (r *Ron) SerialDialClient(path string) error {
 	}
 
 	// connect!
-	c := &serial.Config{
-		Name: r.serialPath,
-		Baud: BAUDRATE,
-	}
-
-	s, err := serial.OpenPort(c)
+	s, err := net.Dial("unix", path)
 	if err != nil {
 		return err
 	}
@@ -99,27 +146,67 @@ func (r *Ron) serialClientHandler(path string) {
 		log.Fatal("could not access client: %v", path)
 	}
 
-	dec := gob.NewDecoder(c)
-
 	for {
+		enc := gob.NewEncoder(c)
+		dec := gob.NewDecoder(c)
 		var h hb
 		err := dec.Decode(&h)
 		if err != nil {
-			log.Errorln(err)
+			if err != io.EOF {
+				log.Errorln(err)
+			}
 			break
 		}
+
+		if h.File != "" {
+			log.Debug("file get heartbeat: %v", h.File)
+
+			var sf serialFile
+
+			// simply encode the file back if it exists
+			filename := filepath.Join(r.path, h.File)
+			info, err := os.Stat(filename)
+			if err != nil {
+				e := fmt.Errorf("file %v does not exist: %v", filename, err)
+				sf.Error = e.Error()
+				log.Errorln(e)
+			} else if info.IsDir() {
+				e := fmt.Errorf("file %v is a directory", filename)
+				sf.Error = e.Error()
+				log.Errorln(e)
+			} else {
+				// read the file
+				sf.File, err = ioutil.ReadFile(filename)
+				if err != nil {
+					e := fmt.Errorf("file %v: %v", filename, err)
+					sf.Error = e.Error()
+					log.Errorln(e)
+				}
+			}
+
+			err = enc.Encode(&sf)
+			if err != nil {
+				if err != io.EOF {
+					log.Errorln(err)
+				}
+				break
+			}
+			continue
+		}
+
 		log.Debug("heartbeat from %v", h.UUID)
 
 		// process the heartbeat in a goroutine so we can send the command list back faster
 		go r.masterHeartbeat(&h)
 
 		// send the command list back
-		buf, err := r.encodeCommands()
+		err = enc.Encode(r.commands)
 		if err != nil {
-			log.Errorln(err)
+			if err != io.EOF {
+				log.Errorln(err)
+			}
 			break
 		}
-		c.Write(buf)
 	}
 
 	// remove this path from the list of connected serial ports

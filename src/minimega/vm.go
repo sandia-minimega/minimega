@@ -400,6 +400,17 @@ func (l *vmList) qmp(vm, qmp string) (string, error) {
 	return "", fmt.Errorf("vm %v not found", vm)
 }
 
+func vmGetAllSerialPorts() []string {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	var ret []string
+	for _, v := range vms.vms {
+		ret = append(ret, v.instancePath+"serial")
+	}
+	return ret
+}
+
 func (vm *vmInfo) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
 }
@@ -1330,14 +1341,17 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
 
+	args = append(args, "-device")
+	args = append(args, "virtio-serial")
+
 	args = append(args, "-chardev")
 	args = append(args, "socket,id=charserial0,path="+vm.instancePath+"serial,server,nowait")
 
+	args = append(args, "-device")
+	args = append(args, "virtserialport,chardev=charserial0,id=serial0,name=serial0")
+
 	args = append(args, "-pidfile")
 	args = append(args, vm.instancePath+"qemu.pid")
-
-	args = append(args, "-device")
-	args = append(args, "isa-serial,chardev=charserial0,id=serial0")
 
 	args = append(args, "-k")
 	args = append(args, "en-us")

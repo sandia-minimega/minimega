@@ -17,6 +17,7 @@ import (
 
 var (
 	ccBackground bool
+	ccSerial     bool
 	ccFileRecv   map[int]string
 	ccFileSend   map[int]string
 	ccFilters    map[int]*ron.Client
@@ -60,6 +61,7 @@ New commands assign any current filters.`,
 		Patterns: []string{
 			"cc",
 			"cc <start,> [port]",
+			"cc <serial,>",
 
 			"cc <background,> [true,false]",
 			"cc <filerecv,> [file]...",
@@ -98,6 +100,7 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"filerecv":   cliCCFileRecv,
 	"command":    cliCCCommand,
 	"background": cliCCBackground,
+	"serial":     cliCCSerial,
 }
 
 func init() {
@@ -347,6 +350,19 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 
 	resp.Response = fmt.Sprintf("started command, id: %v", id)
 	return resp
+}
+
+// Starting serial handler
+func cliCCSerial(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if ccSerial {
+		resp.Error = "cc serial service already running"
+		return &resp
+	}
+
+	ccSerial = true
+	go ccSerialWatcher()
 }
 
 func cliCCClear(c *minicli.Command) *minicli.Response {

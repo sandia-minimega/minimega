@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"ron"
 	"strings"
+	"time"
 )
 
 func client() {
@@ -119,11 +120,8 @@ func clientCommandExec(c *ron.Command) {
 }
 
 func commandGetFiles(files []string) {
-	if *f_serial != "" {
-		log.Errorln("file get not implemented on serial c2 yet!")
-		return
-	}
-
+	start := time.Now()
+	var byteCount int64
 	for _, v := range files {
 		log.Debug("get file %v", v)
 		path := filepath.Join(*f_path, "files", v)
@@ -133,29 +131,59 @@ func commandGetFiles(files []string) {
 			continue
 		}
 
-		url := fmt.Sprintf("http://%v:%v/files/%v", *f_parent, *f_port, v)
-		log.Debug("file get url %v", url)
-		resp, err := http.Get(url)
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
+		if *f_serial != "" {
+			file, err := r.SerialGetFile(v)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			dir := filepath.Dir(path)
+			err = os.MkdirAll(dir, os.FileMode(0770))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			f, err := os.Create(path)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			f.Write(file)
+			f.Close()
+			byteCount += int64(len(file))
+		} else {
+			url := fmt.Sprintf("http://%v:%v/files/%v", *f_parent, *f_port, v)
+			log.Debug("file get url %v", url)
+			resp, err := http.Get(url)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
 
-		dir := filepath.Dir(path)
-		err = os.MkdirAll(dir, os.FileMode(0770))
-		if err != nil {
-			log.Errorln(err)
+			dir := filepath.Dir(path)
+			err = os.MkdirAll(dir, os.FileMode(0770))
+			if err != nil {
+				log.Errorln(err)
+				resp.Body.Close()
+				continue
+			}
+			f, err := os.Create(path)
+			if err != nil {
+				log.Errorln(err)
+				resp.Body.Close()
+				continue
+			}
+			n, err := io.Copy(f, resp.Body)
+			if err != nil {
+				log.Errorln(err)
+			}
+			byteCount += n
+			f.Close()
 			resp.Body.Close()
-			continue
 		}
-		f, err := os.Create(path)
-		if err != nil {
-			log.Errorln(err)
-			resp.Body.Close()
-			continue
-		}
-		io.Copy(f, resp.Body)
-		f.Close()
-		resp.Body.Close()
 	}
+	end := time.Now()
+	elapsed := end.Sub(start)
+	kbytesPerSecond := (float64(byteCount) / 1024.0) / elapsed.Seconds()
+	log.Debug("received %v bytes in %v (%v kbytes/second)", byteCount, elapsed, kbytesPerSecond)
 }
