@@ -144,11 +144,12 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		port := ccNode.GetPort()
 		clients := ccNode.GetActiveClients()
 
-		resp.Header = []string{"port", "clients"}
+		resp.Header = []string{"port", "clients", "serial active"}
 		resp.Tabular = [][]string{
 			[]string{
 				strconv.Itoa(port),
 				fmt.Sprintf("%v", clients),
+				strconv.FormatBool(ccSerial),
 			},
 		}
 	}
