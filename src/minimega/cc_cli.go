@@ -358,11 +358,13 @@ func cliCCSerial(c *minicli.Command) *minicli.Response {
 
 	if ccSerial {
 		resp.Error = "cc serial service already running"
-		return &resp
+		return resp
 	}
 
 	ccSerial = true
 	go ccSerialWatcher()
+
+	return resp
 }
 
 func cliCCClear(c *minicli.Command) *minicli.Response {
