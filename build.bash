@@ -16,20 +16,20 @@ var (
 " > $SCRIPT_DIR/src/version/version.go
 
 # build packages with race detection
-echo "BUILD RACE PACKAGES (linux)"
-echo "protonuke"
-go install -race protonuke
-mv $SCRIPT_DIR/bin/protonuke $SCRIPT_DIR/bin/protonuke_race
-echo "minimega"
-go install -race minimega
-mv $SCRIPT_DIR/bin/minimega $SCRIPT_DIR/bin/minimega_race
-echo "miniccc"
-go install -race miniccc
-mv $SCRIPT_DIR/bin/miniccc $SCRIPT_DIR/bin/miniccc_race
-echo "vmbetter"
-go install -race vmbetter
-mv $SCRIPT_DIR/bin/vmbetter $SCRIPT_DIR/bin/vmbetter_race
-echo
+#echo "BUILD RACE PACKAGES (linux)"
+#echo "protonuke"
+#go install -race protonuke
+#mv $SCRIPT_DIR/bin/protonuke $SCRIPT_DIR/bin/protonuke_race
+#echo "minimega"
+#go install -race minimega
+#mv $SCRIPT_DIR/bin/minimega $SCRIPT_DIR/bin/minimega_race
+#echo "miniccc"
+#go install -race miniccc
+#mv $SCRIPT_DIR/bin/miniccc $SCRIPT_DIR/bin/miniccc_race
+#echo "vmbetter"
+#go install -race vmbetter
+#mv $SCRIPT_DIR/bin/vmbetter $SCRIPT_DIR/bin/vmbetter_race
+#echo
 
 # build packages
 echo "BUILD PACKAGES (linux)"
