@@ -1,0 +1,11 @@
+Package: minimega
+Version: 1.0-1
+Section: utils
+Priority: extra
+Architecture: amd64
+Depends: qemu-kvm, qemu-utils, openvswitch-switch, dnsmasq, dosfstools, ntfs-3g
+Maintainer: John Floren <john@jfloren.net>
+Description: a VM management utility.
+ Minimega allows you to launch and manage virtual machines across a
+ cluster or on your local box. It enables complex virtual network
+ topologies and can reach high VM densities.
