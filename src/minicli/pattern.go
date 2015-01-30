@@ -12,7 +12,7 @@ import (
 type itemType int
 
 const (
-	noType itemType = iota
+	noType itemType = 2 << iota
 	literalString
 	reqString
 	optString
@@ -34,9 +34,8 @@ var listTerminalsToTypes = map[string]itemType{
 	"]": optList,
 }
 
-var requireEndOfLine = []itemType{
-	optString, optChoice, reqList, optList, optString, cmdString,
-}
+var optionalItems = optString + optChoice + +optList
+var requireEOLItems = optionalItems + reqList + cmdString
 
 type patternItem struct {
 	// The item type e.g. string literal, required string
@@ -339,11 +338,9 @@ func (l *patternLexer) enforceEOF() error {
 		panic(errors.New("cannot enforce EOF when item type not specified"))
 	}
 
-	for _, t := range requireEndOfLine {
-		if l.newItem.Type == t {
-			if l.s.Scan() {
-				return errors.New("trailing characters when EOF expected")
-			}
+	if l.newItem.Type&requireEOLItems != 0 {
+		if l.s.Scan() {
+			return errors.New("trailing characters when EOF expected")
 		}
 	}
 
