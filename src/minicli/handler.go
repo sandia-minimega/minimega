@@ -19,11 +19,13 @@ type Handler struct {
 // Command will be nil. The second return value is the number of elements of the
 // Handler's pattern that were matched. This can be used to determine which
 // handler was the closest match.
-func (h *Handler) compileCommand(input []inputItem) (*Command, int) {
+func (h *Handler) compile(input []inputItem) (*Command, int) {
 	var maxMatchLen int
-	for i := range h.patternItems {
-		cmd, matchLen := h.compileCommandWithPattern(i, input)
+	for _, pattern := range h.patternItems {
+		cmd, matchLen := newCommand(pattern, input)
 		if cmd != nil {
+			cmd.Original = printInput(input)
+			cmd.Handler = *h
 			return cmd, matchLen
 		}
 
@@ -35,74 +37,66 @@ func (h *Handler) compileCommand(input []inputItem) (*Command, int) {
 	return nil, maxMatchLen
 }
 
-// compileCommandWithPattern attempts to compile a command using the pattern at index idx.
-func (h *Handler) compileCommandWithPattern(idx int, input []inputItem) (*Command, int) {
-	cmd := Command{
-		Handler:    *h,
-		Pattern:    h.Patterns[idx],
-		StringArgs: make(map[string]string),
-		BoolArgs:   make(map[string]bool),
-		ListArgs:   make(map[string][]string)}
+func (h *Handler) suggest(input []inputItem) []string {
+	suggestions := []string{}
 
 outer:
-	for i, item := range h.patternItems[idx] {
-		// We ran out of items before matching all the items in the pattern
-		if len(input) <= i {
-			// Check if the remaining item is optional
-			if item.Type == optString || item.Type == optList || item.Type == optChoice {
-				// Matched!
-				return &cmd, i
+	for _, pattern := range h.patternItems {
+		var i int
+		var item patternItem
+
+		for i, item = range pattern {
+			if len(input) == i {
+				break
 			}
 
-			return nil, i
-		}
-
-		switch item.Type {
-		case literalString:
-			if input[i].Value != item.Text {
-				return nil, i
-			}
-		case reqString, optString:
-			cmd.StringArgs[item.Key] = input[i].Value
-		case reqChoice, optChoice:
-			for _, choice := range item.Options {
-				if choice == input[i].Value {
-					cmd.BoolArgs[choice] = true
+			// Test whether we should keep matching this pattern or not
+			switch item.Type {
+			case literalString:
+				// Consuming the last item from input, check if it's a prefix
+				// of this literal string.
+				if len(input) == i-1 && strings.HasPrefix(item.Text, input[i].Value) {
+					suggestions = append(suggestions, item.Text)
+				}
+				if input[i].Value != item.Text {
+					// Input does not match pattern
 					continue outer
 				}
-			}
+			case reqChoice, optChoice:
+				for _, choice := range item.Options {
+					// Consuming the last item from input, check if it's a
+					// prefix of one of the choices.
+					if len(input) == i-1 && strings.HasPrefix(choice, input[i].Value) {
+						suggestions = append(suggestions, choice)
+					}
+					// TODO: there's a weird case here where one one option is
+					// a prefix of another.
+					if choice == input[i].Value {
+						continue
+					}
+				}
 
-			// Invalid choice
-			return nil, i
-		case reqList, optList:
-			res := make([]string, len(input)-i)
-			for i, v := range input[i:] {
-				res[i] = v.Value
+				// Invalid choice
+				continue outer
+			case reqList, optList:
+				// Nothing to suggest for lists
+				continue outer
+			case cmdString:
+				// TODO: This is fun, need to recurse to complete the subcommand
 			}
+		}
 
-			cmd.ListArgs[item.Key] = res
-			return &cmd, i
-		case cmdString:
-			// Parse the subcommand
-			subCmd, err := CompileCommand(printInput(input[i:]))
-			if err != nil {
-				return nil, i
-			}
-
-			cmd.Subcommand = subCmd
-			return &cmd, i
+		// Finished consuming input items, figure out if the next pattern item
+		// has something worth completing.
+		switch item.Type {
+		case literalString:
+			suggestions = append(suggestions, item.Text)
+		case reqChoice, optChoice:
+			suggestions = append(suggestions, item.Options...)
 		}
 	}
 
-	// Check whether we consumed all the items from the input or not. If there
-	// are extra inputItems, we only matched a prefix of the input. This is
-	// problematic as we have commands: "vm info" and "vm info search <terms>"
-	// that share the same prefix.
-	if len(h.patternItems[idx]) != len(input) {
-		return nil, len(h.patternItems[idx]) - 1
-	}
-
-	return &cmd, len(h.patternItems[idx]) - 1
+	return suggestions
 }
 
 // Prefix finds the shortest literal string prefix that is shared by all

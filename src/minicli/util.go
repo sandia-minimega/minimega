@@ -48,9 +48,8 @@ func closestMatch(input []inputItem) (*Handler, *Command) {
 	var longestMatch int
 
 	for _, h := range handlers {
-		cmd, matchLen := h.compileCommand(input)
+		cmd, matchLen := h.compile(input)
 		if cmd != nil {
-			cmd.Original = printInput(input)
 			return h, cmd
 		}
 

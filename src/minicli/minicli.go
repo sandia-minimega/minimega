@@ -24,17 +24,6 @@ var (
 var handlers []*Handler
 var history []string // command history for the write command
 
-type Command struct {
-	Handler // Embeds the handler that was matched by the raw input
-
-	Pattern    string              // the specific pattern that was matched
-	Original   string              // original raw input
-	StringArgs map[string]string   // map of arguments
-	BoolArgs   map[string]bool     // map of arguments
-	ListArgs   map[string][]string // map of arguments
-	Subcommand *Command            // parsed command
-}
-
 type Responses []*Response
 
 // A response as populated by handler functions.
@@ -145,6 +134,19 @@ func CompileCommand(input string) (*Command, error) {
 	}
 
 	return nil, errors.New("no matching commands found")
+}
+
+func Suggest(input string) []string {
+	inputItems, err := lexInput(input)
+	if err != nil {
+		return nil
+	}
+
+	res := []string{}
+	for _, h := range handlers {
+		res = append(res, h.suggest(inputItems)...)
+	}
+	return res
 }
 
 //
