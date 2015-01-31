@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"goreadline"
 	"io"
+	"minicli"
 	log "minilog"
 	"net"
 	"os"
@@ -17,6 +18,11 @@ import (
 	"strings"
 	"syscall"
 )
+
+type localResponse struct {
+	Resp minicli.Responses
+	More bool // whether there are more responses coming
+}
 
 func localAttach() {
 	// try to connect to the local minimega
@@ -52,16 +58,14 @@ func localAttach() {
 		if err != nil {
 			return
 		}
+		command := string(line)
 		log.Debug("got from stdin:", line)
 
-		c := makeCommand(string(line))
-
-		if c.Command == "disconnect" {
+		// HAX: Shortcut some commands without using minicli
+		if command == "disconnect" {
 			log.Debugln("disconnecting")
 			return
-		}
-
-		if c.Command == "quit" || c.Command == "exit" {
+		} else if command == "quit" {
 			if !exitNext {
 				fmt.Println("CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit")
 				fmt.Println("If you really want to make the minimega daemon exit, enter quit/exit again")
@@ -72,59 +76,33 @@ func localAttach() {
 
 		exitNext = false
 
-		err = enc.Encode(&c)
+		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			log.Error("local command gob encode: %v", err)
+			fmt.Println("closest match: TODO")
+			continue
+		}
+
+		err = sendLocalCommand(enc, dec, cmd)
+		if err != nil {
+			log.Errorln(err)
 			return
 		}
-		log.Debugln("encoded command:", c)
-
-		for {
-			var r cliResponse
-			err = dec.Decode(&r)
-			if err != nil {
-				if err == io.EOF {
-					log.Infoln("server disconnected")
-				} else {
-					log.Error("local command gob decode: %v", err)
-				}
-				return
-			}
-			if r.Error != "" {
-				x := strings.TrimSpace(r.Error)
-				log.Errorln(x)
-			}
-			if r.Response != "" {
-				x := strings.TrimSpace(r.Response)
-				fmt.Println(x)
-			}
-			if !r.More {
-				log.Debugln("got last message")
-				break
-			} else {
-				log.Debugln("expecting more data")
-			}
-		}
 	}
-
 }
 
 func localCommand() {
 	a := flag.Args()
-	var command string
-	var args []string
 
 	log.Debugln("got args:", a)
 
-	if len(a) > 0 {
-		command = a[0]
-	}
-	if len(a) > 1 {
-		args = a[1:]
+	// TODO: Need to escape?
+	cmd, err := minicli.CompileCommand(strings.Join(a, " "))
+	if err != nil {
+		log.Errorln(err)
+		return
 	}
 
-	log.Infoln("got command:", command)
-	log.Infoln("got args:", args)
+	log.Infoln("got command:", cmd)
 
 	// try to connect to the local minimega
 	f := *f_base + "minimega"
@@ -136,36 +114,35 @@ func localCommand() {
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 
-	c := cliCommand{
-		Command: command,
-		Args:    args,
-	}
-	err = enc.Encode(&c)
+	err = sendLocalCommand(enc, dec, cmd)
 	if err != nil {
-		log.Error("local command gob encode: %v", err)
-		return
+		log.Errorln(err)
 	}
-	log.Debugln("encoded command:", c)
+}
+
+// sendLocalCommand runs a command through a JSON pipe established elsewhere.
+// Prints the responses to stdout.
+func sendLocalCommand(enc *json.Encoder, dec *json.Decoder, cmd *minicli.Command) error {
+	err := enc.Encode(*cmd)
+	if err != nil {
+		return fmt.Errorf("local command gob encode: %v", err)
+	}
+	log.Debugln("encoded command:", cmd)
 
 	for {
-		var r cliResponse
+		var r localResponse
 		err = dec.Decode(&r)
 		if err != nil {
 			if err == io.EOF {
 				log.Infoln("server disconnected")
-			} else {
-				log.Error("local command gob decode: %v", err)
+				return nil
 			}
-			return
+
+			err = fmt.Errorf("local command gob decode: %v", err)
+			return err
 		}
-		if r.Error != "" {
-			x := strings.TrimSpace(r.Error)
-			log.Errorln(x)
-		}
-		if r.Response != "" {
-			x := strings.TrimSpace(r.Response)
-			fmt.Println(x)
-		}
+
+		fmt.Println(r.Resp)
 		if !r.More {
 			log.Debugln("got last message")
 			break
@@ -173,4 +150,6 @@ func localCommand() {
 			log.Debugln("expecting more data")
 		}
 	}
+
+	return nil
 }

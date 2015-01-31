@@ -240,7 +240,7 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.HandlerFunc {
+func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		resp := fn(c)
 		respChan <- minicli.Responses{resp}

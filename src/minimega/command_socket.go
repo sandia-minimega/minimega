@@ -7,23 +7,12 @@ package main
 import (
 	"encoding/json"
 	"io"
-	"math/rand"
+	"minicli"
 	log "minilog"
 	"net"
 	"os"
-	"sync"
-	"time"
+	"strings"
 )
-
-var (
-	commandSocketLock   sync.Mutex
-	commandSocketRoutes map[int32]chan cliResponse
-)
-
-func init() {
-	commandSocketRoutes = make(map[int32]chan cliResponse)
-	go commandSocketMux()
-}
 
 func commandSocketStart() {
 	l, err := net.Listen("unix", *f_base+"minimega")
@@ -38,6 +27,7 @@ func commandSocketStart() {
 			log.Error("commandSocketStart: accept: %v", err)
 		}
 		log.Infoln("client connected")
+
 		go commandSocketHandle(conn)
 	}
 }
@@ -50,90 +40,67 @@ func commandSocketRemove() {
 	}
 }
 
-func socketRegister(TID int32, c chan cliResponse) {
-	commandSocketLock.Lock()
-	defer commandSocketLock.Unlock()
-
-	if _, ok := commandSocketRoutes[TID]; ok {
-		log.Error("TID %v already registered", TID)
-	} else {
-		commandSocketRoutes[TID] = c
-	}
-}
-
-func socketUnregister(TID int32) {
-	commandSocketLock.Lock()
-	defer commandSocketLock.Unlock()
-
-	if _, ok := commandSocketRoutes[TID]; ok {
-		delete(commandSocketRoutes, TID)
-	} else {
-		log.Error("TID %v not registered", TID)
-	}
-}
-
-func commandSocketMux() {
-	log.Debug("commandSocketMux")
-	for {
-		c := <-ackChanSocket
-		respChan, ok := commandSocketRoutes[c.TID]
-		if !ok {
-			log.Error("commandSocket invalid TID %v", c.TID)
-			continue
-		}
-		respChan <- c
-	}
-}
-
 func commandSocketHandle(c net.Conn) {
+	var err error
+
 	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
-	done := false
 
-	respChan := make(chan cliResponse, 1024)
-
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	TID := r.Int31()
-
-	socketRegister(TID, respChan)
-	defer socketUnregister(TID)
-
-	for !done {
-		var c cliCommand
-		err := dec.Decode(&c)
+outer:
+	for err == nil {
+		var cmd *minicli.Command
+		cmd, err = readLocalCommand(dec)
 		if err != nil {
-			if err == io.EOF {
-				log.Infoln("command client disconnected")
-			} else {
-				log.Errorln(err)
-			}
+			// Must be incompatible versions of minimega... F***
 			break
 		}
 
-		c.TID = TID
+		// HAX: Don't record the read command
+		record := !strings.HasPrefix(cmd.Original, "read")
 
-		log.Debug("got command over socket: %v", c)
-
-		// just shove it in the cli command channel
-		commandChanSocket <- c
-		for {
-			r := <-respChan
-			err = enc.Encode(&r)
-			if err != nil {
-				if err == io.EOF {
-					log.Infoln("command client disconnected")
-				} else {
-					log.Errorln(err)
+		// HAX: Work around so that we can add the more boolean
+		var prevResp minicli.Responses
+		for resp := range runCommand(cmd, record) {
+			if prevResp != nil {
+				err = sendLocalResp(enc, prevResp, true)
+				if err != nil {
+					break outer
 				}
-				done = true
 			}
-			if !r.More {
-				log.Debugln("got last message")
-				break
-			} else {
-				log.Debugln("expecting more data")
-			}
+
+			prevResp = resp
+		}
+		if err == nil && prevResp != nil {
+			err = sendLocalResp(enc, prevResp, false)
 		}
 	}
+
+	if err != nil {
+		if err == io.EOF {
+			log.Infoln("command client disconnected")
+		} else {
+			log.Errorln(err)
+		}
+	}
+}
+
+func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
+	var cmd minicli.Command
+	err := dec.Decode(&cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Debug("got command over socket: %v", cmd)
+
+	// HAX: Reprocess the original command since the Call target cannot be
+	// serialized... is there a cleaner way to do this?
+	return minicli.CompileCommand(cmd.Original)
+}
+
+func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
+	log.Infoln("sending resp:", resp)
+	r := localResponse{Resp: resp, More: more}
+
+	return enc.Encode(&r)
 }

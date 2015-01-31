@@ -2,14 +2,15 @@ package minicli
 
 import "strings"
 
-type HandlerFunc func(*Command, chan Responses)
+type CLIFunc func(*Command, chan Responses)
 
 type Handler struct {
 	HelpShort string   // a brief (one line) help message
 	HelpLong  string   // a descriptive help message
 	Patterns  []string // the pattern that the input should match
+
 	// call back to invoke when the raw input matches the pattern
-	Call HandlerFunc
+	Call CLIFunc
 
 	patternItems [][]patternItem // the processed patterns, used for matching
 }
@@ -25,7 +26,7 @@ func (h *Handler) compile(input []inputItem) (*Command, int) {
 		cmd, matchLen := newCommand(pattern, input)
 		if cmd != nil {
 			cmd.Original = printInput(input)
-			cmd.Handler = *h
+			cmd.Call = h.Call
 			return cmd, matchLen
 		}
 

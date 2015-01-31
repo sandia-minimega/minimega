@@ -1,14 +1,16 @@
 package minicli
 
 type Command struct {
-	Handler // Embeds the handler that was matched by the raw input
+	Pattern  string // the specific pattern that was matched
+	Original string // original raw input
 
-	Pattern    string              // the specific pattern that was matched
-	Original   string              // original raw input
-	StringArgs map[string]string   // map of arguments
-	BoolArgs   map[string]bool     // map of arguments
-	ListArgs   map[string][]string // map of arguments
-	Subcommand *Command            // parsed command
+	StringArgs map[string]string
+	BoolArgs   map[string]bool
+	ListArgs   map[string][]string
+
+	Subcommand *Command // parsed command
+
+	Call CLIFunc `json:"-"`
 }
 
 func newCommand(pattern []patternItem, input []inputItem) (*Command, int) {
