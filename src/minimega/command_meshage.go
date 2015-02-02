@@ -251,7 +251,7 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c, c.StringArgs["vms"], respChan)
+	meshageSend(c.Subcommand, c.StringArgs["vms"], respChan)
 }
 
 func getRecipients(r string) []string {

@@ -179,71 +179,54 @@ func webHosts() string {
 
 // this whole block is UGLY, please rewrite
 func webHostVMs(host string) string {
-	var d string
+	cmd, err := minicli.CompileCommand("vm info mask id,name,state")
+	if err != nil {
+		// Should never happen
+		panic(err)
+	}
+	var respChan chan minicli.Responses
 
-	// TODO
 	if host == hostname {
-		//cmd := cliCommand{}
-		//r := cliResponse{} // TODO: vms.info(cmd)
-		//if r.Error != "" {
-		//	log.Errorln(r.Error)
-		//	return r.Error
-		//}
-		//d = r.Response
+		respChan = minicli.ProcessCommand(cmd, false)
 	} else {
-		//cmd := cliCommand{
-		//	Args: []string{host, "vm_info"},
-		//}
-		//r := meshageSet(cmd)
-		//if r.Error != "" {
-		//	log.Errorln(r.Error)
-		//	return r.Error
-		//}
-		//d = r.Response
+		respChan := make(chan minicli.Responses)
+		go meshageSend(cmd, host, respChan)
 	}
 
-	body := `
-	<html>
-	<body>
-	<table border=1>
-	`
-	lines := strings.Split(d, "\n")
-	if len(lines) < 2 {
-		return "no VMs found"
-	}
-	f := strings.Fields(lines[0])
-	body += "<tr>"
-	for _, x := range f {
-		if x != "|" {
-			body += "<td>" + x + "</td>"
-		}
-	}
-	body += "</tr>"
-	for _, l := range lines[1:] {
-		if !strings.Contains(l, "error") && !strings.Contains(l, "quit") {
-			f := strings.Fields(l)
-			if len(f) == 0 { // skip blank lines
+	lines := []string{}
+
+	for resps := range respChan {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
 				continue
 			}
-			val, err := strconv.Atoi(f[0])
-			if err != nil {
-				log.Errorln(err)
-				return err.Error()
-			}
-			body += "<tr>"
-			collect := fmt.Sprintf("<a href=\"/vnc/%v/%v\">%v</a>", host, 5900+val, f[0])
-			for _, x := range f[1:] {
-				if x == "|" {
-					body += fmt.Sprintf("<td>%v</td>", collect)
-					collect = ""
-				} else {
-					collect += " " + x
+
+			for _, row := range resp.Tabular {
+				if row[2] != "error" && row[2] != "quit" {
+					id, err := strconv.Atoi(row[0])
+					if err != nil {
+						log.Errorln(err)
+						return err.Error()
+					}
+
+					format := `<tr><td><a href="/vnc/%v/%v">%v</a></td><td>%s</td></tr>`
+					lines = append(lines, fmt.Sprintf(format, host, 5900+id, row[1], row[2]))
 				}
 			}
-			body += fmt.Sprintf("<td>%v</td></tr>", collect)
 		}
 	}
-	body += "</body></html>"
-	return body
 
+	if len(lines) == 0 {
+		return "no VMs found"
+	}
+
+	return fmt.Sprintf(`
+<html>
+<body>
+<table border=1>
+%s
+</table>
+</body>
+</html>`, strings.Join(lines, "\n"))
 }

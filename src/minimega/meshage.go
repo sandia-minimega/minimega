@@ -102,13 +102,13 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	meshageCommandLock.Lock()
 	defer meshageCommandLock.Unlock()
 
-	subCmd := c.Subcommand.Original
+	orig := c.Original
 
 	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if strings.HasPrefix(subCmd, "read") || strings.HasPrefix(subCmd, "mesh send") {
+	if strings.HasPrefix(orig, "read") || strings.HasPrefix(orig, "mesh send") {
 		resp := &minicli.Response{
 			Host:  hostname,
-			Error: fmt.Sprintf("cannot run %s over mesh", subCmd),
+			Error: fmt.Sprintf("cannot run `%s` over mesh", orig),
 		}
 		respChan <- minicli.Responses{resp}
 		return
@@ -116,17 +116,17 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 
 	meshageID := rand.Int31()
 	// Build a mesh command from the subcommand, assigning a random ID
-	meshageCmd := meshageCommand{Command: *c.Subcommand, TID: meshageID}
+	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
-	if c.StringArgs["vms"] == "*" {
+	if hosts == "*" {
 		// Broadcast command to all VMs
 		recipients = meshageNode.BroadcastRecipients()
 	} else {
 		// Send to specified list of recipients
-		recipients = getRecipients(c.StringArgs["vms"])
+		recipients = getRecipients(hosts)
 	}
 
-	_, err = meshageNode.Set(recipients, meshageCmd)
+	n, err := meshageNode.Set(recipients, meshageCmd)
 	if err != nil {
 		resp := &minicli.Response{
 			Host:  hostname,
@@ -136,11 +136,12 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 		return
 	}
 
+	log.Debug("meshage sent, waiting on %d responses", n)
 	meshResps := map[string]*minicli.Response{}
 
 	// wait on a response from each recipient
 loop:
-	for len(meshResps) < len(recipients) {
+	for len(meshResps) < n {
 		select {
 		case resp := <-meshageResponseChan:
 			body := resp.Body.(meshageResponse)
@@ -151,6 +152,7 @@ loop:
 			}
 		case <-time.After(meshageTimeout):
 			// Didn't hear back from any node within the timeout
+			log.Info("meshage send timed out")
 			break loop
 		}
 	}
@@ -160,7 +162,7 @@ loop:
 	for _, host := range recipients {
 		if v, ok := meshResps[host]; ok {
 			resp = append(resp, v)
-		} else {
+		} else if host != hostname {
 			resp = append(resp, &minicli.Response{
 				Host:  host,
 				Error: "timed out",
@@ -169,5 +171,6 @@ loop:
 	}
 
 	respChan <- resp
+	close(respChan)
 	return
 }

@@ -73,7 +73,7 @@ func (n *Node) Send(m *Message) (int, error) {
 	for _, v := range m.Recipients {
 		if v == n.name {
 			if len(m.Recipients) == 1 {
-				return 0, fmt.Errorf("cannot mesh_set yourself")
+				return 0, fmt.Errorf("cannot mesh send yourself")
 			}
 			continue
 		}
