@@ -1,8 +1,9 @@
 package minicli
 
-import "strings"
-
-type CLIFunc func(*Command, chan Responses)
+import (
+	"fmt"
+	"strings"
+)
 
 type Handler struct {
 	HelpShort string   // a brief (one line) help message
@@ -23,10 +24,8 @@ type Handler struct {
 func (h *Handler) compile(input []inputItem) (*Command, int) {
 	var maxMatchLen int
 	for _, pattern := range h.patternItems {
-		cmd, matchLen := newCommand(pattern, input)
+		cmd, matchLen := newCommand(pattern, input, h.Call)
 		if cmd != nil {
-			cmd.Original = printInput(input)
-			cmd.Call = h.Call
 			return cmd, matchLen
 		}
 
@@ -145,7 +144,7 @@ func (h *Handler) helpShort() string {
 func (h *Handler) helpLong() string {
 	res := "Usage:\n"
 	for _, pattern := range h.patternItems {
-		res += "\t" + printPattern(pattern) + "\n"
+		res += fmt.Sprintf("\t%s\n", patternItems(pattern))
 	}
 	res += "\n"
 	// Fallback on HelpShort if there's no HelpLong

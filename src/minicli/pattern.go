@@ -48,7 +48,9 @@ type patternItem struct {
 	Options []string
 }
 
-func printPattern(items []patternItem) string {
+type patternItems []patternItem
+
+func (items patternItems) String() string {
 	parts := make([]string, len(items))
 
 	for i, v := range items {

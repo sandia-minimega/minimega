@@ -95,7 +95,13 @@ func cliLocal() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			fmt.Println("closest match: TODO")
+			fmt.Printf("err: %v, closest match: TODO\n", err)
+			continue
+		}
+
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
 			continue
 		}
 

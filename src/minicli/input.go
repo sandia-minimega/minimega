@@ -20,7 +20,9 @@ type inputItem struct {
 	Value string
 }
 
-func printInput(items []inputItem) string {
+type inputItems []inputItem
+
+func (items inputItems) String() string {
 	parts := make([]string, len(items))
 	for i, v := range items {
 		if strings.Contains(v.Value, ` `) {
@@ -64,12 +66,15 @@ func (l *inputLexer) lexOutside() (stateFn, error) {
 		}
 	}
 
+outer:
 	for l.s.Scan() {
 		token := l.s.Text()
 		switch token {
 		case `"`, `'`:
 			l.terminal = token
 			return l.lexQuote, nil
+		case CommentLeader:
+			break outer
 		default:
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)

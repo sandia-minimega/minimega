@@ -13,12 +13,14 @@ type Command struct {
 	Call CLIFunc `json:"-"`
 }
 
-func newCommand(pattern []patternItem, input []inputItem) (*Command, int) {
+func newCommand(pattern patternItems, input inputItems, call CLIFunc) (*Command, int) {
 	cmd := Command{
-		Pattern:    printPattern(pattern),
+		Pattern:    pattern.String(),
+		Original:   input.String(),
 		StringArgs: make(map[string]string),
 		BoolArgs:   make(map[string]bool),
-		ListArgs:   make(map[string][]string)}
+		ListArgs:   make(map[string][]string),
+		Call:       call}
 
 outer:
 	for i, item := range pattern {
@@ -60,7 +62,7 @@ outer:
 			return &cmd, i
 		case cmdString:
 			// Parse the subcommand
-			subCmd, err := CompileCommand(printInput(input[i:]))
+			subCmd, err := CompileCommand(input[i:].String())
 			if err != nil {
 				return nil, i
 			}

@@ -36,6 +36,8 @@ var validTestPatterns = []struct {
 	{"foo [bar,zap]", []string{"foo", "foo bar", "foo zap"}},
 	// Subcommand, must come last
 	{"test (foo)", []string{"test cd", "test ping minimega.org", "test foo bar"}},
+	// String literal, testing comments
+	{"foobar", []string{"foobar # test", "foobar #test", "foobar#test", "foobar# test"}},
 }
 
 var invalidTestPatterns = []string{
@@ -70,20 +72,23 @@ var testPrefixes = []struct {
 			"vm info",
 			"vm info search",
 			"vm info mask",
-		}},
+		},
+	},
 	{
 		Prefix: "vm info",
 		Patterns: []string{
 			"vm info search",
 			"vm info mask",
-		}},
+		},
+	},
 	{
 		Prefix: "",
 		Patterns: []string{
 			"foo",
 			"bar",
 			"zombie",
-		}},
+		},
+	},
 }
 
 func TestParse(t *testing.T) {

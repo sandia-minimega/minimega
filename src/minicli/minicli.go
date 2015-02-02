@@ -15,6 +15,10 @@ const (
 	QuietMode
 )
 
+const (
+	CommentLeader = "#"
+)
+
 var (
 	compress bool // compress output
 	tabular  bool // tabularize output
@@ -35,6 +39,8 @@ type Response struct {
 	Error    string      // Because you can't gob/json encode an error type
 	Data     interface{} // Optional user data
 }
+
+type CLIFunc func(*Command, chan Responses)
 
 func init() {
 	handlers = make([]*Handler, 0)
@@ -124,7 +130,7 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
 	inputItems, err := lexInput(input)
-	if err != nil {
+	if err != nil || len(inputItems) == 0 {
 		return nil, err
 	}
 
