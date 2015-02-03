@@ -23,6 +23,8 @@ var externalProcesses = map[string]string{
 	"debootstrap": "debootstrap",
 	"chroot":      "chroot",
 	"bash":        "bash",
+	"mksquashfs":  "mksquashfs",
+	"genisoimage": "genisoimage",
 }
 
 // check for the presence of each of the external processes we may call,
