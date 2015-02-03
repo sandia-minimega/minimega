@@ -279,23 +279,9 @@ func (r Responses) String() string {
 	}
 
 	// Append errors from hosts
-	var hasErrors bool
 	for i := range r {
 		if r[i].Error != "" {
-			// Found first error
-			if !hasErrors {
-				buf.WriteString("\n")
-				buf.WriteString("Errors:")
-				buf.WriteString("\n")
-				hasErrors = true
-			}
-
-			// TODO: Use tabwriter?
-			buf.WriteString("\t")
-			buf.WriteString(r[i].Host)
-			buf.WriteString("\t")
-			buf.WriteString(r[i].Error)
-			buf.WriteString("\n")
+			fmt.Fprintf(&buf, "Error (%s): %s", r[i].Host, r[i].Error)
 		}
 	}
 
