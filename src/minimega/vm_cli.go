@@ -117,8 +117,7 @@ command line immediately instead of waiting on potential errors from
 launching the VM(s). The user must check logs or error states from
 vm_info.`,
 		Patterns: []string{
-			"vm launch name <namespec> [noblock,]",
-			"vm launch count <count> [noblock,]",
+			"vm launch <name or count> [noblock,]",
 		},
 		Call: wrapSimpleCLI(cliVmLaunch),
 	},
@@ -617,39 +616,40 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	arg := c.StringArgs["name"]
 	vmNames := []string{}
 
-	if namespec, ok := c.StringArgs["namespec"]; ok {
-		index := strings.IndexRune(namespec, '[')
+	count, err := strconv.ParseInt(arg, 10, 32)
+	if err == nil {
+		if count <= 0 {
+			resp.Error = "invalid number of vms (must be >= 1)"
+			return resp
+		}
+
+		for i := int64(0); i < count; i++ {
+			vmNames = append(vmNames, "")
+		}
+	} else {
+		index := strings.IndexRune(arg, '[')
 		if index == -1 {
-			vmNames = append(vmNames, namespec)
+			vmNames = append(vmNames, arg)
 		} else {
-			r, err := ranges.NewRange(namespec[:index], 0, int(math.MaxInt32))
+			r, err := ranges.NewRange(arg[:index], 0, int(math.MaxInt32))
 			if err != nil {
 				panic(err)
 			}
 
-			names, err := r.SplitRange(namespec)
+			names, err := r.SplitRange(arg)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 			vmNames = append(vmNames, names...)
 		}
-	} else if countStr, ok := c.StringArgs["count"]; ok {
-		count, err := strconv.ParseUint(countStr, 10, 32)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-
-		for i := uint64(0); i < count; i++ {
-			vmNames = append(vmNames, "")
-		}
 	}
 
 	if len(vmNames) == 0 {
-		resp.Error = "No VMs to launch"
+		resp.Error = "no VMs to launch"
 		return resp
 	}
 
@@ -663,20 +663,18 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	numVMs := len(vmNames)
-	for _, vmName := range vmNames {
+	for i, vmName := range vmNames {
 		if err := vms.launch(vmName, ack); err != nil {
-			resp.Error += fmt.Sprintln(err)
-			numVMs -= 1
+			resp.Error = err.Error()
+			go waitForAcks(i)
+			return resp
 		}
 	}
 
-	resp.Response = fmt.Sprintf("launching %d vms", numVMs)
-
 	if c.BoolArgs["noblock"] {
-		go waitForAcks(numVMs)
+		go waitForAcks(len(vmNames))
 	} else {
-		waitForAcks(numVMs)
+		waitForAcks(len(vmNames))
 	}
 
 	return resp
