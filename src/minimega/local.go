@@ -82,6 +82,12 @@ func localAttach() {
 			continue
 		}
 
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
+			continue
+		}
+
 		err = sendLocalCommand(enc, dec, cmd)
 		if err != nil {
 			log.Errorln(err)

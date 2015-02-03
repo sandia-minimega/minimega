@@ -153,6 +153,12 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
+			continue
+		}
+
 		for resp := range minicli.ProcessCommand(cmd, true) {
 			respChan <- resp
 
