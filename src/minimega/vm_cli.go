@@ -25,13 +25,18 @@ term, and an output mask. If the search term is omitted, information about all
 VMs will be displayed. If the output mask is omitted, all information about the
 VMs will be displayed.
 
-The output mode has two options - quiet and json. Two use either, set the output using the following syntax:
+The output mode has two options - quiet and json. Two use either, set the
+output using the following syntax:
 
 	vm_info output=quiet ...
 
-If the output mode is set to 'quiet', the header and "|" characters in the output formatting will be removed. The output will consist simply of tab delimited lines of VM info based on the search and mask terms.
+If the output mode is set to 'quiet', the header and "|" characters in the
+output formatting will be removed. The output will consist simply of tab
+delimited lines of VM info based on the search and mask terms.
 
-If the output mode is set to 'json', the output will be a json formatted string containing info on all VMs, or those matched by the search term. The mask will be ignored - all fields will be populated.
+If the output mode is set to 'json', the output will be a json formatted string
+containing info on all VMs, or those matched by the search term. The mask will
+be ignored - all fields will be populated.
 
 The search term uses a single key=value argument. For example, if you want all
 information about VM 50:
@@ -484,33 +489,21 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	search := c.StringArgs["search"]
-	mask := c.StringArgs["mask"]
 
-	// output mask
-	if mask != "" {
-		d := strings.Split(mask, ",")
-		for _, j := range d {
-			name := strings.ToLower(j)
-			if _, ok := vmMasks[name]; ok {
-				resp.Header = append(resp.Header, name)
-			} else {
-				resp.Error = fmt.Sprintf("invalid output mask: %v", j)
-				resp.Header = nil
-				return resp
-			}
-		}
-	} else { // print everything
-		for name := range vmMasks {
-			resp.Header = append(resp.Header, name)
-		}
+	masks := vmMasks
+	if c.StringArgs["masks"] != "" {
+		masks = strings.Split(c.StringArgs["masks"], ",")
 	}
 
-	resp.Tabular, err = vms.info(resp.Header, search)
+	log.Debug("vm info masks: %#v", masks)
+
+	resp.Tabular, err = vms.info(masks, search)
 	if err != nil {
 		resp.Error = err.Error()
-		resp.Header = nil
 		return resp
 	}
+
+	resp.Header = masks
 
 	return resp
 }
@@ -539,17 +532,11 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		}
 	} else if c.BoolArgs["clone"] {
 		// Clone the config of an existing vm
-		name := c.StringArgs["vm"]
-
-		id, err := strconv.Atoi(name)
-		if err != nil {
-			id = vms.findByName(name)
-		}
-
-		if vm, ok := vms.vms[id]; ok {
-			info = vm.Copy()
+		vm := vms.findVm(c.StringArgs["vm"])
+		if vm == nil {
+			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {
-			resp.Error = fmt.Sprintf("vm %v not found", name)
+			info = vm.Copy()
 		}
 	} else {
 		// Print the full config
@@ -756,9 +743,9 @@ func cliVmSave(c *minicli.Command) *minicli.Response {
 func cliVmHotplug(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vm := vms.getVM(c.StringArgs["vm"])
+	vm := vms.findVm(c.StringArgs["vm"])
 	if vm == nil {
-		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
+		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
 
@@ -825,9 +812,9 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vm := vms.getVM(c.StringArgs["vm"])
+	vm := vms.findVm(c.StringArgs["vm"])
 	if vm == nil {
-		resp.Error = fmt.Sprintf("no such VM %v", c.StringArgs["vm"])
+		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
 

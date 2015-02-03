@@ -96,9 +96,9 @@ func clearCapture(captureType, id string) (err error) {
 // writing the packets to the specified filename in PCAP format.
 func startCapturePcap(vm string, iface int, filename string) error {
 	// get the vm
-	v := vms.getVM(vm)
+	v := vms.findVm(vm)
 	if v == nil {
-		return fmt.Errorf("no such vm %v", vm)
+		return vmNotFound(vm)
 	}
 
 	if len(v.taps) <= iface {

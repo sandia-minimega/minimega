@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"minicli"
 	log "minilog"
-	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -165,23 +164,12 @@ func findRemoteVM(host, vm string) (int, string, error) {
 	log.Debug("findRemoteVM: %v %v", host, vm)
 
 	// check for our own host
-	hostname, _ := os.Hostname()
 	if host == hostname {
 		log.Debugln("host is local node")
-		id := vms.findByName(vm)
-		if id == VM_NOT_FOUND {
-			// check for VM id
-			id, err := strconv.Atoi(vm)
-			if err != nil {
-				return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
-			}
-			if v, ok := vms.vms[id]; ok {
-				log.Debug("got vm: %v %v %v", host, id, v.Name)
-				return id, v.Name, nil
-			}
-		} else {
-			log.Debug("got vm: %v %v %v", host, id, vm)
-			return id, vm, nil
+		vm := vms.findVm(vm)
+		if vm != nil {
+			log.Debug("got vm: %v %v %v", host, vm.Id, vm.Name)
+			return vm.Id, vm.Name, nil
 		}
 	} else {
 		// message the remote node for this info with:
@@ -196,7 +184,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		if err == nil {
 			cmdStr = fmt.Sprintf("vm info search id=%v mask name,id", v)
 		} else {
-			cmdStr = fmt.Sprintf("vm info search id=%v mask name,id", v)
+			cmdStr = fmt.Sprintf("vm info search name=%v mask name,id", v)
 		}
 
 		cmd, err := minicli.CompileCommand(cmdStr)
@@ -226,7 +214,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		}
 	}
 
-	return VM_NOT_FOUND, "", fmt.Errorf("vm not found")
+	return 0, "", vmNotFound(vm)
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking
