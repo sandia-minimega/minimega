@@ -78,7 +78,7 @@ func (r Responses) Errors() []error {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.patternItems = make([][]patternItem, len(h.Patterns))
+	h.PatternItems = make([][]patternItem, len(h.Patterns))
 
 	for i, pattern := range h.Patterns {
 		items, err := lexPattern(pattern)
@@ -86,7 +86,7 @@ func Register(h *Handler) error {
 			return err
 		}
 
-		h.patternItems[i] = items
+		h.PatternItems[i] = items
 	}
 
 	h.HelpShort = strings.TrimSpace(h.HelpShort)
