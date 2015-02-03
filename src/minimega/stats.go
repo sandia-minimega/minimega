@@ -31,7 +31,7 @@ var hostCLIHandlers = []minicli.Handler{
 			"host [memtotal,]",
 			"host [load,]",
 			"host [bandwidth,]",
-			"host [cpus]",
+			"host [cpus,]",
 		},
 		Call: wrapSimpleCLI(cliHost),
 	},
