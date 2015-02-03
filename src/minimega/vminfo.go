@@ -55,7 +55,7 @@ type vmInfo struct {
 
 func (vm *vmInfo) start() error {
 	stateMask := VM_PAUSED + VM_BUILDING + VM_QUIT
-	if vm.State&stateMask != 0 {
+	if vm.State&stateMask == 0 {
 		return nil
 	}
 

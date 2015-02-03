@@ -206,50 +206,50 @@ func (l *vmList) launch(name string, ack chan int) error {
 	return nil
 }
 
-// kill one or all vms (-1 for all)
-func (l *vmList) kill(vm string) []error {
-	if vm != "*" {
-		err := l.apply(vm, func(vm *vmInfo) error {
-			if vm.State != VM_RUNNING {
-				return fmt.Errorf("vm %v is not running", vm.Name)
+// kill one or all vms (* for all)
+func (l *vmList) kill(idOrName string) []error {
+	stateMask := VM_QUIT + VM_ERROR
+	killedVms := map[int]bool{}
+
+	if idOrName != "*" {
+		vm := l.findVm(idOrName)
+		if vm == nil {
+			return []error{vmNotFound(idOrName)}
+		}
+
+		if vm.getState()&stateMask != 0 {
+			return []error{fmt.Errorf("vm %v is not running", vm.Name)}
+		}
+
+		vm.Kill <- true
+		killedVms[vm.Id] = true
+	} else {
+		for _, vm := range l.vms {
+			if vm.getState()&stateMask == 0 {
+				vm.Kill <- true
+				killedVms[vm.Id] = true
 			}
-
-			vm.Kill <- true
-			log.Info("VM %v killed", <-killAck)
-			return nil
-		})
-
-		return []error{err}
-	}
-
-	killCount := 0
-	timedOut := 0
-
-	for _, i := range l.vms {
-		s := i.getState()
-		if s != VM_QUIT && s != VM_ERROR {
-			i.Kill <- true
-			killCount++
 		}
 	}
 
-	// TODO: This isn't quite right... we will wait for killCount *
-	// COMMAND_TIMEOUT seconds rather than COMMAND_TIMEOUT seconds.
-	for i := 0; i < killCount; i++ {
+outer:
+	for len(killedVms) > 0 {
 		select {
 		case id := <-killAck:
 			log.Info("VM %v killed", id)
+			delete(killedVms, id)
 		case <-time.After(COMMAND_TIMEOUT * time.Second):
 			log.Error("vm kill timeout")
-			timedOut++
+			break outer
 		}
 	}
 
-	if timedOut != 0 {
-		return []error{fmt.Errorf("%v killed VMs failed to acknowledge kill", timedOut)}
+	errs := []error{}
+	for id := range killedVms {
+		errs = append(errs, fmt.Errorf("VM %d failed to acknowledge kill", id))
 	}
 
-	return nil
+	return errs
 }
 
 func (l *vmList) flush() {
