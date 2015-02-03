@@ -36,9 +36,9 @@ func (l *vmList) start(vm string, quit bool) []error {
 		return []error{err}
 	}
 
-	stateMask := VM_PAUSED + VM_BUILDING
+	stateMask := VM_PAUSED | VM_BUILDING
 	if quit {
-		stateMask += VM_QUIT
+		stateMask |= VM_QUIT
 	}
 
 	// start all paused vms
@@ -208,7 +208,7 @@ func (l *vmList) launch(name string, ack chan int) error {
 
 // kill one or all vms (* for all)
 func (l *vmList) kill(idOrName string) []error {
-	stateMask := VM_QUIT + VM_ERROR
+	stateMask := VM_QUIT | VM_ERROR
 	killedVms := map[int]bool{}
 
 	if idOrName != "*" {
@@ -253,8 +253,9 @@ outer:
 }
 
 func (l *vmList) flush() {
+	stateMask := VM_QUIT | VM_ERROR
 	for i, vm := range vms.vms {
-		if vm.State == VM_QUIT || vm.State == VM_ERROR {
+		if vm.State&stateMask != 0 {
 			log.Infoln("deleting VM: ", i)
 			delete(vms.vms, i)
 		}

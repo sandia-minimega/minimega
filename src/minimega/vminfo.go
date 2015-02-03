@@ -54,7 +54,7 @@ type vmInfo struct {
 }
 
 func (vm *vmInfo) start() error {
-	stateMask := VM_PAUSED + VM_BUILDING + VM_QUIT
+	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT
 	if vm.State&stateMask == 0 {
 		return nil
 	}
@@ -216,7 +216,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		}
 
 		s := vm2.getState()
-		stateMask := VM_BUILDING + VM_RUNNING + VM_PAUSED
+		stateMask := VM_BUILDING | VM_RUNNING | VM_PAUSED
 		vmIsActive := (s&stateMask != 0)
 
 		if vmIsActive {
