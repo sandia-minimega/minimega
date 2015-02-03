@@ -16,68 +16,57 @@ var vmCLIHandlers = []minicli.Handler{
 	{ // vm info
 		HelpShort: "print information about VMs",
 		HelpLong: `
-Print information about VMs. vm_info allows searching for VMs based on any VM
+Print information about VMs. vm info allows searching for VMs based on any VM
 parameter, and output some or all information about the VMs in question.
 Additionally, you can display information about all running VMs.
 
-A vm_info command takes three optional arguments, an output mode, a search
-term, and an output mask. If the search term is omitted, information about all
-VMs will be displayed. If the output mask is omitted, all information about the
-VMs will be displayed.
-
-The output mode has two options - quiet and json. Two use either, set the
-output using the following syntax:
-
-	vm_info output=quiet ...
-
-If the output mode is set to 'quiet', the header and "|" characters in the
-output formatting will be removed. The output will consist simply of tab
-delimited lines of VM info based on the search and mask terms.
-
-If the output mode is set to 'json', the output will be a json formatted string
-containing info on all VMs, or those matched by the search term. The mask will
-be ignored - all fields will be populated.
+A vm info command takes two optional arguments: a search term and an output
+mask. If the search term is omitted, information about all VMs will be
+displayed. If the output mask is omitted, all information about the VMs will be
+displayed.
 
 The search term uses a single key=value argument. For example, if you want all
 information about VM 50:
 
-	vm_info id=50
+	vm info search id=50
 
-The output mask uses an ordered list of fields inside [] brackets. For example,
-if you want the ID and IPs for all VMs on vlan 100:
+The output mask uses an ordered comma-seperated list of fields. For example, if
+you want the ID and IPs for all VMs on vlan 100:
 
-	vm_info vlan=100 [id,ip]
+	vm info search vlan=100 mask id,ip
 
 Searchable and maskable fields are:
 
-- host	  : the host that the VM is running on
-- id	  : the VM ID, as an integer
-- name	  : the VM name, if it exists
-- memory  : allocated memory, in megabytes
-- vcpus   : the number of allocated CPUs
-- disk    : disk image
-- initrd  : initrd image
-- kernel  : kernel image
-- cdrom   : cdrom image
-- state   : one of (building, running, paused, quit, error)
-- tap	  : tap name
-- mac	  : mac address
-- ip	  : IPv4 address
-- ip6	  : IPv6 address
-- vlan	  : vlan, as an integer
-- bridge  : bridge name
-- append  : kernel command line string
+- id	    : the VM ID, as an integer
+- host	    : the host that the VM is running on
+- name	    : the VM name, if it exists
+- state     : one of (building, running, paused, quit, error)
+- memory    : allocated memory, in megabytes
+- vcpus     : the number of allocated CPUs
+- disk      : disk image
+- initrd    : initrd image
+- kernel    : kernel image
+- cdrom     : cdrom image
+- append    : kernel command line string
+- bridge    : bridge name
+- tap	    : tap name
+- mac	    : mac address
+- ip	    : IPv4 address
+- ip6	    : IPv6 address
+- vlan	    : vlan, as an integer
+- uuid      : QEMU system uuid
+- cc_active : whether cc is active
 
 Examples:
 
 Display a list of all IPs for all VMs:
-	vm_info [ip,ip6]
+	vm info masks ip,ip6
 
 Display all information about VMs with the disk image foo.qc2:
-	vm_info disk=foo.qc2
+	vm info search disk=foo.qc2
 
 Display all information about all VMs:
-	vm_info`,
+	vm info`,
 		Patterns: []string{
 			"vm info",
 			"vm info search <terms>",
@@ -89,14 +78,14 @@ Display all information about all VMs:
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
 		HelpLong: `
-Saves the configuration of a running virtual machine or set of virtual
-machines so that it/they can be restarted/recovered later, such as after
-a system crash.
+Saves the configuration of a running virtual machine or set of virtual machines
+so that it/they can be restarted/recovered later, such as after a system crash.
 
-If no VM name or ID is given, all VMs (including those in the quit and error state) will be saved.
+If no VM name or ID is given, all VMs (including those in the quit and error
+state) will be saved.
 
-This command does not store the state of the virtual machine itself,
-only its launch configuration.`,
+This command does not store the state of the virtual machine itself, only its
+launch configuration.`,
 		Patterns: []string{
 			"vm save <name> <vm id or name or *>...",
 		},
@@ -105,17 +94,19 @@ only its launch configuration.`,
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
 		HelpLong: `
-Launch virtual machines in a paused state, using the parameters defined
-leading up to the launch command. Any changes to the VM parameters after
-launching will have no effect on launched VMs.
+Launch virtual machines in a paused state, using the parameters defined leading
+up to the launch command. Any changes to the VM parameters after launching will
+have no effect on launched VMs.
 
-If you supply a name instead of a number of VMs, one VM with that name
-will be launched.
+If you supply a name instead of a number of VMs, one VM with that name will be
+launched. You may also supply a range expression to launch VMs with a specific
+naming scheme:
 
-The optional 'noblock' suffix forces minimega to return control of the
-command line immediately instead of waiting on potential errors from
-launching the VM(s). The user must check logs or error states from
-vm_info.`,
+	vm launch foo[0-9]
+
+The optional 'noblock' suffix forces minimega to return control of the command
+line immediately instead of waiting on potential errors from launching the
+VM(s). The user must check logs or error states from vm info.`,
 		Patterns: []string{
 			"vm launch <name or count> [noblock,]",
 		},
@@ -124,7 +115,7 @@ vm_info.`,
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
 		HelpLong: `
-Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
+Kill a virtual machine by ID or name. Pass * to kill all virtual machines.`,
 		Patterns: []string{
 			"vm kill <vm id or name or *>",
 		},
@@ -137,12 +128,12 @@ Kill a virtual machine by ID or name. Pass -1 to kill all virtual machines.`,
 	{ // vm start
 		HelpShort: "start paused virtual machines",
 		HelpLong: `
-Start all or one paused virtual machine. To start all paused virtual machines,
-call start without the optional VM ID or name.
+Start one or all paused virtual machines. Pass * to start all paused virtual
+machines.
 
-Calling vm_start specifically on a quit VM will restart the VM. If the
-'quit=true' argument is passed when using vm_start with no specific VM, all VMs
-in the quit state will also be restarted.`,
+Calling vm start specifically on a quit VM will restart the VM. If the optional 'quit'
+suffix is used with the wildcard, then all virtual machines in the paused *or* quit state
+will be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or *> [quit,]",
 		},
@@ -155,10 +146,10 @@ in the quit state will also be restarted.`,
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
 		HelpLong: `
-Stop all or one running virtual machine. To stop all running virtual machines,
-call stop without the optional VM ID or name.
+Stop one or all running virtual machines. Pass * to stop all running virtual
+machines.
 
-Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
+Calling stop will put VMs in a paused state. Start stopped VMs with vm start.`,
 		Patterns: []string{
 			"vm stop <vm id or name or *>",
 		},
@@ -172,7 +163,7 @@ Calling stop will put VMs in a paused state. Start stopped VMs with vm_start.`,
 		HelpShort: "discard information about quit or failed VMs",
 		HelpLong: `
 Discard information about VMs that have either quit or encountered an error.
-This will remove any VMs with a state of "quit" or "error" from vm_info. Names
+This will remove any VMs with a state of "quit" or "error" from vm info. Names
 of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
@@ -184,23 +175,23 @@ of VMs that have been flushed may be reused.`,
 		HelpLong: `
 Add and remove USB drives to a launched VM.
 
-To view currently attached media, call vm_hotplug with the 'show' argument and
+To view currently attached media, call vm hotplug with the 'show' argument and
 a VM ID or name. To add a device, use the 'add' argument followed by the VM ID
 or name, and the name of the file to add. For example, to add foo.img to VM 5:
 
-	vm_hotplug add 5 foo.img
+	vm hotplug add 5 foo.img
 
-The add command will assign a disk ID, shown in vm_hotplug show. To remove
+The add command will assign a disk ID, shown in vm hotplug show. To remove
 media, use the 'remove' argument with the VM ID and the disk ID. For example,
 to remove the drive added above, named 0:
 
-	vm_hotplug remove 5 0
+	vm hotplug remove 5 0
 
-To remove all hotplug devices, use ID -1.`,
+To remove all hotplug devices, use ID * for the disk ID.`,
 		Patterns: []string{
-			"vm hotplug show <vm id or name>",
-			"vm hotplug add <vm id or name> <filename>",
-			"vm hotplug remove <vm id or name> <disk id or *>",
+			"vm hotplug <show,> <vm id or name>",
+			"vm hotplug <add,> <vm id or name> <filename>",
+			"vm hotplug <remove,> <vm id or name> <disk id or *>",
 		},
 		Call: wrapSimpleCLI(cliVmHotplug),
 	},
@@ -209,22 +200,22 @@ To remove all hotplug devices, use ID -1.`,
 		HelpLong: `
 Disconnect or move existing network connections on a running VM.
 
-Network connections are indicated by their position in vm_net (same order in
-vm_info) and are zero indexed. For example, to disconnect the first network
-connection from a VM with 4 network connections:
+Network connections are indicated by their position in vm net (same order in vm
+info) and are zero indexed. For example, to disconnect the first network
+connection from a VM named vm-0 with 4 network connections:
 
-	vm_netmod <vm name or id> 0 disconnect
+	vm netmod disconnect vm-0 0
 
 To disconnect the second connection:
 
-	vm_netmod <vm name or id> 1 disconnect
+	vm netmod disconnect vm-0 1
 
 To move a connection, specify the new VLAN tag and bridge:
 
-	vm_netmod <vm name or id> 0 bridgeX 100`,
+	vm netmod <vm name or id> 0 bridgeX 100`,
 		Patterns: []string{
-			"vm net connect <vm id or name> <tap position> <bridge> <vlan>",
-			"vm net disconnect <vm id or name> <tap position>",
+			"vm net <connect,> <vm id or name> <tap position> <bridge> <vlan>",
+			"vm net <disconnect,> <vm id or name> <tap position>",
 		},
 		Call: wrapSimpleCLI(cliVmNetMod),
 	},
@@ -232,10 +223,10 @@ To move a connection, specify the new VLAN tag and bridge:
 		HelpShort: "issue a JSON-encoded QMP command",
 		HelpLong: `
 Issue a JSON-encoded QMP command. This is a convenience function for accessing
-the QMP socket of a VM via minimega. vm_qmp takes two arguments, a VM ID or
+the QMP socket of a VM via minimega. vm qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
-	minimega$ vm_qmp 0 '{ "execute": "query-status" }'
+	minimega$ vm qmp 0 '{ "execute": "query-status" }'
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
@@ -247,19 +238,23 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		HelpLong: `
 Display, save, or restore the current VM configuration.
 
-To display the current configuration, call vm_config with no arguments.
+To display the current configuration, call vm config with no arguments.
 
-List the current saved configurations with 'vm_config show'
+List the current saved configurations with 'vm config show'
 
 To save a configuration:
 
-	vm_config save <config name>
+	vm config save <config name>
 
 To restore a configuration:
 
-	vm_config restore <config name>
+	vm config restore <config name>
 
-Calling clear vm_config will clear all VM configuration options, but will not
+To clone the configuration of an existing VM:
+
+	vm config clone <vm name or id>
+
+Calling clear vm config will clear all VM configuration options, but will not
 remove saved configurations.`,
 		Patterns: []string{
 			"vm config",
@@ -330,7 +325,7 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		HelpShort: "set disk images to attach to a VM",
 		HelpLong: `
 Attach one or more disks to a vm. Any disk image supported by QEMU is a valid
-parameter.  Disk images launched in snapshot mode may safely be used for
+parameter. Disk images launched in snapshot mode may safely be used for
 multiple VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
@@ -342,8 +337,8 @@ multiple VMs.`,
 	{ // vm config cdrom
 		HelpShort: "set a cdrom image to attach to a VM",
 		HelpLong: `
-Attach a cdrom to a VM. When using a cdrom, it will automatically be set
-to be the boot device.`,
+Attach a cdrom to a VM. When using a cdrom, it will automatically be set to be
+the boot device.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
@@ -370,7 +365,7 @@ Add an append string to a kernel set with vm kernel. Setting vm append without
 using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
-	vm append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
+	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
 			"vm config append [argument]...",
 		},
@@ -396,25 +391,25 @@ one when the VM is launched.`,
 Specify the network(s) that the VM is a member of by VLAN. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
-use the default 'mega_bridge'. You can also optionally specify the mac
-address of the interface to connect to that network. If not specifed, the mac
-address will be randomly generated. Additionally, you can optionally specify a
-driver for qemu to use. By default, e1000 is used.
+use the default 'mega_bridge'. You can also optionally specify the mac address
+of the interface to connect to that network. If not specifed, the mac address
+will be randomly generated. Additionally, you can optionally specify a driver
+for qemu to use. By default, e1000 is used.
 
 Examples:
 
 To connect a VM to VLANs 1 and 5:
-	vm_net 1 5
+	vm config net 1 5
 To connect a VM to VLANs 100, 101, and 102 with specific mac addresses:
-	vm_net 100,00:00:00:00:00:00 101,00:00:00:00:01:00 102,00:00:00:00:02:00
+	vm config net 100,00:00:00:00:00:00 101,00:00:00:00:01:00 102,00:00:00:00:02:00
 To connect a VM to VLAN 1 on bridge0 and VLAN 2 on bridge1:
-	vm_net bridge0,1 bridge1,2
+	vm config net bridge0,1 bridge1,2
 To connect a VM to VLAN 100 on bridge0 with a specific mac:
-	vm_net bridge0,100,00:11:22:33:44:55
+	vm config net bridge0,100,00:11:22:33:44:55
 To specify a specific driver, such as i82559c:
-	vm_net 100,i82559c
+	vm config net 100,i82559c
 
-Calling vm_net with no parameters will list the current networks for this VM.`,
+Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
@@ -438,8 +433,8 @@ allows a single disk image to be used for many VMs.`,
 	{ // vm config initrd
 		HelpShort: "set a initrd image to attach to a VM",
 		HelpLong: `
-Attach an initrd image to a VM. Passed along with the kernel image at
-boot time.`,
+Attach an initrd image to a VM. Passed along with the kernel image at boot
+time.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
@@ -747,7 +742,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if c.StringArgs["filename"] != "" { // Must be "add"
+	if c.BoolArgs["add"] {
 		// generate an id by adding 1 to the highest in the list for the
 		// Hotplug devices, 0 if it's empty
 		id := 0
@@ -774,7 +769,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 
 		log.Debugln("hotplug usb device add response:", r)
 		vm.Hotplug[id] = c.StringArgs["filename"]
-	} else if c.StringArgs["disk"] != "" { // Must be "remove"
+	} else if c.BoolArgs["remove"] {
 		if c.StringArgs["disk"] == "*" {
 			for k := range vm.Hotplug {
 				if err := vm.hotplugRemove(k); err != nil {
@@ -793,7 +788,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		} else if err := vm.hotplugRemove(id); err != nil {
 			resp.Error = err.Error()
 		}
-	} else { // Must be "show"
+	} else if c.BoolArgs["show"] {
 		if len(vm.Hotplug) > 0 {
 			resp.Header = []string{"Hotplug ID", "File"}
 			resp.Tabular = [][]string{}
@@ -837,7 +832,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if c.StringArgs["bridge"] == "" { // Must be "disconnect"
+	if c.BoolArgs["disconnect"] {
 		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
 		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
 		if err != nil {
@@ -845,7 +840,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		} else {
 			vm.Networks[pos] = -1
 		}
-	} else { // Must be "connect"
+	} else if c.BoolArgs["connect"] {
 		net, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
