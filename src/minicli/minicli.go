@@ -195,18 +195,33 @@ func Help(input string) string {
 		return printHelpShort(helpShort)
 	}
 
-	// If there's a closest match, display the long help for it
-	// TODO: Maybe we want to allow for partial matches here... there's a weird
-	// bug when you type in the suffix of several handlers (e.g. "help vm")
-	handler, _ := closestMatch(inputItems)
-	if handler != nil {
-		return handler.helpLong()
+	// Look for groups who have input as a prefix of the prefix, print help for
+	// the handlers in those groups. If input is the empty string, we will end
+	// up printing the full help short.
+	matches := []string{}
+	for prefix := range groups {
+		if strings.HasPrefix(prefix, input) {
+			matches = append(matches, prefix)
+		}
 	}
 
-	// List help for all the commands. Collapse handlers with the same prefix and
-	// into a single line. If there's multiple handlers that share the same
-	// prefix, use the full pattern instead of the prefix.
-	for prefix, handlers := range groups {
+	if len(matches) == 0 {
+		// If there's a closest match, display the long help for it
+		handler, _ := closestMatch(inputItems)
+		if handler != nil {
+			return handler.helpLong()
+		}
+
+		// Found an unresolvable command
+		return fmt.Sprintf("no help entry for %s", input)
+	} else if len(matches) == 1 && len(groups[matches[0]]) == 1 {
+		// Very special case, one prefix match and only one handler.
+		return groups[matches[0]][0].helpLong()
+	}
+
+	// List help short for all matches
+	for _, prefix := range matches {
+		handlers := groups[prefix]
 		if len(handlers) == 1 {
 			helpShort[prefix] = handlers[0].helpShort()
 		} else {
