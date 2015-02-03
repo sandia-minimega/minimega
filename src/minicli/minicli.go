@@ -2,6 +2,7 @@ package minicli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -87,6 +88,9 @@ func Register(h *Handler) error {
 
 		h.patternItems[i] = items
 	}
+
+	h.HelpShort = strings.TrimSpace(h.HelpShort)
+	h.HelpLong = strings.TrimSpace(h.HelpLong)
 
 	handlers = append(handlers, h)
 
@@ -319,4 +323,10 @@ func History() string {
 // ClearHistory clears the command history.
 func ClearHistory() {
 	history = make([]string, 0)
+}
+
+// Doc generate CLI documentation, in JSON format.
+func Doc() (string, error) {
+	bytes, err := json.Marshal(handlers)
+	return string(bytes), err
 }

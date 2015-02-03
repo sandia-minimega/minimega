@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"goreadline"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/signal"
@@ -40,6 +41,7 @@ var (
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_doc        = flag.Bool("doc", false, "print the minimega api, in markdown, to stdout and exit")
+	f_cli        = flag.Bool("cli", false, "print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	vms          vmList
 	hostname     string
@@ -67,6 +69,15 @@ func main() {
 
 	if *f_doc {
 		docGen()
+		os.Exit(0)
+	}
+
+	if *f_cli {
+		doc, err := minicli.Doc()
+		if err != nil {
+			log.Fatalln("failed to generate docs: %v", err)
+		}
+		fmt.Println(doc)
 		os.Exit(0)
 	}
 

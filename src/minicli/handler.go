@@ -6,14 +6,14 @@ import (
 )
 
 type Handler struct {
-	HelpShort string   // a brief (one line) help message
-	HelpLong  string   // a descriptive help message
-	Patterns  []string // the pattern that the input should match
+	HelpShort string   `json:"help_short"` // a brief (one line) help message
+	HelpLong  string   `json:"help_long"`  // a descriptive help message
+	Patterns  []string `json:"patterns"`   // the pattern that the input should match
 
 	// call back to invoke when the raw input matches the pattern
-	Call CLIFunc
+	Call CLIFunc `json:"-"`
 
-	patternItems [][]patternItem // the processed patterns, used for matching
+	patternItems [][]patternItem `json:"-"` // the processed patterns, used for matching
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
