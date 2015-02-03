@@ -41,11 +41,11 @@ type patternItem struct {
 	// The item type e.g. string literal, required string
 	Type itemType `json:"type"`
 	// Key is usually the first word, so "<foo bar>"->"foo"
-	Key string `json:"key"`
+	Key string `json:"key,omitempty"`
 	// The original full text of the token
-	Text string `json:"text"`
+	Text string `json:"text,omitempty"`
 	// A list of the options in the case of multiple choice
-	Options []string
+	Options []string `json:"options,omitempty"`
 }
 
 type patternItems []patternItem
