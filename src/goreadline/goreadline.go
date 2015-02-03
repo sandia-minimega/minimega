@@ -70,7 +70,7 @@ func minimegaCompletion(text *C.char, state int) *C.char {
 // Rlwrap prompts the user with the given prompt string and calls the
 // underlying readline function. If the input stream closes, Rlwrap returns an
 // EOF error.
-func Rlwrap(prompt string) (string, error) {
+func Rlwrap(prompt string, record bool) (string, error) {
 	p := C.CString(prompt)
 
 	ret := C.readline(p)
@@ -78,7 +78,11 @@ func Rlwrap(prompt string) (string, error) {
 	if ret == nil {
 		return "", errors.New("EOF")
 	}
-	C.add_history(ret)
+
+	if record {
+		C.add_history(ret)
+	}
+
 	s := C.GoString(ret)
 	C.free(unsafe.Pointer(ret))
 	C.free(unsafe.Pointer(p))

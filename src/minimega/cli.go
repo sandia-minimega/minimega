@@ -98,7 +98,7 @@ func cliLocal() {
 	prompt := "minimega$ "
 
 	for {
-		line, err := goreadline.Rlwrap(prompt)
+		line, err := goreadline.Rlwrap(prompt, true)
 		if err != nil {
 			break // EOF
 		}
@@ -168,7 +168,7 @@ outer:
 			}
 		}
 
-		_, err := goreadline.Rlwrap(prompt)
+		_, err := goreadline.Rlwrap(prompt, false)
 		if err != nil {
 			fmt.Println()
 			break outer // EOF

@@ -15,6 +15,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 )
@@ -24,16 +25,39 @@ type localResponse struct {
 	More bool // whether there are more responses coming
 }
 
+type remoteMinimega struct {
+	url string
+
+	conn net.Conn
+
+	enc *json.Encoder
+	dec *json.Decoder
+}
+
+func NewRemoteMinimega() (*remoteMinimega, error) {
+	var mm = &remoteMinimega{
+		url: path.Join(*f_base, "minimega"),
+	}
+	var err error
+
+	// try to connect to the local minimega
+	mm.conn, err = net.Dial("unix", mm.url)
+	if err != nil {
+		return nil, err
+	}
+
+	mm.enc = json.NewEncoder(mm.conn)
+	mm.dec = json.NewDecoder(mm.conn)
+
+	return mm, nil
+}
+
 func localAttach() {
 	// try to connect to the local minimega
-	f := *f_base + "minimega"
-	conn, err := net.Dial("unix", f)
+	mm, err := NewRemoteMinimega()
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	enc := json.NewEncoder(conn)
-	dec := json.NewDecoder(conn)
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
@@ -53,8 +77,8 @@ func localAttach() {
 
 	var exitNext bool
 	for {
-		prompt := fmt.Sprintf("minimega:%v$ ", f)
-		line, err := goreadline.Rlwrap(prompt)
+		prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
+		line, err := goreadline.Rlwrap(prompt, true)
 		if err != nil {
 			return
 		}
@@ -88,10 +112,8 @@ func localAttach() {
 			continue
 		}
 
-		err = sendLocalCommand(enc, dec, cmd)
-		if err != nil {
-			log.Errorln(err)
-			return
+		for resp := range mm.runCommand(cmd) {
+			pageOutput(resp.String())
 		}
 	}
 }
@@ -104,58 +126,57 @@ func localCommand() {
 	// TODO: Need to escape?
 	cmd, err := minicli.CompileCommand(strings.Join(a, " "))
 	if err != nil {
-		log.Errorln(err)
-		return
+		log.Fatalln(err)
 	}
 
 	log.Infoln("got command:", cmd)
 
-	// try to connect to the local minimega
-	f := *f_base + "minimega"
-	conn, err := net.Dial("unix", f)
+	mm, err := NewRemoteMinimega()
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	enc := json.NewEncoder(conn)
-	dec := json.NewDecoder(conn)
-
-	err = sendLocalCommand(enc, dec, cmd)
-	if err != nil {
-		log.Errorln(err)
+	for resp := range mm.runCommand(cmd) {
+		fmt.Println(resp)
 	}
 }
 
-// sendLocalCommand runs a command through a JSON pipe established elsewhere.
-// Prints the responses to stdout.
-func sendLocalCommand(enc *json.Encoder, dec *json.Decoder, cmd *minicli.Command) error {
-	err := enc.Encode(*cmd)
+// runCommand runs a command through a JSON pipe.
+func (mm *remoteMinimega) runCommand(cmd *minicli.Command) chan minicli.Responses {
+	err := mm.enc.Encode(*cmd)
 	if err != nil {
-		return fmt.Errorf("local command gob encode: %v", err)
+		log.Errorln("local command gob encode: %v", err)
+		return nil
 	}
 	log.Debugln("encoded command:", cmd)
 
-	for {
-		var r localResponse
-		err = dec.Decode(&r)
-		if err != nil {
-			if err == io.EOF {
-				log.Infoln("server disconnected")
-				return nil
+	respChan := make(chan minicli.Responses)
+
+	go func() {
+		defer close(respChan)
+
+		for {
+			var r localResponse
+			err = mm.dec.Decode(&r)
+			if err != nil {
+				if err == io.EOF {
+					log.Infoln("server disconnected")
+					return
+				}
+
+				log.Errorln("local command gob decode: %v", err)
+				return
 			}
 
-			err = fmt.Errorf("local command gob decode: %v", err)
-			return err
+			respChan <- r.Resp
+			if !r.More {
+				log.Debugln("got last message")
+				break
+			} else {
+				log.Debugln("expecting more data")
+			}
 		}
+	}()
 
-		fmt.Println(r.Resp)
-		if !r.More {
-			log.Debugln("got last message")
-			break
-		} else {
-			log.Debugln("expecting more data")
-		}
-	}
-
-	return nil
+	return respChan
 }
