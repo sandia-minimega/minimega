@@ -39,9 +39,9 @@ To delete a host tap, use the delete command and tap name from the tap list:
 
 	tap delete <id>
 
-To delete all host taps, use id *, or 'clear tap':
+To delete all host taps, use id all, or 'clear tap':
 
-	tap delete *`,
+	tap delete all`,
 		Patterns: []string{
 			"tap",
 			"tap <create,> <vlan> [tap name]",
@@ -50,7 +50,7 @@ To delete all host taps, use id *, or 'clear tap':
 			"tap <create,> <vlan> ip <ip> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
-			"tap <delete,> <id or *>",
+			"tap <delete,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
 	},
@@ -119,7 +119,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 func cliHostTapClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	err := hostTapDelete("*")
+	err := hostTapDelete(Wildcard)
 	if err != nil {
 		resp.Error = err.Error()
 	}

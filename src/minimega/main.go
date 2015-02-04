@@ -23,6 +23,7 @@ import (
 const (
 	BASE_PATH = "/tmp/minimega"
 	IOM_PATH  = "/tmp/minimega/files"
+	Wildcard  = "all"
 )
 
 var (
@@ -235,7 +236,7 @@ func main() {
 func teardown() {
 	vncClear()
 	clearAllCaptures()
-	vms.kill("*")
+	vms.kill(Wildcard)
 	dnsmasqKill(-1)
 	err := bridgesDestroy()
 	if err != nil {

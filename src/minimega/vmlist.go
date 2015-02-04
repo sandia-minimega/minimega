@@ -31,7 +31,7 @@ func (l *vmList) apply(idOrName string, fn func(*vmInfo) error) error {
 
 // start vms that are paused or building, or restart vms in the quit state
 func (l *vmList) start(vm string, quit bool) []error {
-	if vm != "*" {
+	if vm != Wildcard {
 		err := l.apply(vm, func(vm *vmInfo) error { return vm.start() })
 		return []error{err}
 	}
@@ -70,7 +70,7 @@ func (l *vmList) start(vm string, quit bool) []error {
 
 // stop vms that are paused or building
 func (l *vmList) stop(vm string) []error {
-	if vm != "*" {
+	if vm != Wildcard {
 		err := l.apply(vm, func(vm *vmInfo) error { return vm.stop() })
 		return []error{err}
 	}
@@ -89,7 +89,7 @@ func (l *vmList) stop(vm string) []error {
 func (l *vmList) save(file *os.File, vms []string) error {
 	var allVms bool
 	for _, vm := range vms {
-		if vm == "*" {
+		if vm == Wildcard {
 			allVms = true
 			break
 		}
@@ -211,7 +211,7 @@ func (l *vmList) kill(idOrName string) []error {
 	stateMask := VM_QUIT | VM_ERROR
 	killedVms := map[int]bool{}
 
-	if idOrName != "*" {
+	if idOrName != Wildcard {
 		vm := l.findVm(idOrName)
 		if vm == nil {
 			return []error{vmNotFound(idOrName)}

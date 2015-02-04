@@ -374,7 +374,7 @@ func qemuOverrideString() string {
 }
 
 func delVMQemuOverride(arg string) error {
-	if arg == "*" {
+	if arg == Wildcard {
 		QemuOverrides = make(map[int]*qemuOverride)
 		return nil
 	}

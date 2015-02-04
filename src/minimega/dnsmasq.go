@@ -50,9 +50,9 @@ example, to kill dnsmasq server 2:
 
 	dnsmasq kill 2
 
-To kill all running dnsmasq servers, pass * as the ID:
+To kill all running dnsmasq servers, pass all as the ID:
 
-	dnsmasq kill *
+	dnsmasq kill all
 
 dnsmasq will provide DNS service from the host, as well as from /etc/hosts. You
 can specify an additional config file for dnsmasq by providing a file as an
@@ -66,7 +66,7 @@ to the file.`,
 			"dnsmasq",
 			"dnsmasq start <listen address> <low dhcp range> <high dhcp range> [config]",
 			"dnsmasq start <config>",
-			"dnsmasq kill <id or *>",
+			"dnsmasq kill <id or all>",
 		},
 		Call: wrapSimpleCLI(cliDnsmasq),
 	},
@@ -82,7 +82,7 @@ func cliDnsmasq(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error
 
-	if c.StringArgs["id"] == "*" {
+	if c.StringArgs["id"] == Wildcard {
 		// Must be "kill *"
 		err = dnsmasqKillAll()
 	} else if c.StringArgs["id"] != "" {

@@ -879,7 +879,7 @@ func hostTapList(resp *minicli.Response) {
 func hostTapDelete(tap string) error {
 	var c []*bridge
 	// special case, *, which should delete all host taps from all bridges
-	if tap == "*" {
+	if tap == Wildcard {
 		for _, v := range bridges {
 			c = append(c, v)
 		}
@@ -892,7 +892,7 @@ func hostTapDelete(tap string) error {
 	}
 	for _, b := range c {
 		for lan, t := range b.lans {
-			if tap == "*" {
+			if tap == Wildcard {
 				// remove all host taps on this vlan
 				for k, v := range t.Taps {
 					if v.host {

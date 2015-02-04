@@ -92,7 +92,7 @@ func meshageSnooper(m *meshage.Message) {
 }
 
 func meshageBroadcast(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c, ".", respChan)
+	meshageSend(c, Wildcard, respChan)
 }
 
 func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Responses) {
@@ -120,7 +120,7 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	// Build a mesh command from the subcommand, assigning a random ID
 	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
-	if hosts == "." {
+	if hosts == Wildcard {
 		// Broadcast command to all VMs
 		recipients = meshageNode.BroadcastRecipients()
 	} else {

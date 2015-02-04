@@ -69,10 +69,10 @@ New commands assign any current filters.`,
 			"cc <filter,> [filter]...",
 			"cc <command,> <command>...",
 
-			"cc <delete,> <filerecv,> <id or *>",
-			"cc <delete,> <filesend,> <id or *>",
-			"cc <delete,> <filter,> <id or *>",
-			"cc <delete,> <command,> <id or *>",
+			"cc <delete,> <filerecv,> <id or all>",
+			"cc <delete,> <filesend,> <id or all>",
+			"cc <delete,> <filter,> <id or all>",
+			"cc <delete,> <command,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliCC),
 	},
@@ -383,7 +383,7 @@ func cliCCClear(c *minicli.Command) *minicli.Response {
 		// command line or if we're clearing everything (nothing was
 		// specified).
 		if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
-			err = ccClear(k, "*")
+			err = ccClear(k, Wildcard)
 			if err != nil {
 				break
 			}

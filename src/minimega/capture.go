@@ -42,9 +42,9 @@ func init() {
 }
 
 func clearAllCaptures() (err error) {
-	err = clearCapture("netflow", "*")
+	err = clearCapture("netflow", Wildcard)
 	if err == nil {
-		err = clearCapture("pcap", "*")
+		err = clearCapture("pcap", Wildcard)
 	}
 
 	return
@@ -61,7 +61,7 @@ func clearCapture(captureType, id string) (err error) {
 		}
 	}()
 
-	if id == "*" {
+	if id == Wildcard {
 		for _, v := range captureEntries {
 			if v.Type == "pcap" && captureType == "pcap" {
 				return stopPcapCapture(v)

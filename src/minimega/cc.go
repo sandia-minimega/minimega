@@ -45,7 +45,7 @@ func ccClear(what, idStr string) (err error) {
 	log.Debug("cc clear -- %v:%v", what, idStr)
 	var id int
 
-	deleteAll := (idStr == "*")
+	deleteAll := (idStr == Wildcard)
 	if !deleteAll {
 		id, err = strconv.Atoi(idStr)
 		if err != nil {

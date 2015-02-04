@@ -87,7 +87,7 @@ state) will be saved.
 This command does not store the state of the virtual machine itself, only its
 launch configuration.`,
 		Patterns: []string{
-			"vm save <name> <vm id or name or *>...",
+			"vm save <name> <vm id or name or all>...",
 		},
 		Call: wrapSimpleCLI(cliVmSave),
 	},
@@ -115,9 +115,9 @@ VM(s). The user must check logs or error states from vm info.`,
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
 		HelpLong: `
-Kill a virtual machine by ID or name. Pass * to kill all virtual machines.`,
+Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
 		Patterns: []string{
-			"vm kill <vm id or name or *>",
+			"vm kill <vm id or name or all>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -128,14 +128,14 @@ Kill a virtual machine by ID or name. Pass * to kill all virtual machines.`,
 	{ // vm start
 		HelpShort: "start paused virtual machines",
 		HelpLong: `
-Start one or all paused virtual machines. Pass * to start all paused virtual
+Start one or all paused virtual machines. Pass all to start all paused virtual
 machines.
 
 Calling vm start specifically on a quit VM will restart the VM. If the optional 'quit'
 suffix is used with the wildcard, then all virtual machines in the paused *or* quit state
 will be restarted.`,
 		Patterns: []string{
-			"vm start <vm id or name or *> [quit,]",
+			"vm start <vm id or name or all> [quit,]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -146,12 +146,12 @@ will be restarted.`,
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
 		HelpLong: `
-Stop one or all running virtual machines. Pass * to stop all running virtual
+Stop one or all running virtual machines. Pass all to stop all running virtual
 machines.
 
 Calling stop will put VMs in a paused state. Start stopped VMs with vm start.`,
 		Patterns: []string{
-			"vm stop <vm id or name or *>",
+			"vm stop <vm id or name or all>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -191,7 +191,7 @@ To remove all hotplug devices, use ID * for the disk ID.`,
 		Patterns: []string{
 			"vm hotplug <show,> <vm id or name>",
 			"vm hotplug <add,> <vm id or name> <filename>",
-			"vm hotplug <remove,> <vm id or name> <disk id or *>",
+			"vm hotplug <remove,> <vm id or name> <disk id or all>",
 		},
 		Call: wrapSimpleCLI(cliVmHotplug),
 	},
@@ -281,7 +281,7 @@ replacement string.`,
 		Patterns: []string{
 			"vm config qemu-override",
 			"vm config qemu-override add <match> <replacement>",
-			"vm config qemu-override delete <id or *>",
+			"vm config qemu-override delete <id or all>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
@@ -770,7 +770,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		log.Debugln("hotplug usb device add response:", r)
 		vm.Hotplug[id] = c.StringArgs["filename"]
 	} else if c.BoolArgs["remove"] {
-		if c.StringArgs["disk"] == "*" {
+		if c.StringArgs["disk"] == Wildcard {
 			for k := range vm.Hotplug {
 				if err := vm.hotplugRemove(k); err != nil {
 					resp.Error = err.Error()
