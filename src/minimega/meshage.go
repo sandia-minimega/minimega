@@ -42,8 +42,6 @@ var (
 func init() {
 	gob.Register(meshageCommand{})
 	gob.Register(meshageResponse{})
-	gob.Register(cliCommand{})
-	gob.Register(cliResponse{})
 	gob.Register(iomeshage.IOMMessage{})
 }
 

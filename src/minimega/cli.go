@@ -44,45 +44,9 @@ type winsize struct {
 }
 
 var (
-	commandBuf []string // command history for the write command
-
-	// incoming commands for the cli to parse. these can come from the cli
-	// proper (readline), or from a network source, etc. the cli will parse
-	// them all as if they were typed locally.
-	commandChanLocal   chan cliCommand
-	commandChanSocket  chan cliCommand
-	commandChanMeshage chan cliCommand
-
-	ackChanLocal   chan cliResponse // acknowledgements from the cli, one per incoming command
-	ackChanSocket  chan cliResponse
-	ackChanMeshage chan cliResponse
-
 	// Prevents multiple commands from running at the same time
 	cmdLock sync.Mutex
 )
-
-type cliCommand struct {
-	Command string
-	Args    []string
-	ackChan chan cliResponse
-	TID     int32
-}
-
-type cliResponse struct {
-	Response string
-	Error    string // because you can't gob/json encode an error type
-	More     bool   // more is set if the called command will be sending multiple responses
-	TID      int32
-}
-
-func init() {
-	commandChanLocal = make(chan cliCommand)
-	commandChanSocket = make(chan cliCommand)
-	commandChanMeshage = make(chan cliCommand)
-	ackChanLocal = make(chan cliResponse)
-	ackChanSocket = make(chan cliResponse)
-	ackChanMeshage = make(chan cliResponse)
-}
 
 // Wrapper for minicli.ProcessString. Ensures that the command execution lock
 // is acquired before running the command.
@@ -107,7 +71,8 @@ func cliLocal() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			fmt.Printf("err: %v, closest match: TODO\n", err)
+			fmt.Printf("invalid command: `%s`\n", command)
+			//fmt.Printf("closest match: TODO\n")
 			continue
 		}
 

@@ -193,35 +193,6 @@ func main() {
 		runtime.GOMAXPROCS(cpus)
 	}
 
-	// check for a script on the command line, and invoke it as a read command
-	for _, a := range flag.Args() {
-		log.Infoln("reading script:", a)
-		c := cliCommand{
-			Command: "read",
-			Args:    []string{a},
-		}
-		commandChanLocal <- c
-		for {
-			r := <-ackChanLocal
-			if r.Error != "" {
-				log.Errorln(r.Error)
-			}
-			if r.Response != "" {
-				if strings.HasSuffix(r.Response, "\n") {
-					fmt.Print(r.Response)
-				} else {
-					fmt.Println(r.Response)
-				}
-			}
-			if !r.More {
-				log.Debugln("got last message")
-				break
-			} else {
-				log.Debugln("expecting more data")
-			}
-		}
-	}
-
 	if !*f_nostdin {
 		cliLocal()
 	} else {

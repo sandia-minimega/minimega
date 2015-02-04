@@ -83,7 +83,7 @@ func localAttach() {
 			return
 		}
 		command := string(line)
-		log.Debug("got from stdin:", line)
+		log.Debug("got from stdin: `%s`", line)
 
 		// HAX: Shortcut some commands without using minicli
 		if command == "disconnect" {
@@ -102,7 +102,8 @@ func localAttach() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			fmt.Println("closest match: TODO")
+			log.Error("invalid command: `%s`", command)
+			//fmt.Println("closest match: TODO")
 			continue
 		}
 
@@ -123,10 +124,17 @@ func localCommand() {
 
 	log.Debugln("got args:", a)
 
+	command := strings.Join(a, " ")
+
 	// TODO: Need to escape?
-	cmd, err := minicli.CompileCommand(strings.Join(a, " "))
+	cmd, err := minicli.CompileCommand(command)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal("invalid command: `%s`", command)
+	}
+
+	if cmd == nil {
+		log.Debugln("cmd is nil")
+		return
 	}
 
 	log.Infoln("got command:", cmd)
@@ -137,7 +145,10 @@ func localCommand() {
 	}
 
 	for resp := range mm.runCommand(cmd) {
-		fmt.Println(resp)
+		output := resp.String()
+		if output != "" {
+			fmt.Println(output)
+		}
 	}
 }
 

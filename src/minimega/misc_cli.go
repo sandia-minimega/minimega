@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"minicli"
 	log "minilog"
 	"os"
@@ -125,18 +124,12 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	}
 	defer file.Close()
 
-	count := 0
+	scanner := bufio.NewScanner(file)
 
-	r := bufio.NewReader(file)
-	for ; ; count++ {
-		line, _, err := r.ReadLine()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			resp.Error = err.Error()
-			break
-		}
-		command := string(line)
+	for scanner.Scan() {
+		var cmd *minicli.Command
+
+		command := scanner.Text()
 		log.Debug("read command: %v", command) // commands don't have their newlines removed
 
 		// HAX: Make sure we don't have a recursive read command
@@ -145,11 +138,8 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
-		// TODO: Should we run a write command?
-
-		cmd, err := minicli.CompileCommand(command)
+		cmd, err = minicli.CompileCommand(command)
 		if err != nil {
-			resp.Error = err.Error()
 			break
 		}
 
@@ -171,9 +161,15 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		}
 	}
 
-	// TODO: Should we send the response from read?
-	resp.Response = fmt.Sprintf("read processed %d commands", count)
-	respChan <- minicli.Responses{resp}
+	if err != nil {
+		resp.Error = err.Error()
+		respChan <- minicli.Responses{resp}
+	}
+
+	if err := scanner.Err(); err != nil {
+		resp.Error = err.Error()
+		respChan <- minicli.Responses{resp}
+	}
 }
 
 func cliDebug(c *minicli.Command) *minicli.Response {
