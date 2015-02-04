@@ -266,6 +266,15 @@ func (r Responses) String() string {
 	var buf bytes.Buffer
 
 	if tabular {
+		var count int
+		for _, x := range r {
+			count += len(x.Tabular)
+		}
+
+		if count == 0 {
+			return ""
+		}
+
 		w := new(tabwriter.Writer)
 		w.Init(&buf, 5, 0, 1, ' ', 0)
 		for i, h := range header {
@@ -274,6 +283,7 @@ func (r Responses) String() string {
 			}
 			fmt.Fprintf(w, h)
 		}
+		fmt.Fprintf(w, "\n")
 
 		// Print out the tabular data for all responses that don't have an error
 		for i := range r {

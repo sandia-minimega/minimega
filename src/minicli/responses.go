@@ -7,51 +7,46 @@ import (
 
 // getHeader checks that all the header for all the responses are identical.
 // If they are, it returns those header. Otherwise, returns an error.
-func (r Responses) getHeader() (header []string, err error) {
-	// Check to ensure that all the header are the same
-	for i := 0; i < len(r)-1; i++ {
-		// Assume that there's an error with these two hosts. Will clear before
-		// returning if there's no error.
-		err = fmt.Errorf("header mismatch, hosts: %s, %s", r[i].Host, r[i+1].Host)
+func (r Responses) getHeader() ([]string, error) {
+	var host string
+	var header []string
 
-		// Skip responses that have an error as we don't expect header for these.
-		if r[i].Error != "" || r[i+1].Error != "" {
-			continue
-		}
-
-		if r[i].Header != nil && r[i+1].Header != nil {
-			// Both are not nil, check to make sure they are the same length
-			if len(r[i].Header) != len(r[i+1].Header) {
-				return
-			}
-
-			// Check to make sure all elements are the same
-			for j := range r[i].Header {
-				if r[i].Header[j] != r[i+1].Header[j] {
-					return
-				}
-			}
-		} else if r[i].Header == nil && r[i+1].Header == nil {
-			// Both nil
-			continue
-		} else {
-			// One but not both are nil => done goofed.
-			return
-		}
-	}
-
-	// Clear the error, we made it through the loop without returning
-	err = nil
-
-	// Find the first header that is non-nil to return
-	for i := range r {
-		if r[i].Error != "" && r[i].Header != nil {
-			header = r[i].Header
+	// Find the first header that is non-nil
+	for _, x := range r {
+		if x.Error == "" && x.Header != nil {
+			host = x.Host
+			header = x.Header
 			break
 		}
 	}
 
-	return
+	if header == nil {
+		return nil, nil
+	}
+
+	// Check to ensure that all the header are the same
+	for _, x := range r {
+		// Don't check headers for responses with an error.
+		if x.Error != "" {
+			continue
+		}
+
+		// Prebuild an error with these two hosts.
+		err := fmt.Errorf("header mismatch, hosts: %s, %s", host, x.Host)
+
+		if x.Header == nil || len(header) != len(x.Header) {
+			return nil, err
+		}
+
+		// Check to make sure all elements are the same
+		for i, h := range header {
+			if h != x.Header[i] {
+				return nil, err
+			}
+		}
+	}
+
+	return header, nil
 }
 
 // validTabular checks whether all the responses have tabular data and whether
