@@ -81,7 +81,7 @@ response.`,
 		},
 		Call: wrapSimpleCLI(cliMeshageTimeout),
 	},
-	{ // mesh set
+	{ // mesh send
 		HelpShort: "send a command to one or more connected clients",
 		HelpLong: `
 Send a command to one or more connected clients. For example, to get the
@@ -89,9 +89,9 @@ vm info from nodes kn1 and kn2:
 
 	mesh send kn[1-2] vm info
 
-You can use * to send a command to all connected clients.`,
+You can use . to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh send <vms or *> (command)",
+			"mesh send <vms or .> (command)",
 		},
 		Call: cliMeshageSend,
 	},
