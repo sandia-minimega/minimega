@@ -97,6 +97,7 @@ func (inject *injectData) parseInjectPairs(c *minicli.Command) {
 		}
 
 		inject.pairs = append(inject.pairs, injectPair{src: parts[0], dst: parts[1]})
+		log.Debug("inject pair: %v, %v", parts[0], parts[1])
 	}
 }
 
@@ -107,12 +108,15 @@ func parseInject(c *minicli.Command) *injectData {
 	// parse source image
 	srcPair := strings.Split(c.StringArgs["srcimg"], ":")
 	inject.srcImg, inject.err = filepath.Abs(srcPair[0])
+
 	if inject.err != nil {
 		return inject
 	}
 	if len(srcPair) == 2 {
 		inject.partition = srcPair[1]
 	}
+
+	log.Debug("source image: %v, partition %v", inject.srcImg, inject.partition)
 
 	// parse destination image
 	if strings.Contains(c.StringArgs["dstimg"], "/") {
@@ -127,6 +131,7 @@ func parseInject(c *minicli.Command) *injectData {
 			inject.dstImg = dstImg.Name()
 		}
 	}
+	log.Debug("destination image: %v", inject.dstImg)
 
 	inject.parseInjectPairs(c)
 
@@ -144,6 +149,9 @@ func (inject *injectData) run() (string, error) {
 	// create the new img
 	p := process("qemu-img")
 	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
+
+	log.Debug("creating sub image with: %v", cmd)
+
 	result, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("%v\n%v", string(result[:]), err)
@@ -154,12 +162,13 @@ func (inject *injectData) run() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer vmInjectCleanup(mntDir, inject.nbdPath)
+	log.Debug("temporary mount point: %v", mntDir)
 
 	inject.nbdPath, err = nbd.ConnectImage(inject.dstImg)
 	if err != nil {
 		return "", err
 	}
+	defer vmInjectCleanup(mntDir, inject.nbdPath)
 
 	time.Sleep(100 * time.Millisecond) // give time to create partitions
 
