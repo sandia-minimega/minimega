@@ -136,9 +136,9 @@ func (l *vmList) save(file *os.File, vms []string) error {
 		}
 
 		if vm.Name != "" {
-			cmds = append(cmds, "vm launch name "+vm.Name)
+			cmds = append(cmds, "vm launch "+vm.Name)
 		} else {
-			cmds = append(cmds, "vm launch count 1")
+			cmds = append(cmds, "vm launch 1")
 		}
 
 		// write commands to file
@@ -184,7 +184,7 @@ func (l *vmList) launch(name string, ack chan int) error {
 	if name != "" {
 		for _, vm := range l.vms {
 			if vm.Name == name {
-				return fmt.Errorf("vm_launch duplicate VM name: %s", name)
+				return fmt.Errorf("vm launch duplicate VM name: %s", name)
 			}
 		}
 	}
@@ -276,7 +276,7 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 			return nil, errors.New("malformed search term")
 		}
 
-		log.Debug("vm_info search term: %v", d[1])
+		log.Debug("vm info search term: %v", d[1])
 
 		key := strings.ToLower(d[0])
 

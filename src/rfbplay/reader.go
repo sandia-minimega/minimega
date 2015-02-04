@@ -41,12 +41,12 @@ func (r *RecordingReader) readChunk() error {
 	}
 
 	r.offset, err = strconv.ParseInt(parts[0], 10, 64)
-	if len(parts) != 2 {
+	if err != nil {
 		return errors.New("malformed chunk header line (non-integer offset)")
 	}
 
 	n, err := strconv.ParseInt(parts[1], 10, 64)
-	if len(parts) != 2 {
+	if err != nil {
 		return errors.New("malformed chunk header line (non-integer length)")
 	}
 

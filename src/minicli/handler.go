@@ -6,14 +6,16 @@ import (
 )
 
 type Handler struct {
-	HelpShort string   // a brief (one line) help message
-	HelpLong  string   // a descriptive help message
-	Patterns  []string // the pattern that the input should match
+	HelpShort string   `json:"help_short"` // a brief (one line) help message
+	HelpLong  string   `json:"help_long"`  // a descriptive help message
+	Patterns  []string `json:"patterns"`   // the pattern that the input should match
 
 	// call back to invoke when the raw input matches the pattern
-	Call CLIFunc
+	Call CLIFunc `json:"-"`
 
-	patternItems [][]patternItem // the processed patterns, used for matching
+	// the processed patterns, will be automatically populated when the command
+	// is registered
+	PatternItems [][]patternItem `json:"parsed_patterns"`
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
@@ -23,7 +25,7 @@ type Handler struct {
 // handler was the closest match.
 func (h *Handler) compile(input []inputItem) (*Command, int) {
 	var maxMatchLen int
-	for _, pattern := range h.patternItems {
+	for _, pattern := range h.PatternItems {
 		cmd, matchLen := newCommand(pattern, input, h.Call)
 		if cmd != nil {
 			return cmd, matchLen
@@ -41,7 +43,7 @@ func (h *Handler) suggest(input []inputItem) []string {
 	suggestions := []string{}
 
 outer:
-	for _, pattern := range h.patternItems {
+	for _, pattern := range h.PatternItems {
 		var i int
 		var item patternItem
 
@@ -103,9 +105,9 @@ outer:
 // patterns associated with this handler. May be the empty string if there is
 // no common prefix.
 func (h *Handler) Prefix() string {
-	prefixes := make([]string, len(h.patternItems))
+	prefixes := make([]string, len(h.PatternItems))
 
-	for i, patternItems := range h.patternItems {
+	for i, patternItems := range h.PatternItems {
 		literals := make([]string, 0)
 		for _, item := range patternItems {
 			if item.Type != literalString {
@@ -143,7 +145,7 @@ func (h *Handler) helpShort() string {
 
 func (h *Handler) helpLong() string {
 	res := "Usage:\n"
-	for _, pattern := range h.patternItems {
+	for _, pattern := range h.PatternItems {
 		res += fmt.Sprintf("\t%s\n", patternItems(pattern))
 	}
 	res += "\n"

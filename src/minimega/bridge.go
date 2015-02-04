@@ -892,7 +892,7 @@ func hostTapDelete(tap string) error {
 	}
 	for _, b := range c {
 		for lan, t := range b.lans {
-			if tap == "-1" {
+			if tap == "*" {
 				// remove all host taps on this vlan
 				for k, v := range t.Taps {
 					if v.host {

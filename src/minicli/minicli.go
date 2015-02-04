@@ -2,6 +2,7 @@ package minicli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -77,7 +78,7 @@ func (r Responses) Errors() []error {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.patternItems = make([][]patternItem, len(h.Patterns))
+	h.PatternItems = make([][]patternItem, len(h.Patterns))
 
 	for i, pattern := range h.Patterns {
 		items, err := lexPattern(pattern)
@@ -85,8 +86,11 @@ func Register(h *Handler) error {
 			return err
 		}
 
-		h.patternItems[i] = items
+		h.PatternItems[i] = items
 	}
+
+	h.HelpShort = strings.TrimSpace(h.HelpShort)
+	h.HelpLong = strings.TrimSpace(h.HelpLong)
 
 	handlers = append(handlers, h)
 
@@ -319,4 +323,10 @@ func History() string {
 // ClearHistory clears the command history.
 func ClearHistory() {
 	history = make([]string, 0)
+}
+
+// Doc generate CLI documentation, in JSON format.
+func Doc() (string, error) {
+	bytes, err := json.Marshal(handlers)
+	return string(bytes), err
 }
