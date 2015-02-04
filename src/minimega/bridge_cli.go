@@ -17,15 +17,15 @@ Calling tap with no arguments will list all created taps.
 
 To create a tap on a particular vlan, invoke tap with the create command:
 
-	tap create <vlan> <ip/dhcp>
+	tap create <vlan>
 
 For example, to create a host tap with ip and netmask 10.0.0.1/24 on VLAN 5:
 
-	tap create 5 10.0.0.1/24
+	tap create 5 ip 10.0.0.1/24
 
 Optionally, you can specify the bridge to create the host tap on:
 
-	tap create <bridge> <vlan> <ip/dhcp>
+	tap create <vlan> bridge <bridge> ip <ip>
 
 You can also optionally specify the tap name, otherwise the tap will be in the
 form of mega_tapX.
@@ -39,25 +39,25 @@ To delete a host tap, use the delete command and tap name from the tap list:
 
 	tap delete <id>
 
-To delete all host taps, use id -1, or 'clear tap':
+To delete all host taps, use id *, or 'clear tap':
 
-	tap delete -1`,
+	tap delete *`,
 		Patterns: []string{
 			"tap",
-			"tap create <vlan> [tap name]",
-			"tap create <vlan> bridge <bridge> [tap name]",
-			"tap create <vlan> <dhcp,> [tap name]",
-			"tap create <vlan> ip <ip> [tap name]",
-			"tap create <vlan> bridge <bridge> <dhcp,> [tap name]",
-			"tap create <vlan> bridge <bridge> ip <ip> [tap name]",
-			"tap delete <id or *>",
+			"tap <create,> <vlan> [tap name]",
+			"tap <create,> <vlan> bridge <bridge> [tap name]",
+			"tap <create,> <vlan> <dhcp,> [tap name]",
+			"tap <create,> <vlan> ip <ip> [tap name]",
+			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
+			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
+			"tap <delete,> <id or *>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
 	},
 	{ // clear tap
 		HelpShort: "reset tap state",
 		HelpLong: `
-Resets state for taps. See "help tap" for more information.`,
+Reset state for taps. See "help tap" for more information.`,
 		Patterns: []string{
 			"clear tap",
 		},
@@ -80,8 +80,7 @@ func init() {
 func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if c.StringArgs["vlan"] != "" {
-		// Must be one of the create commands
+	if c.BoolArgs["create"] {
 		vlan := c.StringArgs["vlan"]
 
 		bridge := c.StringArgs["bridge"]
@@ -104,8 +103,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 		} else {
 			resp.Response = tapName
 		}
-	} else if c.StringArgs["id"] != "" {
-		// Must be the delete command
+	} else if c.BoolArgs["delete"] {
 		err := hostTapDelete(c.StringArgs["id"])
 		if err != nil {
 			resp.Error = err.Error()
