@@ -312,6 +312,11 @@ func (r Responses) String() string {
 		if r[i].Error != "" {
 			fmt.Fprintf(&buf, "Error (%s): %s", r[i].Host, r[i].Error)
 		}
+
+		// add a newline unless this is our last iteration
+		if i != len(r)-1 {
+			fmt.Fprintf(&buf, "\n")
+		}
 	}
 
 	resp := buf.String()
