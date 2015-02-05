@@ -137,18 +137,18 @@ func (iom *IOMeshage) Get(file string) error {
 		Filename: file,
 		TID:      TID,
 	}
-	n, err := iom.node.Broadcast(m)
+	recipients, err := iom.node.Broadcast(m)
 	if err != nil {
 		return err
 	}
 	if log.WillLog(log.DEBUG) {
-		log.Debug("sent info request to %v nodes", n)
+		log.Debug("sent info request to %v nodes", len(recipients))
 	}
 
 	var info *IOMMessage
 	var gotInfo bool
 	// wait for n responses, or a timeout
-	for i := 0; i < n; i++ {
+	for i := 0; i < len(recipients); i++ {
 		select {
 		case resp := <-c:
 			if log.WillLog(log.DEBUG) {
@@ -252,14 +252,14 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 				Part:     p,
 			}
 
-			n, err := iom.node.Broadcast(m)
+			recipients, err := iom.node.Broadcast(m)
 			if err != nil {
 				log.Errorln(err)
 				iom.unregisterTID(TID)
 				continue
 			}
 			if log.WillLog(log.DEBUG) {
-				log.Debug("sent info request to %v nodes", n)
+				log.Debug("sent info request to %v nodes", len(recipients))
 			}
 
 			var info *IOMMessage
@@ -267,7 +267,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 			var timeoutCount int
 			// wait for n responses, or a timeout
 		IOMESHAGE_WHOHAS_LOOP:
-			for i := 0; i < n; i++ {
+			for i := 0; i < len(recipients); i++ {
 				select {
 				case resp := <-c:
 					if log.WillLog(log.DEBUG) {

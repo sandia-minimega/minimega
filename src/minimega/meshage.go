@@ -126,7 +126,7 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 		recipients = getRecipients(hosts)
 	}
 
-	n, err := meshageNode.Set(recipients, meshageCmd)
+	recipients, err = meshageNode.Set(recipients, meshageCmd)
 	if err != nil {
 		resp := &minicli.Response{
 			Host:  hostname,
@@ -136,12 +136,12 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 		return
 	}
 
-	log.Debug("meshage sent, waiting on %d responses", n)
+	log.Debug("meshage sent, waiting on %d responses", len(recipients))
 	meshResps := map[string]*minicli.Response{}
 
 	// wait on a response from each recipient
 loop:
-	for len(meshResps) < n {
+	for len(meshResps) < len(recipients) {
 		select {
 		case resp := <-meshageResponseChan:
 			body := resp.Body.(meshageResponse)

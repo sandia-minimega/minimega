@@ -6,6 +6,7 @@ package meshage
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	log "minilog"
 	"text/tabwriter"
@@ -59,7 +60,7 @@ func (m *Message) String() string {
 // Users will generally use the Set and Broadcast functions instead of Send.
 // The returned error is always nil if the message type is broadcast.
 // If an error is encountered, Send returns immediately.
-func (n *Node) Send(m *Message) (int, error) {
+func (n *Node) Send(m *Message) ([]string, error) {
 	if log.WillLog(log.DEBUG) {
 		log.Debug("Send: %v", m)
 	}
@@ -69,7 +70,7 @@ func (n *Node) Send(m *Message) (int, error) {
 
 	routeSlices, err := n.getRoutes(m)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	if log.WillLog(log.DEBUG) {
@@ -104,16 +105,18 @@ func (n *Node) Send(m *Message) (int, error) {
 		}
 	}
 
-	count := 0
+	// Rebuild the recipients from the routeSlices so that the caller can know
+	// which recipients were actually valid.
+	recipients := []string{}
 	for _, r := range routeSlices {
-		count += len(r)
+		recipients = append(recipients, r...)
 	}
 
 	if ret == "" {
-		return count, nil
+		return recipients, nil
 	}
 
-	return count, fmt.Errorf("%v", ret)
+	return recipients, errors.New(ret)
 }
 
 func (n *Node) getRoutes(m *Message) (map[string][]string, error) {
@@ -143,7 +146,7 @@ func (n *Node) getRoutes(m *Message) (map[string][]string, error) {
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
 // from all recipient nodes, or until the timeout is reached.
-func (n *Node) Set(recipients []string, body interface{}) (int, error) {
+func (n *Node) Set(recipients []string, body interface{}) ([]string, error) {
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,
@@ -155,7 +158,7 @@ func (n *Node) Set(recipients []string, body interface{}) (int, error) {
 }
 
 // Broadcast sends a message to all nodes on the mesh.
-func (n *Node) Broadcast(body interface{}) (int, error) {
+func (n *Node) Broadcast(body interface{}) ([]string, error) {
 	// force updating the network if needed on Broadcast before looking at
 	// the effective network
 	m := &Message{
