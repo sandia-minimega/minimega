@@ -70,12 +70,16 @@ func init() {
 // may call, and error if any aren't in our path.
 func checkExternal() error {
 	var errs []string
-	for _, i := range defaultExternalProcesses {
-		path, err := exec.LookPath(i)
+	for name, proc := range defaultExternalProcesses {
+		if alt, ok := customExternalProcesses[name]; ok {
+			proc = alt
+		}
+
+		path, err := exec.LookPath(proc)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("%v not found", err.Error()))
 		} else {
-			log.Info("%v found at: %v", i, path)
+			log.Info("%v found at: %v", proc, path)
 		}
 	}
 	if len(errs) > 0 {
