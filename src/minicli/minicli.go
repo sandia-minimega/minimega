@@ -143,7 +143,7 @@ func CompileCommand(input string) (*Command, error) {
 		return cmd, nil
 	}
 
-	return nil, errors.New("no matching commands found")
+	return nil, fmt.Errorf("invalid command: `%s`", input)
 }
 
 func Suggest(input string) []string {

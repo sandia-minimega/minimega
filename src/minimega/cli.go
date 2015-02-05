@@ -91,7 +91,7 @@ func cliLocal() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			fmt.Printf("invalid command: `%s`\n", command)
+			fmt.Println(err.Error())
 			//fmt.Printf("closest match: TODO\n")
 			continue
 		}
@@ -162,7 +162,7 @@ func cliAttach() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			log.Error("invalid command: `%s`", command)
+			log.Error(err.Error())
 			//fmt.Println("closest match: TODO")
 			continue
 		}
@@ -193,7 +193,7 @@ func localCommand() {
 	// TODO: Need to escape?
 	cmd, err := minicli.CompileCommand(command)
 	if err != nil {
-		log.Fatal("invalid command: `%s`", command)
+		log.Fatal(err.Error())
 	}
 
 	if cmd == nil {
