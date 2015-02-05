@@ -48,10 +48,15 @@ var (
 	hostname     string
 )
 
-var banner string = `minimega, Copyright (2014) Sandia Corporation.
+const (
+	banner = `minimega, Copyright (2014) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-the U.S. Government retains certain rights in this software.
-`
+the U.S. Government retains certain rights in this software.`
+	poeticDeath = `Willst du immer weiterschweifen?
+Sieh, das Gute liegt so nah.
+Lerne nur das Glück ergreifen,
+denn das Glück ist immer da.`
+)
 
 func usage() {
 	fmt.Println(banner)
@@ -113,7 +118,7 @@ func main() {
 		return
 	}
 	if *f_attach {
-		localAttach()
+		cliAttach()
 		return
 	}
 
