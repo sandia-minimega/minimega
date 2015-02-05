@@ -67,27 +67,10 @@ func (n *Node) Send(m *Message) (int, error) {
 	// force updating the network if needed on Send()
 	n.checkUpdateNetwork()
 
-	routeSlices := make(map[string][]string)
-	n.meshLock.Lock()
-	count := 0
-	for _, v := range m.Recipients {
-		if v == n.name {
-			if len(m.Recipients) == 1 {
-				return 0, fmt.Errorf("cannot mesh send yourself")
-			}
-			continue
-		}
-
-		var route string
-		var ok bool
-		if route, ok = n.routes[v]; !ok {
-			log.Warn("no route to host: %v, skipping", v)
-			continue
-		}
-		routeSlices[route] = append(routeSlices[route], v)
-		count++
+	routeSlices, err := n.getRoutes(m)
+	if err != nil {
+		return 0, err
 	}
-	n.meshLock.Unlock()
 
 	if log.WillLog(log.DEBUG) {
 		log.Debug("routeSlices: %v", routeSlices)
@@ -121,10 +104,35 @@ func (n *Node) Send(m *Message) (int, error) {
 		}
 	}
 	if ret == "" {
-		return count, nil
+		return len(routeSlices), nil
 	}
 
-	return count, fmt.Errorf("%v", ret)
+	return len(routeSlices), fmt.Errorf("%v", ret)
+}
+
+func (n *Node) getRoutes(m *Message) (map[string][]string, error) {
+	routeSlices := make(map[string][]string)
+	n.meshLock.Lock()
+	defer n.meshLock.Unlock()
+
+	for _, v := range m.Recipients {
+		if v == n.name {
+			if len(m.Recipients) == 1 {
+				return nil, fmt.Errorf("cannot mesh send yourself")
+			}
+			continue
+		}
+
+		var route string
+		var ok bool
+		if route, ok = n.routes[v]; !ok {
+			log.Warn("no route to host: %v, skipping", v)
+			continue
+		}
+		routeSlices[route] = append(routeSlices[route], v)
+	}
+
+	return routeSlices, nil
 }
 
 // Set sends a message to a set of nodes. Set blocks until an ACK is received
