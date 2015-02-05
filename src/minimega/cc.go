@@ -63,7 +63,11 @@ func ccClear(what, idStr string) (err error) {
 			ccFileRecv = make(map[int]string)
 		case "background":
 			ccBackground = false
+		case "record":
+			ccRecord = false
 		case "command":
+			ccCommand = nil
+		case "running":
 			errs := []string{}
 			for _, v := range ccNode.GetCommands() {
 				err := ccNode.DeleteCommand(v.ID)
@@ -93,7 +97,11 @@ func ccClear(what, idStr string) (err error) {
 			delete(ccFileRecv, id)
 		case "background":
 			ccBackground = false
+		case "record":
+			ccRecord = false
 		case "command":
+			ccCommand = nil
+		case "running":
 			err = ccNode.DeleteCommand(id)
 		}
 	}
@@ -151,4 +159,40 @@ func ccSerialWatcher() {
 
 		time.Sleep(time.Duration(CC_SERIAL_PERIOD * time.Second))
 	}
+}
+
+func filterString(filter []*ron.Client) string {
+	var ret string
+	for _, f := range filter {
+		if len(ret) != 0 {
+			ret += " || "
+		}
+		ret += "( "
+		var j []string
+		if f.UUID != "" {
+			j = append(j, "uuid="+f.UUID)
+		}
+		if f.Hostname != "" {
+			j = append(j, "hostname="+f.Hostname)
+		}
+		if f.Arch != "" {
+			j = append(j, "arch="+f.Arch)
+		}
+		if f.OS != "" {
+			j = append(j, "os="+f.OS)
+		}
+		if len(f.IP) != 0 {
+			for _, y := range f.IP {
+				j = append(j, "ip="+y)
+			}
+		}
+		if len(f.MAC) != 0 {
+			for _, y := range f.MAC {
+				j = append(j, "mac="+y)
+			}
+		}
+		ret += strings.Join(j, " && ")
+		ret += " )"
+	}
+	return ret
 }

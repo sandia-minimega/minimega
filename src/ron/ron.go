@@ -186,7 +186,7 @@ func (r *Ron) GetCommands() map[int]*Command {
 			Command:        v.Command,
 			FilesSend:      v.FilesSend,
 			FilesRecv:      v.FilesRecv,
-			checkedIn:      v.checkedIn,
+			CheckedIn:      v.CheckedIn,
 			ExpireClients:  v.ExpireClients,
 			ExpireStarted:  v.ExpireStarted,
 			ExpireDuration: v.ExpireDuration,

@@ -17,7 +17,9 @@ import (
 
 var (
 	ccBackground bool
+	ccRecord     bool
 	ccSerial     bool
+	ccCommand    []string
 	ccFileRecv   map[int]string
 	ccFileSend   map[int]string
 	ccFilters    map[int]*ron.Client
@@ -31,6 +33,8 @@ func init() {
 	ccFileRecvIDChan = makeIDChan()
 	ccFileSendIDChan = makeIDChan()
 	ccFilerIDChan = makeIDChan()
+
+	ccRecord = true
 }
 
 var ccCLIHandlers = []minicli.Handler{
@@ -64,15 +68,18 @@ New commands assign any current filters.`,
 			"cc <serial,>",
 
 			"cc <background,> [true,false]",
+			"cc <record,> [true,false]",
 			"cc <filerecv,> [file]...",
 			"cc <filesend,> [file]...",
 			"cc <filter,> [filter]...",
 			"cc <command,> <command>...",
+			"cc <send,>",
+			"cc <running,>",
 
 			"cc <delete,> <filerecv,> <id or all>",
 			"cc <delete,> <filesend,> <id or all>",
 			"cc <delete,> <filter,> <id or all>",
-			"cc <delete,> <command,> <id or all>",
+			"cc <delete,> <running,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliCC),
 	},
@@ -88,6 +95,7 @@ See "help cc" for more information.`,
 			"clear cc <filerecv,>",
 			"clear cc <filesend,>",
 			"clear cc <filter,>",
+			"clear cc <record,>",
 		},
 		Call: wrapSimpleCLI(cliCCClear),
 	},
@@ -95,11 +103,14 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
-	"filter":     cliCCFilter,
-	"filesend":   cliCCFileSend,
-	"filerecv":   cliCCFileRecv,
-	"command":    cliCCCommand,
 	"background": cliCCBackground,
+	"command":    cliCCCommand,
+	"filerecv":   cliCCFileRecv,
+	"filesend":   cliCCFileSend,
+	"filter":     cliCCFilter,
+	"record":     cliCCRecord,
+	"running":    cliCCRunning,
+	"send":       cliCCSend,
 	"serial":     cliCCSerial,
 }
 
@@ -323,13 +334,40 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+// Get/set whether cc command responses are recorded
+func cliCCRecord(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if !c.BoolArgs["true"] && !c.BoolArgs["false"] {
+		resp.Response = strconv.FormatBool(ccRecord)
+	} else {
+		ccRecord = c.BoolArgs["true"]
+	}
+
+	return resp
+}
+
 // Setting command
 func cliCCCommand(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	if len(c.ListArgs["command"]) > 0 {
+		resp.Response = fmt.Sprintf("%v", ccCommand)
+	} else {
+		ccCommand = c.ListArgs["command"]
+	}
+
+	return resp
+}
+
+// Actually send off the command
+func cliCCSend(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
 	cmd := &ron.Command{
-		Record:  true,
-		Command: c.ListArgs["command"],
+		Record:     ccRecord,
+		Background: ccBackground,
+		Command:    ccCommand,
 	}
 
 	// Copy fields into cmd
@@ -342,9 +380,6 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 	for _, frecv := range ccFileRecv {
 		cmd.FilesRecv = append(cmd.FilesRecv, frecv)
 	}
-
-	// TODO: Record flag?
-	cmd.Background = ccBackground
 
 	id := ccNode.NewCommand(cmd)
 	log.Debug("generated command %v : %v", id, cmd)
@@ -364,6 +399,35 @@ func cliCCSerial(c *minicli.Command) *minicli.Response {
 
 	ccSerial = true
 	go ccSerialWatcher()
+
+	return resp
+}
+
+// Enumerate the running commands
+func cliCCRunning(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	resp.Header = []string{
+		"ID", "command", "clients checked in",
+		"record", "background", "send",
+		"files", "receive files", "filter",
+	}
+	resp.Tabular = [][]string{}
+
+	for _, v := range ccNode.GetCommands() {
+		row := []string{
+			strconv.Itoa(v.ID),
+			fmt.Sprintf("%v", v.Command),
+			strconv.Itoa(len(v.CheckedIn)),
+			strconv.FormatBool(v.Record),
+			strconv.FormatBool(v.Background),
+			fmt.Sprintf("%v", v.FilesSend),
+			fmt.Sprintf("%v", v.FilesRecv),
+			filterString(v.Filter),
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
 
 	return resp
 }

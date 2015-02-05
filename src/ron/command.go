@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 )
 
@@ -49,7 +48,7 @@ type Command struct {
 	// clients that have responded to this command
 	// leave this private as we don't want to bother sending this
 	// downstream
-	checkedIn []string
+	CheckedIn []string
 
 	// conditions on which commands can expire
 	ExpireClients  int
@@ -72,42 +71,6 @@ type Response struct {
 	Stderr string
 }
 
-func filterString(filter []*Client) string {
-	var ret string
-	for _, f := range filter {
-		if len(ret) != 0 {
-			ret += " || "
-		}
-		ret += "( "
-		var j []string
-		if f.UUID != "" {
-			j = append(j, "uuid="+f.UUID)
-		}
-		if f.Hostname != "" {
-			j = append(j, "hostname="+f.Hostname)
-		}
-		if f.Arch != "" {
-			j = append(j, "arch="+f.Arch)
-		}
-		if f.OS != "" {
-			j = append(j, "os="+f.OS)
-		}
-		if len(f.IP) != 0 {
-			for _, y := range f.IP {
-				j = append(j, "ip="+y)
-			}
-		}
-		if len(f.MAC) != 0 {
-			for _, y := range f.MAC {
-				j = append(j, "mac="+y)
-			}
-		}
-		ret += strings.Join(j, " && ")
-		ret += " )"
-	}
-	return ret
-}
-
 func (r *Ron) shouldRecord(id int) bool {
 	r.commandLock.Lock()
 	defer r.commandLock.Unlock()
@@ -126,8 +89,8 @@ func (r *Ron) expireReaper() {
 		r.commandLock.Lock()
 		for k, v := range r.commands {
 			if v.ExpireClients != 0 {
-				if len(v.checkedIn) >= v.ExpireClients {
-					log.Debug("expiring command %v after %v/%v checkins", k, len(v.checkedIn), v.ExpireClients)
+				if len(v.CheckedIn) >= v.ExpireClients {
+					log.Debug("expiring command %v after %v/%v checkins", k, len(v.CheckedIn), v.ExpireClients)
 					delete(r.commands, k)
 				}
 			} else if v.ExpireDuration != 0 {
@@ -150,19 +113,21 @@ func (r *Ron) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 
 	r.commandLock.Lock()
+	defer r.commandLock.Unlock()
+
 	if c, ok := r.commands[id]; ok {
-		c.checkedIn = append(c.checkedIn, uuid)
+		c.CheckedIn = append(c.CheckedIn, uuid)
 	}
-	r.commandLock.Unlock()
 }
 
 func (r *Ron) getCommandID() int {
 	log.Debugln("getCommandID")
+
 	r.commandCounterLock.Lock()
 	defer r.commandCounterLock.Unlock()
+
 	r.commandCounter++
-	id := r.commandCounter
-	return id
+	return r.commandCounter
 }
 
 func (r *Ron) getMaxCommandID() int {
@@ -233,25 +198,6 @@ func (r *Ron) Resubmit(id int) error {
 	} else {
 		return fmt.Errorf("command %v not found", id)
 	}
-}
-
-func (r *Ron) CommandSummary() string {
-	r.commandLock.Lock()
-	defer r.commandLock.Unlock()
-
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-
-	fmt.Fprintf(w, "ID\tcommand\tclients checked in\trecord\tbackground\tsend files\treceive files\tfilter\n")
-	for _, v := range r.commands {
-		filter := filterString(v.Filter)
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\t%v\n", v.ID, v.Command, len(v.checkedIn), v.Record, v.Background, v.FilesSend, v.FilesRecv, filter)
-	}
-
-	w.Flush()
-
-	return o.String()
 }
 
 func (r *Ron) encodeCommands() ([]byte, error) {
