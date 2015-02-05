@@ -103,11 +103,17 @@ func (n *Node) Send(m *Message) (int, error) {
 			ret += r.Error() + "\n"
 		}
 	}
-	if ret == "" {
-		return len(routeSlices), nil
+
+	count := 0
+	for _, r := range routeSlices {
+		count += len(r)
 	}
 
-	return len(routeSlices), fmt.Errorf("%v", ret)
+	if ret == "" {
+		return count, nil
+	}
+
+	return count, fmt.Errorf("%v", ret)
 }
 
 func (n *Node) getRoutes(m *Message) (map[string][]string, error) {
