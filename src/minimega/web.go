@@ -136,14 +136,13 @@ func webHosts() string {
 	}
 	hosts[hostname] = count
 
-	cmd, err := minicli.CompileCommand("vm info mask id,state")
+	cmd, err := minicli.CompileCommand("mesh send all vm info mask id,state")
 	if err != nil {
 		// Should never happen
-		panic(err)
+		log.Fatalln(err)
 	}
 
-	remoteRespChan := make(chan minicli.Responses)
-	go meshageBroadcast(cmd, remoteRespChan)
+	remoteRespChan := runCommand(cmd, false)
 
 	for resps := range remoteRespChan {
 		for _, resp := range resps {
@@ -179,18 +178,24 @@ func webHosts() string {
 
 // this whole block is UGLY, please rewrite
 func webHostVMs(host string) string {
-	cmd, err := minicli.CompileCommand("vm info mask id,name,state")
-	if err != nil {
-		// Should never happen
-		panic(err)
-	}
 	var respChan chan minicli.Responses
 
+	cmdLocal, err := minicli.CompileCommand("vm info mask id,name,state")
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info mask id,name,state", host))
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+
 	if host == hostname {
-		respChan = minicli.ProcessCommand(cmd, false)
+		respChan = runCommand(cmdLocal, false)
 	} else {
-		respChan := make(chan minicli.Responses)
-		go meshageSend(cmd, host, respChan)
+		respChan = runCommand(cmdRemote, false)
 	}
 
 	lines := []string{}
