@@ -72,7 +72,7 @@ New commands assign any current filters.`,
 			"cc <filerecv,> [file]...",
 			"cc <filesend,> [file]...",
 			"cc <filter,> [filter]...",
-			"cc <command,> <command>...",
+			"cc <command,> [command]...",
 			"cc <send,>",
 			"cc <running,>",
 
@@ -351,7 +351,7 @@ func cliCCRecord(c *minicli.Command) *minicli.Response {
 func cliCCCommand(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if len(c.ListArgs["command"]) > 0 {
+	if len(c.ListArgs["command"]) == 0 {
 		resp.Response = fmt.Sprintf("%v", ccCommand)
 	} else {
 		ccCommand = c.ListArgs["command"]
