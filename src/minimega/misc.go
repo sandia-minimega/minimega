@@ -190,7 +190,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		cmd, err := minicli.CompileCommand(cmdStr)
 		if err != nil {
 			// Should never happen
-			panic(err)
+			log.Fatalln(err)
 		}
 
 		remoteRespChan := make(chan minicli.Responses)
@@ -223,7 +223,7 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	for i := range handlers {
 		err := minicli.Register(&handlers[i])
 		if err != nil {
-			panic(fmt.Sprintf("invalid handler, %s:%d -- %v", name, i, err))
+			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
 		}
 	}
 }

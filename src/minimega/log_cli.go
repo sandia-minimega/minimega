@@ -73,7 +73,7 @@ func cliLogLevel(c *minicli.Command) *minicli.Response {
 		for k := range c.BoolArgs {
 			level, err := log.LevelInt(k)
 			if err != nil {
-				panic("someone goofed on the patterns")
+				log.Fatalln("someone goofed on the patterns")
 			}
 
 			*f_loglevel = k

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	log "minilog"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -337,7 +338,7 @@ func (l *patternLexer) lexComment() (stateFn, error) {
 // building requires it.
 func (l *patternLexer) enforceEOF() error {
 	if l.newItem.Type == noType {
-		panic(errors.New("cannot enforce EOF when item type not specified"))
+		log.Fatalln("cannot enforce EOF when item type not specified")
 	}
 
 	if l.newItem.Type&requireEOLItems != 0 {

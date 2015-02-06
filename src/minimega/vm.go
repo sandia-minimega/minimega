@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
-
 	"sort"
 	"strconv"
 	"strings"
@@ -221,7 +220,8 @@ var vmConfigFns = map[string]struct {
 				return delVMQemuOverride(c.StringArgs["id"])
 			}
 
-			panic("someone goofed the qemu-override patterns")
+			log.Fatalln("someone goofed the qemu-override patterns")
+			return nil
 		},
 		Clear: func(vm *vmInfo) { QemuOverrides = make(map[int]*qemuOverride) },
 		Print: func(vm *vmInfo) string {

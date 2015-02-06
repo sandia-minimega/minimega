@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	log "minilog"
 	"strings"
 	"text/tabwriter"
 )
@@ -111,7 +112,7 @@ func ProcessString(input string, record bool) (chan Responses, error) {
 // Process a prepopulated Command
 func ProcessCommand(c *Command, record bool) chan Responses {
 	if c.Call == nil {
-		panic(fmt.Errorf("command %v has no callback!", c))
+		log.Fatal("command %v has no callback!", c)
 	}
 
 	respChan := make(chan Responses)

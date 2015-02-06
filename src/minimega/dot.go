@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"fmt"
 	"minicli"
+	log "minilog"
 	"os"
 	"strings"
 )
@@ -58,7 +59,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	cmd, err := minicli.CompileCommand("vm info mask host,name,id,ip,ip6,state,vlan")
 	if err != nil {
 		// Should never happen
-		panic(err)
+		log.Fatalln(err)
 	}
 
 	writer := bufio.NewWriter(fout)

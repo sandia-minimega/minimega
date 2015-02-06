@@ -578,7 +578,7 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 		// "true" or "false" and, therefore, not "true" implies "false").
 		err = fns.UpdateBool(info, c.BoolArgs["true"])
 	} else {
-		panic("someone goofed on the patterns")
+		log.Fatalln("someone goofed on the patterns")
 	}
 
 	if err != nil {
@@ -602,7 +602,7 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	}
 
 	if !cleared {
-		panic("no callback defined for clear")
+		log.Fatalln("no callback defined for clear")
 	}
 
 	return resp
@@ -631,7 +631,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		} else {
 			r, err := ranges.NewRange(arg[:index], 0, int(math.MaxInt32))
 			if err != nil {
-				panic(err)
+				log.Fatalln(err)
 			}
 
 			names, err := r.SplitRange(arg)
