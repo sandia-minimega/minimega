@@ -11,6 +11,10 @@ import (
 	"strconv"
 )
 
+var (
+	logFile *os.File
+)
+
 var logCLIHandlers = []minicli.Handler{
 	{ // log level
 		HelpShort: "set or print the log level",
@@ -36,7 +40,7 @@ setting the mode to debug will log everything.`,
 		HelpLong: `
 Log to a file. To disable file logging, call "clear log file".`,
 		Patterns: []string{
-			"log file <file>",
+			"log file [file]",
 		},
 		Call: wrapSimpleCLI(cliLogFile),
 	},
@@ -112,24 +116,30 @@ func cliLogStderr(c *minicli.Command) *minicli.Response {
 func cliLogFile(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// TODO: In the old implementation, if the provided file was "false" we
-	// would disable logging to file. This wasn't documented in the help text
-	// and, therefore, it's not implemented here. Double check with Fritz about
-	// this change.
 	if len(c.StringArgs) == 0 {
 		// Print true or false depending on whether file is enabled
-		_, err := log.GetLevel("file")
-		resp.Response = strconv.FormatBool(err == nil)
+		if logFile != nil {
+			resp.Response = logFile.Name()
+		}
 	} else {
+		var err error
+
 		// Enable logging to file if it's not already enabled
 		level, _ := log.LevelInt(*f_loglevel)
 
-		// TODO: What closes the file?
-		logfile, err := os.OpenFile(c.StringArgs["file"], os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		if logFile != nil {
+			if err = stopFileLogger(); err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+		}
+
+		flags := os.O_WRONLY | os.O_APPEND | os.O_CREATE
+		logFile, err = os.OpenFile(c.StringArgs["file"], flags, 0660)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
-			log.AddLogger("file", logfile, level, false)
+			log.AddLogger("file", logFile, level, false)
 		}
 	}
 
@@ -141,8 +151,10 @@ func cliLogClear(c *minicli.Command) *minicli.Response {
 
 	// Reset file if explicitly cleared or we're clearing everything
 	if c.BoolArgs["file"] || len(c.BoolArgs) == 0 {
-		// Delete logger to file
-		log.DelLogger("file")
+		if err := stopFileLogger(); err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
 	}
 
 	// Reset level if explicitly cleared or we're clearing everything
@@ -160,4 +172,18 @@ func cliLogClear(c *minicli.Command) *minicli.Response {
 	}
 
 	return resp
+}
+
+// stopFileLogger gets rid of the previous file logger
+func stopFileLogger() error {
+	log.DelLogger("file")
+
+	err := logFile.Close()
+	if err != nil {
+		log.Error("error closing log file: %v", err)
+	} else {
+		logFile = nil
+	}
+
+	return err
 }
