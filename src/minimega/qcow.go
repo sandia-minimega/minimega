@@ -123,15 +123,7 @@ func parseInject(c *minicli.Command) *injectData {
 		inject.err = errors.New("dst image must filename without path")
 	} else if c.StringArgs["dstimg"] != "" {
 		inject.dstImg = path.Join(*f_iomBase, c.StringArgs["dstimg"])
-	} else {
-		dstImg, err := ioutil.TempFile(*f_iomBase, "snapshot")
-		if err != nil {
-			inject.err = errors.New("could not create a dst image")
-		} else {
-			inject.dstImg = dstImg.Name()
-		}
 	}
-	log.Debug("destination image: %v", inject.dstImg)
 
 	inject.parseInjectPairs(c)
 
@@ -263,6 +255,17 @@ func cliVmInject(c *minicli.Command) *minicli.Response {
 	}
 
 	inject := parseInject(c)
+	if inject.dstImg == "" {
+		// Create new snapshot for image
+		dstImg, err := ioutil.TempFile(*f_iomBase, "snapshot")
+		if err != nil {
+			inject.err = errors.New("could not create a dst image")
+		} else {
+			inject.dstImg = dstImg.Name()
+		}
+	}
+	log.Debug("destination image: %v", inject.dstImg)
+
 	resp.Response, err = inject.run()
 	if err != nil {
 		resp.Error = err.Error()
