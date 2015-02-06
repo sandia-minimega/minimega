@@ -246,7 +246,6 @@ func (c Command) String() string {
 }
 
 // Return a string representation using the current output mode
-// using the %v verb in pkg fmt
 func (r Responses) String() string {
 	if len(r) == 0 {
 		return ""
@@ -300,23 +299,23 @@ func (r Responses) String() string {
 		}
 		w.Flush()
 	} else {
-		for i := range r {
-			if r[i].Error == "" {
-				buf.WriteString(r[i].Response)
+		for _, v := range r {
+			if v.Error == "" {
+				buf.WriteString(v.Response)
 				buf.WriteString("\n")
 			}
 		}
 	}
 
 	// Append errors from hosts
-	for i := range r {
-		if r[i].Error != "" {
-			fmt.Fprintf(&buf, "Error (%s): %s", r[i].Host, r[i].Error)
-		}
+	for i, v := range r {
+		if v.Error != "" {
+			fmt.Fprintf(&buf, "Error (%s): %s", v.Host, v.Error)
 
-		// add a newline unless this is our last iteration
-		if i != len(r)-1 {
-			fmt.Fprintf(&buf, "\n")
+			// add a newline unless this is our last iteration
+			if i != len(r)-1 {
+				fmt.Fprintf(&buf, "\n")
+			}
 		}
 	}
 
