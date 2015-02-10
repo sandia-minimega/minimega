@@ -498,6 +498,32 @@ to the default value.`,
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
+	{ // clear vm tag
+		HelpShort: "remove tags from a VM",
+		HelpLong: `
+Clears one, many, or all tags from a virtual machine.
+
+Clear the tag "foo" from VM 0:
+
+        clear vm tag 0 foo
+
+Clear the tag "foo" from all VMs:
+
+        clear vm tag all foo
+
+Clear all tags from VM 0:
+
+        clear vm tag 0
+
+Clear all tags from all VMs:
+
+        clear vm tag all
+`,
+		Patterns: []string{
+			"clear vm tag <vm id or name> [tag]",
+		},
+		Call: wrapSimpleCLI(cliClearVmTag),
+	},
 }
 
 func init() {
@@ -548,6 +574,35 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
 		} else {
 			resp.Response = val
+		}
+	}
+	return resp
+}
+
+func cliClearVmTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vmstring := c.StringArgs["vm"]
+	clearVms := make([]*vmInfo, 0)
+	if vmstring == Wildcard {
+		for _, v := range vms.vms {
+			clearVms = append(clearVms, v)
+		}
+	} else {
+		vm := vms.findVm(vmstring)
+		if vm == nil {
+			resp.Error = vmNotFound(vmstring).Error()
+			return resp
+		}
+		clearVms = append(clearVms, vm)
+	}
+
+	tag := c.StringArgs["tag"]
+	for _, v := range clearVms {
+		for k, _ := range v.Tags {
+			if k == tag || tag == "" {
+				delete(v.Tags, k)
+			}
 		}
 	}
 	return resp

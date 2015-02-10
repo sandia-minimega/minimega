@@ -309,7 +309,7 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 			v = append(v, vm)
 		case "tags":
 			for i, j := range l.vms {
-				if val, ok := j.Tags[d[1]]; ok {
+				if _, ok := j.Tags[d[1]]; ok {
 					v = append(v, l.vms[i])
 				}
 			}
