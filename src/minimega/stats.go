@@ -58,6 +58,11 @@ var hostInfoFns = map[string]func() (string, error){
 	"load":      hostStatsLoad,
 }
 
+// Preferred ordering of host info fields in tabular
+var hostInfoKeys = []string{
+	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
+}
+
 func cliHost(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -74,11 +79,11 @@ func cliHost(c *minicli.Command) *minicli.Response {
 	}
 
 	// Must want all fields
-	resp.Header = []string{}
+	resp.Header = hostInfoKeys
+
 	row := []string{}
-	for k, fn := range hostInfoFns {
-		resp.Header = append(resp.Header, k)
-		val, err := fn()
+	for _, k := range resp.Header {
+		val, err := hostInfoFns[k]()
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
