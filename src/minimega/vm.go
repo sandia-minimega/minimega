@@ -334,6 +334,8 @@ func (vms *vmSorter) Less(i, j int) bool {
 		return vms.vms[i].UUID < vms.vms[j].UUID
 	case "cc_active":
 		return true
+	case "tags":
+		return true
 	default:
 		log.Error("invalid sort parameter %v", vms.by)
 		return false
