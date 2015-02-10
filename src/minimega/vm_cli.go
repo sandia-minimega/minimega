@@ -56,6 +56,7 @@ Searchable and maskable fields are:
 - vlan	    : vlan, as an integer
 - uuid      : QEMU system uuid
 - cc_active : whether cc is active
+- tags      : any additional information attached to the VM
 
 Examples:
 
@@ -237,6 +238,21 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		HelpShort: "display or set a tag for the specified VM",
 		HelpLong: `
 Display or set a tag for the specified VM.
+
+Tags are key-value pairs. A VM can have any number of tags associated
+with it. They can be used to attach additional information to a
+virtual machine, for example specifying a VM "group", or the correct
+rendering color for some external visualization tool.
+
+To set a tag:
+
+        vm tag <vm id or name> <key> [value]
+
+To read a tag:
+
+        vm tag <vm id or name> <key>
+
+Tags are not displayed in "vm info" by default, as there may be many of them.
 `,
 		Patterns: []string{
 			"vm tag <vm id or name> <key> [value]",
