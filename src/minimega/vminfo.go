@@ -51,6 +51,8 @@ type vmInfo struct {
 	Kill chan bool // kill channel to signal to shut a vm down
 
 	Hotplug map[int]string
+
+	Tags map[string]string // Additional information
 }
 
 func (vm *vmInfo) start() error {

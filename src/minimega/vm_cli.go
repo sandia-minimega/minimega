@@ -56,6 +56,7 @@ Searchable and maskable fields are:
 - vlan	    : vlan, as an integer
 - uuid      : QEMU system uuid
 - cc_active : whether cc is active
+- tags      : any additional information attached to the VM
 
 Examples:
 
@@ -232,6 +233,31 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 			"vm qmp <vm id or name> <qmp command>",
 		},
 		Call: wrapSimpleCLI(cliVmQmp),
+	},
+	{ // vm tag
+		HelpShort: "display or set a tag for the specified VM",
+		HelpLong: `
+Display or set a tag for the specified VM.
+
+Tags are key-value pairs. A VM can have any number of tags associated
+with it. They can be used to attach additional information to a
+virtual machine, for example specifying a VM "group", or the correct
+rendering color for some external visualization tool.
+
+To set a tag:
+
+        vm tag <vm id or name> <key> [value]
+
+To read a tag:
+
+        vm tag <vm id or name> <key>
+
+Tags are not displayed in "vm info" by default, as there may be many of them.
+`,
+		Patterns: []string{
+			"vm tag <vm id or name> <key> [value]",
+		},
+		Call: wrapSimpleCLI(cliVmTag),
 	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
@@ -472,6 +498,32 @@ to the default value.`,
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
+	{ // clear vm tag
+		HelpShort: "remove tags from a VM",
+		HelpLong: `
+Clears one, many, or all tags from a virtual machine.
+
+Clear the tag "foo" from VM 0:
+
+        clear vm tag 0 foo
+
+Clear the tag "foo" from all VMs:
+
+        clear vm tag all foo
+
+Clear all tags from VM 0:
+
+        clear vm tag 0
+
+Clear all tags from all VMs:
+
+        clear vm tag all
+`,
+		Patterns: []string{
+			"clear vm tag <vm id or name> [tag]",
+		},
+		Call: wrapSimpleCLI(cliClearVmTag),
+	},
 }
 
 func init() {
@@ -499,6 +551,60 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 
 	resp.Header = masks
 
+	return resp
+}
+
+func cliVmTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := vms.findVm(c.StringArgs["vm"])
+	if vm == nil {
+		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
+		return resp
+	}
+
+	key := c.StringArgs["key"]
+	if value, ok := c.StringArgs["value"]; ok {
+		// Set a tag
+		vm.Tags[key] = value
+	} else {
+		// Get a tag
+		val, ok := vm.Tags[key]
+		if !ok {
+			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
+		} else {
+			resp.Response = val
+		}
+	}
+	return resp
+}
+
+func cliClearVmTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vmstring := c.StringArgs["vm"]
+	clearVms := make([]*vmInfo, 0)
+	if vmstring == Wildcard {
+		for _, v := range vms.vms {
+			clearVms = append(clearVms, v)
+		}
+	} else {
+		vm := vms.findVm(vmstring)
+		if vm == nil {
+			resp.Error = vmNotFound(vmstring).Error()
+			return resp
+		}
+		clearVms = append(clearVms, vm)
+	}
+
+	tag := c.StringArgs["tag"]
+	for _, v := range clearVms {
+		for k, _ := range v.Tags {
+			if k == tag || tag == "" {
+				delete(v.Tags, k)
+			}
+		}
+	}
 	return resp
 }
 
