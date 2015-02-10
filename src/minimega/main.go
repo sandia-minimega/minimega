@@ -41,7 +41,6 @@ var (
 	f_namespace  = flag.String("namespace", "minimega", "meshage namespace for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
-	f_doc        = flag.Bool("doc", false, "print the minimega api, in markdown, to stdout and exit")
 	f_cli        = flag.Bool("cli", false, "print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	vms          vmList
@@ -71,11 +70,6 @@ func main() {
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
 		*f_base += "/"
-	}
-
-	if *f_doc {
-		docGen()
-		os.Exit(0)
 	}
 
 	if *f_cli {
