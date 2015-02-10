@@ -119,7 +119,7 @@ func (r Responses) compressString(buf io.Writer) {
 
 	// Find responses that have the same output by hashing them into buckets
 	for _, v := range r {
-		if v.Error == "" {
+		if v.Error == "" && v.Response != "" {
 			h := fnv.New64a()
 			h.Write([]byte(v.Response))
 			k := h.Sum64()
