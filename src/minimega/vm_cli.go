@@ -233,6 +233,16 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		},
 		Call: wrapSimpleCLI(cliVmQmp),
 	},
+	{ // vm tag
+		HelpShort: "display or set a tag for the specified VM",
+		HelpLong: `
+Display or set a tag for the specified VM.
+`,
+		Patterns: []string{
+			"vm tag <vm id or name> <key> [value]",
+		},
+		Call: wrapSimpleCLI(cliVmTag),
+	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
 		HelpLong: `
@@ -499,6 +509,31 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 
 	resp.Header = masks
 
+	return resp
+}
+
+func cliVmTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := vms.findVm(c.StringArgs["vm"])
+	if vm == nil {
+		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
+		return resp
+	}
+
+	key := c.StringArgs["key"]
+	if value, ok := c.StringArgs["value"]; ok {
+		// Set a tag
+		vm.Extra[key] = value
+	} else {
+		// Get a tag
+		val, ok := vm.Extra[key]
+		if !ok {
+			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
+		} else {
+			resp.Response = val
+		}
+	}
 	return resp
 }
 

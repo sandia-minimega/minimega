@@ -197,6 +197,7 @@ func (l *vmList) launch(name string, ack chan int) error {
 	}
 	vm.Kill = make(chan bool)
 	vm.Hotplug = make(map[int]string)
+	vm.Extra = make(map[string]string)
 	vm.State = VM_BUILDING
 	vmLock.Lock()
 	l.vms[vm.Id] = vm
