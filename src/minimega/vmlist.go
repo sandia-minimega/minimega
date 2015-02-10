@@ -197,7 +197,7 @@ func (l *vmList) launch(name string, ack chan int) error {
 	}
 	vm.Kill = make(chan bool)
 	vm.Hotplug = make(map[int]string)
-	vm.Extra = make(map[string]string)
+	vm.Tags = make(map[string]string)
 	vm.State = VM_BUILDING
 	vmLock.Lock()
 	l.vms[vm.Id] = vm
@@ -307,6 +307,14 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 				return make([][]string, 0), nil
 			}
 			v = append(v, vm)
+		case "tags":
+			fmt.Printf("d[1] = %v\n", d[1])
+			for i, j := range l.vms {
+				if val, ok := j.Tags[d[1]]; ok {
+					fmt.Printf("vm %v matched, value = %v\n", i, val)
+					v = append(v, l.vms[i])
+				}
+			}
 		case "state":
 			state, err := ParseVmState(d[1])
 			if err != nil {
@@ -420,6 +428,8 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 				row = append(row, fmt.Sprintf("%v", j.taps))
 			case "mac":
 				row = append(row, fmt.Sprintf("%v", j.macs))
+			case "tags":
+				row = append(row, fmt.Sprintf("%v", j.Tags))
 			case "ip":
 				var ips []string
 				for _, m := range j.macs {

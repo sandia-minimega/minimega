@@ -524,10 +524,10 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 	key := c.StringArgs["key"]
 	if value, ok := c.StringArgs["value"]; ok {
 		// Set a tag
-		vm.Extra[key] = value
+		vm.Tags[key] = value
 	} else {
 		// Get a tag
-		val, ok := vm.Extra[key]
+		val, ok := vm.Tags[key]
 		if !ok {
 			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
 		} else {

@@ -52,7 +52,7 @@ type vmInfo struct {
 
 	Hotplug map[int]string
 
-	Extra map[string]string // Additional information
+	Tags map[string]string // Additional information
 }
 
 func (vm *vmInfo) start() error {
