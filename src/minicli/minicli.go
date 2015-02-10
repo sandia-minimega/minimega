@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	log "minilog"
 	"strings"
 	"text/tabwriter"
@@ -12,9 +13,9 @@ import (
 
 // Output modes
 const (
-	DefaultMode = iota
-	JsonMode
-	QuietMode
+	defaultMode = iota
+	jsonMode
+	csvMode
 )
 
 const (
@@ -22,6 +23,7 @@ const (
 )
 
 var (
+	headers  bool // show headers in output
 	compress bool // compress output
 	tabular  bool // tabularize output
 	mode     int  // output mode
@@ -45,23 +47,8 @@ type Response struct {
 type CLIFunc func(*Command, chan Responses)
 
 func init() {
-	handlers = make([]*Handler, 0)
-	history = make([]string, 0)
-}
-
-// Enable or disable response compression
-func CompressOutput(flag bool) {
-	compress = flag
-}
-
-// Enable or disable tabular aggregation
-func TabularOutput(flag bool) {
-	tabular = flag
-}
-
-// Set the output mode for String()
-func SetOutputMode(newMode int) {
-	mode = newMode
+	headers = true
+	compress = true
 }
 
 // Return any errors contained in the responses, or nil. If any responses have
@@ -74,6 +61,14 @@ func (r Responses) Errors() []error {
 	}
 
 	return errs
+}
+
+// MustRegister calls Register for a handler and panics if the handler has an
+// error registering.
+func MustRegister(h *Handler) {
+	if err := Register(h); err != nil {
+		panic(err)
+	}
 }
 
 // Register a new API based on pattern. See package documentation for details
@@ -182,16 +177,16 @@ func Help(input string) string {
 
 	// User entered a valid command prefix as the argument to help, display help
 	// for that group of handlers.
-	if handlers, ok := groups[input]; input != "" && ok {
+	if group, ok := groups[input]; input != "" && ok {
 		// Only one handler with a given pattern prefix, give the long help message
-		if len(handlers) == 1 {
-			return handlers[0].helpLong()
+		if len(group) == 1 {
+			return group[0].helpLong()
 		}
 
 		// Weird case, multiple handlers share the same prefix. Print the short
 		// help for each handler for each pattern registered.
 		// TODO: Is there something better we can do?
-		for _, handler := range handlers {
+		for _, handler := range group {
 			for _, pattern := range handler.Patterns {
 				helpShort[pattern] = handler.helpShort()
 			}
@@ -226,11 +221,11 @@ func Help(input string) string {
 
 	// List help short for all matches
 	for _, prefix := range matches {
-		handlers := groups[prefix]
-		if len(handlers) == 1 {
-			helpShort[prefix] = handlers[0].helpShort()
+		group := groups[prefix]
+		if len(group) == 1 {
+			helpShort[prefix] = group[0].helpShort()
 		} else {
-			for _, handler := range handlers {
+			for _, handler := range group {
 				for _, pattern := range handler.Patterns {
 					helpShort[pattern] = handler.helpShort()
 				}
@@ -251,6 +246,16 @@ func (r Responses) String() string {
 		return ""
 	}
 
+	if mode == jsonMode {
+		bytes, err := json.Marshal(r)
+		if err != nil {
+			// TODO: Should this be JSON-formatted too?
+			return err.Error()
+		}
+
+		return string(bytes)
+	}
+
 	header, err := r.getHeader()
 	if err != nil {
 		return err.Error()
@@ -266,38 +271,7 @@ func (r Responses) String() string {
 	var buf bytes.Buffer
 
 	if tabular {
-		var count int
-		for _, x := range r {
-			count += len(x.Tabular)
-		}
-
-		if count == 0 {
-			return ""
-		}
-
-		w := new(tabwriter.Writer)
-		w.Init(&buf, 5, 0, 1, ' ', 0)
-		for i, h := range header {
-			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
-			}
-			fmt.Fprintf(w, h)
-		}
-		fmt.Fprintf(w, "\n")
-
-		// Print out the tabular data for all responses that don't have an error
-		for i := range r {
-			for j := range r[i].Tabular {
-				for k, val := range r[i].Tabular[j] {
-					if k != 0 {
-						fmt.Fprintf(w, "\t| ")
-					}
-					fmt.Fprintf(w, val)
-				}
-				fmt.Fprintf(w, "\n")
-			}
-		}
-		w.Flush()
+		r.tabularString(&buf, header)
 	} else {
 		for _, v := range r {
 			if v.Error == "" {
@@ -321,6 +295,44 @@ func (r Responses) String() string {
 
 	resp := buf.String()
 	return strings.TrimSpace(resp)
+}
+
+func (r Responses) tabularString(buf io.Writer, header []string) {
+	var count int
+	for _, x := range r {
+		count += len(x.Tabular)
+	}
+
+	if count == 0 {
+		return
+	}
+
+	w := new(tabwriter.Writer)
+	w.Init(buf, 5, 0, 1, ' ', 0)
+	defer w.Flush()
+
+	if headers {
+		for i, h := range header {
+			if i != 0 {
+				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, h)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+
+	// Print out the tabular data for all responses that don't have an error
+	for i := range r {
+		for j := range r[i].Tabular {
+			for k, val := range r[i].Tabular[j] {
+				if k != 0 {
+					fmt.Fprintf(w, "\t| ")
+				}
+				fmt.Fprintf(w, val)
+			}
+			fmt.Fprintf(w, "\n")
+		}
+	}
 }
 
 // Return a verbose output representation for use with the %#v verb in pkg fmt
