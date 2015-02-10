@@ -31,6 +31,8 @@ var (
 	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
 	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
 	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
+	f_iso           = flag.Bool("iso", false, "generate an ISO")
+	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -72,6 +74,11 @@ func main() {
 		log.Fatalln(err)
 	} else {
 		log.Debugln("read config:", config)
+	}
+
+	// If we're doing a LiveCD, we need to add the live-boot package
+	if *f_iso {
+		config.Packages = append(config.Packages, "live-boot")
 	}
 
 	var buildPath string
@@ -147,6 +154,8 @@ func main() {
 		fmt.Println("building target files")
 		if *f_qcow {
 			err = Buildqcow2(buildPath, config)
+		} else if *f_iso {
+			err = BuildISO(buildPath, config)
 		} else {
 			err = BuildTargets(buildPath, config)
 		}
