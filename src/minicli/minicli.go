@@ -1,14 +1,11 @@
 package minicli
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	log "minilog"
 	"strings"
-	"text/tabwriter"
 )
 
 // Output modes
@@ -238,101 +235,6 @@ func Help(input string) string {
 
 func (c Command) String() string {
 	return c.Original
-}
-
-// Return a string representation using the current output mode
-func (r Responses) String() string {
-	if len(r) == 0 {
-		return ""
-	}
-
-	if mode == jsonMode {
-		bytes, err := json.Marshal(r)
-		if err != nil {
-			// TODO: Should this be JSON-formatted too?
-			return err.Error()
-		}
-
-		return string(bytes)
-	}
-
-	header, err := r.getHeader()
-	if err != nil {
-		return err.Error()
-	}
-
-	// TODO: What is Header for simple responses?
-
-	tabular, err := r.validTabular(header)
-	if err != nil {
-		return err.Error()
-	}
-
-	var buf bytes.Buffer
-
-	if tabular {
-		r.tabularString(&buf, header)
-	} else {
-		for _, v := range r {
-			if v.Error == "" {
-				buf.WriteString(v.Response)
-				buf.WriteString("\n")
-			}
-		}
-	}
-
-	// Append errors from hosts
-	for i, v := range r {
-		if v.Error != "" {
-			fmt.Fprintf(&buf, "Error (%s): %s", v.Host, v.Error)
-
-			// add a newline unless this is our last iteration
-			if i != len(r)-1 {
-				fmt.Fprintf(&buf, "\n")
-			}
-		}
-	}
-
-	resp := buf.String()
-	return strings.TrimSpace(resp)
-}
-
-func (r Responses) tabularString(buf io.Writer, header []string) {
-	var count int
-	for _, x := range r {
-		count += len(x.Tabular)
-	}
-
-	if count == 0 {
-		return
-	}
-
-	w := new(tabwriter.Writer)
-	w.Init(buf, 5, 0, 1, ' ', 0)
-	defer w.Flush()
-
-	if headers {
-		for i, h := range header {
-			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
-			}
-			fmt.Fprintf(w, h)
-		}
-		fmt.Fprintf(w, "\n")
-	}
-
-	// Print out the tabular data for all responses that don't have an error
-	for i := range r {
-		for j := range r[i].Tabular {
-			for k, val := range r[i].Tabular[j] {
-				if k != 0 {
-					fmt.Fprintf(w, "\t| ")
-				}
-				fmt.Fprintf(w, val)
-			}
-			fmt.Fprintf(w, "\n")
-		}
-	}
 }
 
 // Return a verbose output representation for use with the %#v verb in pkg fmt

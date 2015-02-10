@@ -4,7 +4,10 @@
 
 package minicli
 
-import "strconv"
+import (
+	"os"
+	"strconv"
+)
 
 var builtinCLIHandlers = []Handler{
 	{ // csv
@@ -74,9 +77,18 @@ Compression is not applied when the output mode is JSON.`,
 	},
 }
 
+var hostname string
+
 func init() {
+	var err error
+
 	for i := range builtinCLIHandlers {
 		MustRegister(&builtinCLIHandlers[i])
+	}
+
+	hostname, err = os.Hostname()
+	if err != nil {
+		hostname = "???"
 	}
 }
 
@@ -87,6 +99,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 		mode = defaultMode
 	} else {
 		resp := &Response{
+			Host:     hostname,
 			Response: strconv.FormatBool(mode == newMode),
 		}
 		out <- Responses{resp}
@@ -100,6 +113,7 @@ func cliFlagHelper(c *Command, out chan Responses, flag *bool) {
 		*flag = c.BoolArgs["true"]
 	} else {
 		resp := &Response{
+			Host:     hostname,
 			Response: strconv.FormatBool(*flag),
 		}
 		out <- Responses{resp}
