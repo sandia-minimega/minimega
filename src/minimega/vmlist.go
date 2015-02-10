@@ -308,10 +308,8 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 			}
 			v = append(v, vm)
 		case "tags":
-			fmt.Printf("d[1] = %v\n", d[1])
 			for i, j := range l.vms {
 				if val, ok := j.Tags[d[1]]; ok {
-					fmt.Printf("vm %v matched, value = %v\n", i, val)
 					v = append(v, l.vms[i])
 				}
 			}
