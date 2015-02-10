@@ -2,6 +2,7 @@ package minicli
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
@@ -44,12 +45,21 @@ func (r Responses) String() string {
 	var buf bytes.Buffer
 
 	if tabular {
-		r.tabularString(&buf, header)
+		var count int
+		for _, x := range r {
+			count += len(x.Tabular)
+		}
+
+		if count > 0 && mode == csvMode {
+			r.csvString(&buf, header)
+		} else if count > 0 && mode == defaultMode {
+			r.tabularString(&buf, header)
+		}
 	} else if compress && len(r) > 1 {
 		r.compressString(&buf)
 	} else {
 		for _, v := range r {
-			if v.Error == "" {
+			if v.Error == "" && v.Response != "" {
 				if annotate {
 					buf.WriteString(v.Host)
 					buf.WriteString(": ")
@@ -77,15 +87,6 @@ func (r Responses) String() string {
 }
 
 func (r Responses) tabularString(buf io.Writer, header []string) {
-	var count int
-	for _, x := range r {
-		count += len(x.Tabular)
-	}
-
-	if count == 0 {
-		return
-	}
-
 	w := new(tabwriter.Writer)
 	w.Init(buf, 5, 0, 1, ' ', 0)
 	defer w.Flush()
@@ -114,6 +115,20 @@ func (r Responses) tabularString(buf io.Writer, header []string) {
 	}
 }
 
+func (r Responses) csvString(buf io.Writer, header []string) {
+	w := csv.NewWriter(buf)
+	defer w.Flush()
+
+	if headers {
+		w.Write(header)
+	}
+
+	// Print out the tabular data for all responses that don't have an error
+	for i := range r {
+		w.WriteAll(r[i].Tabular)
+	}
+}
+
 func (r Responses) compressString(buf io.Writer) {
 	buckets := map[uint64]Responses{}
 
@@ -126,6 +141,10 @@ func (r Responses) compressString(buf io.Writer) {
 
 			buckets[k] = append(buckets[k], v)
 		}
+	}
+
+	if len(buckets) == 0 {
+		return
 	}
 
 	// Compress hostnames into ranges
