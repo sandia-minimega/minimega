@@ -104,29 +104,33 @@ func init() {
 }
 
 func cliModeHelper(c *Command, out chan Responses, newMode int) {
+	resp := &Response{
+		Host: hostname,
+	}
+
 	if c.BoolArgs["true"] {
 		mode = newMode
 	} else if c.BoolArgs["false"] {
 		mode = defaultMode
 	} else {
-		resp := &Response{
-			Host:     hostname,
-			Response: strconv.FormatBool(mode == newMode),
-		}
-		out <- Responses{resp}
+		resp.Response = strconv.FormatBool(mode == newMode)
 	}
+
+	out <- Responses{resp}
 }
 
 func cliFlagHelper(c *Command, out chan Responses, flag *bool) {
+	resp := &Response{
+		Host: hostname,
+	}
+
 	if c.BoolArgs["true"] || c.BoolArgs["false"] {
 		// Update the flag, can just get value for "true" since the default
 		// value is false.
 		*flag = c.BoolArgs["true"]
 	} else {
-		resp := &Response{
-			Host:     hostname,
-			Response: strconv.FormatBool(*flag),
-		}
-		out <- Responses{resp}
+		resp.Response = strconv.FormatBool(*flag)
 	}
+
+	out <- Responses{resp}
 }
