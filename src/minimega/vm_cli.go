@@ -482,7 +482,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	search := c.StringArgs["search"]
+	search := c.StringArgs["terms"]
 
 	masks := vmMasks
 	if c.StringArgs["masks"] != "" {
