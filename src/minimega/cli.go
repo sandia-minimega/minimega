@@ -50,8 +50,9 @@ type winsize struct {
 }
 
 type localResponse struct {
-	Resp minicli.Responses
-	More bool // whether there are more responses coming
+	Resp     minicli.Responses
+	Rendered string
+	More     bool // whether there are more responses coming
 }
 
 type MinimegaConn struct {
@@ -124,6 +125,9 @@ func cliAttach() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sig
+		if *f_panic {
+			panic("teardown")
+		}
 		log.Debug("caught signal, disconnecting")
 		goreadline.Rlcleanup()
 		os.Exit(0)
@@ -174,7 +178,7 @@ func cliAttach() {
 		}
 
 		for resp := range mm.runCommand(cmd) {
-			pageOutput(resp.String())
+			pageOutput(resp.Rendered)
 		}
 
 		if command == "quit" {
@@ -209,9 +213,8 @@ func localCommand() {
 	}
 
 	for resp := range mm.runCommand(cmd) {
-		output := resp.String()
-		if output != "" {
-			fmt.Println(output)
+		if resp.Rendered != "" {
+			fmt.Println(resp.Rendered)
 		}
 	}
 }
@@ -235,7 +238,7 @@ func DialMinimega() (*MinimegaConn, error) {
 }
 
 // runCommand runs a command through a JSON pipe.
-func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan minicli.Responses {
+func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan *localResponse {
 	err := mm.enc.Encode(*cmd)
 	if err != nil {
 		log.Errorln("local command gob encode: %v", err)
@@ -243,7 +246,7 @@ func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan minicli.Responses 
 	}
 	log.Debugln("encoded command:", cmd)
 
-	respChan := make(chan minicli.Responses)
+	respChan := make(chan *localResponse)
 
 	go func() {
 		defer close(respChan)
@@ -261,7 +264,7 @@ func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan minicli.Responses 
 				return
 			}
 
-			respChan <- r.Resp
+			respChan <- &r
 			if !r.More {
 				log.Debugln("got last message")
 				break

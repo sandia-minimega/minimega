@@ -52,6 +52,7 @@ outer:
 		cmd, err = readLocalCommand(dec)
 		if err != nil {
 			// Must be incompatible versions of minimega... F***
+			log.Errorln(err)
 			break
 		}
 
@@ -100,7 +101,11 @@ func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	log.Infoln("sending resp:", resp)
-	r := localResponse{Resp: resp, More: more}
+	r := localResponse{
+		Resp:     resp,
+		Rendered: resp.String(),
+		More:     more,
+	}
 
 	return enc.Encode(&r)
 }
