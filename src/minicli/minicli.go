@@ -20,9 +20,9 @@ const (
 )
 
 var (
-	headers  bool // show headers in output
+	annotate bool // show hostnames in output
 	compress bool // compress output
-	tabular  bool // tabularize output
+	headers  bool // show headers in output
 	mode     int  // output mode
 )
 
@@ -44,8 +44,9 @@ type Response struct {
 type CLIFunc func(*Command, chan Responses)
 
 func init() {
-	headers = true
+	annotate = true
 	compress = true
+	headers = true
 }
 
 // Return any errors contained in the responses, or nil. If any responses have

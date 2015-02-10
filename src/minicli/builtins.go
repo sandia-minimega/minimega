@@ -43,6 +43,17 @@ Enable or disable headers for tabular data.`,
 			cliFlagHelper(c, out, &headers)
 		},
 	},
+	{ // annotate
+		HelpShort: "enable or disable hostname annotation",
+		HelpLong: `
+Enable or disable hostname annotation for responses.`,
+		Patterns: []string{
+			".annotate [true,false]",
+		},
+		Call: func(c *Command, out chan Responses) {
+			cliFlagHelper(c, out, &annotate)
+		},
+	},
 	{ // compress
 		HelpShort: "enable or disable output compression",
 		HelpLong: `

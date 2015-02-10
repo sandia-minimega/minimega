@@ -50,6 +50,10 @@ func (r Responses) String() string {
 	} else {
 		for _, v := range r {
 			if v.Error == "" {
+				if annotate {
+					buf.WriteString(v.Host)
+					buf.WriteString(": ")
+				}
 				buf.WriteString(v.Response)
 				buf.WriteString("\n")
 			}
@@ -150,8 +154,11 @@ func (r Responses) compressString(buf io.Writer) {
 	for _, h := range hosts {
 		resp := buckets[ranges[h]][0]
 
-		buf.Write([]byte(h))
-		buf.Write([]byte(": "))
+		if annotate {
+			buf.Write([]byte(h))
+			buf.Write([]byte(": "))
+		}
+
 		buf.Write([]byte(resp.Response))
 		buf.Write([]byte("\n"))
 	}
