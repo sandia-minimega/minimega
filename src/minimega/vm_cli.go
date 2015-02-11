@@ -259,6 +259,31 @@ Tags are not displayed in "vm info" by default, as there may be many of them.
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
+	{ // vm cdrom
+		HelpShort: "eject or change an active VM's cdrom",
+		HelpLong: `
+Eject or change an active VM's cdrom image.
+
+Eject VM 0's cdrom:
+
+        vm cdrom eject 0
+
+Eject all VM cdroms:
+
+        vm cdrom eject all
+
+Change a VM to use a new ISO:
+
+        vm cdrom change 0 /tmp/debian.iso
+
+"vm change" implies that the current ISO will be ejected.
+`,
+		Patterns: []string{
+			"vm cdrom <eject,> <vm id or name>",
+			"vm cdrom <change,> <vm id or name> <path>",
+		},
+		Call: wrapSimpleCLI(cliVmCdrom),
+	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
 		HelpLong: `
@@ -550,6 +575,56 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	}
 
 	resp.Header = masks
+
+	return resp
+}
+
+func cliVmCdrom(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vmstring := c.StringArgs["vm"]
+	doVms := make([]*vmInfo, 0)
+	if vmstring == Wildcard {
+		for _, v := range vms.vms {
+			doVms = append(doVms, v)
+		}
+	} else {
+		vm := vms.findVm(vmstring)
+		if vm == nil {
+			resp.Error = vmNotFound(vmstring).Error()
+			return resp
+		}
+		doVms = append(doVms, vm)
+	}
+
+	if c.BoolArgs["eject"] {
+		for _, v := range doVms {
+			err := v.q.BlockdevEject("ide0-cd1")
+			v.CdromPath = ""
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+		}
+	} else if c.BoolArgs["change"] {
+		for _, v := range doVms {
+			// First eject it, then change it
+			err := v.q.BlockdevEject("ide0-cd1")
+			v.CdromPath = ""
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+
+			err = v.q.BlockdevChange("ide0-cd1", c.StringArgs["path"])
+			v.CdromPath = c.StringArgs["path"]
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+		}
+
+	}
 
 	return resp
 }
