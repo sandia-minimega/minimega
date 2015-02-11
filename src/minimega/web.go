@@ -180,13 +180,14 @@ func webHosts() string {
 func webHostVMs(host string) string {
 	var respChan chan minicli.Responses
 
-	cmdLocal, err := minicli.CompileCommand("vm info mask id,name,state")
+	mask := "id,name,state,memory,vcpus,disk,initrd,kernel,cdrom,mac,ip,vlan,append"
+	cmdLocal, err := minicli.CompileCommand("vm info mask " + mask)
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
 
-	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info mask id,name,state", host))
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info mask %v", host, mask))
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
@@ -207,7 +208,21 @@ func webHostVMs(host string) string {
 				continue
 			}
 
+			// If we're the first response, we'll output the Header too.
+			if len(lines) == 0 {
+				header := `<tr>`
+				for _, h := range resp.Header {
+					header += `<td>` + h + `</td>`
+				}
+				header += `</tr>`
+				lines = append(lines, header)
+			}
+
 			for _, row := range resp.Tabular {
+				// We have a hardcoded assumption about 3 fields:
+				// row[0] -> id
+				// row[1] -> name
+				// row[2] -> state
 				if row[2] != "error" && row[2] != "quit" {
 					id, err := strconv.Atoi(row[0])
 					if err != nil {
@@ -215,8 +230,13 @@ func webHostVMs(host string) string {
 						return err.Error()
 					}
 
-					format := `<tr><td><a href="/vnc/%v/%v">%v</a></td><td>%s</td></tr>`
-					lines = append(lines, fmt.Sprintf(format, host, 5900+id, row[1], row[2]))
+					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">%v</a></td><td>%s</td>`
+					tl := fmt.Sprintf(format, id, host, 5900+id, row[1], row[2])
+					for _, entry := range row[3:] {
+						tl += `<td>` + entry + `</td>`
+					}
+					tl += `</tr>`
+					lines = append(lines, tl)
 				}
 			}
 		}
