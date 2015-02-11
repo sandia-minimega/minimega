@@ -183,6 +183,43 @@ func (q *Conn) Stop() error {
 	return nil
 }
 
+func (q *Conn) BlockdevEject(device string) error {
+	s := map[string]interface{}{
+		"execute": "eject",
+		"arguments": map[string]interface{}{
+			"device": device,
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
+	v := <-q.messageSync
+	if !success(v) {
+		return errors.New("eject")
+	}
+	return nil
+}
+
+func (q *Conn) BlockdevChange(device, path string) error {
+	s := map[string]interface{}{
+		"execute": "change",
+		"arguments": map[string]interface{}{
+			"device": device,
+			"target": path,
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
+	v := <-q.messageSync
+	if !success(v) {
+		return errors.New("change")
+	}
+	return nil
+}
+
 func (q *Conn) Pmemsave(path string, size uint64) error {
 	s := map[string]interface{}{
 		"execute": "pmemsave",
