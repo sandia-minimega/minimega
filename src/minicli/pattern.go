@@ -13,7 +13,7 @@ import (
 type itemType int
 
 const (
-	noType itemType = 2 << iota
+	noType itemType = 1 << iota
 	literalString
 	reqString
 	optString
