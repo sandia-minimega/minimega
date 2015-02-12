@@ -13,30 +13,21 @@ import (
 type itemType int
 
 const (
-	noType itemType = 1 << iota
-	literalString
-	reqString
-	optString
-	reqChoice
-	optChoice
-	reqList
-	optList
-	cmdString
+	optionalItem itemType = 1 << iota
+	literalItem
+	commandItem
+	stringItem
+	choiceItem
+	listItem
 )
 
 var terminalsToTypes = map[string]itemType{
-	">": reqString,
-	"]": optString,
-	")": cmdString,
+	">": stringItem,
+	"]": stringItem | optionalItem,
+	")": commandItem,
 }
 
-var listTerminalsToTypes = map[string]itemType{
-	">": reqList,
-	"]": optList,
-}
-
-var optionalItems = optString + optChoice + +optList
-var requireEOLItems = optionalItems + reqList + cmdString
+var requireEOLItems = listItem | commandItem | optionalItem
 
 type patternItem struct {
 	// The item type e.g. string literal, required string
@@ -59,9 +50,9 @@ func (items patternItems) String() string {
 		text = v.Text
 
 		switch v.Type {
-		case literalString:
+		case literalItem:
 			// Nada
-		case reqString, reqChoice:
+		case stringItem, choiceItem:
 			// Special case, required choice with one option which collapses to
 			// just a required string (with some extra semantics to help in the
 			// CLI handler).
@@ -70,13 +61,13 @@ func (items patternItems) String() string {
 			} else {
 				prefix, suffix = "<", ">"
 			}
-		case optString, optChoice:
+		case stringItem | optionalItem, choiceItem | optionalItem:
 			prefix, suffix = "[", "]"
-		case reqList:
+		case listItem:
 			prefix, suffix = "<", ">..."
-		case optList:
+		case listItem | optionalItem:
 			prefix, suffix = "[", "]..."
-		case cmdString:
+		case commandItem:
 			prefix, suffix = "(", ")"
 		}
 
@@ -118,9 +109,16 @@ func (l *patternLexer) Run() (err error) {
 // lexOutside is our starting state. When we're in this state, we look for the
 // start of an optional or required string (or list). While scanning, we
 // may produce a string literal.
-func (l *patternLexer) lexOutside() (stateFn, error) {
+func (l *patternLexer) lexOutside() (fn stateFn, err error) {
 	// Content scanned so far
 	var content string
+
+	defer func() {
+		if err == nil && len(content) > 0 {
+			item := patternItem{Type: literalItem, Text: content}
+			l.items = append(l.items, item)
+		}
+	}()
 
 	for l.s.Scan() {
 		token := l.s.Text()
@@ -143,22 +141,11 @@ func (l *patternLexer) lexOutside() (stateFn, error) {
 			// Found the end of a string literal
 			r, _ := utf8.DecodeRuneInString(token)
 			if unicode.IsSpace(r) {
-				if len(content) > 0 {
-					item := patternItem{Type: literalString, Text: content}
-					l.items = append(l.items, item)
-				}
-
 				return l.lexOutside, nil
 			}
 
 			content += token
 		}
-	}
-
-	// Emit the last item on the line
-	if len(content) > 0 {
-		item := patternItem{Type: literalString, Text: content}
-		l.items = append(l.items, item)
 	}
 
 	// Finished parsing pattern with no errors... Yippie kay yay
@@ -199,7 +186,10 @@ func (l *patternLexer) lexVariable() (stateFn, error) {
 				if list, err := l.checkList(); err != nil {
 					return nil, err
 				} else if list {
-					l.newItem.Type = listTerminalsToTypes[l.terminal]
+					l.newItem.Type = listItem
+					if l.terminal == "]" {
+						l.newItem.Type |= optionalItem
+					}
 				}
 			}
 
@@ -257,14 +247,9 @@ func (l *patternLexer) lexMulti() (stateFn, error) {
 				l.newItem.Text += content
 			}
 
-			switch l.terminal {
-			case ">":
-				l.newItem.Type = reqChoice
-			case "]":
-				l.newItem.Type = optChoice
-			default:
-				// Should never happen
-				return nil, errors.New("something wicked happened")
+			l.newItem.Type = choiceItem
+			if l.terminal == "]" {
+				l.newItem.Type |= optionalItem
 			}
 
 			// Make sure we're at EOF if we need to be
@@ -313,7 +298,10 @@ func (l *patternLexer) lexComment() (stateFn, error) {
 			if list, err := l.checkList(); err != nil {
 				return nil, err
 			} else if list {
-				l.newItem.Type = listTerminalsToTypes[l.terminal]
+				l.newItem.Type = listItem
+				if l.terminal == "]" {
+					l.newItem.Type |= optionalItem
+				}
 
 				// Make sure we're at EOF if we need to be
 				if err := l.enforceEOF(); err != nil {
@@ -337,7 +325,7 @@ func (l *patternLexer) lexComment() (stateFn, error) {
 // enforceEOF makes sure that we are at the end of the line if the item we're
 // building requires it.
 func (l *patternLexer) enforceEOF() error {
-	if l.newItem.Type == noType {
+	if l.newItem.Type == 0 {
 		log.Fatalln("cannot enforce EOF when item type not specified")
 	}
 

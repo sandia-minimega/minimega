@@ -53,8 +53,8 @@ outer:
 			}
 
 			// Test whether we should keep matching this pattern or not
-			switch item.Type {
-			case literalString:
+			switch {
+			case item.Type == literalItem:
 				// Consuming the last item from input, check if it's a prefix
 				// of this literal string.
 				if len(input) == i-1 && strings.HasPrefix(item.Text, input[i].Value) {
@@ -64,7 +64,7 @@ outer:
 					// Input does not match pattern
 					continue outer
 				}
-			case reqChoice, optChoice:
+			case item.Type&choiceItem != 0:
 				for _, choice := range item.Options {
 					// Consuming the last item from input, check if it's a
 					// prefix of one of the choices.
@@ -80,20 +80,20 @@ outer:
 
 				// Invalid choice
 				continue outer
-			case reqList, optList:
+			case item.Type&listItem != 0:
 				// Nothing to suggest for lists
 				continue outer
-			case cmdString:
+			case item.Type == commandItem:
 				// TODO: This is fun, need to recurse to complete the subcommand
 			}
 		}
 
 		// Finished consuming input items, figure out if the next pattern item
 		// has something worth completing.
-		switch item.Type {
-		case literalString:
+		switch {
+		case item.Type == literalItem:
 			suggestions = append(suggestions, item.Text)
-		case reqChoice, optChoice:
+		case item.Type&choiceItem != 0:
 			suggestions = append(suggestions, item.Options...)
 		}
 	}
@@ -110,7 +110,7 @@ func (h *Handler) Prefix() string {
 	for i, patternItems := range h.PatternItems {
 		literals := make([]string, 0)
 		for _, item := range patternItems {
-			if item.Type != literalString {
+			if item.Type != literalItem {
 				break
 			}
 

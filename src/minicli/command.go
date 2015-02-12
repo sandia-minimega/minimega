@@ -27,7 +27,7 @@ outer:
 		// We ran out of items before matching all the items in the pattern
 		if len(input) <= i {
 			// Check if the remaining item is optional
-			if item.Type&optionalItems != 0 {
+			if item.Type&optionalItem != 0 {
 				// Matched!
 				return &cmd, i
 			}
@@ -35,14 +35,14 @@ outer:
 			return nil, i
 		}
 
-		switch item.Type {
-		case literalString:
+		switch {
+		case item.Type == literalItem:
 			if input[i].Value != item.Text {
 				return nil, i
 			}
-		case reqString, optString:
+		case item.Type&stringItem != 0:
 			cmd.StringArgs[item.Key] = input[i].Value
-		case reqChoice, optChoice:
+		case item.Type&choiceItem != 0:
 			for _, choice := range item.Options {
 				if choice == input[i].Value {
 					cmd.BoolArgs[choice] = true
@@ -52,7 +52,7 @@ outer:
 
 			// Invalid choice
 			return nil, i
-		case reqList, optList:
+		case item.Type&listItem != 0:
 			res := make([]string, len(input)-i)
 			for i, v := range input[i:] {
 				res[i] = v.Value
@@ -60,7 +60,7 @@ outer:
 
 			cmd.ListArgs[item.Key] = res
 			return &cmd, i
-		case cmdString:
+		case item.Type == commandItem:
 			// Parse the subcommand
 			subCmd, err := CompileCommand(input[i:].String())
 			if err != nil {
