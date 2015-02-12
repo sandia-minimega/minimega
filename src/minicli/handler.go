@@ -10,6 +10,9 @@ type Handler struct {
 	HelpLong  string   `json:"help_long"`  // a descriptive help message
 	Patterns  []string `json:"patterns"`   // the pattern that the input should match
 
+	// prefix shared by all patterns, automatically populated when
+	SharedPrefix string `json:"shared_prefix"`
+
 	// call back to invoke when the raw input matches the pattern
 	Call CLIFunc `json:"-"`
 
@@ -101,10 +104,10 @@ outer:
 	return suggestions
 }
 
-// Prefix finds the shortest literal string prefix that is shared by all
+// findPrefix finds the shortest literal string prefix that is shared by all
 // patterns associated with this handler. May be the empty string if there is
 // no common prefix.
-func (h *Handler) Prefix() string {
+func (h *Handler) findPrefix() string {
 	prefixes := make([]string, len(h.PatternItems))
 
 	for i, patternItems := range h.PatternItems {

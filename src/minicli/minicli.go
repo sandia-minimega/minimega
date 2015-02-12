@@ -85,6 +85,7 @@ func Register(h *Handler) error {
 
 	h.HelpShort = strings.TrimSpace(h.HelpShort)
 	h.HelpLong = strings.TrimSpace(h.HelpLong)
+	h.SharedPrefix = h.findPrefix()
 
 	handlers = append(handlers, h)
 
@@ -165,7 +166,7 @@ func Help(input string) string {
 	// Figure out the literal string prefixes for each handler
 	groups := make(map[string][]*Handler)
 	for _, handler := range handlers {
-		prefix := handler.Prefix()
+		prefix := handler.SharedPrefix
 		if _, ok := groups[prefix]; !ok {
 			groups[prefix] = make([]*Handler, 0)
 		}
