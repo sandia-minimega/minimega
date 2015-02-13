@@ -51,8 +51,10 @@ outer:
 		var cmd *minicli.Command
 		cmd, err = readLocalCommand(dec)
 		if err != nil {
-			// Must be incompatible versions of minimega... F***
-			log.Errorln(err)
+			if err != io.EOF {
+				// Must be incompatible versions of minimega... F***
+				log.Errorln(err)
+			}
 			break
 		}
 
