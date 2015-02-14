@@ -348,7 +348,9 @@ func vmGetAllSerialPorts() []string {
 
 	var ret []string
 	for _, v := range vms.vms {
-		ret = append(ret, v.instancePath+"serial")
+		if v.State == VM_BUILDING || v.State == VM_RUNNING || v.State == VM_PAUSED {
+			ret = append(ret, v.instancePath+"serial")
+		}
 	}
 	return ret
 }
