@@ -409,12 +409,20 @@ func cliCCRunning(c *minicli.Command) *minicli.Response {
 
 	resp.Header = []string{
 		"ID", "command", "clients checked in",
-		"record", "background", "send",
-		"files", "receive files", "filter",
+		"record", "background", "send files", "receive files",
+		"filter",
 	}
 	resp.Tabular = [][]string{}
 
-	for _, v := range ccNode.GetCommands() {
+	var commandIDs []int
+	commands := ccNode.GetCommands()
+	for k, _ := range commands {
+		commandIDs = append(commandIDs, k)
+	}
+	sort.Ints(commandIDs)
+
+	for _, i := range commandIDs {
+		v := commands[i]
 		row := []string{
 			strconv.Itoa(v.ID),
 			fmt.Sprintf("%v", v.Command),
