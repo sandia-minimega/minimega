@@ -48,6 +48,10 @@ func ccPrefixIDs(prefix string) []int {
 }
 
 func ccStart(portStr string) (err error) {
+	if ccNode != nil {
+		return fmt.Errorf("cc service already running")
+	}
+
 	port := CC_PORT
 	if portStr != "" {
 		port, err = strconv.Atoi(portStr)
