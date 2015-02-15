@@ -75,7 +75,7 @@ func ccClear(what string) (err error) {
 	switch what {
 	case "filter":
 		ccFilter = nil
-	case "command":
+	case "commands":
 		errs := []string{}
 		for _, v := range ccNode.GetCommands() {
 			err := ccNode.DeleteCommand(v.ID)

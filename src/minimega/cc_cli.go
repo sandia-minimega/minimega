@@ -82,7 +82,7 @@ Resets state for the command and control infrastructure provided by minimega.
 See "help cc" for more information.`,
 		Patterns: []string{
 			"clear cc",
-			"clear cc <command,>",
+			"clear cc <commands,>",
 			"clear cc <filter,>",
 			"clear cc <prefix,>",
 			//			"clear cc <response,>",
@@ -423,7 +423,7 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 
 		if id == Wildcard {
 			// delete all commands, same as 'clear cc command'
-			err := ccClear("command")
+			err := ccClear("commands")
 			if err != nil {
 				resp.Error = fmt.Sprintf("delete command %v: %v", Wildcard, err)
 			}
