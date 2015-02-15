@@ -64,7 +64,7 @@ New commands assign any current filters.`,
 			"cc <exec,> <command>...",
 			"cc <background,> <command>...",
 
-			"cc <command,>",
+			"cc <commands,>",
 
 			"cc <filter,> [filter]...",
 
@@ -94,7 +94,7 @@ See "help cc" for more information.`,
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	//	"response":	cliCCResponse,
-	"command":    cliCCCommand,
+	"commands":   cliCCCommand,
 	"filter":     cliCCFilter,
 	"send":       cliCCFileSend,
 	"recv":       cliCCFileRecv,
@@ -133,6 +133,7 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		// Invoke a particular handler
 		for k, fn := range ccCliSubHandlers {
 			if c.BoolArgs[k] {
+				log.Debug("cc handler %v", k)
 				return fn(c)
 			}
 		}
@@ -232,7 +233,9 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 
 	cmd := &ron.Command{
 		Record: true,
-		Filter: []*ron.Client{ccFilter},
+	}
+	if ccFilter != nil {
+		cmd.Filter = []*ron.Client{ccFilter}
 	}
 
 	// Add new files to send, expand globs
@@ -267,7 +270,9 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 
 	cmd := &ron.Command{
 		Record: true,
-		Filter: []*ron.Client{ccFilter},
+	}
+	if ccFilter != nil {
+		cmd.Filter = []*ron.Client{ccFilter}
 	}
 
 	// Add new files to receive
@@ -289,9 +294,11 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 
 	cmd := &ron.Command{
 		Record:     true,
-		Filter:     []*ron.Client{ccFilter},
 		Background: true,
 		Command:    c.ListArgs["command"],
+	}
+	if ccFilter != nil {
+		cmd.Filter = []*ron.Client{ccFilter}
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -308,8 +315,10 @@ func cliCCExec(c *minicli.Command) *minicli.Response {
 
 	cmd := &ron.Command{
 		Record:  true,
-		Filter:  []*ron.Client{ccFilter},
 		Command: c.ListArgs["command"],
+	}
+	if ccFilter != nil {
+		cmd.Filter = []*ron.Client{ccFilter}
 	}
 
 	id := ccNode.NewCommand(cmd)

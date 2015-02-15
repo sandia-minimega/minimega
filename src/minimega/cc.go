@@ -85,7 +85,9 @@ func ccClear(what string) (err error) {
 			}
 			ccUnmapPrefix(v.ID)
 		}
-		err = errors.New(strings.Join(errs, "\n"))
+		if len(errs) != 0 {
+			err = errors.New(strings.Join(errs, "\n"))
+		}
 	case "prefix":
 		ccPrefix = ""
 	}
