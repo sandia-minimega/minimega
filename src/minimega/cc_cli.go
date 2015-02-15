@@ -181,16 +181,17 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 
 	if len(c.ListArgs["filter"]) == 0 {
 		// Summary of current filter
-
-		resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
-		resp.Tabular = append(resp.Tabular, []string{
-			ccFilter.UUID,
-			ccFilter.Hostname,
-			ccFilter.Arch,
-			ccFilter.OS,
-			fmt.Sprintf("%v", ccFilter.IP),
-			fmt.Sprintf("%v", ccFilter.MAC),
-		})
+		if ccFilter != nil {
+			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
+			resp.Tabular = append(resp.Tabular, []string{
+				ccFilter.UUID,
+				ccFilter.Hostname,
+				ccFilter.Arch,
+				ccFilter.OS,
+				fmt.Sprintf("%v", ccFilter.IP),
+				fmt.Sprintf("%v", ccFilter.MAC),
+			})
+		}
 	} else {
 		filter := &ron.Client{}
 
