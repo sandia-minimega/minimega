@@ -129,7 +129,7 @@ func TestInvalidPatterns(t *testing.T) {
 
 func TestPrefix(t *testing.T) {
 	for i := range testPrefixes {
-		expected := testPrefixes[i].Prefix
+		want := testPrefixes[i].Prefix
 		patterns := testPrefixes[i].Patterns
 
 		t.Logf("Testing patterns: %q", patterns)
@@ -145,9 +145,9 @@ func TestPrefix(t *testing.T) {
 			handler := &Handler{Patterns: patterns}
 			Register(handler) // populate patternItems
 
-			prefix := handler.Prefix()
-			if prefix != expected {
-				t.Errorf("`%s` != `%s`", prefix, expected)
+			got := handler.SharedPrefix
+			if got != want {
+				t.Errorf("got `%s`, wanted `%s`", got, want)
 				break
 			}
 		}
