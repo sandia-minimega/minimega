@@ -23,6 +23,30 @@ var (
 	ccNode *ron.Ron
 )
 
+func ccMapPrefix(id int) {
+	if ccPrefix != "" {
+		ccPrefixMap[id] = ccPrefix
+		log.Debug("prefix map %v: %v", id, ccPrefix)
+	}
+}
+
+func ccUnmapPrefix(id int) {
+	if prefix, ok := ccPrefixMap[id]; ok {
+		delete(ccPrefixMap, id)
+		log.Debug("prefix unmap %v: %v", id, prefix)
+	}
+}
+
+func ccPrefixIDs(prefix string) []int {
+	var ret []int
+	for k, v := range ccPrefixMap {
+		if v == prefix {
+			ret = append(ret, k)
+		}
+	}
+	return ret
+}
+
 func ccStart(portStr string) (err error) {
 	port := CC_PORT
 	if portStr != "" {
@@ -41,69 +65,25 @@ func ccStart(portStr string) (err error) {
 	return nil
 }
 
-func ccClear(what, idStr string) (err error) {
-	log.Debug("cc clear -- %v:%v", what, idStr)
-	var id int
+func ccClear(what string) (err error) {
+	log.Debug("cc clear %v", what)
 
-	deleteAll := (idStr == Wildcard)
-	if !deleteAll {
-		id, err = strconv.Atoi(idStr)
-		if err != nil {
-			return fmt.Errorf("invalid id %v", idStr)
+	switch what {
+	case "filter":
+		ccFilter = nil
+	case "command":
+		errs := []string{}
+		for _, v := range ccNode.GetCommands() {
+			err := ccNode.DeleteCommand(v.ID)
+			if err != nil {
+				errMsg := fmt.Sprintf("cc delete command %v : %v", v.ID, err)
+				errs = append(errs, errMsg)
+			}
+			ccUnmapPrefix(v.ID)
 		}
-	}
-
-	if deleteAll {
-		switch what {
-		case "filter":
-			ccFilters = make(map[int]*ron.Client)
-		case "filesend":
-			ccFileSend = make(map[int]string)
-		case "filerecv":
-			ccFileRecv = make(map[int]string)
-		case "background":
-			ccBackground = false
-		case "record":
-			ccRecord = false
-		case "command":
-			ccCommand = nil
-		case "running":
-			errs := []string{}
-			for _, v := range ccNode.GetCommands() {
-				err := ccNode.DeleteCommand(v.ID)
-				if err != nil {
-					errMsg := fmt.Sprintf("cc delete command %v : %v", v.ID, err)
-					errs = append(errs, errMsg)
-				}
-			}
-			err = errors.New(strings.Join(errs, "\n"))
-		}
-	} else {
-		switch what {
-		case "filter":
-			if _, ok := ccFilters[id]; !ok {
-				return fmt.Errorf("invalid filter id: %v", id)
-			}
-			delete(ccFilters, id)
-		case "filesend":
-			if _, ok := ccFileSend[id]; !ok {
-				return fmt.Errorf("invalid file send id: %v", id)
-			}
-			delete(ccFileSend, id)
-		case "filerecv":
-			if _, ok := ccFileRecv[id]; !ok {
-				return fmt.Errorf("invalid file recv id: %v", id)
-			}
-			delete(ccFileRecv, id)
-		case "background":
-			ccBackground = false
-		case "record":
-			ccRecord = false
-		case "command":
-			ccCommand = nil
-		case "running":
-			err = ccNode.DeleteCommand(id)
-		}
+		err = errors.New(strings.Join(errs, "\n"))
+	case "prefix":
+		ccPrefix = ""
 	}
 
 	return
@@ -113,8 +93,8 @@ func ccClients() map[string]bool {
 	clients := make(map[string]bool)
 	if ccNode != nil {
 		c := ccNode.GetActiveClients()
-		for _, v := range c {
-			clients[v] = true
+		for k, _ := range c {
+			clients[k] = true
 		}
 		return clients
 	}

@@ -207,14 +207,27 @@ func (r *Ron) GetPort() int {
 	return r.port
 }
 
-func (r *Ron) GetActiveClients() []string {
-	var clients []string
+// return a copy of each active client
+func (r *Ron) GetActiveClients() map[string]*Client {
+	var clients = make(map[string]*Client)
 
 	r.clientLock.Lock()
 	defer r.clientLock.Unlock()
 
-	for c, _ := range r.clients {
-		clients = append(clients, c)
+	// deep copy
+	for u, c := range r.clients {
+		clients[u] = &Client{
+			UUID:     c.UUID,
+			Hostname: c.Hostname,
+			Arch:     c.Arch,
+			OS:       c.OS,
+		}
+		for _, ip := range c.IP {
+			clients[u].IP = append(clients[u].IP, ip)
+		}
+		for _, mac := range c.MAC {
+			clients[u].MAC = append(clients[u].MAC, mac)
+		}
 	}
 
 	log.Debug("active clients: %v", clients)

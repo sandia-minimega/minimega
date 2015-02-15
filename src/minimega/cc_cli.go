@@ -1,4 +1,4 @@
-// Copyright (2014) Sandia Corporation.
+// Copyright (2015) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
@@ -16,25 +16,14 @@ import (
 )
 
 var (
-	ccBackground bool
-	ccRecord     bool
-	ccSerial     bool
-	ccCommand    []string
-	ccFileRecv   map[int]string
-	ccFileSend   map[int]string
-	ccFilters    map[int]*ron.Client
-
-	ccFileRecvIDChan chan int
-	ccFileSendIDChan chan int
-	ccFilerIDChan    chan int
+	ccSerial    bool
+	ccFilter    *ron.Client
+	ccPrefix    string
+	ccPrefixMap map[int]string
 )
 
 func init() {
-	ccFileRecvIDChan = makeIDChan()
-	ccFileSendIDChan = makeIDChan()
-	ccFilerIDChan = makeIDChan()
-
-	ccRecord = true
+	ccPrefixMap = make(map[int]string)
 }
 
 var ccCLIHandlers = []minicli.Handler{
@@ -66,20 +55,23 @@ New commands assign any current filters.`,
 			"cc",
 			"cc <start,> [port]",
 			"cc <serial,>",
+			"cc <clients,>",
 
-			"cc <background,> [true,false]",
-			"cc <record,> [true,false]",
-			"cc <filerecv,> [file]...",
-			"cc <filesend,> [file]...",
+			"cc <prefix,> [prefix]",
+
+			"cc <send,> <file>...",
+			"cc <recv,> <file>...",
+			"cc <exec,> <command>...",
+			"cc <background,> <command>...",
+
+			"cc <command,>",
+
 			"cc <filter,> [filter]...",
-			"cc <command,> [command]...",
-			"cc <send,>",
-			"cc <running,>",
 
-			"cc <delete,> <filerecv,> <id or all>",
-			"cc <delete,> <filesend,> <id or all>",
-			"cc <delete,> <filter,> <id or all>",
-			"cc <delete,> <running,> <id or all>",
+			//	"cc <response,> <id or prefix or all>",
+
+			"cc <delete,> <command,> <id or prefix or all>",
+			//	"cc <delete,> <response,> <id or prefix or all>",
 		},
 		Call: wrapSimpleCLI(cliCC),
 	},
@@ -90,12 +82,10 @@ Resets state for the command and control infrastructure provided by minimega.
 See "help cc" for more information.`,
 		Patterns: []string{
 			"clear cc",
-			"clear cc <background,>",
 			"clear cc <command,>",
-			"clear cc <filerecv,>",
-			"clear cc <filesend,>",
 			"clear cc <filter,>",
-			"clear cc <record,>",
+			"clear cc <prefix,>",
+			//			"clear cc <response,>",
 		},
 		Call: wrapSimpleCLI(cliCCClear),
 	},
@@ -103,15 +93,17 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
-	"background": cliCCBackground,
+	//	"response":	cliCCResponse,
 	"command":    cliCCCommand,
-	"filerecv":   cliCCFileRecv,
-	"filesend":   cliCCFileSend,
 	"filter":     cliCCFilter,
-	"record":     cliCCRecord,
-	"running":    cliCCRunning,
-	"send":       cliCCSend,
+	"send":       cliCCFileSend,
+	"recv":       cliCCFileRecv,
+	"exec":       cliCCExec,
+	"background": cliCCBackground,
 	"serial":     cliCCSerial,
+	"prefix":     cliCCPrefix,
+	"delete":     cliCCDelete,
+	"clients":    cliCCClients,
 }
 
 func init() {
@@ -137,13 +129,7 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if c.BoolArgs["delete"] {
-		delete(c.BoolArgs, "delete")
-		// Deleting a specific ID, only one other BoolArgs should be set
-		for k := range c.BoolArgs {
-			err = ccClear(k, c.StringArgs["id"])
-		}
-	} else if len(c.BoolArgs) > 0 {
+	if len(c.BoolArgs) > 0 {
 		// Invoke a particular handler
 		for k, fn := range ccCliSubHandlers {
 			if c.BoolArgs[k] {
@@ -155,11 +141,11 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		port := ccNode.GetPort()
 		clients := ccNode.GetActiveClients()
 
-		resp.Header = []string{"port", "clients", "serial active"}
+		resp.Header = []string{"port", "number of clients", "serial active"}
 		resp.Tabular = [][]string{
 			[]string{
 				strconv.Itoa(port),
-				fmt.Sprintf("%v", clients),
+				fmt.Sprintf("%v", len(clients)),
 				strconv.FormatBool(ccSerial),
 			},
 		}
@@ -172,39 +158,41 @@ func cliCC(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-// Adding filter
+// prefix
+func cliCCPrefix(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	prefix, ok := c.StringArgs["prefix"]
+
+	if !ok {
+		resp.Response = ccPrefix
+		return resp
+	} else {
+		ccPrefix = prefix
+	}
+
+	return resp
+}
+
+// filter
 func cliCCFilter(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if len(c.ListArgs["filter"]) == 0 {
-		// Summary of current filters
-		var ids []int
-		for id := range ccFilters {
-			ids = append(ids, id)
-		}
-		sort.Ints(ids)
+		// Summary of current filter
 
-		resp.Header = []string{"ID", "UUID", "hostname", "arch", "OS", "IP", "MAC"}
-		resp.Tabular = [][]string{}
-		for _, id := range ids {
-			filter := ccFilters[id]
-			row := []string{
-				strconv.Itoa(id),
-				filter.UUID,
-				filter.Hostname,
-				filter.Arch,
-				filter.OS,
-				fmt.Sprintf("%v", filter.IP),
-				fmt.Sprintf("%v", filter.MAC),
-			}
-			resp.Tabular = append(resp.Tabular, row)
-		}
+		resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
+		resp.Tabular = append(resp.Tabular, []string{
+			ccFilter.UUID,
+			ccFilter.Hostname,
+			ccFilter.Arch,
+			ccFilter.OS,
+			fmt.Sprintf("%v", ccFilter.IP),
+			fmt.Sprintf("%v", ccFilter.MAC),
+		})
 	} else {
-		if ccFilters == nil {
-			ccFilters = make(map[int]*ron.Client)
-		}
-
 		filter := &ron.Client{}
+
 		// Process the id=value pairs
 		for _, v := range c.ListArgs["filter"] {
 			parts := strings.SplitN(v, "=", 2)
@@ -232,163 +220,107 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 			}
 		}
 
-		ccFilters[<-ccFilerIDChan] = filter
+		ccFilter = filter
 	}
 
 	return resp
 }
 
-// Adding filesend
+// send
 func cliCCFileSend(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if len(c.ListArgs["file"]) == 0 {
-		// Summary of current file sends
-		var ids []int
-		for id := range ccFileSend {
-			ids = append(ids, id)
-		}
-		sort.Ints(ids)
+	cmd := &ron.Command{
+		Record: true,
+		Filter: []*ron.Client{ccFilter},
+	}
 
-		resp.Header = []string{"ID", "File"}
-		resp.Tabular = [][]string{}
-		for _, id := range ids {
-			row := []string{
-				strconv.Itoa(id),
-				ccFileSend[id],
-			}
-			resp.Tabular = append(resp.Tabular, row)
-		}
-	} else {
-		if ccFileSend == nil {
-			ccFileSend = make(map[int]string)
+	// Add new files to send, expand globs
+	for _, fglob := range c.ListArgs["file"] {
+		files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
+		if err != nil {
+			resp.Error = fmt.Sprintf("non-existent files %v", fglob)
+			return resp
 		}
 
-		// Add new files to send, expand globs
-		for _, fglob := range c.ListArgs["file"] {
-			files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
+		for _, f := range files {
+			file, err := filepath.Rel(*f_iomBase, f)
 			if err != nil {
-				resp.Error = fmt.Sprintf("non-existent files %v", fglob)
+				resp.Error = fmt.Sprintf("parsing filesend: %v", err)
 				return resp
 			}
-
-			for _, f := range files {
-				file, err := filepath.Rel(*f_iomBase, f)
-				if err != nil {
-					resp.Error = fmt.Sprintf("parsing filesend: %v", err)
-					return resp
-				}
-				ccFileSend[<-ccFileSendIDChan] = file
-			}
+			cmd.FilesSend = append(cmd.FilesSend, file)
 		}
-	}
-
-	return resp
-}
-
-// Adding filerecv
-func cliCCFileRecv(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.ListArgs["file"]) == 0 {
-		// Summary of current file recvs
-		var ids []int
-		for id := range ccFileSend {
-			ids = append(ids, id)
-		}
-		sort.Ints(ids)
-
-		resp.Header = []string{"ID", "File"}
-		resp.Tabular = [][]string{}
-		for _, id := range ids {
-			row := []string{
-				strconv.Itoa(id),
-				ccFileSend[id],
-			}
-			resp.Tabular = append(resp.Tabular, row)
-		}
-	} else {
-		if ccFileRecv == nil {
-			ccFileRecv = make(map[int]string)
-		}
-
-		// Add new files to receive
-		for _, file := range c.ListArgs["file"] {
-			ccFileRecv[<-ccFileRecvIDChan] = file
-		}
-	}
-
-	return resp
-}
-
-// Get/set whether cc command runs in the background
-func cliCCBackground(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if !c.BoolArgs["true"] && !c.BoolArgs["false"] {
-		resp.Response = strconv.FormatBool(ccBackground)
-	} else {
-		ccBackground = c.BoolArgs["true"]
-	}
-
-	return resp
-}
-
-// Get/set whether cc command responses are recorded
-func cliCCRecord(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if !c.BoolArgs["true"] && !c.BoolArgs["false"] {
-		resp.Response = strconv.FormatBool(ccRecord)
-	} else {
-		ccRecord = c.BoolArgs["true"]
-	}
-
-	return resp
-}
-
-// Setting command
-func cliCCCommand(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.ListArgs["command"]) == 0 {
-		resp.Response = fmt.Sprintf("%v", ccCommand)
-	} else {
-		ccCommand = c.ListArgs["command"]
-	}
-
-	return resp
-}
-
-// Actually send off the command
-func cliCCSend(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	cmd := &ron.Command{
-		Record:     ccRecord,
-		Background: ccBackground,
-		Command:    ccCommand,
-	}
-
-	// Copy fields into cmd
-	for _, filter := range ccFilters {
-		cmd.Filter = append(cmd.Filter, filter)
-	}
-	for _, fsend := range ccFileSend {
-		cmd.FilesSend = append(cmd.FilesSend, fsend)
-	}
-	for _, frecv := range ccFileRecv {
-		cmd.FilesRecv = append(cmd.FilesRecv, frecv)
 	}
 
 	id := ccNode.NewCommand(cmd)
 	log.Debug("generated command %v : %v", id, cmd)
 
-	resp.Response = fmt.Sprintf("started command, id: %v", id)
+	ccMapPrefix(id)
+
 	return resp
 }
 
-// Starting serial handler
+// recv
+func cliCCFileRecv(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	cmd := &ron.Command{
+		Record: true,
+		Filter: []*ron.Client{ccFilter},
+	}
+
+	// Add new files to receive
+	for _, file := range c.ListArgs["file"] {
+		cmd.FilesRecv = append(cmd.FilesRecv, file)
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+
+	ccMapPrefix(id)
+
+	return resp
+}
+
+// background (just exec with background==true)
+func cliCCBackground(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	cmd := &ron.Command{
+		Record:     true,
+		Filter:     []*ron.Client{ccFilter},
+		Background: true,
+		Command:    c.ListArgs["command"],
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+
+	ccMapPrefix(id)
+
+	return resp
+}
+
+// exec
+func cliCCExec(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	cmd := &ron.Command{
+		Record:  true,
+		Filter:  []*ron.Client{ccFilter},
+		Command: c.ListArgs["command"],
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+
+	ccMapPrefix(id)
+
+	return resp
+}
+
+// serial
 func cliCCSerial(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -403,14 +335,48 @@ func cliCCSerial(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-// Enumerate the running commands
-func cliCCRunning(c *minicli.Command) *minicli.Response {
+// clients
+func cliCCClients(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	resp.Header = []string{
-		"ID", "command", "clients checked in",
-		"record", "background", "send files", "receive files",
-		"filter",
+		"UUID", "hostname", "arch", "OS",
+		"IP", "MAC",
+	}
+	resp.Tabular = [][]string{}
+
+	clients := ccNode.GetActiveClients()
+
+	var uuids []string
+	for k, _ := range clients {
+		uuids = append(uuids, k)
+	}
+	sort.Strings(uuids)
+
+	for _, i := range uuids {
+		v := clients[i]
+		row := []string{
+			v.UUID,
+			v.Hostname,
+			v.Arch,
+			v.OS,
+			fmt.Sprintf("%v", v.IP),
+			fmt.Sprintf("%v", v.MAC),
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return resp
+}
+
+// command
+func cliCCCommand(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	resp.Header = []string{
+		"ID", "prefix", "command", "responses", "background",
+		"send files", "receive files", "filter",
 	}
 	resp.Tabular = [][]string{}
 
@@ -425,9 +391,9 @@ func cliCCRunning(c *minicli.Command) *minicli.Response {
 		v := commands[i]
 		row := []string{
 			strconv.Itoa(v.ID),
+			ccPrefixMap[i],
 			fmt.Sprintf("%v", v.Command),
 			strconv.Itoa(len(v.CheckedIn)),
-			strconv.FormatBool(v.Record),
 			strconv.FormatBool(v.Background),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
@@ -435,6 +401,52 @@ func cliCCRunning(c *minicli.Command) *minicli.Response {
 		}
 
 		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return resp
+}
+
+func cliCCDelete(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if c.BoolArgs["command"] {
+		id := c.StringArgs["id"]
+
+		if id == Wildcard {
+			// delete all commands, same as 'clear cc command'
+			err := ccClear("command")
+			if err != nil {
+				resp.Error = fmt.Sprintf("delete command %v: %v", Wildcard, err)
+			}
+			return resp
+		}
+
+		// attempt to delete by prefix
+		ids := ccPrefixIDs(id)
+		if len(ids) != 0 {
+			for _, v := range ids {
+				err := ccNode.DeleteCommand(v)
+				if err != nil {
+					resp.Error = fmt.Sprintf("cc delete command %v : %v", v, err)
+					return resp
+				}
+				ccUnmapPrefix(v)
+			}
+			return resp
+		}
+
+		val, err := strconv.Atoi(id)
+		if err != nil {
+			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
+			return resp
+		}
+
+		err = ccNode.DeleteCommand(val)
+		if err != nil {
+			resp.Error = fmt.Sprintf("cc delete command %v : %v", val, err)
+			return resp
+		}
+		ccUnmapPrefix(val)
 	}
 
 	return resp
@@ -455,7 +467,7 @@ func cliCCClear(c *minicli.Command) *minicli.Response {
 		// command line or if we're clearing everything (nothing was
 		// specified).
 		if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
-			err = ccClear(k, Wildcard)
+			err = ccClear(k)
 			if err != nil {
 				break
 			}
