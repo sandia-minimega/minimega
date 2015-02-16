@@ -60,7 +60,7 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 					}
 					break
 				}
-				if r, ok := vncRecording[rhost]; ok {
+				if r, ok := vncKBRecording[rhost]; ok {
 					r.AddAction(string(sbuf[:n]))
 				}
 				n, err = base64.StdEncoding.Decode(dbuf, sbuf[:n])
