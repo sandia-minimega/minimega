@@ -6,8 +6,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
+	"os"
 	"path/filepath"
 	"ron"
 	"sort"
@@ -68,10 +70,10 @@ New commands assign any current filters.`,
 
 			"cc <filter,> [filter]...",
 
-			//	"cc <response,> <id or prefix or all>",
+			"cc <responses,> <id or prefix or all> [raw,]",
 
 			"cc <delete,> <command,> <id or prefix or all>",
-			//	"cc <delete,> <response,> <id or prefix or all>",
+			"cc <delete,> <response,> <id or prefix or all>",
 		},
 		Call: wrapSimpleCLI(cliCC),
 	},
@@ -85,7 +87,7 @@ See "help cc" for more information.`,
 			"clear cc <commands,>",
 			"clear cc <filter,>",
 			"clear cc <prefix,>",
-			//			"clear cc <response,>",
+			"clear cc <responses,>",
 		},
 		Call: wrapSimpleCLI(cliCCClear),
 	},
@@ -93,7 +95,7 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
-	//	"response":	cliCCResponse,
+	"responses":  cliCCResponses,
 	"commands":   cliCCCommand,
 	"filter":     cliCCFilter,
 	"send":       cliCCFileSend,
@@ -170,6 +172,93 @@ func cliCCPrefix(c *minicli.Command) *minicli.Response {
 		return resp
 	} else {
 		ccPrefix = prefix
+	}
+
+	return resp
+}
+
+// responses
+func cliCCResponses(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	raw := c.BoolArgs["raw"]
+	id := c.StringArgs["id"]
+
+	var files []string
+
+	walker := func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			files = append(files, path)
+			log.Debug("add to response files: %v", path)
+		}
+		return nil
+	}
+
+	if id == Wildcard {
+		// all responses
+		err := filepath.Walk(filepath.Join(*f_iomBase, "miniccc_responses"), walker)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	} else if _, err := strconv.Atoi(id); err == nil {
+		p := filepath.Join(*f_iomBase, "miniccc_responses", id)
+		_, err := os.Stat(p)
+		if err != nil {
+			resp.Error = fmt.Sprintf("no such response dir %v", p)
+			return resp
+		}
+		err = filepath.Walk(p, walker)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	} else {
+		// try a prefix. First, do we even have anything with this prefix?
+		ids := ccPrefixIDs(id)
+		if len(ids) == 0 {
+			resp.Error = fmt.Sprintf("no such prefix %v", id)
+			return resp
+		}
+
+		var totalFiles []string
+		for _, i := range ids {
+			p := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", i))
+			_, err := os.Stat(p)
+			if err != nil {
+				resp.Error = fmt.Sprintf("no such response dir %v", p)
+				return resp
+			}
+			err = filepath.Walk(p, walker)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+			totalFiles = append(totalFiles, files...)
+			files = []string{}
+		}
+		files = totalFiles
+	}
+
+	// now output files
+	for _, file := range files {
+		data, err := ioutil.ReadFile(file)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+		if !raw {
+			path, err := filepath.Rel(filepath.Join(*f_iomBase, "miniccc_responses"), file)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+			resp.Response += fmt.Sprintf("%v:\n", path)
+		}
+		resp.Response += fmt.Sprintf("%v\n", string(data))
 	}
 
 	return resp
@@ -457,6 +546,44 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 		ccUnmapPrefix(val)
+	} else if c.BoolArgs["response"] {
+		id := c.StringArgs["id"]
+
+		if id == Wildcard {
+			err := ccClear("responses")
+			if err != nil {
+				resp.Error = fmt.Sprintf("delete response %v: %v", Wildcard, err)
+			}
+			return resp
+		}
+
+		// attemp to delete by prefix
+		ids := ccPrefixIDs(id)
+		if len(ids) != 0 {
+			for _, v := range ids {
+				path := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", v))
+				err := os.RemoveAll(path)
+				if err != nil {
+					resp.Error = fmt.Sprintf("cc delete response %v: %v", v, err)
+					return resp
+				}
+			}
+			return resp
+		}
+
+		_, err := strconv.Atoi(id)
+		if err != nil {
+			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
+			return resp
+		}
+
+		path := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", id))
+
+		err = os.RemoveAll(path)
+		if err != nil {
+			resp.Error = fmt.Sprintf("cc delete response %v: %v", id, err)
+			return resp
+		}
 	}
 
 	return resp

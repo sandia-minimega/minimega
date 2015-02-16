@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	log "minilog"
+	"os"
+	"path/filepath"
 	"ron"
 	"strconv"
 	"strings"
@@ -87,6 +89,12 @@ func ccClear(what string) (err error) {
 		}
 		if len(errs) != 0 {
 			err = errors.New(strings.Join(errs, "\n"))
+		}
+	case "responses": // delete everything in miniccc_responses
+		path := filepath.Join(*f_iomBase, "miniccc_responses")
+		err := os.RemoveAll(path)
+		if err != nil {
+			return err
 		}
 	case "prefix":
 		ccPrefix = ""
