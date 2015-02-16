@@ -37,22 +37,22 @@ include regular commands, backgrounded commands, and any number of sent and/or
 received files. Commands will be executed in command creation order. For
 example, to send a file 'foo' and display the contents on a remote VM:
 
-	cc command new command="cat foo" filesend=foo
+	cc send=foo
+	cc exec="cat foo"
 
-Responses are generated (unless the 'norecord' flag is set) and written out to
-'<filebase>/miniccc_responses/<command id>/<client UUID>'. Files to be sent
-must be in '<filebase>'.
+Files to be sent must be in the filepath directory, as set -filepath
 
-Filters may be set to limit which clients may execute a posted command. Filters
-are the logical sum of products of every filter added. That is, a single given
-filter must match all given fields for the command to be executed. Multiple
-filters are allowed, in which case any matched filter will allow the command to
-execute. For example, to filter on VMs that are running windows AND have a
-specific IP, OR nodes that have a range of IPs:
+Responses are organized in a structure within <filepath>/miniccc_responses, and
+include subdirectories for each client response named by the client's UUID.
+Responses can also be displayed on the command line with the 'responses'
+command. 
 
-	cc filter add os=windows ip=10.0.0.1 cc filter add ip=12.0.0.0/24
+Filters may be set to limit which clients may execute a posted command.  For
+example, to filter on VMs that are running windows and have a specific IP.
 
-New commands assign any current filters.`,
+	cc filter os=windows ip=10.0.0.1 
+
+New commands assign any current filter.`,
 		Patterns: []string{
 			"cc",
 			"cc <start,> [port]",
