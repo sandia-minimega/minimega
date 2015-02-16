@@ -22,6 +22,7 @@ var serverMessages = map[uint8]func() interface{}{
 	TypeServerCutText:      func() interface{} { return new(_ServerCutText) },
 }
 
+// See RFC 6143 Section 7.3.2
 type Server struct {
 	Width  uint16
 	Height uint16

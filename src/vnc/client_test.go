@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestEncodeDecode(t *testing.T) {
+func TestWriteRead(t *testing.T) {
 	want := []Writable{
 		&SetPixelFormat{
 			PixelFormat: PixelFormat{
@@ -61,5 +61,22 @@ func TestEncodeDecode(t *testing.T) {
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("struct aren't equal -- got: %v, want: %v", got, want)
 		}
+	}
+}
+
+func TestReadBuffer(t *testing.T) {
+	b := []byte{0, 0, 0, 0, 32, 24, 0, 1, 0, 255, 0, 255, 0, 255, 16, 8, 0, 0,
+		0, 0, 2, 0, 0, 11, 0, 0, 0, 1, 0, 0, 0, 7, 255, 255, 254, 252, 0, 0,
+		0, 5, 0, 0, 0, 2, 0, 0, 0, 0, 255, 255, 255, 33, 255, 255, 255, 17,
+		255, 255, 255, 230, 255, 255, 255, 9, 255, 255, 255, 32, 3, 0, 0, 0, 0,
+		0, 3, 32, 2, 88, 2, 0, 0, 2, 0, 0, 0, 0, 255, 255, 255, 33}
+	buf := bytes.NewBuffer(b)
+
+	for buf.Len() > 0 {
+		msg, err := ReadClientMessage(buf)
+		if err != nil {
+			t.Fatalf("read message failed -- %v", err)
+		}
+		t.Logf("%#v\n", msg)
 	}
 }
