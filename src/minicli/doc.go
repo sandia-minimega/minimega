@@ -1,3 +1,7 @@
+// Copyright (2015) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 // The minicli package implements a simple command line interface for minimega.
 // During startup, minimega initializers will register callbacks with minicli.
 // Each registration consists of a pattern that the user's input should match,
