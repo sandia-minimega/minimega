@@ -141,13 +141,12 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		}
 	} else {
 		// Getting status
-		port := ccNode.GetPort()
 		clients := ccNode.GetActiveClients()
 
 		resp.Header = []string{"port", "number of clients", "serial active"}
 		resp.Tabular = [][]string{
 			[]string{
-				strconv.Itoa(port),
+				strconv.Itoa(ccPort),
 				fmt.Sprintf("%v", len(clients)),
 				strconv.FormatBool(ccSerial),
 			},
@@ -322,10 +321,7 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	cmd := &ron.Command{
-		Record: true,
-	}
-	if ccFilter != nil {
-		cmd.Filter = []*ron.Client{ccFilter}
+		Filter: ccFilter,
 	}
 
 	// Add new files to send, expand globs
@@ -359,10 +355,7 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	cmd := &ron.Command{
-		Record: true,
-	}
-	if ccFilter != nil {
-		cmd.Filter = []*ron.Client{ccFilter}
+		Filter: ccFilter,
 	}
 
 	// Add new files to receive
@@ -383,12 +376,9 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	cmd := &ron.Command{
-		Record:     true,
 		Background: true,
 		Command:    c.ListArgs["command"],
-	}
-	if ccFilter != nil {
-		cmd.Filter = []*ron.Client{ccFilter}
+		Filter:     ccFilter,
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -404,11 +394,8 @@ func cliCCExec(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	cmd := &ron.Command{
-		Record:  true,
 		Command: c.ListArgs["command"],
-	}
-	if ccFilter != nil {
-		cmd.Filter = []*ron.Client{ccFilter}
+		Filter:  ccFilter,
 	}
 
 	id := ccNode.NewCommand(cmd)

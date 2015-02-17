@@ -5,12 +5,19 @@
 package ron
 
 import (
+	"encoding/gob"
+	"fmt"
 	log "minilog"
 	"net"
 	"os"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
 )
 
-func (c *Client) Dial(parent string, port int) error {
+func (c *Client) dial(parent string, port int) error {
 	conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", parent, port))
 	if err != nil {
 		return err
@@ -27,12 +34,12 @@ func (c *Client) Dial(parent string, port int) error {
 	return nil
 }
 
-func (c *Client) DialSerial(path string) error {
-	conn, err := os.OpenFile(r.serialPath, os.O_RDWR, 0666)
+func (c *Client) dialSerial(path string) error {
+	conn, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
 		return err
 	}
-	
+
 	c.conn = conn
 
 	go c.handler()
@@ -62,7 +69,7 @@ func (c *Client) commandHandler() {
 
 		for _, id := range ids {
 			if id > c.commandCounter {
-				if !r.matchFilter(commands[id]) {
+				if !c.matchFilter(commands[id]) {
 					continue
 				}
 				c.commandCounter = id
@@ -118,12 +125,12 @@ func (c *Client) heartbeat() {
 
 	c.responseLock.Lock()
 	cin.Responses = c.Responses
-	c.Responses = []*Response
+	c.Responses = []*Response{}
 	c.responseLock.Unlock()
 
 	m := &Message{
-		UUID:         c.UUID,
-		Client:       cin,
+		UUID:   c.UUID,
+		Client: cin,
 	}
 
 	log.Debug("heartbeat %v", cin)
@@ -153,7 +160,7 @@ func (c *Client) mux() {
 			// handle a tunnel message
 		case MESSAGE_COMMAND:
 			// process an incoming command list
-			c.commands <- m.Commands	
+			c.commands <- m.Commands
 		default:
 			log.Error("unknown message type: %v", m.Type)
 			return
@@ -247,7 +254,7 @@ func (c *Client) matchFilter(command *Command) bool {
 			}
 		}
 		if !match {
-			continue
+			return false
 		}
 	}
 	if len(f.MAC) != 0 {
@@ -264,7 +271,7 @@ func (c *Client) matchFilter(command *Command) bool {
 			}
 		}
 		if !match {
-			continue
+			return false
 		}
 	}
 	return true

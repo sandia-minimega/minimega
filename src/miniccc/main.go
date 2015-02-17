@@ -24,7 +24,7 @@ var (
 	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
-	r          *ron.Ron
+	c          *ron.Client
 )
 
 var banner string = `miniccc, Copyright (2014) Sandia Corporation. 
@@ -56,17 +56,12 @@ func main() {
 
 	// start a ron client
 	var err error
-
-	if *f_serial != "" {
-		r, err = ron.NewSerial(*f_serial, ron.MODE_CLIENT, *f_path)
-	} else {
-		r, err = ron.New(*f_port, ron.MODE_CLIENT, *f_parent, *f_path)
-	}
+	c, err = ron.NewClient(*f_port, *f_parent, *f_serial, *f_path)
 	if err != nil {
 		log.Fatal("creating ron node: %v", err)
 	}
 
-	log.Debug("starting ron client with UUID: %v", r.UUID)
+	log.Debug("starting ron client with UUID: %v", c.UUID)
 
 	go client()
 

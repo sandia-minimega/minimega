@@ -5,8 +5,15 @@
 package ron
 
 import (
-	log "minilog"
+	"encoding/gob"
+	"fmt"
 	"io"
+	"io/ioutil"
+	log "minilog"
+	"net"
+	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 )
 
@@ -18,13 +25,13 @@ func (s *Server) GetCommands() map[int]*Command {
 
 	for k, v := range s.commands {
 		ret[k] = &Command{
-			ID:             v.ID,
-			Background:     v.Background,
-			Command:        v.Command,
-			FilesSend:      v.FilesSend,
-			FilesRecv:      v.FilesRecv,
-			CheckedIn:      v.CheckedIn,
-			Filter: v.Filter,
+			ID:         v.ID,
+			Background: v.Background,
+			Command:    v.Command,
+			FilesSend:  v.FilesSend,
+			FilesRecv:  v.FilesRecv,
+			CheckedIn:  v.CheckedIn,
+			Filter:     v.Filter,
 		}
 	}
 	return ret
@@ -38,7 +45,7 @@ func (s *Server) GetActiveClients() map[string]*Client {
 	defer s.clientLock.Unlock()
 
 	// deep copy
-	for u, c := range r.clients {
+	for u, c := range s.clients {
 		clients[u] = &Client{
 			UUID:     c.UUID,
 			Hostname: c.Hostname,
@@ -64,7 +71,7 @@ func (s *Server) Start(port int) error {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(r.path, RESPONSE_PATH), 0775)
+	err = os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775)
 	if err != nil {
 		return err
 	}
@@ -73,6 +80,8 @@ func (s *Server) Start(port int) error {
 	go s.handler(ln)
 	go s.responseHandler()
 	go s.periodic()
+
+	return nil
 }
 
 // send the command list to all clients periodically, unless the list has been
@@ -93,7 +102,7 @@ func (s *Server) periodic() {
 func (s *Server) broadcastCommands() {
 	commands := s.GetCommands()
 	m := &Message{
-		Type: MESSSAGE_COMMAND,
+		Type:     MESSAGE_COMMAND,
 		Commands: commands,
 	}
 	s.in <- m
@@ -108,7 +117,7 @@ func (s *Server) handler(ln net.Listener) {
 			log.Errorln(err)
 			return
 		}
-		
+
 		log.Debug("ron connection from: %v", conn.RemoteAddr())
 
 		go s.clientHandler(conn)
@@ -125,7 +134,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 
 	c.conn = conn
 
-	err := s.addClient(c)
+	err := s.addClient(&c)
 	if err != nil {
 		log.Errorln(err)
 		conn.Close()
@@ -205,7 +214,7 @@ func (s *Server) route(m *Message) {
 
 	if m.UUID == "" {
 		// all clients
-		for _, c := range s.clients
+		for _, c := range s.clients {
 			c.out <- m
 		}
 	} else {
@@ -220,7 +229,7 @@ func (s *Server) route(m *Message) {
 func (s *Server) responseHandler() {
 	for {
 		cin := <-s.responses
-		
+
 		// update client fields
 		s.clientLock.Lock()
 		if c, ok := s.clients[cin.UUID]; ok {
@@ -235,14 +244,14 @@ func (s *Server) responseHandler() {
 			s.clientLock.Unlock()
 			continue
 		}
-		s.clientLock.Unlock()	
+		s.clientLock.Unlock()
 
 		// ingest responses from this client
 		for _, v := range cin.Responses {
 			log.Debug("got response %v : %v", cin.UUID, v.ID)
 			s.commandCheckIn(v.ID, cin.UUID)
 
-			path := filepath.Join(r.path, RESPONSE_PATH, strconv.Itoa(v.ID), cin.UUID)
+			path := filepath.Join(s.path, RESPONSE_PATH, strconv.Itoa(v.ID), cin.UUID)
 			err := os.MkdirAll(path, os.FileMode(0770))
 			if err != nil {
 				log.Errorln(err)
@@ -288,10 +297,10 @@ func (s *Server) responseHandler() {
 func (s *Server) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 
-	r.commandLock.Lock()
-	defer r.commandLock.Unlock()
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
 
-	if c, ok := r.commands[id]; ok {
+	if c, ok := s.commands[id]; ok {
 		c.CheckedIn = append(c.CheckedIn, uuid)
 	} else {
 		log.Error("ron command checkin: command %v does not exist", id)
@@ -302,7 +311,7 @@ func (s *Server) DeleteCommand(id int) error {
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
 	if _, ok := s.commands[id]; ok {
-		delete(r.commands, id)
+		delete(s.commands, id)
 		return nil
 	} else {
 		return fmt.Errorf("command %v not found", id)
@@ -311,9 +320,9 @@ func (s *Server) DeleteCommand(id int) error {
 
 func (s *Server) NewCommand(c *Command) int {
 	c.ID = <-s.commandID
-	r.commandLock.Lock()
-	r.commands[c.ID] = c
-	r.commandLock.Unlock()
+	s.commandLock.Lock()
+	s.commands[c.ID] = c
+	s.commandLock.Unlock()
 	go s.broadcastCommands()
 	return c.ID
 }
@@ -325,22 +334,22 @@ func (s *Server) clientReaper() {
 		log.Debugln("clientReaper")
 		t := time.Now()
 		s.clientLock.Lock()
-		for k, v := range r.clients {
-			if t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED) * time.Second) {
+		for k, v := range s.clients {
+			if t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second) {
 				log.Debug("client %v expired", k)
 				go s.removeClient(k) // hack: put this in a goroutine to simplify locking
 			}
 		}
-		r.clientLock.Unlock()
+		s.clientLock.Unlock()
 	}
 }
 
 func (s *Server) GetActiveSerialPorts() []string {
-	r.serialLock.Lock()
-	defer r.serialLock.Unlock()
+	s.serialLock.Lock()
+	defer s.serialLock.Unlock()
 
 	var ret []string
-	for k, _ := range r.serialConns {
+	for k, _ := range s.serialConns {
 		ret = append(ret, k)
 	}
 

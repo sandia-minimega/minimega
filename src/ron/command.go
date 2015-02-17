@@ -41,5 +41,5 @@ type Response struct {
 
 	// Output from responding command, if any
 	Stdout string
+	Stderr string
 }
-

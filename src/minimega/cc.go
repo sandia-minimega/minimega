@@ -22,7 +22,8 @@ const (
 )
 
 var (
-	ccNode *ron.Ron
+	ccNode *ron.Server
+	ccPort int
 )
 
 func ccMapPrefix(id int) {
@@ -54,20 +55,20 @@ func ccStart(portStr string) (err error) {
 		return fmt.Errorf("cc service already running")
 	}
 
-	port := CC_PORT
+	ccPort = CC_PORT
 	if portStr != "" {
-		port, err = strconv.Atoi(portStr)
+		ccPort, err = strconv.Atoi(portStr)
 		if err != nil {
 			return fmt.Errorf("invalid port: %v", portStr)
 		}
 	}
 
-	ccNode, err = ron.New(port, ron.MODE_MASTER, "", *f_iomBase)
+	ccNode, err = ron.NewServer(ccPort, *f_iomBase)
 	if err != nil {
 		return fmt.Errorf("creating cc node %v", err)
 	}
 
-	log.Debug("created ron node at %v %v", port, *f_base)
+	log.Debug("created ron node at %v %v", ccPort, *f_base)
 	return nil
 }
 
@@ -145,7 +146,7 @@ func ccSerialWatcher() {
 		// dial the unconnected
 		log.Debug("ccSerialWatcher connecting to: %v", unconnected)
 		for _, v := range unconnected {
-			err := ccNode.SerialDialClient(v)
+			err := ccNode.DialSerial(v)
 			if err != nil {
 				log.Errorln(err)
 			}
@@ -155,38 +156,33 @@ func ccSerialWatcher() {
 	}
 }
 
-func filterString(filter []*ron.Client) string {
+func filterString(f *ron.Client) string {
 	var ret string
-	for _, f := range filter {
-		if len(ret) != 0 {
-			ret += " || "
-		}
-		ret += "( "
-		var j []string
-		if f.UUID != "" {
-			j = append(j, "uuid="+f.UUID)
-		}
-		if f.Hostname != "" {
-			j = append(j, "hostname="+f.Hostname)
-		}
-		if f.Arch != "" {
-			j = append(j, "arch="+f.Arch)
-		}
-		if f.OS != "" {
-			j = append(j, "os="+f.OS)
-		}
-		if len(f.IP) != 0 {
-			for _, y := range f.IP {
-				j = append(j, "ip="+y)
-			}
-		}
-		if len(f.MAC) != 0 {
-			for _, y := range f.MAC {
-				j = append(j, "mac="+y)
-			}
-		}
-		ret += strings.Join(j, " && ")
-		ret += " )"
+
+	var j []string
+	if f.UUID != "" {
+		j = append(j, "uuid="+f.UUID)
 	}
+	if f.Hostname != "" {
+		j = append(j, "hostname="+f.Hostname)
+	}
+	if f.Arch != "" {
+		j = append(j, "arch="+f.Arch)
+	}
+	if f.OS != "" {
+		j = append(j, "os="+f.OS)
+	}
+	if len(f.IP) != 0 {
+		for _, y := range f.IP {
+			j = append(j, "ip="+y)
+		}
+	}
+	if len(f.MAC) != 0 {
+		for _, y := range f.MAC {
+			j = append(j, "mac="+y)
+		}
+	}
+	ret += strings.Join(j, " && ")
+
 	return ret
 }
