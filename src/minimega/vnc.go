@@ -101,20 +101,28 @@ func (v *vncClient) Stop() error {
 	return v.err
 }
 
-// Input ought to be a base64-encoded string as read from the websocket
-// connected to NoVNC. If not, well, oops.
-func (r *vncKBRecord) AddAction(s string) {
-	d, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		log.Errorln(err)
-		return
+// RecordMessage records a VNC client-to-server message in plaintext
+func (r *vncKBRecord) RecordMessage(msg interface{}) {
+	delta := time.Now().Sub(r.last).Nanoseconds()
+
+	switch msg := msg.(type) {
+	case vnc.SetPixelFormat:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case vnc.SetEncodings:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case vnc.FramebufferUpdateRequest:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case vnc.KeyEvent:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case vnc.PointerEvent:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case vnc.ClientCutText:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	default:
+		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
 	}
 
-	if d[0] == 4 || d[0] == 5 {
-		record := fmt.Sprintf("%d %s\n", (time.Now().Sub(r.last)).Nanoseconds(), s)
-		r.file.WriteString(record)
-		r.last = time.Now()
-	}
+	r.last = time.Now()
 }
 
 func (r *vncKBRecord) Run() {
