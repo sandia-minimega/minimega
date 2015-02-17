@@ -31,6 +31,40 @@ CMD_TYPES = {
     'choiceItem':   1 << 4,
     'listItem':     1 << 5,
 }
+CMD_BLACKLIST = [
+    # filter these commands out so they don't show up in the API
+    # this list should also include any commands you want to generate manually
+    'help',
+    #'mesh send',
+]
+
+
+def parseCmdType(type):
+    ''' return a string describing the type of the argument
+    type := bitmask 'type' from cmd json object
+    '''
+
+    #zero out the optionalItem bit
+    type &= 0xfffffffe
+
+    #this will only return one type, the first one encountered
+    for name, value in CMD_TYPES.items():
+        if type & value:
+            return name
+
+    raise ValueError('Unknown command type', type)
+
+
+def parseArgs(args):
+    ''' return a list containing the parsed argument info
+    args := list of args from the json cmd object
+    '''
+    for arg in args:
+        arg.update({
+                    'optional': bool(arg['type'] & CMD_TYPES['optionalItem']),
+                    'type':     parseCmdType(arg['type']),
+                   })
+    return args
 
 
 def buildCommand(context, subs, cmd):
@@ -43,6 +77,7 @@ def buildCommand(context, subs, cmd):
     #cmdName needs to be a valid Python identifier
     cmdName = subs[0]
     cmdName = ''.join(filter(str.isalpha, cmdName))
+
     if cmdName in context:
         if 'subcommands' not in context[cmdName]:
             context[cmdName]['subcommands'] = {}
@@ -54,6 +89,9 @@ def buildCommand(context, subs, cmd):
     else:
         #leaf node
         context[cmdName] = cmd
+        prefix_len = len(cmd['shared_prefix'].split())
+        cmd['candidates'] = list(map(parseArgs, [arg[prefix_len:] for arg in
+                                                 cmd['parsed_patterns']]))
 
 
 def render(cmds):
@@ -62,8 +100,13 @@ def render(cmds):
                 'cmds':     {},
               }
     for c in cmds:
-        cmd = c['shared_prefix'].split()
-        buildCommand(context['cmds'], cmd, c)
+        cmd = c['shared_prefix']
+
+        #make sure this isn't a blacklisted command
+        if cmd in CMD_BLACKLIST:
+            continue
+
+        buildCommand(context['cmds'], cmd.split(), c)
 
     with open(TEMPLATE, 'rb') as tfile:
         t = jinja2.Template(tfile.read().decode())

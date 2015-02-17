@@ -41,6 +41,14 @@ class ValidationError(Error): pass
 DEFAULT_TIMEOUT = 60
 MSG_BLOCK_SIZE = 4096
 
+# HAX: python 2/3 hack
+try:
+    def _isstr(obj):
+        return isinstance(obj, basestr)
+except NameError:
+    def _isstr(obj):
+        return isinstance(obj, str)
+
 
 def connect(path):
     '''
@@ -48,6 +56,10 @@ def connect(path):
     a new minimega API object.
     '''
     return minimega(path)
+
+
+class Command:
+    pass
 
 
 class minimega:
@@ -79,9 +91,11 @@ class minimega:
         self.__init__(self._path, self._timeout)
 
     def _send(self, cmd, *args):
+        msg = json.dumps({'Original': cmd + ' ' + ' '.join(map(str, args))},
+                         separators=(',', ':'))
+        if self._debug:
+            print('[debug] sending cmd: ' + msg)
         with self.lock:
-            msg = json.dumps({'Command': cmd, 'Args': args},
-                             separators=(',', ':'))
             if len(msg) != self._socket.send(msg.encode('utf-8')):
                 raise Error('failed to write message to minimega')
 
@@ -100,19 +114,49 @@ class minimega:
             if not msg:
                 raise Error('Expected response, socket closed')
 
-            if response['Error']:
-                raise Error(response['Error'])
+            if self._debug:
+                print('[debug] response: ' + msg)
+            if response['Resp'][0]['Error']:
+                raise Error(response['Resp'][0]['Error'])
 
-            return response['Response']
+            return response['Resp']
 
 {% for cmd, info in cmds.items() recursive %}
     {% if info.subcommands %}
 {{ '    ' * loop.depth }}class {{ cmd }}:
     {{ loop(info.subcommands.items()) }}
     {% else %}
-{{ '    ' * loop.depth }}def {{ cmd }}(*args):
+{{ '    ' * loop.depth }}def {{ cmd }}(self, *args):
     {{ '    ' * loop.depth }}'''{{ info.help_long or info.help_short}}'''
-    {{ '    ' * loop.depth }}pass
+    {{ '    ' * loop.depth }}#validate the args
+    {{ '    ' * loop.depth }}candidates = {{ info.candidates }}
+    {{ '    ' * loop.depth }}for candidate in candidates:
+    {{ '    ' * loop.depth }}    argNum = 0
+    {{ '    ' * loop.depth }}    valid = True
+    {{ '    ' * loop.depth }}    try:
+    {{ '    ' * loop.depth }}        for arg in candidate:
+    {{ '    ' * loop.depth }}            if arg['type'] == 'stringItem' and not _isstr(args[argNum]):
+    {{ '    ' * loop.depth }}                valid = False
+    {{ '    ' * loop.depth }}                break
+    {{ '    ' * loop.depth }}            if arg['type'] == 'listItem' and not isinstance(args[argNum], list):
+    {{ '    ' * loop.depth }}                valid = False
+    {{ '    ' * loop.depth }}                break
+    {{ '    ' * loop.depth }}            if arg['type'] == 'commandItem' and not isinstance(args[argNum], Command):
+    {{ '    ' * loop.depth }}                valid = False
+    {{ '    ' * loop.depth }}                break
+    {{ '    ' * loop.depth }}            if arg['type'] == 'choiceItem' and args[argNum] not in arg['choices']:
+    {{ '    ' * loop.depth }}                valid = False
+    {{ '    ' * loop.depth }}                break
+    {{ '    ' * loop.depth }}            argNum += 1
+    {{ '    ' * loop.depth }}    except IndexError:
+    {{ '    ' * loop.depth }}        if not candidate[argNum]['optional']:
+    {{ '    ' * loop.depth }}           valid = False
+    {{ '    ' * loop.depth }}        pass
+    {{ '    ' * loop.depth }}    if valid:
+    {{ '    ' * loop.depth }}        if args[argNum:]:
+    {{ '    ' * loop.depth }}            continue
+    {{ '    ' * loop.depth }}        return self._send('{{ info.shared_prefix }}', *args)
+    {{ '    ' * loop.depth }}raise ValidationError('could not understand command', args)
     {% endif %}
 {% endfor %}
 

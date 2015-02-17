@@ -7,3 +7,4 @@ src/version/version.go
 __pycache__
 doc/*.html
 doc/markdown/api
+venv/
