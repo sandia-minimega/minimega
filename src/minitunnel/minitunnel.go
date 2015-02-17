@@ -22,6 +22,7 @@ const (
 	CONNECT
 	CLOSED
 	DATA
+	FORWARD
 )
 
 type Tunnel struct {
@@ -33,13 +34,14 @@ type Tunnel struct {
 }
 
 type tunnelMessage struct {
-	Type  int
-	Ack   bool
-	TID   int32
-	Host  string
-	Port  int
-	Error string
-	Data  []byte
+	Type   int
+	Ack    bool
+	TID    int32
+	Source int
+	Host   string
+	Port   int
+	Error  string
+	Data   []byte
 }
 
 func init() {
@@ -141,6 +143,8 @@ func (t *Tunnel) mux() {
 		// create new sessions if necessary
 		if m.Type == CONNECT {
 			go t.handleRemote(&m)
+		} else if m.Type == FORWARD {
+			go t.handleReverse(&m)
 		} else if c, ok := t.tids[m.TID]; ok {
 			// route the message to the handler by TID
 			c <- &m
@@ -148,6 +152,19 @@ func (t *Tunnel) mux() {
 			log.Info("invalid TID: %v", m.TID)
 		}
 	}
+}
+
+func (t *Tunnel) handleReverse(m *tunnelMessage) {
+	resp := &tunnelMessage{
+		Type: DATA,
+		TID:  m.TID,
+		Ack:  true,
+	}
+	err := t.Forward(m.Source, m.Host, m.Port)
+	if err != nil {
+		resp.Error = err.Error()
+	}
+	t.out <- resp
 }
 
 // Forward a local port to a remote host and destination port
@@ -165,6 +182,26 @@ func (t *Tunnel) Forward(source int, host string, dest int) error {
 // Create a reverse forwarded port from a source port on the remote end,
 // destination host, and destination port on the local end.
 func (t *Tunnel) Reverse(source int, host string, dest int) error {
+	// create a temporary TID registration in order to get an ACK back
+	TID := rand.Int31()
+	in := t.registerTID(TID)
+	defer t.unregisterTID(TID)
+
+	// send a message to invoke Forward() on the remote side
+	t.out <- &tunnelMessage{
+		Type:   FORWARD,
+		TID:    TID,
+		Source: source,
+		Host:   host,
+		Port:   dest,
+	}
+
+	m := <-in
+
+	if m.Error != "" {
+		return fmt.Errorf("%v", m.Error)
+	}
+
 	return nil
 }
 

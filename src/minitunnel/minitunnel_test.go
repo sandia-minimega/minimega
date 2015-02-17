@@ -207,3 +207,109 @@ func TestMultiTunnel(t *testing.T) {
 	conn.Close()
 	conn2.Close()
 }
+
+func TestReverse(t *testing.T) {
+	g, h := net.Pipe()
+
+	go func() {
+		errListen := ListenAndServe(g)
+		if errListen != nil {
+			t.Fatalf("ListenAndServe: %v", errListen)
+		}
+	}()
+
+	tun, errDial := Dial(h)
+	if errDial != nil {
+		t.Fatalf("Dial: %v", errDial)
+	}
+
+	ln, err := net.Listen("tcp", ":4450")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	go func() {
+		rconn, err := ln.Accept()
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		var buf = make([]byte, 10)
+		n, err := rconn.Read(buf)
+		if err != nil {
+			t.Fatalf("%v %v %v", err, n, string(buf[:n]))
+		}
+		if string(buf[:n]) != "hello" {
+			t.Fatalf("invalid message: %v", string(buf[:n]))
+		}
+		_, err = rconn.Write([]byte("world"))
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
+		rconn.Close()
+	}()
+
+	err = tun.Reverse(4451, "localhost", 4450)
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+
+	conn, err := net.Dial("tcp", ":4451")
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	_, err = conn.Write([]byte("hello"))
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	var buf = make([]byte, 10)
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("%v %v %v", err, n, string(buf[:n]))
+	}
+	if string(buf[:n]) != "world" {
+		t.Fatalf("invalid message: %v", string(buf[:n]))
+	}
+	conn.Close()
+}
+
+func TestFowardInvalid(t *testing.T) {
+	g, h := net.Pipe()
+
+	go func() {
+		errListen := ListenAndServe(g)
+		if errListen != nil {
+			t.Fatalf("ListenAndServe: %v", errListen)
+		}
+	}()
+
+	tun, errDial := Dial(h)
+	if errDial != nil {
+		t.Fatalf("Dial: %v", errDial)
+	}
+
+	err := tun.Forward(-1, "localhost", 450)
+	if err == nil {
+		t.Fatalf("nil error on Forward")
+	}
+}
+
+func TestReverseInvalid(t *testing.T) {
+	g, h := net.Pipe()
+
+	go func() {
+		errListen := ListenAndServe(g)
+		if errListen != nil {
+			t.Fatalf("ListenAndServe: %v", errListen)
+		}
+	}()
+
+	tun, errDial := Dial(h)
+	if errDial != nil {
+		t.Fatalf("Dial: %v", errDial)
+	}
+
+	err := tun.Reverse(-1, "localhost", 450)
+	if err == nil {
+		t.Fatalf("nil error on Forward")
+	}
+}
