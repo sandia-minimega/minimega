@@ -199,13 +199,13 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 
 	if id == Wildcard {
 		// all responses
-		err := filepath.Walk(filepath.Join(*f_iomBase, "miniccc_responses"), walker)
+		err := filepath.Walk(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), walker)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 	} else if _, err := strconv.Atoi(id); err == nil {
-		p := filepath.Join(*f_iomBase, "miniccc_responses", id)
+		p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, id)
 		_, err := os.Stat(p)
 		if err != nil {
 			resp.Error = fmt.Sprintf("no such response dir %v", p)
@@ -226,7 +226,7 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 
 		var totalFiles []string
 		for _, i := range ids {
-			p := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", i))
+			p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", i))
 			_, err := os.Stat(p)
 			if err != nil {
 				resp.Error = fmt.Sprintf("no such response dir %v", p)
@@ -251,7 +251,7 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 		if !raw {
-			path, err := filepath.Rel(filepath.Join(*f_iomBase, "miniccc_responses"), file)
+			path, err := filepath.Rel(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), file)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
@@ -561,7 +561,7 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		ids := ccPrefixIDs(id)
 		if len(ids) != 0 {
 			for _, v := range ids {
-				path := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", v))
+				path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", v))
 				err := os.RemoveAll(path)
 				if err != nil {
 					resp.Error = fmt.Sprintf("cc delete response %v: %v", v, err)
@@ -577,7 +577,7 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		path := filepath.Join(*f_iomBase, "miniccc_responses", fmt.Sprintf("%v", id))
+		path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", id))
 
 		err = os.RemoveAll(path)
 		if err != nil {

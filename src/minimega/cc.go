@@ -91,7 +91,7 @@ func ccClear(what string) (err error) {
 			err = errors.New(strings.Join(errs, "\n"))
 		}
 	case "responses": // delete everything in miniccc_responses
-		path := filepath.Join(*f_iomBase, "miniccc_responses")
+		path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
 		err := os.RemoveAll(path)
 		if err != nil {
 			return err
