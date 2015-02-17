@@ -157,6 +157,10 @@ func ccSerialWatcher() {
 }
 
 func filterString(f *ron.Client) string {
+	if f == nil {
+		return ""
+	}
+
 	var ret string
 
 	var j []string

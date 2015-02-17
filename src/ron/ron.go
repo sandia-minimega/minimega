@@ -89,7 +89,7 @@ func NewServer(port int, path string) (*Server, error) {
 	}
 
 	go func() {
-		id := 0
+		id := 1
 		for {
 			s.commandID <- id
 			id++

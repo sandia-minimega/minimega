@@ -18,6 +18,8 @@ import (
 )
 
 func (c *Client) dial(parent string, port int) error {
+	log.Debug("ron dial: %v:%v", parent, port)
+
 	conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", parent, port))
 	if err != nil {
 		return err
@@ -35,6 +37,8 @@ func (c *Client) dial(parent string, port int) error {
 }
 
 func (c *Client) dialSerial(path string) error {
+	log.Debug("ron dialSerial; %v", path)
+
 	conn, err := os.OpenFile(path, os.O_RDWR, 0666)
 	if err != nil {
 		return err
@@ -52,6 +56,8 @@ func (c *Client) dialSerial(path string) error {
 }
 
 func (c *Client) Respond(r *Response) {
+	log.Debug("ron Respond: %v", r.ID)
+
 	c.responseLock.Lock()
 	c.Responses = append(c.Responses, r)
 	c.responseLock.Unlock()
@@ -68,10 +74,12 @@ func (c *Client) commandHandler() {
 		sort.Ints(ids)
 
 		for _, id := range ids {
+			log.Debug("ron commandHandler: %v", id)
 			if id > c.commandCounter {
 				if !c.matchFilter(commands[id]) {
 					continue
 				}
+				log.Debug("ron commandHandler match: %v", id)
 				c.commandCounter = id
 				c.Commands <- commands[id]
 			}
@@ -80,6 +88,8 @@ func (c *Client) commandHandler() {
 }
 
 func (c *Client) handler() {
+	log.Debug("ron handler")
+
 	enc := gob.NewEncoder(c.conn)
 	dec := gob.NewDecoder(c.conn)
 
@@ -129,6 +139,7 @@ func (c *Client) heartbeat() {
 	c.responseLock.Unlock()
 
 	m := &Message{
+		Type:   MESSAGE_CLIENT,
 		UUID:   c.UUID,
 		Client: cin,
 	}
@@ -142,12 +153,13 @@ func (c *Client) heartbeat() {
 func (c *Client) periodic() {
 	rate := time.Duration(HEARTBEAT_RATE * time.Second)
 	for {
+		log.Debug("ron periodic")
 		now := time.Now()
-		if c.lastHeartbeat.Sub(now) > rate {
+		if now.Sub(c.lastHeartbeat) > rate {
 			// issue a heartbeat
 			c.heartbeat()
 		}
-		sleep := rate - c.lastHeartbeat.Sub(now)
+		sleep := rate - now.Sub(c.lastHeartbeat)
 		time.Sleep(sleep)
 	}
 }
@@ -158,8 +170,10 @@ func (c *Client) mux() {
 		switch m.Type {
 		case MESSAGE_TUNNEL:
 			// handle a tunnel message
+			log.Debugln("ron MESSAGE_TUNNEL")
 		case MESSAGE_COMMAND:
 			// process an incoming command list
+			log.Debugln("ron MESSAGE_COMMAND")
 			c.commands <- m.Commands
 		default:
 			log.Error("unknown message type: %v", m.Type)

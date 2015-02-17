@@ -34,6 +34,9 @@ func (s *Server) GetCommands() map[int]*Command {
 			Filter:     v.Filter,
 		}
 	}
+
+	log.Debug("ron GetCommands: %v", ret)
+
 	return ret
 }
 
@@ -60,7 +63,8 @@ func (s *Server) GetActiveClients() map[string]*Client {
 		}
 	}
 
-	log.Debug("active clients: %v", clients)
+	log.Debug("ron GetActiveClients: %v", clients)
+
 	return clients
 }
 
@@ -80,6 +84,7 @@ func (s *Server) Start(port int) error {
 	go s.handler(ln)
 	go s.responseHandler()
 	go s.periodic()
+	go s.clientReaper()
 
 	return nil
 }
@@ -89,17 +94,19 @@ func (s *Server) Start(port int) error {
 func (s *Server) periodic() {
 	rate := time.Duration(HEARTBEAT_RATE * time.Second)
 	for {
+		log.Debugln("ron periodic")
 		now := time.Now()
-		if s.lastBroadcast.Sub(now) > rate {
+		if now.Sub(s.lastBroadcast) > rate {
 			// issue a broadcast
 			s.broadcastCommands()
 		}
-		sleep := rate - s.lastBroadcast.Sub(now)
+		sleep := rate - now.Sub(s.lastBroadcast)
 		time.Sleep(sleep)
 	}
 }
 
 func (s *Server) broadcastCommands() {
+	log.Debugln("ron broadcastCommands")
 	commands := s.GetCommands()
 	m := &Message{
 		Type:     MESSAGE_COMMAND,
@@ -110,7 +117,7 @@ func (s *Server) broadcastCommands() {
 }
 
 func (s *Server) handler(ln net.Listener) {
-	log.Debugln("handler")
+	log.Debugln("ron handler")
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -125,16 +132,24 @@ func (s *Server) handler(ln net.Listener) {
 }
 
 func (s *Server) clientHandler(conn io.ReadWriteCloser) {
+	log.Debugln("ron clientHandler")
+
 	enc := gob.NewEncoder(conn)
 	dec := gob.NewDecoder(conn)
 
 	// get the first client struct as a handshake
-	var c Client
-	dec.Decode(&c)
+	var handshake Message
+	err := dec.Decode(&handshake)
+	if err != nil {
+		log.Errorln(err)
+		conn.Close()
+		return
+	}
+	c := handshake.Client
 
 	c.conn = conn
 
-	err := s.addClient(&c)
+	err = s.addClient(c)
 	if err != nil {
 		log.Errorln(err)
 		conn.Close()
@@ -145,9 +160,14 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 	go func() {
 		for {
 			m := <-c.out
+			if m == nil {
+				return
+			}
 			err := enc.Encode(m)
 			if err != nil {
-				log.Errorln(err)
+				if err != io.EOF {
+					log.Errorln(err)
+				}
 				s.removeClient(c.UUID)
 				return
 			}
@@ -158,7 +178,9 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		var m Message
 		err := dec.Decode(&m)
 		if err != nil {
-			log.Errorln(err)
+			if err != io.EOF {
+				log.Errorln(err)
+			}
 			s.removeClient(c.UUID)
 			return
 		}
@@ -167,6 +189,8 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 }
 
 func (s *Server) addClient(c *Client) error {
+	log.Debug("ron addClient: %v", c.UUID)
+
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
@@ -181,9 +205,12 @@ func (s *Server) addClient(c *Client) error {
 
 // conditionally remove client from the client list
 func (s *Server) removeClient(uuid string) {
+	log.Debug("ron removeClient: %v", uuid)
+
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 	if c, ok := s.clients[uuid]; ok {
+		close(c.out)
 		c.conn.Close()
 		delete(s.clients, uuid)
 	}
@@ -195,11 +222,14 @@ func (s *Server) mux() {
 		switch m.Type {
 		case MESSAGE_CLIENT:
 			// handle a client response
+			log.Debugln("ron MESSAGE_CLIENT")
 			s.responses <- m.Client
 		case MESSAGE_TUNNEL:
 			// handle a tunnel message
+			log.Debugln("ron MESSAGE_TUNNEL")
 		case MESSAGE_COMMAND:
 			// route a command to one or all clients
+			log.Debugln("ron MESSAGE_COMMAND")
 			s.route(m)
 		default:
 			log.Error("unknown message type: %v", m.Type)
@@ -209,6 +239,8 @@ func (s *Server) mux() {
 }
 
 func (s *Server) route(m *Message) {
+	log.Debug("ron route: %v", m.UUID)
+
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
@@ -229,6 +261,8 @@ func (s *Server) route(m *Message) {
 func (s *Server) responseHandler() {
 	for {
 		cin := <-s.responses
+
+		log.Debug("ron responseHandler: %v", cin.UUID)
 
 		// update client fields
 		s.clientLock.Lock()
@@ -308,6 +342,8 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 }
 
 func (s *Server) DeleteCommand(id int) error {
+	log.Debug("ron DeleteCommand: %v", id)
+
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
 	if _, ok := s.commands[id]; ok {
@@ -319,6 +355,8 @@ func (s *Server) DeleteCommand(id int) error {
 }
 
 func (s *Server) NewCommand(c *Command) int {
+	log.Debug("ron NewCommand: %v", c)
+
 	c.ID = <-s.commandID
 	s.commandLock.Lock()
 	s.commands[c.ID] = c
@@ -352,6 +390,8 @@ func (s *Server) GetActiveSerialPorts() []string {
 	for k, _ := range s.serialConns {
 		ret = append(ret, k)
 	}
+
+	log.Debug("ron GetActiveSerialPorts: %v", ret)
 
 	return ret
 }
