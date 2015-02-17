@@ -137,7 +137,7 @@ func (m *ClientCutText) Write(w io.Writer) error {
 func ReadClientMessage(r io.Reader) (interface{}, error) {
 	var msgType uint8
 	if err := binary.Read(r, binary.BigEndian, &msgType); err != nil {
-		return nil, fmt.Errorf("unable to read message type -- %s", err.Error())
+		return nil, err
 	}
 
 	if _, ok := clientMessages[msgType]; !ok {
@@ -148,8 +148,10 @@ func ReadClientMessage(r io.Reader) (interface{}, error) {
 	msg := clientMessages[msgType]()
 
 	if err := binary.Read(r, binary.BigEndian, msg); err != nil {
-		return nil, fmt.Errorf("unable to read message -- %s", err.Error())
+		return nil, err
 	}
+
+	var err error
 
 	// Do extra processing on messages that have variable length fields
 	switch msgType {
@@ -157,20 +159,18 @@ func ReadClientMessage(r io.Reader) (interface{}, error) {
 		newMsg := &SetEncodings{_SetEncodings: *msg.(*_SetEncodings)}
 		newMsg.Encodings = make([]int32, newMsg.NumberOfEncodings)
 
-		if err := binary.Read(r, binary.BigEndian, &newMsg.Encodings); err != nil {
-			return nil, fmt.Errorf("unable to read encodings -- %s", err.Error())
-		}
-
+		err = binary.Read(r, binary.BigEndian, &newMsg.Encodings)
 		msg = newMsg
 	case TypeClientCutText:
 		newMsg := &ClientCutText{_ClientCutText: *msg.(*_ClientCutText)}
 		newMsg.Text = make([]uint8, newMsg.Length)
 
-		if err := binary.Read(r, binary.BigEndian, &newMsg.Text); err != nil {
-			return nil, fmt.Errorf("unable to read text -- %s", err.Error())
-		}
-
+		err = binary.Read(r, binary.BigEndian, &newMsg.Text)
 		msg = newMsg
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	return msg, nil
