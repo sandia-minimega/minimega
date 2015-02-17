@@ -334,3 +334,45 @@ func (s *Server) clientReaper() {
 		r.clientLock.Unlock()
 	}
 }
+
+func (s *Server) GetActiveSerialPorts() []string {
+	r.serialLock.Lock()
+	defer r.serialLock.Unlock()
+
+	var ret []string
+	for k, _ := range r.serialConns {
+		ret = append(ret, k)
+	}
+
+	return ret
+}
+
+// Dial a client serial port. Used by a master ron node only.
+func (s *Server) DialSerial(path string) error {
+	log.Debug("DialSerial: %v", path)
+
+	s.serialLock.Lock()
+	defer s.serialLock.Unlock()
+
+	// are we already connected to this client?
+	if _, ok := s.serialConns[path]; ok {
+		return fmt.Errorf("already connected to serial client %v", path)
+	}
+
+	// connect!
+	serial, err := net.Dial("unix", path)
+	if err != nil {
+		return err
+	}
+
+	s.serialConns[path] = serial
+	go func() {
+		s.clientHandler(serial)
+		s.serialLock.Lock()
+		delete(s.serialConns, path)
+		s.serialLock.Unlock()
+		log.Debug("disconnected from serial client: %v", path)
+	}()
+
+	return nil
+}

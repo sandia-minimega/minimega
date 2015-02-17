@@ -29,6 +29,7 @@ const (
 
 type Server struct {
 	serialConns map[string]net.Conn
+	serialLock sync.Mutex
 	commands map[int]*Command
 	commandLock sync.Mutex
 	commandCounter int
@@ -58,6 +59,10 @@ type Client struct {
 	MAC       []string
 
 	Responses []*Response
+	Commands chan *Command
+	responseLock sync.Mutex
+	commands chan map[int]*Command
+	lastHeartbeat time.Time
 }
 
 type Message struct {
@@ -107,6 +112,9 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 		path: path,
 		in: make(chan *Message, 1024),
 		out: make(chan *Message, 1024),
+		Commands: make(chan *Command, 1024),
+		commands: make(chan map[int]*Command, 1024),
+		lastHeartbeat: time.Now(),
 	}
 
 	if serial != "" {
