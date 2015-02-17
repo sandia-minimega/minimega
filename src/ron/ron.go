@@ -16,6 +16,7 @@ const (
 	MESSAGE_COMMAND = iota
 	MESSAGE_CLIENT
 	MESSAGE_TUNNEL
+	MESSAGE_FILE
 )
 
 const (
@@ -62,6 +63,7 @@ type Client struct {
 	responseLock  sync.Mutex
 	commands      chan map[int]*Command
 	lastHeartbeat time.Time
+	files         chan *Message
 }
 
 type Message struct {
@@ -69,6 +71,9 @@ type Message struct {
 	UUID     string
 	Commands map[int]*Command
 	Client   *Client
+	File     []byte
+	Filename string
+	Error    string
 	// Tunnel []byte
 }
 
@@ -115,6 +120,7 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 		Commands:      make(chan *Command, 1024),
 		commands:      make(chan map[int]*Command, 1024),
 		lastHeartbeat: time.Now(),
+		files:         make(chan *Message, 1024),
 	}
 
 	if serial != "" {

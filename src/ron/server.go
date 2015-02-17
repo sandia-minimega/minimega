@@ -231,10 +231,47 @@ func (s *Server) mux() {
 			// route a command to one or all clients
 			log.Debugln("ron MESSAGE_COMMAND")
 			s.route(m)
+		case MESSAGE_FILE:
+			// send a file if it exists
+			s.sendFile(m)
 		default:
 			log.Error("unknown message type: %v", m.Type)
 			return
 		}
+	}
+}
+
+func (s *Server) sendFile(m *Message) {
+	log.Debug("ron sendFile: %v", m.Filename)
+
+	filename := filepath.Join(s.path, m.Filename)
+	info, err := os.Stat(filename)
+	if err != nil {
+		e := fmt.Errorf("file %v does not exist: %v", filename, err)
+		m.Error = e.Error()
+		log.Errorln(e)
+	} else if info.IsDir() {
+		e := fmt.Errorf("file %v is a directory", filename)
+		m.Error = e.Error()
+		log.Errorln(e)
+	} else {
+		// read the file
+		m.File, err = ioutil.ReadFile(filename)
+		if err != nil {
+			e := fmt.Errorf("file %v: %v", filename, err)
+			m.Error = e.Error()
+			log.Errorln(e)
+		}
+	}
+
+	// route this message ourselves instead of using the mux, because we
+	// want the type to still be FILE
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	if c, ok := s.clients[m.UUID]; ok {
+		c.out <- m
+	} else {
+		log.Error("no such client %v", m.UUID)
 	}
 }
 

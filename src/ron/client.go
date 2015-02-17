@@ -175,11 +175,34 @@ func (c *Client) mux() {
 			// process an incoming command list
 			log.Debugln("ron MESSAGE_COMMAND")
 			c.commands <- m.Commands
+		case MESSAGE_FILE:
+			// let GetFile know we have this file or an error
+			c.files <- m
 		default:
 			log.Error("unknown message type: %v", m.Type)
 			return
 		}
 	}
+}
+
+func (c *Client) GetFile(file string) ([]byte, error) {
+	m := &Message{
+		Type:     MESSAGE_FILE,
+		UUID:     c.UUID,
+		Filename: file,
+	}
+	c.out <- m
+
+	resp := <-c.files
+	if resp.Filename != file {
+		return nil, fmt.Errorf("filename mismatch: %v : %v", file, resp.Filename)
+	}
+
+	if resp.Error != "" {
+		return nil, fmt.Errorf("%v", resp.Error)
+	}
+
+	return resp.File, nil
 }
 
 func getNetworkInfo() ([]string, []string) {
