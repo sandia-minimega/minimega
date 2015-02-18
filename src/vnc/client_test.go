@@ -2,6 +2,7 @@ package vnc
 
 import (
 	"bytes"
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -78,5 +79,51 @@ func TestReadBuffer(t *testing.T) {
 			t.Fatalf("read message failed -- %v", err)
 		}
 		t.Logf("%#v\n", msg)
+	}
+}
+
+func TestStringParse(t *testing.T) {
+	vals := []fmt.Stringer{
+		&KeyEvent{
+			DownFlag: 0, Key: 2,
+		},
+		&KeyEvent{
+			DownFlag: 1, Key: 2,
+		},
+		&KeyEvent{
+			DownFlag: 1, Key: 3,
+		},
+		&PointerEvent{
+			ButtonMask: 0, XPosition: 100, YPosition: 200,
+		},
+		&PointerEvent{
+			ButtonMask: 0, XPosition: 105, YPosition: 200,
+		},
+		&PointerEvent{
+			ButtonMask: 1, XPosition: 105, YPosition: 205,
+		},
+	}
+
+	for _, want := range vals {
+		var got interface{}
+		var err error
+
+		s := want.String()
+
+		switch want.(type) {
+		case *KeyEvent:
+			got, err = ParseKeyEvent(s)
+		case *PointerEvent:
+			got, err = ParsePointerEvent(s)
+		}
+
+		if err != nil {
+			t.Errorf("parse failed -- %v", err)
+			continue
+		}
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("struct aren't equal -- got: %v, want: %v", got, want)
+		}
 	}
 }

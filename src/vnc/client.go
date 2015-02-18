@@ -6,6 +6,11 @@ import (
 	"io"
 )
 
+const (
+	_KeyEventFmt     = "KeyEvent,%t,%d"
+	_PointerEventFmt = "PointerEvent,%d,%d,%d"
+)
+
 // See RFC 6143 Section 7.5
 const (
 	TypeSetPixelFormat uint8 = iota
@@ -109,8 +114,43 @@ func (m *FramebufferUpdateRequest) Write(w io.Writer) error {
 	return writeMessage(w, TypeFramebufferUpdateRequest, m)
 }
 
+func (m *KeyEvent) String() string {
+	return fmt.Sprintf(_KeyEventFmt, m.DownFlag != 0, m.Key)
+}
+
+func ParseKeyEvent(arg string) (*KeyEvent, error) {
+	m := &KeyEvent{}
+	var down bool
+
+	_, err := fmt.Sscanf(arg, _KeyEventFmt, &down, &m.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	if down {
+		m.DownFlag = 1
+	}
+
+	return m, nil
+}
+
 func (m *KeyEvent) Write(w io.Writer) error {
 	return writeMessage(w, TypeKeyEvent, m)
+}
+
+func (m *PointerEvent) String() string {
+	return fmt.Sprintf(_PointerEventFmt, m.ButtonMask, m.XPosition, m.YPosition)
+}
+
+func ParsePointerEvent(arg string) (*PointerEvent, error) {
+	m := &PointerEvent{}
+
+	_, err := fmt.Sscanf(arg, _PointerEventFmt, &m.ButtonMask, &m.XPosition, &m.YPosition)
+	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
 }
 
 func (m *PointerEvent) Write(w io.Writer) error {
