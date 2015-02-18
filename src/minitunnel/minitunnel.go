@@ -17,6 +17,7 @@ const (
 	BUFFER_SIZE = 32768
 )
 
+// tunnel message types
 const (
 	HANDSHAKE = iota
 	CONNECT
@@ -26,11 +27,11 @@ const (
 )
 
 type Tunnel struct {
-	transport io.ReadWriter
+	transport io.ReadWriter // underlying transport
 	enc       *gob.Encoder
 	dec       *gob.Decoder
-	out       chan *tunnelMessage
-	tids      map[int32]chan *tunnelMessage
+	out       chan *tunnelMessage           // message queue to be sent out over the transport
+	tids      map[int32]chan *tunnelMessage // maps of transaction id/incoming channel pairs for routing multiple tunnels
 }
 
 type tunnelMessage struct {
@@ -122,6 +123,10 @@ func Dial(transport io.ReadWriter) (*Tunnel, error) {
 	return t, nil
 }
 
+// mux to handle i/o over the transport. Data on channel out will be sent over
+// the transport. Data coming in over the transport will be routed to the
+// incoming channel as tagged be the message's TID. This allows us to trunk
+// multiple tunnels over a single transport.
 func (t *Tunnel) mux() {
 	go func() {
 		for {
@@ -154,6 +159,7 @@ func (t *Tunnel) mux() {
 	}
 }
 
+// reverse tunnels are made by simply asking the remote end to invoke 'Forward'
 func (t *Tunnel) handleReverse(m *tunnelMessage) {
 	resp := &tunnelMessage{
 		Type: DATA,
