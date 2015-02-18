@@ -5,96 +5,120 @@ import (
 	"io"
 	log "minilog"
 	"net"
+	"path"
 	"strings"
 )
 
-type cliCommand struct {
-	Command string
-	Args    []string
-	ackChan chan cliResponse
-	TID     int32
+// from minicli/command.go
+// we only need to populate the Original string
+type Command struct {
+	Pattern  string // the specific pattern that was matched
+	Original string // original raw input
+
+	StringArgs map[string]string
+	BoolArgs   map[string]bool
+	ListArgs   map[string][]string
+
+	Subcommand *Command // parsed command
+
+	Call CLIFunc `json:"-"`
 }
 
-type cliResponse struct {
-	Response string
-	Error    string // because you can't gob/json encode an error type
-	More     bool   // more is set if the called command will be sending multiple responses
-	TID      int32
+type CLIFunc func(*Command, chan Responses)
+type Responses []*Response
+
+// A response as populated by handler functions.
+type Response struct {
+	Host     string      // Host this response was created on
+	Response string      // Simple response
+	Header   []string    // Optional header. If set, will be used for both Response and Tabular data.
+	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
+	Error    string      // Because you can't gob/json encode an error type
+	Data     interface{} // Optional user data
 }
 
-func makeCommand(s string) cliCommand {
-	f := strings.Fields(s)
-	var command string
-	var args []string
-	if len(f) > 0 {
-		command = f[0]
-	}
-	if len(f) > 1 {
-		args = f[1:]
-	}
-	return cliCommand{
-		Command: command,
-		Args:    args,
-	}
+type localResponse struct {
+	Resp     Responses
+	Rendered string
+	More     bool // whether there are more responses coming
 }
 
-func sendCommand(c cliCommand) cliResponse {
-	// try to connect to the local minimega
-	f := *f_minimega + "minimega"
-	conn, err := net.Dial("unix", f)
+func sendCommand(s string) (string, string) {
+	if strings.TrimSpace(s) == "" {
+		return "", ""
+	}
+
+	log.Debug("sendCommand: %v", s)
+
+	c := Command{
+		Original: s,
+	}
+
+	var responses string
+	var errors string
+	for resp := range runCommand(c) {
+		if resp.Rendered != "" {
+			// strip out any errors
+			d := strings.SplitN(resp.Rendered, "Error", 1)
+			if d[0] != "" {
+				responses += d[0] + "\n"
+			}
+			if len(d) == 2 && d[1] != "" {
+				errors += "Error" + d[1] + "\n"
+			}
+		}
+	}
+	return responses, errors
+}
+
+// runCommand runs a command through a JSON pipe.
+func runCommand(cmd Command) chan *localResponse {
+	conn, err := net.Dial("unix", path.Join(*f_minimega, "minimega"))
 	if err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
+		return nil
 	}
 
 	enc := json.NewEncoder(conn)
 	dec := json.NewDecoder(conn)
 
-	err = enc.Encode(&c)
-	if err != nil {
-		log.Error("local command gob encode: %v", err)
-		return cliResponse{
-			Error: err.Error(),
-		}
-	}
-	log.Debugln("encoded command:", c)
+	log.Debug("encoding command: %v", cmd)
 
-	var Responses string
-	var Errors string
-	for {
-		var r cliResponse
-		err = dec.Decode(&r)
-		if err != nil {
-			if err == io.EOF {
-				log.Infoln("server disconnected")
+	err = enc.Encode(cmd)
+	if err != nil {
+		log.Errorln("local command json encode: %v", err)
+		return nil
+	}
+
+	log.Debugln("encoded command:", cmd)
+
+	respChan := make(chan *localResponse)
+
+	go func() {
+		defer close(respChan)
+
+		for {
+			var r localResponse
+			err = dec.Decode(&r)
+			if err != nil {
+				if err == io.EOF {
+					log.Infoln("server disconnected")
+					return
+				}
+
+				log.Errorln("local command json decode: %v", err)
+				return
+			}
+
+			respChan <- &r
+			if !r.More {
+				log.Debugln("got last message")
+				break
 			} else {
-				log.Error("local command gob decode: %v", err)
-			}
-			return cliResponse{
-				Error: err.Error(),
+				log.Debugln("expecting more data")
 			}
 		}
-		if r.Error != "" {
-			Errors += r.Error
-			if !strings.HasSuffix(r.Error, "\n") {
-				Errors += "\n"
-			}
-			log.Errorln(r.Error)
-		}
-		if r.Response != "" {
-			Responses += r.Response
-			if !strings.HasSuffix(r.Response, "\n") {
-				Responses += "\n"
-			}
-		}
-		if !r.More {
-			log.Debugln("got last message")
-			break
-		} else {
-			log.Debugln("expecting more data")
-		}
-	}
-	return cliResponse{
-		Response: Responses,
-		Error:    Errors,
-	}
+	}()
+
+	return respChan
 }
