@@ -141,13 +141,16 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 	var handshake Message
 	err := dec.Decode(&handshake)
 	if err != nil {
-		log.Errorln(err)
+		if err != io.EOF {
+			log.Errorln(err)
+		}
 		conn.Close()
 		return
 	}
 	c := handshake.Client
 
 	c.conn = conn
+	c.Checkin = time.Now()
 
 	err = s.addClient(c)
 	if err != nil {
