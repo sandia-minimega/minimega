@@ -207,7 +207,7 @@ func teardown() {
 	vncClear()
 	clearAllCaptures()
 	vms.kill(Wildcard)
-	dnsmasqKill(-1)
+	dnsmasqKillAll()
 	err := bridgesDestroy()
 	if err != nil {
 		log.Errorln(err)
