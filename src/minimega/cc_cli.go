@@ -72,6 +72,9 @@ New commands assign any current filter.`,
 
 			"cc <responses,> <id or prefix or all> [raw,]",
 
+			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
+			"cc <tunnel,> <reverse,> <src port> <host> <dst port>",
+
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
 		},
@@ -106,6 +109,7 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"prefix":     cliCCPrefix,
 	"delete":     cliCCDelete,
 	"clients":    cliCCClients,
+	"tunnel":     cliCCTunnel,
 }
 
 func init() {
@@ -171,6 +175,39 @@ func cliCCPrefix(c *minicli.Command) *minicli.Response {
 		return resp
 	} else {
 		ccPrefix = prefix
+	}
+
+	return resp
+}
+
+// tunnel
+func cliCCTunnel(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	src, err := strconv.Atoi(c.StringArgs["src"])
+	if err != nil {
+		resp.Error = fmt.Sprintf("non-integer src: %v : %v", c.StringArgs["src"], err)
+		return resp
+	}
+
+	host := c.StringArgs["host"]
+
+	dst, err := strconv.Atoi(c.StringArgs["dst"])
+	if err != nil {
+		resp.Error = fmt.Sprintf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
+		return resp
+	}
+
+	if c.BoolArgs["reverse"] {
+		err := ccNode.Reverse(ccFilter, src, host, dst)
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	} else {
+		err := ccNode.Forward(c.StringArgs["uuid"], src, host, dst)
+		if err != nil {
+			resp.Error = err.Error()
+		}
 	}
 
 	return resp

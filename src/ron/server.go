@@ -156,6 +156,9 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		return
 	}
 
+	// create a tunnel connection
+	go c.handleTunnel(true)
+
 	// handle client i/o
 	go func() {
 		for {

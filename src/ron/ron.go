@@ -7,6 +7,7 @@ package ron
 import (
 	"io"
 	log "minilog"
+	"minitunnel"
 	"net"
 	"sync"
 	"time"
@@ -49,6 +50,8 @@ type Client struct {
 	commandCounter int
 	conn           io.ReadWriteCloser
 	Checkin        time.Time
+	tunnelData     chan []byte
+	tunnel         *minitunnel.Tunnel
 
 	// client parameters
 	UUID     string
@@ -74,7 +77,7 @@ type Message struct {
 	File     []byte
 	Filename string
 	Error    string
-	// Tunnel []byte
+	Tunnel   []byte
 }
 
 func NewServer(port int, path string) (*Server, error) {
@@ -121,6 +124,7 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 		commands:      make(chan map[int]*Command, 1024),
 		lastHeartbeat: time.Now(),
 		files:         make(chan *Message, 1024),
+		tunnelData:    make(chan []byte, 1024),
 	}
 
 	if serial != "" {

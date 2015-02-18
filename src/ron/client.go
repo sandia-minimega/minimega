@@ -93,6 +93,9 @@ func (c *Client) handler() {
 	enc := gob.NewEncoder(c.conn)
 	dec := gob.NewDecoder(c.conn)
 
+	// create a tunnel
+	go c.handleTunnel(false)
+
 	// handle client i/o
 	go func() {
 		for {
