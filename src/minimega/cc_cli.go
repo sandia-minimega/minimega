@@ -52,7 +52,10 @@ example, to filter on VMs that are running windows and have a specific IP.
 
 	cc filter os=windows ip=10.0.0.1 
 
-New commands assign any current filter.`,
+New commands assign any current filter.
+
+You can also create TCP tunnels over the cc transport (virtio or network) by
+using tunnel and rtunnel. Tunnels are created and behave like 'ssh -L' tunnels.`,
 		Patterns: []string{
 			"cc",
 			"cc <start,> [port]",
