@@ -150,6 +150,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 	c := handshake.Client
 
 	c.conn = conn
+	c.Checkin = time.Now()
 
 	err = s.addClient(c)
 	if err != nil {
