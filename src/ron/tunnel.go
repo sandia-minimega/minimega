@@ -30,8 +30,7 @@ func (s *Server) Forward(uuid string, source int, host string, dest int) error {
 }
 
 func (s *Server) Reverse(filter *Client, source int, host string, dest int) error {
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
+	// TODO: can we safely do this without holding s.clientLock?
 
 	command := &Command{
 		Filter: filter,
