@@ -15,6 +15,8 @@ const (
 	BUFFER_SIZE = 32768
 )
 
+// Create a tunnel from host->guest, based on UUID, source, host, and
+// destination port. This is similar to the ssh -L command.
 func (s *Server) Forward(uuid string, source int, host string, dest int) error {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
@@ -29,6 +31,9 @@ func (s *Server) Forward(uuid string, source int, host string, dest int) error {
 	}
 }
 
+// Create a reverse tunnel from guest->host. It is possible to have multiple
+// clients create a reverse tunnel simultaneously. filter allows specifying
+// which clients to have create the tunnel.
 func (s *Server) Reverse(filter *Client, source int, host string, dest int) error {
 	// TODO: can we safely do this without holding s.clientLock?
 
@@ -50,6 +55,7 @@ func (s *Server) Reverse(filter *Client, source int, host string, dest int) erro
 	return nil
 }
 
+// tunnel transport handler
 func (c *Client) handleTunnel(server bool) {
 	log.Debug("handleTunnel: %v", server)
 

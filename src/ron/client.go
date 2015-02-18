@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// dial over tcp to a ron server
 func (c *Client) dial(parent string, port int) error {
 	log.Debug("ron dial: %v:%v", parent, port)
 
@@ -36,6 +37,8 @@ func (c *Client) dial(parent string, port int) error {
 	return nil
 }
 
+// Respond allows a client to post a *Response to a given command. The response
+// will be queued until the next heartbeat.
 func (c *Client) Respond(r *Response) {
 	log.Debug("ron Respond: %v", r.ID)
 
@@ -44,6 +47,9 @@ func (c *Client) Respond(r *Response) {
 	c.responseLock.Unlock()
 }
 
+// commandHandler sorts and filters incoming commands from a ron server.
+// Commands that the client has not yet processed and is eligible to run based
+// on the filter are put in the Commands channel for consumption by the client.
 func (c *Client) commandHandler() {
 	for {
 		commands := <-c.commands
@@ -68,6 +74,9 @@ func (c *Client) commandHandler() {
 	}
 }
 
+// client connection handler and transport. Messages on chan out are sent to
+// the ron server. Incoming messages are put on the message queue to be routed
+// by the mux. The entry to handler() also creates the tunnel transport.
 func (c *Client) handler() {
 	log.Debug("ron handler")
 
@@ -98,6 +107,8 @@ func (c *Client) handler() {
 	}
 }
 
+// client heartbeat sent periodically be periodic(). heartbeat() sends the
+// client info and any queued responses.
 func (c *Client) heartbeat() {
 	log.Debugln("heartbeat")
 
@@ -134,6 +145,7 @@ func (c *Client) heartbeat() {
 	c.lastHeartbeat = time.Now()
 }
 
+// periodically sent the client heartbeat.
 func (c *Client) periodic() {
 	rate := time.Duration(HEARTBEAT_RATE * time.Second)
 	for {
@@ -148,6 +160,7 @@ func (c *Client) periodic() {
 	}
 }
 
+// mux routes incoming messages from the server based on message type
 func (c *Client) mux() {
 	for {
 		m := <-c.in
@@ -170,6 +183,9 @@ func (c *Client) mux() {
 	}
 }
 
+// GetFile asks a ron server to transmit a named file to the client. If
+// successful, the file contents will be returned. A nil byte slice response
+// with a nil error implies the file was empty.
 func (c *Client) GetFile(file string) ([]byte, error) {
 	m := &Message{
 		Type:     MESSAGE_FILE,

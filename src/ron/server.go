@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// GetCommands returns a copy of the current command list
 func (s *Server) GetCommands() map[int]*Command {
 	// return a deep copy of the command list
 	ret := make(map[int]*Command)
@@ -40,7 +41,7 @@ func (s *Server) GetCommands() map[int]*Command {
 	return ret
 }
 
-// return a copy of each active client
+// GetActiveClients returns a list of every active client
 func (s *Server) GetActiveClients() map[string]*Client {
 	var clients = make(map[string]*Client)
 
@@ -105,6 +106,7 @@ func (s *Server) periodic() {
 	}
 }
 
+// send the command list to all active clients
 func (s *Server) broadcastCommands() {
 	log.Debugln("ron broadcastCommands")
 	commands := s.GetCommands()
@@ -116,6 +118,7 @@ func (s *Server) broadcastCommands() {
 	s.lastBroadcast = time.Now()
 }
 
+// accept new tcp connections and start a client handler for each one
 func (s *Server) handler(ln net.Listener) {
 	log.Debugln("ron handler")
 	for {
@@ -131,6 +134,7 @@ func (s *Server) handler(ln net.Listener) {
 	}
 }
 
+// client and transport handler for connections.
 func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 	log.Debugln("ron clientHandler")
 
@@ -194,6 +198,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 	}
 }
 
+// add a client to the list of active clients
 func (s *Server) addClient(c *Client) error {
 	log.Debug("ron addClient: %v", c.UUID)
 
@@ -209,7 +214,8 @@ func (s *Server) addClient(c *Client) error {
 	return nil
 }
 
-// conditionally remove client from the client list
+// conditionally remove client from the client list, closing connections if
+// possible
 func (s *Server) removeClient(uuid string) {
 	log.Debug("ron removeClient: %v", uuid)
 
@@ -222,6 +228,8 @@ func (s *Server) removeClient(uuid string) {
 	}
 }
 
+// incoming message mux. Routes messages to the correct handlers based on
+// message type
 func (s *Server) mux() {
 	for {
 		m := <-s.in
@@ -248,6 +256,7 @@ func (s *Server) mux() {
 	}
 }
 
+// unwrap ron messages and forward tunnel data to the tunnel handler
 func (s *Server) routeTunnel(m *Message) {
 	log.Debug("routeTunnel: %v", m.UUID)
 
@@ -263,6 +272,7 @@ func (s *Server) routeTunnel(m *Message) {
 	log.Errorln("routeTunnel invalid UUID: %v", m.UUID)
 }
 
+// return a file to a client requesting it via the clients GetFile() call
 func (s *Server) sendFile(m *Message) {
 	log.Debug("ron sendFile: %v", m.Filename)
 
@@ -297,6 +307,7 @@ func (s *Server) sendFile(m *Message) {
 	}
 }
 
+// route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
 	log.Debug("ron route: %v", m.UUID)
 
@@ -317,6 +328,7 @@ func (s *Server) route(m *Message) {
 	}
 }
 
+// process responses, writing files when necessary
 func (s *Server) responseHandler() {
 	for {
 		cin := <-s.responses
@@ -387,6 +399,7 @@ func (s *Server) responseHandler() {
 	}
 }
 
+// mark which commands have been responsed to by which client
 func (s *Server) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 
@@ -400,6 +413,9 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 	}
 }
 
+// DeleteCommand removes a command from the active command list. Any in-flight
+// messages held by any clients may still return a response to the deleted
+// command.
 func (s *Server) DeleteCommand(id int) error {
 	log.Debug("ron DeleteCommand: %v", id)
 
@@ -413,6 +429,7 @@ func (s *Server) DeleteCommand(id int) error {
 	}
 }
 
+// Post a new command to the active command list. The command ID is returned.
 func (s *Server) NewCommand(c *Command) int {
 	log.Debug("ron NewCommand: %v", c)
 
@@ -441,6 +458,9 @@ func (s *Server) clientReaper() {
 	}
 }
 
+// Return the list of currently connected serial ports. This does not indicate
+// which serial connections have active clients, simply which serial
+// connections the server is attached to.
 func (s *Server) GetActiveSerialPorts() []string {
 	s.serialLock.Lock()
 	defer s.serialLock.Unlock()
@@ -455,7 +475,8 @@ func (s *Server) GetActiveSerialPorts() []string {
 	return ret
 }
 
-// Dial a client serial port. Used by a master ron node only.
+// Dial a client serial port. The server will maintain this connection until a
+// client connects and then disconnects.
 func (s *Server) DialSerial(path string) error {
 	log.Debug("DialSerial: %v", path)
 

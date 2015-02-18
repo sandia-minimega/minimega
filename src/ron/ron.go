@@ -13,6 +13,7 @@ import (
 	"time"
 )
 
+// Ron message types to inform the mux on either end how to route the message
 const (
 	MESSAGE_COMMAND = iota
 	MESSAGE_CLIENT
@@ -21,36 +22,36 @@ const (
 )
 
 const (
-	HEARTBEAT_RATE = 10
+	HEARTBEAT_RATE = 5
 	REAPER_RATE    = 30
 	CLIENT_EXPIRED = 30
 	RESPONSE_PATH  = "miniccc_responses"
 )
 
 type Server struct {
-	serialConns    map[string]net.Conn
+	serialConns    map[string]net.Conn // map of connected, but not necessarily active serial connections
 	serialLock     sync.Mutex
-	commands       map[int]*Command
+	commands       map[int]*Command // map of active commands
 	commandLock    sync.Mutex
 	commandCounter int
-	clients        map[string]*Client
+	clients        map[string]*Client // map of active clients, each of which have a running handler
 	clientLock     sync.Mutex
-	in             chan *Message
-	path           string
-	lastBroadcast  time.Time
+	in             chan *Message // incoming message queue, consumed by the mux
+	path           string        // path for serving files
+	lastBroadcast  time.Time     // watchdog time of last command list broadcast
 	commandID      chan int
-	responses      chan *Client
+	responses      chan *Client // queue of incoming responses, consumed by the response processor
 }
 
 type Client struct {
 	// server client data
-	out            chan *Message
-	in             chan *Message
-	path           string
+	out            chan *Message // outgoing message queue
+	in             chan *Message // incoming message queue, consumed by the mux
+	path           string        // path for storing files, pid, etc.
 	commandCounter int
 	conn           io.ReadWriteCloser
-	Checkin        time.Time
-	tunnelData     chan []byte
+	Checkin        time.Time   // last client checkin time, used by the server
+	tunnelData     chan []byte // tunnel data queue, consumed by the tunnel handler
 	tunnel         *minitunnel.Tunnel
 
 	// client parameters
@@ -61,12 +62,12 @@ type Client struct {
 	IP       []string
 	MAC      []string
 
-	Responses     []*Response
-	Commands      chan *Command
+	Responses     []*Response   // response queue, consumed and cleared by the heartbeat
+	Commands      chan *Command // ordered list of commands to be processed by the client
 	responseLock  sync.Mutex
-	commands      chan map[int]*Command
-	lastHeartbeat time.Time
-	files         chan *Message
+	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
+	lastHeartbeat time.Time             // last heartbeat watchdog time
+	files         chan *Message         // incoming files sent by the server and requested by GetFile()
 }
 
 type Message struct {
@@ -80,6 +81,7 @@ type Message struct {
 	Tunnel   []byte
 }
 
+// NewServer creates a ron server listening on on tcp.
 func NewServer(port int, path string) (*Server, error) {
 	s := &Server{
 		serialConns:   make(map[string]net.Conn),
@@ -109,6 +111,8 @@ func NewServer(port int, path string) (*Server, error) {
 	return s, nil
 }
 
+// NewClient attempts to connect to a ron server over tcp, or serial if the
+// serial argument is supplied.
 func NewClient(port int, parent, serial, path string) (*Client, error) {
 	uuid, err := getUUID()
 	if err != nil {
