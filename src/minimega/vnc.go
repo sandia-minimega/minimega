@@ -24,11 +24,6 @@ var (
 	vncKBPlaying   map[string]*vncKBPlayback
 )
 
-type Foo interface {
-	Matches(string, string) bool
-	Stop() error
-}
-
 type vncClient struct {
 	Host  string
 	Name  string
@@ -87,7 +82,7 @@ func (v *vncClient) Matches(host, vm string) bool {
 }
 
 func (v *vncClient) Stop() error {
-	<-v.done
+	v.done <- true
 
 	if v.file != nil {
 		v.file.Close()
@@ -120,7 +115,6 @@ func (r *vncKBRecord) RecordMessage(msg interface{}) {
 
 func (r *vncKBRecord) Run() {
 	<-r.done
-	r.file.Close()
 }
 
 func (v *vncFBRecord) Run() {
