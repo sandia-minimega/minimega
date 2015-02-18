@@ -122,9 +122,9 @@ func (r Responses) tabularString(buf io.Writer, header []string) {
 
 	if mode == csvMode {
 		printCSV(buf, header, data)
+	} else {
+		printTabular(buf, header, data)
 	}
-
-	printTabular(buf, header, data)
 }
 
 func (r Responses) compressString(buf io.Writer) {
