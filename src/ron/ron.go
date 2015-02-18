@@ -124,7 +124,6 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 		commands:      make(chan map[int]*Command, 1024),
 		lastHeartbeat: time.Now(),
 		files:         make(chan *Message, 1024),
-		tunnelData:    make(chan []byte, 1024),
 	}
 
 	if serial != "" {

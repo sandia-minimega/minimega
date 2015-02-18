@@ -52,23 +52,30 @@ func (s *Server) Reverse(filter *Client, source int, host string, dest int) erro
 }
 
 func (c *Client) handleTunnel(server bool) {
+	log.Debug("handleTunnel: %v", server)
+
 	a, b := net.Pipe()
 
-	if server {
-		var err error
-		c.tunnel, err = minitunnel.Dial(a)
-		if err != nil {
-			log.Errorln("Dial: %v", err)
-			return
-		}
-	} else {
-		go func() {
-			err := minitunnel.ListenAndServe(a)
+	c.tunnelData = make(chan []byte, 1024)
+
+	go func() {
+		if server {
+			var err error
+			c.tunnel, err = minitunnel.Dial(a)
 			if err != nil {
-				log.Fatalln("ListenAndServe: %v", err)
+				log.Errorln("Dial: %v", err)
+				a.Close()
+				b.Close()
 			}
-		}()
-	}
+		} else {
+			go func() {
+				err := minitunnel.ListenAndServe(a)
+				if err != nil {
+					log.Fatalln("ListenAndServe: %v", err)
+				}
+			}()
+		}
+	}()
 
 	go func() {
 		for {
@@ -76,6 +83,8 @@ func (c *Client) handleTunnel(server bool) {
 			n, err := b.Read(buf)
 			if err != nil {
 				log.Errorln(err)
+				a.Close()
+				b.Close()
 				return
 			}
 
@@ -95,6 +104,8 @@ func (c *Client) handleTunnel(server bool) {
 		_, err := b.Write(data)
 		if err != nil {
 			log.Errorln(err)
+			a.Close()
+			b.Close()
 			return
 		}
 	}

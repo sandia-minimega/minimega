@@ -233,6 +233,7 @@ func (s *Server) mux() {
 		case MESSAGE_TUNNEL:
 			// handle a tunnel message
 			log.Debugln("ron MESSAGE_TUNNEL")
+			s.routeTunnel(m)
 		case MESSAGE_COMMAND:
 			// route a command to one or all clients
 			log.Debugln("ron MESSAGE_COMMAND")
@@ -245,6 +246,21 @@ func (s *Server) mux() {
 			return
 		}
 	}
+}
+
+func (s *Server) routeTunnel(m *Message) {
+	log.Debug("routeTunnel: %v", m.UUID)
+
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	for _, c := range s.clients {
+		if c.UUID == m.UUID {
+			c.tunnelData <- m.Tunnel
+			return
+		}
+	}
+	log.Errorln("routeTunnel invalid UUID: %v", m.UUID)
 }
 
 func (s *Server) sendFile(m *Message) {

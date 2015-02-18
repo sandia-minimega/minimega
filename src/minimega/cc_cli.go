@@ -73,7 +73,7 @@ New commands assign any current filter.`,
 			"cc <responses,> <id or prefix or all> [raw,]",
 
 			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
-			"cc <tunnel,> <reverse,> <src port> <host> <dst port>",
+			"cc <rtunnel,> <src port> <host> <dst port>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
@@ -110,6 +110,7 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"delete":     cliCCDelete,
 	"clients":    cliCCClients,
 	"tunnel":     cliCCTunnel,
+	"rtunnel":    cliCCTunnel,
 }
 
 func init() {
@@ -198,7 +199,7 @@ func cliCCTunnel(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if c.BoolArgs["reverse"] {
+	if c.BoolArgs["rtunnel"] {
 		err := ccNode.Reverse(ccFilter, src, host, dst)
 		if err != nil {
 			resp.Error = err.Error()

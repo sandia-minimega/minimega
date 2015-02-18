@@ -155,6 +155,7 @@ func (c *Client) mux() {
 		case MESSAGE_TUNNEL:
 			// handle a tunnel message
 			log.Debugln("ron MESSAGE_TUNNEL")
+			c.tunnelData <- m.Tunnel
 		case MESSAGE_COMMAND:
 			// process an incoming command list
 			log.Debugln("ron MESSAGE_COMMAND")
