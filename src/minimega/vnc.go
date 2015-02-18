@@ -7,7 +7,6 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -106,23 +105,17 @@ func (r *vncKBRecord) RecordMessage(msg interface{}) {
 	delta := time.Now().Sub(r.last).Nanoseconds()
 
 	switch msg := msg.(type) {
-	case vnc.SetPixelFormat:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
-	case vnc.SetEncodings:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
-	case vnc.FramebufferUpdateRequest:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
-	case vnc.KeyEvent:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
-	case vnc.PointerEvent:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
-	case vnc.ClientCutText:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+	case *vnc.SetPixelFormat:
+	case *vnc.SetEncodings:
+	case *vnc.FramebufferUpdateRequest:
+	case *vnc.ClientCutText:
+		// Don't record
+	case *vnc.KeyEvent, *vnc.PointerEvent:
+		fmt.Fprintf(r.file, "%d:%s\n", delta, msg)
+		r.last = time.Now()
 	default:
-		fmt.Fprintf(r.file, "%d %#v\n", delta, msg)
+		log.Info("unexpected VNC client-to-server message: %#v\n", msg)
 	}
-
-	r.last = time.Now()
 }
 
 func (r *vncKBRecord) Run() {
@@ -211,18 +204,12 @@ func (v *vncFBRecord) Run() {
 }
 
 func (v *vncKBPlayback) Run() {
-	var buf []byte
-
 	scanner := bufio.NewScanner(v.file)
 
 	for scanner.Scan() && v.err == nil {
-		s := strings.Split(scanner.Text(), " ")
-		if len(s) != 2 {
-			continue
-		}
+		s := strings.SplitN(scanner.Text(), ":", 2)
 
-		ns := s[0] + "ns"
-		duration, err := time.ParseDuration(ns)
+		duration, err := time.ParseDuration(s[0] + "ns")
 		if err != nil {
 			log.Errorln(err)
 			continue
@@ -235,12 +222,13 @@ func (v *vncKBPlayback) Run() {
 			return
 		}
 
-		buf, v.err = base64.StdEncoding.DecodeString(s[1])
-		if v.err != nil {
-			return
+		if res, err := vnc.ParseKeyEvent(s[1]); err == nil {
+			v.err = res.Write(v.Conn)
+		} else if res, err := vnc.ParsePointerEvent(s[1]); err == nil {
+			v.err = res.Write(v.Conn)
+		} else {
+			log.Error("invalid vnc message: `%s`", s[1])
 		}
-
-		_, v.err = v.Conn.Write(buf)
 	}
 }
 
