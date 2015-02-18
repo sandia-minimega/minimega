@@ -18,6 +18,20 @@ import (
 	"text/tabwriter"
 )
 
+type table [][]string
+
+func (t table) Len() int {
+	return len(t)
+}
+
+func (t table) Swap(i, j int) {
+	t[i], t[j] = t[j], t[i]
+}
+
+func (t table) Less(i, j int) bool {
+	return t[i][0] < t[j][0]
+}
+
 // Return a string representation using the current output mode
 func (r Responses) String() string {
 	if len(r) == 0 {
@@ -46,19 +60,15 @@ func (r Responses) String() string {
 		return err.Error()
 	}
 
+	var count int
+	for _, x := range r {
+		count += len(x.Tabular)
+	}
+
 	var buf bytes.Buffer
 
-	if tabular {
-		var count int
-		for _, x := range r {
-			count += len(x.Tabular)
-		}
-
-		if count > 0 && mode == csvMode {
-			r.csvString(&buf, header)
-		} else if count > 0 && mode == defaultMode {
-			r.tabularString(&buf, header)
-		}
+	if tabular && count > 0 {
+		r.tabularString(&buf, header)
 	} else if compress && len(r) > 1 {
 		r.compressString(&buf)
 	} else {
@@ -91,46 +101,30 @@ func (r Responses) String() string {
 }
 
 func (r Responses) tabularString(buf io.Writer, header []string) {
-	w := new(tabwriter.Writer)
-	w.Init(buf, 5, 0, 1, ' ', 0)
-	defer w.Flush()
+	// Add extra column to the data so that
+	if annotate {
+		header = append([]string{"host"}, header...)
 
-	if headers {
-		for i, h := range header {
-			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
+		for i := range r {
+			for j, row := range r[i].Tabular {
+				r[i].Tabular[j] = append([]string{r[i].Host}, row...)
 			}
-			fmt.Fprintf(w, h)
-		}
-		fmt.Fprintf(w, "\n")
-	}
-
-	// Print out the tabular data for all responses that don't have an error
-	for i := range r {
-		for j := range r[i].Tabular {
-			for k, val := range r[i].Tabular[j] {
-				if k != 0 {
-					fmt.Fprintf(w, "\t| ")
-				}
-				fmt.Fprintf(w, val)
-			}
-			fmt.Fprintf(w, "\n")
 		}
 	}
-}
 
-func (r Responses) csvString(buf io.Writer, header []string) {
-	w := csv.NewWriter(buf)
-	defer w.Flush()
-
-	if headers {
-		w.Write(header)
-	}
-
-	// Print out the tabular data for all responses that don't have an error
+	// Collect all the tabular data
+	data := [][]string{}
 	for i := range r {
-		w.WriteAll(r[i].Tabular)
+		data = append(data, r[i].Tabular...)
 	}
+
+	sort.Sort(table(data))
+
+	if mode == csvMode {
+		printCSV(buf, header, data)
+	}
+
+	printTabular(buf, header, data)
 }
 
 func (r Responses) compressString(buf io.Writer) {
@@ -227,4 +221,41 @@ func compressHosts(hosts []string) string {
 	sort.Strings(res)
 
 	return strings.Join(res, ",")
+}
+
+func printTabular(buf io.Writer, header []string, data [][]string) {
+	w := new(tabwriter.Writer)
+	w.Init(buf, 5, 0, 1, ' ', 0)
+	defer w.Flush()
+
+	if headers {
+		for i, h := range header {
+			if i != 0 {
+				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, h)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+
+	for _, row := range data {
+		for i, v := range row {
+			if i != 0 {
+				fmt.Fprintf(w, "\t| ")
+			}
+			fmt.Fprintf(w, v)
+		}
+		fmt.Fprintf(w, "\n")
+	}
+}
+
+func printCSV(buf io.Writer, header []string, data [][]string) {
+	w := csv.NewWriter(buf)
+	defer w.Flush()
+
+	if headers {
+		w.Write(header)
+	}
+
+	w.WriteAll(data)
 }
