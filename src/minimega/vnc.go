@@ -224,6 +224,9 @@ func (v *vncKBPlayback) Run() {
 			log.Error("invalid vnc message: `%s`", s[1])
 		}
 	}
+
+	// Block until we receive the done flag if we finished the playback
+	<-v.done
 }
 
 func vncRecordKB(host, vm, filename string) error {
