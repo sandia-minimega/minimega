@@ -56,13 +56,12 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 			for {
 				// Read
 				msg, err := vnc.ReadClientMessage(tee)
-				log.Debug("Read: %#v -- %s", msg, err)
 				if err != nil {
 					if err == io.EOF || strings.Contains(err.Error(), "closed network") {
 						break
 					}
 
-					log.Errorln(err)
+					log.Debugln(err)
 					continue
 				}
 
