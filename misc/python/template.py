@@ -26,6 +26,7 @@ https://code.google.com/p/minimega/issues/list
 
 import json
 import socket
+import inspect
 from threading import Lock
 
 
@@ -43,8 +44,9 @@ MSG_BLOCK_SIZE = 4096
 
 # HAX: python 2/3 hack
 try:
+    basestring
     def _isstr(obj):
-        return isinstance(obj, basestr)
+        return isinstance(obj, basestring)
 except NameError:
     def _isstr(obj):
         return isinstance(obj, str)
@@ -59,7 +61,8 @@ def connect(path):
 
 
 class Command:
-    pass
+    def __init__(self, mm):
+        self.mm = mm
 
 
 class minimega:
@@ -74,6 +77,8 @@ class minimega:
 
     def __init__(self, path, timeout=None):
         '''Connects to the minimega instance with Unix socket at <path>.'''
+        self.mm = self
+        self._linkCommands(self)
         self.lock = Lock()
         self._debug = False
         self._path = path
@@ -81,6 +86,18 @@ class minimega:
         self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._socket.settimeout(timeout if timeout != None else DEFAULT_TIMEOUT)
         self._socket.connect(path)
+
+    def _linkCommands(self, subcommand):
+        '''
+        Recursively instantiate all subcommand classes and link them with the
+        current instance of mm.
+        '''
+        for name, cmd in inspect.getmembers(subcommand,
+                                            predicate=inspect.isclass):
+            if name.startswith('_'):
+                continue
+            setattr(subcommand, name, cmd(self))
+            self._linkCommands(getattr(subcommand, name))
 
     def _reconnect(self):
         try:
@@ -123,40 +140,33 @@ class minimega:
 
 {% for cmd, info in cmds.items() recursive %}
     {% if info.subcommands %}
-{{ '    ' * loop.depth }}class {{ cmd }}:
-    {{ loop(info.subcommands.items()) }}
+{{ '    ' * loop.depth }}class {{ cmd }}(Command):
+        {{ loop(info.subcommands.items()) }}
     {% else %}
 {{ '    ' * loop.depth }}def {{ cmd }}(self, *args):
-    {{ '    ' * loop.depth }}'''{{ info.help_long or info.help_short}}'''
-    {{ '    ' * loop.depth }}#validate the args
-    {{ '    ' * loop.depth }}candidates = {{ info.candidates }}
-    {{ '    ' * loop.depth }}for candidate in candidates:
-    {{ '    ' * loop.depth }}    argNum = 0
-    {{ '    ' * loop.depth }}    valid = True
-    {{ '    ' * loop.depth }}    try:
-    {{ '    ' * loop.depth }}        for arg in candidate:
-    {{ '    ' * loop.depth }}            if arg['type'] == 'stringItem' and not _isstr(args[argNum]):
-    {{ '    ' * loop.depth }}                valid = False
-    {{ '    ' * loop.depth }}                break
-    {{ '    ' * loop.depth }}            if arg['type'] == 'listItem' and not isinstance(args[argNum], list):
-    {{ '    ' * loop.depth }}                valid = False
-    {{ '    ' * loop.depth }}                break
-    {{ '    ' * loop.depth }}            if arg['type'] == 'commandItem' and not isinstance(args[argNum], Command):
-    {{ '    ' * loop.depth }}                valid = False
-    {{ '    ' * loop.depth }}                break
-    {{ '    ' * loop.depth }}            if arg['type'] == 'choiceItem' and args[argNum] not in arg['choices']:
-    {{ '    ' * loop.depth }}                valid = False
-    {{ '    ' * loop.depth }}                break
-    {{ '    ' * loop.depth }}            argNum += 1
-    {{ '    ' * loop.depth }}    except IndexError:
-    {{ '    ' * loop.depth }}        if not candidate[argNum]['optional']:
-    {{ '    ' * loop.depth }}           valid = False
-    {{ '    ' * loop.depth }}        pass
-    {{ '    ' * loop.depth }}    if valid:
-    {{ '    ' * loop.depth }}        if args[argNum:]:
-    {{ '    ' * loop.depth }}            continue
-    {{ '    ' * loop.depth }}        return self._send('{{ info.shared_prefix }}', *args)
-    {{ '    ' * loop.depth }}raise ValidationError('could not understand command', args)
+{{ '    ' * loop.depth }}    '''{{ info.help_long or info.help_short }}'''
+{{ '    ' * loop.depth }}    #validate the args
+{{ '    ' * loop.depth }}    candidates = {{ info.candidates }}
+{{ '    ' * loop.depth }}    for candidate in candidates:
+{{ '    ' * loop.depth }}        argNum = 0
+{{ '    ' * loop.depth }}        try:
+{{ '    ' * loop.depth }}            for arg in candidate:
+{{ '    ' * loop.depth }}                if arg['type'] == 'stringItem' and not _isstr(args[argNum]):
+{{ '    ' * loop.depth }}                    raise ValidationError('expected string for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                if arg['type'] == 'listItem' and not isinstance(args[argNum], list):
+{{ '    ' * loop.depth }}                    raise ValidationError('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                if arg['type'] == 'commandItem' and not isinstance(args[argNum], Command):
+{{ '    ' * loop.depth }}                    raise ValidationError('expected command for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                if arg['type'] == 'choiceItem' and args[argNum] not in arg['choices']:
+{{ '    ' * loop.depth }}                    raise ValidationError('expected one of "{}" for "{}", received {}'.format(arg['choices'], arg['text'], args[argNum]))
+{{ '    ' * loop.depth }}                argNum += 1
+{{ '    ' * loop.depth }}        except IndexError:
+{{ '    ' * loop.depth }}            if not candidate[argNum]['optional']:
+{{ '    ' * loop.depth }}                raise ValidationError('"{}" required but not provided'.format(arg['text']))
+{{ '    ' * loop.depth }}        if not args[argNum:]:
+{{ '    ' * loop.depth }}            #passed validation, exact match for this candidate
+{{ '    ' * loop.depth }}            return self.mm._send('{{ info.shared_prefix }}', *args)
+{{ '    ' * loop.depth }}    raise ValidationError('could not understand command', args)
     {% endif %}
 {% endfor %}
 
