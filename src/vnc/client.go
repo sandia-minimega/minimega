@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	_KeyEventFmt     = "KeyEvent,%t,%d"
+	_KeyEventFmt     = "KeyEvent,%t,%s"
 	_PointerEventFmt = "PointerEvent,%d,%d,%d"
 )
 
@@ -119,16 +119,33 @@ func (m *FramebufferUpdateRequest) Write(w io.Writer) error {
 }
 
 func (m *KeyEvent) String() string {
-	return fmt.Sprintf(_KeyEventFmt, m.DownFlag != 0, m.Key)
+	key, err := xKeysymToString(m.Key)
+	if err != nil {
+		key = fmt.Sprintf("%U", m.Key)
+	}
+
+	return fmt.Sprintf(_KeyEventFmt, m.DownFlag != 0, key)
 }
 
 func ParseKeyEvent(arg string) (*KeyEvent, error) {
-	m := &KeyEvent{}
+	var key string
 	var down bool
 
-	_, err := fmt.Sscanf(arg, _KeyEventFmt, &down, &m.Key)
+	_, err := fmt.Sscanf(arg, _KeyEventFmt, &down, &key)
 	if err != nil {
 		return nil, err
+	}
+
+	m := &KeyEvent{}
+
+	m.Key, err = xStringToKeysym(key)
+	if err != nil {
+		fmt.Println(err.Error())
+		_, err = fmt.Sscanf(key, "%U", &m.Key)
+		if err != nil {
+			fmt.Println(err.Error())
+			return nil, fmt.Errorf("unknown key: `%s`", key)
+		}
 	}
 
 	if down {
