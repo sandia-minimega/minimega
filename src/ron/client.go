@@ -83,8 +83,11 @@ func (c *Client) handler() {
 	enc := gob.NewEncoder(c.conn)
 	dec := gob.NewDecoder(c.conn)
 
+	tunnelQuit := make(chan bool)
+	defer func() { tunnelQuit <- true }()
+
 	// create a tunnel
-	go c.handleTunnel(false)
+	go c.handleTunnel(false, tunnelQuit)
 
 	// handle client i/o
 	go func() {

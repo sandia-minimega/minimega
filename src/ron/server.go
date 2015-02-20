@@ -163,8 +163,11 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		return
 	}
 
+	tunnelQuit := make(chan bool)
+	defer func() { tunnelQuit <- true }()
+
 	// create a tunnel connection
-	go c.handleTunnel(true)
+	go c.handleTunnel(true, tunnelQuit)
 
 	// handle client i/o
 	go func() {

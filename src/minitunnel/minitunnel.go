@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	log "minilog"
 	"net"
+	"strings"
 )
 
 const (
@@ -26,11 +27,14 @@ const (
 	FORWARD
 )
 
+var errClosing = "use of closed network connection"
+
 type Tunnel struct {
-	transport io.ReadWriter // underlying transport
+	transport io.ReadWriteCloser // underlying transport
 	enc       *gob.Encoder
 	dec       *gob.Decoder
 	out       chan *tunnelMessage           // message queue to be sent out over the transport
+	quit      chan bool                     // tell the message pump to quit
 	tids      map[int32]chan *tunnelMessage // maps of transaction id/incoming channel pairs for routing multiple tunnels
 }
 
@@ -51,7 +55,7 @@ func init() {
 
 // Listen for an incoming Tunnel connection. Only one tunnel connection is
 // permitted. ListenAndServe will block indefinitely until an error occurs.
-func ListenAndServe(transport io.ReadWriter) error {
+func ListenAndServe(transport io.ReadWriteCloser) error {
 	enc := gob.NewEncoder(transport)
 	dec := gob.NewDecoder(transport)
 
@@ -80,22 +84,22 @@ func ListenAndServe(transport io.ReadWriter) error {
 		enc:       enc,
 		dec:       dec,
 		out:       make(chan *tunnelMessage, 1024),
+		quit:      make(chan bool),
 		tids:      make(map[int32]chan *tunnelMessage, 1024),
 	}
 
-	go t.mux()
-
-	return nil
+	return t.mux()
 }
 
 // Dial a listening minitunnel. Only one tunnel connection is permitted per
 // transport.
-func Dial(transport io.ReadWriter) (*Tunnel, error) {
+func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 	t := &Tunnel{
 		transport: transport,
 		enc:       gob.NewEncoder(transport),
 		dec:       gob.NewDecoder(transport),
 		out:       make(chan *tunnelMessage, 1024),
+		quit:      make(chan bool),
 		tids:      make(map[int32]chan *tunnelMessage, 1024),
 	}
 
@@ -118,7 +122,12 @@ func Dial(transport io.ReadWriter) (*Tunnel, error) {
 	}
 
 	// start the message mux
-	go t.mux()
+	go func() {
+		err := t.mux()
+		if err != nil && err != io.ErrClosedPipe {
+			log.Errorln(err)
+		}
+	}()
 
 	return t, nil
 }
@@ -127,13 +136,20 @@ func Dial(transport io.ReadWriter) (*Tunnel, error) {
 // the transport. Data coming in over the transport will be routed to the
 // incoming channel as tagged be the message's TID. This allows us to trunk
 // multiple tunnels over a single transport.
-func (t *Tunnel) mux() {
+func (t *Tunnel) mux() error {
 	go func() {
 		for {
-			m := <-t.out
-			err := t.enc.Encode(m)
-			if err != nil {
-				log.Errorln(err)
+			select {
+			case <-t.quit:
+				return
+			case m := <-t.out:
+				if m == nil {
+					return
+				}
+				err := t.enc.Encode(m)
+				if err != nil {
+					log.Errorln(err)
+				}
 			}
 		}
 	}()
@@ -142,14 +158,16 @@ func (t *Tunnel) mux() {
 		var m tunnelMessage
 		err := t.dec.Decode(&m)
 		if err != nil {
-			log.Errorln(err)
+			close(t.quit) // signal to all listeners that this tunnel is outa here
+			t.transport.Close()
+			return err
 		}
 
 		// create new sessions if necessary
 		if m.Type == CONNECT {
-			go t.handleRemote(&m)
+			t.handleRemote(&m)
 		} else if m.Type == FORWARD {
-			go t.handleReverse(&m)
+			t.handleReverse(&m)
 		} else if c, ok := t.tids[m.TID]; ok {
 			// route the message to the handler by TID
 			c <- &m
@@ -213,12 +231,18 @@ func (t *Tunnel) Reverse(source int, host string, dest int) error {
 
 // listen on source port and start new remote connections for every Accept()
 func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
-	defer ln.Close()
+	go func() {
+		<-t.quit
+		ln.Close()
+	}()
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Errorln(err)
-			continue
+			if !strings.Contains(err.Error(), errClosing) {
+				log.Errorln(err)
+			}
+			return
 		}
 
 		go t.handleTunnel(conn, host, dest)
@@ -315,7 +339,7 @@ func (t *Tunnel) handle(in chan *tunnelMessage, conn net.Conn, TID int32) {
 				Type: CLOSED,
 				TID:  TID,
 			}
-			if err != io.EOF {
+			if err != io.EOF && !strings.Contains(err.Error(), errClosing) {
 				log.Errorln(err)
 				closeMessage.Error = err.Error()
 			}

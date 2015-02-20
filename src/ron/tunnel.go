@@ -6,6 +6,7 @@ package ron
 
 import (
 	"fmt"
+	"io"
 	log "minilog"
 	"minitunnel"
 	"net"
@@ -56,7 +57,7 @@ func (s *Server) Reverse(filter *Client, source int, host string, dest int) erro
 }
 
 // tunnel transport handler
-func (c *Client) handleTunnel(server bool) {
+func (c *Client) handleTunnel(server bool, stop chan bool) {
 	log.Debug("handleTunnel: %v", server)
 
 	a, b := net.Pipe()
@@ -87,7 +88,9 @@ func (c *Client) handleTunnel(server bool) {
 			var buf = make([]byte, BUFFER_SIZE)
 			n, err := b.Read(buf)
 			if err != nil {
-				log.Errorln(err)
+				if err != io.ErrClosedPipe {
+					log.Errorln(err)
+				}
 				a.Close()
 				b.Close()
 				return
@@ -104,14 +107,25 @@ func (c *Client) handleTunnel(server bool) {
 		}
 	}()
 
-	for {
-		data := <-c.tunnelData
-		_, err := b.Write(data)
-		if err != nil {
-			log.Errorln(err)
-			a.Close()
-			b.Close()
-			return
+	go func() {
+		for {
+			data := <-c.tunnelData
+			if data == nil {
+				return
+			}
+			_, err := b.Write(data)
+			if err != nil {
+				log.Errorln(err)
+				a.Close()
+				b.Close()
+				return
+			}
 		}
-	}
+	}()
+
+	<-stop
+	log.Debug("ron client tunnel close: %v", c.UUID)
+	a.Close()
+	b.Close()
+	close(c.tunnelData)
 }
