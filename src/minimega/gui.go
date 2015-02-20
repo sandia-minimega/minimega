@@ -21,6 +21,7 @@ const (
 	//#WEB : Will need these lines  when web.go is phased out
 	newdefaultNoVNC string = "/opt/minimega/misc/novnc"
 	newdefaultD3    string = "/opt/minimega/misc/d3"
+	newdefaultTerm  string = "/opt/minimega/misc/terminal"
 	D3_SETUP               = `<meta charset="utf-8">
 				  <style>
 				  .chart div {
@@ -35,6 +36,21 @@ const (
 				  <div class="chart"></div>
 				  <script src="/gui/d3/d3.v3.min.js">
 				  </script>`
+	HTMLFRAME = `<!DOCTYPE html>
+                       <head>
+                       <title>Minimega GUI</title>
+                       <link rel="stylesheet" type="text/css" href="d3/nav.css">
+                       </head>
+                       <body>
+		       <nav><ul><li><a href="vnc">Host List</a></li>
+                         <li><a href="all">All VMs</a></li>
+                         <li><a href="stats">Host Stats</a></li>
+                         <li><a href="map">VM Map(concept)</a></li>
+                         <li><a href="terminal/terminal.html">Terminal(concept)</a></li>
+                       </ul></nav>	
+                       %s
+                       </body>
+                       </html>`
 )
 
 var (
@@ -86,6 +102,7 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 
 	noVNC := newdefaultNoVNC
 	d3 := newdefaultD3
+	term := newdefaultTerm
 	if c.StringArgs["path"] != "" {
 		noVNC = c.StringArgs["path"]
 	}
@@ -93,16 +110,17 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 	if guiRunning {
 		resp.Error = "gui is already running"
 	} else {
-		go guiStart(port, noVNC, d3)
+		go guiStart(port, noVNC, d3, term)
 	}
 
 	return resp
 }
 
-func guiStart(port, noVNC string, d3 string) {
+func guiStart(port, noVNC string, d3 string, term string) {
 	guiRunning = true
 	http.HandleFunc("/gui/", guiRoot)
 	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
+	http.Handle("/gui/terminal/", http.StripPrefix("/gui/terminal/", http.FileServer(http.Dir(term))))
 	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
 	err := http.ListenAndServe(port, nil)
 	if err != nil {
@@ -147,53 +165,68 @@ func guiRoot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 func guiHome() string {
-	var homebody bytes.Buffer
-	//htmlformat := `<html>
-	//
-	//		       <head>
-	//		       <title>%s</title>
-	//		       </head>
-	//		       <body>
-	//		       %s<br>
-	//		       %s
-	//		       <script>
-	//		       var data = [%s];
-	//		       var x = d3.scale.linear()
-	//		         .domain([0,d3.max(data)])
-	//			 .range([0,420]);
-	//		       d3.select(".chart")
-	//		         .selectAll("div")
-	//			 .data(data)
-	//		       .enter().append("div")
-	//		         .style("width", function(d) { return x(d) + "px"; })
-	//			 .text(function(d) { return d; });
-	//		       </script>
-	//		       </body>
-	//		       </html>`
-	htmlformat := `<html>
-                       <head>
-                       <title>%s</title>
-                       </head>
-                       <body>
-                       %s<br>
-                       </body>
-                       </html>`
-	fmt.Fprintf(&homebody, "<a href=\"vnc\">Host List</a>")
-	fmt.Fprintf(&homebody, "<br><a href=\"all\">All VMs</a>")
-	fmt.Fprintf(&homebody, "<br><a href=\"stats\">Host Stats</a>")
-	fmt.Fprintf(&homebody, "<br><a href=\"map\">VM Map(concept)</a>")
-	//	data := `4,8,15,16,23,43`
-	//return fmt.Sprintf(htmlformat, "Minimega GUI", D3_SETUP, homebody.String(), data)
-	return fmt.Sprintf(htmlformat, "Minimega GUI", homebody.String())
+	//var homebody bytes.Buffer
+	//htmlformat := `<!DOCTYPE html>
+	//               <head>
+	//               <title>%s</title>
+	//               </head>
+	//               <body>
+	//		       <link rel="stylesheet" type="text/css" href="d3/nav.css">
+	//                      %s<br>
+	//                     </body>
+	//                    </html>`
+	//	navbar := `<nav><ul><li><a href="vnc">Host List</a></li>
+	//		     <li><a href="all">All VMs</a></li>
+	//	             <li><a href="stats">Host Stats</a></li>
+	//	             <li><a href="map">VM Map(concept)</a></li>
+	//	           </ul></nav>`
+
+	//fmt.Fprintf(&homebody, "<a href=\"vnc\">Host List</a>")
+	//fmt.Fprintf(&homebody, "<br><a href=\"all\">All VMs</a>")
+	//fmt.Fprintf(&homebody, "<br><a href=\"stats\">Host Stats</a>")
+	//fmt.Fprintf(&homebody, "<br><a href=\"map\">VM Map(concept)</a>")
+	return fmt.Sprintf(HTMLFRAME, "Home") //homebody.String())
 }
 func guiMapVMs() string {
-	htmlformat := `<html>
-                       <head>
-                       <title>%s</title>
-                       </head>
-                       <body>
-		       <h1>For proof of d3 concept only:</h1><br>
+	//htmlformat := `<html>
+	//             <head>
+	//           <title>%s</title>
+	//         </head>
+	//       <body>
+	//     <h1>For proof of d3 concept only:</h1><br>
+	//   %s<br>
+	//              <script>
+	//            var data = [%s];
+	//          var x = d3.scale.linear()
+	//          .domain([0,d3.max(data)])
+	//        .range([0,420]);
+	//               d3.select(".chart")
+	//               .selectAll("div")
+	//             .data(data)
+	//         .enter().append("div")
+	//         .style("width", function(d) { return x(d) + "px"; })
+	///              .text(function(d) { return d; });
+	//         </script>
+	//       </body>
+	//     </html>`
+	//	tableformat := `<tr><td>%s</td></tr>`
+	mask := `id`
+	//	tblrw := ""
+	//	tl := ""
+	list := getVMinfo(mask)
+	//	for _, row := range list {
+	//		tl := `<tr>`
+	//		for _, item := range list[row] {
+	//			tl += `<td>` + item + `</td>`
+	//		}
+	//		tl += `</tr>`
+	//		tblrw += tl
+	//	}
+	//	vmIDs := fmt.Sprintf(`<table border=1>%s</table>`, tblrw)
+	vmIDs := list
+	format := `<h1>For proof of d3 concept only:</h1><br>
                        %s<br>
+		       %s<br>
                        <script>
                        var data = [%s]; 
                        var x = d3.scale.linear() 
@@ -205,18 +238,58 @@ func guiMapVMs() string {
                        .enter().append("div")
                          .style("width", function(d) { return x(d) + "px"; })
                          .text(function(d) { return d; }); 
-                       </script>
-                       </body>
-                       </html>`
+                       </script>`
 	data := `4,8,15,16,23,43`
-	return fmt.Sprintf(htmlformat, "VM Map", D3_SETUP, data)
-
+	body := fmt.Sprintf(format, D3_SETUP, vmIDs, data)
+	//return fmt.Sprintf(htmlformat, "VM Map", D3_SETUP, data)
+	return fmt.Sprintf(HTMLFRAME, body)
 }
-func guiStats() string {
-	stats := []string{}
-	format := `<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`
 
-	cmdhost, err := minicli.CompileCommand("host") //mesh send all host
+//func getVMinfo(mask string) string {
+//	list := []string{}
+//	cmdLocal, errLocal := minicli.CompileCommand(fmt.Sprintf(`vm info %v`, mask))
+//	cmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm info %v`, mask))
+//	if err != nil {
+//		// Should never happen
+//		log.Fatalln(err)
+//	}
+//	if errLocal != nil {
+//		// Should never happen
+//		log.Fatalln(errLocal)
+//	}
+//	respChanLocal := runCommand(cmdLocal, false)
+//	respChan := runCommand(cmd, false)
+//	r := <-respChan
+///	l := <-respChanLocal
+//
+//	//all:
+//	if len(l) != 0 {
+//		la := l[0].Tabular
+//		//list = append(list, la)
+//		obb := string{}
+//		for _, ecah := range la {
+//			for _, e := range ecah {
+//				obb = append(obb, string(e))
+//			}
+//		}
+//		list = append(list, obb)
+//	}
+//	if len(r) != 0 {
+//		ra := r[0].Tabular
+//		bob := string{}
+//		for _, each := range ra {
+//			for _, ea := range each {
+//				bob = append(bob, string(ea))
+//			}
+//		}
+//		list = append(list, bob)
+//	}
+//	return string(list)
+//}
+
+func getVMinfo(mask string) string {
+	vminfo := []string{}
+	cmdhost, err := minicli.CompileCommand(fmt.Sprintf(`vm info mask %s`, mask)) //local host stats
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
@@ -224,24 +297,72 @@ func guiStats() string {
 	respHostChan := runCommand(cmdhost, false)
 
 	g := <-respHostChan
-	ga := g[0].Header
-	stats = append(stats, fmt.Sprintf(format, ga[0], ga[1], ga[2], ga[3], ga[4], ga[5]))
+	for _, row := range g[0].Tabular { //local host data
+		tl := `<tr>`
+		for _, entry := range row {
+			tl += `<td>` + entry + `</td>`
+		}
+		tl += `</tr>`
+		vminfo = append(vminfo, tl)
+	}
+	cmdhostall, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm info mask %s`, mask)) //mesh send all host
+	respHostAllChan := runCommand(cmdhostall, false)
+	s := <-respHostAllChan
+	if len(s) != 0 { //check if there are other hosts
+		for _, row := range s[0].Tabular { //mesh data
+			tl := `<tr>`
+			for _, entry := range row {
+				tl += `<td>` + entry + `</td>`
+			}
+			tl += `</tr>`
+			vminfo = append(vminfo, tl)
+		}
+	}
+	body := fmt.Sprintf(`<table border=1>%s</table>`, strings.Join(vminfo, "\n"))
+	return fmt.Sprintf(body)
+}
+func guiStats() string {
+	stats := []string{}
+	cmdhost, err := minicli.CompileCommand("host") //local host stats
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+	respHostChan := runCommand(cmdhost, false)
 
-	r := g[0].Tabular
-	for _, r := range r {
-		stats = append(stats, fmt.Sprintf(format, r[0], r[1], r[2], r[3], r[4], r[5]))
+	g := <-respHostChan
+	if len(stats) == 0 { //If stats is empty, i need a header
+		header := `<tr>`
+		for _, h := range g[0].Header {
+			header += `<td>` + h + `</td>`
+		}
+		header += `</tr>`
+		stats = append(stats, header)
+	}
+
+	for _, row := range g[0].Tabular { //local host data
+		tl := `<tr>`
+		for _, entry := range row {
+			tl += `<td>` + entry + `</td>`
+		}
+		tl += `</tr>`
+		stats = append(stats, tl)
 	}
 	cmdhostall, err := minicli.CompileCommand("mesh send all host") //mesh send all host
 	respHostAllChan := runCommand(cmdhostall, false)
-
 	s := <-respHostAllChan
-	if len(s) != 0 {
-		sa := s[0].Tabular
-		for _, ra := range sa {
-			stats = append(stats, fmt.Sprintf(format, ra[0], ra[1], ra[2], ra[3], ra[4], ra[5]))
+	if len(s) != 0 { //check if there are other hosts
+		for _, row := range s[0].Tabular { //mesh data
+			tl := `<tr>`
+			for _, entry := range row {
+				tl += `<td>` + entry + `</td>`
+			}
+			tl += `</tr>`
+			stats = append(stats, tl)
 		}
 	}
-	return fmt.Sprintf(`<html><title>Host Stats</title><body><table border=1>%s</table></body></html>`, strings.Join(stats, "\n"))
+	body := fmt.Sprintf(`<table border=1>%s</table>`, strings.Join(stats, "\n"))
+	return fmt.Sprintf(HTMLFRAME, body)
 }
 
 func guiHosts() string {
@@ -293,7 +414,8 @@ func guiHosts() string {
 		totalvms += hosts[h]
 	}
 	fmt.Fprintf(&body, "<br>Total VMs: (%v)", totalvms)
-	return fmt.Sprintf(`<html><title>Host List</title><body>%s</body></html>`, body.String())
+	//return fmt.Sprintf(`<html><title>Host List</title><body>%s</body></html>`, body.String())
+	return fmt.Sprintf(HTMLFRAME, body.String())
 }
 func guiAllVMs() string {
 	var resp chan minicli.Responses
@@ -361,7 +483,9 @@ func guiAllVMs() string {
 			}
 		}
 	}
-	return fmt.Sprintf(`<html><title>All VMs</title><body><table border=1>%s</table></body></html>`, strings.Join(info, "\n"))
+	//return fmt.Sprintf(`<html><title>All VMs</title><body><table border=1>%s</table></body></html>`, strings.Join(info, "\n"))
+	body := fmt.Sprintf(`<table border=1>%s</table>`, strings.Join(info, "\n"))
+	return fmt.Sprintf(HTMLFRAME, body)
 }
 
 func guiHostVMs(host string) string {
@@ -428,5 +552,7 @@ func guiHostVMs(host string) string {
 		return "no VMs found"
 	}
 
-	return fmt.Sprintf(`<html><title>VM list</title><body><table border=1>%s</table></body></html>`, strings.Join(lines, "\n"))
+	//return fmt.Sprintf(`<html><title>VM list</title><body><table border=1>%s</table></body></html>`, strings.Join(lines, "\n"))
+	body := fmt.Sprintf(`<table border=1>%s</table>`, strings.Join(lines, "\n"))
+	return fmt.Sprintf(HTMLFRAME, body)
 }
