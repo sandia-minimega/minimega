@@ -19,6 +19,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"vnc"
 	"websocket"
 )
 
@@ -49,31 +50,27 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
-			for {
-				sbuf := make([]byte, VNC_WS_BUF)
-				dbuf := make([]byte, VNC_WS_BUF)
+			decoder := base64.NewDecoder(base64.StdEncoding, ws)
+			tee := io.TeeReader(decoder, remote)
 
-				n, err := ws.Read(sbuf)
+			for {
+				// Read
+				msg, err := vnc.ReadClientMessage(tee)
+				log.Debug("Read: %#v -- %s", msg, err)
 				if err != nil {
-					if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
-						log.Errorln(err)
+					if err == io.EOF || strings.Contains(err.Error(), "closed network") {
+						break
 					}
-					break
-				}
-				if r, ok := vncRecording[rhost]; ok {
-					r.AddAction(string(sbuf[:n]))
-				}
-				n, err = base64.StdEncoding.Decode(dbuf, sbuf[:n])
-				if err != nil {
-					log.Errorln(err, string(sbuf[:n]))
-					break
-				}
-				_, err = remote.Write(dbuf[0:n])
-				if err != nil {
+
 					log.Errorln(err)
-					break
+					continue
+				}
+
+				if r, ok := vncKBRecording[rhost]; ok {
+					r.RecordMessage(msg)
 				}
 			}
+
 			remote.Close()
 		}()
 		func() {
