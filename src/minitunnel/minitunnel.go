@@ -165,9 +165,9 @@ func (t *Tunnel) mux() error {
 
 		// create new sessions if necessary
 		if m.Type == CONNECT {
-			t.handleRemote(&m)
+			go t.handleRemote(&m)
 		} else if m.Type == FORWARD {
-			t.handleReverse(&m)
+			go t.handleReverse(&m)
 		} else if c, ok := t.tids[m.TID]; ok {
 			// route the message to the handler by TID
 			c <- &m
