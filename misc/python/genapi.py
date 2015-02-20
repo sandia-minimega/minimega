@@ -96,7 +96,7 @@ def buildCommand(context, subs, cmd):
 
 def render(cmds):
     context = {
-                'version':  '2.0.dev0',
+                'version':  '2.0a1',
                 'cmds':     {},
               }
     for c in cmds:

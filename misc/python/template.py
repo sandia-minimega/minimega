@@ -28,6 +28,7 @@ import json
 import socket
 import inspect
 from threading import Lock
+from collections import namedtuple
 
 
 # This version is specific to the python API. It is not indicative of the
@@ -59,10 +60,21 @@ def connect(path):
     '''
     return minimega(path)
 
+Command = namedtuple('Command', ['cmd', 'args'])
 
-class Command:
+class SubCommand:
     def __init__(self, mm):
         self.mm = mm
+
+
+def serializeCommand(command):
+    '''
+    Returns a string representation of the Command object passed.
+    '''
+    if not isinstance(command, Command):
+        raise TypeError('command must be an instance of Command')
+    args = ' '.join(map(str, command.args))
+    return '{} {}'.format(command.cmd.shared_prefix, args)
 
 
 class minimega:
@@ -133,18 +145,19 @@ class minimega:
 
             if self._debug:
                 print('[debug] response: ' + msg)
-            if response['Resp'][0]['Error']:
+            if response['Resp'] and response['Resp'][0]['Error']:
                 raise Error(response['Resp'][0]['Error'])
 
             return response['Resp']
 
 {% for cmd, info in cmds.items() recursive %}
     {% if info.subcommands %}
-{{ '    ' * loop.depth }}class {{ cmd }}(Command):
+{{ '    ' * loop.depth }}class {{ cmd }}(SubCommand):
         {{ loop(info.subcommands.items()) }}
     {% else %}
 {{ '    ' * loop.depth }}def {{ cmd }}(self, *args):
 {{ '    ' * loop.depth }}    '''{{ info.help_long or info.help_short }}'''
+{{ '    ' * loop.depth }}    args = list(args)
 {{ '    ' * loop.depth }}    #validate the args
 {{ '    ' * loop.depth }}    candidates = {{ info.candidates }}
 {{ '    ' * loop.depth }}    for candidate in candidates:
@@ -155,8 +168,10 @@ class minimega:
 {{ '    ' * loop.depth }}                    raise ValidationError('expected string for "{}", received {}'.format(arg['text'], type(args[argNum])))
 {{ '    ' * loop.depth }}                if arg['type'] == 'listItem' and not isinstance(args[argNum], list):
 {{ '    ' * loop.depth }}                    raise ValidationError('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
-{{ '    ' * loop.depth }}                if arg['type'] == 'commandItem' and not isinstance(args[argNum], Command):
-{{ '    ' * loop.depth }}                    raise ValidationError('expected command for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                if arg['type'] == 'commandItem':
+{{ '    ' * loop.depth }}                    if not isinstance(args[argNum], Command):
+{{ '    ' * loop.depth }}                        raise ValidationError('expected Command object for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                    args[argNum] = serializeCommand(args[argNum])
 {{ '    ' * loop.depth }}                if arg['type'] == 'choiceItem' and args[argNum] not in arg['choices']:
 {{ '    ' * loop.depth }}                    raise ValidationError('expected one of "{}" for "{}", received {}'.format(arg['choices'], arg['text'], args[argNum]))
 {{ '    ' * loop.depth }}                argNum += 1
@@ -167,6 +182,7 @@ class minimega:
 {{ '    ' * loop.depth }}            #passed validation, exact match for this candidate
 {{ '    ' * loop.depth }}            return self.mm._send('{{ info.shared_prefix }}', *args)
 {{ '    ' * loop.depth }}    raise ValidationError('could not understand command', args)
+{{ '    ' * loop.depth }}{{ cmd }}.shared_prefix = '{{ info.shared_prefix }}'
     {% endif %}
 {% endfor %}
 
