@@ -27,6 +27,7 @@ var (
 	annotate bool // show hostnames in output
 	compress bool // compress output
 	headers  bool // show headers in output
+	sortRows bool // sort tabular data
 	mode     int  // output mode
 )
 
@@ -51,6 +52,7 @@ func init() {
 	annotate = true
 	compress = true
 	headers = true
+	sortRows = true
 }
 
 // Return any errors contained in the responses, or nil. If any responses have

@@ -118,7 +118,9 @@ func (r Responses) tabularString(buf io.Writer, header []string) {
 		data = append(data, r[i].Tabular...)
 	}
 
-	sort.Sort(table(data))
+	if sortRows {
+		sort.Sort(table(data))
+	}
 
 	if mode == csvMode {
 		printCSV(buf, header, data)
