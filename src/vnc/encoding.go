@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	RawEncoding = 0
-	DesktopSize = -223
+	RawEncoding               = 0
+	DesktopSizePseudoEncoding = -223
+	CursorPseudoEncoding      = -239
 )
 
 func (s *Server) readPixel(reader io.Reader) (c color.RGBA64, err error) {

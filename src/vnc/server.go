@@ -158,7 +158,7 @@ func (s *Server) readPixelData(r io.Reader, encType int32, rect *image.RGBA64) e
 	switch encType {
 	case RawEncoding:
 		return s.decodeRawEncoding(r, rect)
-	case DesktopSize:
+	case DesktopSizePseudoEncoding:
 		// No pixel data to read
 		return nil
 	}

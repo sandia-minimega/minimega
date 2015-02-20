@@ -132,7 +132,7 @@ func (v *vncFBRecord) Run() {
 	}
 
 	err = (&vnc.SetEncodings{
-		Encodings: []int32{vnc.RawEncoding, vnc.DesktopSize},
+		Encodings: []int32{vnc.RawEncoding, vnc.DesktopSizePseudoEncoding},
 	}).Write(v.Conn)
 
 	if err != nil {
@@ -198,6 +198,15 @@ func (v *vncFBRecord) Run() {
 }
 
 func (v *vncKBPlayback) Run() {
+	err := (&vnc.SetEncodings{
+		Encodings: []int32{vnc.CursorPseudoEncoding},
+	}).Write(v.Conn)
+
+	if err != nil {
+		v.err = fmt.Errorf("unable to set encodings: %v", err)
+		return
+	}
+
 	scanner := bufio.NewScanner(v.file)
 
 	for scanner.Scan() && v.err == nil {
