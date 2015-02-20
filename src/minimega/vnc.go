@@ -234,8 +234,12 @@ func (v *vncKBPlayback) Run() {
 		}
 	}
 
+	// Stop ourselves
+	go v.Stop()
+
 	// Block until we receive the done flag if we finished the playback
 	<-v.done
+	delete(vncKBPlaying, v.Rhost)
 }
 
 func vncRecordKB(host, vm, filename string) error {
