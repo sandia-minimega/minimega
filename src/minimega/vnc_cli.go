@@ -85,7 +85,7 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 					break
 				}
 			}
-		} else if c.BoolArgs["noplayback"] && c.BoolArgs["kb"] {
+		} else if c.BoolArgs["noplayback"] {
 			err = fmt.Errorf("kb playback %v %v not found", host, vm)
 			for k, v := range vncKBPlaying {
 				if v.Matches(host, vm) {
