@@ -102,8 +102,8 @@ def render(cmds):
     for c in cmds:
         cmd = c['shared_prefix']
 
-        #make sure this isn't a blacklisted command
-        if cmd in CMD_BLACKLIST:
+        #make sure this isn't a blacklisted or cli-specific command
+        if cmd.startswith('.') or cmd in CMD_BLACKLIST:
             continue
 
         buildCommand(context['cmds'], cmd.split(), c)

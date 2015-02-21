@@ -8,3 +8,4 @@ __pycache__
 doc/*.html
 doc/markdown/api
 venv/
+misc/python/minimega.py
