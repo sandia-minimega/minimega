@@ -166,8 +166,10 @@ class minimega:
 {{ '    ' * loop.depth }}            for arg in candidate:
 {{ '    ' * loop.depth }}                if arg['type'] == 'stringItem' and not _isstr(args[argNum]):
 {{ '    ' * loop.depth }}                    raise ValidationError('expected string for "{}", received {}'.format(arg['text'], type(args[argNum])))
-{{ '    ' * loop.depth }}                if arg['type'] == 'listItem' and not isinstance(args[argNum], list):
-{{ '    ' * loop.depth }}                    raise ValidationError('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                if arg['type'] == 'listItem':
+{{ '    ' * loop.depth }}                    if not isinstance(args[argNum], list):
+{{ '    ' * loop.depth }}                        raise ValidationError('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                    args[argNum] = ' '.join(map(str, args[argNum]))
 {{ '    ' * loop.depth }}                if arg['type'] == 'commandItem':
 {{ '    ' * loop.depth }}                    if not isinstance(args[argNum], Command):
 {{ '    ' * loop.depth }}                        raise ValidationError('expected Command object for "{}", received {}'.format(arg['text'], type(args[argNum])))
