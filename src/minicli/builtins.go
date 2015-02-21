@@ -40,9 +40,20 @@ Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 		Patterns: []string{
 			".json [true,false]",
+			".json <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliModeHelper(c, out, jsonMode)
+			if c.Subcommand == nil {
+				cliModeHelper(c, out, jsonMode)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						m := jsonMode
+						resps[0].Mode = &m
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 	{ // header
