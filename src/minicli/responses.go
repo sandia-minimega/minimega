@@ -59,21 +59,21 @@ func (r Responses) getHeader() ([]string, error) {
 // are width mismatches.
 func (r Responses) validTabular(header []string) (bool, error) {
 	var simple, tabular bool
-	for i := range r {
+	for _, v := range r {
 		// Ignore responses with an error
-		if r[i].Error != "" {
+		if v.Error != "" {
 			continue
 		}
 
-		if r[i].Tabular != nil {
+		if v.Tabular != nil {
 			// Ignore the simple response if there's tabular data
 			tabular = true
 
 			if header != nil {
 				// Check the width matches
-				for j := range r[i].Tabular {
-					if len(r[i].Tabular[j]) != len(header) {
-						err := fmt.Errorf("tabular width mismatch, host: %s, row: %d", r[i].Host, j)
+				for j := range v.Tabular {
+					if len(v.Tabular[j]) != len(header) {
+						err := fmt.Errorf("tabular width mismatch, host: %s, row: %d", v.Host, j)
 						return false, err
 					}
 				}
@@ -88,4 +88,28 @@ func (r Responses) validTabular(header []string) (bool, error) {
 	}
 
 	return tabular, nil
+}
+
+func (r Responses) json() bool {
+	return len(r) > 0 && *r[0].Mode == jsonMode
+}
+
+func (r Responses) csv() bool {
+	return len(r) > 0 && *r[0].Mode == csvMode
+}
+
+func (r Responses) annotate() bool {
+	return len(r) > 0 && *r[0].Annotate
+}
+
+func (r Responses) compress() bool {
+	return len(r) > 0 && *r[0].Compress
+}
+
+func (r Responses) sort() bool {
+	return len(r) > 0 && *r[0].Sort
+}
+
+func (r Responses) headers() bool {
+	return len(r) > 0 && *r[0].Headers
 }

@@ -38,7 +38,24 @@ func (r Responses) String() string {
 		return ""
 	}
 
-	if mode == jsonMode {
+	// Copy the global settings where the overrides are not set
+	if r[0].Annotate == nil {
+		r[0].Annotate = &annotate
+	}
+	if r[0].Compress == nil {
+		r[0].Compress = &compress
+	}
+	if r[0].Headers == nil {
+		r[0].Headers = &headers
+	}
+	if r[0].Sort == nil {
+		r[0].Sort = &sortRows
+	}
+	if r[0].Mode == nil {
+		r[0].Mode = &mode
+	}
+
+	if r.json() {
 		bytes, err := json.Marshal(r)
 		if err != nil {
 			// TODO: Should this be JSON-formatted too?
@@ -69,12 +86,12 @@ func (r Responses) String() string {
 
 	if tabular && count > 0 {
 		r.tabularString(&buf, header)
-	} else if compress && len(r) > 1 {
+	} else if r.compress() && len(r) > 1 {
 		r.compressString(&buf)
 	} else {
 		for _, v := range r {
 			if v.Error == "" && v.Response != "" {
-				if annotate {
+				if r.annotate() {
 					buf.WriteString(v.Host)
 					buf.WriteString(": ")
 				}
@@ -102,35 +119,35 @@ func (r Responses) String() string {
 
 func (r Responses) tabularString(buf io.Writer, header []string) {
 	// Add extra column to the data so that
-	if annotate {
+	if r.annotate() {
 		header = append([]string{"host"}, header...)
 
-		for i := range r {
-			for j, row := range r[i].Tabular {
-				r[i].Tabular[j] = append([]string{r[i].Host}, row...)
+		for _, v := range r {
+			for j, row := range v.Tabular {
+				v.Tabular[j] = append([]string{v.Host}, row...)
 			}
 		}
 	}
 
 	// Collect all the tabular data
 	data := [][]string{}
-	for i := range r {
-		data = append(data, r[i].Tabular...)
+	for _, v := range r {
+		data = append(data, v.Tabular...)
 	}
 
-	if sortRows {
+	if r.sort() {
 		sort.Sort(table(data))
 	}
 
-	if mode == csvMode {
-		printCSV(buf, header, data)
+	if r.csv() {
+		r.printCSV(buf, header, data)
 	} else {
-		printTabular(buf, header, data)
+		r.printTabular(buf, header, data)
 	}
 }
 
 func (r Responses) compressString(buf io.Writer) {
-	buckets := map[uint64]Responses{}
+	buckets := map[uint64][]*Response{}
 
 	// Find responses that have the same output by hashing them into buckets
 	for _, v := range r {
@@ -173,7 +190,7 @@ func (r Responses) compressString(buf io.Writer) {
 	for _, h := range hosts {
 		resp := buckets[ranges[h]][0]
 
-		if annotate {
+		if r.annotate() {
 			buf.Write([]byte(h))
 			buf.Write([]byte(": "))
 		}
@@ -225,12 +242,12 @@ func compressHosts(hosts []string) string {
 	return strings.Join(res, ",")
 }
 
-func printTabular(buf io.Writer, header []string, data [][]string) {
+func (r Responses) printTabular(buf io.Writer, header []string, data [][]string) {
 	w := new(tabwriter.Writer)
 	w.Init(buf, 5, 0, 1, ' ', 0)
 	defer w.Flush()
 
-	if headers {
+	if r.headers() {
 		for i, h := range header {
 			if i != 0 {
 				fmt.Fprintf(w, "\t| ")
@@ -251,11 +268,11 @@ func printTabular(buf io.Writer, header []string, data [][]string) {
 	}
 }
 
-func printCSV(buf io.Writer, header []string, data [][]string) {
+func (r Responses) printCSV(buf io.Writer, header []string, data [][]string) {
 	w := csv.NewWriter(buf)
 	defer w.Flush()
 
-	if headers {
+	if r.headers() {
 		w.Write(header)
 	}
 

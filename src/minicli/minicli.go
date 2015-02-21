@@ -44,6 +44,13 @@ type Response struct {
 	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
 	Error    string      // Because you can't gob/json encode an error type
 	Data     interface{} // Optional user data
+
+	// Flags that override the global settings
+	Annotate *bool
+	Compress *bool
+	Headers  *bool
+	Sort     *bool
+	Mode     *int
 }
 
 type CLIFunc func(*Command, chan Responses)

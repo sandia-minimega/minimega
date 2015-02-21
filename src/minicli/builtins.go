@@ -18,9 +18,20 @@ var builtinCLIHandlers = []Handler{
 Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 		Patterns: []string{
 			".csv [true,false]",
+			".csv <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliModeHelper(c, out, csvMode)
+			if c.Subcommand == nil {
+				cliModeHelper(c, out, csvMode)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						m := csvMode
+						resps[0].Mode = &m
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 	{ // json
@@ -40,9 +51,20 @@ Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 Enable or disable headers for tabular data.`,
 		Patterns: []string{
 			".headers [true,false]",
+			".headers <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &headers)
+			if c.Subcommand == nil {
+				cliFlagHelper(c, out, &headers)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						v := c.BoolArgs["true"]
+						resps[0].Headers = &v
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 	{ // annotate
@@ -51,9 +73,20 @@ Enable or disable headers for tabular data.`,
 Enable or disable hostname annotation for responses.`,
 		Patterns: []string{
 			".annotate [true,false]",
+			".annotate <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &annotate)
+			if c.Subcommand == nil {
+				cliFlagHelper(c, out, &annotate)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						v := c.BoolArgs["true"]
+						resps[0].Annotate = &v
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 	{ // sort
@@ -63,9 +96,20 @@ Enable or disable sorting of tabular data based on the value in the first
 column. Sorting is based on string comparison.`,
 		Patterns: []string{
 			".sort [true,false]",
+			".sort <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &sortRows)
+			if c.Subcommand == nil {
+				cliFlagHelper(c, out, &sortRows)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						v := c.BoolArgs["true"]
+						resps[0].Sort = &v
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 	{ // filter
@@ -139,9 +183,20 @@ Or,
 Compression is not applied when the output mode is JSON.`,
 		Patterns: []string{
 			".compress [true,false]",
+			".compress <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &compress)
+			if c.Subcommand == nil {
+				cliFlagHelper(c, out, &compress)
+			} else {
+				for resps := range runSubCommand(c) {
+					if len(resps) > 0 {
+						v := c.BoolArgs["true"]
+						resps[0].Compress = &v
+					}
+					out <- resps
+				}
+			}
 		},
 	},
 }
@@ -161,6 +216,17 @@ func init() {
 	}
 }
 
+func runSubCommand(c *Command) chan Responses {
+	pipe := make(chan Responses)
+
+	go func() {
+		c.Subcommand.Call(c.Subcommand, pipe)
+		close(pipe)
+	}()
+
+	return pipe
+}
+
 func cliFilter(c *Command, out chan Responses) {
 	parts := strings.Split(c.StringArgs["column=value"], "=")
 	if len(parts) != 2 {
@@ -174,14 +240,8 @@ func cliFilter(c *Command, out chan Responses) {
 
 	col, filter := strings.ToLower(parts[0]), strings.ToLower(parts[1])
 
-	pipe := make(chan Responses)
-	go func() {
-		c.Subcommand.Call(c.Subcommand, pipe)
-		close(pipe)
-	}()
-
 outer:
-	for resps := range pipe {
+	for resps := range runSubCommand(c) {
 		newResps := Responses{}
 
 		for _, r := range resps {
@@ -223,21 +283,15 @@ outer:
 			newResps = append(newResps, r)
 		}
 
-		out <- newResps
+		out <- resps
 	}
 }
 
 func cliColumns(c *Command, out chan Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
-	pipe := make(chan Responses)
-	go func() {
-		c.Subcommand.Call(c.Subcommand, pipe)
-		close(pipe)
-	}()
-
 outer:
-	for resps := range pipe {
+	for resps := range runSubCommand(c) {
 		for _, r := range resps {
 			if r.Header == nil || r.Tabular == nil {
 				continue
