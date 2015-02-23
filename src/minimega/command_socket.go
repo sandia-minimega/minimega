@@ -58,6 +58,11 @@ outer:
 			break
 		}
 
+		if cmd == nil {
+			// blank line?
+			continue
+		}
+
 		// HAX: Don't record the read command
 		record := !strings.HasPrefix(cmd.Original, "read")
 
