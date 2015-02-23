@@ -12,6 +12,7 @@ import (
 	log "minilog"
 	"net"
 	"strings"
+	"time"
 )
 
 const (
@@ -36,6 +37,7 @@ type Tunnel struct {
 	out       chan *tunnelMessage           // message queue to be sent out over the transport
 	quit      chan bool                     // tell the message pump to quit
 	tids      map[int32]chan *tunnelMessage // maps of transaction id/incoming channel pairs for routing multiple tunnels
+	rnum      *rand.Rand
 }
 
 type tunnelMessage struct {
@@ -86,6 +88,7 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 		out:       make(chan *tunnelMessage, 1024),
 		quit:      make(chan bool),
 		tids:      make(map[int32]chan *tunnelMessage, 1024),
+		rnum:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	return t.mux()
@@ -101,6 +104,7 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		out:       make(chan *tunnelMessage, 1024),
 		quit:      make(chan bool),
 		tids:      make(map[int32]chan *tunnelMessage, 1024),
+		rnum:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	handshake := &tunnelMessage{
@@ -207,7 +211,7 @@ func (t *Tunnel) Forward(source int, host string, dest int) error {
 // destination host, and destination port on the local end.
 func (t *Tunnel) Reverse(source int, host string, dest int) error {
 	// create a temporary TID registration in order to get an ACK back
-	TID := rand.Int31()
+	TID := t.rnum.Int31()
 	in := t.registerTID(TID)
 	defer t.unregisterTID(TID)
 
@@ -289,7 +293,7 @@ func (t *Tunnel) handleRemote(m *tunnelMessage) {
 }
 
 func (t *Tunnel) handleTunnel(conn net.Conn, host string, dest int) {
-	TID := rand.Int31()
+	TID := t.rnum.Int31()
 	in := t.registerTID(TID)
 
 	m := &tunnelMessage{
