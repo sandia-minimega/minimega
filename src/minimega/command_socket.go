@@ -57,28 +57,27 @@ outer:
 			}
 			break
 		}
+		err = nil
 
-		if cmd == nil {
-			// blank line?
-			continue
-		}
-
-		// HAX: Don't record the read command
-		record := !strings.HasPrefix(cmd.Original, "read")
-
-		// HAX: Work around so that we can add the more boolean
 		var prevResp minicli.Responses
-		for resp := range runCommand(cmd, record) {
-			if prevResp != nil {
-				err = sendLocalResp(enc, prevResp, true)
-				if err != nil {
-					break outer
-				}
-			}
 
-			prevResp = resp
+		if cmd != nil {
+			// HAX: Don't record the read command
+			record := !strings.HasPrefix(cmd.Original, "read")
+
+			// HAX: Work around so that we can add the more boolean
+			for resp := range runCommand(cmd, record) {
+				if prevResp != nil {
+					err = sendLocalResp(enc, prevResp, true)
+					if err != nil {
+						break outer
+					}
+				}
+
+				prevResp = resp
+			}
 		}
-		if err == nil && prevResp != nil {
+		if err == nil {
 			err = sendLocalResp(enc, prevResp, false)
 		}
 	}
@@ -109,9 +108,11 @@ func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	log.Infoln("sending resp:", resp)
 	r := localResponse{
-		Resp:     resp,
-		Rendered: resp.String(),
-		More:     more,
+		More: more,
+	}
+	if resp != nil {
+		r.Resp = resp
+		r.Rendered = resp.String()
 	}
 
 	return enc.Encode(&r)
