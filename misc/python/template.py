@@ -165,23 +165,34 @@ class minimega:
 {{ '    ' * loop.depth }}        try:
 {{ '    ' * loop.depth }}            for arg in candidate:
 {{ '    ' * loop.depth }}                if arg['type'] == 'stringItem' and not _isstr(args[argNum]):
-{{ '    ' * loop.depth }}                    raise ValidationError('expected string for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                    if self.mm._debug:
+{{ '    ' * loop.depth }}                        print('expected string for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                    break
 {{ '    ' * loop.depth }}                if arg['type'] == 'listItem':
 {{ '    ' * loop.depth }}                    if not isinstance(args[argNum], list):
-{{ '    ' * loop.depth }}                        raise ValidationError('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                        if self.mm._debug:
+{{ '    ' * loop.depth }}                            print('expected list for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                        break
 {{ '    ' * loop.depth }}                    args[argNum] = ' '.join(map(str, args[argNum]))
 {{ '    ' * loop.depth }}                if arg['type'] == 'commandItem':
 {{ '    ' * loop.depth }}                    if not isinstance(args[argNum], Command):
-{{ '    ' * loop.depth }}                        raise ValidationError('expected Command object for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                        if self.mm._debug:
+{{ '    ' * loop.depth }}                            print('expected Command object for "{}", received {}'.format(arg['text'], type(args[argNum])))
+{{ '    ' * loop.depth }}                        break
 {{ '    ' * loop.depth }}                    args[argNum] = serializeCommand(args[argNum])
-{{ '    ' * loop.depth }}                if arg['type'] == 'choiceItem' and args[argNum] not in arg['choices']:
-{{ '    ' * loop.depth }}                    raise ValidationError('expected one of "{}" for "{}", received {}'.format(arg['choices'], arg['text'], args[argNum]))
+{{ '    ' * loop.depth }}                if arg['type'] == 'choiceItem' and args[argNum] not in arg['options']:
+{{ '    ' * loop.depth }}                    if self.mm._debug:
+{{ '    ' * loop.depth }}                        print('expected one of "{}" for "{}", received {}'.format(arg['options'], arg['text'], args[argNum]))
+{{ '    ' * loop.depth }}                    break
 {{ '    ' * loop.depth }}                argNum += 1
 {{ '    ' * loop.depth }}        except IndexError:
 {{ '    ' * loop.depth }}            if not candidate[argNum]['optional']:
-{{ '    ' * loop.depth }}                raise ValidationError('"{}" required but not provided'.format(arg['text']))
+{{ '    ' * loop.depth }}                if self.mm._debug:
+{{ '    ' * loop.depth }}                    print('"{}" required but not provided'.format(arg['text']))
+{{ '    ' * loop.depth }}                continue #skip to next candidate
 {{ '    ' * loop.depth }}        if not args[argNum:]:
 {{ '    ' * loop.depth }}            #passed validation, exact match for this candidate
+{{ '    ' * loop.depth }}            #if we break in the loop above, argNum doesn't get incremented and args[argNum:] will never be empty, so we don't need a "valid" flag
 {{ '    ' * loop.depth }}            return self.mm._send('{{ info.shared_prefix }}', *args)
 {{ '    ' * loop.depth }}    raise ValidationError('could not understand command', args)
 {{ '    ' * loop.depth }}{{ cmd }}.shared_prefix = '{{ info.shared_prefix }}'
