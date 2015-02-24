@@ -292,7 +292,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 
 		if c.BoolArgs["true"] {
 			defaultFlags.Mode = newMode
-		} else if c.BoolArgs["false"] {
+		} else if c.BoolArgs["false"] && defaultFlags.Mode == newMode {
 			defaultFlags.Mode = defaultMode
 		} else {
 			resp.Response = strconv.FormatBool(defaultFlags.Mode == newMode)
@@ -309,10 +309,14 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 				*r[0].Flags = defaultFlags
 			}
 
-			r[0].Mode = newMode
-		}
+			if c.BoolArgs["true"] {
+				r[0].Mode = newMode
+			} else if c.BoolArgs["false"] && r[0].Mode == newMode {
+				r[0].Mode = defaultMode
+			}
 
-		out <- r
+			out <- r
+		}
 	}
 }
 
