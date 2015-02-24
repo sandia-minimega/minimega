@@ -23,13 +23,21 @@ const (
 	CommentLeader = "#"
 )
 
-var (
-	annotate bool // show hostnames in output
-	compress bool // compress output
-	headers  bool // show headers in output
-	sortRows bool // sort tabular data
-	mode     int  // output mode
-)
+type Flags struct {
+	Annotate bool
+	Compress bool
+	Headers  bool
+	Sort     bool
+	Mode     int
+}
+
+var defaultFlags = Flags{
+	Annotate: true,
+	Compress: true,
+	Headers:  true,
+	Sort:     true,
+	Mode:     defaultMode,
+}
 
 var handlers []*Handler
 var history []string // command history for the write command
@@ -45,22 +53,11 @@ type Response struct {
 	Error    string      // Because you can't gob/json encode an error type
 	Data     interface{} // Optional user data
 
-	// Flags that override the global settings
-	Annotate *bool
-	Compress *bool
-	Headers  *bool
-	Sort     *bool
-	Mode     *int
+	// Embedded output flags, overrides defaults if set for first response
+	*Flags `json:"-"`
 }
 
 type CLIFunc func(*Command, chan Responses)
-
-func init() {
-	annotate = true
-	compress = true
-	headers = true
-	sortRows = true
-}
 
 // Return any errors contained in the responses, or nil. If any responses have
 // errors, the returned slice will be padded with nil errors to align the error

@@ -91,25 +91,25 @@ func (r Responses) validTabular(header []string) (bool, error) {
 }
 
 func (r Responses) json() bool {
-	return len(r) > 0 && *r[0].Mode == jsonMode
+	return len(r) > 0 && r[0].Mode == jsonMode
 }
 
 func (r Responses) csv() bool {
-	return len(r) > 0 && *r[0].Mode == csvMode
+	return len(r) > 0 && r[0].Mode == csvMode
 }
 
 func (r Responses) annotate() bool {
-	return len(r) > 0 && *r[0].Annotate
+	return len(r) > 0 && r[0].Annotate
 }
 
 func (r Responses) compress() bool {
-	return len(r) > 0 && *r[0].Compress
+	return len(r) > 0 && r[0].Compress
 }
 
 func (r Responses) sort() bool {
-	return len(r) > 0 && *r[0].Sort
+	return len(r) > 0 && r[0].Sort
 }
 
 func (r Responses) headers() bool {
-	return len(r) > 0 && *r[0].Headers
+	return len(r) > 0 && r[0].Headers
 }

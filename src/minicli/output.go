@@ -39,20 +39,9 @@ func (r Responses) String() string {
 	}
 
 	// Copy the global settings where the overrides are not set
-	if r[0].Annotate == nil {
-		r[0].Annotate = &annotate
-	}
-	if r[0].Compress == nil {
-		r[0].Compress = &compress
-	}
-	if r[0].Headers == nil {
-		r[0].Headers = &headers
-	}
-	if r[0].Sort == nil {
-		r[0].Sort = &sortRows
-	}
-	if r[0].Mode == nil {
-		r[0].Mode = &mode
+	if r[0].Flags == nil {
+		r[0].Flags = new(Flags)
+		*r[0].Flags = defaultFlags
 	}
 
 	if r.json() {

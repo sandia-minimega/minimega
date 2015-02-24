@@ -21,17 +21,7 @@ Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 			".csv <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliModeHelper(c, out, csvMode)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						m := csvMode
-						resps[0].Mode = &m
-					}
-					out <- resps
-				}
-			}
+			cliModeHelper(c, out, csvMode)
 		},
 	},
 	{ // json
@@ -43,20 +33,10 @@ Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 			".json <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliModeHelper(c, out, jsonMode)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						m := jsonMode
-						resps[0].Mode = &m
-					}
-					out <- resps
-				}
-			}
+			cliModeHelper(c, out, jsonMode)
 		},
 	},
-	{ // header
+	{ // headers
 		HelpShort: "enable or disable headers for tabular data",
 		HelpLong: `
 Enable or disable headers for tabular data.`,
@@ -65,17 +45,7 @@ Enable or disable headers for tabular data.`,
 			".headers <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliFlagHelper(c, out, &headers)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						v := c.BoolArgs["true"]
-						resps[0].Headers = &v
-					}
-					out <- resps
-				}
-			}
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Headers })
 		},
 	},
 	{ // annotate
@@ -87,17 +57,7 @@ Enable or disable hostname annotation for responses.`,
 			".annotate <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliFlagHelper(c, out, &annotate)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						v := c.BoolArgs["true"]
-						resps[0].Annotate = &v
-					}
-					out <- resps
-				}
-			}
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Annotate })
 		},
 	},
 	{ // sort
@@ -110,17 +70,40 @@ column. Sorting is based on string comparison.`,
 			".sort <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliFlagHelper(c, out, &sortRows)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						v := c.BoolArgs["true"]
-						resps[0].Sort = &v
-					}
-					out <- resps
-				}
-			}
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Sort })
+		},
+	},
+	{ // compress
+		HelpShort: "enable or disable output compression",
+		HelpLong: `
+Enable or disable output compression of like output from multiple responses.
+For example, if you executed a command using mesh, such as:
+
+	mesh send node[0-9] version
+
+You would expect to get the same minimega version for all 10 nodes. Rather than
+print out the same version 10 times, minicli with compression enabled would print:
+
+	node[0-9]: minimega <version>
+
+Assuming that all the minimega instances are running the same version. If one node was running
+a different version or has an error, compression is still useful:
+
+	node[0-4,6-9]: minimega <version>
+	node5: minimega <version>
+
+Or,
+
+	node[0-3,9]: minimega <version>
+	node[4-8]: Error: <error>
+
+Compression is not applied when the output mode is JSON.`,
+		Patterns: []string{
+			".compress [true,false]",
+			".compress <true,false> (command)",
+		},
+		Call: func(c *Command, out chan Responses) {
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Compress })
 		},
 	},
 	{ // filter
@@ -166,49 +149,6 @@ Note: the annotate flag controls the presence of the host column.`,
 			".columns <columns as csv> (command)",
 		},
 		Call: cliColumns,
-	},
-	{ // compress
-		HelpShort: "enable or disable output compression",
-		HelpLong: `
-Enable or disable output compression of like output from multiple responses.
-For example, if you executed a command using mesh, such as:
-
-	mesh send node[0-9] version
-
-You would expect to get the same minimega version for all 10 nodes. Rather than
-print out the same version 10 times, minicli with compression enabled would print:
-
-	node[0-9]: minimega <version>
-
-Assuming that all the minimega instances are running the same version. If one node was running
-a different version or has an error, compression is still useful:
-
-	node[0-4,6-9]: minimega <version>
-	node5: minimega <version>
-
-Or,
-
-	node[0-3,9]: minimega <version>
-	node[4-8]: Error: <error>
-
-Compression is not applied when the output mode is JSON.`,
-		Patterns: []string{
-			".compress [true,false]",
-			".compress <true,false> (command)",
-		},
-		Call: func(c *Command, out chan Responses) {
-			if c.Subcommand == nil {
-				cliFlagHelper(c, out, &compress)
-			} else {
-				for resps := range runSubCommand(c) {
-					if len(resps) > 0 {
-						v := c.BoolArgs["true"]
-						resps[0].Compress = &v
-					}
-					out <- resps
-				}
-			}
-		},
 	},
 }
 
@@ -345,33 +285,65 @@ outer:
 }
 
 func cliModeHelper(c *Command, out chan Responses, newMode int) {
-	resp := &Response{
-		Host: hostname,
+	if c.Subcommand == nil {
+		resp := &Response{
+			Host: hostname,
+		}
+
+		if c.BoolArgs["true"] {
+			defaultFlags.Mode = newMode
+		} else if c.BoolArgs["false"] {
+			defaultFlags.Mode = defaultMode
+		} else {
+			resp.Response = strconv.FormatBool(defaultFlags.Mode == newMode)
+		}
+
+		out <- Responses{resp}
+		return
 	}
 
-	if c.BoolArgs["true"] {
-		mode = newMode
-	} else if c.BoolArgs["false"] {
-		mode = defaultMode
-	} else {
-		resp.Response = strconv.FormatBool(mode == newMode)
-	}
+	for r := range runSubCommand(c) {
+		if len(r) > 0 {
+			if r[0].Flags == nil {
+				r[0].Flags = new(Flags)
+				*r[0].Flags = defaultFlags
+			}
 
-	out <- Responses{resp}
+			r[0].Mode = newMode
+		}
+
+		out <- r
+	}
 }
 
-func cliFlagHelper(c *Command, out chan Responses, flag *bool) {
-	resp := &Response{
-		Host: hostname,
+func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
+	if c.Subcommand == nil {
+		resp := &Response{
+			Host: hostname,
+		}
+
+		if c.BoolArgs["true"] || c.BoolArgs["false"] {
+			// Update the flag, can just get value for "true" since the default
+			// value is false.
+			*get(&defaultFlags) = c.BoolArgs["true"]
+		} else {
+			resp.Response = strconv.FormatBool(*get(&defaultFlags))
+		}
+
+		out <- Responses{resp}
+		return
 	}
 
-	if c.BoolArgs["true"] || c.BoolArgs["false"] {
-		// Update the flag, can just get value for "true" since the default
-		// value is false.
-		*flag = c.BoolArgs["true"]
-	} else {
-		resp.Response = strconv.FormatBool(*flag)
-	}
+	for r := range runSubCommand(c) {
+		if len(r) > 0 {
+			if r[0].Flags == nil {
+				r[0].Flags = new(Flags)
+				*r[0].Flags = defaultFlags
+			}
 
-	out <- Responses{resp}
+			*get(r[0].Flags) = c.BoolArgs["true"]
+		}
+
+		out <- r
+	}
 }
