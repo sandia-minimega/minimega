@@ -1,39 +1,43 @@
-Using Minimega
+Using minimega
 
 * Launching, Namespaces, and the Base Directory
 
+minimega is designed to be simple to deploy, and is configured at runtime by running minimega scripts (more on that later). A few optional startup options are provided as command line switches.
+
 ** Single Node
 
-If running minimega on a single node, simply launch it with no arguments as root. You should be presented with the minimega command line, along with any errors encountered when searching for external tools.
+If running minimega on a single node, simply launch it with no arguments *as*root* (unless you have special permissions on kvm). You should be presented with the minimega command line, along with any errors encountered when searching for external tools.
 
 	$ sudo bin/minimega 
 	minimega, Copyright (2014) Sandia Corporation. 
 	Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
 	the U.S. Government retains certain rights in this software.
-
+	
 	minimega$ 
 
 minimega will exit if stdin is closed, which means that if you put minimega in the background at this point, it will simply interpret that as a call to exit. To start minimega in a way that allows you to put it in the background, use the `nostdin` flag:
 
 	$ sudo bin/minimega -nostdin &
 
-The only way to communicate with a daemonized minimega instance is over the network, through the minimega local command mode, or by attaching a minimega CLI to the running instance.
+The only way to communicate with a daemonized minimega instance is over the network, through the minimega local command mode, or by attaching a minimega CLI to the running instance. We'll go over each of these access modes.
 
 To attach to a local minimega instance, use the `attach` flag:
 
 	$ sudo bin/minimega -attach
 	CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit
 	use 'disconnect' or ^d to exit just the minimega command line
-
+	
 	minimega:/tmp/minimega/minimega$
+
+The `attach` interface shows the CLI prompt as before, this time with the path to the minimega command socket you've connected to. 
 
 ** Multiple Nodes
 
 minimega communicates with other minimega instances via the `meshage` protocol, which supports arbitrary meshes of nodes, auto-discovery, and basic resiliency when nodes fail. Details of meshage are explained later in this document. For the sake of launching, minimega uses meshage to discover other nodes on the cluster and attempts to connect to them. Meshage uses UDP broadcast to solicit new connections, so your cluster nodes should be on the same broadcast domain. If not, you will have to manually dial each of the nodes.
 
-minimega will attempt to maintain several connections to the mesh of minimega nodes, the number of which is defined by the `degree` flag. `degree` is by default 0, which means that when you launch minimega, it will not solicit connections to any other nodes. Additionally, minimega supports basic multi-tenancy by specifying a namespace at launch using the `namespace` flag. This allows you to have two minimega clusters on the same network co-exist without connecting to each other. More details about namespaces and meshage are described later in this document.
+minimega will attempt to maintain several connections to the mesh of minimega nodes, the number of which is defined by the `degree` flag. `degree` is by default 0, which means that when you launch minimega, it will not solicit connections to any other nodes. Additionally, minimega supports partitioning meshage-based groups of nodes by specifying a namespace at launch using the `namespace` flag. This allows you to have two minimega clusters on the same network co-exist without connecting to each other. 
 
-For example, if you want to launch minimega on a number of nodes, put minimega in the background on each node, with a namespace of `foo` and a degree of 2 - run the following on each node:
+For example, if you want to launch minimega on a number of nodes and put minimega in the background on each node with a namespace of `foo` and a degree of 2 - run the following on each node:
 
 	$ sudo bin/minimega -nostdin -degree 2 -namespace foo &
 
@@ -41,91 +45,149 @@ Each node will then auto-discover at least two other nodes with the namespace `f
 
 ** Base Directory
 
-minimega creates a number of files that describe and allow control of virtual machines, DNS/DHCP servers, and other components under a base directory, by default `/tmp/minimega`. You can change this path using the `base` flag. If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use. If you know that minimega is not already running, you can force minimega to repopulate the base directory with the `force` flag, or just delete the existing base directory.
+minimega creates a number of files that describe and allow control of virtual machines, DNS/DHCP servers, and other components under a base directory, by default `/tmp/minimega`. You can change this path using the `base` flag. If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use. If you know that minimega is not already running, you can force minimega to repopulate the base directory with the `force` flag, or just delete the existing base directory. The base directory is important when connecting to an already running minimega instance with the `attach` or `e` flags, as those modes both look for the minimega command socket in a specified base directory. 
 
 * Input Methods
 
-There are three ways to communicate with minimega - the minimega command line, the local command port, and over a network with meshage. Each input method uses the same command set, and all minimega commands are available on each communication interface.
+There are three ways to communicate with minimega - the minimega command line (including the `attach` mode), the local command port (including the `e` mode), and over a network with meshage. Each input method uses the same command set, and all minimega commands are available on each communication interface, even over the network. 
 
 ** Command Prompt
 
-minimega uses a readline-based command prompt for input. Just like bash and other readline-based interfaces, you can use a `.inputrc` file, tab completion on paths, and history. Commands are input simply as `<command> <arguments>`, with arguments split on whitespace. 
+minimega uses a readline-based command prompt for input. Just like bash and other readline-based interfaces, you can use an `.inputrc` file, tab completion on paths, and history. Commands are input simply as `<command> <arguments>`, with arguments split on whitespace, and grouped by "" or '', just like bash. 
 
 For example, to set a disk to boot (the list of commands are described later):
 
 	minimega$ vm config disk /home/minimega/mydisk.qcow2
 
-Any errors will be printed to screen (and optionally to file).
+Any errors will be returned. Internal errors will be logged using the logging arguments either set at runtime or specified with command line switches. 
 
-In general, giving a command without arguments will return the current value of that command. Some commands take no arguments. See the list of commands for more information.
+In general, giving a command without arguments will return the current value of that command (such as `vm`config`disk`). Some commands take no arguments. See the list of commands for more information.
 
 ** Command Port and the Local Command Flag
 
 If minimega is already running and you do not have access to the minimega command prompt (which is the case if running as a daemon), you can send commands to the local minimega instance using the `e` flag, or by attaching to the minimega instance with the `attach` flag. Both `e` and `attach` use the command UNIX domain socket created by minimega at `<base>/minimega`.
 
 	$ sudo bin/minimega -nostdin &
-	$ sudo bin/minimega -e hostname
+	$ sudo bin/minimega -e host name
 	foo
 	$
 
-Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. 
+Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. This is especially useful for pipelining minimega commands with other unix utilities. 
 
 The command port can also be interfaces by external programs. It is a UNIX domain socket in the base directory at `<base>/minimega`. The command port uses JSON encoded commands and responses using the following schema:
 
 	{
-	    "name": "cliCommand",
+	    "name": "Command",
 	    "properties": {
-		"Command": {
+		"Original": {
 		    "type": "string",
-		    "description": "single token command",
-		    "required": true
-		},
-		"Args": {
-		    "type": "array",
-		    "items": {
-			"type": "string"
-		    }
+		    "description": "string form of command, with arguments separated by whitespace",
 		    "required": true
 		},
 	    }
 	}
 
 	{
-	    "name": "cliResponse",
+	    "name": "localResponse",
 	    "properties": {
-		"Response": {
-		    "type": "string",
+		"Resp": {
+		    "type": "array",
+		    "items": {
+			"type": "Response"
+		    }
+		    "description": "array if responses to a single command"
 		},
-		"Error": {
+		"Rendered": {
 		    "type": "string",
-		    "description": "Error, if any",
+		    "description": "pre-rendered output of the Resp object according to output rendering rules"
+		},
+		"More": {
+		    "type": "bool",
+		    "description": "true if additional responses to the command are incoming"
 		},
 	    }
 	}
 
+	{
+	    "name": "Response",
+	    "properties": {
+		"Host": {
+		    "type": "string",
+		    "description": "host this response was created on"
+		},
+		"Response": {
+		    "type": "string",
+		    "description": "simple string response (exclusive to Header/Tabular)
+		},
+		"Header": {
+		    "type": "array",
+		    "items": {
+			"type": "string"
+		    },
+		    "description": "column headers for tabular data"
+		},
+		"Tabular": {
+		    "type": "array",
+		    "items": {
+			"type": "array",
+			"items": {
+			    "type": "string"
+			}
+		    },
+		    "description": "tabular data, each column is an array of strings"
+		},
+		"Error": {
+		    "type": "string",
+		    "description": "Error, if any"
+		}
+	    }
+	}
+			
+
 ** Meshage Commands
 
-minimega nodes can receive commands from other nodes over the network via Meshage. Meshage commands are sent using either of the two methods above, and consist of a normal command prefixed by a meshage operator. For example, to send the command `hostname` to node `bar` from node `foo`:
+minimega nodes can receive commands from other nodes over the network via Meshage. Meshage commands are sent using either of the methods above, and consist of a normal command prefixed by a meshage operator. For example, to send the command `host name` to node `bar` from node `foo`:
 
-	minimega$ mesh_set bar hostname
+	minimega$ mesh send bar host name
 	bar
 
-This sends the command `hostname` to a set of nodes (in this case just one node, bar). Any response or error from bar will be printed locally on foo.
+This sends the command `host name` to a set of nodes (in this case just one node, bar). Any response or error from bar will be printed locally on foo.
 
-The `mesh_set` prefix supports grouping like nodes with a numeric suffix, and comma delimited names. For example, if you want to send a command to nodes `compute0 - compute15`, and some oddly names node `foo`:
+The `mesh`send` prefix supports grouping like nodes with a numeric suffix and/or comma delimited names. For example, if you want to send a command to nodes `compute0 - compute15`, and some oddly named node `foo`:
 
-	minimega$ mesh_set compute[0-15],foo hostname
+	minimega$ mesh send compute[0-15],foo host name
 
-You can also broadcast a command to all nodes on the mesh from any other node, exclusive of the node issuing the command. A broadcast command will not execute locally, only on other nodes. For example, to get the hostname of all nodes (other than the local node):
+You can also broadcast a command to all nodes on the mesh from any other node, exclusive of the node issuing the command, with the `all` keyword. For example, to get the hostname of all nodes (other than the local node):
 
-	minimega$ mesh_broadcast hostname
+	minimega$ mesh send all host name
 	node0
 	node1
 	node2
 
-Sometimes it's necessary to know what response belongs to what node when issuing meshage commands to multiple nodes. Since responses are unordered, `mesh_set` and `mesh_broadcast` allow prepending responses with the node name by adding the `annotate` argument immediately after `mesh_set` or `mesh_broadcast`:
+** Output rendering modes
 
-	minimega$ mesh_set annotate node[0-99] vm_info
+Minimega supports a number of ways to output data as well. By default, output will be tabular (pretty printed) if tabular data is present, and a simple string otherwise. Additionally, with mesh commands, like responses will be grouped into a single response prefixed with a list of the nodes that had that response. 
+
+You can override this behavior with a number of builtin output operators, including JSON, csv, etc., all prefixed with the `.` character. For example, to output tabular data in csv instead of pretty-printing, set csv mode with `.csv true`:
+
+	minimega$ host
+	host  | name | cpus | load           | memused | memtotal | bandwidth
+	foo   | foo  | 4    | 0.25 0.11 0.07 | 606 MB  | 7706 MB  | 0.0 (MB/s)
+	minimega$ .csv true
+	minimega$ host
+	host,name,cpus,load,memused,memtotal,bandwidth
+	foo,foo,4,0.21 0.10 0.07,606 MB,7706 MB,0.0 (MB/s)
+	minimega$ 
+	
+Setting an output mode as a single command sets that output mode globally (all output rendering from that minimega instance will use that output mode). You can optionally set an output mode for a single command by simply adding the command as a suffix to the output mode command:
+
+	.csv true host
+
+Builtin operators can stack, so it's possible to issue compound one-time output modes. For example, to not group like responses from a mesh command, and display the output in csv:
+
+	.csv true .compress false mesh send host
+
+Other builtins allow searching, sorting, and arraning (and removing) columns from tabular data. See the API help, or the minimega `help` command for more information on builtins.
 
 * Describing Virtual Machines
 
@@ -133,20 +195,20 @@ minimega is designed to launch experiments with procedural scripts instead of st
 
 For example, to describe a VM that uses a raw disk image `foo.img`, with 2048 MB of RAM, and 2 CPUs:
 
-	minimega$ vm_disk /tmp/foo.img
-	minimega$ vm_memory 2048
-	minimega$ vm_vcpus 2
+	minimega$ vm config disk /tmp/foo.img
+	minimega$ vm config memory 2048
+	minimega$ vm config vcpus 2
 
-Note that this only describes the VM to be launched, it doesn't launch it. The next section describes launching VMs.
+(Note that this only describes the VM to be launched, it doesn't launch it. The next section describes launching VMs.)
 
-After launching that VM, say you want to launch another with a different disk image, `bar.qcow2` and a network interface on VLAN 100, but otherwise with the same parameters (2048 MB of RAM and 2 CPUs). All you need to change is `vm_disk`, and add a network with `vm_net`. Previously defined parameters will stay the same until changed or cleared:
+After launching that VM, say you want to launch another with a different disk image, `bar.qcow2` and a network interface on VLAN 100, but otherwise with the same parameters (2048 MB of RAM and 2 CPUs). All you need to change is `vm`config`disk`, and add a network with `vm`config`net`. Previously defined parameters will stay the same until changed or cleared:
 
-	minimega$ vm_disk /tmp/bar.qcow2
-	minimega$ vm_net 100
+	minimega$ vm config disk /tmp/bar.qcow2
+	minimega$ vm config net 100
 
 At this point, say we want to launch a third virtual machine, this time with no disk image, but instead a linux kernel and initrd. First, let's take a look at the current VM description:
 
-	minimega$ vm_config
+	minimega$ vm config
 	Current VM configuration:
 	Memory:        2048
 	VCPUS:         2
@@ -159,11 +221,12 @@ At this point, say we want to launch a third virtual machine, this time with no 
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
+	UUID: 
 
-This looks fine, so let's tell minimega to use an initrd and kernel:
+This looks fine, empty fields are either just not included in the next VM to launch, or will be randomly generated (such as UUID), so let's tell minimega to use an initrd and kernel:
 
-	minimega$ vm_initrd /tmp/foo.initrd
-	minimega$ vm_kernel /tmp/foo.kernel
+	minimega$ vm config initrd /tmp/foo.initrd
+	minimega$ vm config kernel /tmp/foo.kernel
 
 And look at our configuration again:
 
@@ -180,10 +243,11 @@ And look at our configuration again:
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
+	UUID: 
 
 Something isn't right here, we see that while the initrd and kernel fields are set correctly, the disk image field is still set. We'd like to get rid of that, so let's use the `clear` command:
 
-	minimega$ clear vm_disk
+	minimega$ clear vm config disk
 
 And look at the config one last time:
 
@@ -200,133 +264,84 @@ And look at the config one last time:
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
+	UUID: 
 
-## Launching Virtual Machines
+** Launching Virtual Machines
 
 We'll start with a VM configuration that uses a disk image and 2048 MB of RAM. We're going to launch more than one VM with this image, so we want to make sure that the VM doesn't have the ability to write to the disk image. In QEMU language, this is called snapshot mode. Minimega has snapshot mode *on* by default, but we'll make sure just to be safe:
 
-	minimega$ vm_disk /tmp/foo.qcow2
-	minimega$ vm_snapshot true
-	minimega$ vm_memory 2048
+	minimega$ vm config disk /tmp/foo.qcow2
+	minimega$ vm config snapshot true
+	minimega$ vm config memory 2048
 
-From here, let's launch a single virtual machine with the name `foo_1`. We do this with the `vm_launch` command:
+From here, let's launch a single virtual machine with the name `foo_1`. We do this with the `vm`launch` command:
 
-	minimega$ vm_launch foo_1
+	minimega$ vm launch foo_1
 
-To check on our VM, we can use the `vm_info` command, which, with no arguments, will tell us about all VMs minimega has on this node:
+To check on our VM, we can use the `vm`info` command, which, with no arguments, will tell us about all VMs minimega has on this node:
 
-	minimega$ vm_info
-	id   | host        | name  | state    | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	0    | bieberfever | foo_1 | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+	minimega$ vm info
+	host | id | host | name  | state    | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
+	foo  | 0  | foo  | foo_1 | BUILDING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
-The next section talks about the `vm_info` command, so don't worry about all of the fields and options just yet.
+You'll notice that the state of the VM from the above `vm`info` command is `BUILDING`. That's because VMs launch in a paused state. We can start a VM by name or ID with the `vm`start` command:
 
-You'll notice that the state of the VM from the above `vm_info` command is `building`. That's because VMs launch in a paused state. We can start a VM by name or ID with the `vm_start` command:
+	minimega$ vm start foo_1
+	minimega$ vm info
+	host | id | host | name  | state   | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
+	foo  | 0  | foo  | foo_1 | RUNNING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
-	minimega$ vm_start foo_1
-	minimega$ vm_info
-	id   | host        | name  | state   | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	0    | bieberfever | foo_1 | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+Now we see that the VM is in the running state. You can also just call `vm`start`all` if you wish to start all VMs that are in the `PAUSED` or `BUILDING` state.
 
-Now we see that the VM is in the running state. You can also just call `vm_start` with no arguments if you wish to start all VMs that are in the `paused` or `building` state.
+Let's kill this VM and try a different approach. We'll use the `vm`kill` command to kill foo_1:
 
-Let's kill this VM and try a different approach. We'll use the `vm_kill` command to kill foo_1:
+	minimega$ vm kill foo_1
+	minimega$ vm info
+	host | id | host | name  | state | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
+	foo  | 0  | foo  | foo_1 | QUIT  | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
-	minimega$ vm_kill foo_1
-	minimega$ vm_info
-	id   | host        | name  | state | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	0    | bieberfever | foo_1 | quit  | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+foo_1 is now in the `QUIT` state. Now let's use `vm`launch` to launch 5 VMs at the same time, all using the configuration we described earlier. To do that, we simply call `vm`launch` with a number instead of a name:
 
-foo_1 is now in the `quit` state. Now let's use vm_start to launch 5 VMs at the same time, all using the configuration we described earlier. To do that, we simply call `vm_launch` with a number instead of a name:
+	minimega$ vm launch 5
 
-	minimega$ vm_launch 5
+We'll also tell minimega to only render certain columns moving forward by using the `.columns` command as a prefix to `vm`info`.
 
-If we check `vm_info` again, we'll notice two things:
+If we check `vm`info` again, we'll notice two things:
 
-	minimega$ vm_info
-	id   | host        | name  | state    | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	0    | bieberfever | foo_1 | quit     | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	1    | bieberfever |       | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	2    | bieberfever |       | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	3    | bieberfever |       | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	4    | bieberfever |       | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	5    | bieberfever |       | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+	minimega$ .columns id,name,state,uuid vm info
+	id   | name  | state    | uuid
+	0    | foo_1 | QUIT     | 64b94cc6-925b-403a-a975-a7723079e74d
+	1    | vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2    | vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3    | vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
-First, the VM foo_1 that we killed earlier is still hanging around in our info table, even though it was killed a while back. We can clear that with a `vm_flush` command, which will remove any VMs that are in the `quit` or `error` state. 
+First, the VM foo_1 that we killed earlier is still hanging around in our info table, even though it was killed a while back. We can clear that with a `vm`flush` command, which will remove any VMs that are in the `QUIT` or `ERROR` state. 
 
-	minimega$ vm_flush
-	minimega$ vm_info
-	id   | host        | name | state    | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	1    | bieberfever |      | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	2    | bieberfever |      | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	3    | bieberfever |      | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	4    | bieberfever |      | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	5    | bieberfever |      | building | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+	minimega$ vm flush
+	minimega$ .columns id,name,state,uuid vm info
+	id   | name  | state    | uuid
+	1    | vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2    | vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3    | vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
-The second thing we notice is that we have 5 VMs of the same type, but none of them have names. That's because we used `vm_launch` with a number instead of a name. We now have to interface these VMs using their unique `id` instead of a unique `name`. 
+The second thing we notice is that we have 5 VMs of the same type, and each of them have a generated name. That's because we used `vm`launch` with a number instead of a name. 
 
-We can start all of the VMs using `vm_start` with no arguments:
+We can start all of the VMs using `vm`start`all`:
 
-	minimega$ vm_start
-	minimega$ vm_info
-	id   | host        | name | state   | memory | disk                      | initrd | kernel | cdrom | tap | mac | ip | ip6 | vlan
-	1    | bieberfever |      | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	2    | bieberfever |      | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	3    | bieberfever |      | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	4    | bieberfever |      | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
-	5    | bieberfever |      | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | []  | []  | [] | []  | []
+	minimega$ vm start all
+	minimega$ .columns id,name,state,uuid vm info
+	id   | name  | state   | uuid
+	1    | vm-1  | RUNNING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2    | vm-2  | RUNNING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3    | vm-3  | RUNNING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4    | vm-4  | RUNNING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5    | vm-5  | RUNNING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
 And off we go!
-
-* Virtual Machine Information
-
-Obtaining information about VMs, running or otherwise, centers around the `vm_info` command. When run with no arguments, it produces all the information available about all of the VMs that are running or have been run on the node. Information includes the VM name, MAC(s), IP addresses (including IPv6), and VM configuration. 
-
-For example, a system running a number of VMs in different states:
-
-	minimega$ vm_info
-	id   | host        | name  | state    | memory | disk                      | initrd              | kernel              | cdrom | tap         | mac                 | ip          | ip6                        | vlan
-	0    | bieberfever | foo_1 | running  | 2048   | /tmp/foo.qcow2 [snapshot] |                     |                     |       | [mega_tap1] | [00:c2:d9:9c:7a:e1] | [10.0.0.16] | [fe80::2c2:d9ff:fe9c:7ae1] | [100]
-	1    | bieberfever |       | quit     | 2048   |                           | ../../newman.initrd | ../../newman.kernel |       | [mega_tap2] | [00:a4:42:c9:72:c0] | []          | []                         | [100]
-	2    | bieberfever |       | running  | 2048   |                           | ../../newman.initrd | ../../newman.kernel |       | [mega_tap3] | [00:27:c9:c1:fc:a1] | []          | []                         | [100]
-	3    | bieberfever |       | paused   | 2048   |                           | ../../newman.initrd | ../../newman.kernel |       | [mega_tap4] | [00:94:42:c2:af:a3] | []          | []                         | [100]
-	4    | bieberfever |       | building | 2048   |                           | ../../newman.initrd | ../../newman.kernel |       | [mega_tap5] | [00:32:a1:72:93:a8] | []          | []                         | [100]
-
-The above shows information on 5 virtual machines. The first has both an IPv4 address from a local DHCP server, and an IPv6 link local address. minimega snoops local ARP and neighbor discovery traffic to obtain information about IP addresses. Additionally, you can see that the first VM has a disk image. The `snapshot` flag indicates that the image is available read-only, and no changes will be committed.
-
-`vm_info` shows VMs that are in any state. Sometimes it's useful to clear out VMs that have failed or quit (`error` or `quit` state). This can be accomplished with the `vm_flush` command.
-
-It's possible to only show some fields from `vm_info` by using the bracket "[]" operators to filter output. For example, if you only want to see the IPv4 address, ID, and state:
-
-	minimega$ vm_info [ip,id,state]
-	ip          | id | state
-	[10.0.0.16] | 0  | running
-	[]          | 1  | quit
-	[10.0.0.1]  | 2  | running
-	[]          | 3  | paused
-	[]          | 4  | building
-
-Fields will be printed in the order specified.
-
-You can also search for VMs on any field. For example, if you want to return the VM with the name foo_1:
-
-	minimega$ vm_info name=foo_1
-	id   | host        | name  | state   | memory | disk                      | initrd | kernel | cdrom | tap         | mac                 | ip          | ip6                        | vlan
-	0    | bieberfever | foo_1 | running | 2048   | /tmp/foo.qcow2 [snapshot] |        |        |       | [mega_tap1] | [00:c2:d9:9c:7a:e1] | [10.0.0.16] | [fe80::2c2:d9ff:fe9c:7ae1] | [100]
-
-Or search for VMs in the `running` state:
-
-	minimega$ vm_info state=running
-	id   | host        | name  | state   | memory | disk                      | initrd              | kernel              | cdrom | tap         | mac                 | ip          | ip6                        | vlan
-	0    | bieberfever | foo_1 | running | 2048   | /tmp/foo.qcow2 [snapshot] |                     |                     |       | [mega_tap1] | [00:c2:d9:9c:7a:e1] | [10.0.0.16] | [fe80::2c2:d9ff:fe9c:7ae1] | [100]
-	2    | bieberfever |       | running | 2048   |                           | ../../newman.initrd | ../../newman.kernel |       | [mega_tap3] | [00:27:c9:c1:fc:a1] | [10.0.0.1]  | [fe80::227:c9ff:fec1:fca1] | [100]
-
-You can combine searching and filtering as well:
-
-	minimega$ vm_info state=running [ip6,vlan,mac]
-	ip6                        | vlan  | mac
-	[fe80::2c2:d9ff:fe9c:7ae1] | [100] | [00:c2:d9:9c:7a:e1]
-	[fe80::227:c9ff:fec1:fca1] | [100] | [00:27:c9:c1:fc:a1]
 
 * Virtual Machine Networking
 
@@ -334,41 +349,41 @@ minimega uses 802.1q vlan tagging with openvswitch to support arbitrary topologi
 
 ** Simple Networking Between VMs 
 
-Say we want to network two virtual machines together on a private lan. We do this by choosing a vlan tag between 1-4096 and assigning it with the `vm_net` command to the VM description:
+Say we want to network two virtual machines together on a private lan. We do this by choosing a vlan tag between 1-4096 and assigning it with the `vm`config`net` command to the VM description:
 
-	minimega$ vm_memory 2048
-	minimega$ vm_disk /tmp/foo.qcow2
-	minimega$ vm_net 100
-	minimega$ vm_launch 2
+	minimega$ vm config memory 2048
+	minimega$ vm config disk /tmp/foo.qcow2
+	minimega$ vm config net 100
+	minimega$ vm launch 2
 
 This will launch two VMs with a single ethernet device on vlan 100. If, for example, one of the VMs is running a DHCP server, the others will be able to obtain a lease from that VM. When VMs are created, MAC addresses are assigned randomly:
 
-	minimega$ vm_info [id,mac]
+	minimega$ .columns id,mac vm info
 	id   | mac
-	5    | [00:52:1d:58:bf:13]
-	6    | [00:f9:ed:42:ae:c7]
+	0    | [00:81:ac:7a:54:e1]
+	1    | [00:a2:12:3f:4f:55]
 
-If you want a VM to have more than one interface, simply supply additional vlan tags with the `vm_net` command, separated by spaces:
+If you want a VM to have more than one interface, simply supply additional vlan tags with the `vm`config`net` command, separated by spaces:
 
-	minimega$ vm_net 100 200 300
-	minimega$ vm_launch many_interfaces
-	minimega$ vm_info name=many_interfaces [name,mac,vlan]
+	minimega$ vm config net 100 200 300
+	minimega$ vm launch many_interfaces
+	minimega$ .columns name,mac,vlan .filter name=many_interface vm info
 	name            | mac                                                     | vlan
 	many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [100 200 300]
 
 ** Host Taps
 
-It is unlikely (but not impossible) that the host node running minimega is on the same vlan (or any vlan) as the VMs. minimega's `host_tap` command allows creating local interfaces on particular vlans to allow 'tapping' into a guest network. 
+minimega's `tap` command allows creating local interfaces on particular vlans to allow 'tapping' into a guest network.
 
-For example, say you have a VM running on vlan 100, it has an IP already, and you wish to be able to connect to it. Use the `host_tap` command to create a new interface on vlan 100, and assign it a static IP that can reach that VM:
+For example, say you have a VM running on vlan 100, it has an IP already, and you wish to be able to connect to it. Use the `tap` command to create a new interface on vlan 100, and assign it a static IP that can reach that VM:
 
-	minimega$ vm_info [name,ip,vlan]
+	minimega$ .columns name,ip,vlan vm info
 	name | ip           | vlan
 	foo  | [10.0.0.234] | [100]
-	minimega$ host_tap create 100 10.0.0.1/24
+	minimega$ tap create 100 ip 10.0.0.1/24
 	mega_tap2
 
-`host_tap` returns the name of the interface it created. At this point, we should be able to ping the VM:
+`tap` returns the name of the interface it created. At this point, we should be able to ping the VM:
 
 	$ ping -c 1 10.0.0.234
 	PING 10.0.0.234 (10.0.0.234) 56(84) bytes of data.
@@ -378,24 +393,20 @@ For example, say you have a VM running on vlan 100, it has an IP already, and yo
 	1 packets transmitted, 1 received, 0% packet loss, time 0ms
 	rtt min/avg/max/mdev = 0.888/0.888/0.888/0.000 ms
 
-You can obtain information about host taps by invoking `host_tap` with no arguments:
+You can obtain information about host taps by invoking `tap` with no arguments:
 
-	minimega$ host_tap
-	tap       vlan option
-	mega_tap2 100  10.0.0.1/24
+	minimega$ tap
+	bridge      | tap       | vlan | option
+	mega_bridge | mega_tap2 | 100  | 10.0.0.1/24
 
 Additionally, you can start a host tap using DHCP, assuming a DHCP server exists on that VLAN already:
 
-	minimega$ host_tap create 100 dhcp
+	minimega$ tap create 100 dhcp
 	mega_tap3
-	minimega$ host_tap
-	tap       vlan option
-	mega_tap2 100  10.0.0.1/24
-	mega_tap3 100  dhcp
 
 Finally, you can delete host taps using the `delete` keyword with the tap name:
 
-	minimega$ host_tap delete mega_tap3
+	minimega$ tap delete mega_tap3
 
 ** DNS and DHCP
 
@@ -403,10 +414,10 @@ minimega supports running `dnsmasq`, a tool to serve DHCP and DNS on a host tap 
 
 For example, to launch a VM that is configured to obtain an IP using DHCP, assign the VM a network interface on a vlan, and a host tap on the same vlan:
 
-	minimega$ vm_memory 2048
-	minimega$ vm_disk /tmp/foo.qcow2 
-	minimega$ vm_net 100
-	minimega$ host_tap create 100 10.0.0.1/24
+	minimega$ vm config memory 2048
+	minimega$ vm config disk /tmp/foo.qcow2 
+	minimega$ vm config net 100
+	minimega$ tap create 100 ip 10.0.0.1/24
 	mega_tap0
 
 Before launching the VM, start a dnsmasq instance attached to the IP of the host tap, as well as a range of IPs to serve to any clients:
@@ -416,14 +427,14 @@ Before launching the VM, start a dnsmasq instance attached to the IP of the host
 You can obtain information about running dnsmasq instances by invoking `dnsmasq` with no arguments:
 
 	minimega$ dnsmasq
-	ID : Listening Address Min      Max        Path                            PID
-	0  : 10.0.0.1          10.0.0.2 10.0.0.254 /tmp/minimega/dnsmasq_804106663 9739
+	ID   | Listening Address | Min      | Max        | Path                            | PID
+	0    | 10.0.0.1          | 10.0.0.2 | 10.0.0.254 | /tmp/minimega/dnsmasq_460796406 | 47997
 
 Finally, we can boot a VM:
 
-	minimega$ vm_launch foo
-	minimega$ vm_start foo
-	minimega$ vm_info name=foo [name,ip]
+	minimega$ vm launch foo
+	minimega$ vm start foo
+	minimega$ .columns name,ip .filter name=foo vm info
 	name | ip
 	foo  | [10.0.0.6]
 
@@ -431,22 +442,22 @@ Optionally, you can specify a configuration file for dnsmasq to use. See the dns
 
 	minimega$ dnsmasq start 10.0.0.1 10.0.0.2 10.0.0.254 /path/to/myconfig.conf
 
-Finally, you can kill dnsmasq instances by passing the kill keyword and the id of the dnsmasq instance (or -1 for all instances)
+Finally, you can kill dnsmasq instances by passing the kill keyword and the id of the dnsmasq instance (or `all` for all instances)
 
 	minimega$ dnsmasq kill 0
 
-# Scripting
+* Scripting
 
 As mentioned earlier, you can script a local minimega instance using the `e` flag:
 
 	$ sudo bin/minimega -nostdin &
-	$ sudo bin/minimega -e hostname
+	$ sudo bin/minimega -e host name
 	foo
 	$
 
-Using `-e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. 
+Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. 
 
-This enables extending the minimega API to external controls, such as a BASH script:
+This enables extending the minimega API to external controls, such as a bash script:
 
 	!/bin/bash
 
@@ -458,15 +469,15 @@ This enables extending the minimega API to external controls, such as a BASH scr
 
 	# launch VMs, all with 512MB of RAM and using one of each
 	# disk images in a directory
-	$MM vm_memory 512
+	$MM vm config memory 512
 
 	for i in `ls $IMAGES`
 	do
-	    $MM vm_disk $IMAGES/$i
-		$MM vm_launch vm-$i
+	    $MM vm config disk $IMAGES/$i
+	    $MM vm launch vm-$i
 	done
 
-	$MM vm_start
+	$MM vm start all
 
 * Web Interface
 
@@ -482,7 +493,7 @@ To start the web interface, use the `web` command with no arguments:
 
 	minimega$ web
 
-By default, minimega uses port 8080 for the web interface. To use a different port or hostname, specify the hostname:port with the `web` command:
+By default, minimega uses port 9001 for the web interface. To use a different port or hostname, specify the hostname:port with the `web` command:
 
 	minimega$ web foo:80
 
@@ -492,9 +503,9 @@ The hostname is optional. To have minimega listen on all interfaces, simply omit
 
 With the web interface started, point your browser to the hostname and port that minimega is listening on, with the `/vnc` path:
 
-	http://localhost:8080/vnc
+	http://localhost:9001/vnc
 
-minimega will list the hostnames of all connected nodes with the number of running VMs in parenthesis. To view a VM running on a particular node, simply click on that hostname. Within a hostname listing, minimega will enumerate all running VMs using information from `vm_info`. To view a particular VM, click on the ID. minimega will then create a tunnel (if necessary) and connect you with novnc.
+minimega will list the hostnames of all connected nodes with the number of running VMs in parenthesis. To view a VM running on a particular node, simply click on that hostname. Within a hostname listing, minimega will enumerate all running VMs using information from `vm`info`. To view a particular VM, click on the ID. minimega will then create a tunnel (if necessary) and connect you with novnc.
 
 * Multi-node Usage
 
@@ -506,15 +517,11 @@ Meshage is a mesh-based message passing and connectivity protocol designed to su
 
 *** Node connections
 
-Minimega connects to other minimega instances (which are communicated to via the `mesh_set` and `mesh_broadcast` commands) using the meshage library. When a minimega instance connects to another instance (either through auto-discovery or the `mesh_dial` command), a simple handshake occurs to verify connection prerequisites and to check the connection namespace. If using auto-discovery and the namespaces are not the same, the connection is dropped. If using `mesh_dial`, namespaces are ignored. This allows two minimega networks to be forcibly joined.
-
-The network of connections represents a mesh. To maintain connectivity and learn about other nodes on the mesh, each node periodically floods the mesh with a Mesh State Announcement (MSA). An MSA simply contains the name of the node broadcasting the MSA and the list of immediate neighbors. To eliminate constant rebroadcasting of MSA messages within the mesh, meshage tags messages with a counter (with special rules for resetting the sequence when a node leaves/rejoins the mesh). 
-
-For large networks, MSA traffic can be a significant amount of the overall network traffic. The rate at which MSA messages are sent is tunable via the `mesh_msa_timeout` command. For example, on a cluster with 500 nodes using the default MSA timeout of 10 seconds, the network will be flooded with MSA messages every 20ms. 
+Minimega connects to other minimega instances (which are communicated to via the `mesh`send` command) using the meshage package. When a minimega instance connects to another instance (either through auto-discovery or the `mesh`dial` command), a simple handshake occurs to verify connection prerequisites and to check the connection namespace. If using auto-discovery and the namespaces are not the same, the connection is dropped. If using `mesh`dial`, namespaces are ignored. This allows two minimega networks to be forcibly joined.
 
 *** Auto-discovery
 
-Minimega instances can auto-discover other instances on a network using the auto-discovery model provided by meshage. This is enabled by using the `-degree` flag at startup or the `mesh_degree` command at runtime. These commands set the minimum mesh degree to attempt to maintain. If non-zero, meshage will broadcast over UDP solicitations for other nodes to attempt a connection to the soliciting node. Other listening nodes, even if they already have enough connections, will attempt to initiate a new connection as described above. When a node meets its degree requirements, it simply stops broadcasting solicitations. To reduce broadcast traffic, nodes uses an exponential backoff function to throttle the rate of solicitation broadcasts. When the number of connections to a given node decreases below the specified degree, the node will resume soliciting connections.
+Minimega instances can auto-discover other instances on a network using the auto-discovery model provided by meshage. This is enabled by using the `-degree` flag at startup or the `mesh`degree` command at runtime. These commands set the minimum mesh degree to attempt to maintain. If non-zero, meshage will broadcast over UDP solicitations for other nodes to attempt a connection to the soliciting node. Other listening nodes, even if they already have enough connections, will attempt to initiate a new connection as described above. When a node meets its degree requirements, it simply stops broadcasting solicitations. To reduce broadcast traffic, nodes uses an exponential backoff function to throttle the rate of solicitation broadcasts. When the number of connections to a given node decreases below the specified degree, the node will resume soliciting connections.
 
 Because nodes that are solicited will attempt to make connections regardless of how many connections they have, it is possible for nodes to have more connections than specified using the degree field. 
 
@@ -522,4 +529,4 @@ Because nodes that are solicited will attempt to make connections regardless of 
 
 Messages that are sent to other nodes are routed through connections on the mesh to the recipients. Routing messages to other nodes over meshage connections instead of directly to the recipient node can, in some circumstances, reduce load on individual nodes (via distributed rebroadcasting of messages), and allows for messages to be sent over special connections such as SSH tunnels. 
 
-Messages can be sent to all nodes as a broadcast message using `mesh_broadcast`, or to a subset of nodes using `mesh_set`. Messages are always sent along the shortest route. Messages timeout after 10 seconds by default. The user can adjust this timeout using the `mesh_timeout` parameter.
+Messages can be sent to all nodes as a broadcast message using `mesh`send`all`, or to a subset of nodes using `mesh`send`<nodes>`. Messages are always sent along the shortest route. Messages timeout after 10 seconds by default. The user can adjust this timeout using the `mesh`timeout` parameter.

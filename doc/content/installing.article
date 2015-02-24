@@ -1,13 +1,31 @@
 Installing minimega
-22 Aug 2014
+24 Feb 2015
 
 * Obtaining minimega
 
-minimega does not currently have an official release. You can obtain nightly builds of the most recent source code [[http://minimega.org/nightly/][here]]. The nightly build is for gnu/linux-amd64. 
+minimega does not currently have an official release or an official build service. You will need to build minimega from source. Source can be obtained from the minimega git repo:
 
-** System requirements
+	git clone https://code.google.com/p/minimega
 
-minimega requires at least qemu-kvm version 1.6 and openvswitch version 1.4.
+** System requirements and runtime dependencies
+
+minimega is designed to be simple to deploy. It has only two runtime dependencies - libpcap and libreadline, both of which are usually included on standard linux distros.
+
+minimega also has a number of external tools it executes. When you start minimega, it will check to see if each of the tools it may need are available in `$PATH`. If you plan to use minimega on a head node and only send messages to other nodes to launch and control VMs, you can ignore any external tool warnings at launch. 
+
+If you plan to launch and maintain VMs, you will need:
+
+- kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
+- ip - ip tool for manipulating devices 
+- ovs-vsctl - openvswitch switch control with daemon running and kernel module loaded (minimum version 1.4)
+- ovs-ofctl - openvswitch openflow control with daemon running and kernel module loaded
+- dnsmasq - DNS and DHCP server 
+- kill
+- qemu-utils - tools for interacting with qemu images
+- mount/umount - used when creating router images and injecting files into existing images
+- mkdosfs - used when creating router images
+- taskset - set CPU affinity for VMs
+- ntfs-3g - NTFS with write support for injecting files into NTFS images
 
 ** Building from source
 
@@ -21,29 +39,9 @@ First, obtain the minimega source, then run the all.bash script from the top of 
 
 	git clone https://code.google.com/p/minimega 
 	cd minimega
-	./build.bash
+	./all.bash
 
-This will build each of the libraries and tools that make up minimega and create a bin directory with each of the tools. 
-
-** Runtime dependencies
-
-minimega is designed to be simple to deploy. It has only two runtime dependencies - libpcap and libreadline, both of which are usually included on standard linux distros.
-
-minimega also has a number of external tools it executes. When you start minimega, it will check to see if each of the tools it may need are available in `$PATH`. If you plan to use minimega on a head node and only send messages to other nodes to launch and control VMs, you can ignore any external tool warnings at launch. 
-
-If you plan to launch and maintain VMs, you will need:
-
-- kvm - qemu-kvm with the kvm kernel module loaded 
-- ip - ip tool for manipulating devices 
-- ovs-vsctl - openvswitch switch control with daemon running and kernel module loaded
-- ovs-ofctl - openvswitch openflow control with daemon running and kernel module loaded
-- dnsmasq - DNS and DHCP server 
-- kill
-- qemu-utils - tools for interacting with qemu images
-- mount/umount - used when creating router images and injecting files into existing images
-- mkdosfs - used when creating router images
-- taskset - set CPU affinity for VMs
-- ntfs-3g - NTFS with write support for injecting files into NTFS images
+This will build and test each of the libraries and tools in the minimega distribution and create a bin sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools. 
 
 * Deploying minimega
 
