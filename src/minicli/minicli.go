@@ -125,12 +125,12 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
-	inputItems, err := lexInput(input)
-	if err != nil || len(inputItems) == 0 {
+	in, err := lexInput(input)
+	if err != nil || len(in.items) == 0 {
 		return nil, err
 	}
 
-	_, cmd := closestMatch(inputItems)
+	_, cmd := closestMatch(in)
 	if cmd != nil {
 		return cmd, nil
 	}
@@ -139,14 +139,14 @@ func CompileCommand(input string) (*Command, error) {
 }
 
 func Suggest(input string) []string {
-	inputItems, err := lexInput(input)
+	in, err := lexInput(input)
 	if err != nil {
 		return nil
 	}
 
 	res := []string{}
 	for _, h := range handlers {
-		res = append(res, h.suggest(inputItems)...)
+		res = append(res, h.suggest(in)...)
 	}
 	return res
 }

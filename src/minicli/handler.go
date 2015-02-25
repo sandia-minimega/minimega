@@ -30,7 +30,7 @@ type Handler struct {
 // Command will be nil. The second return value is the number of elements of the
 // Handler's pattern that were matched. This can be used to determine which
 // handler was the closest match.
-func (h *Handler) compile(input []inputItem) (*Command, int) {
+func (h *Handler) compile(input *Input) (*Command, int) {
 	var maxMatchLen int
 	for _, pattern := range h.PatternItems {
 		cmd, matchLen := newCommand(pattern, input, h.Call)
@@ -46,7 +46,7 @@ func (h *Handler) compile(input []inputItem) (*Command, int) {
 	return nil, maxMatchLen
 }
 
-func (h *Handler) suggest(input []inputItem) []string {
+func (h *Handler) suggest(input *Input) []string {
 	suggestions := []string{}
 
 outer:
@@ -55,7 +55,7 @@ outer:
 		var item patternItem
 
 		for i, item = range pattern {
-			if len(input) == i {
+			if len(input.items) == i {
 				break
 			}
 
@@ -64,10 +64,10 @@ outer:
 			case item.Type == literalItem:
 				// Consuming the last item from input, check if it's a prefix
 				// of this literal string.
-				if len(input) == i-1 && strings.HasPrefix(item.Text, input[i].Value) {
+				if len(input.items) == i-1 && strings.HasPrefix(item.Text, input.items[i].Value) {
 					suggestions = append(suggestions, item.Text)
 				}
-				if input[i].Value != item.Text {
+				if input.items[i].Value != item.Text {
 					// Input does not match pattern
 					continue outer
 				}
@@ -75,12 +75,12 @@ outer:
 				for _, choice := range item.Options {
 					// Consuming the last item from input, check if it's a
 					// prefix of one of the choices.
-					if len(input) == i-1 && strings.HasPrefix(choice, input[i].Value) {
+					if len(input.items) == i-1 && strings.HasPrefix(choice, input.items[i].Value) {
 						suggestions = append(suggestions, choice)
 					}
 					// TODO: there's a weird case here where one one option is
 					// a prefix of another.
-					if choice == input[i].Value {
+					if choice == input.items[i].Value {
 						continue
 					}
 				}
