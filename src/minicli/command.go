@@ -17,10 +17,10 @@ type Command struct {
 	Call CLIFunc `json:"-"`
 }
 
-func newCommand(pattern patternItems, input inputItems, call CLIFunc) (*Command, int) {
+func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int) {
 	cmd := Command{
 		Pattern:    pattern.String(),
-		Original:   input.String(),
+		Original:   input.Original,
 		StringArgs: make(map[string]string),
 		BoolArgs:   make(map[string]bool),
 		ListArgs:   make(map[string][]string),
@@ -29,7 +29,7 @@ func newCommand(pattern patternItems, input inputItems, call CLIFunc) (*Command,
 outer:
 	for i, item := range pattern {
 		// We ran out of items before matching all the items in the pattern
-		if len(input) <= i {
+		if len(input.items) <= i {
 			// Check if the remaining item is optional
 			if item.Type&optionalItem != 0 {
 				// Matched!
@@ -41,14 +41,14 @@ outer:
 
 		switch {
 		case item.Type == literalItem:
-			if input[i].Value != item.Text {
+			if input.items[i].Value != item.Text {
 				return nil, i
 			}
 		case item.Type&stringItem != 0:
-			cmd.StringArgs[item.Key] = input[i].Value
+			cmd.StringArgs[item.Key] = input.items[i].Value
 		case item.Type&choiceItem != 0:
 			for _, choice := range item.Options {
-				if choice == input[i].Value {
+				if choice == input.items[i].Value {
 					cmd.BoolArgs[choice] = true
 					continue outer
 				}
@@ -57,8 +57,8 @@ outer:
 			// Invalid choice
 			return nil, i
 		case item.Type&listItem != 0:
-			res := make([]string, len(input)-i)
-			for i, v := range input[i:] {
+			res := make([]string, len(input.items)-i)
+			for i, v := range input.items[i:] {
 				res[i] = v.Value
 			}
 
@@ -66,7 +66,7 @@ outer:
 			return &cmd, i
 		case item.Type == commandItem:
 			// Parse the subcommand
-			subCmd, err := CompileCommand(input[i:].String())
+			subCmd, err := CompileCommand(input.items[i:].String())
 			if err != nil {
 				return nil, i
 			}
@@ -80,7 +80,7 @@ outer:
 	// are extra inputItems, we only matched a prefix of the input. This is
 	// problematic as we have commands: "vm info" and "vm info search <terms>"
 	// that share the same prefix.
-	if len(pattern) != len(input) {
+	if len(pattern) != len(input.items) {
 		return nil, len(pattern) - 1
 	}
 

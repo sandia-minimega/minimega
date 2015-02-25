@@ -26,6 +26,11 @@ type inputItem struct {
 
 type inputItems []inputItem
 
+type Input struct {
+	Original string
+	items    inputItems
+}
+
 func (items inputItems) String() string {
 	parts := make([]string, len(items))
 	for i, v := range items {
@@ -39,7 +44,7 @@ func (items inputItems) String() string {
 	return strings.Join(parts, " ")
 }
 
-func lexInput(input string) ([]inputItem, error) {
+func lexInput(input string) (*Input, error) {
 	s := bufio.NewScanner(strings.NewReader(input))
 	s.Split(bufio.ScanRunes)
 	l := inputLexer{s: s, items: make([]inputItem, 0)}
@@ -48,7 +53,7 @@ func lexInput(input string) ([]inputItem, error) {
 		return nil, err
 	}
 
-	return l.items, nil
+	return &Input{Original: input, items: l.items}, nil
 }
 
 func (l *inputLexer) Run() (err error) {
