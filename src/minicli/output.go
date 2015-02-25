@@ -29,7 +29,13 @@ func (t table) Swap(i, j int) {
 }
 
 func (t table) Less(i, j int) bool {
-	return t[i][0] < t[j][0]
+	for k := 0; k < len(t[i]) && k < len(t[j]); k++ {
+		if t[i][k] != t[j][k] {
+			return t[i][k] < t[j][k]
+		}
+	}
+
+	return true
 }
 
 // Return a string representation using the current output mode

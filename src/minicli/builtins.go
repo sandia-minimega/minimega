@@ -209,7 +209,14 @@ outer:
 						tabular := [][]string{}
 
 						for _, row := range r.Tabular {
-							if strings.ToLower(row[j]) == filter {
+							elem := strings.ToLower(row[j])
+
+							// If the element looks like a list, do substring matching
+							if strings.HasPrefix(elem, "[") && strings.HasSuffix(elem, "]") {
+								if strings.Contains(elem, filter) {
+									tabular = append(tabular, row)
+								}
+							} else if elem == filter {
 								tabular = append(tabular, row)
 							}
 						}
