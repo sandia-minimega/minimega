@@ -472,40 +472,62 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		HelpShort: "specify the serial ports a VM will use",
 		HelpLong: `
 Specify the serial ports that will be created for the VM to use. 
-The name specified will be the name of the host socket in the 
-$minimega_base/<vm id>/ directory.
 Serial ports specified will be mapped to the VM's /dev/ttySX device, where X
-is the assigned id field.
+refers to the connected unix socket on the host at
+$minimega_runtime/<vm_id>/serialX.
 
 Examples:
 
 To display current serial ports:
   vm config serial
 
-To add a new serial port:
-  vm config serial add gps
-
-To remove a serial port
-	vm config serial del 1
-	OR
-	vm config serial del all
-
-Note: When removing a particular serial port, later ports will "fill in" the 
-missing id. For instance, if you have serial ports 1, 2, and 3 specified, and
-you delete #2, #3 will fill in the #2 spot and you will have serial ports 1 
-and 2 remaining.
+To create three serial ports:
+  vm config serial 3
 
 Note: Whereas modern versions of Windows support up to 256 COM ports, Linux 
 typically only supports up to four serial devices. To use more, make sure to 
 pass "8250.n_uarts = 4" to the guest Linux kernel at boot. Replace 4 with
 another number.`,
 		Patterns: []string{
-			"vm config serial",
-			"vm config serial add <name>",
-			"vm config serial del <id or all>",
+			"vm config serial [number of serial ports]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "serial")
+		}),
+	},
+	{ // vm config snapshot
+		HelpShort: "enable or disable snapshot mode when using disk images",
+		HelpLong: `
+Enable or disable snapshot mode when using disk images. When enabled, disks
+images will be loaded in memory when run and changes will not be saved. This
+allows a single disk image to be used for many VMs.`,
+		Patterns: []string{
+			"vm config snapshot [true,false]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "snapshot")
+		}),
+	},
+	{ // vm config virtio-serial
+		HelpShort: "specify the virtio-serial ports a VM will use",
+		HelpLong: `
+Specify the virtio-serial ports that will be created for the VM to use. 
+Virtio-serial ports specified will be mapped to the VM's 
+/dev/virtio-port/<portname> device, where <portname> refers to the connected 
+unix socket on the host at $minimega_runtime/<vm_id>/virtio-serialX.
+
+Examples:
+
+To display current virtio-serial ports:
+  vm config virtio-serial
+
+To create three virtio-serial ports:
+  vm config virtio-serial 3`,
+		Patterns: []string{
+			"vm config virtio-serial [number of virtio-serial ports]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "virtio-serial")
 		}),
 	},
 	{ // vm config snapshot

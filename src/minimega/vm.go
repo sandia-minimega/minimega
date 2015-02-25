@@ -237,36 +237,31 @@ var vmConfigFns = map[string]struct {
 		},
 	},
 	"serial": {
-		UpdateCommand: func(c *minicli.Command) error {
-			if c.StringArgs["name"] != "" { // add a new serial port
-				if contains(info.serials, c.StringArgs["name"]) {
-					return errors.New("duplicate serial port name")
-				}
-				info.serials = append(info.serials, c.StringArgs["name"])
-			} else if c.StringArgs["id"] != "" { // remove serial port identified by "id"
-				if c.StringArgs["id"] == "all" {
-					info.serials = []string{}
-					return nil
-				}
-				id,err := strconv.Atoi(c.StringArgs["id"])
-				if err != nil {
-					return err
-				}
-				info.serials = append(info.serials[:id],info.serials[id+1:]...)
+		Update: func(vm *vmInfo, v string) error {
+			if num, err := strconv.Atoi(v); err != nil {
+				return err
+			} else {
+				vm.serials = num
+				return nil
 			}
-			return nil
 		},
-		Clear: func(vm *vmInfo) {info.serials = []string{}},
-		Print: func(vm *vmInfo) string {
-			return serialString()
-		},
+		Clear: func(vm *vmInfo) { vm.serials = 0 },
+		Print: func(vm *vmInfo) string { return strconv.Itoa(vm.serials) },
 		PrintCLI: func(vm *vmInfo) string {
-			serials := []string{}
-			for _,serial := range info.serials {
-				serials = append(serials, fmt.Sprintf("vm config serial add %s", serial))
-			}
-			return strings.Join(serials, "\n")
+			return fmt.Sprintf("vm config serial %v", vm.serials)
 		},
+	},
+	"virtio-serial": {
+		Update: func(vm *vmInfo, v string) error {
+			if num, err := strconv.Atoi(v); err != nil {
+				return err
+			} else {
+				vm.vserials = num
+				return nil
+			}
+		},
+		Clear: func(vm *vmInfo) { vm.vserials = 0 },
+		Print: func(vm *vmInfo) string { return strconv.Itoa(vm.vserials) },
 	},
 	"snapshot": {
 		UpdateBool: func(vm *vmInfo, v bool) error {
@@ -387,18 +382,6 @@ func vmGetAllSerialPorts() []string {
 	return ret
 }
 
-func serialString() string {
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "id\tname")
-	for i,serial := range info.serials {
-		fmt.Fprintf(&o, "\t%v\t%v\n", i, serial)
-	}
-	w.Flush()
-	return o.String()
-}
-
 func qemuOverrideString() string {
 	// create output
 	var o bytes.Buffer
@@ -454,8 +437,6 @@ func ParseQemuOverrides(input []string) []string {
 	}
 	return fieldsQuoteEscape("\"", ret)
 }
-
-
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
