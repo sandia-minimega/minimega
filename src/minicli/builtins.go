@@ -198,8 +198,10 @@ outer:
 		for _, r := range resps {
 			// HAX: Special case for when the column name is host which is not
 			// part of the actual tabular data.
-			if col == "host" && r.Host != filter {
-				continue
+			if col == "host" {
+				if r.Host != filter {
+					continue
+				}
 			} else if r.Header != nil && r.Tabular != nil {
 				var found bool
 
