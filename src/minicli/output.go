@@ -96,6 +96,14 @@ func (r Responses) String() string {
 		}
 	}
 
+	resp := buf.String()
+	return strings.TrimSpace(resp)
+}
+
+// Error returns a string containing all the errors in the responses
+func (r Responses) Error() string {
+	var buf bytes.Buffer
+
 	// Append errors from hosts
 	for i, v := range r {
 		if v.Error != "" {
@@ -108,8 +116,7 @@ func (r Responses) String() string {
 		}
 	}
 
-	resp := buf.String()
-	return strings.TrimSpace(resp)
+	return strings.TrimSpace(buf.String())
 }
 
 func (r Responses) tabularString(buf io.Writer, header []string) {

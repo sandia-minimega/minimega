@@ -6,7 +6,6 @@ package minicli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	log "minilog"
 	"strings"
@@ -58,18 +57,6 @@ type Response struct {
 }
 
 type CLIFunc func(*Command, chan Responses)
-
-// Return any errors contained in the responses, or nil. If any responses have
-// errors, the returned slice will be padded with nil errors to align the error
-// with the response.
-func (r Responses) Errors() []error {
-	errs := make([]error, len(r))
-	for i := range r {
-		errs[i] = errors.New(r[i].Error)
-	}
-
-	return errs
-}
 
 // MustRegister calls Register for a handler and panics if the handler has an
 // error registering.
