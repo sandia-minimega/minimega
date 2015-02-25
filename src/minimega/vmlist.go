@@ -5,12 +5,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -263,139 +261,13 @@ func (l *vmList) flush() {
 	}
 }
 
-func (l *vmList) info(masks []string, search string) ([][]string, error) {
-	var v []*vmInfo
+func (l *vmList) info() ([]string, [][]string, error) {
+	table := make([][]string, 0, len(l.vms))
+	for _, j := range l.vms {
+		row := make([]string, 0, len(vmMasks))
 
-	// did someone do something silly?
-	if len(masks) == 0 {
-		return make([][]string, 0), nil
-	}
-
-	if search != "" {
-		d := strings.Split(search, "=")
-		if len(d) != 2 {
-			return nil, errors.New("malformed search term")
-		}
-
-		log.Debug("vm info search term: %v", d[1])
-
-		key := strings.ToLower(d[0])
-
-		switch key {
-		case "host":
-			host, err := os.Hostname()
-			if err != nil {
-				log.Errorln(err)
-				teardown()
-			}
-			if strings.ToLower(d[1]) == strings.ToLower(host) {
-				for _, vm := range l.vms {
-					v = append(v, vm)
-				}
-			}
-		case "id":
-			id, err := strconv.Atoi(d[1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid ID: %v", d[1])
-			}
-			if vm, ok := l.vms[id]; ok {
-				v = append(v, vm)
-			}
-		case "name":
-			vm := l.findVm(d[1])
-			if vm == nil {
-				return make([][]string, 0), nil
-			}
-			v = append(v, vm)
-		case "tags":
-			for i, j := range l.vms {
-				if _, ok := j.Tags[d[1]]; ok {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "state":
-			state, err := ParseVmState(d[1])
-			if err != nil {
-				return nil, err
-			}
-			for i, j := range l.vms {
-				if j.State == state {
-					v = append(v, l.vms[i])
-				}
-			}
-		case "bridge":
-		VM_INFO_BRIDGE_LOOP:
-			for i, j := range l.vms {
-				for _, k := range j.bridges {
-					if k == d[1] || (d[1] == DEFAULT_BRIDGE && k == "") {
-						v = append(v, l.vms[i])
-						break VM_INFO_BRIDGE_LOOP
-					}
-				}
-			}
-		case "tap":
-		VM_INFO_TAP_LOOP:
-			for i, j := range l.vms {
-				for _, k := range j.taps {
-					if k == d[1] {
-						v = append(v, l.vms[i])
-						break VM_INFO_TAP_LOOP
-					}
-				}
-			}
-		case "vlan":
-			vlan, err := strconv.Atoi(d[1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid vlan: %v", d[1])
-			}
-			for i, j := range l.vms {
-				for _, k := range j.Networks {
-					if k == vlan {
-						v = append(v, l.vms[i])
-						break
-					}
-				}
-			}
-		case "cc_active":
-			activeClients := ccClients()
-			for i, j := range l.vms {
-				if activeClients[j.UUID] && d[1] == "true" {
-					v = append(v, l.vms[i])
-				} else if !activeClients[j.UUID] && d[1] == "false" {
-					v = append(v, l.vms[i])
-				}
-			}
-		default:
-			if fn, ok := vmSearchFn[key]; ok {
-				for i := range l.vms {
-					if fn(l.vms[i], d[1]) {
-						v = append(v, l.vms[i])
-					}
-				}
-			} else {
-				return nil, fmt.Errorf("invalid search term: %v", d[0])
-			}
-		}
-	} else { // all vms
-		for _, vm := range l.vms {
-			v = append(v, vm)
-		}
-	}
-	if len(v) == 0 {
-		return make([][]string, 0), nil
-	}
-
-	// create a sorted list of keys, based on the first column of the output mask
-	SortBy(masks[0], v)
-
-	table := make([][]string, 0, len(v))
-	for _, j := range v {
-		row := make([]string, 0, len(masks))
-
-		for _, mask := range masks {
+		for _, mask := range vmMasks {
 			switch mask {
-			case "host":
-				row = append(row, hostname)
 			case "id":
 				row = append(row, fmt.Sprintf("%v", j.Id))
 			case "name":
@@ -407,11 +279,9 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 			case "state":
 				row = append(row, j.State.String())
 			case "disk":
-				field := fmt.Sprintf("%v", j.DiskPaths)
-				if j.Snapshot && len(j.DiskPaths) != 0 {
-					field += " [snapshot]"
-				}
-				row = append(row, field)
+				row = append(row, fmt.Sprintf("%v", j.DiskPaths))
+			case "snapshot":
+				row = append(row, fmt.Sprintf("%v", j.Snapshot))
 			case "initrd":
 				row = append(row, fmt.Sprintf("%v", j.InitrdPath))
 			case "kernel":
@@ -462,14 +332,14 @@ func (l *vmList) info(masks []string, search string) ([][]string, error) {
 				activeClients := ccClients()
 				row = append(row, fmt.Sprintf("%v", activeClients[j.UUID]))
 			default:
-				return nil, fmt.Errorf("invalid mask: %s", mask)
+				return nil, nil, fmt.Errorf("invalid mask: %s", mask)
 			}
 		}
 
 		table = append(table, row)
 	}
 
-	return table, nil
+	return vmMasks, table, nil
 }
 
 // cleanDirs removes all isntance directories in the minimega base directory
