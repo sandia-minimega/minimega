@@ -37,6 +37,7 @@ type vmInfo struct {
 
 	DiskPaths  []string
 	QemuAppend []string // extra arguments for QEMU
+	serials		 []string // ordered list of serial port names
 	Networks   []int    // ordered list of networks (matches 1-1 with Taps)
 	bridges    []string // list of bridges, if specified. Unspecified bridges will contain ""
 	taps       []string // list of taps associated with this vm
@@ -124,6 +125,8 @@ func (info *vmInfo) Copy() *vmInfo {
 	copy(newInfo.netDrivers, info.netDrivers)
 	newInfo.Snapshot = info.Snapshot
 	newInfo.UUID = info.UUID
+	newInfo.serials = make([]string, len(info.serials))
+	copy(newInfo.serials, info.serials)
 	// Hotplug isn't allocated until later in launch()
 	return newInfo
 }
@@ -486,11 +489,16 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "-device")
 	args = append(args, "virtio-serial")
 
-	args = append(args, "-chardev")
-	args = append(args, "socket,id=charserial0,path="+vm.instancePath+"serial,server,nowait")
+	log.Error("Serial: %v\n", vm)
+	for _,name := range vm.serials {
+		log.Error("Serial: "+name+"\n")
+		args = append(args, "-chardev")
+		args = append(args, "socket,id="+name+",path="+vm.instancePath+name+",server,nowait")
 
-	args = append(args, "-device")
-	args = append(args, "virtserialport,chardev=charserial0,id=serial0,name=serial0")
+		args = append(args, "-device")
+		args = append(args, "isa-serial,chardev="+name+",id="+name)
+		//args = append(args, "virtserialport,chardev=charserial0,id=serial0,name=serial0")
+	}
 
 	args = append(args, "-pidfile")
 	args = append(args, vm.instancePath+"qemu.pid")

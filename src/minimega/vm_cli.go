@@ -437,7 +437,7 @@ one when the VM is launched.`,
 		}),
 	},
 	{ // vm config net
-		HelpShort: "specific the networks a VM is a member of",
+		HelpShort: "specify the networks a VM is a member of",
 		HelpLong: `
 Specify the network(s) that the VM is a member of by VLAN. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
@@ -466,6 +466,46 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "net")
+		}),
+	},
+	{ // vm config serial
+		HelpShort: "specify the serial ports a VM will use",
+		HelpLong: `
+Specify the serial ports that will be created for the VM to use. 
+The name specified will be the name of the host socket in the 
+$minimega_base/<vm id>/ directory.
+Serial ports specified will be mapped to the VM's /dev/ttySX device, where X
+is the assigned id field.
+
+Examples:
+
+To display current serial ports:
+  vm config serial
+
+To add a new serial port:
+  vm config serial add gps
+
+To remove a serial port
+	vm config serial del 1
+	OR
+	vm config serial del all
+
+Note: When removing a particular serial port, later ports will "fill in" the 
+missing id. For instance, if you have serial ports 1, 2, and 3 specified, and
+you delete #2, #3 will fill in the #2 spot and you will have serial ports 1 
+and 2 remaining.
+
+Note: Whereas modern versions of Windows support up to 256 COM ports, Linux 
+typically only supports up to four serial devices. To use more, make sure to 
+pass "8250.n_uarts = 4" to the guest Linux kernel at boot. Replace 4 with
+another number.`,
+		Patterns: []string{
+			"vm config serial",
+			"vm config serial add <name>",
+			"vm config serial del <id or all>",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "serial")
 		}),
 	},
 	{ // vm config snapshot
