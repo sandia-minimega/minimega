@@ -5,7 +5,6 @@ src/version/version.go
 *.swp
 *.pyc
 __pycache__
-doc/*.html
-doc/markdown/api
 venv/
 misc/python/minimega.py
+doc/content/api.article
