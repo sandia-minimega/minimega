@@ -46,7 +46,7 @@ func printHelpShort(helpShort map[string]string) string {
 // closestMatch processes the input items and finds the closest match. For
 // successful matches, the returned command will be non-nil. Otherwise, the
 // handler will contain the closest match if there is at least one input item.
-func closestMatch(input []inputItem) (*Handler, *Command) {
+func closestMatch(input *Input) (*Handler, *Command) {
 	// Keep track of what was the closest
 	var closestHandler *Handler
 	var longestMatch int

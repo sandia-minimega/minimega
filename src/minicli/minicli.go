@@ -6,7 +6,6 @@ package minicli
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	log "minilog"
 	"strings"
@@ -23,13 +22,21 @@ const (
 	CommentLeader = "#"
 )
 
-var (
-	annotate bool // show hostnames in output
-	compress bool // compress output
-	headers  bool // show headers in output
-	sortRows bool // sort tabular data
-	mode     int  // output mode
-)
+type Flags struct {
+	Annotate bool
+	Compress bool
+	Headers  bool
+	Sort     bool
+	Mode     int
+}
+
+var defaultFlags = Flags{
+	Annotate: true,
+	Compress: true,
+	Headers:  true,
+	Sort:     true,
+	Mode:     defaultMode,
+}
 
 var handlers []*Handler
 var history []string // command history for the write command
@@ -44,28 +51,12 @@ type Response struct {
 	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
 	Error    string      // Because you can't gob/json encode an error type
 	Data     interface{} // Optional user data
+
+	// Embedded output flags, overrides defaults if set for first response
+	*Flags `json:"-"`
 }
 
 type CLIFunc func(*Command, chan Responses)
-
-func init() {
-	annotate = true
-	compress = true
-	headers = true
-	sortRows = true
-}
-
-// Return any errors contained in the responses, or nil. If any responses have
-// errors, the returned slice will be padded with nil errors to align the error
-// with the response.
-func (r Responses) Errors() []error {
-	errs := make([]error, len(r))
-	for i := range r {
-		errs[i] = errors.New(r[i].Error)
-	}
-
-	return errs
-}
 
 // MustRegister calls Register for a handler and panics if the handler has an
 // error registering.
@@ -134,12 +125,12 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
-	inputItems, err := lexInput(input)
-	if err != nil || len(inputItems) == 0 {
+	in, err := lexInput(input)
+	if err != nil || len(in.items) == 0 {
 		return nil, err
 	}
 
-	_, cmd := closestMatch(inputItems)
+	_, cmd := closestMatch(in)
 	if cmd != nil {
 		return cmd, nil
 	}
@@ -148,14 +139,14 @@ func CompileCommand(input string) (*Command, error) {
 }
 
 func Suggest(input string) []string {
-	inputItems, err := lexInput(input)
+	in, err := lexInput(input)
 	if err != nil {
 		return nil
 	}
 
 	res := []string{}
 	for _, h := range handlers {
-		res = append(res, h.suggest(inputItems)...)
+		res = append(res, h.suggest(in)...)
 	}
 	return res
 }

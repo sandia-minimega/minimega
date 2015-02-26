@@ -92,7 +92,7 @@ func cliLocal() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			fmt.Println(err.Error())
+			log.Error("%v", err)
 			//fmt.Printf("closest match: TODO\n")
 			continue
 		}
@@ -109,6 +109,11 @@ func cliLocal() {
 		for resp := range runCommand(cmd, record) {
 			// print the responses
 			pageOutput(resp.String())
+
+			errs := resp.Error()
+			if errs != "" {
+				fmt.Fprintln(os.Stderr, errs)
+			}
 		}
 	}
 }
@@ -166,7 +171,7 @@ func cliAttach() {
 
 		cmd, err := minicli.CompileCommand(command)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("%v", err)
 			//fmt.Println("closest match: TODO")
 			continue
 		}
@@ -179,6 +184,11 @@ func cliAttach() {
 
 		for resp := range mm.runCommand(cmd) {
 			pageOutput(resp.Rendered)
+
+			errs := resp.Resp.Error()
+			if errs != "" {
+				fmt.Fprintln(os.Stderr, errs)
+			}
 		}
 
 		if command == "quit" {
@@ -215,6 +225,11 @@ func localCommand() {
 	for resp := range mm.runCommand(cmd) {
 		if resp.Rendered != "" {
 			fmt.Println(resp.Rendered)
+		}
+
+		errs := resp.Resp.Error()
+		if errs != "" {
+			fmt.Fprintln(os.Stderr, errs)
 		}
 	}
 }

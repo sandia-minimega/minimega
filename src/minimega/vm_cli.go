@@ -16,26 +16,10 @@ var vmCLIHandlers = []minicli.Handler{
 	{ // vm info
 		HelpShort: "print information about VMs",
 		HelpLong: `
-Print information about VMs. vm info allows searching for VMs based on any VM
-parameter, and output some or all information about the VMs in question.
-Additionally, you can display information about all running VMs.
-
-A vm info command takes two optional arguments: a search term and an output
-mask. If the search term is omitted, information about all VMs will be
-displayed. If the output mask is omitted, all information about the VMs will be
-displayed.
-
-The search term uses a single key=value argument. For example, if you want all
-information about VM 50:
-
-	vm info search id=50
-
-The output mask uses an ordered comma-seperated list of fields. For example, if
-you want the ID and IPs for all VMs on vlan 100:
-
-	vm info search vlan=100 mask id,ip
-
-Searchable and maskable fields are:
+Print information about VMs in tabular form. The .filter and .columns commands
+can be used to subselect a set of rows and/or columns. See the help pages for
+.filter and .columns, respectively, for their usage. Columns returned by VM
+info include:
 
 - id	    : the VM ID, as an integer
 - host	    : the host that the VM is running on
@@ -61,18 +45,15 @@ Searchable and maskable fields are:
 Examples:
 
 Display a list of all IPs for all VMs:
-	vm info masks ip,ip6
+	.columns ip,ip6 vm info
 
 Display all information about VMs with the disk image foo.qc2:
-	vm info search disk=foo.qc2
+	.filter disk=foo.qc2 vm info
 
 Display all information about all VMs:
 	vm info`,
 		Patterns: []string{
 			"vm info",
-			"vm info search <terms>",
-			"vm info search <terms> mask <masks>",
-			"vm info mask <masks>",
 		},
 		Call: wrapSimpleCLI(cliVmInfo),
 	},
@@ -559,22 +540,11 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	search := c.StringArgs["terms"]
-
-	masks := vmMasks
-	if c.StringArgs["masks"] != "" {
-		masks = strings.Split(c.StringArgs["masks"], ",")
-	}
-
-	log.Debug("vm info masks: %#v", masks)
-
-	resp.Tabular, err = vms.info(masks, search)
+	resp.Header, resp.Tabular, err = vms.info()
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
 	}
-
-	resp.Header = masks
 
 	return resp
 }

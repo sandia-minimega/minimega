@@ -51,54 +51,9 @@ type qemuOverride struct {
 
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
-	"id", "host", "name", "state", "memory", "vcpus", "disk", "initrd",
+	"id", "name", "state", "memory", "vcpus", "disk", "snapshot", "initrd",
 	"kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan",
 	"uuid", "cc_active",
-}
-
-// Valid search patterns for vm info
-var vmSearchFn = map[string]func(*vmInfo, string) bool{
-	"append": func(v *vmInfo, q string) bool { return v.Append == q },
-	"cdrom":  func(v *vmInfo, q string) bool { return v.CdromPath == q },
-	"initrd": func(v *vmInfo, q string) bool { return v.InitrdPath == q },
-	"kernel": func(v *vmInfo, q string) bool { return v.KernelPath == q },
-	"memory": func(v *vmInfo, q string) bool { return v.Memory == q },
-	"uuid":   func(v *vmInfo, q string) bool { return v.UUID == q },
-	"vcpus":  func(v *vmInfo, q string) bool { return v.Vcpus == q },
-	"disk": func(v *vmInfo, q string) bool {
-		for _, disk := range v.DiskPaths {
-			if disk == q {
-				return true
-			}
-		}
-		return false
-	},
-	"mac": func(v *vmInfo, q string) bool {
-		for _, mac := range v.macs {
-			if mac == q {
-				return true
-			}
-		}
-		return false
-	},
-	"ip": func(v *vmInfo, q string) bool {
-		for _, mac := range v.macs {
-			ip := GetIPFromMac(mac)
-			if ip != nil && ip.IP4 == q {
-				return true
-			}
-		}
-		return false
-	},
-	"ip6": func(v *vmInfo, q string) bool {
-		for _, mac := range v.macs {
-			ip := GetIPFromMac(mac)
-			if ip != nil && ip.IP6 == q {
-				return true
-			}
-		}
-		return false
-	},
 }
 
 // TODO: This has become a mess... there must be a better way. Perhaps we can

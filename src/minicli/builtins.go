@@ -18,6 +18,7 @@ var builtinCLIHandlers = []Handler{
 Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 		Patterns: []string{
 			".csv [true,false]",
+			".csv <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
 			cliModeHelper(c, out, csvMode)
@@ -29,20 +30,22 @@ Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 		Patterns: []string{
 			".json [true,false]",
+			".json <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
 			cliModeHelper(c, out, jsonMode)
 		},
 	},
-	{ // header
+	{ // headers
 		HelpShort: "enable or disable headers for tabular data",
 		HelpLong: `
 Enable or disable headers for tabular data.`,
 		Patterns: []string{
 			".headers [true,false]",
+			".headers <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &headers)
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Headers })
 		},
 	},
 	{ // annotate
@@ -51,9 +54,10 @@ Enable or disable headers for tabular data.`,
 Enable or disable hostname annotation for responses.`,
 		Patterns: []string{
 			".annotate [true,false]",
+			".annotate <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &annotate)
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Annotate })
 		},
 	},
 	{ // sort
@@ -63,9 +67,43 @@ Enable or disable sorting of tabular data based on the value in the first
 column. Sorting is based on string comparison.`,
 		Patterns: []string{
 			".sort [true,false]",
+			".sort <true,false> (command)",
 		},
 		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &sortRows)
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Sort })
+		},
+	},
+	{ // compress
+		HelpShort: "enable or disable output compression",
+		HelpLong: `
+Enable or disable output compression of like output from multiple responses.
+For example, if you executed a command using mesh, such as:
+
+	mesh send node[0-9] version
+
+You would expect to get the same minimega version for all 10 nodes. Rather than
+print out the same version 10 times, minicli with compression enabled would print:
+
+	node[0-9]: minimega <version>
+
+Assuming that all the minimega instances are running the same version. If one node was running
+a different version or has an error, compression is still useful:
+
+	node[0-4,6-9]: minimega <version>
+	node5: minimega <version>
+
+Or,
+
+	node[0-3,9]: minimega <version>
+	node[4-8]: Error: <error>
+
+Compression is not applied when the output mode is JSON.`,
+		Patterns: []string{
+			".compress [true,false]",
+			".compress <true,false> (command)",
+		},
+		Call: func(c *Command, out chan Responses) {
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Compress })
 		},
 	},
 	{ // filter
@@ -112,38 +150,6 @@ Note: the annotate flag controls the presence of the host column.`,
 		},
 		Call: cliColumns,
 	},
-	{ // compress
-		HelpShort: "enable or disable output compression",
-		HelpLong: `
-Enable or disable output compression of like output from multiple responses.
-For example, if you executed a command using mesh, such as:
-
-	mesh send node[0-9] version
-
-You would expect to get the same minimega version for all 10 nodes. Rather than
-print out the same version 10 times, minicli with compression enabled would print:
-
-	node[0-9]: minimega <version>
-
-Assuming that all the minimega instances are running the same version. If one node was running
-a different version or has an error, compression is still useful:
-
-	node[0-4,6-9]: minimega <version>
-	node5: minimega <version>
-
-Or,
-
-	node[0-3,9]: minimega <version>
-	node[4-8]: Error: <error>
-
-Compression is not applied when the output mode is JSON.`,
-		Patterns: []string{
-			".compress [true,false]",
-		},
-		Call: func(c *Command, out chan Responses) {
-			cliFlagHelper(c, out, &compress)
-		},
-	},
 }
 
 var hostname string
@@ -161,6 +167,17 @@ func init() {
 	}
 }
 
+func runSubCommand(c *Command) chan Responses {
+	pipe := make(chan Responses)
+
+	go func() {
+		c.Subcommand.Call(c.Subcommand, pipe)
+		close(pipe)
+	}()
+
+	return pipe
+}
+
 func cliFilter(c *Command, out chan Responses) {
 	parts := strings.Split(c.StringArgs["column=value"], "=")
 	if len(parts) != 2 {
@@ -174,21 +191,17 @@ func cliFilter(c *Command, out chan Responses) {
 
 	col, filter := strings.ToLower(parts[0]), strings.ToLower(parts[1])
 
-	pipe := make(chan Responses)
-	go func() {
-		c.Subcommand.Call(c.Subcommand, pipe)
-		close(pipe)
-	}()
-
 outer:
-	for resps := range pipe {
+	for resps := range runSubCommand(c) {
 		newResps := Responses{}
 
 		for _, r := range resps {
 			// HAX: Special case for when the column name is host which is not
 			// part of the actual tabular data.
-			if col == "host" && r.Host != filter {
-				continue
+			if col == "host" {
+				if r.Host != filter {
+					continue
+				}
 			} else if r.Header != nil && r.Tabular != nil {
 				var found bool
 
@@ -198,7 +211,14 @@ outer:
 						tabular := [][]string{}
 
 						for _, row := range r.Tabular {
-							if strings.ToLower(row[j]) == filter {
+							elem := strings.ToLower(row[j])
+
+							// If the element looks like a list, do substring matching
+							if strings.HasPrefix(elem, "[") && strings.HasSuffix(elem, "]") {
+								if strings.Contains(elem, filter) {
+									tabular = append(tabular, row)
+								}
+							} else if elem == filter {
 								tabular = append(tabular, row)
 							}
 						}
@@ -223,21 +243,15 @@ outer:
 			newResps = append(newResps, r)
 		}
 
-		out <- newResps
+		out <- resps
 	}
 }
 
 func cliColumns(c *Command, out chan Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
-	pipe := make(chan Responses)
-	go func() {
-		c.Subcommand.Call(c.Subcommand, pipe)
-		close(pipe)
-	}()
-
 outer:
-	for resps := range pipe {
+	for resps := range runSubCommand(c) {
 		for _, r := range resps {
 			if r.Header == nil || r.Tabular == nil {
 				continue
@@ -280,33 +294,69 @@ outer:
 }
 
 func cliModeHelper(c *Command, out chan Responses, newMode int) {
-	resp := &Response{
-		Host: hostname,
+	if c.Subcommand == nil {
+		resp := &Response{
+			Host: hostname,
+		}
+
+		if c.BoolArgs["true"] {
+			defaultFlags.Mode = newMode
+		} else if c.BoolArgs["false"] && defaultFlags.Mode == newMode {
+			defaultFlags.Mode = defaultMode
+		} else {
+			resp.Response = strconv.FormatBool(defaultFlags.Mode == newMode)
+		}
+
+		out <- Responses{resp}
+		return
 	}
 
-	if c.BoolArgs["true"] {
-		mode = newMode
-	} else if c.BoolArgs["false"] {
-		mode = defaultMode
-	} else {
-		resp.Response = strconv.FormatBool(mode == newMode)
-	}
+	for r := range runSubCommand(c) {
+		if len(r) > 0 {
+			if r[0].Flags == nil {
+				r[0].Flags = new(Flags)
+				*r[0].Flags = defaultFlags
+			}
 
-	out <- Responses{resp}
+			if c.BoolArgs["true"] {
+				r[0].Mode = newMode
+			} else if c.BoolArgs["false"] && r[0].Mode == newMode {
+				r[0].Mode = defaultMode
+			}
+
+			out <- r
+		}
+	}
 }
 
-func cliFlagHelper(c *Command, out chan Responses, flag *bool) {
-	resp := &Response{
-		Host: hostname,
+func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
+	if c.Subcommand == nil {
+		resp := &Response{
+			Host: hostname,
+		}
+
+		if c.BoolArgs["true"] || c.BoolArgs["false"] {
+			// Update the flag, can just get value for "true" since the default
+			// value is false.
+			*get(&defaultFlags) = c.BoolArgs["true"]
+		} else {
+			resp.Response = strconv.FormatBool(*get(&defaultFlags))
+		}
+
+		out <- Responses{resp}
+		return
 	}
 
-	if c.BoolArgs["true"] || c.BoolArgs["false"] {
-		// Update the flag, can just get value for "true" since the default
-		// value is false.
-		*flag = c.BoolArgs["true"]
-	} else {
-		resp.Response = strconv.FormatBool(*flag)
-	}
+	for r := range runSubCommand(c) {
+		if len(r) > 0 {
+			if r[0].Flags == nil {
+				r[0].Flags = new(Flags)
+				*r[0].Flags = defaultFlags
+			}
 
-	out <- Responses{resp}
+			*get(r[0].Flags) = c.BoolArgs["true"]
+		}
+
+		out <- r
+	}
 }
