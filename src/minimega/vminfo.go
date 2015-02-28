@@ -124,7 +124,7 @@ func (info *vmInfo) Copy() *vmInfo {
 	copy(newInfo.netDrivers, info.netDrivers)
 	newInfo.Snapshot = info.Snapshot
 	newInfo.UUID = info.UUID
-	// Hotplug isn't allocated until later in launch()
+	// Hotplug and tags aren't allocated until later in launch()
 	return newInfo
 }
 

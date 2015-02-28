@@ -53,7 +53,7 @@ type qemuOverride struct {
 var vmMasks = []string{
 	"id", "name", "state", "memory", "vcpus", "disk", "snapshot", "initrd",
 	"kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan",
-	"uuid", "cc_active",
+	"uuid", "cc_active", "tags",
 }
 
 // TODO: This has become a mess... there must be a better way. Perhaps we can
