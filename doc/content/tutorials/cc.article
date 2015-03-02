@@ -146,6 +146,22 @@ It's useful to group similar commands into named groups. The `cc`prefix` command
 
 * Filtering Clients
 
+In all of the examples so far, each command is run by every connecting client. Sometimes you want to only send commands to specific clients, say, by hostname or IP range. The `cc`filter` command allows you to set a client filter that will be applied to every command issued while the filter is assigned. For example to send a command only to clients that have an IP in the network `10.0.0.0/24`:
 
+.mega cc/filter.mm
+
+Any commands issued from now on will be executed only by clients that meet all filter fields. You can set multiple filter arguments, such as restricting commands to only windows machines in a specific IP range. 
+
+You can filter on any of UUID, hostname, architecture, OS, IP (including CIDR notation), and MAC address.
+
+To clear the current filter, use `clear`cc`filter`.
 
 * TCP Tunnels
+
+The `cc` interface allows creating forward and reverse TCP tunnels over the `cc` connection, including over virtio-serial connections. This is similar to the forward and reverse tunnel support in `ssh`. To create a forward tunnel, that is, a listening port on the minimega host that is tunneled to a destination host and port from the perspective of the client, use `cc`tunnel`. When creating a forward tunnel the UUID of the client *must* be specified. The destination host can be `localhost` or any other host reachable from the client. 
+
+Similarly, a reverse tunnel, a listening port on the client tunneled to a host and port reachable from the minimega host, can be created by using `cc`rtunnel`. Reverse tunnels do not require a UUID to be specified, and instead use the current client filter to restrict which clients create the tunnel. That means you can tunnel a port for every client to a resource outside of the experiment. 
+
+For example, to tunnel local port 4444 on each client to a web server reachable from the minimega host:
+
+	minimega$ cc rtunnel 4444 myserver 80
