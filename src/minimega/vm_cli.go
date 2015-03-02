@@ -232,8 +232,6 @@ To set a tag:
 To read a tag:
 
         vm tag <vm id or name> <key>
-
-Tags are not displayed in "vm info" by default, as there may be many of them.
 `,
 		Patterns: []string{
 			"vm tag <vm id or name> <key> [value]",

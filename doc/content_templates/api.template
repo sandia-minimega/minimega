@@ -5,7 +5,7 @@ Last updated {{.Date}}
 
 * Introduction
 
-This document contains an automatically generated form of the minimega command API help text. The same help text (minus some examples included here) is available in minimega by using the `help` command. You can get specific help on a minimega command by using `help <command>`.
+This document contains an automatically generated form of the minimega command API help text. The same help text (minus some examples included here) is available in minimega by using the `help` command. You can get specific help on a minimega command by using `help`<command>`.
 
 * Builtins
 
@@ -22,6 +22,10 @@ Builtins are commands that impact how responses to commands are rendered. Some b
 
 * Mesh Commands
 
+Mesh commands control the behavior and operation of communication between minimega nodes on a network. Minimega is fully distributed, and commands to other minimega nodes can be issued from any other participating minimega node. For example, you can get the hostname of all minimega nodes (exclusive of the issuing node) with `mesh`send`all`host`name`. 
+
+Generally, `mesh`send` will be the only mesh command you will use. The other commands provided are for manually dialing other nodes and controlling network behavior. 
+
 {{range $v := .Mesh}}
 ** {{$v.SharedPrefix}}
 
@@ -32,6 +36,8 @@ Builtins are commands that impact how responses to commands are rendered. Some b
 {{end}}
 
 * VM Commands
+
+VM commands control the state, monitoring, and launching of VMs on a minimega node. VMs are launched by describing the VM parameters with the various `vm`config` commands. One the VM is described, one or more instances of that description may be launched. The VM description can be modified for subsequent VMs. 
 
 {{range $v := .VM}}
 ** {{$v.SharedPrefix}}
