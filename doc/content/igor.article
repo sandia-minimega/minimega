@@ -1,0 +1,151 @@
+Igor: A Node Reservation System
+3 Mar 2015
+
+* Introduction
+
+Igor is a tool for cluster management.
+
+Users make reservations with igor, requesting either a number of nodes
+or a specific set of nodes. They also specify a kernel and initial
+ramdisk which their nodes should boot. Reservations are deleted when
+they run out of time, but users can add additional time to the
+reservation. Igor allows only the reservation's owner to delete the
+reservation.
+
+Igor will display the status of the cluster by "drawing" the layout of
+the nodes and racks and highlighting each reservation in a different
+color; see the "Using Igor" section for more information.
+
+Igor assumes you have a cluster with uniformly-named compute nodes
+(e.g. "kn1", "kn2", and so on) and a head node. We assume that the
+cluster is already configured such that the head node assigns DHCP
+addresses to the compute nodes.
+
+* Building/Installing
+
+Igor is included as part of the minimega distribution. All the compilation and installation tasks should be done on your head node.
+
+** Compilation
+
+First, make sure you have a [[http://golang.org][Go compiler]] installed, then install the other packages minimega needs to build:
+
+	apt-get install libpcap-dev libreadline-dev
+
+Now, you can fetch and buld the minimega source:
+
+	git clone https://code.google.com/p/minimega 
+	cd minimega
+	./all.bash
+
+This will build and test each of the libraries and tools in the minimega distribution and create a bin/ sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools.
+
+The Igor binary will be in the bin/ subdirectory.
+
+** Installation
+
+As stated above, we assume you have already configured DHCP for your
+cluster; we use dnsmasq. You will also need to have syslinux,
+specifically pxelinux, installed. Figure out where your TFTP root will
+be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and
+set up the default PXE configuration in
+/tftpboot/pxelinux.cfg/default. This setup is simple but is outside
+the scope of this document.
+
+We have provided a shell script to ease the installation of igor. It will show you the commands it intends to run before running them, in case you wish to change anything. (Remember to run this on the head node, not any other node)
+
+        cd minimega/src/igor
+	./setup.sh
+	
+To configure igor, edit /etc/igor.conf, a JSON config file created by
+setup.sh. Here's what one of ours looks like:
+
+        {
+                "tftproot" : "/tftpboot/",
+                "prefix" : "kn",
+                "start" : 1,
+                "end" : 520,
+                "rackwidth" : 8,
+                "rackheight" : 5
+        }
+
+N.B.: It is extremely important that the last entry ("rackheight" in
+this case) is not followed by a comma; this is a quirk of json.
+
+The "tftproot" setting should be whatever directory contains the
+"pxelinux.cfg" directory. The other options describe your cluster
+naming scheme. Our cluster nodes are named kn1 through kn520, so our
+"prefix" is "kn", "start" is 1, and "end" is 520. Note that the
+numbers are *not* in quotes.
+
+"Rackheight" and "rackwidth" define the physical dimensions of your
+cluster hardware, for use with "igor show". We have a cluster composed of
+13 shelves, each containing 5 shelves of 8 PCs each. When "igor show"
+runs, part of the information it gives is a diagram of "racks"; one
+"rack" from our cluster is shown below:
+
+        ---------------------------------
+        |281|282|283|284|285|286|287|288|
+        |289|290|291|292|293|294|295|296|
+        |297|298|299|300|301|302|303|304|
+        |305|306|307|308|309|310|311|312|
+        |313|314|315|316|317|318|319|320|
+        ---------------------------------
+
+If you are running a cluster of 4x 1U servers, and they are all in a
+single rack, you would set rackheight = 4, and rackwidth = 1, to see
+something like this:
+
+        ---
+        |1|
+        |2|
+        |3|
+        |4|
+        ---
+	
+If the physical layout of your cluster is strange, or if you'd just
+prefer a big grid, you can set rackheight = sqrt(# nodes) and
+rackwidth = sqrt(# nodes). This will just show one big grid of all
+your nodes.
+
+* Using Igor
+
+Generally, to use igor you will check what nodes are reserved, make
+your own reservation with some un-used nodes, and then delete the
+reservation when you're done. When creating a reservation, you can
+specify a duration (default 12 hours); after this expires, your
+reservation is automatically deleted.
+
+Igor includes built-in help; you can run "igor help" to get started.
+
+** Checking status
+
+To see what reservations already exist:
+
+        igor show
+
+This will show a diagram of the nodes in your cluster; nodes that are already reserved will be highlighted in a specific color. A key at the bottom matches colors to reservations. An example from one of our clusters is shown below; you'll note that the user "djfritz" has a reservation named "fritz" that claims the entire cluster for the next 9687 hours--a rather long time!
+
+.image igorshow.png
+
+This cluster consists of 14 nodes in a single rack, as illustrated in the diagram. All 14 are currently running and in the "fritz" reservation; if any were powered off, they would be highlighted in red. Any nodes not currently reserved would be un-highlighted.
+
+** Making a reservation
+
+To make a reservation, use the "igor sub" command. "Sub" comes from "submit", as used in HPC batch schedulers. You'll need to specify the reservation name, a path to a kernel, a path to an initrd, and the list of nodes you wish to reserve. For example, if nodes back_ccc10 through back_ccc14 are not reserved, I can make a reservation called "testing" like this:
+
+        igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w back_ccc[10-14]
+
+This reservation will default to 12 hours duration; if I wanted to reserve it for longer, I'd use the -t flag.
+
+** Deleting a reservation
+
+Although reservations will be automatically deleted when they run out of time, it is polite to delete your reservation immediately when you're finished with it. To get rid of our "testing" reservation from above, simply run:
+
+        igor del testing
+
+** Extending a reservation
+
+If you find that you didn't make your reservation long enough, you can extend the time left on it with the "addtime" command. To add an additional 2 hours to the "testing" reservation, we could do this:
+
+        igor addtime -r testing -t 2
+	
