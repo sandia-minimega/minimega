@@ -136,7 +136,7 @@ func webHosts() string {
 	}
 	hosts[hostname] = count
 
-	cmd, err := minicli.CompileCommand("mesh send all vm info mask id,state")
+	cmd, err := minicli.CompileCommand("mesh send all vm info")
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
@@ -152,8 +152,21 @@ func webHosts() string {
 			}
 
 			count := 0
+
+			// find the index for state
+			stateIndex := -1
+			for i, col := range resp.Header {
+				if col == "state" {
+					stateIndex = i
+					break
+				}
+			}
+			if stateIndex == -1 {
+				log.Fatalln("could not find state column")
+			}
+
 			for _, row := range resp.Tabular {
-				if row[1] != "quit" && row[1] != "error" {
+				if row[stateIndex] != "quit" && row[stateIndex] != "error" {
 					count++
 				}
 			}
@@ -180,14 +193,13 @@ func webHosts() string {
 func webHostVMs(host string) string {
 	var respChan chan minicli.Responses
 
-	mask := "id,name,state,memory,vcpus,disk,initrd,kernel,cdrom,mac,ip,vlan,append"
-	cmdLocal, err := minicli.CompileCommand("vm info mask " + mask)
+	cmdLocal, err := minicli.CompileCommand("vm info")
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
 
-	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info mask %v", host, mask))
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info", host))
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
@@ -218,20 +230,30 @@ func webHostVMs(host string) string {
 				lines = append(lines, header)
 			}
 
+			// find the id and state index
+			idIndex := -1
+			stateIndex := -1
+			for i, col := range resp.Header {
+				if col == "id" {
+					idIndex = i
+				} else if col == "state" {
+					stateIndex = i
+				}
+			}
+			if idIndex == -1 || stateIndex == -1 {
+				log.Fatalln("could not find id or state index!")
+			}
+
 			for _, row := range resp.Tabular {
-				// We have a hardcoded assumption about 3 fields:
-				// row[0] -> id
-				// row[1] -> name
-				// row[2] -> state
-				if row[2] != "error" && row[2] != "quit" {
-					id, err := strconv.Atoi(row[0])
+				if row[stateIndex] != "error" && row[stateIndex] != "quit" {
+					id, err := strconv.Atoi(row[idIndex])
 					if err != nil {
 						log.Errorln(err)
 						return err.Error()
 					}
 
-					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">%v</a></td><td>%s</td>`
-					tl := fmt.Sprintf(format, id, host, 5900+id, row[1], row[2])
+					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">vm</a></td><td>%s</td>`
+					tl := fmt.Sprintf(format, id, host, 5900+id, row[stateIndex])
 					for _, entry := range row[3:] {
 						tl += `<td>` + entry + `</td>`
 					}
