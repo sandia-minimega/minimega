@@ -1045,17 +1045,15 @@ func getNewTap() (string, error) {
 	return t, nil
 }
 
-func GetIPFromMac(mac string) *ipmac.IP {
+func (b *bridge) GetIPFromMac(mac string) *ipmac.IP {
 	log.Debugln("GetIPFromMac")
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-	for k, v := range bridges {
-		if v.iml != nil {
-			ip := v.iml.GetIPFromMac(mac)
-			if ip != nil {
-				log.Debug("found mac %v in bridge %v", mac, k)
-				return ip
-			}
+	b.Lock.Lock()
+	defer b.Lock.Unlock()
+	if b.iml != nil {
+		ip := b.iml.GetIPFromMac(mac)
+		if ip != nil {
+			log.Debug("found mac %v", mac)
+			return ip
 		}
 	}
 	return nil

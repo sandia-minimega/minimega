@@ -300,8 +300,13 @@ func (l *vmList) info() ([]string, [][]string, error) {
 				row = append(row, fmt.Sprintf("%v", j.Tags))
 			case "ip":
 				var ips []string
-				for _, m := range j.macs {
-					ip := GetIPFromMac(m)
+				for bIndex, m := range j.macs {
+					b, err := getBridge(j.bridges[bIndex])
+					if err != nil {
+						log.Errorln(err)
+						continue
+					}
+					ip := b.GetIPFromMac(m)
 					if ip != nil {
 						ips = append(ips, ip.IP4)
 					}
@@ -309,8 +314,13 @@ func (l *vmList) info() ([]string, [][]string, error) {
 				row = append(row, fmt.Sprintf("%v", ips))
 			case "ip6":
 				var ips []string
-				for _, m := range j.macs {
-					ip := GetIPFromMac(m)
+				for bIndex, m := range j.macs {
+					b, err := getBridge(j.bridges[bIndex])
+					if err != nil {
+						log.Errorln(err)
+						continue
+					}
+					ip := b.GetIPFromMac(m)
 					if ip != nil {
 						ips = append(ips, ip.IP6)
 					}
