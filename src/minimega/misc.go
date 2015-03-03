@@ -172,19 +172,14 @@ func findRemoteVM(host, vm string) (int, string, error) {
 			return vm.Id, vm.Name, nil
 		}
 	} else {
-		// message the remote node for this info with:
-		// 	vm_info name=<vm> [id]
-		// if that doesn't work, then try:
-		//	vm_info id=<vm> [id,name]
-		// if that doesn't work, return not found
 		log.Debugln("remote host")
 
 		var cmdStr string
 		v, err := strconv.Atoi(vm)
 		if err == nil {
-			cmdStr = fmt.Sprintf("vm info search id=%v mask name,id", v)
+			cmdStr = fmt.Sprintf(".filter id=%v .columns name,id vm info", v)
 		} else {
-			cmdStr = fmt.Sprintf("vm info search name=%v mask name,id", v)
+			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id vm info", v)
 		}
 
 		cmd, err := minicli.CompileCommand(cmdStr)
@@ -194,7 +189,10 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		}
 
 		remoteRespChan := make(chan minicli.Responses)
-		go meshageBroadcast(cmd, remoteRespChan)
+		go func() {
+			meshageBroadcast(cmd, remoteRespChan)
+			close(remoteRespChan)
+		}()
 
 		for resps := range remoteRespChan {
 			// Find a response that is not an error

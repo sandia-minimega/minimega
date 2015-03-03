@@ -56,7 +56,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	}
 	defer fout.Close()
 
-	cmd, err := minicli.CompileCommand("vm info mask host,name,id,ip,ip6,state,vlan")
+	cmd, err := minicli.CompileCommand(".columns host,name,id,ip,ip6,state,vlan vm info")
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
@@ -78,7 +78,11 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	// Get info from remote hosts over meshage
 	remoteRespChan := make(chan minicli.Responses)
-	go meshageBroadcast(cmd, remoteRespChan)
+	go func() {
+		meshageBroadcast(cmd, remoteRespChan)
+		close(remoteRespChan)
+	}()
+
 	for resp := range remoteRespChan {
 		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
