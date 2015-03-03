@@ -41,7 +41,7 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	} else if isDir {
 		return
 	}
-	http.FileServer(http.Dir(base)).ServeHTTP(w, r)
+	http.FileServer(http.Dir(*f_root)).ServeHTTP(w, r)
 }
 
 func isDoc(path string) bool {
@@ -105,7 +105,7 @@ func renderDoc(w io.Writer, docFile string) error {
 }
 
 func parse(name string, mode ParseMode) (*Doc, error) {
-	f, err := os.Open(name)
+	f, err := os.Open(*f_root + name)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +119,7 @@ func parse(name string, mode ParseMode) (*Doc, error) {
 // If the given path is not a directory, it returns (isDir == false, err == nil)
 // and writes nothing to w.
 func dirList(w io.Writer, name string) (isDir bool, err error) {
-	f, err := os.Open(name)
+	f, err := os.Open(*f_root + name)
 	if err != nil {
 		return false, err
 	}
@@ -145,6 +145,17 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 			Name: fi.Name(),
 			Path: filepath.ToSlash(filepath.Join(name, fi.Name())),
 		}
+		// If there's an index.html, send that back and bail out
+		if fi.Name() == "index.html" {
+			ih, err := os.Open(*f_root + e.Path)
+			if err != nil {
+				return false, err
+			}
+			io.Copy(w, ih)
+			// returning true is naughty but whatever
+			return true, nil
+		}
+
 		if fi.IsDir() && showDir(e.Name) {
 			d.Dirs = append(d.Dirs, e)
 			continue
