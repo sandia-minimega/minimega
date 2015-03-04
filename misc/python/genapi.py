@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 '''
 Copyright (2015) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
@@ -76,7 +76,7 @@ def buildCommand(context, subs, cmd):
 
     #cmdName needs to be a valid Python identifier
     cmdName = subs[0]
-    cmdName = ''.join(filter(str.isalpha, cmdName))
+    cmdName = ''.join(filter(str.isalpha, str(cmdName)))
 
     if cmdName in context:
         if 'subcommands' not in context[cmdName]:
