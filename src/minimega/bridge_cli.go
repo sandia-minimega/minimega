@@ -4,7 +4,11 @@
 
 package main
 
-import "minicli"
+import (
+	"fmt"
+	"minicli"
+	"strconv"
+)
 
 var bridgeCLIHandlers = []minicli.Handler{
 	{ // tap
@@ -131,9 +135,23 @@ func cliBridgeInfo(c *minicli.Command) *minicli.Response {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	resp := &minicli.Response{
-		Host:     hostname,
-		Response: bridgeInfo(),
+	resp := &minicli.Response{Host: hostname}
+
+	resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS"}
+	resp.Tabular = [][]string{}
+
+	for _, v := range bridges {
+		var vlans []int
+		for v, _ := range v.lans {
+			vlans = append(vlans, v)
+		}
+
+		row := []string{
+			v.Name,
+			strconv.FormatBool(v.exists),
+			strconv.FormatBool(v.preExist),
+			fmt.Sprintf("%v", vlans)}
+		resp.Tabular = append(resp.Tabular, row)
 	}
 
 	return resp
