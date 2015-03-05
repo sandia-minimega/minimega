@@ -24,7 +24,7 @@ The only way to communicate with a daemonized minimega instance is over the netw
 To attach to a local minimega instance, use the `attach` flag:
 
 	$ sudo bin/minimega -attach
-	CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit
+	CAUTION: calling 'quit' will cause the minimega daemon to exit
 	use 'disconnect' or ^d to exit just the minimega command line
 	
 	minimega:/tmp/minimega/minimega$
