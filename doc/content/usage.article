@@ -8,12 +8,12 @@ minimega is designed to be simple to deploy, and is configured at runtime by run
 
 If running minimega on a single node, simply launch it with no arguments *as*root* (unless you have special permissions on kvm). You should be presented with the minimega command line, along with any errors encountered when searching for external tools.
 
-	$ sudo bin/minimega 
-	minimega, Copyright (2014) Sandia Corporation. 
-	Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+	$ sudo bin/minimega
+	minimega, Copyright (2014) Sandia Corporation.
+	Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 	the U.S. Government retains certain rights in this software.
-	
-	minimega$ 
+
+	minimega$
 
 minimega will exit if stdin is closed, which means that if you put minimega in the background at this point, it will simply interpret that as a call to exit. To start minimega in a way that allows you to put it in the background, use the `nostdin` flag:
 
@@ -26,16 +26,16 @@ To attach to a local minimega instance, use the `attach` flag:
 	$ sudo bin/minimega -attach
 	CAUTION: calling 'quit' will cause the minimega daemon to exit
 	use 'disconnect' or ^d to exit just the minimega command line
-	
+
 	minimega:/tmp/minimega/minimega$
 
-The `attach` interface shows the CLI prompt as before, this time with the path to the minimega command socket you've connected to. 
+The `attach` interface shows the CLI prompt as before, this time with the path to the minimega command socket you've connected to.
 
 ** Multiple Nodes
 
 minimega communicates with other minimega instances via the `meshage` protocol, which supports arbitrary meshes of nodes, auto-discovery, and basic resiliency when nodes fail. Details of meshage are explained later in this document. For the sake of launching, minimega uses meshage to discover other nodes on the cluster and attempts to connect to them. Meshage uses UDP broadcast to solicit new connections, so your cluster nodes should be on the same broadcast domain. If not, you will have to manually dial each of the nodes.
 
-minimega will attempt to maintain several connections to the mesh of minimega nodes, the number of which is defined by the `degree` flag. `degree` is by default 0, which means that when you launch minimega, it will not solicit connections to any other nodes. Additionally, minimega supports partitioning meshage-based groups of nodes by specifying a namespace at launch using the `namespace` flag. This allows you to have two minimega clusters on the same network co-exist without connecting to each other. 
+minimega will attempt to maintain several connections to the mesh of minimega nodes, the number of which is defined by the `degree` flag. `degree` is by default 0, which means that when you launch minimega, it will not solicit connections to any other nodes. Additionally, minimega supports partitioning meshage-based groups of nodes by specifying a namespace at launch using the `namespace` flag. This allows you to have two minimega clusters on the same network co-exist without connecting to each other.
 
 For example, if you want to launch minimega on a number of nodes and put minimega in the background on each node with a namespace of `foo` and a degree of 2 - run the following on each node:
 
@@ -45,21 +45,21 @@ Each node will then auto-discover at least two other nodes with the namespace `f
 
 ** Base Directory
 
-minimega creates a number of files that describe and allow control of virtual machines, DNS/DHCP servers, and other components under a base directory, by default `/tmp/minimega`. You can change this path using the `base` flag. If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use. If you know that minimega is not already running, you can force minimega to repopulate the base directory with the `force` flag, or just delete the existing base directory. The base directory is important when connecting to an already running minimega instance with the `attach` or `e` flags, as those modes both look for the minimega command socket in a specified base directory. 
+minimega creates a number of files that describe and allow control of virtual machines, DNS/DHCP servers, and other components under a base directory, by default `/tmp/minimega`. You can change this path using the `base` flag. If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use. If you know that minimega is not already running, you can force minimega to repopulate the base directory with the `force` flag, or just delete the existing base directory. The base directory is important when connecting to an already running minimega instance with the `attach` or `e` flags, as those modes both look for the minimega command socket in a specified base directory.
 
 * Input Methods
 
-There are three ways to communicate with minimega - the minimega command line (including the `attach` mode), the local command port (including the `e` mode), and over a network with meshage. Each input method uses the same command set, and all minimega commands are available on each communication interface, even over the network. 
+There are three ways to communicate with minimega - the minimega command line (including the `attach` mode), the local command port (including the `e` mode), and over a network with meshage. Each input method uses the same command set, and all minimega commands are available on each communication interface, even over the network.
 
 ** Command Prompt
 
-minimega uses a readline-based command prompt for input. Just like bash and other readline-based interfaces, you can use an `.inputrc` file, tab completion on paths, and history. Commands are input simply as `<command> <arguments>`, with arguments split on whitespace, and grouped by "" or '', just like bash. 
+minimega uses a readline-based command prompt for input. Just like bash and other readline-based interfaces, you can use an `.inputrc` file, tab completion on paths, and history. Commands are input simply as `<command> <arguments>`, with arguments split on whitespace, and grouped by "" or '', just like bash.
 
 For example, to set a disk to boot (the list of commands are described later):
 
 	minimega$ vm config disk /home/minimega/mydisk.qcow2
 
-Any errors will be returned. Internal errors will be logged using the logging arguments either set at runtime or specified with command line switches. 
+Any errors will be returned. Internal errors will be logged using the logging arguments either set at runtime or specified with command line switches.
 
 In general, giving a command without arguments will return the current value of that command (such as `vm`config`disk`). Some commands take no arguments. See the list of commands for more information.
 
@@ -72,7 +72,7 @@ If minimega is already running and you do not have access to the minimega comman
 	foo
 	$
 
-Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. This is especially useful for pipelining minimega commands with other unix utilities. 
+Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. This is especially useful for pipelining minimega commands with other unix utilities.
 
 The command port can also be interfaces by external programs. It is a UNIX domain socket in the base directory at `<base>/minimega`. The command port uses JSON encoded commands and responses using the following schema:
 
@@ -142,7 +142,7 @@ The command port can also be interfaces by external programs. It is a UNIX domai
 		}
 	    }
 	}
-			
+
 
 ** Meshage Commands
 
@@ -166,7 +166,7 @@ You can also broadcast a command to all nodes on the mesh from any other node, e
 
 ** Output rendering modes
 
-Minimega supports a number of ways to output data as well. By default, output will be tabular (pretty printed) if tabular data is present, and a simple string otherwise. Additionally, with mesh commands, like responses will be grouped into a single response prefixed with a list of the nodes that had that response. 
+Minimega supports a number of ways to output data as well. By default, output will be tabular (pretty printed) if tabular data is present, and a simple string otherwise. Additionally, with mesh commands, like responses will be grouped into a single response prefixed with a list of the nodes that had that response.
 
 You can override this behavior with a number of builtin output operators, including JSON, csv, etc., all prefixed with the `.` character. For example, to output tabular data in csv instead of pretty-printing, set csv mode with `.csv true`:
 
@@ -177,8 +177,8 @@ You can override this behavior with a number of builtin output operators, includ
 	minimega$ host
 	host,name,cpus,load,memused,memtotal,bandwidth
 	foo,foo,4,0.21 0.10 0.07,606 MB,7706 MB,0.0 (MB/s)
-	minimega$ 
-	
+	minimega$
+
 Setting an output mode as a single command sets that output mode globally (all output rendering from that minimega instance will use that output mode). You can optionally set an output mode for a single command by simply adding the command as a suffix to the output mode command:
 
 	.csv true host
@@ -191,7 +191,7 @@ Other builtins allow searching, sorting, and arraning (and removing) columns fro
 
 * Describing Virtual Machines
 
-minimega is designed to launch experiments with procedural scripts instead of static configurations. Virtual machines are described in terms of memory, disk image, etc., and then launched. minimega stores information about the last description of a VM, making it possible to launch more than one VM of that description or simply change a few parameters of the description and launch another VM. 
+minimega is designed to launch experiments with procedural scripts instead of static configurations. Virtual machines are described in terms of memory, disk image, etc., and then launched. minimega stores information about the last description of a VM, making it possible to launch more than one VM of that description or simply change a few parameters of the description and launch another VM.
 
 For example, to describe a VM that uses a raw disk image `foo.img`, with 2048 MB of RAM, and 2 CPUs:
 
@@ -213,15 +213,15 @@ At this point, say we want to launch a third virtual machine, this time with no 
 	Memory:        2048
 	VCPUS:         2
 	Disk Path:     /tmp/bar.qcow2
-	CDROM Path:    
-	Kernel Path:   
-	Initrd Path:   
-	Kernel Append: 
+	CDROM Path:
+	Kernel Path:
+	Initrd Path:
+	Kernel Append:
 	QEMU Path:     /usr/bin/kvm
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
-	UUID: 
+	UUID:
 
 This looks fine, empty fields are either just not included in the next VM to launch, or will be randomly generated (such as UUID), so let's tell minimega to use an initrd and kernel:
 
@@ -235,15 +235,15 @@ And look at our configuration again:
 	Memory:        2048
 	VCPUS:         2
 	Disk Path:     /tmp/bar.qcow2
-	CDROM Path:    
+	CDROM Path:
 	Kernel Path:   /tmp/foo.kernel
 	Initrd Path:   /tmp/foo.initrd
-	Kernel Append: 
+	Kernel Append:
 	QEMU Path:     /usr/bin/kvm
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
-	UUID: 
+	UUID:
 
 Something isn't right here, we see that while the initrd and kernel fields are set correctly, the disk image field is still set. We'd like to get rid of that, so let's use the `clear` command:
 
@@ -255,16 +255,16 @@ And look at the config one last time:
 	Current VM configuration:
 	Memory:        2048
 	VCPUS:         2
-	Disk Path:     
-	CDROM Path:    
+	Disk Path:
+	CDROM Path:
 	Kernel Path:   /tmp/foo.kernel
 	Initrd Path:   /tmp/foo.initrd
-	Kernel Append: 
+	Kernel Append:
 	QEMU Path:     /usr/bin/kvm
 	QEMU Append:   []
 	Snapshot:      true
 	Networks:      [100]
-	UUID: 
+	UUID:
 
 ** Launching Virtual Machines
 
@@ -317,7 +317,7 @@ If we check `vm`info` again, we'll notice two things:
 	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
 	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
-First, the VM foo_1 that we killed earlier is still hanging around in our info table, even though it was killed a while back. We can clear that with a `vm`flush` command, which will remove any VMs that are in the `QUIT` or `ERROR` state. 
+First, the VM foo_1 that we killed earlier is still hanging around in our info table, even though it was killed a while back. We can clear that with a `vm`flush` command, which will remove any VMs that are in the `QUIT` or `ERROR` state.
 
 	minimega$ vm flush
 	minimega$ .columns id,name,state,uuid vm info
@@ -328,7 +328,7 @@ First, the VM foo_1 that we killed earlier is still hanging around in our info t
 	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
 	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
-The second thing we notice is that we have 5 VMs of the same type, and each of them have a generated name. That's because we used `vm`launch` with a number instead of a name. 
+The second thing we notice is that we have 5 VMs of the same type, and each of them have a generated name. That's because we used `vm`launch` with a number instead of a name.
 
 We can start all of the VMs using `vm`start`all`:
 
@@ -345,9 +345,9 @@ And off we go!
 
 * Virtual Machine Networking
 
-minimega uses 802.1q vlan tagging with openvswitch to support arbitrary topologies of networks across all nodes. This is accomplished in minimega by assigning one or more vlan tags to the virtual machine description. 
+minimega uses 802.1q vlan tagging with openvswitch to support arbitrary topologies of networks across all nodes. This is accomplished in minimega by assigning one or more vlan tags to the virtual machine description.
 
-** Simple Networking Between VMs 
+** Simple Networking Between VMs
 
 Say we want to network two virtual machines together on a private lan. We do this by choosing a vlan tag between 1-4096 and assigning it with the `vm`config`net` command to the VM description:
 
@@ -388,7 +388,7 @@ For example, say you have a VM running on vlan 100, it has an IP already, and yo
 	$ ping -c 1 10.0.0.234
 	PING 10.0.0.234 (10.0.0.234) 56(84) bytes of data.
 	64 bytes from 10.0.0.234: icmp_req=1 ttl=64 time=0.888 ms
-	
+
 	--- 10.0.0.234 ping statistics ---
 	1 packets transmitted, 1 received, 0% packet loss, time 0ms
 	rtt min/avg/max/mdev = 0.888/0.888/0.888/0.000 ms
@@ -410,12 +410,12 @@ Finally, you can delete host taps using the `delete` keyword with the tap name:
 
 ** DNS and DHCP
 
-minimega supports running `dnsmasq`, a tool to serve DHCP and DNS on a host tap connected to a vlan. This allows you to use the host node to run DHCP and DNS to VMs. 
+minimega supports running `dnsmasq`, a tool to serve DHCP and DNS on a host tap connected to a vlan. This allows you to use the host node to run DHCP and DNS to VMs.
 
 For example, to launch a VM that is configured to obtain an IP using DHCP, assign the VM a network interface on a vlan, and a host tap on the same vlan:
 
 	minimega$ vm config memory 2048
-	minimega$ vm config disk /tmp/foo.qcow2 
+	minimega$ vm config disk /tmp/foo.qcow2
 	minimega$ vm config net 100
 	minimega$ tap create 100 ip 10.0.0.1/24
 	mega_tap0
@@ -455,7 +455,7 @@ As mentioned earlier, you can script a local minimega instance using the `e` fla
 	foo
 	$
 
-Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors. 
+Using `e` will connect to the local minimega instance's command port in the base directory, issue the command, and print any results/errors.
 
 This enables extending the minimega API to external controls, such as a bash script:
 
@@ -509,11 +509,11 @@ minimega will list the hostnames of all connected nodes with the number of runni
 
 * Multi-node Usage
 
-Minimega is designed to scale by running instances on individual nodes that communicate over a message passing protocol, meshage. The goal is to make minimega use the same command set on any number of participating nodes by starting commands with a designation of which nodes (one, some, or all) should execute the command. 
+Minimega is designed to scale by running instances on individual nodes that communicate over a message passing protocol, meshage. The goal is to make minimega use the same command set on any number of participating nodes by starting commands with a designation of which nodes (one, some, or all) should execute the command.
 
 ** Meshage
 
-Meshage is a mesh-based message passing and connectivity protocol designed to support arbitrary connections of nodes, auto-discovery, resiliency, and fully-distributed operation. Meshage operates over TCP/IP on a single port during operation, and optionally uses UDP broadcast for auto-discovery. The operational goal of meshage is to support running a cluster of minimega instances that significantly oversubscribe resources. In such an environment, participating nodes can regularly fail, leave the network, and later rejoin. Meshage is also designed to support multiple sessions running on the same network simultaneously via namespaces that partitions meshage networks. 
+Meshage is a mesh-based message passing and connectivity protocol designed to support arbitrary connections of nodes, auto-discovery, resiliency, and fully-distributed operation. Meshage operates over TCP/IP on a single port during operation, and optionally uses UDP broadcast for auto-discovery. The operational goal of meshage is to support running a cluster of minimega instances that significantly oversubscribe resources. In such an environment, participating nodes can regularly fail, leave the network, and later rejoin. Meshage is also designed to support multiple sessions running on the same network simultaneously via namespaces that partitions meshage networks.
 
 *** Node connections
 
@@ -523,10 +523,10 @@ Minimega connects to other minimega instances (which are communicated to via the
 
 Minimega instances can auto-discover other instances on a network using the auto-discovery model provided by meshage. This is enabled by using the `-degree` flag at startup or the `mesh`degree` command at runtime. These commands set the minimum mesh degree to attempt to maintain. If non-zero, meshage will broadcast over UDP solicitations for other nodes to attempt a connection to the soliciting node. Other listening nodes, even if they already have enough connections, will attempt to initiate a new connection as described above. When a node meets its degree requirements, it simply stops broadcasting solicitations. To reduce broadcast traffic, nodes uses an exponential backoff function to throttle the rate of solicitation broadcasts. When the number of connections to a given node decreases below the specified degree, the node will resume soliciting connections.
 
-Because nodes that are solicited will attempt to make connections regardless of how many connections they have, it is possible for nodes to have more connections than specified using the degree field. 
+Because nodes that are solicited will attempt to make connections regardless of how many connections they have, it is possible for nodes to have more connections than specified using the degree field.
 
 *** Message Delivery
 
-Messages that are sent to other nodes are routed through connections on the mesh to the recipients. Routing messages to other nodes over meshage connections instead of directly to the recipient node can, in some circumstances, reduce load on individual nodes (via distributed rebroadcasting of messages), and allows for messages to be sent over special connections such as SSH tunnels. 
+Messages that are sent to other nodes are routed through connections on the mesh to the recipients. Routing messages to other nodes over meshage connections instead of directly to the recipient node can, in some circumstances, reduce load on individual nodes (via distributed rebroadcasting of messages), and allows for messages to be sent over special connections such as SSH tunnels.
 
 Messages can be sent to all nodes as a broadcast message using `mesh`send`all`, or to a subset of nodes using `mesh`send`<nodes>`. Messages are always sent along the shortest route. Messages timeout after 10 seconds by default. The user can adjust this timeout using the `mesh`timeout` parameter.
