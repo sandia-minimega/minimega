@@ -155,7 +155,7 @@ func Suggest(input string) []string {
 func Help(input string) string {
 	helpShort := make(map[string]string)
 
-	inputItems, err := lexInput(input)
+	_, err := lexInput(input)
 	if err != nil {
 		return "Error parsing help input: " + err.Error()
 	}
@@ -203,13 +203,13 @@ func Help(input string) string {
 
 	if len(matches) == 0 {
 		// If there's a closest match, display the long help for it
-		handler, _ := closestMatch(inputItems)
-		if handler != nil {
-			return handler.helpLong()
-		}
+		//handler, _ := closestMatch(inputItems)
+		//if handler != nil {
+		//	return handler.helpLong()
+		//}
 
 		// Found an unresolvable command
-		return fmt.Sprintf("no help entry for %s", input)
+		return fmt.Sprintf("no help entry for `%s`", input)
 	} else if len(matches) == 1 && len(groups[matches[0]]) == 1 {
 		// Very special case, one prefix match and only one handler.
 		return groups[matches[0]][0].helpLong()
