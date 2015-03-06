@@ -233,15 +233,18 @@ func webHostVMs(host string) string {
 			// find the id and state index
 			idIndex := -1
 			stateIndex := -1
+			nameIndex := -1
 			for i, col := range resp.Header {
 				if col == "id" {
 					idIndex = i
 				} else if col == "state" {
 					stateIndex = i
+				} else if col == "name" {
+					nameIndex = i
 				}
 			}
-			if idIndex == -1 || stateIndex == -1 {
-				log.Fatalln("could not find id or state index!")
+			if idIndex == -1 || stateIndex == -1 || nameIndex == -1 {
+				log.Fatalln("could not find id, state, or name index!")
 			}
 
 			for _, row := range resp.Tabular {
@@ -252,8 +255,8 @@ func webHostVMs(host string) string {
 						return err.Error()
 					}
 
-					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">vm</a></td><td>%s</td>`
-					tl := fmt.Sprintf(format, id, host, 5900+id, row[stateIndex])
+					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">%s</a></td><td>%s</td>`
+					tl := fmt.Sprintf(format, id, host, 5900+id, row[nameIndex], row[stateIndex])
 					for _, entry := range row[3:] {
 						tl += `<td>` + entry + `</td>`
 					}
