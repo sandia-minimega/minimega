@@ -15,6 +15,11 @@ type Command struct {
 	Subcommand *Command // parsed command
 
 	Call CLIFunc `json:"-"`
+
+	// Set when the command is intentionally a NoOp (the original string
+	// contains just a comment). This was added to ensure that lines containing
+	// only a comment are recorded in the history.
+	noOp bool
 }
 
 func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int) {

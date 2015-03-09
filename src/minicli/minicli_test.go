@@ -6,6 +6,7 @@ package minicli_test
 
 import (
 	. "minicli"
+	"strings"
 	"testing"
 )
 
@@ -95,6 +96,13 @@ var testPrefixes = []struct {
 	},
 }
 
+var testHandler = &Handler{
+	Patterns: []string{"test"},
+	Call: func(c *Command, out chan Responses) {
+		// Do nothing
+	},
+}
+
 func TestParse(t *testing.T) {
 	for _, v := range validTestPatterns {
 		t.Logf("Testing pattern: `%s`", v.pattern)
@@ -156,4 +164,68 @@ func TestPrefix(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestHistoryComments(t *testing.T) {
+	Register(testHandler)
+
+	comments := []string{
+		"test #one",
+		"test # two",
+		"test#three",
+		"# four",
+	}
+
+	ClearHistory()
+	for _, c := range comments {
+		out, err := ProcessString(c, true)
+		if err != nil {
+			t.Fatalf("unable to ProcessString: %s -- %v", c, err)
+		}
+
+		for _ = range out {
+			// drop responses
+		}
+	}
+
+	got := History()
+	want := strings.Join(comments, "\n")
+
+	if got != want {
+		t.Error("got incorrect history")
+		t.Logf("got:\n`%s`", got)
+		t.Logf("want:\n`%s`", want)
+	}
+}
+
+func TestWhitespace(t *testing.T) {
+	Register(testHandler)
+	ClearHistory()
+
+	inputs := []string{
+		"test",
+		" test",
+		"\ttest",
+		"\ttest\t",
+		"  ",
+		"# test",
+		" # test",
+		"\t# test",
+		"\t# test\t",
+	}
+
+	for _, v := range inputs {
+		t.Logf("processing input: `%s`", v)
+
+		out, err := ProcessString(v, true)
+		if err != nil {
+			t.Fatalf("unable to ProcessString: `%s` -- %v", v, err)
+		}
+
+		for _ = range out {
+			// drop responses
+		}
+	}
+
+	t.Logf("history:\n`%s`", History())
 }
