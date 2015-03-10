@@ -1,0 +1,74 @@
+Contributing and Development Guide
+
+David Fritz
+10 Mar 2015
+
+* Contributing code
+
+minimega is an open source project and we welcome contributions from the community.
+
+To get started, please read this document, which includes guidelines for contributing code and development style.
+
+* Maintainers
+
+minimega spans several tools and packages, and the committers have fallen into de facto maintainer roles for various subsystems. If you have specific questions about a part of minimega, CC the relevant maintainer(s) below on the mailing list.
+
+- *David*Fritz*<djfritz@sandia.gov>* - Project lead, protonuke, vmbetter, docs, meshage, cc layer, vm subsystem, and anything else not specifically called out below
+- *John*Floren*<jfflore@sandia.gov>* - Projcet lead, igor, powerbot, minidoc, protonuke
+- *Jon*Crussell*<jcrusse@sandia.gov>* - minicli, most helper code, python bindings
+- *Devin*Cook*<devcook@sandia.gov>* - python bindings, containers
+
+* Trivial patches
+
+Many patches are simple enough to not need the more rigorous development approach detailed here. These include typos, additions to documentation without code revisions, and minor fixes (only a few lines of code). For these, simply format the patch according to the "Submitting a Patch" section below to the mailing list. 
+
+* Discuss your design
+
+Begin by joining the [[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing list]. New ideas and better solutions to existing code are always welcome, and posting to the mailing list first allows coming to a quorum on your idea before you spend time implementing it. 
+
+Please post on the mailing list before you submit patches, unless they are trivial. 
+
+* Development style
+
+minimega follows the formatting style enforced by the Go language specification, and _generally_ follows the programming style used by core Go developers (and by luck most Go developers). There are exceptions, particularly in the few C files in the codebase. 
+
+Unless the devlopment in question is aimed at reformatting a piece of the codebase, you should adhere to the style in that particular section of code. minimega is growing rapidly and often times newer code is more well thought out than older code. 
+
+There are some specific guidelines however.
+
+** Adding new API
+
+** Naming functions and globals
+
+* Tests
+
+Add unit tests using Go's unit test framework whenever possible. If your code is not Go, tests should be considered in some other capacity. 
+
+Always make sure that your code revision builds and completes all tests by running `all.bash` in the repo. If your code revision applies to windows binaries (`protonuke`, `miniccc`, etc.), then make sure your change works on Windows as well.
+
+* Documentation
+
+Always include updates and additions to the documents, API help, and tutorials (when appropriate) in your change. Some documentation is missing currently, so there is an emphasis on ensuring that revisions and especially new functionality is well documented.
+
+* Tracking issues 
+
+If your change is being committed to a branch other than `master`, include "updates issue NNN" in the commit log. Never close an issue on a commit in a branch other than `master` unless that ticket is specific to that branch. 
+
+* Submitting a patch
+
+We do not have a formal code review process outside of the mailing list yet. That may come eventually, but for now, follow best practice when discussing patchsets on the mailing list.
+
+If you are not a committer, please format your patch using the `git`format-patch` command:
+
+	git format-patch master --stdout > issueNNN.patch
+
+Generate the patch from master (or the branch you are committing to) for all of the commits in your patchset, including updates to documentation. When iterating on patchsets in the mailing list, regenerate the entire patchset from master for each update, not an additional patchset that depends on the previous. 
+
+Generating the patch in this way ensures that when a committer pushes that patch to the repo on your behalf, the commit log will be preserved along with your name and email, thus attributing the work to you. 
+
+* Copyright
+
+minimega is released under the GNU GPLv3. Several included 3rd party packages are released under other licenses, as described in the LICENSES directory in the repo. If you are submitting a patch to the existing codebase, the code will be licensed under the same license. If you are submitting an entirely new package, please license it under any compatible FLOSS license. If you are submitting under a license not already included in the distribution, please discuss this on the mailing list first. 
+
+GPLv3 is preferred.
+
