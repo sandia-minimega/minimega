@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+
+	"present"
 )
 
 func init() {
@@ -26,6 +28,7 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	const base = "."
 	name := filepath.Join(base, r.URL.Path)
+
 	if isDoc(name) {
 		err := renderDoc(w, name)
 		if err != nil {
@@ -71,7 +74,7 @@ func initTemplates(base string) error {
 		contentTmpl = filepath.Join(base, contentTmpl)
 
 		// Read and parse the input.
-		tmpl := Template()
+		tmpl := present.Template()
 		tmpl = tmpl.Funcs(template.FuncMap{"playable": executable})
 		if _, err := tmpl.ParseFiles(actionTmpl, contentTmpl); err != nil {
 			return err
@@ -104,13 +107,13 @@ func renderDoc(w io.Writer, docFile string) error {
 	return doc.Render(w, tmpl)
 }
 
-func parse(name string, mode ParseMode) (*Doc, error) {
+func parse(name string, mode present.ParseMode) (*present.Doc, error) {
 	f, err := os.Open(*f_root + name)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return Parse(f, name, 0)
+	return present.Parse(f, name, 0)
 }
 
 // dirList scans the given path and writes a directory listing to w.
@@ -161,7 +164,7 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 			continue
 		}
 		if isDoc(e.Name) {
-			if p, err := parse(e.Path, TitlesOnly); err != nil {
+			if p, err := parse(e.Path, present.TitlesOnly); err != nil {
 				log.Errorln(err)
 			} else {
 				e.Title = p.Title

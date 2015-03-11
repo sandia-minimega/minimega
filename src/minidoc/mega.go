@@ -10,6 +10,7 @@ import (
 	"html/template"
 	log "minilog"
 	"path/filepath"
+	"present"
 	"strings"
 )
 
@@ -19,7 +20,7 @@ type Mega struct {
 }
 
 func init() {
-	Register("mega", parseMega)
+	present.Register("mega", parseMega)
 }
 
 func (c Mega) TemplateName() string { return "mega" }
@@ -28,7 +29,7 @@ func executable(m Mega) bool {
 	return *f_exec
 }
 
-func parseMega(ctx *Context, sourceFile string, sourceLine int, cmd string) (Elem, error) {
+func parseMega(ctx *present.Context, sourceFile string, sourceLine int, cmd string) (present.Elem, error) {
 	cmd = strings.TrimSpace(cmd)
 	log.Debug("parseMega cmd: %v", cmd)
 

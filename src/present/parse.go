@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package present
 
 import (
 	"bufio"
@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	parsers = make(map[string]ParseFunc)
-	funcs   = template.FuncMap{}
+	parsers     = make(map[string]ParseFunc)
+	funcs       = template.FuncMap{}
+	PlayEnabled = false
 )
 
 // Template returns an empty template with the action functions in its FuncMap.
@@ -37,7 +38,7 @@ func (d *Doc) Render(w io.Writer, t *template.Template) error {
 		*Doc
 		Template    *template.Template
 		PlayEnabled bool
-	}{d, t, *f_exec}
+	}{d, t, PlayEnabled}
 	return t.ExecuteTemplate(w, "root", data)
 }
 
@@ -47,7 +48,7 @@ func (s *Section) Render(w io.Writer, t *template.Template) error {
 		*Section
 		Template    *template.Template
 		PlayEnabled bool
-	}{s, t, *f_exec}
+	}{s, t, PlayEnabled}
 	return t.ExecuteTemplate(w, "section", data)
 }
 
