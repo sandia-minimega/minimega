@@ -87,36 +87,36 @@ The cc API supports sending and receiving files to and from the client. Files ca
 
 ** Sending Files
 
-In order to send files to a client, the files must be rooted in the `files` subdirectory in the minimega base directory. By default minimega uses `/tmp/minimega/files`. Let's send a file to the client by placing a file `foo` in `/tmp/minimega/files` (or whatever base directory your minimega uses). We do this by using the `cc`send` command.
+In order to send files to a client, the files must be rooted in the `files` subdirectory in the minimega base directory. By default minimega uses `/tmp/minimega/files`. Let's send a simple bash script to the client by placing a file `foo.bash` in `/tmp/minimega/files` (or whatever base directory your minimega uses). Have `foo.bash` do something simple, like `echo`:
+
+	#!/bin/bash
+	echo "hello cc!"
+
+Now we'll send it to the client by using the `cc`send` command.
 
 .mega cc/send.mm
+
+Clients will fetch the files from minimega before moving on to any other commands. You can inspect file send commands with `cc`commands`, just like we did with `cc`exec` before. 
 
 We can also send globs (wildcard) of files, using the * operator. For example:
 
 	minimega$ cc send somedirectory/*
 
-Clients will fetch the files from minimega before moving on to any other commands. You can inspect file send commands with `cc`commands`, just like we did with `cc`exec` before. We'll send the following file:
+Files will appear in the `files` subdirectory in the client's base directory. By default, this is `/tmp/miniccc/files`. 
 
-	#!/bin/bash
-	echo "hello cc!"
+At this point we can both send and execute a file on the client. Let's execute the script we sent a moment ago:
 
 .mega cc/send2.mm
 
-Files will appear in the `files` subdirectory in the client's base directory. By default, this is `/tmp/miniccc/files`. 
-
-At this point we can both send and execute a file on the client. Let's do this by sending a simple bash script and executing it.
-
-.mega cc/send3.mm
-
 After the client responds to the `cc`exec` command, we can check the output.
 
-.mega cc/send4.mm
+.mega cc/send3.mm
 
 ** Receiving Files
 
 Receiving files is just like sending files, except that you can specify any path on the client to receive files from. Globs (wildcards) work with receiving files too, so you can receive entire directories of files. 
 
-Let's modify our example above and send a bash script that creates a file, execute it, and then get that file back. We'll have our bash script create the file `/foo/bar.out`:
+Let's modify our example above and send a bash script that creates a file, execute it, and then get that file back. We'll have our bash script create the file `/foo/bar.out`, and name is `bar.bash`:
 
 	#!/bin/bash
 	mkdir /foo
@@ -132,17 +132,21 @@ Use `cc`responses` to check the file received after it completes. You'll notice 
 
 We've seen the use of `cc`responses` several times so far. The `responses` command simply outputs all files of the specified command, indexed by id as shown in `cc`commands`, with the name of the file. If you don't want the filename shown, you can suffix the response command with `raw`:
 
-	minimega$ cc responses 6 raw
+.mega cc/recv3.mm
 
 You can also print *all* responses by using the `all` keyword instead of a command id:
 
-	minimega$ cc responses all
+.mega cc/recv4.mm
 
 * Command Prefixes
 
 It's useful to group similar commands into named groups. The `cc`prefix` command allows creating groups of commands by associating all issued commands after a `cc`prefix` command with that prefix. You can then use the prefix name instead of a command id when using `cc`responses`, or when deleting commands. 
 
 .mega cc/prefix.mm
+
+After the commands complete, we'll look at the responses.
+
+.mega cc/prefix2.mm
 
 * Filtering Clients
 
