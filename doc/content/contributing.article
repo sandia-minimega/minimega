@@ -9,15 +9,6 @@ minimega is an open source project and we welcome contributions from the communi
 
 To get started, please read this document, which includes guidelines for contributing code and development style.
 
-* Maintainers
-
-minimega spans several tools and packages, and the committers have fallen into de facto maintainer roles for various subsystems. If you have specific questions about a part of minimega, CC the relevant maintainer(s) below on the mailing list.
-
-- *David*Fritz*<djfritz@sandia.gov>* - Project lead, protonuke, vmbetter, docs, meshage, cc layer, vm subsystem, and anything else not specifically called out below
-- *John*Floren*<jfflore@sandia.gov>* - Projcet lead, igor, powerbot, minidoc, protonuke
-- *Jon*Crussell*<jcrusse@sandia.gov>* - minicli, most helper code, python bindings
-- *Devin*Cook*<devcook@sandia.gov>* - python bindings, containers
-
 * Trivial patches
 
 Many patches are simple enough to not need the more rigorous development approach detailed here. These include typos, additions to documentation without code revisions, and minor fixes (only a few lines of code). For these, simply format the patch according to the "Submitting a Patch" section below to the mailing list. 
