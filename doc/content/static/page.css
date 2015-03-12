@@ -1,6 +1,7 @@
 body {
 	font-family: Helvetica, Arial, sans-serif;
 	font-size: 16px;
+	margin: 0;
 }
 pre,
 code {
@@ -20,10 +21,13 @@ a:hover {
 	text-decoration: underline;
 }
 p, ul, ol {
+    margin-before: 1em;
+    margin-after: 1em;
     margin: 20px;
 }
 
 .links {
+    margin: 5px;
     list-style-type: none;
     float: left;
     padding: 10px;
