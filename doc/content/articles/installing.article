@@ -1,0 +1,73 @@
+Installing minimega
+24 Feb 2015
+
+* Obtaining minimega
+
+minimega does not currently have an official release or an official build service. You will need to build minimega from source. Source can be obtained from the minimega git repo:
+
+	git clone https://code.google.com/p/minimega
+
+** System requirements and runtime dependencies
+
+minimega is designed to be simple to deploy. It has only two runtime dependencies - libpcap and libreadline, both of which are usually included on standard linux distros.
+
+minimega also has a number of external tools it executes. When you start minimega, it will check to see if each of the tools it may need are available in `$PATH`. If you plan to use minimega on a head node and only send messages to other nodes to launch and control VMs, you can ignore any external tool warnings at launch. 
+
+If you plan to launch and maintain VMs, you will need:
+
+- kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
+- ip - ip tool for manipulating devices
+- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.4)
+- ovs-ofctl - Open vSwitch openflow control with daemon running and kernel module loaded
+- dnsmasq - DNS and DHCP server
+- kill
+- qemu-utils - tools for interacting with qemu images
+- mount/umount - used when creating router images and injecting files into existing images
+- mkdosfs - used when creating router images
+- taskset - set CPU affinity for VMs
+- ntfs-3g - NTFS with write support for injecting files into NTFS images
+
+** Building from source
+
+To build from source you will need a [[http://golang.org][Go compiler]], libpcap headers, and libreadline headers. On a debian type system, you can install compile-time dependencies with:
+
+	apt-get install libpcap-dev libreadline-dev
+
+The Go compiler must be at least version 1.1.
+
+First, obtain the minimega source, then run the all.bash script from the top of the repo:
+
+	git clone https://code.google.com/p/minimega 
+	cd minimega
+	./all.bash
+
+This will build and test each of the libraries and tools in the minimega distribution and create a bin/ sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools.
+
+* Deploying minimega
+
+minimega is a standalone binary and carries no configuration. To deploy minimega to any number of nodes, simply copy the binary to each node. See [[usage.article][the usage article]] for information about launching minimega.
+
+** Network configuration
+
+minimega is designed to run on one or more nodes and uses Open vSwitch, a software switch and networking package that allows dynamically vlan-tagging network interfaces attached to virtual machines. Open vSwitch can trunk vlan-tagged traffic up to the physical switch connected to the node running minimega.
+
+If your switch supports IEEE 802.1q vlan tagging (and most should), then vlan tagged interfaces with the same tag number should be able to see other interfaces with that tag number, even on other physical nodes. For example, if you wanted to create a private network of VMs that spanned across 5 nodes of a cluster, you could simply tag each VM's network interface with the same vlan tag, say, 100 (802.1q vlan tags must be between 1-4096). If configured correctly, Open vSwitch and your switch hardware will interpret the vlan tag and switch traffic for that vlan as if on an isolated network.
+
+It is also possible to have multiple, isolated vlans running on several nodes in a cluster. That is, you can have nodes A and B both running VMs with vlans 100 and 200, and Open vSwitch and your switch hardware will isolate the two networks, even though the traffic is going to both physical nodes. 
+
+If software defined networking and setting up Open vSwitch is new to you, check out the [[http://openvswitch.org][Open vSwitch website]] for more information. 
+
+*NOTE:* minimega by default does *not* bridge any physical interfaces to the virtual switch. In order to allow multiple nodes to have VMs on the same vlan, you must attach a physical interface from each node to the virtual switch in trunking mode. Doing so will disallow the physical interface from having an IP, although you can assign/obtain an IP in place of the physical interface by assigning/obtaining an IP on the access port of the bridge device. 
+
+For example, if you have only one physical interface, eth0, on your node which is normally assigned an IP via DHCP, and you want to bridge that interface to Open vSwitch to support vlan tagged traffic between nodes:
+
+	ovs-vsctl add-port mega_bridge eth0
+	dhclient -v mega_bridge
+
+The above adds eth0 to the default minimega bridge `mega_bridge` as a trunk port, and then obtains an IP on `mega_bridge`, which has the same MAC as eth0 and will behave as eth0 did before you added it to the bridge. Do this on each node running minimega. We typically add this command to our Linux startup scripts, so the node will configure mega_bridge at boot-time.
+
+* Getting help
+
+The mailing list is the primary resource for both developers and users. 
+
+.link https://groups.google.com/forum/#!forum/minimega-dev minimega mailing list
