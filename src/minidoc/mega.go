@@ -38,7 +38,7 @@ func parseMega(ctx *present.Context, sourceFile string, sourceLine int, cmd stri
 		return nil, fmt.Errorf("invalid .mega directive: %v", cmd)
 	}
 
-	filename := filepath.Join(filepath.Dir(sourceFile), f[1])
+	filename := filepath.Join(*f_root, filepath.Dir(sourceFile), f[1])
 	log.Debug("filename: %v", filename)
 
 	text, err := ctx.ReadFile(filename)
