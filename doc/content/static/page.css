@@ -1,25 +1,30 @@
 body {
 	font-family: Helvetica, Arial, sans-serif;
 	font-size: 16px;
-	margin: 0;
+	margin: 5px;
 }
+
 pre,
 code {
 	font-family: Menlo, monospace;
 	font-size: 14px;
 }
+
 pre {
 	line-height: 18px;
 	margin: 0;
 	padding: 0;
 }
+
 a {
 	color: #375EAB;
 	text-decoration: none;
 }
+
 a:hover {
 	text-decoration: underline;
 }
+
 p, ul, ol {
     margin-before: 1em;
     margin-after: 1em;
@@ -33,7 +38,7 @@ p, ul, ol {
     padding: 10px;
     border: 1px solid #e5ecf9; 
     background-color: white;
-    width: 145px;
+    width: 10%;
     
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
@@ -47,20 +52,24 @@ ul.links, a.links {
 	margin: 0px;
 }
 
-
 .content {
-    margin-left: 175px;
+    margin-left: 13%;
+    width: 82%;
+}
+
+.content p {
+    margin: 5px;
+    padding: 5px;
 }
 
 h1, h2, h3, h4 {
-	margin: 10px;
 	padding: 0px;
 	color: #375EAB;
 	font-weight: bold;
 }
 
 h1 {
-    font-size: 24px;
+	font-size: 24px;
 }
 
 h2 {
@@ -117,6 +126,7 @@ div.output .system { color: rgb(255, 209, 77) }
 .buttons {
 	margin-left: 20px;
 }
+
 div.output .buttons {
 	margin-left: 0;
 	margin-bottom: 10px;
