@@ -47,6 +47,8 @@ This will build and test each of the libraries and tools in the minimega distrib
 
 minimega is a standalone binary and carries no configuration. To deploy minimega to any number of nodes, simply copy the binary to each node. See [[usage.article][the usage article]] for information about launching minimega.
 
+Depending on your cluster configuration, it is also possible to have minimega deploy itself. By launching minimega on a single node, you can use the `deploy` API which will cause minimega to copy itself and run remotely using `ssh` on a provided list of nodes. Se the [[api.article][API documentation]] on `deploy` for more information. 
+
 ** Network configuration
 
 minimega is designed to run on one or more nodes and uses Open vSwitch, a software switch and networking package that allows dynamically vlan-tagging network interfaces attached to virtual machines. Open vSwitch can trunk vlan-tagged traffic up to the physical switch connected to the node running minimega.
