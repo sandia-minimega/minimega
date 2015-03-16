@@ -12,6 +12,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"qmp"
 	"strconv"
 	"strings"
@@ -152,6 +153,59 @@ func (vm *vmInfo) configToString() string {
 
 func (vm *vmInfo) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
+}
+
+func (vm *vmInfo) Migrate(filename string) error {
+	path := filepath.Join(*f_iomBase, filename)
+	return vm.q.MigrateDisk(path)
+}
+
+func (vm *vmInfo) QueryMigrate() (string, float64, error) {
+	var status string
+	var completed float64
+
+	r, err := vm.q.QueryMigrate()
+	if err != nil {
+		return "", 0.0, err
+	}
+
+	// find the status
+	if s, ok := r["status"]; ok {
+		status = s.(string)
+	} else {
+		return status, completed, fmt.Errorf("could not decode status: %v", r)
+	}
+
+	var ram map[string]interface{}
+	switch status {
+	case "completed":
+		completed = 100.0
+		return status, completed, nil
+	case "failed":
+		return status, completed, nil
+	case "active":
+		if e, ok := r["ram"]; !ok {
+			return status, completed, fmt.Errorf("could not decode ram segment: %v", e)
+		} else {
+			switch e.(type) {
+			case map[string]interface{}:
+				ram = e.(map[string]interface{})
+			default:
+				return status, completed, fmt.Errorf("invalid ram type: %v", e)
+			}
+		}
+	}
+
+	total := ram["total"].(float64)
+	transferred := ram["transferred"].(float64)
+
+	if total == 0.0 {
+		return status, completed, fmt.Errorf("zero total ram!")
+	}
+
+	completed = transferred / total
+
+	return status, completed, nil
 }
 
 func (vm *vmInfo) networkString() string {

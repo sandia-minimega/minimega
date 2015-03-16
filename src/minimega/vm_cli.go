@@ -215,6 +215,17 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		},
 		Call: wrapSimpleCLI(cliVmQmp),
 	},
+	{ // vm migrate
+		HelpShort: "write VM state to disk",
+		HelpLong: `
+WRITE ME
+`,
+		Patterns: []string{
+			"vm migrate",
+			"vm migrate <vm id or name> <filename>",
+		},
+		Call: wrapSimpleCLI(cliVmMigrate),
+	},
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
 		HelpLong: `
@@ -849,6 +860,39 @@ func cliVmQmp(c *minicli.Command) *minicli.Response {
 
 	var err error
 	resp.Response, err = vms.qmp(c.StringArgs["vm"], c.StringArgs["qmp"])
+	if err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+}
+
+func cliVmMigrate(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	var err error
+
+	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
+		// tabular data is
+		// 	vm id, vm name, migrate status, % complete
+		for _, vm := range vms.vms {
+			status, complete, err := vm.QueryMigrate()
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+			if status == "" {
+				continue
+			}
+			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.Id), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+		}
+		if len(resp.Tabular) != 0 {
+			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
+		}
+		return resp
+	}
+
+	err = vms.migrate(c.StringArgs["vm"], c.StringArgs["filename"])
 	if err != nil {
 		resp.Error = err.Error()
 	}

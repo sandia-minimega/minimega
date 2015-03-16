@@ -260,6 +260,41 @@ func (q *Conn) BlockdevSnapshot(path, device string) error {
 	return nil
 }
 
+func (q *Conn) MigrateDisk(path string) error {
+	s := map[string]interface{}{
+		"execute": "migrate",
+		"arguments": map[string]interface{}{
+			"uri": fmt.Sprintf("exec:cat > %v", path),
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
+	v := <-q.messageSync
+	if !success(v) {
+		return errors.New("migrate")
+	}
+	return nil
+}
+
+func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
+	s := map[string]interface{}{
+		"execute": "query-migrate",
+	}
+	err := q.write(s)
+	if err != nil {
+		return nil, err
+	}
+	v := <-q.messageSync
+
+	status := v["return"]
+	if status == nil {
+		return nil, errors.New("received nil status")
+	}
+	return status.(map[string]interface{}), nil
+}
+
 func (q *Conn) HumanMonitorCommand(command string) (string, error) {
 	s := map[string]interface{}{
 		"execute": "human-monitor-command",
