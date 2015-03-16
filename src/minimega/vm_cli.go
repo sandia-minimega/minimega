@@ -218,7 +218,11 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
 		HelpLong: `
-WRITE ME
+Migrate runtime state of a VM to disk, which can later be booted with vm config migrate.
+
+Migration files are written to the files directory as specified with -filepath.
+On success, a call to migrate a VM will return immediately. You can check the
+status of in-flight migrations by invoking vm migrate with no arguments. 
 `,
 		Patterns: []string{
 			"vm migrate",
