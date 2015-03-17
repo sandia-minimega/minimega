@@ -1,84 +1,100 @@
 body {
-	margin: 0;
 	font-family: Helvetica, Arial, sans-serif;
 	font-size: 16px;
+	margin: 5px;
 }
+
 pre,
 code {
 	font-family: Menlo, monospace;
 	font-size: 14px;
 }
+
 pre {
 	line-height: 18px;
 	margin: 0;
 	padding: 0;
 }
+
 a {
 	color: #375EAB;
 	text-decoration: none;
 }
+
 a:hover {
 	text-decoration: underline;
 }
+
 p, ul, ol {
-	margin: 20px;
+    margin-before: 1em;
+    margin-after: 1em;
+    margin: 20px;
+}
+
+.links {
+    margin: 5px;
+    list-style-type: none;
+    float: left;
+    padding: 10px;
+    border: 1px solid #e5ecf9; 
+    background-color: white;
+    width: 10%;
+    
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    border-radius: 5px;
+}
+
+ul.links, a.links {
+	list-style-type: none;
+	padding-left: 10px;
+	color: black;
+	margin: 0px;
+}
+
+.content {
+    margin-left: 13%;
+    width: 82%;
+}
+
+.content p {
+    margin: 5px;
+    padding: 5px;
 }
 
 h1, h2, h3, h4 {
-	margin: 20px 0;
-	padding: 0;
+	padding: 0px;
 	color: #375EAB;
 	font-weight: bold;
 }
+
 h1 {
 	font-size: 24px;
 }
+
 h2 {
 	font-size: 20px;
-	background: #E0EBF5;
-	padding: 2px 5px;
 }
+
 h3 {
-	font-size: 20px;
+	font-size: 18px;
 }
-h3, h4 {
-	margin: 20px 5px;
-}
+
 h4 {
 	font-size: 16px;
 }
 
-div#heading {
-	float: left;
-	margin: 0 0 10px 0;
-	padding: 21px 0;
-	font-size: 20px;
-	font-weight: normal;
+#title {
+    padding: 15px;
+    margin-bottom: 10px;
+    background: #E0EBF5;
+    width: 95%;
+    border: 2px solid black;
 }
 
-div#topbar {
-	background: #E0EBF5;
-	height: 64px;
-	overflow: hidden;
-}
-
-body {
-	text-align: center;
-}
-div#page {
-	width: 100%;
-}
-div#page > .container,
-div#topbar > .container {
-	text-align: left;
-	margin-left: auto;
-	margin-right: auto;
-	padding: 0 20px;
-	width: 900px;
-}
-div#page.wide > .container,
-div#topbar.wide > .container {
-	width: auto;
+#title h1, p {
+    margin: 0px;
+    padding: 0px;
 }
 
 div#footer {
@@ -110,27 +126,10 @@ div.output .system { color: rgb(255, 209, 77) }
 .buttons {
 	margin-left: 20px;
 }
+
 div.output .buttons {
 	margin-left: 0;
 	margin-bottom: 10px;
 }
 
-#toc {
-	float: right;
-	margin: 0px 10px;
-	padding: 10px;
-	border: 1px solid #e5ecf9; 
-	background-color: white;
-	max-width: 33%;
 
-	-webkit-border-radius: 5px;
-	-moz-border-radius: 5px;
-	border-radius: 5px;
-}
-
-#toc ul, #toc a {
-	list-style-type: none;
-	padding-left: 10px;
-	color: black;
-	margin: 0px;
-}

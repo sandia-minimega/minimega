@@ -2,6 +2,7 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
+// +build !appengine
 package main
 
 import (
@@ -9,14 +10,16 @@ import (
 	"fmt"
 	log "minilog"
 	"net/http"
+	"present"
 	"strings"
 )
 
 var (
 	f_port     = flag.Int("port", 9003, "HTTP port")
-	f_base     = flag.String("base", "doc/template", "base path for static content and templates")
+	f_root     = flag.String("root", "doc/content/", "HTTP root directory")
+	f_base     = flag.String("base", "doc/template/", "base path for static content and templates")
 	f_exec     = flag.Bool("exec", true, "allow minimega commands")
-	f_loglevel = flag.String("level", "warn", "log level: [debug, info, warn, error, fatal]")
+	f_loglevel = flag.String("level", "debug", "log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "log to file")
 	f_minimega = flag.String("minimega", "/tmp/minimega", "path to minimega base directory")
@@ -37,10 +40,9 @@ func main() {
 	}
 
 	if *f_exec {
+		present.PlayEnabled = true
 		http.Handle("/socket", NewSocketHandler())
 	}
-
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(*f_base))))
 
 	host := fmt.Sprintf(":%v", *f_port)
 	log.Fatalln(http.ListenAndServe(host, nil))
