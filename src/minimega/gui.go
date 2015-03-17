@@ -32,12 +32,13 @@ const (
 				%s
 				</head>
 				<body>
-				<nav><ul><li><a href="/gui/vnc">Host List</a></li>
+				<nav><ul>
+				  <!--<li><a href="/gui/vnc">Host List</a></li>-->
 				  <li><a href="/gui/all">All VMs</a></li>
 				  <li><a href="/gui/stats">Host Stats</a></li>
-				  <li><a href="/gui/map">VM Map</a></li>
 				  <li><a href="/gui/errors">VM Errors</a></li>
 				  <li><a href="/gui/state">State of Health</a></li>
+				  <li><a href="/gui/map">VM Map</a></li>
 				 <!-- <li><a href="/gui/graph">Graph</a></li>
 				  <li><a href="/gui/terminal/terminal.html">Terminal(concept)</a></li>-->
 				</ul></nav>      
