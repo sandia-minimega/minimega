@@ -36,13 +36,14 @@ type vmInfo struct {
 	Snapshot   bool
 	UUID       string
 
-	DiskPaths  []string
-	QemuAppend []string // extra arguments for QEMU
-	Networks   []int    // ordered list of networks (matches 1-1 with Taps)
-	bridges    []string // list of bridges, if specified. Unspecified bridges will contain ""
-	taps       []string // list of taps associated with this vm
-	macs       []string // ordered list of macs (matches 1-1 with Taps, Networks)
-	netDrivers []string // optional non-e1000 driver
+	MigratePath string
+	DiskPaths   []string
+	QemuAppend  []string // extra arguments for QEMU
+	Networks    []int    // ordered list of networks (matches 1-1 with Taps)
+	bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
+	taps        []string // list of taps associated with this vm
+	macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	netDrivers  []string // optional non-e1000 driver
 
 	State        VmState // one of the VM_ states listed above
 	instancePath string
@@ -101,6 +102,7 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.Name = info.Name
 	newInfo.Memory = info.Memory
 	newInfo.Vcpus = info.Vcpus
+	newInfo.MigratePath = info.MigratePath
 	newInfo.DiskPaths = make([]string, len(info.DiskPaths))
 	copy(newInfo.DiskPaths, info.DiskPaths)
 	newInfo.CdromPath = info.CdromPath
@@ -137,6 +139,7 @@ func (vm *vmInfo) configToString() string {
 	fmt.Fprintln(&o, "Current VM configuration:")
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
 	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
@@ -559,6 +562,11 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "none")
 
 	args = append(args, "-S")
+
+	if vm.MigratePath != "" {
+		args = append(args, "-incoming")
+		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
+	}
 
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {

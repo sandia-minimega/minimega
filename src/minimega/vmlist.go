@@ -287,6 +287,8 @@ func (l *vmList) info() ([]string, [][]string, error) {
 				row = append(row, fmt.Sprintf("%v", j.Vcpus))
 			case "state":
 				row = append(row, j.State.String())
+			case "migrate":
+				row = append(row, fmt.Sprintf("%v", j.MigratePath))
 			case "disk":
 				row = append(row, fmt.Sprintf("%v", j.DiskPaths))
 			case "snapshot":

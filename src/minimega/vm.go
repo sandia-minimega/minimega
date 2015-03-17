@@ -51,7 +51,7 @@ type qemuOverride struct {
 
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "disk", "snapshot", "initrd",
+	"id", "name", "state", "memory", "vcpus", "migrate", "disk", "snapshot", "initrd",
 	"kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan",
 	"uuid", "cc_active", "tags",
 }
@@ -82,6 +82,14 @@ var vmConfigFns = map[string]struct {
 		},
 		Clear: func(vm *vmInfo) { vm.CdromPath = "" },
 		Print: func(vm *vmInfo) string { return vm.CdromPath },
+	},
+	"migrate": {
+		Update: func(vm *vmInfo, v string) error {
+			vm.MigratePath = v
+			return nil
+		},
+		Clear: func(vm *vmInfo) { vm.MigratePath = "" },
+		Print: func(vm *vmInfo) string { return vm.MigratePath },
 	},
 	"disk": {
 		Update: func(vm *vmInfo, v string) error {
@@ -273,6 +281,8 @@ func (vms *vmSorter) Less(i, j int) bool {
 		return vms.vms[i].Memory < vms.vms[j].Memory
 	case "vcpus":
 		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
+	case "migrate":
+		return vms.vms[i].MigratePath < vms.vms[j].MigratePath
 	case "disk":
 		return len(vms.vms[i].DiskPaths) < len(vms.vms[j].DiskPaths)
 	case "initrd":
