@@ -590,7 +590,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 		info = append(info, tl)
 	}
 	//sa := <-respAll
-
 	for sa := range respAll {
 		if len(sa) != 0 {
 			for _, node := range sa {
