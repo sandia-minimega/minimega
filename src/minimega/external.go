@@ -41,6 +41,8 @@ var defaultExternalProcesses = map[string]string{
 	"taskset":  "taskset",
 	"lsmod":    "lsmod",
 	"ntfs-3g":  "ntfs-3g",
+	"scp":      "scp",
+	"ssh":      "ssh",
 }
 
 // customExternalProcesses contains user-specified mappings between command

@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"iomeshage"
 	"meshage"
 	"minicli"
 	log "minilog"
 	"strconv"
-	"text/tabwriter"
 )
 
 var (
@@ -77,7 +75,15 @@ func cliFile(c *minicli.Command) *minicli.Response {
 	} else if c.BoolArgs["delete"] {
 		err = iom.Delete(c.StringArgs["file"])
 	} else if c.BoolArgs["status"] {
-		resp.Response = iomStatus()
+		transfers := iom.Status()
+		resp.Header = []string{"Filename", "Temporary directory", "Completed parts"}
+		resp.Tabular = [][]string{}
+
+		for _, f := range transfers {
+			completed := fmt.Sprintf("%v/%v", len(f.Parts), f.NumParts)
+			row := []string{f.Filename, f.Dir, completed}
+			resp.Tabular = append(resp.Tabular, row)
+		}
 	} else if c.BoolArgs["list"] {
 		path := c.StringArgs["path"]
 		if path == "" {
@@ -106,21 +112,4 @@ func cliFile(c *minicli.Command) *minicli.Response {
 	}
 
 	return resp
-}
-
-func iomStatus() string {
-	transfers := iom.Status()
-	if transfers == nil {
-		return ""
-	}
-
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Filename\tTemporary directory\tCompleted parts\n")
-	for _, f := range transfers {
-		fmt.Fprintf(w, "%v\t%v\t%v/%v\n", f.Filename, f.Dir, len(f.Parts), f.NumParts)
-	}
-	w.Flush()
-	return o.String()
 }

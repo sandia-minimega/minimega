@@ -78,7 +78,7 @@ func (r Responses) validTabular(header []string) (bool, error) {
 					}
 				}
 			}
-		} else {
+		} else if v.Response != "" {
 			simple = true
 		}
 	}

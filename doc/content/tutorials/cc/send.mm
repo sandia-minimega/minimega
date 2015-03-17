@@ -1,2 +1,3 @@
-# send `foo` to all clients
-cc send foo
+# send `foo.bash` to all clients
+cc send foo.bash
+cc commands

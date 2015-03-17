@@ -97,19 +97,31 @@ func ProcessString(input string, record bool) (chan Responses, error) {
 		return nil, err
 	}
 
+	if c == nil {
+		// Language spec: "Receiving from a nil channel blocks forever."
+		// Instead, make and immediately close the channel so that range
+		// doesn't block and receives no values.
+		out := make(chan Responses)
+		close(out)
+
+		return out, nil
+	}
+
 	return ProcessCommand(c, record), nil
 }
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command, record bool) chan Responses {
-	if c.Call == nil {
+	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
 
 	respChan := make(chan Responses)
 
 	go func() {
-		c.Call(c, respChan)
+		if !c.noOp {
+			c.Call(c, respChan)
+		}
 
 		// Append the command to the history
 		if record {
@@ -125,9 +137,19 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
+	input = strings.TrimSpace(input)
+	if len(input) == 0 {
+		return nil, nil
+	}
+
 	in, err := lexInput(input)
-	if err != nil || len(in.items) == 0 {
+	if err != nil {
 		return nil, err
+	}
+
+	if strings.HasPrefix(input, CommentLeader) {
+		cmd := &Command{Original: input, noOp: true}
+		return cmd, nil
 	}
 
 	_, cmd := closestMatch(in)
@@ -155,7 +177,7 @@ func Suggest(input string) []string {
 func Help(input string) string {
 	helpShort := make(map[string]string)
 
-	inputItems, err := lexInput(input)
+	_, err := lexInput(input)
 	if err != nil {
 		return "Error parsing help input: " + err.Error()
 	}
@@ -203,13 +225,13 @@ func Help(input string) string {
 
 	if len(matches) == 0 {
 		// If there's a closest match, display the long help for it
-		handler, _ := closestMatch(inputItems)
-		if handler != nil {
-			return handler.helpLong()
-		}
+		//handler, _ := closestMatch(inputItems)
+		//if handler != nil {
+		//	return handler.helpLong()
+		//}
 
 		// Found an unresolvable command
-		return fmt.Sprintf("no help entry for %s", input)
+		return fmt.Sprintf("no help entry for `%s`", input)
 	} else if len(matches) == 1 && len(groups[matches[0]]) == 1 {
 		// Very special case, one prefix match and only one handler.
 		return groups[matches[0]][0].helpLong()

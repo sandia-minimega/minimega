@@ -139,7 +139,7 @@ func cliAttach() {
 	}()
 
 	// start our own rlwrap
-	fmt.Println("CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit")
+	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
 	fmt.Println("use 'disconnect' or ^d to exit just the minimega command line")
 	fmt.Println()
 	defer goreadline.Rlcleanup()
@@ -160,8 +160,8 @@ func cliAttach() {
 			return
 		} else if command == "quit" {
 			if !exitNext {
-				fmt.Println("CAUTION: calling 'quit' or 'exit' will cause the minimega daemon to exit")
-				fmt.Println("If you really want to make the minimega daemon exit, enter quit/exit again")
+				fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
+				fmt.Println("If you really want to stop the minimega daemon, enter 'quit' again")
 				exitNext = true
 				continue
 			}

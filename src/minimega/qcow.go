@@ -64,7 +64,7 @@ dst file - The path where src file should be injected in the new qcow2 snapshot.
 If the src file or dst file contains spaces, use double quotes (" ") as in the
 following example:
 
-	vm inject src src.qc2 dst.qc2 "my file":"Program Files/my file"
+	vm inject dst dst.qc2 src src.qc2 "my file":"Program Files/my file"
 
 Alternatively, when given a single argument, this command supplies the name of
 the backing qcow image for a snapshot image.`,

@@ -155,7 +155,7 @@ var vmConfigFns = map[string]struct {
 	},
 	"qemu-append": {
 		Update: func(vm *vmInfo, v string) error {
-			vm.QemuAppend = append(vm.QemuAppend, fieldsQuoteEscape(`"`, v)...)
+			vm.QemuAppend = append(vm.QemuAppend, v)
 			return nil
 		},
 		Clear: func(vm *vmInfo) { vm.QemuAppend = []string{} },
