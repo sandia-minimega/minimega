@@ -3,7 +3,7 @@ $(document).ready(function() {
     var width = $(window).width();
     var table = $('#example').DataTable( {
         "scrollY": height-150,
-        "paging": true
+        "paging": false
     } );
  
     $('a.toggle-vis').on( 'click', function (e) {
