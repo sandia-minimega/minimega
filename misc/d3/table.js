@@ -3,7 +3,16 @@ $(document).ready(function() {
     var width = $(window).width();
     var table = $('#example').DataTable( {
         "scrollY": height-150,
-        "paging": true
+        "paging": true,
+	"stateSave": true,
+	"scrollX": true,
+	"lengthMenu": [[25, 50, 100, -1], [25, 50, 100, "All"]],
+	"language": {
+		"zeroRecords": "No VMs"
+	}
+    } );
+    $('#example tbody').on( 'click', 'tr', function () {
+        $(this).toggleClass('selected');
     } );
  
     $('a.toggle-vis').on( 'click', function (e) {
