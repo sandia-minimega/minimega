@@ -1,0 +1,120 @@
+Minimega Quickstart
+
+John Floren
+17 Mar 2015
+
+* Introduction
+
+This quickstart will show you how to get bare-minimum Linux VMs running in minimega. It assumes that you have already followed the steps in [[/articles/installing.article][the build guide]] to compile minimega; if your copy of the repository has a bin/ directory with programs inside, you should be ready to go!
+
+To properly use minimega, you need sudo access. The minimega tools will warn you at startup if a particular program they expect (e.g. dnsmasq) doesn't seem to be installed.
+
+* Step One: Make a VM image
+
+We're assuming you're starting from a completely blank slate and don't have any particular VM you want to run. We'll build a disk image for a basic Linux system and use that to start with. If you have another hard disk image (QCOW2 format), you can skip ahead.
+
+Because we'll be working with virtual hard disks, we need to enable NBD, which lets us mount a virtual disk as though it were a physical drive:
+
+    sudo modprobe nbd max_part=10
+
+If you don't already have Syslinux installed, install it:
+
+    sudo apt-get install syslinux
+
+The tool to build a VM is called "vmbetter". It should already have been compiled along with minimega, so all we have to do is point it at one of the provided config files and let it know we want a QCOW disk image:
+
+    sudo ./bin/vmbetter -level=debug -qcow ./misc/vmbetter_configs/ccc_host_ovs.conf
+
+This will grind for a while as it fetches a bunch of Debian packages and creates a disk image. We added -level=debug to the flags so we can see more information as it works.
+
+In some cases, vmbetter may fail because syslinux's mbr.bin file isn't where it expects; if this happens, you should locate your mbr.bin file and use the -mbr flag to specify its location. For instance, on Debian Unstable you may need to run this instead:
+
+    sudo ./bin/vmbetter -mbr /usr/lib/syslinux/mbr/mbr.bin -level=debug -qcow ./misc/vmbetter_configs/ccc_host_ovs.conf
+
+Eventually, vmbetter should finish and leave you with a disk image called ccc_host_ovs.qcow2
+
+* Step Two: Set up the VM
+
+You can just launch minimega from the repository root; for our purposes, it doesn't need any arguments:
+
+    sudo ./bin/minimega
+
+You should get a copyright notice followed by a prompt. If it printed any warning messages, you may need to install missing programs.
+
+** Configure the VM itself
+
+The very first thing we can do is check the default configuration:
+
+	minimega$ vm config
+	freyr: Current VM configuration:
+	Memory:        2048
+	VCPUS:         1
+	Disk Paths:    []
+	CDROM Path:    
+	Kernel Path:   
+	Initrd Path:   
+	Kernel Append: 
+	QEMU Path:     /usr/bin/kvm
+	QEMU Append:   []
+	Snapshot:      true
+	Networks:      []
+	UUID:
+
+By default, very little is configured beyond the memory size and number of CPUs. Note the "Snapshot: true" parameter--this indicates that by default, changes will not be written to the virtual disk file, meaning you can launch multiple copies of the same VM. If you wanted to make permanent changes to the disk, you would set "snapshot" to false.
+
+For our simple purposes, we just need to tell it to use the disk we just created:
+
+   minimega$ vm config disk ccc_host_ovs.qcow2
+
+** Configure the network
+
+Minimega can do a lot of complex things with the network. For this quickstart, we'll do the following:
+
+- Put the VM onto virtual network #100
+- Connect the host to that same virtual network
+- Start a DHCP server on the host
+
+First, we'll configure the VM to use virtual network #100:
+
+      minimega$ vm config net 100
+
+Then, we'll create a tap interface on the host, also on virtual network #100, and specify an IP for the host:
+
+      minimega$ tap create 100 ip 10.0.0.1/24
+
+Now, when the VM is launched, it will be able to communicate with the host via the virtual network.
+	 
+** Launch and start the VM
+
+Although we've configured the VM parameters, we have not actually started any virtual machines yet. We'll use the "vm launch" command to start a single VM named "test":
+
+	 minimega$ vm launch test
+
+This creates the VM, but leaves it in an inactive state until we explicitly start it. If we run "vm info", we see a single VM named "test" in the "BUILDING" state:
+
+     minimega$ vm info
+     host  | id | name | state    | memory | vcpus | disk                 | snapshot |
+     freyr | 0  | test | BUILDING | 2048   | 1     | [ccc_host_ovs.qcow2] | true     |
+
+Let's go ahead and let the VM start running:
+
+      minimega$ vm start test
+
+Our "test" VM should now be booting!
+
+** Connect to the VM
+
+Although we've started the VM, it would be nice to be able to interact with it. Minimega provides VNC access to the VM's console, either directly or through the web interface.
+
+*** Web interface
+
+The web interface is the friendliest way to see VMs. Assuming you ran minimega from the root of the minimega repository, you can start the web interface like this:
+
+    minimega$ web
+
+Now point your web browser to [[http://localhost:9001/vnc/]]. It should list your machine name, with (1) in parentheses after it, indicating that one VM is running on your computer. Click the hostname and it will show you the output of "vm info"; if you then click the VM's name ("test"), you'll be dropped into a web-based VNC client connected to the VM.
+
+*** Direct VNC
+
+If you'd rather connect directly using your preferred VNC client, just run "vm info" and look at the "id" field for your desired VM, then add 5900 to that number to get your VNC port. In our case, the "test" VM should be ID #0; 5900+0 = 5900, so we can connect our VNC client to localhost:5900.
+
