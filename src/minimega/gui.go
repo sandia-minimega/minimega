@@ -38,11 +38,11 @@ const (
 				  <li><a href="/gui/map">VM Map</a></li>
 				 <!-- <li><a href="/gui/graph">Graph</a></li>
 				  <li><a href="/gui/terminal/terminal.html">Terminal(concept)</a></li>-->
-				</ul></nav>      
+				</ul></nav>
 				%s
 				</body></html>`
 
-	D3MAP = `    
+	D3MAP = `
 		<div id="container"></div>
 		<script src="/gui/d3/d3.min.js"></script>
 		<script src="/gui/d3/topojson.v1.min.js"></script>
@@ -97,7 +97,7 @@ const (
 		      })
 		      .on("mouseout",  function(d,i) {
 			tooltip.classed("hidden", true);
-		      }); 
+		      });
 		%s
 		}
 		function redraw() {
@@ -109,15 +109,15 @@ const (
 		}
 		function move() {
 		  var t = d3.event.translate;
-		  var s = d3.event.scale; 
+		  var s = d3.event.scale;
 		  zscale = s;
 		  var h = height/4;
 		  t[0] = Math.min(
-		    (width/height)  * (s - 1), 
+		    (width/height)  * (s - 1),
 		    Math.max( width * (1 - s), t[0] )
 		  );
 		  t[1] = Math.min(
-		    h * (s - 1) + h * s, 
+		    h * (s - 1) + h * s,
 		    Math.max(height  * (1 - s) - h * s, t[1])
 		  );
 		  zoom.translate(t);
@@ -403,8 +403,8 @@ func guiVNC(w http.ResponseWriter, r *http.Request) {
     					document.getElementById('vnc').style.height = height + 'px';
 				}
 
-				window.onresize = resizeIframe;  
-				window.onload = resizeIframe;  
+				window.onresize = resizeIframe;
+				window.onload = resizeIframe;
          		   </script>
 			  `
 
