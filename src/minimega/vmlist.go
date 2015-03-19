@@ -162,7 +162,7 @@ func (l *vmList) qmp(idOrName, qmp string) (string, error) {
 	return vm.QMPRaw(qmp)
 }
 
-func (l *vmList) screenshot(idOrName, path string) error {
+func (l *vmList) screenshot(idOrName, path string, max int) error {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return vmNotFound(idOrName)
@@ -176,7 +176,7 @@ func (l *vmList) screenshot(idOrName, path string) error {
 		return err
 	}
 
-	err = ppmToPng(tmp, path)
+	err = ppmToPng(tmp, path, max)
 	if err != nil {
 		return err
 	}

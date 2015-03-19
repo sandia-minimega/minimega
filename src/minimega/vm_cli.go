@@ -223,9 +223,15 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		HelpLong: `
 Take a screenshot of the framebuffer of a running VM. The screenshot is saved
 in PNG format as "screenshot.png" in the VM's runtime directory (by default
-/tmp/minimega/<vm id>/screenshot.png).`,
+/tmp/minimega/<vm id>/screenshot.png).
+
+An optional argument sets the maximum dimensions in pixels, while keeping the
+aspect ratio. For example, to set either maximum dimension of the output image
+to 100 pixels:
+
+	vm screenshot foo 100`,
 		Patterns: []string{
-			"vm screenshot <vm id or name>",
+			"vm screenshot <vm id or name> [maximum dimension]",
 		},
 		Call: wrapSimpleCLI(cliVmScreenshot),
 	},
@@ -903,6 +909,17 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vm := c.StringArgs["vm"]
+	maximum := c.StringArgs["maximum"]
+
+	var max int
+	var err error
+	if maximum != "" {
+		max, err = strconv.Atoi(maximum)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	}
 
 	v := vms.findVm(vm)
 	if v == nil {
@@ -912,7 +929,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 
 	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.Id), "screenshot.png")
 
-	err := vms.screenshot(vm, path)
+	err = vms.screenshot(vm, path, max)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
