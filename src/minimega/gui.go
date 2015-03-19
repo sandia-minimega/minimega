@@ -168,6 +168,16 @@ looks in /opt/minimega/misc/novnc. To set a different path, invoke:
 
 	gui novnc <path to novnc>
 
+It also requires D3 and expects it in /opt/minimega/misc/d3. To set a different
+path, run:
+
+        gui d3 <path to d3>
+
+Once you have set the paths, or if the defaults are acceptable, run "gui" to
+start the web server:
+
+        gui
+
 To start the webserver on a specific port, issue the web command with the port:
 
 	gui 9526
