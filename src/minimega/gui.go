@@ -11,7 +11,6 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -163,7 +162,9 @@ var guiCLIHandlers = []minicli.Handler{
 Launch the GUI webserver
 
 This command requires access to an installation of novnc. By default minimega
-looks in /opt/minimega/misc/novnc. 
+looks in /opt/minimega/misc/novnc. To set a different path, invoke:
+
+	gui novnc <path to novnc>
 
 To start the webserver on a specific port, issue the web command with the port:
 
@@ -195,36 +196,45 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 
 		port = fmt.Sprintf(":%v", p)
 	}
+	noVNC := defaultVNC
+	d3 := defaultD3
+	if c.StringArgs["path"] != "" {
+		noVNC = c.StringArgs["path"]
+	}
 
 	if guiRunning {
 		resp.Error = "GUI is already running"
 	} else {
-		go guiStart(port)
+		go guiStart(port, noVNC, d3)
 	}
 
 	return resp
 }
 
-func guiStart(port string) {
+func guiStart(port, noVNC string, d3 string) {
+
 	//Look at me! I self-discovered myself!
-	miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
-	fmt.Println(miniLocation)
-	vncLocation := defaultVNC
-	d3Location := defaultD3
-	if oserr == nil {
-		vncLocation = miniLocation + "/misc/novnc"
-		x := strings.Split(vncLocation, "/bin/minimega")
-		d3Location = miniLocation + "/misc/d3"
-		y := strings.Split(d3Location, "/bin/minimega")
-		vncLocation = x[0] + x[1]
-		d3Location = y[0] + y[1]
-		fmt.Println(d3Location)
-		fmt.Println(vncLocation)
-	}
+	//miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
+	//fmt.Println(miniLocation)
+	//vncLocation := defaultVNC
+	//d3Location := defaultD3
+	//if strings.Split(miniLocation, "/")[1] == "tmp" {
+	//	fmt.Println("you found tmp")
+	//}
+	//if oserr == nil {
+	//	vncLocation = miniLocation + "/misc/novnc"
+	//	x := strings.Split(vncLocation, "/bin/minimega")
+	//	d3Location = miniLocation + "/misc/d3"
+	//	y := strings.Split(d3Location, "/bin/minimega")
+	//	vncLocation = x[0] + x[1]
+	//	d3Location = y[0] + y[1]
+	//	fmt.Println(d3Location)
+	//	fmt.Println(vncLocation)
+	//}
 
 	guiRunning = true
-	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(vncLocation))))
-	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3Location))))
+	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
+	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
 
 	http.HandleFunc("/gui/ws/", vncWsHandler)
 	http.HandleFunc("/gui/map", guiMapVMs)
@@ -691,7 +701,8 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	var respAll chan minicli.Responses
 	columnnames := []string{}
 	mask := "id,name,state,memory,vcpus,migrate,disk,snapshot,initrd,kernel,cdrom,append,bridge,tap,mac,ip,ip6,vlan,uuid,cc_active,tags"
-	format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
+	//format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
+	format := `<tr><td><a href="/gui/vnc/%v/%v">"/gui/screenshot/%v_%v.png"</a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
 	if err != nil {
 		// Should never happen
@@ -723,8 +734,9 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 		info = append(info, header)
 	}
 
-	r := g[0].Tabular
-	for _, r := range r {
+	bob := g[0].Tabular
+	fmt.Println(len(bob))
+	for _, r := range bob {
 		if r[2] != "ERROR" && r[2] != "QUIT" {
 			id, err := strconv.Atoi(r[0])
 			if err != nil {
@@ -747,6 +759,7 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 	//get mesh response
+	fmt.Println(len(respAll))
 	for sa := range respAll {
 		if len(sa) != 0 {
 			for _, node := range sa {
@@ -757,7 +770,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 							log.Errorln(err)
 							return
 						}
-
 						tl := fmt.Sprintf(format, node.Host, 5900+id, node.Host, id, s[1], id, node.Host, node.Host, 5900+id, s[1])
 						for _, entry := range s[2:] {
 							tl += `<td>` + entry + `</td>`
