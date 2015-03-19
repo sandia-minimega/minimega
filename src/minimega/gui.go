@@ -684,6 +684,7 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	var respAll chan minicli.Responses
 	columnnames := []string{}
 	mask := "id,name,state,memory,vcpus,migrate,disk,snapshot,initrd,kernel,cdrom,append,bridge,tap,mac,ip,ip6,vlan,uuid,cc_active,tags"
+	format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
 	if err != nil {
 		// Should never happen
@@ -730,7 +731,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 			H := <-HostChan
 			Host := H[0].Response
 
-			format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 			tl := fmt.Sprintf(format, Host, 5900+id, Host, id, r[1], id, Host, Host, 5900+id, r[1])
 			for _, entry := range r[2:] {
 				tl += `<td>` + entry + `</td>`
@@ -751,7 +751,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 							return
 						}
 
-						format := `<tr><td><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 						tl := fmt.Sprintf(format, node.Host, 5900+id, node.Host, id, s[1], id, node.Host, node.Host, 5900+id, s[1])
 						for _, entry := range s[2:] {
 							tl += `<td>` + entry + `</td>`
