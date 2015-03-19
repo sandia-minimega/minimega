@@ -260,6 +260,24 @@ func (q *Conn) BlockdevSnapshot(path, device string) error {
 	return nil
 }
 
+func (q *Conn) Screendump(path string) error {
+	s := map[string]interface{}{
+		"execute": "screendump",
+		"arguments": map[string]interface{}{
+			"filename": fmt.Sprintf("%v", path),
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
+	v := <-q.messageSync
+	if !success(v) {
+		return errors.New("screendump")
+	}
+	return nil
+}
+
 func (q *Conn) MigrateDisk(path string) error {
 	s := map[string]interface{}{
 		"execute": "migrate",
