@@ -153,6 +153,8 @@ const (
 
 var (
 	guiRunning bool
+	noVNCPath  string
+	d3Path     string
 )
 
 var guiCLIHandlers = []minicli.Handler{
@@ -173,7 +175,7 @@ To start the webserver on a specific port, issue the web command with the port:
 9526 is the default port.`,
 		Patterns: []string{
 			"gui [port]",
-			"gui novnc <path to novnc>",
+			"gui <novnc,d3> <path>",
 		},
 		Call: wrapSimpleCLI(cliGUI),
 	},
@@ -181,6 +183,8 @@ To start the webserver on a specific port, issue the web command with the port:
 
 func init() {
 	registerHandlers("gui", guiCLIHandlers)
+	noVNCPath = defaultVNC
+	d3Path = defaultD3
 }
 
 func cliGUI(c *minicli.Command) *minicli.Response {
@@ -197,16 +201,20 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 
 		port = fmt.Sprintf(":%v", p)
 	}
-	noVNC := defaultVNC
-	d3 := defaultD3
+
 	if c.StringArgs["path"] != "" {
-		noVNC = c.StringArgs["path"]
+		if c.BoolArgs["novnc"] {
+			noVNCPath = c.StringArgs["path"]
+		} else if c.BoolArgs["d3"] {
+			d3Path = c.StringArgs["path"]
+		}
+		return resp
 	}
 
 	if guiRunning {
 		resp.Error = "GUI is already running"
 	} else {
-		go guiStart(port, noVNC, d3)
+		go guiStart(port, noVNCPath, d3Path)
 	}
 
 	return resp
