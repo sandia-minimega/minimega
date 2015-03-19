@@ -422,7 +422,7 @@ func guiHome(w http.ResponseWriter, r *http.Request) {
 func guiState(w http.ResponseWriter, r *http.Request) {
 
 	mask := `id,name,tags`
-	list := getVMinfo(mask)
+	list := globalVmInfo(mask)
 	vdata := ``
 	for _, row := range list {
 		if len(row) != 3 {
@@ -465,7 +465,7 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 
 func guiMapVMs(w http.ResponseWriter, r *http.Request) {
 	mask := `id,name,tags`
-	list := getVMinfo(mask)
+	list := globalVmInfo(mask)
 	dataformat := `   addpoint(%s,%s,"%s")` + "\n"
 	mapdata := ``
 	for _, row := range list {
@@ -501,32 +501,23 @@ func guiMapVMs(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(fmt.Sprintf(HTMLFRAME, d3head, d3body)))
 }
 
-func getVMinfo(mask string) [][]string {
+func globalVmInfo(mask string) [][]string {
 	var tabular [][]string
 
-	cmdHost, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s vm info`, mask))
+	cmd, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s vm info`, mask))
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
-	respChan := runCommand(cmdHost, false)
 
-	for r := range respChan {
-		tabular = append(tabular, r[0].Tabular...)
-	}
-
-	cmdHostAll, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s mesh send all vm info`, mask))
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-	respChan = runCommand(cmdHostAll, false)
-
-	for r := range respChan {
-		for _, resp := range r {
-			if len(r) != 0 {
-				tabular = append(tabular, resp.Tabular...)
+	for resps := range runCommandGlobally(cmd, false) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
 			}
+
+			tabular = append(tabular, resp.Tabular...)
 		}
 	}
 
