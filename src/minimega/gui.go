@@ -232,11 +232,69 @@ func guiStart(port, noVNC string, d3 string, term string) {
 	http.HandleFunc("/gui/all", guiAllVMs)
 	http.HandleFunc("/gui/", guiRoot)
 	http.HandleFunc("/gui/command/", guiCmd)
+	http.HandleFunc("/gui/screenshot/", guiScreenshot)
 
 	err := http.ListenAndServe(port, nil)
 	if err != nil {
 		log.Error("guiStart: %v", err)
 		guiRunning = false
+	}
+}
+
+func guiScreenshot(w http.ResponseWriter, r *http.Request) {
+	url := strings.TrimSpace(r.URL.String())
+	urlFields := strings.Split(url, "/")
+
+	if len(urlFields) != 4 {
+		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png"))
+		return
+	}
+
+	fields := strings.Split(urlFields[3], "_")
+	if len(fields) != 2 {
+		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png"))
+		return
+	}
+
+	host := fields[0]
+	vmId := strings.TrimSuffix(fields[1], ".png")
+
+	var respChan chan minicli.Responses
+
+	cmdLocal, err := minicli.CompileCommand(fmt.Sprintf("vm screenshot %v", vmId))
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm screenshot %v", host, vmId))
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+
+	if host == hostname {
+		respChan = runCommand(cmdLocal, false)
+	} else {
+		respChan = runCommand(cmdRemote, false)
+	}
+
+	for resps := range respChan {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				w.Write([]byte(resp.Error))
+				continue
+			}
+
+			if resp.Data == nil {
+				w.Write([]byte("no png data!"))
+				continue
+			}
+
+			d := resp.Data.([]byte)
+			w.Write(d)
+		}
 	}
 }
 
