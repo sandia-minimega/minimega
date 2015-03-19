@@ -173,6 +173,7 @@ To start the webserver on a specific port, issue the web command with the port:
 9526 is the default port.`,
 		Patterns: []string{
 			"gui [port]",
+			"gui novnc <path to novnc>",
 		},
 		Call: wrapSimpleCLI(cliGUI),
 	},
