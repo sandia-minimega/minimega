@@ -6,8 +6,10 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 )
@@ -158,6 +160,33 @@ func (l *vmList) qmp(idOrName, qmp string) (string, error) {
 	}
 
 	return vm.QMPRaw(qmp)
+}
+
+func (l *vmList) screenshot(idOrName, path string) error {
+	vm := vms.findVm(idOrName)
+	if vm == nil {
+		return vmNotFound(idOrName)
+	}
+
+	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
+	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
+
+	err := vm.q.Screendump(tmp)
+	if err != nil {
+		return err
+	}
+
+	err = ppmToPng(tmp, path)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(tmp)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (l *vmList) migrate(idOrName, filename string) error {

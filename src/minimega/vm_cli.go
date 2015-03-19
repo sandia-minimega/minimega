@@ -216,6 +216,17 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		},
 		Call: wrapSimpleCLI(cliVmQmp),
 	},
+	{ // vm screenshot
+		HelpShort: "take a screenshot of a running vm",
+		HelpLong: `
+Take a screenshot of the framebuffer of a running VM. The screenshot is saved
+in PNG format as "screenshot.png" in the VM's runtime directory (by default
+/tmp/minimega/<vm id>/screenshot.png).`,
+		Patterns: []string{
+			"vm screenshot <vm id or name>",
+		},
+		Call: wrapSimpleCLI(cliVmScreenshot),
+	},
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
 		HelpLong: `
@@ -881,6 +892,28 @@ func cliVmQmp(c *minicli.Command) *minicli.Response {
 	resp.Response, err = vms.qmp(c.StringArgs["vm"], c.StringArgs["qmp"])
 	if err != nil {
 		resp.Error = err.Error()
+	}
+
+	return resp
+}
+
+func cliVmScreenshot(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	vm := c.StringArgs["vm"]
+
+	v := vms.findVm(vm)
+	if v == nil {
+		resp.Error = vmNotFound(vm).Error()
+		return resp
+	}
+
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.Id), "screenshot.png")
+
+	err := vms.screenshot(vm, path)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
 	}
 
 	return resp
