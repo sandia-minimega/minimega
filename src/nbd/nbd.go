@@ -25,6 +25,20 @@ const (
 	maxConnectRetries = 3
 )
 
+func Modprobe() error {
+	// Load the kernel module
+	// This will probably fail unless you are root
+	p := process("modprobe")
+	cmd := exec.Command(p, "nbd", "max_part=10")
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+
+	// It's possible nbd was already loaded but max_part wasn't set
+	return Ready()
+}
+
 // Ready checks to see if the NBD kernel module has been loaded. If it does not
 // find the module, it returns an error. NBD functions should only be used
 // after this function returns no error.
