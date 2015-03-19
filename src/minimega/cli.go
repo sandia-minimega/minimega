@@ -69,13 +69,60 @@ var (
 	cmdLock sync.Mutex
 )
 
-// Wrapper for minicli.ProcessString. Ensures that the command execution lock
+// Wrapper for minicli.ProcessCommand. Ensures that the command execution lock
 // is acquired before running the command.
 func runCommand(cmd *minicli.Command, record bool) chan minicli.Responses {
 	cmdLock.Lock()
 	defer cmdLock.Unlock()
 
 	return minicli.ProcessCommand(cmd, record)
+}
+
+// Wrapper for minicli.ProcessCommand for commands that use meshage.
+// Specifically, for `mesh send all ...`, runs the subcommand locally and
+// across meshage, combining the results from the two channels into a single
+// channel. This is useful if you want to get the output of a command from all
+// nodes in the cluster without having to run a command locally and over
+// meshage.
+func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Responses {
+	cmdStr := fmt.Sprintf("mesh send %s %s", Wildcard, cmd.Original)
+	cmd, err := minicli.CompileCommand(cmdStr)
+	if err == nil {
+		log.Fatal("cannot run `%v` globally -- %v", cmd.Original, err)
+	}
+
+	cmdLock.Lock()
+	defer cmdLock.Unlock()
+
+	var wg sync.WaitGroup
+
+	out := make(chan minicli.Responses)
+
+	// Run the command (should be `mesh send all ...` and the subcommand which
+	// should run locally).
+	ins := []chan minicli.Responses{
+		minicli.ProcessCommand(cmd, record),
+		minicli.ProcessCommand(cmd.Subcommand, record),
+	}
+
+	// De-mux ins into out
+	for _, in := range ins {
+		wg.Add(1)
+		go func(in chan minicli.Responses) {
+			defer wg.Done()
+			for v := range in {
+				out <- v
+			}
+		}(in)
+	}
+
+	// Wait until everything has been read before closing out
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+
+	return out
 }
 
 // local command line interface, wrapping readline
