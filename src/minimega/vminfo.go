@@ -12,6 +12,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"qmp"
 	"strconv"
 	"strings"
@@ -35,13 +36,14 @@ type vmInfo struct {
 	Snapshot   bool
 	UUID       string
 
-	DiskPaths  []string
-	QemuAppend []string // extra arguments for QEMU
-	Networks   []int    // ordered list of networks (matches 1-1 with Taps)
-	bridges    []string // list of bridges, if specified. Unspecified bridges will contain ""
-	taps       []string // list of taps associated with this vm
-	macs       []string // ordered list of macs (matches 1-1 with Taps, Networks)
-	netDrivers []string // optional non-e1000 driver
+	MigratePath string
+	DiskPaths   []string
+	QemuAppend  []string // extra arguments for QEMU
+	Networks    []int    // ordered list of networks (matches 1-1 with Taps)
+	bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
+	taps        []string // list of taps associated with this vm
+	macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	netDrivers  []string // optional non-e1000 driver
 
 	State        VmState // one of the VM_ states listed above
 	instancePath string
@@ -100,6 +102,7 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.Name = info.Name
 	newInfo.Memory = info.Memory
 	newInfo.Vcpus = info.Vcpus
+	newInfo.MigratePath = info.MigratePath
 	newInfo.DiskPaths = make([]string, len(info.DiskPaths))
 	copy(newInfo.DiskPaths, info.DiskPaths)
 	newInfo.CdromPath = info.CdromPath
@@ -136,6 +139,7 @@ func (vm *vmInfo) configToString() string {
 	fmt.Fprintln(&o, "Current VM configuration:")
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
 	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
@@ -152,6 +156,59 @@ func (vm *vmInfo) configToString() string {
 
 func (vm *vmInfo) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
+}
+
+func (vm *vmInfo) Migrate(filename string) error {
+	path := filepath.Join(*f_iomBase, filename)
+	return vm.q.MigrateDisk(path)
+}
+
+func (vm *vmInfo) QueryMigrate() (string, float64, error) {
+	var status string
+	var completed float64
+
+	r, err := vm.q.QueryMigrate()
+	if err != nil {
+		return "", 0.0, err
+	}
+
+	// find the status
+	if s, ok := r["status"]; ok {
+		status = s.(string)
+	} else {
+		return status, completed, fmt.Errorf("could not decode status: %v", r)
+	}
+
+	var ram map[string]interface{}
+	switch status {
+	case "completed":
+		completed = 100.0
+		return status, completed, nil
+	case "failed":
+		return status, completed, nil
+	case "active":
+		if e, ok := r["ram"]; !ok {
+			return status, completed, fmt.Errorf("could not decode ram segment: %v", e)
+		} else {
+			switch e.(type) {
+			case map[string]interface{}:
+				ram = e.(map[string]interface{})
+			default:
+				return status, completed, fmt.Errorf("invalid ram type: %v", e)
+			}
+		}
+	}
+
+	total := ram["total"].(float64)
+	transferred := ram["transferred"].(float64)
+
+	if total == 0.0 {
+		return status, completed, fmt.Errorf("zero total ram!")
+	}
+
+	completed = transferred / total
+
+	return status, completed, nil
 }
 
 func (vm *vmInfo) networkString() string {
@@ -505,6 +562,11 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "none")
 
 	args = append(args, "-S")
+
+	if vm.MigratePath != "" {
+		args = append(args, "-incoming")
+		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
+	}
 
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {

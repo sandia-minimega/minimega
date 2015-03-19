@@ -1,0 +1,112 @@
+protonuke
+simple traffic generation
+
+David Fritz
+11 Mar 2015
+
+* Introduction
+
+protonuke is a simple, standalone, configuration-less traffic generator for IP networks. 
+
+protonuke runs on Windows, Linux, MacOS operating systems, and x86-64 and ARM architectures. It supports HTTP, HTTPS, SSH, and SMTP protocols. For TLS enabled protocols (HTTPS and optionally SMTP), certificates are self-signed and generated at startup. 
+
+protonuke also has servers for each of the protocols provided, and so can act as either server or client. protonuke servers do not require protonuke clients, and protonuke clients do not require protonuke servers. Each server/client has either a built-in corpus of data (for example, the SMTP client has a multi-lingual corpus of email), or generates content at runtime (the HTTP/S servers generate content, including images, at each pageload.) Most services can serve user content instead of the built-in services.
+
+All server/client modes are set with command line switches, and require no configuration.
+
+* Client modes
+
+To use protonuke as a client, you must, at minimum, enable one or more services and provide at least one server to connect to. For example, to set protonuke to issue HTTP and HTTPS requests to google.com:
+
+	protonuke -http -https google.com
+
+Using default arguments otherwise, protonuke will connect over HTTP and HTTPS to google.com, issue transactions at a random rate, and periodically report on transaction statistics.
+
+** Specifying hosts
+
+For any of the client services, the final argument of the protonuke command line is the hosts protonuke should connect to. You can specify host names, IP addresses, or CIDR-notation subnets. You can stack any of these by listing hosts, seperated by commas. For example:
+
+	protonuke -http google.com,10.0.0.0/24,facebook.com
+
+At runtime, protonuke will pick a random host within the list of provided hosts to issue a transaction on.
+
+** Client protocols
+
+Client protocols can be stacked to enable multiple protocols on a single protonuke instance. For example, to use SSH and SMTP:
+
+	protonuke -ssh -smtp google.com
+
+*** HTTP and HTTPS
+
+The HTTP and HTTPS protocols are enabled with the `-http` and `-https` flags. At runtime, protonuke will pick a host at random from the supplied list of hosts to connect to by issuing a simple HTTP GET. Returned HTML is parsed for CSS, javascript, and images, and those are downloaded from the server within that transaction. URLS from the returned HTML is added to the possible list of transactions to issue next, along with the list of provided hosts. 
+
+*** SSH
+
+The SSH protocol will create a persistent connection to a host provided in the host list, picked at random just as the HTTP and HTTPS protocols. Enable the SSH protocol with `-ssh`. Active connections will periodically issue small chunks of data, similar to a user typing on a command line. Occasionally, connections are also dropped.
+
+*** SMTP
+
+The SMTP protocol attempts to send pre-specified email from either the built-in corpus, or from a user provided JSON file containing email. By default, the SMTP protocol will attempt to use TLS on new connections, and fall back to plaintext if the server does not support TLS. To disable TLS, use `-smtptls=false`. 
+
+By default, the username is randomized for each sent email. To override this with the built-in corpus, use `-smtpuser=<username>` to set a single username. 
+
+The user can provide a JSON formatted corpus of email to use instead of the built-in corpus. Specify user-provided email with `-smtpmail=<file>`. For example:
+
+	[
+		{
+			"To":"foo@mail.com",
+			"From":"bar@mail.com",
+			"Msg":"benign message"
+		},
+		{
+			"To":"victim@mail.com",
+			"From":"evil@minimega.org",
+			"Msg":"CONFIDENTIAL"
+		}
+	]
+
+** Additional client configuration options
+
+There are a number of additional client configuration options that impact all enabled protocols:
+
+- `-ipv4` Enable/disable IPv4 support. Enabled by default.
+- `-ipv6` Enable/disable IPv6 support. Enabled by default.
+- `-min`, `-max`, `-s`, `-u` Normal distribution parameters (minimum/maximum time, standard deviation, and mean) for timing between events.
+- `-report` Time between reporting event statistics.
+
+* Server modes
+
+Server modes are enabled in a way similar to the client modes (`-http`, `-https`, etc.), and is enabled by specifying the `-serve` flag. Enabling `-serve` will enable the server for all specified protocols. By default, the server modes use built-in content generators for each protocol.
+
+** HTTP and HTTPS
+
+The HTTP and HTTPS servers generate content for each incoming transaction from an internal content generator. Generated content includes generated URLs and images, as shown below.
+
+.image protonuke.png
+
+User provided content can be served instead of the built-in webserver by specifying a directory with the `-httproot` flag.
+
+** SSH and SMTP
+
+Both SSH and SMTP servers simply receive traffic from clients, and do not serve any specific content. SMTP servers will not relay mail.
+
+* Examples
+
+Serve all protocols with default arguments and debug logging:
+
+	protonuke -http -https -ssh -smtp -serve -level debug
+
+Serve HTTP and HTTPS with custom content - a large file in a simple index.html:
+
+	mkdir www
+	dd if=/dev/random of=www/bigfile.png count=1024 bs=1M
+	echo "<img src=bigfile.png>" > www/index.html
+	protonuke -httproot www -http -https -serve
+
+Start a client on all protocols, connecting to google.com:
+
+	protonuke -http -https -smtp -ssh google.com
+
+Start a client on HTTP, connecting to hosts in a subnet, as well as google.com, and go as fast as possible by setting parameters on the normal distribution:
+
+	protonuke -u 0 -http 10.0.0.0/24,google.com

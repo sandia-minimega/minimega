@@ -7,9 +7,13 @@ package main
 import (
 	"crypto/rand"
 	"fmt"
+	_ "gopnm"
+	"image"
+	"image/png"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -246,4 +250,30 @@ func makeIDChan() chan int {
 	}()
 
 	return idChan
+}
+
+// convert a src ppm image to a dst png image
+func ppmToPng(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+
+	img, _, err := image.Decode(in)
+	in.Close()
+	if err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	err = png.Encode(out, img)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
