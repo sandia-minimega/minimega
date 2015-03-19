@@ -330,24 +330,32 @@ func guiCmd(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		runCommand(mmstartcmd, true)
+		localstartrespchan := runCommand(mmstartcmd, true)
+		for range localstartrespchan {
+		}
 		mmstartLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm start all`))
 		if err != nil {
 			log.Fatalln(err)
 		}
-		runCommand(mmstartLcmd, true)
+		allstartrespchan := runCommand(mmstartLcmd, true)
+		for range allstartrespchan {
+		}
 	}
 	if cmd == "flush" {
 		mmflushcmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm flush`))
 		if err != nil {
 			log.Fatalln(err)
 		}
-		runCommand(mmflushcmd, true)
+		localflushrespchan := runCommand(mmflushcmd, true)
+		for range localflushrespchan {
+		}
 		mmflushLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm flush`))
 		if err != nil {
 			log.Fatalln(err)
 		}
-		runCommand(mmflushLcmd, true)
+		allflushrespchan := runCommand(mmflushLcmd, true)
+		for range allflushrespchan {
+		}
 	}
 }
 
@@ -405,7 +413,8 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 		name := row[1]
 
 		var tracert string
-		var ping string
+		var snmp string
+		var dns string
 		var app string
 		f := strings.Fields(row[2])
 		for _, v := range f {
@@ -416,18 +425,20 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 			}
 			if strings.Contains(v2[0], "traceroute") {
 				tracert = v2[1]
-			} else if strings.Contains(v2[0], "ping") {
-				ping = v2[1]
+			} else if strings.Contains(v2[0], "SNMP") {
+				snmp = v2[1]
+			} else if strings.Contains(v2[0], "DNS") {
+				dns = v2[1]
 			} else if strings.Contains(v2[0], "app") {
 				app = v2[1]
 			}
 		}
-		if tracert == "" || ping == "" || app == "" {
+		if tracert == "" || snmp == "" || app == "" || dns == "" {
 			continue
 		}
-		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, tracert, ping, app)
+		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, tracert, snmp, dns, app)
 	}
-	header := `<thead><tr><th>name</th><th>id</th><th>traceroute</th><th>ping</th><th>app</th></thead>`
+	header := `<thead><tr><th>name</th><th>id</th><th>traceroute</th><th>SNMP</th><th>DNS</th><th>app</th></thead>`
 	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
 	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s <tbody> %s </tbody></table>`, header, vdata)
 	w.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
@@ -589,15 +600,9 @@ func guiErrorVMs(writer http.ResponseWriter, request *http.Request) {
 				log.Errorln(err)
 				return
 			}
-			//This is an ABSURD way to get the local host name:
-			var HostChan chan minicli.Responses
-			bob, _ := minicli.CompileCommand(fmt.Sprintf("host name"))
-			HostChan = runCommand(bob, false)
-			H := <-HostChan
-			Host := H[0].Response
 
 			format := `<tr><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
-			tl := fmt.Sprintf(format, id, Host, Host, 5900+id, r[1])
+			tl := fmt.Sprintf(format, id, hostname, hostname, 5900+id, r[1])
 			for _, entry := range r[2:] {
 				tl += `<td>` + entry + `</td>`
 			}
@@ -662,14 +667,7 @@ func guiTiler(writer http.ResponseWriter, request *http.Request) {
 				log.Errorln(err)
 				return
 			}
-			//This is an ABSURD way to get the local host name:
-			var HostChan chan minicli.Responses
-			bob, _ := minicli.CompileCommand(fmt.Sprintf("host name"))
-			HostChan = runCommand(bob, false)
-			H := <-HostChan
-			Host := H[0].Response
-
-			tl := fmt.Sprintf(format, Host, 5900+id, Host, id, r[1])
+			tl := fmt.Sprintf(format, hostname, 5900+id, hostname, id, r[1])
 			info = append(info, tl)
 		}
 	}
@@ -734,7 +732,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	bob := g[0].Tabular
-	fmt.Println(len(bob))
 	for _, r := range bob {
 		if r[2] != "ERROR" && r[2] != "QUIT" {
 			id, err := strconv.Atoi(r[0])
@@ -742,14 +739,8 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 				log.Errorln(err)
 				return
 			}
-			//This is an ABSURD way to get the local host name:
-			var HostChan chan minicli.Responses
-			bob, _ := minicli.CompileCommand(fmt.Sprintf("host name"))
-			HostChan = runCommand(bob, false)
-			H := <-HostChan
-			Host := H[0].Response
 
-			tl := fmt.Sprintf(format, Host, 5900+id, Host, id, r[1], id, Host, Host, 5900+id, r[1])
+			tl := fmt.Sprintf(format, hostname, 5900+id, hostname, id, r[1], id, hostname, hostname, 5900+id, r[1])
 			for _, entry := range r[2:] {
 				tl += `<td>` + entry + `</td>`
 			}
@@ -758,7 +749,6 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 	//get mesh response
-	fmt.Println(len(respAll))
 	for sa := range respAll {
 		if len(sa) != 0 {
 			for _, node := range sa {
