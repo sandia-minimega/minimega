@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"resize"
 	"strconv"
 	"strings"
 	"time"
@@ -252,8 +253,9 @@ func makeIDChan() chan int {
 	return idChan
 }
 
-// convert a src ppm image to a dst png image
-func ppmToPng(src, dst string) error {
+// convert a src ppm image to a dst png image, resizing to a largest dimension
+// max if max != 0
+func ppmToPng(src, dst string, max int) error {
 	in, err := os.Open(src)
 	if err != nil {
 		return err
@@ -263,6 +265,11 @@ func ppmToPng(src, dst string) error {
 	in.Close()
 	if err != nil {
 		return err
+	}
+
+	// resize the image if necessary
+	if max != 0 {
+		img = resize.Thumbnail(uint(max), uint(max), img, resize.NearestNeighbor)
 	}
 
 	out, err := os.Create(dst)

@@ -261,28 +261,35 @@ func guiScreenshot(w http.ResponseWriter, r *http.Request) {
 	urlFields := strings.Split(url, "/")
 
 	if len(urlFields) != 4 {
-		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png"))
+		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png<br>usage: screenshot<hostname>_<vm id>_<max size>.png"))
 		return
 	}
 
 	fields := strings.Split(urlFields[3], "_")
-	if len(fields) != 2 {
-		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png"))
+	if len(fields) != 2 && len(fields) != 3 {
+		w.Write([]byte("usage: screenshot/<hostname>_<vm id>.png<br>usage: screenshot<hostname>_<vm id>_<max size>.png"))
 		return
 	}
 
 	host := fields[0]
-	vmId := strings.TrimSuffix(fields[1], ".png")
+	var vmId string
+	var max string
+	if len(fields) == 2 {
+		vmId = strings.TrimSuffix(fields[1], ".png")
+	} else {
+		vmId = fields[1]
+		max = strings.TrimSuffix(fields[2], ".png")
+	}
 
 	var respChan chan minicli.Responses
 
-	cmdLocal, err := minicli.CompileCommand(fmt.Sprintf("vm screenshot %v", vmId))
+	cmdLocal, err := minicli.CompileCommand(fmt.Sprintf("vm screenshot %v %v", vmId, max))
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
 
-	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm screenshot %v", host, vmId))
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm screenshot %v %v", host, vmId, max))
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
