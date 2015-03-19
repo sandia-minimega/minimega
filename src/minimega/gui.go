@@ -208,11 +208,18 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 func guiStart(port string) {
 	//Look at me! I self-discovered myself!
 	miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
+	fmt.Println(miniLocation)
 	vncLocation := defaultVNC
 	d3Location := defaultD3
 	if oserr == nil {
 		vncLocation = miniLocation + "/misc/novnc"
+		x := strings.Split(vncLocation, "/bin/minimega")
 		d3Location = miniLocation + "/misc/d3"
+		y := strings.Split(d3Location, "/bin/minimega")
+		vncLocation = x[0] + x[1]
+		d3Location = y[0] + y[1]
+		fmt.Println(d3Location)
+		fmt.Println(vncLocation)
 	}
 
 	guiRunning = true
@@ -403,7 +410,7 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 		}
 		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, tracert, ping, app)
 	}
-	header := `<thead><tr><th>name</th><th>id</th><th>trt</th><th>ping</th></thead>`
+	header := `<thead><tr><th>name</th><th>id</th><th>traceroute</th><th>ping</th><th>app</th></thead>`
 	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
 	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s <tbody> %s </tbody></table>`, header, vdata)
 	w.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
