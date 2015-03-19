@@ -644,7 +644,7 @@ func guiTiler(writer http.ResponseWriter, request *http.Request) {
 	resp = runCommand(cmdLocal, false)
 	respAll = runCommand(cmdRemote, false)
 
-	format := `<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;"><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="250" /></a></div>`
+	format := `<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;"><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v_250.png" alt="%v" /></a></div>`
 	info := []string{}
 	g := <-resp
 	r := g[0].Tabular
@@ -694,7 +694,7 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	var respAll chan minicli.Responses
 	columnnames := []string{}
 	mask := "id,name,state,memory,vcpus,migrate,disk,snapshot,initrd,kernel,cdrom,append,bridge,tap,mac,ip,ip6,vlan,uuid,cc_active,tags"
-	//format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
+	//format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v_140.png" alt="%v" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 	format := `<tr><td><a href="/gui/vnc/%v/%v">"/gui/screenshot/%v_%v.png"</a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
 	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
 	if err != nil {
