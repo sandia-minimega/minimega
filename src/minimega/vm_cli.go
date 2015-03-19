@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"math"
 	"minicli"
 	log "minilog"
@@ -915,6 +917,17 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
+
+	// add user data in case this is going across meshage
+	f, err := os.Open(path)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
+	}
+
+	var buf bytes.Buffer
+	io.Copy(&buf, f)
+	resp.Data = buf.Bytes()
 
 	return resp
 }
