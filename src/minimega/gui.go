@@ -6,24 +6,21 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"html"
 	"minicli"
 	log "minilog"
 	"net/http"
-	"sort"
+	"os"
 	"strconv"
 	"strings"
 )
 
 const (
-	GUI_PORT = 9526
-	//#WEB : Will need this line  when web.go is phased out
-	newdefaultNoVNC string = "/opt/minimega/misc/novnc"
-	newdefaultD3    string = "/opt/minimega/misc/d3"
-	newdefaultTerm  string = "/opt/minimega/misc/terminal"
-	HTMLFRAME              = `<!DOCTYPE html>
+	GUI_PORT          = 9526
+	defaultVNC string = "/opt/minimega/misc/novnc"
+	defaultD3  string = "/opt/minimega/misc/d3"
+	HTMLFRAME         = `<!DOCTYPE html>
 				<head><title>Minimega GUI</title>
 				<link rel="stylesheet" type="text/css" href="/gui/d3/nav.css">
 				<link rel="stylesheet" type="text/css" href="/gui/d3/jquery.dataTables.css">
@@ -35,6 +32,7 @@ const (
 				<nav><ul>
 				  <!--<li><a href="/gui/vnc">Host List</a></li>-->
 				  <li><a href="/gui/all">All VMs</a></li>
+				  <li><a href="/gui/tile">VM Tile</a></li>
 				  <li><a href="/gui/stats">Host Stats</a></li>
 				  <li><a href="/gui/errors">VM Errors</a></li>
 				  <li><a href="/gui/state">State of Health</a></li>
@@ -165,9 +163,7 @@ var guiCLIHandlers = []minicli.Handler{
 Launch the GUI webserver
 
 This command requires access to an installation of novnc. By default minimega
-looks in /opt/minimega/misc/novnc. To set a different path, invoke:
-
-	gui novnc <path to novnc>
+looks in /opt/minimega/misc/novnc. 
 
 To start the webserver on a specific port, issue the web command with the port:
 
@@ -176,7 +172,6 @@ To start the webserver on a specific port, issue the web command with the port:
 9526 is the default port.`,
 		Patterns: []string{
 			"gui [port]",
-			"gui novnc <path to novnc> [port]",
 		},
 		Call: wrapSimpleCLI(cliGUI),
 	},
@@ -201,28 +196,28 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 		port = fmt.Sprintf(":%v", p)
 	}
 
-	noVNC := newdefaultNoVNC
-	d3 := newdefaultD3
-	term := newdefaultTerm
-	if c.StringArgs["path"] != "" {
-		noVNC = c.StringArgs["path"]
-	}
-
 	if guiRunning {
 		resp.Error = "GUI is already running"
 	} else {
-		go guiStart(port, noVNC, d3, term)
+		go guiStart(port)
 	}
 
 	return resp
 }
 
-func guiStart(port, noVNC string, d3 string, term string) {
+func guiStart(port string) {
+	//Look at me! I self-discovered myself!
+	miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
+	vncLocation := defaultVNC
+	d3Location := defaultD3
+	if oserr == nil {
+		vncLocation = miniLocation + "/misc/novnc"
+		d3Location = miniLocation + "/misc/d3"
+	}
+
 	guiRunning = true
-	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
-	http.Handle("/gui/terminal/", http.StripPrefix("/gui/terminal/", http.FileServer(http.Dir(term))))
-	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
-	http.Handle("/gui/graph/", http.StripPrefix("/gui/graph/", http.FileServer(http.Dir("/opt/minimega/misc/d3/force"))))
+	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(vncLocation))))
+	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3Location))))
 
 	http.HandleFunc("/gui/ws/", vncWsHandler)
 	http.HandleFunc("/gui/map", guiMapVMs)
@@ -230,9 +225,12 @@ func guiStart(port, noVNC string, d3 string, term string) {
 	http.HandleFunc("/gui/state", guiState)
 	http.HandleFunc("/gui/stats", guiStats)
 	http.HandleFunc("/gui/all", guiAllVMs)
-	http.HandleFunc("/gui/", guiRoot)
+	http.HandleFunc("/gui/tile", guiTiler)
+	http.HandleFunc("/gui/vnc/", guiVNC)
 	http.HandleFunc("/gui/command/", guiCmd)
 	http.HandleFunc("/gui/screenshot/", guiScreenshot)
+	http.HandleFunc("/gui/", guiHome)
+	http.HandleFunc("/", guiHome)
 
 	err := http.ListenAndServe(port, nil)
 	if err != nil {
@@ -329,32 +327,45 @@ func guiCmd(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func guiRoot(w http.ResponseWriter, r *http.Request) {
+func guiVNC(w http.ResponseWriter, r *http.Request) {
 	url := strings.TrimSpace(r.URL.String())
 	if !strings.HasSuffix(url, "/") {
 		url += "/"
 	}
 	fields := strings.Split(url, "/")
 	fields = fields[1 : len(fields)-1]
-	urlLen := len(fields)
-	switch urlLen {
-	case 1: // "/gui"
-		w.Write([]byte(guiHome()))
-	case 2: // "/gui/vnc/"
-		w.Write([]byte(guiHosts()))
-	case 3: // "/gui/vnc/<host>/"
-		w.Write([]byte(guiHostVMs(fields[2])))
-	case 4: // "/gui/vnc/<host>/<port>"
+	if len(fields) == 4 {
 		title := html.EscapeString(fields[2] + ":" + fields[3]) //change to vm NAME
 		path := fmt.Sprintf("/gui/novnc/vnc_auto.html?title=%v&path=gui/ws/%v/%v", title, fields[2], fields[3])
-		http.Redirect(w, r, path, http.StatusTemporaryRedirect)
-	default:
+		iframeresize := `<script>
+                         	var buffer = 20; //scroll bar buffer
+			 	var iframe = document.getElementById('vnc');
+
+			 	function pageY(elem) {
+    					return elem.offsetParent ? (elem.offsetTop + pageY(elem.offsetParent)) : elem.offsetTop;
+				}
+
+				function resizeIframe() {
+    					var height = document.documentElement.clientHeight;
+    					height -= pageY(document.getElementById('vnc'))+ buffer ;
+   					height = (height < 0) ? 0 : height;
+    					document.getElementById('vnc').style.height = height + 'px';
+				}
+
+				window.onresize = resizeIframe;  
+				window.onload = resizeIframe;  
+         		   </script>
+			  `
+
+		body := fmt.Sprintf(`<iframe id="vnc" width="100%v" src="%v"></iframe>`, "%", path)
+		w.Write([]byte(fmt.Sprintf(HTMLFRAME, iframeresize, body)))
+	} else {
 		http.NotFound(w, r)
 	}
 }
 
-func guiHome() string {
-	return fmt.Sprintf(HTMLFRAME, "", "")
+func guiHome(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte(fmt.Sprintf(HTMLFRAME, "", "")))
 }
 
 func guiState(w http.ResponseWriter, r *http.Request) {
@@ -369,8 +380,9 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 		id := row[0]
 		name := row[1]
 
-		var trt string
+		var tracert string
 		var ping string
+		var app string
 		f := strings.Fields(row[2])
 		for _, v := range f {
 			v = strings.Trim(v, "[]")
@@ -378,16 +390,18 @@ func guiState(w http.ResponseWriter, r *http.Request) {
 			if len(v2) != 2 {
 				continue
 			}
-			if strings.Contains(v2[0], "trt") {
-				trt = v2[1]
+			if strings.Contains(v2[0], "traceroute") {
+				tracert = v2[1]
 			} else if strings.Contains(v2[0], "ping") {
 				ping = v2[1]
+			} else if strings.Contains(v2[0], "app") {
+				app = v2[1]
 			}
 		}
-		if trt == "" || ping == "" {
+		if tracert == "" || ping == "" || app == "" {
 			continue
 		}
-		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, trt, ping)
+		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, tracert, ping, app)
 	}
 	header := `<thead><tr><th>name</th><th>id</th><th>trt</th><th>ping</th></thead>`
 	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
@@ -404,7 +418,6 @@ func guiMapVMs(w http.ResponseWriter, r *http.Request) {
 		if len(row) != 3 {
 			log.Fatal("column count mismatch: %v", row)
 		}
-		//id := row[0]
 		name := row[1]
 
 		// grab out lat/long
@@ -474,7 +487,6 @@ func guiStats(w http.ResponseWriter, r *http.Request) {
 		log.Fatalln(err)
 	}
 	respHostChan := runCommand(cmdhost, false)
-
 	g := <-respHostChan
 	if len(stats) == 0 { //If stats is empty, i need a header
 		header := `<thead><tr>`
@@ -484,7 +496,6 @@ func guiStats(w http.ResponseWriter, r *http.Request) {
 		header += `</tr></thead><tbody>`
 		stats = append(stats, header)
 	}
-	//<a class="toggle-vis" data-column="5">Salary</a>
 	for _, row := range g[0].Tabular { //local host data
 		tl := `<tr>`
 		for _, entry := range row {
@@ -495,7 +506,6 @@ func guiStats(w http.ResponseWriter, r *http.Request) {
 	}
 	cmdhostall, err := minicli.CompileCommand("mesh send all host") //mesh send all host
 	respHostAllChan := runCommand(cmdhostall, false)
-	//s := <-respHostAllChan
 	for s := range respHostAllChan {
 		if len(s) != 0 { //check if there are other hosts
 			for _, node := range s {
@@ -510,72 +520,15 @@ func guiStats(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	//body := fmt.Sprintf(`<table border=1>%s</table>`, strings.Join(stats, "\n"))
 	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s </tbody></table>`, strings.Join(stats, "\n"))
-
-	//w.Write([]byte(fmt.Sprintf(HTMLFRAME, body)))
 	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/stats.js"></script>`
 	w.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
-}
-
-func guiHosts() string {
-	hosts := make(map[string]int)
-	// first grab our own list of hosts
-	count := 0
-	for _, vm := range vms.vms {
-		if vm.State != VM_QUIT && vm.State != VM_ERROR {
-			count++
-		}
-	}
-	hosts[hostname] = count
-
-	cmd, err := minicli.CompileCommand(".columns id,state mesh send all vm info")
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-
-	remoteRespChan := runCommand(cmd, false)
-
-	//Calculate total VMs in experiment
-	for resps := range remoteRespChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			count := 0
-			for _, row := range resp.Tabular {
-				if row[1] != "quit" && row[1] != "error" {
-					count++
-				}
-			}
-			hosts[resp.Host] = count
-		}
-	}
-
-	// sort hostnames
-	var sortedHosts []string
-	for h, _ := range hosts {
-		sortedHosts = append(sortedHosts, h)
-	}
-	sort.Strings(sortedHosts)
-	var totalvms int
-	var body bytes.Buffer
-	for _, h := range sortedHosts {
-		fmt.Fprintf(&body, "<a href=\"/gui/vnc/%v\">%v</a> (%v)<br>\n", h, h, hosts[h])
-		totalvms += hosts[h]
-	}
-	fmt.Fprintf(&body, "<br>Total VMs: (%v)", totalvms)
-	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
-	return fmt.Sprintf(HTMLFRAME, tabletype, body.String())
 }
 
 func guiErrorVMs(writer http.ResponseWriter, request *http.Request) {
 	var resp chan minicli.Responses
 	var respAll chan minicli.Responses
-	mask := "id,name,state,memory,vcpus,disk,initrd,kernel,cdrom,mac,bridge,ip,vlan,append,tags"
+	mask := "id,name,state,memory,vcpus,migrate,disk,snapshot,initrd,kernel,cdrom,append,bridge,tap,mac,ip,ip6,vlan,uuid,cc_active,tags"
 	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
 	if err != nil {
 		// Should never happen
@@ -657,10 +610,73 @@ func guiErrorVMs(writer http.ResponseWriter, request *http.Request) {
 	writer.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
 }
 
+func guiTiler(writer http.ResponseWriter, request *http.Request) {
+	var resp chan minicli.Responses
+	var respAll chan minicli.Responses
+	mask := "id,name,state"
+	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf(".columns %s mesh send all vm info", mask))
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+	resp = runCommand(cmdLocal, false)
+	respAll = runCommand(cmdRemote, false)
+
+	format := `<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;"><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="250" /></a></div>`
+	info := []string{}
+	g := <-resp
+	r := g[0].Tabular
+	for _, r := range r {
+		if r[2] != "ERROR" && r[2] != "QUIT" {
+			id, err := strconv.Atoi(r[0])
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
+			//This is an ABSURD way to get the local host name:
+			var HostChan chan minicli.Responses
+			bob, _ := minicli.CompileCommand(fmt.Sprintf("host name"))
+			HostChan = runCommand(bob, false)
+			H := <-HostChan
+			Host := H[0].Response
+
+			tl := fmt.Sprintf(format, Host, 5900+id, Host, id, r[1])
+			info = append(info, tl)
+		}
+	}
+	//get mesh response
+	for sa := range respAll {
+		if len(sa) != 0 {
+			for _, node := range sa {
+				for _, s := range node.Tabular {
+					if s[2] != "ERROR" && s[2] != "QUIT" {
+						id, err := strconv.Atoi(s[0])
+						if err != nil {
+							log.Errorln(err)
+							return
+						}
+
+						tl := fmt.Sprintf(format, node.Host, 5900+id, node.Host, id, s[1])
+						info = append(info, tl)
+					}
+				}
+			}
+		}
+	}
+	body := fmt.Sprintf(`<div style="overflow: hidden; margin: 10px;" > %s </div>`, strings.Join(info, "\n"))
+	writer.Write([]byte(fmt.Sprintf(HTMLFRAME, "", body)))
+}
+
 func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	var resp chan minicli.Responses
 	var respAll chan minicli.Responses
-	mask := "id,name,state,memory,vcpus,disk,initrd,kernel,cdrom,mac,bridge,ip,vlan,append,tags"
+	columnnames := []string{}
+	mask := "id,name,state,memory,vcpus,migrate,disk,snapshot,initrd,kernel,cdrom,append,bridge,tap,mac,ip,ip6,vlan,uuid,cc_active,tags"
 	cmdLocal, err := minicli.CompileCommand(".columns " + mask + " vm info")
 	if err != nil {
 		// Should never happen
@@ -678,11 +694,14 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 	g := <-resp
 	ga := g[0].Header
 	if len(info) == 0 {
-		header := `<thead><tr>`
+		header := `<thead><tr><th>snapshot</th>`
+		columnnames = append(columnnames, "snapshot")
 		for _, h := range ga {
 			header += `<th>` + h + `</th>`
+			columnnames = append(columnnames, h)
 			if h == "id" {
 				header += `<th>` + `host` + `</th>`
+				columnnames = append(columnnames, "host")
 			}
 		}
 		header += `</tr></thead><tbody>`
@@ -704,8 +723,8 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 			H := <-HostChan
 			Host := H[0].Response
 
-			format := `<tr><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
-			tl := fmt.Sprintf(format, id, Host, Host, 5900+id, r[1])
+			format := `<tr><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
+			tl := fmt.Sprintf(format, Host, 5900+id, Host, id, r[1], id, Host, Host, 5900+id, r[1])
 			for _, entry := range r[2:] {
 				tl += `<td>` + entry + `</td>`
 			}
@@ -725,8 +744,8 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 							return
 						}
 
-						format := `<tr><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
-						tl := fmt.Sprintf(format, id, node.Host, node.Host, 5900+id, s[1])
+						format := `<tr><td><td><a href="/gui/vnc/%v/%v"><img src="/gui/screenshot/%v_%v.png" alt="%v" width="140" /></a></td><td>%v</td><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td>`
+						tl := fmt.Sprintf(format, node.Host, 5900+id, node.Host, id, s[1], id, node.Host, node.Host, 5900+id, s[1])
 						for _, entry := range s[2:] {
 							tl += `<td>` + entry + `</td>`
 						}
@@ -737,76 +756,15 @@ func guiAllVMs(writer http.ResponseWriter, request *http.Request) {
 			}
 		}
 	}
-	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s </tbody></table>`, strings.Join(info, "\n"))
-	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
-	writer.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
-}
-
-func guiHostVMs(host string) string {
-	var respChan chan minicli.Responses
-
-	mask := "id,name,state,memory,vcpus,disk,initrd,kernel,cdrom,mac,bridge,ip,vlan,append,tags"
-	cmdLocal, err := minicli.CompileCommand(fmt.Sprintf(".columns %v vm info", mask))
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-
-	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf(".columns %v mesh send %v vm info", mask, host))
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-
-	if host == hostname {
-		respChan = runCommand(cmdLocal, false)
-	} else {
-		respChan = runCommand(cmdRemote, false)
-	}
-
-	lines := []string{}
-
-	for resps := range respChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			// If we're the first response, we'll output the Header too.
-			if len(lines) == 0 {
-				header := `<thead><tr>`
-				for _, h := range resp.Header {
-					header += `<th>` + h + `</th>`
-				}
-				header += `</tr></thead>`
-				lines = append(lines, header)
-			}
-
-			for _, row := range resp.Tabular {
-				if row[2] != "ERROR" && row[2] != "QUIT" {
-					id, err := strconv.Atoi(row[0])
-					if err != nil {
-						log.Errorln(err)
-						return err.Error()
-					}
-					format := `<tr><td>%v</td><td><a href="/gui/vnc/%v/%v">%v</a></td><td>%s</td>`
-					tl := fmt.Sprintf(format, id, host, 5900+id, row[1], row[2])
-					for _, entry := range row[3:] {
-						tl += `<td>` + entry + `</td>`
-					}
-					tl += `</tr>`
-					lines = append(lines, tl)
-				}
-			}
+	columnviz := `<div style="color:#006400"> Toggle Columns: `
+	for i, column := range columnnames {
+		columnviz = columnviz + fmt.Sprintf(`<a class="toggle-vis" data-column="%v">%v</a>`, i, column)
+		if i != len(columnnames) {
+			columnviz = columnviz + " | "
 		}
 	}
-
-	if len(lines) == 0 {
-		return "no VMs found"
-	}
-
-	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s </tbody></table>`, strings.Join(lines, "\n"))
+	columnviz = columnviz + "</div>"
+	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s </tbody></table>`, strings.Join(info, "\n")) + columnviz
 	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
-	return fmt.Sprintf(HTMLFRAME, tabletype, body)
+	writer.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
 }
