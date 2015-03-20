@@ -13,6 +13,7 @@ import (
 var externalProcesses = map[string]string{
 	"qemu-nbd": "qemu-nbd",
 	"lsmod":    "lsmod",
+	"modprobe": "modprobe",
 }
 
 // check for the presence of each of the external processes we may call,

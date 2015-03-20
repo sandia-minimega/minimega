@@ -247,8 +247,8 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 func cliVmInject(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// yell at user to load nbd
-	err := nbd.Ready()
+	// Load nbd
+	err := nbd.Modprobe()
 	if err != nil {
 		resp.Error = err.Error()
 		return resp

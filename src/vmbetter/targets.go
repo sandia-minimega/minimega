@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,7 +16,6 @@ import (
 	"path/filepath"
 	"strings"
 	"vmconfig"
-	"errors"
 )
 
 var (
@@ -38,72 +38,98 @@ func BuildISO(buildPath string, c vmconfig.Config) error {
 	isolinuxDir := tdir + "/image/isolinux/"
 
 	err = os.MkdirAll(liveDir, os.ModeDir|0755)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	err = os.MkdirAll(isolinuxDir, os.ModeDir|0755)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	// Get the kernel path we'll be using
 	matches, err := filepath.Glob(buildPath + "/boot/vmlinu*")
-	if err != nil { return err }
-	if len(matches) == 0 { return errors.New("couldn't find kernel") }
+	if err != nil {
+		return err
+	}
+	if len(matches) == 0 {
+		return errors.New("couldn't find kernel")
+	}
 	kernel := matches[0]
 
 	// Get the initrd path
 	matches, err = filepath.Glob(buildPath + "/boot/initrd*")
-	if err != nil { return err }
-	if len(matches) == 0 { return errors.New("couldn't find initrd") }
+	if err != nil {
+		return err
+	}
+	if len(matches) == 0 {
+		return errors.New("couldn't find initrd")
+	}
 	initrd := matches[0]
 
 	log.Debugln("copy kernel")
 	// Copy the kernel and initrd into the appropriate places
 	p := process("cp")
-	cmd := exec.Command(p, kernel, liveDir + "vmlinuz")
+	cmd := exec.Command(p, kernel, liveDir+"vmlinuz")
 	err = cmd.Run()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	cmd = exec.Command(p, initrd, liveDir + "initrd")
+	cmd = exec.Command(p, initrd, liveDir+"initrd")
 	err = cmd.Run()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	log.Debugln("copy isolinux")
 	// Copy over the ISOLINUX stuff
 	matches, err = filepath.Glob(*f_isolinux + "/*")
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	for _, m := range matches {
 		cmd = exec.Command(p, m, isolinuxDir)
 		err = cmd.Run()
-		if err != nil { return err }
+		if err != nil {
+			return err
+		}
 	}
 
 	log.Debugln("make squashfs")
 	// Now compress the chroot
 	p = process("mksquashfs")
-	cmd = exec.Command(p, buildPath, liveDir + "filesystem.squashfs", "-e", "boot")
+	cmd = exec.Command(p, buildPath, liveDir+"filesystem.squashfs", "-e", "boot")
 	err = cmd.Run()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	log.Debugln("genisoimage")
 	// Finally, run genisoimage
 	//genisoimage -rational-rock -volid "Minimega" -cache-inodes -joliet -full-iso9660-filenames -b isolinux/isolinux.bin -c isolinux/boot.cat -no-emul-boot -boot-load-size 4 -boot-info-table -output ../minimega.iso .
 	p = process("genisoimage")
-	cmd = exec.Command(p, "-rational-rock", "-volid", "\"Minimega\"", "-cache-inodes", "-joliet", "-full-iso9660-filenames", "-b", "isolinux/isolinux.bin", "-c", "isolinux/boot.cat", "-no-emul-boot", "-boot-load-size", "4", "-boot-info-table", "-output", targetName+".iso", tdir + "/image")
-		stdout, err := cmd.StdoutPipe()
-			if err != nil {
-				log.Fatalln(err)
-			}
-			stderr, err := cmd.StderrPipe()
-			if err != nil {
-				log.Fatalln(err)
-			}
-			log.LogAll(stdout, log.INFO, "genisoimage")
-			log.LogAll(stderr, log.ERROR, "genisoimage")
+	cmd = exec.Command(p, "-rational-rock", "-volid", "\"Minimega\"", "-cache-inodes", "-joliet", "-full-iso9660-filenames", "-b", "isolinux/isolinux.bin", "-c", "isolinux/boot.cat", "-no-emul-boot", "-boot-load-size", "4", "-boot-info-table", "-output", targetName+".iso", tdir+"/image")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.LogAll(stdout, log.INFO, "genisoimage")
+	log.LogAll(stderr, log.ERROR, "genisoimage")
 
 	err = cmd.Run()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	// clean up
 	err = os.RemoveAll(tdir)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -167,7 +193,7 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
 
-	err := nbd.Ready()
+	err := nbd.Modprobe()
 	if err != nil {
 		return err
 	}
