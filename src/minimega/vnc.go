@@ -59,6 +59,11 @@ func init() {
 }
 
 func NewVNCClient(host, vm string) (*vncClient, error) {
+	// Resolve localhost to the actual hostname
+	if host == Localhost {
+		host = hostname
+	}
+
 	vmID, vmName, err := findRemoteVM(host, vm)
 	if err != nil {
 		return nil, err
@@ -303,7 +308,7 @@ func vncPlaybackKB(host, vm, filename string) error {
 
 	// is this rhost already being recorded?
 	if _, ok := vncKBPlaying[c.Rhost]; ok {
-		return fmt.Errorf("fb playback for %v %v already running", host, vm)
+		return fmt.Errorf("kb playback for %v %v already running", host, vm)
 	}
 
 	c.file, err = os.Open(filename)

@@ -58,6 +58,10 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 	vm := c.StringArgs["vm"]
 	fname := c.StringArgs["filename"]
 
+	if host == Localhost {
+		host = hostname
+	}
+
 	if c.BoolArgs["record"] && c.BoolArgs["kb"] {
 		// Starting keyboard recording
 		err = vncRecordKB(host, vm, fname)
