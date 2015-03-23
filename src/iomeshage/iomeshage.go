@@ -355,7 +355,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 	}
 
 	for i = 0; i < numParts; i++ {
-		fname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filename, i)
+		fname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(filename), i)
 		fpart, err := os.Open(fname)
 		if err != nil {
 			log.Errorln(err)
@@ -437,7 +437,7 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 			iom.transferLock.RLock()
 			defer iom.transferLock.RUnlock()
 			if t, ok := iom.transfers[filename]; ok {
-				outfile := fmt.Sprintf("%v/%v.part_%v", t.Dir, filename, part)
+				outfile := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(filename), part)
 				err := ioutil.WriteFile(outfile, resp.Data, 0664)
 				if err != nil {
 					return err
@@ -470,7 +470,7 @@ func (iom *IOMeshage) MITM(m *IOMMessage) {
 		}
 		if !f.Parts[m.Part] {
 			log.Debug("snooped filepart %v;%v", f.Filename, m.Part)
-			outfile := fmt.Sprintf("%v/%v.part_%v", f.Dir, f.Filename, m.Part)
+			outfile := fmt.Sprintf("%v/%v.part_%v", f.Dir, filepath.Base(f.Filename), m.Part)
 			err := ioutil.WriteFile(outfile, m.Data, 0664)
 			if err != nil {
 				log.Errorln(err)
