@@ -18,6 +18,7 @@ import (
 	"meshage"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -182,6 +183,26 @@ func (iom *IOMeshage) Get(file string) error {
 // parts to maximize the distributed transfer behavior of iomeshage when used
 // at scale.
 func (iom *IOMeshage) getParts(filename string, numParts int64) {
+	// corner case - empty file
+	if numParts == 0 {
+		log.Debug("file %v has 0 parts, creating empty file", filename)
+
+		// create subdirectories
+		fullPath := filepath.Join(iom.base, filename)
+		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		f, err := os.Create(fullPath)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		f.Close()
+		return
+	}
+
 	// create a random list of parts to grab
 	var parts []int64
 	var i int64
@@ -346,7 +367,15 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 	}
 	name := tfile.Name()
 	tfile.Close()
-	os.Rename(name, iom.base+filename)
+
+	// create subdirectories
+	fullPath := filepath.Join(iom.base, filename)
+	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+	os.Rename(name, fullPath)
 }
 
 // Remove a temporary transfer directory and any transferred parts.
