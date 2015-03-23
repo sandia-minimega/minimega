@@ -87,7 +87,7 @@ func runCommand(cmd *minicli.Command, record bool) chan minicli.Responses {
 func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Responses {
 	cmdStr := fmt.Sprintf("mesh send %s %s", Wildcard, cmd.Original)
 	cmd, err := minicli.CompileCommand(cmdStr)
-	if err == nil {
+	if err != nil {
 		log.Fatal("cannot run `%v` globally -- %v", cmd.Original, err)
 	}
 
