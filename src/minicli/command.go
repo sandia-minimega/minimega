@@ -61,11 +61,23 @@ outer:
 		case item.Type&stringItem != 0:
 			cmd.StringArgs[item.Key] = input.items[i].Value
 		case item.Type&choiceItem != 0:
+			// holds the match
+			matched := ""
 			for _, choice := range item.Options {
-				if choice == input.items[i].Value {
-					cmd.BoolArgs[choice] = true
-					continue outer
+				// Check if item matches as apropos
+				if strings.HasPrefix(choice, input.items[i].Value) {
+					if matched != "" {
+						// We already found a match.
+						// Collision.
+						return nil, i
+					}
+					matched = choice
 				}
+			}
+
+			if matched != "" {
+				cmd.BoolArgs[matched] = true
+				continue outer
 			}
 
 			// Invalid choice
