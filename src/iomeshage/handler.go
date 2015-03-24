@@ -35,6 +35,7 @@ type IOMMessage struct {
 	From     string
 	Type     int
 	Filename string
+	Perm     os.FileMode
 	Glob     []string
 	Part     int64
 	TID      int64
@@ -103,6 +104,12 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	} else if len(glob) == 1 && glob[0] == m.Filename {
 		resp.ACK = true
 		resp.Part = parts
+		fi, err := os.Stat(filepath.Join(iom.base, m.Filename))
+		if err != nil {
+			resp.ACK = false
+		} else {
+			resp.Perm = fi.Mode() & os.ModePerm
+		}
 		if log.WillLog(log.DEBUG) {
 			log.Debugln("handleInfo found file with parts: ", resp.Part)
 		}

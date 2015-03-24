@@ -176,7 +176,7 @@ func (iom *IOMeshage) Get(file string) error {
 			log.Debug("found file on node %v with %v parts", info.From, info.Part)
 		}
 
-		go iom.getParts(info.Filename, info.Part)
+		go iom.getParts(info.Filename, info.Part, info.Perm)
 	} else {
 		// call Get on each of the constituent files, queued in a random order
 
@@ -204,7 +204,7 @@ func (iom *IOMeshage) Get(file string) error {
 // Get a file with numParts parts. getParts will randomize the order of the
 // parts to maximize the distributed transfer behavior of iomeshage when used
 // at scale.
-func (iom *IOMeshage) getParts(filename string, numParts int64) {
+func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode) {
 	// corner case - empty file
 	if numParts == 0 {
 		log.Debug("file %v has 0 parts, creating empty file", filename)
@@ -222,6 +222,11 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 			return
 		}
 		f.Close()
+		log.Debug("changing permissions: %v %v", fullPath, perm)
+		err = os.Chmod(fullPath, perm)
+		if err != nil {
+			log.Errorln(err)
+		}
 		return
 	}
 
@@ -398,6 +403,12 @@ func (iom *IOMeshage) getParts(filename string, numParts int64) {
 		return
 	}
 	os.Rename(name, fullPath)
+
+	log.Debug("changing permissions: %v %v", fullPath, perm)
+	err = os.Chmod(fullPath, perm)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 // Remove a temporary transfer directory and any transferred parts.
