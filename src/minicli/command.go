@@ -4,6 +4,11 @@
 
 package minicli
 
+import (
+	log "minilog"
+	"strings"
+)
+
 type Command struct {
 	Pattern  string // the specific pattern that was matched
 	Original string // original raw input
@@ -46,8 +51,12 @@ outer:
 
 		switch {
 		case item.Type == literalItem:
-			if input.items[i].Value != item.Text {
+			if !strings.HasPrefix(item.Text, input.items[i].Value) {
 				return nil, i
+			}
+
+			if input.items[i].Value != item.Text {
+				log.Debug("matched apropos literal %v : %v", item.Text, input.items[i].Value)
 			}
 		case item.Type&stringItem != 0:
 			cmd.StringArgs[item.Key] = input.items[i].Value
