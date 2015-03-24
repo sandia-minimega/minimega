@@ -9,6 +9,7 @@ import (
 	"io"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -34,6 +35,8 @@ type IOMMessage struct {
 	From     string
 	Type     int
 	Filename string
+	Perm     os.FileMode
+	Glob     []string
 	Part     int64
 	TID      int64
 	ACK      bool
@@ -84,7 +87,8 @@ func (iom *IOMeshage) handleResponse(m *IOMMessage) {
 }
 
 // Handle incoming "get file info" messages by looking up if we have the file
-// and responding with the number of parts or a NACK.
+// and responding with the number of parts or a NACK.  Also process directories
+// and globs, populating the Glob field of the IOMMessage if needed.
 func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	// do we have this file, rooted at iom.base?
 	resp := IOMMessage{
@@ -94,15 +98,25 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 		TID:      m.TID,
 	}
 
-	parts, err := iom.fileInfo(iom.base + m.Filename)
+	glob, parts, err := iom.fileInfo(filepath.Join(iom.base, m.Filename))
 	if err != nil {
 		resp.ACK = false
-	} else {
+	} else if len(glob) == 1 && glob[0] == m.Filename {
 		resp.ACK = true
 		resp.Part = parts
+		fi, err := os.Stat(filepath.Join(iom.base, m.Filename))
+		if err != nil {
+			resp.ACK = false
+		} else {
+			resp.Perm = fi.Mode() & os.ModePerm
+		}
 		if log.WillLog(log.DEBUG) {
 			log.Debugln("handleInfo found file with parts: ", resp.Part)
 		}
+	} else {
+		// populate Glob
+		resp.ACK = true
+		resp.Glob = glob
 	}
 
 	_, err = iom.node.Set([]string{m.From}, resp)
@@ -111,25 +125,67 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	}
 }
 
-// Get file info and return the number of parts in the file.
-func (iom *IOMeshage) fileInfo(filename string) (int64, error) {
+// Get file info and return the number of parts in the file. If the filename is
+// a directory or glob, return the list of files the directory/glob contains.
+func (iom *IOMeshage) fileInfo(filename string) ([]string, int64, error) {
+	glob, err := filepath.Glob(filename)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(glob) > 1 {
+		// globs are recursive, figure out any directories
+		var globsRet []string
+		for _, v := range glob {
+			rGlob, _, err := iom.fileInfo(v)
+			if err != nil {
+				return nil, 0, err
+			}
+			globsRet = append(globsRet, rGlob...)
+		}
+		return globsRet, 0, nil
+	}
+
 	f, err := os.Open(filename)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	defer f.Close()
 
-	// we do have the file, calculate the number of parts
+	// is this a directory
 	fi, err := f.Stat()
 	if err != nil {
 		if log.WillLog(log.DEBUG) {
 			log.Debugln("fileInfo error stat: ", err)
 		}
-		return 0, err
+		return nil, 0, err
+	}
+	if fi.IsDir() {
+		// walk the directory and populate glob
+		glob = []string{}
+		err := filepath.Walk(filename, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
+			rel, err := filepath.Rel(iom.base, path)
+			if err != nil {
+				return err
+			}
+			glob = append(glob, rel)
+			return nil
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		return glob, 0, nil
 	}
 
+	// we do have the file, calculate the number of parts
 	parts := (fi.Size() + PART_SIZE - 1) / PART_SIZE // integer divide with ceiling instead of floor
-	return parts, nil
+	rel, err := filepath.Rel(iom.base, filename)
+	return []string{rel}, parts, nil
 }
 
 // Transactions need unique TIDs, and a corresponing channel to return
@@ -175,7 +231,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	iom.drainLock.RLock()
 	defer iom.drainLock.RUnlock()
 
-	_, err := iom.fileInfo(iom.base + m.Filename)
+	_, _, err := iom.fileInfo(filepath.Join(iom.base, m.Filename))
 	if err != nil {
 		resp.ACK = false
 	} else {
@@ -204,7 +260,7 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		// we are currently transferring parts of the file
 		if t.Parts[m.Part] {
 			partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, t.Filename, m.Part)
-			_, err := iom.fileInfo(partname)
+			_, _, err := iom.fileInfo(partname)
 			if err == nil {
 				// we have it
 				resp.ACK = true
@@ -234,7 +290,7 @@ func (iom *IOMeshage) handleXfer(m *IOMMessage) {
 // Read a filepart and return a byteslice.
 func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 	if !strings.HasPrefix(filename, iom.base) {
-		filename = iom.base + filename
+		filename = filepath.Join(iom.base, filename)
 	}
 	f, err := os.Open(filename)
 	if err != nil {

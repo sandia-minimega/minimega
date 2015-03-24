@@ -42,7 +42,14 @@ completes.
 
 To see files that are currently being transferred, use the status command:
 
-	file status`,
+	file status
+
+If a directory is specified, that directory will be recursively transferred to
+the node. 
+
+You can also supply globs (wildcards) with the * operator. For example:
+
+	file get *.qcow2`,
 		Patterns: []string{
 			"file <list,> [path]",
 			"file <get,> <file>",
@@ -76,12 +83,12 @@ func cliFile(c *minicli.Command) *minicli.Response {
 		err = iom.Delete(c.StringArgs["file"])
 	} else if c.BoolArgs["status"] {
 		transfers := iom.Status()
-		resp.Header = []string{"Filename", "Temporary directory", "Completed parts"}
+		resp.Header = []string{"Filename", "Temporary directory", "Completed parts", "Queued"}
 		resp.Tabular = [][]string{}
 
 		for _, f := range transfers {
 			completed := fmt.Sprintf("%v/%v", len(f.Parts), f.NumParts)
-			row := []string{f.Filename, f.Dir, completed}
+			row := []string{f.Filename, f.Dir, completed, fmt.Sprintf("%v", f.Queued)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 	} else if c.BoolArgs["list"] {

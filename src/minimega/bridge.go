@@ -33,6 +33,7 @@ type bridge struct {
 	iml      *ipmac.IPMacLearner
 	Lock     sync.Mutex
 	nf       *gonetflow.Netflow
+	Trunk    string
 }
 
 type vlan struct {
@@ -750,6 +751,79 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
+
+// add an interface as a trunk port to a bridge
+func (b *bridge) TrunkAdd(iface string) error {
+	if b.Trunk != "" {
+		return fmt.Errorf("bridge %v already has trunk port: %v", b.Name, b.Trunk)
+	}
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"add-port",
+			b.Name,
+			iface,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+
+	log.Debug("trunking interface with cmd: %v", cmd)
+	ovsLock.Lock()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("TrunkAdd: %v: %v", err, sErr.String())
+		return e
+	}
+
+	b.Trunk = iface
+
+	return nil
+}
+
+// remove trunk port from a bridge
+func (b *bridge) TrunkRemove() error {
+	if b.Trunk == "" {
+		return nil
+	}
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"del-port",
+			b.Name,
+			b.Trunk,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("removing trunk interface with cmd: %v", cmd)
+	ovsLock.Lock()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
+		return e
+	}
+
+	b.Trunk = ""
+
 	return nil
 }
 
