@@ -26,6 +26,7 @@ import (
 
 const (
 	MAX_ATTEMPTS = 3
+	QUEUE_LEN    = 3
 )
 
 // IOMeshage object, which must have a base path to serve files on and a
@@ -38,6 +39,7 @@ type IOMeshage struct {
 	transfers    map[string]*Transfer // current transfers
 	drainLock    sync.RWMutex
 	transferLock sync.RWMutex
+	queue        chan bool
 }
 
 // FileInfo object. Used by the calling API to describe existing files.
@@ -54,6 +56,7 @@ type Transfer struct {
 	Parts    map[int64]bool // completed parts
 	NumParts int            // total number of parts for this file
 	Inflight int64          // currently in-flight part, -1 if none
+	Queued   bool
 }
 
 var (
@@ -75,6 +78,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 		Messages:  make(chan *meshage.Message, 1024),
 		TIDs:      make(map[int64]chan *IOMMessage),
 		transfers: make(map[string]*Transfer),
+		queue:     make(chan bool, QUEUE_LEN),
 	}
 
 	go r.handleMessages()
@@ -260,9 +264,20 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 		Parts:    make(map[int64]bool),
 		NumParts: len(parts),
 		Inflight: -1,
+		Queued:   true,
 	}
 	iom.transferLock.Unlock()
 	defer iom.destroyTempTransfer(filename)
+
+	// get in line
+	iom.queue <- true
+	defer func() {
+		<-iom.queue
+	}()
+
+	iom.transferLock.Lock()
+	iom.transfers[filename].Queued = false
+	iom.transferLock.Unlock()
 
 	for _, p := range parts {
 		// did I already get this part via another node's request?

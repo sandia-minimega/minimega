@@ -76,12 +76,12 @@ func cliFile(c *minicli.Command) *minicli.Response {
 		err = iom.Delete(c.StringArgs["file"])
 	} else if c.BoolArgs["status"] {
 		transfers := iom.Status()
-		resp.Header = []string{"Filename", "Temporary directory", "Completed parts"}
+		resp.Header = []string{"Filename", "Temporary directory", "Completed parts", "Queued"}
 		resp.Tabular = [][]string{}
 
 		for _, f := range transfers {
 			completed := fmt.Sprintf("%v/%v", len(f.Parts), f.NumParts)
-			row := []string{f.Filename, f.Dir, completed}
+			row := []string{f.Filename, f.Dir, completed, fmt.Sprintf("%v", f.Queued)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 	} else if c.BoolArgs["list"] {
