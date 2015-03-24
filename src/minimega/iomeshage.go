@@ -42,7 +42,14 @@ completes.
 
 To see files that are currently being transferred, use the status command:
 
-	file status`,
+	file status
+
+If a directory is specified, that directory will be recursively transferred to
+the node. 
+
+You can also supply globs (wildcards) with the * operator. For example:
+
+	file get *.qcow2`,
 		Patterns: []string{
 			"file <list,> [path]",
 			"file <get,> <file>",
