@@ -340,42 +340,73 @@ func guiScreenshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func guiCmd(w http.ResponseWriter, r *http.Request) {
-	url := strings.TrimSpace(r.URL.String())
-	fields := strings.Split(url, "/")
-	cmd := fields[3]
+	host := ""
+	cmd := ""
+	query := r.URL.Query()
+	cmd = query.Get("cmd")
+	host = query.Get("host")
+	fmt.Println(cmd)
+	fmt.Println(host)
+	mm, err := DialMinimega()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
-	if cmd == "start" {
-		mmstartcmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm start all`))
-		if err != nil {
-			log.Fatalln(err)
+	if cmd != "" {
+		fmt.Println("Cmd:", cmd)
+		cmd, err2 := minicli.CompileCommand(cmd)
+		if err2 != nil {
+			log.Error("%v", err2)
+			return
 		}
-		localstartrespchan := runCommand(mmstartcmd, true)
-		for range localstartrespchan {
+		body := ""
+		if cmd != nil {
+			for resp := range mm.runCommand(cmd) {
+				body = strings.Replace(resp.Rendered, "\n", "<br>", -1)
+			}
 		}
-		mmstartLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm start all`))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		allstartrespchan := runCommand(mmstartLcmd, true)
-		for range allstartrespchan {
-		}
+		w.Write([]byte(body))
+		//fmt.Sprintf(HTMLFRAME, "", body)))
+	} else {
+		fmt.Println("ERROR: No command given.")
 	}
-	if cmd == "flush" {
-		mmflushcmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm flush`))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		localflushrespchan := runCommand(mmflushcmd, true)
-		for range localflushrespchan {
-		}
-		mmflushLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm flush`))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		allflushrespchan := runCommand(mmflushLcmd, true)
-		for range allflushrespchan {
-		}
-	}
+
+	//url := strings.TrimSpace(r.URL.String())
+	//fields := strings.Split(url, "/")
+	//cmd := fields[3]
+
+	//if cmd == "start" {
+	//	mmstartcmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm start all`))
+	//	if err != nil {
+	//		log.Fatalln(err)
+	//	}
+	//	localstartrespchan := runCommand(mmstartcmd, true)
+	//	for range localstartrespchan {
+	//	}
+	//	mmstartLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm start all`))
+	//	if err != nil {
+	//		log.Fatalln(err)
+	//	}
+	//	allstartrespchan := runCommand(mmstartLcmd, true)
+	//	for range allstartrespchan {
+	//	}
+	//}
+	//if cmd == "flush" {
+	//	mmflushcmd, err := minicli.CompileCommand(fmt.Sprintf(`mesh send all vm flush`))
+	//	if err != nil {
+	//		log.Fatalln(err)
+	//	}
+	//	localflushrespchan := runCommand(mmflushcmd, true)
+	//	for range localflushrespchan {
+	//	}
+	//	mmflushLcmd, err := minicli.CompileCommand(fmt.Sprintf(`vm flush`))
+	//	if err != nil {
+	//		log.Fatalln(err)
+	//	}
+	//	allflushrespchan := runCommand(mmflushLcmd, true)
+	//	for range allflushrespchan {
+	//	}
+	//}
 }
 
 func guiVNC(w http.ResponseWriter, r *http.Request) {
