@@ -107,9 +107,9 @@ func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 // If the file already exists on this node, Get will return immediately with no
 // error.
 func (iom *IOMeshage) Get(file string) error {
-	// is this file available locally?
-	_, err := iom.fileInfo(iom.base + file)
-	if err == nil {
+	// is this a directory or a glob
+	fi, err := os.Stat(filepath.Join(iom.base, file))
+	if err == nil && !fi.IsDir() {
 		return nil
 	}
 
@@ -170,11 +170,33 @@ func (iom *IOMeshage) Get(file string) error {
 		return fmt.Errorf("file not found")
 	}
 
-	if log.WillLog(log.DEBUG) {
-		log.Debug("found file on node %v with %v parts", info.From, info.Part)
-	}
+	// is this a single file or a directory/blob?
+	if len(info.Glob) == 0 {
+		if log.WillLog(log.DEBUG) {
+			log.Debug("found file on node %v with %v parts", info.From, info.Part)
+		}
 
-	go iom.getParts(info.Filename, info.Part)
+		go iom.getParts(info.Filename, info.Part)
+	} else {
+		// call Get on each of the constituent files, queued in a random order
+
+		// fisher-yates shuffle
+		s := rand.NewSource(time.Now().UnixNano())
+		r := rand.New(s)
+		for i := int64(len(info.Glob)) - 1; i > 0; i-- {
+			j := r.Int63n(i + 1)
+			t := info.Glob[j]
+			info.Glob[j] = info.Glob[i]
+			info.Glob[i] = t
+		}
+
+		for _, v := range info.Glob {
+			err := iom.Get(v)
+			if err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -504,7 +526,7 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 		dir = strings.TrimLeft(dir, "/")
 	}
 	log.Debug("dir is %v%v", iom.base, dir)
-	return iom.base + dir
+	return filepath.Join(iom.base, dir)
 }
 
 // Generate a random 63 bit TID (positive int64).
