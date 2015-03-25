@@ -11,7 +11,6 @@ import (
 	log "minilog"
 	"net"
 	"os"
-	"strings"
 )
 
 func commandSocketStart() {
@@ -63,7 +62,7 @@ outer:
 
 		if cmd != nil {
 			// HAX: Don't record the read command
-			record := !strings.HasPrefix(cmd.Original, "read")
+			record := !hasCommand(cmd, "read")
 
 			// HAX: Work around so that we can add the more boolean
 			for resp := range runCommand(cmd, record) {

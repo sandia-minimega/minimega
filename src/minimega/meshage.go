@@ -13,7 +13,6 @@ import (
 	"minicli"
 	log "minilog"
 	"reflect"
-	"strings"
 	"time"
 )
 
@@ -105,7 +104,7 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	orig := c.Original
 
 	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if strings.HasPrefix(orig, "read") || strings.HasPrefix(orig, "mesh send") {
+	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
 		resp := &minicli.Response{
 			Host:  hostname,
 			Error: fmt.Sprintf("cannot run `%s` over mesh", orig),
