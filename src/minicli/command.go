@@ -27,7 +27,8 @@ type Command struct {
 	noOp bool
 }
 
-func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int) {
+func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
+	exact := true
 	cmd := Command{
 		Pattern:    pattern.String(),
 		Original:   input.Original,
@@ -43,20 +44,21 @@ outer:
 			// Check if the remaining item is optional
 			if item.Type&optionalItem != 0 {
 				// Matched!
-				return &cmd, i
+				return &cmd, i, exact
 			}
 
-			return nil, i
+			return nil, i, exact
 		}
 
 		switch {
 		case item.Type == literalItem:
 			if !strings.HasPrefix(item.Text, input.items[i].Value) {
-				return nil, i
+				return nil, i, exact
 			}
 
 			if input.items[i].Value != item.Text {
 				log.Debug("matched apropos literal %v : %v", item.Text, input.items[i].Value)
+				exact = false
 			}
 		case item.Type&stringItem != 0:
 			cmd.StringArgs[item.Key] = input.items[i].Value
@@ -66,10 +68,13 @@ outer:
 			for _, choice := range item.Options {
 				// Check if item matches as apropos
 				if strings.HasPrefix(choice, input.items[i].Value) {
+					if choice != input.items[i].Value {
+						exact = false
+					}
 					if matched != "" {
 						// We already found a match.
 						// Collision.
-						return nil, i
+						return nil, i, exact
 					}
 					matched = choice
 				}
@@ -81,7 +86,7 @@ outer:
 			}
 
 			// Invalid choice
-			return nil, i
+			return nil, i, exact
 		case item.Type&listItem != 0:
 			res := make([]string, len(input.items)-i)
 			for i, v := range input.items[i:] {
@@ -89,16 +94,16 @@ outer:
 			}
 
 			cmd.ListArgs[item.Key] = res
-			return &cmd, i
+			return &cmd, i, exact
 		case item.Type == commandItem:
 			// Parse the subcommand
 			subCmd, err := CompileCommand(input.items[i:].String())
 			if err != nil {
-				return nil, i
+				return nil, i, exact
 			}
 
 			cmd.Subcommand = subCmd
-			return &cmd, i
+			return &cmd, i, exact
 		}
 	}
 
@@ -107,8 +112,8 @@ outer:
 	// problematic as we have commands: "vm info" and "vm info search <terms>"
 	// that share the same prefix.
 	if len(pattern) != len(input.items) {
-		return nil, len(pattern) - 1
+		return nil, len(pattern) - 1, exact
 	}
 
-	return &cmd, len(pattern) - 1
+	return &cmd, len(pattern) - 1, exact
 }

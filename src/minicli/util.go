@@ -54,8 +54,11 @@ func closestMatch(input *Input) (*Handler, *Command) {
 	var matchedCmd *Command
 
 	for _, h := range handlers {
-		cmd, matchLen := h.compile(input)
+		cmd, matchLen, exact := h.compile(input)
 		if cmd != nil {
+			if exact {
+				return h, cmd
+			}
 			if matchedHandler != nil { // multiple apropos matches
 				return nil, nil
 			}
