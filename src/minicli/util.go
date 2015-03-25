@@ -50,17 +50,31 @@ func closestMatch(input *Input) (*Handler, *Command) {
 	// Keep track of what was the closest
 	var closestHandler *Handler
 	var longestMatch int
+	var matchedHandler *Handler
+	var matchedCmd *Command
 
 	for _, h := range handlers {
-		cmd, matchLen := h.compile(input)
+		cmd, matchLen, exact := h.compile(input)
 		if cmd != nil {
-			return h, cmd
+			if exact {
+				return h, cmd
+			}
+			if matchedHandler != nil { // multiple apropos matches
+				return nil, nil
+			}
+			matchedHandler = h
+			matchedCmd = cmd
 		}
 
 		if matchLen > longestMatch {
 			closestHandler = h
 			longestMatch = matchLen
 		}
+	}
+
+	// return the handler/cmd on perfect or apropos matches
+	if matchedHandler != nil {
+		return matchedHandler, matchedCmd
 	}
 
 	if longestMatch == 0 {

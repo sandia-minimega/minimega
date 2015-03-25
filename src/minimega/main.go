@@ -24,6 +24,7 @@ const (
 	BASE_PATH = "/tmp/minimega"
 	IOM_PATH  = "/tmp/minimega/files"
 	Wildcard  = "all"
+	Localhost = "localhost"
 )
 
 var (

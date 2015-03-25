@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	"strconv"
+	"strings"
 )
 
 var bridgeCLIHandlers = []minicli.Handler{
@@ -68,11 +69,20 @@ Reset state for taps. See "help tap" for more information.`,
 		Call: wrapSimpleCLI(cliHostTapClear),
 	},
 	{ // bridge
-		HelpShort: "display information about virtual bridges",
+		HelpShort: "display information and modify virtual bridges",
+		HelpLong: `
+When called with no arguments, display information about all managed bridges.
+
+To add a trunk interface to a specific bridge, use 'bridge trunk'. For example,
+to add interface bar to bridge foo:
+
+	bridge trunk foo bar`,
 		Patterns: []string{
 			"bridge",
+			"bridge trunk <bridge> <interface>",
+			"bridge notrunk <bridge>",
 		},
-		Call: wrapSimpleCLI(cliBridgeInfo),
+		Call: wrapSimpleCLI(cliBridge),
 	},
 }
 
@@ -131,27 +141,54 @@ func cliHostTapClear(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func cliBridgeInfo(c *minicli.Command) *minicli.Response {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-
+func cliBridge(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS"}
-	resp.Tabular = [][]string{}
+	bridge := c.StringArgs["bridge"]
+	iface := c.StringArgs["interface"]
 
-	for _, v := range bridges {
-		var vlans []int
-		for v, _ := range v.lans {
-			vlans = append(vlans, v)
+	if strings.Contains(c.Original, "notrunk") {
+		b, err := getBridge(bridge)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
 		}
+		err = b.TrunkRemove()
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	} else if strings.Contains(c.Original, "trunk") {
+		b, err := getBridge(bridge)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+		err = b.TrunkAdd(iface)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	} else {
+		resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS", "Trunk port"}
+		resp.Tabular = [][]string{}
 
-		row := []string{
-			v.Name,
-			strconv.FormatBool(v.exists),
-			strconv.FormatBool(v.preExist),
-			fmt.Sprintf("%v", vlans)}
-		resp.Tabular = append(resp.Tabular, row)
+		bridgeLock.Lock()
+		defer bridgeLock.Unlock()
+		for _, v := range bridges {
+			var vlans []int
+			for v, _ := range v.lans {
+				vlans = append(vlans, v)
+			}
+
+			row := []string{
+				v.Name,
+				strconv.FormatBool(v.exists),
+				strconv.FormatBool(v.preExist),
+				fmt.Sprintf("%v", vlans),
+				v.Trunk}
+			resp.Tabular = append(resp.Tabular, row)
+		}
 	}
 
 	return resp

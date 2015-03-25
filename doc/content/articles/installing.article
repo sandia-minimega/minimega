@@ -7,26 +7,6 @@ minimega does not currently have an official release or an official build servic
 
 	git clone https://code.google.com/p/minimega
 
-** System requirements and runtime dependencies
-
-minimega is designed to be simple to deploy. It has only two runtime dependencies - libpcap and libreadline, both of which are usually included on standard linux distros.
-
-minimega also has a number of external tools it executes. When you start minimega, it will check to see if each of the tools it may need are available in `$PATH`. If you plan to use minimega on a head node and only send messages to other nodes to launch and control VMs, you can ignore any external tool warnings at launch. 
-
-If you plan to launch and maintain VMs, you will need:
-
-- kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
-- ip - ip tool for manipulating devices
-- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.4)
-- ovs-ofctl - Open vSwitch openflow control with daemon running and kernel module loaded
-- dnsmasq - DNS and DHCP server
-- kill
-- qemu-utils - tools for interacting with qemu images
-- mount/umount - used when creating router images and injecting files into existing images
-- mkdosfs - used when creating router images
-- taskset - set CPU affinity for VMs
-- ntfs-3g - NTFS with write support for injecting files into NTFS images
-
 ** Building from source
 
 To build from source you will need a [[http://golang.org][Go compiler]], libpcap headers, and libreadline headers. On a debian type system, you can install compile-time dependencies with:
@@ -45,11 +25,37 @@ This will build and test each of the libraries and tools in the minimega distrib
 
 * Deploying minimega
 
-minimega is a standalone binary and carries no configuration. To deploy minimega to any number of nodes, simply copy the binary to each node. See [[usage.article][the usage article]] for information about launching minimega.
+minimega is a single binary and needs no configuration files. However, because minimega makes use of external programs, you'll need to have some things installed--see the section "System requirements and runtime dependencies" below.
 
-Depending on your cluster configuration, it is also possible to have minimega deploy itself. By launching minimega on a single node, you can use the `deploy` API which will cause minimega to copy itself and run remotely using `ssh` on a provided list of nodes. Se the [[api.article][API documentation]] on `deploy` for more information. 
+To deploy minimega to any number of nodes, simply copy the binary to each node. See [[usage.article][the usage article]] for information about launching minimega.
+
+Depending on your cluster configuration, it is also possible to have minimega deploy itself. By launching minimega on a single node, you can use the `deploy` API which will cause minimega to copy itself and run remotely using `ssh` on a provided list of nodes. Se the [[api.article][API documentation]] on `deploy` for more information.
+
+** System requirements and runtime dependencies
+
+minimega is designed to be simple to deploy. It has only two runtime dependencies - libpcap and libreadline, both of which are usually included on standard linux distros.
+
+minimega also has a number of external tools it executes. When you start minimega, it will check to see if each of the tools it may need are available in `$PATH`. If you plan to use minimega on a head node and only send messages to other nodes to launch and control VMs, you can ignore any external tool warnings at launch. 
+
+If you plan to launch and maintain VMs, you'll need the following programs:
+
+- kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
+- ip - ip tool for manipulating devices
+- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.4)
+- ovs-ofctl - Open vSwitch openflow control with daemon running and kernel module loaded
+- dhclient - dhcp client
+- dnsmasq - DNS and DHCP server
+- qemu-nbd/qemu-img - tool for interacting with qemu disk images (in the Debian package "qemu-tools")
+- mount/umount - used when creating router images and injecting files into existing images
+- mkdosfs - used when creating router images
+- taskset - set CPU affinity for VMs
+- ntfs-3g - NTFS with write support for injecting files into NTFS images
+- ssh/scp
+- kill
 
 ** Network configuration
+
+(This section is primarily relevant for people running minimega on a cluster)
 
 minimega is designed to run on one or more nodes and uses Open vSwitch, a software switch and networking package that allows dynamically vlan-tagging network interfaces attached to virtual machines. Open vSwitch can trunk vlan-tagged traffic up to the physical switch connected to the node running minimega.
 

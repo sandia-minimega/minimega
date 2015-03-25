@@ -169,7 +169,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 	log.Debug("findRemoteVM: %v %v", host, vm)
 
 	// check for our own host
-	if host == hostname {
+	if host == hostname || host == Localhost {
 		log.Debugln("host is local node")
 		vm := vms.findVm(vm)
 		if vm != nil {
@@ -195,7 +195,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 
 		remoteRespChan := make(chan minicli.Responses)
 		go func() {
-			meshageBroadcast(cmd, remoteRespChan)
+			meshageSend(cmd, host, remoteRespChan)
 			close(remoteRespChan)
 		}()
 

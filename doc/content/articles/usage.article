@@ -43,6 +43,21 @@ For example, if you want to launch minimega on a number of nodes and put minimeg
 
 Each node will then auto-discover at least two other nodes with the namespace `foo` and connect to them. If the number of connections to any given node drops below 2, it will attempt to discover additional nodes.
 
+*** The `deploy` command
+
+minimega includes a command to make launching on multiple nodes easier. If you launch minimega on one node, you can then run the `deploy` command to copy minimega to additional nodes and launch it there.
+
+For example, if we have the minimega binary on host `ccc1` and want to run it on the whole cluster, `ccc1` through `ccc14`, we can use deploy to push it out and launch it:
+
+    # Launch minimga on ccc1
+    ccc1$ sudo bin/minimega -degree 2 -namespace foo
+    # Now, tell deploy to launch it on the other nodes
+    minimega$ deploy launch ccc[2-14]
+
+This will use `scp` to copy the minimega binary to nodes `ccc2`-`ccc14`, then use `ssh` to launch it. If any node needs a password, it will prompt; you may find that installing SSH keys will make the process simpler.
+
+By default, `deploy` will launch minimega with the same set of command-line options as the original instance, which in this case is fine. See `help`deploy` for more information.
+
 ** Base Directory
 
 minimega creates a number of files that describe and allow control of virtual machines, DNS/DHCP servers, and other components under a base directory, by default `/tmp/minimega`. You can change this path using the `base` flag. If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use. If you know that minimega is not already running, you can force minimega to repopulate the base directory with the `force` flag, or just delete the existing base directory. The base directory is important when connecting to an already running minimega instance with the `attach` or `e` flags, as those modes both look for the minimega command socket in a specified base directory.
@@ -153,7 +168,7 @@ minimega nodes can receive commands from other nodes over the network via Meshag
 
 This sends the command `host name` to a set of nodes (in this case just one node, bar). Any response or error from bar will be printed locally on foo.
 
-The `mesh`send` prefix supports grouping like nodes with a numeric suffix and/or comma delimited names. For example, if you want to send a command to nodes `compute0 - compute15`, and some oddly named node `foo`:
+The `mesh`send` prefix supports grouping like nodes with a numeric suffix and/or comma delimited names. For example, if you want to send a command to nodes `compute0` - `compute15`, and some oddly named node `foo`:
 
 	minimega$ mesh send compute[0-15],foo host name
 
@@ -447,6 +462,31 @@ Finally, you can kill dnsmasq instances by passing the kill keyword and the id o
 	minimega$ dnsmasq kill 0
 
 * Scripting
+
+** Command files
+
+Command files are simply text files containing a list of minimega commands to run. They can either be written by hand or created using the `write` command, which creates a file containing minimega's command history. So, for example, one could set up a VM, launch it, and start it, then save the sequence of commands for later use:
+
+	minimega$ vm config disk foo.img
+	minimega$ vm config net 100
+	minimega$ vm launch foo-vm
+	minimega$ vm start foo-vm
+	minimega$ write launch-foo.mm
+
+This will write out a file called `launch-foo.mm`, which looks like this:
+
+     vm config disk foo.img
+     vm config net 100
+     vm launch foo-vm
+     vm start foo-vm
+
+This script can then be executed by minimega using the `read` command:
+
+        minimega$ read launch-foo.mm
+
+** Shell scripts
+
+If simple command files aren't sufficient--if, for example, a `for` loop is needed--minimega commands can easily be executed from a shell script.
 
 As mentioned earlier, you can script a local minimega instance using the `e` flag:
 

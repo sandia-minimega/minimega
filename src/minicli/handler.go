@@ -29,13 +29,17 @@ type Handler struct {
 // builds a command based on the input. If there was no match, the returned
 // Command will be nil. The second return value is the number of elements of the
 // Handler's pattern that were matched. This can be used to determine which
-// handler was the closest match.
-func (h *Handler) compile(input *Input) (*Command, int) {
+// handler was the closest match. The third return value is true if there
+// pattern is an exact match, not an apropos match.
+func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	var maxMatchLen int
+	var cmd *Command
+	var matchLen int
+	var exact bool
 	for _, pattern := range h.PatternItems {
-		cmd, matchLen := newCommand(pattern, input, h.Call)
+		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
 		if cmd != nil {
-			return cmd, matchLen
+			return cmd, matchLen, exact
 		}
 
 		if matchLen > maxMatchLen {
@@ -43,7 +47,7 @@ func (h *Handler) compile(input *Input) (*Command, int) {
 		}
 	}
 
-	return nil, maxMatchLen
+	return nil, maxMatchLen, false
 }
 
 func (h *Handler) suggest(input *Input) []string {
