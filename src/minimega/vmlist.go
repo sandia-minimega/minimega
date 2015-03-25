@@ -96,7 +96,7 @@ func (l *vmList) save(file *os.File, vms []string) error {
 	}
 
 	if allVms && len(vms) != 1 {
-		log.Info("ignoring vm names, wildcard is present")
+		log.Debug("ignoring vm names, wildcard is present")
 	}
 
 	var toSave []string
@@ -140,6 +140,9 @@ func (l *vmList) save(file *os.File, vms []string) error {
 		} else {
 			cmds = append(cmds, "vm launch 1")
 		}
+
+		// and a blank line
+		cmds = append(cmds, "")
 
 		// write commands to file
 		for _, cmd := range cmds {
