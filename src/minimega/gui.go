@@ -154,6 +154,7 @@ const (
 var (
 	guiRunning bool
 	webroot    string = defaultWebroot
+	server     *http.Server
 )
 
 var guiCLIHandlers = []minicli.Handler{
@@ -176,6 +177,10 @@ start the web server on the default port 9001:
 To start the webserver on a specific port, issue the web command with the port:
 
 	gui 9526
+
+NOTE: If you start the GUI with an invalid webroot, you can safely
+re-run "gui webroot" followed by "gui" to update it.
+
 `,
 		Patterns: []string{
 			"gui [port]",
@@ -210,11 +215,7 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if guiRunning {
-		resp.Error = "GUI is already running"
-	} else {
-		go guiStart(port)
-	}
+	go guiStart(port)
 
 	return resp
 }
@@ -259,15 +260,20 @@ func guiStart(port int) {
 	mux.HandleFunc("/gui/", guiHome)
 	mux.HandleFunc("/", guiHome)
 
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: mux,
-	}
+	if server == nil {
+		server = &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: mux,
+		}
 
-	err := server.ListenAndServe()
-	if err != nil {
-		log.Error("guiStart: %v", err)
-		guiRunning = false
+		err := server.ListenAndServe()
+		if err != nil {
+			log.Error("guiStart: %v", err)
+			guiRunning = false
+		}
+	} else {
+		// just update the mux
+		server.Handler = mux
 	}
 }
 
