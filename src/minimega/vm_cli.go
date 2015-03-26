@@ -243,7 +243,7 @@ Migrate runtime state of a VM to disk, which can later be booted with vm config 
 
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
-status of in-flight migrations by invoking vm migrate with no arguments. 
+status of in-flight migrations by invoking vm migrate with no arguments.
 `,
 		Patterns: []string{
 			"vm migrate",
@@ -446,11 +446,9 @@ using vm kernel will result in an error.
 For example, to set a static IP for a linux VM:
 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
-			"vm config append [argument]...",
+			"vm config append [arg]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "append")
-		}),
+		Call: wrapSimpleCLI(cliVmConfigAppend),
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -492,9 +490,7 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "net")
-		}),
+		Call: wrapSimpleCLI(cliVmConfigNet),
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",
@@ -740,44 +736,96 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 }
 
 func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	// We assume in this function that there is only one key to update the field
+	// from. If there is more than one thing you need to update, use a separate
+	// function (e.g. cliVmConfigNet).
+	if len(c.StringArgs)+len(c.BoolArgs)+len(c.ListArgs) > 1 {
+		log.Fatalln("someone goofed on the patterns, too many arguments")
+	}
+
+	if f := info.getString(field); f != nil {
+		if len(c.StringArgs) == 0 {
+			// Print the current value
+			resp.Response = *f
+		} else {
+			// Update the value, have to use range since we don't know the key
+			for _, v := range c.StringArgs {
+				*f = v
+			}
+		}
+	} else if f := info.getBool(field); f != nil {
+		if len(c.BoolArgs) == 0 {
+			// Print the current value
+			resp.Response = fmt.Sprintf("%t", *f)
+		} else if c.BoolArgs["true"] || c.BoolArgs["false"] {
+			// Update the value, true and false should be the only choices
+			*f = c.BoolArgs["true"]
+		} else {
+			log.Fatalln("someone goofed on the patterns, should be true/false")
+		}
+	} else if f := info.getStringSlice(field); f != nil {
+		if len(c.ListArgs) == 0 {
+			// Print the current values, make sure to properly quote them
+			resp.Response = fmt.Sprintf("%v", *f)
+		} else if len(c.ListArgs) == 1 {
+			// Update the value, have to use range since we don't know the key
+			for _, v := range c.ListArgs {
+				*f = append(*f, v...)
+			}
+		}
+	} else {
+		log.Fatalln("someone goofed on the patterns, invalid field")
+	}
+
+	return resp
+}
+
+func cliVmConfigAppend(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.ListArgs) == 0 {
+		// Print out network config for VM
+		resp.Response = info.Append
+	} else {
+		// Update append by concatenating all the args
+		// TODO: There could be spaces in the args... needs escaping!
+		info.Append = strings.Join(c.ListArgs["arg"], " ")
+	}
+
+	return resp
+}
+
+func cliVmConfigNet(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.ListArgs) == 0 {
+		// Print out network config for VM
+		resp.Response = info.networkString()
+	} else {
+		// Update available nets using all the arguments
+		for _, v := range c.ListArgs["netspec"] {
+			if err := processVMNet(info, v); err != nil {
+				resp.Error = err.Error()
+				break
+			}
+		}
+	}
+
+	return resp
+}
+
+func cliVmConfigQemuOverride(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	fns := vmConfigFns[field]
-
-	// If there are no args it means that we want to display the current value
-	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
-		resp.Response = fns.Print(info)
-		return resp
-	}
-
-	// We expect exactly one key in either the String, List, or Bool Args for
-	// most configs. For some, there is more complex processing and they need
-	// the whole command.
-	if fns.UpdateCommand != nil {
-		err = fns.UpdateCommand(c)
-	} else if len(c.StringArgs) == 1 && fns.Update != nil {
-		for _, arg := range c.StringArgs {
-			err = fns.Update(info, arg)
-		}
-	} else if len(c.ListArgs) == 1 && fns.Update != nil {
-		// Lists need to be cleared first since they process each arg
-		// individually to build state
-		fns.Clear(info)
-
-		for _, args := range c.ListArgs {
-			for _, arg := range args {
-				if err = fns.Update(info, arg); err != nil {
-					break
-				}
-			}
-		}
-	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
-		// Special case, look for key "true" (there should only be two options,
-		// "true" or "false" and, therefore, not "true" implies "false").
-		err = fns.UpdateBool(info, c.BoolArgs["true"])
+	if c.StringArgs["match"] != "" {
+		err = addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
+	} else if c.StringArgs["id"] != "" {
+		err = delVMQemuOverride(c.StringArgs["id"])
 	} else {
-		log.Fatalln("someone goofed on the patterns")
+		log.Fatalln("someone goofed the qemu-override patterns")
 	}
 
 	if err != nil {
@@ -793,11 +841,37 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	var clearAll = len(c.BoolArgs) == 0
 	var cleared bool
 
-	for k, fns := range vmConfigFns {
-		if clearAll || c.BoolArgs[k] {
-			fns.Clear(info)
-			cleared = true
+	// Clear the "simple" fields
+	for _, field := range vmInfoFields {
+		if clearAll || c.BoolArgs[field] {
+			if f := info.getString(field); f != nil {
+				*f = vmInfoDefaultString(field)
+				cleared = true
+			} else if f := info.getBool(field); f != nil {
+				*f = vmInfoDefaultBool(field)
+				cleared = true
+			} else if f := info.getStringSlice(field); f != nil {
+				*f = []string{}
+				cleared = true
+			}
 		}
+	}
+
+	// Clear the "advanced" fields
+	if clearAll || c.BoolArgs["net"] {
+		info.Networks = []int{}
+		info.bridges = []string{}
+		info.macs = []string{}
+		info.netDrivers = []string{}
+		cleared = true
+	}
+	if clearAll || c.BoolArgs["qemu-override"] {
+		QemuOverrides = make(map[int]*qemuOverride)
+		cleared = true
+	}
+	if clearAll || c.BoolArgs["append"] {
+		info.Append = ""
+		cleared = true
 	}
 
 	if !cleared {

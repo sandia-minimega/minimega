@@ -21,6 +21,29 @@ import (
 	"time"
 )
 
+// configurable vmInfo fields that are simple strings
+var vmInfoStringFields = []string{
+	"cdrom", "initrd", "kernel", "memory", "migrate", "uuid", "vcpus",
+}
+
+// configurable vmInfo fields that are boolean
+var vmInfoBoolFields = []string{
+	"snapshot",
+}
+
+// configurable vmInfo fields that are slices of strings
+var vmInfoStringSliceFields = []string{
+	"disk", "qemu-append",
+}
+
+// configurable vmInfo fields that are "special"
+var vmInfoSpecialFields = []string{
+	"net", "qemu-override",
+}
+
+// all configurable vmInfo fields (built in init from above slices)
+var vmInfoFields []string
+
 type vmInfo struct {
 	Lock sync.Mutex
 
@@ -33,8 +56,9 @@ type vmInfo struct {
 	KernelPath string
 	InitrdPath string
 	Append     string
-	Snapshot   bool
 	UUID       string
+
+	Snapshot bool
 
 	MigratePath string
 	DiskPaths   []string
@@ -55,6 +79,74 @@ type vmInfo struct {
 	Hotplug map[int]string
 
 	Tags map[string]string // Additional information
+}
+
+func init() {
+	vmInfoFields = append(vmInfoFields, vmInfoStringFields...)
+	vmInfoFields = append(vmInfoFields, vmInfoBoolFields...)
+	vmInfoFields = append(vmInfoFields, vmInfoStringSliceFields...)
+	vmInfoFields = append(vmInfoFields, vmInfoSpecialFields...)
+}
+
+func vmInfoDefaultString(name string) string {
+	switch name {
+	case "vcpus":
+		return "1"
+	case "memory":
+		return VM_MEMORY_DEFAULT
+	}
+
+	return ""
+}
+
+func vmInfoDefaultBool(name string) bool {
+	switch name {
+	case "snapshot":
+		return true
+	}
+
+	return false
+}
+
+func (vm *vmInfo) getString(name string) *string {
+	switch name {
+	case "cdrom":
+		return &vm.CdromPath
+	case "initrd":
+		return &vm.InitrdPath
+	case "kernel":
+		return &vm.KernelPath
+	case "memory":
+		return &vm.Memory
+	case "migrate":
+		return &vm.MigratePath
+	case "uuid":
+		return &vm.UUID
+	case "vcpus":
+		return &vm.Vcpus
+	}
+
+	return nil
+}
+
+func (vm *vmInfo) getBool(name string) *bool {
+	switch name {
+	case "snapshot":
+		return &vm.Snapshot
+	}
+
+	return nil
+}
+
+func (vm *vmInfo) getStringSlice(name string) *[]string {
+	switch name {
+	case "disk":
+		return &vm.DiskPaths
+	case "qemu-append":
+		return &vm.QemuAppend
+	}
+
+	return nil
 }
 
 func (vm *vmInfo) start() error {
