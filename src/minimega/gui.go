@@ -11,15 +11,15 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
 const (
-	GUI_PORT          = 9526
-	defaultVNC string = "/opt/minimega/misc/novnc"
-	defaultD3  string = "/opt/minimega/misc/d3"
-	HTMLFRAME         = `<!DOCTYPE html>
+	GUI_PORT              = 9001
+	defaultWebroot string = "misc/web"
+	HTMLFRAME             = `<!DOCTYPE html>
 				<head><title>Minimega GUI</title>
 				<link rel="stylesheet" type="text/css" href="/gui/d3/nav.css">
 				<link rel="stylesheet" type="text/css" href="/gui/d3/jquery.dataTables.css">
@@ -153,8 +153,7 @@ const (
 
 var (
 	guiRunning bool
-	noVNCPath  string = defaultVNC
-	d3Path     string = defaultD3
+	webroot    string = defaultWebroot
 )
 
 var guiCLIHandlers = []minicli.Handler{
@@ -163,29 +162,24 @@ var guiCLIHandlers = []minicli.Handler{
 		HelpLong: `
 Launch the GUI webserver
 
-This command requires access to an installation of novnc. By default minimega
-looks in /opt/minimega/misc/novnc. To set a different path, invoke:
+The webserver requires noVNC and D3, expecting to find them in
+subdirectories "novnc" and "d3" under misc/web/ by default. To set a
+different path, run:
 
-	gui novnc <path to novnc>
+        gui webroot <path to web dir>
 
-It also requires D3 and expects it in /opt/minimega/misc/d3. To set a different
-path, run:
-
-        gui d3 <path to d3>
-
-Once you have set the paths, or if the defaults are acceptable, run "gui" to
-start the web server:
+Once you have set the path, or if the default is acceptable, run "gui" to
+start the web server on the default port 9001:
 
         gui
 
 To start the webserver on a specific port, issue the web command with the port:
 
 	gui 9526
-
-9526 is the default port.`,
+`,
 		Patterns: []string{
 			"gui [port]",
-			"gui <novnc,d3> <path>",
+			"gui webroot <path>",
 		},
 		Call: wrapSimpleCLI(cliGUI),
 	},
@@ -212,24 +206,20 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.StringArgs["path"] != "" {
-		if c.BoolArgs["novnc"] {
-			noVNCPath = c.StringArgs["path"]
-		} else if c.BoolArgs["d3"] {
-			d3Path = c.StringArgs["path"]
-		}
+		webroot = c.StringArgs["path"]
 		return resp
 	}
 
 	if guiRunning {
 		resp.Error = "GUI is already running"
 	} else {
-		go guiStart(port, noVNCPath, d3Path)
+		go guiStart(port)
 	}
 
 	return resp
 }
 
-func guiStart(port int, noVNC, d3 string) {
+func guiStart(port int) {
 
 	//Look at me! I self-discovered myself!
 	//miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
@@ -253,8 +243,8 @@ func guiStart(port int, noVNC, d3 string) {
 	guiRunning = true
 
 	mux := http.NewServeMux()
-	mux.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
-	mux.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
+	mux.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(filepath.Join(webroot, "novnc")))))
+	mux.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(filepath.Join(webroot, "d3")))))
 
 	mux.HandleFunc("/gui/ws/", vncWsHandler)
 	mux.HandleFunc("/gui/map", guiMapVMs)
