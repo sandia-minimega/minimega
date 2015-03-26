@@ -153,8 +153,8 @@ const (
 
 var (
 	guiRunning bool
-	noVNCPath  string
-	d3Path     string
+	noVNCPath  string = defaultVNC
+	d3Path     string = defaultD3
 )
 
 var guiCLIHandlers = []minicli.Handler{
@@ -193,14 +193,13 @@ To start the webserver on a specific port, issue the web command with the port:
 
 func init() {
 	registerHandlers("gui", guiCLIHandlers)
-	noVNCPath = defaultVNC
-	d3Path = defaultD3
+
 }
 
 func cliGUI(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	port := fmt.Sprintf(":%v", GUI_PORT)
+	port := GUI_PORT
 	if c.StringArgs["port"] != "" {
 		// Check if port is an integer
 		p, err := strconv.Atoi(c.StringArgs["port"])
@@ -209,7 +208,7 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		port = fmt.Sprintf(":%v", p)
+		port = p
 	}
 
 	if c.StringArgs["path"] != "" {
@@ -230,7 +229,7 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func guiStart(port, noVNC string, d3 string) {
+func guiStart(port int, noVNC, d3 string) {
 
 	//Look at me! I self-discovered myself!
 	//miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
@@ -252,23 +251,30 @@ func guiStart(port, noVNC string, d3 string) {
 	//}
 
 	guiRunning = true
-	http.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
-	http.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
 
-	http.HandleFunc("/gui/ws/", vncWsHandler)
-	http.HandleFunc("/gui/map", guiMapVMs)
-	http.HandleFunc("/gui/errors", guiErrorVMs)
-	http.HandleFunc("/gui/state", guiState)
-	http.HandleFunc("/gui/stats", guiStats)
-	http.HandleFunc("/gui/all", guiAllVMs)
-	http.HandleFunc("/gui/tile", guiTiler)
-	http.HandleFunc("/gui/vnc/", guiVNC)
-	http.HandleFunc("/gui/command/", guiCmd)
-	http.HandleFunc("/gui/screenshot/", guiScreenshot)
-	http.HandleFunc("/gui/", guiHome)
-	http.HandleFunc("/", guiHome)
+	mux := http.NewServeMux()
+	mux.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(noVNC))))
+	mux.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(d3))))
 
-	err := http.ListenAndServe(port, nil)
+	mux.HandleFunc("/gui/ws/", vncWsHandler)
+	mux.HandleFunc("/gui/map", guiMapVMs)
+	mux.HandleFunc("/gui/errors", guiErrorVMs)
+	mux.HandleFunc("/gui/state", guiState)
+	mux.HandleFunc("/gui/stats", guiStats)
+	mux.HandleFunc("/gui/all", guiAllVMs)
+	mux.HandleFunc("/gui/tile", guiTiler)
+	mux.HandleFunc("/gui/vnc/", guiVNC)
+	mux.HandleFunc("/gui/command/", guiCmd)
+	mux.HandleFunc("/gui/screenshot/", guiScreenshot)
+	mux.HandleFunc("/gui/", guiHome)
+	mux.HandleFunc("/", guiHome)
+
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: mux,
+	}
+
+	err := server.ListenAndServe()
 	if err != nil {
 		log.Error("guiStart: %v", err)
 		guiRunning = false
