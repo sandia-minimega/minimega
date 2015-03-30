@@ -44,6 +44,10 @@ Generate the pull request from master (or the branch you are committing to) for 
 
 If your patchset fixes a listed issue, make sure 'fixes issue #NNN' is in the commit log, so the issue is referenced to your work. 
 
+* Code review
+
+When a pull request is made, at least one contributer will review the patchset, make comments, and either wait for more feedback or authorize the patch with a 'LGTM' (looks good to me) phrase. After authorization, any committer may merge the pull request.
+
 * Copyright
 
 minimega is released under the GNU GPLv3. Several included 3rd party packages are released under other licenses, as described in the LICENSES directory in the repo. If you are submitting a patch to the existing codebase, the code will be licensed under the same license. If you are submitting an entirely new package, please license it under any compatible FLOSS license. If you are submitting under a license not already included in the distribution, please discuss this on the mailing list first. 
