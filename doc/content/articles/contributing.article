@@ -48,6 +48,12 @@ If your patchset fixes a listed issue, make sure 'fixes issue #NNN' is in the co
 
 When a pull request is made, at least one contributer will review the patchset, make comments, and either wait for more feedback or authorize the patch with a 'LGTM' (looks good to me) phrase. After authorization, any committer may merge the pull request.
 
+* Working with Github
+
+See Github's [[https://help.github.com/categories/collaborating/][collaborating]] section for more information on effectively contributing to projects the "github" way.
+
+Of specific use may be [[https://help.github.com/articles/syncing-a-fork/][syncing a fork]] with an upstream repo, and [[https://help.github.com/articles/checking-out-pull-requests-locally/][checking out a pull request locally]].
+
 * Copyright
 
 minimega is released under the GNU GPLv3. Several included 3rd party packages are released under other licenses, as described in the LICENSES directory in the repo. If you are submitting a patch to the existing codebase, the code will be licensed under the same license. If you are submitting an entirely new package, please license it under any compatible FLOSS license. If you are submitting under a license not already included in the distribution, please discuss this on the mailing list first. 
