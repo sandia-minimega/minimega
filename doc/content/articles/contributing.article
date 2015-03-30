@@ -8,6 +8,8 @@ minimega is an open source project and we welcome contributions from the communi
 
 Many patches are simple enough to not need the more rigorous development approach detailed here. These include typos, additions to documentation without code revisions, and minor fixes (only a few lines of code). For these, simply format the patch according to the "Submitting a Patch" section below and issue a pull request.
 
+When submitting a trivial patch, include the text 'trivial' in the pull request title.
+
 * Discuss your design
 
 Begin by joining the [[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing list]]. New ideas and better solutions to existing code are always welcome, and posting to the mailing list first allows coming to a quorum on your idea before you spend time implementing it. 
