@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -135,23 +134,12 @@ func (l *vmList) save(file *os.File, vms []string) error {
 			}
 		}
 
-		// Add the "advanced" fields
-		if vm.Append != "" {
-			cmds = append(cmds, fmt.Sprintf("vm config append %s", vm.Append))
-		}
-		if v, ok := customExternalProcesses["qemu"]; ok {
-			cmds = append(cmds, fmt.Sprintf("vm config qemu %q", v))
-		}
-		for _, q := range QemuOverrides {
-			cmds = append(cmds, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
-		}
-		if len(vm.Networks) > 0 {
-			nics := []string{}
-			for i, vlan := range vm.Networks {
-				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
-				nics = append(nics, nic)
+		// Add the "special" fields
+		for _, fns := range vmConfigSpecial {
+			v := fns.PrintCLI(vm)
+			if v != "" {
+				cmds = append(cmds, v)
 			}
-			cmds = append(cmds, "vm config net "+strings.Join(nics, " "))
 		}
 
 		if vm.Name != "" {

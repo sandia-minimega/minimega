@@ -335,7 +335,9 @@ remove saved configurations.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: wrapSimpleCLI(cliVmConfigQemu),
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "qemu")
+		}),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -347,7 +349,9 @@ replacement string.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or all>",
 		},
-		Call: wrapSimpleCLI(cliVmConfigQemuOverride),
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "qemu-override")
+		}),
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -444,7 +448,9 @@ For example, to set a static IP for a linux VM:
 		Patterns: []string{
 			"vm config append [arg]...",
 		},
-		Call: wrapSimpleCLI(cliVmConfigAppend),
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "append")
+		}),
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -486,7 +492,9 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Call: wrapSimpleCLI(cliVmConfigNet),
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "net")
+		}),
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",
@@ -736,6 +744,17 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 
 	nArgs := len(c.StringArgs) + len(c.BoolArgs) + len(c.ListArgs)
 
+	// Check for "special" fields first
+	if fns, ok := vmConfigSpecial[field]; ok {
+		if nArgs == 0 {
+			resp.Response = fns.Print()
+		} else if err := fns.Update(c); err != nil {
+			resp.Error = err.Error()
+		}
+
+		return resp
+	}
+
 	// We assume in this function that there is only one key to update the field
 	// from. If there is more than one thing you need to update, use a separate
 	// function (e.g. cliVmConfigNet).
@@ -744,6 +763,7 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	}
 
 	if f := info.getField(field); f != nil {
+		// "Simple" fields
 		switch f := f.(type) {
 		case *string:
 			if nArgs == 0 {
@@ -780,71 +800,6 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	return resp
 }
 
-func cliVmConfigQemu(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.StringArgs) == 0 {
-		resp.Response = process("qemu")
-	} else {
-		customExternalProcesses["qemu"] = c.StringArgs["path"]
-	}
-
-	return resp
-}
-
-func cliVmConfigAppend(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.ListArgs) == 0 {
-		// Print out network config for VM
-		resp.Response = info.Append
-	} else {
-		// Update append by concatenating all the args
-		// TODO: There could be spaces in the args... needs escaping!
-		info.Append = strings.Join(c.ListArgs["arg"], " ")
-	}
-
-	return resp
-}
-
-func cliVmConfigNet(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.ListArgs) == 0 {
-		// Print out network config for VM
-		resp.Response = info.networkString()
-	} else {
-		// Update available nets using all the arguments
-		for _, v := range c.ListArgs["netspec"] {
-			if err := processVMNet(info, v); err != nil {
-				resp.Error = err.Error()
-				break
-			}
-		}
-	}
-
-	return resp
-}
-
-func cliVmConfigQemuOverride(c *minicli.Command) *minicli.Response {
-	var err error
-	resp := &minicli.Response{Host: hostname}
-
-	if c.StringArgs["match"] != "" {
-		err = addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
-	} else if c.StringArgs["id"] != "" {
-		err = delVMQemuOverride(c.StringArgs["id"])
-	} else {
-		resp.Response = qemuOverrideString()
-	}
-
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
-}
-
 func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -859,25 +814,12 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	// Clear the "advanced" fields
-	if clearAll || c.BoolArgs["append"] {
-		info.Append = ""
-		cleared = true
-	}
-	if clearAll || c.BoolArgs["net"] {
-		info.Networks = []int{}
-		info.bridges = []string{}
-		info.macs = []string{}
-		info.netDrivers = []string{}
-		cleared = true
-	}
-	if clearAll || c.BoolArgs["qemu"] {
-		delete(customExternalProcesses, "qemu")
-		cleared = true
-	}
-	if clearAll || c.BoolArgs["qemu-override"] {
-		QemuOverrides = make(map[int]*qemuOverride)
-		cleared = true
+	// Clear the "special" fields
+	for field, fns := range vmConfigSpecial {
+		if clearAll || c.BoolArgs[field] {
+			fns.Clear()
+			cleared = true
+		}
 	}
 
 	if !cleared {

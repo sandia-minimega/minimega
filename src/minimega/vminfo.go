@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -73,6 +74,107 @@ type vmInfo struct {
 	Hotplug map[int]string
 
 	Tags map[string]string // Additional information
+}
+
+var vmConfigSpecial = map[string]struct {
+	Update   func(*minicli.Command) error
+	Clear    func()
+	Print    func() string
+	PrintCLI func(*vmInfo) string
+}{
+	"append": {
+		Update: func(c *minicli.Command) error {
+			// TODO: There could be spaces in the args... needs escaping!
+			info.Append = strings.Join(c.ListArgs["arg"], " ")
+			return nil
+		},
+		Clear: func() {
+			info.Append = ""
+		},
+		Print: func() string {
+			return info.Append
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			return fmt.Sprintf("vm config append %q", vm.Append)
+		},
+	},
+	"net": {
+		Update: func(c *minicli.Command) error {
+			// Update available nets using all the arguments
+			for _, v := range c.ListArgs["netspec"] {
+				if err := processVMNet(info, v); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+		Clear: func() {
+			info.Networks = []int{}
+			info.bridges = []string{}
+			info.macs = []string{}
+			info.netDrivers = []string{}
+		},
+		Print: func() string {
+			return info.networkString()
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			if len(vm.Networks) == 0 {
+				return ""
+			}
+
+			nics := []string{}
+			for i, vlan := range vm.Networks {
+				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+				nics = append(nics, nic)
+			}
+			return "vm config net " + strings.Join(nics, " ")
+		},
+	},
+	"qemu": {
+		Update: func(c *minicli.Command) error {
+			customExternalProcesses["qemu"] = c.StringArgs["path"]
+			return nil
+		},
+		Clear: func() {
+			delete(customExternalProcesses, "qemu")
+		},
+		Print: func() string {
+			return process("qemu")
+		},
+		PrintCLI: func(_ *vmInfo) string {
+			if v, ok := customExternalProcesses["qemu"]; ok {
+				return fmt.Sprintf("vm config qemu %q", v)
+			}
+
+			return ""
+		},
+	},
+	"qemu-override": {
+		Update: func(c *minicli.Command) error {
+			if c.StringArgs["match"] != "" {
+				return addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
+			} else if c.StringArgs["id"] != "" {
+				return delVMQemuOverride(c.StringArgs["id"])
+			}
+
+			log.Fatal("someone goofed on qemu-override patterns")
+			return nil
+		},
+		Clear: func() {
+			QemuOverrides = make(map[int]*qemuOverride)
+		},
+		Print: func() string {
+			return qemuOverrideString()
+		},
+		PrintCLI: func(_ *vmInfo) string {
+			cmds := []string{}
+			for _, q := range QemuOverrides {
+				cmds = append(cmds, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
+			}
+			return strings.Join(cmds, "\n")
+		},
+	},
 }
 
 func (vm *vmInfo) setDefault(name string) {
