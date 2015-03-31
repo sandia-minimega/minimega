@@ -55,64 +55,6 @@ var vmMasks = []string{
 	"uuid", "cc_active", "tags",
 }
 
-// TODO: This has become a mess... there must be a better way. Perhaps we can
-// add an Update, UpdateBool, ... method to the vmInfo struct and then have the
-// logic in there to handle the different config types.
-var vmConfigFns = map[string]struct {
-	PrintCLI func(*vmInfo) string // If not specified, Print is used
-}{
-	"disk": {
-		PrintCLI: func(vm *vmInfo) string {
-			if len(vm.DiskPaths) == 0 {
-				return ""
-			}
-			return "vm config disk " + strings.Join(vm.DiskPaths, " ")
-		},
-	},
-	"net": {
-		PrintCLI: func(vm *vmInfo) string {
-			if len(vm.Networks) == 0 {
-				return ""
-			}
-
-			nics := []string{}
-			for i, vlan := range vm.Networks {
-				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
-				nics = append(nics, nic)
-			}
-			return "vm config net " + strings.Join(nics, " ")
-		},
-	},
-	"qemu": {
-	/*
-		Update: func(vm *vmInfo, v string) error {
-			customExternalProcesses["qemu"] = v
-			return nil
-		},
-		Clear: func(vm *vmInfo) { delete(customExternalProcesses, "qemu") },
-		Print: func(vm *vmInfo) string { return process("qemu") },
-	*/
-	},
-	"qemu-append": {
-		PrintCLI: func(vm *vmInfo) string {
-			if len(vm.QemuAppend) == 0 {
-				return ""
-			}
-			return "vm config qemu-append " + strings.Join(vm.QemuAppend, " ")
-		},
-	},
-	"qemu-override": {
-		PrintCLI: func(vm *vmInfo) string {
-			overrides := []string{}
-			for _, q := range QemuOverrides {
-				override := fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl)
-				overrides = append(overrides, override)
-			}
-			return strings.Join(overrides, "\n")
-		},
-	},
-}
-
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	killAck = make(chan int)

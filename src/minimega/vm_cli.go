@@ -335,9 +335,7 @@ remove saved configurations.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu")
-		}),
+		Call: wrapSimpleCLI(cliVmConfigQemu),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -349,9 +347,7 @@ replacement string.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or all>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu-override")
-		}),
+		Call: wrapSimpleCLI(cliVmConfigQemuOverride),
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -738,45 +734,59 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	nArgs := len(c.StringArgs) + len(c.BoolArgs) + len(c.ListArgs)
+
 	// We assume in this function that there is only one key to update the field
 	// from. If there is more than one thing you need to update, use a separate
 	// function (e.g. cliVmConfigNet).
-	if len(c.StringArgs)+len(c.BoolArgs)+len(c.ListArgs) > 1 {
+	if nArgs > 1 {
 		log.Fatalln("someone goofed on the patterns, too many arguments")
 	}
 
-	if f := info.getString(field); f != nil {
-		if len(c.StringArgs) == 0 {
-			// Print the current value
-			resp.Response = *f
-		} else {
-			// Update the value, have to use range since we don't know the key
-			for _, v := range c.StringArgs {
-				*f = v
+	if f := info.getField(field); f != nil {
+		switch f := f.(type) {
+		case *string:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else {
+				// Update the value, have to use range since we don't know the key
+				for _, v := range c.StringArgs {
+					*f = v
+				}
 			}
-		}
-	} else if f := info.getBool(field); f != nil {
-		if len(c.BoolArgs) == 0 {
-			// Print the current value
-			resp.Response = fmt.Sprintf("%t", *f)
-		} else if c.BoolArgs["true"] || c.BoolArgs["false"] {
-			// Update the value, true and false should be the only choices
-			*f = c.BoolArgs["true"]
-		} else {
-			log.Fatalln("someone goofed on the patterns, should be true/false")
-		}
-	} else if f := info.getStringSlice(field); f != nil {
-		if len(c.ListArgs) == 0 {
-			// Print the current values, make sure to properly quote them
-			resp.Response = fmt.Sprintf("%v", *f)
-		} else if len(c.ListArgs) == 1 {
-			// Update the value, have to use range since we don't know the key
-			for _, v := range c.ListArgs {
-				*f = append(*f, v...)
+		case *bool:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else if c.BoolArgs["true"] || c.BoolArgs["false"] {
+				// Update the value, true and false should be the only choices
+				*f = c.BoolArgs["true"]
+			} else {
+				log.Fatalln("someone goofed on the patterns, should be true/false")
+			}
+		case *[]string:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else {
+				// Update the value, have to use range since we don't know the key
+				for _, v := range c.ListArgs {
+					*f = append(*f, v...)
+				}
 			}
 		}
 	} else {
 		log.Fatalln("someone goofed on the patterns, invalid field")
+	}
+
+	return resp
+}
+
+func cliVmConfigQemu(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.StringArgs) == 0 {
+		resp.Response = process("qemu")
+	} else {
+		customExternalProcesses["qemu"] = c.StringArgs["path"]
 	}
 
 	return resp
@@ -825,7 +835,7 @@ func cliVmConfigQemuOverride(c *minicli.Command) *minicli.Response {
 	} else if c.StringArgs["id"] != "" {
 		err = delVMQemuOverride(c.StringArgs["id"])
 	} else {
-		log.Fatalln("someone goofed the qemu-override patterns")
+		resp.Response = qemuOverrideString()
 	}
 
 	if err != nil {
@@ -842,22 +852,18 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	var cleared bool
 
 	// Clear the "simple" fields
-	for _, field := range vmInfoFields {
+	for _, field := range vmConfigFields {
 		if clearAll || c.BoolArgs[field] {
-			if f := info.getString(field); f != nil {
-				*f = vmInfoDefaultString(field)
-				cleared = true
-			} else if f := info.getBool(field); f != nil {
-				*f = vmInfoDefaultBool(field)
-				cleared = true
-			} else if f := info.getStringSlice(field); f != nil {
-				*f = []string{}
-				cleared = true
-			}
+			info.setDefault(field)
+			cleared = true
 		}
 	}
 
 	// Clear the "advanced" fields
+	if clearAll || c.BoolArgs["append"] {
+		info.Append = ""
+		cleared = true
+	}
 	if clearAll || c.BoolArgs["net"] {
 		info.Networks = []int{}
 		info.bridges = []string{}
@@ -865,12 +871,12 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 		info.netDrivers = []string{}
 		cleared = true
 	}
-	if clearAll || c.BoolArgs["qemu-override"] {
-		QemuOverrides = make(map[int]*qemuOverride)
+	if clearAll || c.BoolArgs["qemu"] {
+		delete(customExternalProcesses, "qemu")
 		cleared = true
 	}
-	if clearAll || c.BoolArgs["append"] {
-		info.Append = ""
+	if clearAll || c.BoolArgs["qemu-override"] {
+		QemuOverrides = make(map[int]*qemuOverride)
 		cleared = true
 	}
 

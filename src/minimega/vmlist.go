@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -114,25 +115,43 @@ func (l *vmList) save(file *os.File, vms []string) error {
 			return fmt.Errorf("vm %v not found", vm)
 		}
 
-		// build up the command list to re-launch this vm
-		cmds := []string{}
+		// Commands to run to re-launch this vm, starting with clearing all the
+		// existing vm config fields.
+		cmds := []string{fmt.Sprintf("clear vm config")}
 
-		for k, fns := range vmConfigFns {
-			var value string
-			if fns.PrintCLI != nil {
-				value = fns.PrintCLI(vm)
-			} else {
-				value = fns.Print(vm)
-				if len(value) > 0 {
-					value = fmt.Sprintf("vm config %s %s", k, value)
+		// Add the "simple" fields
+		for _, field := range vmConfigFields {
+			switch f := vm.getField(field).(type) {
+			case *string:
+				if *f != "" {
+					cmds = append(cmds, fmt.Sprintf("vm config %s %q", field, *f))
+				}
+			case *bool:
+				cmds = append(cmds, fmt.Sprintf("vm config %s %t", field, *f))
+			case *[]string:
+				for _, v := range *f {
+					cmds = append(cmds, fmt.Sprintf("vm config %s %q", field, v))
 				}
 			}
+		}
 
-			if len(value) != 0 {
-				cmds = append(cmds, value)
-			} else {
-				cmds = append(cmds, fmt.Sprintf("clear vm config %s", k))
+		// Add the "advanced" fields
+		if vm.Append != "" {
+			cmds = append(cmds, fmt.Sprintf("vm config append %s", vm.Append))
+		}
+		if v, ok := customExternalProcesses["qemu"]; ok {
+			cmds = append(cmds, fmt.Sprintf("vm config qemu %q", v))
+		}
+		for _, q := range QemuOverrides {
+			cmds = append(cmds, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
+		}
+		if len(vm.Networks) > 0 {
+			nics := []string{}
+			for i, vlan := range vm.Networks {
+				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+				nics = append(nics, nic)
 			}
+			cmds = append(cmds, "vm config net "+strings.Join(nics, " "))
 		}
 
 		if vm.Name != "" {
