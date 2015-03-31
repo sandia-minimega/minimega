@@ -38,7 +38,7 @@ p, ul, ol {
     padding: 10px;
     border: 1px solid #e5ecf9; 
     background-color: white;
-    width: 10%;
+    width: 12%;
     
     -webkit-border-radius: 5px;
     -moz-border-radius: 5px;
@@ -53,8 +53,8 @@ ul.links, a.links {
 }
 
 .content {
-    margin-left: 13%;
-    width: 82%;
+    margin-left: 15%;
+    width: 80%;
 }
 
 .content p {
