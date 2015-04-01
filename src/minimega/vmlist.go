@@ -337,6 +337,19 @@ func (l *vmList) info() ([]string, [][]string, error) {
 				row = append(row, fmt.Sprintf("%v", j.bridges))
 			case "tap":
 				row = append(row, fmt.Sprintf("%v", j.taps))
+			case "bandwidth":
+				var bw []string
+				bandwidthLock.Lock()
+				for _, v := range j.taps {
+					t := bandwidthStats[v]
+					if t == nil {
+						bw = append(bw, "0.0/0.0")
+					} else {
+						bw = append(bw, fmt.Sprintf("%v", t))
+					}
+				}
+				bandwidthLock.Unlock()
+				row = append(row, fmt.Sprintf("%v", bw))
 			case "mac":
 				row = append(row, fmt.Sprintf("%v", j.macs))
 			case "tags":
