@@ -1,0 +1,130 @@
+minimega 2.0 release notes
+
+* Introduction
+
+The minimega development team is pleased to announce the release of minimega
+2.0. This is the first major release since minimega's creation, and is marked
+by sweeping changes to the command line infrastructure, documentation,
+compatibility, and several new features. 
+
+* What's new
+
+** Major changes and milestones
+
+*** Transition to github.com
+
+minimega is now hosted on
+[[https://github.com/sandia-minimega/minimega][github]]. This came both as a
+response to Google announcing the end of code.google.com, as well as to
+incorporate key features available at github, including better code review and
+ssh git access.
+
+*** minimega.org
+
+minimega once again has a website at [[http://minimega.org][minimega.org]]
+which also serves installation, usage, and API documentation. minimega.org
+reflects the current release. To view documentation rendered from the head of
+the repository, see [[http://head.minimega.org][head.minimega.org]].
+
+*** Documentation
+
+A big push to document all tools and features of the minimega distribution is
+underway, and a large chunk of that effort is complete and hosted on the
+website. Documents can be written as articles or slidedecks, and are rendered
+by the documentation tool `minidoc`. API documentation is now automatically
+generated at compile time, and include the entire API help text you will find
+on the command line.
+
+*** minicli
+
+The most salient change in minimega 2.0 is `minicli`, which represents an
+attempt to unify the command line interface, API style, error reporting, and
+data management. `minicli`... <JON>
+
+*** cc virtio-serial support
+
+The command and control API, used to drive runtime applications on launched on
+endpoints, now supports both TCP and virtio-serial connections. virtio-serial
+connections are supported on both Linux and Windows endpoints. The use of
+virtio-serial for cc connections allows networkless backchannels for command
+and control.
+
+See the [[http://minimega.org/articles/api.article#TOC_5.6.][cc API]]
+documentation for more information.
+
+*** cc tunnelling
+
+The cc API now supports TCP tunnelling over the cc transport layer, including
+over virtio. cc tunnelling is equivalent to SSH tunnelling (-L flag in ssh),
+and supports both forward and reverse tunnels. This means you can create TCP
+tunnels over otherwise no-net VMs for networkless backchannel access.
+
+See the [[http://minimega.org/articles/api.article#TOC_5.6.][cc API]]
+documentation for more information.
+
+** Additional new features
+
+*** Bandwidth stats
+
+*** Bridge trunk
+
+*** Command line pager
+
+<JON>
+
+*** Debian release packaging
+
+<JOHN>
+
+*** Deploy api
+
+*** New python bindings
+
+<DEVIN>
+
+*** nuvnc
+
+<JON>
+
+*** Protonuke json email file
+
+*** Recursive file api
+
+*** vm migrate / vm config migrate
+
+*** vm screenshot
+
+*** vm tag
+
+<JON>
+
+*** vmbetter iso generation
+
+<JOHN>
+
+** Changes from previous versions
+
+*** cc api rewrite
+
+*** IP learning now bridge specific
+
+*** vm cdrom eject/change
+
+<JOHN>
+
+*** vnc keyboard/mouse recordings are now human readable
+
+<JON>
+
+* Compatibility guarantee
+
+? do we want to do this?
+
+* Availability
+
+** Debian package
+
+** tarball
+
+** Building from source
+
