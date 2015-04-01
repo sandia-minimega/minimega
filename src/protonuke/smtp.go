@@ -14,20 +14,27 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
 COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Portions of file encoding scheme from https://gist.github.com/rmulley/6603544
 **/
 
 package main
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
 	log "minilog"
 	"net"
 	"net/smtp"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -58,9 +65,11 @@ const (
 )
 
 type mail struct {
-	To   string
-	From string
-	Msg  string
+	To      string
+	From    string
+	Subject string
+	Msg     string
+	File    string
 }
 
 var (
@@ -134,10 +143,70 @@ func smtpClient(protocol string) {
 	}
 }
 
+func smtpGetFile(m mail) ([]byte, string, error) {
+	var filename string
+
+	// open and read the file if there is one and if it's a directory pick
+	// a random file
+	if m.File != "" {
+		fi, err := os.Stat(m.File)
+		if err != nil {
+			return nil, "", err
+		}
+		if fi.IsDir() {
+			// pick a random file from the directory
+			var files []string
+			err := filepath.Walk(m.File, func(path string, info os.FileInfo, err error) error {
+				if info.IsDir() {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				files = append(files, path)
+				return nil
+			})
+			if err != nil {
+				return nil, "", err
+			}
+
+			if len(files) == 0 {
+				return nil, "", fmt.Errorf("no files in directory %v found", m.File)
+			}
+
+			s := rand.NewSource(time.Now().UnixNano())
+			r := rand.New(s)
+			filename = files[r.Intn(len(files))]
+		} else {
+			filename = m.File
+		}
+	}
+
+	if filename == "" {
+		return nil, "", nil
+	}
+
+	log.Debug("got filename: %v", filename)
+
+	buf, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return nil, "", err
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(buf)
+
+	return []byte(encoded), filepath.Base(filename), nil
+}
+
 func smtpSendMail(server string, m mail, protocol string) error {
 	// url notation requires leading and trailing [] on ipv6 addresses
 	if isIPv6(server) {
 		server = "[" + server + "]"
+	}
+
+	filedata, filename, err := smtpGetFile(m)
+	if err != nil {
+		return err
 	}
 
 	conn, err := net.Dial(protocol, server+smtpPort)
@@ -162,7 +231,35 @@ func smtpSendMail(server string, m mail, protocol string) error {
 	if err != nil {
 		return err
 	}
-	wc.Write([]byte(m.Msg))
+
+	boundary := "PROTONUKE-MIME-BOUNDARY"
+
+	// header
+	header := fmt.Sprintf("Subject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%s\r\n--%s", m.Subject, boundary, boundary)
+
+	// body
+	body := fmt.Sprintf("\r\nContent-Type: text/html\r\nContent-Transfer-Encoding:8bit\r\n\r\n%s\r\n--%s", m.Msg, boundary)
+
+	wc.Write([]byte(header + body))
+
+	if len(filedata) != 0 {
+		var buf bytes.Buffer
+
+		maxLineLen := 500
+		nbrLines := len(filedata) / maxLineLen
+
+		//append lines to buffer
+		for i := 0; i < nbrLines; i++ {
+			buf.Write(filedata[i*maxLineLen : (i+1)*maxLineLen])
+			buf.WriteString("\n")
+		}
+		buf.Write(filedata[nbrLines*maxLineLen:])
+
+		file := fmt.Sprintf("\r\nContent-Type: application/csv; name=\"file.csv\"\r\nContent-Transfer-Encoding:base64\r\nContent-Disposition: attachment; filename=\"%s\"\r\n\r\n%s\r\n--%s--", filename, buf.String(), boundary)
+
+		wc.Write([]byte(file))
+	}
+
 	wc.Close()
 
 	return nil
