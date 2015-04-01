@@ -17,3 +17,7 @@ cp -r $mm_root/doc $dest_opt
 mkdir -p ./minimega/usr/share/doc/minimega
 cp $mm_root/LICENSES/* ./minimega/usr/share/doc/minimega/
 echo COPIED FILES
+
+echo BUILDING PACKAGE...
+fakeroot dpkg-deb -b minimega
+echo DONE
