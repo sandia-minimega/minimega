@@ -61,9 +61,12 @@ The user can provide a JSON formatted corpus of email to use instead of the buil
 		{
 			"To":"victim@mail.com",
 			"From":"evil@minimega.org",
-			"Msg":"CONFIDENTIAL"
+			"Msg":"CONFIDENTIAL",
+			"File": "foo"
 		}
 	]
+
+The optional `File` field in the above JSON example allows you to specify a specific file, or directory of files to be used when sending that email. If a specific file is given, that file will be MIME encoded as part of the email. If a directory is given, then a random file from that directory will be chosen and sent. If no file or directory is given, no file will be sent. 
 
 ** Additional client configuration options
 

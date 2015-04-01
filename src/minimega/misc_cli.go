@@ -138,16 +138,16 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
-		// HAX: Make sure we don't have a recursive read command
-		if hasCommand(cmd, "read") {
-			err = errors.New("cannot run nested `read` commands")
-			break
-		}
-
 		// No command was returned, must have been a blank line or a comment
 		// line. Either way, don't try to run a nil command.
 		if cmd == nil {
 			continue
+		}
+
+		// HAX: Make sure we don't have a recursive read command
+		if hasCommand(cmd, "read") {
+			err = errors.New("cannot run nested `read` commands")
+			break
 		}
 
 		for resp := range minicli.ProcessCommand(cmd, true) {
