@@ -8,7 +8,7 @@ package main
 import (
 	"fmt"
 	"html"
-	"io/ioutil"
+	"html/template"
 	"minicli"
 	log "minilog"
 	"net/http"
@@ -18,9 +18,17 @@ import (
 )
 
 const (
-	GUI_PORT              = 9001
-	defaultWebroot string = "misc/web"
+	GUI_PORT       = 9001
+	defaultWebroot = "misc/web"
+	friendlyError  = "oops, something went wrong"
 )
+
+type htmlTable struct {
+	Header  []string
+	Tabular [][]string
+	ID      string
+	Class   string
+}
 
 var (
 	guiRunning bool
@@ -28,6 +36,8 @@ var (
 	server     *http.Server
 	HTMLFRAME  string
 	D3MAP      string
+
+	guiTemplates *template.Template
 )
 
 var guiCLIHandlers = []minicli.Handler{
@@ -49,7 +59,7 @@ start the web server on the default port 9001:
 
 To start the webserver on a specific port, issue the web command with the port:
 
-	gui 9526
+	gui 9001
 
 NOTE: If you start the GUI with an invalid webroot, you can safely
 re-run "gui webroot" followed by "gui" to update it.
@@ -93,69 +103,30 @@ func cliGUI(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func initTemplates() error {
-	tmplDir := filepath.Join(webroot, "templates")
-
-	// Read in the HTML frame
-	hf, err := ioutil.ReadFile(filepath.Join(tmplDir, "htmlframe"))
-	if err != nil {
-		return err
-	}
-	HTMLFRAME = string(hf)
-
-	d3m, err := ioutil.ReadFile(filepath.Join(tmplDir, "d3map"))
-	if err != nil {
-		return err
-	}
-	D3MAP = string(d3m)
-
-	return nil
-}
-
 func guiStart(port int) {
-
-	//Look at me! I self-discovered myself!
-	//miniLocation, oserr := os.Readlink("/proc/" + strconv.Itoa(os.Getpid()) + "/exe")
-	//fmt.Println(miniLocation)
-	//vncLocation := defaultVNC
-	//d3Location := defaultD3
-	//if strings.Split(miniLocation, "/")[1] == "tmp" {
-	//	fmt.Println("you found tmp")
-	//}
-	//if oserr == nil {
-	//	vncLocation = miniLocation + "/misc/novnc"
-	//	x := strings.Split(vncLocation, "/bin/minimega")
-	//	d3Location = miniLocation + "/misc/d3"
-	//	y := strings.Split(d3Location, "/bin/minimega")
-	//	vncLocation = x[0] + x[1]
-	//	d3Location = y[0] + y[1]
-	//	fmt.Println(d3Location)
-	//	fmt.Println(vncLocation)
-	//}
-
 	guiRunning = true
 
 	// re-initialize templates
-	err := initTemplates()
+	var err error
+	guiTemplates, err = template.ParseGlob(filepath.Join(webroot, "templates", "*.html"))
 	if err != nil {
 		log.Error("guiStart: couldn't initalize templates: %v", err)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/gui/novnc/", http.StripPrefix("/gui/novnc/", http.FileServer(http.Dir(filepath.Join(webroot, "novnc")))))
-	mux.Handle("/gui/d3/", http.StripPrefix("/gui/d3/", http.FileServer(http.Dir(filepath.Join(webroot, "d3")))))
+	mux.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(filepath.Join(webroot, "novnc")))))
+	mux.Handle("/d3/", http.StripPrefix("/d3/", http.FileServer(http.Dir(filepath.Join(webroot, "d3")))))
 
-	mux.HandleFunc("/gui/ws/", vncWsHandler)
-	mux.HandleFunc("/gui/map", guiMapVMs)
-	mux.HandleFunc("/gui/errors", guiErrorVMs)
-	mux.HandleFunc("/gui/state", guiState)
-	mux.HandleFunc("/gui/stats", guiStats)
-	mux.HandleFunc("/gui/all", guiAllVMs)
-	mux.HandleFunc("/gui/tile", guiTiler)
-	mux.HandleFunc("/gui/vnc/", guiVNC)
-	mux.HandleFunc("/gui/command/", guiCmd)
-	mux.HandleFunc("/gui/screenshot/", guiScreenshot)
-	mux.HandleFunc("/gui/", guiHome)
+	mux.HandleFunc("/ws/", vncWsHandler)
+	mux.HandleFunc("/map", guiMapVMs)
+	mux.HandleFunc("/errors", guiErrorVMs)
+	mux.HandleFunc("/state", guiState)
+	mux.HandleFunc("/stats", guiStats)
+	mux.HandleFunc("/all", guiAllVMs)
+	mux.HandleFunc("/tile", guiTiler)
+	mux.HandleFunc("/vnc/", guiVNC)
+	mux.HandleFunc("/command/", guiCmd)
+	mux.HandleFunc("/screenshot/", guiScreenshot)
 	mux.HandleFunc("/", guiHome)
 
 	if server == nil {
@@ -172,6 +143,13 @@ func guiStart(port int) {
 	} else {
 		// just update the mux
 		server.Handler = mux
+	}
+}
+
+func guiRenderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
+	if err := guiTemplates.ExecuteTemplate(w, tmpl, data); err != nil {
+		log.Error("unable to execute template %s -- %v", tmpl, err)
+		http.Error(w, friendlyError, http.StatusInternalServerError)
 	}
 }
 
@@ -347,112 +325,91 @@ func guiVNC(w http.ResponseWriter, r *http.Request) {
 }
 
 func guiHome(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte(fmt.Sprintf(HTMLFRAME, "", "")))
+	guiRenderTemplate(w, "home.html", nil)
 }
 
 func guiState(w http.ResponseWriter, r *http.Request) {
+	table := htmlTable{
+		Header:  []string{"name", "id", "traceroute", "SNMP", "DNS", "app"},
+		Tabular: [][]string{},
+		ID:      "example",
+		Class:   "hover",
+	}
 
-	mask := `id,name,tags`
-	list := globalVmInfo(mask)
-	vdata := ``
-	for _, row := range list {
+OuterLoop:
+	for _, row := range globalVmInfo("id,name,tags") {
 		if len(row) != 3 {
 			log.Fatal("column count mismatch: %v", row)
 		}
-		id := row[0]
-		name := row[1]
 
-		var tracert string
-		var snmp string
-		var dns string
-		var app string
-		f := strings.Fields(row[2])
-		for _, v := range f {
-			v = strings.Trim(v, "[]")
-			v2 := strings.Split(v, ":")
-			if len(v2) != 2 {
-				continue
-			}
-			if strings.Contains(v2[0], "traceroute") {
-				tracert = v2[1]
-			} else if strings.Contains(v2[0], "SNMP") {
-				snmp = v2[1]
-			} else if strings.Contains(v2[0], "DNS") {
-				dns = v2[1]
-			} else if strings.Contains(v2[0], "app") {
-				app = v2[1]
-			}
+		tags, err := ParseVmTags(row[2])
+		if err != nil {
+			log.Error("unable to parse vm tags (%s) -- %v", strings.Join(row[:2], ":"), err)
 		}
-		if tracert == "" || snmp == "" || app == "" || dns == "" {
-			continue
+
+		// Start with ID, name
+		row = row[:2]
+
+		// TODO: Are these the right keys?
+		for _, tag := range []string{"traceroute", "SNMP", "DNS", "app"} {
+			if tags[tag] == "" {
+				log.Debug("skipping vm (%s) -- missing tag %s", strings.Join(row[:2], ":"), tag)
+				continue OuterLoop
+			}
+
+			row = append(row, tags[tag])
 		}
-		vdata += fmt.Sprintf(`<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>`, name, id, tracert, snmp, dns, app)
+
+		table.Tabular = append(table.Tabular, row)
 	}
-	header := `<thead><tr><th>name</th><th>id</th><th>traceroute</th><th>SNMP</th><th>DNS</th><th>app</th></thead>`
-	tabletype := `<script type="text/javascript" language="javascript" src="/gui/d3/table.js"></script>`
-	body := fmt.Sprintf(`<table id="example" class="hover" cellspacing="0"> %s <tbody> %s </tbody></table>`, header, vdata)
-	w.Write([]byte(fmt.Sprintf(HTMLFRAME, tabletype, body)))
+
+	guiRenderTemplate(w, "state.html", table)
 }
 
 func guiMapVMs(w http.ResponseWriter, r *http.Request) {
-	mask := `id,name,tags`
-	list := globalVmInfo(mask)
-	dataformat := `   addpoint(%s,%s,"%s")` + "\n"
-	mapdata := ``
-	for _, row := range list {
+	type point struct {
+		Lat, Long float64
+		Text      string
+	}
+
+	points := []point{}
+
+	for _, row := range globalVmInfo("id,name,tags") {
 		if len(row) != 3 {
 			log.Fatal("column count mismatch: %v", row)
 		}
-		name := row[1]
 
-		// grab out lat/long
-		var lat string
-		var long string
-		f := strings.Fields(row[2])
-		for _, v := range f {
-			v = strings.Trim(v, "[]")
-			v2 := strings.Split(v, ":")
-			if len(v2) != 2 {
-				continue
-			}
-			if strings.Contains(v2[0], "lat") {
-				lat = v2[1]
-			} else if strings.Contains(v2[0], "long") {
-				long = v2[1]
-			}
+		name := strings.Join(row[:2], ":")
+
+		tags, err := ParseVmTags(row[2])
+		if err != nil {
+			log.Error("unable to parse vm tags for %s -- %v", name, err)
 		}
-		if lat == "" || long == "" {
+
+		p := point{Text: name}
+
+		// TODO: Are these the right keys?
+		if tags["lat"] == "" || tags["long"] == "" {
+			log.Debug("skipping vm %s -- missing required tags lat/long", name)
 			continue
 		}
-		mapdata += fmt.Sprintf(dataformat, lat, long, name)
-	}
 
-	d3body := fmt.Sprintf(D3MAP, mapdata)
-	d3head := `<link rel="stylesheet" type="text/css" href="/gui/d3/d3map.css">`
-	w.Write([]byte(fmt.Sprintf(HTMLFRAME, d3head, d3body)))
-}
-
-func globalVmInfo(mask string) [][]string {
-	var tabular [][]string
-
-	cmd, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s vm info`, mask))
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-
-	for resps := range runCommandGlobally(cmd, false) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			tabular = append(tabular, resp.Tabular...)
+		p.Lat, err = strconv.ParseFloat(tags["lat"], 64)
+		if err != nil {
+			log.Error("invalid lat for vm %s -- expected float")
+			continue
 		}
+
+		p.Long, err = strconv.ParseFloat(tags["lat"], 64)
+		if err != nil {
+			log.Error("invalid lat for vm %s -- expected float")
+			continue
+		}
+
+		points = append(points, p)
 	}
 
-	return tabular
+	guiRenderTemplate(w, "map.html", points)
 }
 
 func guiStats(w http.ResponseWriter, r *http.Request) {

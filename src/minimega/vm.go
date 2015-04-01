@@ -512,3 +512,26 @@ func ParseVmState(s string) (VmState, error) {
 
 	return VM_ERROR, fmt.Errorf("invalid state: %v", s)
 }
+
+func globalVmInfo(mask string) [][]string {
+	var tabular [][]string
+
+	cmd, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s vm info`, mask))
+	if err != nil {
+		// Should never happen
+		log.Fatalln(err)
+	}
+
+	for resps := range runCommandGlobally(cmd, false) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			tabular = append(tabular, resp.Tabular...)
+		}
+	}
+
+	return tabular
+}

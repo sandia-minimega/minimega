@@ -337,7 +337,7 @@ func (l *vmList) info() ([]string, [][]string, error) {
 			case "mac":
 				row = append(row, fmt.Sprintf("%v", j.macs))
 			case "tags":
-				row = append(row, fmt.Sprintf("%v", j.Tags))
+				row = append(row, fmt.Sprintf("%q", j.Tags))
 			case "ip":
 				var ips []string
 				for bIndex, m := range j.macs {
