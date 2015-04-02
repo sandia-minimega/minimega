@@ -1,50 +1,76 @@
 // Copyright (2012) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
+//Author: Brian Wright
 
 package main
 
 import (
 	"bytes"
 	"fmt"
-	"html"
+	"html/template"
 	"minicli"
 	log "minilog"
 	"net/http"
-	"sort"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
 const (
-	GOVNC_PORT          = 9001
-	defaultNoVNC string = "misc/novnc"
+	defaultWebPort = 9001
+	defaultWebRoot = "misc/web"
+	friendlyError  = "oops, something went wrong"
 )
 
-var (
-	webRunning bool
-)
+type htmlTable struct {
+	Header  []string
+	Tabular [][]interface{}
+	ID      string
+	Class   string
+}
+
+type vmScreenshotParams struct {
+	Host string
+	Name string
+	Port int
+	ID   int
+	Size int
+}
+
+var web struct {
+	Running   bool
+	Server    *http.Server
+	Templates *template.Template
+}
 
 var webCLIHandlers = []minicli.Handler{
 	{ // web
-		HelpShort: "start the minimega web interface",
+		HelpShort: "start the minimega webserver",
 		HelpLong: `
-Launch a webserver that allows you to browse the connected minimega hosts and
-VMs, and connect to any VM in the pool.
+Launch the minimega webserver
 
-This command requires access to an installation of novnc. By default minimega
-looks in 'pwd'/misc/novnc. To set a different path, invoke:
+The webserver requires noVNC and D3, expecting to find them in subdirectories
+"novnc" and "d3" under misc/web/ by default. To set a different path, run:
 
-	web novnc <path to novnc>
+        web webroot <path to web dir>
+
+Once you have set the path, or if the default is acceptable, run "web" to start
+the web server on the default port 9001:
+
+        web
 
 To start the webserver on a specific port, issue the web command with the port:
 
-	web 7000
+	web 9001
 
-9001 is the default port.`,
+NOTE: If you start the webserver with an invalid webroot, you can safely re-run
+"web root" followed by "web" to update it. You cannot, however, change the
+server's port.`,
 		Patterns: []string{
 			"web [port]",
-			"web novnc <path to novnc> [port]",
+			"web root <path> [port]",
 		},
 		Call: wrapSimpleCLI(cliWeb),
 	},
@@ -52,16 +78,13 @@ To start the webserver on a specific port, issue the web command with the port:
 
 func init() {
 	registerHandlers("web", webCLIHandlers)
+
 }
 
-// TODO: I changed how this command works to make it more intuitive (at least
-// for me). I removed the ability to configure/clear novnc independent of
-// starting the web server. There currently isn't a way to stop
-// http.ListenAndServe so "clear web" doesn't make sense.
 func cliWeb(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	port := fmt.Sprintf(":%v", GOVNC_PORT)
+	port := defaultWebPort
 	if c.StringArgs["port"] != "" {
 		// Check if port is an integer
 		p, err := strconv.Atoi(c.StringArgs["port"])
@@ -70,213 +93,303 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		port = fmt.Sprintf(":%v", p)
+		port = p
 	}
 
-	noVNC := defaultNoVNC
+	root := defaultWebRoot
 	if c.StringArgs["path"] != "" {
-		noVNC = c.StringArgs["path"]
+		root = c.StringArgs["path"]
 	}
 
-	if webRunning {
-		resp.Error = "web interface is already running"
-	} else {
-		go webStart(port, noVNC)
-	}
+	go webStart(port, root)
 
 	return resp
 }
 
-func webStart(port, noVNC string) {
-	webRunning = true
-	http.HandleFunc("/vnc/", vncRoot)
-	http.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(noVNC))))
-	err := http.ListenAndServe(port, nil)
+func webStart(port int, root string) {
+	// Initialize templates
+	var err error
+	web.Templates, err = template.ParseGlob(filepath.Join(root, "templates", "*.html"))
 	if err != nil {
-		log.Error("webStart: %v", err)
+		log.Error("webStart: couldn't initalize templates: %v", err)
 	}
-	webRunning = false
+
+	mux := http.NewServeMux()
+	mux.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(filepath.Join(root, "novnc")))))
+	mux.Handle("/d3/", http.StripPrefix("/d3/", http.FileServer(http.Dir(filepath.Join(root, "d3")))))
+
+	mux.HandleFunc("/", webHome)
+	mux.HandleFunc("/vms", webVMs)
+	mux.HandleFunc("/map", webMapVMs)
+	mux.HandleFunc("/screenshot/", webScreenshot)
+	mux.HandleFunc("/stats", webStats)
+	mux.HandleFunc("/tiles", webTileVMs)
+	mux.HandleFunc("/vnc/", webVNC)
+	mux.HandleFunc("/ws/", vncWsHandler)
+
+	if web.Server == nil {
+		web.Server = &http.Server{
+			Addr:    fmt.Sprintf(":%d", port),
+			Handler: mux,
+		}
+
+		err := web.Server.ListenAndServe()
+		if err != nil {
+			log.Error("webStart: %v", err)
+		} else {
+			web.Running = true
+		}
+	} else {
+		// just update the mux
+		web.Server.Handler = mux
+	}
 }
 
-func vncRoot(w http.ResponseWriter, r *http.Request) {
-	// there are four things we can serve:
-	// 	1. "/" - show the list of hosts
-	//	2. "/<host>" - show the list of host VMs
-	//	3. "/<host>/<value>" - redirect to the novnc html with a path
-	//	4. "/ws/<host>/<value>" - create a tunnel
-	url := r.URL.String()
-	if !strings.HasSuffix(url, "/") {
-		url += "/"
+// webRenderTemplate renders the given template with the provided data, writing
+// the result to the client. Should be called last in an http handler.
+func webRenderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
+	if err := web.Templates.ExecuteTemplate(w, tmpl, data); err != nil {
+		log.Error("unable to execute template %s -- %v", tmpl, err)
+		http.Error(w, friendlyError, http.StatusInternalServerError)
 	}
-	fields := strings.Split(url, "/")
-	switch len(fields) {
-	case 3: // "/"
-		w.Write([]byte(webHosts()))
-	case 4: // "/<host>"
-		w.Write([]byte(webHostVMs(fields[2])))
-	case 5: // "/<host>/<port>"
-		title := html.EscapeString(fields[2] + ":" + fields[3])
-		path := fmt.Sprintf("/novnc/vnc_auto.html?title=%v&path=vnc/ws/%v/%v", title, fields[2], fields[3])
-		http.Redirect(w, r, path, http.StatusTemporaryRedirect)
-	case 6: // "/ws/<host>/<port>"
-		vncWsHandler(w, r)
-	default:
+}
+
+// webScreenshot serves routes like /screenshot/<host>/<id>.png. Optional size
+// query parameter dictates the size of the screenshot.
+func webScreenshot(w http.ResponseWriter, r *http.Request) {
+	fields := strings.Split(r.URL.Path, "/")
+	if len(fields) != 4 {
+		http.NotFound(w, r)
+		return
+	}
+	fields = fields[2:]
+
+	size := r.URL.Query().Get("size")
+	host := fields[0]
+	id := strings.TrimSuffix(fields[1], ".png")
+
+	cmdStr := fmt.Sprintf("vm screenshot %s %s", id, size)
+	if host != hostname {
+		cmdStr = fmt.Sprintf("mesh send %s %s", host, cmdStr)
+	}
+
+	cmd := minicli.MustCompile(cmdStr)
+
+	var screenshot []byte
+
+	for resps := range runCommand(cmd, false) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				http.Error(w, friendlyError, http.StatusInternalServerError)
+				continue
+			}
+
+			if resp.Data == nil {
+				http.NotFound(w, r)
+			}
+
+			if screenshot == nil {
+				screenshot = resp.Data.([]byte)
+			} else {
+				log.Error("received more than one response for vm screenshot")
+			}
+		}
+	}
+
+	if screenshot != nil {
+		w.Write(screenshot)
+	} else {
 		http.NotFound(w, r)
 	}
 }
 
-func webHosts() string {
-	hosts := make(map[string]int)
-	// first grab our own list of hosts
-	count := 0
-	for _, vm := range vms.vms {
-		if vm.State != VM_QUIT && vm.State != VM_ERROR {
-			count++
-		}
+// webVNC serves routes like /vnc/<host>/<port>/<vmName>.
+func webVNC(w http.ResponseWriter, r *http.Request) {
+	fields := strings.Split(r.URL.Path, "/")
+	if len(fields) != 5 {
+		http.NotFound(w, r)
+		return
 	}
-	hosts[hostname] = count
+	fields = fields[2:]
 
-	cmd, err := minicli.CompileCommand("mesh send all vm info")
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
+	host := fields[0]
+	port := fields[1]
+	vm := fields[2]
 
-	remoteRespChan := runCommand(cmd, false)
+	u, _ := url.Parse("/novnc/vnc_auto.html")
+	q := u.Query()
+	q.Set("title", fmt.Sprintf("%s:%s", host, vm))
+	q.Set("path", fmt.Sprintf("ws/%s/%s", host, port))
+	u.RawQuery = q.Encode()
 
-	for resps := range remoteRespChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			count := 0
-
-			// find the index for state
-			stateIndex := -1
-			for i, col := range resp.Header {
-				if col == "state" {
-					stateIndex = i
-					break
-				}
-			}
-			if stateIndex == -1 {
-				log.Fatalln("could not find state column")
-			}
-
-			for _, row := range resp.Tabular {
-				if row[stateIndex] != "quit" && row[stateIndex] != "error" {
-					count++
-				}
-			}
-			hosts[resp.Host] = count
-		}
-	}
-
-	// sort hostnames
-	var sortedHosts []string
-	for h, _ := range hosts {
-		sortedHosts = append(sortedHosts, h)
-	}
-	sort.Strings(sortedHosts)
-
-	var body bytes.Buffer
-	for _, h := range sortedHosts {
-		fmt.Fprintf(&body, "<a href=\"/vnc/%v\">%v</a> (%v)<br>\n", h, h, hosts[h])
-	}
-
-	return body.String()
+	webRenderTemplate(w, "vnc.html", u.String())
 }
 
-// this whole block is UGLY, please rewrite
-func webHostVMs(host string) string {
-	var respChan chan minicli.Responses
+func webHome(w http.ResponseWriter, r *http.Request) {
+	webRenderTemplate(w, "home.html", nil)
+}
 
-	cmdLocal, err := minicli.CompileCommand("vm info")
+func webMapVMs(w http.ResponseWriter, r *http.Request) {
+	type point struct {
+		Lat, Long float64
+		Text      string
+	}
+
+	masks := []string{"id", "name", "tags"}
+
+	points := []point{}
+
+	for _, rows := range globalVmInfo(masks, nil) {
+		for _, row := range rows {
+			if len(row) != 3 {
+				log.Fatal("column count mismatch: %v", row)
+			}
+
+			name := strings.Join(row[:2], ":")
+
+			tags, err := ParseVmTags(row[2])
+			if err != nil {
+				log.Error("unable to parse vm tags for %s -- %v", name, err)
+			}
+
+			p := point{Text: name}
+
+			// TODO: Are these the right keys?
+			if tags["lat"] == "" || tags["long"] == "" {
+				log.Debug("skipping vm %s -- missing required tags lat/long", name)
+				continue
+			}
+
+			p.Lat, err = strconv.ParseFloat(tags["lat"], 64)
+			if err != nil {
+				log.Error("invalid lat for vm %s -- expected float")
+				continue
+			}
+
+			p.Long, err = strconv.ParseFloat(tags["lat"], 64)
+			if err != nil {
+				log.Error("invalid lat for vm %s -- expected float")
+				continue
+			}
+
+			points = append(points, p)
+		}
+	}
+
+	webRenderTemplate(w, "map.html", points)
+}
+
+func webStats(w http.ResponseWriter, r *http.Request) {
+	table := htmlTable{
+		Header:  []string{},
+		Tabular: [][]interface{}{},
+		ID:      "example",
+		Class:   "hover",
+	}
+
+	cmd, err := minicli.CompileCommand("host")
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
 
-	cmdRemote, err := minicli.CompileCommand(fmt.Sprintf("mesh send %v vm info", host))
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
-
-	if host == hostname {
-		respChan = runCommand(cmdLocal, false)
-	} else {
-		respChan = runCommand(cmdRemote, false)
-	}
-
-	lines := []string{}
-
-	for resps := range respChan {
+	for resps := range runCommandGlobally(cmd, false) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
 				continue
 			}
 
-			// If we're the first response, we'll output the Header too.
-			if len(lines) == 0 {
-				header := `<tr>`
-				for _, h := range resp.Header {
-					header += `<td>` + h + `</td>`
-				}
-				header += `</tr>`
-				lines = append(lines, header)
-			}
-
-			// find the id and state index
-			idIndex := -1
-			stateIndex := -1
-			nameIndex := -1
-			for i, col := range resp.Header {
-				if col == "id" {
-					idIndex = i
-				} else if col == "state" {
-					stateIndex = i
-				} else if col == "name" {
-					nameIndex = i
-				}
-			}
-			if idIndex == -1 || stateIndex == -1 || nameIndex == -1 {
-				log.Fatalln("could not find id, state, or name index!")
+			if len(table.Header) == 0 && len(resp.Header) > 0 {
+				table.Header = append(table.Header, resp.Header...)
 			}
 
 			for _, row := range resp.Tabular {
-				if row[stateIndex] != "error" && row[stateIndex] != "quit" {
-					id, err := strconv.Atoi(row[idIndex])
-					if err != nil {
-						log.Errorln(err)
-						return err.Error()
-					}
-
-					format := `<tr><td>%v</td><td><a href="/vnc/%v/%v">%s</a></td><td>%s</td>`
-					tl := fmt.Sprintf(format, id, host, 5900+id, row[nameIndex], row[stateIndex])
-					for _, entry := range row[3:] {
-						tl += `<td>` + entry + `</td>`
-					}
-					tl += `</tr>`
-					lines = append(lines, tl)
+				res := []interface{}{}
+				for _, v := range row {
+					res = append(res, v)
 				}
+				table.Tabular = append(table.Tabular, res)
 			}
 		}
 	}
 
-	if len(lines) == 0 {
-		return "no VMs found"
+	webRenderTemplate(w, "stats.html", table)
+}
+
+func webVMs(w http.ResponseWriter, r *http.Request) {
+	table := htmlTable{
+		Header:  []string{"host", "screenshot"},
+		Tabular: [][]interface{}{},
+		ID:      "example",
+		Class:   "hover",
+	}
+	table.Header = append(table.Header, vmMasks...)
+
+	idIdx := mustFindMask("id")
+	stateIdx := mustFindMask("state")
+	nameIdx := mustFindMask("name")
+
+	for host, rows := range globalVmInfo(vmMasks, nil) {
+		for _, row := range rows {
+			id, err := strconv.Atoi(row[idIdx])
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			var buf bytes.Buffer
+			if row[stateIdx] != "QUIT" && row[stateIdx] != "ERROR" {
+				vm := vmScreenshotParams{
+					Host: host,
+					Name: row[nameIdx],
+					Port: 5900 + id,
+					ID:   id,
+					Size: 140,
+				}
+
+				if err := web.Templates.ExecuteTemplate(&buf, "screenshot", &vm); err != nil {
+					log.Error("unable to execute template screenshot -- %v", err)
+					continue
+				}
+			}
+
+			res := []interface{}{host, template.HTML(buf.String())}
+			log.Debug("res: %v", res)
+			for _, v := range row {
+				res = append(res, v)
+			}
+
+			table.Tabular = append(table.Tabular, res)
+		}
 	}
 
-	return fmt.Sprintf(`
-<html>
-<body>
-<table border=1>
-%s
-</table>
-</body>
-</html>`, strings.Join(lines, "\n"))
+	webRenderTemplate(w, "table.html", table)
+}
+
+func webTileVMs(w http.ResponseWriter, r *http.Request) {
+	masks := []string{"id", "name"}
+	filters := []string{"state!=error", "state!=quit"}
+
+	vms := []vmScreenshotParams{}
+	for host, rows := range globalVmInfo(masks, filters) {
+		for _, row := range rows {
+			id, err := strconv.Atoi(row[0])
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			vms = append(vms, vmScreenshotParams{
+				Host: host,
+				Name: row[1],
+				Port: 5900 + id,
+				ID:   id,
+				Size: 250,
+			})
+		}
+	}
+
+	webRenderTemplate(w, "tiles.html", vms)
 }
