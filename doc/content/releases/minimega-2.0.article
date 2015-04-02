@@ -41,6 +41,11 @@ The most salient change in minimega 2.0 is `minicli`, which represents an
 attempt to unify the command line interface, API style, error reporting, and
 data management. `minicli`... <JON>
 
+*** New web interface
+
+<JON>
+<FRITZ include some screenshots>
+
 *** cc virtio-serial support
 
 The command and control API, used to drive runtime applications on launched on
