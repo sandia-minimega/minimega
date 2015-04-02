@@ -592,7 +592,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	resp.Data = vms.vms
+	resp.Data = vms
 
 	return resp
 }

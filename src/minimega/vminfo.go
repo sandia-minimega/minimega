@@ -673,3 +673,94 @@ func (vm *vmInfo) hotplugRemove(id int) error {
 	delete(vm.Hotplug, id)
 	return nil
 }
+
+func (vm *vmInfo) info(masks []string) ([]string, error) {
+	res := make([]string, 0, len(masks))
+
+	for _, mask := range masks {
+		switch mask {
+		case "id":
+			res = append(res, fmt.Sprintf("%v", vm.ID))
+		case "name":
+			res = append(res, fmt.Sprintf("%v", vm.Name))
+		case "memory":
+			res = append(res, fmt.Sprintf("%v", vm.Memory))
+		case "vcpus":
+			res = append(res, fmt.Sprintf("%v", vm.Vcpus))
+		case "state":
+			res = append(res, vm.State.String())
+		case "migrate":
+			res = append(res, fmt.Sprintf("%v", vm.MigratePath))
+		case "disk":
+			res = append(res, fmt.Sprintf("%v", vm.DiskPaths))
+		case "snapshot":
+			res = append(res, fmt.Sprintf("%v", vm.Snapshot))
+		case "initrd":
+			res = append(res, fmt.Sprintf("%v", vm.InitrdPath))
+		case "kernel":
+			res = append(res, fmt.Sprintf("%v", vm.KernelPath))
+		case "cdrom":
+			res = append(res, fmt.Sprintf("%v", vm.CdromPath))
+		case "append":
+			res = append(res, fmt.Sprintf("%v", vm.Append))
+		case "bridge":
+			res = append(res, fmt.Sprintf("%v", vm.Bridges))
+		case "tap":
+			res = append(res, fmt.Sprintf("%v", vm.Taps))
+		case "mac":
+			res = append(res, fmt.Sprintf("%v", vm.Macs))
+		case "tags":
+			res = append(res, fmt.Sprintf("%q", vm.Tags))
+		case "ip":
+			var ips []string
+			for bIndex, m := range vm.Macs {
+				// TODO: This won't work if it's being run from a different host...
+				b, err := getBridge(vm.Bridges[bIndex])
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+				ip := b.GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP4)
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", ips))
+		case "ip6":
+			var ips []string
+			for bIndex, m := range vm.Macs {
+				// TODO: This won't work if it's being run from a different host...
+				b, err := getBridge(vm.Bridges[bIndex])
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+				ip := b.GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP6)
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", ips))
+		case "vlan":
+			var vlans []string
+			for _, v := range vm.Networks {
+				if v == -1 {
+					vlans = append(vlans, "disconnected")
+				} else {
+					vlans = append(vlans, fmt.Sprintf("%v", v))
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", vlans))
+		case "uuid":
+			res = append(res, fmt.Sprintf("%v", vm.UUID))
+		case "cc_active":
+			// TODO: This won't work if it's being run from a different host...
+			activeClients := ccClients()
+			res = append(res, fmt.Sprintf("%v", activeClients[vm.UUID]))
+		default:
+			return nil, fmt.Errorf("invalid mask: %s", mask)
+		}
+	}
+
+	return res, nil
+}

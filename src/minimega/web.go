@@ -241,43 +241,33 @@ func webHome(w http.ResponseWriter, r *http.Request) {
 }
 
 func webMapVMs(w http.ResponseWriter, r *http.Request) {
+	var err error
+
 	type point struct {
 		Lat, Long float64
 		Text      string
 	}
 
-	masks := []string{"id", "name", "tags"}
-
 	points := []point{}
 
-	for _, rows := range globalVmInfo(masks, nil) {
-		for _, row := range rows {
-			if len(row) != 3 {
-				log.Fatal("column count mismatch: %v", row)
-			}
-
-			name := strings.Join(row[:2], ":")
-
-			tags, err := ParseVmTags(row[2])
-			if err != nil {
-				log.Error("unable to parse vm tags for %s -- %v", name, err)
-			}
+	for _, vms := range globalVmInfo(nil, nil) {
+		for _, vm := range vms.vms {
+			name := fmt.Sprintf("%v:%v", vm.ID, vm.Name)
 
 			p := point{Text: name}
 
-			// TODO: Are these the right keys?
-			if tags["lat"] == "" || tags["long"] == "" {
+			if vm.Tags["lat"] == "" || vm.Tags["long"] == "" {
 				log.Debug("skipping vm %s -- missing required tags lat/long", name)
 				continue
 			}
 
-			p.Lat, err = strconv.ParseFloat(tags["lat"], 64)
+			p.Lat, err = strconv.ParseFloat(vm.Tags["lat"], 64)
 			if err != nil {
 				log.Error("invalid lat for vm %s -- expected float")
 				continue
 			}
 
-			p.Long, err = strconv.ParseFloat(tags["lat"], 64)
+			p.Long, err = strconv.ParseFloat(vm.Tags["lat"], 64)
 			if err != nil {
 				log.Error("invalid lat for vm %s -- expected float")
 				continue
@@ -337,29 +327,21 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	}
 	table.Header = append(table.Header, vmMasks...)
 
-	idIdx := mustFindMask("id")
-	stateIdx := mustFindMask("state")
-	nameIdx := mustFindMask("name")
+	stateMask := VM_QUIT | VM_ERROR
 
-	for host, rows := range globalVmInfo(vmMasks, nil) {
-		for _, row := range rows {
-			id, err := strconv.Atoi(row[idIdx])
-			if err != nil {
-				log.Errorln(err)
-				continue
-			}
-
+	for host, vms := range globalVmInfo(nil, nil) {
+		for _, vm := range vms.vms {
 			var buf bytes.Buffer
-			if row[stateIdx] != "QUIT" && row[stateIdx] != "ERROR" {
-				vm := vmScreenshotParams{
+			if vm.State&stateMask == 0 {
+				params := vmScreenshotParams{
 					Host: host,
-					Name: row[nameIdx],
-					Port: 5900 + id,
-					ID:   id,
+					Name: vm.Name,
+					Port: 5900 + vm.ID,
+					ID:   vm.ID,
 					Size: 140,
 				}
 
-				if err := web.Templates.ExecuteTemplate(&buf, "screenshot", &vm); err != nil {
+				if err := web.Templates.ExecuteTemplate(&buf, "screenshot", &params); err != nil {
 					log.Error("unable to execute template screenshot -- %v", err)
 					continue
 				}
@@ -367,6 +349,12 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			res := []interface{}{host, template.HTML(buf.String())}
 			log.Debug("res: %v", res)
+
+			row, err := vm.info(vmMasks)
+			if err != nil {
+				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name, err)
+				continue
+			}
 			for _, v := range row {
 				res = append(res, v)
 			}
@@ -379,27 +367,24 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 }
 
 func webTileVMs(w http.ResponseWriter, r *http.Request) {
-	masks := []string{"id", "name"}
-	filters := []string{"state!=error", "state!=quit"}
+	stateMask := VM_QUIT | VM_ERROR
 
-	vms := []vmScreenshotParams{}
-	for host, rows := range globalVmInfo(masks, filters) {
-		for _, row := range rows {
-			id, err := strconv.Atoi(row[0])
-			if err != nil {
-				log.Errorln(err)
+	params := []vmScreenshotParams{}
+	for host, vms := range globalVmInfo(nil, nil) {
+		for _, vm := range vms.vms {
+			if vm.State&stateMask != 0 {
 				continue
 			}
 
-			vms = append(vms, vmScreenshotParams{
+			params = append(params, vmScreenshotParams{
 				Host: host,
-				Name: row[1],
-				Port: 5900 + id,
-				ID:   id,
+				Name: vm.Name,
+				Port: 5900 + vm.ID,
+				ID:   vm.ID,
 				Size: 250,
 			})
 		}
 	}
 
-	webRenderTemplate(w, "tiles.html", vms)
+	webRenderTemplate(w, "tiles.html", params)
 }

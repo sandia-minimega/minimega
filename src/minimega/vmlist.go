@@ -304,91 +304,11 @@ func (l *vmList) flush() {
 
 func (l *vmList) info() ([]string, [][]string, error) {
 	table := make([][]string, 0, len(l.vms))
-	for _, j := range l.vms {
-		row := make([]string, 0, len(vmMasks))
-
-		for _, mask := range vmMasks {
-			switch mask {
-			case "id":
-				row = append(row, fmt.Sprintf("%v", j.ID))
-			case "name":
-				row = append(row, fmt.Sprintf("%v", j.Name))
-			case "memory":
-				row = append(row, fmt.Sprintf("%v", j.Memory))
-			case "vcpus":
-				row = append(row, fmt.Sprintf("%v", j.Vcpus))
-			case "state":
-				row = append(row, j.State.String())
-			case "migrate":
-				row = append(row, fmt.Sprintf("%v", j.MigratePath))
-			case "disk":
-				row = append(row, fmt.Sprintf("%v", j.DiskPaths))
-			case "snapshot":
-				row = append(row, fmt.Sprintf("%v", j.Snapshot))
-			case "initrd":
-				row = append(row, fmt.Sprintf("%v", j.InitrdPath))
-			case "kernel":
-				row = append(row, fmt.Sprintf("%v", j.KernelPath))
-			case "cdrom":
-				row = append(row, fmt.Sprintf("%v", j.CdromPath))
-			case "append":
-				row = append(row, fmt.Sprintf("%v", j.Append))
-			case "bridge":
-				row = append(row, fmt.Sprintf("%v", j.Bridges))
-			case "tap":
-				row = append(row, fmt.Sprintf("%v", j.Taps))
-			case "mac":
-				row = append(row, fmt.Sprintf("%v", j.Macs))
-			case "tags":
-				row = append(row, fmt.Sprintf("%q", j.Tags))
-			case "ip":
-				var ips []string
-				for bIndex, m := range j.Macs {
-					b, err := getBridge(j.Bridges[bIndex])
-					if err != nil {
-						log.Errorln(err)
-						continue
-					}
-					ip := b.GetIPFromMac(m)
-					if ip != nil {
-						ips = append(ips, ip.IP4)
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", ips))
-			case "ip6":
-				var ips []string
-				for bIndex, m := range j.Macs {
-					b, err := getBridge(j.Bridges[bIndex])
-					if err != nil {
-						log.Errorln(err)
-						continue
-					}
-					ip := b.GetIPFromMac(m)
-					if ip != nil {
-						ips = append(ips, ip.IP6)
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", ips))
-			case "vlan":
-				var vlans []string
-				for _, v := range j.Networks {
-					if v == -1 {
-						vlans = append(vlans, "disconnected")
-					} else {
-						vlans = append(vlans, fmt.Sprintf("%v", v))
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", vlans))
-			case "uuid":
-				row = append(row, fmt.Sprintf("%v", j.UUID))
-			case "cc_active":
-				activeClients := ccClients()
-				row = append(row, fmt.Sprintf("%v", activeClients[j.UUID]))
-			default:
-				return nil, nil, fmt.Errorf("invalid mask: %s", mask)
-			}
+	for _, vm := range l.vms {
+		row, err := vm.info(vmMasks)
+		if err != nil {
+			continue
 		}
-
 		table = append(table, row)
 	}
 

@@ -516,7 +516,7 @@ func ParseVmState(s string) (VmState, error) {
 // Get the VM info from all hosts optionally applying column/row filters.
 // Returns a map with keys for the hostnames and values as the tabular data
 // from the host.
-func globalVmInfo(masks []string, filters []string) map[string][][]string {
+func globalVmInfo(masks []string, filters []string) map[string]*vmList {
 	cmdStr := "vm info"
 	for _, v := range filters {
 		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
@@ -525,22 +525,21 @@ func globalVmInfo(masks []string, filters []string) map[string][][]string {
 		cmdStr = fmt.Sprintf(".columns %s %s", strings.Join(masks, ","), cmdStr)
 	}
 
-	cmd, err := minicli.CompileCommand(cmdStr)
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
+	res := map[string]*vmList{}
 
-	res := map[string][][]string{}
-
-	for resps := range runCommandGlobally(cmd, false) {
+	for resps := range runCommandGlobally(minicli.MustCompile(cmdStr), false) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
 				continue
 			}
 
-			res[resp.Host] = append(res[resp.Host], resp.Tabular...)
+			switch data := resp.Data.(type) {
+			case vmList:
+				res[resp.Host] = &data
+			default:
+				log.Error("unknown data field in vm info")
+			}
 		}
 	}
 
