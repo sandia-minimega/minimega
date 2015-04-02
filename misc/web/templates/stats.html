@@ -15,12 +15,6 @@
 		{{end}}
 	</tbody>
 </table>
-
-<div style="color:#006400"> Toggle Columns:
-	{{ range $i, $v := .Header }}
-	<a class="toggle-vis" data-column="{{$i}}">{{$v}}</a>
-	{{end}}
-</div>
 </body>
-<script type="text/javascript" language="javascript" src="/d3/table.js"></script>
+<script type="text/javascript" language="javascript" src="/d3/stats.js"></script>
 {{template "footer"}}

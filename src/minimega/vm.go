@@ -513,14 +513,25 @@ func ParseVmState(s string) (VmState, error) {
 	return VM_ERROR, fmt.Errorf("invalid state: %v", s)
 }
 
-func globalVmInfo(mask string) [][]string {
-	var tabular [][]string
+// Get the VM info from all hosts optionally applying column/row filters.
+// Returns a map with keys for the hostnames and values as the tabular data
+// from the host.
+func globalVmInfo(masks []string, filters []string) map[string][][]string {
+	cmdStr := "vm info"
+	for _, v := range filters {
+		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
+	}
+	if len(masks) > 0 {
+		cmdStr = fmt.Sprintf(".columns %s %s", strings.Join(masks, ","), cmdStr)
+	}
 
-	cmd, err := minicli.CompileCommand(fmt.Sprintf(`.columns %s vm info`, mask))
+	cmd, err := minicli.CompileCommand(cmdStr)
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)
 	}
+
+	res := map[string][][]string{}
 
 	for resps := range runCommandGlobally(cmd, false) {
 		for _, resp := range resps {
@@ -529,9 +540,22 @@ func globalVmInfo(mask string) [][]string {
 				continue
 			}
 
-			tabular = append(tabular, resp.Tabular...)
+			res[resp.Host] = append(res[resp.Host], resp.Tabular...)
 		}
 	}
 
-	return tabular
+	return res
+}
+
+// mustFindMask returns the index of the specified mask in vmMasks. If the
+// specified mask is not found, log.Fatal is called.
+func mustFindMask(mask string) int {
+	for i, v := range vmMasks {
+		if v == mask {
+			return i
+		}
+	}
+
+	log.Fatal("missing `%s` in vmMasks", mask)
+	return -1
 }
