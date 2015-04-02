@@ -229,17 +229,17 @@ func (l *vmList) launch(name string, ack chan int) error {
 	}
 
 	vm := info.Copy() // returns reference to deep-copy of info
-	vm.Id = <-vmIdChan
+	vm.ID = <-vmIdChan
 	vm.Name = name
 	if vm.Name == "" {
-		vm.Name = fmt.Sprintf("vm-%d", vm.Id)
+		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	}
-	vm.Kill = make(chan bool)
+	vm.kill = make(chan bool)
 	vm.Hotplug = make(map[int]string)
 	vm.Tags = make(map[string]string)
 	vm.State = VM_BUILDING
 	vmLock.Lock()
-	l.vms[vm.Id] = vm
+	l.vms[vm.ID] = vm
 	vmLock.Unlock()
 	go vm.launchOne(ack)
 
@@ -261,13 +261,13 @@ func (l *vmList) kill(idOrName string) []error {
 			return []error{fmt.Errorf("vm %v is not running", vm.Name)}
 		}
 
-		vm.Kill <- true
-		killedVms[vm.Id] = true
+		vm.kill <- true
+		killedVms[vm.ID] = true
 	} else {
 		for _, vm := range l.vms {
 			if vm.getState()&stateMask == 0 {
-				vm.Kill <- true
-				killedVms[vm.Id] = true
+				vm.kill <- true
+				killedVms[vm.ID] = true
 			}
 		}
 	}
@@ -310,7 +310,7 @@ func (l *vmList) info() ([]string, [][]string, error) {
 		for _, mask := range vmMasks {
 			switch mask {
 			case "id":
-				row = append(row, fmt.Sprintf("%v", j.Id))
+				row = append(row, fmt.Sprintf("%v", j.ID))
 			case "name":
 				row = append(row, fmt.Sprintf("%v", j.Name))
 			case "memory":
@@ -334,17 +334,17 @@ func (l *vmList) info() ([]string, [][]string, error) {
 			case "append":
 				row = append(row, fmt.Sprintf("%v", j.Append))
 			case "bridge":
-				row = append(row, fmt.Sprintf("%v", j.bridges))
+				row = append(row, fmt.Sprintf("%v", j.Bridges))
 			case "tap":
-				row = append(row, fmt.Sprintf("%v", j.taps))
+				row = append(row, fmt.Sprintf("%v", j.Taps))
 			case "mac":
-				row = append(row, fmt.Sprintf("%v", j.macs))
+				row = append(row, fmt.Sprintf("%v", j.Macs))
 			case "tags":
 				row = append(row, fmt.Sprintf("%q", j.Tags))
 			case "ip":
 				var ips []string
-				for bIndex, m := range j.macs {
-					b, err := getBridge(j.bridges[bIndex])
+				for bIndex, m := range j.Macs {
+					b, err := getBridge(j.Bridges[bIndex])
 					if err != nil {
 						log.Errorln(err)
 						continue
@@ -357,8 +357,8 @@ func (l *vmList) info() ([]string, [][]string, error) {
 				row = append(row, fmt.Sprintf("%v", ips))
 			case "ip6":
 				var ips []string
-				for bIndex, m := range j.macs {
-					b, err := getBridge(j.bridges[bIndex])
+				for bIndex, m := range j.Macs {
+					b, err := getBridge(j.Bridges[bIndex])
 					if err != nil {
 						log.Errorln(err)
 						continue

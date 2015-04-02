@@ -243,8 +243,7 @@ Migrate runtime state of a VM to disk, which can later be booted with vm config 
 
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
-status of in-flight migrations by invoking vm migrate with no arguments. 
-`,
+status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Patterns: []string{
 			"vm migrate",
 			"vm migrate <vm id or name> <filename>",
@@ -593,6 +592,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
+	resp.Data = vms.vms
 
 	return resp
 }
@@ -928,7 +928,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.Id), "screenshot.png")
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID), "screenshot.png")
 
 	err = vms.screenshot(vm, path, max)
 	if err != nil {
@@ -967,7 +967,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 			if status == "" {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.Id), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.ID), vm.Name, status, fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
 			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
@@ -1091,8 +1091,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.taps) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.taps))
+	if len(vm.Taps) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Taps))
 		return resp
 	}
 
@@ -1100,7 +1100,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	if c.StringArgs["bridge"] != "" {
 		b, err = getBridge(c.StringArgs["bridge"])
 	} else {
-		b, err = getBridge(vm.bridges[pos])
+		b, err = getBridge(vm.Bridges[pos])
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -1108,8 +1108,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
+		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, vm.Networks[pos])
+		err = b.TapRemove(vm.Networks[pos], vm.Taps[pos])
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
@@ -1124,29 +1124,29 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 
 		if net >= 0 && net < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
-			oldBridge, err := getBridge(vm.bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, vm.Networks[pos], b.Name, net)
+			oldBridge, err := getBridge(vm.Bridges[pos])
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			if vm.Networks[pos] != -1 {
-				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+				err := oldBridge.TapRemove(vm.Networks[pos], vm.Taps[pos])
 				if err != nil {
 					resp.Error = err.Error()
 					return resp
 				}
 			}
 
-			err = b.TapAdd(net, vm.taps[pos], false)
+			err = b.TapAdd(net, vm.Taps[pos], false)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			vm.Networks[pos] = net
-			vm.bridges[pos] = b.Name
+			vm.Bridges[pos] = b.Name
 		} else {
 			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}

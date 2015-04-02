@@ -133,9 +133,9 @@ var vmConfigFns = map[string]struct {
 		Update: processVMNet,
 		Clear: func(vm *vmInfo) {
 			vm.Networks = []int{}
-			vm.bridges = []string{}
-			vm.macs = []string{}
-			vm.netDrivers = []string{}
+			vm.Bridges = []string{}
+			vm.Macs = []string{}
+			vm.NetDrivers = []string{}
 		},
 		Print: func(vm *vmInfo) string {
 			return vm.networkString()
@@ -147,7 +147,7 @@ var vmConfigFns = map[string]struct {
 
 			nics := []string{}
 			for i, vlan := range vm.Networks {
-				nic := fmt.Sprintf("%v,%v,%v,%v", vm.bridges[i], vlan, vm.macs[i], vm.netDrivers[i])
+				nic := fmt.Sprintf("%v,%v,%v,%v", vm.Bridges[i], vlan, vm.Macs[i], vm.NetDrivers[i])
 				nics = append(nics, nic)
 			}
 			return "vm config net " + strings.Join(nics, " ")
@@ -270,7 +270,7 @@ func (vms *vmSorter) Swap(i, j int) {
 func (vms *vmSorter) Less(i, j int) bool {
 	switch vms.by {
 	case "id":
-		return vms.vms[i].Id < vms.vms[j].Id
+		return vms.vms[i].ID < vms.vms[j].ID
 	case "host":
 		return true
 	case "name":
@@ -473,9 +473,9 @@ func processVMNet(vm *vmInfo, lan string) error {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	vm.bridges = append(vm.bridges, b)
-	vm.netDrivers = append(vm.netDrivers, d)
-	vm.macs = append(vm.macs, strings.ToLower(m))
+	vm.Bridges = append(vm.Bridges, b)
+	vm.NetDrivers = append(vm.NetDrivers, d)
+	vm.Macs = append(vm.Macs, strings.ToLower(m))
 
 	return nil
 }
