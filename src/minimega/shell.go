@@ -9,7 +9,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os/exec"
-	"strings"
 )
 
 var shellCLIHandlers = []minicli.Handler{
@@ -53,25 +52,26 @@ func cliShell(c *minicli.Command, background bool) *minicli.Response {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	command := strings.Join(c.ListArgs["command"], " ")
-
 	p, err := exec.LookPath(c.ListArgs["command"][0])
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
 	}
 
-	fields := fieldsQuoteEscape("\"", command)
+	args := []string{p}
+	if len(c.ListArgs["command"]) > 1 {
+		args = append(args, c.ListArgs["command"][1:]...)
+	}
 
 	cmd := &exec.Cmd{
 		Path:   p,
-		Args:   fields,
+		Args:   args,
 		Env:    nil,
 		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Info("starting: %v", command)
+	log.Info("starting: %v", args)
 	err = cmd.Start()
 	if err != nil {
 		resp.Error = err.Error()
@@ -86,9 +86,13 @@ func cliShell(c *minicli.Command, background bool) *minicli.Response {
 				return
 			}
 
-			log.Info("command %v exited", command)
-			log.Info(sOut.String())
-			log.Info(sErr.String())
+			log.Info("command %v exited", args)
+			if out := sOut.String(); out != "" {
+				log.Info(out)
+			}
+			if err := sErr.String(); err != "" {
+				log.Info(err)
+			}
 		}()
 	} else {
 		err = cmd.Wait()

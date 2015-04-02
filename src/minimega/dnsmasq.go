@@ -26,8 +26,8 @@ type dnsmasqServer struct {
 }
 
 var (
-	dnsmasqServers     map[int]*dnsmasqServer
-	dnsmasqServerCount int
+	dnsmasqServers map[int]*dnsmasqServer
+	dnsmasqIdChan  = makeIDChan()
 )
 
 var dnsmasqCLIHandlers = []minicli.Handler{
@@ -83,7 +83,7 @@ func cliDnsmasq(c *minicli.Command) *minicli.Response {
 	var err error
 
 	if c.StringArgs["id"] == Wildcard {
-		// Must be "kill *"
+		// Must be "kill all"
 		err = dnsmasqKillAll()
 	} else if c.StringArgs["id"] != "" {
 		// Must be "kill <id>"
@@ -218,8 +218,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
-	id := dnsmasqServerCount
-	dnsmasqServerCount++
+	id := <-dnsmasqIdChan
 	dnsmasqServers[id] = d
 
 	// wait on the server to finish or be killed

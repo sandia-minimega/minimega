@@ -40,9 +40,9 @@ flags with 'deploy flags'. For example:
 
 	deploy flags -base=/opt/minimega -level=debug`,
 		Patterns: []string{
-			"deploy launch <hosts>",
-			"deploy launch <hosts> <user> [sudo,]",
-			"deploy flags [minimega flags]...",
+			"deploy <launch,> <hosts>",
+			"deploy <launch,> <hosts> <user> [sudo,]",
+			"deploy <flags,> [minimega flags]...",
 		},
 		Call: wrapSimpleCLI(cliDeploy),
 	},
@@ -74,15 +74,13 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 	sudo := c.BoolArgs["sudo"]
 	flagsList := c.ListArgs["minimega"]
 
-	// how's this for a hack?
-	if strings.Contains(c.Original, "deploy flags") {
+	if c.BoolArgs["flags"] {
 		if flagsList == nil {
 			resp.Response = deployGetFlags()
-			return resp
 		} else {
 			deployFlags = flagsList
-			return resp
 		}
+		return resp
 	}
 
 	hostsExpanded := getRecipients(hosts)
