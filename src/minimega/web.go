@@ -122,11 +122,10 @@ func webStart(port int, root string) {
 	mux.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(filepath.Join(root, "novnc")))))
 	mux.Handle("/d3/", http.StripPrefix("/d3/", http.FileServer(http.Dir(filepath.Join(root, "d3")))))
 
-	mux.HandleFunc("/", webHome)
-	mux.HandleFunc("/vms", webVMs)
+	mux.HandleFunc("/", webVMs)
 	mux.HandleFunc("/map", webMapVMs)
 	mux.HandleFunc("/screenshot/", webScreenshot)
-	mux.HandleFunc("/stats", webStats)
+	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/tiles", webTileVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
@@ -236,10 +235,6 @@ func webVNC(w http.ResponseWriter, r *http.Request) {
 	webRenderTemplate(w, "vnc.html", u.String())
 }
 
-func webHome(w http.ResponseWriter, r *http.Request) {
-	webRenderTemplate(w, "home.html", nil)
-}
-
 func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	var err error
 
@@ -280,7 +275,7 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	webRenderTemplate(w, "map.html", points)
 }
 
-func webStats(w http.ResponseWriter, r *http.Request) {
+func webHosts(w http.ResponseWriter, r *http.Request) {
 	table := htmlTable{
 		Header:  []string{},
 		Tabular: [][]interface{}{},
@@ -315,10 +310,15 @@ func webStats(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	webRenderTemplate(w, "stats.html", table)
+	webRenderTemplate(w, "hosts.html", table)
 }
 
 func webVMs(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+		return
+	}
+
 	table := htmlTable{
 		Header:  []string{"host", "screenshot"},
 		Tabular: [][]interface{}{},
