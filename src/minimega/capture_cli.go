@@ -26,22 +26,31 @@ all data seen on that interface is captured to file.
 For example, to capture netflow data on bridge mega_bridge to file in ascii
 mode and with gzip compression:
 
-	minimega$ capture netflow mega_bridge file foo.netflow ascii gzip
+	capture netflow mega_bridge file foo.netflow ascii gzip
 
 You can change the active flow timeout with:
 
-	minimega$ capture netflow mega_bridge timeout <timeout>
+	capture netflow mega_bridge timeout <timeout>
 
 With <timeout> in seconds.
 
 To capture pcap on bridge 'foo' to file 'foo.pcap':
 
-	minimega$ capture pcap bridge foo foo.pcap
+	capture pcap bridge foo foo.pcap
 
 To capture pcap on VM 'foo' to file 'foo.pcap', using the 2nd interface on that
 VM:
 
-	minimega$ capture pcap vm foo 0 foo.pcap`,
+	capture pcap vm foo 0 foo.pcap
+
+When run without arguments, capture prints all running captures. To stop a
+capture, use the delete commands:
+
+	capture netflow delete <id>
+	capture pcap delete <id>
+
+To stop all captures of a particular kind, replace id with "all". To stop all
+capture of all types, use "clear capture".`,
 		Patterns: []string{
 			"capture",
 

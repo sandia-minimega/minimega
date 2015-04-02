@@ -33,7 +33,7 @@ that does not return.`,
 Execute a command under the credentials of the running user.
 
 Commands run in the background and control returns immediately. Any output is
-logged.`,
+logged at the "info" level.`,
 		Patterns: []string{
 			"background <command>...",
 		},

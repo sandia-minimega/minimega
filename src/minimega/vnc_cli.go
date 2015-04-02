@@ -13,15 +13,16 @@ import (
 
 var vncCLIHandlers = []minicli.Handler{
 	{ // vnc
-		HelpShort: "record or playback VNC kbd/mouse input",
+		HelpShort: "record or playback VNC kb or fb",
 		HelpLong: `
 Record or playback keyboard and mouse events sent via the web interface to the
-selected VM.
+selected VM. Can also record the framebuffer for the specified VM so that a
+users can watch a video of interactions with the VM.
 
 With no arguments, vnc will list currently recording or playing VNC sessions.
 
 If record is selected, a file will be created containing a record of mouse and
-keyboard actions by the user.
+keyboard actions by the user or of the framebuffer for the VM.
 
 If playback is selected, the specified file (created using vnc record) will be
 read and processed as a sequence of time-stamped mouse/keyboard events to send

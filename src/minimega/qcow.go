@@ -45,29 +45,22 @@ var qcowCLIHandlers = []minicli.Handler{
 Create a backed snapshot of a qcow2 image and injects one or more files into
 the new snapshot.
 
-src qcow image - the name of the qcow to use as the backing image file.
+	srcimg - the name of the qcow to use as the backing image file. Optionally,
+	specify a partition in which the files should be injected. Separated from
+	the path to the image by a ':'. Defaults to one if no partition specified.
 
-partition - The optional partition number in which the files should be
-injected. Partition defaults to 1, but if multiple partitions exist and
-partition is not explicitly specified, an error is thrown and files are not
-injected.
+	dstimg - The optional name of the snapshot image. This should be a name
+	only, if any extra path is specified, an error is thrown. This file will be
+	created at 'base'/files. A filename will be generated if this optional
+	parameter is omitted.
 
-dst qcow image name - The optional name of the snapshot image. This should be a
-name only, if any extra path is specified, an error is thrown. This file will
-be created at 'base'/files. A filename will be generated if this optional
-parameter is omitted.
+	files - src and destination file pairs. Each pair should contain two
+	elements, the source and the destination, separated by a ':'. If the file
+	paths contain spaces, use double quotes.
 
-src file - The local file that should be injected onto the new qcow2 snapshot.
+For example:
 
-dst file - The path where src file should be injected in the new qcow2 snapshot.
-
-If the src file or dst file contains spaces, use double quotes (" ") as in the
-following example:
-
-	vm inject dst dst.qc2 src src.qc2 "my file":"Program Files/my file"
-
-Alternatively, when given a single argument, this command supplies the name of
-the backing qcow image for a snapshot image.`,
+	vm inject dst dst.qc2 src src.qc2 "my file":"Program Files/my file"`,
 		Patterns: []string{
 			"vm inject src <srcimg> <files like /path/to/src:/path/to/dst>...",
 			"vm inject dst <dstimg> src <srcimg> <files like /path/to/src:/path/to/dst>...",
@@ -130,9 +123,6 @@ func parseInject(c *minicli.Command) *injectData {
 	return inject
 }
 
-// TODO: (JC) I removed an undocumented command (vm inject <image>) which
-// returned the output from qemu-img info <image>. If users actually are using
-// it, it should be documented and probably not part of the vm inject command.
 func (inject *injectData) run() (string, error) {
 	if inject.err != nil {
 		return "", inject.err

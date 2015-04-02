@@ -52,7 +52,7 @@ To enable hugepage support:
 	optimize hugepages </path/to/hugepages_mount>
 
 To disable hugepage support:
-	optimize hugepages ""
+	clear optimize hugepages
 
 To enable/disable CPU affinity support:
 	optimize affinity [true,false]
@@ -62,7 +62,7 @@ CPUs 1, 2-20):
 	optimize affinity filter [1,2-20]
 
 To clear a CPU set filter:
-	optimize affinity filter
+	clear optimize affinity filter
 
 To view current CPU affinity mappings:
 	optimize affinity
