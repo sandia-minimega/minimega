@@ -44,7 +44,7 @@ updated, which will require updating any minimega scripts you use. One of the
 primary goals of these CLI changes was to provide a consistent "feel" across
 all the commands.
 
-A major addition to the CLI is the addition of `build-in` commands that can
+A major addition to the CLI is the addition of `built-in` commands that can
 mutate the output from other commands. For example, `.filter` can be used to
 select particular rows from a response and `.columns` can be used to select
 particular columns. These built-ins can be stacked to select a small subset of
