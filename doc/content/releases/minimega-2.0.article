@@ -90,7 +90,16 @@ has been added to the `bridge` API. See the
 
 *** Debian release packaging
 
-<JOHN>
+A script is now provided to build a Debian package from the
+repository. It will compile all components of the minimega ecosystem,
+then create a .deb file. This package will install the full minimega
+environment into `/opt/minimega` and place licensing information into
+the standard `/usr/share/doc/minimega` location.
+
+To build:
+
+    $ cd packaging/debian
+    $ ./build-package.sh
 
 *** Deploy api
 
@@ -158,7 +167,8 @@ for more information.
 
 *** vmbetter iso generation
 
-<JOHN>
+The vmbetter tool can now generate bootable ISO images. Simply specify
+the `-iso` flag to enable.
 
 ** Changes from previous versions
 
@@ -182,7 +192,11 @@ different bridges) now behave correctly.
 
 *** vm cdrom eject/change
 
-<JOHN>
+The `vm cdrom` commands allow the user to change the CDROM image in
+use by a running VM.
+
+See the [[/articles/api.article#TOC_4.15.][vm cdrom API]]
+documentation for more information.
 
 *** vnc keyboard/mouse recordings are now human readable
 
