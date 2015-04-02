@@ -12,6 +12,14 @@ import (
 var historyCLIHandlers = []minicli.Handler{
 	{ // history
 		HelpShort: "show command history",
+		HelpLong: `
+history displays a list of all the commands that have been invoked since
+minimega started on this host, or since the last time the history was cleared.
+History includes only valid commands and comments. Invalid lines and blank
+lines are not recorded. There are some commands that interact differently with
+history, namely read. Instead of recording the "read" command in the history,
+minimega records all the valid commands executed from the read file in the
+history. This allows the full execution history to be listed using history.`,
 		Patterns: []string{
 			"history",
 		},
@@ -30,9 +38,7 @@ Reset the command history. See "help history" for more information.`,
 		HelpShort: "write the command history to a file",
 		HelpLong: `
 Write the command history to file. This is useful for handcrafting configs on
-the minimega command line and then saving them for later use. Args that failed,
-as well as some commands that do not impact the VM state, such as 'help', do
-not get recorded.`,
+the minimega command line and then saving them for later use.`,
 		Patterns: []string{
 			"write <file>",
 		},

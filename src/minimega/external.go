@@ -54,9 +54,11 @@ var externalCLIHandlers = []minicli.Handler{
 	{ // check
 		HelpShort: "check that all external executables dependencies exist",
 		HelpLong: `
-Minimega maintains a list of external packages that it depends on, such as
+minimega maintains a list of external packages that it depends on, such as
 qemu. Calling check will attempt to find each of these executables in the
-avaiable path, and returns an error on the first one not found.`,
+avaiable path and check to make sure they meet the minimum version
+requirements. Returns errors for all missing executables and all minimum
+versions not met.`,
 		Patterns: []string{
 			"check",
 		},

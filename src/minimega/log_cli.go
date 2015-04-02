@@ -19,9 +19,9 @@ var logCLIHandlers = []minicli.Handler{
 	{ // log level
 		HelpShort: "set or print the log level",
 		HelpLong: `
-Set the log level to one of [debug, info, warn, error, fatal]. Log levels
-inherit lower levels, so setting the level to error will also log fatal, and
-setting the mode to debug will log everything.`,
+Set the log level to one of [debug,info,warn,error,fatal]. Log levels inherit
+lower levels, so setting the level to error will also log fatal, and setting
+the mode to debug will log everything.`,
 		Patterns: []string{
 			"log level [debug,info,warn,error,fatal]",
 		},
@@ -29,7 +29,6 @@ setting the mode to debug will log everything.`,
 	},
 	{ // log stderr
 		HelpShort: "enable or disable logging to stderr",
-		HelpLong:  "enable or disable logging to stderr",
 		Patterns: []string{
 			"log stderr [true,false]",
 		},

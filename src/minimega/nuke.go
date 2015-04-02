@@ -21,8 +21,10 @@ var nukeCLIHandlers = []minicli.Handler{
 		HelpShort: "attempt to clean up after a crash",
 		HelpLong: `
 After a crash, the VM state on the machine can be difficult to recover from.
-Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
-removes the temporary minimega state on the harddisk.`,
+nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
+removes the temporary minimega state on the harddisk.
+
+Should be run with caution.`,
 		Patterns: []string{
 			"nuke",
 		},
