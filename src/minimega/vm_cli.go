@@ -70,9 +70,6 @@ Display all information about all VMs:
 Saves the configuration of a running virtual machine or set of virtual machines
 so that it/they can be restarted/recovered later, such as after a system crash.
 
-If no VM name or ID is given, all VMs (including those in the quit and error
-state) will be saved.
-
 This command does not store the state of the virtual machine itself, only its
 launch configuration.`,
 		Patterns: []string{
@@ -992,9 +989,8 @@ func cliVmSave(c *minicli.Command) *minicli.Response {
 	path := filepath.Join(*f_base, "saved_vms")
 	err := os.MkdirAll(path, 0775)
 	if err != nil {
-		log.Error("mkdir: %v", err)
-		// TODO: do we really want to teardown minimega?
-		teardown()
+		resp.Error = err.Error()
+		return resp
 	}
 
 	name := c.StringArgs["name"]

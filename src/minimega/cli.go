@@ -151,7 +151,7 @@ func cliLocal() {
 		}
 
 		// HAX: Don't record the read command
-		record := !strings.HasPrefix(command, "read")
+		record := !hasCommand(cmd, "read")
 
 		for resp := range runCommand(cmd, record) {
 			// print the responses

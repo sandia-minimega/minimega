@@ -1,21 +1,18 @@
 Contributing and Development Guide
 
-David Fritz
-10 Mar 2015
-
 * Contributing code
 
 minimega is an open source project and we welcome contributions from the community.
 
-To get started, please read this document, which includes guidelines for contributing code and development style.
-
 * Trivial patches
 
-Many patches are simple enough to not need the more rigorous development approach detailed here. These include typos, additions to documentation without code revisions, and minor fixes (only a few lines of code). For these, simply format the patch according to the "Submitting a Patch" section below to the mailing list. 
+Many patches are simple enough to not need the more rigorous development approach detailed here. These include typos, additions to documentation without code revisions, and minor fixes (only a few lines of code). For these, simply format the patch according to the "Submitting a Patch" section below and issue a pull request.
+
+When submitting a trivial patch, include the text 'trivial' in the pull request title.
 
 * Discuss your design
 
-Begin by joining the [[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing list]. New ideas and better solutions to existing code are always welcome, and posting to the mailing list first allows coming to a quorum on your idea before you spend time implementing it. 
+Begin by joining the [[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing list]]. New ideas and better solutions to existing code are always welcome, and posting to the mailing list first allows coming to a quorum on your idea before you spend time implementing it. 
 
 Please post on the mailing list before you submit patches, unless they are trivial. 
 
@@ -23,13 +20,7 @@ Please post on the mailing list before you submit patches, unless they are trivi
 
 minimega follows the formatting style enforced by the Go language specification, and _generally_ follows the programming style used by core Go developers (and by luck most Go developers). There are exceptions, particularly in the few C files in the codebase. 
 
-Unless the devlopment in question is aimed at reformatting a piece of the codebase, you should adhere to the style in that particular section of code. minimega is growing rapidly and often times newer code is more well thought out than older code. 
-
-There are some specific guidelines however.
-
-** Adding new API
-
-** Naming functions and globals
+Unless the devlopment in question is aimed at reformatting a piece of the codebase, you should adhere to the style in that particular section of code. minimega is growing rapidly and often times newer code is more well thought out (or not) than older code. 
 
 * Tests
 
@@ -39,7 +30,7 @@ Always make sure that your code revision builds and completes all tests by runni
 
 * Documentation
 
-Always include updates and additions to the documents, API help, and tutorials (when appropriate) in your change. Some documentation is missing currently, so there is an emphasis on ensuring that revisions and especially new functionality is well documented.
+Always include updates and additions to the documents, API help, and tutorials (when appropriate) in your change. Some documentation is currently missing, so there is an emphasis on ensuring that revisions and especially new functionality is well documented.
 
 * Tracking issues 
 
@@ -47,15 +38,21 @@ If your change is being committed to a branch other than `master`, include "upda
 
 * Submitting a patch
 
-We do not have a formal code review process outside of the mailing list yet. That may come eventually, but for now, follow best practice when discussing patchsets on the mailing list.
+minimega is hosted on github.com, and we use github's 'pull request' functionality for code review and merging patches to the main repository. See [[https://help.github.com/articles/using-pull-requests/][github's pull request page]] for more information. In short, you will need to fork minimega to your own account, commit to your local tree, and issue a pull request to the main repository from your own. 
 
-If you are not a committer, please format your patch using the `git`format-patch` command:
+Generate the pull request from master (or the branch you are committing to) for all of the commits in your patchset, including updates to documentation. 
 
-	git format-patch master --stdout > issueNNN.patch
+If your patchset fixes a listed issue, make sure 'fixes issue #NNN' is in the commit log, so the issue is referenced to your work. 
 
-Generate the patch from master (or the branch you are committing to) for all of the commits in your patchset, including updates to documentation. When iterating on patchsets in the mailing list, regenerate the entire patchset from master for each update, not an additional patchset that depends on the previous. 
+* Code review
 
-Generating the patch in this way ensures that when a committer pushes that patch to the repo on your behalf, the commit log will be preserved along with your name and email, thus attributing the work to you. 
+When a pull request is made, at least one contributer will review the patchset, make comments, and either wait for more feedback or authorize the patch with a 'LGTM' (looks good to me) phrase. After authorization, any committer may merge the pull request.
+
+* Working with Github
+
+See Github's [[https://help.github.com/categories/collaborating/][collaborating]] section for more information on effectively contributing to projects the "github" way.
+
+Of specific use may be [[https://help.github.com/articles/syncing-a-fork/][syncing a fork]] with an upstream repo, and [[https://help.github.com/articles/checking-out-pull-requests-locally/][checking out a pull request locally]].
 
 * Copyright
 

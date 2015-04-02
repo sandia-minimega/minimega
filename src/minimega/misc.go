@@ -284,3 +284,11 @@ func ppmToPng(src, dst string, max int) error {
 
 	return nil
 }
+
+// hasCommand tests whether cmd or any of it's subcommand has the given prefix.
+// This is used to ensure that certain commands don't get nested such as `read`
+// and `mesh send`.
+func hasCommand(cmd *minicli.Command, prefix string) bool {
+	return strings.HasPrefix(cmd.Original, prefix) ||
+		(cmd.Subcommand != nil && hasCommand(cmd.Subcommand, prefix))
+}

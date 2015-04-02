@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -132,14 +133,14 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		command := scanner.Text()
 		log.Debug("read command: %v", command) // commands don't have their newlines removed
 
-		// HAX: Make sure we don't have a recursive read command
-		if strings.HasPrefix(command, "read") {
-			resp.Error = "read cannot run other read commands"
+		cmd, err = minicli.CompileCommand(command)
+		if err != nil {
 			break
 		}
 
-		cmd, err = minicli.CompileCommand(command)
-		if err != nil {
+		// HAX: Make sure we don't have a recursive read command
+		if hasCommand(cmd, "read") {
+			err = errors.New("cannot run nested `read` commands")
 			break
 		}
 
