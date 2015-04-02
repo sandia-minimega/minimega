@@ -24,7 +24,7 @@ ssh git access.
 minimega once again has a website at [[http://minimega.org][minimega.org]]
 which also serves installation, usage, and API documentation. minimega.org
 reflects the current release. To view documentation rendered from the head of
-the repository, see [[http://head.minimega.org][head.minimega.org]].
+the repository, see [[http://tip.minimega.org][tip.minimega.org]].
 
 *** Documentation
 
@@ -44,7 +44,7 @@ data management. `minicli`... <JON>
 *** New web interface
 
 <JON>
-<FRITZ include some screenshots>
+<include some screenshots>
 
 *** cc virtio-serial support
 
@@ -54,8 +54,8 @@ connections are supported on both Linux and Windows endpoints. The use of
 virtio-serial for cc connections allows networkless backchannels for command
 and control.
 
-See the [[http://minimega.org/articles/api.article#TOC_5.6.][cc API]]
-documentation for more information.
+See the [[/articles/api.article#TOC_5.6.][cc API]] documentation for more
+information.
 
 *** cc tunnelling
 
@@ -64,14 +64,25 @@ over virtio. cc tunnelling is equivalent to SSH tunnelling (-L flag in ssh),
 and supports both forward and reverse tunnels. This means you can create TCP
 tunnels over otherwise no-net VMs for networkless backchannel access.
 
-See the [[http://minimega.org/articles/api.article#TOC_5.6.][cc API]]
-documentation for more information.
+See the [[/articles/api.article#TOC_5.6.][cc API]] documentation for more
+information.
 
 ** Additional new features
 
 *** Bandwidth stats
 
+The `host` API already reports bandwidth statistics on all bridges owned by
+minimega. Now it reports split `rx/tx` statistics as an aggregate of all
+interfaces minimega owns (taps). This reporting is more accurate as it doesn't
+include bandwidth used by access ports on a given bridge.
+
+Additionally, per interface bandwidth is now reported in the `vm`info` API.
+
 *** Bridge trunk
+
+The ability to add trunk ports to an openvswitch bridge directly from minimega
+has been added to the `bridge` API. See the
+[[/articles/api.article#TOC_5.3.][bridge API]] for more information.
 
 *** Command line pager
 
@@ -83,6 +94,15 @@ documentation for more information.
 
 *** Deploy api
 
+For simple cluster environments, the new `deploy` API supports copying and
+launching minimega from a single node, further simplifying the installation and
+use of minimega. The `deploy` API uses `scp` to copy itself to a specified list
+of nodes (using the same range notation used in the `mesh`send` API), and
+launches minimega using the same command line arguments used to launch the
+running instance. 
+
+See the [[/articles/api.article#TOC_5.8.][deploy API]] for more information.
+
 *** New python bindings
 
 <DEVIN>
@@ -91,13 +111,46 @@ documentation for more information.
 
 <JON>
 
-*** Protonuke json email file
+*** protonuke json email file
+
+protonuke now supports sending email attachments when using an optional
+external email corpus. A single file or directory may be specified. If a
+directory is specified, a random file from that directory will be used when
+generating email.
+
+See the [[/articles/protonuke.article#TOC_2.2.3.][SMTP]] section of the
+protonuke guide for more information.
 
 *** Recursive file api
 
+The `file` API now supports recursively tranferring entire directories to
+remote nodes. To transfer a directory, simply specify the directory to transfer
+with `file`get` as usual. Additionally, the `file` API now allows only 3
+in-flight transfers at a time, queuing additional transfer requests.
+
+See the [[/articles/api.article#TOC_5.16.][file API]] for more information.
+
 *** vm migrate / vm config migrate
 
+The `vm`migrate` API allows saving the state of a running or paused VM to disk.
+This file is appropriate for reloading a VM later or on another node in exactly
+the same state as when it was saved. The `vm`config`migrate` API allows
+launching VMs from a saved state by specifying the migration file. It's
+especially useful to use `vm`migrate` in conjunction with `vm`save` to create a
+saved VM for later reuse.
+
+See the [[/articles/api.article#TOC_4.13.][vm migrate]] and
+[[/articles/api.article#TOC_4.22.][vm config migrate]] API for more
+information.
+
 *** vm screenshot
+
+The `vm`screenshot` API allows taking screenshots of a running VM's framebuffer
+in the PNG format. Images are saved to the VM's runtime directory (by default
+`/tmp/minimega/<vm id>/screenshot.png`). 
+
+See the [[/articles/api.article#TOC_4.12.][screenshot API]]
+for more information.
 
 *** vm tag
 
@@ -111,7 +164,21 @@ documentation for more information.
 
 *** cc api rewrite
 
+The `cc` API has been rewritten to better reflect the rest of the minimega API
+style. Commands are now one-liners, such as `cc`send`foo`, which will send a
+file `foo`. The other command and control semantics, such as in-order
+processing of commands, are still valid.
+
+See the [[/articles/api.article#TOC_5.6.][cc API]] for more information.
+
 *** IP learning now bridge specific
+
+Minimega snoops ARP and neighbor discovery traffic on local VMs in order to
+associate IP addresses at runtime with VMs, as reflected in `vm`info`. In
+previous versions, minimega simply inspected all bridges for this information.
+This was problematic if VMs with identical MAC addresses existed on different
+bridges. Snooping is now bridge-specific, and identical MAC addresses (on
+different bridges) now behave correctly.
 
 *** vm cdrom eject/change
 
@@ -121,15 +188,29 @@ documentation for more information.
 
 <JON>
 
-* Compatibility guarantee
-
-? do we want to do this?
-
 * Availability
+
+minimega is available in several ways, both as pre-built distributions and
+source. See the [[/articles/installing.article][installing]]
+guide for more information.
 
 ** Debian package
 
+minimega is available as an x86-64 debian package, available [[?][here]]. It is
+known to work in debian 7 (wheezy) and 8 (testing/jessie).
+
 ** tarball
 
+A pre-built, x86-64 distribution is available in a single distributable tarball
+[[?][here]]. It should be sufficient to simply unpack the tarball and run tools
+from the `bin/` directory directly. Most default paths in minimega, vmbetter,
+and other tools are built to be used in this way (i.e. `bin/minimega`, which
+will then look for the web directory in `misc/web`).
+
 ** Building from source
+
+Source of the entire distribution is available on
+[[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
+for cloning or forking minimega on github.com. In order to build minimega, you
+will need a Go 1.3+ compiler, libreadline, and libpcap headers.
 
