@@ -134,6 +134,15 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 	return respChan
 }
 
+func MustCompile(input string) *Command {
+	c, err := CompileCommand(input)
+	if err != nil {
+		log.Fatal("unable to compile `%s` -- %v", input, err)
+	}
+
+	return c
+}
+
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func CompileCommand(input string) (*Command, error) {
