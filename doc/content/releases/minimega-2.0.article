@@ -141,7 +141,11 @@ See the [[/articles/api.article#TOC_5.8.][deploy API]] for more information.
 
 *** New python bindings
 
-<DEVIN>
+It is now possible to automatically generate the python bindings for whichever
+version of minimega you are using. The bindings generated are a 1:1 wrapper
+around the CLI, and should work for both python2 and python3. See the
+documentation in `misc/python/genapi.py` for instructions on building the
+`minimega.py` api file.
 
 *** VNC
 
