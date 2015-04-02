@@ -109,9 +109,13 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 func webStart(port int, root string) {
 	// Initialize templates
 	var err error
-	web.Templates, err = template.ParseGlob(filepath.Join(root, "templates", "*.html"))
+
+	templates := filepath.Join(root, "templates", "*.html")
+	log.Info("compiling templates from %s", templates)
+	web.Templates, err = template.ParseGlob(templates)
 	if err != nil {
-		log.Error("web: couldn't initalize templates: %v", err)
+		log.Error("failed to load templates from %s", templates)
+		return
 	}
 
 	mux := http.NewServeMux()
