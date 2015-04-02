@@ -5,7 +5,7 @@ minimega 2.0 release notes
 The minimega development team is pleased to announce the release of minimega
 2.0. This is the first major release since minimega's creation, and is marked
 by sweeping changes to the command line infrastructure, documentation,
-compatibility, and several new features. 
+compatibility, and several new features.
 
 * What's new
 
@@ -39,11 +39,35 @@ on the command line.
 
 The most salient change in minimega 2.0 is `minicli`, which represents an
 attempt to unify the command line interface, API style, error reporting, and
-data management. `minicli`... <JON>
+data management. As part of this change, many of the old commands have been
+updated, which will require updating any minimega scripts you use. One of the
+primary goals of these CLI changes was to provide a consistent "feel" across
+all the commands.
+
+A major addition to the CLI is the addition of `built-in` commands that can
+mutate the output from other commands. For example, `.filter` can be used to
+select particular rows from a response and `.columns` can be used to select
+particular columns. These built-ins can be stacked to select a small subset of
+the results from a command, for example:
+
+    .columns id .filter state=running vm info
+
+There are also built-ins that change how the result of a command is displayed.
+`.annotate` controls whether the hostname of the machine that ran the command
+is included. `.compress` controls whether identical responses from multiple
+hosts are compressed into a single response with a range-style hostname
+annotation. `.json` and `.csv` can be used to change the output to JSON or
+CSV-formatted text. Consult `help` for a full list of the built-in commands and
+their uses.
 
 *** New web interface
 
-<JON>
+The web interface has been completely rebuilt for minimega 2.0. In addition to
+listing the running VMs and supporting VNC connections, as was supported by the
+old web interface, web 2.0 can display information about hosts connected to the
+mesh, show tiles of screenshots from all running VMs, and plot all running VMs
+on a map with the appropriate tags set via `vm tags`.
+
 <include some screenshots>
 
 *** cc virtio-serial support
@@ -86,7 +110,10 @@ has been added to the `bridge` API. See the
 
 *** Command line pager
 
-<JON>
+Some minimega commands can return a lot of output to the terminal, especially
+when minimega is distributed across a small cluster. When minimega is being run
+interactively, it will automatically page the output from commands to the
+user's terminal height.
 
 *** Debian release packaging
 
@@ -108,7 +135,7 @@ launching minimega from a single node, further simplifying the installation and
 use of minimega. The `deploy` API uses `scp` to copy itself to a specified list
 of nodes (using the same range notation used in the `mesh`send` API), and
 launches minimega using the same command line arguments used to launch the
-running instance. 
+running instance.
 
 See the [[/articles/api.article#TOC_5.8.][deploy API]] for more information.
 
@@ -116,9 +143,17 @@ See the [[/articles/api.article#TOC_5.8.][deploy API]] for more information.
 
 <DEVIN>
 
-*** nuvnc
+*** VNC
 
-<JON>
+minimega 2.0 includes an RFB encoder/decoder with limited support for reading
+framebuffer updates. This enables minimega 2.0 to do two things. First, it
+allows minimega to write the keyboard and mouse recordings in a human-readable
+format. In the previous version of minimega, the keyboard and mouse recordings
+for VNC sessions were stored as raw bytes from the RFB protocol. This means
+that after a recording is finished, you may edit the recording or cut and paste
+multiple recordings before playback. Second, the more complete protocol support
+should ensure that framebuffer recording (and playback with `rfbplay`) works
+consistently.
 
 *** protonuke json email file
 
@@ -156,14 +191,17 @@ information.
 
 The `vm`screenshot` API allows taking screenshots of a running VM's framebuffer
 in the PNG format. Images are saved to the VM's runtime directory (by default
-`/tmp/minimega/<vm id>/screenshot.png`). 
+`/tmp/minimega/<vm id>/screenshot.png`).
 
 See the [[/articles/api.article#TOC_4.12.][screenshot API]]
 for more information.
 
 *** vm tag
 
-<JON>
+VMs now support tags that allow the user to set and get arbitrary key/values
+pairs for VMs. This is currently used by the new web interface to plot VMs that
+have the lat/long tags on a map. We hope that other third-party apps may make
+use of the tags to add interesting new features.
 
 *** vmbetter iso generation
 
@@ -197,10 +235,6 @@ use by a running VM.
 
 See the [[/articles/api.article#TOC_4.15.][vm cdrom API]]
 documentation for more information.
-
-*** vnc keyboard/mouse recordings are now human readable
-
-<JON>
 
 * Availability
 
