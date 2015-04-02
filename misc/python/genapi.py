@@ -19,10 +19,12 @@ commands from python.
 '''
 
 
+import os
 import jinja2
 
 
-TEMPLATE = 'template.py'
+TEMPLATE = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                        'template.py')
 CMD_TYPES = {
     'optionalItem': 1 << 0,
     'literalItem':  1 << 1,
