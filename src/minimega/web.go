@@ -43,31 +43,31 @@ var web struct {
 	Running   bool
 	Server    *http.Server
 	Templates *template.Template
+	Port      int
 }
 
 var webCLIHandlers = []minicli.Handler{
 	{ // web
 		HelpShort: "start the minimega webserver",
 		HelpLong: `
-Launch the minimega webserver
+Launch the minimega webserver. Running web starts the HTTP server whose port
+cannot be changed once started. The default port is 9001. To run the server on
+a different port, run:
 
-The webserver requires noVNC and D3, expecting to find them in subdirectories
-"novnc" and "d3" under misc/web/ by default. To set a different path, run:
+	web 10000
 
-        web webroot <path to web dir>
+The webserver requires several resources found in misc/web in the repo. By
+default, it looks in $PWD/misc/web for these resources. If you are running
+minimega from a different location, you can specify a different path using:
 
-Once you have set the path, or if the default is acceptable, run "web" to start
-the web server on the default port 9001:
+	web root <path/to/web/dir>
 
-        web
+You can also set the port when starting web with an alternative root directory:
 
-To start the webserver on a specific port, issue the web command with the port:
+	web root <path/to/web/dir> 10000
 
-	web 9001
-
-NOTE: If you start the webserver with an invalid webroot, you can safely re-run
-"web root" followed by "web" to update it. You cannot, however, change the
-server's port.`,
+NOTE: If you start the webserver with an invalid root, you can safely re-run
+"web root" to update it. You cannot, however, change the server's port.`,
 		Patterns: []string{
 			"web [port]",
 			"web root <path> [port]",
@@ -111,7 +111,7 @@ func webStart(port int, root string) {
 	var err error
 	web.Templates, err = template.ParseGlob(filepath.Join(root, "templates", "*.html"))
 	if err != nil {
-		log.Error("webStart: couldn't initalize templates: %v", err)
+		log.Error("web: couldn't initalize templates: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -135,11 +135,17 @@ func webStart(port int, root string) {
 
 		err := web.Server.ListenAndServe()
 		if err != nil {
-			log.Error("webStart: %v", err)
+			log.Error("web: %v", err)
+			web.Server = nil
 		} else {
+			web.Port = port
 			web.Running = true
 		}
 	} else {
+		log.Info("web: changing web root to: %s", root)
+		if port != web.Port && port != defaultWebPort {
+			log.Error("web: changing web's port is not supported")
+		}
 		// just update the mux
 		web.Server.Handler = mux
 	}
