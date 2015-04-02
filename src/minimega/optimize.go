@@ -70,10 +70,10 @@ To view current CPU affinity mappings:
 To disable all optimizations see "clear optimize".`,
 		Patterns: []string{
 			"optimize",
-			"optimize <ksm,> [true,false]",
-			"optimize <hugepages,> [path]",
-			"optimize <affinity,> [true,false]",
 			"optimize <affinity,> <filter,> <filter>",
+			"optimize <affinity,> [true,false]",
+			"optimize <hugepages,> [path]",
+			"optimize <ksm,> [true,false]",
 		},
 		Call: wrapSimpleCLI(cliOptimize),
 	},
@@ -86,6 +86,7 @@ information.`,
 			"clear optimize",
 			"clear optimize <affinity,> [filter,]",
 			"clear optimize <hugepages,>",
+			"clear optimize <ksm,>",
 		},
 		Call: wrapSimpleCLI(cliOptimizeClear),
 	},
@@ -192,6 +193,8 @@ func cliOptimizeClear(c *minicli.Command) *minicli.Response {
 	} else if c.BoolArgs["hugepages"] {
 		// Reset hugepages (disable)
 		hugepagesMountPath = ""
+	} else if c.BoolArgs["ksm"] {
+		ksmDisable()
 	} else {
 		clearOptimize()
 	}
