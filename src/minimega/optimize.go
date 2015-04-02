@@ -52,7 +52,7 @@ To enable hugepage support:
 	optimize hugepages </path/to/hugepages_mount>
 
 To disable hugepage support:
-	optimize hugepages ""
+	clear optimize hugepages
 
 To enable/disable CPU affinity support:
 	optimize affinity [true,false]
@@ -62,7 +62,7 @@ CPUs 1, 2-20):
 	optimize affinity filter [1,2-20]
 
 To clear a CPU set filter:
-	optimize affinity filter
+	clear optimize affinity filter
 
 To view current CPU affinity mappings:
 	optimize affinity
@@ -70,10 +70,10 @@ To view current CPU affinity mappings:
 To disable all optimizations see "clear optimize".`,
 		Patterns: []string{
 			"optimize",
-			"optimize <ksm,> [true,false]",
-			"optimize <hugepages,> [path]",
+			"optimize <affinity,> <filter,> <filter>",
 			"optimize <affinity,> [true,false]",
-			"optimize <affinity,> filter <filter>",
+			"optimize <hugepages,> [path]",
+			"optimize <ksm,> [true,false]",
 		},
 		Call: wrapSimpleCLI(cliOptimize),
 	},
@@ -83,7 +83,10 @@ To disable all optimizations see "clear optimize".`,
 Resets state for virtualization optimizations. See "help optimize" for more
 information.`,
 		Patterns: []string{
-			"clear optimize [affinity,]",
+			"clear optimize",
+			"clear optimize <affinity,> [filter,]",
+			"clear optimize <hugepages,>",
+			"clear optimize <ksm,>",
 		},
 		Call: wrapSimpleCLI(cliOptimizeClear),
 	},
@@ -113,9 +116,6 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print hugepage path
 			resp.Response = fmt.Sprintf("%v", hugepagesMountPath)
-		} else if c.StringArgs["path"] == `""` {
-			// TODO: Shouldn't this be handled by a "clear" command?
-			hugepagesMountPath = ""
 		} else {
 			hugepagesMountPath = c.StringArgs["path"]
 		}
@@ -162,7 +162,6 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			if affinityEnabled {
 				affinityEnable()
 			}
-
 		} else if c.BoolArgs["true"] && !affinityEnabled {
 			// Enabling affinity
 			affinityEnable()
@@ -185,9 +184,17 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 func cliOptimizeClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Reset optimizations
-	if c.BoolArgs["affinity"] {
+	if c.BoolArgs["affinity"] && c.BoolArgs["filter"] {
+		// Reset affinity filter
 		affinityClearFilter()
+	} else if c.BoolArgs["affinity"] {
+		// Reset affinity (disable)
+		affinityDisable()
+	} else if c.BoolArgs["hugepages"] {
+		// Reset hugepages (disable)
+		hugepagesMountPath = ""
+	} else if c.BoolArgs["ksm"] {
+		ksmDisable()
 	} else {
 		clearOptimize()
 	}

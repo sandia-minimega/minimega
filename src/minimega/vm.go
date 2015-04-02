@@ -52,7 +52,7 @@ type qemuOverride struct {
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
 	"id", "name", "state", "memory", "vcpus", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan",
+	"kernel", "cdrom", "append", "bridge", "tap", "bandwidth", "mac", "ip", "ip6", "vlan",
 	"uuid", "cc_active", "tags",
 }
 

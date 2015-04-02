@@ -8,21 +8,23 @@ Devin Cook <devcook@sandia.gov>
 
 Minimega Python bindings unittests
 
-These tests can be run under Python's unittest framework. It expects to be run
-in the misc/python/ directory.
+These tests can be run under Python's unittest framework.
 
     ./test_minimega.py
 
 Unfortunately, things may start failing if the cli changes.
 '''
 
+import os
 import unittest
 import subprocess
 from time import sleep
 
 minimega = None
 
-MINIMEGA_BIN = '../../bin/minimega'
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+MINIMEGA_BIN = os.path.realpath(os.path.join(SCRIPT_DIR, '..', '..',
+                                             'bin', 'minimega'))
 MINIMEGA_PROC = None
 
 
@@ -31,9 +33,13 @@ class TestMinimega(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         global MINIMEGA_PROC, minimega
-        print('generating API file...')
-        subprocess.check_call('../../bin/minimega -cli | ./genapi.py > '
-                              'minimega.py', shell=True)
+        print('generating python API file...')
+        subprocess.check_call(
+            '{} -cli | {} > {}'.format(
+                MINIMEGA_BIN,
+                os.path.join(SCRIPT_DIR, 'genapi.py'),
+                os.path.join(SCRIPT_DIR, 'minimega.py'),
+            ), shell=True)
         minimega = __import__('minimega')
         print('starting minimega...')
         MINIMEGA_PROC = subprocess.Popen(MINIMEGA_BIN,

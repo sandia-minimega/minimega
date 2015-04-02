@@ -32,30 +32,28 @@ var ccCLIHandlers = []minicli.Handler{
 	{ // cc
 		HelpShort: "command and control commands",
 		HelpLong: `
-Command and control virtual machines running the miniccc client. Commands may
-include regular commands, backgrounded commands, and any number of sent and/or
-received files. Commands will be executed in command creation order. For
+Command and control for virtual machines running the miniccc client. Commands
+may include regular commands, backgrounded commands, and any number of sent
+and/or received files. Commands will be executed in command creation order. For
 example, to send a file 'foo' and display the contents on a remote VM:
 
 	cc send=foo
 	cc exec="cat foo"
 
-Files to be sent must be in the filepath directory, as set -filepath
+Files to be sent must be in the filepath directory, as set by the -filepath
+flag when launching minimega.
 
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
 Responses can also be displayed on the command line with the 'responses'
-command. 
+command.
 
 Filters may be set to limit which clients may execute a posted command.  For
 example, to filter on VMs that are running windows and have a specific IP.
 
-	cc filter os=windows ip=10.0.0.1 
+	cc filter os=windows ip=10.0.0.1
 
-New commands assign any current filter.
-
-You can also create TCP tunnels over the cc transport (virtio or network) by
-using tunnel and rtunnel. Tunnels are created and behave like 'ssh -L' tunnels.`,
+For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
 			"cc <start,> [port]",

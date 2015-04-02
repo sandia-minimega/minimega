@@ -20,23 +20,29 @@ import (
 var deployCLIHandlers = []minicli.Handler{
 	{ // deploy
 		HelpShort: "copy and run minimega on remote nodes",
-		HelpLong: `deploy will copy and run minimega on remote nodes,
-facilitating the deployment of minimega on a cluster. By default, deploy will
-launch minimega with the same flags used when starting this minimega, and add
-the -nostdin flag so that the remote minimega can be backgrounded.
+		HelpLong: `
+deploy copies and runs minimega on remote nodes, facilitating the deployment of
+minimega to a cluster. By default, deploy will launch minimega with the same
+flags used when starting this minimega, and add the -nostdin flag so that the
+remote minimega can be backgrounded. For example, to launch minimega on nodes
+kn1 and kn2:
+
+	deploy launch kn[1-2]
 
 deploy uses scp/ssh to copy and run minimega. By default, minimega will attempt
 to login to remote nodes using the current user. This can be changed by
 providing a username. If using a different username, you can optionally specify
 the use of sudo when launching minimega (you typically need to run minimega as
-root). 
+root).
 
 In order to override the flags passed to remote minimega instances, provide
-flags with 'deploy flags'.`,
+flags with 'deploy flags'. For example:
+
+	deploy flags -base=/opt/minimega -level=debug`,
 		Patterns: []string{
-			"deploy launch <hosts>",
-			"deploy launch <hosts> <user> [sudo,]",
-			"deploy flags [minimega flags]...",
+			"deploy <launch,> <hosts>",
+			"deploy <launch,> <hosts> <user> [sudo,]",
+			"deploy <flags,> [minimega flags]...",
 		},
 		Call: wrapSimpleCLI(cliDeploy),
 	},
@@ -68,15 +74,13 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 	sudo := c.BoolArgs["sudo"]
 	flagsList := c.ListArgs["minimega"]
 
-	// how's this for a hack?
-	if strings.Contains(c.Original, "deploy flags") {
+	if c.BoolArgs["flags"] {
 		if flagsList == nil {
 			resp.Response = deployGetFlags()
-			return resp
 		} else {
 			deployFlags = flagsList
-			return resp
 		}
+		return resp
 	}
 
 	hostsExpanded := getRecipients(hosts)

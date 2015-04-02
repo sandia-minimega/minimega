@@ -21,7 +21,7 @@ var ioCLIHandlers = []minicli.Handler{
 	{ // file
 		HelpShort: "work with files served by minimega",
 		HelpLong: `
-File allows you to transfer and manage files served by minimega in the
+file allows you to transfer and manage files served by minimega in the
 directory set by the -filepath flag (default is 'base'/files).
 
 To list files currently being served, issue the list command with a directory
@@ -49,7 +49,7 @@ To see files that are currently being transferred, use the status command:
 	file status
 
 If a directory is specified, that directory will be recursively transferred to
-the node. 
+the node.
 
 You can also supply globs (wildcards) with the * operator. For example:
 

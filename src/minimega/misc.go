@@ -187,11 +187,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id vm info", v)
 		}
 
-		cmd, err := minicli.CompileCommand(cmdStr)
-		if err != nil {
-			// Should never happen
-			log.Fatalln(err)
-		}
+		cmd := minicli.MustCompile(cmdStr)
 
 		remoteRespChan := make(chan minicli.Responses)
 		go func() {

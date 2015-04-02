@@ -117,9 +117,9 @@ Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
 Start one or all paused virtual machines. Pass all to start all paused virtual
 machines.
 
-Calling vm start specifically on a quit VM will restart the VM. If the optional 'quit'
-suffix is used with the wildcard, then all virtual machines in the paused *or* quit state
-will be restarted.`,
+Calling vm start specifically on a quit VM will restart the VM. If the optional
+'quit' suffix is used with the wildcard, then all virtual machines in the
+paused *or* quit state will be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or all> [quit,]",
 		},
@@ -173,7 +173,7 @@ to remove the drive added above, named 0:
 
 	vm hotplug remove 5 0
 
-To remove all hotplug devices, use ID * for the disk ID.`,
+To remove all hotplug devices, use ID "all" for the disk ID.`,
 		Patterns: []string{
 			"vm hotplug <show,> <vm id or name>",
 			"vm hotplug <add,> <vm id or name> <filename>",
@@ -212,7 +212,7 @@ Issue a JSON-encoded QMP command. This is a convenience function for accessing
 the QMP socket of a VM via minimega. vm qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
-	minimega$ vm qmp 0 '{ "execute": "query-status" }'
+	vm qmp 0 '{ "execute": "query-status" }'
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
@@ -239,7 +239,8 @@ to 100 pixels:
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with vm config migrate.
+Migrate runtime state of a VM to disk, which can later be booted with vm config
+migrate.
 
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
@@ -255,19 +256,18 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 		HelpLong: `
 Display or set a tag for the specified VM.
 
-Tags are key-value pairs. A VM can have any number of tags associated
-with it. They can be used to attach additional information to a
-virtual machine, for example specifying a VM "group", or the correct
-rendering color for some external visualization tool.
+Tags are key-value pairs. A VM can have any number of tags associated with it.
+They can be used to attach additional information to a virtual machine, for
+example specifying a VM "group", or the correct rendering color for some
+external visualization tool.
 
-To set a tag:
+To set a tag "foo" to "bar":
 
-        vm tag <vm id or name> <key> [value]
+        vm tag <vm id or name> foo bar
 
 To read a tag:
 
-        vm tag <vm id or name> <key>
-`,
+        vm tag <vm id or name> <key>`,
 		Patterns: []string{
 			"vm tag <vm id or name> <key> [value]",
 		},
@@ -290,8 +290,7 @@ Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
-"vm change" implies that the current ISO will be ejected.
-`,
+"vm cdrom change" implies that the current ISO will be ejected.`,
 		Patterns: []string{
 			"vm cdrom <eject,> <vm id or name>",
 			"vm cdrom <change,> <vm id or name> <path>",
@@ -305,7 +304,7 @@ Display, save, or restore the current VM configuration.
 
 To display the current configuration, call vm config with no arguments.
 
-List the current saved configurations with 'vm config show'
+List the current saved configurations with 'vm config show'.
 
 To save a configuration:
 
@@ -356,6 +355,7 @@ replacement string.`,
 		HelpShort: "add additional arguments to the QEMU command",
 		HelpLong: `
 Add additional arguments to be passed to the QEMU instance. For example:
+
 	vm config qemu-append -serial tcp:localhost:4001`,
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
@@ -443,6 +443,7 @@ Add an append string to a kernel set with vm kernel. Setting vm append without
 using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
+
 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
 			"vm config append [argument]...",
@@ -477,14 +478,23 @@ for qemu to use. By default, e1000 is used.
 Examples:
 
 To connect a VM to VLANs 1 and 5:
+
 	vm config net 1 5
+
 To connect a VM to VLANs 100, 101, and 102 with specific mac addresses:
+
 	vm config net 100,00:00:00:00:00:00 101,00:00:00:00:01:00 102,00:00:00:00:02:00
+
 To connect a VM to VLAN 1 on bridge0 and VLAN 2 on bridge1:
+
 	vm config net bridge0,1 bridge1,2
+
 To connect a VM to VLAN 100 on bridge0 with a specific mac:
+
 	vm config net bridge0,100,00:11:22:33:44:55
+
 To specify a specific driver, such as i82559c:
+
 	vm config net 100,i82559c
 
 Calling vm net with no parameters will list the current networks for this VM.`,
@@ -570,10 +580,9 @@ Clear all tags from VM 0:
 
 Clear all tags from all VMs:
 
-        clear vm tag all
-`,
+        clear vm tag all`,
 		Patterns: []string{
-			"clear vm tag <vm id or name> [tag]",
+			"clear vm tag <vm id or name or all> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
 	},

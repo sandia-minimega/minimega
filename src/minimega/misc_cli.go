@@ -22,8 +22,8 @@ var miscCLIHandlers = []minicli.Handler{
 	{ // quit
 		HelpShort: "quit minimega",
 		HelpLong: `
-Quit. An optional integer argument X allows deferring the quit call for X
-seconds. This is useful for telling a mesh of minimega nodes to quit.
+Quit minimega. An optional integer argument X allows deferring the quit call
+for X seconds. This is useful for telling a mesh of minimega nodes to quit.
 
 quit will not return a response to the cli, control socket, or meshage, it will
 simply exit. meshage connected nodes catch this and will remove the quit node
@@ -48,7 +48,7 @@ commands.`,
 		HelpShort: "read and execute a command file",
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
-the file in manually.`,
+the file in manually except that it stops after the first error.`,
 		Patterns: []string{
 			"read <file>",
 		},
@@ -69,7 +69,7 @@ the file in manually.`,
 		Call: wrapSimpleCLI(cliVersion),
 	},
 	{ // echo
-		HelpShort: "display text after macro expansion and comment removal",
+		HelpShort: "display input text after comment removal",
 		Patterns: []string{
 			"echo [args]...",
 		},
@@ -138,16 +138,16 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
-		// HAX: Make sure we don't have a recursive read command
-		if hasCommand(cmd, "read") {
-			err = errors.New("cannot run nested `read` commands")
-			break
-		}
-
 		// No command was returned, must have been a blank line or a comment
 		// line. Either way, don't try to run a nil command.
 		if cmd == nil {
 			continue
+		}
+
+		// HAX: Make sure we don't have a recursive read command
+		if hasCommand(cmd, "read") {
+			err = errors.New("cannot run nested `read` commands")
+			break
 		}
 
 		for resp := range minicli.ProcessCommand(cmd, true) {

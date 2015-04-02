@@ -707,10 +707,23 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 			res = append(res, fmt.Sprintf("%v", vm.Bridges))
 		case "tap":
 			res = append(res, fmt.Sprintf("%v", vm.Taps))
+		case "bandwidth":
+			var bw []string
+			bandwidthLock.Lock()
+			for _, v := range vm.Taps {
+				t := bandwidthStats[v]
+				if t == nil {
+					bw = append(bw, "0.0/0.0")
+				} else {
+					bw = append(bw, fmt.Sprintf("%v", t))
+				}
+			}
+			bandwidthLock.Unlock()
+			res = append(res, fmt.Sprintf("%v", bw))
 		case "mac":
 			res = append(res, fmt.Sprintf("%v", vm.Macs))
 		case "tags":
-			res = append(res, fmt.Sprintf("%q", vm.Tags))
+			res = append(res, fmt.Sprintf("%v", vm.Tags))
 		case "ip":
 			var ips []string
 			for bIndex, m := range vm.Macs {
