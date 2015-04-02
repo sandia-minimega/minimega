@@ -13,7 +13,7 @@ var historyCLIHandlers = []minicli.Handler{
 	{ // history
 		HelpShort: "show command history",
 		HelpLong: `
-History displays a list of all the commands that have been invoked since
+history displays a list of all the commands that have been invoked since
 minimega started on this host, or since the last time the history was cleared.
 History includes only valid commands and comments. Invalid lines and blank
 lines are not recorded. There are some commands that interact differently with

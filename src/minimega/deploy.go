@@ -21,7 +21,7 @@ var deployCLIHandlers = []minicli.Handler{
 	{ // deploy
 		HelpShort: "copy and run minimega on remote nodes",
 		HelpLong: `
-Deploy copies and runs minimega on remote nodes, facilitating the deployment of
+deploy copies and runs minimega on remote nodes, facilitating the deployment of
 minimega to a cluster. By default, deploy will launch minimega with the same
 flags used when starting this minimega, and add the -nostdin flag so that the
 remote minimega can be backgrounded. For example, to launch minimega on nodes
@@ -29,7 +29,7 @@ kn1 and kn2:
 
 	deploy launch kn[1-2]
 
-Deploy uses scp/ssh to copy and run minimega. By default, minimega will attempt
+deploy uses scp/ssh to copy and run minimega. By default, minimega will attempt
 to login to remote nodes using the current user. This can be changed by
 providing a username. If using a different username, you can optionally specify
 the use of sudo when launching minimega (you typically need to run minimega as
