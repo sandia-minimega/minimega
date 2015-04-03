@@ -1,0 +1,23 @@
+Project Naming Conventions
+3 Apr 2015
+
+* Introduction
+
+The various components of the project use a specific naming convention: the name is always lower-case, even when starting a sentence. This document defines the canonical usage; please conform to these conventions when writing documentation:
+
+- minimega
+- miniccc
+- minidoc
+- protonuke
+- igor
+- vmbetter
+- powerbot
+
+Good:
+
+    minimega is a tool for managing virtual machines.
+
+Bad:
+
+    Igor, MiniMega, and MiniCCC work together to manage a cluster.
+    

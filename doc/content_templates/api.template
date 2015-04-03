@@ -22,7 +22,7 @@ Builtins are commands that impact how responses to commands are rendered. Some b
 
 * Mesh Commands
 
-Mesh commands control the behavior and operation of communication between minimega nodes on a network. Minimega is fully distributed, and commands to other minimega nodes can be issued from any other participating minimega node. For example, you can get the hostname of all minimega nodes (exclusive of the issuing node) with `mesh`send`all`host`name`. 
+Mesh commands control the behavior and operation of communication between minimega nodes on a network. minimega is fully distributed, and commands to other minimega nodes can be issued from any other participating minimega node. For example, you can get the hostname of all minimega nodes (exclusive of the issuing node) with `mesh`send`all`host`name`. 
 
 Generally, `mesh`send` will be the only mesh command you will use. The other commands provided are for manually dialing other nodes and controlling network behavior. 
 

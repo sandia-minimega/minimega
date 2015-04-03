@@ -21,7 +21,7 @@ var (
 )
 
 func usage() {
-	fmt.Print(`Powerbot: control a PDU.
+	fmt.Print(`powerbot: control a PDU.
 Usage, <arg> = required, [arg] = optional:
 	powerbot on <nodelist>
 	powerbot off <nodelist>

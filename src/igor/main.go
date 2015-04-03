@@ -192,7 +192,7 @@ func main() {
 	exit()
 }
 
-var usageTemplate = `Igor is a scheduler for Mega-style clusters.
+var usageTemplate = `igor is a scheduler for Mega-style clusters.
 
 Usage:
 

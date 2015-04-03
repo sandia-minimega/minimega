@@ -1,17 +1,17 @@
-Powerbot: A Power-Control Tool
+powerbot: A Power-Control Tool
 3 Mar 2015
 
 * Introduction
 
-Powerbot is a tool in the vein of LLNL's "powerman" ([[https://code.google.com/p/powerman/][google code]]), which can control networked Power Distribution Units (PDUs). We use it to turn our cluster nodes on and off; because the nodes netboot and don't maintain a root filesystem on disk, the fastest and easiest way to reboot them is by cycling power.
+powerbot is a tool in the vein of LLNL's "powerman" ([[https://code.google.com/p/powerman/][google code]]), which can control networked Power Distribution Units (PDUs). We use it to turn our cluster nodes on and off; because the nodes netboot and don't maintain a root filesystem on disk, the fastest and easiest way to reboot them is by cycling power.
 
 ** Compatibility
 
-Powerbot was built to meet our specific needs at Sandia, so it currently only supports the PDUs we have used: a ServerTech device and a TrippLite. Because our needs are pretty simple, it should hopefully work on most ServerTech or TrippLite devices. It is also extremely easy to implement support for other devices, see tripplite.go and servertech.go for examples.
+powerbot was built to meet our specific needs at Sandia, so it currently only supports the PDUs we have used: a ServerTech device and a TrippLite. Because our needs are pretty simple, it should hopefully work on most ServerTech or TrippLite devices. It is also extremely easy to implement support for other devices, see tripplite.go and servertech.go for examples.
 
 * Usage
 
-Powerbot commands consist of an action (on/off/cycle/status) and a list of nodes for which to perform the action. You can use ranges to specify multiple nodes. Here are some example commands:
+powerbot commands consist of an action (on/off/cycle/status) and a list of nodes for which to perform the action. You can use ranges to specify multiple nodes. Here are some example commands:
 
         powerbot on ccc1                # Turn on ccc1
         powerbot off ccc[1-10]          # Turn off ccc1 through ccc10
@@ -22,7 +22,7 @@ Powerbot commands consist of an action (on/off/cycle/status) and a list of nodes
 
 ** Building
 
-Powerbot ships in the minimega distribution. First, ensure that you have a [[http://golang.org][Go compiler]], libpcap headers, and libreadline headers installed. On a debian type system, you can install compile-time dependencies with:
+powerbot ships in the minimega distribution. First, ensure that you have a [[http://golang.org][Go compiler]], libpcap headers, and libreadline headers installed. On a debian type system, you can install compile-time dependencies with:
 
 	apt-get install libpcap-dev libreadline-dev
 
@@ -34,7 +34,7 @@ Then obtain the minimega source and run the all.bash script from the top of the 
 
 ** Installation
 
-The Powerbot binary will be at minimega/bin/powerbot. Copy this somewhere convenient, like /usr/local/bin.
+The powerbot binary will be at minimega/bin/powerbot. Copy this somewhere convenient, like /usr/local/bin.
 
 You'll also need a config file in /etc/powerbot.conf. An example is provided in the minimega/src/powerbot directory and is reproduced here:
 
