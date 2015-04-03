@@ -173,8 +173,8 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		log.Debugln("host is local node")
 		vm := vms.findVm(vm)
 		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.Id, vm.Name)
-			return vm.Id, vm.Name, nil
+			log.Debug("got vm: %v %v %v", host, vm.ID, vm.Name)
+			return vm.ID, vm.Name, nil
 		}
 	} else {
 		log.Debugln("remote host")
@@ -187,11 +187,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id vm info", v)
 		}
 
-		cmd, err := minicli.CompileCommand(cmdStr)
-		if err != nil {
-			// Should never happen
-			log.Fatalln(err)
-		}
+		cmd := minicli.MustCompile(cmdStr)
 
 		remoteRespChan := make(chan minicli.Responses)
 		go func() {

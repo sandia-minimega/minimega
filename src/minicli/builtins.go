@@ -114,6 +114,10 @@ search for vms in a particular state:
 
 	.filter state=running vm info
 
+Filters can also be inverted:
+
+	.filter state!=running vm info
+
 Filters are case insensitive and may be stacked:
 
 	.filter state=running .filter vcpus=4 vm info`,
@@ -179,14 +183,21 @@ func runSubCommand(c *Command) chan Responses {
 }
 
 func cliFilter(c *Command, out chan Responses) {
-	parts := strings.Split(c.StringArgs["column=value"], "=")
-	if len(parts) != 2 {
-		resp := &Response{
-			Host:  hostname,
-			Error: "malformed filter term, expected column=value",
+	var negate bool
+
+	parts := strings.Split(c.StringArgs["column=value"], "!=")
+	if len(parts) == 2 {
+		negate = true
+	} else {
+		parts = strings.Split(c.StringArgs["column=value"], "=")
+		if len(parts) != 2 {
+			resp := &Response{
+				Host:  hostname,
+				Error: "malformed filter term, expected column=value",
+			}
+			out <- Responses{resp}
+			return
 		}
-		out <- Responses{resp}
-		return
 	}
 
 	col, filter := strings.ToLower(parts[0]), strings.ToLower(parts[1])
@@ -199,7 +210,7 @@ outer:
 			// HAX: Special case for when the column name is host which is not
 			// part of the actual tabular data.
 			if col == "host" {
-				if r.Host != filter {
+				if negate != (r.Host != filter) {
 					continue
 				}
 			} else if r.Header != nil && r.Tabular != nil {
@@ -215,10 +226,10 @@ outer:
 
 							// If the element looks like a list, do substring matching
 							if strings.HasPrefix(elem, "[") && strings.HasSuffix(elem, "]") {
-								if strings.Contains(elem, filter) {
+								if negate != strings.Contains(elem, filter) {
 									tabular = append(tabular, row)
 								}
-							} else if elem == filter {
+							} else if negate != (elem == filter) {
 								tabular = append(tabular, row)
 							}
 						}

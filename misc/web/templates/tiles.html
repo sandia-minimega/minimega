@@ -1,0 +1,13 @@
+{{template "header"}}
+<body>
+{{template "nav"}}
+<div style="overflow: hidden; margin: 10px;" >
+	{{range .}}
+	<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;">
+		{{ template "screenshot" . }}
+	</div>
+	{{end}}
+</div>
+</body>
+<script type="text/javascript" language="javascript" src="/d3/table.js"></script>
+{{template "footer"}}

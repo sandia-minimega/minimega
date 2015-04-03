@@ -14,12 +14,26 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
+const (
+	MEGABYTE           = 1024 * 1024
+	BANDWIDTH_INTERVAL = 5
+)
+
+type tapStat struct {
+	bridge  string
+	rxStart int
+	rxStop  int
+	txStart int
+	txStop  int
+}
+
 var (
-	bandwidthLast     int64
-	bandwidthLastTime int64
+	bandwidthStats map[string]*tapStat
+	bandwidthLock  sync.Mutex
 )
 
 var hostCLIHandlers = []minicli.Handler{
@@ -39,6 +53,7 @@ var hostCLIHandlers = []minicli.Handler{
 
 func init() {
 	registerHandlers("host", hostCLIHandlers)
+	go bandwidthCollector()
 }
 
 var hostInfoFns = map[string]func() (string, error){
@@ -61,6 +76,23 @@ var hostInfoFns = map[string]func() (string, error){
 // Preferred ordering of host info fields in tabular
 var hostInfoKeys = []string{
 	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
+}
+
+func (t tapStat) String() string {
+	rx := float64(t.rxStop-t.rxStart) / float64(MEGABYTE)
+	tx := float64(t.txStop-t.txStart) / float64(MEGABYTE)
+
+	// it's possible a VM went away during a previous poll, which can make
+	// our value negative and invalid. Check for that and zero the field if
+	// needed.
+	if rx < 0.0 {
+		rx = 0.0
+	}
+	if tx < 0.0 {
+		tx = 0.0
+	}
+
+	return fmt.Sprintf("%.1f/%.1f", rx, tx)
 }
 
 func cliHost(c *minicli.Command) *minicli.Response {
@@ -172,94 +204,97 @@ func hostStatsMemory() (int, int, error) {
 }
 
 func hostStatsBandwidth() (string, error) {
-	bridges := enumerateBridges()
+	bandwidthLock.Lock()
+	defer bandwidthLock.Unlock()
 
-	band1, err := ioutil.ReadFile("/proc/net/dev")
-	if err != nil {
-		return "", err
+	// get all rx and tx totals
+	var rx int
+	var tx int
+	for _, t := range bandwidthStats {
+		rx += t.rxStop - t.rxStart
+		tx += t.txStop - t.txStart
 	}
 
-	time.Sleep(1 * time.Second)
+	rxMB := float64(rx) / float64(MEGABYTE)
+	txMB := float64(tx) / float64(MEGABYTE)
 
-	band2, err := ioutil.ReadFile("/proc/net/dev")
-	if err != nil {
-		return "", err
-	}
-	now := time.Now().Unix()
+	return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", rxMB, txMB), nil
+}
 
-	// bandwidth ( megabytes / second ) for all interfaces in aggregate
-	// again, a big hack, this time we look for a string with a ":" suffix, and offset from there
-	f := strings.Fields(string(band1))
-	var total1 int64
-	var elapsed int64
-	if bandwidthLast == 0 {
-		for i, v := range f {
-			if strings.HasSuffix(v, ":") {
-				track := false
-				for _, b := range bridges {
-					if b == v[:len(v)-1] {
-						log.Debug("host_stats tracking bridge %v", b)
-						track = true
-						break
-					}
+// enumerate bytes/second on all interfaces owned by minimega
+func bandwidthCollector() {
+	for {
+		time.Sleep(BANDWIDTH_INTERVAL * time.Second)
+
+		stats := make(map[string]*tapStat)
+
+		// get a list of every tap we own
+		for _, v := range vms.VMs {
+			for i, t := range v.Taps {
+				stats[t] = &tapStat{
+					bridge: v.Bridges[i],
 				}
-				if !track {
-					continue
-				}
-				if len(f) < (i + 16) {
-					return "", fmt.Errorf("could not read netdev")
-				}
-				recv, err := strconv.ParseInt(f[i+1], 10, 64)
-				if err != nil {
-					return "", fmt.Errorf("could not read netdev")
-				}
-				send, err := strconv.ParseInt(f[i+9], 10, 64)
-				if err != nil {
-					return "", fmt.Errorf("could not read netdev")
-				}
-				total1 += recv + send
 			}
 		}
-		elapsed = 1
-	} else {
-		total1 = bandwidthLast
-		elapsed = now - bandwidthLastTime
-	}
 
-	f = strings.Fields(string(band2))
-	var total2 int64
-	for i, v := range f {
-		if strings.HasSuffix(v, ":") {
-			track := false
-			for _, b := range bridges {
-				if b == v[:len(v)-1] {
-					log.Debug("host_stats tracking bridge %v", b)
-					track = true
-					break
-				}
-			}
-			if !track {
+		// for each tap, get rx/tx bytes
+		for k, v := range stats {
+			d, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/rx_bytes", k))
+			if err != nil {
+				log.Debugln(err)
 				continue
 			}
-			if len(f) < (i + 16) {
-				return "", fmt.Errorf("could not read netdev")
-			}
-			recv, err := strconv.ParseInt(f[i+1], 10, 64)
+			r, err := strconv.Atoi(strings.TrimSpace(string(d)))
 			if err != nil {
-				return "", fmt.Errorf("could not read netdev")
+				log.Debugln(err)
+				continue
 			}
-			send, err := strconv.ParseInt(f[i+9], 10, 64)
+			v.rxStart = r
+
+			d, err = ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/tx_bytes", k))
 			if err != nil {
-				return "", fmt.Errorf("could not read netdev")
+				log.Debugln(err)
+				continue
 			}
-			total2 += recv + send
+			t, err := strconv.Atoi(strings.TrimSpace(string(d)))
+			if err != nil {
+				log.Debugln(err)
+				continue
+			}
+			v.txStart = t
 		}
+
+		time.Sleep(1 * time.Second)
+
+		// and again
+		for k, v := range stats {
+			d, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/rx_bytes", k))
+			if err != nil {
+				log.Debugln(err)
+				continue
+			}
+			r, err := strconv.Atoi(strings.TrimSpace(string(d)))
+			if err != nil {
+				log.Debugln(err)
+				continue
+			}
+			v.rxStop = r
+
+			d, err = ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/tx_bytes", k))
+			if err != nil {
+				log.Debugln(err)
+				continue
+			}
+			t, err := strconv.Atoi(strings.TrimSpace(string(d)))
+			if err != nil {
+				log.Debugln(err)
+				continue
+			}
+			v.txStop = t
+		}
+
+		bandwidthLock.Lock()
+		bandwidthStats = stats
+		bandwidthLock.Unlock()
 	}
-
-	bandwidth := (float32(total2-total1) / 1048576.0) / float32(elapsed)
-	outputBandwidth := fmt.Sprintf("%.1f (MB/s)", bandwidth)
-	bandwidthLast = total2
-	bandwidthLastTime = now
-
-	return outputBandwidth, nil
 }

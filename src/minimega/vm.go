@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"minicli"
 	log "minilog"
 	"sort"
 	"strconv"
@@ -51,7 +52,7 @@ type qemuOverride struct {
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
 	"id", "name", "state", "memory", "vcpus", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "bridge", "tap", "mac", "ip", "ip6", "vlan",
+	"kernel", "cdrom", "append", "bridge", "tap", "bandwidth", "mac", "ip", "ip6", "vlan",
 	"uuid", "cc_active", "tags",
 }
 
@@ -100,7 +101,7 @@ func (vms *vmSorter) Swap(i, j int) {
 func (vms *vmSorter) Less(i, j int) bool {
 	switch vms.by {
 	case "id":
-		return vms.vms[i].Id < vms.vms[j].Id
+		return vms.vms[i].ID < vms.vms[j].ID
 	case "host":
 		return true
 	case "name":
@@ -142,7 +143,7 @@ func vmGetAllSerialPorts() []string {
 	defer vmLock.Unlock()
 
 	var ret []string
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		if v.State == VM_BUILDING || v.State == VM_RUNNING || v.State == VM_PAUSED {
 			ret = append(ret, v.instancePath+"serial")
 		}
@@ -303,9 +304,9 @@ func processVMNet(vm *vmInfo, lan string) error {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	vm.bridges = append(vm.bridges, b)
-	vm.netDrivers = append(vm.netDrivers, d)
-	vm.macs = append(vm.macs, strings.ToLower(m))
+	vm.Bridges = append(vm.Bridges, b)
+	vm.NetDrivers = append(vm.NetDrivers, d)
+	vm.Macs = append(vm.Macs, strings.ToLower(m))
 
 	return nil
 }
@@ -341,4 +342,50 @@ func ParseVmState(s string) (VmState, error) {
 	}
 
 	return VM_ERROR, fmt.Errorf("invalid state: %v", s)
+}
+
+// Get the VM info from all hosts optionally applying column/row filters.
+// Returns a map with keys for the hostnames and values as the tabular data
+// from the host.
+func globalVmInfo(masks []string, filters []string) map[string]*vmList {
+	cmdStr := "vm info"
+	for _, v := range filters {
+		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
+	}
+	if len(masks) > 0 {
+		cmdStr = fmt.Sprintf(".columns %s %s", strings.Join(masks, ","), cmdStr)
+	}
+
+	res := map[string]*vmList{}
+
+	for resps := range runCommandGlobally(minicli.MustCompile(cmdStr), false) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			switch data := resp.Data.(type) {
+			case vmList:
+				res[resp.Host] = &data
+			default:
+				log.Error("unknown data field in vm info")
+			}
+		}
+	}
+
+	return res
+}
+
+// mustFindMask returns the index of the specified mask in vmMasks. If the
+// specified mask is not found, log.Fatal is called.
+func mustFindMask(mask string) int {
+	for i, v := range vmMasks {
+		if v == mask {
+			return i
+		}
+	}
+
+	log.Fatal("missing `%s` in vmMasks", mask)
+	return -1
 }

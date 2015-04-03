@@ -27,18 +27,19 @@ const VNC_WS_BUF = 32768
 
 func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 	// we assume that if we got here, then the url must be sane and of
-	// the format /<host>/<port>
-	url := r.URL.String()
-	if !strings.HasSuffix(url, "/") {
-		url += "/"
+	// the format /ws/<host>/<port>
+	path := r.URL.Path
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
 	}
-	fields := strings.Split(url, "/")
-	if len(fields) != 6 {
+	fields := strings.Split(path, "/")
+	if len(fields) != 5 {
 		http.NotFound(w, r)
 		return
 	}
+	fields = fields[2:]
 
-	rhost := fmt.Sprintf("%v:%v", fields[3], fields[4])
+	rhost := fmt.Sprintf("%v:%v", fields[0], fields[1])
 
 	// connect to the remote host
 	remote, err := net.Dial("tcp", rhost)

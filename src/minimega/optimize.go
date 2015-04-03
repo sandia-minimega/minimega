@@ -52,7 +52,7 @@ To enable hugepage support:
 	optimize hugepages </path/to/hugepages_mount>
 
 To disable hugepage support:
-	optimize hugepages ""
+	clear optimize hugepages
 
 To enable/disable CPU affinity support:
 	optimize affinity [true,false]
@@ -62,7 +62,7 @@ CPUs 1, 2-20):
 	optimize affinity filter [1,2-20]
 
 To clear a CPU set filter:
-	optimize affinity filter
+	clear optimize affinity filter
 
 To view current CPU affinity mappings:
 	optimize affinity
@@ -70,10 +70,10 @@ To view current CPU affinity mappings:
 To disable all optimizations see "clear optimize".`,
 		Patterns: []string{
 			"optimize",
-			"optimize <ksm,> [true,false]",
-			"optimize <hugepages,> [path]",
+			"optimize <affinity,> <filter,> <filter>",
 			"optimize <affinity,> [true,false]",
-			"optimize <affinity,> filter <filter>",
+			"optimize <hugepages,> [path]",
+			"optimize <ksm,> [true,false]",
 		},
 		Call: wrapSimpleCLI(cliOptimize),
 	},
@@ -83,7 +83,10 @@ To disable all optimizations see "clear optimize".`,
 Resets state for virtualization optimizations. See "help optimize" for more
 information.`,
 		Patterns: []string{
-			"clear optimize [affinity,]",
+			"clear optimize",
+			"clear optimize <affinity,> [filter,]",
+			"clear optimize <hugepages,>",
+			"clear optimize <ksm,>",
 		},
 		Call: wrapSimpleCLI(cliOptimizeClear),
 	},
@@ -113,9 +116,6 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print hugepage path
 			resp.Response = fmt.Sprintf("%v", hugepagesMountPath)
-		} else if c.StringArgs["path"] == `""` {
-			// TODO: Shouldn't this be handled by a "clear" command?
-			hugepagesMountPath = ""
 		} else {
 			hugepagesMountPath = c.StringArgs["path"]
 		}
@@ -135,7 +135,7 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			for _, cpu := range cpus {
 				var ids []int
 				for _, vm := range affinityCPUSets[cpu] {
-					ids = append(ids, vm.Id)
+					ids = append(ids, vm.ID)
 				}
 				resp.Tabular = append(resp.Tabular, []string{
 					cpu,
@@ -162,7 +162,6 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			if affinityEnabled {
 				affinityEnable()
 			}
-
 		} else if c.BoolArgs["true"] && !affinityEnabled {
 			// Enabling affinity
 			affinityEnable()
@@ -185,9 +184,17 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 func cliOptimizeClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Reset optimizations
-	if c.BoolArgs["affinity"] {
+	if c.BoolArgs["affinity"] && c.BoolArgs["filter"] {
+		// Reset affinity filter
 		affinityClearFilter()
+	} else if c.BoolArgs["affinity"] {
+		// Reset affinity (disable)
+		affinityDisable()
+	} else if c.BoolArgs["hugepages"] {
+		// Reset hugepages (disable)
+		hugepagesMountPath = ""
+	} else if c.BoolArgs["ksm"] {
+		ksmDisable()
 	} else {
 		clearOptimize()
 	}
@@ -297,7 +304,7 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		cpu := affinitySelectCPU(v)
 		err := v.AffinitySet(cpu)
 		if err != nil {
@@ -309,7 +316,7 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		affinityUnselectCPU(v)
 		err := v.AffinityUnset()
 		if err != nil {
@@ -355,7 +362,7 @@ func affinityUnselectCPU(vm *vmInfo) {
 	// find and remove vm from its cpuset
 	for k, v := range affinityCPUSets {
 		for i, j := range v {
-			if j.Id == vm.Id {
+			if j.ID == vm.ID {
 				if len(v) == 1 {
 					affinityCPUSets[k] = []*vmInfo{}
 				} else if i == 0 {
@@ -369,7 +376,7 @@ func affinityUnselectCPU(vm *vmInfo) {
 			}
 		}
 	}
-	log.Fatal("could not find vm %v in CPU set", vm.Id)
+	log.Fatal("could not find vm %v in CPU set", vm.ID)
 }
 
 func (vm *vmInfo) CheckAffinity() {
@@ -386,7 +393,7 @@ func (vm *vmInfo) AffinitySet(cpu string) error {
 	log.Debugln("affinitySet")
 
 	p := process("taskset")
-	args := []string{p, "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.PID)}
+	args := []string{p, "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.pid)}
 	cmd := exec.Command(args[0], args[1:]...)
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -403,7 +410,7 @@ func (vm *vmInfo) AffinityUnset() error {
 	log.Debugln("affinityUnset")
 
 	p := process("taskset")
-	args := []string{p, "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.PID)}
+	args := []string{p, "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.pid)}
 	cmd := exec.Command(args[0], args[1:]...)
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer

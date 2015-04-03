@@ -101,20 +101,6 @@ file. For example: vyatta config /tmp/myconfig.boot
 - 'write': Write the current configuration to file. If a filename is omitted, a
 random filename will be used and the file placed in the path specified by the
 -filepath flag. The filename will be returned.`,
-		/*
-			Usage:  vyatta
-				vyatta dhcp add <network> <default gateway/none> <DHCP low range> <DHCP high range>
-				vyatta dhcp delete <network>
-				vyatta interfaces <A.B.C.D/MASK,dhcp,none>[,<A.B.C.D/MASK,dhcp,none>...]
-				vyatta interfaces6 <IPv6 address/MASK,none>[,<IPv6 address/MASK,none>...]
-				vyatta rad <prefix>[,<prefix>...]
-				vyatta ospf <network>[,<network>...]
-				vyatta ospf3 <interface>[,<interface>...]
-				vyatta routes <network>,<next-hop>[ <network>,<next-hop> ...]
-				vyatta config <filename>
-				vyatta write [filename]
-		*/
-
 		Patterns: []string{
 			"vyatta",
 			"vyatta <dhcp,>",

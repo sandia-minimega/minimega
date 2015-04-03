@@ -104,7 +104,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	vms.vms = make(map[int]*vmInfo)
+	vms.VMs = make(map[int]*vmInfo)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance

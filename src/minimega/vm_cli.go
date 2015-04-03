@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"math"
@@ -117,9 +118,9 @@ Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
 Start one or all paused virtual machines. Pass all to start all paused virtual
 machines.
 
-Calling vm start specifically on a quit VM will restart the VM. If the optional 'quit'
-suffix is used with the wildcard, then all virtual machines in the paused *or* quit state
-will be restarted.`,
+Calling vm start specifically on a quit VM will restart the VM. If the optional
+'quit' suffix is used with the wildcard, then all virtual machines in the
+paused *or* quit state will be restarted.`,
 		Patterns: []string{
 			"vm start <vm id or name or all> [quit,]",
 		},
@@ -173,7 +174,7 @@ to remove the drive added above, named 0:
 
 	vm hotplug remove 5 0
 
-To remove all hotplug devices, use ID * for the disk ID.`,
+To remove all hotplug devices, use ID "all" for the disk ID.`,
 		Patterns: []string{
 			"vm hotplug <show,> <vm id or name>",
 			"vm hotplug <add,> <vm id or name> <filename>",
@@ -212,7 +213,7 @@ Issue a JSON-encoded QMP command. This is a convenience function for accessing
 the QMP socket of a VM via minimega. vm qmp takes two arguments, a VM ID or
 name, and a JSON string, and returns the JSON encoded response. For example:
 
-	minimega$ vm qmp 0 '{ "execute": "query-status" }'
+	vm qmp 0 '{ "execute": "query-status" }'
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
@@ -239,12 +240,12 @@ to 100 pixels:
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with vm config migrate.
+Migrate runtime state of a VM to disk, which can later be booted with vm config
+migrate.
 
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
-status of in-flight migrations by invoking vm migrate with no arguments.
-`,
+status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Patterns: []string{
 			"vm migrate",
 			"vm migrate <vm id or name> <filename>",
@@ -256,19 +257,18 @@ status of in-flight migrations by invoking vm migrate with no arguments.
 		HelpLong: `
 Display or set a tag for the specified VM.
 
-Tags are key-value pairs. A VM can have any number of tags associated
-with it. They can be used to attach additional information to a
-virtual machine, for example specifying a VM "group", or the correct
-rendering color for some external visualization tool.
+Tags are key-value pairs. A VM can have any number of tags associated with it.
+They can be used to attach additional information to a virtual machine, for
+example specifying a VM "group", or the correct rendering color for some
+external visualization tool.
 
-To set a tag:
+To set a tag "foo" to "bar":
 
-        vm tag <vm id or name> <key> [value]
+        vm tag <vm id or name> foo bar
 
 To read a tag:
 
-        vm tag <vm id or name> <key>
-`,
+        vm tag <vm id or name> <key>`,
 		Patterns: []string{
 			"vm tag <vm id or name> <key> [value]",
 		},
@@ -291,8 +291,7 @@ Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
-"vm change" implies that the current ISO will be ejected.
-`,
+"vm cdrom change" implies that the current ISO will be ejected.`,
 		Patterns: []string{
 			"vm cdrom <eject,> <vm id or name>",
 			"vm cdrom <change,> <vm id or name> <path>",
@@ -306,7 +305,7 @@ Display, save, or restore the current VM configuration.
 
 To display the current configuration, call vm config with no arguments.
 
-List the current saved configurations with 'vm config show'
+List the current saved configurations with 'vm config show'.
 
 To save a configuration:
 
@@ -357,6 +356,7 @@ replacement string.`,
 		HelpShort: "add additional arguments to the QEMU command",
 		HelpLong: `
 Add additional arguments to be passed to the QEMU instance. For example:
+
 	vm config qemu-append -serial tcp:localhost:4001`,
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
@@ -444,6 +444,7 @@ Add an append string to a kernel set with vm kernel. Setting vm append without
 using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
+
 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
 			"vm config append [arg]...",
@@ -478,14 +479,23 @@ for qemu to use. By default, e1000 is used.
 Examples:
 
 To connect a VM to VLANs 1 and 5:
+
 	vm config net 1 5
+
 To connect a VM to VLANs 100, 101, and 102 with specific mac addresses:
+
 	vm config net 100,00:00:00:00:00:00 101,00:00:00:00:01:00 102,00:00:00:00:02:00
+
 To connect a VM to VLAN 1 on bridge0 and VLAN 2 on bridge1:
+
 	vm config net bridge0,1 bridge1,2
+
 To connect a VM to VLAN 100 on bridge0 with a specific mac:
+
 	vm config net bridge0,100,00:11:22:33:44:55
+
 To specify a specific driver, such as i82559c:
+
 	vm config net 100,i82559c
 
 Calling vm net with no parameters will list the current networks for this VM.`,
@@ -571,10 +581,9 @@ Clear all tags from VM 0:
 
 Clear all tags from all VMs:
 
-        clear vm tag all
-`,
+        clear vm tag all`,
 		Patterns: []string{
-			"clear vm tag <vm id or name> [tag]",
+			"clear vm tag <vm id or name or all> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
 	},
@@ -582,6 +591,9 @@ Clear all tags from all VMs:
 
 func init() {
 	registerHandlers("vm", vmCLIHandlers)
+
+	// for vm info
+	gob.Register(vmList{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
@@ -593,6 +605,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
+	resp.Data = vms
 
 	return resp
 }
@@ -603,7 +616,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	doVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			doVms = append(doVms, v)
 		}
 	} else {
@@ -678,7 +691,7 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	clearVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			clearVms = append(clearVms, v)
 		}
 	} else {
@@ -950,7 +963,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.Id), "screenshot.png")
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID), "screenshot.png")
 
 	err = vms.screenshot(vm, path, max)
 	if err != nil {
@@ -980,7 +993,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				resp.Error = err.Error()
@@ -989,7 +1002,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 			if status == "" {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.Id), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.ID), vm.Name, status, fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
 			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
@@ -1113,8 +1126,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.taps) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.taps))
+	if len(vm.Taps) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Taps))
 		return resp
 	}
 
@@ -1122,7 +1135,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	if c.StringArgs["bridge"] != "" {
 		b, err = getBridge(c.StringArgs["bridge"])
 	} else {
-		b, err = getBridge(vm.bridges[pos])
+		b, err = getBridge(vm.Bridges[pos])
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -1130,8 +1143,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
+		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, vm.Networks[pos])
+		err = b.TapRemove(vm.Networks[pos], vm.Taps[pos])
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
@@ -1146,29 +1159,29 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 
 		if net >= 0 && net < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
-			oldBridge, err := getBridge(vm.bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, vm.Networks[pos], b.Name, net)
+			oldBridge, err := getBridge(vm.Bridges[pos])
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			if vm.Networks[pos] != -1 {
-				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+				err := oldBridge.TapRemove(vm.Networks[pos], vm.Taps[pos])
 				if err != nil {
 					resp.Error = err.Error()
 					return resp
 				}
 			}
 
-			err = b.TapAdd(net, vm.taps[pos], false)
+			err = b.TapAdd(net, vm.Taps[pos], false)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			vm.Networks[pos] = net
-			vm.bridges[pos] = b.Name
+			vm.Bridges[pos] = b.Name
 		} else {
 			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}
