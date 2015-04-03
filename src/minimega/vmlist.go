@@ -16,7 +16,7 @@ import (
 
 // total list of vms running on this host
 type vmList struct {
-	vms map[int]*vmInfo
+	VMs map[int]*vmInfo
 }
 
 // apply applies the provided function to the vm in vmList whose name or ID
@@ -45,7 +45,7 @@ func (l *vmList) start(vm string, quit bool) []error {
 	count := 0
 	errAck := make(chan error)
 
-	for _, i := range l.vms {
+	for _, i := range l.VMs {
 		// only bulk start VMs matching our state mask
 		if i.State&stateMask != 0 {
 			count++
@@ -76,7 +76,7 @@ func (l *vmList) stop(vm string) []error {
 	}
 
 	errors := []error{}
-	for _, i := range l.vms {
+	for _, i := range l.VMs {
 		err := i.stop()
 		if err != nil {
 			errors = append(errors, err)
@@ -101,7 +101,7 @@ func (l *vmList) save(file *os.File, vms []string) error {
 
 	var toSave []string
 	if allVms {
-		for k, _ := range l.vms {
+		for k, _ := range l.VMs {
 			toSave = append(toSave, fmt.Sprintf("%v", k))
 		}
 	} else {
@@ -205,14 +205,14 @@ func (l *vmList) findVm(idOrName string) *vmInfo {
 	id, err := strconv.Atoi(idOrName)
 	if err != nil {
 		// Search for VM by name
-		for _, v := range l.vms {
+		for _, v := range l.VMs {
 			if v.Name == idOrName {
 				return v
 			}
 		}
 	}
 
-	return l.vms[id]
+	return l.VMs[id]
 }
 
 // launch one or more vms. this will copy the info struct, one per vm
@@ -221,7 +221,7 @@ func (l *vmList) findVm(idOrName string) *vmInfo {
 func (l *vmList) launch(name string, ack chan int) error {
 	// Make sure that there isn't another VM with the same name
 	if name != "" {
-		for _, vm := range l.vms {
+		for _, vm := range l.VMs {
 			if vm.Name == name {
 				return fmt.Errorf("vm launch duplicate VM name: %s", name)
 			}
@@ -229,17 +229,17 @@ func (l *vmList) launch(name string, ack chan int) error {
 	}
 
 	vm := info.Copy() // returns reference to deep-copy of info
-	vm.Id = <-vmIdChan
+	vm.ID = <-vmIdChan
 	vm.Name = name
 	if vm.Name == "" {
-		vm.Name = fmt.Sprintf("vm-%d", vm.Id)
+		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	}
-	vm.Kill = make(chan bool)
+	vm.kill = make(chan bool)
 	vm.Hotplug = make(map[int]string)
 	vm.Tags = make(map[string]string)
 	vm.State = VM_BUILDING
 	vmLock.Lock()
-	l.vms[vm.Id] = vm
+	l.VMs[vm.ID] = vm
 	vmLock.Unlock()
 	go vm.launchOne(ack)
 
@@ -261,13 +261,13 @@ func (l *vmList) kill(idOrName string) []error {
 			return []error{fmt.Errorf("vm %v is not running", vm.Name)}
 		}
 
-		vm.Kill <- true
-		killedVms[vm.Id] = true
+		vm.kill <- true
+		killedVms[vm.ID] = true
 	} else {
-		for _, vm := range l.vms {
+		for _, vm := range l.VMs {
 			if vm.getState()&stateMask == 0 {
-				vm.Kill <- true
-				killedVms[vm.Id] = true
+				vm.kill <- true
+				killedVms[vm.ID] = true
 			}
 		}
 	}
@@ -294,114 +294,21 @@ outer:
 
 func (l *vmList) flush() {
 	stateMask := VM_QUIT | VM_ERROR
-	for i, vm := range vms.vms {
+	for i, vm := range vms.VMs {
 		if vm.State&stateMask != 0 {
 			log.Infoln("deleting VM: ", i)
-			delete(vms.vms, i)
+			delete(vms.VMs, i)
 		}
 	}
 }
 
 func (l *vmList) info() ([]string, [][]string, error) {
-	table := make([][]string, 0, len(l.vms))
-	for _, j := range l.vms {
-		row := make([]string, 0, len(vmMasks))
-
-		for _, mask := range vmMasks {
-			switch mask {
-			case "id":
-				row = append(row, fmt.Sprintf("%v", j.Id))
-			case "name":
-				row = append(row, fmt.Sprintf("%v", j.Name))
-			case "memory":
-				row = append(row, fmt.Sprintf("%v", j.Memory))
-			case "vcpus":
-				row = append(row, fmt.Sprintf("%v", j.Vcpus))
-			case "state":
-				row = append(row, j.State.String())
-			case "migrate":
-				row = append(row, fmt.Sprintf("%v", j.MigratePath))
-			case "disk":
-				row = append(row, fmt.Sprintf("%v", j.DiskPaths))
-			case "snapshot":
-				row = append(row, fmt.Sprintf("%v", j.Snapshot))
-			case "initrd":
-				row = append(row, fmt.Sprintf("%v", j.InitrdPath))
-			case "kernel":
-				row = append(row, fmt.Sprintf("%v", j.KernelPath))
-			case "cdrom":
-				row = append(row, fmt.Sprintf("%v", j.CdromPath))
-			case "append":
-				row = append(row, fmt.Sprintf("%v", j.Append))
-			case "bridge":
-				row = append(row, fmt.Sprintf("%v", j.bridges))
-			case "tap":
-				row = append(row, fmt.Sprintf("%v", j.taps))
-			case "bandwidth":
-				var bw []string
-				bandwidthLock.Lock()
-				for _, v := range j.taps {
-					t := bandwidthStats[v]
-					if t == nil {
-						bw = append(bw, "0.0/0.0")
-					} else {
-						bw = append(bw, fmt.Sprintf("%v", t))
-					}
-				}
-				bandwidthLock.Unlock()
-				row = append(row, fmt.Sprintf("%v", bw))
-			case "mac":
-				row = append(row, fmt.Sprintf("%v", j.macs))
-			case "tags":
-				row = append(row, fmt.Sprintf("%v", j.Tags))
-			case "ip":
-				var ips []string
-				for bIndex, m := range j.macs {
-					b, err := getBridge(j.bridges[bIndex])
-					if err != nil {
-						log.Errorln(err)
-						continue
-					}
-					ip := b.GetIPFromMac(m)
-					if ip != nil {
-						ips = append(ips, ip.IP4)
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", ips))
-			case "ip6":
-				var ips []string
-				for bIndex, m := range j.macs {
-					b, err := getBridge(j.bridges[bIndex])
-					if err != nil {
-						log.Errorln(err)
-						continue
-					}
-					ip := b.GetIPFromMac(m)
-					if ip != nil {
-						ips = append(ips, ip.IP6)
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", ips))
-			case "vlan":
-				var vlans []string
-				for _, v := range j.Networks {
-					if v == -1 {
-						vlans = append(vlans, "disconnected")
-					} else {
-						vlans = append(vlans, fmt.Sprintf("%v", v))
-					}
-				}
-				row = append(row, fmt.Sprintf("%v", vlans))
-			case "uuid":
-				row = append(row, fmt.Sprintf("%v", j.UUID))
-			case "cc_active":
-				activeClients := ccClients()
-				row = append(row, fmt.Sprintf("%v", activeClients[j.UUID]))
-			default:
-				return nil, nil, fmt.Errorf("invalid mask: %s", mask)
-			}
+	table := make([][]string, 0, len(l.VMs))
+	for _, vm := range l.VMs {
+		row, err := vm.info(vmMasks)
+		if err != nil {
+			continue
 		}
-
 		table = append(table, row)
 	}
 
@@ -411,7 +318,7 @@ func (l *vmList) info() ([]string, [][]string, error) {
 // cleanDirs removes all isntance directories in the minimega base directory
 func (l *vmList) cleanDirs() {
 	log.Debugln("cleanDirs")
-	for _, i := range l.vms {
+	for _, i := range l.VMs {
 		log.Debug("cleaning instance path: %v", i.instancePath)
 		err := os.RemoveAll(i.instancePath)
 		if err != nil {

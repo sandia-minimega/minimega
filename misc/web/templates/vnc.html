@@ -1,0 +1,25 @@
+{{template "header"}}
+<body>
+{{template "nav"}}
+<iframe id="vnc" width="100%v" src="{{.}}"></iframe>
+</body>
+<script type="text/javascript" language="javascript" src="/d3/table.js"></script>
+<script>
+var buffer = 20; //scroll bar buffer
+var iframe = document.getElementById('vnc');
+
+function pageY(elem) {
+	return elem.offsetParent ? (elem.offsetTop + pageY(elem.offsetParent)) : elem.offsetTop;
+}
+
+function resizeIframe() {
+	var height = document.documentElement.clientHeight;
+	height -= pageY(document.getElementById('vnc'))+ buffer ;
+	height = (height < 0) ? 0 : height;
+	document.getElementById('vnc').style.height = height + 'px';
+}
+
+window.onresize = resizeIframe;
+window.onload = resizeIframe;
+</script>
+{{template "footer"}}

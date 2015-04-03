@@ -22,9 +22,7 @@ import (
 )
 
 type vmInfo struct {
-	Lock sync.Mutex
-
-	Id int
+	ID int
 
 	Name       string
 	Memory     string // memory for the vm, in megabytes
@@ -40,21 +38,22 @@ type vmInfo struct {
 	DiskPaths   []string
 	QemuAppend  []string // extra arguments for QEMU
 	Networks    []int    // ordered list of networks (matches 1-1 with Taps)
-	bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
-	taps        []string // list of taps associated with this vm
-	macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
-	netDrivers  []string // optional non-e1000 driver
+	Bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
+	Taps        []string // list of taps associated with this vm
+	Macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	NetDrivers  []string // optional non-e1000 driver
 
-	State        VmState // one of the VM_ states listed above
-	instancePath string
-
-	PID  int
-	q    qmp.Conn  // qmp connection for this vm
-	Kill chan bool // kill channel to signal to shut a vm down
+	State VmState // one of the VM_ states listed above
 
 	Hotplug map[int]string
+	Tags    map[string]string // Additional information
 
-	Tags map[string]string // Additional information
+	// Internal variables
+	instancePath string
+	lock         sync.Mutex
+	pid          int
+	q            qmp.Conn  // qmp connection for this vm
+	kill         chan bool // kill channel to signal to shut a vm down
 }
 
 func (vm *vmInfo) start() error {
@@ -64,13 +63,13 @@ func (vm *vmInfo) start() error {
 	}
 
 	if vm.State == VM_QUIT {
-		log.Info("restarting VM: %v", vm.Id)
+		log.Info("restarting VM: %v", vm.ID)
 		ack := make(chan int)
 		go vm.launchOne(ack)
 		log.Debugln("ack restarted VM %v", <-ack)
 	}
 
-	log.Info("starting VM: %v", vm.Id)
+	log.Info("starting VM: %v", vm.ID)
 	err := vm.q.Start()
 	if err != nil {
 		vm.state(VM_ERROR)
@@ -83,10 +82,10 @@ func (vm *vmInfo) start() error {
 
 func (vm *vmInfo) stop() error {
 	if vm.State != VM_RUNNING {
-		return fmt.Errorf("VM %v not running", vm.Id)
+		return fmt.Errorf("VM %v not running", vm.ID)
 	}
 
-	log.Info("stopping VM: %v", vm.Id)
+	log.Info("stopping VM: %v", vm.ID)
 	err := vm.q.Stop()
 	if err == nil {
 		vm.state(VM_PAUSED)
@@ -98,7 +97,7 @@ func (vm *vmInfo) stop() error {
 func (info *vmInfo) Copy() *vmInfo {
 	// makes deep copy of info and returns reference to new vmInfo struct
 	newInfo := new(vmInfo)
-	newInfo.Id = info.Id
+	newInfo.ID = info.ID
 	newInfo.Name = info.Name
 	newInfo.Memory = info.Memory
 	newInfo.Vcpus = info.Vcpus
@@ -115,16 +114,16 @@ func (info *vmInfo) Copy() *vmInfo {
 	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
 	// q isn't allocated until launchOne()
-	newInfo.bridges = make([]string, len(info.bridges))
-	copy(newInfo.bridges, info.bridges)
-	newInfo.taps = make([]string, len(info.taps))
-	copy(newInfo.taps, info.taps)
+	newInfo.Bridges = make([]string, len(info.Bridges))
+	copy(newInfo.Bridges, info.Bridges)
+	newInfo.Taps = make([]string, len(info.Taps))
+	copy(newInfo.Taps, info.Taps)
 	newInfo.Networks = make([]int, len(info.Networks))
 	copy(newInfo.Networks, info.Networks)
-	newInfo.macs = make([]string, len(info.macs))
-	copy(newInfo.macs, info.macs)
-	newInfo.netDrivers = make([]string, len(info.netDrivers))
-	copy(newInfo.netDrivers, info.netDrivers)
+	newInfo.Macs = make([]string, len(info.Macs))
+	copy(newInfo.Macs, info.Macs)
+	newInfo.NetDrivers = make([]string, len(info.NetDrivers))
+	copy(newInfo.NetDrivers, info.NetDrivers)
 	newInfo.Snapshot = info.Snapshot
 	newInfo.UUID = info.UUID
 	// Hotplug and tags aren't allocated until later in launch()
@@ -214,12 +213,12 @@ func (vm *vmInfo) QueryMigrate() (string, float64, error) {
 func (vm *vmInfo) networkString() string {
 	s := "["
 	for i, vlan := range vm.Networks {
-		if vm.bridges[i] != "" {
-			s += vm.bridges[i] + ","
+		if vm.Bridges[i] != "" {
+			s += vm.Bridges[i] + ","
 		}
 		s += strconv.Itoa(vlan)
-		if vm.macs[i] != "" {
-			s += "," + vm.macs[i]
+		if vm.Macs[i] != "" {
+			s += "," + vm.Macs[i]
 		}
 		if i+1 < len(vm.Networks) {
 			s += " "
@@ -240,7 +239,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.Id) + "/"
+	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
 	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
 	if err != nil {
 		log.Errorln(err)
@@ -253,7 +252,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// populate selfMacMap
-	for _, mac := range vm.macs {
+	for _, mac := range vm.Macs {
 		if mac == "" { // don't worry about empty mac addresses
 			continue
 		}
@@ -262,14 +261,14 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		if ok { // if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
-			ack <- vm.Id // signal that this vm is "done" launching
+			ack <- vm.ID // signal that this vm is "done" launching
 			return false
 		}
 		selfMacMap[mac] = true
 	}
 
 	// populate macMap, diskSnapshotted, and diskPersistent
-	for _, vm2 := range vms.vms {
+	for _, vm2 := range vms.VMs {
 		if vm == vm2 { // ignore this vm
 			continue
 		}
@@ -280,7 +279,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 
 		if vmIsActive {
 			// populate mac addresses set
-			for _, mac := range vm2.macs {
+			for _, mac := range vm2.Macs {
 				macMap[mac] = true
 			}
 
@@ -298,7 +297,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// check for mac address conflicts and fill in unspecified mac addresses without conflict
-	for i, mac := range vm.macs {
+	for i, mac := range vm.Macs {
 		if mac == "" { // create mac addresses where unspecified
 			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
 			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
@@ -307,7 +306,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
 			}
 
-			vm.macs[i] = newMac       // set the unspecified mac address
+			vm.Macs[i] = newMac       // set the unspecified mac address
 			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
 		}
 	}
@@ -319,7 +318,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
 			log.Error("disk path %v is already in use by another vm.", diskPath)
 			vm.state(VM_ERROR)
-			ack <- vm.Id
+			ack <- vm.ID
 			return false
 		}
 	}
@@ -328,7 +327,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 }
 
 func (vm *vmInfo) launchOne(ack chan int) {
-	log.Info("launching vm: %v", vm.Id)
+	log.Info("launching vm: %v", vm.ID)
 
 	s := vm.getState()
 
@@ -359,33 +358,33 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	var waitChan = make(chan int)
 
 	// clear taps, we may have come from the quit state
-	vm.taps = []string{}
+	vm.Taps = []string{}
 
 	// create and add taps if we are associated with any networks
 	for i, lan := range vm.Networks {
-		b, err := getBridge(vm.bridges[i])
+		b, err := getBridge(vm.Bridges[i])
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.state(VM_ERROR)
-			ack <- vm.Id
+			ack <- vm.ID
 			return
 		}
 		tap, err := b.TapCreate(lan)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.state(VM_ERROR)
-			ack <- vm.Id
+			ack <- vm.ID
 			return
 		}
-		vm.taps = append(vm.taps, tap)
+		vm.Taps = append(vm.Taps, tap)
 	}
 
 	if len(vm.Networks) > 0 {
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.taps, "\n")), 0666)
+		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.Taps, "\n")), 0666)
 		if err != nil {
 			log.Error("write instance taps file: %v", err)
 			vm.state(VM_ERROR)
-			ack <- vm.Id
+			ack <- vm.ID
 			return
 		}
 	}
@@ -406,12 +405,12 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	if err != nil {
 		log.Error("start qemu: %v %v", err, sErr.String())
 		vm.state(VM_ERROR)
-		ack <- vm.Id
+		ack <- vm.ID
 		return
 	}
 
-	vm.PID = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.Id, vm.PID)
+	vm.pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
 
 	vm.CheckAffinity()
 
@@ -424,7 +423,7 @@ func (vm *vmInfo) launchOne(ack chan int) {
 				vm.state(VM_ERROR)
 			}
 		}
-		waitChan <- vm.Id
+		waitChan <- vm.ID
 	}()
 
 	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
@@ -442,21 +441,21 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	}
 
 	if !connected {
-		log.Error("vm %v failed to connect to qmp: %v", vm.Id, err)
+		log.Error("vm %v failed to connect to qmp: %v", vm.ID, err)
 		vm.state(VM_ERROR)
 		cmd.Process.Kill()
 		<-waitChan
-		ack <- vm.Id
+		ack <- vm.ID
 	} else {
 		go vm.asyncLogger()
 
-		ack <- vm.Id
+		ack <- vm.ID
 
 		select {
 		case <-waitChan:
-			log.Info("VM %v exited", vm.Id)
-		case <-vm.Kill:
-			log.Info("Killing VM %v", vm.Id)
+			log.Info("VM %v exited", vm.ID)
+		case <-vm.kill:
+			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
@@ -464,30 +463,30 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	}
 
 	for i, l := range vm.Networks {
-		b, err := getBridge(vm.bridges[i])
+		b, err := getBridge(vm.Bridges[i])
 		if err != nil {
 			log.Error("get bridge: %v", err)
 		} else {
-			b.TapDestroy(l, vm.taps[i])
+			b.TapDestroy(l, vm.Taps[i])
 		}
 	}
 
 	if sendKillAck {
-		killAck <- vm.Id
+		killAck <- vm.ID
 	}
 }
 
 func (vm *vmInfo) getState() VmState {
-	vm.Lock.Lock()
-	defer vm.Lock.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	return vm.State
 }
 
 // update the vm state, and write the state to file
 func (vm *vmInfo) state(s VmState) {
-	vm.Lock.Lock()
-	defer vm.Lock.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	vm.State = s
 	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
@@ -505,7 +504,7 @@ func (vm *vmInfo) qmpPath() string {
 func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	var args []string
 
-	sId := strconv.Itoa(vm.Id)
+	sId := strconv.Itoa(vm.ID)
 
 	args = append(args, process("qemu"))
 
@@ -603,18 +602,18 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	addr := 1
 	args = append(args, fmt.Sprintf("-device"))
 	args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
-	for i, tap := range vm.taps {
+	for i, tap := range vm.Taps {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
 		args = append(args, "-device")
 		if commit {
-			b, err := getBridge(vm.bridges[i])
+			b, err := getBridge(vm.Bridges[i])
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			}
-			b.iml.AddMac(vm.macs[i])
+			b.iml.AddMac(vm.Macs[i])
 		}
-		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.netDrivers[i], tap, vm.macs[i], bus, addr))
+		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.NetDrivers[i], tap, vm.Macs[i], bus, addr))
 		addr++
 		if addr == 32 {
 			addr = 1
@@ -637,7 +636,7 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "-uuid")
 	args = append(args, vm.UUID)
 
-	log.Info("args for vm %v is: %#v", vm.Id, args)
+	log.Info("args for vm %v is: %#v", vm.ID, args)
 	return args
 }
 
@@ -648,7 +647,7 @@ func (vm *vmInfo) asyncLogger() {
 		if v == nil {
 			return
 		}
-		log.Info("VM %v received asynchronous message: %v", vm.Id, v)
+		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
 	}
 }
 
@@ -673,4 +672,108 @@ func (vm *vmInfo) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.Hotplug, id)
 	return nil
+}
+
+func (vm *vmInfo) info(masks []string) ([]string, error) {
+	res := make([]string, 0, len(masks))
+
+	for _, mask := range masks {
+		switch mask {
+		case "id":
+			res = append(res, fmt.Sprintf("%v", vm.ID))
+		case "name":
+			res = append(res, fmt.Sprintf("%v", vm.Name))
+		case "memory":
+			res = append(res, fmt.Sprintf("%v", vm.Memory))
+		case "vcpus":
+			res = append(res, fmt.Sprintf("%v", vm.Vcpus))
+		case "state":
+			res = append(res, vm.State.String())
+		case "migrate":
+			res = append(res, fmt.Sprintf("%v", vm.MigratePath))
+		case "disk":
+			res = append(res, fmt.Sprintf("%v", vm.DiskPaths))
+		case "snapshot":
+			res = append(res, fmt.Sprintf("%v", vm.Snapshot))
+		case "initrd":
+			res = append(res, fmt.Sprintf("%v", vm.InitrdPath))
+		case "kernel":
+			res = append(res, fmt.Sprintf("%v", vm.KernelPath))
+		case "cdrom":
+			res = append(res, fmt.Sprintf("%v", vm.CdromPath))
+		case "append":
+			res = append(res, fmt.Sprintf("%v", vm.Append))
+		case "bridge":
+			res = append(res, fmt.Sprintf("%v", vm.Bridges))
+		case "tap":
+			res = append(res, fmt.Sprintf("%v", vm.Taps))
+		case "bandwidth":
+			var bw []string
+			bandwidthLock.Lock()
+			for _, v := range vm.Taps {
+				t := bandwidthStats[v]
+				if t == nil {
+					bw = append(bw, "0.0/0.0")
+				} else {
+					bw = append(bw, fmt.Sprintf("%v", t))
+				}
+			}
+			bandwidthLock.Unlock()
+			res = append(res, fmt.Sprintf("%v", bw))
+		case "mac":
+			res = append(res, fmt.Sprintf("%v", vm.Macs))
+		case "tags":
+			res = append(res, fmt.Sprintf("%v", vm.Tags))
+		case "ip":
+			var ips []string
+			for bIndex, m := range vm.Macs {
+				// TODO: This won't work if it's being run from a different host...
+				b, err := getBridge(vm.Bridges[bIndex])
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+				ip := b.GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP4)
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", ips))
+		case "ip6":
+			var ips []string
+			for bIndex, m := range vm.Macs {
+				// TODO: This won't work if it's being run from a different host...
+				b, err := getBridge(vm.Bridges[bIndex])
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+				ip := b.GetIPFromMac(m)
+				if ip != nil {
+					ips = append(ips, ip.IP6)
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", ips))
+		case "vlan":
+			var vlans []string
+			for _, v := range vm.Networks {
+				if v == -1 {
+					vlans = append(vlans, "disconnected")
+				} else {
+					vlans = append(vlans, fmt.Sprintf("%v", v))
+				}
+			}
+			res = append(res, fmt.Sprintf("%v", vlans))
+		case "uuid":
+			res = append(res, fmt.Sprintf("%v", vm.UUID))
+		case "cc_active":
+			// TODO: This won't work if it's being run from a different host...
+			activeClients := ccClients()
+			res = append(res, fmt.Sprintf("%v", activeClients[vm.UUID]))
+		default:
+			return nil, fmt.Errorf("invalid mask: %s", mask)
+		}
+	}
+
+	return res, nil
 }

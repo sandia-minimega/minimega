@@ -135,7 +135,7 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			for _, cpu := range cpus {
 				var ids []int
 				for _, vm := range affinityCPUSets[cpu] {
-					ids = append(ids, vm.Id)
+					ids = append(ids, vm.ID)
 				}
 				resp.Tabular = append(resp.Tabular, []string{
 					cpu,
@@ -304,7 +304,7 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		cpu := affinitySelectCPU(v)
 		err := v.AffinitySet(cpu)
 		if err != nil {
@@ -316,7 +316,7 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		affinityUnselectCPU(v)
 		err := v.AffinityUnset()
 		if err != nil {
@@ -362,7 +362,7 @@ func affinityUnselectCPU(vm *vmInfo) {
 	// find and remove vm from its cpuset
 	for k, v := range affinityCPUSets {
 		for i, j := range v {
-			if j.Id == vm.Id {
+			if j.ID == vm.ID {
 				if len(v) == 1 {
 					affinityCPUSets[k] = []*vmInfo{}
 				} else if i == 0 {
@@ -376,7 +376,7 @@ func affinityUnselectCPU(vm *vmInfo) {
 			}
 		}
 	}
-	log.Fatal("could not find vm %v in CPU set", vm.Id)
+	log.Fatal("could not find vm %v in CPU set", vm.ID)
 }
 
 func (vm *vmInfo) CheckAffinity() {
@@ -393,7 +393,7 @@ func (vm *vmInfo) AffinitySet(cpu string) error {
 	log.Debugln("affinitySet")
 
 	p := process("taskset")
-	args := []string{p, "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.PID)}
+	args := []string{p, "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.pid)}
 	cmd := exec.Command(args[0], args[1:]...)
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
@@ -410,7 +410,7 @@ func (vm *vmInfo) AffinityUnset() error {
 	log.Debugln("affinityUnset")
 
 	p := process("taskset")
-	args := []string{p, "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.PID)}
+	args := []string{p, "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.pid)}
 	cmd := exec.Command(args[0], args[1:]...)
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer

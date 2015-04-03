@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"math"
@@ -590,6 +591,9 @@ Clear all tags from all VMs:
 
 func init() {
 	registerHandlers("vm", vmCLIHandlers)
+
+	// for vm info
+	gob.Register(vmList{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
@@ -601,6 +605,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
+	resp.Data = vms
 
 	return resp
 }
@@ -611,7 +616,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	doVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			doVms = append(doVms, v)
 		}
 	} else {
@@ -686,7 +691,7 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	clearVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			clearVms = append(clearVms, v)
 		}
 	} else {
@@ -936,7 +941,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.Id), "screenshot.png")
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID), "screenshot.png")
 
 	err = vms.screenshot(vm, path, max)
 	if err != nil {
@@ -966,7 +971,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				resp.Error = err.Error()
@@ -975,7 +980,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 			if status == "" {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.Id), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.ID), vm.Name, status, fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
 			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
@@ -1099,8 +1104,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.taps) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.taps))
+	if len(vm.Taps) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Taps))
 		return resp
 	}
 
@@ -1108,7 +1113,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	if c.StringArgs["bridge"] != "" {
 		b, err = getBridge(c.StringArgs["bridge"])
 	} else {
-		b, err = getBridge(vm.bridges[pos])
+		b, err = getBridge(vm.Bridges[pos])
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -1116,8 +1121,8 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.Id, pos, vm.Networks[pos])
-		err = b.TapRemove(vm.Networks[pos], vm.taps[pos])
+		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, vm.Networks[pos])
+		err = b.TapRemove(vm.Networks[pos], vm.Taps[pos])
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
@@ -1132,29 +1137,29 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 
 		if net >= 0 && net < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.Id, pos, vm.Networks[pos], b.Name, net)
-			oldBridge, err := getBridge(vm.bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, vm.Networks[pos], b.Name, net)
+			oldBridge, err := getBridge(vm.Bridges[pos])
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			if vm.Networks[pos] != -1 {
-				err := oldBridge.TapRemove(vm.Networks[pos], vm.taps[pos])
+				err := oldBridge.TapRemove(vm.Networks[pos], vm.Taps[pos])
 				if err != nil {
 					resp.Error = err.Error()
 					return resp
 				}
 			}
 
-			err = b.TapAdd(net, vm.taps[pos], false)
+			err = b.TapAdd(net, vm.Taps[pos], false)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
 			vm.Networks[pos] = net
-			vm.bridges[pos] = b.Name
+			vm.Bridges[pos] = b.Name
 		} else {
 			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}

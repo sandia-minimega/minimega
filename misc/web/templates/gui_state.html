@@ -1,0 +1,14 @@
+<table id="{{.Id}}" class="{{.Class}}" cellspacing="0">
+	<thead>
+		<tr>
+			{{ range .Header }}<th>{{.}}</th>{{end}}
+		</tr>
+	</thead>
+	<tbody>
+		{{ range .Tabular }}
+		<tr>
+			{{ range . }}<td>{{.}}</td>{{end}}
+		</tr>
+		{{end}}
+	</tbody>
+</table>

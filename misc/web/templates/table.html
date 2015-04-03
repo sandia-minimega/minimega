@@ -1,0 +1,26 @@
+{{template "header"}}
+<body>
+{{template "nav"}}
+<table id="{{.ID}}" class="{{.Class}}" cellspacing="0">
+	<thead>
+		<tr>
+			{{ range .Header }}<th>{{.}}</th>{{end}}
+		</tr>
+	</thead>
+	<tbody>
+		{{ range .Tabular }}
+		<tr>
+			{{ range . }}<td>{{.}}</td>{{end}}
+		</tr>
+		{{end}}
+	</tbody>
+</table>
+
+<div style="color:#006400"> Toggle Columns:
+	{{ range $i, $v := .Header }}
+	<a class="toggle-vis" data-column="{{$i}}">{{$v}}</a>
+	{{end}}
+</div>
+</body>
+<script type="text/javascript" language="javascript" src="/d3/table.js"></script>
+{{template "footer"}}
