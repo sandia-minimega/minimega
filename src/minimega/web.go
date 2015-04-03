@@ -246,7 +246,7 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	points := []point{}
 
 	for _, vms := range globalVmInfo(nil, nil) {
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			name := fmt.Sprintf("%v:%v", vm.ID, vm.Name)
 
 			p := point{Text: name}
@@ -330,7 +330,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	stateMask := VM_QUIT | VM_ERROR
 
 	for host, vms := range globalVmInfo(nil, nil) {
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			var buf bytes.Buffer
 			if vm.State&stateMask == 0 {
 				params := vmScreenshotParams{
@@ -371,7 +371,7 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 
 	params := []vmScreenshotParams{}
 	for host, vms := range globalVmInfo(nil, nil) {
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			if vm.State&stateMask != 0 {
 				continue
 			}

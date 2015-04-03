@@ -616,7 +616,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	doVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			doVms = append(doVms, v)
 		}
 	} else {
@@ -691,7 +691,7 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	vmstring := c.StringArgs["vm"]
 	clearVms := make([]*vmInfo, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			clearVms = append(clearVms, v)
 		}
 	} else {
@@ -971,7 +971,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
-		for _, vm := range vms.vms {
+		for _, vm := range vms.VMs {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				resp.Error = err.Error()

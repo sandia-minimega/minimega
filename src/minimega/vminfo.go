@@ -268,7 +268,7 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// populate macMap, diskSnapshotted, and diskPersistent
-	for _, vm2 := range vms.vms {
+	for _, vm2 := range vms.VMs {
 		if vm == vm2 { // ignore this vm
 			continue
 		}

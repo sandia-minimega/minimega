@@ -304,7 +304,7 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		cpu := affinitySelectCPU(v)
 		err := v.AffinitySet(cpu)
 		if err != nil {
@@ -316,7 +316,7 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		affinityUnselectCPU(v)
 		err := v.AffinityUnset()
 		if err != nil {

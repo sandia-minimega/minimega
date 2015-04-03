@@ -229,7 +229,7 @@ func bandwidthCollector() {
 		stats := make(map[string]*tapStat)
 
 		// get a list of every tap we own
-		for _, v := range vms.vms {
+		for _, v := range vms.VMs {
 			for i, t := range v.Taps {
 				stats[t] = &tapStat{
 					bridge: v.Bridges[i],

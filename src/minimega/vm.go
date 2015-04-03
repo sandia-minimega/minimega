@@ -312,7 +312,7 @@ func vmGetAllSerialPorts() []string {
 	defer vmLock.Unlock()
 
 	var ret []string
-	for _, v := range vms.vms {
+	for _, v := range vms.VMs {
 		if v.State == VM_BUILDING || v.State == VM_RUNNING || v.State == VM_PAUSED {
 			ret = append(ret, v.instancePath+"serial")
 		}
