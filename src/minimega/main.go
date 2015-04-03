@@ -44,7 +44,7 @@ var (
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_cli        = flag.Bool("cli", false, "print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
-	vms          vmList
+	vms          VMs
 	hostname     string
 )
 
@@ -104,7 +104,7 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	vms.VMs = make(map[int]*vmInfo)
+	vms = make(map[int]*vmInfo)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance

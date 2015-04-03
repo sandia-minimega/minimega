@@ -312,7 +312,7 @@ func vmGetAllSerialPorts() []string {
 	defer vmLock.Unlock()
 
 	var ret []string
-	for _, v := range vms.VMs {
+	for _, v := range vms {
 		if v.State == VM_BUILDING || v.State == VM_RUNNING || v.State == VM_PAUSED {
 			ret = append(ret, v.instancePath+"serial")
 		}
@@ -516,7 +516,7 @@ func ParseVmState(s string) (VmState, error) {
 // Get the VM info from all hosts optionally applying column/row filters.
 // Returns a map with keys for the hostnames and values as the tabular data
 // from the host.
-func globalVmInfo(masks []string, filters []string) map[string]*vmList {
+func globalVmInfo(masks []string, filters []string) map[string]VMs {
 	cmdStr := "vm info"
 	for _, v := range filters {
 		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
@@ -525,7 +525,7 @@ func globalVmInfo(masks []string, filters []string) map[string]*vmList {
 		cmdStr = fmt.Sprintf(".columns %s %s", strings.Join(masks, ","), cmdStr)
 	}
 
-	res := map[string]*vmList{}
+	res := map[string]VMs{}
 
 	for resps := range runCommandGlobally(minicli.MustCompile(cmdStr), false) {
 		for _, resp := range resps {
@@ -535,8 +535,8 @@ func globalVmInfo(masks []string, filters []string) map[string]*vmList {
 			}
 
 			switch data := resp.Data.(type) {
-			case vmList:
-				res[resp.Host] = &data
+			case VMs:
+				res[resp.Host] = data
 			default:
 				log.Error("unknown data field in vm info")
 			}
