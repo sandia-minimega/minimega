@@ -1,10 +1,10 @@
-Igor is a tool for managing reservations on a cluster.
+igor is a tool for managing reservations on a cluster.
 
 Users make reservations with igor, requesting either a number of nodes
 or a specific set of nodes. They also specify a kernel and initial
 ramdisk which their nodes should boot. Reservations are deleted when
 they run out of time, but users can add additional time to the
-reservation. Igor now only allows a reservation's owner to delete the
+reservation. igor now only allows a reservation's owner to delete the
 reservation; experience with using igor in a real setting has shown
 that this is needed.
 

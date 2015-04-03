@@ -39,7 +39,7 @@ Now, you can fetch and buld the minimega source:
 
 This will build and test each of the libraries and tools in the minimega distribution and create a bin/ sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools.
 
-The Igor binary will be in the bin/ subdirectory.
+The igor binary will be in the bin/ subdirectory.
 
 ** Installation
 
@@ -107,7 +107,7 @@ prefer a big grid, you can set rackheight = sqrt(# nodes) and
 rackwidth = sqrt(# nodes). This will just show one big grid of all
 your nodes.
 
-* Using Igor
+* Using igor
 
 Generally, to use igor you will check what nodes are reserved, make
 your own reservation with some un-used nodes, and then delete the
@@ -115,7 +115,7 @@ reservation when you're done. When creating a reservation, you can
 specify a duration (default 12 hours); after this expires, your
 reservation is automatically deleted.
 
-Igor includes built-in help; you can run "igor help" to get started.
+igor includes built-in help; you can run "igor help" to get started.
 
 ** Checking status
 

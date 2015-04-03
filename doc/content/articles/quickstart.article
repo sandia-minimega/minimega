@@ -1,4 +1,4 @@
-Minimega Quickstart
+minimega Quickstart
 
 John Floren
 17 Mar 2015
@@ -64,7 +64,7 @@ For our simple purposes, we just need to tell it to use the disk we just created
 
 ** Configure the network
 
-Minimega can do a lot of complex things with the network. For this quickstart, we'll do the following:
+minimega can do a lot of complex things with the network. For this quickstart, we'll do the following:
 
 - Put the VM onto virtual network #100
 - Connect the host to that same virtual network
@@ -100,9 +100,9 @@ Our "test" VM should now be booting!
 
 * Step 4: Connect to the VM
 
-Although we've started the VM, it would be nice to be able to interact with it. Minimega provides VNC access to the VM's console, either directly or through the web interface.
+Although we've started the VM, it would be nice to be able to interact with it. minimega provides VNC access to the VM's console, either directly or through the web interface.
 
-Note that most VMBetter configurations provided with minimega will set up passwordless login for the root user.
+Note that most vmbetter configurations provided with minimega will set up passwordless login for the root user.
 
 ** Web interface
 

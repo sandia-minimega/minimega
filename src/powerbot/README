@@ -1,7 +1,7 @@
-Powerbot: A Power Control Tool
+powerbot: A Power Control Tool
 =================================
 
-Powerbot is a tool for turning ports on networked PDUs on and off. Currently it is designed specifically for use in a cluster environment, where every node's hostname is of the form <prefix><number>, such as ccc1 or kn402.
+powerbot is a tool for turning ports on networked PDUs on and off. Currently it is designed specifically for use in a cluster environment, where every node's hostname is of the form <prefix><number>, such as ccc1 or kn402.
 
 Motivation
 ----------
@@ -13,7 +13,7 @@ I wanted something that was extensible like powerman, so I could use it with dif
 Usage
 -------
 
-Powerbot commands consist of an action (on/off/cycle/status) and a list of nodes for which to perform the action. You can use ranges to specify multiple nodes. Here are some example commands:
+powerbot commands consist of an action (on/off/cycle/status) and a list of nodes for which to perform the action. You can use ranges to specify multiple nodes. Here are some example commands:
 
 	powerbot on ccc1		# Turn on ccc1
 	powerbot off ccc[1-10]		# Turn off ccc1 through ccc10

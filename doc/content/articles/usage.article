@@ -181,7 +181,7 @@ You can also broadcast a command to all nodes on the mesh from any other node, e
 
 ** Output rendering modes
 
-Minimega supports a number of ways to output data as well. By default, output will be tabular (pretty printed) if tabular data is present, and a simple string otherwise. Additionally, with mesh commands, like responses will be grouped into a single response prefixed with a list of the nodes that had that response.
+minimega supports a number of ways to output data as well. By default, output will be tabular (pretty printed) if tabular data is present, and a simple string otherwise. Additionally, with mesh commands, like responses will be grouped into a single response prefixed with a list of the nodes that had that response.
 
 You can override this behavior with a number of builtin output operators, including JSON, csv, etc., all prefixed with the `.` character. For example, to output tabular data in csv instead of pretty-printing, set csv mode with `.csv true`:
 
@@ -283,7 +283,7 @@ And look at the config one last time:
 
 ** Launching Virtual Machines
 
-We'll start with a VM configuration that uses a disk image and 2048 MB of RAM. We're going to launch more than one VM with this image, so we want to make sure that the VM doesn't have the ability to write to the disk image. In QEMU language, this is called snapshot mode. Minimega has snapshot mode *on* by default, but we'll make sure just to be safe:
+We'll start with a VM configuration that uses a disk image and 2048 MB of RAM. We're going to launch more than one VM with this image, so we want to make sure that the VM doesn't have the ability to write to the disk image. In QEMU language, this is called snapshot mode. minimega has snapshot mode *on* by default, but we'll make sure just to be safe:
 
 	minimega$ vm config disk /tmp/foo.qcow2
 	minimega$ vm config snapshot true
@@ -549,7 +549,7 @@ minimega will list the hostnames of all connected nodes with the number of runni
 
 * Multi-node Usage
 
-Minimega is designed to scale by running instances on individual nodes that communicate over a message passing protocol, meshage. The goal is to make minimega use the same command set on any number of participating nodes by starting commands with a designation of which nodes (one, some, or all) should execute the command.
+minimega is designed to scale by running instances on individual nodes that communicate over a message passing protocol, meshage. The goal is to make minimega use the same command set on any number of participating nodes by starting commands with a designation of which nodes (one, some, or all) should execute the command.
 
 ** Meshage
 
@@ -557,11 +557,11 @@ Meshage is a mesh-based message passing and connectivity protocol designed to su
 
 *** Node connections
 
-Minimega connects to other minimega instances (which are communicated to via the `mesh`send` command) using the meshage package. When a minimega instance connects to another instance (either through auto-discovery or the `mesh`dial` command), a simple handshake occurs to verify connection prerequisites and to check the connection namespace. If using auto-discovery and the namespaces are not the same, the connection is dropped. If using `mesh`dial`, namespaces are ignored. This allows two minimega networks to be forcibly joined.
+minimega connects to other minimega instances (which are communicated to via the `mesh`send` command) using the meshage package. When a minimega instance connects to another instance (either through auto-discovery or the `mesh`dial` command), a simple handshake occurs to verify connection prerequisites and to check the connection namespace. If using auto-discovery and the namespaces are not the same, the connection is dropped. If using `mesh`dial`, namespaces are ignored. This allows two minimega networks to be forcibly joined.
 
 *** Auto-discovery
 
-Minimega instances can auto-discover other instances on a network using the auto-discovery model provided by meshage. This is enabled by using the `-degree` flag at startup or the `mesh`degree` command at runtime. These commands set the minimum mesh degree to attempt to maintain. If non-zero, meshage will broadcast over UDP solicitations for other nodes to attempt a connection to the soliciting node. Other listening nodes, even if they already have enough connections, will attempt to initiate a new connection as described above. When a node meets its degree requirements, it simply stops broadcasting solicitations. To reduce broadcast traffic, nodes uses an exponential backoff function to throttle the rate of solicitation broadcasts. When the number of connections to a given node decreases below the specified degree, the node will resume soliciting connections.
+minimega instances can auto-discover other instances on a network using the auto-discovery model provided by meshage. This is enabled by using the `-degree` flag at startup or the `mesh`degree` command at runtime. These commands set the minimum mesh degree to attempt to maintain. If non-zero, meshage will broadcast over UDP solicitations for other nodes to attempt a connection to the soliciting node. Other listening nodes, even if they already have enough connections, will attempt to initiate a new connection as described above. When a node meets its degree requirements, it simply stops broadcasting solicitations. To reduce broadcast traffic, nodes uses an exponential backoff function to throttle the rate of solicitation broadcasts. When the number of connections to a given node decreases below the specified degree, the node will resume soliciting connections.
 
 Because nodes that are solicited will attempt to make connections regardless of how many connections they have, it is possible for nodes to have more connections than specified using the degree field.
 

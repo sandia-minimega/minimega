@@ -225,7 +225,7 @@ See the [[/articles/api.article#TOC_5.6.][cc API]] for more information.
 
 *** IP learning now bridge specific
 
-Minimega snoops ARP and neighbor discovery traffic on local VMs in order to
+minimega snoops ARP and neighbor discovery traffic on local VMs in order to
 associate IP addresses at runtime with VMs, as reflected in `vm`info`. In
 previous versions, minimega simply inspected all bridges for this information.
 This was problematic if VMs with identical MAC addresses existed on different
