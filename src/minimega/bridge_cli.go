@@ -102,6 +102,11 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			bridge = DEFAULT_BRIDGE
 		}
 
+		if isReserved(bridge) {
+			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for bridge name", bridge)
+			return resp
+		}
+
 		ip := c.StringArgs["ip"]
 		if c.BoolArgs["dhcp"] {
 			ip = "dhcp"
@@ -109,13 +114,17 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			ip = "none"
 		}
 
-		tapName := c.StringArgs["tap"]
+		tap := c.StringArgs["tap"]
+		if isReserved(tap) {
+			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for tap name", tap)
+			return resp
+		}
 
-		tapName, err := hostTapCreate(bridge, vlan, ip, tapName)
+		tap, err := hostTapCreate(bridge, vlan, ip, tap)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
-			resp.Response = tapName
+			resp.Response = tap
 		}
 	} else if c.BoolArgs["delete"] {
 		err := hostTapDelete(c.StringArgs["id"])

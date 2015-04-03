@@ -288,3 +288,15 @@ func hasCommand(cmd *minicli.Command, prefix string) bool {
 	return strings.HasPrefix(cmd.Original, prefix) ||
 		(cmd.Subcommand != nil && hasCommand(cmd.Subcommand, prefix))
 }
+
+// isReserved checks whether the provided string is a reserved identifier.
+func isReserved(s string) bool {
+	for _, r := range reserved {
+		if r == s {
+			return true
+		}
+	}
+
+	return false
+
+}

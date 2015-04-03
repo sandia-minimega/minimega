@@ -860,6 +860,13 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
+	for _, name := range vmNames {
+		if isReserved(name) {
+			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
+			return resp
+		}
+	}
+
 	log.Info("launching %v vms", len(vmNames))
 
 	ack := make(chan int)
