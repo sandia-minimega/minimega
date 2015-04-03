@@ -19,7 +19,7 @@ type VMs map[int]*vmInfo
 
 // apply applies the provided function to the vm in VMs whose name or ID
 // matches the provided vm parameter.
-func (v VMs) apply(idOrName string, fn func(*vmInfo) error) error {
+func (vms VMs) apply(idOrName string, fn func(*vmInfo) error) error {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return vmNotFound(idOrName)
@@ -28,7 +28,7 @@ func (v VMs) apply(idOrName string, fn func(*vmInfo) error) error {
 }
 
 // start vms that are paused or building, or restart vms in the quit state
-func (v VMs) start(vm string, quit bool) []error {
+func (vms VMs) start(vm string, quit bool) []error {
 	if vm != Wildcard {
 		err := vms.apply(vm, func(vm *vmInfo) error { return vm.start() })
 		return []error{err}
