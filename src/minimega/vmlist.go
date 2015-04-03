@@ -15,14 +15,12 @@ import (
 )
 
 // total list of vms running on this host
-type vmList struct {
-	VMs map[int]*vmInfo
-}
+type VMs map[int]*vmInfo
 
-// apply applies the provided function to the vm in vmList whose name or ID
+// apply applies the provided function to the vm in VMs whose name or ID
 // matches the provided vm parameter.
-func (l *vmList) apply(idOrName string, fn func(*vmInfo) error) error {
-	vm := l.findVm(idOrName)
+func (vms VMs) apply(idOrName string, fn func(*vmInfo) error) error {
+	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
@@ -30,9 +28,9 @@ func (l *vmList) apply(idOrName string, fn func(*vmInfo) error) error {
 }
 
 // start vms that are paused or building, or restart vms in the quit state
-func (l *vmList) start(vm string, quit bool) []error {
+func (vms VMs) start(vm string, quit bool) []error {
 	if vm != Wildcard {
-		err := l.apply(vm, func(vm *vmInfo) error { return vm.start() })
+		err := vms.apply(vm, func(vm *vmInfo) error { return vm.start() })
 		return []error{err}
 	}
 
@@ -45,7 +43,7 @@ func (l *vmList) start(vm string, quit bool) []error {
 	count := 0
 	errAck := make(chan error)
 
-	for _, i := range l.VMs {
+	for _, i := range vms {
 		// only bulk start VMs matching our state mask
 		if i.State&stateMask != 0 {
 			count++
@@ -69,14 +67,14 @@ func (l *vmList) start(vm string, quit bool) []error {
 }
 
 // stop vms that are paused or building
-func (l *vmList) stop(vm string) []error {
+func (vms VMs) stop(vm string) []error {
 	if vm != Wildcard {
-		err := l.apply(vm, func(vm *vmInfo) error { return vm.stop() })
+		err := vms.apply(vm, func(vm *vmInfo) error { return vm.stop() })
 		return []error{err}
 	}
 
 	errors := []error{}
-	for _, i := range l.VMs {
+	for _, i := range vms {
 		err := i.stop()
 		if err != nil {
 			errors = append(errors, err)
@@ -86,30 +84,30 @@ func (l *vmList) stop(vm string) []error {
 	return errors
 }
 
-func (l *vmList) save(file *os.File, vms []string) error {
+func (vms VMs) save(file *os.File, args []string) error {
 	var allVms bool
-	for _, vm := range vms {
+	for _, vm := range args {
 		if vm == Wildcard {
 			allVms = true
 			break
 		}
 	}
 
-	if allVms && len(vms) != 1 {
+	if allVms && len(args) != 1 {
 		log.Debug("ignoring vm names, wildcard is present")
 	}
 
 	var toSave []string
 	if allVms {
-		for k, _ := range l.VMs {
+		for k, _ := range vms {
 			toSave = append(toSave, fmt.Sprintf("%v", k))
 		}
 	} else {
-		toSave = vms
+		toSave = args
 	}
 
 	for _, vmStr := range toSave { // iterate over the vm id's specified
-		vm := l.findVm(vmStr)
+		vm := vms.findVm(vmStr)
 		if vm == nil {
 			return fmt.Errorf("vm %v not found", vm)
 		}
@@ -156,8 +154,8 @@ func (l *vmList) save(file *os.File, vms []string) error {
 	return nil
 }
 
-func (l *vmList) qmp(idOrName, qmp string) (string, error) {
-	vm := l.findVm(idOrName)
+func (vms VMs) qmp(idOrName, qmp string) (string, error) {
+	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return "", vmNotFound(idOrName)
 	}
@@ -165,7 +163,7 @@ func (l *vmList) qmp(idOrName, qmp string) (string, error) {
 	return vm.QMPRaw(qmp)
 }
 
-func (l *vmList) screenshot(idOrName, path string, max int) error {
+func (vms VMs) screenshot(idOrName, path string, max int) error {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return vmNotFound(idOrName)
@@ -192,8 +190,8 @@ func (l *vmList) screenshot(idOrName, path string, max int) error {
 	return nil
 }
 
-func (l *vmList) migrate(idOrName, filename string) error {
-	vm := l.findVm(idOrName)
+func (vms VMs) migrate(idOrName, filename string) error {
+	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
@@ -201,27 +199,27 @@ func (l *vmList) migrate(idOrName, filename string) error {
 	return vm.Migrate(filename)
 }
 
-func (l *vmList) findVm(idOrName string) *vmInfo {
+func (vms VMs) findVm(idOrName string) *vmInfo {
 	id, err := strconv.Atoi(idOrName)
 	if err != nil {
 		// Search for VM by name
-		for _, v := range l.VMs {
+		for _, v := range vms {
 			if v.Name == idOrName {
 				return v
 			}
 		}
 	}
 
-	return l.VMs[id]
+	return vms[id]
 }
 
 // launch one or more vms. this will copy the info struct, one per vm
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
-func (l *vmList) launch(name string, ack chan int) error {
+func (vms VMs) launch(name string, ack chan int) error {
 	// Make sure that there isn't another VM with the same name
 	if name != "" {
-		for _, vm := range l.VMs {
+		for _, vm := range vms {
 			if vm.Name == name {
 				return fmt.Errorf("vm launch duplicate VM name: %s", name)
 			}
@@ -239,7 +237,7 @@ func (l *vmList) launch(name string, ack chan int) error {
 	vm.Tags = make(map[string]string)
 	vm.State = VM_BUILDING
 	vmLock.Lock()
-	l.VMs[vm.ID] = vm
+	vms[vm.ID] = vm
 	vmLock.Unlock()
 	go vm.launchOne(ack)
 
@@ -247,12 +245,12 @@ func (l *vmList) launch(name string, ack chan int) error {
 }
 
 // kill one or all vms (* for all)
-func (l *vmList) kill(idOrName string) []error {
+func (vms VMs) kill(idOrName string) []error {
 	stateMask := VM_QUIT | VM_ERROR
 	killedVms := map[int]bool{}
 
 	if idOrName != Wildcard {
-		vm := l.findVm(idOrName)
+		vm := vms.findVm(idOrName)
 		if vm == nil {
 			return []error{vmNotFound(idOrName)}
 		}
@@ -264,7 +262,7 @@ func (l *vmList) kill(idOrName string) []error {
 		vm.kill <- true
 		killedVms[vm.ID] = true
 	} else {
-		for _, vm := range l.VMs {
+		for _, vm := range vms {
 			if vm.getState()&stateMask == 0 {
 				vm.kill <- true
 				killedVms[vm.ID] = true
@@ -292,19 +290,19 @@ outer:
 	return errs
 }
 
-func (l *vmList) flush() {
+func (vms VMs) flush() {
 	stateMask := VM_QUIT | VM_ERROR
-	for i, vm := range vms.VMs {
+	for i, vm := range vms {
 		if vm.State&stateMask != 0 {
 			log.Infoln("deleting VM: ", i)
-			delete(vms.VMs, i)
+			delete(vms, i)
 		}
 	}
 }
 
-func (l *vmList) info() ([]string, [][]string, error) {
-	table := make([][]string, 0, len(l.VMs))
-	for _, vm := range l.VMs {
+func (vms VMs) info() ([]string, [][]string, error) {
+	table := make([][]string, 0, len(vms))
+	for _, vm := range vms {
 		row, err := vm.info(vmMasks)
 		if err != nil {
 			continue
@@ -316,9 +314,9 @@ func (l *vmList) info() ([]string, [][]string, error) {
 }
 
 // cleanDirs removes all isntance directories in the minimega base directory
-func (l *vmList) cleanDirs() {
+func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
-	for _, i := range l.VMs {
+	for _, i := range vms {
 		log.Debug("cleaning instance path: %v", i.instancePath)
 		err := os.RemoveAll(i.instancePath)
 		if err != nil {
