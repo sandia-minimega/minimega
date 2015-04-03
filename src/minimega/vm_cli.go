@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"math"
@@ -590,6 +591,9 @@ Clear all tags from all VMs:
 
 func init() {
 	registerHandlers("vm", vmCLIHandlers)
+
+	// for vm info
+	gob.Register(vmList{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
