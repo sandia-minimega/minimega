@@ -12,7 +12,6 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
-	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -226,13 +225,14 @@ func webVNC(w http.ResponseWriter, r *http.Request) {
 	port := fields[1]
 	vm := fields[2]
 
-	u, _ := url.Parse("/novnc/vnc_auto.html")
-	q := u.Query()
-	q.Set("title", fmt.Sprintf("%s:%s", host, vm))
-	q.Set("path", fmt.Sprintf("ws/%s/%s", host, port))
-	u.RawQuery = q.Encode()
+	data := struct {
+		Title, Path string
+	}{
+		Title: fmt.Sprintf("%s:%s", host, vm),
+		Path:  fmt.Sprintf("ws/%s/%s", host, port),
+	}
 
-	webRenderTemplate(w, "vnc.html", u.String())
+	webRenderTemplate(w, "vnc.html", data)
 }
 
 func webMapVMs(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,6 @@
 <html>
     <head>
         <title>VNC Performance Benchmark</title>
-        <link rel="stylesheet" href="../include/base.css">
     </head>
     <body>
 
@@ -38,12 +37,19 @@
 
     <script type="text/javascript">
         var INCLUDE_URI= "../include/";
+        // TODO: Data file should override
+        var VNC_frame_encoding = "base64";
     </script>
-    <script src="../include/vnc.js"></script>
+    <script src="../include/util.js"></script>
     <script src="../include/playback.js"></script>
     <script src="../data/multi.js"></script>
 
     <script>
+        // Load supporting scripts
+        Util.load_scripts(["webutil.js", "base64.js", "websock.js", "des.js",
+                           "keysymdef.js", "keyboard.js", "input.js", "display.js",
+                           "jsunzip.js", "rfb.js"]);
+
         var start_time, VNC_frame_data, pass, passes, encIdx,
             encOrder = ['raw', 'rre', 'hextile', 'tightpng', 'copyrect'],
             encTot = {}, encMin = {}, encMax = {},
@@ -188,7 +194,7 @@
                 " (min/avg/max)");
         }
 
-        window.onload = function() {
+        window.onscriptsload = function() {
             var i, enc;
             dbgmsg("Frame lengths:");
             for (i = 0; i < encOrder.length; i++) {
@@ -196,8 +202,8 @@
                 dbgmsg("  " + enc + ": " + VNC_frame_data_multi[enc].length);
             }
             rfb = new RFB({'target': $D('VNC_canvas'),
-                           'updateState': updateState});
-            rfb.testMode(send_array);
+                           'onUpdateState': updateState});
+            rfb.testMode(send_array, VNC_frame_encoding);
         }
     </script>
 </html>
