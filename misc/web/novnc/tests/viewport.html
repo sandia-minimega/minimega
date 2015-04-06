@@ -37,6 +37,8 @@
     <script src="../include/util.js"></script>
     <script src="../include/webutil.js"></script> 
     <script src="../include/base64.js"></script>
+    <script src="../include/keysymdef.js"></script>
+    <script src="../include/keyboard.js"></script>
     <script src="../include/input.js"></script> 
     <script src="../include/display.js"></script>
     <script>
@@ -95,7 +97,7 @@
                 deltaY = lastPos.y - y; // drag frame buffer
                 lastPos = {'x': x, 'y': y};
 
-                display.viewportChange(deltaX, deltaY);
+                display.viewportChangePos(deltaX, deltaY);
                 return;
             }
 
@@ -164,14 +166,13 @@
             var p = $D('canvas').parentNode;
             message("doResize1: [" + (p.offsetWidth - padW) +
                     "," + (p.offsetHeight - padH) + "]");
-            display.viewportChange(0, 0,
-                p.offsetWidth - padW, p.offsetHeight - padH);
+            display.viewportChangeSize(p.offsetWidth - padW, p.offsetHeight - padH);
             /*
             var pos, new_w, new_h;pos
             pos = Util.getPosition($D('canvas').parentNode);
             new_w = window.innerWidth - pos.x;
             new_h = window.innerHeight - pos.y;
-            display.viewportChange(0, 0, new_w, new_h);
+            display.viewportChangeSize(new_w, new_h);
             */
         }
 
@@ -192,7 +193,7 @@
             Util.addEvent(window, 'resize', doResize);
             // Shrink viewport for first resize call so that the
             // scrollbars are disabled
-            display.viewportChange(0, 0, 10, 10);
+            display.viewportChangeSize(10, 10);
             setTimeout(doResize, 1);
             setInterval(dirtyRedraw, 50);
 
