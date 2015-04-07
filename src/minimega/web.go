@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"net/http"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -25,6 +26,7 @@ const (
 
 type htmlTable struct {
 	Header  []string
+	Toggle  map[string]int
 	Tabular [][]interface{}
 	ID      string
 	Class   string
@@ -118,13 +120,17 @@ func webStart(port int, root string) {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/novnc/", http.StripPrefix("/novnc/", http.FileServer(http.Dir(filepath.Join(root, "novnc")))))
-	mux.Handle("/d3/", http.StripPrefix("/d3/", http.FileServer(http.Dir(filepath.Join(root, "d3")))))
+	for _, v := range []string{"novnc", "d3", "include"} {
+		path := fmt.Sprintf("/%s/", v)
+		dir := http.Dir(filepath.Join(root, v))
+		mux.Handle(path, http.StripPrefix(path, http.FileServer(dir)))
+	}
 
 	mux.HandleFunc("/", webVMs)
 	mux.HandleFunc("/map", webMapVMs)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.HandleFunc("/hosts", webHosts)
+	mux.HandleFunc("/tags", webVMTags)
 	mux.HandleFunc("/tiles", webTileVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
@@ -273,6 +279,64 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	webRenderTemplate(w, "map.html", points)
+}
+
+func webVMTags(w http.ResponseWriter, r *http.Request) {
+	table := htmlTable{
+		Header:  []string{},
+		Toggle:  map[string]int{},
+		Tabular: [][]interface{}{},
+	}
+
+	tags := map[string]bool{}
+
+	info := globalVmInfo(nil, nil)
+
+	// Find all the distinct tags across all VMs
+	for _, vms := range info {
+		for _, vm := range vms {
+			for k := range vm.Tags {
+				tags[k] = true
+			}
+		}
+	}
+
+	fixedCols := []string{"Host", "Name", "ID"}
+
+	// Copy into Header
+	for k := range tags {
+		table.Header = append(table.Header, k)
+	}
+	sort.Strings(table.Header)
+
+	// Set up Toggle, offset by fixedCols which will be on the left
+	for i, v := range table.Header {
+		table.Toggle[v] = i + len(fixedCols)
+	}
+
+	// Update the VM's tags so that it contains all the distinct values and
+	// then populate data
+	for host, vms := range info {
+		for _, vm := range vms {
+			row := []interface{}{
+				host,
+				vm.Name,
+				vm.ID,
+			}
+
+			for _, k := range table.Header {
+				// If key is not present, will set it to the zero-value
+				row = append(row, vm.Tags[k])
+			}
+
+			table.Tabular = append(table.Tabular, row)
+		}
+	}
+
+	// Add "fixed" headers for host/...
+	table.Header = append(fixedCols, table.Header...)
+
+	webRenderTemplate(w, "tags.html", table)
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {

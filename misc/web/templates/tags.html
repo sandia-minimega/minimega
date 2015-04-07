@@ -1,0 +1,63 @@
+{{template "header"}}
+<body>
+{{template "nav"}}
+<div id="left">
+	<h2>Filter by tags:</h2>
+	<ul>
+    {{ range $k, $v := .Toggle }}
+		<li>
+		<label>
+            <input name="{{$k}}" type="checkbox" data-column="{{$v}}">
+			<span>{{$k}}</span>
+		</label>
+		</li>
+	{{end}}
+	</ul>
+</div>
+<div id="right">
+	<table id="tags" cellspacing="0">
+		<thead>
+			<tr>
+				{{ range .Header }}<th>{{ . }}</th>{{end}}
+			</tr>
+		</thead>
+		<tbody>
+            {{ range .Tabular }}
+			<tr>
+                {{ range . }}<td>{{.}}</td>{{end}}
+			</tr>
+			{{end}}
+		</tbody>
+	</table>
+</div>
+</body>
+<style>
+h2 {
+    font-size: 1em;
+	font-weight: bold;
+}
+
+div#left {
+	clear: left;
+	float: left;
+	padding: 20px;
+	display: block;
+	border-right: 1px solid black;
+}
+
+div#left ul {
+    padding: 0px;
+}
+
+div#left li {
+    list-style: none;
+}
+
+div#right {
+    width: auto;
+    overflow: hidden;
+    padding: 20px;
+}
+</style>
+<script type="text/javascript" language="javascript" src="/include/js/tags.js"></script>
+{{template "footer"}}
