@@ -33,7 +33,7 @@ First, make sure you have a [[http://golang.org][Go compiler]] installed, then i
 
 Now, you can fetch and buld the minimega source:
 
-	git clone https://code.google.com/p/minimega 
+        git clone git@github.com:sandia-minimega/minimega.git
 	cd minimega
 	./all.bash
 
