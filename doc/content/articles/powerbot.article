@@ -28,7 +28,7 @@ powerbot ships in the minimega distribution. First, ensure that you have a [[htt
 
 Then obtain the minimega source and run the all.bash script from the top of the repo:
 
-	git clone https://code.google.com/p/minimega 
+	git clone git@github.com:sandia-minimega/minimega.git
 	cd minimega
 	./all.bash
 

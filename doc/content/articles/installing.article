@@ -5,21 +5,21 @@ Installing minimega
 
 minimega does not currently have an official release or an official build service. You will need to build minimega from source. Source can be obtained from the minimega git repo:
 
-	git clone https://code.google.com/p/minimega
+   git clone git@github.com:sandia-minimega/minimega.git
 
 ** Building from source
 
 To build from source you will need a [[http://golang.org][Go compiler]], libpcap headers, and libreadline headers. On a debian type system, you can install compile-time dependencies with:
 
-	apt-get install libpcap-dev libreadline-dev
+   apt-get install libpcap-dev libreadline-dev
 
 The Go compiler must be at least version 1.1.
 
 First, obtain the minimega source, then run the all.bash script from the top of the repo:
 
-	git clone https://code.google.com/p/minimega 
-	cd minimega
-	./all.bash
+       git clone git@github.com:sandia-minimega/minimega.git
+       cd minimega
+       ./all.bash
 
 This will build and test each of the libraries and tools in the minimega distribution and create a bin/ sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools.
 
