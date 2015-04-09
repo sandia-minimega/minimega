@@ -251,7 +251,8 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 
 	points := []point{}
 
-	for _, vms := range globalVmInfo(nil, nil) {
+	info, _ := globalVmInfo(nil, nil)
+	for _, vms := range info {
 		for _, vm := range vms {
 			name := fmt.Sprintf("%v:%v", vm.ID, vm.Name)
 
@@ -290,7 +291,7 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 
 	tags := map[string]bool{}
 
-	info := globalVmInfo(nil, nil)
+	info, _ := globalVmInfo(nil, nil)
 
 	// Find all the distinct tags across all VMs
 	for _, vms := range info {
@@ -383,6 +384,16 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// HAX: Part of code to hack around "dynamic" fields in vm info.
+	findHeader := func(needle string, header []string) (int, error) {
+		for i, v := range header {
+			if v == needle {
+				return i, nil
+			}
+		}
+		return 0, fmt.Errorf("header `%s` not found", needle)
+	}
+
 	table := htmlTable{
 		Header:  []string{"host", "screenshot"},
 		Tabular: [][]interface{}{},
@@ -393,7 +404,8 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 	stateMask := VM_QUIT | VM_ERROR
 
-	for host, vms := range globalVmInfo(nil, nil) {
+	info, raw := globalVmInfo(nil, nil)
+	for host, vms := range info {
 		for _, vm := range vms {
 			var buf bytes.Buffer
 			if vm.State&stateMask == 0 {
@@ -412,15 +424,42 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 			}
 
 			res := []interface{}{host, template.HTML(buf.String())}
-			log.Debug("res: %v", res)
 
 			row, err := vm.info(vmMasks)
 			if err != nil {
 				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name, err)
 				continue
 			}
-			for _, v := range row {
-				res = append(res, v)
+
+			// HAX: Patch up "dynamic" fields from tabular data. This will be
+			// deleted when we track all the VM state in the VM struct.
+			for i, v := range vmMasks {
+				id := fmt.Sprintf("%v", vm.ID)
+				switch v {
+				case "ip", "ip6", "cc_active":
+					log.Debug("patching `%s` field for `%s` host", v, host)
+					for _, resp := range raw[host] {
+						idIdx, err := findHeader("id", resp.Header)
+						if err != nil {
+							log.Debug("%v", err)
+							continue
+						}
+
+						vIdx, err := findHeader(v, resp.Header)
+						if err != nil {
+							log.Debug("%v", err)
+							continue
+						}
+
+						for _, r := range resp.Tabular {
+							if id == r[idIdx] {
+								row[i] = r[vIdx]
+							}
+						}
+					}
+				}
+
+				res = append(res, row[i])
 			}
 
 			table.Tabular = append(table.Tabular, res)
@@ -434,7 +473,9 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 	stateMask := VM_QUIT | VM_ERROR
 
 	params := []vmScreenshotParams{}
-	for host, vms := range globalVmInfo(nil, nil) {
+
+	info, _ := globalVmInfo(nil, nil)
+	for host, vms := range info {
 		for _, vm := range vms {
 			if vm.State&stateMask != 0 {
 				continue
