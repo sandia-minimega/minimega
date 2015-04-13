@@ -191,15 +191,15 @@ Network connections are indicated by their position in vm net (same order in vm
 info) and are zero indexed. For example, to disconnect the first network
 connection from a VM named vm-0 with 4 network connections:
 
-	vm netmod disconnect vm-0 0
+	vm net disconnect vm-0 0
 
 To disconnect the second connection:
 
-	vm netmod disconnect vm-0 1
+	vm net disconnect vm-0 1
 
 To move a connection, specify the new VLAN tag and bridge:
 
-	vm netmod <vm name or id> 0 bridgeX 100`,
+	vm net <vm name or id> 0 bridgeX 100`,
 		Patterns: []string{
 			"vm net <connect,> <vm id or name> <tap position> <bridge> <vlan>",
 			"vm net <disconnect,> <vm id or name> <tap position>",
@@ -1111,16 +1111,18 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.Taps) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Taps))
+	if len(vm.Networks) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Networks))
 		return resp
 	}
+
+	net := &vm.Networks[pos]
 
 	var b *bridge
 	if c.StringArgs["bridge"] != "" {
 		b, err = getBridge(c.StringArgs["bridge"])
 	} else {
-		b, err = getBridge(vm.Bridges[pos])
+		b, err = getBridge(net.Bridge)
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -1128,45 +1130,45 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, vm.Networks[pos])
-		err = b.TapRemove(vm.Networks[pos], vm.Taps[pos])
+		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
+		err = b.TapRemove(net.VLAN, net.Tap)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
-			vm.Networks[pos] = -1
+			net.VLAN = -1
 		}
 	} else if c.BoolArgs["connect"] {
-		net, err := strconv.Atoi(c.StringArgs["vlan"])
+		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
-		if net >= 0 && net < 4096 {
+		if vlan >= 0 && vlan < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, vm.Networks[pos], b.Name, net)
-			oldBridge, err := getBridge(vm.Bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, net.VLAN, b.Name, vlan)
+			oldBridge, err := getBridge(net.Bridge)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
-			if vm.Networks[pos] != -1 {
-				err := oldBridge.TapRemove(vm.Networks[pos], vm.Taps[pos])
+			if net.VLAN != -1 {
+				err := oldBridge.TapRemove(net.VLAN, net.Tap)
 				if err != nil {
 					resp.Error = err.Error()
 					return resp
 				}
 			}
 
-			err = b.TapAdd(net, vm.Taps[pos], false)
+			err = b.TapAdd(vlan, net.Tap, false)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
-			vm.Networks[pos] = net
-			vm.Bridges[pos] = b.Name
+			net.VLAN = vlan
+			net.Bridge = b.Name
 		} else {
 			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}

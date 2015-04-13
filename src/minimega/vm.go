@@ -44,6 +44,14 @@ const (
 	QMP_CONNECT_DELAY     = 100
 )
 
+type NetConfig struct {
+	VLAN   int
+	Bridge string
+	Tap    string
+	MAC    string
+	Driver string
+}
+
 type qemuOverride struct {
 	match string
 	repl  string
@@ -132,10 +140,7 @@ var vmConfigFns = map[string]struct {
 	"net": {
 		Update: processVMNet,
 		Clear: func(vm *vmInfo) {
-			vm.Networks = []int{}
-			vm.Bridges = []string{}
-			vm.Macs = []string{}
-			vm.NetDrivers = []string{}
+			vm.Networks = []NetConfig{}
 		},
 		Print: func(vm *vmInfo) string {
 			return vm.networkString()
@@ -146,8 +151,8 @@ var vmConfigFns = map[string]struct {
 			}
 
 			nics := []string{}
-			for i, vlan := range vm.Networks {
-				nic := fmt.Sprintf("%v,%v,%v,%v", vm.Bridges[i], vlan, vm.Macs[i], vm.NetDrivers[i])
+			for _, net := range vm.Networks {
+				nic := fmt.Sprintf("%v,%v,%v,%v", net.Bridge, net.VLAN, net.MAC, net.Driver)
 				nics = append(nics, nic)
 			}
 			return "vm config net " + strings.Join(nics, " ")
@@ -464,8 +469,6 @@ func processVMNet(vm *vmInfo, lan string) error {
 		return err
 	}
 
-	vm.Networks = append(vm.Networks, vlan)
-
 	if b == "" {
 		b = DEFAULT_BRIDGE
 	}
@@ -473,9 +476,12 @@ func processVMNet(vm *vmInfo, lan string) error {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	vm.Bridges = append(vm.Bridges, b)
-	vm.NetDrivers = append(vm.NetDrivers, d)
-	vm.Macs = append(vm.Macs, strings.ToLower(m))
+	vm.Networks = append(vm.Networks, NetConfig{
+		VLAN:   vlan,
+		Bridge: b,
+		MAC:    strings.ToLower(m),
+		Driver: d,
+	})
 
 	return nil
 }

@@ -101,11 +101,11 @@ func startCapturePcap(vm string, iface int, filename string) error {
 		return vmNotFound(vm)
 	}
 
-	if len(v.Taps) <= iface {
+	if len(v.Networks) <= iface {
 		return fmt.Errorf("no such interface %v", iface)
 	}
 
-	tap := v.Taps[iface]
+	tap := v.Networks[iface].Tap
 
 	// attempt to start pcap on the bridge
 	p, err := gopcap.NewPCAP(tap, filename)

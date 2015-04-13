@@ -230,9 +230,9 @@ func bandwidthCollector() {
 
 		// get a list of every tap we own
 		for _, v := range vms {
-			for i, t := range v.Taps {
-				stats[t] = &tapStat{
-					bridge: v.Bridges[i],
+			for _, net := range v.Networks {
+				stats[net.Tap] = &tapStat{
+					bridge: net.Bridge,
 				}
 			}
 		}

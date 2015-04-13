@@ -37,11 +37,8 @@ type vmInfo struct {
 	MigratePath string
 	DiskPaths   []string
 	QemuAppend  []string // extra arguments for QEMU
-	Networks    []int    // ordered list of networks (matches 1-1 with Taps)
-	Bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
-	Taps        []string // list of taps associated with this vm
-	Macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
-	NetDrivers  []string // optional non-e1000 driver
+
+	Networks []NetConfig
 
 	State VmState // one of the VM_ states listed above
 
@@ -111,21 +108,13 @@ func (info *vmInfo) Copy() *vmInfo {
 	newInfo.QemuAppend = make([]string, len(info.QemuAppend))
 	copy(newInfo.QemuAppend, info.QemuAppend)
 	newInfo.State = info.State
-	// Kill isn't allocated until later in launch()
 	newInfo.instancePath = info.instancePath
-	// q isn't allocated until launchOne()
-	newInfo.Bridges = make([]string, len(info.Bridges))
-	copy(newInfo.Bridges, info.Bridges)
-	newInfo.Taps = make([]string, len(info.Taps))
-	copy(newInfo.Taps, info.Taps)
-	newInfo.Networks = make([]int, len(info.Networks))
-	copy(newInfo.Networks, info.Networks)
-	newInfo.Macs = make([]string, len(info.Macs))
-	copy(newInfo.Macs, info.Macs)
-	newInfo.NetDrivers = make([]string, len(info.NetDrivers))
-	copy(newInfo.NetDrivers, info.NetDrivers)
 	newInfo.Snapshot = info.Snapshot
 	newInfo.UUID = info.UUID
+	newInfo.Networks = make([]NetConfig, len(info.Networks))
+	copy(newInfo.Networks, info.Networks)
+	// Kill isn't allocated until later in launch()
+	// q isn't allocated until launchOne()
 	// Hotplug and tags aren't allocated until later in launch()
 	return newInfo
 }
@@ -212,13 +201,13 @@ func (vm *vmInfo) QueryMigrate() (string, float64, error) {
 
 func (vm *vmInfo) networkString() string {
 	s := "["
-	for i, vlan := range vm.Networks {
-		if vm.Bridges[i] != "" {
-			s += vm.Bridges[i] + ","
+	for i, net := range vm.Networks {
+		if net.Bridge != "" {
+			s += net.Bridge + ","
 		}
-		s += strconv.Itoa(vlan)
-		if vm.Macs[i] != "" {
-			s += "," + vm.Macs[i]
+		s += strconv.Itoa(net.VLAN)
+		if net.MAC != "" {
+			s += "," + net.MAC
 		}
 		if i+1 < len(vm.Networks) {
 			s += " "
@@ -252,20 +241,22 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// populate selfMacMap
-	for _, mac := range vm.Macs {
-		if mac == "" { // don't worry about empty mac addresses
+	for _, net := range vm.Networks {
+		if net.MAC == "" { // don't worry about empty mac addresses
 			continue
 		}
 
-		_, ok := selfMacMap[mac]
-		if ok { // if this vm specified the same mac address for two interfaces
+		if _, ok := selfMacMap[net.MAC]; ok {
+			// if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.state(VM_ERROR)
 			ack <- vm.ID // signal that this vm is "done" launching
 			return false
 		}
-		selfMacMap[mac] = true
+		selfMacMap[net.MAC] = true
 	}
+
+	stateMask := VM_BUILDING | VM_RUNNING | VM_PAUSED
 
 	// populate macMap, diskSnapshotted, and diskPersistent
 	for _, vm2 := range vms {
@@ -274,13 +265,11 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 		}
 
 		s := vm2.getState()
-		stateMask := VM_BUILDING | VM_RUNNING | VM_PAUSED
-		vmIsActive := (s&stateMask != 0)
 
-		if vmIsActive {
+		if s&stateMask != 0 {
 			// populate mac addresses set
-			for _, mac := range vm2.Macs {
-				macMap[mac] = true
+			for _, net := range vm2.Networks {
+				macMap[net.MAC] = true
 			}
 
 			// populate disk sets
@@ -297,8 +286,8 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 	}
 
 	// check for mac address conflicts and fill in unspecified mac addresses without conflict
-	for i, mac := range vm.Macs {
-		if mac == "" { // create mac addresses where unspecified
+	for i, net := range vm.Networks {
+		if net.MAC == "" { // create mac addresses where unspecified
 			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
 			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
 				newMac = randomMac()               // generate a new mac address
@@ -306,8 +295,8 @@ func (vm *vmInfo) launchPreamble(ack chan int) bool {
 				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
 			}
 
-			vm.Macs[i] = newMac       // set the unspecified mac address
-			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
+			vm.Networks[i].MAC = newMac // set the unspecified mac address
+			selfMacMap[newMac] = true   // add this mac to the set of mac addresses for this vm
 		}
 	}
 
@@ -358,29 +347,37 @@ func (vm *vmInfo) launchOne(ack chan int) {
 	var waitChan = make(chan int)
 
 	// clear taps, we may have come from the quit state
-	vm.Taps = []string{}
+	for i := range vm.Networks {
+		vm.Networks[i].Tap = ""
+	}
 
 	// create and add taps if we are associated with any networks
-	for i, lan := range vm.Networks {
-		b, err := getBridge(vm.Bridges[i])
+	for i, net := range vm.Networks {
+		b, err := getBridge(net.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.state(VM_ERROR)
 			ack <- vm.ID
 			return
 		}
-		tap, err := b.TapCreate(lan)
+
+		tap, err := b.TapCreate(net.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.state(VM_ERROR)
 			ack <- vm.ID
 			return
 		}
-		vm.Taps = append(vm.Taps, tap)
+
+		vm.Networks[i].Tap = tap
 	}
 
 	if len(vm.Networks) > 0 {
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(vm.Taps, "\n")), 0666)
+		taps := []string{}
+		for _, net := range vm.Networks {
+			taps = append(taps, net.Tap)
+		}
+		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
 			log.Error("write instance taps file: %v", err)
 			vm.state(VM_ERROR)
@@ -462,12 +459,12 @@ func (vm *vmInfo) launchOne(ack chan int) {
 		}
 	}
 
-	for i, l := range vm.Networks {
-		b, err := getBridge(vm.Bridges[i])
+	for _, net := range vm.Networks {
+		b, err := getBridge(net.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 		} else {
-			b.TapDestroy(l, vm.Taps[i])
+			b.TapDestroy(net.VLAN, net.Tap)
 		}
 	}
 
@@ -602,18 +599,18 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	addr := 1
 	args = append(args, fmt.Sprintf("-device"))
 	args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
-	for i, tap := range vm.Taps {
+	for _, net := range vm.Networks {
 		args = append(args, "-netdev")
-		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
+		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", net.Tap, net.Tap))
 		args = append(args, "-device")
 		if commit {
-			b, err := getBridge(vm.Bridges[i])
+			b, err := getBridge(net.Bridge)
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			}
-			b.iml.AddMac(vm.Macs[i])
+			b.iml.AddMac(net.MAC)
 		}
-		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.NetDrivers[i], tap, vm.Macs[i], bus, addr))
+		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", net.Driver, net.Tap, net.MAC, bus, addr))
 		addr++
 		if addr == 32 {
 			addr = 1
@@ -704,14 +701,28 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 		case "append":
 			res = append(res, fmt.Sprintf("%v", vm.Append))
 		case "bridge":
-			res = append(res, fmt.Sprintf("%v", vm.Bridges))
+			vals := []string{}
+			for _, net := range vm.Networks {
+				vals = append(vals, net.Bridge)
+			}
+			res = append(res, fmt.Sprintf("%v", vals))
 		case "tap":
-			res = append(res, fmt.Sprintf("%v", vm.Taps))
+			vals := []string{}
+			for _, net := range vm.Networks {
+				vals = append(vals, net.Tap)
+			}
+			res = append(res, fmt.Sprintf("%v", vals))
+		case "mac":
+			vals := []string{}
+			for _, net := range vm.Networks {
+				vals = append(vals, net.MAC)
+			}
+			res = append(res, fmt.Sprintf("%v", vals))
 		case "bandwidth":
 			var bw []string
 			bandwidthLock.Lock()
-			for _, v := range vm.Taps {
-				t := bandwidthStats[v]
+			for _, net := range vm.Networks {
+				t := bandwidthStats[net.Tap]
 				if t == nil {
 					bw = append(bw, "0.0/0.0")
 				} else {
@@ -720,20 +731,19 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 			}
 			bandwidthLock.Unlock()
 			res = append(res, fmt.Sprintf("%v", bw))
-		case "mac":
-			res = append(res, fmt.Sprintf("%v", vm.Macs))
 		case "tags":
 			res = append(res, fmt.Sprintf("%v", vm.Tags))
 		case "ip":
 			var ips []string
-			for bIndex, m := range vm.Macs {
+			for _, net := range vm.Networks {
 				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(vm.Bridges[bIndex])
+				b, err := getBridge(net.Bridge)
 				if err != nil {
 					log.Errorln(err)
 					continue
 				}
-				ip := b.GetIPFromMac(m)
+
+				ip := b.GetIPFromMac(net.MAC)
 				if ip != nil {
 					ips = append(ips, ip.IP4)
 				}
@@ -741,14 +751,15 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 			res = append(res, fmt.Sprintf("%v", ips))
 		case "ip6":
 			var ips []string
-			for bIndex, m := range vm.Macs {
+			for _, net := range vm.Networks {
 				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(vm.Bridges[bIndex])
+				b, err := getBridge(net.Bridge)
 				if err != nil {
 					log.Errorln(err)
 					continue
 				}
-				ip := b.GetIPFromMac(m)
+
+				ip := b.GetIPFromMac(net.MAC)
 				if ip != nil {
 					ips = append(ips, ip.IP6)
 				}
@@ -756,11 +767,11 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 			res = append(res, fmt.Sprintf("%v", ips))
 		case "vlan":
 			var vlans []string
-			for _, v := range vm.Networks {
-				if v == -1 {
+			for _, net := range vm.Networks {
+				if net.VLAN == -1 {
 					vlans = append(vlans, "disconnected")
 				} else {
-					vlans = append(vlans, fmt.Sprintf("%v", v))
+					vlans = append(vlans, fmt.Sprintf("%v", net.VLAN))
 				}
 			}
 			res = append(res, fmt.Sprintf("%v", vlans))
