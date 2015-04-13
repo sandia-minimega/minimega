@@ -7,7 +7,7 @@ mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
 mkdir /dev/pts
-mount -n -t devpts -o gid=5,mode=620 none /dev/pts
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
 
 # enumerate devices, autoload modules where needed
 udevd --daemon
