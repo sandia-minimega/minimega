@@ -24,15 +24,15 @@ type KVMConfig struct {
 	VMConfig // embed
 
 	Append      string
-	CdromPath   string `mm:"cdrom"`
-	InitrdPath  string `mm:"initrd"`
-	KernelPath  string `mm:"kernel"`
-	MigratePath string `mm:"migrate"`
-	UUID        string `mm:"uuid"`
+	CdromPath   string
+	InitrdPath  string
+	KernelPath  string
+	MigratePath string
+	UUID        string
 
-	Snapshot bool `mm:"cdrom"`
+	Snapshot bool
 
-	DiskPaths  []string `mm:"disk"`
+	DiskPaths  []string
 	QemuAppend []string // extra arguments for QEMU
 }
 
@@ -73,7 +73,10 @@ func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	qemuOverrideIdChan = makeIDChan()
 
-	kvmConfig.Snapshot = true
+	// Reset everything to default
+	for _, fns := range kvmConfigFns {
+		fns.Clear(kvmConfig)
+	}
 }
 
 // Copy makes a deep copy and returns reference to the new struct.

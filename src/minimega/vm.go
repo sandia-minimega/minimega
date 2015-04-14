@@ -54,8 +54,8 @@ type VM interface {
 }
 
 type VMConfig struct {
-	Vcpus  string `mm:"vcpus"`  // number of virtual cpus
-	Memory string `mm:"memory"` // memory for the vm, in megabytes
+	Vcpus  string // number of virtual cpus
+	Memory string // memory for the vm, in megabytes
 
 	Networks []NetConfig // ordered list of networks
 }
@@ -178,9 +178,10 @@ func init() {
 
 	vmIdChan = makeIDChan()
 
-	// default parameters at startup
-	vmConfig.Vcpus = "1"
-	vmConfig.Memory = VM_MEMORY_DEFAULT
+	// Reset everything to default
+	for _, fns := range vmConfigFns {
+		fns.Clear(vmConfig)
+	}
 }
 
 func vmNotFound(idOrName string) error {

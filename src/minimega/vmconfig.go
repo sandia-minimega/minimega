@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
-	"reflect"
-	"strconv"
 	"strings"
 )
 
@@ -20,12 +18,32 @@ type VMConfigFns struct {
 	PrintCLI func(interface{}) string // If not specified, Print is used
 }
 
+func mustVMConfig(vm interface{}) *VMConfig {
+	if vm, ok := vm.(*VMConfig); ok {
+		return vm
+	}
+	log.Fatal("`%v` is not a VMConfig", vm)
+	return nil
+}
+
+func mustKVMConfig(vm interface{}) *KVMConfig {
+	if vm, ok := vm.(*KVMConfig); ok {
+		return vm
+	}
+	log.Fatal("`%v` is not a KVMConfig", vm)
+	return nil
+}
+
 var vmConfigFns = map[string]VMConfigFns{
-	"memory": genericVMConfig("memory", VM_MEMORY_DEFAULT),
-	"vcpus":  genericVMConfig("vcpus", "1"),
+	"memory": vmConfigString(func(vm interface{}) *string {
+		return &mustVMConfig(vm).Memory
+	}, VM_MEMORY_DEFAULT),
+	"vcpus": vmConfigString(func(vm interface{}) *string {
+		return &mustVMConfig(vm).Vcpus
+	}, "1"),
 	"net": {
 		Update: func(v interface{}, c *minicli.Command) error {
-			vm := v.(*VMConfig)
+			vm := mustVMConfig(v)
 			for _, spec := range c.ListArgs["netspec"] {
 				net, err := processVMNet(spec)
 				if err != nil {
@@ -35,14 +53,14 @@ var vmConfigFns = map[string]VMConfigFns{
 			}
 			return nil
 		},
-		Clear: func(v interface{}) {
-			v.(*VMConfig).Networks = []NetConfig{}
+		Clear: func(vm interface{}) {
+			mustVMConfig(vm).Networks = []NetConfig{}
 		},
-		Print: func(v interface{}) string {
-			return v.(*VMConfig).NetworkString()
+		Print: func(vm interface{}) string {
+			return mustVMConfig(vm).NetworkString()
 		},
 		PrintCLI: func(v interface{}) string {
-			vm := v.(*VMConfig)
+			vm := mustVMConfig(v)
 			if len(vm.Networks) == 0 {
 				return ""
 			}
@@ -57,26 +75,38 @@ var vmConfigFns = map[string]VMConfigFns{
 	},
 }
 
-// TODO: This has become a mess... there must be a better way. Perhaps we can
-// add an Update, UpdateBool, ... method to the vmInfo struct and then have the
-// logic in there to handle the different config types.
 var kvmConfigFns = map[string]VMConfigFns{
-	"cdrom":       genericVMConfig("cdrom", ""),
-	"disk":        genericVMConfig("disk", ""),
-	"initrd":      genericVMConfig("initrd", ""),
-	"kernel":      genericVMConfig("kernel", ""),
-	"migrate":     genericVMConfig("migrate", ""),
-	"qemu-append": genericVMConfig("qemu-append", ""),
-	"snapshot":    genericVMConfig("snapshot", "true"),
-	"uuid":        genericVMConfig("uuid", ""),
-
+	"cdrom": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).CdromPath
+	}, ""),
+	"initrd": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).InitrdPath
+	}, ""),
+	"kernel": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).KernelPath
+	}, ""),
+	"migrate": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).MigratePath
+	}, ""),
+	"uuid": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).UUID
+	}, ""),
+	"snapshot": vmConfigBool(func(vm interface{}) *bool {
+		return &mustKVMConfig(vm).Snapshot
+	}, true),
+	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustKVMConfig(vm).QemuAppend
+	}),
+	"disk": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustKVMConfig(vm).DiskPaths
+	}),
 	"append": {
-		Update: func(v interface{}, c *minicli.Command) error {
-			v.(*KVMConfig).Append = strings.Join(c.ListArgs["args"], " ")
+		Update: func(vm interface{}, c *minicli.Command) error {
+			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["args"], " ")
 			return nil
 		},
-		Clear: func(v interface{}) { v.(*KVMConfig).Append = "" },
-		Print: func(v interface{}) string { return v.(*KVMConfig).Append },
+		Clear: func(vm interface{}) { mustKVMConfig(vm).Append = "" },
+		Print: func(vm interface{}) string { return mustKVMConfig(vm).Append },
 	},
 	"qemu": {
 		Update: func(_ interface{}, c *minicli.Command) error {
@@ -112,106 +142,59 @@ var kvmConfigFns = map[string]VMConfigFns{
 	},
 }
 
-// findField uses reflection to find the appropriate field (by tag and name) in
-// the provided struct.
-func findField(tag, name string, v interface{}) interface{} {
-	fVal := reflect.ValueOf(v).Elem()
-	fType := reflect.TypeOf(v).Elem()
-
-	// Loop over all the fields and extract the mm tag value. Return a pointer
-	// to the value.
-	for i := 0; i < fType.NumField(); i++ {
-		log.Info("val: `%v`", fType.Field(i).Tag.Get(tag))
-		if fType.Field(i).Tag.Get(tag) == name {
-			return fVal.Field(i).Addr().Interface()
-		}
-	}
-
-	return nil
-}
-
-// mustFindField is like findField except that it will cause a Fatal error if
-// the field is nil.
-func mustFindField(tag, name string, v interface{}) interface{} {
-	f := findField(tag, name, v)
-	if f == nil {
-		log.Fatal("invalid field: `%s`", name)
-	}
-
-	return f
-}
-func genericVMConfig(name string, defaultVal string) VMConfigFns {
+func vmConfigString(fn func(interface{}) *string, defaultVal string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
-			switch f := mustFindField("mm", name, vm).(type) {
-			case *string:
-				// Update the value, have to use range since we don't know the key
-				for _, v := range c.StringArgs {
-					*f = v
-				}
-			case *bool:
-				if c.BoolArgs["true"] || c.BoolArgs["false"] {
-					*f = c.BoolArgs["true"]
-				} else {
-					log.Fatalln("someone goofed on the patterns for `%s`, should be true/false", name)
-				}
-			case *[]string:
-				// Update the value, have to use range since we don't know the key
-				for _, v := range c.ListArgs {
-					*f = append(*f, v...)
-				}
-			default:
-				log.Fatalln("unknown generic field type: `%s`", name)
+			// Update the value, have to use range since we don't know the key
+			for _, v := range c.StringArgs {
+				*fn(vm) = v
 			}
 			return nil
 		},
-		Clear: func(vm interface{}) {
-			switch f := mustFindField("mm", name, vm).(type) {
-			case *string:
-				*f = defaultVal
-			case *bool:
-				var err error
-				*f, err = strconv.ParseBool(defaultVal)
-				if err != nil {
-					log.Fatalln("default value for `%s`, should be true/false", name)
-				}
-			case *[]string:
-				// Ignore defaultVal param...
-				*f = []string{}
-			default:
-				log.Fatalln("unknown generic field type: `%s`", name)
+		Clear: func(vm interface{}) { *fn(vm) = defaultVal },
+		Print: func(vm interface{}) string { return *fn(vm) },
+		PrintCLI: func(vm interface{}) string {
+			if v := *fn(vm); v != "" {
+				return fmt.Sprintf("vm config %s %v", v)
 			}
-		},
-		Print: func(vm interface{}) string {
-			switch f := mustFindField("mm", name, vm).(type) {
-			case *string:
-				return *f
-			case *bool:
-				return fmt.Sprintf("%v", *f)
-			case *[]string:
-				return fmt.Sprintf("%v", *f)
-			default:
-				log.Fatalln("unknown generic field type: `%s`", name)
-			}
-
 			return ""
 		},
-		PrintCLI: func(v interface{}) string {
-			switch f := mustFindField("mm", name, v).(type) {
-			case *string:
-				if *f != "" {
-					return fmt.Sprintf("vm config %s %v", *f)
-				}
-			case *bool:
-				return fmt.Sprintf("vm config %s %v", *f)
-			case *[]string:
-				if len(*f) > 0 {
-					return fmt.Sprintf("vm config %s %s", strings.Join(*f, " "))
-				}
-			default:
-				log.Fatalln("unknown generic field type: `%s`", name)
-			}
+	}
+}
 
+func vmConfigBool(fn func(interface{}) *bool, defaultVal bool) VMConfigFns {
+	return VMConfigFns{
+		Update: func(vm interface{}, c *minicli.Command) error {
+			if c.BoolArgs["true"] || c.BoolArgs["false"] {
+				*fn(vm) = c.BoolArgs["true"]
+			} else {
+				log.Fatalln("someone goofed on the patterns, bool args should be true/false")
+			}
+			return nil
+		},
+		Clear: func(vm interface{}) { *fn(vm) = defaultVal },
+		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
+		PrintCLI: func(vm interface{}) string {
+			return fmt.Sprintf("vm config %s %v", *fn(vm))
+		},
+	}
+}
+
+func vmConfigSlice(fn func(interface{}) *[]string) VMConfigFns {
+	return VMConfigFns{
+		Update: func(vm interface{}, c *minicli.Command) error {
+			// Update the value, have to use range since we don't know the key
+			for _, v := range c.ListArgs {
+				*fn(vm) = append(*fn(vm), v...)
+			}
+			return nil
+		},
+		Clear: func(vm interface{}) { *fn(vm) = []string{} },
+		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
+		PrintCLI: func(vm interface{}) string {
+			if v := *fn(vm); len(v) > 0 {
+				return fmt.Sprintf("vm config %s %s", strings.Join(v, " "))
+			}
 			return ""
 		},
 	}
