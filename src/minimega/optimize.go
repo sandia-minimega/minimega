@@ -26,7 +26,7 @@ var (
 	ksmSleepMillisecs  int
 	ksmEnabled         bool
 	affinityEnabled    bool
-	affinityCPUSets    map[string][]*vmInfo
+	affinityCPUSets    map[string][]*vmKVM
 	hugepagesMountPath string
 )
 
@@ -135,7 +135,7 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			for _, cpu := range cpus {
 				var ids []int
 				for _, vm := range affinityCPUSets[cpu] {
-					ids = append(ids, vm.ID)
+					ids = append(ids, vm.ID())
 				}
 				resp.Tabular = append(resp.Tabular, []string{
 					cpu,
@@ -154,9 +154,9 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 				return resp
 			}
 
-			affinityCPUSets = make(map[string][]*vmInfo)
+			affinityCPUSets = make(map[string][]*vmKVM)
 			for _, v := range cpus {
-				affinityCPUSets[v] = []*vmInfo{}
+				affinityCPUSets[v] = []*vmKVM{}
 			}
 
 			if affinityEnabled {
@@ -304,11 +304,16 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, v := range vms {
-		cpu := affinitySelectCPU(v)
-		err := v.AffinitySet(cpu)
-		if err != nil {
-			return err
+	for _, vm := range vms {
+		switch vm := vm.(type) {
+		case *vmKVM:
+			cpu := affinitySelectCPU(vm)
+			err := vm.AffinitySet(cpu)
+			if err != nil {
+				return err
+			}
+		default:
+			// TODO: Need to do anything?
 		}
 	}
 	return nil
@@ -316,11 +321,16 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, v := range vms {
-		affinityUnselectCPU(v)
-		err := v.AffinityUnset()
-		if err != nil {
-			return err
+	for _, vm := range vms {
+		switch vm := vm.(type) {
+		case *vmKVM:
+			affinityUnselectCPU(vm)
+			err := vm.AffinityUnset()
+			if err != nil {
+				return err
+			}
+		default:
+			// TODO: Need to do anything?
 		}
 	}
 	return nil
@@ -328,17 +338,17 @@ func affinityDisable() error {
 
 func affinityClearFilter() {
 	cpu := runtime.NumCPU()
-	affinityCPUSets = make(map[string][]*vmInfo)
+	affinityCPUSets = make(map[string][]*vmKVM)
 	for i := 0; i < cpu; i++ {
 		v := fmt.Sprintf("%v", i)
-		affinityCPUSets[v] = []*vmInfo{}
+		affinityCPUSets[v] = []*vmKVM{}
 	}
 	if affinityEnabled {
 		affinityEnable()
 	}
 }
 
-func affinitySelectCPU(vm *vmInfo) string {
+func affinitySelectCPU(vm *vmKVM) string {
 	// find a key with the fewest number of entries, add vm to it and
 	// return the key
 	var key string
@@ -358,13 +368,13 @@ func affinitySelectCPU(vm *vmInfo) string {
 	return key
 }
 
-func affinityUnselectCPU(vm *vmInfo) {
+func affinityUnselectCPU(vm *vmKVM) {
 	// find and remove vm from its cpuset
 	for k, v := range affinityCPUSets {
 		for i, j := range v {
-			if j.ID == vm.ID {
+			if j.ID() == vm.ID() {
 				if len(v) == 1 {
-					affinityCPUSets[k] = []*vmInfo{}
+					affinityCPUSets[k] = []*vmKVM{}
 				} else if i == 0 {
 					affinityCPUSets[k] = v[1:]
 				} else if i == len(v)-1 {
@@ -376,10 +386,10 @@ func affinityUnselectCPU(vm *vmInfo) {
 			}
 		}
 	}
-	log.Fatal("could not find vm %v in CPU set", vm.ID)
+	log.Fatal("could not find vm %v in CPU set", vm.ID())
 }
 
-func (vm *vmInfo) CheckAffinity() {
+func (vm *vmKVM) CheckAffinity() {
 	if affinityEnabled {
 		cpu := affinitySelectCPU(vm)
 		err := vm.AffinitySet(cpu)
@@ -389,7 +399,7 @@ func (vm *vmInfo) CheckAffinity() {
 	}
 }
 
-func (vm *vmInfo) AffinitySet(cpu string) error {
+func (vm *vmKVM) AffinitySet(cpu string) error {
 	log.Debugln("affinitySet")
 
 	p := process("taskset")
@@ -406,7 +416,7 @@ func (vm *vmInfo) AffinitySet(cpu string) error {
 	return nil
 }
 
-func (vm *vmInfo) AffinityUnset() error {
+func (vm *vmKVM) AffinityUnset() error {
 	log.Debugln("affinityUnset")
 
 	p := process("taskset")

@@ -174,7 +174,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		vm := vms.findVm(vm)
 		if vm != nil {
 			log.Debug("got vm: %v %v %v", host, vm.ID, vm.Name)
-			return vm.ID, vm.Name, nil
+			return vm.ID(), vm.Name(), nil
 		}
 	} else {
 		log.Debugln("remote host")

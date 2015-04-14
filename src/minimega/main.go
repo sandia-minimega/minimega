@@ -110,7 +110,7 @@ func main() {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
 
-	vms = make(map[int]*vmInfo)
+	vms = make(map[int]VM)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance

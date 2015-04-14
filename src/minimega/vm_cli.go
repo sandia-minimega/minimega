@@ -447,7 +447,7 @@ For example, to set a static IP for a linux VM:
 
 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
-			"vm config append [argument]...",
+			"vm config append [arg]...",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "append")
@@ -614,10 +614,15 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmstring := c.StringArgs["vm"]
-	doVms := make([]*vmInfo, 0)
+	doVms := make([]*vmKVM, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms {
-			doVms = append(doVms, v)
+		for _, vm := range vms {
+			switch vm := vm.(type) {
+			case *vmKVM:
+				doVms = append(doVms, vm)
+			default:
+				// TODO: Do anything?
+			}
 		}
 	} else {
 		vm := vms.findVm(vmstring)
@@ -625,7 +630,12 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			resp.Error = vmNotFound(vmstring).Error()
 			return resp
 		}
-		doVms = append(doVms, vm)
+		if vm, ok := vm.(*vmKVM); ok {
+			doVms = append(doVms, vm)
+		} else {
+			resp.Error = "cdrom commands are only supported for kvm vms"
+			return resp
+		}
 	}
 
 	if c.BoolArgs["eject"] {
@@ -672,16 +682,16 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 	key := c.StringArgs["key"]
 	if value, ok := c.StringArgs["value"]; ok {
 		// Set a tag
-		vm.Tags[key] = value
+		vm.SetTag(key, value)
 	} else {
 		// Get a tag
-		val, ok := vm.Tags[key]
-		if !ok {
-			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
+		if v := vm.Tag(key); v != "" {
+			resp.Response = v
 		} else {
-			resp.Response = val
+			resp.Error = fmt.Sprintf("tag %v not set for vm %v", key, vm.Name())
 		}
 	}
+
 	return resp
 }
 
@@ -689,7 +699,7 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmstring := c.StringArgs["vm"]
-	clearVms := make([]*vmInfo, 0)
+	clearVms := make([]VM, 0)
 	if vmstring == Wildcard {
 		for _, v := range vms {
 			clearVms = append(clearVms, v)
@@ -703,14 +713,16 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 		clearVms = append(clearVms, vm)
 	}
 
-	tag := c.StringArgs["tag"]
-	for _, v := range clearVms {
-		for k, _ := range v.Tags {
-			if k == tag || tag == "" {
-				delete(v.Tags, k)
-			}
+	if tag := c.StringArgs["tag"]; tag != "" {
+		for _, vm := range clearVms {
+			vm.ClearTags()
+		}
+	} else {
+		for _, vm := range clearVms {
+			vm.ClearTag(tag)
 		}
 	}
+
 	return resp
 }
 
@@ -719,12 +731,13 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = info.Copy()
+		savedInfo[c.StringArgs["name"]] = kvmConfig.Copy()
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
 			if s, ok := savedInfo[name]; ok {
-				info = s.Copy()
+				// TODO: copy vmConfig too
+				kvmConfig = s.Copy()
 			} else {
 				resp.Error = fmt.Sprintf("config %v does not exist", name)
 			}
@@ -742,11 +755,12 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {
-			info = vm.Copy()
+			// TODO: Copy kvmConfig?
+			vmConfig = vm.Config()
 		}
 	} else {
 		// Print the full config
-		resp.Response = info.configToString()
+		resp.Response = kvmConfig.configToString()
 	}
 
 	return resp
@@ -756,41 +770,23 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	fns := vmConfigFns[field]
-
 	// If there are no args it means that we want to display the current value
-	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
-		resp.Response = fns.Print(info)
-		return resp
-	}
+	nArgs := len(c.StringArgs) + len(c.ListArgs) + len(c.BoolArgs)
 
-	// We expect exactly one key in either the String, List, or Bool Args for
-	// most configs. For some, there is more complex processing and they need
-	// the whole command.
-	if fns.UpdateCommand != nil {
-		err = fns.UpdateCommand(c)
-	} else if len(c.StringArgs) == 1 && fns.Update != nil {
-		for _, arg := range c.StringArgs {
-			err = fns.Update(info, arg)
+	if fns, ok := vmConfigFns[field]; ok {
+		if nArgs == 0 {
+			resp.Response = fns.Print(vmConfig)
+		} else {
+			err = fns.Update(vmConfig, c)
 		}
-	} else if len(c.ListArgs) == 1 && fns.Update != nil {
-		// Lists need to be cleared first since they process each arg
-		// individually to build state
-		fns.Clear(info)
-
-		for _, args := range c.ListArgs {
-			for _, arg := range args {
-				if err = fns.Update(info, arg); err != nil {
-					break
-				}
-			}
+	} else if fns, ok := kvmConfigFns[field]; ok {
+		if nArgs == 0 {
+			resp.Response = fns.Print(kvmConfig)
+		} else {
+			err = fns.Update(kvmConfig, c)
 		}
-	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
-		// Special case, look for key "true" (there should only be two options,
-		// "true" or "false" and, therefore, not "true" implies "false").
-		err = fns.UpdateBool(info, c.BoolArgs["true"])
 	} else {
-		log.Fatalln("someone goofed on the patterns")
+		log.Fatalln("unknown field: `%s`", field)
 	}
 
 	if err != nil {
@@ -808,7 +804,7 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 
 	for k, fns := range vmConfigFns {
 		if clearAll || c.BoolArgs[k] {
-			fns.Clear(info)
+			fns.Clear(kvmConfig)
 			cleared = true
 		}
 	}
@@ -864,6 +860,13 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
+		}
+
+		for _, vm := range vms {
+			if vm.Name() == name {
+				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
+				return resp
+			}
 		}
 	}
 
@@ -979,6 +982,12 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
 		for _, vm := range vms {
+			vm, ok := vm.(*vmKVM)
+			if !ok {
+				// TODO: remove?
+				continue
+			}
+
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				resp.Error = err.Error()
@@ -987,7 +996,11 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 			if status == "" {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.ID), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+			resp.Tabular = append(resp.Tabular, []string{
+				fmt.Sprintf("%v", vm.ID()),
+				vm.Name(),
+				status,
+				fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
 			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
@@ -1036,12 +1049,17 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
+	kvm, ok := vm.(*vmKVM)
+	if !ok {
+		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		return resp
+	}
 
 	if c.BoolArgs["add"] {
 		// generate an id by adding 1 to the highest in the list for the
-		// Hotplug devices, 0 if it's empty
+		// hotplug devices, 0 if it's empty
 		id := 0
-		for k, _ := range vm.Hotplug {
+		for k, _ := range kvm.hotplug {
 			if k >= id {
 				id = k + 1
 			}
@@ -1049,25 +1067,25 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		hid := fmt.Sprintf("hotplug%v", id)
 		log.Debugln("hotplug generated id:", hid)
 
-		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
+		r, err := kvm.q.DriveAdd(hid, c.StringArgs["filename"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
 		log.Debugln("hotplug drive_add response:", r)
-		r, err = vm.q.USBDeviceAdd(hid)
+		r, err = kvm.q.USBDeviceAdd(hid)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
 		log.Debugln("hotplug usb device add response:", r)
-		vm.Hotplug[id] = c.StringArgs["filename"]
+		kvm.hotplug[id] = c.StringArgs["filename"]
 	} else if c.BoolArgs["remove"] {
 		if c.StringArgs["disk"] == Wildcard {
-			for k := range vm.Hotplug {
-				if err := vm.hotplugRemove(k); err != nil {
+			for k := range kvm.hotplug {
+				if err := kvm.hotplugRemove(k); err != nil {
 					resp.Error = err.Error()
 					// TODO: try to remove the rest if there's an error?
 					break
@@ -1080,15 +1098,15 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		id, err := strconv.Atoi(c.StringArgs["disk"])
 		if err != nil {
 			resp.Error = err.Error()
-		} else if err := vm.hotplugRemove(id); err != nil {
+		} else if err := kvm.hotplugRemove(id); err != nil {
 			resp.Error = err.Error()
 		}
 	} else if c.BoolArgs["show"] {
-		if len(vm.Hotplug) > 0 {
-			resp.Header = []string{"Hotplug ID", "File"}
+		if len(kvm.hotplug) > 0 {
+			resp.Header = []string{"hotplug ID", "File"}
 			resp.Tabular = [][]string{}
 
-			for k, v := range vm.Hotplug {
+			for k, v := range kvm.hotplug {
 				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
 			}
 		}
@@ -1111,12 +1129,16 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.Networks) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Networks))
+
+	config := vm.Config()
+
+	if len(config.Networks) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(config.Networks))
 		return resp
 	}
 
-	net := &vm.Networks[pos]
+	// TODO: this isn't right... need Config to return *vmConfig
+	net := &config.Networks[pos]
 
 	var b *bridge
 	if c.StringArgs["bridge"] != "" {
