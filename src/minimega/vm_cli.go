@@ -447,7 +447,7 @@ For example, to set a static IP for a linux VM:
 
 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
 		Patterns: []string{
-			"vm config append [argument]...",
+			"vm config append [arg]...",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "append")
@@ -753,48 +753,61 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 }
 
 func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
-	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	fns := vmConfigFns[field]
+	nArgs := len(c.StringArgs) + len(c.BoolArgs) + len(c.ListArgs)
 
-	// If there are no args it means that we want to display the current value
-	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
-		resp.Response = fns.Print(info)
+	// Check for "special" fields first
+	if fns, ok := vmConfigSpecial[field]; ok {
+		if nArgs == 0 {
+			resp.Response = fns.Print()
+		} else if err := fns.Update(c); err != nil {
+			resp.Error = err.Error()
+		}
+
 		return resp
 	}
 
-	// We expect exactly one key in either the String, List, or Bool Args for
-	// most configs. For some, there is more complex processing and they need
-	// the whole command.
-	if fns.UpdateCommand != nil {
-		err = fns.UpdateCommand(c)
-	} else if len(c.StringArgs) == 1 && fns.Update != nil {
-		for _, arg := range c.StringArgs {
-			err = fns.Update(info, arg)
-		}
-	} else if len(c.ListArgs) == 1 && fns.Update != nil {
-		// Lists need to be cleared first since they process each arg
-		// individually to build state
-		fns.Clear(info)
+	// We assume in this function that there is only one key to update the field
+	// from. If there is more than one thing you need to update, use a separate
+	// function (e.g. cliVmConfigNet).
+	if nArgs > 1 {
+		log.Fatalln("someone goofed on the patterns, too many arguments")
+	}
 
-		for _, args := range c.ListArgs {
-			for _, arg := range args {
-				if err = fns.Update(info, arg); err != nil {
-					break
+	if f := info.getField(field); f != nil {
+		// "Simple" fields
+		switch f := f.(type) {
+		case *string:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else {
+				// Update the value, have to use range since we don't know the key
+				for _, v := range c.StringArgs {
+					*f = v
+				}
+			}
+		case *bool:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else if c.BoolArgs["true"] || c.BoolArgs["false"] {
+				// Update the value, true and false should be the only choices
+				*f = c.BoolArgs["true"]
+			} else {
+				log.Fatalln("someone goofed on the patterns, should be true/false")
+			}
+		case *[]string:
+			if nArgs == 0 {
+				resp.Response = fmt.Sprintf("%v", *f)
+			} else {
+				// Update the value, have to use range since we don't know the key
+				for _, v := range c.ListArgs {
+					*f = append(*f, v...)
 				}
 			}
 		}
-	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
-		// Special case, look for key "true" (there should only be two options,
-		// "true" or "false" and, therefore, not "true" implies "false").
-		err = fns.UpdateBool(info, c.BoolArgs["true"])
 	} else {
-		log.Fatalln("someone goofed on the patterns")
-	}
-
-	if err != nil {
-		resp.Error = err.Error()
+		log.Fatalln("someone goofed on the patterns, invalid field")
 	}
 
 	return resp
@@ -806,9 +819,18 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	var clearAll = len(c.BoolArgs) == 0
 	var cleared bool
 
-	for k, fns := range vmConfigFns {
-		if clearAll || c.BoolArgs[k] {
-			fns.Clear(info)
+	// Clear the "simple" fields
+	for _, field := range vmConfigFields {
+		if clearAll || c.BoolArgs[field] {
+			info.setDefault(field)
+			cleared = true
+		}
+	}
+
+	// Clear the "special" fields
+	for field, fns := range vmConfigSpecial {
+		if clearAll || c.BoolArgs[field] {
+			fns.Clear()
 			cleared = true
 		}
 	}

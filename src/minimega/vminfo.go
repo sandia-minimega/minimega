@@ -9,11 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"qmp"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,27 +23,44 @@ import (
 	"time"
 )
 
+// vmConfigFields that are handle using getField and mm tags.
+var vmConfigFields = []string{
+	"cdrom", "initrd", "kernel", "memory", "migrate", "uuid", "vcpus",
+	"snapshot", "disk", "qemu-append",
+}
+
+// vmInfo contains all the information about a VM in any stage of the lifecycle
+// including building, running, and errored. When building a VM, the
+// `vm config` commands populate fields of the structs that have the "mm" tags.
+// These tags allow vmInfo.getField to automatically find the appropriate field
+// to return for updating. If you are adding a new configurable field and it's
+// either a string, bool, or slice of string, then most of the work will be
+// handled automatically. Simply add a new handler in vm_cli.go and add a new
+// field to the struct (with a mm tag).
 type vmInfo struct {
 	ID int
 
-	Name       string
-	Memory     string // memory for the vm, in megabytes
-	Vcpus      string // number of virtual cpus
-	CdromPath  string
-	KernelPath string
-	InitrdPath string
-	Append     string
-	Snapshot   bool
-	UUID       string
+	Name string
 
-	MigratePath string
-	DiskPaths   []string
-	QemuAppend  []string // extra arguments for QEMU
-	Networks    []int    // ordered list of networks (matches 1-1 with Taps)
-	Bridges     []string // list of bridges, if specified. Unspecified bridges will contain ""
-	Taps        []string // list of taps associated with this vm
-	Macs        []string // ordered list of macs (matches 1-1 with Taps, Networks)
-	NetDrivers  []string // optional non-e1000 driver
+	CdromPath   string `mm:"cdrom"`
+	InitrdPath  string `mm:"initrd"`
+	KernelPath  string `mm:"kernel"`
+	Memory      string `mm:"memory"` // memory for the vm, in megabytes
+	MigratePath string `mm:"migrate"`
+	UUID        string `mm:"uuid"`
+	Vcpus       string `mm:"vcpus"` // number of virtual cpus
+	Snapshot    bool   `mm:"snapshot"`
+
+	DiskPaths  []string `mm:"disk"`        // paths to disk images
+	QemuAppend []string `mm:"qemu-append"` // extra arguments for QEMU
+
+	Append string
+
+	Networks   []int    // ordered list of networks (matches 1-1 with Taps)
+	Bridges    []string // list of bridges, if specified. Unspecified bridges will contain ""
+	Taps       []string // list of taps associated with this vm
+	Macs       []string // ordered list of macs (matches 1-1 with Taps, Networks)
+	NetDrivers []string // optional non-e1000 driver
 
 	State VmState // one of the VM_ states listed above
 
@@ -54,6 +73,151 @@ type vmInfo struct {
 	pid          int
 	q            qmp.Conn  // qmp connection for this vm
 	kill         chan bool // kill channel to signal to shut a vm down
+}
+
+var vmConfigSpecial = map[string]struct {
+	Update   func(*minicli.Command) error
+	Clear    func()
+	Print    func() string
+	PrintCLI func(*vmInfo) string
+}{
+	"append": {
+		Update: func(c *minicli.Command) error {
+			// TODO: There could be spaces in the args... needs escaping!
+			info.Append = strings.Join(c.ListArgs["arg"], " ")
+			return nil
+		},
+		Clear: func() {
+			info.Append = ""
+		},
+		Print: func() string {
+			return info.Append
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			return fmt.Sprintf("vm config append %q", vm.Append)
+		},
+	},
+	"net": {
+		Update: func(c *minicli.Command) error {
+			// Update available nets using all the arguments
+			for _, v := range c.ListArgs["netspec"] {
+				if err := processVMNet(info, v); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		},
+		Clear: func() {
+			info.Networks = []int{}
+			info.Bridges = []string{}
+			info.Macs = []string{}
+			info.NetDrivers = []string{}
+		},
+		Print: func() string {
+			return info.networkString()
+		},
+		PrintCLI: func(vm *vmInfo) string {
+			if len(vm.Networks) == 0 {
+				return ""
+			}
+
+			nics := []string{}
+			for i, vlan := range vm.Networks {
+				nic := fmt.Sprintf("%v,%v,%v,%v", vm.Bridges[i], vlan, vm.Macs[i], vm.NetDrivers[i])
+				nics = append(nics, nic)
+			}
+			return "vm config net " + strings.Join(nics, " ")
+		},
+	},
+	"qemu": {
+		Update: func(c *minicli.Command) error {
+			customExternalProcesses["qemu"] = c.StringArgs["path"]
+			return nil
+		},
+		Clear: func() {
+			delete(customExternalProcesses, "qemu")
+		},
+		Print: func() string {
+			return process("qemu")
+		},
+		PrintCLI: func(_ *vmInfo) string {
+			if v, ok := customExternalProcesses["qemu"]; ok {
+				return fmt.Sprintf("vm config qemu %q", v)
+			}
+
+			return ""
+		},
+	},
+	"qemu-override": {
+		Update: func(c *minicli.Command) error {
+			if c.StringArgs["match"] != "" {
+				return addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
+			} else if c.StringArgs["id"] != "" {
+				return delVMQemuOverride(c.StringArgs["id"])
+			}
+
+			log.Fatal("someone goofed on qemu-override patterns")
+			return nil
+		},
+		Clear: func() {
+			QemuOverrides = make(map[int]*qemuOverride)
+		},
+		Print: func() string {
+			return qemuOverrideString()
+		},
+		PrintCLI: func(_ *vmInfo) string {
+			cmds := []string{}
+			for _, q := range QemuOverrides {
+				cmds = append(cmds, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
+			}
+			return strings.Join(cmds, "\n")
+		},
+	},
+}
+
+func (vm *vmInfo) setDefault(name string) {
+	// Non-zero default values
+	switch name {
+	case "vcpus":
+		vm.Vcpus = "1"
+		return
+	case "memory":
+		vm.Memory = VM_MEMORY_DEFAULT
+		return
+	case "snapshot":
+		vm.Snapshot = true
+		return
+	}
+
+	// Zero-valued defaults
+	switch f := vm.getField(name).(type) {
+	case *string:
+		*f = ""
+	case *bool:
+		*f = false
+	case *[]string:
+		*f = nil
+	default:
+		log.Fatal("unable to set default for unknown vmInfo field: `%v`", name)
+	}
+}
+
+// getField uses reflection to find the appropriate field in the vmInfo struct.
+// To add new fields, you *have* to add mm tags to the vmInfo struct.
+func (vm *vmInfo) getField(name string) interface{} {
+	fVal := reflect.ValueOf(vm).Elem()
+	fType := reflect.TypeOf(vm).Elem()
+
+	// Loop over all the fields and extract the mm tag value. Return a pointer
+	// to the value.
+	for i := 0; i < fType.NumField(); i++ {
+		if fType.Field(i).Tag.Get("mm") == name {
+			return fVal.Field(i).Addr().Interface()
+		}
+	}
+
+	return nil
 }
 
 func (vm *vmInfo) start() error {
