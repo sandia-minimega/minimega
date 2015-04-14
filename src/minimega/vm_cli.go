@@ -804,6 +804,12 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 
 	for k, fns := range vmConfigFns {
 		if clearAll || c.BoolArgs[k] {
+			fns.Clear(vmConfig)
+			cleared = true
+		}
+	}
+	for k, fns := range kvmConfigFns {
+		if clearAll || c.BoolArgs[k] {
 			fns.Clear(kvmConfig)
 			cleared = true
 		}

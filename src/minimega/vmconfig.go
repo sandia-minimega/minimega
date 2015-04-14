@@ -22,7 +22,7 @@ func mustVMConfig(vm interface{}) *VMConfig {
 	if vm, ok := vm.(*VMConfig); ok {
 		return vm
 	}
-	log.Fatal("`%v` is not a VMConfig", vm)
+	log.Fatal("`%#v` is not a VMConfig", vm)
 	return nil
 }
 
@@ -30,7 +30,7 @@ func mustKVMConfig(vm interface{}) *KVMConfig {
 	if vm, ok := vm.(*KVMConfig); ok {
 		return vm
 	}
-	log.Fatal("`%v` is not a KVMConfig", vm)
+	log.Fatal("`%#v` is not a KVMConfig", vm)
 	return nil
 }
 
@@ -102,7 +102,7 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}),
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
-			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["args"], " ")
+			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
 			return nil
 		},
 		Clear: func(vm interface{}) { mustKVMConfig(vm).Append = "" },
