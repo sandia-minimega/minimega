@@ -28,40 +28,46 @@ can be used to subselect a set of rows and/or columns. See the help pages for
 .filter and .columns, respectively, for their usage. Columns returned by VM
 info include:
 
-- id	    : the VM ID, as an integer
 - host	    : the host that the VM is running on
+- id	    : the VM ID, as an integer
 - name	    : the VM name, if it exists
 - state     : one of (building, running, paused, quit, error)
-- memory    : allocated memory, in megabytes
+- type 		: one of (kvm)
 - vcpus     : the number of allocated CPUs
-- migrate   : qemu migration image
-- disk      : disk image
-- initrd    : initrd image
-- kernel    : kernel image
-- cdrom     : cdrom image
-- append    : kernel command line string
+- memory    : allocated memory, in megabytes
+- vlan	    : vlan, as an integer
 - bridge    : bridge name
 - tap	    : tap name
 - mac	    : mac address
 - ip	    : IPv4 address
 - ip6	    : IPv6 address
-- vlan	    : vlan, as an integer
+- bandwidth : stats regarding bandwidth usage
+- tags      : any additional information attached to the VM
+
+Additional fields are available for KVM-based VMs:
+
+- append    : kernel command line string
+- cdrom     : cdrom image
+- disk      : disk image
+- kernel    : kernel image
+- initrd    : initrd image
+- migrate   : qemu migration image
 - uuid      : QEMU system uuid
 - cc_active : whether cc is active
-- tags      : any additional information attached to the VM
 
 Examples:
 
 Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
-Display all information about VMs with the disk image foo.qc2:
-	.filter disk=foo.qc2 vm info
+Display all information about KVM-based VMs with the disk image foo.qc2:
+	.filter disk=foo.qc2 vm kvm info
 
-Display all information about all VMs:
+Display information about all VMs:
 	vm info`,
 		Patterns: []string{
 			"vm info",
+			"vm <kvm,> info",
 		},
 		Call: wrapSimpleCLI(cliVmInfo),
 	},
@@ -600,7 +606,12 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	resp.Header, resp.Tabular, err = vms.info()
+	vmType := ""
+	if c.BoolArgs["kvm"] {
+		vmType = "kvm"
+	}
+
+	resp.Header, resp.Tabular, err = vms.info(vmType)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp

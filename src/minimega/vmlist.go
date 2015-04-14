@@ -308,17 +308,33 @@ func (vms VMs) flush() {
 	}
 }
 
-func (vms VMs) info() ([]string, [][]string, error) {
+func (vms VMs) info(vmType string) ([]string, [][]string, error) {
 	table := make([][]string, 0, len(vms))
+
+	masks := vmMasks
+	if vmType == "kvm" {
+		masks = kvmMasks
+	}
+
 	for _, vm := range vms {
-		row, err := vm.Info(vmMasks)
+		var row []string
+		var err error
+
+		// All VMs
+		if vmType == "" {
+			row, err = vm.Info(masks)
+		} else if vm, ok := vm.(*vmKVM); ok && vmType == "kvm" {
+			row, err = vm.Info(masks)
+		}
+
 		if err != nil {
 			continue
 		}
+
 		table = append(table, row)
 	}
 
-	return vmMasks, table, nil
+	return masks, table, nil
 }
 
 // cleanDirs removes all isntance directories in the minimega base directory

@@ -77,6 +77,8 @@ func TestVMConfig(t *testing.T) {
 		switch field {
 		case "memory", "vcpus":
 			testVmConfigString(t, field)
+		default:
+			t.Logf("skipping vm config %s", field)
 		}
 	}
 }

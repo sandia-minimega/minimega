@@ -21,8 +21,6 @@ import (
 )
 
 type KVMConfig struct {
-	VMConfig // embed
-
 	Append      string
 	CdromPath   string
 	InitrdPath  string
@@ -110,17 +108,14 @@ func NewKVM() *vmKVM {
 	return vm
 }
 
-// launch one or more vms. this will copy the info struct, one per vm
-// and launch each one in a goroutine. it will not return until all
-// vms have reported that they've launched.
+// launch one or more vms. this will copy the info struct, one per vm and
+// launch each one in a goroutine. it will not return until all vms have
+// reported that they've launched.
 func (vm *vmKVM) Launch(name string, ack chan int) error {
-	vm.KVMConfig = *kvmConfig.Copy() // deep-copy configured fields
-	vm.VMConfig = *vmConfig.Copy()   // deep-copy configured fields
-
-	vm.id = <-vmIdChan
-	if name == "" {
-		vm.name = fmt.Sprintf("vm-%d", vm.id)
+	if err := vm.vmBase.launch(name); err != nil {
+		return err
 	}
+	vm.KVMConfig = *kvmConfig.Copy() // deep-copy configured fields
 
 	vmLock.Lock()
 	vms[vm.id] = vm
@@ -178,113 +173,28 @@ func (vm *vmKVM) Kill() error {
 }
 
 func (vm *vmKVM) String() string {
-	return fmt.Sprintf("%s:%d", hostname, vm.id)
+	return fmt.Sprintf("%s:%d:kvm", hostname, vm.id)
 }
 
 func (vm *vmKVM) Info(masks []string) ([]string, error) {
 	res := make([]string, 0, len(masks))
 
 	for _, mask := range masks {
+		// If it's a field handled by the baseVM, use it.
+		if v, err := vm.vmBase.info(mask); err == nil {
+			res = append(res, v)
+			continue
+		}
+
+		// If it's a configurable field, use the Print fn.
+		if fns, ok := kvmConfigFns[mask]; ok {
+			res = append(res, fns.Print(&vm.KVMConfig))
+			continue
+		}
+
 		switch mask {
-		case "id":
-			res = append(res, fmt.Sprintf("%v", vm.id))
-		case "name":
-			res = append(res, fmt.Sprintf("%v", vm.name))
-		case "memory":
-			res = append(res, fmt.Sprintf("%v", vm.Memory))
-		case "vcpus":
-			res = append(res, fmt.Sprintf("%v", vm.Vcpus))
-		case "state":
-			res = append(res, vm.State().String())
-		case "migrate":
-			res = append(res, fmt.Sprintf("%v", vm.MigratePath))
-		case "disk":
-			res = append(res, fmt.Sprintf("%v", vm.DiskPaths))
-		case "snapshot":
-			res = append(res, fmt.Sprintf("%v", vm.Snapshot))
-		case "initrd":
-			res = append(res, fmt.Sprintf("%v", vm.InitrdPath))
-		case "kernel":
-			res = append(res, fmt.Sprintf("%v", vm.KernelPath))
-		case "cdrom":
-			res = append(res, fmt.Sprintf("%v", vm.CdromPath))
-		case "append":
-			res = append(res, fmt.Sprintf("%v", vm.Append))
-		case "bridge":
-			vals := []string{}
-			for _, v := range vm.Networks {
-				vals = append(vals, v.Bridge)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "tap":
-			vals := []string{}
-			for _, v := range vm.Networks {
-				vals = append(vals, v.Tap)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "bandwidth":
-			var bw []string
-			bandwidthLock.Lock()
-			for _, v := range vm.Networks {
-				t := bandwidthStats[v.Tap]
-				if t == nil {
-					bw = append(bw, "0.0/0.0")
-				} else {
-					bw = append(bw, fmt.Sprintf("%v", t))
-				}
-			}
-			bandwidthLock.Unlock()
-			res = append(res, fmt.Sprintf("%v", bw))
-		case "mac":
-			vals := []string{}
-			for _, v := range vm.Networks {
-				vals = append(vals, v.MAC)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "tags":
-			res = append(res, fmt.Sprintf("%v", vm.tags))
-		case "ip":
-			var ips []string
-			for _, net := range vm.Networks {
-				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(net.Bridge)
-				if err != nil {
-					log.Errorln(err)
-					continue
-				}
-				ip := b.GetIPFromMac(net.MAC)
-				if ip != nil {
-					ips = append(ips, ip.IP4)
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", ips))
-		case "ip6":
-			var ips []string
-			for _, net := range vm.Networks {
-				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(net.Bridge)
-				if err != nil {
-					log.Errorln(err)
-					continue
-				}
-				ip := b.GetIPFromMac(net.MAC)
-				if ip != nil {
-					ips = append(ips, ip.IP6)
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", ips))
-		case "vlan":
-			var vlans []string
-			for _, net := range vm.Networks {
-				if net.VLAN == -1 {
-					vlans = append(vlans, "disconnected")
-				} else {
-					vlans = append(vlans, fmt.Sprintf("%v", net.VLAN))
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", vlans))
-		case "uuid":
-			res = append(res, fmt.Sprintf("%v", vm.UUID))
+		case "type":
+			res = append(res, "kvm")
 		case "cc_active":
 			// TODO: This won't work if it's being run from a different host...
 			activeClients := ccClients()
@@ -303,8 +213,8 @@ func (vm *KVMConfig) configToString() string {
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "Current VM configuration:")
-	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
-	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	//fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
+	//fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
@@ -314,7 +224,7 @@ func (vm *KVMConfig) configToString() string {
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
+	//fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
 	return o.String()

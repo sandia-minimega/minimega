@@ -69,6 +69,8 @@ type NetConfig struct {
 }
 
 type vmBase struct {
+	VMConfig // embed
+
 	lock sync.Mutex
 
 	id   int
@@ -81,9 +83,15 @@ type vmBase struct {
 
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "migrate", "disk", "snapshot",
-	"initrd", "kernel", "cdrom", "append", "bridge", "tap", "bandwidth", "mac",
-	"ip", "ip6", "vlan", "uuid", "cc_active", "tags",
+	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
+	"mac", "ip", "ip6", "bandwidth", "tags",
+}
+
+// Valid names for output masks for vm kvm info, in preferred output order
+var kvmMasks = []string{
+	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
+	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
+	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
 }
 
 func NewVM() *vmBase {
@@ -148,6 +156,17 @@ func (vm *vmBase) State() VMState {
 	return vm.state
 }
 
+func (vm *vmBase) launch(name string) error {
+	vm.VMConfig = *vmConfig.Copy() // deep-copy configured fields
+
+	vm.id = <-vmIdChan
+	if name == "" {
+		vm.name = fmt.Sprintf("vm-%d", vm.id)
+	}
+
+	return nil
+}
+
 func (vm *vmBase) Tags() (tags []string) {
 	for _, v := range vm.tags {
 		tags = append(tags, v)
@@ -169,6 +188,96 @@ func (vm *vmBase) ClearTags() {
 
 func (vm *vmBase) ClearTag(k string) {
 	delete(vm.tags, k)
+}
+
+func (vm *vmBase) info(mask string) (string, error) {
+	if fns, ok := vmConfigFns[mask]; ok {
+		return fns.Print(&vm.VMConfig), nil
+	}
+
+	switch mask {
+	case "id":
+		return fmt.Sprintf("%v", vm.id), nil
+	case "name":
+		return fmt.Sprintf("%v", vm.name), nil
+	case "state":
+		return vm.State().String(), nil
+	case "vlan":
+		var vlans []string
+		for _, net := range vm.Networks {
+			if net.VLAN == -1 {
+				vlans = append(vlans, "disconnected")
+			} else {
+				vlans = append(vlans, fmt.Sprintf("%v", net.VLAN))
+			}
+		}
+		return fmt.Sprintf("%v", vlans), nil
+	case "bridge":
+		vals := []string{}
+		for _, v := range vm.Networks {
+			vals = append(vals, v.Bridge)
+		}
+		return fmt.Sprintf("%v", vals), nil
+	case "tap":
+		vals := []string{}
+		for _, v := range vm.Networks {
+			vals = append(vals, v.Tap)
+		}
+		return fmt.Sprintf("%v", vals), nil
+	case "mac":
+		vals := []string{}
+		for _, v := range vm.Networks {
+			vals = append(vals, v.MAC)
+		}
+		return fmt.Sprintf("%v", vals), nil
+	case "ip":
+		var ips []string
+		for _, net := range vm.Networks {
+			// TODO: This won't work if it's being run from a different host...
+			b, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			ip := b.GetIPFromMac(net.MAC)
+			if ip != nil {
+				ips = append(ips, ip.IP4)
+			}
+		}
+		return fmt.Sprintf("%v", ips), nil
+	case "ip6":
+		var ips []string
+		for _, net := range vm.Networks {
+			// TODO: This won't work if it's being run from a different host...
+			b, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			ip := b.GetIPFromMac(net.MAC)
+			if ip != nil {
+				ips = append(ips, ip.IP6)
+			}
+		}
+		return fmt.Sprintf("%v", ips), nil
+	case "bandwidth":
+		var bw []string
+		bandwidthLock.Lock()
+		for _, v := range vm.Networks {
+			t := bandwidthStats[v.Tap]
+			if t == nil {
+				bw = append(bw, "0.0/0.0")
+			} else {
+				bw = append(bw, fmt.Sprintf("%v", t))
+			}
+		}
+		bandwidthLock.Unlock()
+		return fmt.Sprintf("%v", bw), nil
+	case "tags":
+		return fmt.Sprintf("%v", vm.tags), nil
+	}
+
+	return "", errors.New("field not found")
 }
 
 func init() {
