@@ -20,6 +20,9 @@ import (
 var (
 	vmConfig *VMConfig // current vm config, updated by CLI
 
+	// Types of VMs
+	kvmEnabled bool = true
+
 	killAck  chan int
 	vmIdChan chan int
 	vmLock   sync.Mutex

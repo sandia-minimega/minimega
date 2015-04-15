@@ -28,19 +28,19 @@ can be used to subselect a set of rows and/or columns. See the help pages for
 .filter and .columns, respectively, for their usage. Columns returned by VM
 info include:
 
-- host	    : the host that the VM is running on
-- id	    : the VM ID, as an integer
-- name	    : the VM name, if it exists
+- host      : the host that the VM is running on
+- id        : the VM ID, as an integer
+- name      : the VM name, if it exists
 - state     : one of (building, running, paused, quit, error)
-- type 		: one of (kvm)
+- type      : one of (kvm)
 - vcpus     : the number of allocated CPUs
 - memory    : allocated memory, in megabytes
-- vlan	    : vlan, as an integer
+- vlan      : vlan, as an integer
 - bridge    : bridge name
-- tap	    : tap name
-- mac	    : mac address
-- ip	    : IPv4 address
-- ip6	    : IPv6 address
+- tap       : tap name
+- mac       : mac address
+- ip        : IPv4 address
+- ip6       : IPv6 address
 - bandwidth : stats regarding bandwidth usage
 - tags      : any additional information attached to the VM
 
@@ -335,6 +335,20 @@ remove saved configurations.`,
 			"vm config <clone,> <vm id or name>",
 		},
 		Call: wrapSimpleCLI(cliVmConfig),
+	},
+	{ // vm config <kvm,> [true,false]
+		HelpShort: "display or set the type of VM for newly launched VMs",
+		HelpLong: `
+Display or set the type of VM for newly launched VMs. Currently, the supported
+VM types are:
+
+- kvm : QEMU-based vms
+
+`,
+		Patterns: []string{
+			"vm config <kvm,> [true,false]",
+		},
+		Call: wrapSimpleCLI(cliVmConfigType),
 	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
@@ -777,6 +791,31 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 	} else {
 		// Print the vm config
 		resp.Response = vmConfig.configToString()
+	}
+
+	return resp
+}
+
+func cliVmConfigType(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.BoolArgs) == 1 {
+		// Display the currently enabled type
+		if c.BoolArgs["kvm"] {
+			resp.Response = fmt.Sprintf("%v", kvmEnabled)
+		} else {
+			// TODO: other types
+		}
+	} else if c.BoolArgs["kvm"] {
+		// Enable/disable kvm-based VMs
+		kvmEnabled = c.BoolArgs["true"]
+	} else {
+		// TODO: other types
+	}
+
+	// TODO: OR all the types, if non-enabled, warn
+	if !(kvmEnabled) {
+		log.Warn("Unable to launch VMs -- no VM type selected")
 	}
 
 	return resp
