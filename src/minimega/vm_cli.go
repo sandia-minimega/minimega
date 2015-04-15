@@ -329,6 +329,7 @@ Calling clear vm config will clear all VM configuration options, but will not
 remove saved configurations.`,
 		Patterns: []string{
 			"vm config",
+			"vm <kvm,> config",
 			"vm config <save,> <name>",
 			"vm config <restore,> [name]",
 			"vm config <clone,> <vm id or name>",
@@ -770,9 +771,12 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 			// TODO: Copy kvmConfig?
 			vmConfig = vm.Config()
 		}
+	} else if c.BoolArgs["kvm"] {
+		// Print the kvm config
+		resp.Response = vmConfig.configToString() + kvmConfig.configToString()
 	} else {
-		// Print the full config
-		resp.Response = kvmConfig.configToString()
+		// Print the vm config
+		resp.Response = vmConfig.configToString()
 	}
 
 	return resp

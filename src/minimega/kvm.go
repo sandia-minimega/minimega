@@ -212,9 +212,7 @@ func (vm *KVMConfig) configToString() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "Current VM configuration:")
-	//fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
-	//fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	fmt.Fprintln(&o, "Current KVM configuration:")
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
@@ -224,9 +222,9 @@ func (vm *KVMConfig) configToString() string {
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	//fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
+	fmt.Fprintln(&o)
 	return o.String()
 }
 

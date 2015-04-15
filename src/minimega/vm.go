@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"minicli"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/tabwriter"
 )
 
 var (
@@ -114,6 +116,20 @@ func (old *VMConfig) Copy() *VMConfig {
 	copy(res.Networks, old.Networks)
 
 	return res
+}
+
+func (vm *VMConfig) configToString() string {
+	// create output
+	var o bytes.Buffer
+	fmt.Fprintln(&o, "Current VM configuration:")
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
+	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
+	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
+	w.Flush()
+	fmt.Fprintln(&o)
+	return o.String()
 }
 
 func (vm *VMConfig) NetworkString() string {
