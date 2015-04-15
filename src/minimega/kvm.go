@@ -119,7 +119,7 @@ func NewKVM() *vmKVM {
 // launch each one in a goroutine. it will not return until all vms have
 // reported that they've launched.
 func (vm *vmKVM) Launch(name string, ack chan int) error {
-	if err := vm.vmBase.launch(name); err != nil {
+	if err := vm.vmBase.launch(name, KVM); err != nil {
 		return err
 	}
 	vm.KVMConfig = *kvmConfig.Copy() // deep-copy configured fields
@@ -200,8 +200,6 @@ func (vm *vmKVM) Info(masks []string) ([]string, error) {
 		}
 
 		switch mask {
-		case "type":
-			res = append(res, "kvm")
 		case "cc_active":
 			// TODO: This won't work if it's being run from a different host...
 			activeClients := ccClients()

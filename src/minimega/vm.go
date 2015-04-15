@@ -17,22 +17,30 @@ import (
 	"text/tabwriter"
 )
 
-var (
-	vmConfig *VMConfig // current vm config, updated by CLI
-
-	// Types of VMs
-	kvmEnabled bool = true
-
-	killAck  chan int
-	vmIdChan chan int
-	vmLock   sync.Mutex
-)
-
 const (
 	VM_MEMORY_DEFAULT     = "2048"
 	VM_NET_DRIVER_DEFAULT = "e1000"
 	QMP_CONNECT_RETRY     = 50
 	QMP_CONNECT_DELAY     = 100
+
+	DefaultVMType = KVM
+)
+
+var (
+	vmConfig *VMConfig // current vm config, updated by CLI
+
+	killAck  chan int
+	vmIdChan chan int
+	vmLock   sync.Mutex
+
+	// Types of all newly launched VMs
+	vmType VMType = DefaultVMType
+)
+
+type VMType int
+
+const (
+	KVM VMType = iota + 1
 )
 
 type VM interface {
@@ -41,6 +49,7 @@ type VM interface {
 	ID() int
 	Name() string
 	State() VMState
+	Type() VMType
 
 	Launch(string, chan int) error
 	// TODO: Make kill have ack channel?
@@ -78,10 +87,10 @@ type vmBase struct {
 
 	lock sync.Mutex
 
-	id   int
-	name string
-
-	state VMState
+	id     int
+	name   string
+	state  VMState
+	vmType VMType
 
 	tags map[string]string
 }
@@ -99,6 +108,24 @@ func NewVM() *vmBase {
 	vm.tags = make(map[string]string)
 
 	return vm
+}
+
+func (s VMType) String() string {
+	switch s {
+	case KVM:
+		return "kvm"
+	default:
+		return "???"
+	}
+}
+
+func ParseVMType(s string) VMType {
+	switch s {
+	case "kvm":
+		return KVM
+	default:
+		return -1
+	}
 }
 
 func (old *VMConfig) Copy() *VMConfig {
@@ -168,13 +195,19 @@ func (vm *vmBase) State() VMState {
 	return vm.state
 }
 
-func (vm *vmBase) launch(name string) error {
+func (vm *vmBase) Type() VMType {
+	return vm.vmType
+}
+
+func (vm *vmBase) launch(name string, vmType VMType) error {
 	vm.VMConfig = *vmConfig.Copy() // deep-copy configured fields
 
 	vm.id = <-vmIdChan
 	if name == "" {
 		vm.name = fmt.Sprintf("vm-%d", vm.id)
 	}
+
+	vm.vmType = vmType
 
 	return nil
 }
@@ -214,6 +247,8 @@ func (vm *vmBase) info(mask string) (string, error) {
 		return fmt.Sprintf("%v", vm.name), nil
 	case "state":
 		return vm.State().String(), nil
+	case "type":
+		return vm.Type().String(), nil
 	case "vlan":
 		var vlans []string
 		for _, net := range vm.Networks {

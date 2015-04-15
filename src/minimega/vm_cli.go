@@ -796,26 +796,37 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+// TODO: Add clear.
 func cliVmConfigType(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if len(c.BoolArgs) == 1 {
-		// Display the currently enabled type
-		if c.BoolArgs["kvm"] {
-			resp.Response = fmt.Sprintf("%v", kvmEnabled)
-		} else {
-			// TODO: other types
+	if len(c.BoolArgs) == 0 {
+		// Display the current vmType
+		resp.Response = vmType.String()
+	} else if len(c.BoolArgs) == 1 {
+		// Display whether their selected type is enabled
+		resp.Response = fmt.Sprintf("%v", c.BoolArgs[vmType.String()])
+	} else if c.BoolArgs["true"] {
+		delete(c.BoolArgs, "true")
+		// Enabling different vmType, don't know what type though find it by
+		// looping through all BoolArgs.
+		for k := range c.BoolArgs {
+			vmType = ParseVMType(k)
 		}
-	} else if c.BoolArgs["kvm"] {
-		// Enable/disable kvm-based VMs
-		kvmEnabled = c.BoolArgs["true"]
-	} else {
-		// TODO: other types
-	}
-
-	// TODO: OR all the types, if non-enabled, warn
-	if !(kvmEnabled) {
-		log.Warn("Unable to launch VMs -- no VM type selected")
+	} else if c.BoolArgs["false"] {
+		delete(c.BoolArgs, "false")
+		// "Clearing" a particular VM type by vmType to the default type.
+		for k := range c.BoolArgs {
+			if k == vmType.String() {
+				if vmType == DefaultVMType {
+					resp.Error = fmt.Sprintf("`%s` is the default VM type, cannot set to false", vmType)
+				} else {
+					vmType = DefaultVMType
+				}
+			} else {
+				resp.Error = fmt.Sprintf("`%s` is not enabled")
+			}
+		}
 	}
 
 	return resp
