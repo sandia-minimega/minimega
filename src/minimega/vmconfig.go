@@ -96,10 +96,10 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}, true),
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
-	}),
+	}, "qemu-append", "kvm"),
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
-	}),
+	}, "disk", "kvm"),
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
@@ -134,7 +134,7 @@ var kvmConfigFns = map[string]VMConfigFns{
 		PrintCLI: func(_ interface{}) string {
 			overrides := []string{}
 			for _, q := range QemuOverrides {
-				override := fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl)
+				override := fmt.Sprintf("vm kvm config qemu-override add %s %s", q.match, q.repl)
 				overrides = append(overrides, override)
 			}
 			return strings.Join(overrides, "\n")
@@ -153,12 +153,6 @@ func vmConfigString(fn func(interface{}) *string, defaultVal string) VMConfigFns
 		},
 		Clear: func(vm interface{}) { *fn(vm) = defaultVal },
 		Print: func(vm interface{}) string { return *fn(vm) },
-		PrintCLI: func(vm interface{}) string {
-			if v := *fn(vm); v != "" {
-				return fmt.Sprintf("vm config %s %v", v)
-			}
-			return ""
-		},
 	}
 }
 
@@ -174,13 +168,10 @@ func vmConfigBool(fn func(interface{}) *bool, defaultVal bool) VMConfigFns {
 		},
 		Clear: func(vm interface{}) { *fn(vm) = defaultVal },
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
-		PrintCLI: func(vm interface{}) string {
-			return fmt.Sprintf("vm config %s %v", *fn(vm))
-		},
 	}
 }
 
-func vmConfigSlice(fn func(interface{}) *[]string) VMConfigFns {
+func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
 			// Update the value, have to use range since we don't know the key
@@ -193,7 +184,7 @@ func vmConfigSlice(fn func(interface{}) *[]string) VMConfigFns {
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
 		PrintCLI: func(vm interface{}) string {
 			if v := *fn(vm); len(v) > 0 {
-				return fmt.Sprintf("vm config %s %s", strings.Join(v, " "))
+				return fmt.Sprintf("vm %s config %s %s", ns, name, strings.Join(v, " "))
 			}
 			return ""
 		},

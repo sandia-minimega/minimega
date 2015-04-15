@@ -84,6 +84,22 @@ func (vms VMs) stop(vm string) []error {
 	return errors
 }
 
+func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []string {
+	var cmds = []string{}
+
+	for k, fns := range fns {
+		if fns.PrintCLI != nil {
+			if v := fns.PrintCLI(configs); len(v) > 0 {
+				cmds = append(cmds, v)
+			}
+		} else if v := fns.Print(configs); len(v) > 0 {
+			cmds = append(cmds, fmt.Sprintf("vm %s config %s %s", ns, k, v))
+		}
+	}
+
+	return cmds
+}
+
 func (vms VMs) save(file *os.File, args []string) error {
 	var allVms bool
 	for _, vm := range args {
@@ -111,34 +127,22 @@ func (vms VMs) save(file *os.File, args []string) error {
 		if vm == nil {
 			return fmt.Errorf("vm %v not found", vm)
 		}
-		kvm, ok := vm.(*vmKVM)
-		if !ok {
-			return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+
+		// build up the command list to re-launch this vm, first clear all
+		// previous configuration.
+		cmds := []string{"clear vm config"}
+
+		cmds = append(cmds, saveConfig("", vmConfigFns, vm.Config())...)
+
+		switch vm := vm.(type) {
+		case *vmKVM:
+			cmds = append(cmds, "vm config kvm true")
+			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
+		default:
 		}
 
-		// build up the command list to re-launch this vm
-		cmds := []string{}
-
-		for k, fns := range vmConfigFns {
-			var value string
-			if fns.PrintCLI != nil {
-				value = fns.PrintCLI(&kvm.KVMConfig)
-			} else {
-				value = fns.Print(&kvm.KVMConfig)
-				if len(value) > 0 {
-					value = fmt.Sprintf("vm config %s %s", k, value)
-				}
-			}
-
-			if len(value) != 0 {
-				cmds = append(cmds, value)
-			} else {
-				cmds = append(cmds, fmt.Sprintf("clear vm config %s", k))
-			}
-		}
-
-		if kvm.Name() != "" {
-			cmds = append(cmds, "vm launch "+kvm.Name())
+		if vm.Name() != "" {
+			cmds = append(cmds, "vm launch "+vm.Name())
 		} else {
 			cmds = append(cmds, "vm launch 1")
 		}
