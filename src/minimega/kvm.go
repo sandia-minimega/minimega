@@ -64,6 +64,13 @@ var (
 // Ensure that vmKVM implements the VM interface
 var _ VM = (*vmKVM)(nil)
 
+// Valid names for output masks for vm kvm info, in preferred output order
+var kvmMasks = []string{
+	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
+	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
+	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
+}
+
 func init() {
 	kvmConfig = &KVMConfig{}
 
@@ -734,124 +741,6 @@ func (vm *vmKVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
-}
-
-func (vm *vmKVM) info(masks []string) ([]string, error) {
-	res := make([]string, 0, len(masks))
-
-	for _, mask := range masks {
-		switch mask {
-		case "id":
-			res = append(res, fmt.Sprintf("%v", vm.ID))
-		case "name":
-			res = append(res, fmt.Sprintf("%v", vm.Name))
-		case "memory":
-			res = append(res, fmt.Sprintf("%v", vm.Memory))
-		case "vcpus":
-			res = append(res, fmt.Sprintf("%v", vm.Vcpus))
-		case "state":
-			res = append(res, vm.state.String())
-		case "migrate":
-			res = append(res, fmt.Sprintf("%v", vm.MigratePath))
-		case "disk":
-			res = append(res, fmt.Sprintf("%v", vm.DiskPaths))
-		case "snapshot":
-			res = append(res, fmt.Sprintf("%v", vm.Snapshot))
-		case "initrd":
-			res = append(res, fmt.Sprintf("%v", vm.InitrdPath))
-		case "kernel":
-			res = append(res, fmt.Sprintf("%v", vm.KernelPath))
-		case "cdrom":
-			res = append(res, fmt.Sprintf("%v", vm.CdromPath))
-		case "append":
-			res = append(res, fmt.Sprintf("%v", vm.Append))
-		case "bridge":
-			vals := []string{}
-			for _, net := range vm.Networks {
-				vals = append(vals, net.Bridge)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "tap":
-			vals := []string{}
-			for _, net := range vm.Networks {
-				vals = append(vals, net.Tap)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "mac":
-			vals := []string{}
-			for _, net := range vm.Networks {
-				vals = append(vals, net.MAC)
-			}
-			res = append(res, fmt.Sprintf("%v", vals))
-		case "bandwidth":
-			var bw []string
-			bandwidthLock.Lock()
-			for _, net := range vm.Networks {
-				t := bandwidthStats[net.Tap]
-				if t == nil {
-					bw = append(bw, "0.0/0.0")
-				} else {
-					bw = append(bw, fmt.Sprintf("%v", t))
-				}
-			}
-			bandwidthLock.Unlock()
-			res = append(res, fmt.Sprintf("%v", bw))
-		case "tags":
-			res = append(res, fmt.Sprintf("%v", vm.Tags))
-		case "ip":
-			var ips []string
-			for _, net := range vm.Networks {
-				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(net.Bridge)
-				if err != nil {
-					log.Errorln(err)
-					continue
-				}
-
-				ip := b.GetIPFromMac(net.MAC)
-				if ip != nil {
-					ips = append(ips, ip.IP4)
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", ips))
-		case "ip6":
-			var ips []string
-			for _, net := range vm.Networks {
-				// TODO: This won't work if it's being run from a different host...
-				b, err := getBridge(net.Bridge)
-				if err != nil {
-					log.Errorln(err)
-					continue
-				}
-
-				ip := b.GetIPFromMac(net.MAC)
-				if ip != nil {
-					ips = append(ips, ip.IP6)
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", ips))
-		case "vlan":
-			var vlans []string
-			for _, net := range vm.Networks {
-				if net.VLAN == -1 {
-					vlans = append(vlans, "disconnected")
-				} else {
-					vlans = append(vlans, fmt.Sprintf("%v", net.VLAN))
-				}
-			}
-			res = append(res, fmt.Sprintf("%v", vlans))
-		case "uuid":
-			res = append(res, fmt.Sprintf("%v", vm.UUID))
-		case "cc_active":
-			// TODO: This won't work if it's being run from a different host...
-			activeClients := ccClients()
-			res = append(res, fmt.Sprintf("%v", activeClients[vm.UUID]))
-		default:
-			return nil, fmt.Errorf("invalid mask: %s", mask)
-		}
-	}
-
-	return res, nil
 }
 
 func qemuOverrideString() string {

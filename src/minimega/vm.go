@@ -92,13 +92,6 @@ var vmMasks = []string{
 	"mac", "ip", "ip6", "bandwidth", "tags",
 }
 
-// Valid names for output masks for vm kvm info, in preferred output order
-var kvmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
-}
-
 func NewVM() *vmBase {
 	vm := new(vmBase)
 
