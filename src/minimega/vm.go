@@ -35,6 +35,8 @@ var (
 
 	// Types of all newly launched VMs
 	vmType VMType = DefaultVMType
+
+	savedInfo = make(map[string]SavedVMConfig)
 )
 
 type VMType int
@@ -72,6 +74,11 @@ type VMConfig struct {
 	Memory string // memory for the vm, in megabytes
 
 	Networks []NetConfig // ordered list of networks
+}
+
+type SavedVMConfig struct {
+	vmConfig  *VMConfig
+	kvmConfig *KVMConfig
 }
 
 type NetConfig struct {

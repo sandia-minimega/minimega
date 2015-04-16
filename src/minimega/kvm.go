@@ -57,8 +57,6 @@ var (
 
 	QemuOverrides      map[int]*qemuOverride
 	qemuOverrideIdChan chan int
-
-	savedInfo map[string]*KVMConfig
 )
 
 // Ensure that vmKVM implements the VM interface
@@ -74,7 +72,6 @@ var kvmMasks = []string{
 func init() {
 	kvmConfig = &KVMConfig{}
 
-	savedInfo = make(map[string]*KVMConfig)
 	QemuOverrides = make(map[int]*qemuOverride)
 	qemuOverrideIdChan = makeIDChan()
 

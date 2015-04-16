@@ -307,11 +307,13 @@ Change a VM to use a new ISO:
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
 		HelpLong: `
-Display, save, or restore the current VM configuration.
+Display, save, or restore the current VM configuration. Note that saving and
+restoring configuration applies to all VM configurations including KVM-based VM
+configurations.
 
 To display the current configuration, call vm config with no arguments.
 
-List the current saved configurations with 'vm config show'.
+List the current saved configurations with 'vm config restore'.
 
 To save a configuration:
 
@@ -758,13 +760,16 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = kvmConfig.Copy()
+		savedInfo[c.StringArgs["name"]] = SavedVMConfig{
+			vmConfig:  vmConfig.Copy(),
+			kvmConfig: kvmConfig.Copy(),
+		}
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
 			if s, ok := savedInfo[name]; ok {
-				// TODO: copy vmConfig too
-				kvmConfig = s.Copy()
+				vmConfig = s.vmConfig.Copy()
+				kvmConfig = s.kvmConfig.Copy()
 			} else {
 				resp.Error = fmt.Sprintf("config %v does not exist", name)
 			}
@@ -782,8 +787,11 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {
-			// TODO: Copy kvmConfig?
-			vmConfig = vm.Config()
+			vmConfig = vm.Config().Copy()
+			switch vm := vm.(type) {
+			case *vmKVM:
+				kvmConfig = vm.KVMConfig.Copy()
+			}
 		}
 	} else if c.BoolArgs["kvm"] {
 		// Print the kvm config
