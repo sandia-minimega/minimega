@@ -61,7 +61,7 @@ Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
 Display all information about KVM-based VMs with the disk image foo.qc2:
-	.filter disk=foo.qc2 vm kvm info
+	.filter disk=foo.qc2 vm info kvm
 
 Display information about all VMs:
 	vm info`,
