@@ -237,7 +237,7 @@ func (vms VMs) findVm(idOrName string) VM {
 // launch one or more vms. this will copy the info struct, one per vm
 // and launch each one in a goroutine. it will not return until all
 // vms have reported that they've launched.
-func (vms VMs) launch(name string, ack chan int) error {
+func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	// Make sure that there isn't another VM with the same name
 	if name != "" {
 		for _, vm := range vms {
@@ -247,13 +247,15 @@ func (vms VMs) launch(name string, ack chan int) error {
 		}
 	}
 
-	// TODO: Determine what type of VM we're launching
-	if true {
-		vm := NewKVM()
-		return vm.Launch(name, ack)
+	var vm VM
+	switch vmType {
+	case KVM:
+		vm = NewKVM()
+	default:
+		// TODO
 	}
 
-	return nil
+	return vm.Launch(name, ack)
 }
 
 // kill one or all vms (* for all)

@@ -34,6 +34,7 @@ func mustKVMConfig(vm interface{}) *KVMConfig {
 	return nil
 }
 
+// Functions for configuring VMs.
 var vmConfigFns = map[string]VMConfigFns{
 	"memory": vmConfigString(func(vm interface{}) *string {
 		return &mustVMConfig(vm).Memory
@@ -75,6 +76,8 @@ var vmConfigFns = map[string]VMConfigFns{
 	},
 }
 
+// Functions for configuring KVM-based VMs. Note: if keys overlap with
+// vmConfigFns, the functions in vmConfigFns take priority.
 var kvmConfigFns = map[string]VMConfigFns{
 	"cdrom": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).CdromPath

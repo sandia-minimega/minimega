@@ -76,7 +76,7 @@ func TestVMConfig(t *testing.T) {
 
 		switch field {
 		case "memory", "vcpus":
-			testVmConfigString(t, field, "")
+			testVmConfigString(t, field)
 		default:
 			t.Logf("skipping vm config %s", field)
 		}
@@ -85,51 +85,51 @@ func TestVMConfig(t *testing.T) {
 
 func TestKVMConfig(t *testing.T) {
 	for field := range kvmConfigFns {
-		t.Logf("testing kvm config %s", field)
+		t.Logf("testing config %s", field)
 
 		switch field {
 		case "cdrom", "initrd", "kernel", "migrate", "uuid":
-			testVmConfigString(t, field, "kvm")
+			testVmConfigString(t, field)
 		case "snapshot":
-			testVmConfigBool(t, field, "kvm")
+			testVmConfigBool(t, field)
 		case "disk", "qemu-append":
-			testVmConfigStringSlice(t, field, "kvm")
+			testVmConfigStringSlice(t, field)
 		default:
-			t.Logf("skipping kvm config %s", field)
+			t.Logf("skipping config %s", field)
 		}
 	}
 }
 
-func testVmConfigString(t *testing.T, field, namespace string) {
+func testVmConfigString(t *testing.T, field string) {
 	t.Logf("testing vm config %s", field)
 
 	// Value we'll try to set
 	want := "foo"
 
 	// Compile getter, setter, and clear
-	getCmd := mustCompile(t, "vm %s config %s", namespace, field)
-	setCmd := mustCompile(t, "vm %s config %s %s", namespace, field, want)
-	clrCmd := mustCompile(t, "clear vm %s config %s", namespace, field)
+	getCmd := mustCompile(t, "vm config %s", field)
+	setCmd := mustCompile(t, "vm config %s %s", field, want)
+	clrCmd := mustCompile(t, "clear vm config %s", field)
 
 	testVmConfigField(t, want, getCmd, setCmd, clrCmd)
 }
 
-func testVmConfigBool(t *testing.T, field, namespace string) {
+func testVmConfigBool(t *testing.T, field string) {
 	values := []string{"true", "false"}
 
 	for _, want := range values {
-		t.Logf("testing vm %s config %s (%s)", namespace, field, want)
+		t.Logf("testing vm config %s (%s)", field, want)
 
 		// Compile getter, setter, and clear
-		getCmd := mustCompile(t, "vm %s config %s", namespace, field)
-		setCmd := mustCompile(t, "vm %s config %s %s", namespace, field, want)
-		clrCmd := mustCompile(t, "clear vm %s config %s", namespace, field)
+		getCmd := mustCompile(t, "vm config %s", field)
+		setCmd := mustCompile(t, "vm config %s %s", field, want)
+		clrCmd := mustCompile(t, "clear vm config %s", field)
 
 		testVmConfigField(t, want, getCmd, setCmd, clrCmd)
 	}
 }
 
-func testVmConfigStringSlice(t *testing.T, field, namespace string) {
+func testVmConfigStringSlice(t *testing.T, field string) {
 	t.Logf("testing vm config %s", field)
 
 	// Value we'll try to set
@@ -137,9 +137,9 @@ func testVmConfigStringSlice(t *testing.T, field, namespace string) {
 	want := fmt.Sprintf("%v", values)
 
 	// Compile getter, setter, and clear
-	getCmd := mustCompile(t, "vm %s config %s", namespace, field)
-	setCmd := mustCompile(t, "vm %s config %s %s", namespace, field, strings.Join(values, " "))
-	clrCmd := mustCompile(t, "clear vm %s config %s", namespace, field)
+	getCmd := mustCompile(t, "vm config %s", field)
+	setCmd := mustCompile(t, "vm config %s %s", field, strings.Join(values, " "))
+	clrCmd := mustCompile(t, "clear vm config %s", field)
 
 	testVmConfigField(t, want, getCmd, setCmd, clrCmd)
 }
@@ -151,9 +151,9 @@ func TestVmConfigAppend(t *testing.T) {
 	want := "ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10"
 
 	// Compile getter, setter, and clear
-	getCmd := mustCompile(t, "vm kvm config append")
-	setCmd := mustCompile(t, "vm kvm config append %s", want)
-	clrCmd := mustCompile(t, "clear vm kvm config append")
+	getCmd := mustCompile(t, "vm config append")
+	setCmd := mustCompile(t, "vm config append %s", want)
+	clrCmd := mustCompile(t, "clear vm config append")
 
 	testVmConfigField(t, want, getCmd, setCmd, clrCmd)
 }
@@ -167,8 +167,8 @@ func TestVmConfigQemuOverride(t *testing.T) {
 		[]string{`" "`, `"  "`},
 	}
 
-	getCmd := mustCompile(t, "vm kvm config qemu-override")
-	clrCmd := mustCompile(t, "clear vm kvm config qemu-override")
+	getCmd := mustCompile(t, "vm config qemu-override")
+	clrCmd := mustCompile(t, "clear vm config qemu-override")
 
 	for i := range overrides {
 		orig := mustRun(t, getCmd)
@@ -180,7 +180,7 @@ func TestVmConfigQemuOverride(t *testing.T) {
 			// Accumulate replacements in want
 			want = strings.Replace(want, overrides[j][0], overrides[j][1], -1)
 
-			addCmd := mustCompile(t, "vm kvm config qemu-override add %s %s", overrides[j][0], overrides[j][1])
+			addCmd := mustCompile(t, "vm config qemu-override add %s %s", overrides[j][0], overrides[j][1])
 			mustRun(t, addCmd)
 
 			parts = strings.Split(mustRun(t, getCmd), "\n\n")

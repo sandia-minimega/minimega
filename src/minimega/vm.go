@@ -22,8 +22,6 @@ const (
 	VM_NET_DRIVER_DEFAULT = "e1000"
 	QMP_CONNECT_RETRY     = 50
 	QMP_CONNECT_DELAY     = 100
-
-	DefaultVMType = KVM
 )
 
 var (
@@ -33,16 +31,14 @@ var (
 	vmIdChan chan int
 	vmLock   sync.Mutex
 
-	// Types of all newly launched VMs
-	vmType VMType = DefaultVMType
-
 	savedInfo = make(map[string]SavedVMConfig)
 )
 
 type VMType int
 
 const (
-	KVM VMType = iota + 1
+	_ VMType = iota
+	KVM
 )
 
 type VM interface {
@@ -126,12 +122,12 @@ func (s VMType) String() string {
 	}
 }
 
-func ParseVMType(s string) VMType {
+func ParseVMType(s string) (VMType, error) {
 	switch s {
 	case "kvm":
-		return KVM
+		return KVM, nil
 	default:
-		return -1
+		return -1, errors.New("invalid VMType")
 	}
 }
 
