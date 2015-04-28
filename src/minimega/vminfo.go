@@ -72,6 +72,7 @@ func (vm *vmInfo) start() error {
 	log.Info("starting VM: %v", vm.ID)
 	err := vm.q.Start()
 	if err != nil {
+		log.Errorln(err)
 		vm.state(VM_ERROR)
 	} else {
 		vm.state(VM_RUNNING)
