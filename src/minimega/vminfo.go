@@ -57,12 +57,12 @@ type vmInfo struct {
 }
 
 func (vm *vmInfo) start() error {
-	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT
+	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
 	if vm.State&stateMask == 0 {
 		return nil
 	}
 
-	if vm.State == VM_QUIT {
+	if vm.State == VM_QUIT || vm.State == VM_ERROR {
 		log.Info("restarting VM: %v", vm.ID)
 		ack := make(chan int)
 		go vm.launchOne(ack)
