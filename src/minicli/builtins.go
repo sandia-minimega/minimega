@@ -264,7 +264,12 @@ func cliColumns(c *Command, out chan Responses) {
 outer:
 	for resps := range runSubCommand(c) {
 		for _, r := range resps {
-			if r.Header == nil || r.Tabular == nil {
+			if r.Header == nil {
+				continue
+			}
+
+			if r.Tabular == nil {
+				r.Header = columns
 				continue
 			}
 
