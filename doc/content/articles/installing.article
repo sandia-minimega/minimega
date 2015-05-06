@@ -5,9 +5,9 @@ Installing minimega
 
 ** Binary distribution
 
-minimega is available as a prebuilt, x86-64 debian package, or as a standalone tarball. The debian package is known to work on debian 7 (wheezy) and debian 8 (testing/jessie), and is available [[???][here]]. 
+minimega is available as a prebuilt, x86-64 debian package, or as a standalone tarball. The debian package is known to work on debian 7 (wheezy) and debian 8 (testing/jessie), and is available [[https://docs.google.com/uc?export=download&confirm=LWmy&id=0BzR9HKxE1M90MzNZWlJ3bEV4YUk][here]]. 
 
-For other x86-64 systems, use the prebuilt tarball, available [[???][here]]. Simply unpack minimega and run it from the top level directory:
+For other x86-64 systems, use the prebuilt tarball, available [[https://docs.google.com/uc?export=download&confirm=_0tL&id=0BzR9HKxE1M90N2ZJS2J4Q3Rxd2c][here]]. Simply unpack minimega and run it from the top level directory:
 
 	tar xjf minimega.tar.bz2 && cd minimega
 	bin/minimega

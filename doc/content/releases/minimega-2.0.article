@@ -247,13 +247,13 @@ guide for more information.
 
 ** Debian package
 
-minimega is available as an x86-64 debian package, available [[?][here]]. It is
+minimega is available as an x86-64 debian package, available [[https://docs.google.com/uc?export=download&confirm=LWmy&id=0BzR9HKxE1M90MzNZWlJ3bEV4YUk][here]]. It is
 known to work in debian 7 (wheezy) and 8 (testing/jessie).
 
 ** tarball
 
 A pre-built, x86-64 distribution is available in a single distributable tarball
-[[?][here]]. It should be sufficient to simply unpack the tarball and run tools
+[[https://docs.google.com/uc?export=download&confirm=_0tL&id=0BzR9HKxE1M90N2ZJS2J4Q3Rxd2c][here]]. It should be sufficient to simply unpack the tarball and run tools
 from the `bin/` directory directly. Most default paths in minimega, vmbetter,
 and other tools are built to be used in this way (i.e. `bin/minimega`, which
 will then look for the web directory in `misc/web`).
