@@ -3,9 +3,8 @@ minimega 2.0 release notes
 * Introduction
 
 The minimega development team is pleased to announce the release of minimega
-2.0. This is the first major release since minimega's creation, and is marked
-by sweeping changes to the command line infrastructure, documentation,
-compatibility, and several new features.
+2.0. This release is marked by sweeping changes to the command line
+infrastructure, documentation, compatibility, and several new features.
 
 * What's new
 
@@ -66,9 +65,7 @@ The web interface has been completely rebuilt for minimega 2.0. In addition to
 listing the running VMs and supporting VNC connections, as was supported by the
 old web interface, web 2.0 can display information about hosts connected to the
 mesh, show tiles of screenshots from all running VMs, and plot all running VMs
-on a map with the appropriate tags set via `vm tags`.
-
-<include some screenshots>
+on a map with the appropriate tags set via `vm`tags`.
 
 *** cc virtio-serial support
 
@@ -207,6 +204,8 @@ pairs for VMs. This is currently used by the new web interface to plot VMs that
 have the lat/long tags on a map. We hope that other third-party apps may make
 use of the tags to add interesting new features.
 
+See the [[/articles/api.article#TOC_4.14.][vm tag API]] for more information.
+
 *** vmbetter iso generation
 
 The vmbetter tool can now generate bootable ISO images. Simply specify
@@ -234,7 +233,7 @@ different bridges) now behave correctly.
 
 *** vm cdrom eject/change
 
-The `vm cdrom` commands allow the user to change the CDROM image in
+The `vm`cdrom` commands allow the user to change the CDROM image in
 use by a running VM.
 
 See the [[/articles/api.article#TOC_4.15.][vm cdrom API]]
