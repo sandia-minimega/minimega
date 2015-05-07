@@ -129,27 +129,33 @@ class minimega:
             if len(msg) != self._socket.send(msg.encode('utf-8')):
                 raise Error('failed to write message to minimega')
 
-            msg = ''
-            more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
-            response = None
-            while response is None and more:
-                msg += more
-                try:
-                    response = json.loads(msg)
-                except ValueError as e:
-                    if self._debug:
-                        print(e)
-                    more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+            moreResponses = True
+            responses = []
+            while moreResponses:
+                msg = ''
+                more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+                response = None
+                while response is None and more:
+                    msg += more
+                    try:
+                        response = json.loads(msg)
+                    except ValueError as e:
+                        if self._debug:
+                            print(e)
+                        more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
 
-            if not msg:
-                raise Error('Expected response, socket closed')
+                if not msg:
+                    raise Error('Expected response, socket closed')
 
-            if self._debug:
-                print('[debug] response: ' + msg)
-            if response['Resp'] and response['Resp'][0]['Error']:
-                raise Error(response['Resp'][0]['Error'])
+                if self._debug:
+                    print('[debug] response: ' + msg)
+                if response['Resp'] and response['Resp'][0]['Error']:
+                    raise Error(response['Resp'][0]['Error'])
 
-            return response['Resp']
+                responses.extend(response['Resp'])
+                moreResponses = response['More']
+
+            return responses
 
 {% for cmd, info in cmds.items() recursive %}
     {% if info.subcommands %}
