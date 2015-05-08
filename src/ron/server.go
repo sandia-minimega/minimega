@@ -272,7 +272,7 @@ func (s *Server) routeTunnel(m *Message) {
 			return
 		}
 	}
-	log.Errorln("routeTunnel invalid UUID: %v", m.UUID)
+	log.Error("routeTunnel invalid UUID: %v", m.UUID)
 }
 
 // return a file to a client requesting it via the clients GetFile() call

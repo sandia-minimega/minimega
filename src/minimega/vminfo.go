@@ -66,7 +66,7 @@ func (vm *vmInfo) start() error {
 		log.Info("restarting VM: %v", vm.ID)
 		ack := make(chan int)
 		go vm.launchOne(ack)
-		log.Debugln("ack restarted VM %v", <-ack)
+		log.Debug("ack restarted VM %v", <-ack)
 	}
 
 	log.Info("starting VM: %v", vm.ID)

@@ -303,7 +303,7 @@ func DialMinimega() (*MinimegaConn, error) {
 func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan *localResponse {
 	err := mm.enc.Encode(*cmd)
 	if err != nil {
-		log.Errorln("local command gob encode: %v", err)
+		log.Error("local command gob encode: %v", err)
 		return nil
 	}
 	log.Debugln("encoded command:", cmd)
@@ -322,7 +322,7 @@ func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan *localResponse {
 					return
 				}
 
-				log.Errorln("local command gob decode: %v", err)
+				log.Error("local command gob decode: %v", err)
 				return
 			}
 

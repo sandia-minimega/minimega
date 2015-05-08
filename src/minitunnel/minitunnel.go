@@ -256,7 +256,7 @@ func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
 // register a transaction ID, adding a return channel to the mux
 func (t *Tunnel) registerTID(TID int32) chan *tunnelMessage {
 	if _, ok := t.tids[TID]; ok {
-		log.Fatalln(fmt.Sprintf("tid %v already exists!", TID))
+		log.Fatal("tid %v already exists!", TID)
 	}
 	c := make(chan *tunnelMessage, 1024)
 	t.tids[TID] = c
