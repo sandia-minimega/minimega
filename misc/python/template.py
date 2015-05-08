@@ -42,7 +42,6 @@ class ValidationError(Error): pass
 
 
 DEFAULT_TIMEOUT = 60
-MSG_BLOCK_SIZE = 4096
 
 # HAX: python 2/3 hack
 try:
@@ -93,6 +92,8 @@ class minimega:
         self.mm = self
         self._linkCommands(self)
         self.lock = Lock()
+        self.moreResponses = False
+        self.expectStreamingResponses = False
         self._debug = False
         self._path = path
         self._timeout = timeout
@@ -120,7 +121,39 @@ class minimega:
 
         self.__init__(self._path, self._timeout)
 
+    def _getResponse(self):
+        msg = ''
+        more = self._socket.recv(1).decode('utf-8')
+        response = None
+        while response is None and more:
+            msg += more
+            if more != '}':
+                #want to read a full JSON object, and not run json.loads for
+                # every byte read
+                more = self._socket.recv(1).decode('utf-8')
+                continue
+
+            try:
+                response = json.loads(msg)
+            except ValueError as e:
+                if self._debug:
+                    print(e)
+                more = self._socket.recv(1).decode('utf-8')
+
+        if not msg:
+            raise Error('Expected response, socket closed')
+
+        if self._debug:
+            print('[debug] response: ' + msg)
+        if response['Resp'] and response['Resp'][0]['Error']:
+            raise Error(response['Resp'][0]['Error'])
+
+        return response['Resp'], response['More']
+
     def _send(self, cmd, *args):
+        if self.moreResponses:
+            raise Error('more responses to be read from last command')
+
         msg = json.dumps({'Original': cmd + ' ' + ' '.join(map(str, args))},
                          separators=(',', ':'))
         if self._debug:
@@ -128,35 +161,24 @@ class minimega:
         with self.lock:
             if len(msg) != self._socket.send(msg.encode('utf-8')):
                 raise Error('failed to write message to minimega')
+            if self.expectStreamingResponses:
+                #if they want to stream the responses, we can just return
+                self.moreResponses = True
+                return
 
-            moreResponses = True
-            responses = []
-            while moreResponses:
-                msg = ''
-                more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
-                response = None
-                while response is None and more:
-                    msg += more
-                    try:
-                        response = json.loads(msg)
-                    except ValueError as e:
-                        if self._debug:
-                            print(e)
-                        more = self._socket.recv(MSG_BLOCK_SIZE).decode('utf-8')
+            response, self.moreResponses = self._getResponse()
 
-                if not msg:
-                    raise Error('Expected response, socket closed')
+        #return first/only response
+        return response
 
-                if self._debug:
-                    print('[debug] response: ' + msg)
-                if response['Resp'] and response['Resp'][0]['Error']:
-                    raise Error(response['Resp'][0]['Error'])
+    def streamResponses(self):
+        with self.lock:
+            while self.moreResponses:
+                #more flag was set, return a generator
+                response, self.moreResponses = self._getResponse()
+                yield response
 
-                responses.extend(response['Resp'])
-                moreResponses = response['More']
-
-            return responses
-
+    #GENERATED COMMANDS:
 {% for cmd, info in cmds.items() recursive %}
     {% if info.subcommands %}
 {{ '    ' * loop.depth }}class {{ cmd }}(SubCommand):
