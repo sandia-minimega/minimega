@@ -167,7 +167,7 @@ func (t *Tunnel) mux() error {
 			return err
 		}
 
-		// create new sessions if necessary
+		// create new session if necessary
 		if m.Type == CONNECT {
 			go t.handleRemote(&m)
 		} else if m.Type == FORWARD {
@@ -312,24 +312,29 @@ func (t *Tunnel) handle(in chan *tunnelMessage, conn net.Conn, TID int32) {
 	// begin forwarding until an error occurs
 	go func() {
 		for {
-			m := <-in
-			if m.Type == CLOSED {
-				if m.Error != "" {
-					log.Errorln(m.Error)
+			select {
+			case <-t.quit:
+				conn.Close()
+				return
+			case m := <-in:
+				if m.Type == CLOSED {
+					if m.Error != "" {
+						log.Errorln(m.Error)
+						conn.Close()
+						break
+					}
+				}
+				_, err := conn.Write(m.Data)
+				if err != nil {
+					log.Errorln(err)
 					conn.Close()
+					t.out <- &tunnelMessage{
+						Type:  CLOSED,
+						TID:   TID,
+						Error: err.Error(),
+					}
 					break
 				}
-			}
-			_, err := conn.Write(m.Data)
-			if err != nil {
-				log.Errorln(err)
-				conn.Close()
-				t.out <- &tunnelMessage{
-					Type:  CLOSED,
-					TID:   TID,
-					Error: err.Error(),
-				}
-				break
 			}
 		}
 	}()
