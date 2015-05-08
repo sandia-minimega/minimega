@@ -69,7 +69,7 @@ func (c *Client) handleTunnel(server bool, stop chan bool) {
 			var err error
 			c.tunnel, err = minitunnel.Dial(a)
 			if err != nil {
-				log.Errorln("Dial: %v", err)
+				log.Error("Dial: %v", err)
 				a.Close()
 				b.Close()
 			}
@@ -77,7 +77,7 @@ func (c *Client) handleTunnel(server bool, stop chan bool) {
 			go func() {
 				err := minitunnel.ListenAndServe(a)
 				if err != nil {
-					log.Fatalln("ListenAndServe: %v", err)
+					log.Fatal("ListenAndServe: %v", err)
 				}
 			}()
 		}
