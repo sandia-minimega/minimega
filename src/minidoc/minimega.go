@@ -86,7 +86,7 @@ func runCommand(cmd Command) chan *localResponse {
 
 	err = enc.Encode(cmd)
 	if err != nil {
-		log.Errorln("local command json encode: %v", err)
+		log.Error("local command json encode: %v", err)
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func runCommand(cmd Command) chan *localResponse {
 					return
 				}
 
-				log.Errorln("local command json decode: %v", err)
+				log.Error("local command json decode: %v", err)
 				return
 			}
 
