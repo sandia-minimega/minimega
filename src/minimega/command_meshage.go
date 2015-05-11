@@ -9,10 +9,8 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"ranges"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -252,49 +250,4 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
 	meshageSend(c.Subcommand, c.StringArgs["vms"], respChan)
-}
-
-func getRecipients(r string) []string {
-	f := strings.Split(r, ",")
-
-	// fix splits on things like kn[1-5,200,150]
-	var hosts []string
-	appendState := false
-	for _, v := range f {
-		if strings.Contains(v, "[") {
-			appendState = true
-			hosts = append(hosts, v)
-			if !strings.Contains(v, "]") {
-				hosts[len(hosts)-1] += ","
-			}
-			continue
-		}
-		if appendState == true {
-			hosts[len(hosts)-1] += v
-			if strings.Contains(v, "]") {
-				appendState = false
-			} else {
-				hosts[len(hosts)-1] += ","
-			}
-			continue
-		}
-		hosts = append(hosts, v)
-	}
-	log.Debugln("getRecipients first pass: ", hosts)
-
-	var hostsExpanded []string
-	for _, v := range hosts {
-		index := strings.IndexRune(v, '[')
-		if index == -1 {
-			hostsExpanded = append(hostsExpanded, v)
-			continue
-		}
-		prefix := v[:index]
-		rangeObj, _ := ranges.NewRange(prefix, 0, int(^uint(0)>>1))
-		ret, _ := rangeObj.SplitRange(v)
-		log.Debug("expanded range: %v", ret)
-		hostsExpanded = append(hostsExpanded, ret...)
-	}
-	log.Debugln("getRecipients expanded pass: ", hostsExpanded)
-	return hostsExpanded
 }

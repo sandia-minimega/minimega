@@ -83,7 +83,11 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	hostsExpanded := getRecipients(hosts)
+	hostsExpanded, err := expandListRange(hosts)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
+	}
 	log.Debug("got expanded hosts: %v", hostsExpanded)
 
 	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
