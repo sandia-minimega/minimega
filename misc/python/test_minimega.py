@@ -18,6 +18,7 @@ Unfortunately, things may start failing if the cli changes.
 import os
 import unittest
 import subprocess
+import tempfile
 from time import sleep
 
 minimega = None
@@ -95,6 +96,30 @@ class TestMinimega(unittest.TestCase):
         self.assertEqual('', resp[0]['Response'])
         resp = self.mm.mesh.degree()
         self.assertEqual('1', resp[0]['Response'])
+
+    def test_streaming(self):
+        with tempfile.NamedTemporaryFile() as cmdFile:
+            cmdFile.write(b'echo first command\n'
+                          b'echo second command\n'
+                          b'echo third command\n')
+            expected = ['first command', 'second command', 'third command']
+            cmdFile.flush()
+            resp = self.mm.read(cmdFile.name)
+            self.assertEqual(expected[0], resp[0]['Response'])
+            self.assertTrue(self.mm.moreResponses)
+
+            #more responses in the queue
+            self.assertRaises(minimega.Error,
+                              self.mm.echo, ('hello there',))
+
+            self.assertListEqual(expected[1:], [resp[0]['Response'] for resp in
+                                                self.mm.streamResponses()])
+
+            self.mm.expectStreamingResponses = True
+            self.assertIsNone(self.mm.read(cmdFile.name))
+            self.assertListEqual(expected, [resp[0]['Response'] for resp in
+                                            self.mm.streamResponses()])
+            self.assertEqual([], list(self.mm.streamResponses()))
 
 
 if __name__ == '__main__':
