@@ -78,7 +78,7 @@ func main() {
 	if *f_cli {
 		doc, err := minicli.Doc()
 		if err != nil {
-			log.Fatalln("failed to generate docs: %v", err)
+			log.Fatal("failed to generate docs: %v", err)
 		}
 		fmt.Println(doc)
 		os.Exit(0)

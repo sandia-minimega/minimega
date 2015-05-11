@@ -74,6 +74,8 @@ type Node struct {
 	sequenceLock     sync.Mutex
 	degreeLock       sync.Mutex
 	meshLock         sync.Mutex
+	msaLock          sync.Mutex
+	lastMSA          time.Time
 	updateNetwork    bool
 	Snoop            func(m *Message)
 }
@@ -405,6 +407,14 @@ func (n *Node) dial(host string, solicited bool) error {
 // MSA issues a Meshage State Annoucement, which contains a list of all the nodes connected to the broadcaster
 func (n *Node) MSA() {
 	log.Debugln("MSA")
+
+	// rate limit MSA spam to once per MSA timeout / 2
+	n.msaLock.Lock()
+	defer n.msaLock.Unlock()
+	if time.Now().Sub(n.lastMSA) < (n.msaTimeout / 2) {
+		return
+	}
+	n.lastMSA = time.Now()
 
 	n.clientLock.Lock()
 	var clients []string

@@ -36,7 +36,7 @@ func (vms VMs) start(vm string, quit bool) []error {
 
 	stateMask := VM_PAUSED | VM_BUILDING
 	if quit {
-		stateMask |= VM_QUIT
+		stateMask |= VM_QUIT | VM_ERROR
 	}
 
 	// start all paused vms

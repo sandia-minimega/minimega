@@ -133,21 +133,22 @@ func (vm *vmKVM) Launch(name string, ack chan int) error {
 func (vm *vmKVM) Start() error {
 	s := vm.State()
 
-	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT
+	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
 	if s&stateMask == 0 {
 		return nil
 	}
 
-	if s == VM_QUIT {
+	if s == VM_QUIT || s == VM_ERROR {
 		log.Info("restarting VM: %v", vm.id)
 		ack := make(chan int)
 		go vm.launch(ack)
-		log.Debugln("ack restarted VM %v", <-ack)
+		log.Debug("ack restarted VM %v", <-ack)
 	}
 
 	log.Info("starting VM: %v", vm.id)
 	err := vm.q.Start()
 	if err != nil {
+		log.Errorln(err)
 		vm.setState(VM_ERROR)
 	} else {
 		vm.setState(VM_RUNNING)

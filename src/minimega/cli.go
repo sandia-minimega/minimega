@@ -303,8 +303,7 @@ func DialMinimega() (*MinimegaConn, error) {
 func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan *localResponse {
 	err := mm.enc.Encode(*cmd)
 	if err != nil {
-		log.Errorln("local command gob encode: %v", err)
-		return nil
+		log.Fatal("local command gob encode: %v", err)
 	}
 	log.Debugln("encoded command:", cmd)
 
@@ -318,12 +317,10 @@ func (mm *MinimegaConn) runCommand(cmd *minicli.Command) chan *localResponse {
 			err = mm.dec.Decode(&r)
 			if err != nil {
 				if err == io.EOF {
-					log.Infoln("server disconnected")
-					return
+					log.Fatal("server disconnected")
 				}
 
-				log.Errorln("local command gob decode: %v", err)
-				return
+				log.Fatal("local command gob decode: %v", err)
 			}
 
 			respChan <- &r
