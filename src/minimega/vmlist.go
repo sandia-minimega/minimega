@@ -28,11 +28,13 @@ func (vms VMs) apply(idOrName string, fn func(*vmInfo) error) error {
 }
 
 // start vms that are paused or building, or restart vms in the quit state
-func (vms VMs) start(vm string, quit bool) []error {
-	if vm != Wildcard {
-		err := vms.apply(vm, func(vm *vmInfo) error { return vm.start() })
+func (vms VMs) start(target string, quit bool) []error {
+	vals, err := expandListRange(target)
+	if err != nil {
 		return []error{err}
 	}
+	names := makeSet(vals)
+	wild := hasWildcard(names)
 
 	stateMask := VM_PAUSED | VM_BUILDING
 	if quit {
@@ -41,47 +43,65 @@ func (vms VMs) start(vm string, quit bool) []error {
 
 	// start all paused vms
 	count := 0
-	errAck := make(chan error)
+	errChan := make(chan error)
 
-	for _, i := range vms {
-		// only bulk start VMs matching our state mask
-		if i.State&stateMask != 0 {
+	for _, vm := range vms {
+		if names[vm.Name] && vm.State&stateMask == 0 {
+			delete(names, vm.Name)
 			count++
-			go func(v *vmInfo) {
-				err := v.start()
-				errAck <- err
-			}(i)
+			go func(vm *vmInfo) {
+				errChan <- fmt.Errorf("VM %s is already running", vm.Name)
+			}(vm)
+			continue
+		}
+
+		if (wild && vm.State&stateMask != 0) || names[vm.Name] {
+			delete(names, vm.Name)
+			count++
+			go func(vm *vmInfo) {
+				errChan <- vm.start()
+			}(vm)
 		}
 	}
 
-	errors := []error{}
+	errs := []error{}
+
+	// All names that are leftover weren't found, record errors
+	for v := range names {
+		if v != Wildcard {
+			errs = append(errs, fmt.Errorf("VM %s not found", v))
+		}
+	}
 
 	// get all of the acks
 	for j := 0; j < count; j++ {
-		if err := <-errAck; err != nil {
-			errors = append(errors, err)
+		if err := <-errChan; err != nil {
+			errs = append(errs, err)
 		}
 	}
 
-	return errors
+	return errs
 }
 
 // stop vms that are paused or building
-func (vms VMs) stop(vm string) []error {
-	if vm != Wildcard {
-		err := vms.apply(vm, func(vm *vmInfo) error { return vm.stop() })
+func (vms VMs) stop(target string) []error {
+	vals, err := expandListRange(target)
+	if err != nil {
 		return []error{err}
 	}
+	names := makeSet(vals)
+	wild := hasWildcard(names)
 
-	errors := []error{}
-	for _, i := range vms {
-		err := i.stop()
-		if err != nil {
-			errors = append(errors, err)
+	errs := []error{}
+	for _, vm := range vms {
+		if wild || names[vm.Name] {
+			if err := vm.stop(); err != nil {
+				errs = append(errs, err)
+			}
 		}
 	}
 
-	return errors
+	return errs
 }
 
 func (vms VMs) save(file *os.File, args []string) error {
@@ -245,28 +265,37 @@ func (vms VMs) launch(name string, ack chan int) error {
 }
 
 // kill one or all vms (* for all)
-func (vms VMs) kill(idOrName string) []error {
+func (vms VMs) kill(target string) []error {
+	vals, err := expandListRange(target)
+	if err != nil {
+		return []error{err}
+	}
+	names := makeSet(vals)
+	wild := hasWildcard(names)
+
 	stateMask := VM_QUIT | VM_ERROR
 	killedVms := map[int]bool{}
 
-	if idOrName != Wildcard {
-		vm := vms.findVm(idOrName)
-		if vm == nil {
-			return []error{vmNotFound(idOrName)}
+	errs := []error{}
+
+	for _, vm := range vms {
+		if names[vm.Name] && vm.getState()&stateMask != 0 {
+			delete(names, vm.Name)
+			errs = append(errs, fmt.Errorf("VM %s is not running", vm.Name))
+			continue
 		}
 
-		if vm.getState()&stateMask != 0 {
-			return []error{fmt.Errorf("vm %v is not running", vm.Name)}
+		if (wild && vm.getState()&stateMask == 0) || names[vm.Name] {
+			delete(names, vm.Name)
+			vm.kill <- true
+			killedVms[vm.ID] = true
 		}
+	}
 
-		vm.kill <- true
-		killedVms[vm.ID] = true
-	} else {
-		for _, vm := range vms {
-			if vm.getState()&stateMask == 0 {
-				vm.kill <- true
-				killedVms[vm.ID] = true
-			}
+	// All names that are leftover weren't found, record errors
+	for v := range names {
+		if v != Wildcard {
+			errs = append(errs, fmt.Errorf("VM %s not found", v))
 		}
 	}
 
@@ -282,7 +311,6 @@ outer:
 		}
 	}
 
-	errs := []error{}
 	for id := range killedVms {
 		errs = append(errs, fmt.Errorf("VM %d failed to acknowledge kill", id))
 	}

@@ -7,16 +7,14 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
-	"math"
 	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
-	"ranges"
 	"strconv"
-	"strings"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -268,9 +266,10 @@ To set a tag "foo" to "bar":
 
 To read a tag:
 
-        vm tag <vm id or name> <key>`,
+        vm tag <vm id or name> <key or all>`,
 		Patterns: []string{
-			"vm tag <vm id or name> <key> [value]",
+			"vm tag <vm id or name or all> <key or all>",
+			"vm tag <vm id or name or all> <key> <value>",
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
@@ -824,50 +823,36 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	arg := c.StringArgs["name"]
-	vmNames := []string{}
+	names := []string{}
 
 	count, err := strconv.ParseInt(arg, 10, 32)
-	if err == nil {
-		if count <= 0 {
-			resp.Error = "invalid number of vms (must be >= 1)"
-			return resp
-		}
-
-		for i := int64(0); i < count; i++ {
-			vmNames = append(vmNames, "")
-		}
+	if err != nil {
+		names, err = expandListRange(arg)
+	} else if count <= 0 {
+		err = errors.New("invalid number of vms (must be > 0)")
 	} else {
-		index := strings.IndexRune(arg, '[')
-		if index == -1 {
-			vmNames = append(vmNames, arg)
-		} else {
-			r, err := ranges.NewRange(arg[:index], 0, int(math.MaxInt32))
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			names, err := r.SplitRange(arg)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-			vmNames = append(vmNames, names...)
+		for i := int64(0); i < count; i++ {
+			names = append(names, "")
 		}
 	}
 
-	if len(vmNames) == 0 {
-		resp.Error = "no VMs to launch"
+	if len(names) == 0 && err == nil {
+		err = errors.New("no VMs to launch")
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
 		return resp
 	}
 
-	for _, name := range vmNames {
+	for _, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
 		}
 	}
 
-	log.Info("launching %v vms", len(vmNames))
+	log.Info("launching %v vms", len(names))
 
 	ack := make(chan int)
 	waitForAcks := func(count int) {
@@ -877,7 +862,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	for i, vmName := range vmNames {
+	for i, vmName := range names {
 		if err := vms.launch(vmName, ack); err != nil {
 			resp.Error = err.Error()
 			go waitForAcks(i)
@@ -886,9 +871,9 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["noblock"] {
-		go waitForAcks(len(vmNames))
+		go waitForAcks(len(names))
 	} else {
-		waitForAcks(len(vmNames))
+		waitForAcks(len(names))
 	}
 
 	return resp

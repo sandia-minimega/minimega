@@ -362,3 +362,22 @@ func expandListRange(in string) ([]string, error) {
 
 	return res, nil
 }
+
+// makeSet takes a slice of strings and turns it into a lookup table.
+func makeSet(v []string) map[string]bool {
+	res := map[string]bool{}
+	for _, v := range v {
+		res[v] = true
+	}
+	return res
+}
+
+// hasWildcard tests whether the lookup table has Wildcard set. If it does, and
+// there are more keys set than just the Wildcard, it logs a message.
+func hasWildcard(v map[string]bool) bool {
+	if v[Wildcard] && len(v) > 1 {
+		log.Info("found wildcard amongst names, making command wild")
+	}
+
+	return v[Wildcard]
+}
