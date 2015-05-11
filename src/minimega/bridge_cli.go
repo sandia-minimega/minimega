@@ -80,7 +80,7 @@ to add interface bar to bridge foo:
 		Patterns: []string{
 			"bridge",
 			"bridge trunk <bridge> <interface>",
-			"bridge notrunk <bridge>",
+			"bridge notrunk <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
 	},
@@ -162,7 +162,7 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			resp.Error = err.Error()
 			return resp
 		}
-		err = b.TrunkRemove()
+		err = b.TrunkRemove(iface)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
@@ -195,7 +195,7 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 				strconv.FormatBool(v.exists),
 				strconv.FormatBool(v.preExist),
 				fmt.Sprintf("%v", vlans),
-				v.Trunk}
+				fmt.Sprintf("%v", v.Trunk)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 	}
