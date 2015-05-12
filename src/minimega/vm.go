@@ -245,6 +245,8 @@ func (vm *vmBase) info(mask string) (string, error) {
 		return fns.Print(&vm.VMConfig), nil
 	}
 
+	var vals []string
+
 	switch mask {
 	case "id":
 		return fmt.Sprintf("%v", vm.id), nil
@@ -255,63 +257,51 @@ func (vm *vmBase) info(mask string) (string, error) {
 	case "type":
 		return vm.Type().String(), nil
 	case "vlan":
-		var vlans []string
 		for _, net := range vm.Networks {
 			if net.VLAN == -1 {
-				vlans = append(vlans, "disconnected")
+				vals = append(vals, "disconnected")
 			} else {
-				vlans = append(vlans, fmt.Sprintf("%v", net.VLAN))
+				vals = append(vals, fmt.Sprintf("%v", net.VLAN))
 			}
 		}
-		return fmt.Sprintf("%v", vlans), nil
 	case "bridge":
-		vals := []string{}
 		for _, v := range vm.Networks {
 			vals = append(vals, v.Bridge)
 		}
-		return fmt.Sprintf("%v", vals), nil
 	case "tap":
-		vals := []string{}
 		for _, v := range vm.Networks {
 			vals = append(vals, v.Tap)
 		}
-		return fmt.Sprintf("%v", vals), nil
 	case "mac":
-		vals := []string{}
 		for _, v := range vm.Networks {
 			vals = append(vals, v.MAC)
 		}
-		return fmt.Sprintf("%v", vals), nil
 	case "ip":
-		vals := []string{}
 		for _, v := range vm.Networks {
 			vals = append(vals, v.IP4)
 		}
-		return fmt.Sprintf("%v", vals), nil
 	case "ip6":
-		vals := []string{}
 		for _, v := range vm.Networks {
 			vals = append(vals, v.IP6)
 		}
-		return fmt.Sprintf("%v", vals), nil
 	case "bandwidth":
-		var bw []string
 		bandwidthLock.Lock()
 		for _, v := range vm.Networks {
 			t := bandwidthStats[v.Tap]
 			if t == nil {
-				bw = append(bw, "0.0/0.0")
+				vals = append(vals, "0.0/0.0")
 			} else {
-				bw = append(bw, fmt.Sprintf("%v", t))
+				vals = append(vals, fmt.Sprintf("%v", t))
 			}
 		}
 		bandwidthLock.Unlock()
-		return fmt.Sprintf("%v", bw), nil
 	case "tags":
 		return fmt.Sprintf("%v", vm.tags), nil
+	default:
+		return "", errors.New("field not found")
 	}
 
-	return "", errors.New("field not found")
+	return fmt.Sprintf("%v", vals), nil
 }
 
 func init() {
