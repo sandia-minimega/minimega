@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"ipmac"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -172,7 +173,10 @@ func (vm *vmKVM) Stop() error {
 }
 
 func (vm *vmKVM) Kill() error {
-	vm.kill <- true
+	// Close the channel to signal to all dependent goroutines that they should
+	// stop. Anyone blocking on the channel will unblock immediately.
+	// http://golang.org/ref/spec#Receive_operator
+	close(vm.kill)
 	// TODO: ACK if killed?
 	return nil
 }
@@ -676,7 +680,29 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			}
-			b.iml.AddMac(net.MAC)
+
+			updates := make(chan ipmac.IP)
+			go func(vm *vmKVM, net *NetConfig) {
+				defer close(updates)
+				for {
+					// TODO: need to acquire VM lock?
+					select {
+					case update := <-updates:
+						if update.IP4 != "" {
+							net.IP4 = update.IP4
+						} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
+							log.Debugln("ignoring link-local over existing IPv6 address")
+						} else if update.IP6 != "" {
+							net.IP6 = update.IP6
+						}
+					case <-vm.kill:
+						b.iml.DelMac(net.MAC)
+						return
+					}
+				}
+			}(vm, &net)
+
+			b.iml.AddMac(net.MAC, updates)
 		}
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", net.Driver, net.Tap, net.MAC, bus, addr))
 		addr++

@@ -83,6 +83,8 @@ type NetConfig struct {
 	Tap    string
 	MAC    string
 	Driver string
+	IP4    string
+	IP6    string
 }
 
 type vmBase struct {
@@ -281,35 +283,17 @@ func (vm *vmBase) info(mask string) (string, error) {
 		}
 		return fmt.Sprintf("%v", vals), nil
 	case "ip":
-		var ips []string
-		for _, net := range vm.Networks {
-			// TODO: This won't work if it's being run from a different host...
-			b, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Errorln(err)
-				continue
-			}
-			ip := b.GetIPFromMac(net.MAC)
-			if ip != nil {
-				ips = append(ips, ip.IP4)
-			}
+		vals := []string{}
+		for _, v := range vm.Networks {
+			vals = append(vals, v.IP4)
 		}
-		return fmt.Sprintf("%v", ips), nil
+		return fmt.Sprintf("%v", vals), nil
 	case "ip6":
-		var ips []string
-		for _, net := range vm.Networks {
-			// TODO: This won't work if it's being run from a different host...
-			b, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Errorln(err)
-				continue
-			}
-			ip := b.GetIPFromMac(net.MAC)
-			if ip != nil {
-				ips = append(ips, ip.IP6)
-			}
+		vals := []string{}
+		for _, v := range vm.Networks {
+			vals = append(vals, v.IP6)
 		}
-		return fmt.Sprintf("%v", ips), nil
+		return fmt.Sprintf("%v", vals), nil
 	case "bandwidth":
 		var bw []string
 		bandwidthLock.Lock()

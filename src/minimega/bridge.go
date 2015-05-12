@@ -1118,17 +1118,3 @@ func getNewTap() (string, error) {
 	}
 	return t, nil
 }
-
-func (b *bridge) GetIPFromMac(mac string) *ipmac.IP {
-	log.Debugln("GetIPFromMac")
-	b.Lock.Lock()
-	defer b.Lock.Unlock()
-	if b.iml != nil {
-		ip := b.iml.GetIPFromMac(mac)
-		if ip != nil {
-			log.Debug("found mac %v", mac)
-			return ip
-		}
-	}
-	return nil
-}
