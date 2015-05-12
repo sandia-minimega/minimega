@@ -100,9 +100,10 @@ VM(s). The user must check logs or error states from vm info.`,
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
 		HelpLong: `
-Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
+Kill one or more running virtual machines. See "help vm target" for acceptable
+targets.`,
 		Patterns: []string{
-			"vm kill <vm id or name or all>",
+			"vm kill <vm target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -113,14 +114,14 @@ Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
 	{ // vm start
 		HelpShort: "start paused virtual machines",
 		HelpLong: `
-Start one or all paused virtual machines. Pass all to start all paused virtual
-machines.
+Start one or more paused virtual machines. See "help vm target" for allowed
+targets.
 
 Calling vm start specifically on a quit VM will restart the VM. If the optional
 'quit' suffix is used with the wildcard, then all virtual machines in the
 paused *or* quit state will be restarted.`,
 		Patterns: []string{
-			"vm start <vm id or name or all> [quit,]",
+			"vm start <vm target> [quit,]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -131,12 +132,12 @@ paused *or* quit state will be restarted.`,
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
 		HelpLong: `
-Stop one or all running virtual machines. Pass all to stop all running virtual
-machines.
+Stop one or more running virtual machines. See "help vm target" for acceptable
+targets.
 
-Calling stop will put VMs in a paused state. Start stopped VMs with vm start.`,
+Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <vm id or name or all>",
+			"vm stop <vm target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func() []error {
@@ -253,23 +254,24 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
 		HelpLong: `
-Display or set a tag for the specified VM.
+Display or set a tag for one or more virtual machines. See "help vm target" for
+acceptable targets.
 
 Tags are key-value pairs. A VM can have any number of tags associated with it.
 They can be used to attach additional information to a virtual machine, for
 example specifying a VM "group", or the correct rendering color for some
 external visualization tool.
 
-To set a tag "foo" to "bar":
+To set a tag "foo" to "bar" for VM 2:
 
-        vm tag <vm id or name> foo bar
+        vm tag 2 foo bar
 
 To read a tag:
 
-        vm tag <vm id or name> <key or all>`,
+        vm tag <vm target> <key or all>`,
 		Patterns: []string{
-			"vm tag <vm id or name or all> [key or all]",  // get
-			"vm tag <vm id or name or all> <key> <value>", // set
+			"vm tag <vm target> [key or all]",  // get
+			"vm tag <vm target> <key> <value>", // set
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
@@ -582,9 +584,40 @@ Clear all tags from all VMs:
 
         clear vm tag all`,
 		Patterns: []string{
-			"clear vm tag <vm id or name or all> [tag]",
+			"clear vm tag",
+			"clear vm tag <vm target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
+	},
+	{ // vm target (dummy command)
+		Doc:       true,
+		HelpShort: "documentation for valid vm targets",
+		HelpLong: fmt.Sprintf(`
+VM targets are accepted by a number of different minimega commands to specify
+one or more VMs. The VM target accepts a comma-seperated list of identifiers
+for VMs including the VM name and ID.
+
+To start vm foo:
+
+		vm start foo
+
+To start vms foo and bar:
+
+		vm start foo,bar
+
+To start vms foo0, foo1, foo2, and foo5:
+
+		vm start foo[0-2,5]
+
+There is also a wildcard (%[1]s) which allows the user to specify all VMs:
+
+		vm start %[1]s
+
+Note that including the wildcard in a list of VMs results in the wildcard
+behavior (although a message will be logged).`, Wildcard),
+		Patterns: []string{
+			"vm target",
+		},
 	},
 }
 
@@ -735,29 +768,45 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vmstring := c.StringArgs["vm"]
-	clearVms := make([]*vmInfo, 0)
-	if vmstring == Wildcard {
-		for _, v := range vms {
-			clearVms = append(clearVms, v)
-		}
-	} else {
-		vm := vms.findVm(vmstring)
-		if vm == nil {
-			resp.Error = vmNotFound(vmstring).Error()
-			return resp
-		}
-		clearVms = append(clearVms, vm)
+	arg := c.StringArgs["vm"]
+	vals, err := expandListRange(arg)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
+	}
+	names := makeSet(vals)
+	wild := hasWildcard(names)
+	if arg == "" {
+		wild = true
 	}
 
-	tag := c.StringArgs["tag"]
-	for _, v := range clearVms {
-		for k, _ := range v.Tags {
-			if k == tag || tag == "" {
-				delete(v.Tags, k)
+	key := c.StringArgs["key"]
+	// If they didn't specify a key then they probably want all the tags for a
+	// given VM
+	if key == "" {
+		key = Wildcard
+	}
+
+	for _, vm := range vms {
+		if wild || names[vm.Name] {
+			delete(names, vm.Name)
+
+			if key == Wildcard {
+				vm.Tags = make(map[string]string)
+			} else {
+				delete(vm.Tags, key)
 			}
 		}
 	}
+
+	if len(names) > 0 && !(len(names) == 1 && names[Wildcard]) {
+		vals := []string{}
+		for name := range names {
+			vals = append(vals, name)
+		}
+		resp.Error = fmt.Sprintf("VMs not found: %v", vals)
+	}
+
 	return resp
 }
 
