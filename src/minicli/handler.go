@@ -10,6 +10,7 @@ import (
 )
 
 type Handler struct {
+	Doc       bool     `json:"doc"`        // documentation commands are not runnable
 	HelpShort string   `json:"help_short"` // a brief (one line) help message
 	HelpLong  string   `json:"help_long"`  // a descriptive help message
 	Patterns  []string `json:"patterns"`   // the pattern that the input should match
@@ -36,8 +37,9 @@ func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	var cmd *Command
 	var matchLen int
 	var exact bool
+
 	for _, pattern := range h.PatternItems {
-		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
+		cmd, matchLen, exact = newCommand(pattern, input, h.Call, h.Doc)
 		if cmd != nil {
 			return cmd, matchLen, exact
 		}
