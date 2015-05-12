@@ -268,8 +268,8 @@ To read a tag:
 
         vm tag <vm id or name> <key or all>`,
 		Patterns: []string{
-			"vm tag <vm id or name or all> <key or all>",
-			"vm tag <vm id or name or all> <key> <value>",
+			"vm tag <vm id or name or all> [key or all]",  // get
+			"vm tag <vm id or name or all> <key> <value>", // set
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
@@ -662,25 +662,73 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 func cliVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vm := vms.findVm(c.StringArgs["vm"])
-	if vm == nil {
-		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
+	vals, err := expandListRange(c.StringArgs["vm"])
+	if err != nil {
+		resp.Error = err.Error()
 		return resp
 	}
+	names := makeSet(vals)
+	wild := hasWildcard(names)
 
 	key := c.StringArgs["key"]
+	// If they didn't specify a key then they probably want all the tags for a
+	// given VM
+	if key == "" {
+		key = Wildcard
+	}
+
+	// TODO: Move this code to vmlist?
 	if value, ok := c.StringArgs["value"]; ok {
-		// Set a tag
-		vm.Tags[key] = value
+		if key == Wildcard {
+			// Can't assign a value to wildcard!
+			resp.Error = "cannot assign to wildcard"
+			return resp
+		}
+
+		// Set the value for all the matching VMs
+		for _, vm := range vms {
+			if wild || names[vm.Name] {
+				vm.Tags[key] = value
+			}
+		}
 	} else {
-		// Get a tag
-		val, ok := vm.Tags[key]
-		if !ok {
-			resp.Error = fmt.Sprintf("tag %v does not exist on vm %v\n", key, c.StringArgs["vm"])
+		// Read the requested tags for all the matching VMs
+		if key == Wildcard {
+			resp.Header = []string{"ID", "Tag", "Value"}
 		} else {
-			resp.Response = val
+			resp.Header = []string{"ID", "Value"}
+		}
+
+		resp.Tabular = make([][]string, 0)
+
+		for _, vm := range vms {
+			if wild || names[vm.Name] {
+				delete(names, vm.Name)
+				if key == Wildcard {
+					for k, v := range vm.Tags {
+						resp.Tabular = append(resp.Tabular, []string{
+							strconv.Itoa(vm.ID),
+							k, v,
+						})
+					}
+				} else {
+					resp.Tabular = append(resp.Tabular, []string{
+						strconv.Itoa(vm.ID),
+						vm.Tags[key],
+					})
+				}
+			}
 		}
 	}
+
+	if len(names) > 0 && !(len(names) == 1 && names[Wildcard]) {
+		vals := []string{}
+		for name := range names {
+			vals = append(vals, name)
+		}
+		resp.Error = fmt.Sprintf("VMs not found: %v", vals)
+	}
+
 	return resp
 }
 
