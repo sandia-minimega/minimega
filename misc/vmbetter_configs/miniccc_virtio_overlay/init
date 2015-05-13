@@ -1,0 +1,25 @@
+#!/bin/sh
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o gid=5,mode=620 none /dev/pts
+udevd --daemon
+udevadm trigger
+udevadm settle
+chmod a+rx /
+modprobe loop
+
+ulimit -n 999999
+
+ifconfig lo up
+ifconfig eth0 up
+dhclient -v eth0
+
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+/miniccc -serial /dev/virtio-ports/serial0 -logfile /miniccc.log &
+
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'

@@ -8,6 +8,8 @@ mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
 mkdir /dev/pts
 mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
 
 # enumerate devices, autoload modules where needed
 udevd --daemon
