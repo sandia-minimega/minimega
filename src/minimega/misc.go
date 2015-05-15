@@ -26,6 +26,16 @@ import (
 	"unicode"
 )
 
+type errSlice []error
+
+func (errs errSlice) String() string {
+	vals := []string{}
+	for _, err := range errs {
+		vals = append(vals, err.Error())
+	}
+	return strings.Join(vals, "\n")
+}
+
 // generate a random ipv4 mac address and return as a string
 func randomMac() string {
 	b := make([]byte, 5)

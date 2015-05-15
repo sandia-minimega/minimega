@@ -103,11 +103,11 @@ VM(s). The user must check logs or error states from vm info.`,
 Kill one or more running virtual machines. See "help vm target" for acceptable
 targets.`,
 		Patterns: []string{
-			"vm kill <vm target>",
+			"vm kill <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.kill(c.StringArgs["vm"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.kill(target)
 			})
 		}),
 	},
@@ -117,15 +117,15 @@ targets.`,
 Start one or more paused virtual machines. See "help vm target" for allowed
 targets.
 
-Calling vm start specifically on a quit VM will restart the VM. If the optional
-'quit' suffix is used with the wildcard, then all virtual machines in the
-paused *or* quit state will be restarted.`,
+Calling "vm start" on a specific list of VMs will cause them to be started if they
+are in the building, paused, quit, or error states. When used with the wildcard, only
+vms in the building or paused state will be started.`,
 		Patterns: []string{
-			"vm start <vm target> [quit,]",
+			"vm start <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.start(c.StringArgs["vm"], c.BoolArgs["quit"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.start(target)
 			})
 		}),
 	},
@@ -137,11 +137,11 @@ targets.
 
 Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <vm target>",
+			"vm stop <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.stop(c.StringArgs["vm"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.stop(target)
 			})
 		}),
 	},
@@ -268,10 +268,10 @@ To set a tag "foo" to "bar" for VM 2:
 
 To read a tag:
 
-        vm tag <vm target> <key or all>`,
+        vm tag <target> <key or all>`,
 		Patterns: []string{
-			"vm tag <vm target> [key or all]",  // get
-			"vm tag <vm target> <key> <value>", // set
+			"vm tag <target> [key or all]",  // get
+			"vm tag <target> <key> <value>", // set
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
@@ -585,7 +585,7 @@ Clear all tags from all VMs:
         clear vm tag all`,
 		Patterns: []string{
 			"clear vm tag",
-			"clear vm tag <vm target> [tag]",
+			"clear vm tag <target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
 	},
@@ -695,37 +695,21 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 func cliVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vals, err := expandListRange(c.StringArgs["vm"])
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
-	names := makeSet(vals)
-	wild := hasWildcard(names)
-
 	key := c.StringArgs["key"]
-	// If they didn't specify a key then they probably want all the tags for a
-	// given VM
 	if key == "" {
+		// If they didn't specify a key then they probably want all the tags
+		// for a given VM
 		key = Wildcard
 	}
 
-	// TODO: Move this code to vmlist?
-	if value, ok := c.StringArgs["value"]; ok {
+	value, setOp := c.StringArgs["value"]
+	if setOp {
 		if key == Wildcard {
 			// Can't assign a value to wildcard!
 			resp.Error = "cannot assign to wildcard"
 			return resp
 		}
-
-		// Set the value for all the matching VMs
-		for _, vm := range vms {
-			if wild || names[vm.Name] {
-				vm.Tags[key] = value
-			}
-		}
 	} else {
-		// Read the requested tags for all the matching VMs
 		if key == Wildcard {
 			resp.Header = []string{"ID", "Tag", "Value"}
 		} else {
@@ -733,33 +717,32 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 		}
 
 		resp.Tabular = make([][]string, 0)
-
-		for _, vm := range vms {
-			if wild || names[vm.Name] {
-				delete(names, vm.Name)
-				if key == Wildcard {
-					for k, v := range vm.Tags {
-						resp.Tabular = append(resp.Tabular, []string{
-							strconv.Itoa(vm.ID),
-							k, v,
-						})
-					}
-				} else {
-					resp.Tabular = append(resp.Tabular, []string{
-						strconv.Itoa(vm.ID),
-						vm.Tags[key],
-					})
-				}
-			}
-		}
 	}
 
-	if len(names) > 0 && !(len(names) == 1 && names[Wildcard]) {
-		vals := []string{}
-		for name := range names {
-			vals = append(vals, name)
+	target := c.StringArgs["target"]
+
+	errs := expandVmTargets(target, false, func(vm *vmInfo, wild bool) (bool, error) {
+		if setOp {
+			vm.Tags[key] = value
+		} else if key == Wildcard {
+			for k, v := range vm.Tags {
+				resp.Tabular = append(resp.Tabular, []string{
+					strconv.Itoa(vm.ID),
+					k, v,
+				})
+			}
+		} else {
+			resp.Tabular = append(resp.Tabular, []string{
+				strconv.Itoa(vm.ID),
+				vm.Tags[key],
+			})
 		}
-		resp.Error = fmt.Sprintf("VMs not found: %v", vals)
+
+		return true, nil
+	})
+
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp
@@ -768,43 +751,31 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	arg := c.StringArgs["vm"]
-	vals, err := expandListRange(arg)
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
-	names := makeSet(vals)
-	wild := hasWildcard(names)
-	if arg == "" {
-		wild = true
-	}
-
 	key := c.StringArgs["key"]
-	// If they didn't specify a key then they probably want all the tags for a
-	// given VM
 	if key == "" {
+		// If they didn't specify a key then they probably want all the tags
+		// for a given VM
 		key = Wildcard
 	}
 
-	for _, vm := range vms {
-		if wild || names[vm.Name] {
-			delete(names, vm.Name)
-
-			if key == Wildcard {
-				vm.Tags = make(map[string]string)
-			} else {
-				delete(vm.Tags, key)
-			}
-		}
+	target, ok := c.StringArgs["target"]
+	if !ok {
+		// No target specified, must want to clear all
+		target = Wildcard
 	}
 
-	if len(names) > 0 && !(len(names) == 1 && names[Wildcard]) {
-		vals := []string{}
-		for name := range names {
-			vals = append(vals, name)
+	errs := expandVmTargets(target, true, func(vm *vmInfo, wild bool) (bool, error) {
+		if key == Wildcard {
+			vm.Tags = make(map[string]string)
+		} else {
+			delete(vm.Tags, key)
 		}
-		resp.Error = fmt.Sprintf("VMs not found: %v", vals)
+
+		return true, nil
+	})
+
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp
@@ -976,13 +947,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func cliVmApply(c *minicli.Command, fn func() []error) *minicli.Response {
+func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	for _, err := range fn() {
-		if err != nil {
-			resp.Error += fmt.Sprintln(err)
-		}
+	errs := fn(c.StringArgs["target"])
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp
