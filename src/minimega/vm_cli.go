@@ -609,6 +609,14 @@ To start vms foo0, foo1, foo2, and foo5:
 
 		vm start foo[0-2,5]
 
+VMs can also be specified by ID, such as:
+
+		vm start 0
+
+Or, a range of IDs:
+
+		vm start [2-4,6]
+
 There is also a wildcard (%[1]s) which allows the user to specify all VMs:
 
 		vm start %[1]s

@@ -280,11 +280,21 @@ func (vms VMs) cleanDirs() {
 }
 
 func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (bool, error)) []error {
+	names := map[string]bool{} // Names of VMs for which to apply fn
+	ids := map[int]bool{}      // IDs of VMs for which to apply fn
+
 	vals, err := expandListRange(target)
 	if err != nil {
 		return []error{err}
 	}
-	names := makeSet(vals)
+	for _, v := range vals {
+		id, err := strconv.Atoi(v)
+		if err == nil {
+			ids[id] = true
+		} else {
+			names[v] = true
+		}
+	}
 	wild := hasWildcard(names)
 	delete(names, Wildcard)
 
@@ -308,7 +318,7 @@ func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (boo
 	}
 
 	for _, vm := range vms {
-		if wild || names[vm.Name] {
+		if wild || names[vm.Name] || ids[vm.ID] {
 			delete(names, vm.Name)
 			wg.Add(1)
 
