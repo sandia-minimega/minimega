@@ -101,8 +101,8 @@ VM(s). The user must check logs or error states from vm info.`,
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
 		HelpLong: `
-Kill one or more running virtual machines. See "help vm target" for acceptable
-targets.`,
+Kill one or more running virtual machines. See "vm start" for a full
+description of allowable targets.`,
 		Patterns: []string{
 			"vm kill <target>",
 		},
@@ -114,13 +114,40 @@ targets.`,
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
-		HelpLong: `
-Start one or more paused virtual machines. See "help vm target" for allowed
-targets.
+		HelpLong: fmt.Sprintf(`
+Start one or more paused virtual machines. VMs may be selected by name, ID, range, or
+wildcard. For example,
 
-Calling "vm start" on a specific list of VMs will cause them to be started if they
-are in the building, paused, quit, or error states. When used with the wildcard, only
-vms in the building or paused state will be started.`,
+To start vm foo:
+
+		vm start foo
+
+To start vms foo and bar:
+
+		vm start foo,bar
+
+To start vms foo0, foo1, foo2, and foo5:
+
+		vm start foo[0-2,5]
+
+VMs can also be specified by ID, such as:
+
+		vm start 0
+
+Or, a range of IDs:
+
+		vm start [2-4,6]
+
+There is also a wildcard (%[1]s) which allows the user to specify all VMs:
+
+		vm start %[1]s
+
+Note that including the wildcard in a list of VMs results in the wildcard
+behavior (although a message will be logged).
+
+Calling "vm start" on a specific list of VMs will cause them to be started if
+they are in the building, paused, quit, or error states. When used with the
+wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
 			"vm start <target>",
 		},
@@ -133,8 +160,8 @@ vms in the building or paused state will be started.`,
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
 		HelpLong: `
-Stop one or more running virtual machines. See "help vm target" for acceptable
-targets.
+Stop one or more running virtual machines. See "vm start" for a full
+description of allowable targets.
 
 Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
@@ -255,8 +282,8 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
 		HelpLong: `
-Display or set a tag for one or more virtual machines. See "help vm target" for
-acceptable targets.
+Display or set a tag for one or more virtual machines. See "vm start" for a
+full description of allowable targets.
 
 Tags are key-value pairs. A VM can have any number of tags associated with it.
 They can be used to attach additional information to a virtual machine, for
@@ -589,44 +616,6 @@ Clear all tags from all VMs:
 			"clear vm tag <target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
-	},
-	{ // vm target (dummy command)
-		Doc:       true,
-		HelpShort: "documentation for valid vm targets",
-		HelpLong: fmt.Sprintf(`
-VM targets are accepted by a number of different minimega commands to specify
-one or more VMs. The VM target accepts a comma-seperated list of identifiers
-for VMs including the VM name and ID.
-
-To start vm foo:
-
-		vm start foo
-
-To start vms foo and bar:
-
-		vm start foo,bar
-
-To start vms foo0, foo1, foo2, and foo5:
-
-		vm start foo[0-2,5]
-
-VMs can also be specified by ID, such as:
-
-		vm start 0
-
-Or, a range of IDs:
-
-		vm start [2-4,6]
-
-There is also a wildcard (%[1]s) which allows the user to specify all VMs:
-
-		vm start %[1]s
-
-Note that including the wildcard in a list of VMs results in the wildcard
-behavior (although a message will be logged).`, Wildcard),
-		Patterns: []string{
-			"vm target",
-		},
 	},
 }
 

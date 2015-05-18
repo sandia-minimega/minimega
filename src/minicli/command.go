@@ -27,7 +27,7 @@ type Command struct {
 	noOp bool
 }
 
-func newCommand(pattern patternItems, input *Input, call CLIFunc, doc bool) (*Command, int, bool) {
+func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
 	exact := true
 	cmd := Command{
 		Pattern:    pattern.String(),
@@ -36,10 +36,6 @@ func newCommand(pattern patternItems, input *Input, call CLIFunc, doc bool) (*Co
 		BoolArgs:   make(map[string]bool),
 		ListArgs:   make(map[string][]string),
 		Call:       call}
-
-	if doc {
-		cmd.noOp = true
-	}
 
 outer:
 	for i, item := range pattern {
