@@ -14,6 +14,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"ranges"
 	"strconv"
 )
 
@@ -903,7 +904,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	count, err := strconv.ParseInt(arg, 10, 32)
 	if err != nil {
-		names, err = expandListRange(arg)
+		names, err = ranges.SplitList(arg)
 	} else if count <= 0 {
 		err = errors.New("invalid number of vms (must be > 0)")
 	} else {

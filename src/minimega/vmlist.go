@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"ranges"
 	"strconv"
 	"sync"
 	"time"
@@ -283,7 +284,7 @@ func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (boo
 	names := map[string]bool{} // Names of VMs for which to apply fn
 	ids := map[int]bool{}      // IDs of VMs for which to apply fn
 
-	vals, err := expandListRange(target)
+	vals, err := ranges.SplitList(target)
 	if err != nil {
 		return []error{err}
 	}

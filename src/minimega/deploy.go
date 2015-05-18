@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"ranges"
 	"strings"
 	"time"
 )
@@ -83,7 +84,7 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	hostsExpanded, err := expandListRange(hosts)
+	hostsExpanded, err := ranges.SplitList(hosts)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
