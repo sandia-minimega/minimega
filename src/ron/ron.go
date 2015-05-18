@@ -29,18 +29,18 @@ const (
 )
 
 type Server struct {
-	serialConns    map[string]net.Conn // map of connected, but not necessarily active serial connections
-	serialLock     sync.Mutex
-	commands       map[int]*Command // map of active commands
-	commandLock    sync.Mutex
-	commandCounter int
-	clients        map[string]*Client // map of active clients, each of which have a running handler
-	clientLock     sync.Mutex
-	in             chan *Message // incoming message queue, consumed by the mux
-	path           string        // path for serving files
-	lastBroadcast  time.Time     // watchdog time of last command list broadcast
-	commandID      chan int
-	responses      chan *Client // queue of incoming responses, consumed by the response processor
+	serialConns        map[string]net.Conn // map of connected, but not necessarily active serial connections
+	serialLock         sync.Mutex
+	commands           map[int]*Command // map of active commands
+	commandLock        sync.Mutex
+	commandCounter     int
+	commandCounterLock sync.Mutex
+	clients            map[string]*Client // map of active clients, each of which have a running handler
+	clientLock         sync.Mutex
+	in                 chan *Message // incoming message queue, consumed by the mux
+	path               string        // path for serving files
+	lastBroadcast      time.Time     // watchdog time of last command list broadcast
+	responses          chan *Client  // queue of incoming responses, consumed by the response processor
 }
 
 type Client struct {
@@ -48,7 +48,7 @@ type Client struct {
 	out            chan *Message // outgoing message queue
 	in             chan *Message // incoming message queue, consumed by the mux
 	path           string        // path for storing files, pid, etc.
-	commandCounter int
+	CommandCounter int
 	conn           io.ReadWriteCloser
 	Checkin        time.Time   // last client checkin time, used by the server
 	tunnelData     chan []byte // tunnel data queue, consumed by the tunnel handler
@@ -68,6 +68,7 @@ type Client struct {
 	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
 	lastHeartbeat time.Time             // last heartbeat watchdog time
 	files         chan *Message         // incoming files sent by the server and requested by GetFile()
+	hold          sync.Mutex            // held while attempting to redial to prevent heartbeats, otherwise they get stacked
 }
 
 type Message struct {
@@ -90,21 +91,12 @@ func NewServer(port int, path string) (*Server, error) {
 		path:          path,
 		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),
-		commandID:     make(chan int),
 		responses:     make(chan *Client, 1024),
 	}
 	err := s.Start(port)
 	if err != nil {
 		return nil, err
 	}
-
-	go func() {
-		id := 1
-		for {
-			s.commandID <- id
-			id++
-		}
-	}()
 
 	log.Debug("registered new ron server: %v", port)
 
@@ -133,7 +125,7 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 	if serial != "" {
 		err = c.dialSerial(serial)
 	} else {
-		err = c.dial(parent, port)
+		c.dial(parent, port)
 	}
 	if err != nil {
 		return nil, err
