@@ -36,6 +36,7 @@ func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	var cmd *Command
 	var matchLen int
 	var exact bool
+
 	for _, pattern := range h.PatternItems {
 		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
 		if cmd != nil {

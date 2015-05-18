@@ -23,6 +23,16 @@ import (
 	"unicode"
 )
 
+type errSlice []error
+
+func (errs errSlice) String() string {
+	vals := []string{}
+	for _, err := range errs {
+		vals = append(vals, err.Error())
+	}
+	return strings.Join(vals, "\n")
+}
+
 // generate a random ipv4 mac address and return as a string
 func randomMac() string {
 	b := make([]byte, 5)
@@ -298,5 +308,14 @@ func isReserved(s string) bool {
 	}
 
 	return false
+}
 
+// hasWildcard tests whether the lookup table has Wildcard set. If it does, and
+// there are more keys set than just the Wildcard, it logs a message.
+func hasWildcard(v map[string]bool) bool {
+	if v[Wildcard] && len(v) > 1 {
+		log.Info("found wildcard amongst names, making command wild")
+	}
+
+	return v[Wildcard]
 }

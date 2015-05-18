@@ -12,6 +12,7 @@ package ranges
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -104,6 +105,61 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	}
 
 	return result, nil
+}
+
+// SplitList takes a string such as "foo,bar[1-3]" and expands it to a fully
+// enumerated list of names.
+func SplitList(in string) ([]string, error) {
+	var res, parts []string
+
+	var prev int
+	var inside bool
+
+	for i := 0; i < len(in); i++ {
+		if in[i] == '[' {
+			if inside {
+				return nil, fmt.Errorf("nested '[' at char %d", i)
+			} else {
+				inside = true
+			}
+		} else if in[i] == ']' {
+			if inside {
+				inside = false
+			} else {
+				return nil, fmt.Errorf("unmatched ']' at char %d", i)
+			}
+		} else if in[i] == ',' {
+			if !inside {
+				parts = append(parts, in[prev:i])
+				prev = i + 1
+			}
+		}
+	}
+
+	// handle last entry on the line and look for unterminated ranges
+	if inside {
+		return nil, errors.New("unterminated '['")
+	} else if prev < len(in)-1 {
+		parts = append(parts, in[prev:])
+	}
+
+	for _, v := range parts {
+		index := strings.IndexRune(v, '[')
+		if index == -1 {
+			res = append(res, v)
+			continue
+		}
+
+		prefix := v[:index]
+		r, _ := NewRange(prefix, 0, math.MaxInt32)
+		ret, err := r.SplitRange(v)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, ret...)
+	}
+
+	return res, nil
 }
 
 // Turn an array of node names into a single string like kn[1-5,20]
