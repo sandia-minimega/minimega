@@ -280,6 +280,22 @@ func (vms VMs) cleanDirs() {
 	}
 }
 
+// expandVmTargets is the fan out/in method to apply a function to a set of VMs
+// specified by target. Specifically, it:
+//
+// 	1. Expands target to a list of VM names and IDs (or wild)
+// 	2. Invokes fn on all the matching VMs
+// 	3. Collects all the errors from the invoked fns
+// 	4. Records in the log a list of VMs that were not found
+//
+// The fn that is passed in takes two arguments: the VM struct and a boolean
+// specifying whether the invocation was wild or not. The fn returns a boolean
+// that indicates whether the target was applicable (e.g. calling start on an
+// already running VM would not be applicable) and an error.
+//
+// The concurrent boolean controls whether fn is run concurrently on multiple
+// VMs or not. If the fns alter state they can set this flag to false rather
+// than dealing with locking.
 func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (bool, error)) []error {
 	names := map[string]bool{} // Names of VMs for which to apply fn
 	ids := map[int]bool{}      // IDs of VMs for which to apply fn
@@ -299,9 +315,11 @@ func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (boo
 	wild := hasWildcard(names)
 	delete(names, Wildcard)
 
+	// wg determine when it's okay to close errChan
 	var wg sync.WaitGroup
 	errChan := make(chan error)
 
+	// lock prevents concurrent writes to results
 	var lock sync.Mutex
 	results := map[string]bool{}
 
@@ -321,6 +339,7 @@ func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (boo
 	for _, vm := range vms {
 		if wild || names[vm.Name] || ids[vm.ID] {
 			delete(names, vm.Name)
+			delete(ids, vm.ID)
 			wg.Add(1)
 
 			// Use concurrency only if requested
@@ -347,18 +366,21 @@ func expandVmTargets(target string, concurrent bool, fn func(*vmInfo, bool) (boo
 	//   1. it wasn't found
 	//   2. it wasn't a valid target (e.g. start already running VM)
 	if len(vals) == 1 && !wild {
-		if len(names) == 1 {
+		if (len(names) + len(ids)) == 1 {
 			errs = append(errs, fmt.Errorf("VM not found: %v", vals[0]))
 		} else if !results[vals[0]] {
 			errs = append(errs, fmt.Errorf("VM state error: %v", vals[0]))
 		}
 	}
 
-	// Log the names of the vms that weren't found
-	if len(names) > 0 {
+	// Log the names/ids of the vms that weren't found
+	if (len(names) + len(ids)) > 0 {
 		vals := []string{}
 		for v := range names {
 			vals = append(vals, v)
+		}
+		for v := range ids {
+			vals = append(vals, strconv.Itoa(v))
 		}
 		log.Info("VMs not found: %v", vals)
 	}
