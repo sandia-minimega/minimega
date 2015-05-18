@@ -79,7 +79,7 @@ launch configuration.`,
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
-		HelpLong: `
+		HelpLong: fmt.Sprintf(`
 Launch virtual machines in a paused state, using the parameters defined leading
 up to the launch command. Any changes to the VM parameters after launching will
 have no effect on launched VMs.
@@ -90,9 +90,11 @@ naming scheme:
 
 	vm launch foo[0-9]
 
+Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
+
 The optional 'noblock' suffix forces minimega to return control of the command
 line immediately instead of waiting on potential errors from launching the
-VM(s). The user must check logs or error states from vm info.`,
+VM(s). The user must check logs or error states from vm info.`, Wildcard),
 		Patterns: []string{
 			"vm launch <name or count> [noblock,]",
 		},
@@ -914,6 +916,10 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	for _, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
+			return resp
+		}
+		if _, err := strconv.Atoi(name); err == nil {
+			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
 			return resp
 		}
 	}
