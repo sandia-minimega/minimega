@@ -16,6 +16,7 @@ import (
 	log "minilog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -64,6 +65,13 @@ var pixelFormat = vncPixelFormat{
 	RedShift:      0x10,
 	GreenShift:    0x8,
 	BlueShift:     0x0,
+}
+
+func usage() {
+	fmt.Println("Usage:")
+	fmt.Println("\trfbplay [OPTION] <input> <output>")
+	fmt.Println("\trfbplay [OPTION] <directory>")
+	flag.PrintDefaults()
 }
 
 func readFile(f http.File) (chan *FramebufferUpdate, error) {
@@ -156,23 +164,11 @@ func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
 	return nil
 }
 
-func usage() {
-	fmt.Printf("USAGE: %s [OPTION]... <directory to serve>\n", os.Args[0])
-	flag.PrintDefaults()
-}
-
 func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	if flag.NArg() != 1 {
-		usage()
-		os.Exit(1)
-	}
-
-	// Ensure that the first arg is an existent directory
-	if fi, err := os.Stat(flag.Arg(0)); err != nil || !fi.IsDir() {
-		fmt.Print("Invalid argument: must be an existent directory\n\n")
+	if flag.NArg() != 1 && flag.NArg() != 2 {
 		usage()
 		os.Exit(1)
 	}
@@ -182,6 +178,31 @@ func main() {
 	addr := ":" + strconv.Itoa(*f_port)
 	log.Info("serving recordings from %s on %s", flag.Arg(0), addr)
 
-	http.Handle("/", &playbackServer{http.Dir(flag.Arg(0))})
-	http.ListenAndServe(addr, nil)
+	switch flag.NArg() {
+	case 1: // just serve a directory and mjpeg streams
+		// Ensure that the first arg is an existent directory
+		if fi, err := os.Stat(flag.Arg(0)); err != nil || !fi.IsDir() {
+			fmt.Print("Invalid argument: must be an existent directory\n\n")
+			usage()
+			os.Exit(1)
+		}
+		http.Handle("/", &playbackServer{http.Dir(flag.Arg(0))})
+		http.ListenAndServe(addr, nil)
+	case 2: // transcode with ffmpeg
+		in := flag.Arg(0)
+		out := flag.Arg(1)
+		log.Debug("transcoding %v to %v", in, out)
+
+		path := filepath.Dir(in)
+		http.Handle("/", &playbackServer{http.Dir(path)})
+		go http.ListenAndServe(addr, nil)
+
+		err := transcode(in, out)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	default:
+		usage()
+		os.Exit(1)
+	}
 }
