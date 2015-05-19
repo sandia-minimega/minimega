@@ -516,7 +516,7 @@ func (vm *vmKVM) launch(ack chan int) {
 			break
 		}
 		delay := QMP_CONNECT_DELAY * time.Millisecond
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
+		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID(), err, delay)
 		time.Sleep(delay)
 	}
 
@@ -527,7 +527,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		<-waitChan
 		ack <- vm.id
 	} else {
-		log.Debug("qmp dial to %v successful", vm.ID)
+		log.Debug("qmp dial to %v successful", vm.ID())
 
 		go vm.asyncLogger()
 

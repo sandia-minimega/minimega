@@ -254,7 +254,7 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	info, _ := globalVmInfo(nil, nil)
 	for _, vms := range info {
 		for _, vm := range vms {
-			name := fmt.Sprintf("%v:%v", vm.ID, vm.Name)
+			name := fmt.Sprintf("%v:%v", vm.ID(), vm.Name())
 
 			p := point{Text: name}
 
@@ -321,8 +321,8 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 		for _, vm := range vms {
 			row := []interface{}{
 				host,
-				vm.Name,
-				vm.ID,
+				vm.Name(),
+				vm.ID(),
 			}
 
 			for _, k := range table.Header {
@@ -427,14 +427,14 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			row, err := vm.Info(vmMasks)
 			if err != nil {
-				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name, err)
+				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name(), err)
 				continue
 			}
 
 			// HAX: Patch up "dynamic" fields from tabular data. This will be
 			// deleted when we track all the VM state in the VM struct.
 			for i, v := range vmMasks {
-				id := fmt.Sprintf("%v", vm.ID)
+				id := fmt.Sprintf("%v", vm.ID())
 				switch v {
 				case "ip", "ip6", "cc_active":
 					log.Debug("patching `%s` field for `%s` host", v, host)

@@ -1280,7 +1280,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
+		log.Debug("disconnect network connection: %v %v %v", vm.ID(), pos, net)
 		err = b.TapRemove(net.VLAN, net.Tap)
 		if err != nil {
 			resp.Error = err.Error()
@@ -1296,7 +1296,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 
 		if vlan >= 0 && vlan < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, net.VLAN, b.Name, vlan)
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID(), pos, net.VLAN, b.Name, vlan)
 			oldBridge, err := getBridge(net.Bridge)
 			if err != nil {
 				resp.Error = err.Error()
