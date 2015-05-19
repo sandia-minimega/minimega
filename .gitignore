@@ -8,3 +8,4 @@ __pycache__
 venv/
 misc/python/minimega.py
 doc/content/articles/api.article
+tests/*.got
