@@ -12,6 +12,7 @@ import (
 	"meshage"
 	"minicli"
 	log "minilog"
+	"ranges"
 	"reflect"
 	"time"
 )
@@ -122,10 +123,13 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 		recipients = meshageNode.BroadcastRecipients()
 	} else {
 		// Send to specified list of recipients
-		recipients = getRecipients(hosts)
+		recipients, err = ranges.SplitList(hosts)
 	}
 
-	recipients, err = meshageNode.Set(recipients, meshageCmd)
+	if err == nil {
+		recipients, err = meshageNode.Set(recipients, meshageCmd)
+	}
+
 	if err != nil {
 		resp := &minicli.Response{
 			Host:  hostname,

@@ -8,6 +8,7 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -133,6 +134,11 @@ func cliLogFile(c *minicli.Command) *minicli.Response {
 			}
 		}
 
+		err = os.MkdirAll(filepath.Dir(c.StringArgs["file"]), 0755)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
 		flags := os.O_WRONLY | os.O_APPEND | os.O_CREATE
 		logFile, err = os.OpenFile(c.StringArgs["file"], flags, 0660)
 		if err != nil {

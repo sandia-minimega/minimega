@@ -14,6 +14,8 @@ import (
 	"net"
 )
 
+var ERR_READY = errors.New("qmp is not ready")
+
 type Conn struct {
 	socket       string // path to unix domain socket to connect to
 	conn         net.Conn
@@ -37,6 +39,8 @@ func Dial(s string) (Conn, error) {
 }
 
 func (q *Conn) connect(s string) error {
+	log.Debug("qmp connect: %v", s)
+
 	q.socket = s
 	conn, err := net.Dial("unix", q.socket)
 	if err != nil {
@@ -51,6 +55,7 @@ func (q *Conn) connect(s string) error {
 	// upon connecting we should get the qmp version etc.
 	v, err := q.read()
 	if err != nil {
+		conn.Close()
 		return err
 	}
 
@@ -59,14 +64,17 @@ func (q *Conn) connect(s string) error {
 	}
 	err = q.enc.Encode(&v)
 	if err != nil {
+		conn.Close()
 		return err
 	}
 
 	v, err = q.read()
 	if err != nil {
+		conn.Close()
 		return err
 	}
 	if !success(v) {
+		conn.Close()
 		return errors.New("failed success")
 	}
 
@@ -107,7 +115,7 @@ func (q *Conn) read() (map[string]interface{}, error) {
 func (q *Conn) write(v map[string]interface{}) error {
 	log.Debug("qmp write: %#v", v)
 	if !q.ready {
-		return fmt.Errorf("qmp is not ready")
+		return ERR_READY
 	}
 	err := q.enc.Encode(&v)
 	return err
@@ -116,7 +124,7 @@ func (q *Conn) write(v map[string]interface{}) error {
 func (q *Conn) Raw(input string) (string, error) {
 	log.Debug("qmp write: %v", input)
 	if !q.ready {
-		return "", fmt.Errorf("qmp is not ready")
+		return "", ERR_READY
 	}
 	_, err := q.conn.Write([]byte(input))
 	if err != nil {
@@ -138,6 +146,9 @@ func (q *Conn) Raw(input string) (string, error) {
 }
 
 func (q *Conn) Status() (map[string]interface{}, error) {
+	if !q.ready {
+		return nil, ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "query-status",
 	}
@@ -154,6 +165,9 @@ func (q *Conn) Status() (map[string]interface{}, error) {
 }
 
 func (q *Conn) Start() error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "cont",
 	}
@@ -169,6 +183,9 @@ func (q *Conn) Start() error {
 }
 
 func (q *Conn) Stop() error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "stop",
 	}
@@ -184,6 +201,9 @@ func (q *Conn) Stop() error {
 }
 
 func (q *Conn) BlockdevEject(device string) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "eject",
 		"arguments": map[string]interface{}{
@@ -202,6 +222,9 @@ func (q *Conn) BlockdevEject(device string) error {
 }
 
 func (q *Conn) BlockdevChange(device, path string) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "change",
 		"arguments": map[string]interface{}{
@@ -221,6 +244,9 @@ func (q *Conn) BlockdevChange(device, path string) error {
 }
 
 func (q *Conn) Pmemsave(path string, size uint64) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "pmemsave",
 		"arguments": map[string]interface{}{
@@ -241,6 +267,9 @@ func (q *Conn) Pmemsave(path string, size uint64) error {
 }
 
 func (q *Conn) BlockdevSnapshot(path, device string) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "blockdev-snapshot",
 		"arguments": map[string]interface{}{
@@ -261,6 +290,9 @@ func (q *Conn) BlockdevSnapshot(path, device string) error {
 }
 
 func (q *Conn) Screendump(path string) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "screendump",
 		"arguments": map[string]interface{}{
@@ -279,6 +311,9 @@ func (q *Conn) Screendump(path string) error {
 }
 
 func (q *Conn) MigrateDisk(path string) error {
+	if !q.ready {
+		return ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "migrate",
 		"arguments": map[string]interface{}{
@@ -297,6 +332,9 @@ func (q *Conn) MigrateDisk(path string) error {
 }
 
 func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
+	if !q.ready {
+		return nil, ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "query-migrate",
 	}
@@ -314,6 +352,9 @@ func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
 }
 
 func (q *Conn) HumanMonitorCommand(command string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
 	s := map[string]interface{}{
 		"execute": "human-monitor-command",
 		"arguments": map[string]interface{}{
@@ -333,24 +374,36 @@ func (q *Conn) HumanMonitorCommand(command string) (string, error) {
 }
 
 func (q *Conn) DriveAdd(id, file string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
 	arg := fmt.Sprintf("drive_add 0 id=%v,if=none,file=%v", id, file)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
 
 func (q *Conn) USBDeviceAdd(id string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
 	arg := fmt.Sprintf("device_add usb-storage,id=%v,drive=%v", id, id)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
 
 func (q *Conn) USBDeviceDel(id string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
 	arg := fmt.Sprintf("device_del %v", id)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
 
 func (q *Conn) DriveDel(id string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
 	arg := fmt.Sprintf("drive_del %v", id)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err

@@ -1,0 +1,146 @@
+VNC recording and playback
+
+David Fritz
+11 May 2015
+
+* Introduction
+
+minimega supports recording and playback of both the framebuffer and keyboard
+and mouse interactions with VMs. Framebuffer recordings contain VNC/RFB data at
+10 frames per second and can be played back in a browser or transcoded to
+video, such as mp4, using the `rfbplay` tool. 
+
+Keyboard/mouse recordings are stored in a plaintext file format and can be
+played back to any running VM.
+
+* Recording
+
+minimega supports recording framebuffer and keyboard/mouse data with the
+[[/articles/api.article#TOC_5.33.][`vnc` API]]. There are a few caveats to
+recording data using minimega, depending on on what data you are recording,
+described below.
+
+To view current recordings of any kind, simply issue the `vnc` command with no
+arguments.
+
+** Framebuffer
+
+minimega records VM framebuffers (video) by connecting to the target VM using a
+built-in VNC/RFB client. minimega can record the framebuffer of VMs running on
+any minimega node, so long as it can lookup the VM using `vm`info`, and the
+remote VM's VNC port is accessible from the minimega node you are issuing the
+command from. There is no need to have the web service running, or to be
+connected to the VM in order to record framebuffer data.
+
+minimega records framebuffer data at 10 frames per second.
+
+For example, to record the framebuffer on node `foo`, VM `bar`, and save to
+`recording.fb`:
+
+.mega vnc/vnc1.mm
+
+To stop recording, use the `norecord` keyword:
+
+.mega vnc/vnc2.mm
+
+** Keyboard/mouse
+
+Keyboard and mouse data is recorded in much the same way, with one caveat -
+keyboard and mouse data can only be recorded for connections made over the web
+interface. This means that you need to connect to a VM using the minimega web
+interface, and record keyboard/mouse data from the
+*same*node*running*the*web*service*.
+
+For example, to record keyboard/mouse data on node `foo`, VM `bar`, and save to
+`recording.kb`:
+
+.mega vnc/vnc3.mm
+
+To stop recording:
+
+.mega vnc/vnc4.mm
+
+The recorded file format uses the following schema:
+
+	<time delta>:PointerEvent,<mask>,<x>,<y>
+	<time delta>:KeyEvent,<press>,<key>
+
+The time delta is the time, in nanoseconds, between the previous record and
+this one.
+
+For pointer events, a button mask of 0 is no buttons, 1 is left mouse, 2 right,
+and 3 both left and right.
+
+For keyboard events, there is an event for a key press (press is `true` in the
+schema), and a key release. For code points not represented by ASCII, the key
+value is one of the codepoints defined in the minimega
+[[https://github.com/sandia-minimega/minimega/blob/master/src/vnc/keysymdef.go][keydef file]].
+
+For example, the following shows several mouse movements, and someone typing `foo`:
+
+	178759303:PointerEvent,0,606,44 
+	130044895:PointerEvent,1,606,44 
+	97711488:PointerEvent,0,606,44 
+	578412037:KeyEvent,true,f 
+	8141459:KeyEvent,false,f 
+	111708110:KeyEvent,true,o 
+	10379962:KeyEvent,false,o 
+	69607950:KeyEvent,true,o 
+	102641640:KeyEvent,false,o 
+	436817511:PointerEvent,0,606,43 
+	54109:PointerEvent,0,606,41 
+	4740247:PointerEvent,0,607,38 
+	39063:PointerEvent,0,607,17 
+
+* Playback
+
+** Framebuffer
+
+Playback of framebuffer data uses a seperate tool, available in the minimega
+distribution, `rfbplay`. `rfbplay` can serve a directory of framebuffer files,
+and can playback in a MJPEG supported web browser (Firefox currently supports
+MJPEG, Chrome no longer does). 
+
+Additionally, `rfbplay` can transcode framebuffer data, using `ffmpeg`, to any
+format supported by `ffmpeg`, such as mp4.
+
+*** Using a browser
+
+To playback a framebuffer recording in a web browser that supports MJPEG (not
+Chrome), start `rfbplay` and supply a directory to serve:
+
+	rfbplay <directory>
+
+Then simply browse to the rfbplay service, port 9004 by default, and select the
+framebuffer recording you want to play. 
+
+*** Transcoding to video
+
+To transcode a framebuffer recording, you must have `ffmpeg` in your path.
+Simply invoke `rfbplay` with a source framebuffer file and output video.
+`ffmpeg` will infer the video type based on the filename extension. For
+example, to transcode a file `foo.fb` to an mp4 file named `bar.mp4`, make sure
+you suffix the output filename with `.mp4`:
+
+	rfbplay foo.fb bar.mp4
+
+Files are transcoded in *real*time*, so a one hour framebuffer recording will
+take at least one hour to transcode. You can see `ffmpeg` transcoding details
+by running `rfbplay` with debug logging.
+
+** Keyboard/mouse
+
+minimega supports playback of recorded keyboard/mouse data to any running VM,
+not just the one it was recorded on. Unlike recording keyboard/mouse data, to
+playback data, you do not need the web service running, as minimega uses a
+built-in VNC/RFB client to playback data. To playback data to a VM on a node
+other than the node you are issuing the command on, minimega must be able to
+directly connect to the VNC server of the VM on that node.
+
+For example, to playback a recording on node `foo`, VM `bar`:
+
+.mega vnc/vnc5.mm
+
+Similarly, to stop playback:
+
+.mega vnc/vnc6.mm

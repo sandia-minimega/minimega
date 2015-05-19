@@ -7,16 +7,15 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
-	"math"
 	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"ranges"
 	"strconv"
-	"strings"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -86,7 +85,7 @@ launch configuration.`,
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
-		HelpLong: `
+		HelpLong: fmt.Sprintf(`
 Launch virtual machines in a paused state, using the parameters defined leading
 up to the launch command. Any changes to the VM parameters after launching will
 have no effect on launched VMs.
@@ -102,9 +101,11 @@ naming scheme:
 
 	vm launch foo[0-9]
 
+Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
+
 The optional 'noblock' suffix forces minimega to return control of the command
 line immediately instead of waiting on potential errors from launching the
-VM(s). The user must check logs or error states from vm info.`,
+VM(s). The user must check logs or error states from vm info.`, Wildcard),
 		Patterns: []string{
 			"vm launch <kvm,> <name or count> [noblock,]",
 		},
@@ -113,47 +114,75 @@ VM(s). The user must check logs or error states from vm info.`,
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
 		HelpLong: `
-Kill a virtual machine by ID or name. Pass all to kill all virtual machines.`,
+Kill one or more running virtual machines. See "vm start" for a full
+description of allowable targets.`,
 		Patterns: []string{
-			"vm kill <vm id or name or all>",
+			"vm kill <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.kill(c.StringArgs["vm"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.kill(target)
 			})
 		}),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
-		HelpLong: `
-Start one or all paused virtual machines. Pass all to start all paused virtual
-machines.
+		HelpLong: fmt.Sprintf(`
+Start one or more paused virtual machines. VMs may be selected by name, ID, range, or
+wildcard. For example,
 
-Calling vm start specifically on a quit VM will restart the VM. If the optional
-'quit' suffix is used with the wildcard, then all virtual machines in the
-paused *or* quit state will be restarted.`,
+To start vm foo:
+
+		vm start foo
+
+To start vms foo and bar:
+
+		vm start foo,bar
+
+To start vms foo0, foo1, foo2, and foo5:
+
+		vm start foo[0-2,5]
+
+VMs can also be specified by ID, such as:
+
+		vm start 0
+
+Or, a range of IDs:
+
+		vm start [2-4,6]
+
+There is also a wildcard (%[1]s) which allows the user to specify all VMs:
+
+		vm start %[1]s
+
+Note that including the wildcard in a list of VMs results in the wildcard
+behavior (although a message will be logged).
+
+Calling "vm start" on a specific list of VMs will cause them to be started if
+they are in the building, paused, quit, or error states. When used with the
+wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
-			"vm start <vm id or name or all> [quit,]",
+			"vm start <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.start(c.StringArgs["vm"], c.BoolArgs["quit"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.start(target)
 			})
 		}),
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
 		HelpLong: `
-Stop one or all running virtual machines. Pass all to stop all running virtual
-machines.
+Stop one or more running virtual machines. See "vm start" for a full
+description of allowable targets.
 
-Calling stop will put VMs in a paused state. Start stopped VMs with vm start.`,
+Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <vm id or name or all>",
+			"vm stop <target>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func() []error {
-				return vms.stop(c.StringArgs["vm"])
+			return cliVmApply(c, func(target string) []error {
+				return vms.stop(target)
 			})
 		}),
 	},
@@ -266,22 +295,24 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
 		HelpLong: `
-Display or set a tag for the specified VM.
+Display or set a tag for one or more virtual machines. See "vm start" for a
+full description of allowable targets.
 
 Tags are key-value pairs. A VM can have any number of tags associated with it.
 They can be used to attach additional information to a virtual machine, for
 example specifying a VM "group", or the correct rendering color for some
 external visualization tool.
 
-To set a tag "foo" to "bar":
+To set a tag "foo" to "bar" for VM 2:
 
-        vm tag <vm id or name> foo bar
+        vm tag 2 foo bar
 
 To read a tag:
 
-        vm tag <vm id or name> <key>`,
+        vm tag <target> <key or all>`,
 		Patterns: []string{
-			"vm tag <vm id or name> <key> [value]",
+			"vm tag <target> [key or all]",  // get
+			"vm tag <target> <key> <value>", // set
 		},
 		Call: wrapSimpleCLI(cliVmTag),
 	},
@@ -622,7 +653,8 @@ Clear all tags from all VMs:
 
         clear vm tag all`,
 		Patterns: []string{
-			"clear vm tag <vm id or name or all> [tag]",
+			"clear vm tag",
+			"clear vm tag <target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
 	},
@@ -717,23 +749,55 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 func cliVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vm := vms.findVm(c.StringArgs["vm"])
-	if vm == nil {
-		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
-		return resp
+	key := c.StringArgs["key"]
+	if key == "" {
+		// If they didn't specify a key then they probably want all the tags
+		// for a given VM
+		key = Wildcard
 	}
 
-	key := c.StringArgs["key"]
-	if value, ok := c.StringArgs["value"]; ok {
-		// Set a tag
-		vm.SetTag(key, value)
-	} else {
-		// Get a tag
-		if v := vm.Tag(key); v != "" {
-			resp.Response = v
-		} else {
-			resp.Error = fmt.Sprintf("tag %v not set for vm %v", key, vm.Name())
+	value, setOp := c.StringArgs["value"]
+	if setOp {
+		if key == Wildcard {
+			// Can't assign a value to wildcard!
+			resp.Error = "cannot assign to wildcard"
+			return resp
 		}
+	} else {
+		if key == Wildcard {
+			resp.Header = []string{"ID", "Tag", "Value"}
+		} else {
+			resp.Header = []string{"ID", "Value"}
+		}
+
+		resp.Tabular = make([][]string, 0)
+	}
+
+	target := c.StringArgs["target"]
+
+	errs := expandVmTargets(target, false, func(vm VM, wild bool) (bool, error) {
+		if setOp {
+			vm.Tags()[key] = value
+		} else if key == Wildcard {
+			for k, v := range vm.Tags() {
+				resp.Tabular = append(resp.Tabular, []string{
+					strconv.Itoa(vm.ID()),
+					k, v,
+				})
+			}
+		} else {
+			// TODO: return false if tag not set?
+			resp.Tabular = append(resp.Tabular, []string{
+				strconv.Itoa(vm.ID()),
+				vm.Tags()[key],
+			})
+		}
+
+		return true, nil
+	})
+
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp
@@ -742,29 +806,31 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 func cliClearVmTag(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vmstring := c.StringArgs["vm"]
-	clearVms := make([]VM, 0)
-	if vmstring == Wildcard {
-		for _, v := range vms {
-			clearVms = append(clearVms, v)
-		}
-	} else {
-		vm := vms.findVm(vmstring)
-		if vm == nil {
-			resp.Error = vmNotFound(vmstring).Error()
-			return resp
-		}
-		clearVms = append(clearVms, vm)
+	key := c.StringArgs["key"]
+	if key == "" {
+		// If they didn't specify a key then they probably want all the tags
+		// for a given VM
+		key = Wildcard
 	}
 
-	if tag := c.StringArgs["tag"]; tag != "" {
-		for _, vm := range clearVms {
+	target, ok := c.StringArgs["target"]
+	if !ok {
+		// No target specified, must want to clear all
+		target = Wildcard
+	}
+
+	errs := expandVmTargets(target, true, func(vm VM, wild bool) (bool, error) {
+		if key == Wildcard {
 			vm.ClearTags()
+		} else {
+			delete(vm.Tags(), key)
 		}
-	} else {
-		for _, vm := range clearVms {
-			vm.ClearTag(tag)
-		}
+
+		return true, nil
+	})
+
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp
@@ -878,45 +944,36 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	arg := c.StringArgs["name"]
-	vmNames := []string{}
+	names := []string{}
 
 	count, err := strconv.ParseInt(arg, 10, 32)
-	if err == nil {
-		if count <= 0 {
-			resp.Error = "invalid number of vms (must be >= 1)"
-			return resp
-		}
-
-		for i := int64(0); i < count; i++ {
-			vmNames = append(vmNames, "")
-		}
+	if err != nil {
+		names, err = ranges.SplitList(arg)
+	} else if count <= 0 {
+		err = errors.New("invalid number of vms (must be > 0)")
 	} else {
-		index := strings.IndexRune(arg, '[')
-		if index == -1 {
-			vmNames = append(vmNames, arg)
-		} else {
-			r, err := ranges.NewRange(arg[:index], 0, int(math.MaxInt32))
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			names, err := r.SplitRange(arg)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-			vmNames = append(vmNames, names...)
+		for i := int64(0); i < count; i++ {
+			names = append(names, "")
 		}
 	}
 
-	if len(vmNames) == 0 {
-		resp.Error = "no VMs to launch"
+	if len(names) == 0 && err == nil {
+		err = errors.New("no VMs to launch")
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
 		return resp
 	}
 
-	for _, name := range vmNames {
+	for _, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
+			return resp
+		}
+
+		if _, err := strconv.Atoi(name); err == nil {
+			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
 			return resp
 		}
 
@@ -942,7 +999,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	log.Info("launching %v %v vms", len(vmNames), vmType)
+	log.Info("launching %v %v vms", len(names), vmType)
 
 	ack := make(chan int)
 	waitForAcks := func(count int) {
@@ -952,8 +1009,8 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	for i, vmName := range vmNames {
-		if err := vms.launch(vmName, vmType, ack); err != nil {
+	for i, name := range names {
+		if err := vms.launch(name, vmType, ack); err != nil {
 			resp.Error = err.Error()
 			go waitForAcks(i)
 			return resp
@@ -961,21 +1018,20 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	}
 
 	if noblock {
-		go waitForAcks(len(vmNames))
+		go waitForAcks(len(names))
 	} else {
-		waitForAcks(len(vmNames))
+		waitForAcks(len(names))
 	}
 
 	return resp
 }
 
-func cliVmApply(c *minicli.Command, fn func() []error) *minicli.Response {
+func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	for _, err := range fn() {
-		if err != nil {
-			resp.Error += fmt.Sprintln(err)
-		}
+	errs := fn(c.StringArgs["target"])
+	if len(errs) > 0 {
+		resp.Error = errSlice(errs).String()
 	}
 
 	return resp

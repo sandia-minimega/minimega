@@ -338,6 +338,13 @@ func (s *Server) responseHandler() {
 
 		log.Debug("ron responseHandler: %v", cin.UUID)
 
+		// update maximum command id if there's a higher one in the wild
+		if cin.CommandCounter > s.commandCounter {
+			s.commandCounterLock.Lock()
+			s.commandCounter = cin.CommandCounter
+			s.commandCounterLock.Unlock()
+		}
+
 		// update client fields
 		s.clientLock.Lock()
 		if c, ok := s.clients[cin.UUID]; ok {
@@ -436,7 +443,11 @@ func (s *Server) DeleteCommand(id int) error {
 func (s *Server) NewCommand(c *Command) int {
 	log.Debug("ron NewCommand: %v", c)
 
-	c.ID = <-s.commandID
+	s.commandCounterLock.Lock()
+	s.commandCounter++
+	c.ID = s.commandCounter
+	s.commandCounterLock.Unlock()
+
 	s.commandLock.Lock()
 	s.commands[c.ID] = c
 	s.commandLock.Unlock()

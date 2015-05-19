@@ -33,7 +33,7 @@ type bridge struct {
 	iml      *ipmac.IPMacLearner
 	Lock     sync.Mutex
 	nf       *gonetflow.Netflow
-	Trunk    string
+	Trunk    []string
 }
 
 type vlan struct {
@@ -756,10 +756,6 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 
 // add an interface as a trunk port to a bridge
 func (b *bridge) TrunkAdd(iface string) error {
-	if b.Trunk != "" {
-		return fmt.Errorf("bridge %v already has trunk port: %v", b.Name, b.Trunk)
-	}
-
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	p := process("ovs")
@@ -786,15 +782,23 @@ func (b *bridge) TrunkAdd(iface string) error {
 		return e
 	}
 
-	b.Trunk = iface
+	b.Trunk = append(b.Trunk, iface)
 
 	return nil
 }
 
 // remove trunk port from a bridge
-func (b *bridge) TrunkRemove() error {
-	if b.Trunk == "" {
-		return nil
+func (b *bridge) TrunkRemove(iface string) error {
+	// find this iface in the trunk list
+	index := -1
+	for i, v := range b.Trunk {
+		if v == iface {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return fmt.Errorf("no trunk port %v on bridge %v", iface, b.Name)
 	}
 
 	var sOut bytes.Buffer
@@ -806,7 +810,7 @@ func (b *bridge) TrunkRemove() error {
 			p,
 			"del-port",
 			b.Name,
-			b.Trunk,
+			b.Trunk[index],
 		},
 		Env:    nil,
 		Dir:    "",
@@ -822,7 +826,7 @@ func (b *bridge) TrunkRemove() error {
 		return e
 	}
 
-	b.Trunk = ""
+	b.Trunk = append(b.Trunk[:index], b.Trunk[index+1:]...)
 
 	return nil
 }

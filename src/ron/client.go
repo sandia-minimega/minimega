@@ -17,24 +17,35 @@ import (
 	"time"
 )
 
+const RETRY_TIMEOUT = 10
+
 // dial over tcp to a ron server
-func (c *Client) dial(parent string, port int) error {
+func (c *Client) dial(parent string, port int) {
 	log.Debug("ron dial: %v:%v", parent, port)
 
-	conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", parent, port))
-	if err != nil {
-		return err
-	}
-
-	c.conn = conn
-
-	go c.handler()
 	go c.mux()
 	go c.periodic()
 	go c.commandHandler()
-	c.heartbeat()
 
-	return nil
+	go func() {
+		retry := time.Duration(RETRY_TIMEOUT * time.Second)
+		c.hold.Lock()
+		for {
+			conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", parent, port))
+			if err != nil {
+				log.Errorln(err)
+			} else {
+				c.conn = conn
+				c.out = make(chan *Message, 1024) // remake the out channel to flush outstanding messages
+				c.hold.Unlock()
+				c.handler()
+				c.hold.Lock()
+				log.Error("client disconnected, retrying connection in %v", retry)
+			}
+
+			time.Sleep(retry)
+		}
+	}()
 }
 
 // Respond allows a client to post a *Response to a given command. The response
@@ -62,12 +73,12 @@ func (c *Client) commandHandler() {
 
 		for _, id := range ids {
 			log.Debug("ron commandHandler: %v", id)
-			if id > c.commandCounter {
+			if id > c.CommandCounter {
 				if !c.matchFilter(commands[id]) {
 					continue
 				}
 				log.Debug("ron commandHandler match: %v", id)
-				c.commandCounter = id
+				c.CommandCounter = id
 				c.Commands <- commands[id]
 			}
 		}
@@ -80,14 +91,13 @@ func (c *Client) commandHandler() {
 func (c *Client) handler() {
 	log.Debug("ron handler")
 
+	// create a tunnel
+	stop := make(chan bool)
+	defer func() { stop <- true }()
+	go c.handleTunnel(false, stop)
+
 	enc := gob.NewEncoder(c.conn)
 	dec := gob.NewDecoder(c.conn)
-
-	tunnelQuit := make(chan bool)
-	defer func() { tunnelQuit <- true }()
-
-	// create a tunnel
-	go c.handleTunnel(false, tunnelQuit)
 
 	// handle client i/o
 	go func() {
@@ -95,7 +105,8 @@ func (c *Client) handler() {
 			m := <-c.out
 			err := enc.Encode(m)
 			if err != nil {
-				log.Fatalln(err)
+				log.Errorln(err)
+				return
 			}
 		}
 	}()
@@ -104,7 +115,8 @@ func (c *Client) handler() {
 		var m Message
 		err := dec.Decode(&m)
 		if err != nil {
-			log.Fatalln(err)
+			log.Errorln(err)
+			return
 		}
 		c.in <- &m
 	}
@@ -113,6 +125,8 @@ func (c *Client) handler() {
 // client heartbeat sent periodically be periodic(). heartbeat() sends the
 // client info and any queued responses.
 func (c *Client) heartbeat() {
+	c.hold.Lock()
+	defer c.hold.Unlock()
 	log.Debugln("heartbeat")
 
 	hostname, err := os.Hostname()
@@ -121,10 +135,11 @@ func (c *Client) heartbeat() {
 	}
 
 	cin := &Client{
-		UUID:     c.UUID,
-		Arch:     runtime.GOARCH,
-		OS:       runtime.GOOS,
-		Hostname: hostname,
+		UUID:           c.UUID,
+		Arch:           runtime.GOARCH,
+		OS:             runtime.GOOS,
+		Hostname:       hostname,
+		CommandCounter: c.CommandCounter,
 	}
 
 	macs, ips := getNetworkInfo()

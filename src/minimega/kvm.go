@@ -150,7 +150,9 @@ func (vm *vmKVM) Start() error {
 	err := vm.q.Start()
 	if err != nil {
 		log.Errorln(err)
-		vm.setState(VM_ERROR)
+		if err != qmp.ERR_READY {
+			vm.setState(VM_ERROR)
+		}
 	} else {
 		vm.setState(VM_RUNNING)
 	}
@@ -513,7 +515,9 @@ func (vm *vmKVM) launch(ack chan int) {
 			connected = true
 			break
 		}
-		time.Sleep(QMP_CONNECT_DELAY * time.Millisecond)
+		delay := QMP_CONNECT_DELAY * time.Millisecond
+		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
+		time.Sleep(delay)
 	}
 
 	if !connected {
@@ -523,6 +527,8 @@ func (vm *vmKVM) launch(ack chan int) {
 		<-waitChan
 		ack <- vm.id
 	} else {
+		log.Debug("qmp dial to %v successful", vm.ID)
+
 		go vm.asyncLogger()
 
 		ack <- vm.id

@@ -58,10 +58,8 @@ type VM interface {
 	String() string
 	Info(masks []string) ([]string, error)
 
-	Tags() []string
-	Tag(string) string
-	SetTag(string, string)
-	ClearTag(string)
+	Tag(tag string) string
+	Tags() map[string]string
 	ClearTags()
 }
 
@@ -217,27 +215,16 @@ func (vm *vmBase) launch(name string, vmType VMType) error {
 	return nil
 }
 
-func (vm *vmBase) Tags() (tags []string) {
-	for _, v := range vm.tags {
-		tags = append(tags, v)
-	}
-	return
+func (vm *vmBase) Tag(tag string) string {
+	return vm.tags[tag]
 }
 
-func (vm *vmBase) Tag(k string) string {
-	return vm.tags[k]
-}
-
-func (vm *vmBase) SetTag(k, v string) {
-	vm.tags[k] = v
+func (vm *vmBase) Tags() map[string]string {
+	return vm.tags
 }
 
 func (vm *vmBase) ClearTags() {
 	vm.tags = make(map[string]string)
-}
-
-func (vm *vmBase) ClearTag(k string) {
-	delete(vm.tags, k)
 }
 
 func (vm *vmBase) info(mask string) (string, error) {
