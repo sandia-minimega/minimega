@@ -4,6 +4,8 @@
 
 package ron
 
+import "os"
+
 type Command struct {
 	ID int
 
@@ -16,10 +18,10 @@ type Command struct {
 
 	// Files to transfer to the client if type == COMMAND_EXEC | COMMAND_FILE_SEND
 	// Any path given in a file specified here will be rooted at <BASE>/files
-	FilesSend []string
+	FilesSend []*File
 
 	// Files to transfer back to the master if type == COMMAND_EXEC | COMMAND_FILE_RECV
-	FilesRecv []string
+	FilesRecv []*File
 
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
@@ -32,12 +34,22 @@ type Command struct {
 	CheckedIn []string
 }
 
+type File struct {
+	Name string
+	Perm os.FileMode
+	Data []byte
+}
+
+func (f File) String() string {
+	return f.Name
+}
+
 type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
 
 	// Names and data for uploaded files
-	Files map[string][]byte
+	Files []*File
 
 	// Output from responding command, if any
 	Stdout string
