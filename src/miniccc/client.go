@@ -25,13 +25,15 @@ func client() {
 	}
 }
 
-func prepareRecvFiles(files []string) map[string][]byte {
-	log.Debug("prepareRecvFiles %v", files)
-	r := make(map[string][]byte)
+func prepareRecvFiles(files []*ron.File) []*ron.File {
+	log.Debugln("prepareRecvFiles")
+
+	var r []*ron.File
+
 	// expand everything
 	var nfiles []string
 	for _, f := range files {
-		tmp, err := filepath.Glob(f)
+		tmp, err := filepath.Glob(f.Name)
 		if err != nil {
 			log.Errorln(err)
 			continue
@@ -45,7 +47,19 @@ func prepareRecvFiles(files []string) map[string][]byte {
 			log.Errorln(err)
 			continue
 		}
-		r[f] = d
+
+		fi, err := os.Stat(f)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		perm := fi.Mode() & os.ModePerm
+
+		r = append(r, &ron.File{
+			Name: f,
+			Perm: perm,
+			Data: d,
+		})
 	}
 	return r
 }
@@ -112,19 +126,19 @@ func clientCommandExec(command *ron.Command) {
 	c.Respond(resp)
 }
 
-func commandGetFiles(files []string) {
+func commandGetFiles(files []*ron.File) {
 	start := time.Now()
 	var byteCount int64
 	for _, v := range files {
 		log.Debug("get file %v", v)
-		path := filepath.Join(*f_path, "files", v)
+		path := filepath.Join(*f_path, "files", v.Name)
 
 		if _, err := os.Stat(path); err == nil {
 			// file exists
 			continue
 		}
 
-		file, err := c.GetFile(v)
+		file, err := c.GetFile(v.Name)
 		if err != nil {
 			log.Errorln(err)
 			continue
@@ -136,13 +150,13 @@ func commandGetFiles(files []string) {
 			log.Errorln(err)
 			continue
 		}
-		f, err := os.Create(path)
+
+		err = ioutil.WriteFile(path, file, v.Perm)
 		if err != nil {
 			log.Errorln(err)
 			continue
 		}
-		f.Write(file)
-		f.Close()
+
 		byteCount += int64(len(file))
 	}
 	end := time.Now()

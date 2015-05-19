@@ -390,8 +390,8 @@ func (s *Server) responseHandler() {
 			}
 
 			// write out files if they exist
-			for f, d := range v.Files {
-				fpath := filepath.Join(path, f)
+			for _, f := range v.Files {
+				fpath := filepath.Join(path, f.Name)
 				log.Debug("writing file %v", fpath)
 				dir := filepath.Dir(fpath)
 				err := os.MkdirAll(dir, os.FileMode(0770))
@@ -399,7 +399,7 @@ func (s *Server) responseHandler() {
 					log.Errorln(err)
 					continue
 				}
-				err = ioutil.WriteFile(fpath, d, os.FileMode(0660))
+				err = ioutil.WriteFile(fpath, f.Data, f.Perm)
 				if err != nil {
 					log.Errorln(err)
 					continue

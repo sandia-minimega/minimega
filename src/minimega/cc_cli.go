@@ -371,13 +371,27 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
+		if len(files) == 0 {
+			resp.Error = fmt.Sprintf("no such file %v", fglob)
+			return resp
+		}
+
 		for _, f := range files {
 			file, err := filepath.Rel(*f_iomBase, f)
 			if err != nil {
 				resp.Error = fmt.Sprintf("parsing filesend: %v", err)
 				return resp
 			}
-			cmd.FilesSend = append(cmd.FilesSend, file)
+			fi, err := os.Stat(f)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+			perm := fi.Mode() & os.ModePerm
+			cmd.FilesSend = append(cmd.FilesSend, &ron.File{
+				Name: file,
+				Perm: perm,
+			})
 		}
 	}
 
@@ -399,7 +413,9 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 
 	// Add new files to receive
 	for _, file := range c.ListArgs["file"] {
-		cmd.FilesRecv = append(cmd.FilesRecv, file)
+		cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
+			Name: file,
+		})
 	}
 
 	id := ccNode.NewCommand(cmd)
