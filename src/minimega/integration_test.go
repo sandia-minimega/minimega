@@ -4,7 +4,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -42,14 +41,14 @@ func runCommands(t *testing.T, mm *MinimegaConn, file string) (string, error) {
 				continue
 			}
 
+			res += fmt.Sprintf("## %v\n", cmd.Original)
+
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
-					err = errors.New(resp.Error)
-					break
+					res += fmt.Sprintf("E: %v\n", resp.Error)
 				}
 			}
 
-			res += fmt.Sprintf("## %v\n", cmd.Original)
 			if len(resps.Rendered) > 0 {
 				res += resps.Rendered + "\n"
 			}

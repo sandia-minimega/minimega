@@ -1,0 +1,9 @@
+## .annotate false
+## vm launch [0]
+E: `0` is an integer -- cannot use for vm name
+## vm launch all
+E: `all` is a reserved word -- cannot use for vm name
+## vm launch foo,[0]
+E: `0` is an integer -- cannot use for vm name
+## vm launch foo,all
+E: `all` is a reserved word -- cannot use for vm name
