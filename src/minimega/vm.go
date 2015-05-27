@@ -199,6 +199,33 @@ var vmConfigFns = map[string]struct {
 			return strings.Join(overrides, "\n")
 		},
 	},
+	"serial": {
+		Update: func(vm *vmInfo, v string) error {
+			if num, err := strconv.Atoi(v); err != nil {
+				return err
+			} else {
+				vm.serials = num
+				return nil
+			}
+		},
+		Clear: func(vm *vmInfo) { vm.serials = 0 },
+		Print: func(vm *vmInfo) string { return strconv.Itoa(vm.serials) },
+		PrintCLI: func(vm *vmInfo) string {
+			return fmt.Sprintf("vm config serial %v", vm.serials)
+		},
+	},
+	"virtio-serial": {
+		Update: func(vm *vmInfo, v string) error {
+			if num, err := strconv.Atoi(v); err != nil {
+				return err
+			} else {
+				vm.vserials = num
+				return nil
+			}
+		},
+		Clear: func(vm *vmInfo) { vm.vserials = 0 },
+		Print: func(vm *vmInfo) string { return strconv.Itoa(vm.vserials) },
+	},
 	"snapshot": {
 		UpdateBool: func(vm *vmInfo, v bool) error {
 			vm.Snapshot = v
