@@ -85,9 +85,12 @@ func runCommand(cmd *minicli.Command) chan minicli.Responses {
 // nodes in the cluster without having to run a command locally and over
 // meshage.
 func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Responses {
-	cmd, err := minicli.Compilef("mesh send .record %t %s %s", record, Wildcard, cmd.Original)
+	// Keep the original CLI input
+	original := cmd.Original
+
+	cmd, err := minicli.Compilef("mesh send %s .record %t %s", Wildcard, record, original)
 	if err != nil {
-		log.Fatal("cannot run `%v` globally -- %v", cmd.Original, err)
+		log.Fatal("cannot run `%v` globally -- %v", original, err)
 	}
 
 	cmdLock.Lock()
