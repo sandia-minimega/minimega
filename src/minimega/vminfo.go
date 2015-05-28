@@ -21,6 +21,11 @@ import (
 	"time"
 )
 
+const (
+	DEV_PER_BUS    = 32
+	DEV_PER_VIRTIO = 30 // Max of 30 vserials/device (0 and 32 are reserved)
+)
+
 type vmInfo struct {
 	ID int
 
@@ -640,24 +645,26 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 		}
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.NetDrivers[i], tap, vm.Macs[i], bus, addr))
 		addr++
-		if addr == 32 {
+		if addr == DEV_PER_BUS {
 			addBus()
 		}
 	}
 
 	// virtio-serial
-	max_ports := 31
-	num_vserials := max_ports // counter for how many vserials we've created on this device, set to max_ports because we want to create a new device right away
-	slot := -1                // will be incremented to 0 immediately
+	virtio_slot := -1 // start at -1 since we immediately increment
 	for i := 0; i < vm.vserials; i++ {
-		if num_vserials == max_ports { // if we've run out of ports and need to create a new virtio-serial-pci device
-			slot++
-			num_vserials = 1 // start at 1 because 0 is reserved
+		// qemu port number
+		nr := i%DEV_PER_VIRTIO + 1
+
+		// If port is 1, we're out of slots on the current virtio-serial-pci
+		// device or we're on the first iteration => make a new device
+		if nr == 1 {
+			virtio_slot++
 			args = append(args, "-device")
-			args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", slot, bus, addr))
+			args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtio_slot, bus, addr))
 
 			addr++
-			if addr == 32 { // check to see if we've run out of addr slots on this bus
+			if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
 				addBus()
 			}
 		}
@@ -666,9 +673,7 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%vvirtio-serial%v,server,nowait", i, vm.instancePath, i))
 
 		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", num_vserials, slot, i, i, i))
-
-		num_vserials++
+		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", nr, virtio_slot, i, i, i))
 	}
 
 	// hook for hugepage support
