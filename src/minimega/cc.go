@@ -123,7 +123,7 @@ func ccSerialWatcher() {
 
 	for {
 		// get a list of every vm's serial port path
-		hostPorts := vmGetAllSerialPorts()
+		hostPorts := vmGetFirstVirtioPort()
 
 		// get a list of already opened serial port paths from ron
 		ronPorts := ccNode.GetActiveSerialPorts()
