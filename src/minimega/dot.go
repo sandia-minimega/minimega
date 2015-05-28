@@ -56,7 +56,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	defer fout.Close()
 
 	// TODO: Rewrite to use runCommandGlobally
-	cmd := minicli.MustCompile(".columns host,name,id,ip,ip6,state,vlan vm info")
+	cmd := minicli.MustCompile(".record false .columns host,name,id,ip,ip6,state,vlan vm info")
 
 	writer := bufio.NewWriter(fout)
 
@@ -68,7 +68,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	var expVms []*dotVM
 
 	// Get info from local hosts by invoking command directly
-	for resp := range minicli.ProcessCommand(cmd, false) {
+	for resp := range minicli.ProcessCommand(cmd) {
 		expVms = append(expVms, dotProcessInfo(resp)...)
 	}
 
