@@ -540,7 +540,7 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 	{ // vm config serial
 		HelpShort: "specify the serial ports a VM will use",
 		HelpLong: `
-Specify the serial ports that will be created for the VM to use. 
+Specify the serial ports that will be created for the VM to use.
 Serial ports specified will be mapped to the VM's /dev/ttySX device, where X
 refers to the connected unix socket on the host at
 $minimega_runtime/<vm_id>/serialX.
@@ -553,8 +553,8 @@ To display current serial ports:
 To create three serial ports:
   vm config serial 3
 
-Note: Whereas modern versions of Windows support up to 256 COM ports, Linux 
-typically only supports up to four serial devices. To use more, make sure to 
+Note: Whereas modern versions of Windows support up to 256 COM ports, Linux
+typically only supports up to four serial devices. To use more, make sure to
 pass "8250.n_uarts = 4" to the guest Linux kernel at boot. Replace 4 with
 another number.`,
 		Patterns: []string{
@@ -564,25 +564,12 @@ another number.`,
 			return cliVmConfigField(c, "serial")
 		}),
 	},
-	{ // vm config snapshot
-		HelpShort: "enable or disable snapshot mode when using disk images",
-		HelpLong: `
-Enable or disable snapshot mode when using disk images. When enabled, disks
-images will be loaded in memory when run and changes will not be saved. This
-allows a single disk image to be used for many VMs.`,
-		Patterns: []string{
-			"vm config snapshot [true,false]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "snapshot")
-		}),
-	},
 	{ // vm config virtio-serial
 		HelpShort: "specify the virtio-serial ports a VM will use",
 		HelpLong: `
-Specify the virtio-serial ports that will be created for the VM to use. 
-Virtio-serial ports specified will be mapped to the VM's 
-/dev/virtio-port/<portname> device, where <portname> refers to the connected 
+Specify the virtio-serial ports that will be created for the VM to use.
+Virtio-serial ports specified will be mapped to the VM's
+/dev/virtio-port/<portname> device, where <portname> refers to the connected
 unix socket on the host at $minimega_runtime/<vm_id>/virtio-serialX.
 
 Examples:

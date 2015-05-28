@@ -618,10 +618,15 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	}
 
 	// net
-	bus := 1
-	addr := 1 // start at 1 because 0 is reserved
-	args = append(args, fmt.Sprintf("-device"))
-	args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+	var bus, addr int
+	addBus := func() {
+		addr = 1 // start at 1 because 0 is reserved
+		bus++
+		args = append(args, fmt.Sprintf("-device"))
+		args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+	}
+
+	addBus()
 	for i, tap := range vm.Taps {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
@@ -636,10 +641,7 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.NetDrivers[i], tap, vm.Macs[i], bus, addr))
 		addr++
 		if addr == 32 {
-			addr = 1 // start at 1 because 0 is reserved
-			bus++
-			args = append(args, fmt.Sprintf("-device"))
-			args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+			addBus()
 		}
 	}
 
@@ -656,10 +658,7 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 
 			addr++
 			if addr == 32 { // check to see if we've run out of addr slots on this bus
-				addr = 1 // start at 1 because 0 is reserved
-				bus++
-				args = append(args, fmt.Sprintf("-device")) // create new pci bus
-				args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+				addBus()
 			}
 		}
 
