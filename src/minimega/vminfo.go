@@ -21,6 +21,11 @@ import (
 	"time"
 )
 
+const (
+	DEV_PER_BUS    = 32
+	DEV_PER_VIRTIO = 30 // Max of 30 vserials/device (0 and 32 are reserved)
+)
+
 type vmInfo struct {
 	ID int
 
@@ -33,6 +38,8 @@ type vmInfo struct {
 	Append     string
 	Snapshot   bool
 	UUID       string
+	serials    int
+	vserials   int
 
 	MigratePath string
 	DiskPaths   []string
@@ -129,7 +136,11 @@ func (info *vmInfo) Copy() *vmInfo {
 	copy(newInfo.NetDrivers, info.NetDrivers)
 	newInfo.Snapshot = info.Snapshot
 	newInfo.UUID = info.UUID
-	// Hotplug and tags aren't allocated until later in launch()
+
+	newInfo.serials = info.serials
+	newInfo.vserials = info.vserials
+
+	// Hotplug isn't allocated until later in launch()
 	return newInfo
 }
 
@@ -152,6 +163,8 @@ func (vm *vmInfo) configToString() string {
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
 	fmt.Fprintf(w, "Networks:\t%v\n", vm.networkString())
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
+	fmt.Fprintf(w, "Serials:\t%v\n", vm.serials)
+	fmt.Fprintf(w, "Virtio-serials:\t%v\n", vm.vserials)
 	w.Flush()
 	return o.String()
 }
@@ -549,11 +562,15 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 	args = append(args, "-device")
 	args = append(args, "virtio-serial")
 
-	args = append(args, "-chardev")
-	args = append(args, "socket,id=charserial0,path="+vm.instancePath+"serial,server,nowait")
+	// this is non-virtio serial ports
+	// for virtio-serial, look below near the net code
+	for i := 0; i < vm.serials; i++ {
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%vserial%v,server,nowait", i, vm.instancePath, i))
 
-	args = append(args, "-device")
-	args = append(args, "virtserialport,chardev=charserial0,id=serial0,name=serial0")
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
+	}
 
 	args = append(args, "-pidfile")
 	args = append(args, vm.instancePath+"qemu.pid")
@@ -605,10 +622,16 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 		args = append(args, "once=d")
 	}
 
-	bus := 1
-	addr := 1
-	args = append(args, fmt.Sprintf("-device"))
-	args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+	// net
+	var bus, addr int
+	addBus := func() {
+		addr = 1 // start at 1 because 0 is reserved
+		bus++
+		args = append(args, fmt.Sprintf("-device"))
+		args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+	}
+
+	addBus()
 	for i, tap := range vm.Taps {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", tap, tap))
@@ -622,12 +645,35 @@ func (vm *vmInfo) vmGetArgs(commit bool) []string {
 		}
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", vm.NetDrivers[i], tap, vm.Macs[i], bus, addr))
 		addr++
-		if addr == 32 {
-			addr = 1
-			bus++
-			args = append(args, fmt.Sprintf("-device"))
-			args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
+		if addr == DEV_PER_BUS {
+			addBus()
 		}
+	}
+
+	// virtio-serial
+	virtio_slot := -1 // start at -1 since we immediately increment
+	for i := 0; i < vm.vserials; i++ {
+		// qemu port number
+		nr := i%DEV_PER_VIRTIO + 1
+
+		// If port is 1, we're out of slots on the current virtio-serial-pci
+		// device or we're on the first iteration => make a new device
+		if nr == 1 {
+			virtio_slot++
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtio_slot, bus, addr))
+
+			addr++
+			if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+				addBus()
+			}
+		}
+
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%vvirtio-serial%v,server,nowait", i, vm.instancePath, i))
+
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", nr, virtio_slot, i, i, i))
 	}
 
 	// hook for hugepage support
