@@ -21,6 +21,8 @@ type Command struct {
 
 	Call CLIFunc `json:"-"`
 
+	Record bool // record command in history (or not), default is true
+
 	// Set when the command is intentionally a NoOp (the original string
 	// contains just a comment). This was added to ensure that lines containing
 	// only a comment are recorded in the history.
@@ -97,7 +99,7 @@ outer:
 			return &cmd, i, exact
 		case item.Type == commandItem:
 			// Parse the subcommand
-			subCmd, err := CompileCommand(input.items[i:].String())
+			subCmd, err := Compile(input.items[i:].String())
 			if err != nil {
 				return nil, i, exact
 			}

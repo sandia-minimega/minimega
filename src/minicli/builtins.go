@@ -154,6 +154,24 @@ Note: the annotate flag controls the presence of the host column.`,
 		},
 		Call: cliColumns,
 	},
+	{ // record
+		HelpShort: "enable or disable history recording",
+		HelpLong: `
+Enable or disable the recording of a given command in the command history.`,
+		Patterns: []string{
+			".record [true,false]",
+			".record <true,false> (command)",
+		},
+		Call: func(c *Command, out chan Responses) {
+			if c.Subcommand != nil {
+				c.Record = c.BoolArgs["true"]
+			} else if !c.BoolArgs["true"] {
+				// Don't record `.record false` in history
+				c.Record = false
+			}
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Record })
+		},
+	},
 }
 
 var hostname string

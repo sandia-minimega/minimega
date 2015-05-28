@@ -188,10 +188,11 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cmd := minicli.MustCompile(cmdStr)
+	cmd.Record = false
 
 	var screenshot []byte
 
-	for resps := range runCommand(cmd, false) {
+	for resps := range runCommand(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -348,7 +349,7 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 		Class:   "hover",
 	}
 
-	cmd, err := minicli.CompileCommand("host")
+	cmd, err := minicli.Compile("host")
 	if err != nil {
 		// Should never happen
 		log.Fatalln(err)

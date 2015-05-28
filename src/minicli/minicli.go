@@ -28,14 +28,19 @@ type Flags struct {
 	Headers  bool
 	Sort     bool
 	Mode     int
+	Record   bool
 }
 
 var defaultFlags = Flags{
+	// Output flags
 	Annotate: true,
 	Compress: true,
 	Headers:  true,
 	Sort:     true,
 	Mode:     defaultMode,
+
+	// Command flags
+	Record: true,
 }
 
 var handlers []*Handler
@@ -92,7 +97,7 @@ func Register(h *Handler) error {
 // Process raw input text. An error is returned if parsing the input text
 // failed.
 func ProcessString(input string, record bool) (chan Responses, error) {
-	c, err := CompileCommand(input)
+	c, err := Compile(input)
 	if err != nil {
 		return nil, err
 	}
@@ -107,11 +112,13 @@ func ProcessString(input string, record bool) (chan Responses, error) {
 		return out, nil
 	}
 
-	return ProcessCommand(c, record), nil
+	c.Record = record
+
+	return ProcessCommand(c), nil
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command, record bool) chan Responses {
+func ProcessCommand(c *Command) chan Responses {
 	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
@@ -124,7 +131,7 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 		}
 
 		// Append the command to the history
-		if record {
+		if c.Record {
 			history = append(history, c.Original)
 		}
 
@@ -135,7 +142,7 @@ func ProcessCommand(c *Command, record bool) chan Responses {
 }
 
 func MustCompile(input string) *Command {
-	c, err := CompileCommand(input)
+	c, err := Compile(input)
 	if err != nil {
 		log.Fatal("unable to compile `%s` -- %v", input, err)
 	}
@@ -145,7 +152,7 @@ func MustCompile(input string) *Command {
 
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
-func CompileCommand(input string) (*Command, error) {
+func Compile(input string) (*Command, error) {
 	input = strings.TrimSpace(input)
 	if len(input) == 0 {
 		return nil, nil
@@ -163,10 +170,16 @@ func CompileCommand(input string) (*Command, error) {
 
 	_, cmd := closestMatch(in)
 	if cmd != nil {
+		cmd.Record = defaultFlags.Record
 		return cmd, nil
 	}
 
 	return nil, fmt.Errorf("invalid command: `%s`", input)
+}
+
+// Compilef wraps fmt.Sprintf and Compile
+func Compilef(format string, args ...interface{}) (*Command, error) {
+	return Compile(fmt.Sprintf(format, args...))
 }
 
 func Suggest(input string) []string {
