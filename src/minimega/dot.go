@@ -57,7 +57,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	writer := bufio.NewWriter(fout)
 	fmt.Fprintln(writer, "graph minimega {")
-	fmt.Fprintln(writer, `size=\"8,11\";`)
+	fmt.Fprintln(writer, `size="8,11";`)
 	fmt.Fprintln(writer, "overlap=false;")
 	//fmt.Fprintf(fout, "Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
@@ -73,7 +73,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 				continue
 			}
 
-			text := fmt.Sprintf("%s:%s:%d:%v:%v", host, vm.Name, vm.ID, info[0], info[1])
+			text := fmt.Sprintf(`"%s:%s:%d:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
 			color := stateToColor[vm.State]
 
 			fmt.Fprintf(writer, "%s [style=filled, color=%s];\n", text, color)
