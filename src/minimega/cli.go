@@ -84,14 +84,16 @@ func runCommand(cmd *minicli.Command) chan minicli.Responses {
 // channel. This is useful if you want to get the output of a command from all
 // nodes in the cluster without having to run a command locally and over
 // meshage.
-func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Responses {
+func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	// Keep the original CLI input
 	original := cmd.Original
+	record := cmd.Record
 
 	cmd, err := minicli.Compilef("mesh send %s .record %t %s", Wildcard, record, original)
 	if err != nil {
 		log.Fatal("cannot run `%v` globally -- %v", original, err)
 	}
+	cmd.Record = record
 
 	cmdLock.Lock()
 	defer cmdLock.Unlock()

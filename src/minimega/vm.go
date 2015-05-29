@@ -557,7 +557,10 @@ func globalVmInfo(masks []string, filters []string) (map[string]VMs, map[string]
 	res := map[string]VMs{}
 	res2 := map[string]minicli.Responses{}
 
-	for resps := range runCommandGlobally(minicli.MustCompile(cmdStr), false) {
+	cmd := minicli.MustCompile(cmdStr)
+	cmd.Record = false
+
+	for resps := range runCommandGlobally(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
