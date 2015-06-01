@@ -69,24 +69,24 @@ func cliDot(c *minicli.Command) *minicli.Response {
 			info, err := vm.info([]string{"ip", "ip6"})
 			if err != nil || len(info) != 2 {
 				// Should never happen
-				log.Error("bad VM info: %s -- %s", host, vm.Name)
+				log.Error("bad VM info: %v -- %v", host, vm.Name)
 				continue
 			}
 
 			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
 			color := stateToColor[vm.State]
 
-			fmt.Fprintf(writer, "%s [style=filled, color=%s];\n", text, color)
+			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
 			for _, vlan := range vm.Networks {
-				fmt.Fprintf(writer, "%s -- %s\n", text, vlan)
+				fmt.Fprintf(writer, "%v -- %v\n", text, vlan)
 				vlans[vlan] = true
 			}
 		}
 	}
 
 	for vlan := range vlans {
-		fmt.Fprintf(writer, "%s;\n", vlan)
+		fmt.Fprintf(writer, "%v;\n", vlan)
 	}
 
 	fmt.Fprint(writer, "}")
