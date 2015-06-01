@@ -184,7 +184,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	cmdStr := fmt.Sprintf("vm screenshot %s %s", id, size)
 	if host != hostname {
-		cmdStr = fmt.Sprintf("mesh send %s %s", host, cmdStr)
+		cmdStr = fmt.Sprintf("mesh send %s .record false %s", host, cmdStr)
 	}
 
 	cmd := minicli.MustCompile(cmdStr)
@@ -349,13 +349,10 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 		Class:   "hover",
 	}
 
-	cmd, err := minicli.Compile("host")
-	if err != nil {
-		// Should never happen
-		log.Fatalln(err)
-	}
+	cmd := minicli.MustCompile("host")
+	cmd.Record = false
 
-	for resps := range runCommandGlobally(cmd, false) {
+	for resps := range runCommandGlobally(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
