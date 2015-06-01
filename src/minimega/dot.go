@@ -73,7 +73,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 				continue
 			}
 
-			text := fmt.Sprintf(`"%s:%s:%d:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
+			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
 			color := stateToColor[vm.State]
 
 			fmt.Fprintf(writer, "%s [style=filled, color=%s];\n", text, color)
