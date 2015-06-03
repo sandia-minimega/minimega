@@ -22,7 +22,8 @@ $(document).ready(function () {
                             //              vlanLinks[2] = [5]
                             //              vlanLinks[5] = []
     var vlanMachines = [];  // Machines on each vlan
-    var nodeIndexFromValue = [];    // table correlating a vlan number and its position in graph.nodes
+    var nodeIndexFromValue = [];    // Table correlating a vlan number and its position in graph.nodes
+    var unconnectedMachines = [];   // List of machines that aren't on any vlan
     var graph = {
         "nodes": [],
         "links": []
@@ -34,7 +35,14 @@ $(document).ready(function () {
     // generate vlanList
     graphData.forEach(function (currentVM, i, array) {
         var vmName = currentVM[vlanNameIndex];
-        var vlans = currentVM[vlanFieldIndex].slice(1, -1).split(" ").map(Number).sort();
+        var vlanString = currentVM[vlanFieldIndex];
+        if (vlanString == "[]") {
+            unconnectedMachines.push(vmName);
+            return;
+        }
+
+        // If we haven't already returned, the VM has at least one vlan assigned
+        var vlans = vlanString.slice(1, -1).split(" ").map(Number).sort();
         if (vlans.length > 1) multipleVlans.push(vlans);
         vlans.forEach(function (vlan, i, array) {
             vlanWeight[vlan] = (vlanWeight[vlan] === undefined) ? 0 : vlanWeight[vlan] + 1;
@@ -48,9 +56,13 @@ $(document).ready(function () {
     });
 
     vlanList.forEach(function (vlan, i, array) {
-        graph.nodes.push({"name": vlan, "group": 0});
+        graph.nodes.push({"name": vlan, "group": 0, "unconnected": false});
         nodeIndexFromValue[vlan] = graph.nodes.length - 1;
         vlanLinks[vlan] = [];
+    });
+
+    unconnectedMachines.forEach(function (machine, i, array) {
+        graph.nodes.push({"name": machine, "group": 1, "unconnected": true});
     });
 
     // generate the vlanLinks list
@@ -154,13 +166,23 @@ $(document).ready(function () {
 
     var circle = node.append("circle")
             .attr("class", "node")
-            .attr("r", function (d) { return radiusScale(vlanWeight[Number(d.name)]); })
+            .attr("r", function (d) {
+                if (!d.unconnected)
+                    return radiusScale(vlanWeight[Number(d.name)]);
+                else
+                    return radiusScale(1);
+            })
             .style("fill", function (d) { return color(d.group); });
 
     node.append("text")
             .attr("class", "vlan-number")
             .attr("y", "5")
-            .text(function (d) { return d.name; });
+            .text(function (d) {
+                if (!d.unconnected)
+                    return d.name;
+                else
+                    return " ";
+            });
 
     var popupContainer = svg.append("g")
                     .attr("id", "popup");
@@ -172,7 +194,12 @@ $(document).ready(function () {
     popup.append("text")
             .attr("class", "vlan-machine")
         .selectAll("tspan")
-        .data(function (d) { return vlanMachines[Number(d.name)]; })
+        .data(function (d) {
+                if (!d.unconnected)
+                    return vlanMachines[Number(d.name)];
+                else
+                    return [d.name];
+        })
         .enter()
             .append("tspan")
             .attr("x", 0)
@@ -206,7 +233,7 @@ $(document).ready(function () {
         var factor = rezoom();
         node.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
         popup.attr("transform", function (d) {
-            var offset = d3.transform(d3.select("#graph-container").attr("style").split(" s")[0].slice(10).split("px").join("")).translate; // Sorry for this one.
+            var offset = d3.transform(d3.select("#graph-container").attr("style").split(" s")[0].slice(10).split("px").join("")).translate; // Really sorry for this one.
             var centeringOffset = this.getBoundingClientRect()["height"] / 2;
             offset[0] += d3.select('#graph-container > *[data-node="' + d3.select(this).attr("data-node") + '"]').node().getBoundingClientRect()["width"] / 2;
             offset[1] -= centeringOffset;
@@ -269,6 +296,4 @@ $(document).ready(function () {
             force.size([chartWidth, chartHeight]).resume();
         };
     })(force));
-
-    window.repositionPopup = repositionPopup;
 });
