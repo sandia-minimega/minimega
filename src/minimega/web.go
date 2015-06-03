@@ -132,6 +132,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/tags", webVMTags)
 	mux.HandleFunc("/tiles", webTileVMs)
+	mux.HandleFunc("/graph", webGraphVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
 
@@ -492,4 +493,90 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	webRenderTemplate(w, "tiles.html", params)
+}
+
+func webGraphVMs(w http.ResponseWriter, r *http.Request) {
+	// HAX: Part of code to hack around "dynamic" fields in vm info.
+	findHeader := func(needle string, header []string) (int, error) {
+		for i, v := range header {
+			if v == needle {
+				return i, nil
+			}
+		}
+		return 0, fmt.Errorf("header `%s` not found", needle)
+	}
+
+	table := htmlTable{
+		Header:  []string{"host", "screenshot"},
+		Tabular: [][]interface{}{},
+		ID:      "example",
+		Class:   "hover",
+	}
+	table.Header = append(table.Header, vmMasks...)
+
+	stateMask := VM_QUIT | VM_ERROR
+
+	info, raw := globalVmInfo(nil, nil)
+	for host, vms := range info {
+		for _, vm := range vms {
+			var buf bytes.Buffer
+			if vm.State&stateMask == 0 {
+				params := vmScreenshotParams{
+					Host: host,
+					Name: vm.Name,
+					Port: 5900 + vm.ID,
+					ID:   vm.ID,
+					Size: 140,
+				}
+
+				if err := web.Templates.ExecuteTemplate(&buf, "screenshot", &params); err != nil {
+					log.Error("unable to execute template screenshot -- %v", err)
+					continue
+				}
+			}
+
+			res := []interface{}{host, template.HTML(buf.String())}
+
+			row, err := vm.info(vmMasks)
+			if err != nil {
+				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name, err)
+				continue
+			}
+
+			// HAX: Patch up "dynamic" fields from tabular data. This will be
+			// deleted when we track all the VM state in the VM struct.
+			for i, v := range vmMasks {
+				id := fmt.Sprintf("%v", vm.ID)
+				switch v {
+				case "ip", "ip6", "cc_active":
+					log.Debug("patching `%s` field for `%s` host", v, host)
+					for _, resp := range raw[host] {
+						idIdx, err := findHeader("id", resp.Header)
+						if err != nil {
+							log.Debug("%v", err)
+							continue
+						}
+
+						vIdx, err := findHeader(v, resp.Header)
+						if err != nil {
+							log.Debug("%v", err)
+							continue
+						}
+
+						for _, r := range resp.Tabular {
+							if id == r[idIdx] {
+								row[i] = r[vIdx]
+							}
+						}
+					}
+				}
+
+				res = append(res, row[i])
+			}
+
+			table.Tabular = append(table.Tabular, res)
+		}
+	}
+
+	webRenderTemplate(w, "graph.html", table)
 }

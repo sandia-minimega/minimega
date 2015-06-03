@@ -1,0 +1,85 @@
+{{template "header"}}
+<body>
+{{template "nav"}}
+
+	<style type="text/css">
+
+body {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+}
+
+.node {
+	cursor: pointer;
+}
+
+.link {
+	stroke: #999;
+	stroke-opacity: .6;
+}
+
+#chart {
+	width: 90%;
+	height: 70%;
+	background-color: #fff;
+	border: 1px solid #dedede;
+	border-radius: 4px;
+	box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.055);
+	margin: 8px 22px 8px 22px;
+
+	-webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+.vlan-number, .vlan-machine {
+	pointer-events: none;
+}
+
+.vlan-number {
+	fill: white;
+	text-anchor: middle;
+}
+
+.vlan-machine {
+	fill: white;
+}
+
+#popup > g {
+	display: none;
+}
+
+#graph-container {
+	/*CAUSES ISSUES IN FIREFOX. DISABLE THERE.*/
+	transition: transform 0.75s ease-out; 
+}
+
+#popup > g {
+	transition: transform 0.75s ease-out; 
+}
+	</style>
+
+	<div id="chart"></div>
+
+	<script type="text/javascript">
+		// Build an array of the headings for each field.
+		var graphFieldNames =	[ {{ range .Header }}
+									"{{.}}",
+								{{end}} ];
+		// Build a list of arrays of data. Each array is the data for a single VM.
+		var graphData		=	[ {{ range .Tabular }}
+									[ {{ range . }}
+										"{{.}}",
+									{{end}} ],
+								{{end}} ]
+	</script>
+	<script src="/d3/d3.min.js"></script>
+	<script type="text/javascript" src="/include/js/graph.js"></script>
+</body>
+{{template "footer"}}
