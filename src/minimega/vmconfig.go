@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"strconv"
 	"strings"
 )
 
@@ -97,6 +98,12 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"snapshot": vmConfigBool(func(vm interface{}) *bool {
 		return &mustKVMConfig(vm).Snapshot
 	}, true),
+	"serial": vmConfigInt(func(vm interface{}) *int {
+		return &mustKVMConfig(vm).SerialPorts
+	}, "number", 1), // TODO: What should default be?
+	"virtio-serial": vmConfigInt(func(vm interface{}) *int {
+		return &mustKVMConfig(vm).VirtioPorts
+	}, "number", 0), // TODO: What should default be?
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
 	}, "qemu-append", "kvm"),
@@ -167,6 +174,22 @@ func vmConfigBool(fn func(interface{}) *bool, defaultVal bool) VMConfigFns {
 			} else {
 				log.Fatalln("someone goofed on the patterns, bool args should be true/false")
 			}
+			return nil
+		},
+		Clear: func(vm interface{}) { *fn(vm) = defaultVal },
+		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
+	}
+}
+
+func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfigFns {
+	return VMConfigFns{
+		Update: func(vm interface{}, c *minicli.Command) error {
+			v, err := strconv.Atoi(c.StringArgs[arg])
+			if err != nil {
+				return err
+			}
+
+			*fn(vm) = v
 			return nil
 		},
 		Clear: func(vm interface{}) { *fn(vm) = defaultVal },

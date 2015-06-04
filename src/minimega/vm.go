@@ -382,7 +382,7 @@ func (vms *vmSorter) Less(i, j int) bool {
 	}
 }
 
-func vmGetAllSerialPorts() []string {
+func vmGetFirstVirtioPort() []string {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
@@ -392,7 +392,9 @@ func vmGetAllSerialPorts() []string {
 	for _, vm := range vms {
 		// TODO: non-kvm VMs?
 		if vm, ok := vm.(*vmKVM); ok && vm.State()&mask != 0 {
-			ret = append(ret, vm.instancePath+"serial")
+			if vm.VirtioPorts > 0 {
+				ret = append(ret, vm.instancePath+"virtio-serial0")
+			}
 		}
 	}
 	return ret
@@ -522,7 +524,10 @@ func globalVmInfo(masks []string, filters []string) (map[string]VMs, map[string]
 	res := map[string]VMs{}
 	res2 := map[string]minicli.Responses{}
 
-	for resps := range runCommandGlobally(minicli.MustCompile(cmdStr), false) {
+	cmd := minicli.MustCompile(cmdStr)
+	cmd.Record = false
+
+	for resps := range runCommandGlobally(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)

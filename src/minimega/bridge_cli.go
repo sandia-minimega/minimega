@@ -76,11 +76,17 @@ When called with no arguments, display information about all managed bridges.
 To add a trunk interface to a specific bridge, use 'bridge trunk'. For example,
 to add interface bar to bridge foo:
 
-	bridge trunk foo bar`,
+	bridge trunk foo bar
+
+To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
+
+	bridge tunnel vxlan, mega_bridge 10.0.0.1`,
 		Patterns: []string{
 			"bridge",
 			"bridge trunk <bridge> <interface>",
 			"bridge notrunk <bridge> <interface>",
+			"bridge tunnel <vxlan,gre> <bridge> <remote ip>",
+			"bridge notunnel <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
 	},
@@ -155,8 +161,9 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 
 	bridge := c.StringArgs["bridge"]
 	iface := c.StringArgs["interface"]
+	remoteIP := c.StringArgs["remote"]
 
-	if strings.Contains(c.Original, "notrunk") {
+	if strings.HasPrefix(c.Original, "bridge notrunk") {
 		b, err := getBridge(bridge)
 		if err != nil {
 			resp.Error = err.Error()
@@ -167,7 +174,7 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			resp.Error = err.Error()
 			return resp
 		}
-	} else if strings.Contains(c.Original, "trunk") {
+	} else if strings.HasPrefix(c.Original, "bridge trunk") {
 		b, err := getBridge(bridge)
 		if err != nil {
 			resp.Error = err.Error()
@@ -178,8 +185,39 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			resp.Error = err.Error()
 			return resp
 		}
+	} else if strings.HasPrefix(c.Original, "bridge tunnel") {
+		b, err := getBridge(bridge)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+
+		var t int
+		if c.BoolArgs["gre"] {
+			t = TYPE_GRE
+		} else {
+			t = TYPE_VXLAN
+		}
+
+		err = b.TunnelAdd(t, remoteIP)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+	} else if strings.HasPrefix(c.Original, "bridge notunnel") {
+		b, err := getBridge(bridge)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+
+		err = b.TunnelRemove(iface)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
 	} else {
-		resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS", "Trunk port"}
+		resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
 		resp.Tabular = [][]string{}
 
 		bridgeLock.Lock()
@@ -195,7 +233,8 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 				strconv.FormatBool(v.exists),
 				strconv.FormatBool(v.preExist),
 				fmt.Sprintf("%v", vlans),
-				fmt.Sprintf("%v", v.Trunk)}
+				fmt.Sprintf("%v", v.Trunk),
+				fmt.Sprintf("%v", v.Tunnel)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 	}

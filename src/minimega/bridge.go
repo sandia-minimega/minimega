@@ -34,6 +34,7 @@ type bridge struct {
 	Lock     sync.Mutex
 	nf       *gonetflow.Netflow
 	Trunk    []string
+	Tunnel   []string
 }
 
 type vlan struct {
@@ -48,6 +49,8 @@ type tap struct {
 const (
 	DEFAULT_BRIDGE = "mega_bridge"
 	OVS_TIMEOUT    = time.Duration(5 * time.Second)
+	TYPE_VXLAN     = 1
+	TYPE_GRE       = 2
 )
 
 var (
@@ -751,6 +754,105 @@ func (b *bridge) TapDestroy(lan int, tap string) error {
 		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return e
 	}
+	return nil
+}
+
+// add a vxlan or GRE tunnel to a bridge
+func (b *bridge) TunnelAdd(t int, remoteIP string) error {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	var tunnelType string
+	switch t {
+	case TYPE_VXLAN:
+		tunnelType = "vxlan"
+	case TYPE_GRE:
+		tunnelType = "gre"
+	default:
+		return fmt.Errorf("invalid tunnel type: %v", t)
+	}
+
+	tapName, err := getNewTap()
+	if err != nil {
+		return err
+	}
+
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"add-port",
+			b.Name,
+			tapName,
+			"--",
+			"set",
+			"interface",
+			tapName,
+			fmt.Sprintf("type=%v", tunnelType),
+			fmt.Sprintf("options:remote_ip=%v", remoteIP),
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+
+	log.Debug("adding ovs tunnel with cmd: %v", cmd)
+	ovsLock.Lock()
+	err = cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("TunnelAdd: %v: %v", err, sErr.String())
+		return e
+	}
+
+	b.Tunnel = append(b.Tunnel, tapName)
+
+	return nil
+}
+
+// remove trunk port from a bridge
+func (b *bridge) TunnelRemove(iface string) error {
+	// find this iface in the tunnel list
+	index := -1
+	for i, v := range b.Tunnel {
+		if v == iface {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return fmt.Errorf("no tunnel port %v on bridge %v", iface, b.Name)
+	}
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("ovs")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"del-port",
+			b.Name,
+			b.Tunnel[index],
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("removing ovs tunnel with cmd: %v", cmd)
+	ovsLock.Lock()
+	err := cmdTimeout(cmd, OVS_TIMEOUT)
+	ovsLock.Unlock()
+	if err != nil {
+		e := fmt.Errorf("TunnelRemove: %v: %v", err, sErr.String())
+		return e
+	}
+
+	b.Tunnel = append(b.Tunnel[:index], b.Tunnel[index+1:]...)
+
 	return nil
 }
 

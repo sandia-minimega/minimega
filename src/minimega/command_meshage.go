@@ -105,14 +105,14 @@ func meshageHandler() {
 		go func() {
 			mCmd := m.Body.(meshageCommand)
 
-			cmd, err := minicli.CompileCommand(mCmd.Original)
+			cmd, err := minicli.Compile(mCmd.Original)
 			if err != nil {
 				log.Error("invalid command from mesh: `%s`", mCmd.Original)
 				return
 			}
 
 			resps := []minicli.Responses{}
-			for resp := range runCommand(cmd, true) {
+			for resp := range runCommand(cmd) {
 				resps = append(resps, resp)
 			}
 

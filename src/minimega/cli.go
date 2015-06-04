@@ -71,11 +71,11 @@ var (
 
 // Wrapper for minicli.ProcessCommand. Ensures that the command execution lock
 // is acquired before running the command.
-func runCommand(cmd *minicli.Command, record bool) chan minicli.Responses {
+func runCommand(cmd *minicli.Command) chan minicli.Responses {
 	cmdLock.Lock()
 	defer cmdLock.Unlock()
 
-	return minicli.ProcessCommand(cmd, record)
+	return minicli.ProcessCommand(cmd)
 }
 
 // Wrapper for minicli.ProcessCommand for commands that use meshage.
@@ -84,12 +84,16 @@ func runCommand(cmd *minicli.Command, record bool) chan minicli.Responses {
 // channel. This is useful if you want to get the output of a command from all
 // nodes in the cluster without having to run a command locally and over
 // meshage.
-func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Responses {
-	cmdStr := fmt.Sprintf("mesh send %s %s", Wildcard, cmd.Original)
-	cmd, err := minicli.CompileCommand(cmdStr)
+func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
+	// Keep the original CLI input
+	original := cmd.Original
+	record := cmd.Record
+
+	cmd, err := minicli.Compilef("mesh send %s .record %t %s", Wildcard, record, original)
 	if err != nil {
-		log.Fatal("cannot run `%v` globally -- %v", cmd.Original, err)
+		log.Fatal("cannot run `%v` globally -- %v", original, err)
 	}
+	cmd.Record = record
 
 	cmdLock.Lock()
 	defer cmdLock.Unlock()
@@ -101,8 +105,8 @@ func runCommandGlobally(cmd *minicli.Command, record bool) chan minicli.Response
 	// Run the command (should be `mesh send all ...` and the subcommand which
 	// should run locally).
 	ins := []chan minicli.Responses{
-		minicli.ProcessCommand(cmd, record),
-		minicli.ProcessCommand(cmd.Subcommand, record),
+		minicli.ProcessCommand(cmd),
+		minicli.ProcessCommand(cmd.Subcommand),
 	}
 
 	// De-mux ins into out
@@ -137,7 +141,7 @@ func cliLocal() {
 		command := string(line)
 		log.Debug("got from stdin:", command)
 
-		cmd, err := minicli.CompileCommand(command)
+		cmd, err := minicli.Compile(command)
 		if err != nil {
 			log.Error("%v", err)
 			//fmt.Printf("closest match: TODO\n")
@@ -151,9 +155,11 @@ func cliLocal() {
 		}
 
 		// HAX: Don't record the read command
-		record := !hasCommand(cmd, "read")
+		if hasCommand(cmd, "read") {
+			cmd.Record = false
+		}
 
-		for resp := range runCommand(cmd, record) {
+		for resp := range runCommand(cmd) {
 			// print the responses
 			pageOutput(resp.String())
 
@@ -216,7 +222,7 @@ func cliAttach() {
 
 		exitNext = false
 
-		cmd, err := minicli.CompileCommand(command)
+		cmd, err := minicli.Compile(command)
 		if err != nil {
 			log.Error("%v", err)
 			//fmt.Println("closest match: TODO")
@@ -252,7 +258,7 @@ func localCommand() {
 	command := strings.Join(a, " ")
 
 	// TODO: Need to escape?
-	cmd, err := minicli.CompileCommand(command)
+	cmd, err := minicli.Compile(command)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
