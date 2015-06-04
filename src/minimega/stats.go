@@ -24,11 +24,12 @@ const (
 )
 
 type tapStat struct {
-	bridge  string
-	rxStart int
-	rxStop  int
-	txStart int
-	txStop  int
+	bridge      string
+	rxStart     int
+	rxStop      int
+	txStart     int
+	txStop      int
+	start, stop time.Time
 }
 
 var (
@@ -79,8 +80,9 @@ var hostInfoKeys = []string{
 }
 
 func (t tapStat) String() string {
-	rx := float64(t.rxStop-t.rxStart) / float64(MEGABYTE)
-	tx := float64(t.txStop-t.txStart) / float64(MEGABYTE)
+	duration := t.stop.Sub(t.start).Seconds()
+	rx := float64(t.rxStop-t.rxStart) / float64(MEGABYTE) / duration
+	tx := float64(t.txStop-t.txStart) / float64(MEGABYTE) / duration
 
 	// it's possible a VM went away during a previous poll, which can make
 	// our value negative and invalid. Check for that and zero the field if
@@ -210,19 +212,33 @@ func hostStatsBandwidth() (string, error) {
 	// get all rx and tx totals
 	var rx int
 	var tx int
+	var duration float64
 	for _, t := range bandwidthStats {
 		rx += t.rxStop - t.rxStart
 		tx += t.txStop - t.txStart
+
+		duration += t.stop.Sub(t.start).Seconds()
 	}
 
-	rxMB := float64(rx) / float64(MEGABYTE)
-	txMB := float64(tx) / float64(MEGABYTE)
+	rxMB := float64(rx) / float64(MEGABYTE) / duration
+	txMB := float64(tx) / float64(MEGABYTE) / duration
 
 	return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", rxMB, txMB), nil
 }
 
+// readNetStats reads the tx or rx bytes for the given interface
+func readNetStats(iface, dir string) (int, error) {
+	d, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/%v_bytes", iface, dir))
+	if err != nil {
+		return 0, err
+	}
+
+	return strconv.Atoi(strings.TrimSpace(string(d)))
+}
+
 // enumerate bytes/second on all interfaces owned by minimega
 func bandwidthCollector() {
+	var err error
 	for {
 		time.Sleep(BANDWIDTH_INTERVAL * time.Second)
 
@@ -239,58 +255,38 @@ func bandwidthCollector() {
 
 		// for each tap, get rx/tx bytes
 		for k, v := range stats {
-			d, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/rx_bytes", k))
+			v.rxStart, err = readNetStats(k, "rx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
-			r, err := strconv.Atoi(strings.TrimSpace(string(d)))
-			if err != nil {
-				log.Debugln(err)
-				continue
-			}
-			v.rxStart = r
 
-			d, err = ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/tx_bytes", k))
+			v.txStart, err = readNetStats(k, "tx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
-			t, err := strconv.Atoi(strings.TrimSpace(string(d)))
-			if err != nil {
-				log.Debugln(err)
-				continue
-			}
-			v.txStart = t
+
+			v.start = time.Now()
 		}
 
 		time.Sleep(1 * time.Second)
 
 		// and again
 		for k, v := range stats {
-			d, err := ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/rx_bytes", k))
+			v.rxStop, err = readNetStats(k, "rx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
-			r, err := strconv.Atoi(strings.TrimSpace(string(d)))
-			if err != nil {
-				log.Debugln(err)
-				continue
-			}
-			v.rxStop = r
 
-			d, err = ioutil.ReadFile(fmt.Sprintf("/sys/class/net/%v/statistics/tx_bytes", k))
+			v.txStop, err = readNetStats(k, "tx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
-			t, err := strconv.Atoi(strings.TrimSpace(string(d)))
-			if err != nil {
-				log.Debugln(err)
-				continue
-			}
-			v.txStop = t
+
+			v.stop = time.Now()
 		}
 
 		bandwidthLock.Lock()
