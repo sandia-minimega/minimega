@@ -61,6 +61,8 @@ type VM interface {
 	Tag(tag string) string
 	Tags() map[string]string
 	ClearTags()
+
+	UpdateBW()
 }
 
 type VMConfig struct {
@@ -83,6 +85,7 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
+	Stats  *tapStat // Bandwidth stats, updated by calling UpdateBW
 }
 
 type vmBase struct {
@@ -227,6 +230,18 @@ func (vm *vmBase) ClearTags() {
 	vm.tags = make(map[string]string)
 }
 
+func (vm *vmBase) UpdateBW() {
+	bandwidthLock.Lock()
+	defer bandwidthLock.Unlock()
+
+	for _, v := range vm.Networks {
+		v.Stats = nil
+		if t := bandwidthStats[v.Tap]; t != nil {
+			v.Stats = t
+		}
+	}
+}
+
 func (vm *vmBase) info(mask string) (string, error) {
 	if fns, ok := vmConfigFns[mask]; ok {
 		return fns.Print(&vm.VMConfig), nil
@@ -272,16 +287,13 @@ func (vm *vmBase) info(mask string) (string, error) {
 			vals = append(vals, v.IP6)
 		}
 	case "bandwidth":
-		bandwidthLock.Lock()
 		for _, v := range vm.Networks {
-			t := bandwidthStats[v.Tap]
-			if t == nil {
-				vals = append(vals, "0.0/0.0")
+			if v.Stats == nil {
+				vals = append(vals, "N/A")
 			} else {
-				vals = append(vals, fmt.Sprintf("%v", t))
+				vals = append(vals, fmt.Sprintf("%v", v.Stats))
 			}
 		}
-		bandwidthLock.Unlock()
 	case "tags":
 		return fmt.Sprintf("%v", vm.tags), nil
 	default:

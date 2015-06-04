@@ -676,6 +676,11 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vmType = "kvm"
 	}
 
+	// Populate the latest bandwidth stats for all VMs
+	for _, vm := range vms {
+		vm.UpdateBW()
+	}
+
 	resp.Header, resp.Tabular, err = vms.info(vmType)
 	if err != nil {
 		resp.Error = err.Error()
