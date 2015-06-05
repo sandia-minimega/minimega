@@ -1,0 +1,59 @@
+vm config memory
+vm config memory foo
+vm config memory 1024
+vm config memory
+clear vm config memory
+vm config memory
+vm config vcpus
+vm config vcpus foo
+vm config vcpus 2
+vm config vcpus
+clear vm config vcpus
+vm config vcpus
+vm config cdrom
+vm config cdrom foo
+vm config cdrom
+clear vm config cdrom
+vm config cdrom
+vm config initrd
+vm config initrd foo
+vm config initrd
+clear vm config initrd
+vm config initrd
+vm config kernel
+vm config kernel foo
+vm config kernel
+clear vm config kernel
+vm config kernel
+vm config migrate
+vm config migrate foo
+vm config migrate
+clear vm config migrate
+vm config migrate
+vm config uuid
+vm config uuid foo
+vm config uuid
+clear vm config uuid
+vm config uuid
+vm config snapshot
+vm config snapshot true
+vm config snapshot
+vm config snapshot false
+vm config snapshot
+clear vm config snapshot
+vm config snapshot
+vm config disk
+vm config disk a b c
+vm config disk
+clear vm config disk
+vm config disk
+vm config qemu-append
+vm config qemu-append a b c
+vm config qemu-append
+clear vm config qemu-append
+vm config qemu-append
+vm config append
+vm config append a b c
+vm config append
+clear vm config append
+vm config append
