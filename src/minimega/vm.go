@@ -211,6 +211,8 @@ func (vm *vmBase) launch(name string, vmType VMType) error {
 	vm.id = <-vmIdChan
 	if name == "" {
 		vm.name = fmt.Sprintf("vm-%d", vm.id)
+	} else {
+		vm.name = name
 	}
 
 	vm.vmType = vmType
