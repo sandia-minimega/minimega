@@ -36,6 +36,8 @@ from collections import namedtuple
 #  versions of minimega that it can talk with.
 __version__ = '{{ version }}'
 
+# This is the version of minimega these bindings were created for:
+MM_VERSION = '{{ mm_version }}'
 
 class Error(Exception): pass
 class ValidationError(Error): pass
