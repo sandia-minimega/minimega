@@ -1,0 +1,5 @@
+.annotate false
+vm launch [0]
+vm launch all
+vm launch foo,[0]
+vm launch foo,all

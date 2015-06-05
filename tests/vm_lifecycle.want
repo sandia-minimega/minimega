@@ -1,0 +1,31 @@
+## .annotate false
+## vm launch foo[0-3]
+## .columns name,state vm info
+name | state
+foo0 | BUILDING
+foo1 | BUILDING
+foo2 | BUILDING
+foo3 | BUILDING
+## vm start foo0
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | BUILDING
+foo2 | BUILDING
+foo3 | BUILDING
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | BUILDING
+foo2 | BUILDING
+foo3 | BUILDING
+## vm kill foo1,foo3
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | QUIT
+foo2 | BUILDING
+foo3 | QUIT
+## vm kill all
+## vm flush
+## .columns name,state vm info

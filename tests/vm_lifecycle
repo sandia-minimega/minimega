@@ -1,0 +1,11 @@
+.annotate false
+vm launch foo[0-3]
+.columns name,state vm info
+vm start foo0
+.columns name,state vm info
+.columns name,state vm info
+vm kill foo1,foo3
+.columns name,state vm info
+vm kill all
+vm flush
+.columns name,state vm info
