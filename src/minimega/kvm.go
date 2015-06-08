@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"qmp"
 	"strconv"
@@ -49,9 +50,8 @@ type vmKVM struct {
 	KVMConfig // embed
 
 	// Internal variables
-	hotplug      map[int]string
-	instancePath string
-	kill         chan bool // kill channel to signal to shut a vm down
+	hotplug map[int]string
+	kill    chan bool // kill channel to signal to shut a vm down
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
@@ -63,8 +63,6 @@ type qemuOverride struct {
 }
 
 var (
-	kvmConfig *KVMConfig // current kvm config, updated by CLI
-
 	QemuOverrides      map[int]*qemuOverride
 	qemuOverrideIdChan chan int
 )
@@ -80,14 +78,12 @@ var kvmMasks = []string{
 }
 
 func init() {
-	kvmConfig = &KVMConfig{}
-
 	QemuOverrides = make(map[int]*qemuOverride)
 	qemuOverrideIdChan = makeIDChan()
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
-		fns.Clear(kvmConfig)
+		fns.Clear(&vmConfig.KVMConfig)
 	}
 }
 
@@ -107,8 +103,8 @@ func (old *KVMConfig) Copy() *KVMConfig {
 	return res
 }
 
-func (vm *vmKVM) Config() *VMConfig {
-	return &vm.VMConfig
+func (vm *vmKVM) Config() *BaseConfig {
+	return &vm.BaseConfig
 }
 
 func NewKVM() *vmKVM {
@@ -129,7 +125,7 @@ func (vm *vmKVM) Launch(name string, ack chan int) error {
 	if err := vm.vmBase.launch(name, KVM); err != nil {
 		return err
 	}
-	vm.KVMConfig = *kvmConfig.Copy() // deep-copy configured fields
+	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
 
 	vmLock.Lock()
 	vms[vm.id] = vm
@@ -225,7 +221,7 @@ func (vm *vmKVM) Info(masks []string) ([]string, error) {
 	return res, nil
 }
 
-func (vm *KVMConfig) configToString() string {
+func (vm *KVMConfig) String() string {
 	// create output
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
@@ -316,7 +312,6 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.id) + "/"
 	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
 	if err != nil {
 		log.Errorln(err)
@@ -419,7 +414,7 @@ func (vm *vmKVM) launch(ack chan int) {
 	vm.setState(VM_BUILDING)
 
 	// write the config for this vm
-	config := vm.configToString()
+	config := vm.String()
 	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
 	if err != nil {
 		log.Errorln(err)
@@ -461,6 +456,29 @@ func (vm *vmKVM) launch(ack chan int) {
 		}
 
 		vm.Networks[i].Tap = tap
+
+		updates := make(chan ipmac.IP)
+		go func(vm *vmKVM, net *NetConfig) {
+			defer close(updates)
+			for {
+				// TODO: need to acquire VM lock?
+				select {
+				case update := <-updates:
+					if update.IP4 != "" {
+						net.IP4 = update.IP4
+					} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
+						log.Debugln("ignoring link-local over existing IPv6 address")
+					} else if update.IP6 != "" {
+						net.IP6 = update.IP6
+					}
+				case <-vm.kill:
+					b.iml.DelMac(net.MAC)
+					return
+				}
+			}
+		}(vm, &net)
+
+		b.iml.AddMac(net.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {
@@ -478,7 +496,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		}
 	}
 
-	args = vm.vmGetArgs(true)
+	args = VMConfig{vm.BaseConfig, vm.KVMConfig}.qemuArgs(vm.ID(), vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
@@ -587,10 +605,11 @@ func (vm *vmKVM) qmpPath() string {
 }
 
 // build the horribly long qemu argument string
-func (vm *vmKVM) vmGetArgs(commit bool) []string {
+func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	var args []string
 
-	sId := strconv.Itoa(vm.id)
+	sId := strconv.Itoa(id)
+	qmpPath := path.Join(vmPath, "qmp")
 
 	args = append(args, process("qemu"))
 
@@ -617,7 +636,7 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 	args = append(args, vm.Vcpus)
 
 	args = append(args, "-qmp")
-	args = append(args, "unix:"+vm.qmpPath()+",server")
+	args = append(args, "unix:"+qmpPath+",server")
 
 	args = append(args, "-vga")
 	args = append(args, "cirrus")
@@ -632,14 +651,14 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 	// for virtio-serial, look below near the net code
 	for i := 0; i < vm.SerialPorts; i++ {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%vserial%v,server,nowait", i, vm.instancePath, i))
+		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%vserial%v,server,nowait", i, vmPath, i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
 	}
 
 	args = append(args, "-pidfile")
-	args = append(args, vm.instancePath+"qemu.pid")
+	args = append(args, path.Join(vmPath, "qemu.pid"))
 
 	args = append(args, "-k")
 	args = append(args, "en-us")
@@ -702,35 +721,6 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 		args = append(args, "-netdev")
 		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", net.Tap, net.Tap))
 		args = append(args, "-device")
-		if commit {
-			b, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-			}
-
-			updates := make(chan ipmac.IP)
-			go func(vm *vmKVM, net *NetConfig) {
-				defer close(updates)
-				for {
-					// TODO: need to acquire VM lock?
-					select {
-					case update := <-updates:
-						if update.IP4 != "" {
-							net.IP4 = update.IP4
-						} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
-							log.Debugln("ignoring link-local over existing IPv6 address")
-						} else if update.IP6 != "" {
-							net.IP6 = update.IP6
-						}
-					case <-vm.kill:
-						b.iml.DelMac(net.MAC)
-						return
-					}
-				}
-			}(vm, &net)
-
-			b.iml.AddMac(net.MAC, updates)
-		}
 		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", net.Driver, net.Tap, net.MAC, bus, addr))
 		addr++
 		if addr == DEV_PER_BUS {
@@ -758,7 +748,7 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 		}
 
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%vvirtio-serial%v,server,nowait", i, vm.instancePath, i))
+		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%vvirtio-serial%v,server,nowait", i, vmPath, i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", nr, virtio_slot, i, i, i))
@@ -777,7 +767,7 @@ func (vm *vmKVM) vmGetArgs(commit bool) []string {
 	args = append(args, "-uuid")
 	args = append(args, vm.UUID)
 
-	log.Info("args for vm %v is: %#v", vm.id, args)
+	log.Info("args for vm %v is: %#v", id, args)
 	return args
 }
 
@@ -826,8 +816,7 @@ func qemuOverrideString() string {
 	}
 	w.Flush()
 
-	// TODO
-	args := []string{} //vm.vmGetArgs(false)
+	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- just testing
 	preArgs := unescapeString(args)
 	postArgs := strings.Join(ParseQemuOverrides(args), " ")
 

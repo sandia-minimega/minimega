@@ -143,7 +143,7 @@ func unescapeString(input []string) string {
 		}
 	}
 	log.Debug("unescapeString generated: %v", ret)
-	return ret
+	return strings.TrimSpace(ret)
 }
 
 // cmdTimeout runs the command c and returns a timeout if it doesn't complete

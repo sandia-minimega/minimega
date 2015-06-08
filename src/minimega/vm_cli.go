@@ -897,16 +897,12 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = SavedVMConfig{
-			vmConfig:  vmConfig.Copy(),
-			kvmConfig: kvmConfig.Copy(),
-		}
+		savedInfo[c.StringArgs["name"]] = *vmConfig.Copy()
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
 			if s, ok := savedInfo[name]; ok {
-				vmConfig = s.vmConfig.Copy()
-				kvmConfig = s.kvmConfig.Copy()
+				vmConfig = *s.Copy()
 			} else {
 				resp.Error = fmt.Sprintf("config %v does not exist", name)
 			}
@@ -924,16 +920,15 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {
-			vmConfig = vm.Config().Copy()
+			vmConfig.BaseConfig = *vm.Config().Copy()
 			switch vm := vm.(type) {
 			case *vmKVM:
-				kvmConfig = vm.KVMConfig.Copy()
+				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
 			}
 		}
 	} else {
 		// Print the config
-		resp.Response = vmConfig.configToString() +
-			kvmConfig.configToString()
+		resp.Response = vmConfig.String()
 	}
 
 	return resp
@@ -949,11 +944,11 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	var fns VMConfigFns
 	var config interface{}
 
-	// Find the right config functions, vmConfigFns has highest priority
-	if fns, ok = vmConfigFns[field]; ok {
-		config = vmConfig
+	// Find the right config functions, baseConfigFns has highest priority
+	if fns, ok = baseConfigFns[field]; ok {
+		config = &vmConfig.BaseConfig
 	} else if fns, ok = kvmConfigFns[field]; ok {
-		config = kvmConfig
+		config = &vmConfig.KVMConfig
 	} else {
 		log.Fatalln("unknown config field: `%s`", field)
 	}
@@ -976,15 +971,15 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	var clearKVM = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["kvm"])
 	var cleared bool
 
-	for k, fns := range vmConfigFns {
+	for k, fns := range baseConfigFns {
 		if clearAll || c.BoolArgs[k] {
-			fns.Clear(vmConfig)
+			fns.Clear(&vmConfig.BaseConfig)
 			cleared = true
 		}
 	}
 	for k, fns := range kvmConfigFns {
 		if clearKVM || c.BoolArgs[k] {
-			fns.Clear(kvmConfig)
+			fns.Clear(&vmConfig.KVMConfig)
 			cleared = true
 		}
 	}
@@ -1321,7 +1316,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	// TODO: this isn't right... need Config to return *vmConfig
+	// TODO: this isn't right... need Config to return *baseConfig
 	net := &config.Networks[pos]
 
 	var b *bridge

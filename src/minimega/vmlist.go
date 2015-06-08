@@ -77,7 +77,7 @@ func (vms VMs) save(file *os.File, args []string) error {
 		// previous configuration.
 		cmds := []string{"clear vm config"}
 
-		cmds = append(cmds, saveConfig("", vmConfigFns, vm.Config())...)
+		cmds = append(cmds, saveConfig("", baseConfigFns, vm.Config())...)
 
 		switch vm := vm.(type) {
 		case *vmKVM:

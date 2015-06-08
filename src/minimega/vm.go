@@ -25,13 +25,13 @@ const (
 )
 
 var (
-	vmConfig *VMConfig // current vm config, updated by CLI
-
 	killAck  chan int
 	vmIdChan chan int
 	vmLock   sync.Mutex
 
-	savedInfo = make(map[string]SavedVMConfig)
+	vmConfig VMConfig // current kvm config, updated by CLI
+
+	savedInfo = make(map[string]VMConfig)
 )
 
 type VMType int
@@ -42,7 +42,7 @@ const (
 )
 
 type VM interface {
-	Config() *VMConfig
+	Config() *BaseConfig
 
 	ID() int
 	Name() string
@@ -65,16 +65,16 @@ type VM interface {
 	UpdateBW()
 }
 
-type VMConfig struct {
+type BaseConfig struct {
 	Vcpus  string // number of virtual cpus
 	Memory string // memory for the vm, in megabytes
 
 	Networks []NetConfig // ordered list of networks
 }
 
-type SavedVMConfig struct {
-	vmConfig  *VMConfig
-	kvmConfig *KVMConfig
+type VMConfig struct {
+	BaseConfig
+	KVMConfig
 }
 
 type NetConfig struct {
@@ -89,7 +89,7 @@ type NetConfig struct {
 }
 
 type vmBase struct {
-	VMConfig // embed
+	BaseConfig // embed
 
 	lock sync.Mutex
 
@@ -97,6 +97,8 @@ type vmBase struct {
 	name   string
 	state  VMState
 	vmType VMType
+
+	instancePath string
 
 	tags map[string]string
 }
@@ -135,7 +137,18 @@ func ParseVMType(s string) (VMType, error) {
 }
 
 func (old *VMConfig) Copy() *VMConfig {
-	res := new(VMConfig)
+	return &VMConfig{
+		BaseConfig: *old.BaseConfig.Copy(),
+		KVMConfig:  *old.KVMConfig.Copy(),
+	}
+}
+
+func (vm VMConfig) String() string {
+	return vm.BaseConfig.String() + vm.KVMConfig.String()
+}
+
+func (old *BaseConfig) Copy() *BaseConfig {
+	res := new(BaseConfig)
 
 	// Copy all fields
 	*res = *old
@@ -147,7 +160,7 @@ func (old *VMConfig) Copy() *VMConfig {
 	return res
 }
 
-func (vm *VMConfig) configToString() string {
+func (vm *BaseConfig) String() string {
 	// create output
 	var o bytes.Buffer
 	fmt.Fprintln(&o, "Current VM configuration:")
@@ -161,7 +174,7 @@ func (vm *VMConfig) configToString() string {
 	return o.String()
 }
 
-func (vm *VMConfig) NetworkString() string {
+func (vm *BaseConfig) NetworkString() string {
 	parts := []string{}
 	for _, net := range vm.Networks {
 		parts = append(parts, net.String())
@@ -206,7 +219,7 @@ func (vm *vmBase) Type() VMType {
 }
 
 func (vm *vmBase) launch(name string, vmType VMType) error {
-	vm.VMConfig = *vmConfig.Copy() // deep-copy configured fields
+	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
 
 	vm.id = <-vmIdChan
 	if name == "" {
@@ -214,6 +227,8 @@ func (vm *vmBase) launch(name string, vmType VMType) error {
 	} else {
 		vm.name = name
 	}
+
+	vm.instancePath = *f_base + strconv.Itoa(vm.id) + "/"
 
 	vm.vmType = vmType
 
@@ -242,8 +257,8 @@ func (vm *vmBase) UpdateBW() {
 }
 
 func (vm *vmBase) info(mask string) (string, error) {
-	if fns, ok := vmConfigFns[mask]; ok {
-		return fns.Print(&vm.VMConfig), nil
+	if fns, ok := baseConfigFns[mask]; ok {
+		return fns.Print(&vm.BaseConfig), nil
 	}
 
 	var vals []string
@@ -303,15 +318,14 @@ func (vm *vmBase) info(mask string) (string, error) {
 }
 
 func init() {
+	fmt.Println("here")
 	killAck = make(chan int)
-
-	vmConfig = &VMConfig{}
 
 	vmIdChan = makeIDChan()
 
 	// Reset everything to default
-	for _, fns := range vmConfigFns {
-		fns.Clear(vmConfig)
+	for _, fns := range baseConfigFns {
+		fns.Clear(&vmConfig.BaseConfig)
 	}
 }
 

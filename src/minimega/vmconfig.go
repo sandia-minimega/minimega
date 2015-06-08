@@ -19,33 +19,33 @@ type VMConfigFns struct {
 	PrintCLI func(interface{}) string // If not specified, Print is used
 }
 
-func mustVMConfig(vm interface{}) *VMConfig {
-	if vm, ok := vm.(*VMConfig); ok {
-		return vm
+func mustBaseConfig(val interface{}) *BaseConfig {
+	if val, ok := val.(*BaseConfig); ok {
+		return val
 	}
-	log.Fatal("`%#v` is not a VMConfig", vm)
+	log.Fatal("`%#v` is not a BaseConfig", val)
 	return nil
 }
 
-func mustKVMConfig(vm interface{}) *KVMConfig {
-	if vm, ok := vm.(*KVMConfig); ok {
-		return vm
+func mustKVMConfig(val interface{}) *KVMConfig {
+	if val, ok := val.(*KVMConfig); ok {
+		return val
 	}
-	log.Fatal("`%#v` is not a KVMConfig", vm)
+	log.Fatal("`%#v` is not a KVMConfig", val)
 	return nil
 }
 
 // Functions for configuring VMs.
-var vmConfigFns = map[string]VMConfigFns{
+var baseConfigFns = map[string]VMConfigFns{
 	"memory": vmConfigString(func(vm interface{}) *string {
-		return &mustVMConfig(vm).Memory
+		return &mustBaseConfig(vm).Memory
 	}, VM_MEMORY_DEFAULT),
 	"vcpus": vmConfigString(func(vm interface{}) *string {
-		return &mustVMConfig(vm).Vcpus
+		return &mustBaseConfig(vm).Vcpus
 	}, "1"),
 	"net": {
 		Update: func(v interface{}, c *minicli.Command) error {
-			vm := mustVMConfig(v)
+			vm := mustBaseConfig(v)
 			for _, spec := range c.ListArgs["netspec"] {
 				net, err := processVMNet(spec)
 				if err != nil {
@@ -56,13 +56,13 @@ var vmConfigFns = map[string]VMConfigFns{
 			return nil
 		},
 		Clear: func(vm interface{}) {
-			mustVMConfig(vm).Networks = []NetConfig{}
+			mustBaseConfig(vm).Networks = []NetConfig{}
 		},
 		Print: func(vm interface{}) string {
-			return mustVMConfig(vm).NetworkString()
+			return mustBaseConfig(vm).NetworkString()
 		},
 		PrintCLI: func(v interface{}) string {
-			vm := mustVMConfig(v)
+			vm := mustBaseConfig(v)
 			if len(vm.Networks) == 0 {
 				return ""
 			}
@@ -100,10 +100,10 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}, true),
 	"serial": vmConfigInt(func(vm interface{}) *int {
 		return &mustKVMConfig(vm).SerialPorts
-	}, "number", 1), // TODO: What should default be?
+	}, "number", 0),
 	"virtio-serial": vmConfigInt(func(vm interface{}) *int {
 		return &mustKVMConfig(vm).VirtioPorts
-	}, "number", 0), // TODO: What should default be?
+	}, "number", 0),
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
 	}, "qemu-append", "kvm"),
