@@ -727,9 +727,14 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vmType = "kvm"
 	}
 
-	// Populate the latest bandwidth stats for all VMs
 	for _, vm := range vms {
+		// Populate the latest bandwidth stats for all VMs
 		vm.UpdateBW()
+
+		// Populate CC Active flag for KVM vms
+		if vm, ok := vm.(*vmKVM); ok {
+			vm.UpdateCCActive()
+		}
 	}
 
 	resp.Header, resp.Tabular, err = vms.info(vmType)
@@ -1316,7 +1321,6 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	// TODO: this isn't right... need Config to return *baseConfig
 	net := &config.Networks[pos]
 
 	var b *bridge

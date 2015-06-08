@@ -104,6 +104,10 @@ func ccClear(what string) (err error) {
 	return
 }
 
+func ccHasClient(c string) bool {
+	return ccNode != nil && ccNode.HasClient(c)
+}
+
 func ccClients() map[string]bool {
 	clients := make(map[string]bool)
 	if ccNode != nil {

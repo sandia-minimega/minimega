@@ -69,6 +69,15 @@ func (s *Server) GetActiveClients() map[string]*Client {
 	return clients
 }
 
+// HasClient checks whether a client exists with the given identifier.
+func (s *Server) HasClient(c string) bool {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	_, ok := s.clients[c]
+	return ok
+}
+
 // Starts a Ron server on the specified port
 func (s *Server) Start(port int) error {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%v", port))

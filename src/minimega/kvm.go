@@ -55,6 +55,12 @@ type vmKVM struct {
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
+
+	ccActive bool // Whether CC is active, updated by calling UpdateCCActive
+}
+
+func (vm *vmKVM) UpdateCCActive() {
+	vm.ccActive = ccHasClient(vm.UUID)
 }
 
 type qemuOverride struct {
@@ -210,9 +216,7 @@ func (vm *vmKVM) Info(masks []string) ([]string, error) {
 
 		switch mask {
 		case "cc_active":
-			// TODO: This won't work if it's being run from a different host...
-			activeClients := ccClients()
-			res = append(res, fmt.Sprintf("%v", activeClients[vm.UUID]))
+			res = append(res, fmt.Sprintf("%v", vm.ccActive))
 		default:
 			return nil, fmt.Errorf("invalid mask: %s", mask)
 		}
