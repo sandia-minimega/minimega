@@ -21,14 +21,18 @@ body {
 	stroke-opacity: .6;
 }
 
-#chart {
-	width: 90%;
-	height: 70%;
+.copy-theme {
 	background-color: #fff;
 	border: 1px solid #dedede;
 	border-radius: 4px;
 	box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.055);
-	margin: 8px 22px 8px 22px;
+	box-sizing: border-box;
+}
+
+#chart {
+	width: 60%;
+	height: 100%;
+	float: left;
 
 	-webkit-touch-callout: none;
     -webkit-user-select: none;
@@ -36,6 +40,26 @@ body {
     -moz-user-select: none;
     -ms-user-select: none;
     user-select: none;
+}
+
+#sidebar-container {
+	width: 40%;
+	height: 100%;
+	float: right;
+	padding-left: 6px;
+	box-sizing: border-box;
+}
+
+#sidebar {
+	position: relative;
+	height: 100%;
+	left: 2px;
+}
+
+#container {
+	width: 90%;
+	height: 70%;
+	margin: 8px 22px 8px 22px;
 }
 
 .vlan-number, .vlan-machine {
@@ -51,21 +75,29 @@ body {
 	fill: white;
 }
 
+#popup {
+	pointer-events: none;
+}
+
 #popup > g {
 	display: none;
 }
 
 #graph-container {
-	/*CAUSES ISSUES IN FIREFOX. DISABLE THERE.*/
 	transition: transform 0.75s ease-out; 
 }
 
-#popup > g {
-	transition: transform 0.75s ease-out; 
+.no-transition {
+	transition: none !important;
 }
 	</style>
 
-	<div id="chart"></div>
+	<div id="container">
+		<div id="chart" class="copy-theme"></div>
+		<div id="sidebar-container">
+			<div id="sidebar" class="copy-theme"></div>
+		</div>
+	</div>
 
 	<script type="text/javascript">
 		// Build an array of the headings for each field.
