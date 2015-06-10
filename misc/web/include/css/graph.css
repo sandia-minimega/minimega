@@ -1,0 +1,126 @@
+body {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	height: 100%;
+	position: absolute;
+}
+
+.node {
+	cursor: pointer;
+}
+
+.link {
+	stroke: #999;
+	stroke-opacity: .6;
+}
+
+.copy-theme {
+	background-color: #fff;
+	border: 1px solid #dedede;
+	border-radius: 4px;
+	box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.055);
+	box-sizing: border-box;
+}
+
+#chart {
+	width: 60%;
+	height: 100%;
+	float: left;
+
+	-webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+
+#sidebar-container {
+	width: 40%;
+	height: 100%;
+	float: right;
+	padding-left: 6px;
+	box-sizing: border-box;
+}
+
+#sidebar {
+	position: relative;
+	height: 100%;
+	left: 2px;
+	overflow: hidden;
+
+	display: flex;
+	flex-direction: column;
+}
+
+#container {
+	width: 90%;
+	height: 70%;
+	margin: 8px 22px 8px 22px;
+}
+
+#chart > canvas {
+	width: 100%;
+	height: 100%;
+}
+
+#controls {
+	padding: 10px 15px;
+	background: #3E3E3E;
+	display: none;
+}
+
+button {
+	background: #FFF;
+	border: none;
+	border-radius: 5px;
+	padding: 5px 15px;
+	cursor: pointer;
+}
+
+button::-moz-focus-inner {
+	border: none;
+}
+
+#controls-left {
+	float: left;
+}
+
+#controls-right {
+	float: right;
+}
+
+.clear {
+	clear: both;
+}
+
+#node-data {
+	height: 100%;
+	padding: 5px 15px;
+}
+
+#node-heading {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	font-weight: 900;
+	border-bottom: 1px solid #dedede;
+	margin: 10px 0;
+}
+
+h1 {
+	margin: 0;
+}
+
+button.active {
+	background: #EBE8E4;
+}
+
+#node-count {
+	white-space: nowrap;
+}
+
+.uninitialized {
+	opacity: 0.2;
+}
