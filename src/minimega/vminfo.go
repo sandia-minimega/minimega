@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -783,4 +784,62 @@ func (vm *vmInfo) info(masks []string) ([]string, error) {
 	}
 
 	return res, nil
+}
+
+func (vm *vmInfo) MarshalJSON() ([]byte, error) {
+	// generate bandwidth value
+	var bw []string
+	bandwidthLock.Lock()
+	for _, v := range vm.Taps {
+		t := bandwidthStats[v]
+		if t == nil {
+			bw = append(bw, "0.0/0.0")
+		} else {
+			k, _ := json.Marshal(t)
+			bw = append(bw, string(k))
+		}
+	}
+	bandwidthLock.Unlock()
+
+	// generate ip4 and ip6 values
+	var ip4s []string
+	var ip6s []string
+	for bIndex, m := range vm.Macs {
+		// TODO: This won't work if it's being run from a different host...
+		b, err := getBridge(vm.Bridges[bIndex])
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		ip := b.GetIPFromMac(m)
+		if ip != nil {
+			ip4s = append(ip4s, ip.IP4)
+			ip6s = append(ip6s, ip.IP6)
+		}
+	}
+
+	return json.Marshal(map[string]interface{}{
+		"id": vm.ID,
+		"name": vm.Name,
+		"memory": vm.Memory,
+		"vcpus": vm.Vcpus,
+		"state": vm.State.String(),
+		"migrate": vm.MigratePath,
+		"disk": vm.DiskPaths,
+		"snapshot": vm.Snapshot,
+		"initrd": vm.InitrdPath,
+		"kernel": vm.KernelPath,
+		"cdrom": vm.CdromPath,
+		"append": vm.Append,
+		"bridge": vm.Bridges,
+		"tap": vm.Taps,
+		"bandwidth": bw,
+		"mac": vm.Macs,
+		"tags": vm.Tags,
+		"ip": ip4s,
+		"ip6": ip6s,
+		"vlan": vm.Networks,
+		"uuid": vm.UUID,
+		"cc_active": ccClients()[vm.UUID],
+	})
 }

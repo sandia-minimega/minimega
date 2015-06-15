@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	log "minilog"
@@ -278,6 +279,18 @@ func (vms VMs) cleanDirs() {
 			log.Error("clearDirs: %v", err)
 		}
 	}
+}
+
+func (vms VMs) MarshalJSON() ([]byte, error) {
+	s := make([]*vmInfo, 0, len(vms))
+
+	for  _, v := range vms {
+	   s = append(s, v)
+	}
+
+	SortBy("id", s)
+
+	return json.Marshal(s)
 }
 
 // expandVmTargets is the fan out/in method to apply a function to a set of VMs
