@@ -117,7 +117,7 @@ func TestParse(t *testing.T) {
 		for _, i := range v.inputs {
 			t.Logf("Testing input: `%s`", i)
 
-			cmd, err := CompileCommand(i)
+			cmd, err := Compile(i)
 			if err != nil {
 				t.Errorf("unable to compile command, %s", err.Error())
 			} else if cmd.Pattern != v.pattern {

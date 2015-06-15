@@ -8,8 +8,8 @@ import (
 	"bufio"
 	"fmt"
 	"minicli"
+	log "minilog"
 	"os"
-	"strings"
 )
 
 type dotVM struct {
@@ -18,12 +18,12 @@ type dotVM struct {
 	Text  string
 }
 
-var stateToColor = map[string]string{
-	"building": "yellow",
-	"running":  "green",
-	"paused":   "yellow",
-	"quit":     "blue",
-	"error":    "red",
+var stateToColor = map[VmState]string{
+	VM_BUILDING: "yellow",
+	VM_RUNNING:  "green",
+	VM_PAUSED:   "yellow",
+	VM_QUIT:     "blue",
+	VM_ERROR:    "red",
 }
 
 var dotCLIHandlers = []minicli.Handler{
@@ -55,76 +55,44 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	}
 	defer fout.Close()
 
-	// TODO: Rewrite to use runCommandGlobally
-	cmd := minicli.MustCompile(".columns host,name,id,ip,ip6,state,vlan vm info")
-
 	writer := bufio.NewWriter(fout)
-
 	fmt.Fprintln(writer, "graph minimega {")
-	fmt.Fprintln(writer, `size=\"8,11\";`)
+	fmt.Fprintln(writer, `size="8,11";`)
 	fmt.Fprintln(writer, "overlap=false;")
 	//fmt.Fprintf(fout, "Legend [shape=box, shape=plaintext, label=\"total=%d\"];\n", len(n.effectiveNetwork))
 
-	var expVms []*dotVM
+	vlans := make(map[int]bool)
 
-	// Get info from local hosts by invoking command directly
-	for resp := range minicli.ProcessCommand(cmd, false) {
-		expVms = append(expVms, dotProcessInfo(resp)...)
-	}
+	info, _ := globalVmInfo(nil, nil)
+	for host, vms := range info {
+		for _, vm := range vms {
+			info, err := vm.info([]string{"ip", "ip6"})
+			if err != nil || len(info) != 2 {
+				// Should never happen
+				log.Error("bad VM info: %v -- %v", host, vm.Name)
+				continue
+			}
 
-	// Get info from remote hosts over meshage
-	remoteRespChan := make(chan minicli.Responses)
-	go func() {
-		meshageBroadcast(cmd, remoteRespChan)
-		close(remoteRespChan)
-	}()
+			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
+			color := stateToColor[vm.State]
 
-	for resp := range remoteRespChan {
-		expVms = append(expVms, dotProcessInfo(resp)...)
-	}
+			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
-	vlans := make(map[string]bool)
-
-	for _, v := range expVms {
-		color := stateToColor[v.State]
-		fmt.Fprintf(writer, "%s [style=filled, color=%s];\n", v.Text, color)
-
-		for _, c := range v.Vlans {
-			fmt.Fprintf(writer, "%s -- %s\n", v.Text, c)
-			vlans[c] = true
+			for _, vlan := range vm.Networks {
+				fmt.Fprintf(writer, "%v -- %v\n", text, vlan)
+				vlans[vlan] = true
+			}
 		}
 	}
 
-	for k, _ := range vlans {
-		fmt.Fprintf(writer, "%s;\n", k)
+	for vlan := range vlans {
+		fmt.Fprintf(writer, "%v;\n", vlan)
 	}
 
 	fmt.Fprint(writer, "}")
-	err = writer.Flush()
-	if err != nil {
+	if err = writer.Flush(); err != nil {
 		resp.Error = err.Error()
 	}
 
 	return resp
-}
-
-func dotProcessInfo(resp minicli.Responses) []*dotVM {
-	res := []*dotVM{}
-
-	for _, r := range resp {
-		// Process Tabular data, order is:
-		//   host,name,id,ip,ip6,state,vlan
-		row := r.Tabular[0]
-
-		s := strings.Trim(row[6], "[]")
-		vlans := strings.Split(s, ", ")
-
-		res = append(res, &dotVM{
-			Vlans: vlans,
-			State: row[5],
-			Text:  strings.Join(row[0:5], ":"),
-		})
-	}
-
-	return res
 }

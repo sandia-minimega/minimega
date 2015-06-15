@@ -133,7 +133,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		command := scanner.Text()
 		log.Debug("read command: %v", command) // commands don't have their newlines removed
 
-		cmd, err = minicli.CompileCommand(command)
+		cmd, err = minicli.Compile(command)
 		if err != nil {
 			break
 		}
@@ -150,7 +150,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
-		for resp := range minicli.ProcessCommand(cmd, true) {
+		for resp := range minicli.ProcessCommand(cmd) {
 			respChan <- resp
 
 			// Stop processing at the first error if there is one response.

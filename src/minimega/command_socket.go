@@ -62,10 +62,12 @@ outer:
 
 		if cmd != nil {
 			// HAX: Don't record the read command
-			record := !hasCommand(cmd, "read")
+			if hasCommand(cmd, "read") {
+				cmd.Record = false
+			}
 
 			// HAX: Work around so that we can add the more boolean
-			for resp := range runCommand(cmd, record) {
+			for resp := range runCommand(cmd) {
 				if prevResp != nil {
 					err = sendLocalResp(enc, prevResp, true)
 					if err != nil {
@@ -101,7 +103,7 @@ func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
 
 	// HAX: Reprocess the original command since the Call target cannot be
 	// serialized... is there a cleaner way to do this?
-	return minicli.CompileCommand(cmd.Original)
+	return minicli.Compile(cmd.Original)
 }
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {

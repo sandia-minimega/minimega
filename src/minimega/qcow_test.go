@@ -19,7 +19,7 @@ var validInjectCommands = []string{
 
 func TestParseInject(t *testing.T) {
 	for _, cmdStr := range validInjectCommands {
-		cmd, err := minicli.CompileCommand(cmdStr)
+		cmd, err := minicli.Compile(cmdStr)
 		if err != nil {
 			t.Fatalf("invalid command: %s", cmdStr)
 		}
