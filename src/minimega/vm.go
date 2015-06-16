@@ -318,7 +318,6 @@ func (vm *vmBase) info(mask string) (string, error) {
 }
 
 func init() {
-	fmt.Println("here")
 	killAck = make(chan int)
 
 	vmIdChan = makeIDChan()
