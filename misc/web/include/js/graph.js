@@ -28,13 +28,17 @@ var config = {
         friction:       0.1 },  // How quickly all forces slow down (1 -> frictionless, 0 -> no movement)
     selectors: {
         chart:              "#chart",
+        popupContainer:     "#popup",
+        popupTable:         "#machine-info > table",
+        popupName:          "#machine-name",
         sidebarContainer:   "#node-data",
         sidebarHeading:     "#node-name",
         sidebarCount:       "#node-count",
         sidebarSubnodes:    "#subnodes",
+        sidebarTable:         "#node-info > table",
         sidebarText: {                          // Default text for a given selector element (used to revert sidebar text to a specific string when no node is selected)
             "sidebarHeading":   "Click a node",
-            "sidebarCount":  "" }}
+            "sidebarCount":     "" }}
 };
 
 // Initialize the color palette
@@ -90,6 +94,13 @@ var cursor = {
 // Make it so that we always have the cursor position
 document.onmousemove = function (e) {
     cursor.event = e;
+}
+
+
+// Whenever anything is clicked that isn't part of the popup, close it.
+document.onclick = function (e) {
+    setPopupMachine();
+    clearSelectedVM();
 }
 
 
@@ -230,28 +241,86 @@ function outlineNode (id) {
 
 
 // List all the machines that the selected node directly touches
-function listMachines (ul, id) {
-    var vlans = grapher.graph.nodes[id].vlans;
+function listMachines (ul, id, memberNodes) {
     var allMachines = {};
 
-    for (var i = 0; i < vlans.length; i++) {
-        var vlan = vlans[i];
-        var vlanMachines = grapher.graph.machines.vlans[vlan];
+    if (grapher.graph.nodes[id].unconnected === false) {
+        var vlans = grapher.graph.nodes[id].vlans;
+        for (var i = 0; i < vlans.length; i++) {
+            var vlan = vlans[i];
+            var vlanMachines = grapher.graph.machines.vlans[vlan];
 
-        for (var j = 0; j < vlanMachines.length; j++) {
-            var machineId = vlanMachines[j].id;
+            for (var j = 0; j < vlanMachines.length; j++) {
+                var machineId = vlanMachines[j].id;
 
-            if (allMachines[machineId] === undefined) {        // Add a machine to the list if it's not already in there
-                allMachines[machineId] = vlanMachines[j];
+                if (allMachines[machineId] === undefined) {        // Add a machine to the list if it's not already in there
+                    allMachines[machineId] = vlanMachines[j];
+                }
             }
         }
+    } else {
+        allMachines[0] = grapher.graph.machines.unconnected[grapher.graph.nodes[id].unconnected];
     }
 
     for (var machine in allMachines) {
         var li = ul.append("li");
-        li.text(allMachines[machine].name);
-        li.style("color", vmColor(allMachines[machine], true));
+        var span = li.append("span");
+        var machineColor = vmColor(allMachines[machine], true);
+
+        if (memberNodes && (memberNodes.indexOf(allMachines[machine].uuid) > -1)) span.classed("member-node", true);
+
+        span.text(allMachines[machine].name);
+        span.style("color", machineColor);
+        span.style("border-color", machineColor);
+        span.on("mouseenter", (function (machineColor) {
+            return function () {
+                d3.select(this)
+                    .style("background", machineColor)
+                    .style("color", "#ffffff");
+            };
+        })(machineColor));
+        span.on("mouseleave", (function (machineColor) {
+            return function () {
+                var d3this = d3.select(this);
+
+                if ((!d3this.classed("selected-vm")) && (!d3this.classed("member-node"))) {
+                    d3.select(this)
+                        .style("background", "transparent")
+                        .style("color", machineColor);
+                }
+            };
+        })(machineColor));
+        span.on("click", (function (machine) {
+            return function () {
+                d3.event.stopPropagation();
+
+                var previous = clearSelectedVM();
+                var d3this = d3.select(this);
+                d3this.on("mouseenter").call(this);
+
+                if (previous != this) {
+                    d3.select(this).classed("selected-vm", true);
+                    d3.select(this).classed("widen", true);
+                    d3.select(this.parentNode).classed("widen", true);
+                    setPopupMachine(allMachines[machine], this.getBoundingClientRect());
+                } else {
+                    setPopupMachine();
+                }
+            };
+        })(machine));
     }
+}
+
+
+// Deselect one of the VMs (remove visual cue that it's associated with the popup)
+function clearSelectedVM () {
+    var previous = d3.select(".selected-vm").classed("selected-vm", false);
+    if (previous.node() != null) {
+        previous.on("mouseleave").call(previous.node());
+        d3.select(previous.node()).classed("widen", false);
+        d3.select(previous.node().parentNode).classed("widen", false);
+    }
+    return previous.node();
 }
 
 
@@ -270,30 +339,141 @@ function setSidebarNode (id) {
 
     if (id === null) {
         container.attr("class", "uninitialized");
+        d3.select(config.selectors.sidebarTable).html("");
     } else {
         container.attr("class", "");
-
+ 
         if (grapher.graph.nodes[id].group == config.types.normal) {
-            header.text("VLAN " + grapher.graph.nodes[id].vlans[0]);
+            var vlan = grapher.graph.nodes[id].vlans[0];
+            header.text("VLAN " + vlan);
             subheader.text(grapher.graph.nodes[id].machines.length + " VM" + ((grapher.graph.nodes[id].machines.length > 1) ? "s" : ""));
 
-            listMachines(ul, id);
+            var vlanMachines = grapher.graph.machines.vlans[vlan];
+            var nonRouterMachines = [];
+            for (var i = 0; i < vlanMachines.length; i++) {
+                var current = vlanMachines[i];
+                if (current.vlan.length == 1) {
+                    nonRouterMachines.push(current.uuid);
+                }
+            }
+
+            listMachines(ul, id, nonRouterMachines);
+            makeTable(d3.select(config.selectors.sidebarTable), {});
+
+            d3.selectAll(".member-node").each(function () {
+                vmAlwaysHighlighted(this, false, true);
+            });
+
         } else if (grapher.graph.nodes[id].group == config.types.router) {
-            header.text(grapher.graph.nodes[id].machines[0].name);
+            var node = grapher.graph.nodes[id].machines[0];
+            header.text(node.name);
             subheader.text("Router");
             
-            listMachines(ul, id);
+            listMachines(ul, id, [node.uuid]);
+            makeTable(d3.select(config.selectors.sidebarTable), {});
+            vmAlwaysHighlighted(d3.select(".member-node").node(), false, true);
+
         } else if (grapher.graph.nodes[id].group == config.types.empty) {
-            header.text("VLAN " + grapher.graph.nodes[id].vlans[0]);
+            var vlan = grapher.graph.nodes[id].vlans[0];
+            header.text("VLAN " + vlan);
             subheader.text("Empty");
 
             listMachines(ul, id);
+            makeTable(d3.select(config.selectors.sidebarTable), {});
+                
         } else if (grapher.graph.nodes[id].group == config.types.unconnected) {
-            header.text(grapher.graph.nodes[id].machines[0].name);
+            var node = grapher.graph.nodes[id].machines[0];
+            header.text(node.name);
             subheader.text("Unconnected");
+            
+            listMachines(ul, id, [node.uuid]);
+            makeTable(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
+            vmAlwaysHighlighted(d3.select(".member-node").node(), true, false);
         }
         
         subheader.style("color", nodeColor(grapher.graph.nodes[id], true));
+    }
+}
+
+
+// Make a VM be always highlighted (used for member VMs)
+function vmAlwaysHighlighted (spanNode, widened, clickable) {
+    var vmSpan = d3.select(spanNode);
+    vmSpan.on("mouseenter").call(spanNode);
+
+    if (!clickable) {
+        // Remove event handlers
+        vmSpan.on("mouseenter", null);
+        vmSpan.on("mouseleave", null);
+        vmSpan.on("click", null);
+        vmSpan.style("cursor", "default");
+    }
+
+    if (widened) vmSpan.classed("widen", true);
+    if (widened) d3.select(spanNode.parentNode).classed("widen", true);
+}
+
+
+// Put an italic "null" in the table where there are fields that aren't set
+function handleEmptyString (value) {
+    if ((value === "") || (value === null) || (value === undefined)) return '<span class="empty-string">null</span>';
+    return value;
+}
+
+
+// Turn a field into a string properly formatted for the table
+function tableString (field) {
+    if (typeof(field) == "object") {
+        if (Array.isArray(field)) {
+            if (field.length == 0) return handleEmptyString();
+            var underscoredField = field.map(function (d) { return handleEmptyString(d); });
+            return underscoredField.join(", ");
+        } else if ((field === null) || (Object.keys(field).length == 0)) {
+            return handleEmptyString();
+        } else {
+            var toReturn = "";
+
+            for (var key in field) {
+                toReturn += '<div><span class="field-name">' + key + ": </span>" + handleEmptyString(field[key]) + "</div>";
+            }
+
+            return toReturn;
+        }
+    } else {
+        return String(handleEmptyString(field));
+    }
+}
+
+
+// Set the machine which is to be displayed in the popup
+function setPopupMachine (vm, position) {
+    var container = d3.select(config.selectors.popupContainer);
+    var table = d3.select(config.selectors.popupTable).html("");
+    if (vm === undefined) {
+        container.classed("hidden", true);
+    } else {
+        var title = d3.select(config.selectors.popupName);
+
+        makeTable(table, vm);
+
+        container.style("left", (position.left - 10) + "px");
+        container.style("top", (position.top - (position.height / 2)) + "px");
+        container.classed("hidden", false);
+
+        title.text(vm.name);
+    }
+}
+
+
+// Build the DOM for the table
+function makeTable (parent, data) {
+    parent.html("");
+    for (var key in data) {
+        if (key != "color") {
+            var row = parent.append("tr");
+            row.append("td").text(key);
+            row.append("td").html(tableString(data[key]));
+        }
     }
 }
 
@@ -319,9 +499,10 @@ function getVMInfo () {
                 // Match each new node with its corresponding previous node
                 var oldNode = oldGraph.nodes.filter(function (candidateOldNode, j) {
                     if (candidateOldNode.id === node.id) {
-                        if (grapher.selectedNode === j)
+                        if (grapher.selectedNode === j) {
                             grapher.selectedNode = i;
                             setSidebarNode(i);
+                        }
                         return true;
                     }
 
@@ -516,7 +697,7 @@ function makeGraph (response, ethers) {
             "vlans":        [],
             "group":        config.types.unconnected,
             "color":        vmColor(vm),
-            "unconnected":  true,
+            "unconnected":  i,
             "machines":     [vm],
             "id":           vm.uuid,
             "r":            null
@@ -555,6 +736,10 @@ function makeGraph (response, ethers) {
 
 
 $(document).ready(function () {
+    d3.select(config.selectors.popupContainer).on("click", function (e) {
+        d3.event.stopPropagation();
+    });
+
     // RGB to hex. One-liners ftw? Sorry for the ugliness, there's no pretty way to do this AFAIK
     grapher.background = "#" + window.getComputedStyle(d3.select(config.selectors.chart).node(), null)["background-color"]  // "rgb(255, 255, 255)"
                                 .slice(4, -1)                                                                               // "255, 255, 255"
@@ -569,12 +754,14 @@ $(document).ready(function () {
 
     // Set up event handler for mousedown on graph
     grapher.instance.on('mousedown', function (e) {
-        var nodeId = eventNode(e);
+        if (e.button === 0) {   // Only consider the left mouse button
+            var nodeId = eventNode(e);
 
-        if (nodeId > -1) {  // A node was clicked.
-            cursor.node = grapher.graph.nodes[nodeId];
-        } else {            // A node wasn't clicked. We should pan.
-            cursor.startPoint = getOffset(e, grapher.instance.canvas);
+            if (nodeId > -1) {  // A node was clicked.
+                cursor.node = grapher.graph.nodes[nodeId];
+            } else {            // A node wasn't clicked. We should pan.
+                cursor.startPoint = getOffset(e, grapher.instance.canvas);
+            }
         }
     });
 
@@ -608,6 +795,9 @@ $(document).ready(function () {
         // If we're panning and the mouse leaves the chart area, we don't care.
         if ((e.type == "mouseleave") && (cursor.startPoint != null)) return;
 
+        // Only consider the left mouse button
+        if (e.button !== 0) return;
+
         if (cursor.movedTo == null) {   // If the cursor hasn't moved...
             var nodeId = eventNode(e);
             
@@ -633,6 +823,8 @@ $(document).ready(function () {
                 setSidebarNode(null);
 
                 grapher.selectedNode = null;
+
+                document.onclick();     // Get rid of the popup
             }
         }
 
@@ -648,6 +840,12 @@ $(document).ready(function () {
     // If we're doing anything but dragging, clean up mouse actions.
     // This allows us to pan, but not drag nodes outside of the graph area.
     grapher.instance.on('mouseleave', endMouseActions);
+
+    // Stop the propagation of click events originating on the graph
+    // Prevents popup from prematurely going away
+    grapher.instance.on('click', function (e) {
+        e.stopPropagation();
+    });
 
     // Zoom in or out on a point when the scroll wheel is moved
     grapher.instance.on('wheel', function (e) {

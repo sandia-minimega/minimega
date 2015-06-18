@@ -81,11 +81,14 @@ button::-moz-focus-inner {
 	clear: both;
 }
 
-#node-data {
+#node-data, #popup {
 	display: flex;
 	flex-direction: column;
-	height: 100%;
 	padding: 5px 15px;
+}
+
+#node-data {
+	height: 100%;
 }
 
 #node-heading {
@@ -94,29 +97,81 @@ button::-moz-focus-inner {
 	justify-content: space-between;
 	font-weight: 900;
 	border-bottom: 1px solid #dedede;
-	margin: 10px 0;
+	margin: 10px 0 25px;
+	flex-shrink: 0;
 }
 
 h1 {
 	margin: 0;
 }
 
-#subnodes, #data {
+#machine-name {
+	flex-shrink: 0;
+	font-weight: 900;
+	border-bottom: 1px solid #dedede;
+	margin: 10px 0;
+}
+
+#subnodes, #node-info, #machine-info {
 	flex-grow: 1;
+	overflow: auto;
+	margin: 2px 0 10px;
+}
+
+#node-info > table, #machine-info > table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+table tr td {
+	padding: 8px 15px;
+	border: 1px solid #DEDEDE;
+}
+
+table tr td:first-child {
+	background: #F6F6F6;
+}
+
+table tr td:nth-child(2) {
+	text-align: right;
 }
 
 #subnodes {
-	margin: 0;
+	margin: 0 0 15px;
 	padding: 0;
 	display: flex;
 	flex-direction: row;
 	flex-wrap: wrap;
 	align-content: flex-start;
-	/*justify-content: space-around;*/
+	flex-shrink: 0;
 }
 
 #subnodes > li {
 	margin: 0 20px 10px 30px;
+	list-style: none;
+	transition: all 0.5s;
+	width: auto;
+}
+
+#subnodes > li > span:before {
+	content: "•";
+	font-size: 2em;
+	padding-right: 8px;
+	line-height: 0.5em;
+	position: relative;
+	top: 6px;
+	left: -1px;
+}
+
+#subnodes > li > span {
+	border-width: 1px;
+	border-style: solid;
+	padding: 2px 15px 8px;
+	border-radius: 5px;
+	cursor: pointer;
+	display: inline-block;
+	line-height: 1.1em;
+	box-sizing: border-box;
 }
 
 button.active {
@@ -128,5 +183,61 @@ button.active {
 }
 
 .uninitialized {
-	opacity: 0.2;
+	opacity: 0.13;
+}
+
+#popup {
+	position: absolute;
+	width: 20%;
+	max-height: 600px;
+	top: 100px;
+	transform: translateX(-100%);
+	margin-left: 6px;
+	min-width: 330px;
+}
+
+.sidepoint::before {
+	content: "";
+	position: absolute;
+	border-style: solid;
+	display: block;
+	width: 0px;
+	top: 18px;
+	right: -13px;
+	bottom: auto;
+	left: auto;
+	border-width: 13px 0px 13px 13px;
+	border-color: transparent #dedede;
+}
+
+.sidepoint::after {
+	content: "";
+	position: absolute;
+	border-style: solid;
+	display: block;
+	width: 0px;
+	top: 18px;
+	right: -12px;
+	bottom: auto;
+	left: auto;
+	border-width: 13px 0px 13px 13px;
+	border-color: transparent #ffffff;
+}
+
+.empty-string {
+	font-style: italic;
+	color: #DEDEDE;
+}
+
+.hidden {
+	display: none !important;
+}
+
+.widen {
+	width: 100% !important;
+}
+
+.field-name {
+	font-weight: 900;
+	font-style: italic;
 }
