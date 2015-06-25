@@ -251,8 +251,9 @@ func (vm *vmBase) UpdateBW() {
 	bandwidthLock.Lock()
 	defer bandwidthLock.Unlock()
 
-	for _, v := range vm.Networks {
-		v.Stats = bandwidthStats[v.Tap]
+	for i := range vm.Networks {
+		net := &vm.Networks[i]
+		net.Stats = bandwidthStats[net.Tap]
 	}
 }
 
