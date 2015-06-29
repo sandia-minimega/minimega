@@ -442,7 +442,9 @@ func (vm *vmKVM) launch(ack chan int) {
 	}
 
 	// create and add taps if we are associated with any networks
-	for i, net := range vm.Networks {
+	for i := range vm.Networks {
+		net := &vm.Networks[i]
+
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
@@ -451,15 +453,13 @@ func (vm *vmKVM) launch(ack chan int) {
 			return
 		}
 
-		tap, err := b.TapCreate(net.VLAN)
+		net.Tap, err = b.TapCreate(net.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setState(VM_ERROR)
 			ack <- vm.id
 			return
 		}
-
-		vm.Networks[i].Tap = tap
 
 		updates := make(chan ipmac.IP)
 		go func(vm *vmKVM, net *NetConfig) {
@@ -480,7 +480,7 @@ func (vm *vmKVM) launch(ack chan int) {
 					return
 				}
 			}
-		}(vm, &net)
+		}(vm, net)
 
 		b.iml.AddMac(net.MAC, updates)
 	}
