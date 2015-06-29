@@ -376,7 +376,9 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 	}
 
 	// check for mac address conflicts and fill in unspecified mac addresses without conflict
-	for i, net := range vm.Networks {
+	for i := range vm.Networks {
+		net := &vm.Networks[i]
+
 		if net.MAC == "" { // create mac addresses where unspecified
 			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
 			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
@@ -385,8 +387,8 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
 			}
 
-			vm.Networks[i].MAC = newMac // set the unspecified mac address
-			selfMacMap[newMac] = true   // add this mac to the set of mac addresses for this vm
+			net.MAC = newMac          // set the unspecified mac address
+			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
 		}
 	}
 
