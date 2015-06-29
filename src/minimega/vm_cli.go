@@ -716,7 +716,7 @@ func init() {
 
 	// for vm info
 	gob.Register(VMs{})
-	gob.Register(vmKVM{})
+	gob.Register(&vmKVM{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
