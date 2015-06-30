@@ -24,6 +24,13 @@ type Handler struct {
 	// the processed patterns, will be automatically populated when the command
 	// is registered
 	PatternItems [][]patternItem `json:"parsed_patterns"`
+
+	// Suggest provides suggestions for variable completion. For example, the
+	// `vm stop` command might provide a listing of the currently running VM
+	// names if the user tries to tab complete the "target". The function takes
+	// two arguments: the variable name (e.g. "target") and the user's input
+	// for the variable so far.
+	Suggest func(string, string) []string
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
@@ -120,16 +127,24 @@ outer:
 
 		// Finished consuming input items, figure out if the next pattern item
 		// has something worth completing.
-		switch {
-		case item.Type == literalItem:
+		switch item.Type {
+		case literalItem:
 			suggestions = append(suggestions, item.Text)
-		case item.Type&choiceItem != 0:
+		case choiceItem:
 			for _, choice := range item.Options {
 				if i >= len(input.items) || strings.HasPrefix(choice, input.items[i].Value) {
 					suggestions = append(suggestions, choice)
 				}
 			}
-		case item.Type == commandItem:
+		case stringItem, listItem:
+			if h.Suggest != nil {
+				var prefix string
+				if i < len(input.items) {
+					prefix = input.items[i].Value
+				}
+				suggestions = append(suggestions, h.Suggest(item.Key, prefix)...)
+			}
+		case commandItem:
 			log.Debug("recursing to find suggestions for %q", input.items[i:])
 			suggestions = append(suggestions, suggest(&Input{
 				Original: input.Original,

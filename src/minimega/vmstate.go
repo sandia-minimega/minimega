@@ -19,6 +19,9 @@ const (
 	VM_ERROR
 )
 
+// All VM states in one variable for masking any state
+var VM_ANY_STATE VMState = ^0
+
 func (s VMState) String() string {
 	switch s {
 	case VM_BUILDING:

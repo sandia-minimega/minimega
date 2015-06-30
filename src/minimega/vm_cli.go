@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"ranges"
 	"strconv"
+	"strings"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -169,6 +170,13 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 				return vms.start(target)
 			})
 		}),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(val, prefix, ^VM_RUNNING)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -185,6 +193,13 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 				return vms.stop(target)
 			})
 		}),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(val, prefix, VM_RUNNING)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
@@ -221,6 +236,13 @@ To remove all hotplug devices, use ID "all" for the disk ID.`,
 			"vm hotplug <remove,> <vm id or name> <disk id or all>",
 		},
 		Call: wrapSimpleCLI(cliVmHotplug),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
@@ -245,6 +267,13 @@ To move a connection, specify the new VLAN tag and bridge:
 			"vm net <disconnect,> <vm id or name> <tap position>",
 		},
 		Call: wrapSimpleCLI(cliVmNetMod),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm qmp
 		HelpShort: "issue a JSON-encoded QMP command",
@@ -259,6 +288,13 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 			"vm qmp <vm id or name> <qmp command>",
 		},
 		Call: wrapSimpleCLI(cliVmQmp),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm screenshot
 		HelpShort: "take a screenshot of a running vm",
@@ -276,6 +312,13 @@ to 100 pixels:
 			"vm screenshot <vm id or name> [maximum dimension]",
 		},
 		Call: wrapSimpleCLI(cliVmScreenshot),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
@@ -291,6 +334,13 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate <vm id or name> <filename>",
 		},
 		Call: wrapSimpleCLI(cliVmMigrate),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
@@ -315,6 +365,13 @@ To read a tag:
 			"vm tag <target> <key> <value>", // set
 		},
 		Call: wrapSimpleCLI(cliVmTag),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
@@ -339,6 +396,13 @@ Change a VM to use a new ISO:
 			"vm cdrom <change,> <vm id or name> <path>",
 		},
 		Call: wrapSimpleCLI(cliVmCdrom),
+		Suggest: func(val, prefix string) []string {
+			if val == "vm" {
+				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
@@ -1381,4 +1445,31 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	return resp
+}
+
+func cliVMSuggest(val, prefix string, mask VMState) []string {
+	var isID bool
+	res := []string{}
+
+	if _, err := strconv.Atoi(prefix); err == nil {
+		isID = true
+	}
+
+	for _, vm := range vms {
+		if vm.State()&mask == 0 {
+			continue
+		}
+
+		if isID {
+			id := strconv.Itoa(vm.ID())
+
+			if strings.HasPrefix(id, prefix) {
+				res = append(res, id)
+			}
+		} else if strings.HasPrefix(vm.Name(), prefix) {
+			res = append(res, vm.Name())
+		}
+	}
+
+	return res
 }
