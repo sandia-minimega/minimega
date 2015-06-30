@@ -30,7 +30,7 @@ type Handler struct {
 	// names if the user tries to tab complete the "target". The function takes
 	// two arguments: the variable name (e.g. "target") and the user's input
 	// for the variable so far.
-	Suggest func(string, string) []string
+	Suggest func(string, string) []string `json:"-"`
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
