@@ -5,12 +5,13 @@
 package main
 
 import (
-	"crypto/rand"
 	"fmt"
+	"gopacket/macs"
 	_ "gopnm"
 	"image"
 	"image/png"
 	"io/ioutil"
+	"math/rand"
 	"minicli"
 	log "minilog"
 	"os"
@@ -25,6 +26,14 @@ import (
 
 type errSlice []error
 
+var validMACPrefix [][3]byte
+
+func init() {
+	for k, _ := range macs.ValidMACPrefixMap {
+		validMACPrefix = append(validMACPrefix, k)
+	}
+}
+
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {
@@ -33,11 +42,14 @@ func (errs errSlice) String() string {
 	return strings.Join(vals, "\n")
 }
 
-// generate a random ipv4 mac address and return as a string
+// generate a random mac address and return as a string
 func randomMac() string {
-	b := make([]byte, 5)
-	rand.Read(b)
-	mac := fmt.Sprintf("00:%02x:%02x:%02x:%02x:%02x", b[0], b[1], b[2], b[3], b[4])
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	//
+	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+
+	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
 	log.Info("generated mac: %v", mac)
 	return mac
 }
