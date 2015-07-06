@@ -1,13 +1,27 @@
-{{template "header"}}
-<body>
-{{template "nav"}}
-<div style="overflow: hidden; margin: 10px;" >
-	{{range .}}
-	<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;">
-		{{ template "screenshot" . }}
-	</div>
-	{{end}}
-</div>
-</body>
-<script type="text/javascript" language="javascript" src="/include/js/table.js"></script>
-{{template "footer"}}
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>minimega</title>
+
+		<link rel="stylesheet" type="text/css" href="/include/css/nav.css">
+		<link rel="stylesheet" type="text/css" href="/include/css/tags.css">
+	</head>
+	<body>
+
+		{{ template "fragment/nav" }}
+
+		<div style="overflow: hidden; margin: 10px;" >
+			{{ range . }}
+			<div style="float: left; position: relative; padding-right: 4px; padding-bottom: 3px;">
+				{{ template "fragment/screenshot" . }}
+			</div>
+			{{ end }}
+		</div>
+
+		{{ template "include/jQuery" }}
+		{{ template "include/dataTables" }}
+
+		<script type="text/javascript" language="javascript" src="/include/js/table.js"></script>
+
+	</body>
+</html>

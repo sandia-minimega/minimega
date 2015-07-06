@@ -1,26 +1,43 @@
-{{template "header"}}
-<body>
-{{template "nav"}}
-<table id="{{.ID}}" class="{{.Class}}" cellspacing="0">
-	<thead>
-		<tr>
-			{{ range .Header }}<th>{{.}}</th>{{end}}
-		</tr>
-	</thead>
-	<tbody>
-		{{ range .Tabular }}
-		<tr>
-			{{ range . }}<td>{{.}}</td>{{end}}
-		</tr>
-		{{end}}
-	</tbody>
-</table>
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>minimega</title>
 
-<div style="color:#006400"> Toggle Columns:
-	{{ range $i, $v := .Header }}
-	<a class="toggle-vis" data-column="{{$i}}">{{$v}}</a>
-	{{end}}
-</div>
-</body>
-<script type="text/javascript" language="javascript" src="/include/js/table.js"></script>
-{{template "footer"}}
+		<link rel="stylesheet" type="text/css" href="/include/css/nav.css">
+	</head>
+	<body>
+
+		{{ template "fragment/nav" }}
+
+		<table id="{{ .ID }}" class="{{ .Class }}" cellspacing="0">
+			<thead>
+				<tr>
+					{{ range .Header }}
+					<th>{{ . }}</th>
+					{{ end }}
+				</tr>
+			</thead>
+			<tbody>
+				{{ range .Tabular }}
+				<tr>
+					{{ range . }}
+					<td>{{ . }}</td>
+					{{ end }}
+				</tr>
+				{{ end }}
+			</tbody>
+		</table>
+
+		<div style="color:#006400"> Toggle Columns:
+			{{ range $i, $v := .Header }}
+			<a class="toggle-vis" data-column="{{ $i }}">{{ $v }}</a>
+			{{ end }}
+		</div>
+
+		{{ template "include/jQuery" }}
+		{{ template "include/dataTables" }}
+
+		<script type="text/javascript" language="javascript" src="/include/js/table.js"></script>
+
+	</body>
+</html>

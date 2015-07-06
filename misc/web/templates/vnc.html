@@ -16,7 +16,7 @@
     minimega: changed this file to be a template, added /novnc/ prefix.
     -->
     <!--<title>noVNC</title>-->
-    <title>{{.Title}}</title>
+    <title>{{ .Title }}</title>
 
     <meta charset="utf-8">
 
@@ -50,7 +50,7 @@
 </head>
 
 <body style="margin: 0px;">
-    {{template "nav"}}
+    {{ template "fragment/nav" }}
     <div id="noVNC_screen">
             <div id="noVNC_status_bar" class="noVNC_status_bar" style="margin-top: 0px;">
                 <table border=0 width="100%"><tr>
@@ -221,7 +221,7 @@
             password = WebUtil.getQueryVar('password', '');
             // minimega: use value from template instead of URL
             // path = WebUtil.getQueryVar('path', 'websockify');
-            path = {{.Path}};
+            path = {{ .Path }};
 
             if ((!host) || (!port)) {
                 updateState('failed',

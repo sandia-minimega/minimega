@@ -1136,7 +1136,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID), "screenshot.png")
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID()), "screenshot.png")
 
 	err = vms.screenshot(vm, path, max)
 	if err != nil {
