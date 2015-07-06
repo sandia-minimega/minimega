@@ -7,6 +7,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"minicli"
@@ -132,6 +133,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/tags", webVMTags)
 	mux.HandleFunc("/tiles", webTileVMs)
+	mux.HandleFunc("/json", webJSON)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
 
@@ -490,4 +492,47 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	webRenderTemplate(w, "tiles.html", params)
+}
+
+func webJSON(w http.ResponseWriter, r *http.Request) {
+	info, _ := globalVmInfo(nil, nil)
+	infos   := make([]map[string]interface{}, 0)
+
+	for host, vms := range info {
+		for _, vm := range vms {
+			stateMask := VM_QUIT | VM_ERROR
+
+			if vm.State()&stateMask != 0 {
+				continue
+			}
+
+			config := vm.Config()
+
+			infos = append(infos, map[string]interface{}{
+				"host":    host,
+
+				"id":      vm.ID(),
+				"name":    vm.Name(),
+				"state":   vm.State().String(),
+				"type":    vm.Type().String(),
+
+				"tags":    vm.Tags(),
+
+				"vcpus":   config.Vcpus,
+				"memory":  config.Memory,
+
+				"network": config.Networks,
+			})
+		}
+	}
+
+	js, err := json.Marshal(infos)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
 }
