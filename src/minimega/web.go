@@ -255,22 +255,22 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 	info, _ := globalVmInfo(nil, nil)
 	for _, vms := range info {
 		for _, vm := range vms {
-			name := fmt.Sprintf("%v:%v", vm.ID, vm.Name)
+			name := fmt.Sprintf("%v:%v", vm.ID(), vm.Name())
 
 			p := point{Text: name}
 
-			if vm.Tags["lat"] == "" || vm.Tags["long"] == "" {
+			if vm.Tag("lat") == "" || vm.Tag("long") == "" {
 				log.Debug("skipping vm %s -- missing required tags lat/long", name)
 				continue
 			}
 
-			p.Lat, err = strconv.ParseFloat(vm.Tags["lat"], 64)
+			p.Lat, err = strconv.ParseFloat(vm.Tag("lat"), 64)
 			if err != nil {
 				log.Error("invalid lat for vm %s -- expected float")
 				continue
 			}
 
-			p.Long, err = strconv.ParseFloat(vm.Tags["lat"], 64)
+			p.Long, err = strconv.ParseFloat(vm.Tag("lat"), 64)
 			if err != nil {
 				log.Error("invalid lat for vm %s -- expected float")
 				continue
@@ -297,7 +297,7 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 	// Find all the distinct tags across all VMs
 	for _, vms := range info {
 		for _, vm := range vms {
-			for k := range vm.Tags {
+			for _, k := range vm.Tags() {
 				tags[k] = true
 			}
 		}
@@ -322,13 +322,13 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 		for _, vm := range vms {
 			row := []interface{}{
 				host,
-				vm.Name,
-				vm.ID,
+				vm.Name(),
+				vm.ID(),
 			}
 
 			for _, k := range table.Header {
 				// If key is not present, will set it to the zero-value
-				row = append(row, vm.Tags[k])
+				row = append(row, vm.Tag(k))
 			}
 
 			table.Tabular = append(table.Tabular, row)
@@ -406,12 +406,12 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	for host, vms := range info {
 		for _, vm := range vms {
 			var buf bytes.Buffer
-			if vm.State&stateMask == 0 {
+			if vm.State()&stateMask == 0 {
 				params := vmScreenshotParams{
 					Host: host,
-					Name: vm.Name,
-					Port: 5900 + vm.ID,
-					ID:   vm.ID,
+					Name: vm.Name(),
+					Port: 5900 + vm.ID(),
+					ID:   vm.ID(),
 					Size: 140,
 				}
 
@@ -423,16 +423,16 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			res := []interface{}{host, template.HTML(buf.String())}
 
-			row, err := vm.info(vmMasks)
+			row, err := vm.Info(vmMasks)
 			if err != nil {
-				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name, err)
+				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name(), err)
 				continue
 			}
 
 			// HAX: Patch up "dynamic" fields from tabular data. This will be
 			// deleted when we track all the VM state in the VM struct.
 			for i, v := range vmMasks {
-				id := fmt.Sprintf("%v", vm.ID)
+				id := fmt.Sprintf("%v", vm.ID())
 				switch v {
 				case "ip", "ip6", "cc_active":
 					log.Debug("patching `%s` field for `%s` host", v, host)
@@ -475,15 +475,15 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 	info, _ := globalVmInfo(nil, nil)
 	for host, vms := range info {
 		for _, vm := range vms {
-			if vm.State&stateMask != 0 {
+			if vm.State()&stateMask != 0 {
 				continue
 			}
 
 			params = append(params, vmScreenshotParams{
 				Host: host,
-				Name: vm.Name,
-				Port: 5900 + vm.ID,
-				ID:   vm.ID,
+				Name: vm.Name(),
+				Port: 5900 + vm.ID(),
+				ID:   vm.ID(),
 				Size: 250,
 			})
 		}

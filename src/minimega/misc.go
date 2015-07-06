@@ -155,7 +155,7 @@ func unescapeString(input []string) string {
 		}
 	}
 	log.Debug("unescapeString generated: %v", ret)
-	return ret
+	return strings.TrimSpace(ret)
 }
 
 // cmdTimeout runs the command c and returns a timeout if it doesn't complete
@@ -195,8 +195,8 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		log.Debugln("host is local node")
 		vm := vms.findVm(vm)
 		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.ID, vm.Name)
-			return vm.ID, vm.Name, nil
+			log.Debug("got vm: %v %v %v", host, vm.ID, vm.Name())
+			return vm.ID(), vm.Name(), nil
 		}
 	} else {
 		log.Debugln("remote host")

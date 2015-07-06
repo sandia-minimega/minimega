@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"minicli"
+	"miniclient"
 	log "minilog"
 	"net"
 	"os"
@@ -108,7 +109,7 @@ func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	log.Infoln("sending resp:", resp)
-	r := localResponse{
+	r := miniclient.Response{
 		More: more,
 	}
 	if resp != nil {

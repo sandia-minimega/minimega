@@ -10,6 +10,7 @@ import (
 	"goreadline"
 	"io/ioutil"
 	"minicli"
+	"miniclient"
 	log "minilog"
 	"os"
 	"os/signal"
@@ -110,16 +111,30 @@ func main() {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
 
-	vms = make(map[int]*vmInfo)
+	vms = make(map[int]VM)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
-	if *f_e {
-		localCommand()
-		return
-	}
-	if *f_attach {
-		cliAttach()
+	if *f_e || *f_attach {
+		// try to connect to the local minimega
+		mm, err := miniclient.Dial(*f_base)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		if *f_e {
+			a := flag.Args()
+			log.Debugln("got args:", a)
+
+			// TODO: Need to escape?
+			cmd := minicli.MustCompile(strings.Join(a, " "))
+			log.Infoln("got command:", cmd)
+
+			mm.RunAndPrint(cmd, false)
+		} else {
+			mm.Attach()
+		}
+
 		return
 	}
 

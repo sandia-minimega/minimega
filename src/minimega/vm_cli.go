@@ -27,40 +27,46 @@ can be used to subselect a set of rows and/or columns. See the help pages for
 .filter and .columns, respectively, for their usage. Columns returned by VM
 info include:
 
-- id	    : the VM ID, as an integer
-- host	    : the host that the VM is running on
-- name	    : the VM name, if it exists
+- host      : the host that the VM is running on
+- id        : the VM ID, as an integer
+- name      : the VM name, if it exists
 - state     : one of (building, running, paused, quit, error)
-- memory    : allocated memory, in megabytes
+- type      : one of (kvm)
 - vcpus     : the number of allocated CPUs
-- migrate   : qemu migration image
-- disk      : disk image
-- initrd    : initrd image
-- kernel    : kernel image
-- cdrom     : cdrom image
-- append    : kernel command line string
+- memory    : allocated memory, in megabytes
+- vlan      : vlan, as an integer
 - bridge    : bridge name
-- tap	    : tap name
-- mac	    : mac address
-- ip	    : IPv4 address
-- ip6	    : IPv6 address
-- vlan	    : vlan, as an integer
+- tap       : tap name
+- mac       : mac address
+- ip        : IPv4 address
+- ip6       : IPv6 address
+- bandwidth : stats regarding bandwidth usage
+- tags      : any additional information attached to the VM
+
+Additional fields are available for KVM-based VMs:
+
+- append    : kernel command line string
+- cdrom     : cdrom image
+- disk      : disk image
+- kernel    : kernel image
+- initrd    : initrd image
+- migrate   : qemu migration image
 - uuid      : QEMU system uuid
 - cc_active : whether cc is active
-- tags      : any additional information attached to the VM
 
 Examples:
 
 Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
-Display all information about VMs with the disk image foo.qc2:
-	.filter disk=foo.qc2 vm info
+Display all information about KVM-based VMs with the disk image foo.qc2:
+	.filter disk=foo.qc2 vm info kvm
 
-Display all information about all VMs:
+Display information about all VMs:
 	vm info`,
 		Patterns: []string{
 			"vm info",
+			"vm info <kvm,>",
 		},
 		Call: wrapSimpleCLI(cliVmInfo),
 	},
@@ -84,6 +90,11 @@ Launch virtual machines in a paused state, using the parameters defined leading
 up to the launch command. Any changes to the VM parameters after launching will
 have no effect on launched VMs.
 
+When you launch a VM, you supply the type of VM in the launch command.
+Currently, the supported VM types are:
+
+- kvm : QEMU-based vms
+
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
 naming scheme:
@@ -96,7 +107,7 @@ The optional 'noblock' suffix forces minimega to return control of the command
 line immediately instead of waiting on potential errors from launching the
 VM(s). The user must check logs or error states from vm info.`, Wildcard),
 		Patterns: []string{
-			"vm launch <name or count> [noblock,]",
+			"vm launch <kvm,> <name or count> [noblock,]",
 		},
 		Call: wrapSimpleCLI(cliVmLaunch),
 	},
@@ -220,15 +231,15 @@ Network connections are indicated by their position in vm net (same order in vm
 info) and are zero indexed. For example, to disconnect the first network
 connection from a VM named vm-0 with 4 network connections:
 
-	vm netmod disconnect vm-0 0
+	vm net disconnect vm-0 0
 
 To disconnect the second connection:
 
-	vm netmod disconnect vm-0 1
+	vm net disconnect vm-0 1
 
 To move a connection, specify the new VLAN tag and bridge:
 
-	vm netmod <vm name or id> 0 bridgeX 100`,
+	vm net <vm name or id> 0 bridgeX 100`,
 		Patterns: []string{
 			"vm net <connect,> <vm id or name> <tap position> <bridge> <vlan>",
 			"vm net <disconnect,> <vm id or name> <tap position>",
@@ -332,11 +343,13 @@ Change a VM to use a new ISO:
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
 		HelpLong: `
-Display, save, or restore the current VM configuration.
+Display, save, or restore the current VM configuration. Note that saving and
+restoring configuration applies to all VM configurations including KVM-based VM
+configurations.
 
 To display the current configuration, call vm config with no arguments.
 
-List the current saved configurations with 'vm config show'.
+List the current saved configurations with 'vm config restore'.
 
 To save a configuration:
 
@@ -360,42 +373,6 @@ remove saved configurations.`,
 		},
 		Call: wrapSimpleCLI(cliVmConfig),
 	},
-	{ // vm config qemu
-		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
-		Patterns: []string{
-			"vm config qemu [path to qemu]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu")
-		}),
-	},
-	{ // vm config qemu-override
-		HelpShort: "override parts of the QEMU launch string",
-		HelpLong: `
-Override parts of the QEMU launch string by supplying a string to match, and a
-replacement string.`,
-		Patterns: []string{
-			"vm config qemu-override",
-			"vm config qemu-override add <match> <replacement>",
-			"vm config qemu-override delete <id or all>",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu-override")
-		}),
-	},
-	{ // vm config qemu-append
-		HelpShort: "add additional arguments to the QEMU command",
-		HelpLong: `
-Add additional arguments to be passed to the QEMU instance. For example:
-
-	vm config qemu-append -serial tcp:localhost:4001`,
-		Patterns: []string{
-			"vm config qemu-append [argument]...",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu-append")
-		}),
-	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
 		HelpLong: `
@@ -418,86 +395,8 @@ Set the number of virtual CPUs to allocate for a VM.`,
 			return cliVmConfigField(c, "vcpus")
 		}),
 	},
-	{ // vm config migrate
-		HelpShort: "set migration image for a saved VM",
-		HelpLong: `
-Assign a migration image, generated by a previously saved VM to boot with.
-Migration images should be booted with a kernel/initrd, disk, or cdrom. Use 'vm
-migrate' to generate migration images from running VMs.`,
-		Patterns: []string{
-			"vm config migrate [path to migration image]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "migrate")
-		}),
-	},
-	{ // vm config disk
-		HelpShort: "set disk images to attach to a VM",
-		HelpLong: `
-Attach one or more disks to a vm. Any disk image supported by QEMU is a valid
-parameter. Disk images launched in snapshot mode may safely be used for
-multiple VMs.`,
-		Patterns: []string{
-			"vm config disk [path to disk image]...",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "disk")
-		}),
-	},
-	{ // vm config cdrom
-		HelpShort: "set a cdrom image to attach to a VM",
-		HelpLong: `
-Attach a cdrom to a VM. When using a cdrom, it will automatically be set to be
-the boot device.`,
-		Patterns: []string{
-			"vm config cdrom [path to cdrom image]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "cdrom")
-		}),
-	},
-	{ // vm config kernel
-		HelpShort: "set a kernel image to attach to a VM",
-		HelpLong: `
-Attach a kernel image to a VM. If set, QEMU will boot from this image instead
-of any disk image.`,
-		Patterns: []string{
-			"vm config kernel [path to kernel]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "kernel")
-		}),
-	},
-	{ // vm config append
-		HelpShort: "set an append string to pass to a kernel set with vm kernel",
-		HelpLong: `
-Add an append string to a kernel set with vm kernel. Setting vm append without
-using vm kernel will result in an error.
-
-For example, to set a static IP for a linux VM:
-
-	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10`,
-		Patterns: []string{
-			"vm config append [argument]...",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "append")
-		}),
-	},
-	{ // vm config uuid
-		HelpShort: "set the UUID for a VM",
-		HelpLong: `
-Set the UUID for a virtual machine. If not set, minimega will create a random
-one when the VM is launched.`,
-		Patterns: []string{
-			"vm config uuid [uuid]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "uuid")
-		}),
-	},
 	{ // vm config net
-		HelpShort: "specify the networks a VM is a member of",
+		HelpShort: "specific the networks a VM is a member of",
 		HelpLong: `
 Specify the network(s) that the VM is a member of by VLAN. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
@@ -535,6 +434,154 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "net")
+		}),
+	},
+	{ // vm config append
+		HelpShort: "set an append string to pass to a kernel set with vm kernel",
+		HelpLong: `
+Add an append string to a kernel set with vm kernel. Setting vm append without
+using vm kernel will result in an error.
+
+For example, to set a static IP for a linux VM:
+
+	vm kvm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config append [arg]...",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "append")
+		}),
+	},
+	{ // vm config qemu
+		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
+		HelpLong: `
+Set the QEMU process to invoke. Relative paths are ok.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config qemu [path to qemu]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "qemu")
+		}),
+	},
+	{ // vm config qemu-override
+		HelpShort: "override parts of the QEMU launch string",
+		HelpLong: `
+Override parts of the QEMU launch string by supplying a string to match, and a
+replacement string.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config qemu-override",
+			"vm config qemu-override add <match> <replacement>",
+			"vm config qemu-override delete <id or all>",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "qemu-override")
+		}),
+	},
+	{ // vm config qemu-append
+		HelpShort: "add additional arguments to the QEMU command",
+		HelpLong: `
+Add additional arguments to be passed to the QEMU instance. For example:
+
+	vm kvm config qemu-append -serial tcp:localhost:4001
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config qemu-append [argument]...",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "qemu-append")
+		}),
+	},
+	{ // vm config migrate
+		HelpShort: "set migration image for a saved VM",
+		HelpLong: `
+Assign a migration image, generated by a previously saved VM to boot with.
+Migration images should be booted with a kernel/initrd, disk, or cdrom. Use 'vm
+migrate' to generate migration images from running VMs.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config migrate [path to migration image]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "migrate")
+		}),
+	},
+	{ // vm config disk
+		HelpShort: "set disk images to attach to a VM",
+		HelpLong: `
+Attach one or more disks to a vm. Any disk image supported by QEMU is a valid
+parameter. Disk images launched in snapshot mode may safely be used for
+multiple VMs.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config disk [path to disk image]...",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "disk")
+		}),
+	},
+	{ // vm config cdrom
+		HelpShort: "set a cdrom image to attach to a VM",
+		HelpLong: `
+Attach a cdrom to a VM. When using a cdrom, it will automatically be set to be
+the boot device.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config cdrom [path to cdrom image]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "cdrom")
+		}),
+	},
+	{ // vm config kernel
+		HelpShort: "set a kernel image to attach to a VM",
+		HelpLong: `
+Attach a kernel image to a VM. If set, QEMU will boot from this image instead
+of any disk image.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config kernel [path to kernel]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "kernel")
+		}),
+	},
+	{ // vm config initrd
+		HelpShort: "set a initrd image to attach to a VM",
+		HelpLong: `
+Attach an initrd image to a VM. Passed along with the kernel image at boot
+time.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config initrd [path to initrd]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "initrd")
+		}),
+	},
+	{ // vm config uuid
+		HelpShort: "set the UUID for a VM",
+		HelpLong: `
+Set the UUID for a virtual machine. If not set, minimega will create a random
+one when the VM is launched.
+
+Note: this configuration only applies to KVM-based VMs.`,
+		Patterns: []string{
+			"vm config uuid [uuid]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "uuid")
 		}),
 	},
 	{ // vm config serial
@@ -591,24 +638,14 @@ To create three virtio-serial ports:
 		HelpLong: `
 Enable or disable snapshot mode when using disk images. When enabled, disks
 images will be loaded in memory when run and changes will not be saved. This
-allows a single disk image to be used for many VMs.`,
+allows a single disk image to be used for many VMs.
+
+Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "snapshot")
-		}),
-	},
-	{ // vm config initrd
-		HelpShort: "set a initrd image to attach to a VM",
-		HelpLong: `
-Attach an initrd image to a VM. Passed along with the kernel image at boot
-time.`,
-		Patterns: []string{
-			"vm config initrd [path to initrd]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "initrd")
 		}),
 	},
 	{ // clear vm config
@@ -625,20 +662,24 @@ to the default value.`,
 		// magic of single-choice fields to set the field name in BoolArgs.
 		Patterns: []string{
 			"clear vm config",
+			// VMConfig
+			"clear vm config <memory,>",
+			"clear vm config <net,>",
+			"clear vm config <vcpus,>",
+			// KVMConfig
 			"clear vm config <append,>",
 			"clear vm config <cdrom,>",
 			"clear vm config <migrate,>",
 			"clear vm config <disk,>",
 			"clear vm config <initrd,>",
 			"clear vm config <kernel,>",
-			"clear vm config <memory,>",
-			"clear vm config <net,>",
 			"clear vm config <qemu,>",
 			"clear vm config <qemu-append,>",
 			"clear vm config <qemu-override,>",
 			"clear vm config <snapshot,>",
 			"clear vm config <uuid,>",
-			"clear vm config <vcpus,>",
+			"clear vm config <serial,>",
+			"clear vm config <virtio-serial,>",
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
@@ -675,13 +716,29 @@ func init() {
 
 	// for vm info
 	gob.Register(VMs{})
+	gob.Register(&vmKVM{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	resp.Header, resp.Tabular, err = vms.info()
+	vmType := ""
+	if c.BoolArgs["kvm"] {
+		vmType = "kvm"
+	}
+
+	for _, vm := range vms {
+		// Populate the latest bandwidth stats for all VMs
+		vm.UpdateBW()
+
+		// Populate CC Active flag for KVM vms
+		if vm, ok := vm.(*vmKVM); ok {
+			vm.UpdateCCActive()
+		}
+	}
+
+	resp.Header, resp.Tabular, err = vms.info(vmType)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
@@ -695,10 +752,15 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmstring := c.StringArgs["vm"]
-	doVms := make([]*vmInfo, 0)
+	doVms := make([]*vmKVM, 0)
 	if vmstring == Wildcard {
-		for _, v := range vms {
-			doVms = append(doVms, v)
+		for _, vm := range vms {
+			switch vm := vm.(type) {
+			case *vmKVM:
+				doVms = append(doVms, vm)
+			default:
+				// TODO: Do anything?
+			}
 		}
 	} else {
 		vm := vms.findVm(vmstring)
@@ -706,7 +768,12 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			resp.Error = vmNotFound(vmstring).Error()
 			return resp
 		}
-		doVms = append(doVms, vm)
+		if vm, ok := vm.(*vmKVM); ok {
+			doVms = append(doVms, vm)
+		} else {
+			resp.Error = "cdrom commands are only supported for kvm vms"
+			return resp
+		}
 	}
 
 	if c.BoolArgs["eject"] {
@@ -770,20 +837,21 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 
 	target := c.StringArgs["target"]
 
-	errs := expandVmTargets(target, false, func(vm *vmInfo, wild bool) (bool, error) {
+	errs := expandVmTargets(target, false, func(vm VM, wild bool) (bool, error) {
 		if setOp {
-			vm.Tags[key] = value
+			vm.Tags()[key] = value
 		} else if key == Wildcard {
-			for k, v := range vm.Tags {
+			for k, v := range vm.Tags() {
 				resp.Tabular = append(resp.Tabular, []string{
-					strconv.Itoa(vm.ID),
+					strconv.Itoa(vm.ID()),
 					k, v,
 				})
 			}
 		} else {
+			// TODO: return false if tag not set?
 			resp.Tabular = append(resp.Tabular, []string{
-				strconv.Itoa(vm.ID),
-				vm.Tags[key],
+				strconv.Itoa(vm.ID()),
+				vm.Tags()[key],
 			})
 		}
 
@@ -813,11 +881,11 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 		target = Wildcard
 	}
 
-	errs := expandVmTargets(target, true, func(vm *vmInfo, wild bool) (bool, error) {
+	errs := expandVmTargets(target, true, func(vm VM, wild bool) (bool, error) {
 		if key == Wildcard {
-			vm.Tags = make(map[string]string)
+			vm.ClearTags()
 		} else {
-			delete(vm.Tags, key)
+			delete(vm.Tags(), key)
 		}
 
 		return true, nil
@@ -835,12 +903,12 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = info.Copy()
+		savedInfo[c.StringArgs["name"]] = *vmConfig.Copy()
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
 			if s, ok := savedInfo[name]; ok {
-				info = s.Copy()
+				vmConfig = *s.Copy()
 			} else {
 				resp.Error = fmt.Sprintf("config %v does not exist", name)
 			}
@@ -858,59 +926,45 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {
-			info = vm.Copy()
+			vmConfig.BaseConfig = *vm.Config().Copy()
+			switch vm := vm.(type) {
+			case *vmKVM:
+				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
+			}
 		}
 	} else {
-		// Print the full config
-		resp.Response = info.configToString()
+		// Print the config
+		resp.Response = vmConfig.String()
 	}
 
 	return resp
 }
 
 func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
-	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	fns := vmConfigFns[field]
-
 	// If there are no args it means that we want to display the current value
-	if len(c.StringArgs) == 0 && len(c.ListArgs) == 0 && len(c.BoolArgs) == 0 {
-		resp.Response = fns.Print(info)
-		return resp
-	}
+	nArgs := len(c.StringArgs) + len(c.ListArgs) + len(c.BoolArgs)
 
-	// We expect exactly one key in either the String, List, or Bool Args for
-	// most configs. For some, there is more complex processing and they need
-	// the whole command.
-	if fns.UpdateCommand != nil {
-		err = fns.UpdateCommand(c)
-	} else if len(c.StringArgs) == 1 && fns.Update != nil {
-		for _, arg := range c.StringArgs {
-			err = fns.Update(info, arg)
-		}
-	} else if len(c.ListArgs) == 1 && fns.Update != nil {
-		// Lists need to be cleared first since they process each arg
-		// individually to build state
-		fns.Clear(info)
+	var ok bool
+	var fns VMConfigFns
+	var config interface{}
 
-		for _, args := range c.ListArgs {
-			for _, arg := range args {
-				if err = fns.Update(info, arg); err != nil {
-					break
-				}
-			}
-		}
-	} else if len(c.BoolArgs) == 1 && fns.UpdateBool != nil {
-		// Special case, look for key "true" (there should only be two options,
-		// "true" or "false" and, therefore, not "true" implies "false").
-		err = fns.UpdateBool(info, c.BoolArgs["true"])
+	// Find the right config functions, baseConfigFns has highest priority
+	if fns, ok = baseConfigFns[field]; ok {
+		config = &vmConfig.BaseConfig
+	} else if fns, ok = kvmConfigFns[field]; ok {
+		config = &vmConfig.KVMConfig
 	} else {
-		log.Fatalln("someone goofed on the patterns")
+		log.Fatalln("unknown config field: `%s`", field)
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
+	if nArgs == 0 {
+		resp.Response = fns.Print(config)
+	} else {
+		if err := fns.Update(config, c); err != nil {
+			resp.Error = err.Error()
+		}
 	}
 
 	return resp
@@ -920,11 +974,18 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	var clearAll = len(c.BoolArgs) == 0
+	var clearKVM = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["kvm"])
 	var cleared bool
 
-	for k, fns := range vmConfigFns {
+	for k, fns := range baseConfigFns {
 		if clearAll || c.BoolArgs[k] {
-			fns.Clear(info)
+			fns.Clear(&vmConfig.BaseConfig)
+			cleared = true
+		}
+	}
+	for k, fns := range kvmConfigFns {
+		if clearKVM || c.BoolArgs[k] {
+			fns.Clear(&vmConfig.KVMConfig)
 			cleared = true
 		}
 	}
@@ -967,13 +1028,35 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
 		}
+
 		if _, err := strconv.Atoi(name); err == nil {
 			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
 			return resp
 		}
+
+		for _, vm := range vms {
+			if vm.Name() == name {
+				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
+				return resp
+			}
+		}
 	}
 
-	log.Info("launching %v vms", len(names))
+	noblock := c.BoolArgs["noblock"]
+	delete(c.BoolArgs, "noblock")
+
+	// Parse the VM type, at this point there should only be one key left in
+	// BoolArgs and it should be the VM type.
+	var vmType VMType
+	for k := range c.BoolArgs {
+		var err error
+		vmType, err = ParseVMType(k)
+		if err != nil {
+			log.Fatalln("expected VM type, not `%v`", k)
+		}
+	}
+
+	log.Info("launching %v %v vms", len(names), vmType)
 
 	ack := make(chan int)
 	waitForAcks := func(count int) {
@@ -983,15 +1066,15 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	for i, vmName := range names {
-		if err := vms.launch(vmName, ack); err != nil {
+	for i, name := range names {
+		if err := vms.launch(name, vmType, ack); err != nil {
 			resp.Error = err.Error()
 			go waitForAcks(i)
 			return resp
 		}
 	}
 
-	if c.BoolArgs["noblock"] {
+	if noblock {
 		go waitForAcks(len(names))
 	} else {
 		waitForAcks(len(names))
@@ -1084,6 +1167,12 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
 		for _, vm := range vms {
+			vm, ok := vm.(*vmKVM)
+			if !ok {
+				// TODO: remove?
+				continue
+			}
+
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				resp.Error = err.Error()
@@ -1092,7 +1181,11 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 			if status == "" {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{fmt.Sprintf("%v", vm.ID), vm.Name, status, fmt.Sprintf("%.2f", complete)})
+			resp.Tabular = append(resp.Tabular, []string{
+				fmt.Sprintf("%v", vm.ID()),
+				vm.Name(),
+				status,
+				fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
 			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
@@ -1141,12 +1234,17 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
+	kvm, ok := vm.(*vmKVM)
+	if !ok {
+		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		return resp
+	}
 
 	if c.BoolArgs["add"] {
 		// generate an id by adding 1 to the highest in the list for the
-		// Hotplug devices, 0 if it's empty
+		// hotplug devices, 0 if it's empty
 		id := 0
-		for k, _ := range vm.Hotplug {
+		for k, _ := range kvm.hotplug {
 			if k >= id {
 				id = k + 1
 			}
@@ -1154,25 +1252,25 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		hid := fmt.Sprintf("hotplug%v", id)
 		log.Debugln("hotplug generated id:", hid)
 
-		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
+		r, err := kvm.q.DriveAdd(hid, c.StringArgs["filename"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
 		log.Debugln("hotplug drive_add response:", r)
-		r, err = vm.q.USBDeviceAdd(hid)
+		r, err = kvm.q.USBDeviceAdd(hid)
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
 		log.Debugln("hotplug usb device add response:", r)
-		vm.Hotplug[id] = c.StringArgs["filename"]
+		kvm.hotplug[id] = c.StringArgs["filename"]
 	} else if c.BoolArgs["remove"] {
 		if c.StringArgs["disk"] == Wildcard {
-			for k := range vm.Hotplug {
-				if err := vm.hotplugRemove(k); err != nil {
+			for k := range kvm.hotplug {
+				if err := kvm.hotplugRemove(k); err != nil {
 					resp.Error = err.Error()
 					// TODO: try to remove the rest if there's an error?
 					break
@@ -1185,15 +1283,15 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		id, err := strconv.Atoi(c.StringArgs["disk"])
 		if err != nil {
 			resp.Error = err.Error()
-		} else if err := vm.hotplugRemove(id); err != nil {
+		} else if err := kvm.hotplugRemove(id); err != nil {
 			resp.Error = err.Error()
 		}
 	} else if c.BoolArgs["show"] {
-		if len(vm.Hotplug) > 0 {
-			resp.Header = []string{"Hotplug ID", "File"}
+		if len(kvm.hotplug) > 0 {
+			resp.Header = []string{"hotplug ID", "File"}
 			resp.Tabular = [][]string{}
 
-			for k, v := range vm.Hotplug {
+			for k, v := range kvm.hotplug {
 				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
 			}
 		}
@@ -1216,16 +1314,21 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
-	if len(vm.Taps) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(vm.Taps))
+
+	config := vm.Config()
+
+	if len(config.Networks) < pos {
+		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(config.Networks))
 		return resp
 	}
+
+	net := &config.Networks[pos]
 
 	var b *bridge
 	if c.StringArgs["bridge"] != "" {
 		b, err = getBridge(c.StringArgs["bridge"])
 	} else {
-		b, err = getBridge(vm.Bridges[pos])
+		b, err = getBridge(net.Bridge)
 	}
 	if err != nil {
 		resp.Error = err.Error()
@@ -1233,45 +1336,45 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, vm.Networks[pos])
-		err = b.TapRemove(vm.Networks[pos], vm.Taps[pos])
+		log.Debug("disconnect network connection: %v %v %v", vm.ID(), pos, net)
+		err = b.TapRemove(net.VLAN, net.Tap)
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
-			vm.Networks[pos] = -1
+			net.VLAN = -1
 		}
 	} else if c.BoolArgs["connect"] {
-		net, err := strconv.Atoi(c.StringArgs["vlan"])
+		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
-		if net >= 0 && net < 4096 {
+		if vlan >= 0 && vlan < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, vm.Networks[pos], b.Name, net)
-			oldBridge, err := getBridge(vm.Bridges[pos])
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID(), pos, net.VLAN, b.Name, vlan)
+			oldBridge, err := getBridge(net.Bridge)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
-			if vm.Networks[pos] != -1 {
-				err := oldBridge.TapRemove(vm.Networks[pos], vm.Taps[pos])
+			if net.VLAN != -1 {
+				err := oldBridge.TapRemove(net.VLAN, net.Tap)
 				if err != nil {
 					resp.Error = err.Error()
 					return resp
 				}
 			}
 
-			err = b.TapAdd(net, vm.Taps[pos], false)
+			err = b.TapAdd(vlan, net.Tap, false)
 			if err != nil {
 				resp.Error = err.Error()
 				return resp
 			}
 
-			vm.Networks[pos] = net
-			vm.Bridges[pos] = b.Name
+			net.VLAN = vlan
+			net.Bridge = b.Name
 		} else {
 			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
 		}

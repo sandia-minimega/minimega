@@ -18,7 +18,7 @@ type dotVM struct {
 	Text  string
 }
 
-var stateToColor = map[VmState]string{
+var stateToColor = map[VMState]string{
 	VM_BUILDING: "yellow",
 	VM_RUNNING:  "green",
 	VM_PAUSED:   "yellow",
@@ -66,7 +66,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	info, _ := globalVmInfo(nil, nil)
 	for host, vms := range info {
 		for _, vm := range vms {
-			info, err := vm.info([]string{"ip", "ip6"})
+			info, err := vm.Info([]string{"ip", "ip6"})
 			if err != nil || len(info) != 2 {
 				// Should never happen
 				log.Error("bad VM info: %v -- %v", host, vm.Name)
@@ -74,13 +74,13 @@ func cliDot(c *minicli.Command) *minicli.Response {
 			}
 
 			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
-			color := stateToColor[vm.State]
+			color := stateToColor[vm.State()]
 
 			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
-			for _, vlan := range vm.Networks {
-				fmt.Fprintf(writer, "%v -- %v\n", text, vlan)
-				vlans[vlan] = true
+			for _, net := range vm.Config().Networks {
+				fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
+				vlans[net.VLAN] = true
 			}
 		}
 	}

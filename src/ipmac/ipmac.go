@@ -16,14 +16,13 @@ import "C"
 import (
 	"fmt"
 	log "minilog"
-	"strings"
 	"sync"
 	"unsafe"
 )
 
 type IPMacLearner struct {
 	handle unsafe.Pointer
-	pairs  map[string]*IP
+	pairs  map[string]chan IP
 	closed bool
 	lock   sync.Mutex
 }
@@ -36,7 +35,7 @@ type IP struct {
 // NewLearner returns an IPMacLearner object bound to a particular interface.
 func NewLearner(dev string) (*IPMacLearner, error) {
 	ret := &IPMacLearner{
-		pairs: make(map[string]*IP),
+		pairs: make(map[string]chan IP),
 	}
 	p := C.CString(dev)
 	handle := C.pcapInit(p)
@@ -56,18 +55,13 @@ func NewLearner(dev string) (*IPMacLearner, error) {
 	return ret, nil
 }
 
-// Lookup any known IPv4 or IPv6 addresses associated with a given MAC address.
-func (iml *IPMacLearner) GetIPFromMac(mac string) *IP {
-	return iml.pairs[mac]
-}
-
 // Add a MAC address to the list of addresses to search for. IPMacLearner will
 // not gather information on MAC addresses not in the list.
-func (iml *IPMacLearner) AddMac(mac string) {
+func (iml *IPMacLearner) AddMac(mac string, out chan IP) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
 	log.Debugln("adding mac to filter:", mac)
-	iml.pairs[mac] = &IP{}
+	iml.pairs[mac] = out
 }
 
 // Delete a MAC address from the list of addresses to search for.
@@ -81,7 +75,7 @@ func (iml *IPMacLearner) DelMac(mac string) {
 func (iml *IPMacLearner) Flush() {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
-	iml.pairs = make(map[string]*IP)
+	iml.pairs = make(map[string]chan IP)
 }
 
 // Stop searching for IP addresses.
@@ -121,15 +115,8 @@ func (iml *IPMacLearner) learner() {
 			continue
 		}
 
-		if ip != "" {
-			iml.pairs[mac].IP4 = ip
-		} else if ip6 != "" {
-			if iml.pairs[mac].IP6 != "" && strings.HasPrefix(ip6, "fe80") {
-				log.Debugln("ignoring link-local over existing IPv6 address")
-			} else {
-				iml.pairs[mac].IP6 = ip6
-			}
-		}
+		// TODO: Need to send from goroutine?
+		iml.pairs[mac] <- IP{ip, ip6}
 
 		iml.lock.Unlock()
 	}
