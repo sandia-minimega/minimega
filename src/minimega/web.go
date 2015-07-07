@@ -13,6 +13,7 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -110,18 +111,25 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 
 func webStart(port int, root string) {
 	// Initialize templates
-	var err error
-
-	templates := filepath.Join(root, "templates", "*.html")
+	templates := filepath.Join(root, "templates")
 	log.Info("compiling templates from %s", templates)
-	web.Templates, err = template.ParseGlob(templates)
-	if err != nil {
-		log.Error("failed to load templates from %s", templates)
-		return
-	}
+
+	web.Templates = template.New("minimega-templates")
+	filepath.Walk(templates, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Error("failed to load template from %s", path)
+			return nil
+		}
+
+		if !info.IsDir() && strings.HasSuffix(path, ".html") {
+			web.Templates.ParseFiles(path)
+		}
+
+		return nil
+	})
 
 	mux := http.NewServeMux()
-	for _, v := range []string{"novnc", "d3", "include"} {
+	for _, v := range []string{"novnc", "libs", "include"} {
 		path := fmt.Sprintf("/%s/", v)
 		dir := http.Dir(filepath.Join(root, v))
 		mux.Handle(path, http.StripPrefix(path, http.FileServer(dir)))
@@ -417,7 +425,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 					Size: 140,
 				}
 
-				if err := web.Templates.ExecuteTemplate(&buf, "screenshot", &params); err != nil {
+				if err := web.Templates.ExecuteTemplate(&buf, "fragment/screenshot", &params); err != nil {
 					log.Error("unable to execute template screenshot -- %v", err)
 					continue
 				}
