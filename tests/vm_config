@@ -43,7 +43,12 @@ vm config snapshot
 clear vm config snapshot
 vm config snapshot
 vm config disk
-vm config disk a b c
+vm config disk a
+vm config disk
+clear vm config disk
+vm config disk
+vm config disk a
+vm config disk b c
 vm config disk
 clear vm config disk
 vm config disk

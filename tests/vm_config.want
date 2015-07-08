@@ -59,9 +59,16 @@ false
 true
 ## vm config disk
 []
-## vm config disk a b c
+## vm config disk a
 ## vm config disk
-[a b c]
+[a]
+## clear vm config disk
+## vm config disk
+[]
+## vm config disk a
+## vm config disk b c
+## vm config disk
+[b c]
 ## clear vm config disk
 ## vm config disk
 []
