@@ -46,6 +46,10 @@ var baseConfigFns = map[string]VMConfigFns{
 	"net": {
 		Update: func(v interface{}, c *minicli.Command) error {
 			vm := mustBaseConfig(v)
+
+			// Reset any previously configured networks
+			vm.Networks = []NetConfig{}
+
 			for _, spec := range c.ListArgs["netspec"] {
 				net, err := processVMNet(spec)
 				if err != nil {
@@ -53,6 +57,7 @@ var baseConfigFns = map[string]VMConfigFns{
 				}
 				vm.Networks = append(vm.Networks, net)
 			}
+
 			return nil
 		},
 		Clear: func(vm interface{}) {
@@ -200,10 +205,14 @@ func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfig
 func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
+			// Reset to empty list
+			*fn(vm) = []string{}
+
 			// Update the value, have to use range since we don't know the key
 			for _, v := range c.ListArgs {
 				*fn(vm) = append(*fn(vm), v...)
 			}
+
 			return nil
 		},
 		Clear: func(vm interface{}) { *fn(vm) = []string{} },
