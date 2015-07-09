@@ -1341,7 +1341,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		if err != nil {
 			resp.Error = err.Error()
 		} else {
-			net.VLAN = -1
+			net.VLAN = DisconnectedVLAN
 		}
 	} else if c.BoolArgs["connect"] {
 		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
