@@ -525,18 +525,18 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 			config := vm.Config()
 
 			// The " " is invalid as a hostname, so we use it as a separator.
-			infovms[host + " " + strconv.Itoa(vm.ID())] = map[string]interface{}{
-				"host":    host,
+			infovms[host+" "+strconv.Itoa(vm.ID())] = map[string]interface{}{
+				"host": host,
 
-				"id":      vm.ID(),
-				"name":    vm.Name(),
-				"state":   vm.State().String(),
-				"type":    vm.Type().String(),
+				"id":    vm.ID(),
+				"name":  vm.Name(),
+				"state": vm.State().String(),
+				"type":  vm.Type().String(),
 
-				"tags":    vm.Tags(),
+				"tags": vm.Tags(),
 
-				"vcpus":   config.Vcpus,
-				"memory":  config.Memory,
+				"vcpus":  config.Vcpus,
+				"memory": config.Memory,
 
 				"network": config.Networks,
 			}
