@@ -311,7 +311,7 @@ div.code {
   padding: 5px 10px;
   margin-top: 20px;
   margin-bottom: 20px;
-  overflow: hidden;
+  overflow: auto;
 
   background: rgb(240, 240, 240);
   border: 1px solid rgb(224, 224, 224);
@@ -366,6 +366,7 @@ div.code {
 }
 div.playground {
   position: relative;
+  overflow: auto;
 }
 div.output {
   position: absolute;

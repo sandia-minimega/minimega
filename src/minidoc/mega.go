@@ -11,12 +11,14 @@ import (
 	log "minilog"
 	"path/filepath"
 	"present"
+	"strconv"
 	"strings"
 )
 
 type Mega struct {
 	Text     template.HTML
 	Filename string
+	Height   int
 }
 
 func init() {
@@ -34,8 +36,19 @@ func parseMega(ctx *present.Context, sourceFile string, sourceLine int, cmd stri
 	log.Debug("parseMega cmd: %v", cmd)
 
 	f := strings.Fields(cmd)
-	if len(f) != 2 {
+
+	if len(f) != 2 && len(f) != 3 {
 		return nil, fmt.Errorf("invalid .mega directive: %v", cmd)
+	}
+
+	var height int
+	if len(f) == 3 {
+		h, err := strconv.Atoi(f[2])
+		if err != nil {
+			return nil, err
+		}
+		height = h
+		log.Debug("got mega height: %v", h)
 	}
 
 	filename := filepath.Join(*f_root, filepath.Dir(sourceFile), f[1])
@@ -58,6 +71,7 @@ func parseMega(ctx *present.Context, sourceFile string, sourceLine int, cmd stri
 	return Mega{
 		Text:     template.HTML(buf.String()),
 		Filename: filepath.Base(filename),
+		Height:   height,
 	}, nil
 }
 
