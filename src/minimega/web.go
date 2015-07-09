@@ -141,6 +141,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/tags", webVMTags)
 	mux.HandleFunc("/tiles", webTileVMs)
+	mux.HandleFunc("/graph", webGraph)
 	mux.HandleFunc("/json", webJSON)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
@@ -227,6 +228,10 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.NotFound(w, r)
 	}
+}
+
+func webGraph(w http.ResponseWriter, r *http.Request) {
+	webRenderTemplate(w, "graph.html", make([]interface{}, 0))
 }
 
 // webVNC serves routes like /vnc/<host>/<port>/<vmName>.
@@ -503,8 +508,11 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 }
 
 func webJSON(w http.ResponseWriter, r *http.Request) {
+	// info is returned in a mapping of hosts to their vms
 	info, _ := globalVmInfo(nil, nil)
-	infos   := make([]map[string]interface{}, 0)
+
+	// we want a map of "hostname + id" to vm info so that it can be sorted
+	infovms := make(map[string]map[string]interface{}, 0)
 
 	for host, vms := range info {
 		for _, vm := range vms {
@@ -516,7 +524,8 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 
 			config := vm.Config()
 
-			infos = append(infos, map[string]interface{}{
+			// The " " is invalid as a hostname, so we use it as a separator.
+			infovms[host + " " + strconv.Itoa(vm.ID())] = map[string]interface{}{
 				"host":    host,
 
 				"id":      vm.ID(),
@@ -530,11 +539,27 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 				"memory":  config.Memory,
 
 				"network": config.Networks,
-			})
+			}
 		}
 	}
 
-	js, err := json.Marshal(infos)
+	// We need to pass it as an array for the JSON generation (so the weird keys don't show up)
+	infoslice := make([]map[string]interface{}, len(infovms))
+
+	// Make a slice of all keys in infovms, then sort it
+	keys := []string{}
+	for k, _ := range infovms {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	// Make a sorted slice of values from the sorted slice of keys
+	for i, k := range keys {
+		infoslice[i] = infovms[k]
+	}
+
+	// Now the order of items in the JSON doesn't randomly change between calls (since the values are sorted)
+	js, err := json.Marshal(infoslice)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

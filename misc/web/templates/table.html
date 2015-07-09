@@ -3,7 +3,8 @@
 	<head>
 		<title>minimega</title>
 
-		<link rel="stylesheet" type="text/css" href="/include/css/nav.css">
+		{{ template "include/style" }}
+		{{ template "include/dataTables.css" }}
 	</head>
 	<body>
 
@@ -35,7 +36,7 @@
 		</div>
 
 		{{ template "include/jQuery" }}
-		{{ template "include/dataTables" }}
+		{{ template "include/dataTables.js" }}
 
 		<script type="text/javascript" language="javascript" src="/include/js/table.js"></script>
 
