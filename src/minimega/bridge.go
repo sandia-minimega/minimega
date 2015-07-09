@@ -1005,13 +1005,15 @@ func (b *bridge) TapAdd(lan int, tap string, host bool) error {
 
 // remove a tap from a bridge
 func (b *bridge) TapRemove(lan int, tap string) error {
+	// put this tap into the disconnected vlan
+	bridgeLock.Lock()
+	b.Lock.Lock()
+
+	// No-op is the VLAN is already disconnected
 	if lan == DisconnectedVLAN {
 		return nil
 	}
 
-	// put this tap into the disconnected vlan
-	bridgeLock.Lock()
-	b.Lock.Lock()
 	if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
 		disconnectedTaps[tap] = b.lans[lan].Taps[tap]
 	}
