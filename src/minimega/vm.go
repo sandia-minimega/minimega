@@ -275,7 +275,7 @@ func (vm *vmBase) info(mask string) (string, error) {
 		return vm.Type().String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
-			if net.VLAN == -1 {
+			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
 				vals = append(vals, fmt.Sprintf("%v", net.VLAN))
