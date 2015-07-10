@@ -135,7 +135,7 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			for _, cpu := range cpus {
 				var ids []int
 				for _, vm := range affinityCPUSets[cpu] {
-					ids = append(ids, vm.ID())
+					ids = append(ids, vm.GetID())
 				}
 				resp.Tabular = append(resp.Tabular, []string{
 					cpu,
@@ -372,7 +372,7 @@ func affinityUnselectCPU(vm *vmKVM) {
 	// find and remove vm from its cpuset
 	for k, v := range affinityCPUSets {
 		for i, j := range v {
-			if j.ID() == vm.ID() {
+			if j.GetID() == vm.GetID() {
 				if len(v) == 1 {
 					affinityCPUSets[k] = []*vmKVM{}
 				} else if i == 0 {
@@ -386,7 +386,7 @@ func affinityUnselectCPU(vm *vmKVM) {
 			}
 		}
 	}
-	log.Fatal("could not find vm %v in CPU set", vm.ID())
+	log.Fatal("could not find vm %v in CPU set", vm.GetID())
 }
 
 func (vm *vmKVM) CheckAffinity() {

@@ -264,7 +264,7 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 
 	for _, vms := range globalVmInfo(nil, nil) {
 		for _, vm := range vms {
-			name := fmt.Sprintf("%v:%v", vm.ID(), vm.Name())
+			name := fmt.Sprintf("%v:%v", vm.GetID(), vm.GetName())
 
 			p := point{Text: name}
 
@@ -306,7 +306,7 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 	// Find all the distinct tags across all VMs
 	for _, vms := range info {
 		for _, vm := range vms {
-			for _, k := range vm.Tags() {
+			for _, k := range vm.GetTags() {
 				tags[k] = true
 			}
 		}
@@ -331,8 +331,8 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 		for _, vm := range vms {
 			row := []interface{}{
 				host,
-				vm.Name(),
-				vm.ID(),
+				vm.GetName(),
+				vm.GetID(),
 			}
 
 			for _, k := range table.Header {
@@ -404,12 +404,12 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	for host, vms := range globalVmInfo(nil, nil) {
 		for _, vm := range vms {
 			var buf bytes.Buffer
-			if vm.State()&stateMask == 0 {
+			if vm.GetState()&stateMask == 0 {
 				params := vmScreenshotParams{
 					Host: host,
-					Name: vm.Name(),
-					Port: 5900 + vm.ID(),
-					ID:   vm.ID(),
+					Name: vm.GetName(),
+					Port: 5900 + vm.GetID(),
+					ID:   vm.GetID(),
 					Size: 140,
 				}
 
@@ -423,7 +423,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			row, err := vm.Info(vmMasks)
 			if err != nil {
-				log.Error("unable to get info from VM %s:%s -- %v", host, vm.Name(), err)
+				log.Error("unable to get info from VM %s:%s -- %v", host, vm.GetName(), err)
 				continue
 			}
 
@@ -445,15 +445,15 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 
 	for host, vms := range globalVmInfo(nil, nil) {
 		for _, vm := range vms {
-			if vm.State()&stateMask != 0 {
+			if vm.GetState()&stateMask != 0 {
 				continue
 			}
 
 			params = append(params, vmScreenshotParams{
 				Host: host,
-				Name: vm.Name(),
-				Port: 5900 + vm.ID(),
-				ID:   vm.ID(),
+				Name: vm.GetName(),
+				Port: 5900 + vm.GetID(),
+				ID:   vm.GetID(),
 				Size: 250,
 			})
 		}
@@ -469,7 +469,7 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 		for _, vm := range vms {
 			stateMask := VM_QUIT | VM_ERROR
 
-			if vm.State()&stateMask != 0 {
+			if vm.GetState()&stateMask != 0 {
 				continue
 			}
 
@@ -478,12 +478,12 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 			info = append(info, map[string]interface{}{
 				"host": host,
 
-				"id":    vm.ID(),
-				"name":  vm.Name(),
-				"state": vm.State().String(),
-				"type":  vm.Type().String(),
+				"id":    vm.GetID(),
+				"name":  vm.GetName(),
+				"state": vm.GetState().String(),
+				"type":  vm.GetType().String(),
 
-				"tags": vm.Tags(),
+				"tags": vm.GetTags(),
 
 				"vcpus":  config.Vcpus,
 				"memory": config.Memory,

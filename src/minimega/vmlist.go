@@ -86,8 +86,8 @@ func (vms VMs) save(file *os.File, args []string) error {
 		default:
 		}
 
-		if vm.Name() != "" {
-			cmds = append(cmds, "vm launch "+vm.Name())
+		if vm.GetName() != "" {
+			cmds = append(cmds, "vm launch "+vm.GetName())
 		} else {
 			cmds = append(cmds, "vm launch 1")
 		}
@@ -117,7 +117,7 @@ func (vms VMs) qmp(idOrName, qmp string) (string, error) {
 		return vm.QMPRaw(qmp)
 	} else {
 		// TODO
-		return "", fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		return "", fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
 }
 
@@ -128,7 +128,7 @@ func (vms VMs) screenshot(idOrName, path string, max int) error {
 	}
 	kvm, ok := vm.(*vmKVM)
 	if !ok {
-		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
 
 	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
@@ -159,7 +159,7 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	}
 	kvm, ok := vm.(*vmKVM)
 	if !ok {
-		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
 
 	return kvm.Migrate(filename)
@@ -170,7 +170,7 @@ func (vms VMs) findVm(idOrName string) VM {
 	if err != nil {
 		// Search for VM by name
 		for _, v := range vms {
-			if v.Name() == idOrName {
+			if v.GetName() == idOrName {
 				return v
 			}
 		}
@@ -186,7 +186,7 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	// Make sure that there isn't another VM with the same name
 	if name != "" {
 		for _, vm := range vms {
-			if vm.Name() == name {
+			if vm.GetName() == name {
 				return fmt.Errorf("vm launch duplicate VM name: %s", name)
 			}
 		}
@@ -205,10 +205,10 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 
 func (vms VMs) start(target string) []error {
 	return expandVmTargets(target, true, func(vm VM, wild bool) (bool, error) {
-		if wild && vm.State()&(VM_PAUSED|VM_BUILDING) != 0 {
+		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
-		} else if !wild && vm.State()&VM_RUNNING == 0 {
+		} else if !wild && vm.GetState()&VM_RUNNING == 0 {
 			// If not wild, start VMs that aren't already running
 			return true, vm.Start()
 		}
@@ -219,7 +219,7 @@ func (vms VMs) start(target string) []error {
 
 func (vms VMs) stop(target string) []error {
 	return expandVmTargets(target, true, func(vm VM, _ bool) (bool, error) {
-		if vm.State()&VM_RUNNING != 0 {
+		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
 
@@ -231,12 +231,12 @@ func (vms VMs) kill(target string) []error {
 	killedVms := map[int]bool{}
 
 	errs := expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
-		if vm.State()&(VM_QUIT|VM_ERROR) != 0 {
+		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			return false, nil
 		}
 
 		vm.Kill()
-		killedVms[vm.ID()] = true
+		killedVms[vm.GetID()] = true
 		return true, nil
 	})
 
@@ -261,7 +261,7 @@ outer:
 
 func (vms VMs) flush() {
 	for i, vm := range vms {
-		if vm.State()&(VM_QUIT|VM_ERROR) != 0 {
+		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			log.Infoln("deleting VM: ", i)
 			delete(vms, i)
 		}
@@ -366,13 +366,13 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 
 		lock.Lock()
 		defer lock.Unlock()
-		results[vm.Name()] = ok
+		results[vm.GetName()] = ok
 	}
 
 	for _, vm := range vms {
-		if wild || names[vm.Name()] || ids[vm.ID()] {
-			delete(names, vm.Name())
-			delete(ids, vm.ID())
+		if wild || names[vm.GetName()] || ids[vm.GetID()] {
+			delete(names, vm.GetName())
+			delete(ids, vm.GetID())
 			wg.Add(1)
 
 			// Use concurrency only if requested

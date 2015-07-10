@@ -56,11 +56,11 @@ type vmKVM struct {
 	pid int
 	q   qmp.Conn // qmp connection for this vm
 
-	ccActive bool // Whether CC is active, updated by calling UpdateCCActive
+	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
 func (vm *vmKVM) UpdateCCActive() {
-	vm.ccActive = ccHasClient(vm.UUID)
+	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 type qemuOverride struct {
@@ -134,7 +134,7 @@ func (vm *vmKVM) Launch(name string, ack chan int) error {
 	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
 
 	vmLock.Lock()
-	vms[vm.id] = vm
+	vms[vm.ID] = vm
 	vmLock.Unlock()
 
 	go vm.launch(ack)
@@ -143,7 +143,7 @@ func (vm *vmKVM) Launch(name string, ack chan int) error {
 }
 
 func (vm *vmKVM) Start() error {
-	s := vm.State()
+	s := vm.GetState()
 
 	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
 	if s&stateMask == 0 {
@@ -151,13 +151,13 @@ func (vm *vmKVM) Start() error {
 	}
 
 	if s == VM_QUIT || s == VM_ERROR {
-		log.Info("restarting VM: %v", vm.id)
+		log.Info("restarting VM: %v", vm.ID)
 		ack := make(chan int)
 		go vm.launch(ack)
 		log.Debug("ack restarted VM %v", <-ack)
 	}
 
-	log.Info("starting VM: %v", vm.id)
+	log.Info("starting VM: %v", vm.ID)
 	err := vm.q.Start()
 	if err != nil {
 		log.Errorln(err)
@@ -172,11 +172,11 @@ func (vm *vmKVM) Start() error {
 }
 
 func (vm *vmKVM) Stop() error {
-	if vm.State() != VM_RUNNING {
-		return fmt.Errorf("VM %v not running", vm.id)
+	if vm.GetState() != VM_RUNNING {
+		return fmt.Errorf("VM %v not running", vm.ID)
 	}
 
-	log.Info("stopping VM: %v", vm.id)
+	log.Info("stopping VM: %v", vm.ID)
 	err := vm.q.Stop()
 	if err == nil {
 		vm.setState(VM_PAUSED)
@@ -195,7 +195,7 @@ func (vm *vmKVM) Kill() error {
 }
 
 func (vm *vmKVM) String() string {
-	return fmt.Sprintf("%s:%d:kvm", hostname, vm.id)
+	return fmt.Sprintf("%s:%d:kvm", hostname, vm.ID)
 }
 
 func (vm *vmKVM) Info(masks []string) ([]string, error) {
@@ -216,7 +216,7 @@ func (vm *vmKVM) Info(masks []string) ([]string, error) {
 
 		switch mask {
 		case "cc_active":
-			res = append(res, fmt.Sprintf("%v", vm.ccActive))
+			res = append(res, fmt.Sprintf("%v", vm.ActiveCC))
 		default:
 			return nil, fmt.Errorf("invalid mask: %s", mask)
 		}
@@ -337,7 +337,7 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 			// if this vm specified the same mac address for two interfaces
 			log.Errorln("Cannot specify the same mac address for two interfaces")
 			vm.setState(VM_ERROR)
-			ack <- vm.id // signal that this vm is "done" launching
+			ack <- vm.ID // signal that this vm is "done" launching
 			return false
 		}
 		selfMacMap[net.MAC] = true
@@ -351,7 +351,7 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 			continue
 		}
 
-		s := vm2.State()
+		s := vm2.GetState()
 
 		if s&stateMask != 0 {
 			// populate mac addresses set
@@ -399,7 +399,7 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 		if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
 			log.Error("disk path %v is already in use by another vm.", diskPath)
 			vm.setState(VM_ERROR)
-			ack <- vm.id
+			ack <- vm.ID
 			return false
 		}
 	}
@@ -408,9 +408,9 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 }
 
 func (vm *vmKVM) launch(ack chan int) {
-	log.Info("launching vm: %v", vm.id)
+	log.Info("launching vm: %v", vm.ID)
 
-	s := vm.State()
+	s := vm.GetState()
 
 	// don't repeat the preamble if we're just in the quit state
 	if s != VM_QUIT && !vm.launchPreamble(ack) {
@@ -426,7 +426,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		log.Errorln(err)
 		teardown()
 	}
-	err = ioutil.WriteFile(vm.instancePath+"name", []byte(vm.name), 0664)
+	err = ioutil.WriteFile(vm.instancePath+"name", []byte(vm.Name), 0664)
 	if err != nil {
 		log.Errorln(err)
 		teardown()
@@ -451,7 +451,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.setState(VM_ERROR)
-			ack <- vm.id
+			ack <- vm.ID
 			return
 		}
 
@@ -459,7 +459,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setState(VM_ERROR)
-			ack <- vm.id
+			ack <- vm.ID
 			return
 		}
 
@@ -497,12 +497,12 @@ func (vm *vmKVM) launch(ack chan int) {
 		if err != nil {
 			log.Error("write instance taps file: %v", err)
 			vm.setState(VM_ERROR)
-			ack <- vm.id
+			ack <- vm.ID
 			return
 		}
 	}
 
-	args = VMConfig{vm.BaseConfig, vm.KVMConfig}.qemuArgs(vm.ID(), vm.instancePath)
+	args = VMConfig{vm.BaseConfig, vm.KVMConfig}.qemuArgs(vm.GetID(), vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
@@ -518,12 +518,12 @@ func (vm *vmKVM) launch(ack chan int) {
 	if err != nil {
 		log.Error("start qemu: %v %v", err, sErr.String())
 		vm.setState(VM_ERROR)
-		ack <- vm.id
+		ack <- vm.ID
 		return
 	}
 
 	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.id, vm.pid)
+	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
 
 	vm.CheckAffinity()
 
@@ -536,7 +536,7 @@ func (vm *vmKVM) launch(ack chan int) {
 				vm.setState(VM_ERROR)
 			}
 		}
-		waitChan <- vm.id
+		waitChan <- vm.ID
 	}()
 
 	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
@@ -551,28 +551,28 @@ func (vm *vmKVM) launch(ack chan int) {
 			break
 		}
 		delay := QMP_CONNECT_DELAY * time.Millisecond
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID(), err, delay)
+		log.Info("qmp dial to %v : %v, redialing in %v", vm.GetID(), err, delay)
 		time.Sleep(delay)
 	}
 
 	if !connected {
-		log.Error("vm %v failed to connect to qmp: %v", vm.id, err)
+		log.Error("vm %v failed to connect to qmp: %v", vm.ID, err)
 		vm.setState(VM_ERROR)
 		cmd.Process.Kill()
 		<-waitChan
-		ack <- vm.id
+		ack <- vm.ID
 	} else {
-		log.Debug("qmp dial to %v successful", vm.ID())
+		log.Debug("qmp dial to %v successful", vm.GetID())
 
 		go vm.asyncLogger()
 
-		ack <- vm.id
+		ack <- vm.ID
 
 		select {
 		case <-waitChan:
-			log.Info("VM %v exited", vm.id)
+			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
-			log.Info("Killing VM %v", vm.id)
+			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
@@ -589,7 +589,7 @@ func (vm *vmKVM) launch(ack chan int) {
 	}
 
 	if sendKillAck {
-		killAck <- vm.id
+		killAck <- vm.ID
 	}
 }
 
@@ -598,7 +598,7 @@ func (vm *vmKVM) setState(s VMState) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	vm.state = s
+	vm.State = s
 	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
@@ -784,7 +784,7 @@ func (vm *vmKVM) asyncLogger() {
 		if v == nil {
 			return
 		}
-		log.Info("VM %v received asynchronous message: %v", vm.id, v)
+		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
 	}
 }
 

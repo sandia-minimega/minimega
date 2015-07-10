@@ -44,10 +44,10 @@ const (
 type VM interface {
 	Config() *BaseConfig
 
-	ID() int
-	Name() string
-	State() VMState
-	Type() VMType
+	GetID() int
+	GetName() string
+	GetState() VMState
+	GetType() VMType
 
 	Launch(string, chan int) error
 	// TODO: Make kill have ack channel?
@@ -59,7 +59,7 @@ type VM interface {
 	Info(masks []string) ([]string, error)
 
 	Tag(tag string) string
-	Tags() map[string]string
+	GetTags() map[string]string
 	ClearTags()
 
 	UpdateBW()
@@ -93,10 +93,10 @@ type vmBase struct {
 
 	lock sync.Mutex
 
-	id     int
-	name   string
-	state  VMState
-	vmType VMType
+	ID    int
+	Name  string
+	State VMState
+	Type  VMType
 
 	instancePath string
 
@@ -112,7 +112,7 @@ var vmMasks = []string{
 func NewVM() *vmBase {
 	vm := new(vmBase)
 
-	vm.state = VM_BUILDING
+	vm.State = VM_BUILDING
 	vm.tags = make(map[string]string)
 
 	return vm
@@ -199,38 +199,38 @@ func (net NetConfig) String() (s string) {
 	return strings.Join(parts, ",")
 }
 
-func (vm *vmBase) ID() int {
-	return vm.id
+func (vm *vmBase) GetID() int {
+	return vm.ID
 }
 
-func (vm *vmBase) Name() string {
-	return vm.name
+func (vm *vmBase) GetName() string {
+	return vm.Name
 }
 
-func (vm *vmBase) State() VMState {
+func (vm *vmBase) GetState() VMState {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	return vm.state
+	return vm.State
 }
 
-func (vm *vmBase) Type() VMType {
-	return vm.vmType
+func (vm *vmBase) GetType() VMType {
+	return vm.Type
 }
 
 func (vm *vmBase) launch(name string, vmType VMType) error {
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
 
-	vm.id = <-vmIdChan
+	vm.ID = <-vmIdChan
 	if name == "" {
-		vm.name = fmt.Sprintf("vm-%d", vm.id)
+		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
-		vm.name = name
+		vm.Name = name
 	}
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.id) + "/"
+	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
 
-	vm.vmType = vmType
+	vm.Type = vmType
 
 	return nil
 }
@@ -239,7 +239,7 @@ func (vm *vmBase) Tag(tag string) string {
 	return vm.tags[tag]
 }
 
-func (vm *vmBase) Tags() map[string]string {
+func (vm *vmBase) GetTags() map[string]string {
 	return vm.tags
 }
 
@@ -266,13 +266,13 @@ func (vm *vmBase) info(mask string) (string, error) {
 
 	switch mask {
 	case "id":
-		return fmt.Sprintf("%v", vm.id), nil
+		return fmt.Sprintf("%v", vm.ID), nil
 	case "name":
-		return fmt.Sprintf("%v", vm.name), nil
+		return fmt.Sprintf("%v", vm.Name), nil
 	case "state":
-		return vm.State().String(), nil
+		return vm.GetState().String(), nil
 	case "type":
-		return vm.Type().String(), nil
+		return vm.GetType().String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
 			if net.VLAN == DisconnectedVLAN {
@@ -358,13 +358,13 @@ func (vms *vmSorter) Swap(i, j int) {
 func (vms *vmSorter) Less(i, j int) bool {
 	switch vms.by {
 	case "id":
-		return vms.vms[i].id < vms.vms[j].id
+		return vms.vms[i].ID < vms.vms[j].ID
 	case "host":
 		return true
 	case "name":
-		return vms.vms[i].name < vms.vms[j].name
+		return vms.vms[i].Name < vms.vms[j].Name
 	case "state":
-		return vms.vms[i].State() < vms.vms[j].State()
+		return vms.vms[i].GetState() < vms.vms[j].GetState()
 	case "memory":
 		return vms.vms[i].Memory < vms.vms[j].Memory
 	case "vcpus":
@@ -404,7 +404,7 @@ func vmGetFirstVirtioPort() []string {
 	var ret []string
 	for _, vm := range vms {
 		// TODO: non-kvm VMs?
-		if vm, ok := vm.(*vmKVM); ok && vm.State()&mask != 0 {
+		if vm, ok := vm.(*vmKVM); ok && vm.GetState()&mask != 0 {
 			if vm.VirtioPorts > 0 {
 				ret = append(ret, vm.instancePath+"virtio-serial0")
 			}
