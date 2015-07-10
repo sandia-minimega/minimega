@@ -63,8 +63,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	vlans := make(map[int]bool)
 
-	info, _ := globalVmInfo(nil, nil)
-	for host, vms := range info {
+	for host, vms := range globalVmInfo(nil, nil) {
 		for _, vm := range vms {
 			info, err := vm.Info([]string{"ip", "ip6"})
 			if err != nil || len(info) != 2 {
@@ -73,7 +72,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 				continue
 			}
 
-			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name, vm.ID, info[0], info[1])
+			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.Name(), vm.ID(), info[0], info[1])
 			color := stateToColor[vm.State()]
 
 			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
