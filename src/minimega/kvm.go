@@ -45,8 +45,8 @@ type KVMConfig struct {
 	QemuAppend []string // extra arguments for QEMU
 }
 
-type vmKVM struct {
-	vmBase    // embed
+type KvmVM struct {
+	BaseVM    // embed
 	KVMConfig // embed
 
 	// Internal variables
@@ -59,7 +59,7 @@ type vmKVM struct {
 	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
-func (vm *vmKVM) UpdateCCActive() {
+func (vm *KvmVM) UpdateCCActive() {
 	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
@@ -74,7 +74,7 @@ var (
 )
 
 // Ensure that vmKVM implements the VM interface
-var _ VM = (*vmKVM)(nil)
+var _ VM = (*KvmVM)(nil)
 
 // Valid names for output masks for vm kvm info, in preferred output order
 var kvmMasks = []string{
@@ -109,14 +109,14 @@ func (old *KVMConfig) Copy() *KVMConfig {
 	return res
 }
 
-func (vm *vmKVM) Config() *BaseConfig {
+func (vm *KvmVM) Config() *BaseConfig {
 	return &vm.BaseConfig
 }
 
-func NewKVM() *vmKVM {
-	vm := new(vmKVM)
+func NewKVM() *KvmVM {
+	vm := new(KvmVM)
 
-	vm.vmBase = *NewVM()
+	vm.BaseVM = *NewVM()
 
 	vm.kill = make(chan bool)
 	vm.hotplug = make(map[int]string)
@@ -127,8 +127,8 @@ func NewKVM() *vmKVM {
 // launch one or more vms. this will copy the info struct, one per vm and
 // launch each one in a goroutine. it will not return until all vms have
 // reported that they've launched.
-func (vm *vmKVM) Launch(name string, ack chan int) error {
-	if err := vm.vmBase.launch(name, KVM); err != nil {
+func (vm *KvmVM) Launch(name string, ack chan int) error {
+	if err := vm.BaseVM.launch(name, KVM); err != nil {
 		return err
 	}
 	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
@@ -142,7 +142,7 @@ func (vm *vmKVM) Launch(name string, ack chan int) error {
 	return nil
 }
 
-func (vm *vmKVM) Start() error {
+func (vm *KvmVM) Start() error {
 	s := vm.GetState()
 
 	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
@@ -171,7 +171,7 @@ func (vm *vmKVM) Start() error {
 	return err
 }
 
-func (vm *vmKVM) Stop() error {
+func (vm *KvmVM) Stop() error {
 	if vm.GetState() != VM_RUNNING {
 		return fmt.Errorf("VM %v not running", vm.ID)
 	}
@@ -185,7 +185,7 @@ func (vm *vmKVM) Stop() error {
 	return err
 }
 
-func (vm *vmKVM) Kill() error {
+func (vm *KvmVM) Kill() error {
 	// Close the channel to signal to all dependent goroutines that they should
 	// stop. Anyone blocking on the channel will unblock immediately.
 	// http://golang.org/ref/spec#Receive_operator
@@ -194,16 +194,16 @@ func (vm *vmKVM) Kill() error {
 	return nil
 }
 
-func (vm *vmKVM) String() string {
+func (vm *KvmVM) String() string {
 	return fmt.Sprintf("%s:%d:kvm", hostname, vm.ID)
 }
 
-func (vm *vmKVM) Info(masks []string) ([]string, error) {
+func (vm *KvmVM) Info(masks []string) ([]string, error) {
 	res := make([]string, 0, len(masks))
 
 	for _, mask := range masks {
 		// If it's a field handled by the baseVM, use it.
-		if v, err := vm.vmBase.info(mask); err == nil {
+		if v, err := vm.BaseVM.info(mask); err == nil {
 			res = append(res, v)
 			continue
 		}
@@ -248,16 +248,16 @@ func (vm *KVMConfig) String() string {
 	return o.String()
 }
 
-func (vm *vmKVM) QMPRaw(input string) (string, error) {
+func (vm *KvmVM) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
 }
 
-func (vm *vmKVM) Migrate(filename string) error {
+func (vm *KvmVM) Migrate(filename string) error {
 	path := filepath.Join(*f_iomBase, filename)
 	return vm.q.MigrateDisk(path)
 }
 
-func (vm *vmKVM) QueryMigrate() (string, float64, error) {
+func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	var status string
 	var completed float64
 
@@ -305,7 +305,7 @@ func (vm *vmKVM) QueryMigrate() (string, float64, error) {
 	return status, completed, nil
 }
 
-func (vm *vmKVM) launchPreamble(ack chan int) bool {
+func (vm *KvmVM) launchPreamble(ack chan int) bool {
 	// check if the vm has a conflict with the disk or mac address of another vm
 	// build state of currently running system
 	macMap := map[string]bool{}
@@ -360,7 +360,7 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 			}
 
 			// TODO: Check non-kvm as well?
-			if vm2, ok := vm2.(*vmKVM); ok {
+			if vm2, ok := vm2.(*KvmVM); ok {
 				// populate disk sets
 				if len(vm2.DiskPaths) != 0 {
 					for _, diskpath := range vm2.DiskPaths {
@@ -407,7 +407,7 @@ func (vm *vmKVM) launchPreamble(ack chan int) bool {
 	return true
 }
 
-func (vm *vmKVM) launch(ack chan int) {
+func (vm *KvmVM) launch(ack chan int) {
 	log.Info("launching vm: %v", vm.ID)
 
 	s := vm.GetState()
@@ -464,7 +464,7 @@ func (vm *vmKVM) launch(ack chan int) {
 		}
 
 		updates := make(chan ipmac.IP)
-		go func(vm *vmKVM, net *NetConfig) {
+		go func(vm *KvmVM, net *NetConfig) {
 			defer close(updates)
 			for {
 				// TODO: need to acquire VM lock?
@@ -594,7 +594,7 @@ func (vm *vmKVM) launch(ack chan int) {
 }
 
 // update the vm state, and write the state to file
-func (vm *vmKVM) setState(s VMState) {
+func (vm *KvmVM) setState(s VMState) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -606,7 +606,7 @@ func (vm *vmKVM) setState(s VMState) {
 }
 
 // return the path to the qmp socket
-func (vm *vmKVM) qmpPath() string {
+func (vm *KvmVM) qmpPath() string {
 	return vm.instancePath + "qmp"
 }
 
@@ -778,7 +778,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 }
 
 // log any asynchronous messages, such as vnc connects, to log.Info
-func (vm *vmKVM) asyncLogger() {
+func (vm *KvmVM) asyncLogger() {
 	for {
 		v := vm.q.Message()
 		if v == nil {
@@ -788,7 +788,7 @@ func (vm *vmKVM) asyncLogger() {
 	}
 }
 
-func (vm *vmKVM) hotplugRemove(id int) error {
+func (vm *KvmVM) hotplugRemove(id int) error {
 	hid := fmt.Sprintf("hotplug%v", id)
 	log.Debugln("hotplug id:", hid)
 	if _, ok := vm.hotplug[id]; !ok {

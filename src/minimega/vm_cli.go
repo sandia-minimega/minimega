@@ -780,7 +780,7 @@ func init() {
 
 	// for vm info
 	gob.Register(VMs{})
-	gob.Register(&vmKVM{})
+	gob.Register(&KvmVM{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
@@ -797,7 +797,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vm.UpdateBW()
 
 		// Populate CC Active flag for KVM vms
-		if vm, ok := vm.(*vmKVM); ok {
+		if vm, ok := vm.(*KvmVM); ok {
 			vm.UpdateCCActive()
 		}
 	}
@@ -816,11 +816,11 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmstring := c.StringArgs["vm"]
-	doVms := make([]*vmKVM, 0)
+	doVms := make([]*KvmVM, 0)
 	if vmstring == Wildcard {
 		for _, vm := range vms {
 			switch vm := vm.(type) {
-			case *vmKVM:
+			case *KvmVM:
 				doVms = append(doVms, vm)
 			default:
 				// TODO: Do anything?
@@ -832,7 +832,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			resp.Error = vmNotFound(vmstring).Error()
 			return resp
 		}
-		if vm, ok := vm.(*vmKVM); ok {
+		if vm, ok := vm.(*KvmVM); ok {
 			doVms = append(doVms, vm)
 		} else {
 			resp.Error = "cdrom commands are only supported for kvm vms"
@@ -992,7 +992,7 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		} else {
 			vmConfig.BaseConfig = *vm.Config().Copy()
 			switch vm := vm.(type) {
-			case *vmKVM:
+			case *KvmVM:
 				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
 			}
 		}
@@ -1231,7 +1231,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
 		for _, vm := range vms {
-			vm, ok := vm.(*vmKVM)
+			vm, ok := vm.(*KvmVM)
 			if !ok {
 				// TODO: remove?
 				continue
@@ -1298,7 +1298,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
-	kvm, ok := vm.(*vmKVM)
+	kvm, ok := vm.(*KvmVM)
 	if !ok {
 		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 		return resp

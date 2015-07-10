@@ -88,7 +88,7 @@ type NetConfig struct {
 	Stats  *tapStat // Bandwidth stats, updated by calling UpdateBW
 }
 
-type vmBase struct {
+type BaseVM struct {
 	BaseConfig // embed
 
 	lock sync.Mutex
@@ -109,8 +109,8 @@ var vmMasks = []string{
 	"mac", "ip", "ip6", "bandwidth", "tags",
 }
 
-func NewVM() *vmBase {
-	vm := new(vmBase)
+func NewVM() *BaseVM {
+	vm := new(BaseVM)
 
 	vm.State = VM_BUILDING
 	vm.tags = make(map[string]string)
@@ -199,26 +199,26 @@ func (net NetConfig) String() (s string) {
 	return strings.Join(parts, ",")
 }
 
-func (vm *vmBase) GetID() int {
+func (vm *BaseVM) GetID() int {
 	return vm.ID
 }
 
-func (vm *vmBase) GetName() string {
+func (vm *BaseVM) GetName() string {
 	return vm.Name
 }
 
-func (vm *vmBase) GetState() VMState {
+func (vm *BaseVM) GetState() VMState {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	return vm.State
 }
 
-func (vm *vmBase) GetType() VMType {
+func (vm *BaseVM) GetType() VMType {
 	return vm.Type
 }
 
-func (vm *vmBase) launch(name string, vmType VMType) error {
+func (vm *BaseVM) launch(name string, vmType VMType) error {
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
 
 	vm.ID = <-vmIdChan
@@ -235,19 +235,19 @@ func (vm *vmBase) launch(name string, vmType VMType) error {
 	return nil
 }
 
-func (vm *vmBase) Tag(tag string) string {
+func (vm *BaseVM) Tag(tag string) string {
 	return vm.tags[tag]
 }
 
-func (vm *vmBase) GetTags() map[string]string {
+func (vm *BaseVM) GetTags() map[string]string {
 	return vm.tags
 }
 
-func (vm *vmBase) ClearTags() {
+func (vm *BaseVM) ClearTags() {
 	vm.tags = make(map[string]string)
 }
 
-func (vm *vmBase) UpdateBW() {
+func (vm *BaseVM) UpdateBW() {
 	bandwidthLock.Lock()
 	defer bandwidthLock.Unlock()
 
@@ -257,7 +257,7 @@ func (vm *vmBase) UpdateBW() {
 	}
 }
 
-func (vm *vmBase) info(mask string) (string, error) {
+func (vm *BaseVM) info(mask string) (string, error) {
 	if fns, ok := baseConfigFns[mask]; ok {
 		return fns.Print(&vm.BaseConfig), nil
 	}
@@ -334,7 +334,7 @@ func vmNotFound(idOrName string) error {
 }
 
 // satisfy the sort interface for vmInfo
-func SortBy(by string, vms []*vmKVM) {
+func SortBy(by string, vms []*KvmVM) {
 	v := &vmSorter{
 		vms: vms,
 		by:  by,
@@ -343,7 +343,7 @@ func SortBy(by string, vms []*vmKVM) {
 }
 
 type vmSorter struct {
-	vms []*vmKVM
+	vms []*KvmVM
 	by  string
 }
 
@@ -404,7 +404,7 @@ func vmGetFirstVirtioPort() []string {
 	var ret []string
 	for _, vm := range vms {
 		// TODO: non-kvm VMs?
-		if vm, ok := vm.(*vmKVM); ok && vm.GetState()&mask != 0 {
+		if vm, ok := vm.(*KvmVM); ok && vm.GetState()&mask != 0 {
 			if vm.VirtioPorts > 0 {
 				ret = append(ret, vm.instancePath+"virtio-serial0")
 			}

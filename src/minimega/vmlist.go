@@ -80,7 +80,7 @@ func (vms VMs) save(file *os.File, args []string) error {
 		cmds = append(cmds, saveConfig("", baseConfigFns, vm.Config())...)
 
 		switch vm := vm.(type) {
-		case *vmKVM:
+		case *KvmVM:
 			cmds = append(cmds, "vm config kvm true")
 			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
 		default:
@@ -113,7 +113,7 @@ func (vms VMs) qmp(idOrName, qmp string) (string, error) {
 		return "", vmNotFound(idOrName)
 	}
 
-	if vm, ok := vm.(*vmKVM); ok {
+	if vm, ok := vm.(*KvmVM); ok {
 		return vm.QMPRaw(qmp)
 	} else {
 		// TODO
@@ -126,7 +126,7 @@ func (vms VMs) screenshot(idOrName, path string, max int) error {
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
-	kvm, ok := vm.(*vmKVM)
+	kvm, ok := vm.(*KvmVM)
 	if !ok {
 		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
@@ -157,7 +157,7 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
-	kvm, ok := vm.(*vmKVM)
+	kvm, ok := vm.(*KvmVM)
 	if !ok {
 		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
@@ -283,7 +283,7 @@ func (vms VMs) info(vmType string) ([]string, [][]string, error) {
 		// All VMs
 		if vmType == "" {
 			row, err = vm.Info(masks)
-		} else if vm, ok := vm.(*vmKVM); ok && vmType == "kvm" {
+		} else if vm, ok := vm.(*KvmVM); ok && vmType == "kvm" {
 			row, err = vm.Info(masks)
 		}
 
@@ -301,7 +301,7 @@ func (vms VMs) info(vmType string) ([]string, [][]string, error) {
 func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
 	for _, vm := range vms {
-		if vm, ok := vm.(*vmKVM); ok {
+		if vm, ok := vm.(*KvmVM); ok {
 			log.Debug("cleaning instance path: %v", vm.instancePath)
 			err := os.RemoveAll(vm.instancePath)
 			if err != nil {
