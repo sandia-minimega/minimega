@@ -6,6 +6,7 @@ package minicli
 
 import (
 	"fmt"
+	log "minilog"
 	"strings"
 )
 
@@ -23,6 +24,13 @@ type Handler struct {
 	// the processed patterns, will be automatically populated when the command
 	// is registered
 	PatternItems [][]patternItem `json:"parsed_patterns"`
+
+	// Suggest provides suggestions for variable completion. For example, the
+	// `vm stop` command might provide a listing of the currently running VM
+	// names if the user tries to tab complete the "target". The function takes
+	// two arguments: the variable name (e.g. "target") and the user's input
+	// for the variable so far.
+	Suggest func(string, string) []string `json:"-"`
 }
 
 // compileCommand tests whether the input matches the Handler's pattern and
@@ -60,53 +68,88 @@ outer:
 		var item patternItem
 
 		for i, item = range pattern {
+			// We ran out of input items before pattern items, make suggestion
+			// based on the next pattern item
 			if len(input.items) == i {
 				break
 			}
 
+			val := input.items[i].Value
+
 			// Test whether we should keep matching this pattern or not
 			switch {
 			case item.Type == literalItem:
-				// Consuming the last item from input, check if it's a prefix
-				// of this literal string.
-				if len(input.items) == i-1 && strings.HasPrefix(item.Text, input.items[i].Value) {
-					suggestions = append(suggestions, item.Text)
-				}
-				if input.items[i].Value != item.Text {
-					// Input does not match pattern
+				if !strings.HasPrefix(item.Text, val) {
 					continue outer
 				}
 			case item.Type&choiceItem != 0:
+				var found bool
 				for _, choice := range item.Options {
-					// Consuming the last item from input, check if it's a
-					// prefix of one of the choices.
-					if len(input.items) == i-1 && strings.HasPrefix(choice, input.items[i].Value) {
-						suggestions = append(suggestions, choice)
-					}
-					// TODO: there's a weird case here where one one option is
-					// a prefix of another.
-					if choice == input.items[i].Value {
-						continue
-					}
+					found = found || strings.HasPrefix(choice, val)
 				}
 
 				// Invalid choice
-				continue outer
+				if !found {
+					continue outer
+				}
 			case item.Type&listItem != 0:
 				// Nothing to suggest for lists
 				continue outer
 			case item.Type == commandItem:
-				// TODO: This is fun, need to recurse to complete the subcommand
+				// This is fun, need to recurse to complete the subcommand
+				log.Debug("recursing to find suggestions for %q", input.items[i:])
+				suggestions = append(suggestions, suggest(&Input{
+					Original: input.Original,
+					items:    input.items[i:],
+				})...)
 			}
+
+			// Before proceeding to the next pattern item, check whether the
+			// input is ``complete'' or not -- based on whether it is followed
+			// by a space. If the input is not complete, and we are consuming
+			// the last input element, we should suggest for the current
+			// pattern item and not the next one.
+			if len(input.items) == i+1 && !strings.HasSuffix(input.Original, " ") {
+				break
+			}
+		}
+
+		// Don't make suggestions if we have consumed the whole pattern
+		if len(input.items) == len(pattern) && strings.HasSuffix(input.Original, " ") {
+			continue
+		}
+
+		// Skip over patterns that are shorter than the input unless they have
+		// a nested subcommand
+		if len(input.items) > len(pattern) && item.Type != commandItem {
+			continue
 		}
 
 		// Finished consuming input items, figure out if the next pattern item
 		// has something worth completing.
-		switch {
-		case item.Type == literalItem:
+		switch item.Type {
+		case literalItem:
 			suggestions = append(suggestions, item.Text)
-		case item.Type&choiceItem != 0:
-			suggestions = append(suggestions, item.Options...)
+		case choiceItem, choiceItem | optionalItem:
+			for _, choice := range item.Options {
+				if i >= len(input.items) || strings.HasPrefix(choice, input.items[i].Value) {
+					suggestions = append(suggestions, choice)
+				}
+			}
+		case stringItem, listItem:
+			if h.Suggest != nil {
+				var prefix string
+				if i < len(input.items) {
+					prefix = input.items[i].Value
+				}
+				suggestions = append(suggestions, h.Suggest(item.Key, prefix)...)
+			}
+		case commandItem:
+			log.Debug("recursing to find suggestions for %q", input.items[i:])
+			suggestions = append(suggestions, suggest(&Input{
+				Original: input.Original,
+				items:    input.items[i:],
+			})...)
 		}
 	}
 
