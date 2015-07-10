@@ -85,7 +85,7 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
-	Stats  *tapStat // Bandwidth stats, updated by calling UpdateBW
+	Stats  *TapStat // Bandwidth stats, updated by calling UpdateBW
 }
 
 type BaseVM struct {
