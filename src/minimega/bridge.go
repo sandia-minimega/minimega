@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+const (
+	DisconnectedVLAN = -1
+)
+
 // a bridge representation that includes a list of vlans and their respective
 // taps.
 type bridge struct {
@@ -1004,6 +1008,12 @@ func (b *bridge) TapRemove(lan int, tap string) error {
 	// put this tap into the disconnected vlan
 	bridgeLock.Lock()
 	b.Lock.Lock()
+
+	// No-op is the VLAN is already disconnected
+	if lan == DisconnectedVLAN {
+		return nil
+	}
+
 	if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
 		disconnectedTaps[tap] = b.lans[lan].Taps[tap]
 	}

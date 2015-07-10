@@ -182,17 +182,30 @@ func Compilef(format string, args ...interface{}) (*Command, error) {
 	return Compile(fmt.Sprintf(format, args...))
 }
 
+func suggest(input *Input) []string {
+	vals := map[string]bool{}
+	for _, h := range handlers {
+		for _, v := range h.suggest(input) {
+			vals[v] = true
+		}
+	}
+
+	res := []string{}
+	for k := range vals {
+		res = append(res, k)
+	}
+
+	return res
+}
+
 func Suggest(input string) []string {
+	log.Debug("Suggest: `%v`", input)
 	in, err := lexInput(input)
 	if err != nil {
 		return nil
 	}
 
-	res := []string{}
-	for _, h := range handlers {
-		res = append(res, h.suggest(in)...)
-	}
-	return res
+	return suggest(in)
 }
 
 //

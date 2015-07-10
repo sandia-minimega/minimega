@@ -44,10 +44,10 @@ const (
 type VM interface {
 	Config() *BaseConfig
 
-	ID() int
-	Name() string
-	State() VMState
-	Type() VMType
+	GetID() int
+	GetName() string
+	GetState() VMState
+	GetType() VMType
 
 	Launch(string, chan int) error
 	// TODO: Make kill have ack channel?
@@ -59,7 +59,7 @@ type VM interface {
 	Info(masks []string) ([]string, error)
 
 	Tag(tag string) string
-	Tags() map[string]string
+	GetTags() map[string]string
 	ClearTags()
 
 	UpdateBW()
@@ -85,18 +85,18 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
-	Stats  *tapStat // Bandwidth stats, updated by calling UpdateBW
+	Stats  *TapStat // Bandwidth stats, updated by calling UpdateBW
 }
 
-type vmBase struct {
+type BaseVM struct {
 	BaseConfig // embed
 
 	lock sync.Mutex
 
-	id     int
-	name   string
-	state  VMState
-	vmType VMType
+	ID    int
+	Name  string
+	State VMState
+	Type  VMType
 
 	instancePath string
 
@@ -109,10 +109,10 @@ var vmMasks = []string{
 	"mac", "ip", "ip6", "bandwidth", "tags",
 }
 
-func NewVM() *vmBase {
-	vm := new(vmBase)
+func NewVM() *BaseVM {
+	vm := new(BaseVM)
 
-	vm.state = VM_BUILDING
+	vm.State = VM_BUILDING
 	vm.tags = make(map[string]string)
 
 	return vm
@@ -199,55 +199,55 @@ func (net NetConfig) String() (s string) {
 	return strings.Join(parts, ",")
 }
 
-func (vm *vmBase) ID() int {
-	return vm.id
+func (vm *BaseVM) GetID() int {
+	return vm.ID
 }
 
-func (vm *vmBase) Name() string {
-	return vm.name
+func (vm *BaseVM) GetName() string {
+	return vm.Name
 }
 
-func (vm *vmBase) State() VMState {
+func (vm *BaseVM) GetState() VMState {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	return vm.state
+	return vm.State
 }
 
-func (vm *vmBase) Type() VMType {
-	return vm.vmType
+func (vm *BaseVM) GetType() VMType {
+	return vm.Type
 }
 
-func (vm *vmBase) launch(name string, vmType VMType) error {
+func (vm *BaseVM) launch(name string, vmType VMType) error {
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
 
-	vm.id = <-vmIdChan
+	vm.ID = <-vmIdChan
 	if name == "" {
-		vm.name = fmt.Sprintf("vm-%d", vm.id)
+		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
-		vm.name = name
+		vm.Name = name
 	}
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.id) + "/"
+	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
 
-	vm.vmType = vmType
+	vm.Type = vmType
 
 	return nil
 }
 
-func (vm *vmBase) Tag(tag string) string {
+func (vm *BaseVM) Tag(tag string) string {
 	return vm.tags[tag]
 }
 
-func (vm *vmBase) Tags() map[string]string {
+func (vm *BaseVM) GetTags() map[string]string {
 	return vm.tags
 }
 
-func (vm *vmBase) ClearTags() {
+func (vm *BaseVM) ClearTags() {
 	vm.tags = make(map[string]string)
 }
 
-func (vm *vmBase) UpdateBW() {
+func (vm *BaseVM) UpdateBW() {
 	bandwidthLock.Lock()
 	defer bandwidthLock.Unlock()
 
@@ -257,7 +257,7 @@ func (vm *vmBase) UpdateBW() {
 	}
 }
 
-func (vm *vmBase) info(mask string) (string, error) {
+func (vm *BaseVM) info(mask string) (string, error) {
 	if fns, ok := baseConfigFns[mask]; ok {
 		return fns.Print(&vm.BaseConfig), nil
 	}
@@ -266,16 +266,16 @@ func (vm *vmBase) info(mask string) (string, error) {
 
 	switch mask {
 	case "id":
-		return fmt.Sprintf("%v", vm.id), nil
+		return fmt.Sprintf("%v", vm.ID), nil
 	case "name":
-		return fmt.Sprintf("%v", vm.name), nil
+		return fmt.Sprintf("%v", vm.Name), nil
 	case "state":
-		return vm.State().String(), nil
+		return vm.GetState().String(), nil
 	case "type":
-		return vm.Type().String(), nil
+		return vm.GetType().String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
-			if net.VLAN == -1 {
+			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
 				vals = append(vals, fmt.Sprintf("%v", net.VLAN))
@@ -334,7 +334,7 @@ func vmNotFound(idOrName string) error {
 }
 
 // satisfy the sort interface for vmInfo
-func SortBy(by string, vms []*vmKVM) {
+func SortBy(by string, vms []*KvmVM) {
 	v := &vmSorter{
 		vms: vms,
 		by:  by,
@@ -343,7 +343,7 @@ func SortBy(by string, vms []*vmKVM) {
 }
 
 type vmSorter struct {
-	vms []*vmKVM
+	vms []*KvmVM
 	by  string
 }
 
@@ -358,13 +358,13 @@ func (vms *vmSorter) Swap(i, j int) {
 func (vms *vmSorter) Less(i, j int) bool {
 	switch vms.by {
 	case "id":
-		return vms.vms[i].id < vms.vms[j].id
+		return vms.vms[i].ID < vms.vms[j].ID
 	case "host":
 		return true
 	case "name":
-		return vms.vms[i].name < vms.vms[j].name
+		return vms.vms[i].Name < vms.vms[j].Name
 	case "state":
-		return vms.vms[i].State() < vms.vms[j].State()
+		return vms.vms[i].GetState() < vms.vms[j].GetState()
 	case "memory":
 		return vms.vms[i].Memory < vms.vms[j].Memory
 	case "vcpus":
@@ -404,7 +404,7 @@ func vmGetFirstVirtioPort() []string {
 	var ret []string
 	for _, vm := range vms {
 		// TODO: non-kvm VMs?
-		if vm, ok := vm.(*vmKVM); ok && vm.State()&mask != 0 {
+		if vm, ok := vm.(*KvmVM); ok && vm.GetState()&mask != 0 {
 			if vm.VirtioPorts > 0 {
 				ret = append(ret, vm.instancePath+"virtio-serial0")
 			}
@@ -525,7 +525,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // Get the VM info from all hosts optionally applying column/row filters.
 // Returns a map with keys for the hostnames and values as the tabular data
 // from the host.
-func globalVmInfo(masks []string, filters []string) (map[string]VMs, map[string]minicli.Responses) {
+func globalVmInfo(masks []string, filters []string) map[string]VMs {
 	cmdStr := "vm info"
 	for _, v := range filters {
 		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
@@ -535,7 +535,6 @@ func globalVmInfo(masks []string, filters []string) (map[string]VMs, map[string]
 	}
 
 	res := map[string]VMs{}
-	res2 := map[string]minicli.Responses{}
 
 	cmd := minicli.MustCompile(cmdStr)
 	cmd.Record = false
@@ -553,12 +552,10 @@ func globalVmInfo(masks []string, filters []string) (map[string]VMs, map[string]
 			default:
 				log.Error("unknown data field in vm info")
 			}
-
-			res2[resp.Host] = append(res2[resp.Host], resp)
 		}
 	}
 
-	return res, res2
+	return res
 }
 
 // mustFindMask returns the index of the specified mask in vmMasks. If the

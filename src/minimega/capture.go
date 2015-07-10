@@ -119,7 +119,7 @@ func startCapturePcap(vm string, iface int, filename string) error {
 	ce := &capture{
 		ID:        <-captureIDCount,
 		Type:      "pcap",
-		VM:        v.ID(),
+		VM:        v.GetID(),
 		Interface: iface,
 		Path:      filename,
 		pcap:      p,

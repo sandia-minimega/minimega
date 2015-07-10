@@ -110,6 +110,11 @@ Load a minimega script:
 
 	.mega foo.mm
 
+You can specify an optional integer height for the mega script, in case it's
+too large to render:
+
+	.mega foo.mm 300
+
 link:
 
 Create a hyperlink. The syntax is 1 or 2 space-separated arguments.
