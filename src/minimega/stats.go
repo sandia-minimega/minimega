@@ -23,17 +23,17 @@ const (
 	BANDWIDTH_INTERVAL = 5
 )
 
-type tapStat struct {
-	bridge      string
-	rxStart     int
-	rxStop      int
-	txStart     int
-	txStop      int
-	start, stop time.Time
+type TapStat struct {
+	Bridge      string
+	RxStart     int
+	RxStop      int
+	TxStart     int
+	TxStop      int
+	Start, Stop time.Time
 }
 
 var (
-	bandwidthStats map[string]*tapStat
+	bandwidthStats map[string]*TapStat
 	bandwidthLock  sync.Mutex
 )
 
@@ -79,10 +79,10 @@ var hostInfoKeys = []string{
 	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
 }
 
-func (t tapStat) String() string {
-	duration := t.stop.Sub(t.start).Seconds()
-	rx := float64(t.rxStop-t.rxStart) / float64(MEGABYTE) / duration
-	tx := float64(t.txStop-t.txStart) / float64(MEGABYTE) / duration
+func (t TapStat) String() string {
+	duration := t.Stop.Sub(t.Start).Seconds()
+	rx := float64(t.RxStop-t.RxStart) / float64(MEGABYTE) / duration
+	tx := float64(t.TxStop-t.TxStart) / float64(MEGABYTE) / duration
 
 	// it's possible a VM went away during a previous poll, which can make
 	// our value negative and invalid. Check for that and zero the field if
@@ -214,10 +214,10 @@ func hostStatsBandwidth() (string, error) {
 	var tx int
 	var duration float64
 	for _, t := range bandwidthStats {
-		rx += t.rxStop - t.rxStart
-		tx += t.txStop - t.txStart
+		rx += t.RxStop - t.RxStart
+		tx += t.TxStop - t.TxStart
 
-		duration += t.stop.Sub(t.start).Seconds()
+		duration += t.Stop.Sub(t.Start).Seconds()
 	}
 
 	rxMB := float64(rx) / float64(MEGABYTE) / duration
@@ -242,51 +242,51 @@ func bandwidthCollector() {
 	for {
 		time.Sleep(BANDWIDTH_INTERVAL * time.Second)
 
-		stats := make(map[string]*tapStat)
+		stats := make(map[string]*TapStat)
 
 		// get a list of every tap we own
 		for _, v := range vms {
 			for _, net := range v.Config().Networks {
-				stats[net.Tap] = &tapStat{
-					bridge: net.Bridge,
+				stats[net.Tap] = &TapStat{
+					Bridge: net.Bridge,
 				}
 			}
 		}
 
 		// for each tap, get rx/tx bytes
 		for k, v := range stats {
-			v.rxStart, err = readNetStats(k, "rx")
+			v.RxStart, err = readNetStats(k, "rx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
 
-			v.txStart, err = readNetStats(k, "tx")
+			v.TxStart, err = readNetStats(k, "tx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
 
-			v.start = time.Now()
+			v.Start = time.Now()
 		}
 
 		time.Sleep(1 * time.Second)
 
 		// and again
 		for k, v := range stats {
-			v.rxStop, err = readNetStats(k, "rx")
+			v.RxStop, err = readNetStats(k, "rx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
 
-			v.txStop, err = readNetStats(k, "tx")
+			v.TxStop, err = readNetStats(k, "tx")
 			if err != nil {
 				log.Debugln(err)
 				continue
 			}
 
-			v.stop = time.Now()
+			v.Stop = time.Now()
 		}
 
 		bandwidthLock.Lock()

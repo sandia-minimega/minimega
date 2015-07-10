@@ -780,7 +780,7 @@ func init() {
 
 	// for vm info
 	gob.Register(VMs{})
-	gob.Register(&vmKVM{})
+	gob.Register(&KvmVM{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
@@ -797,7 +797,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vm.UpdateBW()
 
 		// Populate CC Active flag for KVM vms
-		if vm, ok := vm.(*vmKVM); ok {
+		if vm, ok := vm.(*KvmVM); ok {
 			vm.UpdateCCActive()
 		}
 	}
@@ -816,11 +816,11 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	vmstring := c.StringArgs["vm"]
-	doVms := make([]*vmKVM, 0)
+	doVms := make([]*KvmVM, 0)
 	if vmstring == Wildcard {
 		for _, vm := range vms {
 			switch vm := vm.(type) {
-			case *vmKVM:
+			case *KvmVM:
 				doVms = append(doVms, vm)
 			default:
 				// TODO: Do anything?
@@ -832,7 +832,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			resp.Error = vmNotFound(vmstring).Error()
 			return resp
 		}
-		if vm, ok := vm.(*vmKVM); ok {
+		if vm, ok := vm.(*KvmVM); ok {
 			doVms = append(doVms, vm)
 		} else {
 			resp.Error = "cdrom commands are only supported for kvm vms"
@@ -903,19 +903,19 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 
 	errs := expandVmTargets(target, false, func(vm VM, wild bool) (bool, error) {
 		if setOp {
-			vm.Tags()[key] = value
+			vm.GetTags()[key] = value
 		} else if key == Wildcard {
-			for k, v := range vm.Tags() {
+			for k, v := range vm.GetTags() {
 				resp.Tabular = append(resp.Tabular, []string{
-					strconv.Itoa(vm.ID()),
+					strconv.Itoa(vm.GetID()),
 					k, v,
 				})
 			}
 		} else {
 			// TODO: return false if tag not set?
 			resp.Tabular = append(resp.Tabular, []string{
-				strconv.Itoa(vm.ID()),
-				vm.Tags()[key],
+				strconv.Itoa(vm.GetID()),
+				vm.GetTags()[key],
 			})
 		}
 
@@ -949,7 +949,7 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 		if key == Wildcard {
 			vm.ClearTags()
 		} else {
-			delete(vm.Tags(), key)
+			delete(vm.GetTags(), key)
 		}
 
 		return true, nil
@@ -992,7 +992,7 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		} else {
 			vmConfig.BaseConfig = *vm.Config().Copy()
 			switch vm := vm.(type) {
-			case *vmKVM:
+			case *KvmVM:
 				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
 			}
 		}
@@ -1099,7 +1099,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 
 		for _, vm := range vms {
-			if vm.Name() == name {
+			if vm.GetName() == name {
 				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
 				return resp
 			}
@@ -1200,7 +1200,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.ID()), "screenshot.png")
+	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.GetID()), "screenshot.png")
 
 	err = vms.screenshot(vm, path, max)
 	if err != nil {
@@ -1231,7 +1231,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
 		for _, vm := range vms {
-			vm, ok := vm.(*vmKVM)
+			vm, ok := vm.(*KvmVM)
 			if !ok {
 				// TODO: remove?
 				continue
@@ -1246,8 +1246,8 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 				continue
 			}
 			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", vm.ID()),
-				vm.Name(),
+				fmt.Sprintf("%v", vm.GetID()),
+				vm.GetName(),
 				status,
 				fmt.Sprintf("%.2f", complete)})
 		}
@@ -1298,9 +1298,9 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		return resp
 	}
-	kvm, ok := vm.(*vmKVM)
+	kvm, ok := vm.(*KvmVM)
 	if !ok {
-		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.Name())
+		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 		return resp
 	}
 
@@ -1400,7 +1400,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.ID(), pos, net)
+		log.Debug("disconnect network connection: %v %v %v", vm.GetID(), pos, net)
 		err = b.TapRemove(net.VLAN, net.Tap)
 		if err != nil {
 			resp.Error = err.Error()
@@ -1416,7 +1416,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 
 		if vlan >= 0 && vlan < 4096 {
 			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID(), pos, net.VLAN, b.Name, vlan)
+			log.Debug("moving network connection: %v %v %v -> %v %v", vm.GetID(), pos, net.VLAN, b.Name, vlan)
 			oldBridge, err := getBridge(net.Bridge)
 			if err != nil {
 				resp.Error = err.Error()
@@ -1456,18 +1456,18 @@ func cliVMSuggest(val, prefix string, mask VMState) []string {
 	}
 
 	for _, vm := range vms {
-		if vm.State()&mask == 0 {
+		if vm.GetState()&mask == 0 {
 			continue
 		}
 
 		if isID {
-			id := strconv.Itoa(vm.ID())
+			id := strconv.Itoa(vm.GetID())
 
 			if strings.HasPrefix(id, prefix) {
 				res = append(res, id)
 			}
-		} else if strings.HasPrefix(vm.Name(), prefix) {
-			res = append(res, vm.Name())
+		} else if strings.HasPrefix(vm.GetName(), prefix) {
+			res = append(res, vm.GetName())
 		}
 	}
 
