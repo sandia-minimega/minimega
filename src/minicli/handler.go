@@ -130,7 +130,7 @@ outer:
 		switch item.Type {
 		case literalItem:
 			suggestions = append(suggestions, item.Text)
-		case choiceItem:
+		case choiceItem, choiceItem | optionalItem:
 			for _, choice := range item.Options {
 				if i >= len(input.items) || strings.HasPrefix(choice, input.items[i].Value) {
 					suggestions = append(suggestions, choice)
