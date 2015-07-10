@@ -41,7 +41,7 @@ CMD_BLACKLIST = [
 ]
 
 # API Version:
-VERSION = '2.0a1'
+VERSION = '2.0a2'
 # minimega version (set this before rendering)
 MM_VERSION = 'UNKNOWN'
 
@@ -133,7 +133,7 @@ if __name__ == '__main__':
     mm_bin = sys.argv[1]
     cmds = json.loads(subprocess.check_output([mm_bin, '-cli']))
     version_str = subprocess.check_output([mm_bin, '--version'])
-    MM_VERSION = version_str.split(None, 2)[1]
+    MM_VERSION = version_str.splitlines()[0]
 
     sys.stdout.write(render(cmds))
 
