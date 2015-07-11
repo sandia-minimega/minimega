@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,7 +268,7 @@ func webMapVMs(w http.ResponseWriter, r *http.Request) {
 
 	points := []point{}
 
-	for _, vms := range globalVmInfo(nil, nil) {
+	for _, vms := range globalVmInfo() {
 		for _, vm := range vms {
 			name := fmt.Sprintf("%v:%v", vm.GetID(), vm.GetName())
 
@@ -306,7 +307,7 @@ func webVMTags(w http.ResponseWriter, r *http.Request) {
 
 	tags := map[string]bool{}
 
-	info := globalVmInfo(nil, nil)
+	info := globalVmInfo()
 
 	// Find all the distinct tags across all VMs
 	for _, vms := range info {
@@ -406,7 +407,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 	stateMask := VM_QUIT | VM_ERROR
 
-	for host, vms := range globalVmInfo(nil, nil) {
+	for host, vms := range globalVmInfo() {
 		for _, vm := range vms {
 			var buf bytes.Buffer
 			if vm.GetState()&stateMask == 0 {
@@ -448,7 +449,7 @@ func webTileVMs(w http.ResponseWriter, r *http.Request) {
 
 	params := []vmScreenshotParams{}
 
-	for host, vms := range globalVmInfo(nil, nil) {
+	for host, vms := range globalVmInfo() {
 		for _, vm := range vms {
 			if vm.GetState()&stateMask != 0 {
 				continue
@@ -471,7 +472,7 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
-	for host, vms := range globalVmInfo(nil, nil) {
+	for host, vms := range globalVmInfo() {
 		for _, vm := range vms {
 			stateMask := VM_QUIT | VM_ERROR
 
@@ -481,8 +482,7 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 
 			config := vm.Config()
 
-			// The " " is invalid as a hostname, so we use it as a separator.
-			infovms[host+" "+strconv.Itoa(vm.ID())] = map[string]interface{}{
+			vmMap := map[string]interface{}{
 				"host": host,
 
 				"id":    vm.GetID(),
@@ -490,13 +490,24 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 				"state": vm.GetState().String(),
 				"type":  vm.GetType().String(),
 
-				"tags": vm.GetTags(),
-
 				"vcpus":  config.Vcpus,
 				"memory": config.Memory,
-
-				"network": config.Networks,
 			}
+
+			if reflect.ValueOf(config.Networks).IsNil() {
+				vmMap["network"] = make([]int, 0)
+			} else {
+				vmMap["network"] = config.Networks
+			}
+
+			if reflect.ValueOf(vm.GetTags()).IsNil() {
+				vmMap["tags"] = make(map[string]string, 0)
+			} else {
+				vmMap["tags"] = vm.GetTags()
+			}
+
+			// The " " is invalid as a hostname, so we use it as a separator.
+			infovms[host+" "+strconv.Itoa(vm.GetID())] = vmMap
 		}
 	}
 

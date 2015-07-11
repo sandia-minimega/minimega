@@ -197,7 +197,7 @@ button.active {
 	top: 100px;
 	transform: translateX(-100%);
 	margin-left: 6px;
-	min-width: 410px;
+	min-width: 450px;
 }
 
 .sidepoint::before {
