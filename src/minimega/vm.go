@@ -56,7 +56,7 @@ type VM interface {
 	Stop() error
 
 	String() string
-	Info(masks []string) ([]string, error)
+	Info(string) (string, error)
 
 	Tag(tag string) string
 	GetTags() map[string]string

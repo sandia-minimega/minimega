@@ -407,6 +407,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	stateMask := VM_QUIT | VM_ERROR
 
 	for host, vms := range globalVmInfo() {
+	vmLoop:
 		for _, vm := range vms {
 			var buf bytes.Buffer
 			if vm.GetState()&stateMask == 0 {
@@ -426,14 +427,15 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			res := []interface{}{host, template.HTML(buf.String())}
 
-			row, err := vm.Info(vmMasks)
-			if err != nil {
-				log.Error("unable to get info from VM %s:%s -- %v", host, vm.GetName(), err)
-				continue
-			}
+			row := []string{}
 
-			for _, v := range row {
-				res = append(res, v)
+			for _, mask := range vmMasks {
+				if v, err := vm.Info(mask); err != nil {
+					log.Error("bad mask for %v -- %v", vm.GetID(), err)
+					continue vmLoop
+				} else {
+					row = append(row, v)
+				}
 			}
 
 			table.Tabular = append(table.Tabular, res)

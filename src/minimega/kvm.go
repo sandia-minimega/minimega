@@ -198,31 +198,23 @@ func (vm *KvmVM) String() string {
 	return fmt.Sprintf("%s:%d:kvm", hostname, vm.ID)
 }
 
-func (vm *KvmVM) Info(masks []string) ([]string, error) {
-	res := make([]string, 0, len(masks))
-
-	for _, mask := range masks {
-		// If it's a field handled by the baseVM, use it.
-		if v, err := vm.BaseVM.info(mask); err == nil {
-			res = append(res, v)
-			continue
-		}
-
-		// If it's a configurable field, use the Print fn.
-		if fns, ok := kvmConfigFns[mask]; ok {
-			res = append(res, fns.Print(&vm.KVMConfig))
-			continue
-		}
-
-		switch mask {
-		case "cc_active":
-			res = append(res, fmt.Sprintf("%v", vm.ActiveCC))
-		default:
-			return nil, fmt.Errorf("invalid mask: %s", mask)
-		}
+func (vm *KvmVM) Info(mask string) (string, error) {
+	// If it's a field handled by the baseVM, use it.
+	if v, err := vm.BaseVM.info(mask); err == nil {
+		return v, nil
 	}
 
-	return res, nil
+	// If it's a configurable field, use the Print fn.
+	if fns, ok := kvmConfigFns[mask]; ok {
+		return fns.Print(&vm.KVMConfig), nil
+	}
+
+	switch mask {
+	case "cc_active":
+		return fmt.Sprintf("%v", vm.ActiveCC), nil
+	}
+
+	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
 func (vm *KVMConfig) String() string {
