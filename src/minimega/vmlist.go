@@ -276,19 +276,21 @@ func (vms VMs) info(vmType string) ([]string, [][]string, error) {
 		masks = kvmMasks
 	}
 
+vmLoop:
 	for _, vm := range vms {
-		var row []string
-		var err error
-
-		// All VMs
-		if vmType == "" {
-			row, err = vm.Info(masks)
-		} else if vm, ok := vm.(*KvmVM); ok && vmType == "kvm" {
-			row, err = vm.Info(masks)
+		if vm.GetType().String() != vmType && vmType != "" {
+			continue
 		}
 
-		if err != nil {
-			continue
+		row := []string{}
+
+		for _, mask := range masks {
+			if v, err := vm.Info(mask); err != nil {
+				log.Error("bad mask for %v -- %v", vm.GetID(), err)
+				continue vmLoop
+			} else {
+				row = append(row, v)
+			}
 		}
 
 		table = append(table, row)
