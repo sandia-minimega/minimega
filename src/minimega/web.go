@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -494,13 +493,13 @@ func webJSON(w http.ResponseWriter, r *http.Request) {
 				"memory": config.Memory,
 			}
 
-			if reflect.ValueOf(config.Networks).IsNil() {
+			if config.Networks == nil {
 				vmMap["network"] = make([]int, 0)
 			} else {
 				vmMap["network"] = config.Networks
 			}
 
-			if reflect.ValueOf(vm.GetTags()).IsNil() {
+			if vm.GetTags() == nil {
 				vmMap["tags"] = make(map[string]string, 0)
 			} else {
 				vmMap["tags"] = vm.GetTags()
