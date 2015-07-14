@@ -100,7 +100,7 @@ type BaseVM struct {
 
 	instancePath string
 
-	tags map[string]string
+	Tags map[string]string
 }
 
 // Valid names for output masks for vm info, in preferred output order
@@ -113,7 +113,7 @@ func NewVM() *BaseVM {
 	vm := new(BaseVM)
 
 	vm.State = VM_BUILDING
-	vm.tags = make(map[string]string)
+	vm.Tags = make(map[string]string)
 
 	return vm
 }
@@ -236,15 +236,15 @@ func (vm *BaseVM) launch(name string, vmType VMType) error {
 }
 
 func (vm *BaseVM) Tag(tag string) string {
-	return vm.tags[tag]
+	return vm.Tags[tag]
 }
 
 func (vm *BaseVM) GetTags() map[string]string {
-	return vm.tags
+	return vm.Tags
 }
 
 func (vm *BaseVM) ClearTags() {
-	vm.tags = make(map[string]string)
+	vm.Tags = make(map[string]string)
 }
 
 func (vm *BaseVM) UpdateBW() {
@@ -310,7 +310,7 @@ func (vm *BaseVM) info(mask string) (string, error) {
 			}
 		}
 	case "tags":
-		return fmt.Sprintf("%v", vm.tags), nil
+		return fmt.Sprintf("%v", vm.Tags), nil
 	default:
 		return "", errors.New("field not found")
 	}

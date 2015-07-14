@@ -422,14 +422,12 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			res := []interface{}{host, template.HTML(buf.String())}
 
-			row := []string{}
-
 			for _, mask := range vmMasks {
 				if v, err := vm.Info(mask); err != nil {
 					log.Error("bad mask for %v -- %v", vm.GetID(), err)
 					continue vmLoop
 				} else {
-					row = append(row, v)
+					res = append(res, v)
 				}
 			}
 
