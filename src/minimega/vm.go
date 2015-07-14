@@ -525,14 +525,8 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // Get the VM info from all hosts optionally applying column/row filters.
 // Returns a map with keys for the hostnames and values as the tabular data
 // from the host.
-func globalVmInfo(masks []string, filters []string) map[string]VMs {
+func globalVmInfo() map[string]VMs {
 	cmdStr := "vm info"
-	for _, v := range filters {
-		cmdStr = fmt.Sprintf(".filter %s %s", v, cmdStr)
-	}
-	if len(masks) > 0 {
-		cmdStr = fmt.Sprintf(".columns %s %s", strings.Join(masks, ","), cmdStr)
-	}
 
 	res := map[string]VMs{}
 
