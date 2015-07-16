@@ -17,9 +17,7 @@ import (
 )
 
 type ContainerConfig struct {
-	FSPath   string
-	UUID     string
-	Snapshot bool
+	FSPath string
 }
 
 type ContainerVM struct {
@@ -187,8 +185,6 @@ func (vm *ContainerConfig) String() string {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "Current container configuration:")
 	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FSPath)
-	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -315,7 +311,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 		teardown()
 	}
 
-	var sOut bytes.Buffer
+	//var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	var cmd *exec.Cmd
 	var waitChan = make(chan int)

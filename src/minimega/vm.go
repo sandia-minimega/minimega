@@ -71,6 +71,9 @@ type BaseConfig struct {
 	Memory string // memory for the vm, in megabytes
 
 	Networks []NetConfig // ordered list of networks
+
+	Snapshot bool
+	UUID     string
 }
 
 type VMConfig struct {
@@ -171,6 +174,8 @@ func (vm *BaseConfig) String() string {
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
 	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
 	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
+	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
+	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()

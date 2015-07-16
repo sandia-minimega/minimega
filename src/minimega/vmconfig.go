@@ -88,17 +88,17 @@ var baseConfigFns = map[string]VMConfigFns{
 			return "vm config net " + strings.Join(nics, " ")
 		},
 	},
+	"uuid": vmConfigString(func(vm interface{}) *string {
+		return &mustBaseConfig(vm).UUID
+	}, ""),
+	"snapshot": vmConfigBool(func(vm interface{}) *bool {
+		return &mustBaseConfig(vm).Snapshot
+	}, true),
 }
 
 // Functions for configuring container-based VMs. Note: if keys overlap with
 // vmConfigFns, the functions in vmConfigFns take priority.
 var containerConfigFns = map[string]VMConfigFns{
-	"uuid": vmConfigString(func(vm interface{}) *string {
-		return &mustKVMConfig(vm).UUID
-	}, ""),
-	"snapshot": vmConfigBool(func(vm interface{}) *bool {
-		return &mustKVMConfig(vm).Snapshot
-	}, true),
 	"filesystem": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).FSPath
 	}, ""),
@@ -119,12 +119,6 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"migrate": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).MigratePath
 	}, ""),
-	"uuid": vmConfigString(func(vm interface{}) *string {
-		return &mustKVMConfig(vm).UUID
-	}, ""),
-	"snapshot": vmConfigBool(func(vm interface{}) *bool {
-		return &mustKVMConfig(vm).Snapshot
-	}, true),
 	"serial": vmConfigInt(func(vm interface{}) *int {
 		return &mustKVMConfig(vm).SerialPorts
 	}, "number", 0),

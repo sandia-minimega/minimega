@@ -34,9 +34,6 @@ type KVMConfig struct {
 	KernelPath string
 
 	MigratePath string
-	UUID        string
-
-	Snapshot bool
 
 	SerialPorts int
 	VirtioPorts int
@@ -231,8 +228,6 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
-	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
 	w.Flush()
@@ -494,7 +489,8 @@ func (vm *KvmVM) launch(ack chan int) {
 		}
 	}
 
-	args = VMConfig{vm.BaseConfig, vm.KVMConfig}.qemuArgs(vm.GetID(), vm.instancePath)
+	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
+	args = vmConfig.qemuArgs(vm.GetID(), vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
