@@ -39,6 +39,7 @@ type VMType int
 const (
 	_ VMType = iota
 	KVM
+	CONTAINER
 )
 
 type VM interface {
@@ -75,6 +76,7 @@ type BaseConfig struct {
 type VMConfig struct {
 	BaseConfig
 	KVMConfig
+	ContainerConfig
 }
 
 type NetConfig struct {

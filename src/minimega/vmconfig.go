@@ -35,6 +35,14 @@ func mustKVMConfig(val interface{}) *KVMConfig {
 	return nil
 }
 
+func mustContainerConfig(val interface{}) *ContainerConfig {
+	if val, ok := val.(*ContainerConfig); ok {
+		return val
+	}
+	log.Fatal("`%#v` is not a ContainerConfig", val)
+	return nil
+}
+
 // Functions for configuring VMs.
 var baseConfigFns = map[string]VMConfigFns{
 	"memory": vmConfigString(func(vm interface{}) *string {
@@ -80,6 +88,20 @@ var baseConfigFns = map[string]VMConfigFns{
 			return "vm config net " + strings.Join(nics, " ")
 		},
 	},
+}
+
+// Functions for configuring container-based VMs. Note: if keys overlap with
+// vmConfigFns, the functions in vmConfigFns take priority.
+var containerConfigFns = map[string]VMConfigFns{
+	"uuid": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).UUID
+	}, ""),
+	"snapshot": vmConfigBool(func(vm interface{}) *bool {
+		return &mustKVMConfig(vm).Snapshot
+	}, true),
+	"filesystem": vmConfigString(func(vm interface{}) *string {
+		return &mustContainerConfig(vm).FSPath
+	}, ""),
 }
 
 // Functions for configuring KVM-based VMs. Note: if keys overlap with
