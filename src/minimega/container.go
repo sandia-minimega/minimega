@@ -249,7 +249,6 @@ func NewContainer() *ContainerVM {
 	vm.BaseVM = *NewVM()
 
 	vm.kill = make(chan bool)
-	vm.Init = "/init"
 
 	return vm
 }
@@ -571,7 +570,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 		p, err := os.FindProcess(pid)
 		if err != nil {
-			log.Fatalln("FindProcess: %v", err)
+			log.Fatal("FindProcess: %v", err)
 		}
 
 		go func() {
@@ -625,80 +624,80 @@ func (vm *ContainerVM) launch(ack chan int) {
 		if vm.Hostname != "" {
 			_, err := exec.Command(process("hostname"), vm.Hostname).Output()
 			if err != nil {
-				log.Fatalln("set hostname: %v", err)
+				log.Fatal("set hostname: %v", err)
 			}
 		}
 
 		// setup the root fs
 		err = vm.setupRoot()
 		if err != nil {
-			log.Fatalln("setupRoot: %v", err)
+			log.Fatal("setupRoot: %v", err)
 		}
 
 		// mount defaults
 		err = vm.mountDefaults()
 		if err != nil {
-			log.Fatalln("mountDefaults: %v", err)
+			log.Fatal("mountDefaults: %v", err)
 		}
 
 		// mknod
 		err = vm.mknodDevices()
 		if err != nil {
-			log.Fatalln("mknodDevices: %v", err)
+			log.Fatal("mknodDevices: %v", err)
 		}
 
 		// pseudoterminals
 		err = vm.ptmx()
 		if err != nil {
-			log.Fatalln("ptmx: %v", err)
+			log.Fatal("ptmx: %v", err)
 		}
 
 		// symlinkx
 		err = vm.symlinks()
 		if err != nil {
-			log.Fatalln("symlinks: %v", err)
+			log.Fatal("symlinks: %v", err)
 		}
 
 		// remount key paths as read-only
 		err = vm.remountReadOnly()
 		if err != nil {
-			log.Fatalln("remountReadOnly: %v", err)
+			log.Fatal("remountReadOnly: %v", err)
 		}
 
 		// mask paths
 		err = vm.maskPaths()
 		if err != nil {
-			log.Fatalln("maskPaths: %v", err)
+			log.Fatal("maskPaths: %v", err)
 		}
 
 		// populate devices cgroup
 		err = vm.populateDevices()
 		if err != nil {
-			log.Fatalln("populateDevices: %v", err)
+			log.Fatal("populateDevices: %v", err)
 		}
 
 		// chdir
 		err = syscall.Chdir(vm.FSPath)
 		if err != nil {
-			log.Fatalln("chdir: %v", err)
+			log.Fatal("chdir: %v", err)
 		}
 
 		// attempt to chroot
 		err = vm.chroot()
 		if err != nil {
-			log.Fatalln("chroot: %v", err)
+			log.Fatal("chroot: %v", err)
 		}
 
 		// set capabilities
 		err = vm.setCapabilities()
 		if err != nil {
-			log.Fatalln("setCapabilities: %v", err)
+			log.Fatal("setCapabilities: %v", err)
 		}
 
 		// GO!
 		err = syscall.Exec(vm.Init, vm.Args, nil)
 		if err != nil {
-			log.Fatalln("Exec: %v", err)
+			log.Fatal("Exec: %v", err)
 		}
 
 		// the new child process will exit and the parent will catch it
@@ -784,7 +783,9 @@ func prctl(option int, arg2, arg3, arg4, arg5 uintptr) error {
 func (vm *ContainerVM) chroot() error {
 	err := syscall.Mount(vm.FSPath, "/", "", syscall.MS_MOVE, "")
 	if err != nil {
-		return err
+		log.Debug("could not MS_MOVE mount, using chroot+chdir")
+	} else {
+		return nil
 	}
 	err = syscall.Chroot(".")
 	if err != nil {
@@ -912,45 +913,55 @@ func (vm *ContainerVM) setupRoot() error {
 }
 
 func (vm *ContainerVM) mountDefaults() error {
+	log.Debug("mountDefaults: %v", vm.FSPath)
+
 	var err error
 
 	err = syscall.Mount("proc", filepath.Join(vm.FSPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "shm"), 0755)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "mqueue"), 0755)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "pts"), 0755)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = syscall.Mount("pts", filepath.Join(vm.FSPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
 	err = syscall.Mount("sysfs", filepath.Join(vm.FSPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 

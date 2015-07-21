@@ -136,6 +136,8 @@ func ParseVMType(s string) (VMType, error) {
 	switch s {
 	case "kvm":
 		return KVM, nil
+	case "container":
+		return CONTAINER, nil
 	default:
 		return -1, errors.New("invalid VMType")
 	}

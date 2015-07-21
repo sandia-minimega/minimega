@@ -107,7 +107,7 @@ var containerConfigFns = map[string]VMConfigFns{
 	}, ""),
 	"init": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Init
-	}, ""),
+	}, "/init"),
 	"initargs": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustContainerConfig(vm).Args
 	}, "initargs", "container"),

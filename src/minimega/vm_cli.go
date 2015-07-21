@@ -28,32 +28,38 @@ can be used to subselect a set of rows and/or columns. See the help pages for
 .filter and .columns, respectively, for their usage. Columns returned by VM
 info include:
 
-- host      : the host that the VM is running on
-- id        : the VM ID, as an integer
-- name      : the VM name, if it exists
-- state     : one of (building, running, paused, quit, error)
-- type      : one of (kvm)
-- vcpus     : the number of allocated CPUs
-- memory    : allocated memory, in megabytes
-- vlan      : vlan, as an integer
-- bridge    : bridge name
-- tap       : tap name
-- mac       : mac address
-- ip        : IPv4 address
-- ip6       : IPv6 address
-- bandwidth : stats regarding bandwidth usage
-- tags      : any additional information attached to the VM
+- host       : the host that the VM is running on
+- id         : the VM ID, as an integer
+- name       : the VM name, if it exists
+- state      : one of (building, running, paused, quit, error)
+- type       : one of (kvm)
+- vcpus      : the number of allocated CPUs
+- memory     : allocated memory, in megabytes
+- vlan       : vlan, as an integer
+- bridge     : bridge name
+- tap        : tap name
+- mac        : mac address
+- ip         : IPv4 address
+- ip6        : IPv6 address
+- bandwidth  : stats regarding bandwidth usage
+- tags       : any additional information attached to the VM
+- uuid       : QEMU system uuid
+- cc_active  : whether cc is active
 
 Additional fields are available for KVM-based VMs:
 
-- append    : kernel command line string
-- cdrom     : cdrom image
-- disk      : disk image
-- kernel    : kernel image
-- initrd    : initrd image
-- migrate   : qemu migration image
-- uuid      : QEMU system uuid
-- cc_active : whether cc is active
+- append     : kernel command line string
+- cdrom      : cdrom image
+- disk       : disk image
+- kernel     : kernel image
+- initrd     : initrd image
+- migrate    : qemu migration image
+
+Additional fields are available for container-based VMs:
+
+- init	     : process to invoke as init
+- initargs   : optional arguments to pass to init
+- filesystem : root filesystem for the container
 
 Examples:
 
@@ -108,7 +114,7 @@ The optional 'noblock' suffix forces minimega to return control of the command
 line immediately instead of waiting on potential errors from launching the
 VM(s). The user must check logs or error states from vm info.`, Wildcard),
 		Patterns: []string{
-			"vm launch <kvm,> <name or count> [noblock,]",
+			"vm launch <kvm,container> <name or count> [noblock,]",
 		},
 		Call: wrapSimpleCLI(cliVmLaunch),
 	},
@@ -712,6 +718,36 @@ Note: this configuration only applies to KVM-based VMs.`,
 			return cliVmConfigField(c, "snapshot")
 		}),
 	},
+	{ // vm config init
+		HelpShort: "add me",
+		HelpLong:  " add me",
+		Patterns: []string{
+			"vm config init [init]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "init")
+		}),
+	},
+	{ // vm config initargs
+		HelpShort: "add me",
+		HelpLong:  " add me",
+		Patterns: []string{
+			"vm config initargs [initargs]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "initargs")
+		}),
+	},
+	{ // vm config filesystem
+		HelpShort: "add me",
+		HelpLong:  " add me",
+		Patterns: []string{
+			"vm config filesystem [filesystem]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "filesystem")
+		}),
+	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
 		HelpLong: `
@@ -1019,8 +1055,10 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 		config = &vmConfig.BaseConfig
 	} else if fns, ok = kvmConfigFns[field]; ok {
 		config = &vmConfig.KVMConfig
+	} else if fns, ok = containerConfigFns[field]; ok {
+		config = &vmConfig.ContainerConfig
 	} else {
-		log.Fatalln("unknown config field: `%s`", field)
+		log.Fatal("unknown config field: `%s`", field)
 	}
 
 	if nArgs == 0 {
@@ -1116,7 +1154,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		var err error
 		vmType, err = ParseVMType(k)
 		if err != nil {
-			log.Fatalln("expected VM type, not `%v`", k)
+			log.Fatal("expected VM type, not `%v`", k)
 		}
 	}
 

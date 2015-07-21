@@ -196,6 +196,8 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	switch vmType {
 	case KVM:
 		vm = NewKVM()
+	case CONTAINER:
+		vm = NewContainer()
 	default:
 		// TODO
 	}
