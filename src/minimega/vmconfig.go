@@ -102,6 +102,15 @@ var containerConfigFns = map[string]VMConfigFns{
 	"filesystem": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).FSPath
 	}, ""),
+	"hostname": vmConfigString(func(vm interface{}) *string {
+		return &mustContainerConfig(vm).Hostname
+	}, ""),
+	"init": vmConfigString(func(vm interface{}) *string {
+		return &mustContainerConfig(vm).Init
+	}, ""),
+	"initargs": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustContainerConfig(vm).Args
+	}, "initargs", "container"),
 }
 
 // Functions for configuring KVM-based VMs. Note: if keys overlap with

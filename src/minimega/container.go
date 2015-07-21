@@ -12,12 +12,186 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"text/tabwriter"
+	"unsafe"
 )
 
+// posix capabilities. See:
+// 	linux/include/linux/capability.h
+// 	https://github.com/torvalds/linux/blob/master/include/linux/capability.h
+//	https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h
+
+// includes code from:
+// 	https://github.com/syndtr/gocapability/blob/master/capability/capability_linux.go
+
+const (
+	CAP_CHOWN            = uint64(1) << 0
+	CAP_DAC_OVERRIDE     = uint64(1) << 1
+	CAP_DAC_READ_SEARCH  = uint64(1) << 2
+	CAP_FOWNER           = uint64(1) << 3
+	CAP_FSETID           = uint64(1) << 4
+	CAP_KILL             = uint64(1) << 5
+	CAP_SETGID           = uint64(1) << 6
+	CAP_SETUID           = uint64(1) << 7
+	CAP_SETPCAP          = uint64(1) << 8
+	CAP_LINUX_IMMUTABLE  = uint64(1) << 9
+	CAP_NET_BIND_SERVICE = uint64(1) << 10
+	CAP_NET_BROADCAST    = uint64(1) << 11
+	CAP_NET_ADMIN        = uint64(1) << 12
+	CAP_NET_RAW          = uint64(1) << 13
+	CAP_IPC_LOCK         = uint64(1) << 14
+	CAP_IPC_OWNDER       = uint64(1) << 15
+	CAP_SYS_MODULE       = uint64(1) << 16
+	CAP_SYS_RAWIO        = uint64(1) << 17
+	CAP_SYS_CHROOT       = uint64(1) << 18
+	CAP_SYS_PTRACE       = uint64(1) << 19
+	CAP_SYS_PACCT        = uint64(1) << 20
+	CAP_SYS_ADMIN        = uint64(1) << 21
+	CAP_SYS_BOOT         = uint64(1) << 22
+	CAP_SYS_NICE         = uint64(1) << 23
+	CAP_SYS_RESOURCE     = uint64(1) << 24
+	CAP_SYS_TIME         = uint64(1) << 25
+	CAP_SYS_TTY_CONFIG   = uint64(1) << 26
+	CAP_MKNOD            = uint64(1) << 27
+	CAP_LEASE            = uint64(1) << 28
+	CAP_AUDIT_WRITE      = uint64(1) << 29
+	CAP_AUDIT_CONTROL    = uint64(1) << 30
+	CAP_SETFCAP          = uint64(1) << 31
+	CAP_MAC_OVERRIDE     = uint64(1) << 32
+	CAP_MAC_ADMIN        = uint64(1) << 33
+	CAP_SYSLOG           = uint64(1) << 34
+	CAP_WAKE_ALARM       = uint64(1) << 35
+	CAP_BLOCK_SUSPEND    = uint64(1) << 36
+	CAP_AUDIT_READ       = uint64(1) << 37
+	CAP_LAST_CAP         = 37
+)
+
+const (
+	CAPV3 = 0x20080522
+)
+
+// DEFAULT_CAPS represents capabilities necessary for a full-system container
+// and nothing more
+const (
+	DEFAULT_CAPS = CAP_CHOWN | CAP_DAC_OVERRIDE | CAP_FSETID | CAP_FOWNER | CAP_MKNOD | CAP_NET_RAW | CAP_SETGID | CAP_SETUID | CAP_SETFCAP | CAP_SETPCAP | CAP_NET_BIND_SERVICE | CAP_SYS_CHROOT | CAP_KILL | CAP_AUDIT_WRITE | CAP_NET_ADMIN | CAP_DAC_READ_SEARCH | CAP_AUDIT_CONTROL
+)
+
+type capHeader struct {
+	version uint32
+	pid     int
+}
+
+type capData struct {
+	effective   uint32
+	permitted   uint32
+	inheritable uint32
+}
+
+// only bother with version 3
+type cap struct {
+	header capHeader
+	data   [2]capData
+	bounds [2]uint32
+}
+
+const CONTAINER_FLAGS = syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC | syscall.CLONE_NEWNS | syscall.CLONE_NEWPID | syscall.CLONE_NEWUTS | syscall.CLONE_VFORK | syscall.SIGCHLD
+
+var containerMaskPaths = []string{
+	"/proc/kcore",
+}
+
+var containerReadOnlyPaths = []string{
+	"/proc/sys",
+	"/proc/sysrq-trigger",
+	"/proc/irq",
+	"/proc/bus",
+}
+
+var containerLinks = [][2]string{
+	{"/proc/self/fd", "/dev/fd"},
+	{"/proc/self/0", "/dev/stdin"},
+	{"/proc/self/1", "/dev/stdout"},
+	{"/proc/self/2", "/dev/stderr"},
+}
+
+var containerDevices []string = []string{
+	"c 1:3 rwm",    // null
+	"c 1:5 rwm",    // zero
+	"c 1:7 rwm",    // full
+	"c 5:0 rwm",    // tty
+	"c 1:8 rwm",    // random
+	"c 1:9 rwm",    // urandom
+	"c *:* m",      // mknod any character dev
+	"b *:* m",      // mknod and block dev
+	"c 5:1 rwm",    // /dev/console
+	"c 4:0 rwm",    // /dev/tty0
+	"c 4:1 rwm",    // /dev/tty1
+	"c 136:* rwm",  // pts
+	"c 5:2 rwm",    // ptmx
+	"c 10:200 rwm", // ?
+}
+
+type Dev struct {
+	Name  string
+	Major int
+	Minor int
+	Type  string
+	Mode  int
+}
+
+var containerDeviceNames []*Dev = []*Dev{
+	&Dev{
+		Name:  "/dev/null",
+		Major: 1,
+		Minor: 3,
+		Type:  "c",
+		Mode:  438,
+	},
+	&Dev{
+		Name:  "/dev/zero",
+		Major: 1,
+		Minor: 5,
+		Type:  "c",
+		Mode:  438,
+	},
+	&Dev{
+		Name:  "/dev/full",
+		Major: 1,
+		Minor: 7,
+		Type:  "c",
+		Mode:  438,
+	},
+	&Dev{
+		Name:  "/dev/tty",
+		Major: 5,
+		Minor: 0,
+		Type:  "c",
+		Mode:  438,
+	},
+	&Dev{
+		Name:  "/dev/random",
+		Major: 1,
+		Minor: 8,
+		Type:  "c",
+		Mode:  438,
+	},
+	&Dev{
+		Name:  "/dev/urandom",
+		Major: 1,
+		Minor: 9,
+		Type:  "c",
+		Mode:  438,
+	},
+}
+
 type ContainerConfig struct {
-	FSPath string
+	FSPath   string
+	Hostname string
+	Init     string
+	Args     []string
 }
 
 type ContainerVM struct {
@@ -75,6 +249,7 @@ func NewContainer() *ContainerVM {
 	vm.BaseVM = *NewVM()
 
 	vm.kill = make(chan bool)
+	vm.Init = "/init"
 
 	return vm
 }
@@ -312,8 +487,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 	}
 
 	//var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	var cmd *exec.Cmd
 	var waitChan = make(chan int)
 
 	// clear taps, we may have come from the quit state
@@ -380,68 +553,425 @@ func (vm *ContainerVM) launch(ack chan int) {
 		}
 	}
 
-	// 	cmd = &exec.Cmd{
-	// 		Path:   process("qemu"),
-	// 		Args:   args,
-	// 		Env:    nil,
-	// 		Dir:    "",
-	// 		Stdout: &sOut,
-	// 		Stderr: &sErr,
-	// 	}
-	// 	err = cmd.Start()
-	// 	if err != nil {
-	// 		log.Error("start qemu: %v %v", err, sErr.String())
-	// 		vm.setState(VM_ERROR)
-	// 		ack <- vm.ID
-	// 		return
-	// 	}
-	//
-	// 	vm.pid = cmd.Process.Pid
-	// 	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	// launch the container
+	pid, err := vm.clone()
+	if err != nil {
+		log.Error("clone: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
 
-	// TODO: add affinity funcs for containers
-	// vm.CheckAffinity()
+	log.Debug("clone pid: %v", pid)
 
-	go func() {
-		err := cmd.Wait()
-		vm.setState(VM_QUIT)
+	if pid != 0 {
+		// parent
+		vm.pid = pid
+		log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+
+		p, err := os.FindProcess(pid)
 		if err != nil {
-			if err.Error() != "signal: killed" { // because we killed it
-				log.Error("kill container: %v %v", err, sErr.String())
-				vm.setState(VM_ERROR)
+			log.Fatalln("FindProcess: %v", err)
+		}
+
+		go func() {
+			_, err := p.Wait()
+			vm.setState(VM_QUIT)
+			if err != nil {
+				if err.Error() != "signal: killed" { // because we killed it
+					log.Error("kill container: %v", err)
+					vm.setState(VM_ERROR)
+				}
+			}
+			waitChan <- vm.ID
+		}()
+
+		// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
+		sendKillAck := false
+
+		ack <- vm.ID
+
+		select {
+		case <-waitChan:
+			log.Info("VM %v exited", vm.ID)
+		case <-vm.kill:
+			log.Info("Killing VM %v", vm.ID)
+			p.Kill()
+			<-waitChan
+			sendKillAck = true // wait to ack until we've cleaned up
+		}
+
+		// TODO: umountDefaults
+
+		for _, net := range vm.Networks {
+			b, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Error("get bridge: %v", err)
+			} else {
+				b.TapDestroy(net.VLAN, net.Tap)
 			}
 		}
-		waitChan <- vm.ID
-	}()
 
-	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
-	sendKillAck := false
+		if sendKillAck {
+			killAck <- vm.ID
+		}
 
-	ack <- vm.ID
+		// TODO: add affinity funcs for containers
+		// vm.CheckAffinity()
+	} else {
+		// child - use log.Fatalln like it's going out of style
 
-	select {
-	case <-waitChan:
-		log.Info("VM %v exited", vm.ID)
-	case <-vm.kill:
-		log.Info("Killing VM %v", vm.ID)
-		// TODO: kill vm
-		// cmd.Process.Kill()
-		<-waitChan
-		sendKillAck = true // wait to ack until we've cleaned up
+		// set hostname
+		if vm.Hostname != "" {
+			_, err := exec.Command(process("hostname"), vm.Hostname).Output()
+			if err != nil {
+				log.Fatalln("set hostname: %v", err)
+			}
+		}
+
+		// setup the root fs
+		err = vm.setupRoot()
+		if err != nil {
+			log.Fatalln("setupRoot: %v", err)
+		}
+
+		// mount defaults
+		err = vm.mountDefaults()
+		if err != nil {
+			log.Fatalln("mountDefaults: %v", err)
+		}
+
+		// mknod
+		err = vm.mknodDevices()
+		if err != nil {
+			log.Fatalln("mknodDevices: %v", err)
+		}
+
+		// pseudoterminals
+		err = vm.ptmx()
+		if err != nil {
+			log.Fatalln("ptmx: %v", err)
+		}
+
+		// symlinkx
+		err = vm.symlinks()
+		if err != nil {
+			log.Fatalln("symlinks: %v", err)
+		}
+
+		// remount key paths as read-only
+		err = vm.remountReadOnly()
+		if err != nil {
+			log.Fatalln("remountReadOnly: %v", err)
+		}
+
+		// mask paths
+		err = vm.maskPaths()
+		if err != nil {
+			log.Fatalln("maskPaths: %v", err)
+		}
+
+		// populate devices cgroup
+		err = vm.populateDevices()
+		if err != nil {
+			log.Fatalln("populateDevices: %v", err)
+		}
+
+		// chdir
+		err = syscall.Chdir(vm.FSPath)
+		if err != nil {
+			log.Fatalln("chdir: %v", err)
+		}
+
+		// attempt to chroot
+		err = vm.chroot()
+		if err != nil {
+			log.Fatalln("chroot: %v", err)
+		}
+
+		// set capabilities
+		err = vm.setCapabilities()
+		if err != nil {
+			log.Fatalln("setCapabilities: %v", err)
+		}
+
+		// GO!
+		err = syscall.Exec(vm.Init, vm.Args, nil)
+		if err != nil {
+			log.Fatalln("Exec: %v", err)
+		}
+
+		// the new child process will exit and the parent will catch it
+		log.Fatalln("how did I get here?")
+	}
+}
+
+func (vm *ContainerVM) setCapabilities() error {
+	c := new(cap)
+	c.header.version = CAPV3
+	c.header.pid = os.Getpid()
+
+	caps := DEFAULT_CAPS
+
+	for i := uint(0); i < 32; i++ {
+		// first word
+		c.data[0].effective |= uint32(caps) & (1 << i)
+		c.data[0].permitted |= uint32(caps) & (1 << i)
+		c.data[0].inheritable |= uint32(caps) & (1 << i)
+		c.bounds[0] |= uint32(caps) & (1 << i)
+
+		// second word
+		c.data[1].effective |= uint32(caps>>32) & (1 << i)
+		c.data[1].permitted |= uint32(caps>>32) & (1 << i)
+		c.data[1].inheritable |= uint32(caps>>32) & (1 << i)
+		c.bounds[1] |= uint32(caps>>32) & (1 << i)
 	}
 
-	for _, net := range vm.Networks {
-		b, err := getBridge(net.Bridge)
-		if err != nil {
-			log.Error("get bridge: %v", err)
-		} else {
-			b.TapDestroy(net.VLAN, net.Tap)
+	// bounding set
+	var data [2]capData
+	err := capget(&c.header, &data[0])
+	if err != nil {
+		return err
+	}
+	if uint32(CAP_SETPCAP)&data[0].effective != 0 {
+		for i := uint(1); i <= CAP_LAST_CAP; i++ {
+			if i <= 31 && c.bounds[0]&(1<<i) != 0 {
+				continue
+			}
+			if i > 31 && c.bounds[1]&(1<<(i-32)) != 0 {
+				continue
+			}
+
+			err = prctl(syscall.PR_CAPBSET_DROP, uintptr(i), 0, 0, 0)
+			if err != nil {
+				// Ignore EINVAL since the capability may not be supported in this system.
+				if errno, ok := err.(syscall.Errno); ok && errno == syscall.EINVAL {
+					err = nil
+					continue
+				}
+				return err
+			}
 		}
 	}
 
-	if sendKillAck {
-		killAck <- vm.ID
+	return capset(&c.header, &c.data[0])
+}
+
+func capget(hdr *capHeader, data *capData) error {
+	_, _, e1 := syscall.Syscall(syscall.SYS_CAPGET, uintptr(unsafe.Pointer(hdr)), uintptr(unsafe.Pointer(data)), 0)
+	if e1 != 0 {
+		return e1
 	}
+	return nil
+}
+
+func capset(hdr *capHeader, data *capData) error {
+	_, _, e1 := syscall.Syscall(syscall.SYS_CAPSET, uintptr(unsafe.Pointer(hdr)), uintptr(unsafe.Pointer(data)), 0)
+	if e1 != 0 {
+		return e1
+	}
+	return nil
+}
+
+func prctl(option int, arg2, arg3, arg4, arg5 uintptr) error {
+	_, _, e1 := syscall.Syscall6(syscall.SYS_PRCTL, uintptr(option), arg2, arg3, arg4, arg5, 0)
+	if e1 != 0 {
+		return e1
+	}
+	return nil
+}
+
+func (vm *ContainerVM) chroot() error {
+	err := syscall.Mount(vm.FSPath, "/", "", syscall.MS_MOVE, "")
+	if err != nil {
+		return err
+	}
+	err = syscall.Chroot(".")
+	if err != nil {
+		return err
+	}
+	return syscall.Chdir("/")
+}
+
+func (vm *ContainerVM) populateDevices() error {
+	// TODO: ensure devices cgroups are mounted
+	// for now just assume it's at /sys/fs/cgroups/devices
+
+	err := os.MkdirAll("/sys/fs/cgroup/devices/mega", 0755)
+	if err != nil {
+		return err
+	}
+
+	deny := "/sys/fs/cgroup/devices/mega/devices.deny"
+	allow := "/sys/fs/cgroup/devices/mega/devices.allow"
+	tasks := "/sys/fs/cgroup/devices/mega/tasks"
+
+	err = ioutil.WriteFile(deny, []byte("a"), 0200)
+	if err != nil {
+		return err
+	}
+	for _, a := range containerDevices {
+		err = ioutil.WriteFile(allow, []byte(a), 0200)
+		if err != nil {
+			return err
+		}
+	}
+
+	// associate the pid with these permissions
+	err = ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (vm *ContainerVM) maskPaths() error {
+	for _, v := range containerMaskPaths {
+		p := filepath.Join(vm.FSPath, v)
+		err := syscall.Mount("/dev/null", p, "", syscall.MS_BIND, "")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *ContainerVM) remountReadOnly() error {
+	for _, v := range containerReadOnlyPaths {
+		p := filepath.Join(vm.FSPath, v)
+		err := syscall.Mount("", p, "", syscall.MS_REMOUNT|syscall.MS_RDONLY, "")
+		if err == nil {
+			continue // this was actually a mountpoint
+		}
+		err = syscall.Mount(p, p, "", syscall.MS_BIND, "")
+		if err != nil {
+			return err
+		}
+		err = syscall.Mount(p, p, "", syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY|syscall.MS_REC|syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *ContainerVM) symlinks() error {
+	for _, l := range containerLinks {
+		path := filepath.Join(vm.FSPath, l[1])
+		os.Remove(path)
+		err := os.Symlink(l[0], path)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *ContainerVM) ptmx() error {
+	path := filepath.Join(vm.FSPath, "/dev/ptmx")
+	os.Remove(path)
+	err := os.Symlink("pts/ptmx", path)
+	if err != nil {
+		return err
+	}
+
+	// bind mount /dev/console
+	path = filepath.Join(vm.FSPath, "/dev/console")
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	f.Close()
+	return syscall.Mount("/dev/console", path, "", syscall.MS_BIND, "")
+}
+
+func (vm *ContainerVM) mknodDevices() error {
+	for _, v := range containerDeviceNames {
+		path := filepath.Join(vm.FSPath, v.Name)
+		mode := v.Mode
+		if v.Type == "c" {
+			mode |= syscall.S_IFCHR
+		} else {
+			mode |= syscall.S_IFBLK
+		}
+		dev := int((v.Major << 8) | (v.Minor & 0xff) | ((v.Minor & 0xfff00) << 12))
+		err := syscall.Mknod(path, uint32(mode), dev)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *ContainerVM) setupRoot() error {
+	err := syscall.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
+	if err != nil {
+		return err
+	}
+	return syscall.Mount(vm.FSPath, vm.FSPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
+}
+
+func (vm *ContainerVM) mountDefaults() error {
+	var err error
+
+	err = syscall.Mount("proc", filepath.Join(vm.FSPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	if err != nil {
+		return err
+	}
+
+	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "shm"), 0755)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "mqueue"), 0755)
+	if err != nil {
+		return err
+	}
+
+	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "pts"), 0755)
+	if err != nil {
+		return err
+	}
+
+	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
+	if err != nil {
+		return err
+	}
+
+	err = syscall.Mount("pts", filepath.Join(vm.FSPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	if err != nil {
+		return err
+	}
+
+	err = syscall.Mount("sysfs", filepath.Join(vm.FSPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// syscall clone with namespace flags
+func (vm *ContainerVM) clone() (int, error) {
+	// see go/src/pkg/syscall/exec_unix.go
+	syscall.ForkLock.Lock()
+
+	r1, _, err1 := syscall.RawSyscall(syscall.SYS_CLONE, uintptr(CONTAINER_FLAGS), 0, 0)
+
+	syscall.ForkLock.Unlock()
+
+	if err1 != 0 {
+		return 0, err1
+	}
+
+	// parent gets the pid, child == 0
+	return int(r1), nil
 }
 
 // update the vm state, and write the state to file
