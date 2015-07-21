@@ -83,6 +83,9 @@ func (vms VMs) save(file *os.File, args []string) error {
 		case *KvmVM:
 			cmds = append(cmds, "vm config kvm true")
 			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
+		case *ContainerVM:
+			cmds = append(cmds, "vm config container true")
+			cmds = append(cmds, saveConfig("container", containerConfigFns, &vm.ContainerConfig)...)
 		default:
 		}
 

@@ -1030,6 +1030,8 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 			switch vm := vm.(type) {
 			case *KvmVM:
 				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
+			case *ContainerVM:
+				vmConfig.ContainerConfig = *vm.ContainerConfig.Copy()
 			}
 		}
 	} else {
@@ -1077,6 +1079,7 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 
 	var clearAll = len(c.BoolArgs) == 0
 	var clearKVM = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["kvm"])
+	var clearContainer = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["container"])
 	var cleared bool
 
 	for k, fns := range baseConfigFns {
@@ -1088,6 +1091,12 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	for k, fns := range kvmConfigFns {
 		if clearKVM || c.BoolArgs[k] {
 			fns.Clear(&vmConfig.KVMConfig)
+			cleared = true
+		}
+	}
+	for k, fns := range containerConfigFns {
+		if clearContainer || c.BoolArgs[k] {
+			fns.Clear(&vmConfig.ContainerConfig)
 			cleared = true
 		}
 	}

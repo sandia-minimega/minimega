@@ -127,6 +127,8 @@ func (s VMType) String() string {
 	switch s {
 	case KVM:
 		return "kvm"
+	case CONTAINER:
+		return "container"
 	default:
 		return "???"
 	}
@@ -145,13 +147,14 @@ func ParseVMType(s string) (VMType, error) {
 
 func (old *VMConfig) Copy() *VMConfig {
 	return &VMConfig{
-		BaseConfig: *old.BaseConfig.Copy(),
-		KVMConfig:  *old.KVMConfig.Copy(),
+		BaseConfig:      *old.BaseConfig.Copy(),
+		KVMConfig:       *old.KVMConfig.Copy(),
+		ContainerConfig: *old.ContainerConfig.Copy(),
 	}
 }
 
 func (vm VMConfig) String() string {
-	return vm.BaseConfig.String() + vm.KVMConfig.String()
+	return vm.BaseConfig.String() + vm.KVMConfig.String() + vm.ContainerConfig.String()
 }
 
 func (old *BaseConfig) Copy() *BaseConfig {
