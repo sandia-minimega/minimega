@@ -100,6 +100,9 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"uuid": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).UUID
 	}, ""),
+	"cpu": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).CPU
+	}, DefaultKVMCPU),
 	"snapshot": vmConfigBool(func(vm interface{}) *bool {
 		return &mustKVMConfig(vm).Snapshot
 	}, true),

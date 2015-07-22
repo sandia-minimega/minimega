@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"ipmac"
+	"math/rand"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -25,6 +26,8 @@ import (
 const (
 	DEV_PER_BUS    = 32
 	DEV_PER_VIRTIO = 30 // Max of 30 virtio ports/device (0 and 32 are reserved)
+
+	DefaultKVMCPU = "host"
 )
 
 type KVMConfig struct {
@@ -32,6 +35,8 @@ type KVMConfig struct {
 	CdromPath  string
 	InitrdPath string
 	KernelPath string
+
+	CPU string // not user configurable, yet.
 
 	MigratePath string
 	UUID        string
@@ -51,16 +56,11 @@ type KvmVM struct {
 
 	// Internal variables
 	hotplug map[int]string
-	kill    chan bool // kill channel to signal to shut a vm down
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
 
 	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
-}
-
-func (vm *KvmVM) UpdateCCActive() {
-	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 type qemuOverride struct {
@@ -76,7 +76,7 @@ var (
 // Ensure that vmKVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
 
-// Valid names for output masks for vm kvm info, in preferred output order
+// Valid names for output masks for vm info kvm, in preferred output order
 var kvmMasks = []string{
 	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
 	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
@@ -109,37 +109,32 @@ func (old *KVMConfig) Copy() *KVMConfig {
 	return res
 }
 
-func (vm *KvmVM) Config() *BaseConfig {
-	return &vm.BaseConfig
-}
-
-func NewKVM() *KvmVM {
+func NewKVM(name string) *KvmVM {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewVM()
+	vm.BaseVM = *NewVM(name)
+	vm.Type = KVM
 
-	vm.kill = make(chan bool)
+	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
+
 	vm.hotplug = make(map[int]string)
 
 	return vm
 }
 
-// launch one or more vms. this will copy the info struct, one per vm and
-// launch each one in a goroutine. it will not return until all vms have
-// reported that they've launched.
-func (vm *KvmVM) Launch(name string, ack chan int) error {
-	if err := vm.BaseVM.launch(name, KVM); err != nil {
-		return err
-	}
-	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
-
-	vmLock.Lock()
-	vms[vm.ID] = vm
-	vmLock.Unlock()
-
+// Launch a new KVM VM.
+func (vm *KvmVM) Launch(ack chan int) error {
 	go vm.launch(ack)
 
 	return nil
+}
+
+func (vm *KvmVM) Config() *BaseConfig {
+	return &vm.BaseConfig
+}
+
+func (vm *KvmVM) UpdateCCActive() {
+	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *KvmVM) Start() error {
@@ -183,15 +178,6 @@ func (vm *KvmVM) Stop() error {
 	}
 
 	return err
-}
-
-func (vm *KvmVM) Kill() error {
-	// Close the channel to signal to all dependent goroutines that they should
-	// stop. Anyone blocking on the channel will unblock immediately.
-	// http://golang.org/ref/spec#Receive_operator
-	close(vm.kill)
-	// TODO: ACK if killed?
-	return nil
 }
 
 func (vm *KvmVM) String() string {
@@ -295,6 +281,29 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	completed = transferred / total
 
 	return status, completed, nil
+}
+
+func (vm *KvmVM) Screenshot(fpath string, size int) error {
+	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
+	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
+
+	err := vm.q.Screendump(tmp)
+	if err != nil {
+		return err
+	}
+
+	err = ppmToPng(tmp, fpath, size)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(tmp)
+	if err != nil {
+		return err
+	}
+
+	return nil
+
 }
 
 func (vm *KvmVM) launchPreamble(ack chan int) bool {
@@ -494,7 +503,8 @@ func (vm *KvmVM) launch(ack chan int) {
 		}
 	}
 
-	args = VMConfig{vm.BaseConfig, vm.KVMConfig}.qemuArgs(vm.GetID(), vm.instancePath)
+	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
+	args = vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
@@ -661,8 +671,10 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-k")
 	args = append(args, "en-us")
 
-	args = append(args, "-cpu")
-	args = append(args, "host")
+	if vm.CPU != "" {
+		args = append(args, "-cpu")
+		args = append(args, vm.CPU)
+	}
 
 	args = append(args, "-net")
 	args = append(args, "none")
