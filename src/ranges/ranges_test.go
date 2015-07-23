@@ -97,6 +97,9 @@ func TestSplitList(t *testing.T) {
 		input string
 		count int
 	}{
+		{"f", 1},
+		{"0", 1},
+		{"10", 1},
 		{"foo", 1},
 		{"foo,", 1},
 		{"foo,bar", 2},
