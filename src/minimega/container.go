@@ -314,16 +314,14 @@ func (vm *ContainerVM) Start() error {
 
 	// TODO: container unpause
 
-	// 	err := vm.q.Start()
-	// 	if err != nil {
-	// 		log.Errorln(err)
-	// 		if err != qmp.ERR_READY {
-	// 			vm.setState(VM_ERROR)
-	// 		}
-	// 	} else {
-	// 		vm.setState(VM_RUNNING)
-	// 	}
-	//
+	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+	err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644)
+	if err != nil {
+		return err
+	}
+
+	vm.setState(VM_RUNNING)
+	
 	return nil
 }
 
@@ -334,12 +332,13 @@ func (vm *ContainerVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 
-	// TODO: container pause
+	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+	err := ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
+	if err != nil {
+		return err
+	}
 
-	// 	err := vm.q.Stop()
-	// 	if err == nil {
-	// 		vm.setState(VM_PAUSED)
-	// 	}
+	vm.setState(VM_PAUSED)
 
 	return nil
 }
@@ -840,6 +839,7 @@ func (vm *ContainerVM) populateCgroups() error {
 	allow := filepath.Join(cgroupPath, "devices.allow")
 	tasks := filepath.Join(cgroupPath, "tasks")
 	memory := filepath.Join(cgroupPath, "memory.limit_in_bytes")
+	freezer := filepath.Join(cgroupPath, "freezer.state")
 
 	// devices
 	err = ioutil.WriteFile(deny, []byte("a"), 0200)
@@ -864,6 +864,13 @@ func (vm *ContainerVM) populateCgroups() error {
 	if err != nil {
 		return err
 	}
+
+	// freeze and let the parent unfreeze us later
+	err = ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
