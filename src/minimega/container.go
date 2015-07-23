@@ -295,6 +295,7 @@ func (vm *ContainerVM) Launch(ack chan int) error {
 }
 
 func (vm *ContainerVM) Start() error {
+	log.Debugln("HEY")
 	s := vm.GetState()
 
 	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
@@ -621,6 +622,11 @@ func (vm *ContainerVM) launch(ack chan int) {
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
 			p.Kill()
+
+			// containers cannot return unless thawed, so thaw the
+			// process if necessary
+			vm.Start()
+
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
@@ -838,7 +844,6 @@ func (vm *ContainerVM) populateCgroups() error {
 	allow := filepath.Join(cgroupPath, "devices.allow")
 	tasks := filepath.Join(cgroupPath, "tasks")
 	memory := filepath.Join(cgroupPath, "memory.limit_in_bytes")
-	freezer := filepath.Join(cgroupPath, "freezer.state")
 
 	// devices
 	err = ioutil.WriteFile(deny, []byte("a"), 0200)
@@ -860,12 +865,6 @@ func (vm *ContainerVM) populateCgroups() error {
 
 	// associate the pid with these permissions
 	err = ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
-	if err != nil {
-		return err
-	}
-
-	// freeze and let the parent unfreeze us later
-	err = ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
 	if err != nil {
 		return err
 	}
