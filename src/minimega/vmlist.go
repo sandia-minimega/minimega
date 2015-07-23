@@ -292,14 +292,11 @@ vmLoop:
 func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
 	for _, vm := range vms {
-		if vm, ok := vm.(*KvmVM); ok {
-			log.Debug("cleaning instance path: %v", vm.instancePath)
-			err := os.RemoveAll(vm.instancePath)
-			if err != nil {
-				log.Error("clearDirs: %v", err)
-			}
-		} else {
-			// TODO
+		path := vm.GetInstancePath()
+		log.Debug("cleaning instance path: %v", path)
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Error("clearDirs: %v", err)
 		}
 	}
 }

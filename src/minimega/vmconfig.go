@@ -128,15 +128,9 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"migrate": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).MigratePath
 	}, ""),
-	"uuid": vmConfigString(func(vm interface{}) *string {
-		return &mustKVMConfig(vm).UUID
-	}, ""),
 	"cpu": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).CPU
 	}, DefaultKVMCPU),
-	"snapshot": vmConfigBool(func(vm interface{}) *bool {
-		return &mustKVMConfig(vm).Snapshot
-	}, true),
 	"serial": vmConfigInt(func(vm interface{}) *int {
 		return &mustKVMConfig(vm).SerialPorts
 	}, "number", 0),

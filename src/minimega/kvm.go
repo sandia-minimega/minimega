@@ -56,8 +56,6 @@ type KvmVM struct {
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
-
-	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
 type qemuOverride struct {
@@ -88,6 +86,10 @@ func init() {
 	for _, fns := range kvmConfigFns {
 		fns.Clear(&vmConfig.KVMConfig)
 	}
+}
+
+func (vm *KvmVM) GetInstancePath() string {
+	return vm.instancePath
 }
 
 // Copy makes a deep copy and returns reference to the new struct.

@@ -817,6 +817,7 @@ func init() {
 	// Register these so we can serialize the VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
+	gob.Register(&ContainerVM{})
 }
 
 func cliVmInfo(c *minicli.Command) *minicli.Response {
@@ -831,11 +832,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	for _, vm := range vms {
 		// Populate the latest bandwidth stats for all VMs
 		vm.UpdateBW()
-
-		// Populate CC Active flag for KVM vms
-		if vm, ok := vm.(*KvmVM); ok {
-			vm.UpdateCCActive()
-		}
+		vm.UpdateCCActive()
 	}
 
 	resp.Header, resp.Tabular, err = vms.info(vmType)

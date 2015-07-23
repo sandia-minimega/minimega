@@ -49,6 +49,7 @@ type VM interface {
 	GetName() string // GetName returns the VM's per-host unique name
 	GetState() VMState
 	GetType() VMType
+	GetInstancePath() string
 
 	// Launch launches the VM and acks on the provided channel when the VM has
 	// been launched.
@@ -70,6 +71,7 @@ type VM interface {
 	Screenshot(fpath string, size int) error
 
 	UpdateBW()
+	UpdateCCActive()
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -81,6 +83,7 @@ type BaseConfig struct {
 
 	Snapshot bool
 	UUID     string
+	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
 // VMConfig contains all the configs possible for a VM. When a VM of a
@@ -146,6 +149,7 @@ func init() {
 	// for serializing VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
+	gob.Register(&ContainerVM{})
 }
 
 // NewVM creates a new VM, copying the currently set configs. After a VM is
