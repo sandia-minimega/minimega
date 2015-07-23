@@ -2,6 +2,9 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
+// NOTE: debian hosts need 'cgroup_enable=memory' added to the kernel command
+// line. https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=534964
+
 package main
 
 import (
@@ -26,6 +29,11 @@ import (
 
 // includes code from:
 // 	https://github.com/syndtr/gocapability/blob/master/capability/capability_linux.go
+
+const (
+	CGROUP_PATH = "/sys/fs/cgroup/minimega"
+	CGROUP_ROOT = "/sys/fs/cgroup"
+)
 
 const (
 	CAP_CHOWN            = uint64(1) << 0
@@ -223,6 +231,22 @@ func init() {
 	// Reset everything to default
 	for _, fns := range containerConfigFns {
 		fns.Clear(&vmConfig.ContainerConfig)
+	}
+
+	// create a minimega cgroup
+	// TODO: ensure devices cgroups are mounted
+	// for now just assume it's at /sys/fs/cgroup
+	err := os.MkdirAll(CGROUP_PATH, 0755)
+	if err != nil {
+		fmt.Printf("creating minimega cgroup: %v", err)
+		os.Exit(1)
+	}
+
+	// inherit cpusets
+	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
+	if err != nil {
+		fmt.Printf("setting cgroup: %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -485,7 +509,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 		teardown()
 	}
 
-	//var sOut bytes.Buffer
 	var waitChan = make(chan int)
 
 	// clear taps, we may have come from the quit state
@@ -585,8 +608,12 @@ func (vm *ContainerVM) launch(ack chan int) {
 			waitChan <- vm.ID
 		}()
 
-		// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
+		// we can't just return on error at this point because we'll
+		// leave dangling goroutines, we have to clean up on failure
 		sendKillAck := false
+
+		// TODO: add affinity funcs for containers
+		// vm.CheckAffinity()
 
 		ack <- vm.ID
 
@@ -611,12 +638,16 @@ func (vm *ContainerVM) launch(ack chan int) {
 			}
 		}
 
+		// clean up the cgroup directory
+		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
+		err = os.Remove(cgroupPath)
+		if err != nil {
+			log.Errorln(err)
+		}
+
 		if sendKillAck {
 			killAck <- vm.ID
 		}
-
-		// TODO: add affinity funcs for containers
-		// vm.CheckAffinity()
 	} else {
 		// child - use log.Fatalln like it's going out of style
 
@@ -670,10 +701,10 @@ func (vm *ContainerVM) launch(ack chan int) {
 			log.Fatal("maskPaths: %v", err)
 		}
 
-		// populate devices cgroup
-		err = vm.populateDevices()
+		// setup cgroups for this vm
+		err = vm.populateCgroups()
 		if err != nil {
-			log.Fatal("populateDevices: %v", err)
+			log.Fatal("populateCgroups: %v", err)
 		}
 
 		// chdir
@@ -693,6 +724,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 		if err != nil {
 			log.Fatal("setCapabilities: %v", err)
 		}
+
+		// TODO: figure out how to freeze the vm
 
 		// GO!
 		err = syscall.Exec(vm.Init, vm.Args, nil)
@@ -794,19 +827,21 @@ func (vm *ContainerVM) chroot() error {
 	return syscall.Chdir("/")
 }
 
-func (vm *ContainerVM) populateDevices() error {
-	// TODO: ensure devices cgroups are mounted
-	// for now just assume it's at /sys/fs/cgroups/devices
+func (vm *ContainerVM) populateCgroups() error {
+	cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
+	log.Debug("using cgroupPath: %v", cgroupPath)
 
-	err := os.MkdirAll("/sys/fs/cgroup/devices/mega", 0755)
+	err := os.MkdirAll(cgroupPath, 0755)
 	if err != nil {
 		return err
 	}
 
-	deny := "/sys/fs/cgroup/devices/mega/devices.deny"
-	allow := "/sys/fs/cgroup/devices/mega/devices.allow"
-	tasks := "/sys/fs/cgroup/devices/mega/tasks"
+	deny := filepath.Join(cgroupPath, "devices.deny")
+	allow := filepath.Join(cgroupPath, "devices.allow")
+	tasks := filepath.Join(cgroupPath, "tasks")
+	memory := filepath.Join(cgroupPath, "memory.limit_in_bytes")
 
+	// devices
 	err = ioutil.WriteFile(deny, []byte("a"), 0200)
 	if err != nil {
 		return err
@@ -816,6 +851,12 @@ func (vm *ContainerVM) populateDevices() error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// memory
+	err = ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vm.Memory)), 0644)
+	if err != nil {
+		return err
 	}
 
 	// associate the pid with these permissions

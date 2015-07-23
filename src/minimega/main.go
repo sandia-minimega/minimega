@@ -238,6 +238,10 @@ func teardown() {
 	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
+	err = os.Remove(CGROUP_PATH)
+	if err != nil {
+		log.Fatalln(err)
+	}
 	err = os.Remove(*f_base + "minimega.pid")
 	if err != nil {
 		log.Fatalln(err)
