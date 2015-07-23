@@ -6,11 +6,11 @@ package main
 
 import (
 	"bytes"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,13 +25,13 @@ const (
 )
 
 var (
-	killAck  chan int
-	vmIdChan chan int
-	vmLock   sync.Mutex
+	killAck  chan int   // channel that all VMs ack on when killed
+	vmIdChan chan int   // channel of new VM IDs
+	vmLock   sync.Mutex // lock for synchronizing access to vms
 
-	vmConfig VMConfig // current kvm config, updated by CLI
+	vmConfig VMConfig // current vm config, updated by CLI
 
-	savedInfo = make(map[string]VMConfig)
+	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
 )
 
 type VMType int
@@ -45,12 +45,14 @@ const (
 type VM interface {
 	Config() *BaseConfig
 
-	GetID() int
-	GetName() string
+	GetID() int      // GetID returns the VM's per-host unique ID
+	GetName() string // GetName returns the VM's per-host unique name
 	GetState() VMState
 	GetType() VMType
 
-	Launch(string, chan int) error
+	// Launch launches the VM and acks on the provided channel when the VM has
+	// been launched.
+	Launch(chan int) error
 	// TODO: Make kill have ack channel?
 	Kill() error
 	Start() error
@@ -63,9 +65,14 @@ type VM interface {
 	GetTags() map[string]string
 	ClearTags()
 
+	// Screenshot takes a screenshot of the VM and saves it to the fpath. The
+	// image should be at most size pixels on each edge.
+	Screenshot(fpath string, size int) error
+
 	UpdateBW()
 }
 
+// BaseConfig contains all fields common to all VM types.
 type BaseConfig struct {
 	Vcpus  string // number of virtual cpus
 	Memory string // memory for the vm, in megabytes
@@ -76,12 +83,18 @@ type BaseConfig struct {
 	UUID     string
 }
 
+// VMConfig contains all the configs possible for a VM. When a VM of a
+// particular kind is launched, only the pertinent configuration is copied so
+// fields from other configs will have the zero value for the field type.
 type VMConfig struct {
 	BaseConfig
 	KVMConfig
 	ContainerConfig
 }
 
+// NetConfig contains all the network-related config for an interface. The IP
+// addresses are automagically populated by snooping ARP traffic. The bandwidth
+// stats are updated on-demand by calling the UpdateBW function of BaseConfig.
 type NetConfig struct {
 	VLAN   int
 	Bridge string
@@ -90,13 +103,19 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
-	Stats  *TapStat // Bandwidth stats, updated by calling UpdateBW
+	Stats  *TapStat // Most recent bandwidth measurements for Tap
 }
 
+// BaseVM provides the bare-bones for base VM functionality. It implements
+// several functions from the VM interface that are relatively common. All
+// newly created VM types will most likely embed this struct to reuse the base
+// functionality.
 type BaseVM struct {
 	BaseConfig // embed
 
-	lock sync.Mutex
+	lock sync.Mutex // lock to synchronize changes to VM
+
+	kill chan bool // channel to signal the VM to shut down
 
 	ID    int
 	Name  string
@@ -114,8 +133,37 @@ var vmMasks = []string{
 	"mac", "ip", "ip6", "bandwidth", "tags",
 }
 
-func NewVM() *BaseVM {
+func init() {
+	killAck = make(chan int)
+
+	vmIdChan = makeIDChan()
+
+	// Reset everything to default
+	for _, fns := range baseConfigFns {
+		fns.Clear(&vmConfig.BaseConfig)
+	}
+
+	// for serializing VMs
+	gob.Register(VMs{})
+	gob.Register(&KvmVM{})
+}
+
+// NewVM creates a new VM, copying the currently set configs. After a VM is
+// created, it can be Launched.
+func NewVM(name string) *BaseVM {
 	vm := new(BaseVM)
+
+	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
+	vm.ID = <-vmIdChan
+	if name == "" {
+		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
+	} else {
+		vm.Name = name
+	}
+
+	vm.kill = make(chan bool)
+
+	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
 
 	vm.State = VM_BUILDING
 	vm.Tags = make(map[string]string)
@@ -230,20 +278,12 @@ func (vm *BaseVM) GetType() VMType {
 	return vm.Type
 }
 
-func (vm *BaseVM) launch(name string, vmType VMType) error {
-	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
-
-	vm.ID = <-vmIdChan
-	if name == "" {
-		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
-	} else {
-		vm.Name = name
-	}
-
-	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
-
-	vm.Type = vmType
-
+func (vm *BaseVM) Kill() error {
+	// Close the channel to signal to all dependent goroutines that they should
+	// stop. Anyone blocking on the channel will unblock immediately.
+	// http://golang.org/ref/spec#Receive_operator
+	close(vm.kill)
+	// TODO: ACK if killed?
 	return nil
 }
 
@@ -330,81 +370,8 @@ func (vm *BaseVM) info(mask string) (string, error) {
 	return fmt.Sprintf("%v", vals), nil
 }
 
-func init() {
-	killAck = make(chan int)
-
-	vmIdChan = makeIDChan()
-
-	// Reset everything to default
-	for _, fns := range baseConfigFns {
-		fns.Clear(&vmConfig.BaseConfig)
-	}
-}
-
 func vmNotFound(idOrName string) error {
 	return fmt.Errorf("vm not found: %v", idOrName)
-}
-
-// satisfy the sort interface for vmInfo
-func SortBy(by string, vms []*KvmVM) {
-	v := &vmSorter{
-		vms: vms,
-		by:  by,
-	}
-	sort.Sort(v)
-}
-
-type vmSorter struct {
-	vms []*KvmVM
-	by  string
-}
-
-func (vms *vmSorter) Len() int {
-	return len(vms.vms)
-}
-
-func (vms *vmSorter) Swap(i, j int) {
-	vms.vms[i], vms.vms[j] = vms.vms[j], vms.vms[i]
-}
-
-func (vms *vmSorter) Less(i, j int) bool {
-	switch vms.by {
-	case "id":
-		return vms.vms[i].ID < vms.vms[j].ID
-	case "host":
-		return true
-	case "name":
-		return vms.vms[i].Name < vms.vms[j].Name
-	case "state":
-		return vms.vms[i].GetState() < vms.vms[j].GetState()
-	case "memory":
-		return vms.vms[i].Memory < vms.vms[j].Memory
-	case "vcpus":
-		return vms.vms[i].Vcpus < vms.vms[j].Vcpus
-	case "migrate":
-		return vms.vms[i].MigratePath < vms.vms[j].MigratePath
-	case "disk":
-		return len(vms.vms[i].DiskPaths) < len(vms.vms[j].DiskPaths)
-	case "initrd":
-		return vms.vms[i].InitrdPath < vms.vms[j].InitrdPath
-	case "kernel":
-		return vms.vms[i].KernelPath < vms.vms[j].KernelPath
-	case "cdrom":
-		return vms.vms[i].CdromPath < vms.vms[j].CdromPath
-	case "append":
-		return vms.vms[i].Append < vms.vms[j].Append
-	case "bridge", "tap", "mac", "ip", "ip6", "vlan":
-		return true
-	case "uuid":
-		return vms.vms[i].UUID < vms.vms[j].UUID
-	case "cc_active":
-		return true
-	case "tags":
-		return true
-	default:
-		log.Error("invalid sort parameter %v", vms.by)
-		return false
-	}
 }
 
 func vmGetFirstVirtioPort() []string {
@@ -444,49 +411,34 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(spec, ",")
 
-	var b string
-	var v string
-	var m string
-	var d string
+	var b, v, m, d string
 	switch len(f) {
 	case 1:
 		v = f[0]
 	case 2:
 		if isMac(f[1]) {
 			// vlan, mac
-			v = f[0]
-			m = f[1]
+			v, m = f[0], f[1]
 		} else if _, err := strconv.Atoi(f[0]); err == nil {
 			// vlan, driver
-			v = f[0]
-			d = f[1]
+			v, d = f[0], f[1]
 		} else {
 			// bridge, vlan
-			b = f[0]
-			v = f[1]
+			b, v = f[0], f[1]
 		}
 	case 3:
 		if isMac(f[2]) {
 			// bridge, vlan, mac
-			b = f[0]
-			v = f[1]
-			m = f[2]
+			b, v, m = f[0], f[1], f[2]
 		} else if isMac(f[1]) {
 			// vlan, mac, driver
-			v = f[0]
-			m = f[1]
-			d = f[2]
+			v, m, d = f[0], f[1], f[2]
 		} else {
 			// bridge, vlan, driver
-			b = f[0]
-			v = f[1]
-			d = f[2]
+			b, v, d = f[0], f[1], f[2]
 		}
 	case 4:
-		b = f[0]
-		v = f[1]
-		m = f[2]
-		d = f[3]
+		b, v, m, d = f[0], f[1], f[2], f[3]
 	default:
 		err = errors.New("malformed netspec")
 		return
@@ -562,17 +514,4 @@ func globalVmInfo() map[string]VMs {
 	}
 
 	return res
-}
-
-// mustFindMask returns the index of the specified mask in vmMasks. If the
-// specified mask is not found, log.Fatal is called.
-func mustFindMask(mask string) int {
-	for i, v := range vmMasks {
-		if v == mask {
-			return i
-		}
-	}
-
-	log.Fatal("missing `%s` in vmMasks", mask)
-	return -1
 }

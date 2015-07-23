@@ -178,7 +178,7 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		}),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(val, prefix, ^VM_RUNNING)
+				return cliVMSuggest(prefix, ^VM_RUNNING)
 			} else {
 				return nil
 			}
@@ -201,7 +201,7 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		}),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(val, prefix, VM_RUNNING)
+				return cliVMSuggest(prefix, VM_RUNNING)
 			} else {
 				return nil
 			}
@@ -244,7 +244,7 @@ To remove all hotplug devices, use ID "all" for the disk ID.`,
 		Call: wrapSimpleCLI(cliVmHotplug),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -275,7 +275,7 @@ To move a connection, specify the new VLAN tag and bridge:
 		Call: wrapSimpleCLI(cliVmNetMod),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -296,7 +296,7 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		Call: wrapSimpleCLI(cliVmQmp),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -320,7 +320,7 @@ to 100 pixels:
 		Call: wrapSimpleCLI(cliVmScreenshot),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -342,7 +342,7 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Call: wrapSimpleCLI(cliVmMigrate),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -373,7 +373,7 @@ To read a tag:
 		Call: wrapSimpleCLI(cliVmTag),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -404,7 +404,7 @@ Change a VM to use a new ISO:
 		Call: wrapSimpleCLI(cliVmCdrom),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(val, prefix, VM_ANY_STATE)
+				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else {
 				return nil
 			}
@@ -814,7 +814,7 @@ Clear all tags from all VMs:
 func init() {
 	registerHandlers("vm", vmCLIHandlers)
 
-	// for vm info
+	// Register these so we can serialize the VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
 }
@@ -1194,6 +1194,9 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+// cliVmApply is a wrapper function that runs the provided function on the
+// ``target'' of the command. This is useful as many VM-related commands take a
+// single target (e.g. start, stop).
 func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -1494,7 +1497,11 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func cliVMSuggest(val, prefix string, mask VMState) []string {
+// cliVMSuggest takes a prefix that could be the start of a VM name or a VM ID
+// and makes suggestions for VM names (or IDs) that have a common prefix. mask
+// can be used to only complete for VMs that are in a particular state (e.g.
+// running). Returns a list of suggestions.
+func cliVMSuggest(prefix string, mask VMState) []string {
 	var isID bool
 	res := []string{}
 

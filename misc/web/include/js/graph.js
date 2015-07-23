@@ -141,6 +141,7 @@ function getOffset (e, canvas) {
 
 // Get the node located at the coordinates of the event
 function eventNode (e) {
+    if (cursor.event.target != grapher.instance.canvas) return -1;
     var point = grapher.instance.getDataPosition(getOffset(e, grapher.instance.canvas));
     return getNodeIdAt(point, grapher.graph);
 }
@@ -149,21 +150,23 @@ function eventNode (e) {
 // Update cursor.hoveringOver with the appropriate value for the new cursor position
 function checkHover (e) {
     var nodeId = eventNode(e);
+    var chartElement = d3.select(config.selectors.chart);
 
     if (nodeId > -1) {
-        d3.select(config.selectors.chart).style("cursor", "pointer");
+        chartElement.style("cursor", "pointer");
 
         if (nodeId != grapher.selectedNode) {
+            if (cursor.hoveringOver != null) setColor(cursor.hoveringOver);
             setColor(nodeId, config.types.highlighted);
             cursor.hoveringOver = nodeId;
         }
 
     // If we WERE hovering over a node, and it's not the currently selected node...
-    } else if ((cursor.hoveringOver != null)) {
-        d3.select(config.selectors.chart).style("cursor", "default");
+    } else if (chartElement && (chartElement.style("cursor") != "default")) {
+        chartElement.style("cursor", "default");
 
         if (cursor.hoveringOver != grapher.selectedNode) {
-            setColor(cursor.hoveringOver);
+            if (cursor.hoveringOver != null) setColor(cursor.hoveringOver);
             cursor.hoveringOver = null;
         }
     }
@@ -424,6 +427,33 @@ function vmAlwaysHighlighted (spanNode, widened, clickable) {
 }
 
 
+// Function to be run on every time the node positions are updated (on every "tick")
+function graphTick () {
+    // Move the node we're currently dragging (if we're dragging a node)
+    if ((cursor.node != null) && (cursor.movedTo != null)) {
+        cursor.node.x = cursor.movedTo.x;
+        cursor.node.y = cursor.movedTo.y;
+    }
+
+    // If we're not dragging, check if we're hovering
+    if (cursor.event && (cursor.node == null)) {
+        checkHover({
+            target:  grapher.instance.canvas,
+            clientX: cursor.event.clientX,
+            clientY: cursor.event.clientY
+        });
+    }
+
+    // Outline the selected node
+    if (grapher.selectedNode != null) {
+        outlineNode(grapher.selectedNode);
+    }
+
+    // Update the WebGL rendering
+    grapher.instance.update();
+}
+
+
 // Put an italic "null" in the table where there are fields that aren't set
 function handleEmptyString (value) {
     if (
@@ -583,6 +613,8 @@ function getVMInfo () {
                     .alpha(2.5);
             } else {
                 grapher.d3force.start();
+                graphTick();
+                grapher.d3force.alpha(0);
             }
         }
     });
@@ -926,26 +958,7 @@ $(document).ready(function () {
         .linkDistance( config.force.linkDistance )
         .friction(     config.force.friction     )
         .charge(       config.force.charge       )
-        .on('tick', function () {
-            if ((cursor.node != null) && (cursor.movedTo != null)) {
-                cursor.node.x = cursor.movedTo.x;
-                cursor.node.y = cursor.movedTo.y;
-            }
-
-            if (cursor.event && (cursor.node == null)) {
-                checkHover({
-                    target:  grapher.instance.canvas,
-                    clientX: cursor.event.clientX,
-                    clientY: cursor.event.clientY
-                });
-            }
-
-            if (grapher.selectedNode != null) {
-                outlineNode(grapher.selectedNode);
-            }
-
-            grapher.instance.update();
-        });
+        .on('tick',    graphTick);
 
     // Wrap things up and get started!
     $(window).resize();
