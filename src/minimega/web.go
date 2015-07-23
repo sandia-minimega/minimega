@@ -429,7 +429,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 			for _, mask := range vmMasks {
 				if v, err := vm.Info(mask); err != nil {
-					log.Error("bad mask for %v -- %v", vm.GetID(), err)
+					log.Error("unable to get info from VM %s:%s -- %v", host, vm.GetName(), err)
 					continue vmLoop
 				} else {
 					res = append(res, v)
