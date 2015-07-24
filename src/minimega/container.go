@@ -11,9 +11,11 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -574,6 +576,28 @@ func (vm *ContainerVM) launch(ack chan int) {
 		}
 	}
 
+	parentStdout, childStdout, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
+	parentStderr, childStderr, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
+	childStdin, parentStdin, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
+
 	// launch the container
 	pid, err := vm.clone()
 	if err != nil {
@@ -587,6 +611,9 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 	if pid != 0 {
 		// parent
+
+		go vm.console(parentStdin, parentStdout, parentStderr)
+
 		vm.pid = pid
 		log.Debug("vm %v has pid %v", vm.ID, vm.pid)
 
@@ -687,7 +714,20 @@ func (vm *ContainerVM) launch(ack chan int) {
 			log.Fatal("ptmx: %v", err)
 		}
 
-		// symlinkx
+		err = syscall.Dup2(int(childStdout.Fd()), syscall.Stdout)
+		if err != nil {
+			log.Fatal("dup2 stdout: %v", err)
+		}
+		err = syscall.Dup2(int(childStderr.Fd()), syscall.Stderr)
+		if err != nil {
+			log.Fatal("dup2 stderr: %v", err)
+		}
+		err = syscall.Dup2(int(childStdin.Fd()), syscall.Stdin)
+		if err != nil {
+			log.Fatal("dup2 stdin: %v", err)
+		}
+
+		// symlinks
 		err = vm.symlinks()
 		if err != nil {
 			log.Fatal("symlinks: %v", err)
@@ -739,6 +779,29 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 		// the new child process will exit and the parent will catch it
 		log.Fatalln("how did I get here?")
+	}
+}
+
+func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
+	socketPath := filepath.Join(vm.instancePath, "console")
+	l, err := net.Listen("unix", socketPath)
+	if err != nil {
+		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
+		return
+	}
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Error("console socket on vm %v: %v", vm.ID, err)
+			continue
+		}
+		log.Debug("new connection!")
+
+		go io.Copy(conn, stdout)
+		go io.Copy(conn, stderr)
+		io.Copy(stdin, conn)
+		log.Debug("disconnected!")
 	}
 }
 
