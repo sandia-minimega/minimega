@@ -139,7 +139,7 @@ func SplitList(in string) ([]string, error) {
 	// handle last entry on the line and look for unterminated ranges
 	if inside {
 		return nil, errors.New("unterminated '['")
-	} else if prev < len(in)-1 {
+	} else if prev < len(in) {
 		parts = append(parts, in[prev:])
 	}
 
