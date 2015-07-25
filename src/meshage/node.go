@@ -31,6 +31,7 @@ package meshage
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -368,6 +369,12 @@ func (n *Node) dial(host string, solicited bool) error {
 		}
 		conn.Close()
 		return fmt.Errorf("dial %v: %v", host, err)
+	}
+
+	// are we the remote host?
+	if remoteHost == n.name {
+		conn.Close()
+		return errors.New("cannot mesh dial yourself")
 	}
 
 	// are we already connected to this node?
