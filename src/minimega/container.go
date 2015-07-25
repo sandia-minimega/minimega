@@ -247,6 +247,11 @@ func init() {
 		fmt.Printf("setting cgroup: %v", err)
 		os.Exit(1)
 	}
+	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
+	if err != nil {
+		fmt.Printf("setting use_hierarchy: %v", err)
+		os.Exit(1)
+	}
 }
 
 // containers don't return screenshots
@@ -768,8 +773,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 		if err != nil {
 			log.Fatal("setCapabilities: %v", err)
 		}
-
-		// TODO: figure out how to freeze the vm
 
 		// GO!
 		err = syscall.Exec(vm.Init, vm.Args, nil)
