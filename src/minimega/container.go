@@ -36,6 +36,7 @@ import (
 const (
 	CGROUP_PATH = "/sys/fs/cgroup/minimega"
 	CGROUP_ROOT = "/sys/fs/cgroup"
+	CONTAINER_MAGIC = "CONTAINER"
 )
 
 const (
@@ -210,6 +211,7 @@ type ContainerVM struct {
 	ContainerConfig // embed
 
 	pid int
+	effectivePath string
 }
 
 func (vm *ContainerVM) UpdateCCActive() {
@@ -232,17 +234,8 @@ func init() {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
 
-	// create a minimega cgroup
-	// TODO: ensure devices cgroups are mounted
-	// for now just assume it's at /sys/fs/cgroup
-	err := os.MkdirAll(CGROUP_PATH, 0755)
-	if err != nil {
-		fmt.Printf("creating minimega cgroup: %v", err)
-		os.Exit(1)
-	}
-
 	// inherit cpusets
-	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
+	err := ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
 	if err != nil {
 		fmt.Printf("setting cgroup: %v", err)
 		os.Exit(1)
@@ -252,6 +245,32 @@ func init() {
 		fmt.Printf("setting use_hierarchy: %v", err)
 		os.Exit(1)
 	}
+
+	// create a minimega cgroup
+	// TODO: ensure devices cgroups are mounted
+	// for now just assume it's at /sys/fs/cgroup
+	err = os.MkdirAll(CGROUP_PATH, 0755)
+	if err != nil {
+		fmt.Printf("creating minimega cgroup: %v", err)
+		os.Exit(1)
+	}
+}
+
+// golang can't easily support the typical clone+exec method of firing off a
+// child process. We need a child process to do ample setup for containers
+// *post* clone.  We have two options - duplicate the forkAndExec shim in
+// src/syscall to do a clone and get into a new minimega that can finish the
+// container setup, or start a new minimega with an 'nsinit' C shim *before*
+// the runtime starts. Docker and others use the latter, though it's not
+// entirely clear why they don't just borrow the forkAndExec method. We'll use
+// the forkAndExec method here.
+//
+// 
+// This function is a shim to finalize container setup from a running minimega
+// parent. It expects to be called inside namespace isolations (mount, pid,
+// etc...). 
+func containerShim() {
+
 }
 
 // containers don't return screenshots
@@ -588,7 +607,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 		ack <- vm.ID
 		return
 	}
-	parentStderr, childStderr, err := os.Pipe()
+	//parentStderr, childStderr, err := os.Pipe()
 	if err != nil {
 		log.Error("pipe: %v", err)
 		vm.setState(VM_ERROR)
@@ -603,9 +622,20 @@ func (vm *ContainerVM) launch(ack chan int) {
 		return
 	}
 
+	if vm.Snapshot {
+		err = vm.overlayMount()
+		if err != nil {
+			log.Error("overlayMount: %v", err)
+			vm.setState(VM_ERROR)
+			ack <- vm.ID
+			return
+		}
+	}
+
 	// launch the container
 	pid, err := vm.clone()
 	if err != nil {
+		vm.overlayUnmount()
 		log.Error("clone: %v", err)
 		vm.setState(VM_ERROR)
 		ack <- vm.ID
@@ -617,7 +647,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	if pid != 0 {
 		// parent
 
-		go vm.console(parentStdin, parentStdout, parentStderr)
+		go vm.console(parentStdin, parentStdout, parentStdout)
 
 		vm.pid = pid
 		log.Debug("vm %v has pid %v", vm.ID, vm.pid)
@@ -681,6 +711,11 @@ func (vm *ContainerVM) launch(ack chan int) {
 			log.Errorln(err)
 		}
 
+		// umount the overlay, if any
+		if vm.Snapshot {
+			vm.overlayUnmount()
+		}
+
 		if sendKillAck {
 			killAck <- vm.ID
 		}
@@ -688,6 +723,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 		// child - use log.Fatalln like it's going out of style
 
 		// set hostname
+		log.Debug("vm %v hostname", vm.ID)
 		if vm.Hostname != "" {
 			_, err := exec.Command(process("hostname"), vm.Hostname).Output()
 			if err != nil {
@@ -696,85 +732,100 @@ func (vm *ContainerVM) launch(ack chan int) {
 		}
 
 		// setup the root fs
+		log.Debug("vm %v setupRoot", vm.ID)
 		err = vm.setupRoot()
 		if err != nil {
 			log.Fatal("setupRoot: %v", err)
 		}
 
 		// mount defaults
+		log.Debug("vm %v mountDefaults", vm.ID)
 		err = vm.mountDefaults()
 		if err != nil {
 			log.Fatal("mountDefaults: %v", err)
 		}
 
 		// mknod
+		log.Debug("vm %v mknodDevices", vm.ID)
 		err = vm.mknodDevices()
 		if err != nil {
 			log.Fatal("mknodDevices: %v", err)
 		}
 
 		// pseudoterminals
+		log.Debug("vm %v ptmx", vm.ID)
 		err = vm.ptmx()
 		if err != nil {
 			log.Fatal("ptmx: %v", err)
 		}
 
+		log.Debug("vm %v stdio", vm.ID)
+		syscall.ForkLock.RLock()
 		err = syscall.Dup2(int(childStdout.Fd()), syscall.Stdout)
 		if err != nil {
 			log.Fatal("dup2 stdout: %v", err)
 		}
-		err = syscall.Dup2(int(childStderr.Fd()), syscall.Stderr)
-		if err != nil {
-			log.Fatal("dup2 stderr: %v", err)
-		}
+		//err = syscall.Dup2(int(childStderr.Fd()), syscall.Stderr)
+		//if err != nil {
+		//	log.Fatal("dup2 stderr: %v", err)
+		//}
 		err = syscall.Dup2(int(childStdin.Fd()), syscall.Stdin)
 		if err != nil {
 			log.Fatal("dup2 stdin: %v", err)
 		}
+		syscall.ForkLock.RUnlock()
 
 		// symlinks
+		log.Debug("vm %v symlinks", vm.ID)
 		err = vm.symlinks()
 		if err != nil {
 			log.Fatal("symlinks: %v", err)
 		}
 
 		// remount key paths as read-only
+		log.Debug("vm %v remountReadOnly", vm.ID)
 		err = vm.remountReadOnly()
 		if err != nil {
 			log.Fatal("remountReadOnly: %v", err)
 		}
 
 		// mask paths
+		log.Debug("vm %v maskPaths", vm.ID)
 		err = vm.maskPaths()
 		if err != nil {
 			log.Fatal("maskPaths: %v", err)
 		}
 
 		// setup cgroups for this vm
+		log.Debug("vm %v populateCgroups", vm.ID)
 		err = vm.populateCgroups()
 		if err != nil {
 			log.Fatal("populateCgroups: %v", err)
 		}
 
 		// chdir
+		log.Debug("vm %v chdir", vm.ID)
 		err = syscall.Chdir(vm.FSPath)
 		if err != nil {
 			log.Fatal("chdir: %v", err)
 		}
 
 		// attempt to chroot
+		log.Debug("vm %v chroot", vm.ID)
 		err = vm.chroot()
 		if err != nil {
 			log.Fatal("chroot: %v", err)
 		}
 
 		// set capabilities
+		log.Debug("vm %v setCapabilities", vm.ID)
 		err = vm.setCapabilities()
 		if err != nil {
 			log.Fatal("setCapabilities: %v", err)
 		}
 
 		// GO!
+		log.Debug("vm %v exec: %v %v", vm.ID, vm.Init, vm.Args)
 		err = syscall.Exec(vm.Init, vm.Args, nil)
 		if err != nil {
 			log.Fatal("Exec: %v", err)
@@ -783,6 +834,63 @@ func (vm *ContainerVM) launch(ack chan int) {
 		// the new child process will exit and the parent will catch it
 		log.Fatalln("how did I get here?")
 	}
+}
+
+// create an overlay mount (linux 3.18 or greater) is snapshot mode is
+// being used.
+// TODO: check for existing mounts like we do with megatap and friends
+func (vm *ContainerVM) overlayMount() error {
+	vm.effectivePath = filepath.Join(vm.instancePath, "fs")
+	workPath := filepath.Join(vm.instancePath, "fs_work")
+
+	err := os.MkdirAll(vm.effectivePath, 0755)
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(workPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	// create the overlay mountpoint
+	cmd := &exec.Cmd{
+		Path:   process("mount"),
+		Args:   []string{
+			process("mount"),
+			"-t",
+			"overlay",
+			fmt.Sprintf("megamount-%v", vm.ID),
+			"-o",
+			fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
+			vm.effectivePath,
+		},
+		Env:    nil,
+		Dir:    "",
+	}
+	log.Debug("mounting overlay: %v", cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error("overlay mount: %v %v", err, string(output))
+		return err
+	}
+	return nil
+}
+
+func (vm *ContainerVM) overlayUnmount() error {
+	cmd := &exec.Cmd{
+		Path:   process("umount"),
+		Args:   []string{
+			vm.effectivePath,
+		},
+		Env:    nil,
+		Dir:    "",
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error("overlay umount: %v %v", err, string(output))
+		return err
+	}
+	return nil
 }
 
 func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
@@ -1083,6 +1191,7 @@ func (vm *ContainerVM) mountDefaults() error {
 // syscall clone with namespace flags
 func (vm *ContainerVM) clone() (int, error) {
 	// see go/src/pkg/syscall/exec_unix.go
+	// We need to take ForkLock to avoid leaking fds
 	syscall.ForkLock.Lock()
 
 	r1, _, err1 := syscall.RawSyscall(syscall.SYS_CLONE, uintptr(CONTAINER_FLAGS), 0, 0)

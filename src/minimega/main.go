@@ -70,6 +70,11 @@ func usage() {
 func main() {
 	var err error
 
+	// see containerShim()
+	if len(os.Args) > 1 && os.Args[1] == CONTAINER_MAGIC {
+		containerShim()
+	}
+
 	flag.Usage = usage
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
