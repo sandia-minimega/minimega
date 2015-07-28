@@ -60,7 +60,10 @@ def connect(path):
     Connect to the minimega instance with UNIX socket at <path> and return
     a new minimega API object.
     '''
-    return minimega(path)
+    mm = minimega(path)
+    if mm.version()[0]['Response'] != MM_VERSION:
+        print('WARNING: API was built using a different version of minimega')
+    return mm
 
 Command = namedtuple('Command', ['cmd', 'args'])
 
