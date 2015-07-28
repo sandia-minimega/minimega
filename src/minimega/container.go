@@ -113,7 +113,7 @@ type cap struct {
 
 const CONTAINER_FLAGS = syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC | syscall.CLONE_NEWNS | syscall.CLONE_NEWPID | syscall.CLONE_NEWUTS | syscall.CLONE_VFORK | syscall.SIGCHLD
 
-var containerMaskPaths = []string{
+var containerMaskedPaths = []string{
 	"/proc/kcore",
 }
 
@@ -322,112 +322,106 @@ func containerShim() {
 	if err != nil {
 		log.Fatalln(err)
 	}
+	vmHostname := os.Args[3]
+	if vmHostname == CONTAINER_NONE {
+		vmHostname = ""
+	}
+	vmFSPath := os.Args[4]
 	vmMemory, err := strconv.Atoi(os.Args[5])
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	//// set hostname
-	//log.Debug("vm %v hostname", vm.ID)
-	//if vm.Hostname != "" {
-	//	_, err := exec.Command(process("hostname"), vm.Hostname).Output()
-	//	if err != nil {
-	//		log.Fatal("set hostname: %v", err)
-	//	}
-	//}
-
-	//// setup the root fs
-	//log.Debug("vm %v setupRoot", vm.ID)
-	//err = vm.setupRoot()
-	//if err != nil {
-	//	log.Fatal("setupRoot: %v", err)
-	//}
-
-	//// mount defaults
-	//log.Debug("vm %v mountDefaults", vm.ID)
-	//err = vm.mountDefaults()
-	//if err != nil {
-	//	log.Fatal("mountDefaults: %v", err)
-	//}
-
-	//// mknod
-	//log.Debug("vm %v mknodDevices", vm.ID)
-	//err = vm.mknodDevices()
-	//if err != nil {
-	//	log.Fatal("mknodDevices: %v", err)
-	//}
-
-	//// pseudoterminals
-	//log.Debug("vm %v ptmx", vm.ID)
-	//err = vm.ptmx()
-	//if err != nil {
-	//	log.Fatal("ptmx: %v", err)
-	//}
-
-	//log.Debug("vm %v stdio", vm.ID)
-	//syscall.ForkLock.RLock()
-	//err = syscall.Dup2(int(childStdout.Fd()), syscall.Stdout)
-	//if err != nil {
-	//	log.Fatal("dup2 stdout: %v", err)
-	//}
-	////err = syscall.Dup2(int(childStderr.Fd()), syscall.Stderr)
-	////if err != nil {
-	////	log.Fatal("dup2 stderr: %v", err)
-	////}
-	//err = syscall.Dup2(int(childStdin.Fd()), syscall.Stdin)
-	//if err != nil {
-	//	log.Fatal("dup2 stdin: %v", err)
-	//}
-	//syscall.ForkLock.RUnlock()
-
-	//// symlinks
-	//log.Debug("vm %v symlinks", vm.ID)
-	//err = vm.symlinks()
-	//if err != nil {
-	//	log.Fatal("symlinks: %v", err)
-	//}
-
-	//// remount key paths as read-only
-	//log.Debug("vm %v remountReadOnly", vm.ID)
-	//err = vm.remountReadOnly()
-	//if err != nil {
-	//	log.Fatal("remountReadOnly: %v", err)
-	//}
-
-	//// mask paths
-	//log.Debug("vm %v maskPaths", vm.ID)
-	//err = vm.maskPaths()
-	//if err != nil {
-	//	log.Fatal("maskPaths: %v", err)
-	//}
-
-	// setup cgroups for this vm
-	log.Debug("vm %v populateCgroups", vmID)
-	err = containerPopulateCgroups(vmID, vmMemory)
-	if err != nil {
-		log.Fatal("populateCgroups: %v", err)
+	vmInit := os.Args[6]
+	var vmArgs []string
+	if len(os.Args) > 7 {
+		vmArgs = os.Args[7:]
 	}
 
-	//// chdir
-	//log.Debug("vm %v chdir", vm.ID)
-	//err = syscall.Chdir(vm.FSPath)
-	//if err != nil {
-	//	log.Fatal("chdir: %v", err)
-	//}
+	// set hostname
+	log.Debug("vm %v hostname", vmID)
+	if vmHostname != "" {
+		_, err := exec.Command(process("hostname"), vmHostname).Output()
+		if err != nil {
+			log.Fatal("set hostname: %v", err)
+		}
+	}
 
-	//// attempt to chroot
-	//log.Debug("vm %v chroot", vm.ID)
-	//err = vm.chroot()
-	//if err != nil {
-	//	log.Fatal("chroot: %v", err)
-	//}
+	// setup the root fs
+	log.Debug("vm %v containerSetupRoot", vmID)
+	err = containerSetupRoot(vmFSPath)
+	if err != nil {
+		log.Fatal("containerSetupRoot: %v", err)
+	}
 
-	//// set capabilities
-	//log.Debug("vm %v setCapabilities", vm.ID)
-	//err = vm.setCapabilities()
-	//if err != nil {
-	//	log.Fatal("setCapabilities: %v", err)
-	//}
+	// mount defaults
+	log.Debug("vm %v containerMountDefaults", vmID)
+	err = containerMountDefaults(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMountDefaults: %v", err)
+	}
+
+	// mknod
+	log.Debug("vm %v containerMknodDevices", vmID)
+	err = containerMknodDevices(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMknodDevices: %v", err)
+	}
+
+	// pseudoterminals
+	log.Debug("vm %v containerPtmx", vmID)
+	err = containerPtmx(vmFSPath)
+	if err != nil {
+		log.Fatal("containerPtmx: %v", err)
+	}
+
+	// symlinks
+	log.Debug("vm %v containerSymlinks", vmID)
+	err = containerSymlinks(vmFSPath)
+	if err != nil {
+		log.Fatal("containerSymlinks: %v", err)
+	}
+
+	// remount key paths as read-only
+	log.Debug("vm %v containerRemountReadOnly", vmID)
+	err = containerRemountReadOnly(vmFSPath)
+	if err != nil {
+		log.Fatal("containerRemountReadOnly: %v", err)
+	}
+
+	// mask paths
+	log.Debug("vm %v containerMaskPaths", vmID)
+	err = containerMaskPaths(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMaskPaths: %v", err)
+	}
+
+	// setup cgroups for this vm
+	log.Debug("vm %v containerPopulateCgroups", vmID)
+	err = containerPopulateCgroups(vmID, vmMemory)
+	if err != nil {
+		log.Fatal("containerPopulateCgroups: %v", err)
+	}
+
+	// chdir
+	log.Debug("vm %v chdir", vmID)
+	err = syscall.Chdir(vmFSPath)
+	if err != nil {
+		log.Fatal("chdir: %v", err)
+	}
+
+	// attempt to chroot
+	log.Debug("vm %v containerChroot", vmID)
+	err = containerChroot(vmFSPath)
+	if err != nil {
+		log.Fatal("containerChroot: %v", err)
+	}
+
+	// set capabilities
+	log.Debug("vm %v containerSetCapabilities", vmID)
+	err = containerSetCapabilities()
+	if err != nil {
+		log.Fatal("containerSetCapabilities: %v", err)
+	}
 
 	// in order to synchronize freezing the container before we call init,
 	// we close fd(4) to signal the parent that we're ready to freeze. We
@@ -446,15 +440,15 @@ func containerShim() {
 	// close fds we don't want in init
 	logFile.Close()
 
-	//// GO!
-	//log.Debug("vm %v exec: %v %v", vm.ID, vm.Init, vm.Args)
-	//err = syscall.Exec(vm.Init, vm.Args, nil)
-	//if err != nil {
-	//	log.Fatal("Exec: %v", err)
-	//}
+	// GO!
+	log.Debug("vm %v exec: %v %v", vmID, vmInit, vmArgs)
+	err = syscall.Exec(vmInit, vmArgs, nil)
+	if err != nil {
+		log.Fatal("Exec: %v", err)
+	}
 
-	//// the new child process will exit and the parent will catch it
-	//log.Fatalln("how did I get here?")
+	// the new child process will exit and the parent will catch it
+	log.Fatalln("how did I get here?")
 }
 
 // containers don't return screenshots
@@ -798,6 +792,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 			ack <- vm.ID
 			return
 		}
+	} else {
+		vm.effectivePath = vm.FSPath
 	}
 
 	// the child process will communicate with a fake console using pipes
@@ -945,7 +941,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 	// vm.CheckAffinity()
 
 	// wait for the freezer notification
-	childSync1.Close()
 	var buf = make([]byte, 1)
 	parentSync1.Read(buf)
 	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
@@ -1092,7 +1087,7 @@ func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
 	}
 }
 
-func (vm *ContainerVM) setCapabilities() error {
+func containerSetCapabilities() error {
 	c := new(cap)
 	c.header.version = CAPV3
 	c.header.pid = os.Getpid()
@@ -1167,8 +1162,8 @@ func prctl(option int, arg2, arg3, arg4, arg5 uintptr) error {
 	return nil
 }
 
-func (vm *ContainerVM) chroot() error {
-	err := syscall.Mount(vm.FSPath, "/", "", syscall.MS_MOVE, "")
+func containerChroot(fsPath string) error {
+	err := syscall.Mount(fsPath, "/", "", syscall.MS_MOVE, "")
 	if err != nil {
 		log.Debug("could not MS_MOVE mount, using chroot+chdir")
 	} else {
@@ -1222,9 +1217,9 @@ func containerPopulateCgroups(vmID, vmMemory int) error {
 	return nil
 }
 
-func (vm *ContainerVM) maskPaths() error {
-	for _, v := range containerMaskPaths {
-		p := filepath.Join(vm.FSPath, v)
+func containerMaskPaths(fsPath string) error {
+	for _, v := range containerMaskedPaths {
+		p := filepath.Join(fsPath, v)
 		err := syscall.Mount("/dev/null", p, "", syscall.MS_BIND, "")
 		if err != nil {
 			return err
@@ -1233,9 +1228,9 @@ func (vm *ContainerVM) maskPaths() error {
 	return nil
 }
 
-func (vm *ContainerVM) remountReadOnly() error {
+func containerRemountReadOnly(fsPath string) error {
 	for _, v := range containerReadOnlyPaths {
-		p := filepath.Join(vm.FSPath, v)
+		p := filepath.Join(fsPath, v)
 		err := syscall.Mount("", p, "", syscall.MS_REMOUNT|syscall.MS_RDONLY, "")
 		if err == nil {
 			continue // this was actually a mountpoint
@@ -1252,9 +1247,9 @@ func (vm *ContainerVM) remountReadOnly() error {
 	return nil
 }
 
-func (vm *ContainerVM) symlinks() error {
+func containerSymlinks(fsPath string) error {
 	for _, l := range containerLinks {
-		path := filepath.Join(vm.FSPath, l[1])
+		path := filepath.Join(fsPath, l[1])
 		os.Remove(path)
 		err := os.Symlink(l[0], path)
 		if err != nil {
@@ -1264,8 +1259,8 @@ func (vm *ContainerVM) symlinks() error {
 	return nil
 }
 
-func (vm *ContainerVM) ptmx() error {
-	path := filepath.Join(vm.FSPath, "/dev/ptmx")
+func containerPtmx(fsPath string) error {
+	path := filepath.Join(fsPath, "/dev/ptmx")
 	os.Remove(path)
 	err := os.Symlink("pts/ptmx", path)
 	if err != nil {
@@ -1273,7 +1268,7 @@ func (vm *ContainerVM) ptmx() error {
 	}
 
 	// bind mount /dev/console
-	path = filepath.Join(vm.FSPath, "/dev/console")
+	path = filepath.Join(fsPath, "/dev/console")
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -1282,9 +1277,9 @@ func (vm *ContainerVM) ptmx() error {
 	return syscall.Mount("/dev/console", path, "", syscall.MS_BIND, "")
 }
 
-func (vm *ContainerVM) mknodDevices() error {
+func containerMknodDevices(fsPath string) error {
 	for _, v := range containerDeviceNames {
-		path := filepath.Join(vm.FSPath, v.Name)
+		path := filepath.Join(fsPath, v.Name)
 		mode := v.Mode
 		if v.Type == "c" {
 			mode |= syscall.S_IFCHR
@@ -1300,62 +1295,62 @@ func (vm *ContainerVM) mknodDevices() error {
 	return nil
 }
 
-func (vm *ContainerVM) setupRoot() error {
+func containerSetupRoot(fsPath string) error {
 	err := syscall.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
 	if err != nil {
 		return err
 	}
-	return syscall.Mount(vm.FSPath, vm.FSPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
+	return syscall.Mount(fsPath, fsPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
 }
 
-func (vm *ContainerVM) mountDefaults() error {
-	log.Debug("mountDefaults: %v", vm.FSPath)
+func containerMountDefaults(fsPath string) error {
+	log.Debug("mountDefaults: %v", fsPath)
 
 	var err error
 
-	err = syscall.Mount("proc", filepath.Join(vm.FSPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = syscall.Mount("proc", filepath.Join(fsPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
+	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "shm"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "shm"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "mqueue"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "mqueue"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "pts"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "pts"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
+	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("pts", filepath.Join(vm.FSPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("sysfs", filepath.Join(vm.FSPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
+	err = syscall.Mount("sysfs", filepath.Join(fsPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
