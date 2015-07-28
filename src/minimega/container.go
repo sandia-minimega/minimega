@@ -238,7 +238,9 @@ func init() {
 	}
 }
 
-var cgroupInitialized bool
+var (
+	cgroupInitialized bool
+)
 
 func containerInit() error {
 	// inherit cpusets
@@ -844,33 +846,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 		return
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Error("Getwd: %v", err)
-		vm.setState(VM_ERROR)
-		ack <- vm.ID
-		return
-	}
-
-	attr := &syscall.ProcAttr{
-		Dir: wd,
-		Env: os.Environ(), // cannot be nil like os.Exec
-		Files: []uintptr{
-			uintptr(syscall.Stdin),
-			uintptr(syscall.Stdout),
-			uintptr(syscall.Stderr),
-			childLog.Fd(),
-			childSync1.Fd(),
-			childSync2.Fd(),
-			childStdin.Fd(),
-			childStdout.Fd(),
-			childStderr.Fd(),
-		},
-		Sys: &syscall.SysProcAttr{
-			Cloneflags: uintptr(CONTAINER_FLAGS),
-		},
-	}
-
 	//	0:  minimega binary
 	// 	1:  CONTAINER
 	//	2:  vm id
@@ -897,14 +872,34 @@ func (vm *ContainerVM) launch(ack chan int) {
 	}
 
 	// launch the container
-	pid, err := syscall.ForkExec(os.Args[0], args, attr)
+	cmd := &exec.Cmd{
+		Path: os.Args[0],
+		Args: args,
+		Env:  nil,
+		Dir:  "",
+		ExtraFiles: []*os.File{
+			childLog,
+			childSync1,
+			childSync2,
+			childStdin,
+			childStdout,
+			childStderr,
+		},
+		SysProcAttr: &syscall.SysProcAttr{
+			Cloneflags: uintptr(CONTAINER_FLAGS),
+		},
+	}
+	err = cmd.Start()
 	if err != nil {
 		vm.overlayUnmount()
-		log.Error("clone: %v", err)
+		log.Error("start container: %v", err)
 		vm.setState(VM_ERROR)
 		ack <- vm.ID
 		return
 	}
+
+	vm.pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
 
 	// log the child
 	childLog.Close()
@@ -912,16 +907,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 	go vm.console(parentStdin, parentStdout, parentStderr)
 
-	vm.pid = pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
-
-	p, err := os.FindProcess(pid)
-	if err != nil {
-		log.Fatal("FindProcess: %v", err)
-	}
-
 	go func() {
-		_, err := p.Wait()
+		err := cmd.Wait()
 		vm.setState(VM_QUIT)
 		if err != nil {
 			if err.Error() != "signal: killed" { // because we killed it
@@ -941,6 +928,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	// vm.CheckAffinity()
 
 	// wait for the freezer notification
+	childSync1.Close()
 	var buf = make([]byte, 1)
 	parentSync1.Read(buf)
 	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
@@ -948,7 +936,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	if err != nil {
 		log.Error("freezer: %v", err)
 		vm.setState(VM_ERROR)
-		p.Kill()
+		cmd.Process.Kill()
 		<-waitChan
 		success = false
 	}
@@ -962,11 +950,17 @@ func (vm *ContainerVM) launch(ack chan int) {
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
-			p.Kill()
+			cmd.Process.Kill()
 
 			// containers cannot return unless thawed, so thaw the
 			// process if necessary
-			vm.Start()
+			freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+			err = ioutil.WriteFile(freezer, []byte("THAWED"), 0644)
+			if err != nil {
+				log.Error("freezer: %v", err)
+				vm.setState(VM_ERROR)
+				<-waitChan
+			}
 
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
@@ -1047,11 +1041,13 @@ func (vm *ContainerVM) overlayUnmount() error {
 	cmd := &exec.Cmd{
 		Path: process("umount"),
 		Args: []string{
+			process("umount"),
 			vm.effectivePath,
 		},
 		Env: nil,
 		Dir: "",
 	}
+	log.Debug("unmount: %v", cmd)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Error("overlay umount: %v %v", err, string(output))
@@ -1165,9 +1161,7 @@ func prctl(option int, arg2, arg3, arg4, arg5 uintptr) error {
 func containerChroot(fsPath string) error {
 	err := syscall.Mount(fsPath, "/", "", syscall.MS_MOVE, "")
 	if err != nil {
-		log.Debug("could not MS_MOVE mount, using chroot+chdir")
-	} else {
-		return nil
+		return err
 	}
 	err = syscall.Chroot(".")
 	if err != nil {
@@ -1357,24 +1351,6 @@ func containerMountDefaults(fsPath string) error {
 	}
 
 	return nil
-}
-
-// syscall clone with namespace flags
-func (vm *ContainerVM) clone() (int, error) {
-	// see go/src/pkg/syscall/exec_unix.go
-	// We need to take ForkLock to avoid leaking fds
-	syscall.ForkLock.Lock()
-
-	r1, _, err1 := syscall.RawSyscall(syscall.SYS_CLONE, uintptr(CONTAINER_FLAGS), 0, 0)
-
-	syscall.ForkLock.Unlock()
-
-	if err1 != 0 {
-		return 0, err1
-	}
-
-	// parent gets the pid, child == 0
-	return int(r1), nil
 }
 
 // update the vm state, and write the state to file
