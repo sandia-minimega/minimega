@@ -12,7 +12,7 @@ This tool can take a json string from stdin that describes the minimega cli,
 and produce a python API that will talk to the minimega process over the Unix
 domain socket. In other words, run it like so:
 
-    minimega -cli | ./genapi.py > minimega.py
+    ./genapi.py /path/to/minimega > minimega.py
 
 The resulting minimega.py file will provide easy access to the minimega
 commands from python.
@@ -39,6 +39,11 @@ CMD_BLACKLIST = [
     'help',
     #'mesh send',
 ]
+
+# API Version:
+VERSION = '2.0a2'
+# minimega version (set this before rendering)
+MM_VERSION = 'UNKNOWN'
 
 
 def parseCmdType(type):
@@ -98,8 +103,9 @@ def buildCommand(context, subs, cmd):
 
 def render(cmds):
     context = {
-                'version':  '2.0a1',
-                'cmds':     {},
+                'version':    VERSION,
+                'mm_version': MM_VERSION,
+                'cmds':       {},
               }
     for c in cmds:
         cmd = c['shared_prefix']
@@ -117,9 +123,17 @@ def render(cmds):
 
 if __name__ == '__main__':
     import sys
+    import subprocess
     import json
 
-    cmds = json.loads(sys.stdin.read())
+    if len(sys.argv) != 2:
+        print('Usage: {} /path/to/minimega'.format(sys.argv[0]))
+        exit()
+
+    mm_bin = sys.argv[1]
+    cmds = json.loads(subprocess.check_output([mm_bin, '-cli']))
+    version_str = subprocess.check_output([mm_bin, '--version'])
+    MM_VERSION = version_str.splitlines()[0]
 
     sys.stdout.write(render(cmds))
 
