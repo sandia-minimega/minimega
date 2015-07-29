@@ -1061,7 +1061,7 @@ func (vm *ContainerVM) overlayMount() error {
 			process("mount"),
 			"-t",
 			"overlay",
-			fmt.Sprintf("megamount-%v", vm.ID),
+			fmt.Sprintf("megamount_%v", vm.ID),
 			"-o",
 			fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
 			vm.effectivePath,
@@ -1403,6 +1403,94 @@ func (vm *ContainerVM) setState(s VMState) {
 	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
+	}
+}
+
+// aggressively cleanup container cruff, called by the nuke api
+func containerNuke() {
+	// walk /sys/fs/cgroup/minimega for tasks, killing each one
+	err := filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		log.Debug("walking file: %v", path)
+
+		switch info.Name() {
+		case "tasks":
+			d, err := ioutil.ReadFile(path)
+			pids := strings.Fields(string(d))
+			for _, pid := range pids {
+				log.Debug("found pid: %v", pid)
+
+				p := process("kill")
+				cmd := &exec.Cmd{
+					Path: p,
+					Args: []string{
+						p,
+						"-9",
+						pid,
+					},
+					Env: nil,
+					Dir: "",
+				}
+				log.Infoln("killing process:", pid)
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					log.Error("%v: %v", err, out)
+				}
+			}
+			// remove the directory for this vm
+			dir := filepath.Dir(path)
+			err = os.Remove(dir)
+			if err != nil {
+				log.Errorln(err)
+			}
+		}
+		return nil
+	})
+
+	// remove cgroup structure
+	err = os.Remove(CGROUP_PATH)
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	// umount megamount_*
+	d, err := ioutil.ReadFile("/proc/mounts")
+	mounts := strings.Fields(string(d))
+	for _, m := range mounts {
+		if strings.Contains(m, "megamount") {
+			cmd := &exec.Cmd{
+				Path: process("umount"),
+				Args: []string{
+					process("umount"),
+					m,
+				},
+				Env: nil,
+				Dir: "",
+			}
+			log.Debug("unmount: %v", cmd)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Error("overlay umount: %v %v", err, string(output))
+			}
+		}
+	}
+
+	// remove meganet_* from /var/run/netns
+	netns, err := ioutil.ReadDir("/var/run/netns")
+	if err != nil {
+		log.Errorln(err)
+	} else {
+		for _, n := range netns {
+			if strings.Contains(n.Name(), "meganet") {
+				err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
+				if err != nil {
+					log.Errorln(err)
+				}
+			}
+		}
 	}
 }
 
