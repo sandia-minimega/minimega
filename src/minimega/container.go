@@ -255,8 +255,6 @@ func containerInit() error {
 	}
 
 	// create a minimega cgroup
-	// TODO: ensure devices cgroups are mounted
-	// for now just assume it's at /sys/fs/cgroup
 	err = os.MkdirAll(CGROUP_PATH, 0755)
 	if err != nil {
 		return fmt.Errorf("creating minimega cgroup: %v", err)
@@ -996,8 +994,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 		}
 	}
 
-	// TODO: umountDefaults
-
 	vm.listener.Close()
 	vm.unlinkNetns()
 
@@ -1045,7 +1041,6 @@ func (vm *ContainerVM) unlinkNetns() error {
 
 // create an overlay mount (linux 3.18 or greater) is snapshot mode is
 // being used.
-// TODO: check for existing mounts like we do with megatap and friends
 func (vm *ContainerVM) overlayMount() error {
 	vm.effectivePath = filepath.Join(vm.instancePath, "fs")
 	workPath := filepath.Join(vm.instancePath, "fs_work")
