@@ -283,26 +283,32 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	return status, completed, nil
 }
 
-func (vm *KvmVM) Screenshot(fpath string, size int) error {
+func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
 
+	// We have to write this out to a file, because QMP
 	err := vm.q.Screendump(tmp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = ppmToPng(tmp, fpath, size)
+	ppmFile, err := ioutil.ReadFile(tmp)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	pngResult, err := ppmToPng(ppmFile, size)
+	if err != nil {
+		return nil, err
 	}
 
 	err = os.Remove(tmp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return pngResult, nil
 
 }
 

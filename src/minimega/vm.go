@@ -64,9 +64,9 @@ type VM interface {
 	GetTags() map[string]string
 	ClearTags()
 
-	// Screenshot takes a screenshot of the VM and saves it to the fpath. The
+	// Screenshot takes a screenshot of the VM and returns it as a []byte. The
 	// image should be at most size pixels on each edge.
-	Screenshot(fpath string, size int) error
+	Screenshot(size int) ([]byte, error)
 
 	UpdateBW()
 }
