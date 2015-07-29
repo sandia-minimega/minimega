@@ -36,9 +36,9 @@ class TestMinimega(unittest.TestCase):
         global MINIMEGA_PROC, minimega
         print('generating python API file...')
         subprocess.check_call(
-            '{} -cli | {} > {}'.format(
-                MINIMEGA_BIN,
+            '{} {} > {}'.format(
                 os.path.join(SCRIPT_DIR, 'genapi.py'),
+                MINIMEGA_BIN,
                 os.path.join(SCRIPT_DIR, 'minimega.py'),
             ), shell=True)
         minimega = __import__('minimega')
