@@ -1234,3 +1234,165 @@ func getNewTap() (string, error) {
 	}
 	return t, nil
 }
+
+// create and add a veth tap to a bridge
+func (b *bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	tapName, err := getNewTap()
+	if err != nil {
+		return "", err
+	}
+	p := process("ip")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"add",
+			tapName,
+			"type",
+			"veth",
+			"peer",
+			"mega", // does the namespace ignore this?
+			"netns",
+			ns,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("creating tap with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return "", e
+	}
+
+	// the tap add was successful, so try to add it to the bridge
+	b.Lock.Lock()
+	b.lans[lan].Taps[tapName] = &tap{
+		host: false,
+	}
+	b.Lock.Unlock()
+	err = b.TapAdd(lan, tapName, false)
+	if err != nil {
+		return "", err
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"set",
+			tapName,
+			"up",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("bringing tap up with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return "", e
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"netns",
+			"exec",
+			ns,
+			"ip",
+			"link",
+			"set",
+			"dev",
+			fmt.Sprintf("veth%v", index),
+			"address",
+			mac,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("setting container mac address with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return "", e
+	}
+	return tapName, nil
+}
+
+// destroy and remove a container tap from a bridge
+func (b *bridge) ContainerTapDestroy(lan int, tap string) error {
+	err := b.TapRemove(lan, tap)
+	if err != nil {
+		log.Info("TapDestroy: could not remove tap: %v", err)
+	}
+
+	// if it's a host tap, then ovs removed it for us and we don't need to continue
+	bridgeLock.Lock()
+	if _, ok := disconnectedTaps[tap]; !ok {
+		bridgeLock.Unlock()
+		return nil
+	}
+	bridgeLock.Unlock()
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	p := process("ip")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"set",
+			tap,
+			"down",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("bringing tap down with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return e
+	}
+
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"del",
+			tap,
+			"type",
+			"veth",
+			"peer",
+			"eth0",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("destroying tap with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return e
+	}
+	return nil
+}

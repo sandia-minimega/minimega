@@ -215,6 +215,7 @@ type ContainerVM struct {
 	pid           int
 	effectivePath string
 	listener      net.Listener
+	netns         string
 }
 
 func (vm *ContainerVM) UpdateCCActive() {
@@ -727,65 +728,6 @@ func (vm *ContainerVM) launch(ack chan int) {
 		vm.Networks[i].Tap = ""
 	}
 
-	// create and add taps if we are associated with any networks
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-
-		b, err := getBridge(net.Bridge)
-		if err != nil {
-			log.Error("get bridge: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
-		}
-
-		net.Tap, err = b.TapCreate(net.VLAN)
-		if err != nil {
-			log.Error("create tap: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
-		}
-
-		updates := make(chan ipmac.IP)
-		go func(vm *ContainerVM, net *NetConfig) {
-			defer close(updates)
-			for {
-				// TODO: need to acquire VM lock?
-				select {
-				case update := <-updates:
-					if update.IP4 != "" {
-						net.IP4 = update.IP4
-					} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
-						log.Debugln("ignoring link-local over existing IPv6 address")
-					} else if update.IP6 != "" {
-						net.IP6 = update.IP6
-					}
-				case <-vm.kill:
-					b.iml.DelMac(net.MAC)
-					return
-				}
-			}
-		}(vm, net)
-
-		b.iml.AddMac(net.MAC, updates)
-	}
-
-	if len(vm.Networks) > 0 {
-		taps := []string{}
-		for _, net := range vm.Networks {
-			taps = append(taps, net.Tap)
-		}
-
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
-		if err != nil {
-			log.Error("write instance taps file: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
-		}
-	}
-
 	if vm.Snapshot {
 		err = vm.overlayMount()
 		if err != nil {
@@ -927,20 +869,107 @@ func (vm *ContainerVM) launch(ack chan int) {
 	// TODO: add affinity funcs for containers
 	// vm.CheckAffinity()
 
-	// wait for the freezer notification
-	childSync1.Close()
-	var buf = make([]byte, 1)
-	parentSync1.Read(buf)
-	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
-	err = ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
+	// network creation for containers happens /after/ the container is
+	// started, as we need the PID in order to attach a veth to the
+	// container side of the network namespace.
+	// create and add taps if we are associated with any networks
+
+	// expose the network namespace to iptool
+	err = vm.symlinkNetns()
 	if err != nil {
-		log.Error("freezer: %v", err)
+		log.Error("symlinkNetns: %v", err)
 		vm.setState(VM_ERROR)
 		cmd.Process.Kill()
 		<-waitChan
 		success = false
 	}
-	parentSync2.Close()
+
+	if success {
+		for i := range vm.Networks {
+			net := &vm.Networks[i]
+
+			b, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Error("get bridge: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+				break
+			}
+
+			net.Tap, err = b.ContainerTapCreate(net.VLAN, vm.netns, net.MAC, i)
+			if err != nil {
+				log.Error("create tap: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+				break
+			}
+
+			updates := make(chan ipmac.IP)
+			go func(vm *ContainerVM, net *NetConfig) {
+				defer close(updates)
+				for {
+					// TODO: need to acquire VM lock?
+					select {
+					case update := <-updates:
+						if update.IP4 != "" {
+							net.IP4 = update.IP4
+						} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
+							log.Debugln("ignoring link-local over existing IPv6 address")
+						} else if update.IP6 != "" {
+							net.IP6 = update.IP6
+						}
+					case <-vm.kill:
+						b.iml.DelMac(net.MAC)
+						return
+					}
+				}
+			}(vm, net)
+
+			b.iml.AddMac(net.MAC, updates)
+		}
+	}
+
+	if success {
+		if len(vm.Networks) > 0 {
+			taps := []string{}
+			for _, net := range vm.Networks {
+				taps = append(taps, net.Tap)
+			}
+
+			err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+			if err != nil {
+				log.Error("write instance taps file: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+			}
+		}
+	}
+
+	childSync1.Close()
+	if success {
+		// wait for the freezer notification
+		var buf = make([]byte, 1)
+		parentSync1.Read(buf)
+		freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+		err = ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
+		if err != nil {
+			log.Error("freezer: %v", err)
+			vm.setState(VM_ERROR)
+			cmd.Process.Kill()
+			<-waitChan
+			success = false
+		}
+		parentSync2.Close()
+	} else {
+		parentSync1.Close()
+		parentSync2.Close()
+	}
 
 	ack <- vm.ID
 
@@ -970,13 +999,14 @@ func (vm *ContainerVM) launch(ack chan int) {
 	// TODO: umountDefaults
 
 	vm.listener.Close()
+	vm.unlinkNetns()
 
 	for _, net := range vm.Networks {
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 		} else {
-			b.TapDestroy(net.VLAN, net.Tap)
+			b.ContainerTapDestroy(net.VLAN, net.Tap)
 		}
 	}
 
@@ -995,6 +1025,22 @@ func (vm *ContainerVM) launch(ack chan int) {
 	if sendKillAck {
 		killAck <- vm.ID
 	}
+}
+
+func (vm *ContainerVM) symlinkNetns() error {
+	err := os.MkdirAll("/var/run/netns", 0755)
+	if err != nil {
+		return err
+	}
+	src := fmt.Sprintf("/proc/%v/ns/net", vm.pid)
+	dst := fmt.Sprintf("/var/run/netns/meganet_%v", vm.ID)
+	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
+	return os.Symlink(src, dst)
+}
+
+func (vm *ContainerVM) unlinkNetns() error {
+	dst := fmt.Sprintf("/var/run/netns/%v", vm.netns)
+	return os.Remove(dst)
 }
 
 // create an overlay mount (linux 3.18 or greater) is snapshot mode is
