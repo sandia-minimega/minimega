@@ -68,6 +68,7 @@ var grapher = {
     instance:       null,       // Instance of the Grapher object (used for all the WebGL graphing magic)
     d3force:        null,       // Instance of the D3 force-directed graph object (used for positioning the nodes)
     selectedNode:   null,       // The currently-selected node (the one you clicked on to select and display its info)
+    jsonData:       null,       // The parsed data from jsonString
     jsonString:     null,       // The most recently-received JSON string containing all the graph data. The new data is only processed when this changes.
     graphString:    null,       // The previous JSON-stringified graph structure. The graph is only restructured when this changes.
     graph:          {
@@ -141,6 +142,7 @@ function getOffset (e, canvas) {
 
 // Get the node located at the coordinates of the event
 function eventNode (e) {
+    if (!grapher.instance.canvas) return -1;
     if (cursor.event.target != grapher.instance.canvas) return -1;
     var point = grapher.instance.getDataPosition(getOffset(e, grapher.instance.canvas));
     return getNodeIdAt(point, grapher.graph);
@@ -183,7 +185,7 @@ function vmColor (vm, hex) {
     if (vm.tags.infected == "true") {
         colorNumber = config.types.infected;
     } else {
-        colorNumber = config.types[vm.type];
+        colorNumber = config.types[vm.node_type];
     }
 
     if (hex) {
@@ -309,7 +311,7 @@ function listMachines (ul, id, memberNodes) {
                         d3.select(this).classed("selected-vm", true);
                         d3.select(this).classed("widen", true);
                         d3.select(this.parentNode).classed("widen", true);
-                        setPopupMachine(allMachines[machine], this.getBoundingClientRect());
+                        setPopupMachine(allMachines[machine], this);
                     } else {
                         setPopupMachine();
                     }
@@ -324,7 +326,7 @@ function listMachines (ul, id, memberNodes) {
 // Deselect one of the VMs (remove visual cue that it's associated with the popup)
 function clearSelectedVM () {
     var previous = d3.select(".selected-vm").classed("selected-vm", false);
-    if (previous.node() != null) {
+    if ((previous.node() != null) && previous.on("mouseleave")) {
         previous.on("mouseleave").call(previous.node());
         d3.select(previous.node()).classed("widen", false);
         d3.select(previous.node().parentNode).classed("widen", false);
@@ -412,7 +414,7 @@ function setSidebarNode (id) {
 // Make a VM be always highlighted (used for member VMs)
 function vmAlwaysHighlighted (spanNode, widened, clickable) {
     var vmSpan = d3.select(spanNode);
-    vmSpan.on("mouseenter").call(spanNode);
+    if (vmSpan.on("mouseenter")) vmSpan.on("mouseenter").call(spanNode);
 
     if (!clickable) {
         // Remove event handlers
@@ -498,18 +500,20 @@ function tableString (field) {
 
 
 // Set the machine which is to be displayed in the popup
-function setPopupMachine (vm, position) {
+function setPopupMachine (vm, node) {
     var container = d3.select(config.selectors.popupContainer);
-    var table = d3.select(config.selectors.popupTable).html("");
+    var table = d3.select(config.selectors.popupTable);
     if (vm === undefined) {
         container.classed("hidden", true);
     } else {
         var title = d3.select(config.selectors.popupName);
+        var position = $(node).position();
+        var height = node.getBoundingClientRect()["height"];
 
         makeTable(table, vm);
 
         container.style("left", (position.left - 10) + "px");
-        container.style("top", (position.top - (position.height / 2)) + "px");
+        container.style("top", (position.top - (height / 2)) + "px");
         container.classed("hidden", false);
 
         title.text(vm.name);
@@ -519,14 +523,17 @@ function setPopupMachine (vm, position) {
 
 // Build the DOM for the table
 function makeTable (parent, data) {
-    parent.html("");
+    var newHtml = "";
     for (var key in data) {
         if ($.inArray(key, ["color", "uuid"]) === -1) {
-            var row = parent.append("tr");
-            row.append("td").text(key);
-            row.append("td").html(tableString(data[key]));
+            var row = $("<tr></tr>");
+            $("<td></td>").appendTo(row).text(key);
+            $("<td></td>").appendTo(row).html(tableString(data[key]));
+            newHtml += row.get(0).outerHTML;
         }
     }
+
+    parent.html(newHtml);
 }
 
 
@@ -535,15 +542,15 @@ function makeTable (parent, data) {
 
 // Used to get the new graph info via AJAX.
 function getVMInfo () {
-    d3.text("/json", function (error, info) {
+    d3.text("http://localhost:9001/vms", function (error, info) {
         if ((info != grapher.jsonString) && (cursor.node == null)) {
             if (error) return console.warn(error);
 
             grapher.jsonString = info;
-            var json = JSON.parse(info);
+            grapher.jsonData = JSON.parse(info);
 
             var oldGraph = grapher.graph;
-            grapher.graph = makeGraph(json, 1);
+            grapher.graph = makeGraph(grapher.jsonData, 1);
 
             for (var i = 0; i < grapher.graph.nodes.length; i++) {
                 var node = grapher.graph.nodes[i];
@@ -568,7 +575,8 @@ function getVMInfo () {
                                     .classed("widen", true);
                                 d3.select(newWidened.node().parentNode)
                                     .classed("widen", true);
-                                setPopupMachine(machines[widenedUUID], newWidened.node().getBoundingClientRect());
+                                setPopupMachine(machines[widenedUUID], newWidened.node());
+                                vmAlwaysHighlighted(newWidened.node(), false, true);
                             }
                         }
                         return true;
@@ -597,7 +605,7 @@ function getVMInfo () {
                 links:  grapher.graph.links
             });
 
-
+            var oldAlpha = grapher.d3force.alpha();
             grapher.d3force
                 .nodes(grapher.graph.nodes.slice(config.node.ethers))
                 .links(grapher.graph.links);
@@ -614,8 +622,10 @@ function getVMInfo () {
             } else {
                 grapher.d3force.start();
                 graphTick();
-                grapher.d3force.alpha(0);
+                grapher.d3force.alpha(oldAlpha);
             }
+
+            updateTables();
         }
     });
 }
@@ -667,18 +677,18 @@ function makeGraph (response, ethers) {
     for (var i = 0; i < response.length; i++) {
         var vm = response[i];
 
-        vm["type"] = null;
+        vm["node_type"] = null;
         vm["uuid"] = vm["host"] + " " + vm["id"];  // Space suffices as a separator
 
         // Unconnected machine (no VLANs)
         if (vm.network.length < 1) {
-            vm["type"] = "unconnected";
+            vm["node_type"] = "unconnected";
             unconnected.push(vm);
             network.machines.unconnected.push(vm);
         
         // Router (multiple VLANs)
         } else if (vm.network.length > 1) {
-            vm["type"] = "router";
+            vm["node_type"] = "router";
             routers.push(vm);
 
             for (var j = 0; j < vm.network.length; j++)
@@ -686,7 +696,7 @@ function makeGraph (response, ethers) {
 
         // Normal machine (one VLAN)
         } else {
-            vm["type"] = "normal";
+            vm["node_type"] = "normal";
             pushOrCreate(vlans,                  vm.network[0].VLAN, vm);
             pushOrCreate(network.machines.vlans, vm.network[0].VLAN, vm);
         }
@@ -830,7 +840,7 @@ $(document).ready(function () {
     d3.select(config.selectors.centerButton).on("click", function () {
         grapher.instance.center();
         grapher.instance.zoom(0.85)
-        d3.event.stopPropagation();
+        if (d3.event) d3.event.stopPropagation();
     });
 
     // RGB to hex. One-liners ftw? Sorry for the ugliness, there's no pretty way to do this AFAIK
@@ -901,12 +911,15 @@ $(document).ready(function () {
                     setColor(grapher.selectedNode);
                 }
                 
-                outlineNode(nodeId);
+                // If we didn't go from hovering over a node to immediately leaving the graph
+                if (!((e.type == "mouseleave") && (cursor.hoveringOver != null))) {
+                    outlineNode(nodeId);
 
-                setColor(nodeId);
-                setSidebarNode(nodeId);
+                    setColor(nodeId);
+                    setSidebarNode(nodeId);
 
-                grapher.selectedNode = nodeId;
+                    grapher.selectedNode = nodeId;
+                }
 
             // ... But if we didn't click on a node and the mouseup event called us, clear the selection.
             } else if ((grapher.selectedNode != null) && (e.type == "mouseup")) {
@@ -942,6 +955,8 @@ $(document).ready(function () {
 
     // Zoom in or out on a point when the scroll wheel is moved
     grapher.instance.on('wheel', function (e) {
+        e.preventDefault();
+
         // Make sure we are OK to zoom in or out according to the limits
         if (((grapher.instance.renderer.scale > config.zoom.farLimit ) && (e.deltaY > 0)) ||      // Can't zoom out too far...
             ((grapher.instance.renderer.scale < config.zoom.nearLimit) && (e.deltaY < 0))         // ... or in too far
@@ -969,6 +984,11 @@ $(document).ready(function () {
 
     d3.select(config.selectors.chart).node().appendChild(grapher.instance.canvas);
     grapher.instance.play();
+
+    setTimeout(function () {
+        d3.select(config.selectors.centerButton).on("click")();
+        d3.select(grapher.instance.canvas).style("opacity", "1");
+    }, 750);
 
     setInterval(getVMInfo, 1500);
 });

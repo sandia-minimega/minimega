@@ -6,14 +6,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"minicli"
 	log "minilog"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -26,14 +23,6 @@ const (
 	friendlyError  = "oops, something went wrong"
 )
 
-type htmlTable struct {
-	Header  []string
-	Toggle  map[string]int
-	Tabular [][]interface{}
-	ID      string
-	Class   string
-}
-
 type vmScreenshotParams struct {
 	Host string
 	Name string
@@ -45,8 +34,8 @@ type vmScreenshotParams struct {
 var web struct {
 	Running   bool
 	Server    *http.Server
-	Templates *template.Template
 	Port      int
+	Root      string
 }
 
 var webCLIHandlers = []minicli.Handler{
@@ -110,40 +99,20 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 }
 
 func webStart(port int, root string) {
-	// Initialize templates
-	templates := filepath.Join(root, "templates")
-	log.Info("compiling templates from %s", templates)
-
-	web.Templates = template.New("minimega-templates")
-	filepath.Walk(templates, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			log.Error("failed to load template from %s", path)
-			return nil
-		}
-
-		if !info.IsDir() && strings.HasSuffix(path, ".html") {
-			web.Templates.ParseFiles(path)
-		}
-
-		return nil
-	})
+	web.Root = root
 
 	mux := http.NewServeMux()
-	for _, v := range []string{"novnc", "libs", "include"} {
+	for _, v := range []string{"css", "fonts", "js", "libs", "novnc", "images"} {
 		path := fmt.Sprintf("/%s/", v)
 		dir := http.Dir(filepath.Join(root, v))
 		mux.Handle(path, http.StripPrefix(path, http.FileServer(dir)))
 	}
 
-	mux.HandleFunc("/", webVMs)
-	mux.HandleFunc("/map", webMapVMs)
+	mux.HandleFunc("/", webIndex)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.HandleFunc("/hosts", webHosts)
-	mux.HandleFunc("/tags", webVMTags)
-	mux.HandleFunc("/tiles", webTileVMs)
-	mux.HandleFunc("/graph", webGraph)
-	mux.HandleFunc("/json", webJSON)
-	mux.HandleFunc("/vnc/", webVNC)
+	mux.HandleFunc("/vms", webVMs)
+	mux.HandleFunc("/vnc", webVNC)
 	mux.HandleFunc("/ws/", vncWsHandler)
 
 	if web.Server == nil {
@@ -167,15 +136,6 @@ func webStart(port int, root string) {
 		}
 		// just update the mux
 		web.Server.Handler = mux
-	}
-}
-
-// webRenderTemplate renders the given template with the provided data, writing
-// the result to the client. Should be called last in an http handler.
-func webRenderTemplate(w http.ResponseWriter, tmpl string, data interface{}) {
-	if err := web.Templates.ExecuteTemplate(w, tmpl, data); err != nil {
-		log.Error("unable to execute template %s -- %v", tmpl, err)
-		http.Error(w, friendlyError, http.StatusInternalServerError)
 	}
 }
 
@@ -230,138 +190,17 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func webGraph(w http.ResponseWriter, r *http.Request) {
-	webRenderTemplate(w, "graph.html", make([]interface{}, 0))
+func webIndex(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(web.Root, "index.html"));
 }
 
-// webVNC serves routes like /vnc/<host>/<port>/<vmName>.
+// webVNC serves routes like /vnc#<vmName>@<host>:<port>
 func webVNC(w http.ResponseWriter, r *http.Request) {
-	fields := strings.Split(r.URL.Path, "/")
-	if len(fields) != 5 {
-		http.NotFound(w, r)
-		return
-	}
-	fields = fields[2:]
-
-	host := fields[0]
-	port := fields[1]
-	vm := fields[2]
-
-	data := struct {
-		Title, Path string
-	}{
-		Title: fmt.Sprintf("%s:%s", host, vm),
-		Path:  fmt.Sprintf("ws/%s/%s", host, port),
-	}
-
-	webRenderTemplate(w, "vnc.html", data)
-}
-
-func webMapVMs(w http.ResponseWriter, r *http.Request) {
-	var err error
-
-	type point struct {
-		Lat, Long float64
-		Text      string
-	}
-
-	points := []point{}
-
-	for _, vms := range globalVmInfo() {
-		for _, vm := range vms {
-			name := fmt.Sprintf("%v:%v", vm.GetID(), vm.GetName())
-
-			p := point{Text: name}
-
-			if vm.Tag("lat") == "" || vm.Tag("long") == "" {
-				log.Debug("skipping vm %s -- missing required tags lat/long", name)
-				continue
-			}
-
-			p.Lat, err = strconv.ParseFloat(vm.Tag("lat"), 64)
-			if err != nil {
-				log.Error("invalid lat for vm %s -- expected float")
-				continue
-			}
-
-			p.Long, err = strconv.ParseFloat(vm.Tag("lat"), 64)
-			if err != nil {
-				log.Error("invalid lat for vm %s -- expected float")
-				continue
-			}
-
-			points = append(points, p)
-		}
-	}
-
-	webRenderTemplate(w, "map.html", points)
-}
-
-func webVMTags(w http.ResponseWriter, r *http.Request) {
-	table := htmlTable{
-		Header:  []string{},
-		Toggle:  map[string]int{},
-		Tabular: [][]interface{}{},
-	}
-
-	tags := map[string]bool{}
-
-	info := globalVmInfo()
-
-	// Find all the distinct tags across all VMs
-	for _, vms := range info {
-		for _, vm := range vms {
-			for _, k := range vm.GetTags() {
-				tags[k] = true
-			}
-		}
-	}
-
-	fixedCols := []string{"Host", "Name", "ID"}
-
-	// Copy into Header
-	for k := range tags {
-		table.Header = append(table.Header, k)
-	}
-	sort.Strings(table.Header)
-
-	// Set up Toggle, offset by fixedCols which will be on the left
-	for i, v := range table.Header {
-		table.Toggle[v] = i + len(fixedCols)
-	}
-
-	// Update the VM's tags so that it contains all the distinct values and
-	// then populate data
-	for host, vms := range info {
-		for _, vm := range vms {
-			row := []interface{}{
-				host,
-				vm.GetName(),
-				vm.GetID(),
-			}
-
-			for _, k := range table.Header {
-				// If key is not present, will set it to the zero-value
-				row = append(row, vm.Tag(k))
-			}
-
-			table.Tabular = append(table.Tabular, row)
-		}
-	}
-
-	// Add "fixed" headers for host/...
-	table.Header = append(fixedCols, table.Header...)
-
-	webRenderTemplate(w, "tags.html", table)
+	http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"));
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {
-	table := htmlTable{
-		Header:  []string{},
-		Tabular: [][]interface{}{},
-		ID:      "example",
-		Class:   "hover",
-	}
+	hosts := [][]interface{}{}
 
 	cmd := minicli.MustCompile("host")
 	cmd.Record = false
@@ -373,103 +212,28 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			if len(table.Header) == 0 && len(resp.Header) > 0 {
-				table.Header = append(table.Header, resp.Header...)
-			}
-
 			for _, row := range resp.Tabular {
 				res := []interface{}{}
 				for _, v := range row {
 					res = append(res, v)
 				}
-				table.Tabular = append(table.Tabular, res)
+				hosts = append(hosts, res)
 			}
 		}
 	}
 
-	webRenderTemplate(w, "hosts.html", table)
-}
+	js, err := json.Marshal(hosts)
 
-func webVMs(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	table := htmlTable{
-		Header:  []string{"host", "screenshot"},
-		Tabular: [][]interface{}{},
-		ID:      "example",
-		Class:   "hover",
-	}
-	table.Header = append(table.Header, vmMasks...)
-
-	stateMask := VM_QUIT | VM_ERROR
-
-	for host, vms := range globalVmInfo() {
-	vmLoop:
-		for _, vm := range vms {
-			var buf bytes.Buffer
-			if vm.GetState()&stateMask == 0 {
-				params := vmScreenshotParams{
-					Host: host,
-					Name: vm.GetName(),
-					Port: 5900 + vm.GetID(),
-					ID:   vm.GetID(),
-					Size: 140,
-				}
-
-				if err := web.Templates.ExecuteTemplate(&buf, "fragment/screenshot", &params); err != nil {
-					log.Error("unable to execute template screenshot -- %v", err)
-					continue
-				}
-			}
-
-			res := []interface{}{host, template.HTML(buf.String())}
-
-			row := []string{}
-
-			for _, mask := range vmMasks {
-				if v, err := vm.Info(mask); err != nil {
-					log.Error("bad mask for %v -- %v", vm.GetID(), err)
-					continue vmLoop
-				} else {
-					row = append(row, v)
-				}
-			}
-
-			table.Tabular = append(table.Tabular, res)
-		}
-	}
-
-	webRenderTemplate(w, "table.html", table)
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
 }
 
-func webTileVMs(w http.ResponseWriter, r *http.Request) {
-	stateMask := VM_QUIT | VM_ERROR
-
-	params := []vmScreenshotParams{}
-
-	for host, vms := range globalVmInfo() {
-		for _, vm := range vms {
-			if vm.GetState()&stateMask != 0 {
-				continue
-			}
-
-			params = append(params, vmScreenshotParams{
-				Host: host,
-				Name: vm.GetName(),
-				Port: 5900 + vm.GetID(),
-				ID:   vm.GetID(),
-				Size: 250,
-			})
-		}
-	}
-
-	webRenderTemplate(w, "tiles.html", params)
-}
-
-func webJSON(w http.ResponseWriter, r *http.Request) {
+func webVMs(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
