@@ -193,7 +193,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	host := fields[0]
 	id := strings.TrimSuffix(fields[1], ".png")
 
-	cmdStr := fmt.Sprintf("vm screenshot %s %s", id, size)
+	cmdStr := fmt.Sprintf("vm screenshot %s file /dev/null %s", id, size)
 	if host != hostname {
 		cmdStr = fmt.Sprintf("mesh send %s .record false %s", host, cmdStr)
 	}

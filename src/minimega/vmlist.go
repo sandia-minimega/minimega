@@ -119,13 +119,13 @@ func (vms VMs) qmp(idOrName, qmp string) (string, error) {
 	}
 }
 
-func (vms VMs) screenshot(idOrName, path string, max int) error {
+func (vms VMs) screenshot(idOrName, path string, max int) ([]byte, error) {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
-		return vmNotFound(idOrName)
+		return nil, vmNotFound(idOrName)
 	}
 
-	return vm.Screenshot(path, max)
+	return vm.Screenshot(max)
 }
 
 func (vms VMs) migrate(idOrName, filename string) error {

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"gopacket/macs"
 	_ "gopnm"
@@ -14,7 +15,6 @@ import (
 	"math/rand"
 	"minicli"
 	log "minilog"
-	"os"
 	"os/exec"
 	"regexp"
 	"resize"
@@ -273,16 +273,12 @@ func makeIDChan() chan int {
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
 // max if max != 0
-func ppmToPng(src, dst string, max int) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
+func ppmToPng(src []byte, max int) ([]byte, error) {
+	in := bytes.NewReader(src)
 
 	img, _, err := image.Decode(in)
-	in.Close()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// resize the image if necessary
@@ -290,17 +286,14 @@ func ppmToPng(src, dst string, max int) error {
 		img = resize.Thumbnail(uint(max), uint(max), img, resize.NearestNeighbor)
 	}
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
+	out := new(bytes.Buffer)
 
 	err = png.Encode(out, img)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return out.Bytes(), nil
 }
 
 // hasCommand tests whether cmd or any of it's subcommand has the given prefix.
