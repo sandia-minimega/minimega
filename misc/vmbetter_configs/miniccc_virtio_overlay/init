@@ -22,6 +22,6 @@ dhclient -v eth0
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
-/miniccc -serial /dev/virtio-ports/serial0 -logfile /miniccc.log &
+/miniccc -serial /dev/virtio-ports/virtio-serial0 -logfile /miniccc.log &
 
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'

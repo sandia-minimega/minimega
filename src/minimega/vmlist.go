@@ -6,17 +6,15 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	log "minilog"
 	"os"
-	"path/filepath"
 	"ranges"
 	"strconv"
 	"sync"
 	"time"
 )
 
-// total list of vms running on this host
+// VMs contains all the VMs running on this host, the key is the VM's ID
 type VMs map[int]VM
 
 // apply applies the provided function to the vm in VMs whose name or ID
@@ -126,30 +124,8 @@ func (vms VMs) screenshot(idOrName, path string, max int) error {
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
-	kvm, ok := vm.(*KvmVM)
-	if !ok {
-		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
-	}
 
-	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
-	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
-
-	err := kvm.q.Screendump(tmp)
-	if err != nil {
-		return err
-	}
-
-	err = ppmToPng(tmp, path, max)
-	if err != nil {
-		return err
-	}
-
-	err = os.Remove(tmp)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return vm.Screenshot(path, max)
 }
 
 func (vms VMs) migrate(idOrName, filename string) error {
@@ -165,6 +141,8 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	return kvm.Migrate(filename)
 }
 
+// findVm finds a VM based on it's ID or Name. Returns nil if no such VM
+// exists.
 func (vms VMs) findVm(idOrName string) VM {
 	id, err := strconv.Atoi(idOrName)
 	if err != nil {
@@ -179,9 +157,8 @@ func (vms VMs) findVm(idOrName string) VM {
 	return vms[id]
 }
 
-// launch one or more vms. this will copy the info struct, one per vm
-// and launch each one in a goroutine. it will not return until all
-// vms have reported that they've launched.
+// launch one VM of a given type. This call should be "non-blocking" -- the VM
+// will ack on the provided channel when it has finished launching.
 func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	// Make sure that there isn't another VM with the same name
 	if name != "" {
@@ -195,12 +172,16 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	var vm VM
 	switch vmType {
 	case KVM:
-		vm = NewKVM()
+		vm = NewKVM(name)
 	default:
 		// TODO
 	}
 
-	return vm.Launch(name, ack)
+	vmLock.Lock()
+	vms[vm.GetID()] = vm
+	vmLock.Unlock()
+
+	return vm.Launch(ack)
 }
 
 func (vms VMs) start(target string) []error {
@@ -260,6 +241,9 @@ outer:
 }
 
 func (vms VMs) flush() {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	for i, vm := range vms {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			log.Infoln("deleting VM: ", i)
