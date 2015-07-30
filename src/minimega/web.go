@@ -32,10 +32,10 @@ type vmScreenshotParams struct {
 }
 
 var web struct {
-	Running   bool
-	Server    *http.Server
-	Port      int
-	Root      string
+	Running bool
+	Server  *http.Server
+	Port    int
+	Root    string
 }
 
 var webCLIHandlers = []minicli.Handler{
@@ -109,10 +109,10 @@ func webStart(port int, root string) {
 	}
 
 	mux.HandleFunc("/", webIndex)
-	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/vms", webVMs)
 	mux.HandleFunc("/vnc", webVNC)
+	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.HandleFunc("/ws/", vncWsHandler)
 
 	if web.Server == nil {
@@ -191,12 +191,15 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 }
 
 func webIndex(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "index.html"));
+	if r.URL.Path != "/" {
+		http.NotFound(w, r)
+	} else {
+		http.ServeFile(w, r, filepath.Join(web.Root, "index.html"))
+	}
 }
 
-// webVNC serves routes like /vnc#<vmName>@<host>:<port>
 func webVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"));
+	http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"))
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {

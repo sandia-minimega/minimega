@@ -32,6 +32,7 @@ var config = {
         popupTable:         "#machine-info > table",
         popupName:          "#machine-name",
         centerButton:       "#center-button",
+        reflowButton:       "#reflow-button",
         sidebarContainer:   "#node-data",
         sidebarHeading:     "#node-name",
         sidebarCount:       "#node-count",
@@ -469,13 +470,13 @@ function handleEmptyString (value) {
 
 
 // Turn a field into a string properly formatted for the table
-function tableString (field) {
+function tableString (field, toplevel) {
     if (typeof(field) === "object") {
         if (Array.isArray(field)) {
             if (typeof(field[0]) === "object") {
                 var accumulator = "";
                 for (var i = 0; i < field.length; i++) {
-                    accumulator += "<table>" + tableString(field[i]) + "</table><br>";      // Sorry about this one.
+                    accumulator += "<table style=\"float:right\">" + tableString(field[i], false) + "</table><br>";      // Sorry about this one.
                 }
                 return accumulator;
             } else if (field.length == 0) {
@@ -486,6 +487,8 @@ function tableString (field) {
             }
         } else if ((field === null) || (Object.keys(field).length == 0)) {
             return handleEmptyString();
+        } else if ((typeof(field) === "object") && (toplevel !== false)) {
+            return "<table style=\"float:right\">" + tableString(field, false) + "</table>";
         } else {
             var toReturn = "";
             for (var key in field) {
@@ -840,6 +843,11 @@ $(document).ready(function () {
     d3.select(config.selectors.centerButton).on("click", function () {
         grapher.instance.center();
         grapher.instance.zoom(0.85)
+        if (d3.event) d3.event.stopPropagation();
+    });
+
+    d3.select(config.selectors.reflowButton).on("click", function () {
+        grapher.d3force.alpha(4);
         if (d3.event) d3.event.stopPropagation();
     });
 

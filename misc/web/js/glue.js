@@ -45,7 +45,7 @@ function screenshotURL (vm, size) {
 }
 
 function vncURL (vm) {
-    return "http://localhost:9001/vnc/" + vm.host + "/" + (5900 + vm.id) + "/" + vm.name
+    return "http://localhost:9001/vnc#" + vm.host + ":" + (5900 + vm.id) + ":" + vm.name
 }
 
 var lastImages = {};
@@ -97,7 +97,13 @@ function flattenObjectValues (row, data, displayIndex) {
         []
     ).join(", ")));
 
-    tagsColumn.html(Object.keys(data.tags).length === 0 ? handleEmptyString() : Object.keys(data.tags).length);
+    var tagsHTML = [];
+    var tagsKeys = Object.keys(data.tags);
+    for (var i = 0; i < tagsKeys.length; i++) {
+        tagsHTML.push("<em>" + tagsKeys[i] + ":</em> " + data.tags[tagsKeys[i]]);
+    }
+
+    tagsColumn.html(handleEmptyString(tagsHTML.join(", ")));
 }
 
 function updateTables () {
@@ -150,8 +156,8 @@ function updateTables () {
             <div class="caption">                                            \
                 <h3></h3>                                                    \
                 <p>                                                          \
-                    <a class="btn btn-primary connect-vm-button">Connect</a> \
-                    <a href="#TODO" class="btn manage-vm-button">Manage</a>  \
+                    <a class="btn btn-primary connect-vm-button" target="_blank">Connect</a> \
+                    ' + /*<a href="#TODO" class="btn manage-vm-button">Manage</a>*/  '\
                 </p>                                                         \
             </div>                                                           \
             <div class="screenshot-state"></div>                             \

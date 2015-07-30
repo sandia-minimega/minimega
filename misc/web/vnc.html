@@ -16,7 +16,7 @@
     minimega: changed this file to be a template, added /novnc/ prefix.
     -->
     <!--<title>noVNC</title>-->
-    <title>{{ .Title }}</title>
+    <title></title>
 
     <meta charset="utf-8">
 
@@ -39,18 +39,10 @@
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="/novnc/include/base.css" title="plain">
-
-    <!-- minimega nav -->
-    {{ template "include/style" }}
-    <!--
-    <script type='text/javascript'
-        src='http://getfirebug.com/releases/lite/1.2/firebug-lite-compressed.js'></script>
-    -->
     <script src="/novnc/include/util.js"></script>
 </head>
 
 <body style="margin: 0px;">
-    {{ template "fragment/nav" }}
     <div id="noVNC_screen">
             <div id="noVNC_status_bar" class="noVNC_status_bar" style="margin-top: 0px;">
                 <table border=0 width="100%"><tr>
@@ -221,7 +213,8 @@
             password = WebUtil.getQueryVar('password', '');
             // minimega: use value from template instead of URL
             // path = WebUtil.getQueryVar('path', 'websockify');
-            path = {{ .Path }};
+            var locationArray = window.location.hash.split(":");
+            path = "ws/" + locationArray[0].substring(1) + "/" + locationArray[1];
 
             if ((!host) || (!port)) {
                 updateState('failed',
@@ -250,6 +243,13 @@
 
             rfb.connect(host, port, password, path);
         };
+        </script>
+
+        <script type="text/javascript">
+            var locationArray = window.location.hash.split(":");
+            locationArray.shift();
+            locationArray.shift();
+            document.title = locationArray.join(":");
         </script>
 
     </body>

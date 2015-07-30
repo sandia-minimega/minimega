@@ -2,6 +2,10 @@ body {
 	background-color: #ecf0f1;
 }
 
+body.modal-open {
+    overflow: hidden;
+}
+
 #logo {
 	padding: 20px;
 	width: 200px;
@@ -170,6 +174,18 @@ div.box-content {
 	border-radius: 0 0 0 6px;
 }
 
+.dataTable em {
+	font-weight: bold;
+}
+
+#machine-info table table {
+	margin-bottom: 5px;
+}
+
+#machine-info table table:last-child {
+	margin-bottom: 0;
+}
+
 /*****************************************************************************/
 
 #chart {
@@ -244,6 +260,7 @@ button span {
 
 #node-data {
 	height: 100%;
+	overflow: auto;
 }
 
 #node-heading {
@@ -348,12 +365,12 @@ button.active {
 #popup {
 	position: absolute;
 	z-index: 10;
-	width: 20%;
+	width: 120%;
 	max-height: 600px;
 	top: 100px;
 	transform: translateX(-100%);
 	margin-left: 6px;
-	min-width: 450px;
+	min-width: 575px;
 	background-color: #FFFFFF;
 	border: 1px solid #DADFE1;
 }
@@ -404,9 +421,8 @@ button.active {
 	font-style: italic;
 }
 
-#center-button {
+#chart-toolbar {
 	position: absolute;
 	margin-top: 5px;
 	margin-left: 5px;
-	outline: none;
 }
