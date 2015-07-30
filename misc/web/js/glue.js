@@ -24,7 +24,7 @@ function setView () {
 }
 
 function updateHosts () {
-    d3.text("http://localhost:9001/hosts", function (error, info) {
+    d3.text("./hosts", function (error, info) {
         if (info != hostData) {
             if (error) return console.warn(error);
 
@@ -41,11 +41,11 @@ function updateHosts () {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 function screenshotURL (vm, size) {
-    return "http://localhost:9001/screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
+    return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
 }
 
 function vncURL (vm) {
-    return "http://localhost:9001/vnc#" + vm.host + ":" + (5900 + vm.id) + ":" + vm.name
+    return "./vnc#" + vm.host + ":" + (5900 + vm.id) + ":" + vm.name
 }
 
 var lastImages = {};
