@@ -353,6 +353,7 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 		lock.Lock()
 		defer lock.Unlock()
 		results[vm.GetName()] = ok
+		results[strconv.Itoa(vm.GetID())] = ok
 	}
 
 	for _, vm := range vms {
