@@ -147,6 +147,9 @@ func (vm *KvmVM) Start() error {
 
 	if s == VM_QUIT || s == VM_ERROR {
 		log.Info("restarting VM: %v", vm.ID)
+		// Create a new channel since we closed the other one to indicate that
+		// the VM should quit.
+		vm.kill = make(chan bool)
 		ack := make(chan int)
 		go vm.launch(ack)
 		log.Debug("ack restarted VM %v", <-ack)

@@ -1,10 +1,24 @@
 .annotate false
-vm launch kvm foo[0-3]
+vm launch kvm foo[0-2]
 .columns name,state vm info
 vm start foo0
 .columns name,state vm info
+vm kill foo0
 .columns name,state vm info
-vm kill foo1,foo3
+vm start foo0
+.columns name,state vm info
+vm kill foo1
+.columns name,state vm info
+vm start all
+.columns name,state vm info
+vm start foo1
+.columns name,state vm info
+vm stop foo0
+.columns name,state vm info
+vm start foo0
+.columns name,state vm info
+vm kill foo0
+vm flush
 .columns name,state vm info
 vm kill all
 vm flush
