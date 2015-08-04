@@ -1,0 +1,66 @@
+minimega 2.1 release notes
+
+* Introduction
+
+The minimega development team is pleased to announce the release of minimega
+2.1. This release includes several bugfixes and tweaks to the 2.0 release, as
+well as substantive internal changes to pave the way for future development.
+Several new usability features have been added which should make the
+programmability and visibility of minimega environments much better.
+
+* What's new
+
+** Major changes and milestones
+
+*** new web interface
+
+*** vm launch kvm and internal changes
+
+*** tab completion
+
+*** runtime test framework
+
+** Additional new features
+
+*** vm config serial api
+
+*** bridge tunnel api
+
+*** vm launch/start/stop/kill/tag range support
+
+*** rfbplay ffmpeg transcoding
+
+*** bridge trunk multiple trunks
+
+*** .record api
+
+*** mac generation
+
+** Changes from previous versions
+
+* Availability
+
+minimega is available in several ways, both as pre-built distributions and
+source. See the [[/articles/installing.article][installing]]
+guide for more information.
+
+** Debian package
+
+minimega is available as an x86-64 debian package, available here.  It is known
+to work in debian 7 (wheezy) and 8 (testing/jessie).
+
+** tarball
+
+A pre-built, x86-64 distribution is available in a single distributable tarball
+here. It should be sufficient to simply unpack the tarball and run tools from
+the `bin/` directory directly. Most default paths in minimega, vmbetter, and
+other tools are built to be used in this way (i.e. `bin/minimega`, which will
+then look for the web directory in `misc/web`).
+
+** Building from source
+
+Source of the entire distribution is available on
+[[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
+for cloning or forking minimega on github.com. In order to build minimega, you
+will need a Go 1.3+ compiler, libreadline, and libpcap headers.
+
