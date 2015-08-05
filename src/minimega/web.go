@@ -111,7 +111,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/", webIndex)
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/vms", webVMs)
-	mux.HandleFunc("/vnc", webVNC)
+	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.HandleFunc("/ws/", vncWsHandler)
 
