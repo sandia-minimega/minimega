@@ -362,6 +362,10 @@ func vmNotFound(idOrName string) error {
 	return fmt.Errorf("vm not found: %v", idOrName)
 }
 
+func vmNotRunning(idOrName string) error {
+	return fmt.Errorf("vm not running: %v", idOrName)
+}
+
 func vmGetFirstVirtioPort() []string {
 	vmLock.Lock()
 	defer vmLock.Unlock()
