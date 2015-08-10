@@ -1392,69 +1392,24 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	config := vm.Config()
-
-	if len(config.Networks) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(config.Networks))
-		return resp
-	}
-
-	net := &config.Networks[pos]
-
-	var b *bridge
-	if c.StringArgs["bridge"] != "" {
-		b, err = getBridge(c.StringArgs["bridge"])
+	if c.BoolArgs["disconnect"] {
+		err = vm.NetworkDisconnect(pos)
 	} else {
-		b, err = getBridge(net.Bridge)
+		vlan := 0
+
+		vlan, err = strconv.Atoi(c.StringArgs["vlan"])
+
+		if vlan < 0 || vlan >= 4096 {
+			err = fmt.Errorf("invalid vlan tag %v", vlan)
+		}
+
+		if err == nil {
+			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+		}
 	}
+
 	if err != nil {
 		resp.Error = err.Error()
-		return resp
-	}
-
-	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.GetID(), pos, net)
-		err = b.TapRemove(net.VLAN, net.Tap)
-		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			net.VLAN = DisconnectedVLAN
-		}
-	} else if c.BoolArgs["connect"] {
-		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-
-		if vlan >= 0 && vlan < 4096 {
-			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.GetID(), pos, net.VLAN, b.Name, vlan)
-			oldBridge, err := getBridge(net.Bridge)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-
-			if net.VLAN != -1 {
-				err := oldBridge.TapRemove(net.VLAN, net.Tap)
-				if err != nil {
-					resp.Error = err.Error()
-					return resp
-				}
-			}
-
-			err = b.TapAdd(vlan, net.Tap, false)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-
-			net.VLAN = vlan
-			net.Bridge = b.Name
-		} else {
-			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
-		}
 	}
 
 	return resp

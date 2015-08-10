@@ -69,6 +69,14 @@ type VM interface {
 	Screenshot(size int) ([]byte, error)
 
 	UpdateBW()
+
+	// NetworkConnect updates the VM's config to reflect that it has been
+	// connected to the specified bridge and VLAN.
+	NetworkConnect(int, string, int) error
+
+	// NetworkDisconnect updates the VM's config to reflect that the specified
+	// tap has been disconnected.
+	NetworkDisconnect(int) error
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -267,6 +275,13 @@ func (vm *BaseVM) GetType() VMType {
 }
 
 func (vm *BaseVM) Kill() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.State&VM_RUNNING == 0 {
+		return fmt.Errorf("vm not running: %d", vm.ID)
+	}
+
 	// Close the channel to signal to all dependent goroutines that they should
 	// stop. Anyone blocking on the channel will unblock immediately.
 	// http://golang.org/ref/spec#Receive_operator
@@ -295,6 +310,79 @@ func (vm *BaseVM) UpdateBW() {
 		net := &vm.Networks[i]
 		net.Stats = bandwidthStats[net.Tap]
 	}
+}
+
+func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if len(vm.Networks) <= pos {
+		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
+	}
+
+	net := &vm.Networks[pos]
+
+	log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, net.VLAN, bridge, vlan)
+
+	// Do this before disconnecting from the old bridge in case the new one was
+	// mistyped or invalid.
+	newBridge, err := getBridge(bridge)
+	if err != nil {
+		return err
+	}
+
+	// Disconnect from the old bridge, if we were connected
+	if net.VLAN != DisconnectedVLAN {
+		oldBridge, err := getBridge(net.Bridge)
+		if err != nil {
+			return err
+		}
+
+		err = oldBridge.TapRemove(net.VLAN, net.Tap)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Connect to the new bridge
+	err = newBridge.TapAdd(vlan, net.Tap, false)
+	if err != nil {
+		return err
+	}
+
+	// Record updates to the VM config
+	net.VLAN = vlan
+	net.Bridge = bridge
+
+	return nil
+}
+
+func (vm *BaseVM) NetworkDisconnect(pos int) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if len(vm.Networks) <= pos {
+		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
+	}
+
+	net := &vm.Networks[pos]
+
+	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
+
+	b, err := getBridge(net.Bridge)
+	if err != nil {
+		return err
+	}
+
+	err = b.TapRemove(net.VLAN, net.Tap)
+	if err != nil {
+		return err
+	}
+
+	net.Bridge = ""
+	net.VLAN = DisconnectedVLAN
+
+	return nil
 }
 
 func (vm *BaseVM) info(mask string) (string, error) {
