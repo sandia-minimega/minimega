@@ -171,7 +171,7 @@ func (vm *KvmVM) Start() error {
 
 func (vm *KvmVM) Stop() error {
 	if vm.GetState() != VM_RUNNING {
-		return fmt.Errorf("VM %v not running", vm.ID)
+		return vmNotRunning(strconv.Itoa(vm.ID))
 	}
 
 	log.Info("stopping VM: %v", vm.ID)
@@ -287,6 +287,10 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 }
 
 func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
+	if vm.GetState()&VM_RUNNING == 0 {
+		return nil, vmNotRunning(strconv.Itoa(vm.ID))
+	}
+
 	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
 
