@@ -324,3 +324,12 @@ func hasWildcard(v map[string]bool) bool {
 
 	return v[Wildcard]
 }
+
+// writeOrDie writes data to the provided file. If there is an error, calls
+// teardown to kill minimega.
+func writeOrDie(fpath, data string) {
+	if err := ioutil.WriteFile(fpath, []byte(data), 0664); err != nil {
+		log.Errorln(err)
+		teardown()
+	}
+}

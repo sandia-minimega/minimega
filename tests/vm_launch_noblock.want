@@ -1,0 +1,29 @@
+## .annotate false
+## vm launch kvm foo[0-9] noblock
+## .columns name,state vm info
+name | state
+foo0 | BUILDING
+foo1 | BUILDING
+foo2 | BUILDING
+foo3 | BUILDING
+foo4 | BUILDING
+foo5 | BUILDING
+foo6 | BUILDING
+foo7 | BUILDING
+foo8 | BUILDING
+foo9 | BUILDING
+## vm start all
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | RUNNING
+foo2 | RUNNING
+foo3 | RUNNING
+foo4 | RUNNING
+foo5 | RUNNING
+foo6 | RUNNING
+foo7 | RUNNING
+foo8 | RUNNING
+foo9 | RUNNING
+## vm kill all
+## vm flush
