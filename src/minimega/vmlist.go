@@ -212,12 +212,15 @@ func (vms VMs) kill(target string) []error {
 	killedVms := map[int]bool{}
 
 	errs := expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
-		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
 
-		vm.Kill()
-		killedVms[vm.GetID()] = true
+		if err := vm.Kill(); err != nil {
+			log.Error("unleash the zombie VM: %v", err)
+		} else {
+			killedVms[vm.GetID()] = true
+		}
 		return true, nil
 	})
 
