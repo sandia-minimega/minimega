@@ -427,8 +427,6 @@ func (vm *KvmVM) launch(ack chan int) {
 		return
 	}
 
-	vm.setState(VM_BUILDING)
-
 	// write the config for this vm
 	config := vm.String()
 	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
@@ -590,16 +588,14 @@ func (vm *KvmVM) launch(ack chan int) {
 		}
 	}
 
-	for _, net := range vm.Networks {
-		b, err := getBridge(net.Bridge)
-		if err != nil {
-			log.Error("get bridge: %v", err)
-		} else {
-			b.TapDestroy(net.VLAN, net.Tap)
+	for i := range vm.Networks {
+		if err := vm.NetworkDisconnect(i); err != nil {
+			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
 		}
 	}
 
 	if sendKillAck {
+		log.Info("sending kill ack %v", vm.ID)
 		killAck <- vm.ID
 	}
 }

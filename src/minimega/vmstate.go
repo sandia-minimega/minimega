@@ -22,6 +22,9 @@ const (
 // All VM states in one variable for masking any state
 var VM_ANY_STATE VMState = ^0
 
+// VM states that can be killed
+var VM_KILLABLE = VM_BUILDING | VM_RUNNING | VM_PAUSED
+
 func (s VMState) String() string {
 	switch s {
 	case VM_BUILDING:

@@ -278,14 +278,15 @@ func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	if vm.State&VM_RUNNING == 0 {
-		return fmt.Errorf("vm not running: %d", vm.ID)
+	if vm.State&VM_KILLABLE == 0 {
+		return fmt.Errorf("invalid VM state to kill: %d %v", vm.ID, vm.State)
 	}
 
 	// Close the channel to signal to all dependent goroutines that they should
 	// stop. Anyone blocking on the channel will unblock immediately.
 	// http://golang.org/ref/spec#Receive_operator
 	close(vm.kill)
+
 	// TODO: ACK if killed?
 	return nil
 }
@@ -366,6 +367,11 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	}
 
 	net := &vm.Networks[pos]
+
+	// Don't try to diconnect an interface that is already disconnected...
+	if net.VLAN == DisconnectedVLAN {
+		return nil
+	}
 
 	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
 
