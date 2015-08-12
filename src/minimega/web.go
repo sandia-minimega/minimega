@@ -166,11 +166,14 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	for resps := range runCommand(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
-				if !strings.HasSuffix(resp.Error, "qmp is not ready") {
-					log.Errorln(resp.Error)
-					http.Error(w, friendlyError, http.StatusInternalServerError)
+				if strings.HasPrefix(resp.Error, "vm not running:") {
+					continue
 				}
-				continue
+
+				// Unknown error
+				log.Errorln(resp.Error)
+				http.Error(w, friendlyError, http.StatusInternalServerError)
+				return
 			}
 
 			if resp.Data == nil {
