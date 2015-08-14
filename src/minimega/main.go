@@ -225,6 +225,12 @@ func main() {
 	teardown()
 }
 
+func teardownf(format string, args ...interface{}) {
+	log.Error(format, args...)
+
+	teardown()
+}
+
 func teardown() {
 	vncClear()
 	clearAllCaptures()

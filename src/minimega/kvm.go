@@ -119,6 +119,11 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
+	// generate a UUID if we don't have one
+	if vm.UUID == "" {
+		vm.UUID = generateUUID()
+	}
+
 	return vm
 }
 
@@ -137,36 +142,44 @@ func (vm *KvmVM) UpdateCCActive() {
 	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
-func (vm *KvmVM) Start() error {
-	s := vm.GetState()
+func (vm *KvmVM) Start() (err error) {
+	// Update the state after the lock has been released
+	defer func() {
+		if err != nil {
+			log.Errorln(err)
+			vm.setState(VM_ERROR)
+		} else {
+			vm.setState(VM_RUNNING)
+		}
+	}()
 
-	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
-	if s&stateMask == 0 {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.State&VM_RUNNING != 0 {
 		return nil
 	}
 
-	if s == VM_QUIT || s == VM_ERROR {
-		log.Info("restarting VM: %v", vm.ID)
+	if vm.State == VM_QUIT || vm.State == VM_ERROR {
+		log.Info("relaunching VM: %v", vm.ID)
+
 		// Create a new channel since we closed the other one to indicate that
 		// the VM should quit.
 		vm.kill = make(chan bool)
 		ack := make(chan int)
+
 		go vm.launch(ack)
+
+		// Unlock so that launch can do its thing. We will block on receiving
+		// on the ack channel so that we know when launch has finished and it's
+		// okay to reaquire the lock.
+		vm.lock.Unlock()
 		log.Debug("ack restarted VM %v", <-ack)
+		vm.lock.Lock()
 	}
 
 	log.Info("starting VM: %v", vm.ID)
-	err := vm.q.Start()
-	if err != nil {
-		log.Errorln(err)
-		if err != qmp.ERR_READY {
-			vm.setState(VM_ERROR)
-		}
-	} else {
-		vm.setState(VM_RUNNING)
-	}
-
-	return err
+	return vm.q.Start()
 }
 
 func (vm *KvmVM) Stop() error {
@@ -319,130 +332,128 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 
 }
 
-func (vm *KvmVM) launchPreamble(ack chan int) bool {
-	// check if the vm has a conflict with the disk or mac address of another vm
-	// build state of currently running system
-	macMap := map[string]bool{}
-	selfMacMap := map[string]bool{}
-	diskSnapshotted := map[string]bool{}
-	diskPersistent := map[string]bool{}
+func (vm *KvmVM) checkDisks() error {
+	// Disk path to whether it is a snapshot or not
+	disks := map[string]bool{}
 
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-
-	// generate a UUID if we don't have one
-	if vm.UUID == "" {
-		vm.UUID = generateUUID()
-	}
-
-	// populate selfMacMap
-	for _, net := range vm.Networks {
-		if net.MAC == "" { // don't worry about empty mac addresses
+	// Record which disks are in use and whether they are being used as a
+	// snapshot or not by other VMs. If the same disk happens to be in use by
+	// different VMs and they have mismatched snapshot flags, assume that the
+	// disk is not being used in snapshot mode.
+	for _, vmOther := range vms {
+		// Skip ourself
+		if vm == vmOther {
 			continue
 		}
 
-		if _, ok := selfMacMap[net.MAC]; ok {
-			// if this vm specified the same mac address for two interfaces
-			log.Errorln("Cannot specify the same mac address for two interfaces")
-			vm.setState(VM_ERROR)
-			ack <- vm.ID // signal that this vm is "done" launching
-			return false
-		}
-		selfMacMap[net.MAC] = true
-	}
-
-	stateMask := VM_BUILDING | VM_RUNNING | VM_PAUSED
-
-	// populate macMap, diskSnapshotted, and diskPersistent
-	for _, vm2 := range vms {
-		if vm == vm2 { // ignore this vm
-			continue
-		}
-
-		s := vm2.GetState()
-
-		if s&stateMask != 0 {
-			// populate mac addresses set
-			for _, net := range vm2.Config().Networks {
-				macMap[net.MAC] = true
-			}
-
-			// TODO: Check non-kvm as well?
-			if vm2, ok := vm2.(*KvmVM); ok {
-				// populate disk sets
-				if len(vm2.DiskPaths) != 0 {
-					for _, diskpath := range vm2.DiskPaths {
-						if vm2.Snapshot {
-							diskSnapshotted[diskpath] = true
-						} else {
-							diskPersistent[diskpath] = true
-						}
-					}
-				}
+		if vmOther, ok := vmOther.(*KvmVM); ok {
+			for _, disk := range vmOther.DiskPaths {
+				disks[disk] = vmOther.Snapshot || disks[disk]
 			}
 		}
 	}
 
-	// check for mac address conflicts and fill in unspecified mac addresses without conflict
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-
-		if net.MAC == "" { // create mac addresses where unspecified
-			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
-			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
-				newMac = randomMac()               // generate a new mac address
-				_, existsOther = macMap[newMac]    // check it against the set of mac addresses from other vms
-				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
-			}
-
-			net.MAC = newMac          // set the unspecified mac address
-			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
+	// Check our disks to see if we're trying to use a disk that is in use by
+	// another VM (unless both are being used in snapshot mode).
+	for _, disk := range vm.DiskPaths {
+		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
+			return fmt.Errorf("disk path %v is already in use by another vm", disk)
 		}
 	}
 
-	// check for disk conflict
-	for _, diskPath := range vm.DiskPaths {
-		_, existsSnapshotted := diskSnapshotted[diskPath]                    // check if another vm is using this disk in snapshot mode
-		_, existsPersistent := diskPersistent[diskPath]                      // check if another vm is using this disk in persistent mode (snapshot=false)
-		if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-			log.Error("disk path %v is already in use by another vm.", diskPath)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return false
-		}
-	}
-
-	return true
+	return nil
 }
 
-func (vm *KvmVM) launch(ack chan int) {
+func (vm *KvmVM) checkInterfaces() error {
+	macs := map[string]bool{}
+
+	for _, net := range vm.Networks {
+		// Skip unassigned MACs
+		if net.MAC == "" {
+			continue
+		}
+
+		// Check if the VM already has this MAC for one of its interfaces
+		if _, ok := macs[net.MAC]; ok {
+			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
+		}
+
+		macs[net.MAC] = true
+	}
+
+	for _, vmOther := range vms {
+		// Skip ourself
+		if vm == vmOther {
+			continue
+		}
+
+		// TODO: Before, there was a state mask:
+		// 	 VM_BUILDING | VM_RUNNING | VM_PAUSED
+		// Are conflicts with QUIT VMs fine? They can be restarted...
+
+		for _, net := range vmOther.Config().Networks {
+			macs[net.MAC] = true
+		}
+
+		// TODO: Do we want to check for conflicts? Or warn them?
+	}
+
+	// Find any unassigned MACs and randomly generate a MAC for them
+	for i := range vm.Networks {
+		net := &vm.Networks[i]
+		if net.MAC != "" {
+			continue
+		}
+
+		for exists := true; exists; _, exists = macs[net.MAC] {
+			net.MAC = randomMac()
+		}
+
+		macs[net.MAC] = true
+	}
+
+	return nil
+}
+
+func (vm *KvmVM) launch(ack chan int) (err error) {
 	log.Info("launching vm: %v", vm.ID)
 
-	s := vm.GetState()
+	// Update the state after the lock has been released
+	defer func() {
+		if err != nil {
+			log.Errorln(err)
+			vm.setState(VM_ERROR)
 
-	// don't repeat the preamble if we're just in the quit state
-	if s != VM_QUIT && !vm.launchPreamble(ack) {
-		return
+			// Only ACK for failures since, on success, launch may block
+			ack <- vm.ID
+		} else {
+			vm.setState(VM_BUILDING)
+		}
+	}()
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// If this is the first time launching the VM, do the final configuration
+	// check and create a directory for it.
+	if vm.State != VM_QUIT {
+		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
+			teardownf("unable to create VM dir: %v", err)
+		}
+
+		// Check the disks and network interfaces are sane
+		err = vm.checkInterfaces()
+		if err == nil {
+			err = vm.checkDisks()
+		}
+		if err != nil {
+			return
+		}
 	}
 
 	// write the config for this vm
-	config := vm.String()
-	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-	err = ioutil.WriteFile(vm.instancePath+"name", []byte(vm.Name), 0664)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
+	writeOrDie(vm.instancePath+"config", vm.Config().String())
+	writeOrDie(vm.instancePath+"name", vm.Name)
 
 	var args []string
 	var sOut bytes.Buffer
@@ -461,18 +472,12 @@ func (vm *KvmVM) launch(ack chan int) {
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
-			log.Error("get bridge: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
+			return err
 		}
 
 		net.Tap, err = b.TapCreate(net.VLAN)
 		if err != nil {
-			log.Error("create tap: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
+			return err
 		}
 
 		updates := make(chan ipmac.IP)
@@ -507,10 +512,7 @@ func (vm *KvmVM) launch(ack chan int) {
 
 		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
-			log.Error("write instance taps file: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
+			return fmt.Errorf("write instance taps file: %v", err)
 		}
 	}
 
@@ -529,10 +531,7 @@ func (vm *KvmVM) launch(ack chan int) {
 	}
 	err = cmd.Start()
 	if err != nil {
-		log.Error("start qemu: %v %v", err, sErr.String())
-		vm.setState(VM_ERROR)
-		ack <- vm.ID
-		return
+		return fmt.Errorf("start qemu: %v %v", err, sErr.String())
 	}
 
 	vm.pid = cmd.Process.Pid
@@ -564,23 +563,22 @@ func (vm *KvmVM) launch(ack chan int) {
 			break
 		}
 		delay := QMP_CONNECT_DELAY * time.Millisecond
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.GetID(), err, delay)
+		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
 		time.Sleep(delay)
 	}
 
 	if !connected {
-		log.Error("vm %v failed to connect to qmp: %v", vm.ID, err)
-		vm.setState(VM_ERROR)
 		cmd.Process.Kill()
-		<-waitChan
-		ack <- vm.ID
-	} else {
-		log.Debug("qmp dial to %v successful", vm.GetID())
+		return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
+	}
 
-		go vm.asyncLogger()
+	log.Debug("qmp dial to %v successful", vm.ID)
 
-		ack <- vm.ID
+	go vm.asyncLogger()
 
+	ack <- vm.ID
+
+	go func() {
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -590,18 +588,19 @@ func (vm *KvmVM) launch(ack chan int) {
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
-	}
 
-	for i := range vm.Networks {
-		if err := vm.NetworkDisconnect(i); err != nil {
-			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+		for i := range vm.Networks {
+			if err := vm.NetworkDisconnect(i); err != nil {
+				log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+			}
 		}
-	}
 
-	if sendKillAck {
-		log.Info("sending kill ack %v", vm.ID)
-		killAck <- vm.ID
-	}
+		if sendKillAck {
+			killAck <- vm.ID
+		}
+	}()
+
+	return nil
 }
 
 // update the vm state, and write the state to file
