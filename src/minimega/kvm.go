@@ -147,6 +147,9 @@ func (vm *KvmVM) Start() error {
 
 	if s == VM_QUIT || s == VM_ERROR {
 		log.Info("restarting VM: %v", vm.ID)
+		// Create a new channel since we closed the other one to indicate that
+		// the VM should quit.
+		vm.kill = make(chan bool)
 		ack := make(chan int)
 		go vm.launch(ack)
 		log.Debug("ack restarted VM %v", <-ack)
@@ -168,7 +171,7 @@ func (vm *KvmVM) Start() error {
 
 func (vm *KvmVM) Stop() error {
 	if vm.GetState() != VM_RUNNING {
-		return fmt.Errorf("VM %v not running", vm.ID)
+		return vmNotRunning(strconv.Itoa(vm.ID))
 	}
 
 	log.Info("stopping VM: %v", vm.ID)
@@ -284,6 +287,10 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 }
 
 func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
+	if vm.GetState()&VM_RUNNING == 0 {
+		return nil, vmNotRunning(strconv.Itoa(vm.ID))
+	}
+
 	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
 
@@ -423,8 +430,6 @@ func (vm *KvmVM) launch(ack chan int) {
 	if s != VM_QUIT && !vm.launchPreamble(ack) {
 		return
 	}
-
-	vm.setState(VM_BUILDING)
 
 	// write the config for this vm
 	config := vm.String()
@@ -587,16 +592,14 @@ func (vm *KvmVM) launch(ack chan int) {
 		}
 	}
 
-	for _, net := range vm.Networks {
-		b, err := getBridge(net.Bridge)
-		if err != nil {
-			log.Error("get bridge: %v", err)
-		} else {
-			b.TapDestroy(net.VLAN, net.Tap)
+	for i := range vm.Networks {
+		if err := vm.NetworkDisconnect(i); err != nil {
+			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
 		}
 	}
 
 	if sendKillAck {
+		log.Info("sending kill ack %v", vm.ID)
 		killAck <- vm.ID
 	}
 }

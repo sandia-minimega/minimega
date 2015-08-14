@@ -112,7 +112,7 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 		err = vncPlaybackKB(host, vm, fname)
 	} else {
 		// List all active recordings and playbacks
-		resp.Header = []string{"Host", "VM name", "VM id", "Type", "Filename"}
+		resp.Header = []string{"host", "name", "id", "type", "filename"}
 		resp.Tabular = [][]string{}
 
 		for _, v := range vncKBRecording {
