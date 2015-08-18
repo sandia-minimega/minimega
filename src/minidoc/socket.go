@@ -142,17 +142,12 @@ func (m *megaconn) start() {
 	log.Debug("got body: %v", m.body)
 	lines := strings.Split(m.body, "\n")
 	for _, v := range lines {
-		resp, errs := sendCommand(v)
+		resp := sendCommand(v)
 		mess := &Message{
 			Id: m.id,
 		}
-		if errs != "" {
-			mess.Kind = "stderr"
-			mess.Body = errs
-		} else {
-			mess.Kind = "stdout"
-			mess.Body = resp
-		}
+		mess.Kind = "stdout"
+		mess.Body = resp
 		log.Debug("generated message: %v", mess)
 		m.out <- mess
 	}
