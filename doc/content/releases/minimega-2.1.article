@@ -14,15 +14,35 @@ programmability and visibility of minimega environments much better.
 
 *** new web interface
 
+The minimega web interface has been updated again; it now features a
+live diagram of the network layout and a more modern look.
+
 *** vm launch kvm and internal changes
 
+In preparation for Linux container support, we have changed the way
+the `vm`launch` command works. It now expects the type of the VM to
+be launched; currently, only KVM is supported. Where you would have
+previously run `vm`launch`10` to launch 10 VMs, you should now use
+`vm`launch`kvm`10` to accomplish the same task.
+
 *** tab completion
+
+Tab completion now works for minimega commands, not just filenames. As
+in bash, striking the TAB key after typing a sufficiently unique prefix
+will complete the command; if there are multiple possible completions,
+striking the TAB key again will show the possibilities.
 
 *** runtime test framework
 
 ** Additional new features
 
 *** vm config serial api
+
+minimega can now set up regular (non-virtio) serial ports for your
+VMs. The `vm`config`serial` command lets you specify how many ports
+to create; these will show up on the VM as /dev/ttyS[0,1,2...] (or
+COM[0,1,2...]); on the host side, the ports appear as unix sockets at
+$minimega_runtime/<vm_id>/serialX.
 
 *** bridge tunnel api
 
