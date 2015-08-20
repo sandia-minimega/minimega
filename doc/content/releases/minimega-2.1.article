@@ -38,6 +38,17 @@ striking the TAB key again will show the possibilities.
 
 *** Runtime test framework
 
+To help squash bugs earlier, minimega has a new runtime test framework that
+exercises some basic single-host functionality. There is a new tool, minitest,
+that runs tests from the `tests/` directory against a running minimega instance
+and checks that the output (*.got) matches the expected output (*.want). This
+tool is still in its infancy -- there are only a handful of tests and the
+framework has limited ability to clean up after itself when things go wrong
+(requiring the user to manually cleanup VMs or restart minimega). However, it
+has proven useful to find bugs introduced during the changes to the internals.
+We hope to improve upon this initial work in future releases to provide more
+complete runtime testing for minimega developers.
+
 ** Additional new features
 
 *** vm config serial API
