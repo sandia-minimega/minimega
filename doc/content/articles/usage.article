@@ -291,7 +291,7 @@ We'll start with a VM configuration that uses a disk image and 2048 MB of RAM. W
 
 From here, let's launch a single virtual machine with the name `foo_1`. We do this with the `vm`launch` command:
 
-	minimega$ vm launch foo_1
+	minimega$ vm launch kvm foo_1
 
 To check on our VM, we can use the `vm`info` command, which, with no arguments, will tell us about all VMs minimega has on this node:
 
@@ -317,7 +317,7 @@ Let's kill this VM and try a different approach. We'll use the `vm`kill` command
 
 foo_1 is now in the `QUIT` state. Now let's use `vm`launch` to launch 5 VMs at the same time, all using the configuration we described earlier. To do that, we simply call `vm`launch` with a number instead of a name:
 
-	minimega$ vm launch 5
+	minimega$ vm launch kvm 5
 
 We'll also tell minimega to only render certain columns moving forward by using the `.columns` command as a prefix to `vm`info`.
 
@@ -369,7 +369,7 @@ Say we want to network two virtual machines together on a private lan. We do thi
 	minimega$ vm config memory 2048
 	minimega$ vm config disk /tmp/foo.qcow2
 	minimega$ vm config net 100
-	minimega$ vm launch 2
+	minimega$ vm launch kvm 2
 
 This will launch two VMs with a single ethernet device on vlan 100. If, for example, one of the VMs is running a DHCP server, the others will be able to obtain a lease from that VM. When VMs are created, MAC addresses are assigned randomly:
 
@@ -381,7 +381,7 @@ This will launch two VMs with a single ethernet device on vlan 100. If, for exam
 If you want a VM to have more than one interface, simply supply additional vlan tags with the `vm`config`net` command, separated by spaces:
 
 	minimega$ vm config net 100 200 300
-	minimega$ vm launch many_interfaces
+	minimega$ vm launch kvm many_interfaces
 	minimega$ .columns name,mac,vlan .filter name=many_interface vm info
 	name            | mac                                                     | vlan
 	many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [100 200 300]
@@ -447,7 +447,7 @@ You can obtain information about running dnsmasq instances by invoking `dnsmasq`
 
 Finally, we can boot a VM:
 
-	minimega$ vm launch foo
+	minimega$ vm launch kvm foo
 	minimega$ vm start foo
 	minimega$ .columns name,ip .filter name=foo vm info
 	name | ip
@@ -469,7 +469,7 @@ Command files are simply text files containing a list of minimega commands to ru
 
 	minimega$ vm config disk foo.img
 	minimega$ vm config net 100
-	minimega$ vm launch foo-vm
+	minimega$ vm launch kvm foo-vm
 	minimega$ vm start foo-vm
 	minimega$ write launch-foo.mm
 
@@ -477,7 +477,7 @@ This will write out a file called `launch-foo.mm`, which looks like this:
 
      vm config disk foo.img
      vm config net 100
-     vm launch foo-vm
+     vm launch kvm foo-vm
      vm start foo-vm
 
 This script can then be executed by minimega using the `read` command:
@@ -514,7 +514,7 @@ This enables extending the minimega API to external controls, such as a bash scr
 	for i in `ls $IMAGES`
 	do
 	    $MM vm config disk $IMAGES/$i
-	    $MM vm launch vm-$i
+	    $MM vm launch kvm vm-$i
 	done
 
 	$MM vm start all
