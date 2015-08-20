@@ -12,51 +12,86 @@ programmability and visibility of minimega environments much better.
 
 ** Major changes and milestones
 
-*** new web interface
+*** New web interface
 
 The minimega web interface has been updated again; it now features a
-live diagram of the network layout and a more modern look.
+live diagram of the network layout and a more modern look. The new web
+interface also fixes several performance issues with the previous interface.
+Most notably the web interface now only loads VM screenshots for VMs that are
+currently displayed on the screen instead of attempting to render all VM
+screenshots on every pageload.
 
 *** vm launch kvm and internal changes
 
-In preparation for Linux container support, we have changed the way
-the `vm`launch` command works. It now expects the type of the VM to
-be launched; currently, only KVM is supported. Where you would have
-previously run `vm`launch`10` to launch 10 VMs, you should now use
-`vm`launch`kvm`10` to accomplish the same task.
+In preparation for Linux container support, we have changed the way the
+`vm`launch` command works. It now expects the type of the VM to be launched;
+currently, only KVM is supported. Where you would have previously run
+`vm`launch`10` to launch 10 VMs, you should now use `vm`launch`kvm`10` to
+accomplish the same task.
 
-*** tab completion
+*** Tab completion
 
 Tab completion now works for minimega commands, not just filenames. As
 in bash, striking the TAB key after typing a sufficiently unique prefix
 will complete the command; if there are multiple possible completions,
 striking the TAB key again will show the possibilities.
 
-*** runtime test framework
+*** Runtime test framework
 
 ** Additional new features
 
-*** vm config serial api
+*** vm config serial API
 
-minimega can now set up regular (non-virtio) serial ports for your
-VMs. The `vm`config`serial` command lets you specify how many ports
-to create; these will show up on the VM as /dev/ttyS[0,1,2...] (or
-COM[0,1,2...]); on the host side, the ports appear as unix sockets at
-$minimega_runtime/<vm_id>/serialX.
+minimega now supports specifying the number of ISA serial and virtio serial
+ports. Previous versions of minimega hardcoded one of these ports (1.0 use ISA
+serial, 2.0 used virtio serial). The default is to have no serial ports
+whatsoever. The `vm`config`serial` command lets you specify how many ports to
+create. 
 
-*** bridge tunnel api
+See the [[/articles/api.article#TOC_4.30.][vm config serial API]] for more
+information.
+
+*** bridge tunnel API
+
+The `bridge` API now supports VXLAN and GRE tunneling. This API must be
+instrumented from both ends of two minimega instances. 
+
+See the [[/articles/api.article#TOC_5.3.][bridge API]] for more information.
 
 *** vm launch/start/stop/kill/tag range support
 
+All of `vm`launch`, `vm`start`, `vm`stop`, `vm`kill`, and `vm`tag` now support
+range operations, such as:
+
+    vm launch kvm foo[1-20]
+
+Which will create foo1, foo2, ..., foo20 VMs.
+
 *** rfbplay ffmpeg transcoding
+
+The `rfbplay` tool now supports invoking ffmpeg for VNC framebuffer recordings
+directly in addition to the built-in MJPEG webserver. 
+
+See the [[/articles/vnc.article#TOC_3.1.2.][VNC record/replay]] article for
+more information.
 
 *** bridge trunk multiple trunks
 
-*** .record api
+The `bridge`trunk` API now supports adding more than one trunk port per bridge.
 
-*** mac generation
+*** .record API
 
-** Changes from previous versions
+The `.record` API allows toggling if a command is recorded in the command
+history or not. 
+
+See the [[/articles/api.article#TOC_2.9.][.record]] API for more information.
+
+*** MAC address generation
+
+Automatically generated MAC addresses are now valid according to
+[[http://standards.ieee.org/develop/regauth/oui/oui.txt]]. You may still
+override the automatically generated MAC address with any you like using the
+`vm`config`net` API.
 
 * Availability
 
@@ -66,16 +101,18 @@ guide for more information.
 
 ** Debian package
 
-minimega is available as an x86-64 debian package, available here.  It is known
-to work in debian 7 (wheezy) and 8 (testing/jessie).
+minimega is available as an x86-64 debian package, available
+[[https://storage.googleapis.com/minimega-files/minimega-2.1.deb][here]]. It
+is known to work in debian 7 (wheezy) and 8 (testing/jessie).
 
 ** tarball
 
 A pre-built, x86-64 distribution is available in a single distributable tarball
-here. It should be sufficient to simply unpack the tarball and run tools from
-the `bin/` directory directly. Most default paths in minimega, vmbetter, and
-other tools are built to be used in this way (i.e. `bin/minimega`, which will
-then look for the web directory in `misc/web`).
+[[https://storage.googleapis.com/minimega-files/minimega-2.1.tar.bz2][here]].
+It should be sufficient to simply unpack the tarball and run tools from the
+`bin/` directory directly. Most default paths in minimega, vmbetter, and other
+tools are built to be used in this way (i.e. `bin/minimega`, which will then
+look for the web directory in `misc/web`).
 
 ** Building from source
 
