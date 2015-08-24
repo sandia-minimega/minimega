@@ -64,10 +64,6 @@ You can also supply globs (wildcards) with the * operator. For example:
 	},
 }
 
-func init() {
-	registerHandlers("io", ioCLIHandlers)
-}
-
 func iomeshageInit(node *meshage.Node) {
 	var err error
 	iom, err = iomeshage.New(*f_iomBase, node)

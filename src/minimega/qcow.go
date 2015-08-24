@@ -69,10 +69,6 @@ For example:
 	},
 }
 
-func init() {
-	registerHandlers("qcow", qcowCLIHandlers)
-}
-
 //Parse the source-file:destination pairs
 func (inject *injectData) parseInjectPairs(c *minicli.Command) {
 	if inject.err != nil {

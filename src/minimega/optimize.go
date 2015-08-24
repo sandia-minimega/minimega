@@ -93,8 +93,6 @@ information.`,
 }
 
 func init() {
-	registerHandlers("optimize", optimizeCLIHandlers)
-
 	affinityClearFilter()
 }
 

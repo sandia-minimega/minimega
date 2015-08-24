@@ -38,10 +38,6 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 	},
 }
 
-func init() {
-	registerHandlers("dot", dotCLIHandlers)
-}
-
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
 func cliDot(c *minicli.Command) *minicli.Response {

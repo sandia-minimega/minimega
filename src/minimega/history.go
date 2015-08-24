@@ -46,10 +46,6 @@ the minimega command line and then saving them for later use.`,
 	},
 }
 
-func init() {
-	registerHandlers("history", historyCLIHandlers)
-}
-
 func cliHistory(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{
 		Host:     hostname,

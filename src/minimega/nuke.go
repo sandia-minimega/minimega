@@ -32,10 +32,6 @@ Should be run with caution.`,
 	},
 }
 
-func init() {
-	registerHandlers("nuke", nukeCLIHandlers)
-}
-
 // clean up after an especially bad crash, hopefully we don't have to call
 // this one much :)
 // currently this will:

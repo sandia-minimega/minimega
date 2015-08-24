@@ -77,10 +77,6 @@ the file in manually except that it stops after the first error.`,
 	},
 }
 
-func init() {
-	registerHandlers("misc", miscCLIHandlers)
-}
-
 func cliQuit(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 

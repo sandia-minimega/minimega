@@ -73,8 +73,6 @@ to the file.`,
 }
 
 func init() {
-	registerHandlers("dnsmasq", dnsmasqCLIHandlers)
-
 	dnsmasqServers = make(map[int]*dnsmasqServer)
 }
 
