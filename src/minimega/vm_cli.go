@@ -726,6 +726,16 @@ Note: this configuration only applies to KVM-based VMs.`,
 			return cliVmConfigField(c, "snapshot")
 		}),
 	},
+	{ // vm config hostname
+		HelpShort: "add me",
+		HelpLong: " add me",
+		Patterns: []string{
+			"vm config hostname [hostname]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "hostname")
+		}),
+	},
 	{ // vm config init
 		HelpShort: "add me",
 		HelpLong:  " add me",
