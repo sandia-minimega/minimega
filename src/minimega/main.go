@@ -106,6 +106,7 @@ func main() {
 	}
 
 	logSetup()
+	cliSetup()
 
 	hostname, err = os.Hostname()
 	if err != nil {

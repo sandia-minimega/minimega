@@ -37,13 +37,49 @@ var (
 	cmdLock sync.Mutex
 )
 
+// cliSetup registers all the minimega handlers
+func cliSetup() {
+	registerHandlers("bridge", bridgeCLIHandlers)
+	registerHandlers("capture", captureCLIHandlers)
+	registerHandlers("cc", ccCLIHandlers)
+	registerHandlers("deploy", deployCLIHandlers)
+	registerHandlers("dnsmasq", dnsmasqCLIHandlers)
+	registerHandlers("dot", dotCLIHandlers)
+	registerHandlers("external", externalCLIHandlers)
+	registerHandlers("history", historyCLIHandlers)
+	registerHandlers("host", hostCLIHandlers)
+	registerHandlers("io", ioCLIHandlers)
+	registerHandlers("log", logCLIHandlers)
+	registerHandlers("meshage", meshageCLIHandlers)
+	registerHandlers("misc", miscCLIHandlers)
+	registerHandlers("nuke", nukeCLIHandlers)
+	registerHandlers("optimize", optimizeCLIHandlers)
+	registerHandlers("qcow", qcowCLIHandlers)
+	registerHandlers("shell", shellCLIHandlers)
+	registerHandlers("vm", vmCLIHandlers)
+	registerHandlers("vnc", vncCLIHandlers)
+	registerHandlers("vyatta", vyattaCLIHandlers)
+	registerHandlers("web", webCLIHandlers)
+}
+
 // Wrapper for minicli.ProcessCommand. Ensures that the command execution lock
 // is acquired before running the command.
 func runCommand(cmd *minicli.Command) chan minicli.Responses {
 	cmdLock.Lock()
-	defer cmdLock.Unlock()
 
-	return minicli.ProcessCommand(cmd)
+	// Forward the responses and unlock when all are passed through
+	localChan := make(chan minicli.Responses)
+	go func() {
+		defer cmdLock.Unlock()
+
+		for resp := range minicli.ProcessCommand(cmd) {
+			localChan <- resp
+		}
+
+		close(localChan)
+	}()
+
+	return localChan
 }
 
 // Wrapper for minicli.ProcessCommand for commands that use meshage.

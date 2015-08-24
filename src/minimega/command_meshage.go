@@ -95,10 +95,6 @@ You can use 'all' to send a command to all connected clients.`,
 	},
 }
 
-func init() {
-	registerHandlers("meshage", meshageCLIHandlers)
-}
-
 func meshageHandler() {
 	for {
 		m := <-meshageCommandChan

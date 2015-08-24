@@ -129,8 +129,6 @@ Resets state for vyatta. See "help vyatta" for more information.`,
 }
 
 func init() {
-	registerHandlers("vyatta", vyattaCLIHandlers)
-
 	vyatta.Dhcp = make(map[string]*vyattaDhcp)
 }
 

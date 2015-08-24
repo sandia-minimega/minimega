@@ -80,10 +80,6 @@ Resets state for captures. See "help capture" for more information.`,
 	},
 }
 
-func init() {
-	registerHandlers("capture", captureCLIHandlers)
-}
-
 func cliCapture(c *minicli.Command) *minicli.Response {
 	if c.BoolArgs["netflow"] {
 		// Capture to netflow

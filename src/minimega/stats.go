@@ -53,7 +53,6 @@ var hostCLIHandlers = []minicli.Handler{
 }
 
 func init() {
-	registerHandlers("host", hostCLIHandlers)
 	go bandwidthCollector()
 }
 

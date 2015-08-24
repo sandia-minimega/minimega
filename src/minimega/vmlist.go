@@ -260,26 +260,18 @@ func (vms VMs) flush() {
 	}
 }
 
-func (vms VMs) info(vmType string) ([]string, [][]string, error) {
+func (vms VMs) info() ([]string, [][]string, error) {
 	table := make([][]string, 0, len(vms))
 
 	masks := vmMasks
-	if vmType == "kvm" {
-		masks = kvmMasks
-	}
 
-vmLoop:
 	for _, vm := range vms {
-		if vm.GetType().String() != vmType && vmType != "" {
-			continue
-		}
-
 		row := []string{}
 
 		for _, mask := range masks {
 			if v, err := vm.Info(mask); err != nil {
-				log.Error("bad mask for %v -- %v", vm.GetID(), err)
-				continue vmLoop
+				// Field not set for VM type, replace with placeholder
+				row = append(row, "N/A")
 			} else {
 				row = append(row, v)
 			}

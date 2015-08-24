@@ -67,10 +67,6 @@ versions not met.`,
 	},
 }
 
-func init() {
-	registerHandlers("external", externalCLIHandlers)
-}
-
 // checkExternal checks for the presence of each of the external processes we
 // may call, and error if any aren't in our path.
 func checkExternal() error {

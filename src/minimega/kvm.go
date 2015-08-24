@@ -71,13 +71,6 @@ var (
 // Ensure that vmKVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
 
-// Valid names for output masks for vm info kvm, in preferred output order
-var kvmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
-}
-
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	qemuOverrideIdChan = makeIDChan()

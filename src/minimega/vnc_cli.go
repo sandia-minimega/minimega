@@ -47,10 +47,6 @@ Resets the state for VNC recordings. See "help vnc" for more information.`,
 	},
 }
 
-func init() {
-	registerHandlers("vnc", vncCLIHandlers)
-}
-
 func cliVNC(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error

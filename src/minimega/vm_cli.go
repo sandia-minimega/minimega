@@ -65,14 +65,10 @@ Examples:
 Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
-Display all information about KVM-based VMs with the disk image foo.qc2:
-	.filter disk=foo.qc2 vm info kvm
-
 Display information about all VMs:
 	vm info`,
 		Patterns: []string{
 			"vm info",
-			"vm info <kvm,>",
 		},
 		Call: wrapSimpleCLI(cliVmInfo),
 	},
@@ -830,8 +826,6 @@ Clear all tags from all VMs:
 }
 
 func init() {
-	registerHandlers("vm", vmCLIHandlers)
-
 	// Register these so we can serialize the VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
@@ -842,18 +836,13 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
-	vmType := ""
-	if c.BoolArgs["kvm"] {
-		vmType = "kvm"
-	}
-
 	for _, vm := range vms {
 		// Populate the latest bandwidth stats for all VMs
 		vm.UpdateBW()
 		vm.UpdateCCActive()
 	}
 
-	resp.Header, resp.Tabular, err = vms.info(vmType)
+	resp.Header, resp.Tabular, err = vms.info()
 	if err != nil {
 		resp.Error = err.Error()
 		return resp

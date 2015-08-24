@@ -42,10 +42,6 @@ logged at the "info" level.`,
 	},
 }
 
-func init() {
-	registerHandlers("shell", shellCLIHandlers)
-}
-
 func cliShell(c *minicli.Command, background bool) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
