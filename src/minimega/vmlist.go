@@ -122,13 +122,13 @@ func (vms VMs) qmp(idOrName, qmp string) (string, error) {
 	}
 }
 
-func (vms VMs) screenshot(idOrName, path string, max int) error {
+func (vms VMs) screenshot(idOrName, path string, max int) ([]byte, error) {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
-		return vmNotFound(idOrName)
+		return nil, vmNotFound(idOrName)
 	}
 
-	return vm.Screenshot(path, max)
+	return vm.Screenshot(max)
 }
 
 func (vms VMs) migrate(idOrName, filename string) error {
@@ -217,12 +217,15 @@ func (vms VMs) kill(target string) []error {
 	killedVms := map[int]bool{}
 
 	errs := expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
-		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
 
-		vm.Kill()
-		killedVms[vm.GetID()] = true
+		if err := vm.Kill(); err != nil {
+			log.Error("unleash the zombie VM: %v", err)
+		} else {
+			killedVms[vm.GetID()] = true
+		}
 		return true, nil
 	})
 
@@ -355,6 +358,7 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 		lock.Lock()
 		defer lock.Unlock()
 		results[vm.GetName()] = ok
+		results[strconv.Itoa(vm.GetID())] = ok
 	}
 
 	for _, vm := range vms {

@@ -5,11 +5,10 @@
 package main
 
 import (
-	"bytes"
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"os"
@@ -313,9 +312,18 @@ An optional argument sets the maximum dimensions in pixels, while keeping the
 aspect ratio. For example, to set either maximum dimension of the output image
 to 100 pixels:
 
-	vm screenshot foo 100`,
+	vm screenshot foo 100
+
+The screenshot can be saved elsewhere like this:
+
+        vm screenshot foo file /tmp/foo.png
+
+You can also specify the maximum dimension:
+
+        vm screenshot foo file /tmp/foo.png 100`,
 		Patterns: []string{
 			"vm screenshot <vm id or name> [maximum dimension]",
+			"vm screenshot <vm id or name> file <filename> [maximum dimension]",
 		},
 		Call: wrapSimpleCLI(cliVmScreenshot),
 		Suggest: func(val, prefix string) []string {
@@ -1230,6 +1238,7 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 
 	vm := c.StringArgs["vm"]
 	maximum := c.StringArgs["maximum"]
+	file := c.StringArgs["filename"]
 
 	var max int
 	var err error
@@ -1248,23 +1257,24 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 	}
 
 	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.GetID()), "screenshot.png")
+	if file != "" {
+		path = file
+	}
 
-	err = vms.screenshot(vm, path, max)
+	pngData, err := vms.screenshot(vm, path, max)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
 	}
 
 	// add user data in case this is going across meshage
-	f, err := os.Open(path)
+	err = ioutil.WriteFile(path, pngData, os.FileMode(0644))
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
 	}
 
-	var buf bytes.Buffer
-	io.Copy(&buf, f)
-	resp.Data = buf.Bytes()
+	resp.Data = pngData
 
 	return resp
 }
@@ -1426,69 +1436,24 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	config := vm.Config()
-
-	if len(config.Networks) < pos {
-		resp.Error = fmt.Sprintf("no such network %v, VM only has %v networks", pos, len(config.Networks))
-		return resp
-	}
-
-	net := &config.Networks[pos]
-
-	var b *bridge
-	if c.StringArgs["bridge"] != "" {
-		b, err = getBridge(c.StringArgs["bridge"])
+	if c.BoolArgs["disconnect"] {
+		err = vm.NetworkDisconnect(pos)
 	} else {
-		b, err = getBridge(net.Bridge)
+		vlan := 0
+
+		vlan, err = strconv.Atoi(c.StringArgs["vlan"])
+
+		if vlan < 0 || vlan >= 4096 {
+			err = fmt.Errorf("invalid vlan tag %v", vlan)
+		}
+
+		if err == nil {
+			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+		}
 	}
+
 	if err != nil {
 		resp.Error = err.Error()
-		return resp
-	}
-
-	if c.BoolArgs["disconnect"] {
-		log.Debug("disconnect network connection: %v %v %v", vm.GetID(), pos, net)
-		err = b.TapRemove(net.VLAN, net.Tap)
-		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			net.VLAN = DisconnectedVLAN
-		}
-	} else if c.BoolArgs["connect"] {
-		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-
-		if vlan >= 0 && vlan < 4096 {
-			// new network
-			log.Debug("moving network connection: %v %v %v -> %v %v", vm.GetID(), pos, net.VLAN, b.Name, vlan)
-			oldBridge, err := getBridge(net.Bridge)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-
-			if net.VLAN != -1 {
-				err := oldBridge.TapRemove(net.VLAN, net.Tap)
-				if err != nil {
-					resp.Error = err.Error()
-					return resp
-				}
-			}
-
-			err = b.TapAdd(vlan, net.Tap, false)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-
-			net.VLAN = vlan
-			net.Bridge = b.Name
-		} else {
-			resp.Error = fmt.Sprintf("invalid vlan tag %v", net)
-		}
 	}
 
 	return resp

@@ -43,8 +43,6 @@ OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -o flag revents nodes from rebooting after a reservation has been successfully placed.
-
 The -t flag is used to specify the reservation time in integer hours. (default = 12)
 	`,
 }
@@ -55,7 +53,6 @@ var subI string // -i
 var subN int    // -n
 var subW string // -w
 var subC string // -c
-var subO bool   // -o
 var subT int    // -t
 
 func init() {
@@ -68,7 +65,6 @@ func init() {
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
-	cmdSub.Flag.BoolVar(&subO, "o", false, "")
 	cmdSub.Flag.IntVar(&subT, "t", 12, "")
 }
 
@@ -178,7 +174,7 @@ func runSub(cmd *Command, args []string) {
 	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
 	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
 	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
-	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd\n", subR))
+	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
 
 	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range pxefiles {
