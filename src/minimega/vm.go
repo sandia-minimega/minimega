@@ -133,7 +133,8 @@ type BaseVM struct {
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
 	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "tags",
+	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
+	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
 }
 
 func init() {
