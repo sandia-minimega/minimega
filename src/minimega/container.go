@@ -453,12 +453,12 @@ func containerShim() {
 }
 
 // containers don't return screenshots
-func (vm *ContainerVM) Screenshot(fpath string, size int) error {
+func (vm *ContainerVM) Screenshot(size int) ([]byte, error) {
 	data, err := base64.StdEncoding.DecodeString(containerScreenshot)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return ioutil.WriteFile(fpath, data, 0644)
+	return data, nil
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
