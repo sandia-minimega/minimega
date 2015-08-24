@@ -724,7 +724,7 @@ Note: this configuration only applies to KVM-based VMs.`,
 	},
 	{ // vm config hostname
 		HelpShort: "add me",
-		HelpLong: " add me",
+		HelpLong:  " add me",
 		Patterns: []string{
 			"vm config hostname [hostname]",
 		},

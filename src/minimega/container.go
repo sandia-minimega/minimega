@@ -124,6 +124,8 @@ var containerReadOnlyPaths = []string{
 	"/proc/bus",
 }
 
+var containerUUIDLink = "/sys/devices/virtual/dmi/id/product_uuid"
+
 var containerLinks = [][2]string{
 	{"/proc/self/fd", "/dev/fd"},
 	{"/proc/self/0", "/dev/stdin"},
@@ -291,10 +293,11 @@ func containerInit() error {
 //	3:  hostname ("CONTAINER_NONE" if none)
 //	4:  filesystem path
 //	5:  memory in megabytes
-//	6:  init program (relative to filesystem path)
-//	7:  init args
+//	6:  uuid
+//	7:  init program (relative to filesystem path)
+//	8:  init args
 func containerShim() {
-	if len(os.Args) < 7 { // 7 because init args can be nil
+	if len(os.Args) < 8 { // 8 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -332,10 +335,11 @@ func containerShim() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmInit := os.Args[6]
+	vmUUID := os.Args[6]
+	vmInit := os.Args[7]
 	var vmArgs []string
-	if len(os.Args) > 7 {
-		vmArgs = os.Args[7:]
+	if len(os.Args) > 8 {
+		vmArgs = os.Args[8:]
 	}
 
 	// set hostname
@@ -387,6 +391,13 @@ func containerShim() {
 	err = containerRemountReadOnly(vmFSPath)
 	if err != nil {
 		log.Fatal("containerRemountReadOnly: %v", err)
+	}
+
+	// mask uuid path
+	log.Debug("uuid bind mount: %v -> %v", vmUUID, containerUUIDLink)
+	err = syscall.Mount(vmUUID, filepath.Join(vmFSPath, containerUUIDLink), "", syscall.MS_BIND, "")
+	if err != nil {
+		log.Fatal("containerUUIDLink: %v", err)
 	}
 
 	// mask paths
@@ -786,14 +797,20 @@ func (vm *ContainerVM) launch(ack chan int) {
 		return
 	}
 
+	// create the uuid path that will bind mount into sysfs in the
+	// container
+	uuidPath := filepath.Join(vm.instancePath, "uuid")
+	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
+
 	//	0:  minimega binary
 	// 	1:  CONTAINER
 	//	2:  vm id
 	//	3:  hostname ("CONTAINER_NONE" if none)
 	//	4:  filesystem path
 	//	5:  memory in megabytes
-	//	6:  init program (relative to filesystem path)
-	//	7+:  init args
+	//	6:  uuid path
+	//	7:  init program (relative to filesystem path)
+	//	8+:  init args
 	hn := vm.Hostname
 	if hn == "" {
 		hn = CONTAINER_NONE
@@ -805,6 +822,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 		hn,
 		vm.effectivePath,
 		vm.Memory,
+		uuidPath,
 		vm.Init,
 	}
 	if vm.Args != nil {
