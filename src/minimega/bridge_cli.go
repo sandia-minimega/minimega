@@ -92,10 +92,6 @@ To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For exam
 	},
 }
 
-func init() {
-	registerHandlers("bridge", bridgeCLIHandlers)
-}
-
 // routines for interfacing bridge mechanisms with the cli
 func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}

@@ -58,10 +58,6 @@ Resets state for logging. See "help log ..." for more information.`,
 	},
 }
 
-func init() {
-	registerHandlers("log", logCLIHandlers)
-}
-
 func cliLogLevel(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 

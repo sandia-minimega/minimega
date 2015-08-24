@@ -61,10 +61,6 @@ flags used when launching minimega.`,
 
 var deployFlags []string
 
-func init() {
-	registerHandlers("deploy", deployCLIHandlers)
-}
-
 func cliDeploy(c *minicli.Command) *minicli.Response {
 	log.Debugln("deploy")
 

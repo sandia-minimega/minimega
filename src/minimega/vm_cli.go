@@ -780,8 +780,6 @@ Clear all tags from all VMs:
 }
 
 func init() {
-	registerHandlers("vm", vmCLIHandlers)
-
 	// Register these so we can serialize the VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})

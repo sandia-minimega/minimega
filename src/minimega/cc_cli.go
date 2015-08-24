@@ -114,10 +114,6 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"rtunnel":    cliCCTunnel,
 }
 
-func init() {
-	registerHandlers("cc", ccCLIHandlers)
-}
-
 func cliCC(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error

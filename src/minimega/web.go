@@ -68,11 +68,6 @@ NOTE: If you start the webserver with an invalid root, you can safely re-run
 	},
 }
 
-func init() {
-	registerHandlers("web", webCLIHandlers)
-
-}
-
 func cliWeb(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
