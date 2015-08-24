@@ -19,6 +19,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"text/tabwriter"
@@ -34,8 +35,10 @@ import (
 // 	https://github.com/syndtr/gocapability/blob/master/capability/capability_linux.go
 
 const (
-	CGROUP_PATH = "/sys/fs/cgroup/minimega"
-	CGROUP_ROOT = "/sys/fs/cgroup"
+	CGROUP_PATH     = "/sys/fs/cgroup/minimega"
+	CGROUP_ROOT     = "/sys/fs/cgroup"
+	CONTAINER_MAGIC = "CONTAINER"
+	CONTAINER_NONE  = "CONTAINER_NONE"
 )
 
 const (
@@ -110,7 +113,7 @@ type cap struct {
 
 const CONTAINER_FLAGS = syscall.CLONE_NEWNET | syscall.CLONE_NEWIPC | syscall.CLONE_NEWNS | syscall.CLONE_NEWPID | syscall.CLONE_NEWUTS | syscall.CLONE_VFORK | syscall.SIGCHLD
 
-var containerMaskPaths = []string{
+var containerMaskedPaths = []string{
 	"/proc/kcore",
 }
 
@@ -209,7 +212,10 @@ type ContainerVM struct {
 	BaseVM          // embed
 	ContainerConfig // embed
 
-	pid int
+	pid           int
+	effectivePath string
+	listener      net.Listener
+	netns         string
 }
 
 func (vm *ContainerVM) UpdateCCActive() {
@@ -231,27 +237,219 @@ func init() {
 	for _, fns := range containerConfigFns {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
+}
 
-	// create a minimega cgroup
-	// TODO: ensure devices cgroups are mounted
-	// for now just assume it's at /sys/fs/cgroup
-	err := os.MkdirAll(CGROUP_PATH, 0755)
-	if err != nil {
-		fmt.Printf("creating minimega cgroup: %v", err)
-		os.Exit(1)
-	}
+var (
+	cgroupInitialized bool
+)
 
+func containerInit() error {
 	// inherit cpusets
-	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
+	err := ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
 	if err != nil {
-		fmt.Printf("setting cgroup: %v", err)
-		os.Exit(1)
+		return fmt.Errorf("setting cgroup: %v", err)
 	}
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
 	if err != nil {
-		fmt.Printf("setting use_hierarchy: %v", err)
+		return fmt.Errorf("setting use_hierarchy: %v", err)
+	}
+
+	// create a minimega cgroup
+	err = os.MkdirAll(CGROUP_PATH, 0755)
+	if err != nil {
+		return fmt.Errorf("creating minimega cgroup: %v", err)
+	}
+	return nil
+}
+
+// golang can't easily support the typical clone+exec method of firing off a
+// child process. We need a child process to do ample setup for containers
+// *post* clone.  We have two options - duplicate the forkAndExec shim in
+// src/syscall to do a clone and get into a new minimega that can finish the
+// container setup, or start a new minimega with an 'nsinit' C shim *before*
+// the runtime starts. Docker and others use the latter, though it's not
+// entirely clear why they don't just borrow the forkAndExec method. We'll use
+// the forkAndExec method here.
+//
+// This function is a shim to finalize container setup from a running minimega
+// parent. It expects to be called inside namespace isolations (mount, pid,
+// etc...) with args: minimega CONTAINER hostname fsPath...
+//
+// A number of fds get passed to the child on specific fd numbers:
+//
+// 	3: logging port, closed just before exec into init
+// 	4: closed by the child before exec to elect to be frozen
+// 	5: closed by the parent when the child returns to allow calling exec
+// 	6: stdin
+// 	7: stdout
+// 	8: stderr
+//
+// A number of arguments are passed on os.Args to configure the container:
+//	0:  minimega binary
+// 	1:  CONTAINER
+//	2:  vm id
+//	3:  hostname ("CONTAINER_NONE" if none)
+//	4:  filesystem path
+//	5:  memory in megabytes
+//	6:  init program (relative to filesystem path)
+//	7:  init args
+func containerShim() {
+	if len(os.Args) < 7 { // 7 because init args can be nil
 		os.Exit(1)
 	}
+
+	// we log to fd(3), and close it before we move on to exec ourselves
+	logFile := os.NewFile(uintptr(3), "")
+	log.AddLogger("file", logFile, log.DEBUG, false)
+
+	log.Debug("containerShim: %v", os.Args)
+
+	// dup2 stdio
+	err := syscall.Dup2(6, syscall.Stdin)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = syscall.Dup2(7, syscall.Stdout)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	err = syscall.Dup2(8, syscall.Stderr)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// get args
+	vmID, err := strconv.Atoi(os.Args[2])
+	if err != nil {
+		log.Fatalln(err)
+	}
+	vmHostname := os.Args[3]
+	if vmHostname == CONTAINER_NONE {
+		vmHostname = ""
+	}
+	vmFSPath := os.Args[4]
+	vmMemory, err := strconv.Atoi(os.Args[5])
+	if err != nil {
+		log.Fatalln(err)
+	}
+	vmInit := os.Args[6]
+	var vmArgs []string
+	if len(os.Args) > 7 {
+		vmArgs = os.Args[7:]
+	}
+
+	// set hostname
+	log.Debug("vm %v hostname", vmID)
+	if vmHostname != "" {
+		_, err := exec.Command(process("hostname"), vmHostname).Output()
+		if err != nil {
+			log.Fatal("set hostname: %v", err)
+		}
+	}
+
+	// setup the root fs
+	log.Debug("vm %v containerSetupRoot", vmID)
+	err = containerSetupRoot(vmFSPath)
+	if err != nil {
+		log.Fatal("containerSetupRoot: %v", err)
+	}
+
+	// mount defaults
+	log.Debug("vm %v containerMountDefaults", vmID)
+	err = containerMountDefaults(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMountDefaults: %v", err)
+	}
+
+	// mknod
+	log.Debug("vm %v containerMknodDevices", vmID)
+	err = containerMknodDevices(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMknodDevices: %v", err)
+	}
+
+	// pseudoterminals
+	log.Debug("vm %v containerPtmx", vmID)
+	err = containerPtmx(vmFSPath)
+	if err != nil {
+		log.Fatal("containerPtmx: %v", err)
+	}
+
+	// symlinks
+	log.Debug("vm %v containerSymlinks", vmID)
+	err = containerSymlinks(vmFSPath)
+	if err != nil {
+		log.Fatal("containerSymlinks: %v", err)
+	}
+
+	// remount key paths as read-only
+	log.Debug("vm %v containerRemountReadOnly", vmID)
+	err = containerRemountReadOnly(vmFSPath)
+	if err != nil {
+		log.Fatal("containerRemountReadOnly: %v", err)
+	}
+
+	// mask paths
+	log.Debug("vm %v containerMaskPaths", vmID)
+	err = containerMaskPaths(vmFSPath)
+	if err != nil {
+		log.Fatal("containerMaskPaths: %v", err)
+	}
+
+	// setup cgroups for this vm
+	log.Debug("vm %v containerPopulateCgroups", vmID)
+	err = containerPopulateCgroups(vmID, vmMemory)
+	if err != nil {
+		log.Fatal("containerPopulateCgroups: %v", err)
+	}
+
+	// chdir
+	log.Debug("vm %v chdir", vmID)
+	err = syscall.Chdir(vmFSPath)
+	if err != nil {
+		log.Fatal("chdir: %v", err)
+	}
+
+	// attempt to chroot
+	log.Debug("vm %v containerChroot", vmID)
+	err = containerChroot(vmFSPath)
+	if err != nil {
+		log.Fatal("containerChroot: %v", err)
+	}
+
+	// set capabilities
+	log.Debug("vm %v containerSetCapabilities", vmID)
+	err = containerSetCapabilities()
+	if err != nil {
+		log.Fatal("containerSetCapabilities: %v", err)
+	}
+
+	// in order to synchronize freezing the container before we call init,
+	// we close fd(4) to signal the parent that we're ready to freeze. We
+	// then read fd(5) in order to block for the parent. The parent will
+	// freeze the child and close the other end of fd(5). Upon unfreezing,
+	// the read will fail and we can move on to exec.
+
+	log.Debug("sync for freezing")
+	sync1 := os.NewFile(uintptr(4), "")
+	sync2 := os.NewFile(uintptr(5), "")
+	sync1.Close()
+	var buf = make([]byte, 1)
+	sync2.Read(buf)
+	log.Debug("return from freezing")
+
+	// close fds we don't want in init
+	logFile.Close()
+
+	// GO!
+	log.Debug("vm %v exec: %v %v", vmID, vmInit, vmArgs)
+	err = syscall.Exec(vmInit, vmArgs, nil)
+	if err != nil {
+		log.Fatal("Exec: %v", err)
+	}
+
+	// the new child process will exit and the parent will catch it
+	log.Fatalln("how did I get here?")
 }
 
 // containers don't return screenshots
@@ -302,7 +500,6 @@ func (vm *ContainerVM) Launch(ack chan int) error {
 }
 
 func (vm *ContainerVM) Start() error {
-	log.Debugln("HEY")
 	s := vm.GetState()
 
 	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
@@ -318,8 +515,6 @@ func (vm *ContainerVM) Start() error {
 	}
 
 	log.Info("starting VM: %v", vm.ID)
-
-	// TODO: container unpause
 
 	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
 	err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644)
@@ -493,6 +688,15 @@ func (vm *ContainerVM) launchPreamble(ack chan int) bool {
 func (vm *ContainerVM) launch(ack chan int) {
 	log.Info("launching vm: %v", vm.ID)
 
+	if !cgroupInitialized {
+		err := containerInit()
+		if err != nil {
+			log.Errorln(err)
+			teardown()
+		}
+		cgroupInitialized = true
+	}
+
 	s := vm.GetState()
 
 	// don't repeat the preamble if we're just in the quit state
@@ -522,65 +726,37 @@ func (vm *ContainerVM) launch(ack chan int) {
 		vm.Networks[i].Tap = ""
 	}
 
-	// create and add taps if we are associated with any networks
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-
-		b, err := getBridge(net.Bridge)
+	if vm.Snapshot {
+		err = vm.overlayMount()
 		if err != nil {
-			log.Error("get bridge: %v", err)
+			log.Error("overlayMount: %v", err)
 			vm.setState(VM_ERROR)
 			ack <- vm.ID
 			return
 		}
-
-		net.Tap, err = b.TapCreate(net.VLAN)
-		if err != nil {
-			log.Error("create tap: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
-		}
-
-		updates := make(chan ipmac.IP)
-		go func(vm *ContainerVM, net *NetConfig) {
-			defer close(updates)
-			for {
-				// TODO: need to acquire VM lock?
-				select {
-				case update := <-updates:
-					if update.IP4 != "" {
-						net.IP4 = update.IP4
-					} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
-						log.Debugln("ignoring link-local over existing IPv6 address")
-					} else if update.IP6 != "" {
-						net.IP6 = update.IP6
-					}
-				case <-vm.kill:
-					b.iml.DelMac(net.MAC)
-					return
-				}
-			}
-		}(vm, net)
-
-		b.iml.AddMac(net.MAC, updates)
+	} else {
+		vm.effectivePath = vm.FSPath
 	}
 
-	if len(vm.Networks) > 0 {
-		taps := []string{}
-		for _, net := range vm.Networks {
-			taps = append(taps, net.Tap)
-		}
-
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
-		if err != nil {
-			log.Error("write instance taps file: %v", err)
-			vm.setState(VM_ERROR)
-			ack <- vm.ID
-			return
-		}
+	// the child process will communicate with a fake console using pipes
+	// to mimic stdio, and a fourth pipe for logging before the child execs
+	// into the init program
+	// two additional pipes are needed to synchronize freezing the child
+	// before it enters the container
+	parentLog, childLog, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
 	}
-
+	childStdin, parentStdin, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
 	parentStdout, childStdout, err := os.Pipe()
 	if err != nil {
 		log.Error("pipe: %v", err)
@@ -595,7 +771,14 @@ func (vm *ContainerVM) launch(ack chan int) {
 		ack <- vm.ID
 		return
 	}
-	childStdin, parentStdin, err := os.Pipe()
+	parentSync1, childSync1, err := os.Pipe()
+	if err != nil {
+		log.Error("pipe: %v", err)
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
+		return
+	}
+	childSync2, parentSync2, err := os.Pipe()
 	if err != nil {
 		log.Error("pipe: %v", err)
 		vm.setState(VM_ERROR)
@@ -603,186 +786,315 @@ func (vm *ContainerVM) launch(ack chan int) {
 		return
 	}
 
+	//	0:  minimega binary
+	// 	1:  CONTAINER
+	//	2:  vm id
+	//	3:  hostname ("CONTAINER_NONE" if none)
+	//	4:  filesystem path
+	//	5:  memory in megabytes
+	//	6:  init program (relative to filesystem path)
+	//	7+:  init args
+	hn := vm.Hostname
+	if hn == "" {
+		hn = CONTAINER_NONE
+	}
+	args := []string{
+		os.Args[0],
+		CONTAINER_MAGIC,
+		fmt.Sprintf("%v", vm.ID),
+		hn,
+		vm.effectivePath,
+		vm.Memory,
+		vm.Init,
+	}
+	if vm.Args != nil {
+		args = append(args, vm.Args...)
+	}
+
 	// launch the container
-	pid, err := vm.clone()
+	cmd := &exec.Cmd{
+		Path: os.Args[0],
+		Args: args,
+		Env:  nil,
+		Dir:  "",
+		ExtraFiles: []*os.File{
+			childLog,
+			childSync1,
+			childSync2,
+			childStdin,
+			childStdout,
+			childStderr,
+		},
+		SysProcAttr: &syscall.SysProcAttr{
+			Cloneflags: uintptr(CONTAINER_FLAGS),
+		},
+	}
+	err = cmd.Start()
 	if err != nil {
-		log.Error("clone: %v", err)
+		vm.overlayUnmount()
+		log.Error("start container: %v", err)
 		vm.setState(VM_ERROR)
 		ack <- vm.ID
 		return
 	}
 
-	log.Debug("clone pid: %v", pid)
+	vm.pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
 
-	if pid != 0 {
-		// parent
+	// log the child
+	childLog.Close()
+	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
-		go vm.console(parentStdin, parentStdout, parentStderr)
+	go vm.console(parentStdin, parentStdout, parentStderr)
 
-		vm.pid = pid
-		log.Debug("vm %v has pid %v", vm.ID, vm.pid)
-
-		p, err := os.FindProcess(pid)
+	go func() {
+		err := cmd.Wait()
+		vm.setState(VM_QUIT)
 		if err != nil {
-			log.Fatal("FindProcess: %v", err)
-		}
-
-		go func() {
-			_, err := p.Wait()
-			vm.setState(VM_QUIT)
-			if err != nil {
-				if err.Error() != "signal: killed" { // because we killed it
-					log.Error("kill container: %v", err)
-					vm.setState(VM_ERROR)
-				}
+			if err.Error() != "signal: killed" { // because we killed it
+				log.Error("kill container: %v", err)
+				vm.setState(VM_ERROR)
 			}
-			waitChan <- vm.ID
-		}()
+		}
+		waitChan <- vm.ID
+	}()
 
-		// we can't just return on error at this point because we'll
-		// leave dangling goroutines, we have to clean up on failure
-		sendKillAck := false
+	// we can't just return on error at this point because we'll
+	// leave dangling goroutines, we have to clean up on failure
+	success := true
+	sendKillAck := false
 
-		// TODO: add affinity funcs for containers
-		// vm.CheckAffinity()
+	// TODO: add affinity funcs for containers
+	// vm.CheckAffinity()
 
-		ack <- vm.ID
+	// network creation for containers happens /after/ the container is
+	// started, as we need the PID in order to attach a veth to the
+	// container side of the network namespace.
+	// create and add taps if we are associated with any networks
 
+	// expose the network namespace to iptool
+	err = vm.symlinkNetns()
+	if err != nil {
+		log.Error("symlinkNetns: %v", err)
+		vm.setState(VM_ERROR)
+		cmd.Process.Kill()
+		<-waitChan
+		success = false
+	}
+
+	if success {
+		for i := range vm.Networks {
+			net := &vm.Networks[i]
+
+			b, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Error("get bridge: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+				break
+			}
+
+			net.Tap, err = b.ContainerTapCreate(net.VLAN, vm.netns, net.MAC, i)
+			if err != nil {
+				log.Error("create tap: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+				break
+			}
+
+			updates := make(chan ipmac.IP)
+			go func(vm *ContainerVM, net *NetConfig) {
+				defer close(updates)
+				for {
+					// TODO: need to acquire VM lock?
+					select {
+					case update := <-updates:
+						if update.IP4 != "" {
+							net.IP4 = update.IP4
+						} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
+							log.Debugln("ignoring link-local over existing IPv6 address")
+						} else if update.IP6 != "" {
+							net.IP6 = update.IP6
+						}
+					case <-vm.kill:
+						b.iml.DelMac(net.MAC)
+						return
+					}
+				}
+			}(vm, net)
+
+			b.iml.AddMac(net.MAC, updates)
+		}
+	}
+
+	if success {
+		if len(vm.Networks) > 0 {
+			taps := []string{}
+			for _, net := range vm.Networks {
+				taps = append(taps, net.Tap)
+			}
+
+			err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+			if err != nil {
+				log.Error("write instance taps file: %v", err)
+				vm.setState(VM_ERROR)
+				cmd.Process.Kill()
+				<-waitChan
+				success = false
+			}
+		}
+	}
+
+	childSync1.Close()
+	if success {
+		// wait for the freezer notification
+		var buf = make([]byte, 1)
+		parentSync1.Read(buf)
+		freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+		err = ioutil.WriteFile(freezer, []byte("FROZEN"), 0644)
+		if err != nil {
+			log.Error("freezer: %v", err)
+			vm.setState(VM_ERROR)
+			cmd.Process.Kill()
+			<-waitChan
+			success = false
+		}
+		parentSync2.Close()
+	} else {
+		parentSync1.Close()
+		parentSync2.Close()
+	}
+
+	ack <- vm.ID
+
+	if success {
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
-			p.Kill()
+			cmd.Process.Kill()
 
 			// containers cannot return unless thawed, so thaw the
 			// process if necessary
-			vm.Start()
+			freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+			err = ioutil.WriteFile(freezer, []byte("THAWED"), 0644)
+			if err != nil {
+				log.Error("freezer: %v", err)
+				vm.setState(VM_ERROR)
+				<-waitChan
+			}
 
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
-
-		// TODO: umountDefaults
-
-		for _, net := range vm.Networks {
-			b, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-			} else {
-				b.TapDestroy(net.VLAN, net.Tap)
-			}
-		}
-
-		// clean up the cgroup directory
-		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
-		err = os.Remove(cgroupPath)
-		if err != nil {
-			log.Errorln(err)
-		}
-
-		if sendKillAck {
-			killAck <- vm.ID
-		}
-	} else {
-		// child - use log.Fatalln like it's going out of style
-
-		// set hostname
-		if vm.Hostname != "" {
-			_, err := exec.Command(process("hostname"), vm.Hostname).Output()
-			if err != nil {
-				log.Fatal("set hostname: %v", err)
-			}
-		}
-
-		// setup the root fs
-		err = vm.setupRoot()
-		if err != nil {
-			log.Fatal("setupRoot: %v", err)
-		}
-
-		// mount defaults
-		err = vm.mountDefaults()
-		if err != nil {
-			log.Fatal("mountDefaults: %v", err)
-		}
-
-		// mknod
-		err = vm.mknodDevices()
-		if err != nil {
-			log.Fatal("mknodDevices: %v", err)
-		}
-
-		// pseudoterminals
-		err = vm.ptmx()
-		if err != nil {
-			log.Fatal("ptmx: %v", err)
-		}
-
-		err = syscall.Dup2(int(childStdout.Fd()), syscall.Stdout)
-		if err != nil {
-			log.Fatal("dup2 stdout: %v", err)
-		}
-		err = syscall.Dup2(int(childStderr.Fd()), syscall.Stderr)
-		if err != nil {
-			log.Fatal("dup2 stderr: %v", err)
-		}
-		err = syscall.Dup2(int(childStdin.Fd()), syscall.Stdin)
-		if err != nil {
-			log.Fatal("dup2 stdin: %v", err)
-		}
-
-		// symlinks
-		err = vm.symlinks()
-		if err != nil {
-			log.Fatal("symlinks: %v", err)
-		}
-
-		// remount key paths as read-only
-		err = vm.remountReadOnly()
-		if err != nil {
-			log.Fatal("remountReadOnly: %v", err)
-		}
-
-		// mask paths
-		err = vm.maskPaths()
-		if err != nil {
-			log.Fatal("maskPaths: %v", err)
-		}
-
-		// setup cgroups for this vm
-		err = vm.populateCgroups()
-		if err != nil {
-			log.Fatal("populateCgroups: %v", err)
-		}
-
-		// chdir
-		err = syscall.Chdir(vm.FSPath)
-		if err != nil {
-			log.Fatal("chdir: %v", err)
-		}
-
-		// attempt to chroot
-		err = vm.chroot()
-		if err != nil {
-			log.Fatal("chroot: %v", err)
-		}
-
-		// set capabilities
-		err = vm.setCapabilities()
-		if err != nil {
-			log.Fatal("setCapabilities: %v", err)
-		}
-
-		// GO!
-		err = syscall.Exec(vm.Init, vm.Args, nil)
-		if err != nil {
-			log.Fatal("Exec: %v", err)
-		}
-
-		// the new child process will exit and the parent will catch it
-		log.Fatalln("how did I get here?")
 	}
+
+	vm.listener.Close()
+	vm.unlinkNetns()
+
+	for _, net := range vm.Networks {
+		b, err := getBridge(net.Bridge)
+		if err != nil {
+			log.Error("get bridge: %v", err)
+		} else {
+			b.ContainerTapDestroy(net.VLAN, net.Tap)
+		}
+	}
+
+	// clean up the cgroup directory
+	cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
+	err = os.Remove(cgroupPath)
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	// umount the overlay, if any
+	if vm.Snapshot {
+		vm.overlayUnmount()
+	}
+
+	if sendKillAck {
+		killAck <- vm.ID
+	}
+}
+
+func (vm *ContainerVM) symlinkNetns() error {
+	err := os.MkdirAll("/var/run/netns", 0755)
+	if err != nil {
+		return err
+	}
+	src := fmt.Sprintf("/proc/%v/ns/net", vm.pid)
+	dst := fmt.Sprintf("/var/run/netns/meganet_%v", vm.ID)
+	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
+	return os.Symlink(src, dst)
+}
+
+func (vm *ContainerVM) unlinkNetns() error {
+	dst := fmt.Sprintf("/var/run/netns/%v", vm.netns)
+	return os.Remove(dst)
+}
+
+// create an overlay mount (linux 3.18 or greater) is snapshot mode is
+// being used.
+func (vm *ContainerVM) overlayMount() error {
+	vm.effectivePath = filepath.Join(vm.instancePath, "fs")
+	workPath := filepath.Join(vm.instancePath, "fs_work")
+
+	err := os.MkdirAll(vm.effectivePath, 0755)
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(workPath, 0755)
+	if err != nil {
+		return err
+	}
+
+	// create the overlay mountpoint
+	cmd := &exec.Cmd{
+		Path: process("mount"),
+		Args: []string{
+			process("mount"),
+			"-t",
+			"overlay",
+			fmt.Sprintf("megamount_%v", vm.ID),
+			"-o",
+			fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
+			vm.effectivePath,
+		},
+		Env: nil,
+		Dir: "",
+	}
+	log.Debug("mounting overlay: %v", cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error("overlay mount: %v %v", err, string(output))
+		return err
+	}
+	return nil
+}
+
+func (vm *ContainerVM) overlayUnmount() error {
+	cmd := &exec.Cmd{
+		Path: process("umount"),
+		Args: []string{
+			process("umount"),
+			vm.effectivePath,
+		},
+		Env: nil,
+		Dir: "",
+	}
+	log.Debug("unmount: %v", cmd)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Error("overlay umount: %v %v", err, string(output))
+		return err
+	}
+	return nil
 }
 
 func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
@@ -792,10 +1104,14 @@ func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
 		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
 		return
 	}
+	vm.listener = l
 
 	for {
 		conn, err := l.Accept()
 		if err != nil {
+			if strings.Contains(err.Error(), "use of closed network connection") {
+				return
+			}
 			log.Error("console socket on vm %v: %v", vm.ID, err)
 			continue
 		}
@@ -808,7 +1124,7 @@ func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
 	}
 }
 
-func (vm *ContainerVM) setCapabilities() error {
+func containerSetCapabilities() error {
 	c := new(cap)
 	c.header.version = CAPV3
 	c.header.pid = os.Getpid()
@@ -883,12 +1199,10 @@ func prctl(option int, arg2, arg3, arg4, arg5 uintptr) error {
 	return nil
 }
 
-func (vm *ContainerVM) chroot() error {
-	err := syscall.Mount(vm.FSPath, "/", "", syscall.MS_MOVE, "")
+func containerChroot(fsPath string) error {
+	err := syscall.Mount(fsPath, "/", "", syscall.MS_MOVE, "")
 	if err != nil {
-		log.Debug("could not MS_MOVE mount, using chroot+chdir")
-	} else {
-		return nil
+		return err
 	}
 	err = syscall.Chroot(".")
 	if err != nil {
@@ -897,8 +1211,8 @@ func (vm *ContainerVM) chroot() error {
 	return syscall.Chdir("/")
 }
 
-func (vm *ContainerVM) populateCgroups() error {
-	cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
+func containerPopulateCgroups(vmID, vmMemory int) error {
+	cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vmID))
 	log.Debug("using cgroupPath: %v", cgroupPath)
 
 	err := os.MkdirAll(cgroupPath, 0755)
@@ -924,7 +1238,7 @@ func (vm *ContainerVM) populateCgroups() error {
 	}
 
 	// memory
-	err = ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vm.Memory)), 0644)
+	err = ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vmMemory)), 0644)
 	if err != nil {
 		return err
 	}
@@ -938,9 +1252,9 @@ func (vm *ContainerVM) populateCgroups() error {
 	return nil
 }
 
-func (vm *ContainerVM) maskPaths() error {
-	for _, v := range containerMaskPaths {
-		p := filepath.Join(vm.FSPath, v)
+func containerMaskPaths(fsPath string) error {
+	for _, v := range containerMaskedPaths {
+		p := filepath.Join(fsPath, v)
 		err := syscall.Mount("/dev/null", p, "", syscall.MS_BIND, "")
 		if err != nil {
 			return err
@@ -949,9 +1263,9 @@ func (vm *ContainerVM) maskPaths() error {
 	return nil
 }
 
-func (vm *ContainerVM) remountReadOnly() error {
+func containerRemountReadOnly(fsPath string) error {
 	for _, v := range containerReadOnlyPaths {
-		p := filepath.Join(vm.FSPath, v)
+		p := filepath.Join(fsPath, v)
 		err := syscall.Mount("", p, "", syscall.MS_REMOUNT|syscall.MS_RDONLY, "")
 		if err == nil {
 			continue // this was actually a mountpoint
@@ -968,9 +1282,9 @@ func (vm *ContainerVM) remountReadOnly() error {
 	return nil
 }
 
-func (vm *ContainerVM) symlinks() error {
+func containerSymlinks(fsPath string) error {
 	for _, l := range containerLinks {
-		path := filepath.Join(vm.FSPath, l[1])
+		path := filepath.Join(fsPath, l[1])
 		os.Remove(path)
 		err := os.Symlink(l[0], path)
 		if err != nil {
@@ -980,8 +1294,8 @@ func (vm *ContainerVM) symlinks() error {
 	return nil
 }
 
-func (vm *ContainerVM) ptmx() error {
-	path := filepath.Join(vm.FSPath, "/dev/ptmx")
+func containerPtmx(fsPath string) error {
+	path := filepath.Join(fsPath, "/dev/ptmx")
 	os.Remove(path)
 	err := os.Symlink("pts/ptmx", path)
 	if err != nil {
@@ -989,7 +1303,7 @@ func (vm *ContainerVM) ptmx() error {
 	}
 
 	// bind mount /dev/console
-	path = filepath.Join(vm.FSPath, "/dev/console")
+	path = filepath.Join(fsPath, "/dev/console")
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -998,9 +1312,9 @@ func (vm *ContainerVM) ptmx() error {
 	return syscall.Mount("/dev/console", path, "", syscall.MS_BIND, "")
 }
 
-func (vm *ContainerVM) mknodDevices() error {
+func containerMknodDevices(fsPath string) error {
 	for _, v := range containerDeviceNames {
-		path := filepath.Join(vm.FSPath, v.Name)
+		path := filepath.Join(fsPath, v.Name)
 		mode := v.Mode
 		if v.Type == "c" {
 			mode |= syscall.S_IFCHR
@@ -1016,85 +1330,68 @@ func (vm *ContainerVM) mknodDevices() error {
 	return nil
 }
 
-func (vm *ContainerVM) setupRoot() error {
+func containerSetupRoot(fsPath string) error {
 	err := syscall.Mount("", "/", "", syscall.MS_SLAVE|syscall.MS_REC, "")
 	if err != nil {
 		return err
 	}
-	return syscall.Mount(vm.FSPath, vm.FSPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
+	return syscall.Mount(fsPath, fsPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
 }
 
-func (vm *ContainerVM) mountDefaults() error {
-	log.Debug("mountDefaults: %v", vm.FSPath)
+func containerMountDefaults(fsPath string) error {
+	log.Debug("mountDefaults: %v", fsPath)
 
 	var err error
 
-	err = syscall.Mount("proc", filepath.Join(vm.FSPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = syscall.Mount("proc", filepath.Join(fsPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
+	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "shm"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "shm"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "mqueue"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "mqueue"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(vm.FSPath, "dev", "pts"), 0755)
+	err = os.MkdirAll(filepath.Join(fsPath, "dev", "pts"), 0755)
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("tmpfs", filepath.Join(vm.FSPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
+	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("pts", filepath.Join(vm.FSPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("sysfs", filepath.Join(vm.FSPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
+	err = syscall.Mount("sysfs", filepath.Join(fsPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
 	return nil
-}
-
-// syscall clone with namespace flags
-func (vm *ContainerVM) clone() (int, error) {
-	// see go/src/pkg/syscall/exec_unix.go
-	syscall.ForkLock.Lock()
-
-	r1, _, err1 := syscall.RawSyscall(syscall.SYS_CLONE, uintptr(CONTAINER_FLAGS), 0, 0)
-
-	syscall.ForkLock.Unlock()
-
-	if err1 != 0 {
-		return 0, err1
-	}
-
-	// parent gets the pid, child == 0
-	return int(r1), nil
 }
 
 // update the vm state, and write the state to file
@@ -1106,6 +1403,94 @@ func (vm *ContainerVM) setState(s VMState) {
 	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
+	}
+}
+
+// aggressively cleanup container cruff, called by the nuke api
+func containerNuke() {
+	// walk /sys/fs/cgroup/minimega for tasks, killing each one
+	err := filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		log.Debug("walking file: %v", path)
+
+		switch info.Name() {
+		case "tasks":
+			d, err := ioutil.ReadFile(path)
+			pids := strings.Fields(string(d))
+			for _, pid := range pids {
+				log.Debug("found pid: %v", pid)
+
+				p := process("kill")
+				cmd := &exec.Cmd{
+					Path: p,
+					Args: []string{
+						p,
+						"-9",
+						pid,
+					},
+					Env: nil,
+					Dir: "",
+				}
+				log.Infoln("killing process:", pid)
+				out, err := cmd.CombinedOutput()
+				if err != nil {
+					log.Error("%v: %v", err, out)
+				}
+			}
+			// remove the directory for this vm
+			dir := filepath.Dir(path)
+			err = os.Remove(dir)
+			if err != nil {
+				log.Errorln(err)
+			}
+		}
+		return nil
+	})
+
+	// remove cgroup structure
+	err = os.Remove(CGROUP_PATH)
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	// umount megamount_*
+	d, err := ioutil.ReadFile("/proc/mounts")
+	mounts := strings.Fields(string(d))
+	for _, m := range mounts {
+		if strings.Contains(m, "megamount") {
+			cmd := &exec.Cmd{
+				Path: process("umount"),
+				Args: []string{
+					process("umount"),
+					m,
+				},
+				Env: nil,
+				Dir: "",
+			}
+			log.Debug("unmount: %v", cmd)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Error("overlay umount: %v %v", err, string(output))
+			}
+		}
+	}
+
+	// remove meganet_* from /var/run/netns
+	netns, err := ioutil.ReadDir("/var/run/netns")
+	if err != nil {
+		log.Errorln(err)
+	} else {
+		for _, n := range netns {
+			if strings.Contains(n.Name(), "meganet") {
+				err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
+				if err != nil {
+					log.Errorln(err)
+				}
+			}
+		}
 	}
 }
 
