@@ -41,9 +41,20 @@ var (
 // is acquired before running the command.
 func runCommand(cmd *minicli.Command) chan minicli.Responses {
 	cmdLock.Lock()
-	defer cmdLock.Unlock()
 
-	return minicli.ProcessCommand(cmd)
+	// Forward the responses and unlock when all are passed through
+	localChan := make(chan minicli.Responses)
+	go func() {
+		defer cmdLock.Unlock()
+
+		for resp := range minicli.ProcessCommand(cmd) {
+			localChan <- resp
+		}
+
+		close(localChan)
+	}()
+
+	return localChan
 }
 
 // Wrapper for minicli.ProcessCommand for commands that use meshage.
