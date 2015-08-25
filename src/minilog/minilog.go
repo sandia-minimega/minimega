@@ -66,6 +66,14 @@ func DelLogger(name string) {
 	delete(loggers, name)
 }
 
+func Loggers() []string {
+	var ret []string
+	for k, _ := range loggers {
+		ret = append(ret, k)
+	}
+	return ret
+}
+
 // WillLog returns true if logging to a specific log level will result in
 // actual logging. Useful if the logging text itself is expensive to produce.
 func WillLog(level int) bool {
@@ -135,6 +143,16 @@ func LevelInt(l string) (int, error) {
 		return FATAL, nil
 	}
 	return -1, errors.New("invalid log level")
+}
+
+func Filters(name string) ([]string, error) {
+	if l, ok := loggers[name]; ok {
+		var ret = make([]string, len(l.filters))
+		copy(ret, l.filters)
+		return ret, nil
+	} else {
+		return nil, fmt.Errorf("no such logger %v", name)
+	}
 }
 
 func AddFilter(name string, filter string) error {
@@ -219,24 +237,22 @@ func (l *minilogger) epilogue() string {
 }
 
 func (l *minilogger) log(level int, format string, arg ...interface{}) {
-	_, file, _, _ := runtime.Caller(2)
+	msg := l.prologue(level, "") + fmt.Sprintf(format, arg...) + l.epilogue()
 	for _, f := range l.filters {
-		if strings.Contains(file, f) {
+		if strings.Contains(msg, f) {
 			return
 		}
 	}
-	msg := l.prologue(level, "") + fmt.Sprintf(format, arg...) + l.epilogue()
 	l.Print(msg)
 }
 
 func (l *minilogger) logln(level int, arg ...interface{}) {
-	_, file, _, _ := runtime.Caller(2)
+	msg := l.prologue(level, "") + fmt.Sprint(arg...) + l.epilogue()
 	for _, f := range l.filters {
-		if strings.Contains(file, f) {
+		if strings.Contains(msg, f) {
 			return
 		}
 	}
-	msg := l.prologue(level, "") + fmt.Sprint(arg...) + l.epilogue()
 	l.Println(msg)
 }
 
