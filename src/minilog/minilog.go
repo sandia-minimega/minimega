@@ -45,8 +45,9 @@ var (
 
 type minilogger struct {
 	*log.Logger
-	Level int
-	Color bool // print in color
+	Level   int
+	Color   bool // print in color
+	filters []string
 }
 
 func init() {
@@ -57,7 +58,7 @@ func init() {
 // output: io.Writer instance to which to log (can be os.Stderr or os.Stdout)
 // level:  one of the minilogging levels defined as a constant
 func AddLogger(name string, output io.Writer, level int, color bool) {
-	loggers[name] = &minilogger{log.New(output, "", log.LstdFlags), level, color}
+	loggers[name] = &minilogger{log.New(output, "", log.LstdFlags), level, color, nil}
 }
 
 // Remove a named logger that was added using AddLogger
@@ -136,6 +137,34 @@ func LevelInt(l string) (int, error) {
 	return -1, errors.New("invalid log level")
 }
 
+func AddFilter(name string, filter string) error {
+	if l, ok := loggers[name]; ok {
+		for _, f := range l.filters {
+			if f == filter {
+				return nil
+			}
+		}
+		l.filters = append(l.filters, filter)
+	} else {
+		return fmt.Errorf("no such logger %v", name)
+	}
+	return nil
+}
+
+func DelFilter(name string, filter string) error {
+	if l, ok := loggers[name]; ok {
+		for i, f := range l.filters {
+			if f == filter {
+				l.filters = append(l.filters[:i], l.filters[i+1:]...)
+				return nil
+			}
+		}
+		return fmt.Errorf("filter %v does not exist", filter)
+	} else {
+		return fmt.Errorf("no such logger %v", name)
+	}
+}
+
 func (l *minilogger) prologue(level int, name string) (msg string) {
 	switch level {
 	case DEBUG:
@@ -190,11 +219,23 @@ func (l *minilogger) epilogue() string {
 }
 
 func (l *minilogger) log(level int, format string, arg ...interface{}) {
+	_, file, _, _ := runtime.Caller(2)
+	for _, f := range l.filters {
+		if strings.Contains(file, f) {
+			return
+		}
+	}
 	msg := l.prologue(level, "") + fmt.Sprintf(format, arg...) + l.epilogue()
 	l.Print(msg)
 }
 
 func (l *minilogger) logln(level int, arg ...interface{}) {
+	_, file, _, _ := runtime.Caller(2)
+	for _, f := range l.filters {
+		if strings.Contains(file, f) {
+			return
+		}
+	}
 	msg := l.prologue(level, "") + fmt.Sprint(arg...) + l.epilogue()
 	l.Println(msg)
 }
