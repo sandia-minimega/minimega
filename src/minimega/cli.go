@@ -25,6 +25,7 @@ import (
 	"miniclient"
 	log "minilog"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -35,6 +36,13 @@ const (
 var (
 	// Prevents multiple commands from running at the same time
 	cmdLock sync.Mutex
+)
+
+type CLIFunc func(*minicli.Command) *minicli.Response
+
+const (
+	NamespaceBroadcast = iota // simply broadcast the command to hosts
+	NamespaceBroadcastVmTarget
 )
 
 // cliSetup registers all the minimega handlers
@@ -62,32 +70,132 @@ func cliSetup() {
 	registerHandlers("web", webCLIHandlers)
 }
 
-// Wrapper for minicli.ProcessCommand. Ensures that the command execution lock
-// is acquired before running the command.
-func runCommand(cmd *minicli.Command) chan minicli.Responses {
-	cmdLock.Lock()
-
-	// Forward the responses and unlock when all are passed through
-	localChan := make(chan minicli.Responses)
-	go func() {
-		defer cmdLock.Unlock()
-
-		for resp := range minicli.ProcessCommand(cmd) {
-			localChan <- resp
+// wrapCLI wraps handlers with some extra handling for namespacing. options
+// dictate what generic cases should be applied to the handler.
+func wrapCLI(fn CLIFunc, options int) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		// No namespace specified, just invoke the handler
+		if namespace == "" {
+			resp := fn(c)
+			respChan <- minicli.Responses{resp}
 		}
 
-		close(localChan)
-	}()
+		hosts := namespaces[namespace].Hosts
 
-	return localChan
+		switch options {
+		case NamespaceBroadcast:
+			// Simple case, just broadcast and then collect the responses
+			forward(runCommandHosts(hosts, c), respChan)
+		case NamespaceBroadcastVmTarget:
+			var ok bool
+			var notFound string
+			resps := minicli.Responses{}
+
+			// Broadcast to all machines, collecting errors and forwarding
+			// successful commands.
+			for resp := range runCommandHosts(hosts, c) {
+				if len(resp) > 1 {
+					log.Error("unsure how to process multiple responses!!")
+				}
+
+				if resp[0].Error == "" {
+					// Keep all responses without an error
+					resps = append(resps, resp[0])
+					ok = true
+				} else if !isVmNotFound(resp[0].Error) {
+					// Record errors that aren't not found
+					resps = append(resps, resp[0])
+				} else {
+					// Record not found in case the VM doesn't exist anywhere
+					notFound = resp[0].Error
+				}
+			}
+
+			if !ok && notFound != "" {
+				// Didn't find any responses without errors so create a new
+				// response with the not found error
+				resps = append(resps, &minicli.Response{
+					Host:  hostname,
+					Error: notFound,
+				})
+			}
+
+			respChan <- resps
+		}
+	}
 }
 
-// Wrapper for minicli.ProcessCommand for commands that use meshage.
-// Specifically, for `mesh send all ...`, runs the subcommand locally and
-// across meshage, combining the results from the two channels into a single
-// channel. This is useful if you want to get the output of a command from all
-// nodes in the cluster without having to run a command locally and over
-// meshage.
+// wrapSimpleCLI wraps handlers that return a single response. This greatly
+// reduces boilerplate code with minicli handlers.
+func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		resp := fn(c)
+		respChan <- minicli.Responses{resp}
+	}
+}
+
+// forward receives minicli.Responses from in and forwards them to out.
+func forward(in, out chan minicli.Responses) {
+	for v := range in {
+		out <- v
+	}
+}
+
+// processCommands wraps minicli.ProcessCommand for multiple commands,
+// combining their outputs into a single channel. This function does not
+// acquire the cmdLock so it should only be called by functions that do.
+func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
+	// Forward the responses and unlock when all are passed through
+	out := make(chan minicli.Responses)
+	ins := []chan minicli.Responses{}
+
+	for _, c := range cmd {
+		ins = append(ins, minicli.ProcessCommand(c))
+	}
+
+	var wg sync.WaitGroup
+
+	// De-mux ins into out
+	for _, in := range ins {
+		wg.Add(1)
+
+		go func(in chan minicli.Responses) {
+			// Mark done after we have read all the responses from in
+			defer wg.Done()
+
+			forward(in, out)
+		}(in)
+	}
+
+	go func() {
+		// Close after all de-muxing goroutines have completed
+		defer close(out)
+
+		wg.Wait()
+	}()
+
+	return out
+}
+
+// runCommand wraps processCommands, ensuring that the command execution lock
+// is acquired before running the command.
+func runCommand(cmd ...*minicli.Command) chan minicli.Responses {
+	cmdLock.Lock()
+
+	out := make(chan minicli.Responses)
+	go func() {
+		// Unlock and close the channel after forwarding all the responses
+		defer cmdLock.Unlock()
+		defer close(out)
+
+		forward(processCommands(cmd...), out)
+	}()
+
+	return out
+}
+
+// runCommandGlobally runs the given command across all nodes on meshage,
+// including the local node and combines the results into a single channel.
 func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	// Keep the original CLI input
 	original := cmd.Original
@@ -99,38 +207,42 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	}
 	cmd.Record = record
 
-	cmdLock.Lock()
-	defer cmdLock.Unlock()
+	return runCommand(cmd, cmd.Subcommand)
+}
 
-	var wg sync.WaitGroup
+// runCommandHosts runs the given command on a set of hosts.
+func runCommandHosts(hosts []string, cmd *minicli.Command) chan minicli.Responses {
+	// filter out local node, if included
+	var includeLocal bool
+	var hosts2 []string
 
-	out := make(chan minicli.Responses)
-
-	// Run the command (should be `mesh send all ...` and the subcommand which
-	// should run locally).
-	ins := []chan minicli.Responses{
-		minicli.ProcessCommand(cmd),
-		minicli.ProcessCommand(cmd.Subcommand),
+	for _, host := range hosts {
+		if host == hostname {
+			includeLocal = true
+		} else {
+			// Quote the hostname in case there are spaces
+			hosts2 = append(hosts2, fmt.Sprintf("%q", host))
+		}
 	}
 
-	// De-mux ins into out
-	for _, in := range ins {
-		wg.Add(1)
-		go func(in chan minicli.Responses) {
-			defer wg.Done()
-			for v := range in {
-				out <- v
-			}
-		}(in)
+	targets := strings.Join(hosts2, ",")
+
+	// Keep the original CLI input
+	original := cmd.Original
+	record := cmd.Record
+
+	cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
+	if err != nil {
+		log.Fatal("cannot run `%v` on hosts -- %v", original, err)
+	}
+	cmd.Record = record
+
+	var cmds = []*minicli.Command{cmd}
+	if includeLocal {
+		cmds = append(cmds, cmd.Subcommand)
 	}
 
-	// Wait until everything has been read before closing out
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-
-	return out
+	return runCommand(cmds...)
 }
 
 // local command line interface, wrapping readline

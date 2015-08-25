@@ -249,13 +249,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		resp := fn(c)
-		respChan <- minicli.Responses{resp}
-	}
-}
-
 // makeIDChan creates a channel of IDs and a goroutine to populate the channel
 // with a counter. This is useful for assigning UIDs to fields since the
 // goroutine will (almost) never repeat the same value (unless we hit IntMax).

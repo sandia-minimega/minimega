@@ -21,6 +21,17 @@ Control namespace environments.`,
 		},
 		Call: cliNamespace,
 	},
+	{ // clear namespace
+		HelpShort: "unset namespace",
+		HelpLong: `
+Without a namespace, clear namespace unsets the current namespace.
+
+With a namespace, clear namespace deletes the specified namespace.`,
+		Patterns: []string{
+			"clear namespace [name]",
+		},
+		Call: wrapSimpleCLI(cliClearNamespace),
+	},
 }
 
 func init() {
@@ -42,6 +53,35 @@ func init() {
 
 }
 
+// VMs retrieves all the VMs across a namespace. Note that the keys for the
+// returned map are arbitrary -- multiple VMs may share the same ID if they are
+// on separate hosts so we cannot key off of ID.
+func (n Namespace) VMs() VMs {
+	var res VMs
+
+	cmd := minicli.MustCompile(`vm info`)
+	cmd.Record = false
+
+	for resps := range runCommandHosts(n.Hosts, cmd) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if vms, ok := resp.Data.(VMs); ok {
+				for _, vm := range vms {
+					res[len(res)] = vm
+				}
+			} else {
+				log.Error("unknown data field in `vm info`")
+			}
+		}
+	}
+
+	return res
+}
+
 func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
@@ -49,7 +89,10 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 		if _, ok := namespaces[name]; !ok {
 			log.Info("creating new namespace -- %v", name)
 
-			namespaces[name] = Namespace{}
+			// By default, every reachable node is part of the namespace
+			namespaces[name] = Namespace{
+				Hosts: append(meshageNode.BroadcastRecipients(), hostname),
+			}
 		}
 
 		if c.Subcommand == nil {
@@ -73,11 +116,36 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 		}
 	}
 
-	names := []string{}
-	for name := range namespaces {
-		names = append(names, name)
+	if namespace == "" {
+		names := []string{}
+		for name := range namespaces {
+			names = append(names, name)
+		}
+
+		resp.Response = fmt.Sprintf("Namespaces: %v", names)
+	} else {
+		ns := namespaces[namespace]
+		resp.Response = fmt.Sprintf("Namespace: `%v`\nHosts: %v", namespace, ns.Hosts)
 	}
 
-	resp.Response = fmt.Sprintf("Current: `%v` -- Known: %v", namespace, names)
 	respChan <- minicli.Responses{resp}
+}
+
+func cliClearNamespace(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if name, ok := c.StringArgs["name"]; ok {
+		// Trying to delete a namespace
+		if _, ok := namespaces[name]; !ok {
+			resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
+		} else {
+			delete(namespaces, name)
+		}
+
+		return resp
+	}
+
+	// Clearing the namespace global
+	namespace = ""
+	return resp
 }

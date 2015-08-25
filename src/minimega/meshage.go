@@ -119,7 +119,7 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
 	if hosts == Wildcard {
-		// Broadcast command to all VMs
+		// Broadcast command to all hosts
 		recipients = meshageNode.BroadcastRecipients()
 	} else {
 		// Send to specified list of recipients

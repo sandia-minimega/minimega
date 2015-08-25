@@ -115,11 +115,11 @@ description of allowable targets.`,
 		Patterns: []string{
 			"vm kill <target>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func(target string) []error {
 				return vms.kill(target)
 			})
-		}),
+		}, NamespaceBroadcastVmTarget),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -160,11 +160,11 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
 			"vm start <target>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func(target string) []error {
 				return vms.start(target)
 			})
-		}),
+		}, NamespaceBroadcastVmTarget),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, ^VM_RUNNING)
@@ -183,11 +183,11 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
 			"vm stop <target>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmApply(c, func(target string) []error {
 				return vms.stop(target)
 			})
-		}),
+		}, NamespaceBroadcastVmTarget),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, VM_RUNNING)
@@ -448,9 +448,9 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "memory")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config vcpus
 		HelpShort: "set the number of virtual CPUs for a VM",
@@ -459,9 +459,9 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "vcpus")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config net
 		HelpShort: "specific the networks a VM is a member of",
@@ -500,9 +500,9 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "net")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
@@ -518,9 +518,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config append [arg]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "append")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
@@ -531,9 +531,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -547,9 +547,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or all>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -562,9 +562,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-append")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config migrate
 		HelpShort: "set migration image for a saved VM",
@@ -577,9 +577,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config migrate [path to migration image]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "migrate")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config disk
 		HelpShort: "set disk images to attach to a VM",
@@ -592,9 +592,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "disk")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config cdrom
 		HelpShort: "set a cdrom image to attach to a VM",
@@ -606,9 +606,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "cdrom")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config kernel
 		HelpShort: "set a kernel image to attach to a VM",
@@ -620,9 +620,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "kernel")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config initrd
 		HelpShort: "set a initrd image to attach to a VM",
@@ -634,9 +634,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "initrd")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -648,9 +648,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "uuid")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config serial
 		HelpShort: "specify the serial ports a VM will use",
@@ -675,9 +675,9 @@ another number.`,
 		Patterns: []string{
 			"vm config serial [number of serial ports]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "serial")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config virtio-serial
 		HelpShort: "specify the virtio-serial ports a VM will use",
@@ -697,9 +697,9 @@ To create three virtio-serial ports:
 		Patterns: []string{
 			"vm config virtio-serial [number of virtio-serial ports]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "virtio-serial")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",
@@ -712,9 +712,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "snapshot")
-		}),
+		}, NamespaceBroadcast),
 	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
@@ -749,7 +749,7 @@ to the default value.`,
 			"clear vm config <serial,>",
 			"clear vm config <virtio-serial,>",
 		},
-		Call: wrapSimpleCLI(cliClearVmConfig),
+		Call: wrapCLI(cliClearVmConfig, NamespaceBroadcast),
 	},
 	{ // clear vm tag
 		HelpShort: "remove tags from a VM",
@@ -1093,6 +1093,11 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		if _, err := strconv.Atoi(name); err == nil {
 			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
 			return resp
+		}
+
+		vms := vms
+		if namespace != "" {
+			vms = namespaces[namespace].VMs()
 		}
 
 		for _, vm := range vms {
