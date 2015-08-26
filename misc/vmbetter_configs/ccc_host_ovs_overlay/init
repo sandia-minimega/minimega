@@ -10,6 +10,7 @@ mkdir /dev/pts
 mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
 rm /dev/ptmx
 ln -s /dev/pts/ptmx /dev/ptmx
+mount -t cgroup cgroup /sys/fs/cgroup
 
 # / needs permissions!?
 chmod a+rx /
