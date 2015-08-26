@@ -141,6 +141,9 @@ func ProcessCommand(c *Command) chan Responses {
 	return respChan
 }
 
+// MustCompile compiles the string, calling log.Fatal if the string is not a
+// valid command. Should be used when providing a known command rather than
+// processing user input.
 func MustCompile(input string) *Command {
 	c, err := Compile(input)
 	if err != nil {
@@ -148,6 +151,11 @@ func MustCompile(input string) *Command {
 	}
 
 	return c
+}
+
+// MustCompilef wraps fmt.Sprintf and MustCompile
+func MustCompilef(format string, args ...interface{}) *Command {
+	return MustCompile(fmt.Sprintf(format, args...))
 }
 
 // Create a command from raw input text. An error is returned if parsing the
