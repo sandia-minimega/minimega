@@ -57,7 +57,6 @@ Additional fields are available for KVM-based VMs:
 Additional fields are available for container-based VMs:
 
 - init	     : process to invoke as init
-- initargs   : optional arguments to pass to init
 - filesystem : root filesystem for the container
 
 Examples:
@@ -723,8 +722,11 @@ Note: this configuration only applies to KVM-based VMs.`,
 		}),
 	},
 	{ // vm config hostname
-		HelpShort: "add me",
-		HelpLong:  " add me",
+		HelpShort: "set a hostname for containers",
+		HelpLong: `
+Set a hostname for a container before launching the init program. If not set,
+the hostname will be that of the physical host. The hostname can also be set by
+the init program or other root process in the container.`,
 		Patterns: []string{
 			"vm config hostname [hostname]",
 		},
@@ -733,28 +735,22 @@ Note: this configuration only applies to KVM-based VMs.`,
 		}),
 	},
 	{ // vm config init
-		HelpShort: "add me",
-		HelpLong:  " add me",
+		HelpShort: "container init program and args",
+		HelpLong: `
+Set the init program and args to exec into upon container launch. This will be
+PID 1 in the container.`,
 		Patterns: []string{
-			"vm config init [init]",
+			"vm config init [init]...",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "init")
 		}),
 	},
-	{ // vm config initargs
-		HelpShort: "add me",
-		HelpLong:  " add me",
-		Patterns: []string{
-			"vm config initargs [initargs]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "initargs")
-		}),
-	},
 	{ // vm config filesystem
-		HelpShort: "add me",
-		HelpLong:  " add me",
+		HelpShort: "set the filesystem for containers",
+		HelpLong: `
+Set the filesystem to use for launching a container. This should be a root
+filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)`,
 		Patterns: []string{
 			"vm config filesystem [filesystem]",
 		},
@@ -794,6 +790,10 @@ to the default value.`,
 			"clear vm config <uuid,>",
 			"clear vm config <serial,>",
 			"clear vm config <virtio-serial,>",
+			// ContainerConfig
+			"clear vm config <hostname,>",
+			"clear vm config <filesystem,>",
+			"clear vm config <init,>",
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},

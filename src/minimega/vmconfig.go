@@ -105,12 +105,17 @@ var containerConfigFns = map[string]VMConfigFns{
 	"hostname": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Hostname
 	}, ""),
-	"init": vmConfigString(func(vm interface{}) *string {
-		return &mustContainerConfig(vm).Init
-	}, "/init"),
-	"initargs": vmConfigSlice(func(vm interface{}) *[]string {
-		return &mustContainerConfig(vm).Args
-	}, "initargs", "container"),
+	"init": {
+		Update: func(v interface{}, c *minicli.Command) error {
+			vm := mustContainerConfig(v)
+			vm.Init = c.ListArgs["init"]
+			return nil
+		},
+		Clear: func(vm interface{}) {
+			mustContainerConfig(vm).Init = []string{"/init"}
+		},
+		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
+	},
 }
 
 // Functions for configuring KVM-based VMs. Note: if keys overlap with

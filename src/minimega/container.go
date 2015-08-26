@@ -2,8 +2,17 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
-// NOTE: debian hosts need 'cgroup_enable=memory' added to the kernel command
-// line. https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=534964
+// NOTES:
+// debian hosts need 'cgroup_enable=memory' added to the kernel command line.
+// See https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=534964
+//
+// posix capabilities. See:
+// 	linux/include/linux/capability.h
+// 	https://github.com/torvalds/linux/blob/master/include/linux/capability.h
+//	https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h
+//
+// includes code from:
+// 	https://github.com/syndtr/gocapability/blob/master/capability/capability_linux.go
 
 package main
 
@@ -25,14 +34,6 @@ import (
 	"text/tabwriter"
 	"unsafe"
 )
-
-// posix capabilities. See:
-// 	linux/include/linux/capability.h
-// 	https://github.com/torvalds/linux/blob/master/include/linux/capability.h
-//	https://github.com/torvalds/linux/blob/master/include/uapi/linux/capability.h
-
-// includes code from:
-// 	https://github.com/syndtr/gocapability/blob/master/capability/capability_linux.go
 
 const (
 	CGROUP_PATH     = "/sys/fs/cgroup/minimega"
@@ -206,8 +207,7 @@ var containerDeviceNames []*Dev = []*Dev{
 type ContainerConfig struct {
 	FSPath   string
 	Hostname string
-	Init     string
-	Args     []string
+	Init     []string
 }
 
 type ContainerVM struct {
@@ -336,11 +336,7 @@ func containerShim() {
 		log.Fatalln(err)
 	}
 	vmUUID := os.Args[6]
-	vmInit := os.Args[7]
-	var vmArgs []string
-	if len(os.Args) > 8 {
-		vmArgs = os.Args[8:]
-	}
+	vmInit := os.Args[7:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -453,8 +449,8 @@ func containerShim() {
 	logFile.Close()
 
 	// GO!
-	log.Debug("vm %v exec: %v %v", vmID, vmInit, vmArgs)
-	err = syscall.Exec(vmInit, vmArgs, nil)
+	log.Debug("vm %v exec: %v %v", vmID, vmInit)
+	err = syscall.Exec(vmInit[0], vmInit, nil)
 	if err != nil {
 		log.Fatal("Exec: %v", err)
 	}
@@ -823,11 +819,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 		vm.effectivePath,
 		vm.Memory,
 		uuidPath,
-		vm.Init,
 	}
-	if vm.Args != nil {
-		args = append(args, vm.Args...)
-	}
+	args = append(args, vm.Init...)
 
 	// launch the container
 	cmd := &exec.Cmd{
