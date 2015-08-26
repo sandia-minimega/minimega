@@ -11,33 +11,44 @@ mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
 rm /dev/ptmx
 ln -s /dev/pts/ptmx /dev/ptmx
 
-# enumerate devices, autoload modules where needed
-udevd --daemon
-udevadm trigger
-udevadm settle
-
 # / needs permissions!?
 chmod a+rx /
 
-# local disk for scratch
-mount /dev/sda1 /scratch
-
 # minimega needs
+modprobe igb
+modprobe ixgbe
 modprobe loop
 modprobe tun
 modprobe nbd max_part=10
 modprobe kvm-intel
 
+# enumerate devices, autoload modules where needed
+udevd --daemon
+udevadm trigger
+udevadm settle
+
+# local disk for scratch
+mount /dev/sda1 /scratch
+
 # bump open file handle limits
 ulimit -n 999999
 
 # bond all 10G interfaces
-#modprobe bonding
-for i in `ls /sys/class/net | grep eth10G`;
+# modprobe bonding
+# for i in `ls /sys/class/net | grep eth10G`;
+# do
+# 	#ifenslave bond0 $i
+# 	NETS="${NETS} $i"
+# 	ifconfig $i up
+# done
+for i in `ls /sys/class/net`
 do
-	#ifenslave bond0 $i
-	NETS="${NETS} $i"
-	ifconfig $i up
+        G=`ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep ixgbe`
+        if [ -n "$G" ]
+        then
+                NETS="$NETS $i"
+		ifconfig $i up
+        fi
 done
 
 echo "bonding nets $NETS"
@@ -49,7 +60,8 @@ ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
 #ovs-vsctl add-port mega_bridge eth10G
 #ovs-vsctl add-port mega_bridge bond0
-numnets=`ls /sys/class/net | grep eth10G | wc -l`
+#numnets=`ls /sys/class/net | grep eth10G | wc -l`
+numnets=`echo $NETS | wc -w`
 if [ $numnets -eq 1 ]
 then
 	ovs-vsctl add-port mega_bridge $NETS
