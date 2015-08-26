@@ -78,14 +78,16 @@ func wrapCLI(fn CLIFunc, options int) minicli.CLIFunc {
 		if namespace == "" {
 			resp := fn(c)
 			respChan <- minicli.Responses{resp}
+			return
 		}
 
 		hosts := namespaces[namespace].Hosts
+		cmds := makeCommandHosts(hosts, c)
 
 		switch options {
 		case NamespaceBroadcast:
 			// Simple case, just broadcast and then collect the responses
-			forward(runCommandHosts(hosts, c), respChan)
+			forward(processCommands(cmds...), respChan)
 		case NamespaceBroadcastVmTarget:
 			var ok bool
 			var notFound string
@@ -93,7 +95,7 @@ func wrapCLI(fn CLIFunc, options int) minicli.CLIFunc {
 
 			// Broadcast to all machines, collecting errors and forwarding
 			// successful commands.
-			for resp := range runCommandHosts(hosts, c) {
+			for resp := range processCommands(cmds...) {
 				if len(resp) > 1 {
 					log.Error("unsure how to process multiple responses!!")
 				}
@@ -212,6 +214,12 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 
 // runCommandHosts runs the given command on a set of hosts.
 func runCommandHosts(hosts []string, cmd *minicli.Command) chan minicli.Responses {
+	return runCommand(makeCommandHosts(hosts, cmd)...)
+}
+
+// makeCommandHosts creates commands to run the given command on a set of hosts
+// handling the case where the local node is included in the list.
+func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 	// filter out local node, if included
 	var includeLocal bool
 	var hosts2 []string
@@ -225,24 +233,35 @@ func runCommandHosts(hosts []string, cmd *minicli.Command) chan minicli.Response
 		}
 	}
 
-	targets := strings.Join(hosts2, ",")
+	var cmds = []*minicli.Command{}
 
 	// Keep the original CLI input
 	original := cmd.Original
 	record := cmd.Record
 
-	cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
-	if err != nil {
-		log.Fatal("cannot run `%v` on hosts -- %v", original, err)
-	}
-	cmd.Record = record
-
-	var cmds = []*minicli.Command{cmd}
 	if includeLocal {
-		cmds = append(cmds, cmd.Subcommand)
+		cmd, err := minicli.Compilef(".record %t namespace '' %s", record, original)
+		if err != nil {
+			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
+		}
+		cmd.Record = record
+
+		cmds = append(cmds, cmd)
 	}
 
-	return runCommand(cmds...)
+	if len(hosts2) > 0 {
+		targets := strings.Join(hosts2, ",")
+
+		cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
+		if err != nil {
+			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
+		}
+		cmd.Record = record
+
+		cmds = append(cmds, cmd)
+	}
+
+	return cmds
 }
 
 // local command line interface, wrapping readline

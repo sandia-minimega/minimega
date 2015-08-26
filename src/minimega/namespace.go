@@ -86,7 +86,7 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	if name, ok := c.StringArgs["name"]; ok {
-		if _, ok := namespaces[name]; !ok {
+		if _, ok := namespaces[name]; !ok && name != "" {
 			log.Info("creating new namespace -- %v", name)
 
 			// By default, every reachable node is part of the namespace
@@ -139,6 +139,12 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 		if _, ok := namespaces[name]; !ok {
 			resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
 		} else {
+			// If we're deleting the currently active namespace, we should get
+			// out of that namespace
+			if namespace == name {
+				namespace = ""
+			}
+
 			delete(namespaces, name)
 		}
 
