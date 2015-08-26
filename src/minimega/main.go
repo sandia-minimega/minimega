@@ -252,7 +252,7 @@ func teardown() {
 	goreadline.Rlcleanup()
 	err = os.Remove(CGROUP_PATH)
 	if err != nil {
-		log.Fatalln(err)
+		log.Debugln(err)
 	}
 	err = os.Remove(*f_base + "minimega.pid")
 	if err != nil {
