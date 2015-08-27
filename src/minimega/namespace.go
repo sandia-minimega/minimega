@@ -41,6 +41,8 @@ func init() {
 type Namespace struct {
 	Hosts []string
 
+	vmIDChan chan int
+
 	// Queued VMs to launch
 	// Status of launching things
 }
@@ -55,14 +57,15 @@ func init() {
 
 // VMs retrieves all the VMs across a namespace. Note that the keys for the
 // returned map are arbitrary -- multiple VMs may share the same ID if they are
-// on separate hosts so we cannot key off of ID.
+// on separate hosts so we cannot key off of ID. Note: this assumes that the
+// caller has the cmdLock.
 func (n Namespace) VMs() VMs {
-	var res VMs
+	res := VMs{}
 
 	cmd := minicli.MustCompile(`vm info`)
 	cmd.Record = false
 
-	for resps := range runCommandHosts(n.Hosts, cmd) {
+	for resps := range processCommands(makeCommandHosts(n.Hosts, cmd)...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -91,7 +94,8 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 
 			// By default, every reachable node is part of the namespace
 			namespaces[name] = Namespace{
-				Hosts: append(meshageNode.BroadcastRecipients(), hostname),
+				Hosts:    append(meshageNode.BroadcastRecipients(), hostname),
+				vmIDChan: makeIDChan(),
 			}
 		}
 

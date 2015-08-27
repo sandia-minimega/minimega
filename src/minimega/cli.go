@@ -82,6 +82,13 @@ func wrapCLI(fn CLIFunc, options int) minicli.CLIFunc {
 		}
 
 		hosts := namespaces[namespace].Hosts
+
+		// Clear namespace so subcommands don't use -- revert afterwards
+		defer func(old string) {
+			namespace = old
+		}(namespace)
+		namespace = ""
+
 		cmds := makeCommandHosts(hosts, c)
 
 		switch options {
@@ -233,24 +240,18 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		}
 	}
 
+	targets := strings.Join(hosts2, ",")
+
 	var cmds = []*minicli.Command{}
 
-	// Keep the original CLI input
-	original := cmd.Original
-	record := cmd.Record
-
 	if includeLocal {
-		cmd, err := minicli.Compilef(".record %t namespace '' %s", record, original)
-		if err != nil {
-			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
-		}
-		cmd.Record = record
-
 		cmds = append(cmds, cmd)
 	}
 
 	if len(hosts2) > 0 {
-		targets := strings.Join(hosts2, ",")
+		// Keep the original CLI input
+		original := cmd.Original
+		record := cmd.Record
 
 		cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
 		if err != nil {

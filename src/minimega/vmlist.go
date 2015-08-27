@@ -158,17 +158,9 @@ func (vms VMs) findVm(idOrName string) VM {
 }
 
 // launch one VM of a given type. This call should be "non-blocking" -- the VM
-// will ack on the provided channel when it has finished launching.
+// will ack on the provided channel when it has finished launching. The name
+// should be globally unique.
 func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
-	// Make sure that there isn't another VM with the same name
-	if name != "" {
-		for _, vm := range vms {
-			if vm.GetName() == name {
-				return fmt.Errorf("vm launch duplicate VM name: %s", name)
-			}
-		}
-	}
-
 	var vm VM
 	switch vmType {
 	case KVM:

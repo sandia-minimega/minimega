@@ -16,6 +16,7 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -1084,6 +1085,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
+	// List of VMs to check against for name collisions
+	allVMs := vms
+	if namespace != "" {
+		allVMs = namespaces[namespace].VMs()
+	}
+
 	for _, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
@@ -1095,12 +1102,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		vms := vms
-		if namespace != "" {
-			vms = namespaces[namespace].VMs()
-		}
-
-		for _, vm := range vms {
+		for _, vm := range allVMs {
 			if vm.GetName() == name {
 				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
 				return resp
@@ -1124,26 +1126,71 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	log.Info("launching %v %v vms", len(names), vmType)
 
+	// When wait is finished, all VMs have acked the launch
+	var wg sync.WaitGroup
+
+	// Locally launched acks
 	ack := make(chan int)
-	waitForAcks := func(count int) {
-		// get acknowledgements from each vm
-		for i := 0; i < count; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
-		}
+	// Remotely launched acks
+	respChan := make(chan minicli.Responses)
+
+	// By default, all VMs are launched on the local instance. If there's a
+	// valid namespace, we fan out to multiple instances.
+	assignment := map[string][]string{hostname: names}
+	if namespace != "" {
+		assignment = schedule(namespace, names)
 	}
 
-	for i, name := range names {
-		if err := vms.launch(name, vmType, ack); err != nil {
-			resp.Error = err.Error()
-			go waitForAcks(i)
-			return resp
+	// Number of VMs being launched locally
+	localCount := len(assignment[hostname])
+
+	// Collect acks from each VM launched on the local instance
+	go func(n int) {
+		for i := 0; i < n; i++ {
+			log.Debug("launch ack from VM %v", <-ack)
+
+			wg.Done()
+		}
+	}(localCount)
+
+	// Collect acks from each VM launched on a remote instance
+	go func(n int) {
+		for i := 0; i < n; i++ {
+			resps := <-respChan
+			if len(resps) > 0 {
+				log.Error("unsure how to process multiple responses!!")
+			}
+
+			log.Debug("launch ack from host %v", resps[0].Host)
+
+			if resps[0].Error != "" {
+				log.Error("vm launch error on host %v -- %v", resps[0].Host, resps[0].Error)
+			}
+
+			wg.Done()
+		}
+	}(len(names) - localCount)
+
+	for host, names := range assignment {
+		for _, name := range names {
+			wg.Add(1)
+
+			if host == hostname {
+				if err := vms.launch(name, vmType, ack); err != nil {
+					resp.Error = err.Error()
+					return resp
+				}
+			} else {
+				cmd := minicli.MustCompilef("vm launch %v %v", vmType, name)
+				meshageSend(cmd, host, respChan)
+			}
 		}
 	}
 
 	if noblock {
-		go waitForAcks(len(names))
+		go wg.Wait()
 	} else {
-		waitForAcks(len(names))
+		wg.Wait()
 	}
 
 	return resp
