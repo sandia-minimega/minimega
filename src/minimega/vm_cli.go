@@ -767,7 +767,7 @@ for the container as fifoN, and on the container as /dev/fifos/fifoN.
 
 Fifos are created using mkfifo() and have all of the same usage constraints.`,
 		Patterns: []string{
-			"vm config fifo [fifo]",
+			"vm config fifo [number]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "fifo")

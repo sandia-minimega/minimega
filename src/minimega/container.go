@@ -288,18 +288,19 @@ func containerInit() error {
 // 	8: stderr
 //
 // A number of arguments are passed on os.Args to configure the container:
-//	0:  minimega binary
-// 	1:  CONTAINER
-//	2:  vm id
-//	3:  hostname ("CONTAINER_NONE" if none)
-//	4:  filesystem path
-//	5:  memory in megabytes
-//	6:  uuid
-//	7:  number of fifos
-//	8:  init program (relative to filesystem path)
-//	9:  init args
+//	0 :  minimega binary
+// 	1 :  CONTAINER
+//	2 :  instance path
+//	3 :  vm id
+//	4 :  hostname ("CONTAINER_NONE" if none)
+//	5 :  filesystem path
+//	6 :  memory in megabytes
+//	7 :  uuid
+//	8 :  number of fifos
+//	9 :  init program (relative to filesystem path)
+//	10:  init args
 func containerShim() {
-	if len(os.Args) < 9 { // 9 because init args can be nil
+	if len(os.Args) < 10 { // 10 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -324,25 +325,26 @@ func containerShim() {
 	}
 
 	// get args
-	vmID, err := strconv.Atoi(os.Args[2])
+	vmInstancePath := os.Args[2]
+	vmID, err := strconv.Atoi(os.Args[3])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmHostname := os.Args[3]
+	vmHostname := os.Args[4]
 	if vmHostname == CONTAINER_NONE {
 		vmHostname = ""
 	}
-	vmFSPath := os.Args[4]
-	vmMemory, err := strconv.Atoi(os.Args[5])
+	vmFSPath := os.Args[5]
+	vmMemory, err := strconv.Atoi(os.Args[6])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmUUID := os.Args[6]
-	vmFifos, err := strconv.Atoi(os.Args[7])
+	vmUUID := os.Args[7]
+	vmFifos, err := strconv.Atoi(os.Args[8])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmInit := os.Args[8:]
+	vmInit := os.Args[9:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -404,7 +406,7 @@ func containerShim() {
 
 	// bind mount fifos
 	log.Debug("vm %v containerFifos", vmID)
-	err = containerFifos(vmFSPath, vmID, vmFifos)
+	err = containerFifos(vmFSPath, vmInstancePath, vmFifos)
 	if err != nil {
 		log.Fatal("containerFifos: %v", err)
 	}
@@ -472,7 +474,36 @@ func containerShim() {
 	log.Fatalln("how did I get here?")
 }
 
-func containerFifos(vmFSPath string, vmID, vmFifos int) error {
+func containerFifos(vmFSPath string, vmInstancePath string, vmFifos int) error {
+	err := os.Mkdir(filepath.Join(vmFSPath, "/dev/fifos"), 0755)
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
+	for i := 0; i < vmFifos; i++ {
+		src := filepath.Join(vmInstancePath, fmt.Sprintf("fifo%v", i))
+		_, err := os.Stat(src)
+		if err != nil {
+			log.Errorln(err)
+			return err
+		}
+
+		dst := filepath.Join(vmFSPath, fmt.Sprintf("/dev/fifos/fifo%v", i))
+
+		// dst must exist for bind mounting to work
+		f, err := os.Create(dst)
+		if err != nil {
+			log.Errorln(err)
+			return err
+		}
+		f.Close()
+		log.Debug("bind mounting: %v -> %v", src, dst)
+		err = syscall.Mount(src, dst, "", syscall.MS_BIND, "")
+		if err != nil {
+			log.Errorln(err)
+			return err
+		}
+	}
 	return nil
 }
 
@@ -825,16 +856,17 @@ func (vm *ContainerVM) launch(ack chan int) {
 		}
 	}
 
-	//	0:  minimega binary
-	// 	1:  CONTAINER
-	//	2:  vm id
-	//	3:  hostname ("CONTAINER_NONE" if none)
-	//	4:  filesystem path
-	//	5:  memory in megabytes
-	//	6:  uuid path
-	//	7:  number of fifos
-	//	8:  init program (relative to filesystem path)
-	//	9+:  init args
+	//	0 :  minimega binary
+	// 	1 :  CONTAINER
+	//	2 :  instance path
+	//	3 :  vm id
+	//	4 :  hostname ("CONTAINER_NONE" if none)
+	//	5 :  filesystem path
+	//	6 :  memory in megabytes
+	//	7 :  uuid
+	//	8 :  number of fifos
+	//	9 :  init program (relative to filesystem path)
+	//	10:  init args
 	hn := vm.Hostname
 	if hn == "" {
 		hn = CONTAINER_NONE
@@ -842,6 +874,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	args := []string{
 		os.Args[0],
 		CONTAINER_MAGIC,
+		vm.instancePath,
 		fmt.Sprintf("%v", vm.ID),
 		hn,
 		vm.effectivePath,
