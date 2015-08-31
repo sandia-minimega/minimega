@@ -46,6 +46,13 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		log.Errorln(err)
 	}
 
+	// force bridge info to update (and make sure that at least the default
+	// bridge tracked by minimega).
+	getBridge(DEFAULT_BRIDGE)
+	bridgeLock.Lock()
+	updateBridgeInfo()
+	bridgeLock.Unlock()
+
 	// remove all mega_taps
 	bNames := nukeBridgeNames(true)
 	dirs, err := ioutil.ReadDir("/sys/class/net")
@@ -90,10 +97,10 @@ func nukeBridgeNames(preExist bool) []string {
 	for scanner.Scan() {
 		f := strings.Fields(scanner.Text())
 		log.Debugln(f)
-		if len(f) <= 3 {
+		if len(f) <= 2 {
 			continue
 		}
-		if (f[2] == "true" && preExist) || f[2] == "false" {
+		if (f[1] == "true" && preExist) || f[1] == "false" {
 			ret = append(ret, f[0])
 		}
 	}
