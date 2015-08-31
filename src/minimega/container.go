@@ -208,6 +208,7 @@ type ContainerConfig struct {
 	FSPath   string
 	Hostname string
 	Init     []string
+	Fifos	int
 }
 
 type ContainerVM struct {
@@ -294,10 +295,11 @@ func containerInit() error {
 //	4:  filesystem path
 //	5:  memory in megabytes
 //	6:  uuid
-//	7:  init program (relative to filesystem path)
-//	8:  init args
+//	7:  number of fifos
+//	8:  init program (relative to filesystem path)
+//	9:  init args
 func containerShim() {
-	if len(os.Args) < 8 { // 8 because init args can be nil
+	if len(os.Args) < 9 { // 9 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -336,7 +338,11 @@ func containerShim() {
 		log.Fatalln(err)
 	}
 	vmUUID := os.Args[6]
-	vmInit := os.Args[7:]
+	vmFifos, err := strconv.Atoi(os.Args[7])
+	if err != nil {
+		log.Fatalln(err)
+	}
+	vmInit := os.Args[8:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -394,6 +400,13 @@ func containerShim() {
 	err = syscall.Mount(vmUUID, filepath.Join(vmFSPath, containerUUIDLink), "", syscall.MS_BIND, "")
 	if err != nil {
 		log.Fatal("containerUUIDLink: %v", err)
+	}
+
+	// bind mount fifos
+	log.Debug("vm %v containerFifos", vmID)
+	err = containerFifos(vmFSPath, vmID, vmFifos)
+	if err != nil {
+		log.Fatal("containerFifos: %v", err)
 	}
 
 	// mask paths
@@ -457,6 +470,10 @@ func containerShim() {
 
 	// the new child process will exit and the parent will catch it
 	log.Fatalln("how did I get here?")
+}
+
+func containerFifos(vmFSPath string, vmID, vmFifos int) error {
+	return nil
 }
 
 // containers don't return screenshots
@@ -798,6 +815,18 @@ func (vm *ContainerVM) launch(ack chan int) {
 	uuidPath := filepath.Join(vm.instancePath, "uuid")
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
+	// create fifos
+	for i:=0; i < vm.Fifos; i++ {
+		p := filepath.Join(vm.instancePath, fmt.Sprintf("fifo%v", i))
+		err := syscall.Mkfifo(p, 0660)
+		if err != nil {
+			log.Error("fifo: %v", err)
+			vm.setState(VM_ERROR)
+			ack <- vm.ID
+			return
+		}
+	}	
+
 	//	0:  minimega binary
 	// 	1:  CONTAINER
 	//	2:  vm id
@@ -805,8 +834,9 @@ func (vm *ContainerVM) launch(ack chan int) {
 	//	4:  filesystem path
 	//	5:  memory in megabytes
 	//	6:  uuid path
-	//	7:  init program (relative to filesystem path)
-	//	8+:  init args
+	//	7:  number of fifos
+	//	8:  init program (relative to filesystem path)
+	//	9+:  init args
 	hn := vm.Hostname
 	if hn == "" {
 		hn = CONTAINER_NONE
@@ -819,6 +849,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 		vm.effectivePath,
 		vm.Memory,
 		uuidPath,
+		fmt.Sprintf("%v", vm.Fifos),
 	}
 	args = append(args, vm.Init...)
 
@@ -1306,12 +1337,12 @@ func containerSymlinks(fsPath string) error {
 }
 
 func containerPtmx(fsPath string) error {
-	path := filepath.Join(fsPath, "/dev/ptmx")
-	os.Remove(path)
-	err := os.Symlink("pts/ptmx", path)
-	if err != nil {
-		return err
-	}
+ 	path := filepath.Join(fsPath, "/dev/ptmx")
+ 	os.Remove(path)
+ 	err := os.Symlink("pts/ptmx", path)
+ 	if err != nil {
+ 		return err
+ 	}
 
 	// bind mount /dev/console
 	path = filepath.Join(fsPath, "/dev/console")
@@ -1390,7 +1421,7 @@ func containerMountDefaults(fsPath string) error {
 		return err
 	}
 
-	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "newinstance,ptmxmode=666,gid=5,mode=620")
 	if err != nil {
 		log.Errorln(err)
 		return err

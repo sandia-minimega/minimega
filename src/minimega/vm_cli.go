@@ -758,6 +758,21 @@ filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)`,
 			return cliVmConfigField(c, "filesystem")
 		}),
 	},
+	{ // vm config fifo
+		HelpShort: "set the number of fifos for containers",
+		HelpLong: `
+Set the number of named pipes to include in the container for container-host
+communication. Named pipes will appear on the host in the instance directory
+for the container as fifoN, and on the container as /dev/fifos/fifoN.
+
+Fifos are created using mkfifo() and have all of the same usage constraints.`,
+		Patterns: []string{
+			"vm config fifo [fifo]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "fifo")
+		}),
+	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
 		HelpLong: `

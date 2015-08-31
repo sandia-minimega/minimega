@@ -116,6 +116,9 @@ var containerConfigFns = map[string]VMConfigFns{
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
 	},
+	"fifo": vmConfigInt(func(vm interface{}) *int {
+		return &mustContainerConfig(vm).Fifos
+	}, "number", 0),
 }
 
 // Functions for configuring KVM-based VMs. Note: if keys overlap with
