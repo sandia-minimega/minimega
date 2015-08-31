@@ -111,27 +111,8 @@ func nukeBridgeNames(preExist bool) []string {
 func nukeBridges() {
 	bNames := nukeBridgeNames(false)
 	for _, b := range bNames {
-		var sOut bytes.Buffer
-		var sErr bytes.Buffer
-
-		p := process("ovs")
-		cmd := &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				"del-br",
-				b,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Infoln("removing bridge:", b)
-		//err := cmd.Run()
-		err := cmdTimeout(cmd, OVS_TIMEOUT)
-		if err != nil {
-			log.Error("%v: %v", err, sErr.String())
+		if err := ovsDelBridge(b); err != nil {
+			log.Error("%v -- %v", b, err)
 		}
 	}
 }
@@ -179,28 +160,12 @@ func nukeTap(b, tap string) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tap,
-			"down",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Info("bringing tap down with cmd: %v", cmd)
-	err := cmd.Run()
-	if err != nil {
-		log.Error("%v: %v", err, sErr.String())
+	if err := toggleInterface(tap, false); err != nil {
+		log.Error("%v -- %v", tap, err)
 	}
 
-	cmd = &exec.Cmd{
+	p := process("ip")
+	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
@@ -216,28 +181,12 @@ func nukeTap(b, tap string) {
 		Stderr: &sErr,
 	}
 	log.Info("destroying tap with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
+
+	if err := cmd.Run(); err != nil {
 		log.Error("%v: %v", err, sErr.String())
 	}
 
-	p = process("ovs")
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"del-port",
-			b,
-			tap,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Info("removing tap from mega_bridge with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		log.Error("%v: %v", err, sErr.String())
+	if err := ovsDelPort(b, tap); err != nil {
+		log.Error("%v, %v -- %v", b, tap, err)
 	}
 }
