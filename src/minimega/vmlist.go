@@ -250,6 +250,9 @@ func (vms VMs) flush() {
 	for i, vm := range vms {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			log.Infoln("deleting VM: ", i)
+
+			vm.Flush()
+
 			delete(vms, i)
 		}
 	}

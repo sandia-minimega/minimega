@@ -56,6 +56,7 @@ type VM interface {
 	Kill() error
 	Start() error
 	Stop() error
+	Flush() error
 
 	String() string
 	Info(string) (string, error)
@@ -289,6 +290,16 @@ func (vm *BaseVM) Kill() error {
 	close(vm.kill)
 
 	// TODO: ACK if killed?
+	return nil
+}
+
+func (vm *BaseVM) Flush() error {
+	for i := range vm.Networks {
+		if err := vm.NetworkDisconnect(i); err != nil {
+			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+		}
+	}
+
 	return nil
 }
 
@@ -542,17 +553,6 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	if m != "" && !isMac(m) {
 		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
-	}
-
-	var currBridge *bridge
-	currBridge, err = getBridge(b)
-	if err != nil {
-		return
-	}
-
-	err = currBridge.LanCreate(vlan)
-	if err != nil {
 		return
 	}
 

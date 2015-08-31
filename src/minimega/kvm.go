@@ -462,6 +462,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		net := &vm.Networks[i]
+		log.Info("%#v", net)
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
@@ -580,12 +581,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			cmd.Process.Kill()
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
-		}
-
-		for i := range vm.Networks {
-			if err := vm.NetworkDisconnect(i); err != nil {
-				log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-			}
 		}
 
 		if sendKillAck {

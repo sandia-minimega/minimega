@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -213,22 +214,28 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 	} else {
-		resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
+		resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
 		resp.Tabular = [][]string{}
 
 		bridgeLock.Lock()
 		defer bridgeLock.Unlock()
+
 		for _, v := range bridges {
-			var vlans []int
-			for v, _ := range v.lans {
-				vlans = append(vlans, v)
+			vlans := map[int]bool{}
+			for _, tap := range v.Taps {
+				vlans[tap.lan] = true
 			}
+
+			vlans2 := []int{}
+			for k, _ := range vlans {
+				vlans2 = append(vlans2, k)
+			}
+			sort.Ints(vlans2)
 
 			row := []string{
 				v.Name,
-				strconv.FormatBool(v.exists),
 				strconv.FormatBool(v.preExist),
-				fmt.Sprintf("%v", vlans),
+				fmt.Sprintf("%v", vlans2),
 				fmt.Sprintf("%v", v.Trunk),
 				fmt.Sprintf("%v", v.Tunnel)}
 			resp.Tabular = append(resp.Tabular, row)
