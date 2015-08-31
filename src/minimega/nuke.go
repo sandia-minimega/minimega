@@ -160,7 +160,7 @@ func nukeTap(b, tap string) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	if err := toggleInterface(tap, false); err != nil {
+	if err := toggleInterface(tap, false, false); err != nil {
 		log.Error("%v -- %v", tap, err)
 	}
 

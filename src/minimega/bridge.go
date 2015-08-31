@@ -104,7 +104,7 @@ func NewBridge(name string) (*Bridge, error) {
 	b.preExist = !isNew
 
 	// Bring the interface up
-	if err := toggleInterface(b.Name, true); err != nil {
+	if err := toggleInterface(b.Name, true, false); err != nil {
 		if err := ovsDelBridge(b.Name); err != nil {
 			// Welp, we're boned
 			log.Error("defunct bridge -- %v %v", b.Name, err)
@@ -137,7 +137,7 @@ func (b *Bridge) Destroy() error {
 	b.Lock()
 	defer b.Unlock()
 
-	err := toggleInterface(b.Name, false)
+	err := toggleInterface(b.Name, false, false)
 	if err == nil {
 		err = ovsDelBridge(b.Name)
 	}
@@ -180,7 +180,7 @@ func (b *Bridge) TapCreate(lan int) (tapName string, err error) {
 	// start the ipmaclearner, if need be
 	b.once.Do(b.startIML)
 
-	if err = toggleInterface(tapName, true); err != nil {
+	if err = toggleInterface(tapName, true, false); err != nil {
 		return
 	}
 
@@ -247,7 +247,7 @@ func (b *Bridge) TapDestroy(lan int, tap string) (err error) {
 	b.Lock()
 	defer b.Unlock()
 
-	if err = toggleInterface(tap, false); err != nil {
+	if err = toggleInterface(tap, false, false); err != nil {
 		return
 	}
 
@@ -306,30 +306,14 @@ func (b *Bridge) UpdateNFTimeout(t int) error {
 		return fmt.Errorf("bridge %v has no netflow object", b.Name)
 	}
 
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"set",
-			"NetFlow",
-			b.Name,
-			fmt.Sprintf("active_timeout=%v", t),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args := []string{
+		"set",
+		"NetFlow",
+		b.Name,
+		fmt.Sprintf("active_timeout=%v", t),
 	}
-	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("UpdateNFTimeout: %v: %v", err, sErr)
 	}
 
 	return nil
@@ -342,48 +326,38 @@ func (b *Bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 		return nil, err
 	}
 
+	b.Lock()
+	defer b.Unlock()
+
 	// connect openvswitch to our new netflow object
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"--",
-			"set",
-			"Bridge",
-			b.Name,
-			"netflow=@nf",
-			"--",
-			"--id=@nf",
-			"create",
-			"NetFlow",
-			fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
-			fmt.Sprintf("active-timeout=%v", timeout),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("creating netflow to bridge with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr.String())
-		return nil, e
+	args := []string{
+		"--",
+		"set",
+		"Bridge",
+		b.Name,
+		"netflow=@nf",
+		"--",
+		"--id=@nf",
+		"create",
+		"NetFlow",
+		fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
+		fmt.Sprintf("active-timeout=%v", timeout),
 	}
 
-	b.Lock()
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return nil, fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr)
+	}
+
 	b.nf = nf
-	b.Unlock()
+
 	return nf, nil
 }
 
 // remove an active netflow object
 func (b *Bridge) DestroyNetflow() error {
+	b.Lock()
+	defer b.Unlock()
+
 	if b.nf == nil {
 		return fmt.Errorf("bridge %v has no netflow object", b.Name)
 	}
@@ -391,44 +365,24 @@ func (b *Bridge) DestroyNetflow() error {
 	b.nf.Stop()
 
 	// connect openvswitch to our new netflow object
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"clear",
-			"Bridge",
-			b.Name,
-			"netflow",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("removing netflow on bridge with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
+	args := []string{
+		"clear",
+		"Bridge",
+		b.Name,
+		"netflow",
 	}
 
-	b.Lock()
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("DestroyNetflow: %v: %v", err, sErr)
+	}
+
 	b.nf = nil
-	b.Unlock()
 
 	return nil
 }
 
 // add a vxlan or GRE tunnel to a bridge
 func (b *Bridge) TunnelAdd(t int, remoteIP string) error {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
 	var tunnelType string
 	switch t {
 	case TYPE_VXLAN:
@@ -444,34 +398,22 @@ func (b *Bridge) TunnelAdd(t int, remoteIP string) error {
 		return err
 	}
 
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-port",
-			b.Name,
-			tapName,
-			"--",
-			"set",
-			"interface",
-			tapName,
-			fmt.Sprintf("type=%v", tunnelType),
-			fmt.Sprintf("options:remote_ip=%v", remoteIP),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
+	b.Lock()
+	defer b.Unlock()
 
-	log.Debug("adding ovs tunnel with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("TunnelAdd: %v: %v", err, sErr.String())
-		return e
+	args := []string{
+		"add-port",
+		b.Name,
+		tapName,
+		"--",
+		"set",
+		"interface",
+		tapName,
+		fmt.Sprintf("type=%v", tunnelType),
+		fmt.Sprintf("options:remote_ip=%v", remoteIP),
+	}
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("TunnelAdd: %v: %v", err, sErr)
 	}
 
 	b.Tunnel = append(b.Tunnel, tapName)
@@ -676,82 +618,48 @@ func (b *Bridge) CreateBridgeMirror() (string, error) {
 	}
 
 	// create the mirror for this bridge
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"--",
-			"--id=@p",
-			"get",
-			"port",
-			tapName,
-			"--",
-			"--id=@m",
-			"create",
-			"mirror",
-			"name=m0",
-			"select-all=true",
-			"output-port=@p",
-			"--",
-			"set",
-			"bridge",
-			b.Name,
-			"mirrors=@m",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args := []string{
+		"--",
+		"--id=@p",
+		"get",
+		"port",
+		tapName,
+		"--",
+		"--id=@m",
+		"create",
+		"mirror",
+		"name=m0",
+		"select-all=true",
+		"output-port=@p",
+		"--",
+		"set",
+		"bridge",
+		b.Name,
+		"mirrors=@m",
 	}
-	log.Debug("creating bridge mirror with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return "", e
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return "", fmt.Errorf("openvswitch: %v: %v", err, sErr)
 	}
+
 	return tapName, nil
 }
 
 func (b *Bridge) DeleteBridgeMirror(tap string) error {
 	// delete the mirror for this bridge
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"clear",
-			"bridge",
-			b.Name,
-			"mirrors",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args := []string{
+		"clear",
+		"bridge",
+		b.Name,
+		"mirrors",
 	}
-	log.Debug("deleting bridge mirror with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("DeleteBridgeMirror: %v: %v", err, sErr)
 	}
 
 	// delete the associated host tap
-	err = hostTapDelete(tap)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return hostTapDelete(tap)
 }
 
 func hostTapList(resp *minicli.Response) {
@@ -834,30 +742,8 @@ func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 	}
 
 	// bring the tap up
-	p := process("ip")
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tapName,
-			"up",
-			"promisc",
-			"on",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing up host tap %v", tapName)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
-		return "", e
+	if err := toggleInterface(tapName, true, true); err != nil {
+		return "", err
 	}
 
 	if strings.ToLower(ip) == "none" {
@@ -865,8 +751,11 @@ func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 	}
 
 	if strings.ToLower(ip) == "dhcp" {
-		p = process("dhcp")
-		cmd = &exec.Cmd{
+		var sOut bytes.Buffer
+		var sErr bytes.Buffer
+
+		p := process("dhcp")
+		cmd := &exec.Cmd{
 			Path: p,
 			Args: []string{
 				p,
@@ -878,13 +767,16 @@ func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 			Stderr: &sErr,
 		}
 		log.Debug("obtaining dhcp on tap %v", tapName)
-		err = cmd.Run()
-		if err != nil {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
-			return "", e
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
 		}
 	} else {
-		cmd = &exec.Cmd{
+		var sOut bytes.Buffer
+		var sErr bytes.Buffer
+
+		p := process("ip")
+		cmd := &exec.Cmd{
 			Path: p,
 			Args: []string{
 				p,
@@ -900,10 +792,9 @@ func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
 			Stderr: &sErr,
 		}
 		log.Debug("setting ip on tap %v", tapName)
-		err = cmd.Run()
-		if err != nil {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
-			return "", e
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
 		}
 	}
 
@@ -935,7 +826,7 @@ func getNewTap() (string, error) {
 
 // toggleInterface activates or deactivates an interface based on the activate
 // parameter using the `ip` command.
-func toggleInterface(name string, activate bool) error {
+func toggleInterface(name string, activate, promisc bool) error {
 	var sErr bytes.Buffer
 
 	direction := "up"
@@ -957,6 +848,11 @@ func toggleInterface(name string, activate bool) error {
 		Dir:    "",
 		Stderr: &sErr,
 	}
+	if activate && promisc {
+		cmd.Args = append(cmd.Args, "promisc")
+		cmd.Args = append(cmd.Args, "on")
+	}
+
 	log.Debug("bringing bridge %v with cmd: %v", direction, cmd)
 
 	if err := cmd.Run(); err != nil {
