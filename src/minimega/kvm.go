@@ -469,7 +469,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			return err
 		}
 
-		net.Tap, err = b.TapCreate(net.VLAN)
+		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
 		if err != nil {
 			return err
 		}

@@ -144,21 +144,25 @@ func (b *Bridge) Destroy() error {
 	return err
 }
 
-// create and add a tap to a bridge
-func (b *Bridge) TapCreate(lan int) (tapName string, err error) {
+// create and add a tap to a bridge. If a name is not provided, one will be
+// automatically generated.
+func (b *Bridge) TapCreate(name string, lan int, host bool) (tapName string, err error) {
 	defer func() {
 		// No error => add tap to lan. Do this in a defer so that the bridge
 		// isn't locked.
 		if err == nil {
-			err = b.TapAdd(lan, tapName, false)
+			err = b.TapAdd(lan, tapName, host)
 		}
 	}()
 
 	b.Lock()
 	defer b.Unlock()
 
-	if tapName, err = getNewTap(); err != nil {
-		return
+	tapName = name
+	if tapName == "" {
+		if tapName, err = getNewTap(); err != nil {
+			return
+		}
 	}
 
 	if err = addRemoveTap(tapName, true); err != nil {
@@ -180,14 +184,15 @@ func (b *Bridge) TapCreate(lan int) (tapName string, err error) {
 	// start the ipmaclearner, if need be
 	b.once.Do(b.startIML)
 
-	if err = toggleInterface(tapName, true, false); err != nil {
+	// Host taps are brought up in promisc mode
+	if err = toggleInterface(tapName, true, host); err != nil {
 		return
 	}
 
 	// the tap add was successful, so try to add it to the bridge
 	b.Taps[tapName] = Tap{
 		lan:  lan,
-		host: false,
+		host: host,
 	}
 
 	return
@@ -662,6 +667,50 @@ func (b *Bridge) DeleteBridgeMirror(tap string) error {
 	return hostTapDelete(tap)
 }
 
+func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
+	r, err := strconv.Atoi(lan)
+	if err != nil {
+		return "", err
+	}
+
+	b, err := getBridge(bridge)
+	if err != nil {
+		return "", err
+	}
+
+	tapName, err = b.TapCreate(tapName, r, true)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.ToLower(ip) == "none" {
+		return tapName, nil
+	} else if strings.ToLower(ip) == "dhcp" {
+		var sErr bytes.Buffer
+
+		cmd := exec.Command(process("dhcp"), tapName)
+		cmd.Stderr = &sErr
+		log.Debug("obtaining dhcp on tap %v", tapName)
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		}
+	} else {
+		// Must be a static IP
+		var sErr bytes.Buffer
+
+		cmd := exec.Command(process("ip"), "addr", "add", "dev", tapName, ip)
+		cmd.Stderr = &sErr
+		log.Debug("setting ip on tap %v", tapName)
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		}
+	}
+
+	return tapName, nil
+}
+
 func hostTapList(resp *minicli.Response) {
 	resp.Header = []string{"bridge", "tap", "vlan"}
 	resp.Tabular = [][]string{}
@@ -712,95 +761,6 @@ func hostTapDelete(tap string) error {
 	return nil
 }
 
-func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
-	b, err := getBridge(bridge)
-	if err != nil {
-		return "", err
-	}
-	r, err := strconv.Atoi(lan)
-	if err != nil {
-		return "", err
-	}
-
-	if tapName == "" {
-		tapName, err = getNewTap()
-		if err != nil {
-			return "", err
-		}
-	}
-
-	// create the tap
-	b.Lock()
-	b.Taps[tapName] = Tap{
-		lan:  r,
-		host: true,
-	}
-	b.Unlock()
-	err = b.TapAdd(r, tapName, true)
-	if err != nil {
-		return "", err
-	}
-
-	// bring the tap up
-	if err := toggleInterface(tapName, true, true); err != nil {
-		return "", err
-	}
-
-	if strings.ToLower(ip) == "none" {
-		return tapName, nil
-	}
-
-	if strings.ToLower(ip) == "dhcp" {
-		var sOut bytes.Buffer
-		var sErr bytes.Buffer
-
-		p := process("dhcp")
-		cmd := &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				tapName,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("obtaining dhcp on tap %v", tapName)
-
-		if err = cmd.Run(); err != nil {
-			return "", fmt.Errorf("%v: %v", err, sErr.String())
-		}
-	} else {
-		var sOut bytes.Buffer
-		var sErr bytes.Buffer
-
-		p := process("ip")
-		cmd := &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				"addr",
-				"add",
-				"dev",
-				tapName,
-				ip,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("setting ip on tap %v", tapName)
-
-		if err = cmd.Run(); err != nil {
-			return "", fmt.Errorf("%v: %v", err, sErr.String())
-		}
-	}
-
-	return tapName, nil
-}
-
 // gets a new tap from tapChan and verifies that it doesn't already exist
 func getNewTap() (string, error) {
 	var t string
@@ -834,20 +794,8 @@ func toggleInterface(name string, activate, promisc bool) error {
 		direction = "down"
 	}
 
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			name,
-			direction,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stderr: &sErr,
-	}
+	cmd := exec.Command(process("ip"), "link", "set", name, direction)
+	cmd.Stderr = &sErr
 	if activate && promisc {
 		cmd.Args = append(cmd.Args, "promisc")
 		cmd.Args = append(cmd.Args, "on")
@@ -872,21 +820,9 @@ func addRemoveTap(name string, add bool) error {
 		direction = "del"
 	}
 
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"tuntap",
-			direction,
-			"mode",
-			"tap",
-			name,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stderr: &sErr,
-	}
+	cmd := exec.Command(process("ip"), "tuntap", direction, "mode", "tap", name)
+	cmd.Stderr = &sErr
+
 	log.Debug("%v tap %v with cmd: %v", direction, name, cmd)
 
 	if err := cmd.Run(); err != nil {
@@ -900,24 +836,11 @@ func addOpenflow(bridge, filter string) error {
 	ovsLock.Lock()
 	defer ovsLock.Unlock()
 
-	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	p := process("openflow")
+	cmd := exec.Command(process("openflow"), "add-flow", bridge, filter)
+	cmd.Stderr = &sErr
 
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-flow",
-			bridge,
-			filter,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
 	log.Debug("adding flow with cmd: %v", cmd)
 
 	if err := cmd.Run(); err != nil {

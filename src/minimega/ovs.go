@@ -99,14 +99,9 @@ func ovsCmdWrapper(args []string) (string, string, error) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path:   p,
-		Args:   []string{p}, // append args next
-		Stdout: &sErr,
-		Stderr: &sErr,
-	}
-	cmd.Args = append(cmd.Args, args...)
+	cmd := exec.Command(process("ovs"), args...)
+	cmd.Stdout = &sOut
+	cmd.Stderr = &sErr
 	log.Debug("running ovs cmd: %v", cmd)
 
 	if err := cmdTimeout(cmd, OVS_TIMEOUT); err != nil {
