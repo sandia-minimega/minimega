@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"minicli"
 	log "minilog"
 	"os"
@@ -44,6 +45,18 @@ Log to a file. To disable file logging, call "clear log file".`,
 		},
 		Call: wrapSimpleCLI(cliLogFile),
 	},
+	{ // log filter
+		HelpShort: "filter logging messages",
+		HelpLong: `
+Control what data gets logged based on matching text. For example, to filter
+out all logging messages containing the word "foo":
+
+	log filter foo`,
+		Patterns: []string{
+			"log filter [filter]",
+		},
+		Call: wrapSimpleCLI(cliLogFilter),
+	},
 	{ // clear log
 		HelpShort: "reset state for logging",
 		HelpLong: `
@@ -53,6 +66,7 @@ Resets state for logging. See "help log ..." for more information.`,
 			"clear log <file,>",
 			"clear log <level,>",
 			"clear log <stderr,>",
+			"clear log <filter,>",
 		},
 		Call: wrapSimpleCLI(cliLogClear),
 	},
@@ -147,6 +161,46 @@ func cliLogFile(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+func cliLogFilter(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if len(c.StringArgs) == 0 {
+		var filters []string
+		loggers := log.Loggers()
+
+		for _, l := range loggers {
+			filt, _ := log.Filters(l)
+			for _, f := range filt {
+				var found bool
+				for _, v := range filters {
+					if v == f {
+						found = true
+					}
+				}
+				if !found {
+					filters = append(filters, f)
+				}
+			}
+		}
+		if len(filters) != 0 {
+			resp.Response = fmt.Sprintf("%v", filters)
+		}
+	} else {
+		filter := c.StringArgs["filter"]
+
+		loggers := log.Loggers()
+		for _, l := range loggers {
+			err := log.AddFilter(l, filter)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+		}
+	}
+
+	return resp
+}
+
 func cliLogClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -170,6 +224,17 @@ func cliLogClear(c *minicli.Command) *minicli.Response {
 	if c.BoolArgs["stderr"] || len(c.BoolArgs) == 0 {
 		// Delete logger to stdout
 		log.DelLogger("stdio")
+	}
+
+	if c.BoolArgs["filter"] || len(c.BoolArgs) == 0 {
+		loggers := log.Loggers()
+
+		for _, l := range loggers {
+			filt, _ := log.Filters(l)
+			for _, f := range filt {
+				log.DelFilter(l, f)
+			}
+		}
 	}
 
 	return resp
