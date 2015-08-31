@@ -208,7 +208,7 @@ type ContainerConfig struct {
 	FSPath   string
 	Hostname string
 	Init     []string
-	Fifos	int
+	Fifos    int
 }
 
 type ContainerVM struct {
@@ -524,16 +524,14 @@ func (vm *ContainerVM) Launch(ack chan int) error {
 }
 
 func (vm *ContainerVM) Start() error {
-	s := vm.GetState()
-
-	stateMask := VM_PAUSED | VM_BUILDING | VM_QUIT | VM_ERROR
-	if s&stateMask == 0 {
+	if vm.State&VM_RUNNING != 0 {
 		return nil
 	}
 
-	if s == VM_QUIT || s == VM_ERROR {
+	if vm.State == VM_QUIT || vm.State == VM_ERROR {
 		log.Info("restarting VM: %v", vm.ID)
 		ack := make(chan int)
+		vm.kill = make(chan bool)
 		go vm.launch(ack)
 		log.Debug("ack restarted VM %v", <-ack)
 	}
@@ -816,7 +814,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
-	for i:=0; i < vm.Fifos; i++ {
+	for i := 0; i < vm.Fifos; i++ {
 		p := filepath.Join(vm.instancePath, fmt.Sprintf("fifo%v", i))
 		err := syscall.Mkfifo(p, 0660)
 		if err != nil {
@@ -825,7 +823,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 			ack <- vm.ID
 			return
 		}
-	}	
+	}
 
 	//	0:  minimega binary
 	// 	1:  CONTAINER
@@ -1337,12 +1335,12 @@ func containerSymlinks(fsPath string) error {
 }
 
 func containerPtmx(fsPath string) error {
- 	path := filepath.Join(fsPath, "/dev/ptmx")
- 	os.Remove(path)
- 	err := os.Symlink("pts/ptmx", path)
- 	if err != nil {
- 		return err
- 	}
+	path := filepath.Join(fsPath, "/dev/ptmx")
+	os.Remove(path)
+	err := os.Symlink("pts/ptmx", path)
+	if err != nil {
+		return err
+	}
 
 	// bind mount /dev/console
 	path = filepath.Join(fsPath, "/dev/console")
