@@ -1421,7 +1421,7 @@ func containerMountDefaults(fsPath string) error {
 		return err
 	}
 
-	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "newinstance,ptmxmode=666,gid=5,mode=620")
+	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID, "newinstance,ptmxmode=666,gid=5,mode=620")
 	if err != nil {
 		log.Errorln(err)
 		return err
