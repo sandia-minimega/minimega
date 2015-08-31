@@ -156,6 +156,36 @@ func ccSerialWatcher() {
 			}
 		}
 
+		// look for container vms that we aren't listening on already
+		unconnected = []string{}
+		ronPorts = ccNode.GetActiveUDSPorts()
+		for _, vm := range vms {
+			switch vm := vm.(type) {
+			case *ContainerVM:
+				found := false
+				for _, w := range ronPorts {
+					if strings.HasPrefix(w, vm.instancePath) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					unconnected = append(unconnected, filepath.Join(vm.instancePath, "cc"))
+				}
+			default:
+				continue
+			}
+		}
+
+		// listen the unconnected :)
+		log.Debug("ccSerialWatcher listening on: %v", unconnected)
+		for _, v := range unconnected {
+			err := ccNode.ListenUnix(v)
+			if err != nil {
+				log.Errorln(err)
+			}
+		}
+
 		time.Sleep(time.Duration(CC_SERIAL_PERIOD * time.Second))
 	}
 }
