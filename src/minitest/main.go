@@ -20,11 +20,13 @@ const (
 	BANNER    = `minimega, Copyright (2014) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.`
+
+	PROLOG = "prolog"
+	EPILOG = "epilog"
 )
 
 var (
 	f_base     = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_preamble = flag.String("preamble", "", "path to file containing minimega commands to run on startup")
 	f_testDir  = flag.String("dir", "tests", "path to directory containing tests")
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
@@ -112,15 +114,6 @@ func runTests() {
 		log.Fatal("%v", err)
 	}
 
-	if *f_preamble != "" {
-		out, err := runCommands(mm, *f_preamble)
-		if err != nil {
-			log.Fatal("%v", err)
-		}
-
-		log.Info(out)
-	}
-
 	// TODO: Should we quit minimega and restart it between each test?
 	//quit := mustCompile(t, "quit 2")
 
@@ -129,9 +122,32 @@ func runTests() {
 		log.Fatal("%v", err)
 	}
 
+	var prolog, epilog string
+
+	for _, info := range files {
+		if info.Name() == PROLOG {
+			prolog = path.Join(*f_testDir, info.Name())
+		}
+
+		if info.Name() == EPILOG {
+			epilog = path.Join(*f_testDir, info.Name())
+		}
+	}
+
 	for _, info := range files {
 		if strings.HasSuffix(info.Name(), ".want") || strings.HasSuffix(info.Name(), ".got") {
 			continue
+		}
+		if info.Name() == PROLOG || info.Name() == EPILOG {
+			continue
+		}
+
+		if prolog != "" {
+			// Run the prolog commands
+			log.Debug("Running prolog")
+			if _, err := runCommands(mm, prolog); err != nil {
+				log.Fatal("%v", err)
+			}
 		}
 
 		log.Info("Running commands from %s", info.Name())
@@ -140,6 +156,14 @@ func runTests() {
 		got, err := runCommands(mm, fpath)
 		if err != nil {
 			log.Fatal("%v", err)
+		}
+
+		if epilog != "" {
+			// Run the prolog commands
+			log.Debug("Running epilog")
+			if _, err := runCommands(mm, epilog); err != nil {
+				log.Fatal("%v", err)
+			}
 		}
 
 		// Record the output for offline comparison
@@ -156,7 +180,6 @@ func runTests() {
 		if got != string(want) {
 			log.Error("got != want for %s", info.Name())
 		}
-
 		//mm.runCommand(quit)
 	}
 }
