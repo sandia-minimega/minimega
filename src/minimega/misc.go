@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"gopacket/macs"
 	_ "gopnm"
@@ -332,4 +333,22 @@ func writeOrDie(fpath, data string) {
 		log.Errorln(err)
 		teardown()
 	}
+}
+
+func cmdWrapper(arg ...string) (string, string, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	if len(arg) == 0 {
+		return "", "", errors.New("must have a least one arg")
+	}
+
+	cmd := exec.Command(arg[0], arg[1:]...)
+	cmd.Stdout = &sOut
+	cmd.Stderr = &sErr
+
+	log.Debug("running cmd: %v", cmd)
+
+	err := cmd.Run()
+	return sOut.String(), sErr.String(), err
 }

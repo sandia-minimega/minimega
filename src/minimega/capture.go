@@ -142,7 +142,7 @@ func startBridgeCapturePcap(bridge, filename string) error {
 		return err
 	}
 
-	tap, err := b.CreateBridgeMirror()
+	tap, err := b.MirrorAdd()
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func stopPcapCapture(entry *capture) error {
 			return err
 		}
 
-		return b.DeleteBridgeMirror(entry.tap)
+		return b.MirrorRemove(entry.tap)
 	}
 
 	return nil

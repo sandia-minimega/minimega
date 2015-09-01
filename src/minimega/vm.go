@@ -297,8 +297,16 @@ func (vm *BaseVM) Kill() error {
 
 func (vm *BaseVM) Flush() error {
 	for i := range vm.Networks {
+		net := vm.Networks[i]
+
 		if err := vm.NetworkDisconnect(i); err != nil {
+			// Keep trying even if there's an error...
 			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+		}
+
+		if err := delTap(net.Tap); err != nil {
+			// Keep trying even if there's an error...
+			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
 		}
 	}
 
@@ -353,14 +361,14 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 			return err
 		}
 
-		err = oldBridge.TapRemove(net.VLAN, net.Tap)
+		err = oldBridge.TapRemove(net.Tap)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Connect to the new bridge
-	err = newBridge.TapAdd(vlan, net.Tap, false)
+	err = newBridge.TapAdd(net.Tap, vlan, false)
 	if err != nil {
 		return err
 	}
@@ -394,7 +402,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 		return err
 	}
 
-	err = b.TapRemove(net.VLAN, net.Tap)
+	err = b.TapRemove(net.Tap)
 	if err != nil {
 		return err
 	}

@@ -14,7 +14,8 @@ import (
 )
 
 var (
-	ErrAlreadyExists = errors.New("ovs already exists")
+	ErrAlreadyExists = errors.New("already exists")
+	ErrNoSuchPort    = errors.New("no such port")
 )
 
 // ovsAddBridge creates a new OVS bridge. Returns whether the bridge was new or
@@ -69,7 +70,7 @@ func ovsAddPort(bridge, tap string, lan int, host bool) error {
 	}
 
 	if _, sErr, err := ovsCmdWrapper(args); err == ErrAlreadyExists {
-		return fmt.Errorf("ovsAddPort: %v already exists", tap)
+		return ErrAlreadyExists
 	} else if err != nil {
 		return fmt.Errorf("ovsAddPort: %v: %v", err, sErr)
 	}
@@ -107,6 +108,8 @@ func ovsCmdWrapper(args []string) (string, string, error) {
 	if err := cmdTimeout(cmd, OVS_TIMEOUT); err != nil {
 		if strings.Contains(sErr.String(), "already exists") {
 			err = ErrAlreadyExists
+		} else if strings.Contains(sErr.String(), "no port named") {
+			err = ErrNoSuchPort
 		} else {
 			log.Error("openvswitch cmd failed: %v %v", cmd, sErr.String())
 		}

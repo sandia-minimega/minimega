@@ -454,11 +454,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	var cmd *exec.Cmd
 	var waitChan = make(chan int)
 
-	// clear taps, we may have come from the quit state
-	for i := range vm.Networks {
-		vm.Networks[i].Tap = ""
-	}
-
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		net := &vm.Networks[i]

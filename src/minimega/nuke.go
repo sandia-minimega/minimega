@@ -157,36 +157,11 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 }
 
 func nukeTap(b, tap string) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	if err := toggleInterface(tap, false, false); err != nil {
-		log.Error("%v -- %v", tap, err)
-	}
-
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"tuntap",
-			"del",
-			"mode",
-			"tap",
-			tap,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Info("destroying tap with cmd: %v", cmd)
-
-	if err := cmd.Run(); err != nil {
-		log.Error("%v: %v", err, sErr.String())
-	}
-
-	if err := ovsDelPort(b, tap); err != nil {
+	if err := ovsDelPort(b, tap); err != nil && err != ErrNoSuchPort {
 		log.Error("%v, %v -- %v", b, tap, err)
+	}
+
+	if err := delTap(tap); err != nil {
+		log.Error("%v -- %v", tap, err)
 	}
 }
