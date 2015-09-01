@@ -58,8 +58,9 @@ class TestMinimega(unittest.TestCase):
     def setUp(self):
         try:
             self.mm = minimega.connect('/tmp/minimega/minimega')
-        except FileNotFoundError:
-            raise minimega.Error('failed to connect?')
+        except Exception as e:
+            # python 2 and 3 throw different exceptions for this
+            raise minimega.Error('failed to connect? ' + str(e))
         # uncomment the following line to enable debug output:
         #self.mm._debug = True
 
