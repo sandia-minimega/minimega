@@ -63,7 +63,7 @@ var (
 	bridges          map[string]*Bridge // all bridges. mega_bridge0 will be automatically added
 	disconnectedTaps map[string]Tap
 
-	tapChan chan string // atomic feeder of tap names, wraps tapCount
+	tapNameChan chan string // atomic feeder of tap names
 
 	bridgeLock sync.Mutex
 	ovsLock    sync.Mutex
@@ -75,13 +75,19 @@ func init() {
 	bridges = make(map[string]*Bridge)
 	disconnectedTaps = make(map[string]Tap)
 
-	tapChan = make(chan string)
+	tapNameChan = make(chan string)
 
 	go func() {
-		tapCount := 0
-		for {
-			tapChan <- fmt.Sprintf("mega_tap%v", tapCount)
-			tapCount++
+		for tapCount := 0; ; tapCount++ {
+			tapName := fmt.Sprintf("mega_tap%v", tapCount)
+			fpath := filepath.Join("/sys/class/net", tapName)
+
+			if _, err := os.Stat(fpath); os.IsNotExist(err) {
+				tapNameChan <- tapName
+			} else if err != nil {
+				log.Fatal("unable to stat file -- %v %v", fpath, err)
+			}
+
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
@@ -160,9 +166,7 @@ func (b *Bridge) TapCreate(name string, lan int, host bool) (tapName string, err
 
 	tapName = name
 	if tapName == "" {
-		if tapName, err = getNewTap(); err != nil {
-			return
-		}
+		tapName = <-tapNameChan
 	}
 
 	if err = addRemoveTap(tapName, true); err != nil {
@@ -398,10 +402,7 @@ func (b *Bridge) TunnelAdd(t int, remoteIP string) error {
 		return fmt.Errorf("invalid tunnel type: %v", t)
 	}
 
-	tapName, err := getNewTap()
-	if err != nil {
-		return err
-	}
+	tapName := <-tapNameChan
 
 	b.Lock()
 	defer b.Unlock()
@@ -759,29 +760,6 @@ func hostTapDelete(tap string) error {
 		}
 	}
 	return nil
-}
-
-// gets a new tap from tapChan and verifies that it doesn't already exist
-func getNewTap() (string, error) {
-	var t string
-	for {
-		t = <-tapChan
-		taps, err := ioutil.ReadDir("/sys/class/net")
-		if err != nil {
-			return "", err
-		}
-		found := false
-		for _, v := range taps {
-			if v.Name() == t {
-				found = true
-				log.Warn("tap %v already exists, trying again", t)
-			}
-		}
-		if !found {
-			break
-		}
-	}
-	return t, nil
 }
 
 // toggleInterface activates or deactivates an interface based on the activate
