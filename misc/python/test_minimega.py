@@ -47,7 +47,7 @@ class TestMinimega(unittest.TestCase):
                                          stdout=subprocess.PIPE,
                                          stdin=subprocess.PIPE,
                                          stderr=subprocess.PIPE)
-        sleep(1) #let minimega start up
+        sleep(1)  # let minimega start up
 
     @classmethod
     def tearDownClass(cls):
@@ -62,7 +62,7 @@ class TestMinimega(unittest.TestCase):
             # python 2 and 3 throw different exceptions for this
             raise minimega.Error('failed to connect? ' + str(e))
         # uncomment the following line to enable debug output:
-        #self.mm._debug = True
+        # self.mm._debug = True
 
     def test_stringArgs(self):
         resp = self.mm.vm.config.qemuoverride('add', 'foo', 'bar')
@@ -109,7 +109,7 @@ class TestMinimega(unittest.TestCase):
             self.assertEqual(expected[0], resp[0]['Response'])
             self.assertTrue(self.mm.moreResponses)
 
-            #more responses in the queue
+            # more responses in the queue
             self.assertRaises(minimega.Error,
                               self.mm.echo, ('hello there',))
 
