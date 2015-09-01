@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -168,7 +170,7 @@ func NewVM(name string) *BaseVM {
 
 	vm.kill = make(chan bool)
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
+	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
 	vm.Tags = make(map[string]string)
@@ -300,7 +302,7 @@ func (vm *BaseVM) Flush() error {
 		}
 	}
 
-	return nil
+	return os.RemoveAll(vm.instancePath)
 }
 
 func (vm *BaseVM) Tag(tag string) string {
@@ -483,7 +485,7 @@ func vmGetFirstVirtioPort() []string {
 		// TODO: non-kvm VMs?
 		if vm, ok := vm.(*KvmVM); ok && vm.GetState()&mask != 0 {
 			if vm.VirtioPorts > 0 {
-				ret = append(ret, vm.instancePath+"virtio-serial0")
+				ret = append(ret, filepath.Join(vm.instancePath, "virtio-serial0"))
 			}
 		}
 	}

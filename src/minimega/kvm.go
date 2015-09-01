@@ -445,8 +445,8 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}
 
 	// write the config for this vm
-	writeOrDie(vm.instancePath+"config", vm.Config().String())
-	writeOrDie(vm.instancePath+"name", vm.Name)
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	var args []string
 	var sOut bytes.Buffer
@@ -504,7 +504,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			taps = append(taps, net.Tap)
 		}
 
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+		err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
 			return fmt.Errorf("write instance taps file: %v", err)
 		}
@@ -597,7 +597,7 @@ func (vm *KvmVM) setState(s VMState) {
 	defer vm.lock.Unlock()
 
 	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
+	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}
@@ -605,7 +605,7 @@ func (vm *KvmVM) setState(s VMState) {
 
 // return the path to the qmp socket
 func (vm *KvmVM) qmpPath() string {
-	return vm.instancePath + "qmp"
+	return filepath.Join(vm.instancePath, "qmp")
 }
 
 // build the horribly long qemu argument string
