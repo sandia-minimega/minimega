@@ -76,6 +76,9 @@ func main() {
 		*f_base += "/"
 	}
 
+	logSetup()
+	cliSetup()
+
 	if *f_cli {
 		doc, err := minicli.Doc()
 		if err != nil {
@@ -99,9 +102,6 @@ func main() {
 		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
-
-	logSetup()
-	cliSetup()
 
 	hostname, err = os.Hostname()
 	if err != nil {
