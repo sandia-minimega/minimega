@@ -708,7 +708,7 @@ func hostTapDelete(tap string) error {
 			// remove all host taps on this vlan
 			for name, t := range b.Taps {
 				if t.host {
-					b.TapRemove(name)
+					b.TapDestroy(name)
 				}
 			}
 			continue
@@ -717,7 +717,7 @@ func hostTapDelete(tap string) error {
 			if !t.host {
 				return fmt.Errorf("not a host tap")
 			}
-			b.TapRemove(tap)
+			b.TapDestroy(tap)
 		}
 	}
 	return nil
