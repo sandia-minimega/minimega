@@ -25,6 +25,11 @@ the U.S. Government retains certain rights in this software.`
 	EPILOG = "epilog"
 )
 
+var skippedExtensions = []string{
+	"got",
+	"want",
+}
+
 var (
 	f_base     = flag.String("base", BASE_PATH, "base path for minimega data")
 	f_testDir  = flag.String("dir", "tests", "path to directory containing tests")
@@ -124,6 +129,7 @@ func runTests() {
 
 	var prolog, epilog string
 
+	// Check to see if the prolog and epilog files exist
 	for _, info := range files {
 		if info.Name() == PROLOG {
 			prolog = path.Join(*f_testDir, info.Name())
@@ -134,11 +140,22 @@ func runTests() {
 		}
 	}
 
+outer:
 	for _, info := range files {
-		if strings.HasSuffix(info.Name(), ".want") || strings.HasSuffix(info.Name(), ".got") {
+		name := info.Name()
+		for _, ext := range skippedExtensions {
+			if strings.HasSuffix(name, ext) {
+				continue outer
+			}
+		}
+
+		// Skip hidden files -- probably not valid tets
+		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if info.Name() == PROLOG || info.Name() == EPILOG {
+
+		// Don't run the prolog or epilog
+		if name == PROLOG || name == EPILOG {
 			continue
 		}
 
@@ -150,8 +167,8 @@ func runTests() {
 			}
 		}
 
-		log.Info("Running commands from %s", info.Name())
-		fpath := path.Join(*f_testDir, info.Name())
+		log.Info("Running commands from %s", name)
+		fpath := path.Join(*f_testDir, name)
 
 		got, err := runCommands(mm, fpath)
 		if err != nil {
@@ -178,7 +195,7 @@ func runTests() {
 		}
 
 		if got != string(want) {
-			log.Error("got != want for %s", info.Name())
+			log.Error("got != want for %s", name)
 		}
 		//mm.runCommand(quit)
 	}
