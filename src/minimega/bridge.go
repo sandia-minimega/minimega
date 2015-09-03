@@ -726,12 +726,12 @@ func hostTapDelete(tap string) error {
 // upInterface activates an interface parameter using the `ip` command. promisc
 // controls whether the interface is brought up in promiscuous mode.
 func upInterface(name string, promisc bool) error {
-	args := []string{process("ip"), "link", "set", name, "up"}
+	args := []string{"link", "set", name, "up"}
 	if promisc {
 		args = append(args, "promisc", "on")
 	}
 
-	if _, sErr, err := cmdWrapper(args...); err != nil {
+	if _, sErr, err := cmdWrapper(process("ip"), args...); err != nil {
 		return fmt.Errorf("ip: %v: %v", err, sErr)
 	}
 

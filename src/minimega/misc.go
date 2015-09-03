@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"gopacket/macs"
 	_ "gopnm"
@@ -335,15 +334,14 @@ func writeOrDie(fpath, data string) {
 	}
 }
 
-func cmdWrapper(arg ...string) (string, string, error) {
+// cmdWrapper wraps exec'ing a command. Returns the stdout, stderr, and the
+// error run running the command (which may indicate that the command had a
+// non-zero exit code).
+func cmdWrapper(first string, arg ...string) (string, string, error) {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	if len(arg) == 0 {
-		return "", "", errors.New("must have a least one arg")
-	}
-
-	cmd := exec.Command(arg[0], arg[1:]...)
+	cmd := exec.Command(first, arg...)
 	cmd.Stdout = &sOut
 	cmd.Stderr = &sErr
 
