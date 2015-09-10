@@ -461,24 +461,6 @@ func vmNotRunning(idOrName string) error {
 	return fmt.Errorf("vm not running: %v", idOrName)
 }
 
-func vmGetFirstVirtioPort() []string {
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	mask := VM_BUILDING | VM_RUNNING | VM_PAUSED
-
-	var ret []string
-	for _, vm := range vms {
-		// TODO: non-kvm VMs?
-		if vm, ok := vm.(*KvmVM); ok && vm.GetState()&mask != 0 {
-			if vm.VirtioPorts > 0 {
-				ret = append(ret, vm.instancePath+"virtio-serial0")
-			}
-		}
-	}
-	return ret
-}
-
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
 // bit of parsing, because the entry can be in a few forms:
