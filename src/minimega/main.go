@@ -206,6 +206,9 @@ func main() {
 	}
 	meshageInit(host, *f_namespace, uint(*f_degree), *f_port)
 
+	// start the cc service
+	ccStart()
+
 	fmt.Println(banner)
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable is

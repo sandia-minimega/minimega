@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"ron"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -50,26 +49,14 @@ func ccPrefixIDs(prefix string) []int {
 	return ret
 }
 
-func ccStart(portStr string) (err error) {
-	if ccNode != nil {
-		return fmt.Errorf("cc service already running")
-	}
-
-	ccPort = CC_PORT
-	if portStr != "" {
-		ccPort, err = strconv.Atoi(portStr)
-		if err != nil {
-			return fmt.Errorf("invalid port: %v", portStr)
-		}
-	}
-
-	ccNode, err = ron.NewServer(ccPort, *f_iomBase)
+func ccStart() {
+	var err error
+	ccNode, err = ron.NewServer(CC_PORT, *f_iomBase)
 	if err != nil {
-		return fmt.Errorf("creating cc node %v", err)
+		log.Fatalln(fmt.Errorf("creating cc node %v", err))
 	}
 
 	log.Debug("created ron node at %v %v", ccPort, *f_base)
-	return nil
 }
 
 func ccClear(what string) (err error) {
