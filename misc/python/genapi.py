@@ -37,7 +37,6 @@ CMD_BLACKLIST = [
     # filter these commands out so they don't show up in the API
     # this list should also include any commands you want to generate manually
     'help',
-    #'mesh send',
 ]
 
 # API Version:
@@ -51,10 +50,10 @@ def parseCmdType(type):
     type := bitmask 'type' from cmd json object
     '''
 
-    #zero out the optionalItem bit
+    # zero out the optionalItem bit
     type &= 0xfffffffe
 
-    #this will only return one type, the first one encountered
+    # this will only return one type, the first one encountered
     for name, value in CMD_TYPES.items():
         if type & value:
             return name
@@ -81,7 +80,7 @@ def buildCommand(context, subs, cmd):
     cmd     := json command object
     '''
 
-    #cmdName needs to be a valid Python identifier
+    # cmdName needs to be a valid Python identifier
     cmdName = subs[0]
     cmdName = ''.join(filter(str.isalpha, str(cmdName)))
 
@@ -90,11 +89,11 @@ def buildCommand(context, subs, cmd):
             context[cmdName]['subcommands'] = {}
         buildCommand(context[cmdName]['subcommands'], subs[1:], cmd)
     elif len(subs) > 1:
-        #still have more recursing to do
+        # still have more recursing to do
         context[cmdName] = {'subcommands': {}}
         buildCommand(context[cmdName]['subcommands'], subs[1:], cmd)
     else:
-        #leaf node
+        # leaf node
         context[cmdName] = cmd
         prefix_len = len(cmd['shared_prefix'].split())
         cmd['candidates'] = list(map(parseArgs, [arg[prefix_len:] for arg in
@@ -110,7 +109,7 @@ def render(cmds):
     for c in cmds:
         cmd = c['shared_prefix']
 
-        #make sure this isn't a blacklisted or cli-specific command
+        # make sure this isn't a blacklisted or cli-specific command
         if cmd.startswith('.') or cmd in CMD_BLACKLIST:
             continue
 
@@ -136,4 +135,3 @@ if __name__ == '__main__':
     MM_VERSION = version_str.splitlines()[0]
 
     sys.stdout.write(render(cmds))
-

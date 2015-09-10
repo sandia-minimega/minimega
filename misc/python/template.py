@@ -67,7 +67,7 @@ def connect(path):
 
 Command = namedtuple('Command', ['cmd', 'args'])
 
-class SubCommand:
+class SubCommand(object):
     def __init__(self, mm):
         self.mm = mm
 
@@ -82,7 +82,7 @@ def serializeCommand(command):
     return '{} {}'.format(command.cmd.shared_prefix, args)
 
 
-class minimega:
+class minimega(object):
     '''
     This class communicates with a running instance of minimega using a Unix
     domain socket. The protocol is specified here:
