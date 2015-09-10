@@ -164,13 +164,19 @@ func ccSerialWatcher() {
 			case *ContainerVM:
 				found := false
 				for _, w := range ronPorts {
-					if strings.HasPrefix(w, vm.instancePath) {
+					if strings.HasPrefix(w, vm.effectivePath) {
 						found = true
 						break
 					}
 				}
 				if !found {
-					unconnected = append(unconnected, filepath.Join(vm.instancePath, "cc"))
+					// instead of creating this in the instance directory and bind mounting, which
+					// would require another watcher for new vms, etc., we just create the domain
+					// socket in the effective filesystem for the container. The container will see
+					// it when it's created, and it will get cleaned up automatically when the
+					// container dies.
+					unconnected = append(unconnected, filepath.Join(vm.effectivePath, "/cc"))
+					//unconnected = append(unconnected, filepath.Join(vm.instancePath, "cc"))
 				}
 			default:
 				continue

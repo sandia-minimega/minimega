@@ -1152,21 +1152,12 @@ func (vm *ContainerVM) overlayMount() error {
 }
 
 func (vm *ContainerVM) overlayUnmount() error {
-	cmd := &exec.Cmd{
-		Path: process("umount"),
-		Args: []string{
-			process("umount"),
-			vm.effectivePath,
-		},
-		Env: nil,
-		Dir: "",
-	}
-	log.Debug("unmount: %v", cmd)
-	output, err := cmd.CombinedOutput()
+	err := syscall.Unmount(vm.effectivePath, 0)
 	if err != nil {
-		log.Error("overlay umount: %v %v", err, string(output))
+		log.Error("overlay unmount: %v", err)
 		return err
 	}
+
 	return nil
 }
 
@@ -1534,19 +1525,9 @@ func containerNuke() {
 	mounts := strings.Fields(string(d))
 	for _, m := range mounts {
 		if strings.Contains(m, "megamount") {
-			cmd := &exec.Cmd{
-				Path: process("umount"),
-				Args: []string{
-					process("umount"),
-					m,
-				},
-				Env: nil,
-				Dir: "",
-			}
-			log.Debug("unmount: %v", cmd)
-			output, err := cmd.CombinedOutput()
+			err := syscall.Unmount(m, 0)
 			if err != nil {
-				log.Error("overlay umount: %v %v", err, string(output))
+				log.Error("overlay unmount: %v", err)
 			}
 		}
 	}

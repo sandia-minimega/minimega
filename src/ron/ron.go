@@ -108,7 +108,7 @@ func NewServer(port int, path string) (*Server, error) {
 
 // NewClient attempts to connect to a ron server over tcp, or serial if the
 // serial argument is supplied.
-func NewClient(port int, parent, serial, path string) (*Client, error) {
+func NewClient(family string, port int, parent, serial, path string) (*Client, error) {
 	uuid, err := getUUID()
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func NewClient(port int, parent, serial, path string) (*Client, error) {
 	if serial != "" {
 		err = c.dialSerial(serial)
 	} else {
-		c.dial(parent, port)
+		c.dial(family, parent, port)
 	}
 	if err != nil {
 		return nil, err
