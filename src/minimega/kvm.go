@@ -571,6 +571,13 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 	ack <- vm.ID
 
+	// connect cc
+	ccPath := filepath.Join(vm.instancePath, "cc")
+	err = ccNode.DialSerial(ccPath)
+	if err != nil {
+		log.Errorln(err)
+	}
+
 	go func() {
 		select {
 		case <-waitChan:

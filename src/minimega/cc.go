@@ -12,7 +12,6 @@ import (
 	"path/filepath"
 	"ron"
 	"strings"
-	"time"
 )
 
 const (
@@ -105,46 +104,6 @@ func ccClients() map[string]bool {
 		return clients
 	}
 	return nil
-}
-
-// periodically check for VMs that we aren't dialed into with the ron serial
-// service, and dial them.
-func ccSerialWatcher() {
-	log.Debugln("ccSerialWatcher")
-
-	for {
-		// get a list of every vm's serial port path
-		hostPorts := vmGetFirstVirtioPort()
-
-		// get a list of already opened serial port paths from ron
-		ronPorts := ccNode.GetActiveSerialPorts()
-
-		// find the difference
-		var unconnected []string
-		for _, v := range hostPorts {
-			found := false
-			for _, w := range ronPorts {
-				if v == w {
-					found = true
-					break
-				}
-			}
-			if !found {
-				unconnected = append(unconnected, v)
-			}
-		}
-
-		// dial the unconnected
-		log.Debug("ccSerialWatcher connecting to: %v", unconnected)
-		for _, v := range unconnected {
-			err := ccNode.DialSerial(v)
-			if err != nil {
-				log.Errorln(err)
-			}
-		}
-
-		time.Sleep(time.Duration(CC_SERIAL_PERIOD * time.Second))
-	}
 }
 
 func filterString(f *ron.Client) string {
