@@ -208,7 +208,7 @@ func (b *Bridge) TapAdd(tap string, lan int, host bool) (err error) {
 		return fmt.Errorf("tap is already connected to bridge: %v %v", b.Name, tap)
 	}
 
-	if err = ovsAddPort(b.Name, tap, lan, false); err != nil {
+	if err = ovsAddPort(b.Name, tap, lan, host); err != nil {
 		return
 	}
 
