@@ -452,7 +452,7 @@ func (b *Bridge) TrunkRemove(iface string) error {
 
 func (b *Bridge) MirrorAdd() (string, error) {
 	// get a host tap
-	tapName, err := hostTapCreate(b.Name, "0", "none", "")
+	tapName, err := hostTapCreate(b.Name, "none", "", 0)
 	if err != nil {
 		return "", err
 	}
@@ -629,19 +629,34 @@ func bridgeInfo() string {
 	return o.String()
 }
 
-func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
-	r, err := strconv.Atoi(lan)
-	if err != nil {
+func hostTapCreate(bridge, ip, name string, lan int) (tapName string, err error) {
+	var b *Bridge
+	if b, err = getBridge(bridge); err != nil {
 		return "", err
 	}
 
-	b, err := getBridge(bridge)
-	if err != nil {
-		return "", err
+	tapName = name
+	if tapName == "" {
+		tapName = <-tapNameChan
 	}
 
-	tapName, err = b.TapCreate(tapName, r, true)
-	if err != nil {
+	// Add the interface
+	if err := b.TapAdd(tapName, lan, true); err != nil {
+		return "", err
+	}
+	defer func() {
+		// If there was an error, remove the tap. Again, handle the special
+		// case where the caller provided the tap name explicitly by not
+		// deleting the tap.
+		if name == "" && err != nil {
+			if err := b.TapRemove(tapName); err != nil {
+				// Welp, we're boned
+				log.Error("defunct tap -- %v %v", tapName, err)
+			}
+		}
+	}()
+
+	if err := upInterface(tapName, true); err != nil {
 		return "", err
 	}
 

@@ -98,7 +98,11 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan := c.StringArgs["vlan"]
+		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+		if err != nil {
+			resp.Error = fmt.Sprintf("`%s` is not a valid VLAN", c.StringArgs["vlan"])
+			return resp
+		}
 
 		bridge := c.StringArgs["bridge"]
 		if bridge == "" {
@@ -123,8 +127,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		tap, err := hostTapCreate(bridge, vlan, ip, tap)
-		if err != nil {
+		if tap, err := hostTapCreate(bridge, ip, tap, vlan); err != nil {
 			resp.Error = err.Error()
 		} else {
 			resp.Response = tap
