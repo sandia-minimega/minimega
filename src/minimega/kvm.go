@@ -58,6 +58,9 @@ type KvmVM struct {
 	q   qmp.Conn // qmp connection for this vm
 }
 
+// Ensure that vmKVM implements the VM interface
+var _ VM = (*KvmVM)(nil)
+
 type qemuOverride struct {
 	match string
 	repl  string
@@ -68,9 +71,6 @@ var (
 	qemuOverrideIdChan chan int
 )
 
-// Ensure that vmKVM implements the VM interface
-var _ VM = (*KvmVM)(nil)
-
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
 	qemuOverrideIdChan = makeIDChan()
@@ -79,10 +79,6 @@ func init() {
 	for _, fns := range kvmConfigFns {
 		fns.Clear(&vmConfig.KVMConfig)
 	}
-}
-
-func (vm *KvmVM) GetInstancePath() string {
-	return vm.instancePath
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
@@ -111,11 +107,6 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	// generate a UUID if we don't have one
-	if vm.UUID == "" {
-		vm.UUID = generateUUID()
-	}
-
 	return vm
 }
 
@@ -128,10 +119,6 @@ func (vm *KvmVM) Launch(ack chan int) error {
 
 func (vm *KvmVM) Config() *BaseConfig {
 	return &vm.BaseConfig
-}
-
-func (vm *KvmVM) UpdateCCActive() {
-	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *KvmVM) Start() (err error) {
@@ -201,11 +188,6 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 	// If it's a configurable field, use the Print fn.
 	if fns, ok := kvmConfigFns[mask]; ok {
 		return fns.Print(&vm.KVMConfig), nil
-	}
-
-	switch mask {
-	case "cc_active":
-		return fmt.Sprintf("%v", vm.ActiveCC), nil
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
@@ -598,18 +580,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}()
 
 	return nil
-}
-
-// update the vm state, and write the state to file
-func (vm *KvmVM) setState(s VMState) {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
 }
 
 // return the path to the qmp socket

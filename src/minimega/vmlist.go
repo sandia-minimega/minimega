@@ -128,7 +128,11 @@ func (vms VMs) screenshot(idOrName, path string, max int) ([]byte, error) {
 		return nil, vmNotFound(idOrName)
 	}
 
-	return vm.Screenshot(max)
+	if vm, ok := vm.(*KvmVM); ok {
+		return vm.Screenshot(max)
+	}
+
+	return nil, vmNotPhotogenic(idOrName)
 }
 
 func (vms VMs) migrate(idOrName, filename string) error {

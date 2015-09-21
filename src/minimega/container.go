@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -221,19 +220,12 @@ type ContainerVM struct {
 	netns         string
 }
 
-func (vm *ContainerVM) UpdateCCActive() {
-	vm.ActiveCC = ccHasClient(vm.UUID)
-}
-
 // Ensure that ContainerVM implements the VM interface
-var _ VM = (*KvmVM)(nil)
+var _ VM = (*ContainerVM)(nil)
 
-// Valid names for output masks for vm kvm info, in preferred output order
-var containerMasks = []string{
-	"id", "name", "state", "memory", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "filesystem", "snapshot", "uuid",
-	"cc_active", "tags",
-}
+var (
+	cgroupInitialized bool
+)
 
 func init() {
 	// Reset everything to default
@@ -241,10 +233,6 @@ func init() {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
 }
-
-var (
-	cgroupInitialized bool
-)
 
 func containerInit() error {
 	// inherit cpusets
@@ -507,15 +495,6 @@ func containerFifos(vmFSPath string, vmInstancePath string, vmFifos int) error {
 	return nil
 }
 
-// containers don't return screenshots
-func (vm *ContainerVM) Screenshot(size int) ([]byte, error) {
-	data, err := base64.StdEncoding.DecodeString(containerScreenshot)
-	if err != nil {
-		return nil, err
-	}
-	return data, nil
-}
-
 // Copy makes a deep copy and returns reference to the new struct.
 func (old *ContainerConfig) Copy() *ContainerConfig {
 	res := new(ContainerConfig)
@@ -542,10 +521,6 @@ func NewContainer(name string) *ContainerVM {
 	vm.ContainerConfig = *vmConfig.ContainerConfig.Copy() // deep-copy configured fields
 
 	return vm
-}
-
-func (vm *ContainerVM) GetInstancePath() string {
-	return vm.instancePath
 }
 
 func (vm *ContainerVM) Launch(ack chan int) error {
@@ -598,15 +573,6 @@ func (vm *ContainerVM) Stop() error {
 	return nil
 }
 
-func (vm *ContainerVM) Kill() error {
-	// Close the channel to signal to all dependent goroutines that they should
-	// stop. Anyone blocking on the channel will unblock immediately.
-	// http://golang.org/ref/spec#Receive_operator
-	close(vm.kill)
-	// TODO: ACK if killed?
-	return nil
-}
-
 func (vm *ContainerVM) String() string {
 	return fmt.Sprintf("%s:%d:container", hostname, vm.ID)
 }
@@ -620,11 +586,6 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	// If it's a configurable field, use the Print fn.
 	if fns, ok := containerConfigFns[mask]; ok {
 		return fns.Print(&vm.ContainerConfig), nil
-	}
-
-	switch mask {
-	case "cc_active":
-		return fmt.Sprintf("%v", vm.ActiveCC), nil
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
@@ -642,6 +603,8 @@ func (vm *ContainerConfig) String() string {
 	return o.String()
 }
 
+// TODO: lift KvmVM.checkInterfaces and KvmVM.checkDisks to BaseVM so that we
+// can reuse them here.
 func (vm *ContainerVM) launchPreamble(ack chan int) bool {
 	// check if the vm has a conflict with the disk or mac address of another vm
 	// build state of currently running system
@@ -657,11 +620,6 @@ func (vm *ContainerVM) launchPreamble(ack chan int) bool {
 	if err != nil {
 		log.Errorln(err)
 		teardown()
-	}
-
-	// generate a UUID if we don't have one
-	if vm.UUID == "" {
-		vm.UUID = generateUUID()
 	}
 
 	// populate selfMacMap
@@ -760,17 +718,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 	vm.setState(VM_BUILDING)
 
 	// write the config for this vm
-	config := vm.String()
-	err := ioutil.WriteFile(vm.instancePath+"config", []byte(config), 0664)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-	err = ioutil.WriteFile(vm.instancePath+"name", []byte(vm.Name), 0664)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
+	writeOrDie(vm.instancePath+"config", vm.Config().String())
+	writeOrDie(vm.instancePath+"name", vm.Name)
 
 	var waitChan = make(chan int)
 
@@ -780,7 +729,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 	}
 
 	if vm.Snapshot {
-		err = vm.overlayMount()
+		err := vm.overlayMount()
 		if err != nil {
 			log.Error("overlayMount: %v", err)
 			vm.setState(VM_ERROR)
@@ -1470,18 +1419,6 @@ func containerMountDefaults(fsPath string) error {
 	return nil
 }
 
-// update the vm state, and write the state to file
-func (vm *ContainerVM) setState(s VMState) {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
-}
-
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
 	// walk /sys/fs/cgroup/minimega for tasks, killing each one
@@ -1559,46 +1496,3 @@ func containerNuke() {
 		}
 	}
 }
-
-const containerScreenshot = `
-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
-rkJggg==
-`
