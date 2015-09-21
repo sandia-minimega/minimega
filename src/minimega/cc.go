@@ -11,9 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"ron"
-	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -50,26 +48,14 @@ func ccPrefixIDs(prefix string) []int {
 	return ret
 }
 
-func ccStart(portStr string) (err error) {
-	if ccNode != nil {
-		return fmt.Errorf("cc service already running")
-	}
-
-	ccPort = CC_PORT
-	if portStr != "" {
-		ccPort, err = strconv.Atoi(portStr)
-		if err != nil {
-			return fmt.Errorf("invalid port: %v", portStr)
-		}
-	}
-
-	ccNode, err = ron.NewServer(ccPort, *f_iomBase)
+func ccStart() {
+	var err error
+	ccNode, err = ron.NewServer(CC_PORT, *f_iomBase)
 	if err != nil {
-		return fmt.Errorf("creating cc node %v", err)
+		log.Fatalln(fmt.Errorf("creating cc node %v", err))
 	}
 
 	log.Debug("created ron node at %v %v", ccPort, *f_base)
-	return nil
 }
 
 func ccClear(what string) (err error) {
@@ -118,82 +104,6 @@ func ccClients() map[string]bool {
 		return clients
 	}
 	return nil
-}
-
-// periodically check for VMs that we aren't dialed into with the ron serial
-// service, and dial them.
-func ccSerialWatcher() {
-	log.Debugln("ccSerialWatcher")
-
-	for {
-		// get a list of every vm's serial port path
-		hostPorts := vmGetFirstVirtioPort()
-
-		// get a list of already opened serial port paths from ron
-		ronPorts := ccNode.GetActiveSerialPorts()
-
-		// find the difference
-		var unconnected []string
-		for _, v := range hostPorts {
-			found := false
-			for _, w := range ronPorts {
-				if v == w {
-					found = true
-					break
-				}
-			}
-			if !found {
-				unconnected = append(unconnected, v)
-			}
-		}
-
-		// dial the unconnected
-		log.Debug("ccSerialWatcher connecting to: %v", unconnected)
-		for _, v := range unconnected {
-			err := ccNode.DialSerial(v)
-			if err != nil {
-				log.Errorln(err)
-			}
-		}
-
-		// look for container vms that we aren't listening on already
-		unconnected = []string{}
-		ronPorts = ccNode.GetActiveUDSPorts()
-		for _, vm := range vms {
-			switch vm := vm.(type) {
-			case *ContainerVM:
-				found := false
-				for _, w := range ronPorts {
-					if strings.HasPrefix(w, vm.effectivePath) {
-						found = true
-						break
-					}
-				}
-				if !found {
-					// instead of creating this in the instance directory and bind mounting, which
-					// would require another watcher for new vms, etc., we just create the domain
-					// socket in the effective filesystem for the container. The container will see
-					// it when it's created, and it will get cleaned up automatically when the
-					// container dies.
-					unconnected = append(unconnected, filepath.Join(vm.effectivePath, "/cc"))
-					//unconnected = append(unconnected, filepath.Join(vm.instancePath, "cc"))
-				}
-			default:
-				continue
-			}
-		}
-
-		// listen the unconnected :)
-		log.Debug("ccSerialWatcher listening on: %v", unconnected)
-		for _, v := range unconnected {
-			err := ccNode.ListenUnix(v)
-			if err != nil {
-				log.Errorln(err)
-			}
-		}
-
-		time.Sleep(time.Duration(CC_SERIAL_PERIOD * time.Second))
-	}
 }
 
 func filterString(f *ron.Client) string {
