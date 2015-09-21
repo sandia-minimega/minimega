@@ -18,7 +18,6 @@ import (
 )
 
 var (
-	ccSerial    bool
 	ccFilter    *ron.Client
 	ccPrefix    string
 	ccPrefixMap map[int]string
@@ -56,8 +55,6 @@ example, to filter on VMs that are running windows and have a specific IP.
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
-			"cc <start,> [port]",
-			"cc <serial,>",
 			"cc <clients,>",
 
 			"cc <prefix,> [prefix]",
@@ -106,7 +103,6 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"recv":       cliCCFileRecv,
 	"exec":       cliCCExec,
 	"background": cliCCBackground,
-	"serial":     cliCCSerial,
 	"prefix":     cliCCPrefix,
 	"delete":     cliCCDelete,
 	"clients":    cliCCClients,
@@ -117,15 +113,6 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 func cliCC(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	var err error
-
-	if c.BoolArgs["start"] {
-		err = ccStart(c.StringArgs["port"])
-		if err != nil {
-			resp.Error = err.Error()
-		}
-
-		return resp
-	}
 
 	// Ensure that cc is running before proceeding
 	if ccNode == nil {
@@ -145,12 +132,10 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		// Getting status
 		clients := ccNode.GetActiveClients()
 
-		resp.Header = []string{"port", "number of clients", "serial active"}
+		resp.Header = []string{"number of clients"}
 		resp.Tabular = [][]string{
 			[]string{
-				strconv.Itoa(ccPort),
 				fmt.Sprintf("%v", len(clients)),
-				strconv.FormatBool(ccSerial),
 			},
 		}
 	}
@@ -453,21 +438,6 @@ func cliCCExec(c *minicli.Command) *minicli.Response {
 	log.Debug("generated command %v : %v", id, cmd)
 
 	ccMapPrefix(id)
-
-	return resp
-}
-
-// serial
-func cliCCSerial(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if ccSerial {
-		resp.Error = "cc serial service already running"
-		return resp
-	}
-
-	ccSerial = true
-	go ccSerialWatcher()
 
 	return resp
 }

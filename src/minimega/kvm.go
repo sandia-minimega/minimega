@@ -567,6 +567,13 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 	ack <- vm.ID
 
+	// connect cc
+	ccPath := filepath.Join(vm.instancePath, "cc")
+	err = ccNode.DialSerial(ccPath)
+	if err != nil {
+		log.Errorln(err)
+	}
+
 	go func() {
 		select {
 		case <-waitChan:
@@ -730,7 +737,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	// virtio-serial
-	virtio_slot := -1 // start at -1 since we immediately increment
+	// we always get a cc virtio port
+	args = append(args, "-device")
+	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial1,bus=pci.%v,addr=0x%x", bus, addr))
+	args = append(args, "-chardev")
+	args = append(args, fmt.Sprintf("socket,id=charvserial0,path=%vcc,server,nowait", vmPath))
+	args = append(args, "-device")
+	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserial0,id=charvserial0,name=cc"))
+	addr++
+	if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+		addBus()
+	}
+
+	virtio_slot := 0 // start at 0 since we immediately increment and we already have a cc port
 	for i := 0; i < vm.VirtioPorts; i++ {
 		// qemu port number
 		nr := i%DEV_PER_VIRTIO + 1
