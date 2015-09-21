@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"strconv"
@@ -65,10 +66,6 @@ type VM interface {
 	Tag(tag string) string
 	GetTags() map[string]string
 	ClearTags()
-
-	// Screenshot takes a screenshot of the VM and returns it as a []byte. The
-	// image should be at most size pixels on each edge.
-	Screenshot(size int) ([]byte, error)
 
 	UpdateBW()
 	UpdateCCActive()
@@ -172,6 +169,11 @@ func NewVM(name string) *BaseVM {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
 		vm.Name = name
+	}
+
+	// generate a UUID if we don't have one
+	if vm.UUID == "" {
+		vm.UUID = generateUUID()
 	}
 
 	vm.kill = make(chan bool)
@@ -291,6 +293,10 @@ func (vm *BaseVM) GetType() VMType {
 	return vm.Type
 }
 
+func (vm *BaseVM) GetInstancePath() string {
+	return vm.instancePath
+}
+
 func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -328,6 +334,10 @@ func (vm *BaseVM) UpdateBW() {
 		net := &vm.Networks[i]
 		net.Stats = bandwidthStats[net.Tap]
 	}
+}
+
+func (vm *BaseVM) UpdateCCActive() {
+	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
@@ -462,11 +472,25 @@ func (vm *BaseVM) info(mask string) (string, error) {
 		}
 	case "tags":
 		return fmt.Sprintf("%v", vm.Tags), nil
+	case "cc_active":
+		return fmt.Sprintf("%v", vm.ActiveCC), nil
 	default:
 		return "", errors.New("field not found")
 	}
 
 	return fmt.Sprintf("%v", vals), nil
+}
+
+// update the vm state, and write the state to file
+func (vm *BaseVM) setState(s VMState) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm.State = s
+	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
+	if err != nil {
+		log.Error("write instance state file: %v", err)
+	}
 }
 
 func vmNotFound(idOrName string) error {
@@ -475,6 +499,10 @@ func vmNotFound(idOrName string) error {
 
 func vmNotRunning(idOrName string) error {
 	return fmt.Errorf("vm not running: %v", idOrName)
+}
+
+func vmNotPhotogenic(idOrName string) error {
+	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
 }
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for
