@@ -516,6 +516,17 @@ func (s *Server) GetActiveUDSPorts() []string {
 	return ret
 }
 
+func (s *Server) CloseUDS(path string) error {
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	if l, ok := s.udsConns[path]; ok {
+		return l.Close()
+	} else {
+		return fmt.Errorf("no such path: %v", path)
+	}
+}
+
 // ListenUnix creates a unix domain socket at the given path and listens for
 // incoming connections. ListenUnix returns on the successful creation of the
 // socket, and accepts connections in a goroutine. If the domain socket file is
@@ -538,6 +549,7 @@ func (s *Server) ListenUnix(path string) error {
 	s.udsConns[path] = l
 
 	go func() {
+		defer s.CloseUDS(path)
 		for {
 			l.SetDeadline(time.Now().Add(time.Second))
 			conn, err := l.Accept()
@@ -545,15 +557,14 @@ func (s *Server) ListenUnix(path string) error {
 				if strings.Contains(err.Error(), "timeout") {
 					_, err := os.Stat(path)
 					if err != nil {
-						s.udsLock.Lock()
-						delete(s.udsConns, path)
-						s.udsLock.Unlock()
 						return
 					} else {
 						continue
 					}
 				} else {
-					log.Error("ListenUnix: accept: %v", err)
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						log.Error("ListenUnix: accept: %v", err)
+					}
 					return
 				}
 			}

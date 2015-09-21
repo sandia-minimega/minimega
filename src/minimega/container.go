@@ -1042,6 +1042,13 @@ func (vm *ContainerVM) launch(ack chan int) {
 		parentSync2.Close()
 	}
 
+	// connect cc
+	ccPath := filepath.Join(vm.effectivePath, "cc")
+	err = ccNode.ListenUnix(ccPath)
+	if err != nil {
+		log.Errorln(err)
+	}
+
 	ack <- vm.ID
 
 	if success {
@@ -1065,6 +1072,11 @@ func (vm *ContainerVM) launch(ack chan int) {
 			<-waitChan
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
+	}
+
+	err = ccNode.CloseUDS(ccPath)
+	if err != nil {
+		log.Errorln(err)
 	}
 
 	vm.listener.Close()
