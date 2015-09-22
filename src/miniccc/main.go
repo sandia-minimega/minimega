@@ -24,6 +24,7 @@ var (
 	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
+	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	c          *ron.Client
 )
 
@@ -56,7 +57,7 @@ func main() {
 
 	// start a ron client
 	var err error
-	c, err = ron.NewClient(*f_port, *f_parent, *f_serial, *f_path)
+	c, err = ron.NewClient(*f_family, *f_port, *f_parent, *f_serial, *f_path)
 	if err != nil {
 		log.Fatal("creating ron node: %v", err)
 	}

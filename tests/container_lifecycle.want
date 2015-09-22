@@ -1,0 +1,66 @@
+## .annotate false
+## vm config filesystem containerfs
+## vm config hostname foo
+## vm launch container foo[0-2]
+## .columns name,state vm info
+name | state
+foo0 | BUILDING
+foo1 | BUILDING
+foo2 | BUILDING
+## vm start foo0
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | BUILDING
+foo2 | BUILDING
+## vm kill foo0
+## .columns name,state vm info
+name | state
+foo0 | QUIT
+foo1 | BUILDING
+foo2 | BUILDING
+## vm start foo0
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | BUILDING
+foo2 | BUILDING
+## vm kill foo1
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | QUIT
+foo2 | BUILDING
+## vm start all
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | QUIT
+foo2 | RUNNING
+## vm start foo1
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | RUNNING
+foo2 | RUNNING
+## vm stop foo0
+## .columns name,state vm info
+name | state
+foo0 | PAUSED
+foo1 | RUNNING
+foo2 | RUNNING
+## vm start foo0
+## .columns name,state vm info
+name | state
+foo0 | RUNNING
+foo1 | RUNNING
+foo2 | RUNNING
+## vm kill foo0
+## vm flush
+## .columns name,state vm info
+name | state
+foo1 | RUNNING
+foo2 | RUNNING
+## vm kill all
+## vm flush
+## .columns name,state vm info
