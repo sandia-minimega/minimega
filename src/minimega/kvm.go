@@ -39,9 +39,6 @@ type KVMConfig struct {
 	CPU string // not user configurable, yet.
 
 	MigratePath string
-	UUID        string
-
-	Snapshot bool
 
 	SerialPorts int
 	VirtioPorts int
@@ -59,9 +56,10 @@ type KvmVM struct {
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
-
-	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
+
+// Ensure that vmKVM implements the VM interface
+var _ VM = (*KvmVM)(nil)
 
 type qemuOverride struct {
 	match string
@@ -72,9 +70,6 @@ var (
 	QemuOverrides      map[int]*qemuOverride
 	qemuOverrideIdChan chan int
 )
-
-// Ensure that vmKVM implements the VM interface
-var _ VM = (*KvmVM)(nil)
 
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
@@ -112,11 +107,6 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	// generate a UUID if we don't have one
-	if vm.UUID == "" {
-		vm.UUID = generateUUID()
-	}
-
 	return vm
 }
 
@@ -129,10 +119,6 @@ func (vm *KvmVM) Launch(ack chan int) error {
 
 func (vm *KvmVM) Config() *BaseConfig {
 	return &vm.BaseConfig
-}
-
-func (vm *KvmVM) UpdateCCActive() {
-	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *KvmVM) Start() (err error) {
@@ -204,11 +190,6 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 		return fns.Print(&vm.KVMConfig), nil
 	}
 
-	switch mask {
-	case "cc_active":
-		return fmt.Sprintf("%v", vm.ActiveCC), nil
-	}
-
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
@@ -226,8 +207,6 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
-	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
 	w.Flush()
@@ -591,18 +570,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}()
 
 	return nil
-}
-
-// update the vm state, and write the state to file
-func (vm *KvmVM) setState(s VMState) {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.State = s
-	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
 }
 
 // return the path to the qmp socket
