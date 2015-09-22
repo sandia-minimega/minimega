@@ -716,11 +716,11 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// virtio-serial
 	// we always get a cc virtio port
 	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial1,bus=pci.%v,addr=0x%x", bus, addr))
+	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
 	args = append(args, "-chardev")
-	args = append(args, fmt.Sprintf("socket,id=charvserial0,path=%vcc,server,nowait", vmPath))
+	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%vcc,server,nowait", vmPath))
 	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserial0,id=charvserial0,name=cc"))
+	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
 	addr++
 	if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
 		addBus()
