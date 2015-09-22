@@ -81,6 +81,9 @@ func (vms VMs) save(file *os.File, args []string) error {
 		case *KvmVM:
 			cmds = append(cmds, "vm config kvm true")
 			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
+		case *ContainerVM:
+			cmds = append(cmds, "vm config container true")
+			cmds = append(cmds, saveConfig("container", containerConfigFns, &vm.ContainerConfig)...)
 		default:
 		}
 
@@ -125,7 +128,11 @@ func (vms VMs) screenshot(idOrName, path string, max int) ([]byte, error) {
 		return nil, vmNotFound(idOrName)
 	}
 
-	return vm.Screenshot(max)
+	if vm, ok := vm.(*KvmVM); ok {
+		return vm.Screenshot(max)
+	}
+
+	return nil, vmNotPhotogenic(idOrName)
 }
 
 func (vms VMs) migrate(idOrName, filename string) error {
@@ -173,6 +180,8 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	switch vmType {
 	case KVM:
 		vm = NewKVM(name)
+	case CONTAINER:
+		vm = NewContainer(name)
 	default:
 		// TODO
 	}
@@ -282,14 +291,11 @@ func (vms VMs) info() ([]string, [][]string, error) {
 func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
 	for _, vm := range vms {
-		if vm, ok := vm.(*KvmVM); ok {
-			log.Debug("cleaning instance path: %v", vm.instancePath)
-			err := os.RemoveAll(vm.instancePath)
-			if err != nil {
-				log.Error("clearDirs: %v", err)
-			}
-		} else {
-			// TODO
+		path := vm.GetInstancePath()
+		log.Debug("cleaning instance path: %v", path)
+		err := os.RemoveAll(path)
+		if err != nil {
+			log.Error("clearDirs: %v", err)
 		}
 	}
 }

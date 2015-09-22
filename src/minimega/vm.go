@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"strconv"
@@ -39,6 +40,7 @@ type VMType int
 const (
 	_ VMType = iota
 	KVM
+	CONTAINER
 )
 
 type VM interface {
@@ -48,6 +50,7 @@ type VM interface {
 	GetName() string // GetName returns the VM's per-host unique name
 	GetState() VMState
 	GetType() VMType
+	GetInstancePath() string
 
 	// Launch launches the VM and acks on the provided channel when the VM has
 	// been launched.
@@ -64,11 +67,8 @@ type VM interface {
 	GetTags() map[string]string
 	ClearTags()
 
-	// Screenshot takes a screenshot of the VM and returns it as a []byte. The
-	// image should be at most size pixels on each edge.
-	Screenshot(size int) ([]byte, error)
-
 	UpdateBW()
+	UpdateCCActive()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
 	// connected to the specified bridge and VLAN.
@@ -85,6 +85,10 @@ type BaseConfig struct {
 	Memory string // memory for the vm, in megabytes
 
 	Networks []NetConfig // ordered list of networks
+
+	Snapshot bool
+	UUID     string
+	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
 // VMConfig contains all the configs possible for a VM. When a VM of a
@@ -93,6 +97,7 @@ type BaseConfig struct {
 type VMConfig struct {
 	BaseConfig
 	KVMConfig
+	ContainerConfig
 }
 
 // NetConfig contains all the network-related config for an interface. The IP
@@ -150,6 +155,7 @@ func init() {
 	// for serializing VMs
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
+	gob.Register(&ContainerVM{})
 }
 
 // NewVM creates a new VM, copying the currently set configs. After a VM is
@@ -163,6 +169,11 @@ func NewVM(name string) *BaseVM {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
 		vm.Name = name
+	}
+
+	// generate a UUID if we don't have one
+	if vm.UUID == "" {
+		vm.UUID = generateUUID()
 	}
 
 	vm.kill = make(chan bool)
@@ -179,6 +190,8 @@ func (s VMType) String() string {
 	switch s {
 	case KVM:
 		return "kvm"
+	case CONTAINER:
+		return "container"
 	default:
 		return "???"
 	}
@@ -188,6 +201,8 @@ func ParseVMType(s string) (VMType, error) {
 	switch s {
 	case "kvm":
 		return KVM, nil
+	case "container":
+		return CONTAINER, nil
 	default:
 		return -1, errors.New("invalid VMType")
 	}
@@ -195,13 +210,14 @@ func ParseVMType(s string) (VMType, error) {
 
 func (old *VMConfig) Copy() *VMConfig {
 	return &VMConfig{
-		BaseConfig: *old.BaseConfig.Copy(),
-		KVMConfig:  *old.KVMConfig.Copy(),
+		BaseConfig:      *old.BaseConfig.Copy(),
+		KVMConfig:       *old.KVMConfig.Copy(),
+		ContainerConfig: *old.ContainerConfig.Copy(),
 	}
 }
 
 func (vm VMConfig) String() string {
-	return vm.BaseConfig.String() + vm.KVMConfig.String()
+	return vm.BaseConfig.String() + vm.KVMConfig.String() + vm.ContainerConfig.String()
 }
 
 func (old *BaseConfig) Copy() *BaseConfig {
@@ -226,6 +242,8 @@ func (vm *BaseConfig) String() string {
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
 	fmt.Fprintf(w, "VCPUS:\t%v\n", vm.Vcpus)
 	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
+	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
+	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -275,6 +293,10 @@ func (vm *BaseVM) GetType() VMType {
 	return vm.Type
 }
 
+func (vm *BaseVM) GetInstancePath() string {
+	return vm.instancePath
+}
+
 func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -312,6 +334,10 @@ func (vm *BaseVM) UpdateBW() {
 		net := &vm.Networks[i]
 		net.Stats = bandwidthStats[net.Tap]
 	}
+}
+
+func (vm *BaseVM) UpdateCCActive() {
+	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
@@ -446,11 +472,25 @@ func (vm *BaseVM) info(mask string) (string, error) {
 		}
 	case "tags":
 		return fmt.Sprintf("%v", vm.Tags), nil
+	case "cc_active":
+		return fmt.Sprintf("%v", vm.ActiveCC), nil
 	default:
 		return "", errors.New("field not found")
 	}
 
 	return fmt.Sprintf("%v", vals), nil
+}
+
+// update the vm state, and write the state to file
+func (vm *BaseVM) setState(s VMState) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm.State = s
+	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
+	if err != nil {
+		log.Error("write instance state file: %v", err)
+	}
 }
 
 func vmNotFound(idOrName string) error {
@@ -459,6 +499,10 @@ func vmNotFound(idOrName string) error {
 
 func vmNotRunning(idOrName string) error {
 	return fmt.Errorf("vm not running: %v", idOrName)
+}
+
+func vmNotPhotogenic(idOrName string) error {
+	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
 }
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for

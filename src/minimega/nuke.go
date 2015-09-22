@@ -39,6 +39,9 @@ Should be run with caution.`,
 //	kill all taps
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 func cliNuke(c *minicli.Command) *minicli.Response {
+	// nuke any container related items
+	containerNuke()
+
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
 	err := filepath.Walk(*f_base, nukeWalker)

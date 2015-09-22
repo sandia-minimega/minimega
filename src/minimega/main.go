@@ -70,6 +70,11 @@ func usage() {
 func main() {
 	var err error
 
+	// see containerShim()
+	if len(os.Args) > 1 && os.Args[1] == CONTAINER_MAGIC {
+		containerShim()
+	}
+
 	flag.Usage = usage
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
@@ -248,6 +253,10 @@ func teardown() {
 	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
+	err = os.Remove(CGROUP_PATH)
+	if err != nil {
+		log.Debugln(err)
+	}
 	err = os.Remove(*f_base + "minimega.pid")
 	if err != nil {
 		log.Fatalln(err)

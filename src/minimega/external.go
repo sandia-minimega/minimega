@@ -43,6 +43,7 @@ var defaultExternalProcesses = map[string]string{
 	"ntfs-3g":  "ntfs-3g",
 	"scp":      "scp",
 	"ssh":      "ssh",
+	"hostname": "hostname",
 }
 
 // customExternalProcesses contains user-specified mappings between command
