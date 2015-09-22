@@ -798,13 +798,12 @@ func addOpenflow(bridge, filter string) error {
 }
 
 // create and add a veth tap to a bridge
-func (b *bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
+func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
+	tapName := <-tapNameChan
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
-	tapName, err := getNewTap()
-	if err != nil {
-		return "", err
-	}
+
 	p := process("ip")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -826,42 +825,30 @@ func (b *bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 		Stderr: &sErr,
 	}
 	log.Debug("creating tap with cmd: %v", cmd)
-	err = cmd.Run()
+	err := cmd.Run()
 	if err != nil {
 		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return "", e
 	}
 
-	// the tap add was successful, so try to add it to the bridge
-	b.Lock.Lock()
-	b.lans[lan].Taps[tapName] = &tap{
-		host: false,
-	}
-	b.Lock.Unlock()
-	err = b.TapAdd(lan, tapName, false)
-	if err != nil {
+	// Add the interface
+	if err := b.TapAdd(tapName, lan, true); err != nil {
 		return "", err
 	}
+	defer func() {
+		// If there was an error, remove the tap. Again, handle the special
+		// case where the caller provided the tap name explicitly by not
+		// deleting the tap.
+		if err != nil {
+			if err := b.TapRemove(tapName); err != nil {
+				// Welp, we're boned
+				log.Error("defunct tap -- %v %v", tapName, err)
+			}
+		}
+	}()
 
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tapName,
-			"up",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing tap up with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return "", e
+	if err := upInterface(tapName, false); err != nil {
+		return "", err
 	}
 
 	cmd = &exec.Cmd{
@@ -894,46 +881,21 @@ func (b *bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 }
 
 // destroy and remove a container tap from a bridge
-func (b *bridge) ContainerTapDestroy(lan int, tap string) error {
-	err := b.TapRemove(lan, tap)
+func (b *Bridge) ContainerTapDestroy(lan int, tap string) error {
+	err := b.TapRemove(tap)
 	if err != nil {
 		log.Info("TapDestroy: could not remove tap: %v", err)
 	}
 
-	// if it's a host tap, then ovs removed it for us and we don't need to continue
-	bridgeLock.Lock()
-	if _, ok := disconnectedTaps[tap]; !ok {
-		bridgeLock.Unlock()
-		return nil
+	if err := downInterface(tap); err != nil {
+		return err
 	}
-	bridgeLock.Unlock()
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
 	p := process("ip")
 	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tap,
-			"down",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing tap down with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return e
-	}
-
-	cmd = &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
