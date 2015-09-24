@@ -11,6 +11,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 )
@@ -36,6 +37,7 @@ var (
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "also log to file")
+	f_run      = flag.String("run", "", "run only tests matching the regular expression")
 )
 
 func logSetup() {
@@ -140,6 +142,15 @@ func runTests() {
 		}
 	}
 
+	var matchRe *regexp.Regexp
+	if *f_run != "" {
+		log.Debug("only running files matching `%v`", *f_run)
+		matchRe, err = regexp.Compile(*f_run)
+		if err != nil {
+			log.Fatal("invalid regexp: %v", err)
+		}
+	}
+
 outer:
 	for _, info := range files {
 		name := info.Name()
@@ -156,6 +167,12 @@ outer:
 
 		// Don't run the prolog or epilog
 		if name == PROLOG || name == EPILOG {
+			continue
+		}
+
+		// If a regexp is defined, skip files that don't match
+		if matchRe != nil && !matchRe.Match([]byte(name)) {
+			log.Debug("skipping %v due to regexp", name)
 			continue
 		}
 
