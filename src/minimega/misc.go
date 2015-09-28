@@ -326,3 +326,19 @@ func writeOrDie(fpath, data string) {
 		teardown()
 	}
 }
+
+// PermStrings creates a random permutation of the source slice using the
+// "inside-out" version of the Fisher-Yates algorithm.
+func PermStrings(source []string) []string {
+	res := make([]string, len(source))
+
+	for i := range source {
+		j := rand.Intn(i + 1)
+		if j != i {
+			res[i] = res[j]
+		}
+		res[j] = source[i]
+	}
+
+	return res
+}

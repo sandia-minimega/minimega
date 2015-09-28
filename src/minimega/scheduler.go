@@ -5,28 +5,57 @@ import (
 	log "minilog"
 )
 
-func schedule(namespace string, names []string) map[string][]string {
-	res := map[string][]string{}
+func schedule(ns *Namespace) map[string][]queuedVM {
+	res := map[string][]queuedVM{}
 
-	ns := namespaces[namespace]
+	// Total number of VMs to launch
+	var total int
 
-	// Simplest scheduler -- roughly equal allocation per node
-	// TODO: Shuffle hosts
-	hosts := ns.Hosts
-	count := len(names) / len(hosts)
-	if len(names)%len(names) != 0 {
-		count += 1
+	for _, queued := range ns.queuedVMs {
+		total += len(queued.names)
 	}
 
-	log.Debug("launching %d vms per host", count)
-	for i, name := range names {
-		log.Debug("launch vm %d on host %d", i, i/count)
-		host := hosts[i/count]
-		if name == "" {
-			name = fmt.Sprintf("vm-%v-%v", namespace, <-ns.vmIDChan)
+	// Simplest scheduler -- roughly equal allocation per node
+	hosts := PermStrings(ns.Hosts)
+
+	// Number of VMs per host, need to round up
+	perHost := int(float32(total)/float32(len(hosts)) + 0.5)
+	log.Debug("launching %d vms per host", perHost)
+
+	// Host is an index in hosts that VMs are currently being allocated on and
+	// allocated is the number of VMs that have been allocated on that host
+	var host, allocated int
+
+	for _, queued := range ns.queuedVMs {
+		// Replace empty VM names with generic name
+		for i, name := range queued.names {
+			if name == "" {
+				queued.names[i] = fmt.Sprintf("vm-%v-%v", namespace, <-ns.vmIDChan)
+			}
 		}
 
-		res[host] = append(res[host], name)
+		// Process queued VMs until all names have been allocated
+		for len(queued.names) > 0 {
+			// Splitter for names based on how many VMs should be allocated to
+			// the current host
+			split := perHost - allocated
+			if split > len(queued.names) {
+				split = len(queued.names)
+			}
+
+			// Copy queued and partition names
+			curr := queued
+			curr.names = queued.names[:split]
+			queued.names = queued.names[split:]
+
+			res[hosts[host]] = append(res[hosts[host]], curr)
+			allocated += len(curr.names)
+
+			if allocated == perHost {
+				host += 1
+				allocated = 0
+			}
+		}
 	}
 
 	return res

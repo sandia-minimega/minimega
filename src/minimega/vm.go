@@ -189,8 +189,20 @@ func ParseVMType(s string) (VMType, error) {
 	case "kvm":
 		return KVM, nil
 	default:
-		return -1, errors.New("invalid VMType")
+		return 0, errors.New("invalid VMType")
 	}
+}
+
+// findVMType tries to find a key that parses to a valid VMType. Useful for
+// hunting through a command's BoolArgs.
+func findVMType(args map[string]bool) (VMType, error) {
+	for k := range args {
+		if res, err := ParseVMType(k); err == nil {
+			return res, nil
+		}
+	}
+
+	return 0, errors.New("invalid VMType")
 }
 
 func (old *VMConfig) Copy() *VMConfig {

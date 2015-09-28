@@ -373,7 +373,7 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 	//   2. it wasn't a valid target (e.g. start already running VM)
 	if len(vals) == 1 && !wild {
 		if (len(names) + len(ids)) == 1 {
-			errs = append(errs, fmt.Errorf("VM not found: %v", vals[0]))
+			errs = append(errs, vmNotFound(vals[0]))
 		} else if !results[vals[0]] {
 			errs = append(errs, fmt.Errorf("VM state error: %v", vals[0]))
 		}

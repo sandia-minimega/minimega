@@ -40,11 +40,6 @@ var (
 
 type CLIFunc func(*minicli.Command) *minicli.Response
 
-const (
-	NamespaceBroadcast = iota // simply broadcast the command to hosts
-	NamespaceBroadcastVmTarget
-)
-
 // cliSetup registers all the minimega handlers
 func cliSetup() {
 	registerHandlers("bridge", bridgeCLIHandlers)
@@ -68,70 +63,6 @@ func cliSetup() {
 	registerHandlers("vnc", vncCLIHandlers)
 	registerHandlers("vyatta", vyattaCLIHandlers)
 	registerHandlers("web", webCLIHandlers)
-}
-
-// wrapCLI wraps handlers with some extra handling for namespacing. options
-// dictate what generic cases should be applied to the handler.
-func wrapCLI(fn CLIFunc, options int) minicli.CLIFunc {
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		// No namespace specified, just invoke the handler
-		if namespace == "" {
-			resp := fn(c)
-			respChan <- minicli.Responses{resp}
-			return
-		}
-
-		hosts := namespaces[namespace].Hosts
-
-		// Clear namespace so subcommands don't use -- revert afterwards
-		defer func(old string) {
-			namespace = old
-		}(namespace)
-		namespace = ""
-
-		cmds := makeCommandHosts(hosts, c)
-
-		switch options {
-		case NamespaceBroadcast:
-			// Simple case, just broadcast and then collect the responses
-			forward(processCommands(cmds...), respChan)
-		case NamespaceBroadcastVmTarget:
-			var ok bool
-			var notFound string
-			resps := minicli.Responses{}
-
-			// Broadcast to all machines, collecting errors and forwarding
-			// successful commands.
-			for resp := range processCommands(cmds...) {
-				if len(resp) > 1 {
-					log.Error("unsure how to process multiple responses!!")
-				}
-
-				if resp[0].Error == "" {
-					// Keep all responses without an error
-					resps = append(resps, resp[0])
-					ok = true
-				} else if !isVmNotFound(resp[0].Error) {
-					// Record errors that aren't not found
-					resps = append(resps, resp[0])
-				} else {
-					// Record not found in case the VM doesn't exist anywhere
-					notFound = resp[0].Error
-				}
-			}
-
-			if !ok && notFound != "" {
-				// Didn't find any responses without errors so create a new
-				// response with the not found error
-				resps = append(resps, &minicli.Response{
-					Host:  hostname,
-					Error: notFound,
-				})
-			}
-
-			respChan <- resps
-		}
-	}
 }
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly

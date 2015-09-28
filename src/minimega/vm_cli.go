@@ -16,7 +16,6 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -102,8 +101,15 @@ Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
 
 The optional 'noblock' suffix forces minimega to return control of the command
 line immediately instead of waiting on potential errors from launching the
-VM(s). The user must check logs or error states from vm info.`, Wildcard),
+VM(s). The user must check logs or error states from vm info.
+
+The launch behavior changes when namespace are active. If a namespace is
+active, invocations that include the VM type and the name or number of VMs will
+be queue until a subsequent invocation that does not include any arguments.
+This allows the scheduler to better allocate resources across the cluster. The
+'noblock' suffix is ignored when namespaces are active.`, Wildcard),
 		Patterns: []string{
+			"vm launch",
 			"vm launch <kvm,> <name or count> [noblock,]",
 		},
 		Call: wrapSimpleCLI(cliVmLaunch),
@@ -116,11 +122,7 @@ description of allowable targets.`,
 		Patterns: []string{
 			"vm kill <target>",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func(target string) []error {
-				return vms.kill(target)
-			})
-		}, NamespaceBroadcastVmTarget),
+		Call: wrapVMTargetCLI(vms.kill),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -161,11 +163,7 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
 			"vm start <target>",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func(target string) []error {
-				return vms.start(target)
-			})
-		}, NamespaceBroadcastVmTarget),
+		Call: wrapVMTargetCLI(vms.start),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, ^VM_RUNNING)
@@ -184,11 +182,7 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
 			"vm stop <target>",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmApply(c, func(target string) []error {
-				return vms.stop(target)
-			})
-		}, NamespaceBroadcastVmTarget),
+		Call: wrapVMTargetCLI(vms.stop),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, VM_RUNNING)
@@ -449,9 +443,9 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "memory")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config vcpus
 		HelpShort: "set the number of virtual CPUs for a VM",
@@ -460,9 +454,9 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "vcpus")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config net
 		HelpShort: "specific the networks a VM is a member of",
@@ -501,9 +495,9 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "net")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
@@ -519,9 +513,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config append [arg]...",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "append")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
@@ -532,9 +526,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -548,9 +542,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or all>",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config qemu-append
 		HelpShort: "add additional arguments to the QEMU command",
@@ -563,9 +557,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-append")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config migrate
 		HelpShort: "set migration image for a saved VM",
@@ -578,9 +572,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config migrate [path to migration image]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "migrate")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config disk
 		HelpShort: "set disk images to attach to a VM",
@@ -593,9 +587,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "disk")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config cdrom
 		HelpShort: "set a cdrom image to attach to a VM",
@@ -607,9 +601,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "cdrom")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config kernel
 		HelpShort: "set a kernel image to attach to a VM",
@@ -621,9 +615,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "kernel")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config initrd
 		HelpShort: "set a initrd image to attach to a VM",
@@ -635,9 +629,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "initrd")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config uuid
 		HelpShort: "set the UUID for a VM",
@@ -649,9 +643,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "uuid")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config serial
 		HelpShort: "specify the serial ports a VM will use",
@@ -676,9 +670,9 @@ another number.`,
 		Patterns: []string{
 			"vm config serial [number of serial ports]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "serial")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config virtio-serial
 		HelpShort: "specify the virtio-serial ports a VM will use",
@@ -698,9 +692,9 @@ To create three virtio-serial ports:
 		Patterns: []string{
 			"vm config virtio-serial [number of virtio-serial ports]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "virtio-serial")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // vm config snapshot
 		HelpShort: "enable or disable snapshot mode when using disk images",
@@ -713,9 +707,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Call: wrapCLI(func(c *minicli.Command) *minicli.Response {
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "snapshot")
-		}, NamespaceBroadcast),
+		}),
 	},
 	{ // clear vm config
 		HelpShort: "reset vm config to the default value",
@@ -750,7 +744,7 @@ to the default value.`,
 			"clear vm config <serial,>",
 			"clear vm config <virtio-serial,>",
 		},
-		Call: wrapCLI(cliClearVmConfig, NamespaceBroadcast),
+		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
 	{ // clear vm tag
 		HelpShort: "remove tags from a VM",
@@ -1062,149 +1056,60 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	arg := c.StringArgs["name"]
-	names := []string{}
+	if namespace == "" && len(c.StringArgs) == 0 {
+		resp.Error = "invalid command when namespace is not active"
+		return resp
+	}
 
-	count, err := strconv.ParseInt(arg, 10, 32)
-	if err != nil {
-		names, err = ranges.SplitList(arg)
-	} else if count <= 0 {
-		err = errors.New("invalid number of vms (must be > 0)")
-	} else {
-		for i := int64(0); i < count; i++ {
-			names = append(names, "")
+	if namespace != "" {
+		if len(c.StringArgs) > 0 {
+			namespaceQueue(c, resp)
+		} else {
+			namespaceLaunch(c, resp)
 		}
+
+		return resp
 	}
 
-	if len(names) == 0 && err == nil {
-		err = errors.New("no VMs to launch")
-	}
-
+	names, err := expandVMLaunchNames(c.StringArgs["name"], vms)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
 	}
 
-	// List of VMs to check against for name collisions
-	allVMs := vms
-	if namespace != "" {
-		allVMs = namespaces[namespace].VMs()
-	}
-
-	for _, name := range names {
-		if isReserved(name) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
-			return resp
-		}
-
-		if _, err := strconv.Atoi(name); err == nil {
-			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
-			return resp
-		}
-
-		for _, vm := range allVMs {
-			if vm.GetName() == name {
-				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
-				return resp
-			}
-		}
-	}
-
 	noblock := c.BoolArgs["noblock"]
-	delete(c.BoolArgs, "noblock")
 
-	// Parse the VM type, at this point there should only be one key left in
-	// BoolArgs and it should be the VM type.
-	var vmType VMType
-	for k := range c.BoolArgs {
-		var err error
-		vmType, err = ParseVMType(k)
-		if err != nil {
-			log.Fatalln("expected VM type, not `%v`", k)
-		}
+	vmType, err := findVMType(c.BoolArgs)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
 	}
 
 	log.Info("launching %v %v vms", len(names), vmType)
 
-	// When wait is finished, all VMs have acked the launch
-	var wg sync.WaitGroup
-
-	// Locally launched acks
 	ack := make(chan int)
-	// Remotely launched acks
-	respChan := make(chan minicli.Responses)
 
-	// By default, all VMs are launched on the local instance. If there's a
-	// valid namespace, we fan out to multiple instances.
-	assignment := map[string][]string{hostname: names}
-	if namespace != "" {
-		assignment = schedule(namespace, names)
+	// Collect acks from each of the launched VM
+	waitForAcks := func(count int) {
+		for i := 0; i < count; i++ {
+			log.Debug("launch ack from VM %v", <-ack)
+		}
 	}
 
-	// Number of VMs being launched locally
-	localCount := len(assignment[hostname])
-
-	// Collect acks from each VM launched on the local instance
-	go func(n int) {
-		for i := 0; i < n; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
-
-			wg.Done()
-		}
-	}(localCount)
-
-	// Collect acks from each VM launched on a remote instance
-	go func(n int) {
-		for i := 0; i < n; i++ {
-			resps := <-respChan
-			if len(resps) > 0 {
-				log.Error("unsure how to process multiple responses!!")
-			}
-
-			log.Debug("launch ack from host %v", resps[0].Host)
-
-			if resps[0].Error != "" {
-				log.Error("vm launch error on host %v -- %v", resps[0].Host, resps[0].Error)
-			}
-
-			wg.Done()
-		}
-	}(len(names) - localCount)
-
-	for host, names := range assignment {
-		for _, name := range names {
-			wg.Add(1)
-
-			if host == hostname {
-				if err := vms.launch(name, vmType, ack); err != nil {
-					resp.Error = err.Error()
-					return resp
-				}
-			} else {
-				cmd := minicli.MustCompilef("vm launch %v %v", vmType, name)
-				meshageSend(cmd, host, respChan)
-			}
+	for i, name := range names {
+		if err := vms.launch(name, vmType, ack); err != nil {
+			resp.Error = err.Error()
+			// Ending early, launch a goroutine to record the acks from the vms
+			// that we have launched so far.
+			go waitForAcks(i)
+			return resp
 		}
 	}
 
 	if noblock {
-		go wg.Wait()
+		go waitForAcks(len(names))
 	} else {
-		wg.Wait()
-	}
-
-	return resp
-}
-
-// cliVmApply is a wrapper function that runs the provided function on the
-// ``target'' of the command. This is useful as many VM-related commands take a
-// single target (e.g. start, stop).
-func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	errs := fn(c.StringArgs["target"])
-	if len(errs) > 0 {
-		resp.Error = errSlice(errs).String()
+		waitForAcks(len(names))
 	}
 
 	return resp
@@ -1485,4 +1390,47 @@ func cliVMSuggest(prefix string, mask VMState) []string {
 	}
 
 	return res
+}
+
+// expandVMLaunchNames takes a VM name, range, or count and expands the list of
+// names of VMs that should be launch. Does several sanity checks on the names
+// to make sure that they aren't reserved words and don't collide with existing
+// VM names (as supplied via the vms argument).
+func expandVMLaunchNames(arg string, vms VMs) ([]string, error) {
+	names := []string{}
+
+	count, err := strconv.ParseInt(arg, 10, 32)
+	if err != nil {
+		names, err = ranges.SplitList(arg)
+	} else if count <= 0 {
+		err = errors.New("invalid number of vms (must be > 0)")
+	} else {
+		names = make([]string, count)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(names) == 0 {
+		return nil, errors.New("no VMs to launch")
+	}
+
+	for _, name := range names {
+		if isReserved(name) {
+			return nil, fmt.Errorf("invalid vm name, `%s` is a reserved word", name)
+		}
+
+		if _, err := strconv.Atoi(name); err == nil {
+			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
+		}
+
+		for _, vm := range vms {
+			if vm.GetName() == name {
+				return nil, fmt.Errorf("vm already exists with name `%s`", name)
+			}
+		}
+	}
+
+	return names, nil
 }
