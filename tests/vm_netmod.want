@@ -1,4 +1,3 @@
-## .annotate false
 ## vm config net 0
 ## vm launch kvm vm0
 ## .columns name,vlan,bridge vm info
@@ -20,5 +19,3 @@ vm0  | [0]  | [bar]
 ## .columns name,vlan,bridge vm info
 name | vlan           | bridge
 vm0  | [disconnected] | []
-## vm kill all
-## vm flush

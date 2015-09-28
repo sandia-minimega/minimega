@@ -424,8 +424,8 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}
 
 	// write the config for this vm
-	writeOrDie(vm.instancePath+"config", vm.Config().String())
-	writeOrDie(vm.instancePath+"name", vm.Name)
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	var args []string
 	var sOut bytes.Buffer
@@ -433,21 +433,17 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	var cmd *exec.Cmd
 	var waitChan = make(chan int)
 
-	// clear taps, we may have come from the quit state
-	for i := range vm.Networks {
-		vm.Networks[i].Tap = ""
-	}
-
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		net := &vm.Networks[i]
+		log.Info("%#v", net)
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
 
-		net.Tap, err = b.TapCreate(net.VLAN)
+		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
 		if err != nil {
 			return err
 		}
@@ -482,7 +478,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			taps = append(taps, net.Tap)
 		}
 
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+		err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
 			return fmt.Errorf("write instance taps file: %v", err)
 		}
@@ -568,12 +564,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
-		for i := range vm.Networks {
-			if err := vm.NetworkDisconnect(i); err != nil {
-				log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-			}
-		}
-
 		if sendKillAck {
 			killAck <- vm.ID
 		}
@@ -584,7 +574,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 // return the path to the qmp socket
 func (vm *KvmVM) qmpPath() string {
-	return vm.instancePath + "qmp"
+	return filepath.Join(vm.instancePath, "qmp")
 }
 
 // build the horribly long qemu argument string

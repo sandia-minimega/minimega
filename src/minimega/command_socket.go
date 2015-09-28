@@ -108,7 +108,6 @@ func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
 }
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
-	log.Info("sending resp: %v", resp)
 	r := miniclient.Response{
 		More: more,
 	}

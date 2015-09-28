@@ -12,6 +12,8 @@ import (
 	"io/ioutil"
 	"minicli"
 	log "minilog"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,6 +61,7 @@ type VM interface {
 	Kill() error
 	Start() error
 	Stop() error
+	Flush() error
 
 	String() string
 	Info(string) (string, error)
@@ -178,7 +181,7 @@ func NewVM(name string) *BaseVM {
 
 	vm.kill = make(chan bool)
 
-	vm.instancePath = *f_base + strconv.Itoa(vm.ID) + "/"
+	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
 	vm.Tags = make(map[string]string)
@@ -314,6 +317,24 @@ func (vm *BaseVM) Kill() error {
 	return nil
 }
 
+func (vm *BaseVM) Flush() error {
+	for i := range vm.Networks {
+		net := vm.Networks[i]
+
+		if err := vm.NetworkDisconnect(i); err != nil {
+			// Keep trying even if there's an error...
+			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+		}
+
+		if err := delTap(net.Tap); err != nil {
+			// Keep trying even if there's an error...
+			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
+		}
+	}
+
+	return os.RemoveAll(vm.instancePath)
+}
+
 func (vm *BaseVM) Tag(tag string) string {
 	return vm.Tags[tag]
 }
@@ -366,14 +387,14 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 			return err
 		}
 
-		err = oldBridge.TapRemove(net.VLAN, net.Tap)
+		err = oldBridge.TapRemove(net.Tap)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Connect to the new bridge
-	err = newBridge.TapAdd(vlan, net.Tap, false)
+	err = newBridge.TapAdd(net.Tap, vlan, false)
 	if err != nil {
 		return err
 	}
@@ -407,7 +428,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 		return err
 	}
 
-	err = b.TapRemove(net.VLAN, net.Tap)
+	err = b.TapRemove(net.Tap)
 	if err != nil {
 		return err
 	}
@@ -568,17 +589,6 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	if m != "" && !isMac(m) {
 		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
-	}
-
-	var currBridge *bridge
-	currBridge, err = getBridge(b)
-	if err != nil {
-		return
-	}
-
-	err = currBridge.LanCreate(vlan)
-	if err != nil {
 		return
 	}
 

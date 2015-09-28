@@ -1,0 +1,11 @@
+.columns bridge,tap,vlan tap
+tap create 10 t0
+.columns bridge,tap,vlan tap
+tap create 10 bridge mega_test0 t1
+.columns bridge,tap,vlan tap
+tap create 10 ip 192.168.123.100 t2
+.columns bridge,tap,vlan tap
+tap create 10 bridge mega_test0 ip 192.168.123.101 t3
+.columns bridge,tap,vlan tap
+tap delete all
+.columns bridge,tap,vlan tap
