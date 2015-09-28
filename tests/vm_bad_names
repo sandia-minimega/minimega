@@ -1,4 +1,3 @@
-.annotate false
 vm launch kvm [0]
 vm launch kvm all
 vm launch kvm foo,[0]

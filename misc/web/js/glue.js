@@ -2,7 +2,10 @@
 
 var IMAGE_REFRESH_TIMEOUT = 5000;
 var NETWORK_COLUMN_INDEX = 5;
-var TAGS_COLUMN_INDEX = 7;
+var IP4_COLUMN_INDEX = 6;
+var IP6_COLUMN_INDEX = 7;
+var TAP_COLUMN_INDEX = 8;
+var TAGS_COLUMN_INDEX = 10;
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -90,7 +93,25 @@ function convertImgToBase64URL(url, callback, outputFormat){
 
 function flattenObjectValues (row, data, displayIndex) {
     var networkColumn = $("td:nth-child(" + NETWORK_COLUMN_INDEX + ")", row);
+    var tapColumn = $("td:nth-child(" + TAP_COLUMN_INDEX + ")", row);
+    var ip4Column = $("td:nth-child(" + IP4_COLUMN_INDEX + ")", row);
+    var ip6Column = $("td:nth-child(" + IP6_COLUMN_INDEX + ")", row);
     var tagsColumn = $("td:nth-child(" + TAGS_COLUMN_INDEX + ")", row);
+
+    ip4Column.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.IP4]); },
+        []
+    ).join(", ")));
+
+    ip6Column.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.IP6]); },
+        []
+    ).join(", ")));
+
+    tapColumn.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.Tap]); },
+        []
+    ).join(", ")));
 
     networkColumn.html(handleEmptyString(data.network.reduce(
         function (previous, current) { return previous.concat([current.VLAN]); },
@@ -133,6 +154,9 @@ function updateTables () {
                 { "sTitle": "Memory", "mDataProp": "memory" },
                 { "sTitle": "Name", "mDataProp": "name" },
                 { "sTitle": "Network", "mDataProp": "network" },
+		{ "sTitle": "IPv4", "mDataProp": "network" },
+		{ "sTitle": "IPv6", "mDataProp": "network" },
+		{ "sTitle": "Taps", "mDataProp": "network" },
                 { "sTitle": "State", "mDataProp": "state" },
                 { "sTitle": "Tags", "mDataProp": "tags" },
                 { "sTitle": "Type", "mDataProp": "type" },

@@ -70,11 +70,19 @@ func usage() {
 func main() {
 	var err error
 
+	// see containerShim()
+	if len(os.Args) > 1 && os.Args[1] == CONTAINER_MAGIC {
+		containerShim()
+	}
+
 	flag.Usage = usage
 	flag.Parse()
 	if !strings.HasSuffix(*f_base, "/") {
 		*f_base += "/"
 	}
+
+	logSetup()
+	cliSetup()
 
 	if *f_cli {
 		doc, err := minicli.Doc()
@@ -99,9 +107,6 @@ func main() {
 		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
-
-	logSetup()
-	cliSetup()
 
 	hostname, err = os.Hostname()
 	if err != nil {
@@ -206,6 +211,9 @@ func main() {
 	}
 	meshageInit(host, *f_namespace, uint(*f_degree), *f_port)
 
+	// start the cc service
+	ccStart()
+
 	fmt.Println(banner)
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable is
@@ -245,6 +253,10 @@ func teardown() {
 	vms.cleanDirs()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
+	err = os.Remove(CGROUP_PATH)
+	if err != nil {
+		log.Debugln(err)
+	}
 	err = os.Remove(*f_base + "minimega.pid")
 	if err != nil {
 		log.Fatalln(err)

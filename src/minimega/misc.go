@@ -327,6 +327,23 @@ func writeOrDie(fpath, data string) {
 	}
 }
 
+// cmdWrapper wraps exec'ing a command. Returns the stdout, stderr, and the
+// error run running the command (which may indicate that the command had a
+// non-zero exit code).
+func cmdWrapper(first string, arg ...string) (string, string, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	cmd := exec.Command(first, arg...)
+	cmd.Stdout = &sOut
+	cmd.Stderr = &sErr
+
+	log.Debug("running cmd: %v", cmd)
+
+	err := cmd.Run()
+	return sOut.String(), sErr.String(), err
+}
+
 // PermStrings creates a random permutation of the source slice using the
 // "inside-out" version of the Fisher-Yates algorithm.
 func PermStrings(source []string) []string {

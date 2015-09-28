@@ -39,9 +39,6 @@ type KVMConfig struct {
 	CPU string // not user configurable, yet.
 
 	MigratePath string
-	UUID        string
-
-	Snapshot bool
 
 	SerialPorts int
 	VirtioPorts int
@@ -59,9 +56,10 @@ type KvmVM struct {
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
-
-	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
+
+// Ensure that vmKVM implements the VM interface
+var _ VM = (*KvmVM)(nil)
 
 type qemuOverride struct {
 	match string
@@ -72,9 +70,6 @@ var (
 	QemuOverrides      map[int]*qemuOverride
 	qemuOverrideIdChan chan int
 )
-
-// Ensure that vmKVM implements the VM interface
-var _ VM = (*KvmVM)(nil)
 
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
@@ -112,11 +107,6 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	// generate a UUID if we don't have one
-	if vm.UUID == "" {
-		vm.UUID = generateUUID()
-	}
-
 	return vm
 }
 
@@ -129,10 +119,6 @@ func (vm *KvmVM) Launch(ack chan int) error {
 
 func (vm *KvmVM) Config() *BaseConfig {
 	return &vm.BaseConfig
-}
-
-func (vm *KvmVM) UpdateCCActive() {
-	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
 func (vm *KvmVM) Start() (err error) {
@@ -204,11 +190,6 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 		return fns.Print(&vm.KVMConfig), nil
 	}
 
-	switch mask {
-	case "cc_active":
-		return fmt.Sprintf("%v", vm.ActiveCC), nil
-	}
-
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
@@ -226,8 +207,6 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
-	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
-	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
 	w.Flush()
@@ -445,8 +424,8 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}
 
 	// write the config for this vm
-	writeOrDie(vm.instancePath+"config", vm.Config().String())
-	writeOrDie(vm.instancePath+"name", vm.Name)
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	var args []string
 	var sOut bytes.Buffer
@@ -454,21 +433,17 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	var cmd *exec.Cmd
 	var waitChan = make(chan int)
 
-	// clear taps, we may have come from the quit state
-	for i := range vm.Networks {
-		vm.Networks[i].Tap = ""
-	}
-
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		net := &vm.Networks[i]
+		log.Info("%#v", net)
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
 
-		net.Tap, err = b.TapCreate(net.VLAN)
+		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
 		if err != nil {
 			return err
 		}
@@ -503,7 +478,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			taps = append(taps, net.Tap)
 		}
 
-		err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+		err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
 			return fmt.Errorf("write instance taps file: %v", err)
 		}
@@ -571,6 +546,13 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 	ack <- vm.ID
 
+	// connect cc
+	ccPath := filepath.Join(vm.instancePath, "cc")
+	err = ccNode.DialSerial(ccPath)
+	if err != nil {
+		log.Errorln(err)
+	}
+
 	go func() {
 		select {
 		case <-waitChan:
@@ -582,12 +564,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
-		for i := range vm.Networks {
-			if err := vm.NetworkDisconnect(i); err != nil {
-				log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-			}
-		}
-
 		if sendKillAck {
 			killAck <- vm.ID
 		}
@@ -596,21 +572,9 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	return nil
 }
 
-// update the vm state, and write the state to file
-func (vm *KvmVM) setState(s VMState) {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
-}
-
 // return the path to the qmp socket
 func (vm *KvmVM) qmpPath() string {
-	return vm.instancePath + "qmp"
+	return filepath.Join(vm.instancePath, "qmp")
 }
 
 // build the horribly long qemu argument string
@@ -740,7 +704,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	// virtio-serial
-	virtio_slot := -1 // start at -1 since we immediately increment
+	// we always get a cc virtio port
+	args = append(args, "-device")
+	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
+	args = append(args, "-chardev")
+	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%vcc,server,nowait", vmPath))
+	args = append(args, "-device")
+	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
+	addr++
+	if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+		addBus()
+	}
+
+	virtio_slot := 0 // start at 0 since we immediately increment and we already have a cc port
 	for i := 0; i < vm.VirtioPorts; i++ {
 		// qemu port number
 		nr := i%DEV_PER_VIRTIO + 1

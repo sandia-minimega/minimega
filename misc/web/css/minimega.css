@@ -7,20 +7,26 @@ body.modal-open {
 }
 
 #logo {
-	padding: 20px;
+	float: left;
+	margin: 5px;
 	width: 200px;
 }
 
 #global-search {
 	display: none;
 	/*display: block;*/
-	margin: 0 10px 10px;
+	margin: 10px;
+	float: right;
 	width: 180px;
 }
 
 .form-control {
 	box-shadow: none !important;
 	border: 1px solid #ccc !important;
+}
+
+.nav {
+	background: "#22313F";
 }
 
 #nav-container {
@@ -92,7 +98,6 @@ nav a span {
 }
 
 #content {
-	margin-left: 200px;
 	padding: 20px;
 	box-sizing: border-box;
 }

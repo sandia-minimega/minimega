@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -97,7 +98,11 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan := c.StringArgs["vlan"]
+		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+		if err != nil {
+			resp.Error = fmt.Sprintf("`%s` is not a valid VLAN", c.StringArgs["vlan"])
+			return resp
+		}
 
 		bridge := c.StringArgs["bridge"]
 		if bridge == "" {
@@ -122,8 +127,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		tap, err := hostTapCreate(bridge, vlan, ip, tap)
-		if err != nil {
+		if tap, err := hostTapCreate(bridge, ip, tap, vlan); err != nil {
 			resp.Error = err.Error()
 		} else {
 			resp.Response = tap
@@ -213,22 +217,28 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 	} else {
-		resp.Header = []string{"Bridge", "Exists", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
+		resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
 		resp.Tabular = [][]string{}
 
 		bridgeLock.Lock()
 		defer bridgeLock.Unlock()
+
 		for _, v := range bridges {
-			var vlans []int
-			for v, _ := range v.lans {
-				vlans = append(vlans, v)
+			vlans := map[int]bool{}
+			for _, tap := range v.Taps {
+				vlans[tap.lan] = true
 			}
+
+			vlans2 := []int{}
+			for k, _ := range vlans {
+				vlans2 = append(vlans2, k)
+			}
+			sort.Ints(vlans2)
 
 			row := []string{
 				v.Name,
-				strconv.FormatBool(v.exists),
 				strconv.FormatBool(v.preExist),
-				fmt.Sprintf("%v", vlans),
+				fmt.Sprintf("%v", vlans2),
 				fmt.Sprintf("%v", v.Trunk),
 				fmt.Sprintf("%v", v.Tunnel)}
 			resp.Tabular = append(resp.Tabular, row)

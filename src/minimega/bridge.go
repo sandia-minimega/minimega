@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,29 +26,30 @@ import (
 
 const (
 	DisconnectedVLAN = -1
+	TrunkVLAN        = -2
 )
 
-// a bridge representation that includes a list of vlans and their respective
-// taps.
-type bridge struct {
+// Bridge represents a bridge on the host and the Taps connected to it.
+type Bridge struct {
 	Name     string
-	lans     map[int]*vlan
-	exists   bool // false until the first usage, then true until destroyed.
 	preExist bool
 	iml      *ipmac.IPMacLearner
-	Lock     sync.Mutex
 	nf       *gonetflow.Netflow
 	Trunk    []string
 	Tunnel   []string
+
+	Taps map[string]Tap
+
+	// Embedded mutex
+	sync.Mutex
+
+	// Guards startIML
+	once sync.Once
 }
 
-type vlan struct {
-	Taps map[string]*tap // named list of taps.
-}
-
-type tap struct {
-	host       bool
-	hostOption string
+type Tap struct {
+	lan  int
+	host bool
 }
 
 const (
@@ -58,50 +60,471 @@ const (
 )
 
 var (
-	bridges          map[string]*bridge // all bridges. mega_bridge0 will be automatically added
-	bridgeLock       sync.Mutex
-	tapCount         int         // total number of allocated taps on this host
-	tapChan          chan string // atomic feeder of tap names, wraps tapCount
-	disconnectedTaps map[string]*tap
-	ovsLock          sync.Mutex
+	bridges map[string]*Bridge // all bridges. mega_bridge0 will be automatically added
+
+	tapNameChan chan string // atomic feeder of tap names
+
+	bridgeLock sync.Mutex
+	ovsLock    sync.Mutex
 )
 
 // create the default bridge struct and create a goroutine to generate
 // tap names for this host.
 func init() {
-	bridges = make(map[string]*bridge)
-	tapChan = make(chan string)
-	disconnectedTaps = make(map[string]*tap)
+	bridges = make(map[string]*Bridge)
+
+	tapNameChan = make(chan string)
+
 	go func() {
-		for {
-			tapChan <- fmt.Sprintf("mega_tap%v", tapCount)
-			tapCount++
+		for tapCount := 0; ; tapCount++ {
+			tapName := fmt.Sprintf("mega_tap%v", tapCount)
+			fpath := filepath.Join("/sys/class/net", tapName)
+
+			if _, err := os.Stat(fpath); os.IsNotExist(err) {
+				tapNameChan <- tapName
+			} else if err != nil {
+				log.Fatal("unable to stat file -- %v %v", fpath, err)
+			}
+
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
 }
 
+// NewBridge creates a new bridge with ovs, assumes that the bridgeLock is held.
+func NewBridge(name string) (*Bridge, error) {
+	log.Debug("creating new bridge -- %v", name)
+	b := &Bridge{
+		Name: name,
+		Taps: make(map[string]Tap),
+	}
+
+	// Create the bridge
+	isNew, err := ovsAddBridge(b.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	b.preExist = !isNew
+
+	// Bring the interface up
+	if err := upInterface(b.Name, false); err != nil {
+		if err := ovsDelBridge(b.Name); err != nil {
+			// Welp, we're boned
+			log.Error("defunct bridge -- %v %v", b.Name, err)
+		}
+
+		return nil, err
+	}
+
+	return b, nil
+}
+
+// destroy a bridge with ovs, and remove all of the taps, etc associated with it
+func (b *Bridge) Destroy() error {
+	// first get all of the taps off of this bridge and destroy them
+	for tap := range b.Taps {
+		log.Debug("destroying tap %v", tap)
+		if err := b.TapDestroy(tap); err != nil {
+			log.Info("Destroy: could not destroy tap: %v", err)
+		}
+	}
+
+	// don't destroy the bridge if it existed before we started
+	if b.preExist {
+		return nil
+	}
+
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	b.Lock()
+	defer b.Unlock()
+
+	if err := ovsDelBridge(b.Name); err != nil {
+		return err
+	}
+
+	delete(bridges, b.Name)
+	return nil
+}
+
+// create and add a tap to a bridge. If a name is not provided, one will be
+// automatically generated.
+func (b *Bridge) TapCreate(name string, lan int, host bool) (tapName string, err error) {
+	tapName = name
+	if tapName == "" {
+		tapName = <-tapNameChan
+	}
+
+	// Add the tap and only fail if it already exists and the caller did not
+	// explicitly name it. If the caller did provide a name, assume that they
+	// already created the tap for us.
+	if err = addTap(tapName); err != nil && !(err == ErrAlreadyExists && name != "") {
+		return
+	}
+
+	defer func() {
+		// If there was an error, remove the tap. Again, handle the special
+		// case where the caller provided the tap name explicitly by not
+		// deleting the tap.
+		if name == "" && err != nil {
+			if err := delTap(tapName); err != nil {
+				// Welp, we're boned
+				log.Error("defunct tap -- %v %v", tapName, err)
+			}
+		}
+	}()
+
+	if err = upInterface(tapName, host); err != nil {
+		return
+	}
+
+	// Host taps are brought up in promisc mode
+	err = b.TapAdd(tapName, lan, host)
+	return
+}
+
+// add a tap to the bridge
+func (b *Bridge) TapAdd(tap string, lan int, host bool) (err error) {
+	defer func() {
+		if err == ErrAlreadyExists {
+			// special case - we own the tap, but it already exists
+			// on the bridge. simply remove and add it again.
+			log.Info("tap %v is already on bridge, adding again", tap)
+			if err = b.TapRemove(tap); err == nil {
+				err = b.TapAdd(tap, lan, host)
+			}
+		}
+	}()
+
+	// start the ipmaclearner, if need be
+	b.once.Do(b.startIML)
+
+	b.Lock()
+	defer b.Unlock()
+
+	if _, ok := b.Taps[tap]; ok {
+		return fmt.Errorf("tap is already connected to bridge: %v %v", b.Name, tap)
+	}
+
+	if err = ovsAddPort(b.Name, tap, lan, host); err != nil {
+		return
+	}
+
+	b.Taps[tap] = Tap{
+		lan:  lan,
+		host: host,
+	}
+
+	return
+}
+
+// destroy and remove a tap from a bridge
+func (b *Bridge) TapDestroy(tap string) error {
+	if err := b.TapRemove(tap); err != nil {
+		return err
+	}
+
+	return delTap(tap)
+}
+
+// remove a tap from a bridge
+func (b *Bridge) TapRemove(tap string) error {
+	b.Lock()
+	defer b.Unlock()
+
+	if err := ovsDelPort(b.Name, tap); err != nil {
+		return err
+	}
+
+	delete(b.Taps, tap)
+	return nil
+}
+
+// startIML starts the MAC listener.
+func (b *Bridge) startIML() {
+	// use openflow to redirect arp and icmp6 traffic to the local tap
+	filters := []string{
+		"dl_type=0x0806,actions=local,normal",
+		"dl_type=0x86dd,nw_proto=58,icmp_type=135,actions=local,normal",
+	}
+	for _, filter := range filters {
+		if err := addOpenflow(b.Name, filter); err != nil {
+			log.Error("cannot start ip learner on bridge: %v", err)
+			return
+		}
+	}
+
+	iml, err := ipmac.NewLearner(b.Name)
+	if err != nil {
+		log.Error("cannot start ip learner on bridge: %v", err)
+		return
+	}
+
+	b.iml = iml
+}
+
+// create a new netflow object for the specified bridge
+func (b *Bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.nf != nil {
+		return nil, fmt.Errorf("bridge %v already has a netflow object", b.Name)
+	}
+
+	nf, port, err := gonetflow.NewNetflow()
+	if err != nil {
+		return nil, err
+	}
+
+	// connect openvswitch to our new netflow object
+	args := []string{
+		"--",
+		"set",
+		"Bridge",
+		b.Name,
+		"netflow=@nf",
+		"--",
+		"--id=@nf",
+		"create",
+		"NetFlow",
+		fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
+		fmt.Sprintf("active-timeout=%v", timeout),
+	}
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return nil, fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr)
+	}
+
+	b.nf = nf
+
+	return nf, nil
+}
+
+// remove an active netflow object
+func (b *Bridge) DestroyNetflow() error {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.nf == nil {
+		return fmt.Errorf("bridge %v has no netflow object", b.Name)
+	}
+
+	b.nf.Stop()
+
+	// disconnect openvswitch from netflow object
+	args := []string{
+		"clear",
+		"Bridge",
+		b.Name,
+		"netflow",
+	}
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("DestroyNetflow: %v: %v", err, sErr)
+	}
+
+	b.nf = nil
+
+	return nil
+}
+
+// update the active timeout on a nf object
+func (b *Bridge) UpdateNFTimeout(t int) error {
+	b.Lock()
+	defer b.Unlock()
+
+	if b.nf == nil {
+		return fmt.Errorf("bridge %v has no netflow object", b.Name)
+	}
+
+	args := []string{
+		"set",
+		"NetFlow",
+		b.Name,
+		fmt.Sprintf("active_timeout=%v", t),
+	}
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("UpdateNFTimeout: %v: %v", err, sErr)
+	}
+
+	return nil
+}
+
+// add a vxlan or GRE tunnel to a bridge
+func (b *Bridge) TunnelAdd(t int, remoteIP string) error {
+	var tunnelType string
+	switch t {
+	case TYPE_VXLAN:
+		tunnelType = "vxlan"
+	case TYPE_GRE:
+		tunnelType = "gre"
+	default:
+		return fmt.Errorf("invalid tunnel type: %v", t)
+	}
+
+	tapName := <-tapNameChan
+
+	b.Lock()
+	defer b.Unlock()
+
+	args := []string{
+		"add-port",
+		b.Name,
+		tapName,
+		"--",
+		"set",
+		"interface",
+		tapName,
+		fmt.Sprintf("type=%v", tunnelType),
+		fmt.Sprintf("options:remote_ip=%v", remoteIP),
+	}
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("TunnelAdd: %v: %v", err, sErr)
+	}
+
+	b.Tunnel = append(b.Tunnel, tapName)
+
+	return nil
+}
+
+// remove trunk port from a bridge
+func (b *Bridge) TunnelRemove(iface string) error {
+	// find this iface in the tunnel list
+	index := -1
+	for i, v := range b.Tunnel {
+		if v == iface {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return fmt.Errorf("no tunnel port %v on bridge %v", iface, b.Name)
+	}
+
+	err := ovsDelPort(b.Name, b.Tunnel[index])
+	if err == nil {
+		b.Tunnel = append(b.Tunnel[:index], b.Tunnel[index+1:]...)
+	}
+
+	return err
+}
+
+// add an interface as a trunk port to a bridge
+func (b *Bridge) TrunkAdd(iface string) error {
+	b.Lock()
+	defer b.Unlock()
+
+	err := ovsAddPort(b.Name, iface, TrunkVLAN, false)
+	if err == nil {
+		b.Trunk = append(b.Trunk, iface)
+	}
+
+	return err
+}
+
+// remove trunk port from a bridge
+func (b *Bridge) TrunkRemove(iface string) error {
+	b.Lock()
+	defer b.Unlock()
+
+	// find this iface in the trunk list
+	index := -1
+	for i, v := range b.Trunk {
+		if v == iface {
+			index = i
+			break
+		}
+	}
+	if index == -1 {
+		return fmt.Errorf("no trunk port %v on bridge %v", iface, b.Name)
+	}
+
+	err := ovsDelPort(b.Name, b.Trunk[index])
+	if err == nil {
+		b.Trunk = append(b.Trunk[:index], b.Trunk[index+1:]...)
+	}
+
+	return err
+}
+
+func (b *Bridge) MirrorAdd() (string, error) {
+	// get a host tap
+	tapName, err := hostTapCreate(b.Name, "none", "", 0)
+	if err != nil {
+		return "", err
+	}
+
+	// create the mirror for this bridge
+	args := []string{
+		"--",
+		"--id=@p",
+		"get",
+		"port",
+		tapName,
+		"--",
+		"--id=@m",
+		"create",
+		"mirror",
+		"name=m0",
+		"select-all=true",
+		"output-port=@p",
+		"--",
+		"set",
+		"bridge",
+		b.Name,
+		"mirrors=@m",
+	}
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return "", fmt.Errorf("openvswitch: %v: %v", err, sErr)
+	}
+
+	return tapName, nil
+}
+
+func (b *Bridge) MirrorRemove(tap string) error {
+	// delete the mirror for this bridge
+	args := []string{
+		"clear",
+		"bridge",
+		b.Name,
+		"mirrors",
+	}
+
+	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("DeleteBridgeMirror: %v: %v", err, sErr)
+	}
+
+	// delete the associated host tap
+	return hostTapDelete(tap)
+}
+
 // return a pointer to the specified bridge, creating it if it doesn't already
 // exist. If b == "", return the default bridge
-func getBridge(b string) (*bridge, error) {
+func getBridge(b string) (*Bridge, error) {
 	if b == "" {
 		b = DEFAULT_BRIDGE
 	}
+
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 	if v, ok := bridges[b]; ok {
 		return v, nil
 	}
-	bridges[b] = &bridge{
-		Name: b,
-	}
-	err := bridges[b].create()
+
+	bridge, err := NewBridge(b)
 	if err != nil {
-		delete(bridges, b)
 		return nil, err
 	}
+
+	bridges[b] = bridge
+
 	updateBridgeInfo()
-	return bridges[b], nil
+
+	return bridge, nil
 }
 
 func enumerateBridges() []string {
@@ -129,70 +552,41 @@ func getNetflowFromBridge(b string) (*gonetflow.Netflow, error) {
 }
 
 // return a pointer to a bridge that has tap t attached to it, or error
-func getBridgeFromTap(t string) (*bridge, error) {
+func getBridgeFromTap(t string) (*Bridge, error) {
 	log.Debugln("getBridgeFromTap")
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
+
 	for k, b := range bridges {
-		for _, l := range b.lans {
-			for tap, _ := range l.Taps {
-				if tap == t {
-					log.Debug("found tap %v in bridge %v", t, k)
-					return b, nil
-				}
+		for tap, _ := range b.Taps {
+			if tap == t {
+				log.Debug("found tap %v in bridge %v", t, k)
+				return b, nil
 			}
 		}
 	}
+
 	return nil, fmt.Errorf("tap %v not found", t)
 }
 
 // destroy all bridges
 func bridgesDestroy() error {
-	var e []string
-	for k, v := range bridges {
-		err := v.Destroy()
-		if err != nil {
-			e = append(e, err.Error())
+	var errs []string
+	for _, v := range bridges {
+		if err := v.Destroy(); err != nil {
+			errs = append(errs, err.Error())
 		}
-		bridgeLock.Lock()
-		delete(bridges, k)
-		bridgeLock.Unlock()
 	}
-	bridgeLock.Lock()
-	updateBridgeInfo()
-	bridgeLock.Unlock()
-	bridgeFile := *f_base + "bridges"
+
+	bridgeFile := filepath.Join(*f_base, "bridges")
 	err := os.Remove(bridgeFile)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		log.Error("bridgesDestroy: could not remove bridge file: %v", err)
 	}
-	if len(e) == 0 {
-		return nil
-	} else {
-		return errors.New(strings.Join(e, " : "))
-	}
-}
 
-// return formatted bridge info. expected to be called with bridgeLock set
-func bridgeInfo() string {
-	if len(bridges) == 0 {
-		return ""
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, " : "))
 	}
 
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Bridge\tExists\tExisted before minimega\tActive VLANS\n")
-	for _, v := range bridges {
-		var vlans []int
-		for v, _ := range v.lans {
-			vlans = append(vlans, v)
-		}
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", v.Name, v.exists, v.preExist, vlans)
-	}
-
-	w.Flush()
-	return o.String()
+	return nil
 }
 
 // called with bridgeLock set
@@ -206,868 +600,112 @@ func updateBridgeInfo() {
 	}
 }
 
-func (b *bridge) CreateBridgeMirror() (string, error) {
-	// get a host tap
-	tapName, err := hostTapCreate(b.Name, "0", "none", "")
-	if err != nil {
+// return formatted bridge info. expected to be called with bridgeLock set
+func bridgeInfo() string {
+	if len(bridges) == 0 {
+		return ""
+	}
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Bridge\tExisted before minimega\tActive VLANS\n")
+	for _, v := range bridges {
+		vlans := map[int]bool{}
+		for _, tap := range v.Taps {
+			vlans[tap.lan] = true
+		}
+
+		vlans2 := []int{}
+		for k, _ := range vlans {
+			vlans2 = append(vlans2, k)
+		}
+		sort.Ints(vlans2)
+
+		fmt.Fprintf(w, "%v\t%v\t%v\n", v.Name, v.preExist, vlans2)
+	}
+
+	w.Flush()
+	return o.String()
+}
+
+func hostTapCreate(bridge, ip, name string, lan int) (tapName string, err error) {
+	var b *Bridge
+	if b, err = getBridge(bridge); err != nil {
 		return "", err
 	}
 
-	// create the mirror for this bridge
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"--",
-			"--id=@p",
-			"get",
-			"port",
-			tapName,
-			"--",
-			"--id=@m",
-			"create",
-			"mirror",
-			"name=m0",
-			"select-all=true",
-			"output-port=@p",
-			"--",
-			"set",
-			"bridge",
-			b.Name,
-			"mirrors=@m",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	tapName = name
+	if tapName == "" {
+		tapName = <-tapNameChan
 	}
-	log.Debug("creating bridge mirror with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return "", e
+
+	// Add the interface
+	if err := b.TapAdd(tapName, lan, true); err != nil {
+		return "", err
 	}
+	defer func() {
+		// If there was an error, remove the tap. Again, handle the special
+		// case where the caller provided the tap name explicitly by not
+		// deleting the tap.
+		if name == "" && err != nil {
+			if err := b.TapRemove(tapName); err != nil {
+				// Welp, we're boned
+				log.Error("defunct tap -- %v %v", tapName, err)
+			}
+		}
+	}()
+
+	if err := upInterface(tapName, true); err != nil {
+		return "", err
+	}
+
+	if strings.ToLower(ip) == "none" {
+		return tapName, nil
+	} else if strings.ToLower(ip) == "dhcp" {
+		var sErr bytes.Buffer
+
+		cmd := exec.Command(process("dhcp"), tapName)
+		cmd.Stderr = &sErr
+		log.Debug("obtaining dhcp on tap %v", tapName)
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		}
+	} else {
+		// Must be a static IP
+		var sErr bytes.Buffer
+
+		cmd := exec.Command(process("ip"), "addr", "add", "dev", tapName, ip)
+		cmd.Stderr = &sErr
+		log.Debug("setting ip on tap %v", tapName)
+
+		if err = cmd.Run(); err != nil {
+			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		}
+	}
+
 	return tapName, nil
-}
-
-func (b *bridge) DeleteBridgeMirror(tap string) error {
-	// delete the mirror for this bridge
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"clear",
-			"bridge",
-			b.Name,
-			"mirrors",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("deleting bridge mirror with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-
-	// delete the associated host tap
-	err = hostTapDelete(tap)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// create a new vlan. If this is the first vlan being allocated, then the
-// bridge will need to be created as well. this allows us to avoid using the
-// bridge utils when we create vms with no network.
-func (b *bridge) LanCreate(lan int) error {
-	// start the ipmaclearner if need be
-	err := b.startIML()
-	if err != nil {
-		return err
-	}
-	if b.lans[lan] != nil {
-		return nil
-	}
-	b.Lock.Lock()
-	b.lans[lan] = &vlan{
-		Taps: make(map[string]*tap),
-	}
-	b.Lock.Unlock()
-	return nil
-}
-
-// remove an active netflow object
-func (b *bridge) DestroyNetflow() error {
-	if b.nf == nil {
-		return fmt.Errorf("bridge %v has no netflow object", b.Name)
-	}
-
-	b.nf.Stop()
-
-	// connect openvswitch to our new netflow object
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"clear",
-			"Bridge",
-			b.Name,
-			"netflow",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("removing netflow on bridge with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-
-	b.Lock.Lock()
-	b.nf = nil
-	b.Lock.Unlock()
-
-	return nil
-}
-
-// update the active timeout on a nf object
-func (b *bridge) UpdateNFTimeout(t int) error {
-	if b.nf == nil {
-		return fmt.Errorf("bridge %v has no netflow object", b.Name)
-	}
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"set",
-			"NetFlow",
-			b.Name,
-			fmt.Sprintf("active_timeout=%v", t),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("updating netflow active_timeout with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-
-	return nil
-}
-
-// create a new netflow object for the specified bridge
-func (b *bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
-	nf, port, err := gonetflow.NewNetflow()
-	if err != nil {
-		return nil, err
-	}
-
-	// connect openvswitch to our new netflow object
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"--",
-			"set",
-			"Bridge",
-			b.Name,
-			"netflow=@nf",
-			"--",
-			"--id=@nf",
-			"create",
-			"NetFlow",
-			fmt.Sprintf("targets=\"127.0.0.1:%v\"", port),
-			fmt.Sprintf("active-timeout=%v", timeout),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("creating netflow to bridge with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("NewNetflow: could not enable netflow: %v: %v", err, sErr.String())
-		return nil, e
-	}
-
-	b.Lock.Lock()
-	b.nf = nf
-	b.Lock.Unlock()
-	return nf, nil
-}
-
-func (b *bridge) startIML() error {
-	if b.iml != nil {
-		return nil
-	}
-
-	// use openflow to redirect arp and icmp6 traffic to the local tap
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("openflow")
-
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-flow",
-			b.Name,
-			"dl_type=0x0806,actions=local,normal",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("adding arp flow with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmd.Run()
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openflow: %v: %v", err, sErr.String())
-		return e
-	}
-
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-flow",
-			b.Name,
-			"dl_type=0x86dd,nw_proto=58,icmp_type=135,actions=local,normal",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("adding icmp6 ND flow with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmd.Run()
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openflow: %v: %v", err, sErr.String())
-		return e
-	}
-
-	iml, err := ipmac.NewLearner(b.Name)
-	if err != nil {
-		return fmt.Errorf("cannot start ip learner on bridge: %v", err)
-	}
-	b.Lock.Lock()
-	b.iml = iml
-	b.Lock.Unlock()
-	return nil
-}
-
-// create the bridge with ovs
-func (b *bridge) create() error {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	if !b.exists {
-		log.Debugln("bridge does not exist")
-		p := process("ovs")
-		cmd := &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				"add-br",
-				b.Name,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("creating bridge with cmd: %v", cmd)
-		ovsLock.Lock()
-		err := cmdTimeout(cmd, OVS_TIMEOUT)
-		ovsLock.Unlock()
-		if err != nil {
-			es := sErr.String()
-			if strings.Contains(es, "already exists") {
-				b.preExist = true
-			} else {
-				e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-				return e
-			}
-		}
-		b.Lock.Lock()
-		b.exists = true
-		b.lans = make(map[int]*vlan)
-		b.Lock.Unlock()
-
-		p = process("ip")
-		cmd = &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				"link",
-				"set",
-				b.Name,
-				"up",
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("bringing bridge up with cmd: %v", cmd)
-		err = cmd.Run()
-		if err != nil {
-			e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-			return e
-		}
-	}
-
-	return nil
-}
-
-// destroy a bridge with ovs, and remove all of the taps, etc associated with it
-func (b *bridge) Destroy() error {
-	// first get all of the taps off of this bridge and destroy them
-	for name, lan := range b.lans {
-		log.Debug("destroying lan %v", name)
-		for tapName, t := range lan.Taps {
-			if t != nil {
-				err := b.TapDestroy(name, tapName)
-				if err != nil {
-					log.Info("Destroy: could not destroy tap: %v", err)
-				}
-			}
-		}
-	}
-
-	// don't destroy the bridge if it existed before we started
-	if !b.exists || b.preExist {
-		return nil
-	}
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			b.Name,
-			"down",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing bridge down with cmd: %v", cmd)
-	err := cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return e
-	}
-
-	p = process("ovs")
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"del-br",
-			b.Name,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("destroying bridge with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-	return nil
-}
-
-// create and add a tap to a bridge
-func (b *bridge) TapCreate(lan int) (string, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	tapName, err := getNewTap()
-	if err != nil {
-		return "", err
-	}
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"tuntap",
-			"add",
-			"mode",
-			"tap",
-			tapName,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("creating tap with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return "", e
-	}
-
-	// the tap add was successful, so try to add it to the bridge
-	b.Lock.Lock()
-	b.lans[lan].Taps[tapName] = &tap{
-		host: false,
-	}
-	b.Lock.Unlock()
-	err = b.TapAdd(lan, tapName, false)
-	if err != nil {
-		return "", err
-	}
-
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tapName,
-			"up",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing tap up with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return "", e
-	}
-	return tapName, nil
-}
-
-// destroy and remove a tap from a bridge
-func (b *bridge) TapDestroy(lan int, tap string) error {
-	err := b.TapRemove(lan, tap)
-	if err != nil {
-		log.Info("TapDestroy: could not remove tap: %v", err)
-	}
-
-	// if it's a host tap, then ovs removed it for us and we don't need to continue
-	bridgeLock.Lock()
-	if _, ok := disconnectedTaps[tap]; !ok {
-		bridgeLock.Unlock()
-		return nil
-	}
-	bridgeLock.Unlock()
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"set",
-			tap,
-			"down",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("bringing tap down with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return e
-	}
-
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"tuntap",
-			"del",
-			"mode",
-			"tap",
-			tap,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("destroying tap with cmd: %v", cmd)
-	err = cmd.Run()
-	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
-		return e
-	}
-	return nil
-}
-
-// add a vxlan or GRE tunnel to a bridge
-func (b *bridge) TunnelAdd(t int, remoteIP string) error {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	var tunnelType string
-	switch t {
-	case TYPE_VXLAN:
-		tunnelType = "vxlan"
-	case TYPE_GRE:
-		tunnelType = "gre"
-	default:
-		return fmt.Errorf("invalid tunnel type: %v", t)
-	}
-
-	tapName, err := getNewTap()
-	if err != nil {
-		return err
-	}
-
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-port",
-			b.Name,
-			tapName,
-			"--",
-			"set",
-			"interface",
-			tapName,
-			fmt.Sprintf("type=%v", tunnelType),
-			fmt.Sprintf("options:remote_ip=%v", remoteIP),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("adding ovs tunnel with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("TunnelAdd: %v: %v", err, sErr.String())
-		return e
-	}
-
-	b.Tunnel = append(b.Tunnel, tapName)
-
-	return nil
-}
-
-// remove trunk port from a bridge
-func (b *bridge) TunnelRemove(iface string) error {
-	// find this iface in the tunnel list
-	index := -1
-	for i, v := range b.Tunnel {
-		if v == iface {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		return fmt.Errorf("no tunnel port %v on bridge %v", iface, b.Name)
-	}
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"del-port",
-			b.Name,
-			b.Tunnel[index],
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("removing ovs tunnel with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("TunnelRemove: %v: %v", err, sErr.String())
-		return e
-	}
-
-	b.Tunnel = append(b.Tunnel[:index], b.Tunnel[index+1:]...)
-
-	return nil
-}
-
-// add an interface as a trunk port to a bridge
-func (b *bridge) TrunkAdd(iface string) error {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-port",
-			b.Name,
-			iface,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("trunking interface with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("TrunkAdd: %v: %v", err, sErr.String())
-		return e
-	}
-
-	b.Trunk = append(b.Trunk, iface)
-
-	return nil
-}
-
-// remove trunk port from a bridge
-func (b *bridge) TrunkRemove(iface string) error {
-	// find this iface in the trunk list
-	index := -1
-	for i, v := range b.Trunk {
-		if v == iface {
-			index = i
-			break
-		}
-	}
-	if index == -1 {
-		return fmt.Errorf("no trunk port %v on bridge %v", iface, b.Name)
-	}
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"del-port",
-			b.Name,
-			b.Trunk[index],
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("removing trunk interface with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-
-	b.Trunk = append(b.Trunk[:index], b.Trunk[index+1:]...)
-
-	return nil
-}
-
-// add a tap to the bridge
-func (b *bridge) TapAdd(lan int, tap string, host bool) error {
-	err := b.LanCreate(lan)
-	if err != nil {
-		return err
-	}
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"add-port",
-			b.Name,
-			tap,
-			fmt.Sprintf("tag=%v", lan),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	if host {
-		cmd.Args = append(cmd.Args, "--")
-		cmd.Args = append(cmd.Args, "set")
-		cmd.Args = append(cmd.Args, "Interface")
-		cmd.Args = append(cmd.Args, tap)
-		cmd.Args = append(cmd.Args, "type=internal")
-	}
-
-	log.Debug("adding tap with cmd: %v", cmd)
-	ovsLock.Lock()
-	err = cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		if strings.Contains(sErr.String(), "already exists") {
-			// special case - we own the tap, but it already exists
-			// on the bridge. simply remove and add it again
-			log.Info("tap %v is already on bridge, readding", tap)
-			err = b.TapRemove(lan, tap)
-			if err != nil {
-				return err
-			}
-			return b.TapAdd(lan, tap, host)
-		} else {
-			e := fmt.Errorf("TapAdd: %v: %v", err, sErr.String())
-			return e
-		}
-	}
-
-	// if this tap is in the disconnected list, move it out
-	bridgeLock.Lock()
-	b.Lock.Lock()
-	if _, ok := disconnectedTaps[tap]; ok {
-		b.lans[lan].Taps[tap] = disconnectedTaps[tap]
-		delete(disconnectedTaps, tap)
-	}
-	b.Lock.Unlock()
-	bridgeLock.Unlock()
-
-	return nil
-}
-
-// remove a tap from a bridge
-func (b *bridge) TapRemove(lan int, tap string) error {
-	// put this tap into the disconnected vlan
-	bridgeLock.Lock()
-	b.Lock.Lock()
-
-	// No-op is the VLAN is already disconnected
-	if lan == DisconnectedVLAN {
-		return nil
-	}
-
-	if !b.lans[lan].Taps[tap].host { // don't move host taps, just delete them
-		disconnectedTaps[tap] = b.lans[lan].Taps[tap]
-	}
-	delete(b.lans[lan].Taps, tap)
-	b.Lock.Unlock()
-	bridgeLock.Unlock()
-
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"del-port",
-			b.Name,
-			tap,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-	log.Debug("removing tap with cmd: %v", cmd)
-	ovsLock.Lock()
-	err := cmdTimeout(cmd, OVS_TIMEOUT)
-	ovsLock.Unlock()
-	if err != nil {
-		e := fmt.Errorf("openvswitch: %v: %v", err, sErr.String())
-		return e
-	}
-	return nil
 }
 
 func hostTapList(resp *minicli.Response) {
-	resp.Header = []string{"bridge", "tap", "vlan", "option"}
+	resp.Header = []string{"bridge", "tap", "vlan"}
 	resp.Tabular = [][]string{}
 
 	// find all the host taps first
-	for k, v := range bridges {
-		for lan, t := range v.lans {
-			for tap, ti := range t.Taps {
-				if ti.host {
-					resp.Tabular = append(resp.Tabular, []string{
-						k, tap, strconv.Itoa(lan), ti.hostOption,
-					})
-				}
+	for k, b := range bridges {
+		for name, tap := range b.Taps {
+			if tap.host {
+				resp.Tabular = append(resp.Tabular, []string{
+					k, name, strconv.Itoa(tap.lan),
+				})
 			}
 		}
 	}
 }
 
 func hostTapDelete(tap string) error {
-	var c []*bridge
+	var c []*Bridge
 	// special case, *, which should delete all host taps from all bridges
 	if tap == Wildcard {
 		for _, v := range bridges {
@@ -1081,156 +719,204 @@ func hostTapDelete(tap string) error {
 		c = append(c, b)
 	}
 	for _, b := range c {
-		for lan, t := range b.lans {
-			if tap == Wildcard {
-				// remove all host taps on this vlan
-				for k, v := range t.Taps {
-					if v.host {
-						b.TapRemove(lan, k)
-					}
+		if tap == Wildcard {
+			// remove all host taps on this vlan
+			for name, t := range b.Taps {
+				if t.host {
+					b.TapDestroy(name)
 				}
-				continue
 			}
-			if tf, ok := t.Taps[tap]; ok {
-				if !tf.host {
-					return fmt.Errorf("not a host tap")
-				}
-				b.TapRemove(lan, tap)
+			continue
+		}
+		if t, ok := b.Taps[tap]; ok {
+			if !t.host {
+				return fmt.Errorf("not a host tap")
 			}
+			b.TapDestroy(tap)
 		}
 	}
 	return nil
 }
 
-func hostTapCreate(bridge, lan, ip, tapName string) (string, error) {
-	b, err := getBridge(bridge)
-	if err != nil {
-		return "", err
-	}
-	r, err := strconv.Atoi(lan)
-	if err != nil {
-		return "", err
-	}
-	err = b.LanCreate(r)
-	if err != nil {
-		return "", err
+// upInterface activates an interface parameter using the `ip` command. promisc
+// controls whether the interface is brought up in promiscuous mode.
+func upInterface(name string, promisc bool) error {
+	args := []string{"link", "set", name, "up"}
+	if promisc {
+		args = append(args, "promisc", "on")
 	}
 
-	if tapName == "" {
-		tapName, err = getNewTap()
-		if err != nil {
-			return "", err
-		}
+	if _, sErr, err := cmdWrapper(process("ip"), args...); err != nil {
+		return fmt.Errorf("ip: %v: %v", err, sErr)
 	}
 
-	// create the tap
-	b.Lock.Lock()
-	b.lans[r].Taps[tapName] = &tap{
-		host:       true,
-		hostOption: ip,
-	}
-	b.Lock.Unlock()
-	err = b.TapAdd(r, tapName, true)
+	return nil
+}
+
+// downInterface deactivates an interface parameter using the `ip` command.
+func downInterface(name string) error {
+	_, sErr, err := cmdWrapper(process("ip"), "link", "set", name, "down")
 	if err != nil {
-		return "", err
+		return fmt.Errorf("ip: %v: %v", err, sErr)
 	}
 
-	// bring the tap up
-	p := process("ip")
+	return nil
+}
+
+// createTap adds a tuntap based on the add parameter using the `ip` command.
+func addTap(name string) error {
+	_, sErr, err := cmdWrapper(process("ip"), "tuntap", "add", "mode", "tap", name)
+	if strings.Contains(sErr, "Device or resource busy") {
+		return ErrAlreadyExists
+	} else if err != nil {
+		return fmt.Errorf("ip: %v: %v", err, sErr)
+	}
+
+	return nil
+}
+
+// delTap removes a tuntap based on the add parameter using the `ip` command.
+func delTap(name string) error {
+	_, sErr, err := cmdWrapper(process("ip"), "tuntap", "del", "mode", "tap", name)
+	if err != nil {
+		return fmt.Errorf("ip: %v: %v", err, sErr)
+	}
+
+	return nil
+}
+
+func addOpenflow(bridge, filter string) error {
+	ovsLock.Lock()
+	defer ovsLock.Unlock()
+
+	_, sErr, err := cmdWrapper(process("openflow"), "add-flow", bridge, filter)
+	if err != nil {
+		return fmt.Errorf("openflow: %v: %v", err, sErr)
+	}
+
+	return nil
+}
+
+// create and add a veth tap to a bridge
+func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
+	tapName := <-tapNameChan
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
+
+	p := process("ip")
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
 			"link",
-			"set",
+			"add",
 			tapName,
-			"up",
-			"promisc",
-			"on",
+			"type",
+			"veth",
+			"peer",
+			"mega", // does the namespace ignore this?
+			"netns",
+			ns,
 		},
 		Env:    nil,
 		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	log.Debug("bringing up host tap %v", tapName)
-	err = cmd.Run()
+	log.Debug("creating tap with cmd: %v", cmd)
+	err := cmd.Run()
 	if err != nil {
-		e := fmt.Errorf("%v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
 		return "", e
 	}
 
-	if strings.ToLower(ip) == "none" {
-		return tapName, nil
+	// Add the interface
+	if err := b.TapAdd(tapName, lan, true); err != nil {
+		return "", err
+	}
+	defer func() {
+		// If there was an error, remove the tap. Again, handle the special
+		// case where the caller provided the tap name explicitly by not
+		// deleting the tap.
+		if err != nil {
+			if err := b.TapRemove(tapName); err != nil {
+				// Welp, we're boned
+				log.Error("defunct tap -- %v %v", tapName, err)
+			}
+		}
+	}()
+
+	if err := upInterface(tapName, false); err != nil {
+		return "", err
 	}
 
-	if strings.ToLower(ip) == "dhcp" {
-		p = process("dhcp")
-		cmd = &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				tapName,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("obtaining dhcp on tap %v", tapName)
-		err = cmd.Run()
-		if err != nil {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
-			return "", e
-		}
-	} else {
-		cmd = &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				"addr",
-				"add",
-				"dev",
-				tapName,
-				ip,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
-		}
-		log.Debug("setting ip on tap %v", tapName)
-		err = cmd.Run()
-		if err != nil {
-			e := fmt.Errorf("%v: %v", err, sErr.String())
-			return "", e
-		}
+	cmd = &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"netns",
+			"exec",
+			ns,
+			"ip",
+			"link",
+			"set",
+			"dev",
+			fmt.Sprintf("veth%v", index),
+			"address",
+			mac,
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
 	}
-
+	log.Debug("setting container mac address with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return "", e
+	}
 	return tapName, nil
 }
 
-// gets a new tap from tapChan and verifies that it doesn't already exist
-func getNewTap() (string, error) {
-	var t string
-	for {
-		t = <-tapChan
-		taps, err := ioutil.ReadDir("/sys/class/net")
-		if err != nil {
-			return "", err
-		}
-		found := false
-		for _, v := range taps {
-			if v.Name() == t {
-				found = true
-				log.Warn("tap %v already exists, trying again", t)
-			}
-		}
-		if !found {
-			break
-		}
+// destroy and remove a container tap from a bridge
+func (b *Bridge) ContainerTapDestroy(lan int, tap string) error {
+	err := b.TapRemove(tap)
+	if err != nil {
+		log.Info("TapDestroy: could not remove tap: %v", err)
 	}
-	return t, nil
+
+	if err := downInterface(tap); err != nil {
+		return err
+	}
+
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+
+	p := process("ip")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"link",
+			"del",
+			tap,
+			"type",
+			"veth",
+			"peer",
+			"eth0",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+	log.Debug("destroying tap with cmd: %v", cmd)
+	err = cmd.Run()
+	if err != nil {
+		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		return e
+	}
+	return nil
 }

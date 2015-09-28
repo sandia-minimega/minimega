@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -496,6 +497,83 @@ func (s *Server) GetActiveSerialPorts() []string {
 	log.Debug("ron GetActiveSerialPorts: %v", ret)
 
 	return ret
+}
+
+// Return the list of currently listening UDS ports. This does not indicate
+// which connections have active clients, simply which connections the server
+// is attached to.
+func (s *Server) GetActiveUDSPorts() []string {
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	var ret []string
+	for k, _ := range s.udsConns {
+		ret = append(ret, k)
+	}
+
+	log.Debug("ron GetActiveUDSPorts: %v", ret)
+
+	return ret
+}
+
+func (s *Server) CloseUDS(path string) error {
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	if l, ok := s.udsConns[path]; ok {
+		return l.Close()
+	} else {
+		return fmt.Errorf("no such path: %v", path)
+	}
+}
+
+// ListenUnix creates a unix domain socket at the given path and listens for
+// incoming connections. ListenUnix returns on the successful creation of the
+// socket, and accepts connections in a goroutine. If the domain socket file is
+// deleted, the goroutine for ListenUnix exists silently.
+func (s *Server) ListenUnix(path string) error {
+	log.Debug("ListenUnix: %v", path)
+
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	u, err := net.ResolveUnixAddr("unix", path)
+	if err != nil {
+		return err
+	}
+
+	l, err := net.ListenUnix("unix", u)
+	if err != nil {
+		return err
+	}
+	s.udsConns[path] = l
+
+	go func() {
+		defer s.CloseUDS(path)
+		for {
+			l.SetDeadline(time.Now().Add(time.Second))
+			conn, err := l.Accept()
+			if err != nil {
+				if strings.Contains(err.Error(), "timeout") {
+					_, err := os.Stat(path)
+					if err != nil {
+						return
+					} else {
+						continue
+					}
+				} else {
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						log.Error("ListenUnix: accept: %v", err)
+					}
+					return
+				}
+			}
+			log.Info("client connected on %v", path)
+			s.clientHandler(conn)
+			log.Info("client disconnected on %v", path)
+		}
+	}()
+	return nil
 }
 
 // Dial a client serial port. The server will maintain this connection until a

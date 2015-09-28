@@ -12,6 +12,43 @@ import (
 	"time"
 )
 
+func TestFilter(t *testing.T) {
+	sink1 := new(bytes.Buffer)
+
+	AddLogger("sink1Level", sink1, DEBUG, false)
+
+	testString := "test 123"
+	testString2 := "test 456"
+
+	Debugln(testString)
+
+	s1 := sink1.String()
+
+	if !strings.Contains(s1, testString) {
+		t.Fatal("sink1 got:", s1)
+	}
+
+	AddFilter("sink1Level", "minilog_test")
+
+	Debugln(testString2)
+
+	s1 = sink1.String()
+
+	if strings.Contains(s1, testString2) {
+		t.Fatal("sink1 got:", s1)
+	}
+
+	DelFilter("sink1Level", "minilog_test")
+
+	Debugln(testString2)
+
+	s1 = sink1.String()
+
+	if !strings.Contains(s1, testString2) {
+		t.Fatal("sink1 got:", s1)
+	}
+}
+
 func TestMultilog(t *testing.T) {
 	sink1 := new(bytes.Buffer)
 	sink2 := new(bytes.Buffer)
