@@ -464,6 +464,20 @@ Set the number of virtual CPUs to allocate for a VM.`,
 			return cliVmConfigField(c, "vcpus")
 		}),
 	},
+	{ // vm config cpus
+		HelpShort: "set the virtual CPU architecture",
+		HelpLong: `
+Set the virtual CPU architecture.
+
+By default, set to 'host' which matches the host architecture. See 'kvm -cpu
+help' for a list of architectures available for your version of kvm.`,
+		Patterns: []string{
+			"vm config cpu [cpu]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "cpu")
+		}),
+	},
 	{ // vm config net
 		HelpShort: "specific the networks a VM is a member of",
 		HelpLong: `
