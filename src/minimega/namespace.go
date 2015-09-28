@@ -40,7 +40,8 @@ func init() {
 }
 
 type queuedVM struct {
-	config VMConfig
+	VMConfig // embed
+
 	names  []string
 	vmType VMType
 }
@@ -168,9 +169,9 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 }
 
 func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
-	ns := namespaces[c.StringArgs["name"]]
+	ns := namespaces[namespace]
 
-	names, err := expandVMLaunchNames(c.StringArgs["vm"], ns.VMs())
+	names, err := expandVMLaunchNames(c.StringArgs["name"], ns.VMs())
 	if err != nil {
 		resp.Error = err.Error()
 		return
@@ -200,14 +201,23 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	}
 
 	ns.queuedVMs = append(ns.queuedVMs, queuedVM{
-		config: *vmConfig.Copy(),
-		names:  names,
-		vmType: vmType,
+		VMConfig: *vmConfig.Copy(),
+		names:    names,
+		vmType:   vmType,
 	})
 }
 
 func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
-	ns := namespaces[c.StringArgs["name"]]
+	ns := namespaces[namespace]
+
+	// Create the host -> VMs assignment
+	assignment := schedule(namespace)
+
+	// Clear namespace so subcommands don't use -- revert afterwards
+	defer func(old string) {
+		namespace = old
+	}(namespace)
+	namespace = ""
 
 	// Result of vm launch commands
 	respChan := make(chan minicli.Responses)
@@ -226,7 +236,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 		}
 	}()
 
-	for host, queuedVMs := range schedule(ns) {
+	for host, queuedVMs := range assignment {
 		namespaceHostLaunch(host, queuedVMs, respChan)
 	}
 
@@ -238,11 +248,13 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 	for _, queued := range queuedVMs {
 		// Mesh send all the config commands
 		cmds := []string{"clear vm config"}
-		cmds = append(cmds, saveConfig(baseConfigFns, queued.config)...)
+		cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
 
 		switch queued.vmType {
 		case KVM:
-			cmds = append(cmds, saveConfig(kvmConfigFns, queued.config.KVMConfig)...)
+			cmds = append(cmds, saveConfig(kvmConfigFns, &queued.KVMConfig)...)
+		case CONTAINER:
+			cmds = append(cmds, saveConfig(containerConfigFns, &queued.ContainerConfig)...)
 		default:
 		}
 

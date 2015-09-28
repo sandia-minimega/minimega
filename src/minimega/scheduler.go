@@ -5,7 +5,9 @@ import (
 	log "minilog"
 )
 
-func schedule(ns *Namespace) map[string][]queuedVM {
+func schedule(namespace string) map[string][]queuedVM {
+	ns := namespaces[namespace]
+
 	res := map[string][]queuedVM{}
 
 	// Total number of VMs to launch
