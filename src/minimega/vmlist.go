@@ -27,7 +27,7 @@ func (vms VMs) apply(idOrName string, fn func(VM) error) error {
 	return fn(vm)
 }
 
-func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []string {
+func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
 	var cmds = []string{}
 
 	for k, fns := range fns {
@@ -36,7 +36,7 @@ func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []st
 				cmds = append(cmds, v)
 			}
 		} else if v := fns.Print(configs); len(v) > 0 {
-			cmds = append(cmds, fmt.Sprintf("vm %s config %s %s", ns, k, v))
+			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
 		}
 	}
 
@@ -75,20 +75,19 @@ func (vms VMs) save(file *os.File, args []string) error {
 		// previous configuration.
 		cmds := []string{"clear vm config"}
 
-		cmds = append(cmds, saveConfig("", baseConfigFns, vm.Config())...)
+		cmds = append(cmds, saveConfig(baseConfigFns, vm.Config())...)
 
 		switch vm := vm.(type) {
 		case *KvmVM:
-			cmds = append(cmds, "vm config kvm true")
-			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
+			cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
 		default:
 		}
 
-		if vm.GetName() != "" {
-			cmds = append(cmds, "vm launch "+vm.GetName())
-		} else {
-			cmds = append(cmds, "vm launch 1")
+		arg := vm.GetName()
+		if arg == "" {
+			arg = "1"
 		}
+		cmds = append(cmds, fmt.Sprintf("vm launch %v %v", vm.GetType(), arg))
 
 		// and a blank line
 		cmds = append(cmds, "")
