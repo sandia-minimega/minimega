@@ -69,7 +69,7 @@ Display information about all VMs:
 		Patterns: []string{
 			"vm info",
 		},
-		Call: wrapSimpleCLI(cliVmInfo),
+		Call: wrapBroadcastCLI(cliVmInfo),
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -206,7 +206,7 @@ of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
 		},
-		Call: wrapSimpleCLI(cliVmFlush),
+		Call: wrapBroadcastCLI(cliVmFlush),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -861,8 +861,9 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 	var err error
 	resp := &minicli.Response{Host: hostname}
 
+	// Populate "dynamic" fields for all VMs, when running outside of the
+	// namespace environment.
 	for _, vm := range vms {
-		// Populate the latest bandwidth stats for all VMs
 		vm.UpdateBW()
 		vm.UpdateCCActive()
 	}

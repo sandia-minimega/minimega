@@ -136,6 +136,7 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 
 		resp.Response = fmt.Sprintf("Namespaces: %v", names)
 	} else {
+		// TODO: Dump the queued VMs
 		ns := namespaces[namespace]
 		resp.Response = fmt.Sprintf("Namespace: `%v`\nHosts: %v", namespace, ns.Hosts)
 	}
@@ -326,32 +327,68 @@ func wrapVMTargetCLI(fn func(string) []error) minicli.CLIFunc {
 		}(namespace)
 		namespace = ""
 
-		cmds := makeCommandHosts(hosts, c)
-		resps := minicli.Responses{}
+		res := minicli.Responses{}
 
 		var ok bool
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
-		for resps := range processCommands(cmds...) {
+		for resps := range processCommands(makeCommandHosts(hosts, c)...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
 				if resp.Error == "" || !isVmNotFound(resp.Error) {
 					// Record successes and unexpected errors
-					resps = append(resps, resp)
+					res = append(res, resp)
 				}
 			}
 		}
 
-		if !ok && len(resps) == 0 {
+		if !ok && len(res) == 0 {
 			// Presumably, we weren't able to find the VM
-			resps = append(resps, &minicli.Response{
+			res = append(res, &minicli.Response{
 				Host:  hostname,
 				Error: vmNotFound(c.StringArgs["target"]).Error(),
 			})
 		}
 
-		respChan <- resps
+		respChan <- res
+	}
+}
+
+// wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
+// broadcasts the command to all hosts in the namespace and collects all the
+// responses together.
+func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		// No namespace specified, just invoke the handler
+		if namespace == "" {
+			respChan <- minicli.Responses{fn(c)}
+			return
+		}
+
+		hosts := namespaces[namespace].Hosts
+
+		// Clear namespace so subcommands don't use -- revert afterwards
+		defer func(old string) {
+			namespace = old
+		}(namespace)
+		namespace = ""
+
+		res := minicli.Responses{}
+
+		// Broadcast to all machines, collecting errors and forwarding
+		// successful commands.
+		for resps := range processCommands(makeCommandHosts(hosts, c)...) {
+			// TODO: we are flattening commands that return multiple responses
+			// by doing this... should we implement proper buffering? Only a
+			// problem if commands that return multiple responses are wrapped
+			// by this (which *currently* is not the case).
+			for _, resp := range resps {
+				res = append(res, resp)
+			}
+		}
+
+		respChan <- res
 	}
 }
