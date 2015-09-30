@@ -184,21 +184,37 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 
 	ns := namespaces[namespace]
 
-	if c.BoolArgs["add-host"] || c.BoolArgs["del-host"] {
-		adding := c.BoolArgs["add-host"]
+	// Empty string should parse fine...
+	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+	if err != nil {
+		resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
+		return resp
+	}
 
-		hosts, err := ranges.SplitList(c.StringArgs["hosts"])
-		if err != nil {
-			resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
-			return resp
+	if c.BoolArgs["add-host"] {
+		peers := map[string]bool{}
+		for _, peer := range meshageNode.BroadcastRecipients() {
+			peers[peer] = true
 		}
 
+		// Test that the host is actually in the mesh. If it's not, we could
+		// try to mesh dial it... Returning an error is simpler, for now.
 		for _, host := range hosts {
-			if adding {
-				ns.Hosts[host] = true
-			} else {
-				delete(ns.Hosts, host)
+			if host != hostname {
+				if !peers[host] {
+					resp.Error = fmt.Sprintf("unknown host: `%v`", host)
+					return resp
+				}
 			}
+		}
+
+		// After all have been checked, updated the namespace
+		for _, host := range hosts {
+			ns.Hosts[host] = true
+		}
+	} else if c.BoolArgs["del-host"] {
+		for _, host := range hosts {
+			delete(ns.Hosts, host)
 		}
 	} else if c.BoolArgs["add-vlans"] {
 		// TODO
@@ -276,6 +292,11 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	ns := namespaces[namespace]
 
+	if len(ns.Hosts) == 0 {
+		resp.Error = "namespace must contain at least one host to launch VMs"
+		return
+	}
+
 	// Create the host -> VMs assignment
 	assignment := schedule(namespace)
 
@@ -332,6 +353,7 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 
 			for _, cmd := range cmds {
 				cmd := minicli.MustCompile(cmd)
+				cmd.Record = false
 
 				if host == hostname {
 					forward(processCommands(cmd), configChan)
@@ -357,6 +379,7 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 			names := strings.Join(queued.names, ",")
 			log.Debug("launch vms on host %v -- %v", host, names)
 			cmd := minicli.MustCompilef("vm launch %v %v noblock", queued.vmType, names)
+			cmd.Record = false
 			if host == hostname {
 				forward(processCommands(cmd), respChan)
 			} else {
@@ -399,9 +422,14 @@ func wrapVMTargetCLI(fn func(string) []error) minicli.CLIFunc {
 
 		var ok bool
 
+		cmds := makeCommandHosts(hosts, c)
+		for _, cmd := range cmds {
+			cmd.Record = false
+		}
+
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
-		for resps := range processCommands(makeCommandHosts(hosts, c)...) {
+		for resps := range processCommands(cmds...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
@@ -446,6 +474,9 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 		res := minicli.Responses{}
 
 		cmds := makeCommandHosts(hosts, c)
+		for _, cmd := range cmds {
+			cmd.Record = false
+		}
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
