@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"ranges"
 	"strings"
 )
 
@@ -21,6 +22,17 @@ Control and run commands in namespace environments.`,
 			"namespace <name> (command)",
 		},
 		Call: cliNamespace,
+	},
+	{ // nsmod
+		HelpShort: "modify namespace environments",
+		HelpLong: `
+Modify settings of the currently active namespace.`,
+		Patterns: []string{
+			"nsmod <add-host,> <hosts>",
+			"nsmod <del-host,> <hosts>",
+			"nsmod <add-vlans,> <vlans>",
+		},
+		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
 	{ // clear namespace
 		HelpShort: "unset namespace",
@@ -47,7 +59,7 @@ type queuedVM struct {
 }
 
 type Namespace struct {
-	Hosts []string
+	Hosts map[string]bool
 
 	vmIDChan chan int
 
@@ -64,6 +76,15 @@ func init() {
 	namespaces = map[string]*Namespace{}
 }
 
+func (n Namespace) hostSlice() []string {
+	hosts := []string{}
+	for host := range n.Hosts {
+		hosts = append(hosts, host)
+	}
+
+	return hosts
+}
+
 // VMs retrieves all the VMs across a namespace. Note that the keys for the
 // returned map are arbitrary -- multiple VMs may share the same ID if they are
 // on separate hosts so we cannot key off of ID. Note: this assumes that the
@@ -74,7 +95,9 @@ func (n Namespace) VMs() VMs {
 	cmd := minicli.MustCompile(`vm info`)
 	cmd.Record = false
 
-	for resps := range processCommands(makeCommandHosts(n.Hosts, cmd)...) {
+	cmds := makeCommandHosts(n.hostSlice(), cmd)
+
+	for resps := range processCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -101,11 +124,18 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 		if _, ok := namespaces[name]; !ok && name != "" {
 			log.Info("creating new namespace -- %v", name)
 
-			// By default, every reachable node is part of the namespace
-			namespaces[name] = &Namespace{
-				Hosts:    append(meshageNode.BroadcastRecipients(), hostname),
+			ns := Namespace{
+				Hosts:    map[string]bool{},
 				vmIDChan: makeIDChan(),
 			}
+
+			// By default, every mesh-reachable node is part of the namespace
+			// except for the local node which is typically the "head" node.
+			for _, host := range meshageNode.BroadcastRecipients() {
+				ns.Hosts[host] = true
+			}
+
+			namespaces[name] = &ns
 		}
 
 		if c.Subcommand != nil {
@@ -142,6 +172,41 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 	}
 
 	respChan <- minicli.Responses{resp}
+}
+
+func cliNamespaceMod(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if namespace == "" {
+		resp.Error = "cannot run nsmod without active namespace"
+		return resp
+	}
+
+	ns := namespaces[namespace]
+
+	if c.BoolArgs["add-host"] || c.BoolArgs["del-host"] {
+		adding := c.BoolArgs["add-host"]
+
+		hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+		if err != nil {
+			resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
+			return resp
+		}
+
+		for _, host := range hosts {
+			if adding {
+				ns.Hosts[host] = true
+			} else {
+				delete(ns.Hosts, host)
+			}
+		}
+	} else if c.BoolArgs["add-vlans"] {
+		// TODO
+	} else {
+		// oops...
+	}
+
+	return resp
 }
 
 func cliClearNamespace(c *minicli.Command) *minicli.Response {
@@ -319,7 +384,10 @@ func wrapVMTargetCLI(fn func(string) []error) minicli.CLIFunc {
 			return
 		}
 
-		hosts := namespaces[namespace].Hosts
+		hosts := []string{}
+		for host := range namespaces[namespace].Hosts {
+			hosts = append(hosts, host)
+		}
 
 		// Clear namespace so subcommands don't use -- revert afterwards
 		defer func(old string) {
@@ -367,7 +435,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 			return
 		}
 
-		hosts := namespaces[namespace].Hosts
+		hosts := namespaces[namespace].hostSlice()
 
 		// Clear namespace so subcommands don't use -- revert afterwards
 		defer func(old string) {
@@ -377,9 +445,11 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 
 		res := minicli.Responses{}
 
+		cmds := makeCommandHosts(hosts, c)
+
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
-		for resps := range processCommands(makeCommandHosts(hosts, c)...) {
+		for resps := range processCommands(cmds...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
 			// problem if commands that return multiple responses are wrapped

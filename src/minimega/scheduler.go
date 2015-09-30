@@ -18,7 +18,7 @@ func schedule(namespace string) map[string][]queuedVM {
 	}
 
 	// Simplest scheduler -- roughly equal allocation per node
-	hosts := PermStrings(ns.Hosts)
+	hosts := PermStrings(ns.hostSlice())
 
 	// Number of VMs per host, need to round up
 	perHost := int(float32(total)/float32(len(hosts)) + 0.5)
