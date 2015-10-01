@@ -51,7 +51,7 @@ func (m *Message) String() string {
 	case MESSAGE:
 		fmt.Fprintf(w, "\tCommand:\tmessage\n")
 	}
-	fmt.Fprintf(w, "\tBody:\t%v", m.Body)
+	//fmt.Fprintf(w, "\tBody:\t%v", m.Body)
 	w.Flush()
 	return o.String()
 }
