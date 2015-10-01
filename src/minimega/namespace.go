@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"ranges"
 	"strings"
+	"sync"
 )
 
 var namespaceCLIHandlers = []minicli.Handler{
@@ -239,6 +240,8 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 				namespace = ""
 			}
 
+			// TODO: Warn about VMs that are running in this namespace?
+
 			delete(namespaces, name)
 		}
 
@@ -297,21 +300,41 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 		return
 	}
 
+	if len(ns.queuedVMs) == 0 {
+		resp.Error = "namespace must contain at least one host to launch VMs"
+		return
+	}
+
 	// Create the host -> VMs assignment
+	// TODO: This is a static assignment... should it be updated periodically
+	// during the launching process?
 	assignment := schedule(namespace)
 
-	// Clear namespace so subcommands don't use -- revert afterwards
-	defer func(old string) {
-		namespace = old
-	}(namespace)
-	namespace = ""
+	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
+	ns.queuedVMs = nil
 
-	// Result of vm launch commands
-	respChan := make(chan minicli.Responses)
-	defer close(respChan)
-
-	// Collect all the responses and log them
 	go func() {
+		// Result of vm launch commands
+		respChan := make(chan minicli.Responses)
+
+		var wg sync.WaitGroup
+
+		for host, queuedVMs := range assignment {
+			wg.Add(1)
+
+			go func(host string, queuedVMs []queuedVM) {
+				defer wg.Done()
+
+				namespaceHostLaunch(host, queuedVMs, respChan)
+			}(host, queuedVMs)
+		}
+
+		go func() {
+			wg.Wait()
+			close(respChan)
+		}()
+
+		// Collect all the responses and log them
 		for resps := range respChan {
 			for _, resp := range resps {
 				if resp.Error != "" {
@@ -322,13 +345,6 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 			}
 		}
 	}()
-
-	for host, queuedVMs := range assignment {
-		namespaceHostLaunch(host, queuedVMs, respChan)
-	}
-
-	// Clear the queuedVMs -- we just launched them (hopefully!)
-	ns.queuedVMs = nil
 }
 
 func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicli.Responses) {
@@ -347,6 +363,29 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 
 		// Channel for all the `vm config ...` responses
 		configChan := make(chan minicli.Responses)
+
+		// TODO: Add .atomic built-in? Runs all the commands which are
+		// separated by -- and stop when .Error != "". Otherwise, we have to
+		// have this giant lock to make sure that the VM we configure is the VM
+		// we launch (assuming no one else is issuing commands to the same
+		// remote host).
+		cmdLock.Lock()
+
+		// Poor man's defer statement -- run it at the end of the loop to:
+		//  * Revert namespace to old value
+		//  * Release the cmdLock
+		// Silly double func to make the inner func a closure (preserving the
+		// original value of namespace).
+		deferred := func() func() {
+			old := namespace
+
+			return func() {
+				namespace = old
+
+				cmdLock.Unlock()
+			}
+		}()
+		namespace = ""
 
 		go func() {
 			defer close(configChan)
@@ -386,6 +425,9 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 				meshageSend(cmd, host, respChan)
 			}
 		}
+
+		// Call our deferred callback
+		deferred()
 	}
 }
 
