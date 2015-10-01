@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"minicli"
 	log "minilog"
+	"net"
 	"os/exec"
 	"regexp"
 	"resize"
@@ -72,6 +73,18 @@ func isMac(mac string) bool {
 		return false
 	}
 	return match
+}
+
+func allocatedMac(mac string) bool {
+	hw, err := net.ParseMAC(mac)
+	if err != nil {
+		return false
+	}
+
+	if _, ok := macs.ValidMACPrefixMap[[3]byte{hw[0], hw[1], hw[2]}]; !ok {
+		return false
+	}
+	return true
 }
 
 func hostid(s string) (string, int) {
