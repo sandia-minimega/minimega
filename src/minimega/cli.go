@@ -72,6 +72,19 @@ func runCommand(cmd *minicli.Command) chan minicli.Responses {
 	go func() {
 		defer cmdLock.Unlock()
 
+		cmd, err := cliPreprocessor(cmd)
+		if err != nil {
+			log.Errorln(err)
+			localChan <- minicli.Responses{
+				&minicli.Response{
+					Host:  hostname,
+					Error: err.Error(),
+				},
+			}
+			close(localChan)
+			return
+		}
+
 		for resp := range minicli.ProcessCommand(cmd) {
 			localChan <- resp
 		}
@@ -105,6 +118,19 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	var wg sync.WaitGroup
 
 	out := make(chan minicli.Responses)
+
+	cmd, err = cliPreprocessor(cmd)
+	if err != nil {
+		log.Errorln(err)
+		out <- minicli.Responses{
+			&minicli.Response{
+				Host:  hostname,
+				Error: err.Error(),
+			},
+		}
+		close(out)
+		return out
+	}
 
 	// Run the command (should be `mesh send all ...` and the subcommand which
 	// should run locally).
@@ -173,4 +199,10 @@ func cliLocal() {
 			}
 		}
 	}
+}
+
+// cliPreprocessor allows modifying commands post-compile but pre-process.
+// Currently the only preprocessor is the "file:" handler.
+func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
+	return iomPreprocessor(c)
 }

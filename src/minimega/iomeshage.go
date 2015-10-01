@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	IOM_HELPER_WAIT = time.Duration(100 * time.Millisecond)
+	IOM_HELPER_WAIT  = time.Duration(100 * time.Millisecond)
+	IOM_HELPER_MATCH = "file:"
 )
 
 var (
@@ -128,6 +129,36 @@ func cliFile(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
+// walk every arg looking for "file:" and calling iomHelper on the suffix.
+// Replace the arg with the local file if found.
+func iomPreprocessor(c *minicli.Command) (*minicli.Command, error) {
+	for k, v := range c.StringArgs {
+		if strings.HasPrefix(v, IOM_HELPER_MATCH) {
+			file := strings.TrimPrefix(v, IOM_HELPER_MATCH)
+			local, err := iomHelper(file)
+			if err != nil {
+				return nil, err
+			}
+			log.Debug("iomPreProcessor: %v -> %v", v, local)
+			c.StringArgs[k] = local
+		}
+	}
+	for k, v := range c.ListArgs {
+		for x, y := range v {
+			if strings.HasPrefix(y, IOM_HELPER_MATCH) {
+				file := strings.TrimPrefix(y, IOM_HELPER_MATCH)
+				local, err := iomHelper(file)
+				if err != nil {
+					return nil, err
+				}
+				log.Debug("iomPreProcessor: %v -> %v", y, local)
+				c.ListArgs[k][x] = local
+			}
+		}
+	}
+	return c, nil
+}
+
 // iomHelper supports grabbing files for internal minimega operations. It
 // returns the local path of the file or an error if the file doesn't exist or
 // could not transfer. iomHelper blocks until all file transfers are completed.
@@ -143,13 +174,14 @@ func iomHelper(file string) (string, error) {
 		transfers := iom.Status()
 		for _, f := range transfers {
 			if strings.Contains(f.Filename, file) {
-				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, f.Parts, f.NumParts)
+				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
 				waiting = true
 			}
 		}
-		if waiting {
-			time.Sleep(IOM_HELPER_WAIT)
+		if !waiting {
+			break
 		}
+		time.Sleep(IOM_HELPER_WAIT)
 	}
 
 	dst := filepath.Join(*f_iomBase, file)
