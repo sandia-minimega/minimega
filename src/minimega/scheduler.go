@@ -21,7 +21,10 @@ func schedule(namespace string) map[string][]queuedVM {
 	hosts := PermStrings(ns.hostSlice())
 
 	// Number of VMs per host, need to round up
-	perHost := int(float32(total)/float32(len(hosts)) + 0.5)
+	perHost := total / len(hosts)
+	if perHost*len(hosts) < total {
+		perHost += 1
+	}
 	log.Debug("launching %d vms per host", perHost)
 
 	// Host is an index in hosts that VMs are currently being allocated on and
