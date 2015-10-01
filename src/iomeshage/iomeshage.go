@@ -180,6 +180,23 @@ func (iom *IOMeshage) Get(file string) error {
 			log.Debug("found file on node %v with %v parts", info.From, info.Part)
 		}
 
+		// create a transfer object
+		tdir, err := ioutil.TempDir(iom.base, "transfer_")
+		if err != nil {
+			log.Errorln(err)
+			return err
+		}
+		iom.transferLock.Lock()
+		iom.transfers[info.Filename] = &Transfer{
+			Dir:      tdir,
+			Filename: info.Filename,
+			Parts:    make(map[int64]bool),
+			NumParts: int(info.Part),
+			Inflight: -1,
+			Queued:   true,
+		}
+		iom.transferLock.Unlock()
+
 		go iom.getParts(info.Filename, info.Part, info.Perm)
 	} else {
 		// call Get on each of the constituent files, queued in a random order
@@ -251,22 +268,6 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 		parts[i] = t
 	}
 
-	// create a transfer object
-	tdir, err := ioutil.TempDir(iom.base, "transfer_")
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-	iom.transferLock.Lock()
-	iom.transfers[filename] = &Transfer{
-		Dir:      tdir,
-		Filename: filename,
-		Parts:    make(map[int64]bool),
-		NumParts: len(parts),
-		Inflight: -1,
-		Queued:   true,
-	}
-	iom.transferLock.Unlock()
 	defer iom.destroyTempTransfer(filename)
 
 	// get in line
