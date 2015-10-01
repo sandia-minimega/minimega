@@ -10,7 +10,14 @@ import (
 	"meshage"
 	"minicli"
 	log "minilog"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
+)
+
+const (
+	IOM_HELPER_WAIT = time.Duration(100 * time.Millisecond)
 )
 
 var (
@@ -119,4 +126,32 @@ func cliFile(c *minicli.Command) *minicli.Response {
 	}
 
 	return resp
+}
+
+// iomHelper supports grabbing files for internal minimega operations. It
+// returns the local path of the file or an error if the file doesn't exist or
+// could not transfer. iomHelper blocks until all file transfers are completed.
+func iomHelper(file string) (string, error) {
+	err := iom.Get(file)
+	if err != nil {
+		return "", err
+	}
+
+	// poll until the file transfer is completed
+	for {
+		var waiting bool
+		transfers := iom.Status()
+		for _, f := range transfers {
+			if strings.Contains(f.Filename, file) {
+				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, f.Parts, f.NumParts)
+				waiting = true
+			}
+		}
+		if waiting {
+			time.Sleep(IOM_HELPER_WAIT)
+		}
+	}
+
+	dst := filepath.Join(*f_iomBase, file)
+	return dst, nil
 }
