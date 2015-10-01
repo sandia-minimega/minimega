@@ -226,6 +226,8 @@ func (iom *IOMeshage) Get(file string) error {
 // parts to maximize the distributed transfer behavior of iomeshage when used
 // at scale.
 func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode) {
+	defer iom.destroyTempTransfer(filename)
+
 	// corner case - empty file
 	if numParts == 0 {
 		log.Debug("file %v has 0 parts, creating empty file", filename)
@@ -267,8 +269,6 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 		parts[j] = parts[i]
 		parts[i] = t
 	}
-
-	defer iom.destroyTempTransfer(filename)
 
 	// get in line
 	iom.queue <- true
