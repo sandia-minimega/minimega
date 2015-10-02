@@ -84,6 +84,8 @@ type VM interface {
 
 // BaseConfig contains all fields common to all VM types.
 type BaseConfig struct {
+	Namespace string // namespace this VM belongs to, set by scheduler
+
 	Vcpus  string // number of virtual cpus
 	Memory string // memory for the vm, in megabytes
 
@@ -140,9 +142,10 @@ type BaseVM struct {
 
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
+	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
+	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
+	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
+	"tags",
 }
 
 func init() {
@@ -462,7 +465,9 @@ func (vm *BaseVM) info(mask string) (string, error) {
 	case "id":
 		return fmt.Sprintf("%v", vm.ID), nil
 	case "name":
-		return fmt.Sprintf("%v", vm.Name), nil
+		return vm.Name, nil
+	case "namespace":
+		return vm.Namespace, nil
 	case "state":
 		return vm.GetState().String(), nil
 	case "type":

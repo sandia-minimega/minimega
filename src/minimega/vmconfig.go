@@ -45,6 +45,9 @@ func mustContainerConfig(val interface{}) *ContainerConfig {
 
 // Functions for configuring VMs.
 var baseConfigFns = map[string]VMConfigFns{
+	"namespace": vmConfigString(func(vm interface{}) *string {
+		return &mustBaseConfig(vm).Namespace
+	}, ""),
 	"memory": vmConfigString(func(vm interface{}) *string {
 		return &mustBaseConfig(vm).Memory
 	}, VM_MEMORY_DEFAULT),

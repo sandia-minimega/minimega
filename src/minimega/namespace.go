@@ -361,6 +361,10 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 		default:
 		}
 
+		// Append last to ensure that the automatically generated config
+		// commands don't override our namespace with a blank string.
+		cmds = append(cmds, fmt.Sprintf("vm config namespace %q", namespace))
+
 		// Channel for all the `vm config ...` responses
 		configChan := make(chan minicli.Responses)
 
