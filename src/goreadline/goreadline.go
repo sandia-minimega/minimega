@@ -113,6 +113,10 @@ func lcp(s []string) string {
 	var lcp string
 	var p int
 
+	if len(s) == 0 {
+		return ""
+	}
+
 	for {
 		var c byte
 		for _, v := range s {
