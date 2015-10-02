@@ -78,11 +78,20 @@ Saves the configuration of a running virtual machine or set of virtual machines
 so that it/they can be restarted/recovered later, such as after a system crash.
 
 This command does not store the state of the virtual machine itself, only its
-launch configuration.`,
+launch configuration.
+
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm save <name> <vm id or name or all>...",
+			"vm save <target> <name>",
 		},
 		Call: wrapSimpleCLI(cliVmSave),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
@@ -128,7 +137,22 @@ description of allowable targets.`,
 		Patterns: []string{
 			"vm kill <target>",
 		},
-		Call: wrapVMTargetCLI(vms.kill),
+		Call: wrapVMTargetCLI(func(c *minicli.Command) *minicli.Response {
+			resp := &minicli.Response{Host: hostname}
+
+			if errs := vms.kill(c.StringArgs["target"]); len(errs) > 0 {
+				resp.Error = errSlice(errs).String()
+			}
+
+			return resp
+		}),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -169,7 +193,15 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
 			"vm start <target>",
 		},
-		Call: wrapVMTargetCLI(vms.start),
+		Call: wrapVMTargetCLI(func(c *minicli.Command) *minicli.Response {
+			resp := &minicli.Response{Host: hostname}
+
+			if errs := vms.start(c.StringArgs["target"]); len(errs) > 0 {
+				resp.Error = errSlice(errs).String()
+			}
+
+			return resp
+		}),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, ^VM_RUNNING)
@@ -188,7 +220,15 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
 			"vm stop <target>",
 		},
-		Call: wrapVMTargetCLI(vms.stop),
+		Call: wrapVMTargetCLI(func(c *minicli.Command) *minicli.Response {
+			resp := &minicli.Response{Host: hostname}
+
+			if errs := vms.stop(c.StringArgs["target"]); len(errs) > 0 {
+				resp.Error = errSlice(errs).String()
+			}
+
+			return resp
+		}),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, VM_RUNNING)
@@ -283,7 +323,7 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		Patterns: []string{
 			"vm qmp <vm id or name> <qmp command>",
 		},
-		Call: wrapSimpleCLI(cliVmQmp),
+		Call: wrapVMTargetCLI(cliVmQmp),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
@@ -316,7 +356,7 @@ You can also specify the maximum dimension:
 			"vm screenshot <vm id or name> [maximum dimension]",
 			"vm screenshot <vm id or name> file <filename> [maximum dimension]",
 		},
-		Call: wrapSimpleCLI(cliVmScreenshot),
+		Call: wrapVMTargetCLI(cliVmScreenshot),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
@@ -338,7 +378,7 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate",
 			"vm migrate <vm id or name> <filename>",
 		},
-		Call: wrapSimpleCLI(cliVmMigrate),
+		Call: wrapVMTargetCLI(cliVmMigrate),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
@@ -369,7 +409,7 @@ To read a tag:
 			"vm tag <target> [key or all]",  // get
 			"vm tag <target> <key> <value>", // set
 		},
-		Call: wrapSimpleCLI(cliVmTag),
+		Call: wrapVMTargetCLI(cliVmTag),
 		Suggest: func(val, prefix string) []string {
 			if val == "target" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
@@ -400,7 +440,7 @@ Change a VM to use a new ISO:
 			"vm cdrom <eject,> <vm id or name>",
 			"vm cdrom <change,> <vm id or name> <path>",
 		},
-		Call: wrapSimpleCLI(cliVmCdrom),
+		Call: wrapVMTargetCLI(cliVmCdrom),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
@@ -1249,21 +1289,18 @@ func cliVmScreenshot(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	v := vms.findVm(vm)
-	if v == nil {
-		resp.Error = vmNotFound(vm).Error()
-		return resp
-	}
-
-	path := filepath.Join(*f_base, fmt.Sprintf("%v", v.GetID()), "screenshot.png")
-	if file != "" {
-		path = file
-	}
-
-	pngData, err := vms.screenshot(vm, path, max)
+	pngData, err := vms.screenshot(vm, max)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
+	}
+
+	// VM has to exist if we got pngData without an error
+	id := vms.findVm(vm).GetID()
+
+	path := filepath.Join(*f_base, strconv.Itoa(id), "screenshot.png")
+	if file != "" {
+		path = file
 	}
 
 	// add user data in case this is going across meshage
@@ -1338,7 +1375,12 @@ func cliVmSave(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	err = vms.save(file, c.ListArgs["vm"])
+	vms := vms
+	if namespace != "" {
+		vms = namespaces[namespace].VMs()
+	}
+
+	err = vms.save(file, c.StringArgs["target"])
 	if err != nil {
 		resp.Error = err.Error()
 	}

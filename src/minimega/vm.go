@@ -547,6 +547,10 @@ func vmNotPhotogenic(idOrName string) error {
 	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
 }
 
+func vmNotKVM(idOrName string) error {
+	return fmt.Errorf("vm is not a KVM: %v", idOrName)
+}
+
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
 // bit of parsing, because the entry can be in a few forms:

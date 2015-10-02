@@ -43,32 +43,13 @@ func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
 	return cmds
 }
 
-func (vms VMs) save(file *os.File, args []string) error {
-	var allVms bool
-	for _, vm := range args {
-		if vm == Wildcard {
-			allVms = true
-			break
-		}
-	}
+func (vms VMs) save(file *os.File, target string) error {
+	// Stop on the first error
+	var err error
 
-	if allVms && len(args) != 1 {
-		log.Debug("ignoring vm names, wildcard is present")
-	}
-
-	var toSave []string
-	if allVms {
-		for k, _ := range vms {
-			toSave = append(toSave, fmt.Sprintf("%v", k))
-		}
-	} else {
-		toSave = args
-	}
-
-	for _, vmStr := range toSave { // iterate over the vm id's specified
-		vm := vms.findVm(vmStr)
-		if vm == nil {
-			return fmt.Errorf("vm %v not found", vm)
+	expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
+		if err != nil {
+			return true, err
 		}
 
 		// build up the command list to re-launch this vm, first clear all
@@ -96,14 +77,15 @@ func (vms VMs) save(file *os.File, args []string) error {
 
 		// write commands to file
 		for _, cmd := range cmds {
-			_, err := file.WriteString(cmd + "\n")
-			if err != nil {
-				return err
+			if _, err = file.WriteString(cmd + "\n"); err != nil {
+				return true, err
 			}
 		}
-	}
 
-	return nil
+		return true, nil
+	})
+
+	return err
 }
 
 func (vms VMs) qmp(idOrName, qmp string) (string, error) {
@@ -114,13 +96,12 @@ func (vms VMs) qmp(idOrName, qmp string) (string, error) {
 
 	if vm, ok := vm.(*KvmVM); ok {
 		return vm.QMPRaw(qmp)
-	} else {
-		// TODO
-		return "", fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
 	}
+
+	return "", vmNotKVM(idOrName)
 }
 
-func (vms VMs) screenshot(idOrName, path string, max int) ([]byte, error) {
+func (vms VMs) screenshot(idOrName string, max int) ([]byte, error) {
 	vm := vms.findVm(idOrName)
 	if vm == nil {
 		return nil, vmNotFound(idOrName)
@@ -138,12 +119,12 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	if vm == nil {
 		return vmNotFound(idOrName)
 	}
-	kvm, ok := vm.(*KvmVM)
-	if !ok {
-		return fmt.Errorf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
+
+	if vm, ok := vm.(*KvmVM); ok {
+		return vm.Migrate(filename)
 	}
 
-	return kvm.Migrate(filename)
+	return vmNotKVM(idOrName)
 }
 
 // findVm finds a VM based on it's ID or Name. Returns nil if no such VM

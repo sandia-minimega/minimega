@@ -435,21 +435,13 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 	}
 }
 
-// wrapVMTargetCLI is a namespace-aware wrapper for VM commands that take a
-// single argument -- the VM target. This is used by commands like `vm start`
-// and `vm kill`.
-func wrapVMTargetCLI(fn func(string) []error) minicli.CLIFunc {
+// wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
+// or more VMs. This is used by commands like `vm start` and `vm kill`.
+func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		// No namespace specified, just invoke the handler
 		if namespace == "" {
-			resp := &minicli.Response{Host: hostname}
-
-			errs := fn(c.StringArgs["target"])
-			if len(errs) > 0 {
-				resp.Error = errSlice(errs).String()
-			}
-
-			respChan <- minicli.Responses{resp}
+			respChan <- minicli.Responses{fn(c)}
 			return
 		}
 
