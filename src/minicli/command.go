@@ -27,6 +27,10 @@ type Command struct {
 	// contains just a comment). This was added to ensure that lines containing
 	// only a comment are recorded in the history.
 	noOp bool
+
+	// Source allows developers to keep track of where the command originated
+	// from. Setting and using this is entirely up to developers using minicli.
+	Source string
 }
 
 func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
