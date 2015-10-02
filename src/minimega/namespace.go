@@ -93,7 +93,7 @@ func (n Namespace) hostSlice() []string {
 func (n Namespace) VMs() VMs {
 	res := VMs{}
 
-	cmd := minicli.MustCompile(`vm info`)
+	cmd := minicli.MustCompilef(`.filter namespace=%q vm info`, namespace)
 	cmd.Record = false
 
 	cmds := makeCommandHosts(n.hostSlice(), cmd)
