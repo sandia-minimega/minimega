@@ -223,12 +223,15 @@ outer:
 	return errs
 }
 
-func (vms VMs) flush() {
+func (vms VMs) flush(namespace string) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	for i, vm := range vms {
-		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+		matchesState := vm.GetState()&(VM_QUIT|VM_ERROR) != 0
+		matchesNamespace := (namespace == "" || vm.GetNamespace() == namespace)
+
+		if matchesState && matchesNamespace {
 			log.Infoln("deleting VM: ", i)
 
 			vm.Flush()

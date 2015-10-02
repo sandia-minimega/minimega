@@ -48,8 +48,9 @@ const (
 type VM interface {
 	Config() *BaseConfig
 
-	GetID() int      // GetID returns the VM's per-host unique ID
-	GetName() string // GetName returns the VM's per-host unique name
+	GetID() int           // GetID returns the VM's per-host unique ID
+	GetName() string      // GetName returns the VM's per-host unique name
+	GetNamespace() string // GetNamespace returns the VM's namespace
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
@@ -298,6 +299,10 @@ func (vm *BaseVM) GetID() int {
 
 func (vm *BaseVM) GetName() string {
 	return vm.Name
+}
+
+func (vm *BaseVM) GetNamespace() string {
+	return vm.Namespace
 }
 
 func (vm *BaseVM) GetState() VMState {

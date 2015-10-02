@@ -242,9 +242,13 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		HelpLong: `
 Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm info. Names
-of VMs that have been flushed may be reused.`,
+of VMs that have been flushed may be reused.
+
+If a namespace is provided, only VMs in that namespace will be flushed. The
+default behavior is to flush VMs regardless of namespace.`,
 		Patterns: []string{
 			"vm flush",
+			"vm flush namespace <namespace>",
 		},
 		Call: wrapBroadcastCLI(cliVmFlush),
 	},
@@ -1256,7 +1260,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 func cliVmFlush(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vms.flush()
+	vms.flush(c.StringArgs["namespace"])
 
 	return resp
 }
