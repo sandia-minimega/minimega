@@ -198,12 +198,11 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		original := cmd.Original
 		record := cmd.Record
 
-		var prefix string
 		if namespace != "" {
-			prefix = fmt.Sprintf("namespace %q ", namespace)
+			original = fmt.Sprintf("namespace %q %v", namespace, original)
 		}
 
-		cmd, err := minicli.Compilef("%vmesh send %s .record %t %s", prefix, targets, record, original)
+		cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
 		if err != nil {
 			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
 		}
