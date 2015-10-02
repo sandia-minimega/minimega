@@ -178,6 +178,8 @@ func NewVM(name string) *BaseVM {
 		vm.Name = name
 	}
 
+	vm.Namespace = namespace
+
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
 		vm.UUID = generateUUID()

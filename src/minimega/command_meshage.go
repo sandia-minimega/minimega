@@ -106,6 +106,7 @@ func meshageHandler() {
 				log.Error("invalid command from mesh: `%s`", mCmd.Original)
 				return
 			}
+			cmd.Source = SourceMeshage
 
 			resps := []minicli.Responses{}
 			for resp := range runCommand(cmd) {

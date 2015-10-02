@@ -140,6 +140,8 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			continue
 		}
 
+		cmd.Source = SourceRead
+
 		// HAX: Make sure we don't have a recursive read command
 		if hasCommand(cmd, "read") {
 			err = errors.New("cannot run nested `read` commands")

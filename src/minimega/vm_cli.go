@@ -65,22 +65,11 @@ Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
 Display information about all VMs:
-	vm info
-
-If a namespace is provided, only VMs in that namespace will be listed. The
-default behavior is to list info for all VMs regardless of namespace. This is
-primarily for internal use, most likely you want to use '.filter'.`,
+	vm info`,
 		Patterns: []string{
 			"vm info",
-			"vm info namespace <namespace>",
 		},
-		Call: wrapBroadcastCLI(cliVmInfo, func(c *minicli.Command) *minicli.Command {
-			if namespace != "" && c.StringArgs["namespace"] == "" {
-				return minicli.MustCompilef("%v namespace %q", c.Original, namespace)
-			}
-
-			return c
-		}),
+		Call: wrapBroadcastCLI(cliVmInfo),
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -253,22 +242,11 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		HelpLong: `
 Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm info. Names
-of VMs that have been flushed may be reused.
-
-If a namespace is provided, only VMs in that namespace will be flushed. The
-default behavior is to flush VMs regardless of namespace. This is primarily for
-internal use, most likely you should not need it.`,
+of VMs that have been flushed may be reused.`,
 		Patterns: []string{
 			"vm flush",
-			"vm flush namespace <namespace>",
 		},
-		Call: wrapBroadcastCLI(cliVmFlush, func(c *minicli.Command) *minicli.Command {
-			if namespace != "" && c.StringArgs["namespace"] == "" {
-				return minicli.MustCompilef("%v namespace %q", c.Original, namespace)
-			}
-
-			return c
-		}),
+		Call: wrapBroadcastCLI(cliVmFlush),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -943,7 +921,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vm.UpdateCCActive()
 	}
 
-	resp.Header, resp.Tabular, err = vms.info(c.StringArgs["namespace"])
+	resp.Header, resp.Tabular, err = vms.info()
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
@@ -1221,7 +1199,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if namespace != "" {
+	if c.Source != "" && namespace != "" {
 		if len(c.StringArgs) > 0 {
 			namespaceQueue(c, resp)
 		} else {
@@ -1278,7 +1256,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 func cliVmFlush(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	vms.flush(c.StringArgs["namespace"])
+	vms.flush()
 
 	return resp
 }
@@ -1346,7 +1324,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
 		// tabular data is
 		// 	vm id, vm name, migrate status, % complete
-		for _, vm := range vms {
+		for _, vm := range vms.namespace() {
 			vm, ok := vm.(*KvmVM)
 			if !ok {
 				// TODO: remove?
@@ -1421,7 +1399,7 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 	}
 	kvm, ok := vm.(*KvmVM)
 	if !ok {
-		resp.Error = fmt.Sprintf("`%s` is not a kvm vm -- command unsupported", vm.GetName())
+		resp.Error = vmNotKVM(c.StringArgs["vm"]).Error()
 		return resp
 	}
 

@@ -62,6 +62,8 @@ outer:
 		var prevResp minicli.Responses
 
 		if cmd != nil {
+			cmd.Source = SourceAttachCLI
+
 			// HAX: Don't record the read command
 			if hasCommand(cmd, "read") {
 				cmd.Record = false

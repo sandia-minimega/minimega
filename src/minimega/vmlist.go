@@ -17,6 +17,23 @@ import (
 // VMs contains all the VMs running on this host, the key is the VM's ID
 type VMs map[int]VM
 
+// namespace returns the VMs that are part of the currently active namespace,
+// if there is one. Otherwise, returns itself.
+func (vms VMs) namespace() VMs {
+	if namespace == "" {
+		return vms
+	}
+
+	res := map[int]VM{}
+	for id, vm := range vms {
+		if vm.GetNamespace() == namespace {
+			res[id] = vm
+		}
+	}
+
+	return res
+}
+
 // apply applies the provided function to the vm in VMs whose name or ID
 // matches the provided vm parameter.
 func (vms VMs) apply(idOrName string, fn func(VM) error) error {
@@ -127,20 +144,26 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	return vmNotKVM(idOrName)
 }
 
-// findVm finds a VM based on it's ID or Name. Returns nil if no such VM
-// exists.
-func (vms VMs) findVm(idOrName string) VM {
-	id, err := strconv.Atoi(idOrName)
-	if err != nil {
+// findVm finds a VM based on it's ID or Name, ensuring that the VM is part of
+// the current namespace, if one is active. Returns nil if no such VM exists.
+func (vms VMs) findVm(idOrName string) (vm VM) {
+	if id, err := strconv.Atoi(idOrName); err == nil {
+		vm = vms[id]
+	} else {
 		// Search for VM by name
 		for _, v := range vms {
 			if v.GetName() == idOrName {
-				return v
+				vm = v
+				break
 			}
 		}
 	}
 
-	return vms[id]
+	if vm != nil && (namespace != "" && vm.GetNamespace() != namespace) {
+		vm = nil
+	}
+
+	return
 }
 
 // launch one VM of a given type. This call should be "non-blocking" -- the VM
@@ -223,15 +246,12 @@ outer:
 	return errs
 }
 
-func (vms VMs) flush(namespace string) {
+func (vms VMs) flush() {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	for i, vm := range vms {
-		matchesState := vm.GetState()&(VM_QUIT|VM_ERROR) != 0
-		matchesNamespace := (namespace == "" || vm.GetNamespace() == namespace)
-
-		if matchesState && matchesNamespace {
+	for i, vm := range vms.namespace() {
+		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			log.Infoln("deleting VM: ", i)
 
 			vm.Flush()
@@ -241,20 +261,13 @@ func (vms VMs) flush(namespace string) {
 	}
 }
 
-func (vms VMs) info(namespace string) ([]string, [][]string, error) {
-	table := make([][]string, 0, len(vms))
+func (vms VMs) info() ([]string, [][]string, error) {
+	table := [][]string{}
 
-	masks := vmMasks
-
-	for _, vm := range vms {
+	for _, vm := range vms.namespace() {
 		row := []string{}
 
-		// When namespace is set, only include VMs in the namespace
-		if namespace != "" && vm.GetNamespace() != namespace {
-			continue
-		}
-
-		for _, mask := range masks {
+		for _, mask := range vmMasks {
 			if v, err := vm.Info(mask); err != nil {
 				// Field not set for VM type, replace with placeholder
 				row = append(row, "N/A")
@@ -266,13 +279,13 @@ func (vms VMs) info(namespace string) ([]string, [][]string, error) {
 		table = append(table, row)
 	}
 
-	return masks, table, nil
+	return vmMasks, table, nil
 }
 
 // cleanDirs removes all isntance directories in the minimega base directory
 func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
-	for _, vm := range vms {
+	for _, vm := range vms.namespace() {
 		path := vm.GetInstancePath()
 		log.Debug("cleaning instance path: %v", path)
 		err := os.RemoveAll(path)
@@ -339,7 +352,7 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 		results[strconv.Itoa(vm.GetID())] = ok
 	}
 
-	for _, vm := range vms {
+	for _, vm := range vms.namespace() {
 		if wild || names[vm.GetName()] || ids[vm.GetID()] {
 			delete(names, vm.GetName())
 			delete(ids, vm.GetID())

@@ -40,6 +40,15 @@ var (
 
 type CLIFunc func(*minicli.Command) *minicli.Response
 
+// Sources of minicli.Commands. If minicli.Command.Source is not set, then we
+// generated the Command programmatically.
+var (
+	SourceMeshage   = "meshage"
+	SourceLocalCLI  = "local"
+	SourceAttachCLI = "attach"
+	SourceRead      = "read"
+)
+
 // cliSetup registers all the minimega handlers
 func cliSetup() {
 	registerHandlers("bridge", bridgeCLIHandlers)
@@ -176,7 +185,12 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 	var cmds = []*minicli.Command{}
 
 	if includeLocal {
-		cmds = append(cmds, cmd)
+		// Copy the command and clear the Source flag
+		copied := new(minicli.Command)
+		*copied = *cmd
+		copied.Source = ""
+
+		cmds = append(cmds, copied)
 	}
 
 	if len(hosts2) > 0 {
@@ -184,7 +198,12 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		original := cmd.Original
 		record := cmd.Record
 
-		cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
+		var prefix string
+		if namespace != "" {
+			prefix = fmt.Sprintf("namespace %q ", namespace)
+		}
+
+		cmd, err := minicli.Compilef("%vmesh send %s .record %t %s", prefix, targets, record, original)
 		if err != nil {
 			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
 		}
@@ -223,6 +242,7 @@ func cliLocal() {
 		if cmd == nil {
 			continue
 		}
+		cmd.Source = SourceLocalCLI
 
 		// HAX: Don't record the read command
 		if hasCommand(cmd, "read") {
