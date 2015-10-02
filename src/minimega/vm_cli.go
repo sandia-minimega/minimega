@@ -271,7 +271,7 @@ To remove all hotplug devices, use ID "all" for the disk ID.`,
 			"vm hotplug <add,> <vm id or name> <filename>",
 			"vm hotplug <remove,> <vm id or name> <disk id or all>",
 		},
-		Call: wrapSimpleCLI(cliVmHotplug),
+		Call: wrapVMTargetCLI(cliVmHotplug),
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
