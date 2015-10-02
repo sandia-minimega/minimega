@@ -198,9 +198,12 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 
 // local command line interface, wrapping readline
 func cliLocal() {
-	prompt := "minimega$ "
-
 	for {
+		prompt := "minimega$ "
+		if namespace != "" {
+			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
+		}
+
 		line, err := goreadline.Rlwrap(prompt, true)
 		if err != nil {
 			break // EOF
