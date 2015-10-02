@@ -152,8 +152,10 @@ func (iom *IOMeshage) Info(file string) []string {
 					log.Debugln("got info from: ", resp.From)
 				}
 				if len(resp.Glob) == 0 {
-					// exact match
-					ret = append(ret, resp.Filename)
+					// exact match unless the exact match is the original glob
+					if !strings.Contains(resp.Filename, "*") {
+						ret = append(ret, resp.Filename)
+					}
 				} else {
 					ret = append(ret, resp.Glob...)
 				}
