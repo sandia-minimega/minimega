@@ -145,6 +145,12 @@ func (iom *IOMeshage) fileInfo(filename string) ([]string, int64, error) {
 		return globsRet, 0, nil
 	}
 
+	log.Debug("glob %v", glob)
+	// special case, glob match was a single directory
+	if len(glob) == 1 && strings.Contains(glob[0], filename[:len(filename)-1]) {
+		filename = glob[0]
+	}
+
 	f, err := os.Open(filename)
 	if err != nil {
 		return nil, 0, err

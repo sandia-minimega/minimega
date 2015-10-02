@@ -105,6 +105,68 @@ func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 	return ret, nil
 }
 
+// search the mesh for the file/glob/directory, returning a slice of string
+// matches. The search includes local matches.
+func (iom *IOMeshage) Info(file string) []string {
+	var ret []string
+
+	// search locally
+	files, _, _ := iom.fileInfo(filepath.Join(iom.base, file))
+	ret = append(ret, files...)
+
+	// search the mesh
+	TID := genTID()
+	c := make(chan *IOMMessage)
+	err := iom.registerTID(TID, c)
+	defer iom.unregisterTID(TID)
+
+	if err != nil {
+		// a collision in int64, we should tell someone about this
+		log.Fatalln(err)
+	}
+
+	m := &IOMMessage{
+		From:     iom.node.Name(),
+		Type:     TYPE_INFO,
+		Filename: file,
+		TID:      TID,
+	}
+	recipients, err := iom.node.Broadcast(m)
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
+	if log.WillLog(log.DEBUG) {
+		log.Debug("sent info request to %v nodes", len(recipients))
+	}
+
+	// wait for n responses, or a timeout
+	for i := 0; i < len(recipients); i++ {
+		select {
+		case resp := <-c:
+			if log.WillLog(log.DEBUG) {
+				log.Debugln("got response: ", resp)
+			}
+			if resp.ACK {
+				if log.WillLog(log.DEBUG) {
+					log.Debugln("got info from: ", resp.From)
+				}
+				if len(resp.Glob) == 0 {
+					// exact match
+					ret = append(ret, resp.Filename)
+				} else {
+					ret = append(ret, resp.Glob...)
+				}
+			}
+		case <-time.After(timeout):
+			log.Errorln(fmt.Errorf("timeout"))
+			return nil
+		}
+	}
+
+	return ret
+}
+
 // Retrieve a file from the shortest path node that has it. Get blocks until
 // the file transfer is begins or errors out. If the file specified is a
 // directory, the entire directory will be recursively transferred.
