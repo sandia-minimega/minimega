@@ -1513,6 +1513,11 @@ func cliVMSuggest(prefix string, mask VMState) []string {
 		isID = true
 	}
 
+	vms := vms
+	if namespace != "" {
+		vms = namespaces[namespace].VMs()
+	}
+
 	for _, vm := range vms {
 		if vm.GetState()&mask == 0 {
 			continue
