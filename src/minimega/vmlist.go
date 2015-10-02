@@ -241,13 +241,18 @@ func (vms VMs) flush(namespace string) {
 	}
 }
 
-func (vms VMs) info() ([]string, [][]string, error) {
+func (vms VMs) info(namespace string) ([]string, [][]string, error) {
 	table := make([][]string, 0, len(vms))
 
 	masks := vmMasks
 
 	for _, vm := range vms {
 		row := []string{}
+
+		// When namespace is set, only include VMs in the namespace
+		if namespace != "" && vm.GetNamespace() != namespace {
+			continue
+		}
 
 		for _, mask := range masks {
 			if v, err := vm.Info(mask); err != nil {

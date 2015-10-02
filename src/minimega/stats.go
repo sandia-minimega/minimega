@@ -48,7 +48,7 @@ var hostCLIHandlers = []minicli.Handler{
 			"host [bandwidth,]",
 			"host [cpus,]",
 		},
-		Call: wrapBroadcastCLI(cliHost),
+		Call: wrapBroadcastCLI(cliHost, nil),
 	},
 }
 

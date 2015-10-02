@@ -325,7 +325,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 			go func(host string, queuedVMs []queuedVM) {
 				defer wg.Done()
 
-				namespaceHostLaunch(host, queuedVMs, respChan)
+				namespaceHostLaunch(host, namespace, queuedVMs, respChan)
 			}(host, queuedVMs)
 		}
 
@@ -347,7 +347,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	}()
 }
 
-func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicli.Responses) {
+func namespaceHostLaunch(host, ns string, queuedVMs []queuedVM, respChan chan minicli.Responses) {
 	for _, queued := range queuedVMs {
 		// Mesh send all the config commands
 		cmds := []string{"clear vm config"}
@@ -363,7 +363,7 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 
 		// Append last to ensure that the automatically generated config
 		// commands don't override our namespace with a blank string.
-		cmds = append(cmds, fmt.Sprintf("vm config namespace %q", namespace))
+		cmds = append(cmds, fmt.Sprintf("vm config namespace %q", ns))
 
 		// Channel for all the `vm config ...` responses
 		configChan := make(chan minicli.Responses)
@@ -376,7 +376,7 @@ func namespaceHostLaunch(host string, queuedVMs []queuedVM, respChan chan minicl
 		cmdLock.Lock()
 
 		// Poor man's defer statement -- run it at the end of the loop to:
-		//  * Revert namespace to old value
+		//  * Revert global namespace to old value
 		//  * Release the cmdLock
 		// Silly double func to make the inner func a closure (preserving the
 		// original value of namespace).
@@ -493,8 +493,12 @@ func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFun
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
-func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response, preprocess func(*minicli.Command) *minicli.Command) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		if preprocess != nil {
+			c = preprocess(c)
+		}
+
 		// No namespace specified, just invoke the handler
 		if namespace == "" {
 			respChan <- minicli.Responses{fn(c)}

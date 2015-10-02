@@ -65,11 +65,22 @@ Display a list of all IPs for all VMs:
 	.columns ip,ip6 vm info
 
 Display information about all VMs:
-	vm info`,
+	vm info
+
+If a namespace is provided, only VMs in that namespace will be listed. The
+default behavior is to list info for all VMs regardless of namespace. This is
+primarily for internal use, most likely you want to use '.filter'.`,
 		Patterns: []string{
 			"vm info",
+			"vm info namespace <namespace>",
 		},
-		Call: wrapBroadcastCLI(cliVmInfo),
+		Call: wrapBroadcastCLI(cliVmInfo, func(c *minicli.Command) *minicli.Command {
+			if namespace != "" && c.StringArgs["namespace"] == "" {
+				return minicli.MustCompilef("%v namespace %q", c.Original, namespace)
+			}
+
+			return c
+		}),
 	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
@@ -245,12 +256,19 @@ This will remove any VMs with a state of "quit" or "error" from vm info. Names
 of VMs that have been flushed may be reused.
 
 If a namespace is provided, only VMs in that namespace will be flushed. The
-default behavior is to flush VMs regardless of namespace.`,
+default behavior is to flush VMs regardless of namespace. This is primarily for
+internal use, most likely you should not need it.`,
 		Patterns: []string{
 			"vm flush",
 			"vm flush namespace <namespace>",
 		},
-		Call: wrapBroadcastCLI(cliVmFlush),
+		Call: wrapBroadcastCLI(cliVmFlush, func(c *minicli.Command) *minicli.Command {
+			if namespace != "" && c.StringArgs["namespace"] == "" {
+				return minicli.MustCompilef("%v namespace %q", c.Original, namespace)
+			}
+
+			return c
+		}),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -925,7 +943,7 @@ func cliVmInfo(c *minicli.Command) *minicli.Response {
 		vm.UpdateCCActive()
 	}
 
-	resp.Header, resp.Tabular, err = vms.info()
+	resp.Header, resp.Tabular, err = vms.info(c.StringArgs["namespace"])
 	if err != nil {
 		resp.Error = err.Error()
 		return resp
