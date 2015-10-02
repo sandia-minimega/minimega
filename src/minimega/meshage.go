@@ -119,10 +119,17 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
 	if hosts == Wildcard {
-		// Broadcast command to all hosts
-		recipients = meshageNode.BroadcastRecipients()
+		if namespace != "" {
+			// Broadcast command to hosts in the same namespace
+			recipients = namespaces[namespace].hostSlice()
+		} else {
+			// Broadcast command to all hosts
+			recipients = meshageNode.BroadcastRecipients()
+		}
 	} else {
 		// Send to specified list of recipients
+		// TODO: Do we want to enforce that the recipients are in the currently
+		// active namespace, if there is one?
 		recipients, err = ranges.SplitList(hosts)
 	}
 
