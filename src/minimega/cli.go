@@ -161,6 +161,8 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 
 // local command line interface, wrapping readline
 func cliLocal() {
+	goreadline.FilenameCompleter = iomCompleter
+
 	prompt := "minimega$ "
 
 	for {
