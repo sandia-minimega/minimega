@@ -99,13 +99,13 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	}
 
 	glob, parts, err := iom.fileInfo(filepath.Join(iom.base, m.Filename))
-	if err != nil {
+	if err != nil || len(glob) == 0 {
 		resp.ACK = false
 	} else if len(glob) == 1 && glob[0] == m.Filename {
 		resp.ACK = true
 		resp.Part = parts
 		fi, err := os.Stat(filepath.Join(iom.base, m.Filename))
-		if err != nil {
+		if err != nil || fi.IsDir() {
 			resp.ACK = false
 		} else {
 			resp.Perm = fi.Mode() & os.ModePerm

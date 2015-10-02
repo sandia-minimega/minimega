@@ -214,7 +214,7 @@ func (iom *IOMeshage) Get(file string) error {
 		log.Debug("sent info request to %v nodes", len(recipients))
 	}
 
-	var info *IOMMessage
+	var info []*IOMMessage
 	var gotInfo bool
 	// wait for n responses, or a timeout
 	for i := 0; i < len(recipients); i++ {
@@ -227,7 +227,7 @@ func (iom *IOMeshage) Get(file string) error {
 				if log.WillLog(log.DEBUG) {
 					log.Debugln("got info from: ", resp.From)
 				}
-				info = resp
+				info = append(info, resp)
 				gotInfo = true
 			}
 		case <-time.After(timeout):
@@ -238,47 +238,60 @@ func (iom *IOMeshage) Get(file string) error {
 		return fmt.Errorf("file not found")
 	}
 
-	// is this a single file or a directory/blob?
-	if len(info.Glob) == 0 {
-		if log.WillLog(log.DEBUG) {
-			log.Debug("found file on node %v with %v parts", info.From, info.Part)
-		}
+	inflight := make(map[string]bool)
 
-		// create a transfer object
-		tdir, err := ioutil.TempDir(iom.base, "transfer_")
-		if err != nil {
-			log.Errorln(err)
-			return err
-		}
-		iom.transferLock.Lock()
-		iom.transfers[info.Filename] = &Transfer{
-			Dir:      tdir,
-			Filename: info.Filename,
-			Parts:    make(map[int64]bool),
-			NumParts: int(info.Part),
-			Inflight: -1,
-			Queued:   true,
-		}
-		iom.transferLock.Unlock()
+	for _, v := range info {
+		// is this a single file or a directory/blob?
+		if len(v.Glob) == 0 {
+			if _, ok := inflight[v.Filename]; ok {
+				continue
+			}
 
-		go iom.getParts(info.Filename, info.Part, info.Perm)
-	} else {
-		// call Get on each of the constituent files, queued in a random order
+			if log.WillLog(log.DEBUG) {
+				log.Debug("found file on node %v with %v parts", v.From, v.Part)
+			}
 
-		// fisher-yates shuffle
-		s := rand.NewSource(time.Now().UnixNano())
-		r := rand.New(s)
-		for i := int64(len(info.Glob)) - 1; i > 0; i-- {
-			j := r.Int63n(i + 1)
-			t := info.Glob[j]
-			info.Glob[j] = info.Glob[i]
-			info.Glob[i] = t
-		}
-
-		for _, v := range info.Glob {
-			err := iom.Get(v)
+			// create a transfer object
+			tdir, err := ioutil.TempDir(iom.base, "transfer_")
 			if err != nil {
+				log.Errorln(err)
 				return err
+			}
+			iom.transferLock.Lock()
+			iom.transfers[v.Filename] = &Transfer{
+				Dir:      tdir,
+				Filename: v.Filename,
+				Parts:    make(map[int64]bool),
+				NumParts: int(v.Part),
+				Inflight: -1,
+				Queued:   true,
+			}
+			iom.transferLock.Unlock()
+
+			go iom.getParts(v.Filename, v.Part, v.Perm)
+
+			inflight[v.Filename] = true
+		} else {
+			// call Get on each of the constituent files, queued in a random order
+
+			// fisher-yates shuffle
+			s := rand.NewSource(time.Now().UnixNano())
+			r := rand.New(s)
+			for i := int64(len(v.Glob)) - 1; i > 0; i-- {
+				j := r.Int63n(i + 1)
+				t := v.Glob[j]
+				v.Glob[j] = v.Glob[i]
+				v.Glob[i] = t
+			}
+
+			for _, x := range v.Glob {
+				if _, ok := inflight[x]; ok {
+					continue
+				}
+				err := iom.Get(x)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
