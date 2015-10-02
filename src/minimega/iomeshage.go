@@ -212,6 +212,11 @@ func iomCompleter(line string) []string {
 		}
 		log.Debug("dlcp: %v, drel: %v", dlcp, drel)
 
+		if len(fileprefix) < len(drel) {
+			r := IOM_HELPER_MATCH + drel + string(filepath.Separator)
+			return []string{r, r + "0"} // hack to prevent readline from fastforwarding beyond the directory name
+		}
+
 		var finalMatches []string
 		for _, v := range matches {
 			if strings.Contains(v, "*") {
@@ -237,7 +242,7 @@ func iomCompleter(line string) []string {
 				}
 			}
 			if !found {
-				finalMatches = append(finalMatches, IOM_HELPER_MATCH+drel+paths[0]+string(filepath.Separator))
+				finalMatches = append(finalMatches, IOM_HELPER_MATCH+filepath.Join(drel, paths[0])+string(filepath.Separator))
 			}
 		}
 
@@ -250,6 +255,10 @@ func iomCompleter(line string) []string {
 func lcp(s []string) string {
 	var lcp string
 	var p int
+
+	if len(s) == 0 {
+		return ""
+	}
 
 	for {
 		var c byte
