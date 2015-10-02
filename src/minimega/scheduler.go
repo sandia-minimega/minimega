@@ -5,7 +5,7 @@ import (
 	log "minilog"
 )
 
-func schedule(namespace string) map[string][]queuedVM {
+func schedule(namespace string) (*scheduleStat, map[string][]queuedVM) {
 	ns := namespaces[namespace]
 
 	res := map[string][]queuedVM{}
@@ -63,5 +63,10 @@ func schedule(namespace string) map[string][]queuedVM {
 		}
 	}
 
-	return res
+	stats := &scheduleStat{
+		total: total,
+		hosts: len(hosts),
+	}
+
+	return stats, res
 }

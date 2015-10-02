@@ -5,12 +5,15 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"minicli"
 	log "minilog"
 	"ranges"
 	"strings"
 	"sync"
+	"text/tabwriter"
+	"time"
 )
 
 var namespaceCLIHandlers = []minicli.Handler{
@@ -59,6 +62,14 @@ type queuedVM struct {
 	vmType VMType
 }
 
+type scheduleStat struct {
+	start, end time.Time
+
+	state string
+
+	launched, failures, total, hosts int
+}
+
 type Namespace struct {
 	Hosts map[string]bool
 
@@ -68,6 +79,7 @@ type Namespace struct {
 	queuedVMs []queuedVM
 
 	// Status of launching things
+	scheduleStats []*scheduleStat
 }
 
 var namespace string
@@ -167,9 +179,37 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 
 		resp.Response = fmt.Sprintf("Namespaces: %v", names)
 	} else {
-		// TODO: Dump the queued VMs
+		// TODO: Make this pretty or divide it up somehow
 		ns := namespaces[namespace]
-		resp.Response = fmt.Sprintf("Namespace: `%v`\nHosts: %v", namespace, ns.Hosts)
+		resp.Response = fmt.Sprintf(`Namespace: "%v"
+Hosts: %v
+Number of queuedVMs: %v
+
+Schedules:
+`, namespace, ns.Hosts, len(ns.queuedVMs))
+
+		var o bytes.Buffer
+		w := new(tabwriter.Writer)
+		w.Init(&o, 5, 0, 1, ' ', 0)
+		fmt.Fprintln(w, "start\tend\tstate\tlaunched\tfailures\ttotal\thosts")
+		for _, stats := range ns.scheduleStats {
+			var end string
+			if !stats.end.IsZero() {
+				end = fmt.Sprintf("%v", stats.end)
+			}
+
+			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
+				stats.start,
+				end,
+				stats.state,
+				stats.launched,
+				stats.failures,
+				stats.total,
+				stats.hosts)
+		}
+		w.Flush()
+
+		resp.Response += o.String()
 	}
 
 	respChan <- minicli.Responses{resp}
@@ -310,10 +350,15 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	// Create the host -> VMs assignment
 	// TODO: This is a static assignment... should it be updated periodically
 	// during the launching process?
-	assignment := schedule(namespace)
+	stats, assignment := schedule(namespace)
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
 	ns.queuedVMs = nil
+
+	stats.start = time.Now()
+	stats.state = "running"
+
+	ns.scheduleStats = append(ns.scheduleStats, stats)
 
 	go func() {
 		// Result of vm launch commands
@@ -339,13 +384,18 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 		// Collect all the responses and log them
 		for resps := range respChan {
 			for _, resp := range resps {
+				stats.launched += 1
 				if resp.Error != "" {
+					stats.failures += 1
 					log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
 				} else if resp.Response != "" {
 					log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
 				}
 			}
 		}
+
+		stats.end = time.Now()
+		stats.state = "completed"
 	}()
 }
 
