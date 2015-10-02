@@ -624,6 +624,11 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		return
 	}
 
+	// warn on valid but not allocated macs
+	if m != "" && !allocatedMac(m) {
+		log.Warn("unallocated mac address: %v", m)
+	}
+
 	if b == "" {
 		b = DEFAULT_BRIDGE
 	}

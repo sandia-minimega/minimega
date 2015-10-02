@@ -99,6 +99,20 @@ func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
 	ins := []chan minicli.Responses{}
 
 	for _, c := range cmd {
+		c, err := cliPreprocessor(c)
+		if err != nil {
+			log.Errorln(err)
+
+			out <- minicli.Responses{
+				&minicli.Response{
+					Host:  hostname,
+					Error: err.Error(),
+				},
+			}
+
+			break
+		}
+
 		ins = append(ins, minicli.ProcessCommand(c))
 	}
 
@@ -258,4 +272,10 @@ func cliLocal() {
 			}
 		}
 	}
+}
+
+// cliPreprocessor allows modifying commands post-compile but pre-process.
+// Currently the only preprocessor is the "file:" handler.
+func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
+	return iomPreprocessor(c)
 }

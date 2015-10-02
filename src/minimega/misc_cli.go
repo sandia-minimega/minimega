@@ -148,6 +148,18 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
+		cmd, err := cliPreprocessor(cmd)
+		if err != nil {
+			log.Errorln(err)
+			respChan <- minicli.Responses{
+				&minicli.Response{
+					Host:  hostname,
+					Error: err.Error(),
+				},
+			}
+			return
+		}
+
 		for resp := range minicli.ProcessCommand(cmd) {
 			respChan <- resp
 
