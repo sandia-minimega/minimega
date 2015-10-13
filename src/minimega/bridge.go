@@ -832,7 +832,7 @@ func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 	}
 
 	// Add the interface
-	if err := b.TapAdd(tapName, lan, true); err != nil {
+	if err := b.TapAdd(tapName, lan, false); err != nil {
 		return "", err
 	}
 	defer func() {
