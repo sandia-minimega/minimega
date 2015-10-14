@@ -12,7 +12,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"text/template"
@@ -503,10 +502,10 @@ func vyattaWrite(filename string) (string, error) {
 	f.Close()
 
 	// mkdosfs
-	out, err := exec.Command(process("mkdosfs"), f.Name(), "1440").CombinedOutput()
+	out, err := processWrapper("mkdosfs", f.Name(), "1440")
 	if err != nil {
 		os.Remove(f.Name())
-		return "", fmt.Errorf("%v %v", string(out), err.Error())
+		return "", fmt.Errorf("%v %v", out, err.Error())
 	}
 
 	// mount
@@ -517,18 +516,18 @@ func vyattaWrite(filename string) (string, error) {
 	}
 	defer os.RemoveAll(td)
 
-	out, err = exec.Command(process("mount"), "-o", "loop", f.Name(), td).CombinedOutput()
+	out, err = processWrapper("mount", "-o", "loop", f.Name(), td)
 	if err != nil {
 		os.Remove(f.Name())
-		return "", fmt.Errorf("%v %v", string(out), err.Error())
+		return "", fmt.Errorf("%v %v", out, err.Error())
 	}
 
 	// create <floppy>/config/config.boot from vc
 	err = os.Mkdir(td+"/config", 0774)
 	if err != nil {
-		out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+		out, err2 = processWrapper("umount", td)
 		if err2 != nil {
-			log.Errorln(string(out), err)
+			log.Errorln(out, err)
 			teardown()
 		}
 		os.Remove(f.Name())
@@ -540,9 +539,9 @@ func vyattaWrite(filename string) (string, error) {
 
 		err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
 		if err != nil {
-			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			out, err2 = processWrapper("umount", td)
 			if err2 != nil {
-				log.Errorln(string(out), err)
+				log.Errorln(out, err)
 				teardown()
 			}
 			os.Remove(f.Name())
@@ -551,9 +550,9 @@ func vyattaWrite(filename string) (string, error) {
 	} else {
 		vc, err := ioutil.ReadFile(vyatta.ConfigFile)
 		if err != nil {
-			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			out, err2 = processWrapper("umount", td)
 			if err2 != nil {
-				log.Errorln(string(out), err)
+				log.Errorln(out, err)
 				teardown()
 			}
 			os.Remove(f.Name())
@@ -562,9 +561,9 @@ func vyattaWrite(filename string) (string, error) {
 
 		err = ioutil.WriteFile(td+"/config/config.boot", vc, 0664)
 		if err != nil {
-			out, err2 = exec.Command(process("umount"), td).CombinedOutput()
+			out, err2 = processWrapper("umount", td)
 			if err2 != nil {
-				log.Errorln(string(out), err)
+				log.Errorln(out, err)
 				teardown()
 			}
 			os.Remove(f.Name())
@@ -573,10 +572,10 @@ func vyattaWrite(filename string) (string, error) {
 	}
 
 	// umount
-	out, err = exec.Command(process("umount"), td).CombinedOutput()
+	out, err = processWrapper("umount", td)
 	if err != nil {
 		os.Remove(f.Name())
-		return "", fmt.Errorf("%v %v", string(out), err.Error())
+		return "", fmt.Errorf("%v %v", out, err.Error())
 	}
 
 	return f.Name(), nil

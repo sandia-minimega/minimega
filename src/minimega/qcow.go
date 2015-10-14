@@ -12,7 +12,6 @@ import (
 	log "minilog"
 	"nbd"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -125,14 +124,13 @@ func (inject *injectData) run() (string, error) {
 	}
 
 	// create the new img
-	p := process("qemu-img")
-	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg)
+	args := []string{"qemu-img", "create", "-f", "qcow2", "-b", inject.srcImg, inject.dstImg}
 
-	log.Debug("creating sub image with: %v", cmd)
+	log.Debug("creating sub image with: %v", args)
 
-	result, err := cmd.CombinedOutput()
+	out, err := processWrapper(args...)
 	if err != nil {
-		return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+		return "", fmt.Errorf("%v: %v", err, out)
 	}
 
 	// create a tmp mount point
@@ -166,37 +164,30 @@ func (inject *injectData) run() (string, error) {
 	}
 
 	// mount new img
-	p = process("mount")
-	cmd = exec.Command(p, "-w", inject.nbdPath+"p"+inject.partition, mntDir)
-	result, err = cmd.CombinedOutput()
+
+	out, err = processWrapper("mount", "-w", inject.nbdPath+"p"+inject.partition, mntDir)
 	if err != nil {
 		// check that ntfs-3g is installed
-		p = process("ntfs-3g")
-		cmd = exec.Command(p, "--version")
-		_, err = cmd.CombinedOutput()
+		_, err = processWrapper("ntfs-3g", "--version")
 		if err != nil {
 			log.Error("ntfs-3g not found, ntfs images unwriteable")
 		}
 
 		// mount with ntfs-3g
-		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
-		result, err = cmd.CombinedOutput()
+		out, err = processWrapper("mount", "-o", "ntfs-3g", inject.nbdPath+"p"+inject.partition, mntDir)
 		if err != nil {
 			log.Error("failed to mount partition")
-			return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+			return "", fmt.Errorf("%v: %v", err, out)
 		}
 	}
 
 	// copy files/folders into mntDir
-	p = process("cp")
 	for _, pair := range inject.pairs {
 		dir := filepath.Dir(filepath.Join(mntDir, pair.dst))
 		os.MkdirAll(dir, 0775)
-		cmd = exec.Command(p, "-fr", pair.src, mntDir+"/"+pair.dst)
-		result, err = cmd.CombinedOutput()
+		out, err = processWrapper("cp", "-fr", pair.src, mntDir+"/"+pair.dst)
 		if err != nil {
-			return "", fmt.Errorf("%v\n%v", string(result[:]), err)
+			return "", fmt.Errorf("%v: %v", err, out)
 		}
 	}
 
@@ -207,9 +198,7 @@ func (inject *injectData) run() (string, error) {
 func vmInjectCleanup(mntDir, nbdPath string) {
 	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
 
-	p := process("umount")
-	cmd := exec.Command(p, mntDir)
-	err := cmd.Run()
+	_, err := processWrapper("umount", mntDir)
 	if err != nil {
 		log.Error("injectCleanup: %v", err)
 	}
@@ -220,9 +209,7 @@ func vmInjectCleanup(mntDir, nbdPath string) {
 		log.Warn("minimega was unable to disconnect %v", nbdPath)
 	}
 
-	p = process("rm")
-	cmd = exec.Command(p, "-r", mntDir)
-	err = cmd.Run()
+	_, err = processWrapper("rm", "-r", mntDir)
 	if err != nil {
 		log.Error("rm mount dir: %v", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -122,6 +123,32 @@ func cliCheckExternal(c *minicli.Command) *minicli.Response {
 	}
 
 	return resp
+}
+
+// processWrapper executes the given arg list and returns a combined
+// stdout/stderr and any errors. processWrapper blocks until the process exits.
+// Users that need runtime control of processes should use os/exec directly.
+func processWrapper(args ...string) (string, error) {
+	a := append([]string{}, args...)
+	if len(a) == 0 {
+		return "", fmt.Errorf("empty argument list")
+	}
+	p := process(a[0])
+	if p == "" {
+		return "", fmt.Errorf("cannot find process %v", args[0])
+	}
+
+	a[0] = p
+	var ea []string
+	if len(a) > 1 {
+		ea = a[1:]
+	}
+
+	start := time.Now()
+	out, err := exec.Command(p, ea...).CombinedOutput()
+	stop := time.Now()
+	log.Debug("cmd %v completed in %v", p, stop.Sub(start))
+	return string(out), err
 }
 
 func process(p string) string {

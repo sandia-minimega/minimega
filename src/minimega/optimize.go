@@ -11,7 +11,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"os/exec"
 	"ranges"
 	"runtime"
 	"sort"
@@ -400,16 +399,9 @@ func (vm *KvmVM) CheckAffinity() {
 func (vm *KvmVM) AffinitySet(cpu string) error {
 	log.Debugln("affinitySet")
 
-	p := process("taskset")
-	args := []string{p, "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.pid)}
-	cmd := exec.Command(args[0], args[1:]...)
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-	err := cmd.Run()
+	out, err := processWrapper("taskset", "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.pid))
 	if err != nil {
-		return fmt.Errorf("%v : stdout: %v, stderr: %v", err, sOut.String(), sErr.String())
+		return fmt.Errorf("%v: %v", err, out)
 	}
 	return nil
 }
@@ -417,16 +409,9 @@ func (vm *KvmVM) AffinitySet(cpu string) error {
 func (vm *KvmVM) AffinityUnset() error {
 	log.Debugln("affinityUnset")
 
-	p := process("taskset")
-	args := []string{p, "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.pid)}
-	cmd := exec.Command(args[0], args[1:]...)
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-	err := cmd.Run()
+	out, err := processWrapper("taskset", "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.pid))
 	if err != nil {
-		return fmt.Errorf("%v : stdout: %v, stderr: %v", err, sOut.String(), sErr.String())
+		return fmt.Errorf("%v: %v", err, out)
 	}
 	return nil
 }
