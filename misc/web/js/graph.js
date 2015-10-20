@@ -402,6 +402,7 @@ function setSidebarNode (id) {
             
             toReturn = listMachines(ul, id, [node.uuid]);
             makeTable(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
+            addVNClink(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
             vmAlwaysHighlighted(d3.select(".member-node").node(), true, false);
         }
         
@@ -514,6 +515,7 @@ function setPopupMachine (vm, node) {
         var height = node.getBoundingClientRect()["height"];
 
         makeTable(table, vm);
+	addVNClink(table, vm);
 
         container.style("left", (position.left - 10) + "px");
         container.style("top", (position.top - (height / 2)) + "px");
@@ -523,6 +525,19 @@ function setPopupMachine (vm, node) {
     }
 }
 
+function makeVNClink(vm) {
+    return "<a target=\"_blank\" href=\"" + vncURL(vm) + "\">" + vm.host + ":" + (5900 + vm.id) + "</a>"
+}
+
+function addVNClink(parent, vm) {
+    var newHtml = "";
+    var oldHtml = parent.html();
+    var row = $("<tr></tr>");
+    $("<td></td>").appendTo(row).text("VNC");
+    $("<td></td>").appendTo(row).html(makeVNClink(vm));
+    newHtml += row.get(0).outerHTML;
+    parent.html(newHtml + oldHtml);
+}
 
 // Build the DOM for the table
 function makeTable (parent, data) {
