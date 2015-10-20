@@ -53,7 +53,7 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
 		Patterns: []string{
 			"disk <snapshot,> <src image> [dst image]",
-			"disk <inject,> <image> <options> <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> options <options> <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
 		},
 		Call: wrapSimpleCLI(cliDisk),
