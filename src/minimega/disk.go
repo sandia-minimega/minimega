@@ -53,8 +53,8 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
 		Patterns: []string{
 			"disk <snapshot,> <src image> [dst image]",
-			"disk <inject,> <image> options <options> <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> <options> <files like /path/to/src:/path/to/dst>...", // this should never be used, see implementation below
 		},
 		Call: wrapSimpleCLI(cliDisk),
 	},
@@ -116,13 +116,23 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 	// mount new img
 	p := process("mount")
 	var cmd *exec.Cmd
+
+	var path string
+	if partition == "none" {
+		path = nbdPath
+	} else {
+		path = nbdPath + "p" + partition
+	}
+
 	if len(options) != 0 {
-		args := append([]string{"-w"}, options...)
-		args = append(args, nbdPath+"p"+partition, mntDir)
+		args := append(options, path, mntDir)
 		cmd = exec.Command(p, args...)
 	} else {
-		cmd = exec.Command(p, "-w", nbdPath+"p"+partition, mntDir)
+		cmd = exec.Command(p, "-w", path, mntDir)
 	}
+
+	log.Debug("diskInject cmd: %v", cmd)
+
 	if result, err := cmd.CombinedOutput(); err != nil {
 		// check that ntfs-3g is installed
 		p = process("ntfs-3g")
@@ -134,7 +144,7 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 
 		// mount with ntfs-3g
 		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", nbdPath+"p"+partition, mntDir)
+		cmd = exec.Command(p, "-o", "ntfs-3g", path, mntDir)
 		result, err = cmd.CombinedOutput()
 		if err != nil {
 			log.Error("failed to mount partition")
@@ -257,15 +267,24 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
+		var options string
 		pairs, err := parseInjectPairs(c.ListArgs["files"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			// attempt to pop the first argument as options
+			if len(c.ListArgs["files"]) > 1 {
+				pairs, err = parseInjectPairs(c.ListArgs["files"][1:])
+				if err != nil {
+					resp.Error = err.Error()
+					return resp
+				}
+				options = c.ListArgs["files"][0]
+			} else {
+				resp.Error = err.Error()
+				return resp
+			}
 		}
 
-		option := c.StringArgs["option"]
-
-		if err := diskInject(image, partition, pairs, option); err != nil {
+		if err := diskInject(image, partition, pairs, options); err != nil {
 			resp.Error = err.Error()
 		}
 	} else {
