@@ -46,9 +46,14 @@ Each argument after the image should be a source and destination pair,
 separated by a ':'. If the file paths contain spaces, use double quotes. Optionally,
 you may specify a partition (partition 1 will be used by default):
 
-	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc`,
+	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc
+
+You can optionally specify mount arguments to use with inject. Multiple options should be quoted. For example:
+
+	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
 		Patterns: []string{
 			"disk <snapshot,> <src image> [dst image]",
+			"disk <inject,> <image> <options> <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
 		},
 		Call: wrapSimpleCLI(cliDisk),
@@ -70,7 +75,7 @@ func diskSnapshot(src, dst string) error {
 	return nil
 }
 
-func diskInject(dst, partition string, pairs map[string]string) error {
+func diskInject(dst, partition string, pairs map[string]string, option string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
 		return err
@@ -106,9 +111,18 @@ func diskInject(dst, partition string, pairs map[string]string) error {
 		partition = "1"
 	}
 
+	options := strings.Fields(option)
+
 	// mount new img
 	p := process("mount")
-	cmd := exec.Command(p, "-w", nbdPath+"p"+partition, mntDir)
+	var cmd *exec.Cmd
+	if len(options) != 0 {
+		args := append([]string{"-w"}, options...)
+		args = append(args, nbdPath+"p"+partition, mntDir)
+		cmd = exec.Command(p, args...)
+	} else {
+		cmd = exec.Command(p, "-w", nbdPath+"p"+partition, mntDir)
+	}
 	if result, err := cmd.CombinedOutput(); err != nil {
 		// check that ntfs-3g is installed
 		p = process("ntfs-3g")
@@ -249,7 +263,9 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		if err := diskInject(image, partition, pairs); err != nil {
+		option := c.StringArgs["option"]
+
+		if err := diskInject(image, partition, pairs, option); err != nil {
 			resp.Error = err.Error()
 		}
 	} else {
