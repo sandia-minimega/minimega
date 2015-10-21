@@ -28,8 +28,15 @@ var diskCLIHandlers = []minicli.Handler{
 	{ // disk
 		HelpShort: "manipulate qcow disk images image",
 		HelpLong: `
-Manipulate qcow disk images. Supports creating snapshots of existing images and
-injecting one or more files into an existing image.
+Manipulate qcow disk images. Supports creating new images, snapshots of
+existing images, and injecting one or more files into an existing image.
+
+Example of creating a new disk:
+
+	disk create qcow2 foo.qcow2 100G
+
+The size argument is the size in bytes, or using optional suffixes "k"
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).
 
 Example of taking a snapshot of a disk:
 
@@ -48,6 +55,7 @@ you may specify a partition (partition 1 will be used by default):
 
 	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc`,
 		Patterns: []string{
+			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <src image> [dst image]",
 			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
 		},
@@ -67,6 +75,18 @@ func diskSnapshot(src, dst string) error {
 		return fmt.Errorf("%v\n%v", string(result), err)
 	}
 
+	return nil
+}
+
+func diskCreate(t, i, s string) error {
+	path := filepath.Join(*f_iomBase, i)
+	p := process("qemu-img")
+	cmd := exec.Command(p, "create", "-f", t, path, s)
+	log.Debug("diskCreate cmd: %v", cmd)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Error("diskCreate: %v", string(out))
+		return err
+	}
 	return nil
 }
 
@@ -250,6 +270,19 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 		}
 
 		if err := diskInject(image, partition, pairs); err != nil {
+			resp.Error = err.Error()
+		}
+	} else if c.BoolArgs["create"] {
+		i := c.StringArgs["image"]
+		s := c.StringArgs["size"]
+		var t string
+		if _, ok := c.BoolArgs["qcow2"]; ok {
+			t = "qcow2"
+		} else {
+			t = "raw"
+		}
+
+		if err := diskCreate(t, i, s); err != nil {
 			resp.Error = err.Error()
 		}
 	} else {
