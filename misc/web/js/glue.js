@@ -68,34 +68,18 @@ function loadOrRestoreImage (row, data, displayIndex) {
         lastImages[url].used = true;
     }
 
-    convertImgToBase64URL(url + "&" + new Date().getTime(), (function () {
-        return function (base64) {
+    var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
+
+    d3.text(requestUrl, (function () {
+        return function (error, response) {
             lastImages[url] = {
-                data: base64,
+                data: response,
                 used: true
             };
-            img.attr("src", base64);
-        };
+
+            img.attr("src", response);
+        }
     })());
-}
-
-// TODO: Fix serious performance hit when using this function.
-function convertImgToBase64URL(url, callback, outputFormat){
-    var img = new Image();
-    img.crossOrigin = 'Anonymous';
-
-    img.onload = function(){
-        var canvas = document.createElement('CANVAS'),
-        ctx = canvas.getContext('2d'), dataURL;
-        canvas.height = this.height;
-        canvas.width = this.width;
-        ctx.drawImage(this, 0, 0);
-        dataURL = canvas.toDataURL(outputFormat);
-        callback(dataURL);
-        canvas = null; 
-    };
-
-    img.src = url;
 }
 
 // Stringify columns with object info

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"minicli"
@@ -147,6 +148,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	size := r.URL.Query().Get("size")
 	host := fields[0]
 	id := strings.TrimSuffix(fields[1], ".png")
+	do_encode := r.URL.Query().Get("base64") != ""
 
 	cmdStr := fmt.Sprintf("vm screenshot %s file /dev/null %s", id, size)
 	if host != hostname {
@@ -186,7 +188,12 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if screenshot != nil {
-		w.Write(screenshot)
+		if (do_encode) {
+			base64string := "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
+			w.Write([]byte(base64string))
+		} else {
+			w.Write(screenshot)
+		}
 	} else {
 		http.NotFound(w, r)
 	}
