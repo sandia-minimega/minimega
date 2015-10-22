@@ -64,6 +64,8 @@ type Client struct {
 	IP       []string
 	MAC      []string
 
+	Version string
+
 	Responses     []*Response   // response queue, consumed and cleared by the heartbeat
 	Commands      chan *Command // ordered list of commands to be processed by the client
 	responseLock  sync.Mutex
