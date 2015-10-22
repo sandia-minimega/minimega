@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"version"
 )
 
 // GetCommands returns a copy of the current command list
@@ -162,6 +163,10 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		return
 	}
 	c := handshake.Client
+
+	if c.Version != version.Revision {
+		log.Warn("mismatched miniccc version: %v", c.Version)
+	}
 
 	c.conn = conn
 	c.Checkin = time.Now()
