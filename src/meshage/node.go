@@ -79,6 +79,7 @@ type Node struct {
 	lastMSA          time.Time
 	updateNetwork    bool
 	Snoop            func(m *Message)
+	version          string
 }
 
 func init() {
@@ -88,7 +89,7 @@ func init() {
 // NewNode returns a new node, receiver channel, and error channel with a given name
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
-func NewNode(name string, namespace string, degree uint, port int) (*Node, chan *Message) {
+func NewNode(name string, namespace string, degree uint, port int, version string) (*Node, chan *Message) {
 	log.Debug("NewNode: %v %v %v", name, degree, port)
 	n := &Node{
 		name:             name,
@@ -105,6 +106,7 @@ func NewNode(name string, namespace string, degree uint, port int) (*Node, chan 
 		errors:           make(chan error),
 		messagePump:      make(chan *Message, RECEIVE_BUFFER),
 		sequences:        make(map[string]uint64),
+		version:          version,
 	}
 
 	go n.connectionListener()
@@ -193,7 +195,7 @@ func (n *Node) newConnection(conn net.Conn) {
 	}
 
 	// the handshake involves the following:
-	// 1.  We send our name and our solicitation status
+	// 1.  We send our name, our solicitation status, and our version
 	// 2a. If the connection is solicited but we're all full, the remote node simply hangs up
 	// 2b. If the connection is unsolicited or solicited and we are still soliciting connections, the remote node responds with its name
 	// 3.  The connection is valid, add it to our client list and broadcast a MSA announcing the new connection.
@@ -212,6 +214,13 @@ func (n *Node) newConnection(conn net.Conn) {
 		return
 	}
 
+	err = c.enc.Encode(n.version)
+	if err != nil {
+		log.Error("newConnection encode version: %v: %v", n.name, err)
+		c.conn.Close()
+		return
+	}
+
 	var resp string
 	err = c.dec.Decode(&resp)
 	if err != nil {
@@ -220,6 +229,19 @@ func (n *Node) newConnection(conn net.Conn) {
 		}
 		c.conn.Close()
 		return
+	}
+
+	var remoteVersion string
+	err = c.dec.Decode(&remoteVersion)
+	if err != nil {
+		if err != io.EOF {
+			log.Error("newConnection decode version: %v: %v", n.name, err)
+		}
+		c.conn.Close()
+		return
+	}
+	if remoteVersion != n.version {
+		log.Warn("remote node version mismatch on host %v: %v", resp, remoteVersion)
 	}
 
 	c.name = resp
@@ -371,6 +393,19 @@ func (n *Node) dial(host string, solicited bool) error {
 		return fmt.Errorf("dial %v: %v", host, err)
 	}
 
+	var remoteVersion string
+	err = c.dec.Decode(&remoteVersion)
+	if err != nil {
+		if solicited {
+			log.Error("dial %v: %v", host, err)
+		}
+		conn.Close()
+		return fmt.Errorf("dial %v: %v", host, err)
+	}
+	if remoteVersion != n.version {
+		log.Warn("remote node version mismatch on host %v: %v", host, remoteVersion)
+	}
+
 	// are we the remote host?
 	if remoteHost == n.name {
 		conn.Close()
@@ -392,6 +427,15 @@ func (n *Node) dial(host string, solicited bool) error {
 	}
 
 	err = c.enc.Encode(n.name)
+	if err != nil {
+		if solicited {
+			log.Error("dial %v: %v", host, err)
+		}
+		conn.Close()
+		return fmt.Errorf("dial %v: %v", host, err)
+	}
+
+	err = c.enc.Encode(n.version)
 	if err != nil {
 		if solicited {
 			log.Error("dial %v: %v", host, err)
