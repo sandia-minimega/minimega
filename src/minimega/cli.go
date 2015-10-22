@@ -43,6 +43,7 @@ func cliSetup() {
 	registerHandlers("capture", captureCLIHandlers)
 	registerHandlers("cc", ccCLIHandlers)
 	registerHandlers("deploy", deployCLIHandlers)
+	registerHandlers("disk", diskCLIHandlers)
 	registerHandlers("dnsmasq", dnsmasqCLIHandlers)
 	registerHandlers("dot", dotCLIHandlers)
 	registerHandlers("external", externalCLIHandlers)
@@ -54,7 +55,6 @@ func cliSetup() {
 	registerHandlers("misc", miscCLIHandlers)
 	registerHandlers("nuke", nukeCLIHandlers)
 	registerHandlers("optimize", optimizeCLIHandlers)
-	registerHandlers("qcow", qcowCLIHandlers)
 	registerHandlers("shell", shellCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
@@ -113,7 +113,6 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	cmd.Record = record
 
 	cmdLock.Lock()
-	defer cmdLock.Unlock()
 
 	var wg sync.WaitGroup
 
@@ -150,10 +149,13 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 		}(in)
 	}
 
-	// Wait until everything has been read before closing out
+	// Wait until everything has been read before closing the chan and
+	// releasing the lock.
 	go func() {
+		defer cmdLock.Unlock()
+		defer close(out)
+
 		wg.Wait()
-		close(out)
 	}()
 
 	return out

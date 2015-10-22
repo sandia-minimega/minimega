@@ -160,7 +160,7 @@ function updateTables () {
                 { "sTitle": "State", "mDataProp": "state" },
                 { "sTitle": "Tags", "mDataProp": "tags" },
                 { "sTitle": "Type", "mDataProp": "type" },
-                { "sTitle": "Virtual CPUs", "mDataProp": "vcpus" }
+                { "sTitle": "VCPUs", "mDataProp": "vcpus" }
             ],
             "fnRowCallback": flattenObjectValues
         });
