@@ -221,8 +221,8 @@ func (n *Node) newConnection(conn net.Conn) {
 		return
 	}
 
-	var resp string
-	err = c.dec.Decode(&resp)
+	var remoteHost string
+	err = c.dec.Decode(&remoteHost)
 	if err != nil {
 		if err != io.EOF {
 			log.Error("newConnection decode name: %v: %v", n.name, err)
@@ -241,17 +241,17 @@ func (n *Node) newConnection(conn net.Conn) {
 		return
 	}
 	if remoteVersion != n.version {
-		log.Warn("remote node version mismatch on host %v: %v", resp, remoteVersion)
+		log.Warn("remote node version mismatch on host %v: %v", remoteHost, remoteVersion)
 	}
 
-	c.name = resp
+	c.name = remoteHost
 	log.Debug("handshake from: %v", c.name)
 
 	n.clientLock.Lock()
-	n.clients[resp] = c
+	n.clients[remoteHost] = c
 	n.clientLock.Unlock()
 
-	go n.clientHandler(resp)
+	go n.clientHandler(remoteHost)
 }
 
 // broadcastListener listens for broadcast connection solicitations and connects to
