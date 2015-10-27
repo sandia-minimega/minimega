@@ -1,0 +1,19 @@
+vm config net 0 1 2
+# Should be VLAN 3
+vm config net A
+vlans
+vm config net
+# Should be VLAN 4
+vm config net B
+vlans
+vm config net
+vm config net A
+vlans
+vm config net
+namespace foo
+# Should be VLAN 5
+vm config net A
+vlans
+vm config net
+clear namespace
+clear vlans

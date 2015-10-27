@@ -68,6 +68,7 @@ func cliSetup() {
 	registerHandlers("optimize", optimizeCLIHandlers)
 	registerHandlers("qcow", qcowCLIHandlers)
 	registerHandlers("shell", shellCLIHandlers)
+	registerHandlers("vlans", vlansCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
 	registerHandlers("vyatta", vyattaCLIHandlers)

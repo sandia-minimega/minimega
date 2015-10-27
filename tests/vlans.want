@@ -1,0 +1,33 @@
+## vm config net 0 1 2
+## # Should be VLAN 3
+## vm config net A
+## vlans
+Alias | VLAN
+.A    | 3
+## vm config net
+[mega_bridge,3]
+## # Should be VLAN 4
+## vm config net B
+## vlans
+Alias | VLAN
+.A    | 3
+.B    | 4
+## vm config net
+[mega_bridge,4]
+## vm config net A
+## vlans
+Alias | VLAN
+.A    | 3
+.B    | 4
+## vm config net
+[mega_bridge,3]
+## namespace foo
+## # Should be VLAN 5
+## vm config net A
+## vlans
+Alias | VLAN
+foo.A | 5
+## vm config net
+[mega_bridge,5]
+## clear namespace
+## clear vlans

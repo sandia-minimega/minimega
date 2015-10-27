@@ -563,6 +563,20 @@ To specify a specific driver, such as i82559c:
 
 	vm config net 100,i82559c
 
+If you prefer, you can also use aliases for VLANs:
+
+	vm config net DMZ CORE
+
+These aliases will be allocated from the pool of available VLANs and is
+namespace-aware (i.e. 'DMZ' in namespace 'foo' will be a different VLAN than
+'DMZ' in namespace 'foo'). Internally, this is implemented by concatenating the
+namespace name with the VLAN alias (e.g. 'DMZ' in namespace 'foo' becomes
+'foo.DMZ'). If you wish to connect VLANs in different namespaces, you may use
+abuse this implementation detail:
+
+	namespace bar
+	vm config net foo.DMZ
+
 Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",

@@ -34,7 +34,6 @@ Modify settings of the currently active namespace.`,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
-			"nsmod <add-vlans,> <vlans>",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
@@ -257,8 +256,6 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 		for _, host := range hosts {
 			delete(ns.Hosts, host)
 		}
-	} else if c.BoolArgs["add-vlans"] {
-		// TODO
 	} else {
 		// oops...
 	}
@@ -277,6 +274,9 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 			if len(ns.VMs()) > 0 {
 				log.Warn("deleting VMs when there are still VMs running")
 			}
+
+			// Free up any VLANs associated with the namespace
+			allocatedVLANs.Delete(namespace + VLANAliasSep)
 
 			// If we're deleting the currently active namespace, we should get
 			// out of that namespace

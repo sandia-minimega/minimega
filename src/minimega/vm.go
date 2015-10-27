@@ -573,7 +573,7 @@ func vmNotKVM(idOrName string) error {
 //
 //	bridge,vlan,mac,driver
 // If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(spec string) (res NetConfig, err error) {
+func processVMNet(spec string) (NetConfig, error) {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(spec, ",")
 
@@ -585,7 +585,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		if isMac(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
-		} else if _, err := strconv.Atoi(f[0]); err == nil {
+		} else if isNetworkDriver(f[1]) {
 			// vlan, driver
 			v, d = f[0], f[1]
 		} else {
@@ -606,8 +606,11 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	case 4:
 		b, v, m, d = f[0], f[1], f[2], f[3]
 	default:
-		err = errors.New("malformed netspec")
-		return
+		return NetConfig{}, errors.New("malformed netspec")
+	}
+
+	if d != "" && !isNetworkDriver(d) {
+		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
 	}
 
 	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
@@ -615,13 +618,27 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	// VLAN ID, with optional bridge
 	vlan, err := strconv.Atoi(v) // the vlan id
 	if err != nil {
-		err = errors.New("malformed netspec, vlan must be an integer")
-		return
+		// Probably trying to use a VLAN alias... get or create a VLAN for this
+		// alias in the current namespace.
+		if !strings.Contains(v, VLANAliasSep) {
+			v = namespace + VLANAliasSep + v
+		}
+
+		vlan = allocatedVLANs.GetOrAllocate(v)
+	} else {
+		alias := allocatedVLANs.GetAlias(vlan)
+		if alias != "" && alias != BlacklistedVLAN {
+			log.Warn("VLAN %d has alias %v", vlan, alias)
+		}
+
+		// Always blacklist the VLAN, even if it was previously allocated since
+		// we can't assume that it's safe to reclaim after we delete the
+		// namespace it was associated with.
+		allocatedVLANs.Blacklist(vlan)
 	}
 
 	if m != "" && !isMac(m) {
-		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
+		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
 	}
 
 	// warn on valid but not allocated macs
@@ -636,14 +653,12 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	res = NetConfig{
+	return NetConfig{
 		VLAN:   vlan,
 		Bridge: b,
 		MAC:    strings.ToLower(m),
 		Driver: d,
-	}
-
-	return
+	}, nil
 }
 
 // Get the VM info from all hosts optionally applying column/row filters.
