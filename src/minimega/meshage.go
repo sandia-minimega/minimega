@@ -15,6 +15,7 @@ import (
 	"ranges"
 	"reflect"
 	"time"
+	"version"
 )
 
 const (
@@ -46,7 +47,7 @@ func init() {
 }
 
 func meshageInit(host string, namespace string, degree uint, port int) {
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port)
+	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
