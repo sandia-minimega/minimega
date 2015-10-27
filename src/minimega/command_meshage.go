@@ -222,7 +222,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 			strconv.Itoa(nodes),
 			strconv.FormatUint(uint64(degree), 10),
 			strconv.Itoa(len(mesh[hostname])),
-			*f_namespace,
+			*f_nameshpace,
 			strconv.Itoa(*f_port),
 		},
 	}
