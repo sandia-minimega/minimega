@@ -173,6 +173,8 @@ func unescapeString(input []string) string {
 // after time t. If a timeout occurs, cmdTimeout will kill the process.
 func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	log.Debug("cmdTimeout: %v", c)
+
+	start := time.Now()
 	err := c.Start()
 	if err != nil {
 		return fmt.Errorf("cmd start: %v", err)
@@ -191,6 +193,7 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 		}
 		return <-done
 	case err = <-done:
+		log.Debug("cmd %v completed in %v", c, time.Now().Sub(start))
 		return err
 	}
 }
@@ -336,23 +339,6 @@ func writeOrDie(fpath, data string) {
 		log.Errorln(err)
 		teardown()
 	}
-}
-
-// cmdWrapper wraps exec'ing a command. Returns the stdout, stderr, and the
-// error run running the command (which may indicate that the command had a
-// non-zero exit code).
-func cmdWrapper(first string, arg ...string) (string, string, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	cmd := exec.Command(first, arg...)
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
-
-	log.Debug("running cmd: %v", cmd)
-
-	err := cmd.Run()
-	return sOut.String(), sErr.String(), err
 }
 
 // PermStrings creates a random permutation of the source slice using the

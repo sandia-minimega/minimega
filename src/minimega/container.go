@@ -337,7 +337,7 @@ func containerShim() {
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
 	if vmHostname != "" {
-		_, err := exec.Command(process("hostname"), vmHostname).Output()
+		_, err := processWrapper("hostname", vmHostname)
 		if err != nil {
 			log.Fatal("set hostname: %v", err)
 		}
@@ -1089,24 +1089,19 @@ func (vm *ContainerVM) overlayMount() error {
 	}
 
 	// create the overlay mountpoint
-	cmd := &exec.Cmd{
-		Path: process("mount"),
-		Args: []string{
-			process("mount"),
-			"-t",
-			"overlay",
-			fmt.Sprintf("megamount_%v", vm.ID),
-			"-o",
-			fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
-			vm.effectivePath,
-		},
-		Env: nil,
-		Dir: "",
+	args := []string{
+		"mount",
+		"-t",
+		"overlay",
+		fmt.Sprintf("megamount_%v", vm.ID),
+		"-o",
+		fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
+		vm.effectivePath,
 	}
-	log.Debug("mounting overlay: %v", cmd)
-	output, err := cmd.CombinedOutput()
+	log.Debug("mounting overlay: %v", args)
+	out, err := processWrapper(args...)
 	if err != nil {
-		log.Error("overlay mount: %v %v", err, string(output))
+		log.Error("overlay mount: %v %v", err, out)
 		return err
 	}
 	return nil
@@ -1436,19 +1431,8 @@ func containerNuke() {
 			for _, pid := range pids {
 				log.Debug("found pid: %v", pid)
 
-				p := process("kill")
-				cmd := &exec.Cmd{
-					Path: p,
-					Args: []string{
-						p,
-						"-9",
-						pid,
-					},
-					Env: nil,
-					Dir: "",
-				}
 				log.Infoln("killing process:", pid)
-				out, err := cmd.CombinedOutput()
+				out, err := processWrapper("kill", "-9", pid)
 				if err != nil {
 					log.Error("%v: %v", err, out)
 				}

@@ -6,12 +6,10 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -135,25 +133,16 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-		var sOut bytes.Buffer
-		var sErr bytes.Buffer
 
-		p := process("kill")
-		cmd := &exec.Cmd{
-			Path: p,
-			Args: []string{
-				p,
-				t,
-			},
-			Env:    nil,
-			Dir:    "",
-			Stdout: &sOut,
-			Stderr: &sErr,
+		args := []string{
+			"kill",
+			t,
 		}
 		log.Infoln("killing process:", t)
-		err = cmd.Run()
+
+		out, err := processWrapper(args...)
 		if err != nil {
-			log.Error("%v: %v", err, sErr.String())
+			log.Error("%v: %v", err, out)
 		}
 	}
 	return nil
