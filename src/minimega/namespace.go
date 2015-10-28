@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+const (
+	SchedulerRunning   = "running"
+	SchedulerCompleted = "completed"
+)
+
 var namespaceCLIHandlers = []minicli.Handler{
 	{ // namespace
 		HelpShort: "control namespace environments",
@@ -240,11 +245,9 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 		// Test that the host is actually in the mesh. If it's not, we could
 		// try to mesh dial it... Returning an error is simpler, for now.
 		for _, host := range hosts {
-			if host != hostname {
-				if !peers[host] {
-					resp.Error = fmt.Sprintf("unknown host: `%v`", host)
-					return resp
-				}
+			if host != hostname && !peers[host] {
+				resp.Error = fmt.Sprintf("unknown host: `%v`", host)
+				return resp
 			}
 		}
 
@@ -273,6 +276,16 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 		} else {
 			if len(ns.VMs()) > 0 {
 				log.Warn("deleting VMs when there are still VMs running")
+			}
+
+			for _, stats := range ns.scheduleStats {
+				// TODO: We could kill the scheduler -- that wouldn't be too
+				// hard to do (add a kill channel and close it here). Easier to
+				// make the user wait, for now.
+				if stats.state != SchedulerCompleted {
+					resp.Error = "cannot kill namespace -- scheduler still running"
+					return resp
+				}
 			}
 
 			// Free up any VLANs associated with the namespace
@@ -356,7 +369,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	ns.queuedVMs = nil
 
 	stats.start = time.Now()
-	stats.state = "running"
+	stats.state = SchedulerRunning
 
 	ns.scheduleStats = append(ns.scheduleStats, stats)
 
@@ -395,7 +408,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 		}
 
 		stats.end = time.Now()
-		stats.state = "completed"
+		stats.state = SchedulerCompleted
 	}()
 }
 
