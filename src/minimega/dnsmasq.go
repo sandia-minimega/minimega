@@ -145,22 +145,9 @@ func dnsmasqKill(id int) error {
 		return fmt.Errorf("invalid id")
 	}
 
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("kill")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			fmt.Sprintf("%v", pid),
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
 	log.Infoln("killing dnsmasq server:", pid)
-	err := cmd.Run()
+
+	_, err := processWrapper("kill", fmt.Sprintf("%v", pid))
 	if err != nil {
 		return err
 	}
