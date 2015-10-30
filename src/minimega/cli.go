@@ -231,6 +231,8 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 
 // local command line interface, wrapping readline
 func cliLocal() {
+	goreadline.FilenameCompleter = iomCompleter
+
 	for {
 		prompt := "minimega$ "
 		if namespace != "" {
