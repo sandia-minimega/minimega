@@ -53,3 +53,5 @@ This will transfer the file foo.qcow2 to the local node, and block until the fil
 	minimega$ vm config disk
 	[/tmp/minimega/files/foo.qcow2]
 	minimega$ 
+
+Additionally, `file:` can by tab completed across the mesh in the same way as bash.
