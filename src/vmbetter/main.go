@@ -33,6 +33,7 @@ var (
 	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
 	f_iso           = flag.Bool("iso", false, "generate an ISO")
 	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
+	f_rootfs        = flag.String("rootfs", "", "path for generating a simple rootfs")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -156,6 +157,8 @@ func main() {
 			err = Buildqcow2(buildPath, config)
 		} else if *f_iso {
 			err = BuildISO(buildPath, config)
+		} else if *f_rootfs {
+			err = BuildRootFS(buildPath, config)
 		} else {
 			err = BuildTargets(buildPath, config)
 		}
