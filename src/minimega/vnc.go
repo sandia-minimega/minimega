@@ -242,13 +242,12 @@ func (v *vncKBPlayback) playFile() {
 				// Our file is in the same directory as the parent
 				file = filepath.Join(filepath.Dir(v.file.Name()), file)
 			}
-			log.Warn("loading file %v", file)
 			// Save the file we were working from
 			oldfile := v.file
 			// Load the new file
 			v.file, err = os.Open(file)
 			if err != nil {
-				log.Error("oops: %v", err)
+				log.Error("Couldn't load VNC playback file %v: %v", file, err)
 				v.err = err
 			} else {
 				r := &vncKBPlayback{v.vncClient}
