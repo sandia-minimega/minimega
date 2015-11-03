@@ -23,6 +23,36 @@ var (
 	initrdName string
 )
 
+// BuildRootFS generates simple rootfs a from the stage 1 directory.
+func BuildRootFS(buildPath string, c vmconfig.Config) error {
+	targetName := strings.Split(filepath.Base(c.Path), ".")[0] + "_rootfs"
+	log.Debugln("using target name:", targetName)
+
+	err := os.Mkdir(targetName, 0666)
+	if err != nil {
+		return err
+	}
+
+	p := process("cp")
+	cmd := exec.Command(p, "-r", "-v", buildPath+"/.", targetName)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stderr, log.ERROR, "cp")
+
+	err = cmd.Run()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // BuildISO generates a bootable ISO from the stage 1 directory.
 func BuildISO(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
