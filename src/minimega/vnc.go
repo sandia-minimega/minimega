@@ -12,6 +12,7 @@ import (
 	"io"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -202,16 +203,18 @@ func (v *vncFBRecord) Run() {
 	}
 }
 
-func (v *vncKBPlayback) Run() {
-	err := (&vnc.SetEncodings{
-		Encodings: []int32{vnc.CursorPseudoEncoding},
-	}).Write(v.Conn)
-
+func ParseLoadFileEvent(arg string) (string, error) {
+	var filename string
+	format := "LoadFile,%s"
+	_, err := fmt.Sscanf(arg, format, &filename)
 	if err != nil {
-		v.err = fmt.Errorf("unable to set encodings: %v", err)
-		return
+		return "", err
 	}
 
+	return filename, nil
+}
+
+func (v *vncKBPlayback) playFile() {
 	scanner := bufio.NewScanner(v.file)
 
 	for scanner.Scan() && v.err == nil {
@@ -234,10 +237,42 @@ func (v *vncKBPlayback) Run() {
 			v.err = res.Write(v.Conn)
 		} else if res, err := vnc.ParsePointerEvent(s[1]); err == nil {
 			v.err = res.Write(v.Conn)
+		} else if file, err := ParseLoadFileEvent(s[1]); err == nil {
+			if !filepath.IsAbs(file) {
+				// Our file is in the same directory as the parent
+				file = filepath.Join(filepath.Dir(v.file.Name()), file)
+			}
+			log.Warn("loading file %v", file)
+			// Save the file we were working from
+			oldfile := v.file
+			// Load the new file
+			v.file, err = os.Open(file)
+			if err != nil {
+				log.Error("oops: %v", err)
+				v.err = err
+			} else {
+				r := &vncKBPlayback{v.vncClient}
+				// We will wait until this file has played fully.
+				r.playFile()
+			}
+			v.file = oldfile
 		} else {
 			log.Error("invalid vnc message: `%s`", s[1])
 		}
 	}
+}
+
+func (v *vncKBPlayback) Run() {
+	err := (&vnc.SetEncodings{
+		Encodings: []int32{vnc.CursorPseudoEncoding},
+	}).Write(v.Conn)
+
+	if err != nil {
+		v.err = fmt.Errorf("unable to set encodings: %v", err)
+		return
+	}
+
+	v.playFile()
 
 	// Stop ourselves
 	go v.Stop()
