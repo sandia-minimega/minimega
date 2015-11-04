@@ -108,7 +108,7 @@ func renderDoc(w io.Writer, docFile string) error {
 }
 
 func parse(name string, mode present.ParseMode) (*present.Doc, error) {
-	f, err := os.Open(*f_root + name)
+	f, err := os.Open(filepath.Join(*f_root, name))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func parse(name string, mode present.ParseMode) (*present.Doc, error) {
 // If the given path is not a directory, it returns (isDir == false, err == nil)
 // and writes nothing to w.
 func dirList(w io.Writer, name string) (isDir bool, err error) {
-	f, err := os.Open(*f_root + name)
+	f, err := os.Open(filepath.Join(*f_root, name))
 	if err != nil {
 		return false, err
 	}
@@ -150,7 +150,7 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 		}
 		// If there's an index.html, send that back and bail out
 		if fi.Name() == "index.html" {
-			ih, err := os.Open(*f_root + e.Path)
+			ih, err := os.Open(filepath.Join(*f_root, e.Path))
 			if err != nil {
 				return false, err
 			}
