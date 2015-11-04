@@ -19,16 +19,16 @@ import (
 )
 
 type dnsmasqServer struct {
-	Addr     string
-	MinRange string
-	MaxRange string
-	Path     string
-	Hostdir string
-	DHCPdir string
+	Addr        string
+	MinRange    string
+	MaxRange    string
+	Path        string
+	Hostdir     string
+	DHCPdir     string
 	DHCPoptsdir string
-	DHCPhosts map[string]string	// map MAC to IP address
-	Hostnames	map[string]string	// map IP to hostname
-	DHCPopts	[]string	// DHCP options
+	DHCPhosts   map[string]string // map MAC to IP address
+	Hostnames   map[string]string // map IP to hostname
+	DHCPopts    []string          // DHCP options
 }
 
 var (
@@ -78,7 +78,7 @@ to the file.`,
 	},
 	{
 		HelpShort: "configure dhcp/dns options",
-		HelpLong: ``,
+		HelpLong:  ``,
 		Patterns: []string{
 			"dnsmasq configure <ID> <ip,>",
 			"dnsmasq configure <ID> <ip,> <mac address> <ip>",
@@ -96,53 +96,53 @@ func init() {
 }
 
 func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
-			// print info about the mapping
-			resp.Header = []string{"ID", "MAC", "IP"}
-			resp.Tabular = [][]string{}
-			if c.StringArgs["ID"] == Wildcard {
-				for id, v := range dnsmasqServers {
-					for mac, ip := range v.DHCPhosts {
-						resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), mac, ip })
-					}
-				}
-			} else {
-				id, err := strconv.Atoi(c.StringArgs["ID"])
-				if err != nil {
-					resp.Error = "Invalid dnsmasq ID"
-				}
-				if _, ok := dnsmasqServers[id]; ok {
-					for mac, ip := range dnsmasqServers[id].DHCPhosts {
-						resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), mac, ip })
-					}
-				} else {
-					resp.Error = "Invalid dnsmasq ID"
-				}
+	// print info about the mapping
+	resp.Header = []string{"ID", "MAC", "IP"}
+	resp.Tabular = [][]string{}
+	if c.StringArgs["ID"] == Wildcard {
+		for id, v := range dnsmasqServers {
+			for mac, ip := range v.DHCPhosts {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), mac, ip})
 			}
+		}
+	} else {
+		id, err := strconv.Atoi(c.StringArgs["ID"])
+		if err != nil {
+			resp.Error = "Invalid dnsmasq ID"
+		}
+		if _, ok := dnsmasqServers[id]; ok {
+			for mac, ip := range dnsmasqServers[id].DHCPhosts {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), mac, ip})
+			}
+		} else {
+			resp.Error = "Invalid dnsmasq ID"
+		}
+	}
 }
 
 func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
-			// print info
-			resp.Header = []string{"ID", "IP", "Hostname"}
-			resp.Tabular = [][]string{}
-			if c.StringArgs["ID"] == Wildcard {
-				for id, v := range dnsmasqServers {
-					for ip, host := range v.Hostnames {
-						resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), ip, host })
-					}
-				}
-			} else {
-				id, err := strconv.Atoi(c.StringArgs["ID"])
-				if err != nil {
-					resp.Error = "Invalid dnsmasq ID"
-				}
-				if _, ok := dnsmasqServers[id]; ok {
-					for ip, host := range dnsmasqServers[id].Hostnames {
-						resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), ip, host })
-					}
-				} else {
-					resp.Error = "Invalid dnsmasq ID"
-				}
+	// print info
+	resp.Header = []string{"ID", "IP", "Hostname"}
+	resp.Tabular = [][]string{}
+	if c.StringArgs["ID"] == Wildcard {
+		for id, v := range dnsmasqServers {
+			for ip, host := range v.Hostnames {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), ip, host})
 			}
+		}
+	} else {
+		id, err := strconv.Atoi(c.StringArgs["ID"])
+		if err != nil {
+			resp.Error = "Invalid dnsmasq ID"
+		}
+		if _, ok := dnsmasqServers[id]; ok {
+			for ip, host := range dnsmasqServers[id].Hostnames {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), ip, host})
+			}
+		} else {
+			resp.Error = "Invalid dnsmasq ID"
+		}
+	}
 }
 
 func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
@@ -151,7 +151,7 @@ func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
 			for _, ent := range v.DHCPopts {
-				resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), ent })
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), ent})
 			}
 		}
 	} else {
@@ -161,14 +161,13 @@ func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
 		}
 		if _, ok := dnsmasqServers[id]; ok {
 			for _, ent := range dnsmasqServers[id].DHCPopts {
-				resp.Tabular = append(resp.Tabular, []string{ strconv.Itoa(id), ent })
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), ent})
 			}
 		} else {
 			resp.Error = "Invalid dnsmasq ID"
 		}
 	}
 }
-
 
 func (d *dnsmasqServer) writeHostFile() {
 	// Generate the new file contents
@@ -397,11 +396,17 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 	d.DHCPdir = filepath.Join(path, "dhcpdir")
 	d.DHCPoptsdir = filepath.Join(path, "dhcpoptsdir")
 	err = os.MkdirAll(d.Hostdir, 0755)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	err = os.MkdirAll(d.DHCPdir, 0755)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	err = os.MkdirAll(d.DHCPoptsdir, 0755)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	p := process("dnsmasq")
 	var sOut bytes.Buffer
@@ -467,6 +472,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 
 func dnsmasqPath() (string, error) {
 	path, err := ioutil.TempDir(*f_base, "dnsmasq_")
+	os.Chmod(path, 0755)
 	log.Infoln("created dnsmasq server path: ", path)
 	return path, err
 }
