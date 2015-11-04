@@ -718,8 +718,8 @@ func (vm *ContainerVM) launch(ack chan int) {
 	vm.setState(VM_BUILDING)
 
 	// write the config for this vm
-	writeOrDie(vm.instancePath+"config", vm.Config().String())
-	writeOrDie(vm.instancePath+"name", vm.Name)
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	var waitChan = make(chan int)
 
@@ -960,7 +960,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 				taps = append(taps, net.Tap)
 			}
 
-			err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+			err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 			if err != nil {
 				log.Error("write instance taps file: %v", err)
 				vm.setState(VM_ERROR)

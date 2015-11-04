@@ -508,7 +508,7 @@ func (vm *BaseVM) setState(s VMState) {
 	defer vm.lock.Unlock()
 
 	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
+	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}

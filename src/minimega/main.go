@@ -8,14 +8,15 @@ import (
 	"flag"
 	"fmt"
 	"goreadline"
-	"io/ioutil"
 	"minicli"
 	"miniclient"
 	log "minilog"
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"version"
@@ -77,9 +78,6 @@ func main() {
 
 	flag.Usage = usage
 	flag.Parse()
-	if !strings.HasSuffix(*f_base, "/") {
-		*f_base += "/"
-	}
 
 	logSetup()
 	cliSetup()
@@ -95,11 +93,7 @@ func main() {
 
 	// rebase f_iomBase if f_base changed but iomBase did not
 	if *f_base != BASE_PATH && *f_iomBase == IOM_PATH {
-		*f_iomBase = *f_base + "files"
-	}
-
-	if !strings.HasSuffix(*f_iomBase, "/") {
-		*f_iomBase += "/"
+		*f_iomBase = filepath.Join(*f_base, "files")
 	}
 
 	if *f_version {
@@ -154,13 +148,13 @@ func main() {
 	}
 
 	// check for a running instance of minimega
-	_, err = os.Stat(*f_base + "minimega")
+	_, err = os.Stat(filepath.Join(*f_base, "minimega"))
 	if err == nil {
 		if !*f_force {
 			log.Fatalln("minimega appears to already be running, override with -force")
 		}
 		log.Warn("minimega may already be running, proceed with caution")
-		err = os.Remove(*f_base + "minimega")
+		err = os.Remove(filepath.Join(*f_base, "minimega"))
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -196,12 +190,10 @@ func main() {
 	if err != nil {
 		log.Fatal("mkdir base path: %v", err)
 	}
+
 	pid := os.Getpid()
-	err = ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
-	if err != nil {
-		log.Error("write minimega pid: %v", err)
-		teardown()
-	}
+	writeOrDie(filepath.Join(*f_base, "minimega.pid"), strconv.Itoa(pid))
+
 	go commandSocketStart()
 
 	// create a node for meshage
@@ -257,7 +249,7 @@ func teardown() {
 	if err != nil {
 		log.Debugln(err)
 	}
-	err = os.Remove(*f_base + "minimega.pid")
+	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
 	if err != nil {
 		log.Fatalln(err)
 	}

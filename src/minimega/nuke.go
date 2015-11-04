@@ -87,7 +87,7 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 // bridges that existed before minimega was launched
 func nukeBridgeNames(preExist bool) []string {
 	var ret []string
-	b, err := os.Open(*f_base + "bridges")
+	b, err := os.Open(filepath.Join(*f_base, "bridges"))
 	if err != nil {
 		log.Errorln(err)
 		return nil
