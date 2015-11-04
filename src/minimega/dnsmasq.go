@@ -78,7 +78,33 @@ to the file.`,
 	},
 	{
 		HelpShort: "configure dhcp/dns options",
-		HelpLong:  ``,
+		HelpLong: `
+Configuration options for running dnsmasq instances. Define a static IP allocation, specify a hostname->IP mapping for DNS, or set DHCP options.
+
+To list all existing static IP allocations on the first running dnsmasq server, do the following:
+
+	dnsmasq configure 0 ip
+
+To set up a static IP allocation for a VM with the MAC address 00:11:22:33:44:55:
+
+	dnsmasq configure 0 ip 00:11:22:33:44:55 172.17.0.50
+
+To see DNS entries:
+
+	dnsmasq configure 0 dns
+
+To add a DNS entry:
+
+	dnsmasq configure 0 dns 172.17.0.50 example.com
+
+To see a list of all DHCP options:
+
+	dnsmasq configure 0 options
+
+To add a DHCP option:
+
+	dnsmasq configure 0 options option:dns-server,172.17.0.254
+`,
 		Patterns: []string{
 			"dnsmasq configure <ID> <ip,>",
 			"dnsmasq configure <ID> <ip,> <mac address> <ip>",
