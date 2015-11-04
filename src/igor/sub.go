@@ -148,27 +148,30 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// make kernel copy
-	kdest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-kernel")
+	fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
+	kdest, err := os.Create(fname)
 	if err != nil {
-		fatalf("%v", err)
+		fatalf("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(kdest, ksource)
 	kdest.Close()
 	ksource.Close()
 
 	// make initrd copy
-	idest, err := os.Create(igorConfig.TFTPRoot + "/igor/" + subR + "-initrd")
+	fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
+	idest, err := os.Create(fname)
 	if err != nil {
-		fatalf("%v", err)
+		fatalf("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(idest, isource)
 	idest.Close()
 	isource.Close()
 
 	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-	masterfile, err := os.Create(igorConfig.TFTPRoot + "/pxelinux.cfg/igor/" + subR)
+	fname = filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", subR)
+	masterfile, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v: %v", igorConfig.TFTPRoot+"pxelinux.cfg/igor/"+subR, err)
+		fatalf("failed to create %v -- %v", fname, err)
 	}
 	defer masterfile.Close()
 	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
@@ -179,9 +182,10 @@ func runSub(cmd *Command, args []string) {
 	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range pxefiles {
 		masterfile.Seek(0, 0)
-		f, err := os.Create(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+		fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+		f, err := os.Create(fname)
 		if err != nil {
-			fatalf("%v", err)
+			fatalf("failed to create %v -- %v", fname, err)
 		}
 		io.Copy(f, masterfile)
 		f.Close()
