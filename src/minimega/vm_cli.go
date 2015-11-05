@@ -482,18 +482,6 @@ remove saved configurations.`,
 		},
 		Call: wrapSimpleCLI(cliVmConfig),
 	},
-	{ // vm config namespace
-		HelpShort: "set the namespace for the VM",
-		HelpLong: `
-Used by the scheduler to help keep track of which VMs belong to the namespace.
-Most likely, this is not what you're looking for unless you're a scheduler.`,
-		Patterns: []string{
-			"vm config namespace [name]",
-		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "namespace")
-		}),
-	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
 		HelpLong: `
