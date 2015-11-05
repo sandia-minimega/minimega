@@ -835,7 +835,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 	// launch the container
 	cmd := &exec.Cmd{
-		Path: os.Args[0],
+		Path: "/proc/self/exe",
 		Args: args,
 		Env:  nil,
 		Dir:  "",
