@@ -79,13 +79,16 @@ to the file.`,
 	{
 		HelpShort: "configure dhcp/dns options",
 		HelpLong: `
-Configuration options for running dnsmasq instances. Define a static IP allocation, specify a hostname->IP mapping for DNS, or set DHCP options.
+Configuration options for running dnsmasq instances. Define a static IP
+allocation, specify a hostname->IP mapping for DNS, or set DHCP options.
 
-To list all existing static IP allocations on the first running dnsmasq server, do the following:
+To list all existing static IP allocations on the first running dnsmasq
+server, do the following:
 
 	dnsmasq configure 0 ip
 
-To set up a static IP allocation for a VM with the MAC address 00:11:22:33:44:55:
+To set up a static IP allocation for a VM with the MAC address
+00:11:22:33:44:55:
 
 	dnsmasq configure 0 ip 00:11:22:33:44:55 172.17.0.50
 
@@ -135,6 +138,7 @@ func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
 		id, err := strconv.Atoi(c.StringArgs["ID"])
 		if err != nil {
 			resp.Error = "Invalid dnsmasq ID"
+			return
 		}
 		if _, ok := dnsmasqServers[id]; ok {
 			for mac, ip := range dnsmasqServers[id].DHCPhosts {
@@ -160,6 +164,7 @@ func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
 		id, err := strconv.Atoi(c.StringArgs["ID"])
 		if err != nil {
 			resp.Error = "Invalid dnsmasq ID"
+			return
 		}
 		if _, ok := dnsmasqServers[id]; ok {
 			for ip, host := range dnsmasqServers[id].Hostnames {
@@ -184,6 +189,7 @@ func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
 		id, err := strconv.Atoi(c.StringArgs["ID"])
 		if err != nil {
 			resp.Error = "Invalid dnsmasq ID"
+			return
 		}
 		if _, ok := dnsmasqServers[id]; ok {
 			for _, ent := range dnsmasqServers[id].DHCPopts {
