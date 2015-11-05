@@ -19,6 +19,7 @@ import (
 const (
 	MIN_QEMU = 1.6
 	MIN_OVS  = 1.4
+	MIN_DNSMASQ = 2.73
 )
 
 // defaultExternalProcesses is the default mapping between a command and the
@@ -109,6 +110,16 @@ func checkExternal() error {
 		return fmt.Errorf("ovs version %v does not meet minimum version %v", version, MIN_OVS)
 	}
 
+	version, err = dnsmasqVersion()
+	if err != nil {
+		return err
+	}
+
+	log.Debug("got dnsmasq version %v", version)
+	if version < MIN_DNSMASQ {
+		return fmt.Errorf("dnsmasq version %v does not meet minimum version %v", version, MIN_DNSMASQ)
+	}
+
 	return nil
 }
 
@@ -163,6 +174,46 @@ func process(p string) string {
 		return ""
 	}
 	return path
+}
+
+func dnsmasqVersion() (float64, error) {
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
+	p := process("dnsmasq")
+	cmd := &exec.Cmd{
+		Path: p,
+		Args: []string{
+			p,
+			"-v",
+		},
+		Env:    nil,
+		Dir:    "",
+		Stdout: &sOut,
+		Stderr: &sErr,
+	}
+
+	log.Debug("checking dnsmasq version with cmd: %v", cmd)
+	if err := cmd.Run(); err != nil {
+		return 0.0, fmt.Errorf("error checking dnsmasq version: %v %v", err, sErr.String())
+	}
+
+	f := strings.Fields(sOut.String())
+	if len(f) < 3 {
+		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v", sOut.String())
+	}
+
+	dnsmasqVersionFields := strings.Split(f[2], ".")
+	if len(dnsmasqVersionFields) < 2 {
+		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v", sOut.String())
+	}
+
+	log.Debugln(dnsmasqVersionFields)
+	dnsmasqVersion, err := strconv.ParseFloat(strings.Join(dnsmasqVersionFields[:2], "."), 64)
+	if err != nil {
+		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v %v", sOut.String(), err)
+	}
+
+	return dnsmasqVersion, nil
 }
 
 func qemuVersion() (float64, error) {
