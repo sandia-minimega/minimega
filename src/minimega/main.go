@@ -243,12 +243,9 @@ func teardown() {
 	}
 	ksmDisable()
 	vms.cleanDirs()
+	containerTeardown()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
-	err = os.Remove(CGROUP_PATH)
-	if err != nil {
-		log.Debugln(err)
-	}
 	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
 	if err != nil {
 		log.Fatalln(err)
