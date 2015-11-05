@@ -252,6 +252,7 @@ func cliDnsmasqConfigure(c *minicli.Command) *minicli.Response {
 				id, err := strconv.Atoi(c.StringArgs["ID"])
 				if err != nil {
 					resp.Error = "Invalid dnsmasq ID"
+					return resp
 				}
 				if _, ok := dnsmasqServers[id]; ok {
 					dnsmasqServers[id].DHCPhosts[mac] = ip
@@ -277,6 +278,7 @@ func cliDnsmasqConfigure(c *minicli.Command) *minicli.Response {
 				id, err := strconv.Atoi(c.StringArgs["ID"])
 				if err != nil {
 					resp.Error = "Invalid dnsmasq ID"
+					return resp
 				}
 				if _, ok := dnsmasqServers[id]; ok {
 					dnsmasqServers[id].Hostnames[ip] = hostname
@@ -300,6 +302,7 @@ func cliDnsmasqConfigure(c *minicli.Command) *minicli.Response {
 				id, err := strconv.Atoi(c.StringArgs["ID"])
 				if err != nil {
 					resp.Error = "Invalid dnsmasq ID"
+					return resp
 				}
 				dnsmasqServers[id].DHCPopts = append(dnsmasqServers[id].DHCPopts, optionstring)
 				dnsmasqServers[id].writeDHCPopts()
