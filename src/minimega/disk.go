@@ -60,8 +60,8 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <src image> [dst image]",
-			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
-			"disk <inject,> <image> <options> <files like /path/to/src:/path/to/dst>...", // this should never be used, see implementation below
+			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
 		},
 		Call: wrapSimpleCLI(cliDisk),
 	},
@@ -87,7 +87,7 @@ func diskCreate(t, i, s string) error {
 	return nil
 }
 
-func diskInject(dst, partition string, pairs map[string]string, option string) error {
+func diskInject(dst, partition string, pairs map[string]string, options []string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
 		return err
@@ -123,8 +123,6 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 		partition = "1"
 	}
 
-	options := strings.Fields(option)
-
 	// mount new img
 	var path string
 	if partition == "none" {
@@ -140,6 +138,7 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 	} else {
 		args = []string{"mount", "-w", path, mntDir}
 	}
+	log.Debug("mount args: %v", args)
 
 	_, err = processWrapper(args...)
 	if err != nil {
@@ -269,21 +268,13 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		var options string
+		options := fieldsQuoteEscape("\"", c.StringArgs["options"])
+		log.Debug("got options: %v", options)
+
 		pairs, err := parseInjectPairs(c.ListArgs["files"])
 		if err != nil {
-			// attempt to pop the first argument as options
-			if len(c.ListArgs["files"]) > 1 {
-				pairs, err = parseInjectPairs(c.ListArgs["files"][1:])
-				if err != nil {
-					resp.Error = err.Error()
-					return resp
-				}
-				options = c.ListArgs["files"][0]
-			} else {
-				resp.Error = err.Error()
-				return resp
-			}
+			resp.Error = err.Error()
+			return resp
 		}
 
 		if err := diskInject(image, partition, pairs, options); err != nil {
