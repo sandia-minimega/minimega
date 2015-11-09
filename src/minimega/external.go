@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	MIN_QEMU = 1.6
-	MIN_OVS  = 1.4
+	MIN_QEMU    = 1.6
+	MIN_OVS     = 1.4
 	MIN_DNSMASQ = 2.73
 )
 
