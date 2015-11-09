@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -131,6 +132,8 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		path = nbdPath + "p" + partition
 	}
 
+	// we use mount(8), because the mount syscall (mount(2)) requires we
+	// populate the fstype field, which we don't know
 	args := []string{"mount"}
 	if len(options) != 0 {
 		args = append(args, options...)
@@ -201,9 +204,9 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 func diskInjectCleanup(mntDir, nbdPath string) {
 	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
 
-	out, err := processWrapper("umount", mntDir)
+	err := syscall.Unmount(mntDir, 0)
 	if err != nil {
-		log.Error("injectCleanup: %v: %v", out, err)
+		log.Error("injectCleanup: %v", err)
 	}
 
 	if err := nbd.DisconnectDevice(nbdPath); err != nil {
@@ -211,9 +214,9 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 		log.Warn("minimega was unable to disconnect %v", nbdPath)
 	}
 
-	out, err = processWrapper("rm", "-r", mntDir)
+	err = os.Remove(mntDir)
 	if err != nil {
-		log.Error("rm mount dir: %v: %v", out, err)
+		log.Error("rm mount dir: %v", err)
 	}
 }
 
