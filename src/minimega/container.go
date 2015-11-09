@@ -35,8 +35,6 @@ import (
 )
 
 const (
-	CGROUP_PATH     = "/sys/fs/cgroup/minimega"
-	CGROUP_ROOT     = "/sys/fs/cgroup"
 	CONTAINER_MAGIC = "CONTAINER"
 	CONTAINER_NONE  = "CONTAINER_NONE"
 )
@@ -91,6 +89,11 @@ const (
 // and nothing more
 const (
 	DEFAULT_CAPS = CAP_CHOWN | CAP_DAC_OVERRIDE | CAP_FSETID | CAP_FOWNER | CAP_MKNOD | CAP_NET_RAW | CAP_SETGID | CAP_SETUID | CAP_SETFCAP | CAP_SETPCAP | CAP_NET_BIND_SERVICE | CAP_SYS_CHROOT | CAP_KILL | CAP_AUDIT_WRITE | CAP_NET_ADMIN | CAP_DAC_READ_SEARCH | CAP_AUDIT_CONTROL
+)
+
+var (
+	CGROUP_PATH string
+	CGROUP_ROOT string
 )
 
 type capHeader struct {
@@ -232,11 +235,26 @@ func init() {
 	for _, fns := range containerConfigFns {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
+	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
+	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 }
 
 func containerInit() error {
+	// mount our own cgroup namespace to avoid having to ever ever ever
+	// deal with systemd
+	log.Debug("cgroup mkdir: %v", CGROUP_ROOT)
+	err := os.MkdirAll(CGROUP_ROOT, 0755)
+	if err != nil {
+		return fmt.Errorf("cgroup mkdir: %v", err)
+	}
+
+	err = syscall.Mount("minicgroup", CGROUP_ROOT, "cgroup", 0, "")
+	if err != nil {
+		return fmt.Errorf("cgroup mount: %v", err)
+	}
+
 	// inherit cpusets
-	err := ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
+	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
 	if err != nil {
 		return fmt.Errorf("setting cgroup: %v", err)
 	}
@@ -251,6 +269,19 @@ func containerInit() error {
 		return fmt.Errorf("creating minimega cgroup: %v", err)
 	}
 	return nil
+}
+
+func containerTeardown() {
+	if cgroupInitialized {
+		err := os.Remove(CGROUP_PATH)
+		if err != nil {
+			log.Errorln(err)
+		}
+		err = syscall.Unmount(CGROUP_ROOT, 0)
+		if err != nil {
+			log.Errorln(err)
+		}
+	}
 }
 
 // golang can't easily support the typical clone+exec method of firing off a
@@ -337,7 +368,7 @@ func containerShim() {
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
 	if vmHostname != "" {
-		_, err := exec.Command(process("hostname"), vmHostname).Output()
+		_, err := processWrapper("hostname", vmHostname)
 		if err != nil {
 			log.Fatal("set hostname: %v", err)
 		}
@@ -703,7 +734,9 @@ func (vm *ContainerVM) launch(ack chan int) {
 		err := containerInit()
 		if err != nil {
 			log.Errorln(err)
-			teardown()
+			vm.setState(VM_ERROR)
+			ack <- vm.ID
+			return
 		}
 		cgroupInitialized = true
 	}
@@ -712,14 +745,16 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 	// don't repeat the preamble if we're just in the quit state
 	if s != VM_QUIT && !vm.launchPreamble(ack) {
+		vm.setState(VM_ERROR)
+		ack <- vm.ID
 		return
 	}
 
 	vm.setState(VM_BUILDING)
 
 	// write the config for this vm
-	writeOrDie(vm.instancePath+"config", vm.Config().String())
-	writeOrDie(vm.instancePath+"name", vm.Name)
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	var waitChan = make(chan int)
 
@@ -835,7 +870,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 
 	// launch the container
 	cmd := &exec.Cmd{
-		Path: os.Args[0],
+		Path: "/proc/self/exe",
 		Args: args,
 		Env:  nil,
 		Dir:  "",
@@ -960,7 +995,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 				taps = append(taps, net.Tap)
 			}
 
-			err := ioutil.WriteFile(vm.instancePath+"taps", []byte(strings.Join(taps, "\n")), 0666)
+			err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 			if err != nil {
 				log.Error("write instance taps file: %v", err)
 				vm.setState(VM_ERROR)
@@ -1089,24 +1124,19 @@ func (vm *ContainerVM) overlayMount() error {
 	}
 
 	// create the overlay mountpoint
-	cmd := &exec.Cmd{
-		Path: process("mount"),
-		Args: []string{
-			process("mount"),
-			"-t",
-			"overlay",
-			fmt.Sprintf("megamount_%v", vm.ID),
-			"-o",
-			fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
-			vm.effectivePath,
-		},
-		Env: nil,
-		Dir: "",
+	args := []string{
+		"mount",
+		"-t",
+		"overlay",
+		fmt.Sprintf("megamount_%v", vm.ID),
+		"-o",
+		fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
+		vm.effectivePath,
 	}
-	log.Debug("mounting overlay: %v", cmd)
-	output, err := cmd.CombinedOutput()
+	log.Debug("mounting overlay: %v", args)
+	out, err := processWrapper(args...)
 	if err != nil {
-		log.Error("overlay mount: %v %v", err, string(output))
+		log.Error("overlay mount: %v %v", err, out)
 		return err
 	}
 	return nil
@@ -1436,19 +1466,8 @@ func containerNuke() {
 			for _, pid := range pids {
 				log.Debug("found pid: %v", pid)
 
-				p := process("kill")
-				cmd := &exec.Cmd{
-					Path: p,
-					Args: []string{
-						p,
-						"-9",
-						pid,
-					},
-					Env: nil,
-					Dir: "",
-				}
 				log.Infoln("killing process:", pid)
-				out, err := cmd.CombinedOutput()
+				out, err := processWrapper("kill", "-9", pid)
 				if err != nil {
 					log.Error("%v: %v", err, out)
 				}

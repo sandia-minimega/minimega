@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"version"
 )
 
 const RETRY_TIMEOUT = 10
@@ -149,6 +150,7 @@ func (c *Client) heartbeat() {
 		OS:             runtime.GOOS,
 		Hostname:       hostname,
 		CommandCounter: c.CommandCounter,
+		Version:        version.Revision,
 	}
 
 	macs, ips := getNetworkInfo()

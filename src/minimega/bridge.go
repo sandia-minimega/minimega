@@ -14,7 +14,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -663,25 +662,19 @@ func hostTapCreate(bridge, ip, name string, lan int) (tapName string, err error)
 	if strings.ToLower(ip) == "none" {
 		return tapName, nil
 	} else if strings.ToLower(ip) == "dhcp" {
-		var sErr bytes.Buffer
-
-		cmd := exec.Command(process("dhcp"), tapName)
-		cmd.Stderr = &sErr
 		log.Debug("obtaining dhcp on tap %v", tapName)
 
-		if err = cmd.Run(); err != nil {
-			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		out, err := processWrapper("dhcp", tapName)
+		if err != nil {
+			return "", fmt.Errorf("%v: %v", err, out)
 		}
 	} else {
-		// Must be a static IP
-		var sErr bytes.Buffer
-
-		cmd := exec.Command(process("ip"), "addr", "add", "dev", tapName, ip)
-		cmd.Stderr = &sErr
 		log.Debug("setting ip on tap %v", tapName)
 
-		if err = cmd.Run(); err != nil {
-			return "", fmt.Errorf("%v: %v", err, sErr.String())
+		// Must be a static IP
+		out, err := processWrapper("ip", "addr", "add", "dev", tapName, ip)
+		if err != nil {
+			return "", fmt.Errorf("%v: %v", err, out)
 		}
 	}
 
@@ -741,13 +734,13 @@ func hostTapDelete(tap string) error {
 // upInterface activates an interface parameter using the `ip` command. promisc
 // controls whether the interface is brought up in promiscuous mode.
 func upInterface(name string, promisc bool) error {
-	args := []string{"link", "set", name, "up"}
+	args := []string{"ip", "link", "set", name, "up"}
 	if promisc {
 		args = append(args, "promisc", "on")
 	}
 
-	if _, sErr, err := cmdWrapper(process("ip"), args...); err != nil {
-		return fmt.Errorf("ip: %v: %v", err, sErr)
+	if out, err := processWrapper(args...); err != nil {
+		return fmt.Errorf("ip: %v: %v", err, out)
 	}
 
 	return nil
@@ -755,9 +748,9 @@ func upInterface(name string, promisc bool) error {
 
 // downInterface deactivates an interface parameter using the `ip` command.
 func downInterface(name string) error {
-	_, sErr, err := cmdWrapper(process("ip"), "link", "set", name, "down")
+	out, err := processWrapper("ip", "link", "set", name, "down")
 	if err != nil {
-		return fmt.Errorf("ip: %v: %v", err, sErr)
+		return fmt.Errorf("ip: %v: %v", err, out)
 	}
 
 	return nil
@@ -765,11 +758,11 @@ func downInterface(name string) error {
 
 // createTap adds a tuntap based on the add parameter using the `ip` command.
 func addTap(name string) error {
-	_, sErr, err := cmdWrapper(process("ip"), "tuntap", "add", "mode", "tap", name)
-	if strings.Contains(sErr, "Device or resource busy") {
+	out, err := processWrapper("ip", "tuntap", "add", "mode", "tap", name)
+	if strings.Contains(out, "Device or resource busy") {
 		return ErrAlreadyExists
 	} else if err != nil {
-		return fmt.Errorf("ip: %v: %v", err, sErr)
+		return fmt.Errorf("ip: %v: %v", err, out)
 	}
 
 	return nil
@@ -777,9 +770,9 @@ func addTap(name string) error {
 
 // delTap removes a tuntap based on the add parameter using the `ip` command.
 func delTap(name string) error {
-	_, sErr, err := cmdWrapper(process("ip"), "tuntap", "del", "mode", "tap", name)
+	out, err := processWrapper("ip", "tuntap", "del", "mode", "tap", name)
 	if err != nil {
-		return fmt.Errorf("ip: %v: %v", err, sErr)
+		return fmt.Errorf("ip: %v: %v", err, out)
 	}
 
 	return nil
@@ -789,9 +782,9 @@ func addOpenflow(bridge, filter string) error {
 	ovsLock.Lock()
 	defer ovsLock.Unlock()
 
-	_, sErr, err := cmdWrapper(process("openflow"), "add-flow", bridge, filter)
+	out, err := processWrapper("openflow", "add-flow", bridge, filter)
 	if err != nil {
-		return fmt.Errorf("openflow: %v: %v", err, sErr)
+		return fmt.Errorf("openflow: %v: %v", err, out)
 	}
 
 	return nil
@@ -801,33 +794,23 @@ func addOpenflow(bridge, filter string) error {
 func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
 	tapName := <-tapNameChan
 
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"add",
-			tapName,
-			"type",
-			"veth",
-			"peer",
-			"mega", // does the namespace ignore this?
-			"netns",
-			ns,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args := []string{
+		"ip",
+		"link",
+		"add",
+		tapName,
+		"type",
+		"veth",
+		"peer",
+		"mega", // does the namespace ignore this?
+		"netns",
+		ns,
 	}
-	log.Debug("creating tap with cmd: %v", cmd)
-	err := cmd.Run()
+	log.Debug("creating tap with cmd: %v", args)
+
+	out, err := processWrapper(args...)
 	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, out)
 		return "", e
 	}
 
@@ -851,30 +834,25 @@ func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 		return "", err
 	}
 
-	cmd = &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"netns",
-			"exec",
-			ns,
-			"ip",
-			"link",
-			"set",
-			"dev",
-			fmt.Sprintf("veth%v", index),
-			"address",
-			mac,
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args = []string{
+		"ip",
+		"netns",
+		"exec",
+		ns,
+		"ip",
+		"link",
+		"set",
+		"dev",
+		fmt.Sprintf("veth%v", index),
+		"address",
+		mac,
 	}
-	log.Debug("setting container mac address with cmd: %v", cmd)
-	err = cmd.Run()
+
+	log.Debug("setting container mac address with cmd: %v", args)
+
+	out, err = processWrapper(args...)
 	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, out)
 		return "", e
 	}
 	return tapName, nil
@@ -891,31 +869,21 @@ func (b *Bridge) ContainerTapDestroy(lan int, tap string) error {
 		return err
 	}
 
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	p := process("ip")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"link",
-			"del",
-			tap,
-			"type",
-			"veth",
-			"peer",
-			"eth0",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
+	args := []string{
+		"ip",
+		"link",
+		"del",
+		tap,
+		"type",
+		"veth",
+		"peer",
+		"eth0",
 	}
-	log.Debug("destroying tap with cmd: %v", cmd)
-	err = cmd.Run()
+	log.Debug("destroying tap with cmd: %v", args)
+
+	out, err := processWrapper(args...)
 	if err != nil {
-		e := fmt.Errorf("ip: %v: %v", err, sErr.String())
+		e := fmt.Errorf("ip: %v: %v", err, out)
 		return e
 	}
 	return nil

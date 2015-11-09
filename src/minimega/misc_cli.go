@@ -121,6 +121,13 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	}
 	defer file.Close()
 
+	// HACK: We *don't* want long-running read commands to cause all other
+	// commands to block so we *unlock* the command lock here and *lock* it
+	// again for each command that we read (well, `runCommand` handles the
+	// locking for us).
+	cmdLock.Unlock()
+	defer cmdLock.Lock()
+
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
@@ -146,26 +153,14 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
-		cmd, err := cliPreprocessor(cmd)
-		if err != nil {
-			log.Errorln(err)
-			respChan <- minicli.Responses{
-				&minicli.Response{
-					Host:  hostname,
-					Error: err.Error(),
-				},
-			}
-			return
-		}
-
-		for resp := range minicli.ProcessCommand(cmd) {
+		for resp := range runCommand(cmd) {
 			respChan <- resp
 
-			// Stop processing at the first error if there is one response.
-			// TODO: What should we do if the command was mesh send and there
-			// is a mixture of success and failure?
-			if len(resp) == 1 && resp[0].Error != "" {
-				break
+			// Stop processing if any of the responses have an error.
+			for _, r := range resp {
+				if r.Error != "" {
+					break
+				}
 			}
 		}
 	}

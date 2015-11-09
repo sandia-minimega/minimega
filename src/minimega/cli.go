@@ -113,7 +113,6 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	cmd.Record = record
 
 	cmdLock.Lock()
-	defer cmdLock.Unlock()
 
 	var wg sync.WaitGroup
 
@@ -150,10 +149,13 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 		}(in)
 	}
 
-	// Wait until everything has been read before closing out
+	// Wait until everything has been read before closing the chan and
+	// releasing the lock.
 	go func() {
+		defer cmdLock.Unlock()
+		defer close(out)
+
 		wg.Wait()
-		close(out)
 	}()
 
 	return out
@@ -161,6 +163,8 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 
 // local command line interface, wrapping readline
 func cliLocal() {
+	goreadline.FilenameCompleter = iomCompleter
+
 	prompt := "minimega$ "
 
 	for {

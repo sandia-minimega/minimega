@@ -12,7 +12,6 @@ import (
 	log "minilog"
 	"nbd"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -28,8 +27,15 @@ var diskCLIHandlers = []minicli.Handler{
 	{ // disk
 		HelpShort: "manipulate qcow disk images image",
 		HelpLong: `
-Manipulate qcow disk images. Supports creating snapshots of existing images and
-injecting one or more files into an existing image.
+Manipulate qcow disk images. Supports creating new images, snapshots of
+existing images, and injecting one or more files into an existing image.
+
+Example of creating a new disk:
+
+	disk create qcow2 foo.qcow2 100G
+
+The size argument is the size in bytes, or using optional suffixes "k"
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).
 
 Example of taking a snapshot of a disk:
 
@@ -52,6 +58,7 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 
 	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
 		Patterns: []string{
+			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <src image> [dst image]",
 			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> <options> <files like /path/to/src:/path/to/dst>...", // this should never be used, see implementation below
@@ -62,16 +69,21 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 
 func diskSnapshot(src, dst string) error {
 	// create the new img
-	p := process("qemu-img")
-	cmd := exec.Command(p, "create", "-f", "qcow2", "-b", src, dst)
-
-	log.Debug("creating snapshot with: %v", cmd)
-
-	result, err := cmd.CombinedOutput()
+	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
 	if err != nil {
-		return fmt.Errorf("%v\n%v", string(result), err)
+		return fmt.Errorf("%v: %v", out, err)
 	}
 
+	return nil
+}
+
+func diskCreate(t, i, s string) error {
+	path := filepath.Join(*f_iomBase, i)
+	out, err := processWrapper("qemu-img", "create", "-f", t, path, s)
+	if err != nil {
+		log.Error("diskCreate: %v", out)
+		return err
+	}
 	return nil
 }
 
@@ -114,9 +126,6 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 	options := strings.Fields(option)
 
 	// mount new img
-	p := process("mount")
-	var cmd *exec.Cmd
-
 	var path string
 	if partition == "none" {
 		path = nbdPath
@@ -124,43 +133,38 @@ func diskInject(dst, partition string, pairs map[string]string, option string) e
 		path = nbdPath + "p" + partition
 	}
 
+	args := []string{"mount"}
 	if len(options) != 0 {
-		args := append(options, path, mntDir)
-		cmd = exec.Command(p, args...)
+		args = append(args, options...)
+		args = append(args, path, mntDir)
 	} else {
-		cmd = exec.Command(p, "-w", path, mntDir)
+		args = []string{"mount", "-w", path, mntDir}
 	}
 
-	log.Debug("diskInject cmd: %v", cmd)
-
-	if result, err := cmd.CombinedOutput(); err != nil {
+	_, err = processWrapper(args...)
+	if err != nil {
 		// check that ntfs-3g is installed
-		p = process("ntfs-3g")
-		cmd = exec.Command(p, "--version")
-		_, err = cmd.CombinedOutput()
+		_, err = processWrapper("ntfs-3g", "--version")
 		if err != nil {
 			log.Error("ntfs-3g not found, ntfs images unwriteable")
 		}
 
 		// mount with ntfs-3g
-		p = process("mount")
-		cmd = exec.Command(p, "-o", "ntfs-3g", path, mntDir)
-		result, err = cmd.CombinedOutput()
+		out, err := processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
 		if err != nil {
 			log.Error("failed to mount partition")
-			return fmt.Errorf("%v\n%v", string(result[:]), err)
+			return fmt.Errorf("%v: %v", out, err)
 		}
 	}
 
 	// copy files/folders into mntDir
-	p = process("cp")
 	for dst, src := range pairs {
 		dir := filepath.Dir(filepath.Join(mntDir, dst))
 		os.MkdirAll(dir, 0775)
 
-		cmd := exec.Command(p, "-fr", src, mntDir+"/"+dst)
-		if result, err := cmd.CombinedOutput(); err != nil {
-			return fmt.Errorf("%v\n%v", string(result[:]), err)
+		out, err := processWrapper("cp", "-fr", src, filepath.Join(mntDir, dst))
+		if err != nil {
+			return fmt.Errorf("%v: %v", out, err)
 		}
 	}
 
@@ -198,10 +202,9 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 func diskInjectCleanup(mntDir, nbdPath string) {
 	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
 
-	p := process("umount")
-	cmd := exec.Command(p, mntDir)
-	if err := cmd.Run(); err != nil {
-		log.Error("injectCleanup: %v", err)
+	out, err := processWrapper("umount", mntDir)
+	if err != nil {
+		log.Error("injectCleanup: %v: %v", out, err)
 	}
 
 	if err := nbd.DisconnectDevice(nbdPath); err != nil {
@@ -209,10 +212,9 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 		log.Warn("minimega was unable to disconnect %v", nbdPath)
 	}
 
-	p = process("rm")
-	cmd = exec.Command(p, "-r", mntDir)
-	if err := cmd.Run(); err != nil {
-		log.Error("rm mount dir: %v", err)
+	out, err = processWrapper("rm", "-r", mntDir)
+	if err != nil {
+		log.Error("rm mount dir: %v: %v", out, err)
 	}
 }
 
@@ -285,6 +287,19 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 		}
 
 		if err := diskInject(image, partition, pairs, options); err != nil {
+			resp.Error = err.Error()
+		}
+	} else if c.BoolArgs["create"] {
+		i := c.StringArgs["image"]
+		s := c.StringArgs["size"]
+		var t string
+		if _, ok := c.BoolArgs["qcow2"]; ok {
+			t = "qcow2"
+		} else {
+			t = "raw"
+		}
+
+		if err := diskCreate(t, i, s); err != nil {
 			resp.Error = err.Error()
 		}
 	} else {

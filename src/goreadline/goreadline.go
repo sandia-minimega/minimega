@@ -23,6 +23,7 @@ import (
 var (
 	completionCandidates []string
 	listIndex            int
+	FilenameCompleter    func(string) []string // optional filename completer to attempt before the readline builtin
 )
 
 // disable readline's ability to catch signals, as this will cause a panic
@@ -48,21 +49,25 @@ func minicliCompletion(text *C.char, start, end C.int) **C.char {
 	// Copy the buffer containing the line so far
 	line := C.GoString(C.rl_line_buffer)
 
-	// Default is to not change the string
-	vals := []string{C.GoString(text)}
-
 	// Generate suggestions
-	suggest := minicli.Suggest(line)
+	var suggest []string
+	suggest = minicli.Suggest(line)
 
-	if len(suggest) == 1 {
-		// Use only suggestion as substitution for text
-		vals[0] = suggest[0]
-	} else if len(suggest) == 0 {
+	if len(suggest) == 0 {
 		// No suggestions.. fall back on default behavior (filename completion)
-		return C.rl_completion_matches(text,
-			(*C.rl_compentry_func_t)(C.rl_filename_completion_function))
+		if FilenameCompleter == nil {
+			return C.rl_completion_matches(text,
+				(*C.rl_compentry_func_t)(C.rl_filename_completion_function))
+		}
+
+		suggest = FilenameCompleter(line)
+		if len(suggest) == 0 {
+			// no dice, use the builtin
+			return C.rl_completion_matches(text,
+				(*C.rl_compentry_func_t)(C.rl_filename_completion_function))
+		}
 	}
-	vals = append(vals, suggest...)
+	vals := append([]string{lcp(suggest)}, suggest...)
 
 	// Copy suggestions into char**
 	ptr := C.malloc(C.size_t(len(vals)+1) * C.size_t(ptrSize))
@@ -101,4 +106,32 @@ func Rlwrap(prompt string, record bool) (string, error) {
 func Rlcleanup() {
 	log.Info("restoring terminal state from readline")
 	C.rl_deprep_terminal()
+}
+
+// a simple longest common prefix function
+func lcp(s []string) string {
+	var lcp string
+	var p int
+
+	if len(s) == 0 {
+		return ""
+	}
+
+	for {
+		var c byte
+		for _, v := range s {
+			if len(v) <= p {
+				return lcp
+			}
+			if c == 0 {
+				c = v[p]
+				continue
+			}
+			if c != v[p] {
+				return lcp
+			}
+		}
+		lcp += string(s[0][p])
+		p++
+	}
 }

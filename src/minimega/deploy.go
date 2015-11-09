@@ -11,7 +11,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"ranges"
 	"strings"
@@ -119,23 +118,18 @@ func deployCopy(hosts []string, user, remotePath string) []error {
 	minimegaBinary := fmt.Sprintf("/proc/%v/exe", os.Getpid())
 	log.Debug("minimega binary: %v", minimegaBinary)
 
-	// scp to each host
-	scp := process("scp")
-
 	for _, host := range hosts {
-		command := []string{"-B", "-o", "StrictHostKeyChecking=no", minimegaBinary}
+		command := []string{"scp", "-B", "-o", "StrictHostKeyChecking=no", minimegaBinary}
 		if user != "" {
 			command = append(command, fmt.Sprintf("%v@%v:%v", user, host, remotePath))
 		} else {
 			command = append(command, fmt.Sprintf("%v:%v", host, remotePath))
 		}
-		log.Debug("scp command: %v %v", scp, command)
+		log.Debug("scp command: %v", command)
 
-		cmd := exec.Command(scp, command...)
-
-		out, err := cmd.CombinedOutput()
+		out, err := processWrapper(command...)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%v: %v", err, string(out)))
+			errs = append(errs, fmt.Errorf("%v: %v", err, out))
 		}
 	}
 
@@ -146,9 +140,6 @@ func deployRun(hosts []string, user, remotePath string, sudo bool) []error {
 	log.Debug("deployRun: %v, %v", hosts, user)
 
 	var errs []error
-
-	// ssh to each host
-	ssh := process("ssh")
 
 	// minimega command
 	flags := deployGetFlags()
@@ -162,20 +153,18 @@ func deployRun(hosts []string, user, remotePath string, sudo bool) []error {
 	}
 
 	for _, host := range hosts {
-		command := []string{"-o", "StrictHostKeyChecking=no"}
+		command := []string{"ssh", "-o", "StrictHostKeyChecking=no"}
 		if user != "" {
 			command = append(command, fmt.Sprintf("%v@%v", user, host))
 		} else {
 			command = append(command, fmt.Sprintf("%v", host))
 		}
 		command = append(command, minimegaCommand)
-		log.Debug("ssh command: %v %v", ssh, command)
+		log.Debug("ssh command: %v", command)
 
-		cmd := exec.Command(ssh, command...)
-
-		out, err := cmd.CombinedOutput()
+		out, err := processWrapper(command...)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%v: %v", err, string(out)))
+			errs = append(errs, fmt.Errorf("%v: %v", err, out))
 		}
 	}
 
