@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -52,11 +53,16 @@ Each argument after the image should be a source and destination pair,
 separated by a ':'. If the file paths contain spaces, use double quotes. Optionally,
 you may specify a partition (partition 1 will be used by default):
 
-	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc`,
+	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc
+
+You can optionally specify mount arguments to use with inject. Multiple options should be quoted. For example:
+
+	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <src image> [dst image]",
-			"disk <inject,> <image> <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
 		},
 		Call: wrapSimpleCLI(cliDisk),
 	},
@@ -82,7 +88,7 @@ func diskCreate(t, i, s string) error {
 	return nil
 }
 
-func diskInject(dst, partition string, pairs map[string]string) error {
+func diskInject(dst, partition string, pairs map[string]string, options []string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
 		return err
@@ -119,7 +125,25 @@ func diskInject(dst, partition string, pairs map[string]string) error {
 	}
 
 	// mount new img
-	_, err = processWrapper("mount", "-w", nbdPath+"p"+partition, mntDir)
+	var path string
+	if partition == "none" {
+		path = nbdPath
+	} else {
+		path = nbdPath + "p" + partition
+	}
+
+	// we use mount(8), because the mount syscall (mount(2)) requires we
+	// populate the fstype field, which we don't know
+	args := []string{"mount"}
+	if len(options) != 0 {
+		args = append(args, options...)
+		args = append(args, path, mntDir)
+	} else {
+		args = []string{"mount", "-w", path, mntDir}
+	}
+	log.Debug("mount args: %v", args)
+
+	_, err = processWrapper(args...)
 	if err != nil {
 		// check that ntfs-3g is installed
 		_, err = processWrapper("ntfs-3g", "--version")
@@ -128,7 +152,7 @@ func diskInject(dst, partition string, pairs map[string]string) error {
 		}
 
 		// mount with ntfs-3g
-		out, err := processWrapper("mount", "-o", "ntfs-3g", nbdPath+"p"+partition, mntDir)
+		out, err := processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
 		if err != nil {
 			log.Error("failed to mount partition")
 			return fmt.Errorf("%v: %v", out, err)
@@ -180,9 +204,9 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 func diskInjectCleanup(mntDir, nbdPath string) {
 	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
 
-	out, err := processWrapper("umount", mntDir)
+	err := syscall.Unmount(mntDir, 0)
 	if err != nil {
-		log.Error("injectCleanup: %v: %v", out, err)
+		log.Error("injectCleanup: %v", err)
 	}
 
 	if err := nbd.DisconnectDevice(nbdPath); err != nil {
@@ -190,9 +214,9 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 		log.Warn("minimega was unable to disconnect %v", nbdPath)
 	}
 
-	out, err = processWrapper("rm", "-r", mntDir)
+	err = os.Remove(mntDir)
 	if err != nil {
-		log.Error("rm mount dir: %v: %v", out, err)
+		log.Error("rm mount dir: %v", err)
 	}
 }
 
@@ -247,13 +271,16 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
+		options := fieldsQuoteEscape("\"", c.StringArgs["options"])
+		log.Debug("got options: %v", options)
+
 		pairs, err := parseInjectPairs(c.ListArgs["files"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
 		}
 
-		if err := diskInject(image, partition, pairs); err != nil {
+		if err := diskInject(image, partition, pairs, options); err != nil {
 			resp.Error = err.Error()
 		}
 	} else if c.BoolArgs["create"] {
