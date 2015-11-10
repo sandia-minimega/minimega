@@ -36,15 +36,21 @@ func (t *memTransport) readPacket() ([]byte, error) {
 	}
 }
 
-func (t *memTransport) Close() error {
-	t.write.Lock()
-	defer t.write.Unlock()
-	if t.write.eof {
+func (t *memTransport) closeSelf() error {
+	t.Lock()
+	defer t.Unlock()
+	if t.eof {
 		return io.EOF
 	}
-	t.write.eof = true
-	t.write.Cond.Broadcast()
+	t.eof = true
+	t.Cond.Broadcast()
 	return nil
+}
+
+func (t *memTransport) Close() error {
+	err := t.write.closeSelf()
+	t.closeSelf()
+	return err
 }
 
 func (t *memTransport) writePacket(p []byte) error {
@@ -53,7 +59,9 @@ func (t *memTransport) writePacket(p []byte) error {
 	if t.write.eof {
 		return io.EOF
 	}
-	t.write.pending = append(t.write.pending, p)
+	c := make([]byte, len(p))
+	copy(c, p)
+	t.write.pending = append(t.write.pending, c)
 	t.write.Cond.Signal()
 	return nil
 }
@@ -68,7 +76,7 @@ func memPipe() (a, b packetConn) {
 	return &t1, &t2
 }
 
-func TestmemPipe(t *testing.T) {
+func TestMemPipe(t *testing.T) {
 	a, b := memPipe()
 	if err := a.writePacket([]byte{42}); err != nil {
 		t.Fatalf("writePacket: %v", err)
