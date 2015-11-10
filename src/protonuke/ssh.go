@@ -7,10 +7,12 @@ package main
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	log "minilog"
+	"net"
 	"ssh"
 	"ssh/terminal"
 	"time"
@@ -47,17 +49,11 @@ Ju2wJ6nHR3zeAxwqnmhl3VPKTHjIQu0GkQ83Z9NcnYZsLSYnuz8=
 
 type sshConn struct {
 	Config    *ssh.ClientConfig
-	Client    *ssh.ClientConn
+	Client    *ssh.Client
 	Session   *ssh.Session
 	Host      string
 	Stdin     io.Writer
 	StdoutBuf bytes.Buffer
-}
-
-type sshPassword string
-
-func (p sshPassword) Password(user string) (string, error) {
-	return string(p), nil
 }
 
 var (
@@ -115,8 +111,8 @@ func sshClientConnect(host string, protocol string) {
 	sc := &sshConn{}
 	sc.Config = &ssh.ClientConfig{
 		User: "protonuke",
-		Auth: []ssh.ClientAuth{
-			ssh.ClientAuthPassword(sshPassword("password")),
+		Auth: []ssh.AuthMethod{
+			ssh.Password("password"),
 		},
 	}
 
@@ -200,8 +196,12 @@ func sshServer(p string) {
 	log.Debugln("sshServer")
 
 	config := &ssh.ServerConfig{
-		PasswordCallback: func(conn *ssh.ServerConn, user, pass string) bool {
-			return user == "protonuke" && pass == "password"
+		PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+			if conn.User() == "protonuke" && string(password) == "password" {
+				return &ssh.Permissions{}, nil
+			}
+
+			return nil, errors.New("invalid user/password")
 		},
 	}
 
@@ -212,70 +212,95 @@ func sshServer(p string) {
 
 	config.AddHostKey(private)
 
-	l, err := ssh.Listen(p, PORT, config)
+	// Once a ServerConfig has been configured, connections can be accepted.
+	listener, err := net.Listen(p, PORT)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	for {
-		conn, err := l.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			log.Errorln(err)
 			continue
 		}
 
-		if err := conn.Handshake(); err != nil {
-			if err != io.EOF {
-				log.Errorln(err)
-			}
+		// Before use, a handshake must be performed on the incoming net.Conn.
+		_, chans, reqs, err := ssh.NewServerConn(conn, config)
+		if err != nil {
+			log.Errorln(err)
 			continue
 		}
 
-		go sshHandleConn(conn)
+		// The incoming Request channel must be serviced.
+		go ssh.DiscardRequests(reqs)
+
+		go sshHandleChannels(conn, chans)
 	}
 }
 
-func sshHandleConn(conn *ssh.ServerConn) {
-	for {
-		channel, err := conn.Accept()
-		if err != nil {
-			if err != io.EOF {
-				log.Errorln(err)
-			}
-			return
-		}
-
-		if channel.ChannelType() != "session" {
-			channel.Reject(ssh.UnknownChannelType, "unknown channel type")
-			continue
-		}
-		channel.Accept()
-
-		term := terminal.NewTerminal(channel, "> ")
-		serverTerm := &ssh.ServerTerminal{
-			Term:    term,
-			Channel: channel,
-		}
-		go func() {
-			defer channel.Close()
-			for {
-				line, err := serverTerm.ReadLine()
-				start := time.Now().UnixNano()
-				if err != nil {
-					if err != io.EOF {
-						log.Errorln(err)
-					}
-					return
-				}
-				sshReportChan <- uint64(len(line))
-				// just echo the message
-				log.Debugln("ssh received: ", line)
-				serverTerm.Write([]byte(line))
-				serverTerm.Write([]byte{'\r', '\n'})
-
-				stop := time.Now().UnixNano()
-				log.Info("ssh %v %vns", conn.RemoteAddr(), uint64(stop-start))
-			}
-		}()
+func sshHandleChannels(conn net.Conn, chans <-chan ssh.NewChannel) {
+	// Service the incoming Channel channel.
+	for newChannel := range chans {
+		go sshHandleChannel(conn, newChannel)
 	}
+}
+
+func sshHandleChannel(conn net.Conn, newChannel ssh.NewChannel) {
+	// Channels have a type, depending on the application level protocol
+	// intended. In the case of a shell, the type is "session" and ServerShell
+	// may be used to present a simple terminal interface.
+	if newChannel.ChannelType() != "session" {
+		newChannel.Reject(ssh.UnknownChannelType, "unknown channel type")
+		return
+	}
+	channel, requests, err := newChannel.Accept()
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	// Sessions have out-of-band requests such as "shell", "pty-req" and "env".
+	// Here we handle only the "shell" request.
+	go func(in <-chan *ssh.Request) {
+		for req := range in {
+			ok := false
+			switch req.Type {
+			case "shell":
+				ok = true
+				if len(req.Payload) > 0 {
+					// We don't accept any commands, only the default shell.
+					ok = false
+				}
+			case "pty-req":
+				ok = true
+			}
+			req.Reply(ok, nil)
+		}
+	}(requests)
+
+	term := terminal.NewTerminal(channel, "> ")
+
+	go func() {
+		defer channel.Close()
+
+		for {
+			line, err := term.ReadLine()
+			start := time.Now().UnixNano()
+			if err != nil {
+				if err != io.EOF {
+					log.Errorln(err)
+				}
+				return
+			}
+			sshReportChan <- uint64(len(line))
+			// just echo the message
+			log.Debugln("ssh received: ", line)
+			term.Write([]byte(line))
+			term.Write([]byte{'\r', '\n'})
+
+			stop := time.Now().UnixNano()
+			log.Info("ssh %v %vns", conn.RemoteAddr(), uint64(stop-start))
+		}
+	}()
 }
