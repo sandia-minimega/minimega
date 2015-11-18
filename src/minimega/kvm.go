@@ -706,7 +706,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-device")
 	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
 	args = append(args, "-chardev")
-	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%vcc,server,nowait", vmPath))
+	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
 	args = append(args, "-device")
 	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
 	addr++
