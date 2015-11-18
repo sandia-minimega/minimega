@@ -972,9 +972,7 @@ func (vm *ContainerVM) launch(ack chan int) {
 					case update := <-updates:
 						if update.IP4 != "" {
 							net.IP4 = update.IP4
-						} else if net.IP6 != "" && strings.HasPrefix(update.IP6, "fe80") {
-							log.Debugln("ignoring link-local over existing IPv6 address")
-						} else if update.IP6 != "" {
+						} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
 							net.IP6 = update.IP6
 						}
 					case <-vm.kill:
