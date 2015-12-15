@@ -622,7 +622,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// for virtio-serial, look below near the net code
 	for i := 0; i < vm.SerialPorts; i++ {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%vserial%v,server,nowait", i, vmPath, i))
+		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "serial"), i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
@@ -733,7 +733,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		}
 
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%vvirtio-serial%v,server,nowait", i, vmPath, i))
+		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", nr, virtio_slot, i, i, i))
