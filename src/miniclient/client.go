@@ -5,29 +5,19 @@
 package miniclient
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"goreadline"
 	"io"
 	"minicli"
 	log "minilog"
+	"minipager"
 	"net"
 	"os"
 	"os/signal"
 	"path"
-	"strings"
 	"syscall"
-	"unsafe"
 )
-
-// Copy of winsize struct defined by iotctl.h
-type winsize struct {
-	Row    uint16
-	Col    uint16
-	Xpixel uint16
-	Ypixel uint16
-}
 
 type Response struct {
 	Resp     minicli.Responses
@@ -42,6 +32,9 @@ type Conn struct {
 
 	enc *json.Encoder
 	dec *json.Decoder
+
+	// Set the Pager to use for long output messages
+	Pager minipager.Pager
 }
 
 func Dial(base string) (*Conn, error) {
@@ -116,8 +109,8 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 // Run a command and print the response.
 func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 	for resp := range mm.Run(cmd) {
-		if page {
-			Pager(resp.Rendered)
+		if page && mm.Pager != nil {
+			mm.Pager.Page(resp.Rendered)
 		} else if resp.Rendered != "" {
 			fmt.Println(resp.Rendered)
 		}
@@ -191,57 +184,4 @@ func (mm *Conn) Attach() {
 			return
 		}
 	}
-}
-
-func Pager(output string) {
-	if output == "" {
-		return
-	}
-
-	size := termSize()
-	if size == nil {
-		fmt.Println(output)
-		return
-	}
-
-	log.Debug("term height: %d", size.Row)
-
-	prompt := "-- press [ENTER] to show more, EOF to discard --"
-
-	scanner := bufio.NewScanner(strings.NewReader(output))
-outer:
-	for {
-		for i := uint16(0); i < size.Row-1; i++ {
-			if scanner.Scan() {
-				fmt.Println(scanner.Text()) // Println will add back the final '\n'
-			} else {
-				break outer // finished consuming from scanner
-			}
-		}
-
-		_, err := goreadline.Rlwrap(prompt, false)
-		if err != nil {
-			fmt.Println()
-			break outer // EOF
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Error("problem paging: %s", err)
-	}
-}
-
-func termSize() *winsize {
-	ws := &winsize{}
-	res, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-
-	if int(res) == -1 {
-		log.Error("unable to determine terminal size (errno: %d)", errno)
-		return nil
-	}
-
-	return ws
 }
