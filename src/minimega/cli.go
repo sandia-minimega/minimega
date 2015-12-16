@@ -173,7 +173,7 @@ func cliLocal() {
 			break // EOF
 		}
 		command := string(line)
-		log.Debug("got from stdin:", command)
+		log.Debug("got from stdin: `%v`", command)
 
 		cmd, err := minicli.Compile(command)
 		if err != nil {

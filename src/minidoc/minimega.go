@@ -25,12 +25,10 @@ func sendCommand(s string) string {
 
 	var responses string
 	for resp := range mm.Run(cmd) {
-		r := resp.Resp.String()
-		e := resp.Resp.Error()
-		if r != "" {
+		if r := resp.Rendered; r != "" {
 			responses += r + "\n"
 		}
-		if e != "" {
+		if e := resp.Resp.Error(); e != "" {
 			responses += e + "\n"
 		}
 	}
