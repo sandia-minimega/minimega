@@ -2,6 +2,7 @@ package main
 
 import (
 	"minicli"
+	"miniclient"
 	log "minilog"
 	"strings"
 )
@@ -13,7 +14,7 @@ func sendCommand(s string) string {
 
 	log.Debug("sendCommand: %v", s)
 
-	mm, err := Dial(*f_minimega)
+	mm, err := miniclient.Dial(*f_minimega)
 	if err != nil {
 		log.Errorln(err)
 		return err.Error()
@@ -24,12 +25,10 @@ func sendCommand(s string) string {
 
 	var responses string
 	for resp := range mm.Run(cmd) {
-		r := resp.Resp.String()
-		e := resp.Resp.Error()
-		if r != "" {
+		if r := resp.Rendered; r != "" {
 			responses += r + "\n"
 		}
-		if e != "" {
+		if e := resp.Resp.Error(); e != "" {
 			responses += e + "\n"
 		}
 	}

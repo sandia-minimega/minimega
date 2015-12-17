@@ -11,6 +11,7 @@ import (
 	"minicli"
 	"miniclient"
 	log "minilog"
+	"minipager"
 	"os"
 	"os/signal"
 	"os/user"
@@ -121,6 +122,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
+		mm.Pager = minipager.DefaultPager
 
 		if *f_e {
 			a := flag.Args()

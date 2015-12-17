@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"goreadline"
 	"minicli"
-	"miniclient"
 	log "minilog"
+	"minipager"
 	"os"
 	"sync"
 )
@@ -173,7 +173,7 @@ func cliLocal() {
 			break // EOF
 		}
 		command := string(line)
-		log.Debug("got from stdin:", command)
+		log.Debug("got from stdin: `%v`", command)
 
 		cmd, err := minicli.Compile(command)
 		if err != nil {
@@ -195,7 +195,7 @@ func cliLocal() {
 
 		for resp := range runCommand(cmd) {
 			// print the responses
-			miniclient.Pager(resp.String())
+			minipager.DefaultPager.Page(resp.String())
 
 			errs := resp.Error()
 			if errs != "" {
