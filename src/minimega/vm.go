@@ -318,20 +318,6 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	for i := range vm.Networks {
-		net := vm.Networks[i]
-
-		if err := vm.NetworkDisconnect(i); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-		}
-
-		if err := delTap(net.Tap); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
-		}
-	}
-
 	return os.RemoveAll(vm.instancePath)
 }
 

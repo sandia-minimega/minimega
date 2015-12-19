@@ -791,14 +791,16 @@ func addOpenflow(bridge, filter string) error {
 }
 
 // create and add a veth tap to a bridge
-func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (string, error) {
-	tapName := <-tapNameChan
+func (b *Bridge) ContainerTapCreate(tap string, lan int, ns string, mac string, index int) (string, error) {
+	if tap == "" {
+		tap = <-tapNameChan
+	}
 
 	args := []string{
 		"ip",
 		"link",
 		"add",
-		tapName,
+		tap,
 		"type",
 		"veth",
 		"peer",
@@ -815,7 +817,7 @@ func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 	}
 
 	// Add the interface
-	if err := b.TapAdd(tapName, lan, false); err != nil {
+	if err := b.TapAdd(tap, lan, false); err != nil {
 		return "", err
 	}
 	defer func() {
@@ -823,14 +825,14 @@ func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 		// case where the caller provided the tap name explicitly by not
 		// deleting the tap.
 		if err != nil {
-			if err := b.TapRemove(tapName); err != nil {
+			if err := b.TapRemove(tap); err != nil {
 				// Welp, we're boned
-				log.Error("defunct tap -- %v %v", tapName, err)
+				log.Error("defunct tap -- %v %v", tap, err)
 			}
 		}
 	}()
 
-	if err := upInterface(tapName, false); err != nil {
+	if err := upInterface(tap, false); err != nil {
 		return "", err
 	}
 
@@ -855,7 +857,7 @@ func (b *Bridge) ContainerTapCreate(lan int, ns string, mac string, index int) (
 		e := fmt.Errorf("ip: %v: %v", err, out)
 		return "", e
 	}
-	return tapName, nil
+	return tap, nil
 }
 
 // destroy and remove a container tap from a bridge
