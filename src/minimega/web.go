@@ -242,7 +242,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
-	for host, vms := range globalVmInfo() {
+	for host, vms := range globalVMs(false) {
 		for _, vm := range vms {
 			stateMask := VM_QUIT | VM_ERROR
 

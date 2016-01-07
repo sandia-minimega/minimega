@@ -59,7 +59,7 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	vlans := make(map[int]bool)
 
-	for host, vms := range globalVmInfo() {
+	for host, vms := range globalVMs(true) {
 		for _, vm := range vms {
 			ip, err := vm.Info("ip")
 			ip6, err2 := vm.Info("ip6")

@@ -600,28 +600,33 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	return
 }
 
-// Get the VM info from all hosts optionally applying column/row filters.
-// Returns a map with keys for the hostnames and values as the tabular data
-// from the host.
-func globalVmInfo() map[string]VMs {
-	cmdStr := "vm info"
+// Get the VM info from all hosts in the mesh. Callers must specify whether
+// they already hold the cmdLock or not. Returns a map where each key is a
+// hostname and the value is the VMs for that host.
+func globalVMs(hasLock bool) map[string]VMs {
+	if !hasLock {
+		cmdLock.Lock()
+		defer cmdLock.Unlock()
+	}
 
 	res := map[string]VMs{}
 
-	cmd := minicli.MustCompile(cmdStr)
+	cmd := minicli.MustCompile("vm info")
 	cmd.Record = false
 
-	for resps := range runCommandGlobally(cmd) {
+	cmds := makeCommandHosts(meshageNode.BroadcastRecipients(), cmd)
+	cmds = append(cmds, cmd) // add local node
+
+	for resps := range processCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
 				continue
 			}
 
-			switch data := resp.Data.(type) {
-			case VMs:
-				res[resp.Host] = data
-			default:
+			if vms, ok := resp.Data.(VMs); ok {
+				res[resp.Host] = vms
+			} else {
 				log.Error("unknown data field in vm info")
 			}
 		}
