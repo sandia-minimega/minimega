@@ -587,7 +587,7 @@ func (vm *ContainerVM) Start() (err error) {
 			vm.setState(VM_ERROR)
 		} else {
 			// launch() may have put the vm in the error state, don't change that
-			if vm.GetState() == VM_BUILDING {
+			if vm.GetState() != VM_ERROR {
 				vm.setState(VM_RUNNING)
 			}
 		}
