@@ -244,6 +244,7 @@ func teardown() {
 		log.Errorln(err)
 	}
 	ksmDisable()
+	vms.flush()
 	vms.cleanDirs()
 	containerTeardown()
 	commandSocketRemove()
