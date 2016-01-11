@@ -68,6 +68,7 @@ func (iml *IPMacLearner) AddMac(mac string, out chan IP) {
 func (iml *IPMacLearner) DelMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
+	close(iml.pairs[mac])
 	delete(iml.pairs, mac)
 }
 

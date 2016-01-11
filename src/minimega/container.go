@@ -983,19 +983,11 @@ func (vm *ContainerVM) launch(ack chan int) (err error) {
 
 			updates := make(chan ipmac.IP)
 			go func(vm *ContainerVM, net *NetConfig) {
-				defer close(updates)
-				for {
-					// TODO: need to acquire VM lock?
-					select {
-					case update := <-updates:
-						if update.IP4 != "" {
-							net.IP4 = update.IP4
-						} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
-							net.IP6 = update.IP6
-						}
-					case <-vm.kill:
-						b.iml.DelMac(net.MAC)
-						return
+				for update := range updates {
+					if update.IP4 != "" {
+						net.IP4 = update.IP4
+					} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
+						net.IP6 = update.IP6
 					}
 				}
 			}(vm, net)
@@ -1087,6 +1079,7 @@ func (vm *ContainerVM) launch(ack chan int) (err error) {
 				if err != nil {
 					log.Error("get bridge: %v", err)
 				} else {
+					b.iml.DelMac(net.MAC)
 					b.ContainerTapDestroy(net.VLAN, net.Tap)
 				}
 			}
