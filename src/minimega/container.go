@@ -662,80 +662,33 @@ func (vm *ContainerConfig) String() string {
 	return o.String()
 }
 
-func (vm *ContainerVM) launchPreamble() error {
-	// check if the vm has a conflict with the disk or mac address of another vm
-	// build state of currently running system
-	macMap := map[string]bool{}
-	selfMacMap := map[string]bool{}
-	diskSnapshotted := map[string]bool{}
-	diskPersistent := map[string]bool{}
+func (vm *ContainerVM) checkDisks() error {
+	// Disk path to whether it is a snapshot or not
+	disks := map[string]bool{}
 
+	// See note about vmLock in vm.checkInterfaces.
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	err := os.MkdirAll(vm.instancePath, os.FileMode(0700))
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
-
-	// populate selfMacMap
-	for _, net := range vm.Networks {
-		if net.MAC == "" { // don't worry about empty mac addresses
+	// Record which disks are in use and whether they are being used as a
+	// snapshot or not by other VMs. If the same disk happens to be in use by
+	// different VMs and they have mismatched snapshot flags, assume that the
+	// disk is not being used in snapshot mode.
+	for _, vmOther := range vms {
+		// Skip ourself
+		if vm == vmOther { // ignore this vm
 			continue
 		}
 
-		if _, ok := selfMacMap[net.MAC]; ok {
-			// if this vm specified the same mac address for two interfaces
-			return fmt.Errorf("Cannot specify the same mac address for two interfaces")
-		}
-		selfMacMap[net.MAC] = true
-	}
-
-	// populate macMap, diskSnapshotted, and diskPersistent
-	for _, vm2 := range vms {
-		if vm == vm2 { // ignore this vm
-			continue
-		}
-
-		// populate mac addresses set
-		for _, net := range vm2.Config().Networks {
-			macMap[net.MAC] = true
-		}
-
-		if vm2, ok := vm2.(*ContainerVM); ok {
-			// populate disk sets
-			if vm2.Snapshot {
-				diskSnapshotted[vm2.FSPath] = true
-			} else {
-				diskPersistent[vm2.FSPath] = true
-			}
-
+		if vmOther, ok := vmOther.(*ContainerVM); ok {
+			disks[vmOther.FSPath] = vmOther.Snapshot
 		}
 	}
 
-	// check for mac address conflicts and fill in unspecified mac addresses without conflict
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-
-		if net.MAC == "" { // create mac addresses where unspecified
-			existsOther, existsSelf, newMac := true, true, "" // entry condition/initialization
-			for existsOther || existsSelf {                   // loop until we generate a random mac that doesn't conflict (already exist)
-				newMac = randomMac()               // generate a new mac address
-				_, existsOther = macMap[newMac]    // check it against the set of mac addresses from other vms
-				_, existsSelf = selfMacMap[newMac] // check it against the set of mac addresses specified from this vm
-			}
-
-			net.MAC = newMac          // set the unspecified mac address
-			selfMacMap[newMac] = true // add this mac to the set of mac addresses for this vm
-		}
-	}
-
-	// check for disk conflict
-	_, existsSnapshotted := diskSnapshotted[vm.FSPath]                   // check if another vm is using this disk in snapshot mode
-	_, existsPersistent := diskPersistent[vm.FSPath]                     // check if another vm is using this disk in persistent mode (snapshot=false)
-	if existsPersistent || (vm.Snapshot == false && existsSnapshotted) { // if we have a disk conflict
-		return fmt.Errorf("disk path %v is already in use by another vm.", vm.FSPath)
+	// Check our disk to see if we're trying to use a disk that is in use by
+	// another VM (unless both are being used in snapshot mode).
+	if snapshot, ok := disks[vm.FSPath]; ok && (snapshot != vm.Snapshot) {
+		return fmt.Errorf("disk path %v is already in use by another vm", vm.FSPath)
 	}
 
 	return nil
@@ -771,7 +724,17 @@ func (vm *ContainerVM) launch() error {
 
 	// don't repeat the preamble if we're just in the quit state
 	if s != VM_QUIT {
-		if err := vm.launchPreamble(); err != nil {
+		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
+			teardownf("unable to create VM dir: %v", err)
+		}
+
+		// Check the disks and network interfaces are sane
+		err := vm.checkInterfaces()
+		if err == nil {
+			err = vm.checkDisks()
+		}
+
+		if err != nil {
 			log.Errorln(err)
 			vm.setError(err)
 			return err

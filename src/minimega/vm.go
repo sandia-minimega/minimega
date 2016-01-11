@@ -535,6 +535,63 @@ func (vm *BaseVM) writeTaps() error {
 	return nil
 }
 
+func (vm *BaseVM) checkInterfaces() error {
+	macs := map[string]bool{}
+
+	for _, net := range vm.Networks {
+		// Skip unassigned MACs
+		if net.MAC == "" {
+			continue
+		}
+
+		// Check if the VM already has this MAC for one of its interfaces
+		if _, ok := macs[net.MAC]; ok {
+			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
+		}
+
+		macs[net.MAC] = true
+	}
+
+	// Ensure that no new VMs are added while we check our interfaces. If a new
+	// VM has a conflict with us, it will be noted during thier
+	// checkInterfaces. This also ensures that only one VM's checkInterfaces
+	// can be running at a given time.
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	for _, vmOther := range vms {
+		// Skip ourself
+		if vm.ID == vmOther.GetID() {
+			continue
+		}
+
+		for _, net := range vmOther.Config().Networks {
+			// Warn if we see a conflict
+			if _, ok := macs[net.MAC]; ok {
+				log.Warn("VMs share MAC (%v) -- %v %v", net.MAC, vm.ID, vmOther.GetID())
+			}
+
+			macs[net.MAC] = true
+		}
+	}
+
+	// Find any unassigned MACs and randomly generate a MAC for them
+	for i := range vm.Networks {
+		net := &vm.Networks[i]
+		if net.MAC != "" {
+			continue
+		}
+
+		for exists := true; exists; _, exists = macs[net.MAC] {
+			net.MAC = randomMac()
+		}
+
+		macs[net.MAC] = true
+	}
+
+	return nil
+}
+
 func vmNotFound(idOrName string) error {
 	return fmt.Errorf("vm not found: %v", idOrName)
 }

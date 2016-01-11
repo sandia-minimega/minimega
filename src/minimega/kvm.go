@@ -324,6 +324,10 @@ func (vm *KvmVM) checkDisks() error {
 	// Disk path to whether it is a snapshot or not
 	disks := map[string]bool{}
 
+	// See note about vmLock in vm.checkInterfaces.
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	// Record which disks are in use and whether they are being used as a
 	// snapshot or not by other VMs. If the same disk happens to be in use by
 	// different VMs and they have mismatched snapshot flags, assume that the
@@ -347,57 +351,6 @@ func (vm *KvmVM) checkDisks() error {
 		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
 			return fmt.Errorf("disk path %v is already in use by another vm", disk)
 		}
-	}
-
-	return nil
-}
-
-func (vm *KvmVM) checkInterfaces() error {
-	macs := map[string]bool{}
-
-	for _, net := range vm.Networks {
-		// Skip unassigned MACs
-		if net.MAC == "" {
-			continue
-		}
-
-		// Check if the VM already has this MAC for one of its interfaces
-		if _, ok := macs[net.MAC]; ok {
-			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
-		}
-
-		macs[net.MAC] = true
-	}
-
-	for _, vmOther := range vms {
-		// Skip ourself
-		if vm == vmOther {
-			continue
-		}
-
-		// TODO: Before, there was a state mask:
-		// 	 VM_BUILDING | VM_RUNNING | VM_PAUSED
-		// Are conflicts with QUIT VMs fine? They can be restarted...
-
-		for _, net := range vmOther.Config().Networks {
-			macs[net.MAC] = true
-		}
-
-		// TODO: Do we want to check for conflicts? Or warn them?
-	}
-
-	// Find any unassigned MACs and randomly generate a MAC for them
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		if net.MAC != "" {
-			continue
-		}
-
-		for exists := true; exists; _, exists = macs[net.MAC] {
-			net.MAC = randomMac()
-		}
-
-		macs[net.MAC] = true
 	}
 
 	return nil
