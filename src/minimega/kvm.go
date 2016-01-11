@@ -142,7 +142,6 @@ func (vm *KvmVM) Start() (err error) {
 	// Update the state after the lock has been released
 	defer func() {
 		if err != nil {
-			log.Errorln(err)
 			vm.setState(VM_ERROR)
 		} else {
 			vm.setState(VM_RUNNING)
@@ -175,7 +174,10 @@ func (vm *KvmVM) Start() (err error) {
 	}
 
 	log.Info("starting VM: %v", vm.ID)
-	return vm.q.Start()
+	if err := vm.q.Start(); err != nil {
+		log.Errorln(err)
+	}
+	return err
 }
 
 func (vm *KvmVM) Stop() error {
@@ -427,7 +429,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	if vm.State != VM_QUIT {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
-			// XXX - Why not return here?
 		}
 
 		// Check the disks and network interfaces are sane
