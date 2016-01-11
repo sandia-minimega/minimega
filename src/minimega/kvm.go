@@ -118,17 +118,14 @@ func (vm *KvmVM) Launch(ack chan int) error {
 }
 
 func (vm *KvmVM) Flush() error {
-	for i := range vm.Networks {
-		net := vm.Networks[i]
-
-		if err := vm.NetworkDisconnect(i); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
+	for _, net := range vm.Networks {
+		b, err := getBridge(net.Bridge)
+		if err != nil {
+			log.Errorln(err)
 		}
-
-		if err := delTap(net.Tap); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
+		err = b.TapDestroy(net.Tap)
+		if err != nil {
+			log.Errorln(err)
 		}
 	}
 	return vm.BaseVM.Flush()

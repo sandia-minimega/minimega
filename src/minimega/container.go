@@ -945,8 +945,10 @@ func (vm *ContainerVM) launch(ack chan int) (err error) {
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the
 	// container side of the network namespace.
-	// create and add taps if we are associated with any networks
+	// That means that unlike kvm vms, we MUST create/destroy taps on
+	// launch/kill boundaries (kvm destroys taps on flush).
 
+	// create and add taps if we are associated with any networks
 	// expose the network namespace to iptool
 	err = vm.symlinkNetns()
 	if err != nil {

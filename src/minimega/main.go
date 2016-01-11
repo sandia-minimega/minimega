@@ -239,14 +239,15 @@ func teardown() {
 	clearAllCaptures()
 	vms.kill(Wildcard)
 	dnsmasqKillAll()
-	err := bridgesDestroy()
-	if err != nil {
-		log.Errorln(err)
-	}
 	ksmDisable()
 	vms.flush()
 	vms.cleanDirs()
 	containerTeardown()
+	err := bridgesDestroy()
+	if err != nil {
+		log.Errorln(err)
+	}
+	reapTaps()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
 	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
