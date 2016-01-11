@@ -28,6 +28,10 @@ const (
 	TrunkVLAN        = -2
 )
 
+const (
+	TAP_REAP_RATE = time.Second
+)
+
 // Bridge represents a bridge on the host and the Taps connected to it.
 type Bridge struct {
 	Name     string
@@ -37,7 +41,8 @@ type Bridge struct {
 	Trunk    []string
 	Tunnel   []string
 
-	Taps map[string]Tap
+	Taps        map[string]Tap
+	defunctTaps []string
 
 	// Embedded mutex
 	sync.Mutex
@@ -63,8 +68,9 @@ var (
 
 	tapNameChan chan string // atomic feeder of tap names
 
-	bridgeLock sync.Mutex
-	ovsLock    sync.Mutex
+	bridgeLock   sync.Mutex
+	ovsLock      sync.Mutex
+	reapTapsLock sync.Mutex
 )
 
 // create the default bridge struct and create a goroutine to generate
@@ -88,6 +94,8 @@ func init() {
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
+
+	go periodicReapTaps()
 }
 
 // NewBridge creates a new bridge with ovs, assumes that the bridgeLock is held.
@@ -121,6 +129,8 @@ func NewBridge(name string) (*Bridge, error) {
 
 // destroy a bridge with ovs, and remove all of the taps, etc associated with it
 func (b *Bridge) Destroy() error {
+	reapTaps()
+
 	// first get all of the taps off of this bridge and destroy them
 	for tap := range b.Taps {
 		log.Debug("destroying tap %v", tap)
@@ -151,6 +161,12 @@ func (b *Bridge) Destroy() error {
 // create and add a tap to a bridge. If a name is not provided, one will be
 // automatically generated.
 func (b *Bridge) TapCreate(name string, lan int, host bool) (tapName string, err error) {
+	// don't bother with any of this if the named tap is already on the
+	// bridge
+	if name != "" && b.onBridge(name) {
+		return name, nil
+	}
+
 	tapName = name
 	if tapName == "" {
 		tapName = <-tapNameChan
@@ -186,6 +202,10 @@ func (b *Bridge) TapCreate(name string, lan int, host bool) (tapName string, err
 
 // add a tap to the bridge
 func (b *Bridge) TapAdd(tap string, lan int, host bool) (err error) {
+	// reap taps before adding to avoid someone killing/restarting a vm
+	// faster than the periodic tap reaper
+	reapTaps()
+
 	defer func() {
 		if err == ErrAlreadyExists {
 			// special case - we own the tap, but it already exists
@@ -221,7 +241,8 @@ func (b *Bridge) TapAdd(tap string, lan int, host bool) (err error) {
 
 // destroy and remove a tap from a bridge
 func (b *Bridge) TapDestroy(tap string) error {
-	if err := b.TapRemove(tap); err != nil {
+	err := b.queueRemove(tap)
+	if err != nil {
 		return err
 	}
 
@@ -499,6 +520,16 @@ func (b *Bridge) MirrorRemove(tap string) error {
 
 	// delete the associated host tap
 	return hostTapDelete(tap)
+}
+
+// onBridge returns true if a given tap is on the bridge
+func (b *Bridge) onBridge(tap string) bool {
+	b.Lock()
+	defer b.Unlock()
+	if _, ok := b.Taps[tap]; ok {
+		return true
+	}
+	return false
 }
 
 // return a pointer to the specified bridge, creating it if it doesn't already
@@ -862,12 +893,12 @@ func (b *Bridge) ContainerTapCreate(tap string, lan int, ns string, mac string, 
 
 // destroy and remove a container tap from a bridge
 func (b *Bridge) ContainerTapDestroy(lan int, tap string) error {
-	err := b.TapRemove(tap)
+	err := b.queueRemove(tap)
 	if err != nil {
-		log.Info("TapDestroy: could not remove tap: %v", err)
+		return err
 	}
 
-	if err := downInterface(tap); err != nil {
+	if err = downInterface(tap); err != nil {
 		return err
 	}
 
@@ -889,4 +920,83 @@ func (b *Bridge) ContainerTapDestroy(lan int, tap string) error {
 		return e
 	}
 	return nil
+}
+
+// mark a tap as being defunct. The periodic tapReaper will remove the tap.
+func (b *Bridge) queueRemove(tap string) error {
+	log.Debug("queueRemove %v %v", b.Name, tap)
+
+	b.Lock()
+	defer b.Unlock()
+
+	if _, ok := b.Taps[tap]; !ok {
+		return fmt.Errorf("no such tap %v", tap)
+	}
+
+	b.defunctTaps = append(b.defunctTaps, tap)
+	return nil
+}
+
+// reapTaps walks all of the bridges and groups taps declared as defunct into a
+// single openvswitch del-port command. We do this to speed up the time it
+// takes to remove openvswitch taps when a large number of taps are present on
+// a bridge. See https://github.com/sandia-minimega/minimega/issues/296 for
+// more discussion. A periodic call to reapTaps is issued every TAP_REAP_RATE.
+// On exiting, an additional call is made to ensure we've completed cleanup.
+//
+// A single del-port command in openvswitch is typically between 30-40
+// characters, plus the 'ovs-vsctl' command. A command line buffer on a modern
+// linux machine is something like 2MB (wow), so if we round the per-del-port
+// up to 50 characters, we should be able to stack 40000 del-ports on a single
+// command line. To that end we won't bother with setting a maximum number of
+// taps to remove in a single operation. If we eventually get to 40k taps
+// needing removal in a single pass of the reaper, then we have other problems.
+//
+// You can check yourself with `getconf ARG_MAX` or `xargs --show-limits`
+func reapTaps() {
+	reapTapsLock.Lock()
+	defer reapTapsLock.Unlock()
+
+	bridges := enumerateBridges()
+	var args []string
+
+	for _, v := range bridges {
+		b, err := getBridge(v)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		b.Lock()
+
+		// don't hold the lock on bridges with no taps to remove
+		if len(b.defunctTaps) == 0 {
+			b.Unlock()
+		} else {
+			defer b.Unlock()
+
+			// just build up the arg string directly
+			for _, t := range b.defunctTaps {
+				args = append(args, "--", "del-port", b.Name, t)
+				delete(b.Taps, t)
+			}
+			b.defunctTaps = []string{}
+		}
+	}
+
+	if len(args) != 0 {
+		log.Debug("reapTaps args: %v", strings.Join(args, " "))
+
+		_, sErr, err := ovsCmdWrapper(args)
+		if err != nil {
+			log.Error("reapTaps: %v: %v", err, sErr)
+		}
+	}
+}
+
+func periodicReapTaps() {
+	for {
+		time.Sleep(TAP_REAP_RATE)
+		log.Debugln("periodic reapTaps")
+		reapTaps()
+	}
 }

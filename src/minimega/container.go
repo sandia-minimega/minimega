@@ -583,7 +583,6 @@ func (vm *ContainerVM) Start() (err error) {
 	// Update the state after the lock has been released
 	defer func() {
 		if err != nil {
-			log.Errorln(err)
 			vm.setState(VM_ERROR)
 		} else {
 			// launch() may have put the vm in the error state, don't change that
@@ -623,6 +622,7 @@ func (vm *ContainerVM) Start() (err error) {
 	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
 	err = ioutil.WriteFile(freezer, []byte("THAWED"), 0644)
 	if err != nil {
+		log.Errorln(err)
 		return err
 	}
 
@@ -777,6 +777,7 @@ func (vm *ContainerVM) launch(ack chan int) (err error) {
 	ContainerInit.Init()
 	if !ContainerInit.Success {
 		err = errors.New("cannot launch container VMs -- cgroups failed to initialize")
+		log.Errorln(err)
 		return
 	}
 
@@ -945,8 +946,10 @@ func (vm *ContainerVM) launch(ack chan int) (err error) {
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the
 	// container side of the network namespace.
-	// create and add taps if we are associated with any networks
+	// That means that unlike kvm vms, we MUST create/destroy taps on
+	// launch/kill boundaries (kvm destroys taps on flush).
 
+	// create and add taps if we are associated with any networks
 	// expose the network namespace to iptool
 	err = vm.symlinkNetns()
 	if err != nil {

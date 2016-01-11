@@ -118,23 +118,17 @@ func (vm *KvmVM) Launch(ack chan int) error {
 }
 
 func (vm *KvmVM) Flush() error {
-	for i := range vm.Networks {
-		net := vm.Networks[i]
-
+	for _, net := range vm.Networks {
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
+
 		b.iml.DelMac(net.MAC)
 
-		if err := vm.NetworkDisconnect(i); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-		}
-
-		if err := delTap(net.Tap); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
+		err = b.TapDestroy(net.Tap)
+		if err != nil {
+			log.Error(err)
 		}
 	}
 	return vm.BaseVM.Flush()
@@ -148,7 +142,6 @@ func (vm *KvmVM) Start() (err error) {
 	// Update the state after the lock has been released
 	defer func() {
 		if err != nil {
-			log.Errorln(err)
 			vm.setState(VM_ERROR)
 		} else {
 			vm.setState(VM_RUNNING)
@@ -181,7 +174,10 @@ func (vm *KvmVM) Start() (err error) {
 	}
 
 	log.Info("starting VM: %v", vm.ID)
-	return vm.q.Start()
+	if err := vm.q.Start(); err != nil {
+		log.Errorln(err)
+	}
+	return err
 }
 
 func (vm *KvmVM) Stop() error {
@@ -416,7 +412,6 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	// Update the state after the lock has been released
 	defer func() {
 		if err != nil {
-			log.Errorln(err)
 			vm.setState(VM_ERROR)
 
 			// Only ACK for failures since, on success, launch may block
@@ -442,6 +437,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			err = vm.checkDisks()
 		}
 		if err != nil {
+			log.Errorln(err)
 			return
 		}
 	}
@@ -463,11 +459,13 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
+			log.Errorln(err)
 			return err
 		}
 
 		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
 		if err != nil {
+			log.Errorln(err)
 			return err
 		}
 
@@ -493,6 +491,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 		err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
 		if err != nil {
+			log.Errorln(err)
 			return fmt.Errorf("write instance taps file: %v", err)
 		}
 	}
@@ -512,6 +511,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 	}
 	err = cmd.Start()
 	if err != nil {
+		log.Errorln(err)
 		return fmt.Errorf("start qemu: %v %v", err, sErr.String())
 	}
 
@@ -550,6 +550,7 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 	if !connected {
 		cmd.Process.Kill()
+		log.Errorln(err)
 		return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
 	}
 
