@@ -128,7 +128,7 @@ func (vm *KvmVM) Flush() error {
 
 		err = b.TapDestroy(net.Tap)
 		if err != nil {
-			log.Error(err)
+			log.Errorln(err)
 		}
 	}
 	return vm.BaseVM.Flush()
