@@ -112,7 +112,7 @@ func NewKVM(name string) *KvmVM {
 
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch(ack chan int) error {
-	go vm.launch(ack)
+	vm.asyncLaunch(ack)
 
 	return nil
 }
@@ -139,17 +139,8 @@ func (vm *KvmVM) Config() *BaseConfig {
 }
 
 func (vm *KvmVM) Start() (err error) {
-	// Update the state after the lock has been released
-	defer func() {
-		if err != nil {
-			vm.setState(VM_ERROR)
-		} else {
-			vm.setState(VM_RUNNING)
-		}
-	}()
-
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+	vm.Lock()
+	defer vm.Unlock()
 
 	if vm.State&VM_RUNNING != 0 {
 		return nil
@@ -161,37 +152,43 @@ func (vm *KvmVM) Start() (err error) {
 		// Create a new channel since we closed the other one to indicate that
 		// the VM should quit.
 		vm.kill = make(chan bool)
-		ack := make(chan int)
 
-		go vm.launch(ack)
-
-		// Unlock so that launch can do its thing. We will block on receiving
-		// on the ack channel so that we know when launch has finished and it's
-		// okay to reaquire the lock.
-		vm.lock.Unlock()
-		log.Debug("ack restarted VM %v", <-ack)
-		vm.lock.Lock()
+		// Launch handles setting the VM to error state
+		if err := vm.launch(); err != nil {
+			return err
+		}
 	}
 
 	log.Info("starting VM: %v", vm.ID)
 	if err := vm.q.Start(); err != nil {
 		log.Errorln(err)
+		vm.setError(err)
+		return err
 	}
-	return err
+
+	vm.setState(VM_RUNNING)
+
+	return nil
 }
 
 func (vm *KvmVM) Stop() error {
-	if vm.GetState() != VM_RUNNING {
+	vm.Lock()
+	defer vm.Unlock()
+
+	if vm.State != VM_RUNNING {
 		return vmNotRunning(strconv.Itoa(vm.ID))
 	}
 
 	log.Info("stopping VM: %v", vm.ID)
-	err := vm.q.Stop()
-	if err == nil {
-		vm.setState(VM_PAUSED)
+	if err := vm.q.Stop(); err != nil {
+		log.Errorln(err)
+		vm.setError(err)
+		return err
 	}
 
-	return err
+	vm.setState(VM_PAUSED)
+
+	return nil
 }
 
 func (vm *KvmVM) String() string {
@@ -406,23 +403,40 @@ func (vm *KvmVM) checkInterfaces() error {
 	return nil
 }
 
-func (vm *KvmVM) launch(ack chan int) (err error) {
-	log.Info("launching vm: %v", vm.ID)
+func (vm *KvmVM) connectQMP() (err error) {
+	delay := QMP_CONNECT_DELAY * time.Millisecond
 
-	// Update the state after the lock has been released
-	defer func() {
-		if err != nil {
-			vm.setState(VM_ERROR)
-
-			// Only ACK for failures since, on success, launch may block
-			ack <- vm.ID
-		} else {
-			vm.setState(VM_BUILDING)
+	for count := 0; count < QMP_CONNECT_RETRY; count++ {
+		vm.q, err = qmp.Dial(vm.qmpPath())
+		if err == nil {
+			log.Debug("qmp dial to %v successful", vm.ID)
+			return
 		}
-	}()
 
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
+		time.Sleep(delay)
+	}
+
+	// Never connected successfully
+	return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
+}
+
+// asyncLaunch performs the VM launch function in the background, sending an
+// ack on the channel when done.
+func (vm *KvmVM) asyncLaunch(ack chan int) {
+	go func() {
+		vm.Lock()
+		defer vm.Unlock()
+
+		vm.launch()
+		ack <- vm.ID
+	}()
+}
+
+// launch is the low-level launch function for KVM VMs. The caller should hold
+// the VM's lock.
+func (vm *KvmVM) launch() error {
+	log.Info("launching vm: %v", vm.ID)
 
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
@@ -432,25 +446,21 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 		}
 
 		// Check the disks and network interfaces are sane
-		err = vm.checkInterfaces()
+		err := vm.checkInterfaces()
 		if err == nil {
 			err = vm.checkDisks()
 		}
+
 		if err != nil {
 			log.Errorln(err)
-			return
+			vm.setError(err)
+			return err
 		}
 	}
 
 	// write the config for this vm
 	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
-
-	var args []string
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	var cmd *exec.Cmd
-	var waitChan = make(chan int)
 
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
@@ -459,60 +469,53 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 		b, err := getBridge(net.Bridge)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("get bridge: %v", err)
+			vm.setError(err)
 			return err
 		}
 
 		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
 		if err != nil {
-			log.Errorln(err)
+			log.Error("create tap: %v", err)
+			vm.setError(err)
 			return err
 		}
 
 		updates := make(chan ipmac.IP)
-		go func(vm *KvmVM, net *NetConfig) {
-			for update := range updates {
-				if update.IP4 != "" {
-					net.IP4 = update.IP4
-				} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
-					net.IP6 = update.IP6
-				}
-			}
-		}(vm, net)
+		go vm.macSnooper(net, updates)
 
 		b.iml.AddMac(net.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {
-		taps := []string{}
-		for _, net := range vm.Networks {
-			taps = append(taps, net.Tap)
-		}
-
-		err := ioutil.WriteFile(filepath.Join(vm.instancePath, "taps"), []byte(strings.Join(taps, "\n")), 0666)
-		if err != nil {
+		if err := vm.writeTaps(); err != nil {
 			log.Errorln(err)
-			return fmt.Errorf("write instance taps file: %v", err)
+			vm.setError(err)
+			return err
 		}
 	}
+
+	var args []string
+	var sOut bytes.Buffer
+	var sErr bytes.Buffer
 
 	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
 	args = vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
-	cmd = &exec.Cmd{
+	cmd := &exec.Cmd{
 		Path:   process("qemu"),
 		Args:   args,
-		Env:    nil,
-		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
-	err = cmd.Start()
-	if err != nil {
+
+	if err := cmd.Start(); err != nil {
+		err = fmt.Errorf("start qemu: %v %v", err, sErr.String())
 		log.Errorln(err)
-		return fmt.Errorf("start qemu: %v %v", err, sErr.String())
+		vm.setError(err)
+		return err
 	}
 
 	vm.pid = cmd.Process.Pid
@@ -520,54 +523,48 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 
 	vm.CheckAffinity()
 
+	// Channel to signal when the process has exited
+	var waitChan = make(chan bool)
+
+	// Create goroutine to wait for process to exit
 	go func() {
+		defer close(waitChan)
 		err := cmd.Wait()
-		vm.setState(VM_QUIT)
-		if err != nil {
-			if err.Error() != "signal: killed" { // because we killed it
-				log.Error("kill qemu: %v %v", err, sErr.String())
-				vm.setState(VM_ERROR)
-			}
+
+		vm.Lock()
+		defer vm.Unlock()
+
+		// Check if the process quit for some reason other than being killed
+		if err != nil && err.Error() != "signal: killed" {
+			log.Error("kill qemu: %v %v", err, sErr.String())
+			vm.setError(err)
+		} else if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
 		}
-		waitChan <- vm.ID
 	}()
 
-	// we can't just return on error at this point because we'll leave dangling goroutines, we have to clean up on failure
-	sendKillAck := false
-
-	// connect to qmp
-	connected := false
-	for count := 0; count < QMP_CONNECT_RETRY; count++ {
-		vm.q, err = qmp.Dial(vm.qmpPath())
-		if err == nil {
-			connected = true
-			break
-		}
-		delay := QMP_CONNECT_DELAY * time.Millisecond
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
-		time.Sleep(delay)
-	}
-
-	if !connected {
+	if err := vm.connectQMP(); err != nil {
+		// Failed to connect to qmp so clean up the process
 		cmd.Process.Kill()
-		log.Errorln(err)
-		return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
-	}
 
-	log.Debug("qmp dial to %v successful", vm.ID)
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
 
 	go vm.asyncLogger()
 
-	ack <- vm.ID
-
 	// connect cc
 	ccPath := filepath.Join(vm.instancePath, "cc")
-	err = ccNode.DialSerial(ccPath)
-	if err != nil {
+	if err := ccNode.DialSerial(ccPath); err != nil {
+		// TODO: Should we kill the VM?
 		log.Errorln(err)
 	}
 
+	// Create goroutine to wait to kill the VM
 	go func() {
+		sendKillAck := false
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -582,6 +579,9 @@ func (vm *KvmVM) launch(ack chan int) (err error) {
 			killAck <- vm.ID
 		}
 	}()
+
+	// No errors.. ready to go!
+	vm.setState(VM_BUILDING)
 
 	return nil
 }

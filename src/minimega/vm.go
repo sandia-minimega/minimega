@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"ipmac"
 	"minicli"
 	log "minilog"
 	"os"
@@ -124,7 +125,7 @@ type NetConfig struct {
 type BaseVM struct {
 	BaseConfig // embed
 
-	lock sync.Mutex // lock to synchronize changes to VM
+	sync.Mutex // embed, vm is lockble to synchronize changes to VM
 
 	kill chan bool // channel to signal the VM to shut down
 
@@ -286,8 +287,8 @@ func (vm *BaseVM) GetName() string {
 }
 
 func (vm *BaseVM) GetState() VMState {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+	vm.Lock()
+	defer vm.Unlock()
 
 	return vm.State
 }
@@ -301,8 +302,8 @@ func (vm *BaseVM) GetInstancePath() string {
 }
 
 func (vm *BaseVM) Kill() error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+	vm.Lock()
+	defer vm.Unlock()
 
 	if vm.State&VM_KILLABLE == 0 {
 		return fmt.Errorf("invalid VM state to kill: %d %v", vm.ID, vm.State)
@@ -348,8 +349,8 @@ func (vm *BaseVM) UpdateCCActive() {
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+	vm.Lock()
+	defer vm.Unlock()
 
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
@@ -393,8 +394,8 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 }
 
 func (vm *BaseVM) NetworkDisconnect(pos int) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
+	vm.Lock()
+	defer vm.Unlock()
 
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
@@ -432,13 +433,16 @@ func (vm *BaseVM) info(mask string) (string, error) {
 
 	var vals []string
 
+	vm.Lock()
+	defer vm.Unlock()
+
 	switch mask {
 	case "id":
 		return fmt.Sprintf("%v", vm.ID), nil
 	case "name":
 		return fmt.Sprintf("%v", vm.Name), nil
 	case "state":
-		return vm.GetState().String(), nil
+		return vm.State.String(), nil
 	case "type":
 		return vm.GetType().String(), nil
 	case "vlan":
@@ -488,16 +492,47 @@ func (vm *BaseVM) info(mask string) (string, error) {
 	return fmt.Sprintf("%v", vals), nil
 }
 
-// update the vm state, and write the state to file
+// setState updates the vm state, and write the state to file. Assumes that the
+// caller has locked the vm.
 func (vm *BaseVM) setState(s VMState) {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
 	vm.State = s
+
 	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}
+}
+
+// setError updates the vm state and records the error in the VM's tags.
+// Assumes that the caller has locked the vm.
+func (vm *BaseVM) setError(err error) {
+	vm.Tags["error"] = err.Error()
+	vm.setState(VM_ERROR)
+}
+
+func (vm *BaseVM) macSnooper(net *NetConfig, updates chan ipmac.IP) {
+	for update := range updates {
+		// TODO: need to acquire VM lock?
+		if update.IP4 != "" {
+			net.IP4 = update.IP4
+		} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
+			net.IP6 = update.IP6
+		}
+	}
+}
+
+func (vm *BaseVM) writeTaps() error {
+	taps := []string{}
+	for _, net := range vm.Networks {
+		taps = append(taps, net.Tap)
+	}
+
+	f := filepath.Join(vm.instancePath, "taps")
+	if err := ioutil.WriteFile(f, []byte(strings.Join(taps, "\n")), 0666); err != nil {
+		return fmt.Errorf("write instance taps file: %v", err)
+	}
+
+	return nil
 }
 
 func vmNotFound(idOrName string) error {
