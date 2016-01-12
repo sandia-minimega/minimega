@@ -118,7 +118,20 @@ func (vm *KvmVM) Launch(ack chan int) error {
 }
 
 func (vm *KvmVM) Flush() error {
+	vm.Lock()
+	defer vm.Unlock()
+
 	for _, net := range vm.Networks {
+		// Handle already disconnected taps differently since they aren't
+		// assigned to any bridges.
+		if net.VLAN == DisconnectedVLAN {
+			if err := delTap(net.Tap); err != nil {
+				log.Error("leaked tap %v: %v", net.Tap, err)
+			}
+
+			continue
+		}
+
 		b, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
@@ -131,6 +144,7 @@ func (vm *KvmVM) Flush() error {
 			log.Errorln(err)
 		}
 	}
+
 	return vm.BaseVM.Flush()
 }
 
