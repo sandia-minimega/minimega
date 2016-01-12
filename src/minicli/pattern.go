@@ -46,6 +46,14 @@ type patternItem struct {
 
 type patternItems []patternItem
 
+func (p patternItem) Optional() bool {
+	return p.Type&optionalItem != 0
+}
+
+func (p patternItem) List() bool {
+	return p.Type&listItem != 0
+}
+
 func (items patternItems) String() string {
 	parts := make([]string, len(items))
 
