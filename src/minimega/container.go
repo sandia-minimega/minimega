@@ -956,11 +956,11 @@ func (vm *ContainerVM) launch() error {
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
 	if err == nil {
-		// connect cc
+		// connect cc. Note that we have a local err here because we don't want
+		// to prevent the VM from continuing to launch, even if we can't
+		// connect to cc.
 		if err := ccNode.ListenUnix(ccPath); err != nil {
-			// TODO: Should we kill the VM? Note: we create an err that is local
-			// to this block to avoid aborting the launch.
-			log.Errorln(err)
+			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 		}
 	}
 

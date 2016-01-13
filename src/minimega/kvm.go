@@ -525,8 +525,7 @@ func (vm *KvmVM) launch() error {
 	// connect cc
 	ccPath := filepath.Join(vm.instancePath, "cc")
 	if err := ccNode.DialSerial(ccPath); err != nil {
-		// TODO: Should we kill the VM?
-		log.Errorln(err)
+		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 	}
 
 	// Create goroutine to wait to kill the VM
