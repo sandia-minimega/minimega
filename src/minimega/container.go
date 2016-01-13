@@ -573,10 +573,12 @@ func NewContainer(name string) *ContainerVM {
 	return vm
 }
 
-func (vm *ContainerVM) Launch(ack chan int) error {
-	vm.asyncLaunch(ack)
+func (vm *ContainerVM) Launch(ack chan int) {
+	vm.Lock()
+	defer vm.Unlock()
 
-	return nil
+	vm.launch()
+	ack <- vm.ID
 }
 
 func (vm *ContainerVM) Start() (err error) {
@@ -692,18 +694,6 @@ func (vm *ContainerVM) checkDisks() error {
 	}
 
 	return nil
-}
-
-// asyncLaunch performs the VM launch function in the background, sending an
-// ack on the channel when done.
-func (vm *ContainerVM) asyncLaunch(ack chan int) {
-	go func() {
-		vm.Lock()
-		defer vm.Unlock()
-
-		vm.launch()
-		ack <- vm.ID
-	}()
 }
 
 // launch is the low-level launch function for KVM VMs. The caller should hold

@@ -111,10 +111,12 @@ func NewKVM(name string) *KvmVM {
 }
 
 // Launch a new KVM VM.
-func (vm *KvmVM) Launch(ack chan int) error {
-	vm.asyncLaunch(ack)
+func (vm *KvmVM) Launch(ack chan int) {
+	vm.Lock()
+	defer vm.Unlock()
 
-	return nil
+	vm.launch()
+	ack <- vm.ID
 }
 
 func (vm *KvmVM) Flush() error {
@@ -386,18 +388,6 @@ func (vm *KvmVM) connectQMP() (err error) {
 
 	// Never connected successfully
 	return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
-}
-
-// asyncLaunch performs the VM launch function in the background, sending an
-// ack on the channel when done.
-func (vm *KvmVM) asyncLaunch(ack chan int) {
-	go func() {
-		vm.Lock()
-		defer vm.Unlock()
-
-		vm.launch()
-		ack <- vm.ID
-	}()
 }
 
 // launch is the low-level launch function for KVM VMs. The caller should hold

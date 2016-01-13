@@ -190,7 +190,9 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 	vms[vm.GetID()] = vm
 	vmLock.Unlock()
 
-	return vm.Launch(ack)
+	go vm.Launch(ack)
+
+	return nil
 }
 
 func (vms VMs) start(target string) []error {

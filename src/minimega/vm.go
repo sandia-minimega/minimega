@@ -55,10 +55,10 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 
-	// Launch launches the VM and acks on the provided channel when the VM has
-	// been launched.
-	Launch(chan int) error
-	// TODO: Make kill have ack channel?
+	// Launch asynchronously launches the VM and acknoledges the launch via the
+	// provided channel.
+	Launch(chan int)
+
 	Kill() error
 	Start() error
 	Stop() error
