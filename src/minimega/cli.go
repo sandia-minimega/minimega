@@ -76,42 +76,53 @@ func forward(in, out chan minicli.Responses) {
 func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
 	// Forward the responses and unlock when all are passed through
 	out := make(chan minicli.Responses)
-	ins := []chan minicli.Responses{}
-
-	for _, c := range cmd {
-		c, err := cliPreprocessor(c)
-		if err != nil {
-			log.Errorln(err)
-
-			out <- minicli.Responses{
-				&minicli.Response{
-					Host:  hostname,
-					Error: err.Error(),
-				},
-			}
-
-			break
-		}
-
-		ins = append(ins, minicli.ProcessCommand(c))
-	}
 
 	var wg sync.WaitGroup
 
-	// De-mux ins into out
-	for _, in := range ins {
+	// Preprocess all the commands so that if there's an error, we haven't
+	// already started to run some of the commands.
+	for i := range cmd {
+		var err error
+
+		cmd[i], err = cliPreprocessor(cmd[i])
+		if err != nil {
+			log.Errorln(err)
+
+			// Send the error from a separate goroutine because nothing will
+			// receive from this channel until processCommands returns and we
+			// don't want to create a deadlock.
+			go func() {
+				out <- minicli.Responses{
+					&minicli.Response{
+						Host:  hostname,
+						Error: err.Error(),
+					},
+				}
+
+				close(out)
+			}()
+
+			return out
+		}
+	}
+
+	// Completed preprocessing... start all the commands and forward all
+	// responses to out.
+	for _, c := range cmd {
 		wg.Add(1)
 
-		go func(in chan minicli.Responses) {
+		in := minicli.ProcessCommand(c)
+
+		go func() {
 			// Mark done after we have read all the responses from in
 			defer wg.Done()
 
 			forward(in, out)
-		}(in)
+		}()
 	}
 
+	// Wait for all the de-muxing goroutines to complete
 	go func() {
-		// Close after all de-muxing goroutines have completed
 		defer close(out)
 
 		wg.Wait()
