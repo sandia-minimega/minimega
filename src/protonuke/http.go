@@ -357,7 +357,7 @@ func httpMakeImage() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 
-	pixelcount := *f_imageSize * 1024 * 1024 / 4
+	pixelcount := *f_httpImageSize * 1024 * 1024 / 4
 	side := int(math.Sqrt(float64(pixelcount)))
 	log.Debug("Image served will be %v by %v", side, side)
 
