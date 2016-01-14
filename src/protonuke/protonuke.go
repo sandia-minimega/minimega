@@ -34,6 +34,7 @@ var (
 	f_v4       = flag.Bool("ipv4", true, "use IPv4. Can be used together with -ipv6")
 	f_v6       = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
 	f_report   = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
+	f_imageSize = flag.Int("imagesize", 3, "size of image to serve in http/https pages")
 	hosts      map[string]string
 	keys       []string
 )
