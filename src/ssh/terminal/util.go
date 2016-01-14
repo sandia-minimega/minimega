@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build linux,!appengine darwin
+// +build darwin dragonfly freebsd linux,!appengine netbsd openbsd
 
 // Package terminal provides support functions for dealing with terminals, as
 // commonly found on UNIX systems.
@@ -14,7 +14,7 @@
 // 	        panic(err)
 // 	}
 // 	defer terminal.Restore(0, oldState)
-package terminal
+package terminal // import "ssh/terminal"
 
 import (
 	"io"

@@ -19,6 +19,7 @@ import (
 	"minicli"
 	"miniclient"
 	log "minilog"
+	"minipager"
 	"path/filepath"
 	"strings"
 	"time"
@@ -40,6 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+	c.Pager = minipager.DefaultPager
 
 	// Get the list of files containing VNC recordings
 	recordings, err := ioutil.ReadDir(*f_recordings)

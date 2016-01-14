@@ -120,21 +120,24 @@ func (r Responses) Error() string {
 }
 
 func (r Responses) tabularString(buf io.Writer, header []string) {
-	// Add extra column to the data so that
-	if r.annotate() {
-		header = append([]string{"host"}, header...)
+	annotate := r.annotate()
 
-		for _, v := range r {
-			for j, row := range v.Tabular {
-				v.Tabular[j] = append([]string{v.Host}, row...)
-			}
-		}
+	// Add extra header for host if annotate is set
+	if annotate {
+		header = append([]string{"host"}, header...)
 	}
 
-	// Collect all the tabular data
+	// Collect all the tabular data, adding extra data column for host, if
+	// annotate is set.
 	data := [][]string{}
 	for _, v := range r {
-		data = append(data, v.Tabular...)
+		for _, row := range v.Tabular {
+			if annotate {
+				row = append([]string{v.Host}, row...)
+			}
+
+			data = append(data, row)
+		}
 	}
 
 	if r.sort() {

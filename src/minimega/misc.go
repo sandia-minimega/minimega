@@ -220,7 +220,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		if err == nil {
 			cmdStr = fmt.Sprintf(".filter id=%v .columns name,id .record false vm info", v)
 		} else {
-			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id .record false vm info", v)
+			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id .record false vm info", vm)
 		}
 
 		cmd := minicli.MustCompile(cmdStr)

@@ -8,14 +8,16 @@ import (
 	"flag"
 	"fmt"
 	"goreadline"
-	"io/ioutil"
 	"minicli"
 	"miniclient"
 	log "minilog"
+	"minipager"
 	"os"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"version"
@@ -43,7 +45,7 @@ var (
 	f_nameshpace = flag.String("nameshpace", "minimega", "meshage namespace for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
-	f_cli        = flag.Bool("cli", false, "print the minimega cli, in markdown, to stdout and exit")
+	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 
 	vms      VMs
@@ -77,14 +79,15 @@ func main() {
 
 	flag.Usage = usage
 	flag.Parse()
-	if !strings.HasSuffix(*f_base, "/") {
-		*f_base += "/"
-	}
 
 	logSetup()
 	cliSetup()
 
 	if *f_cli {
+		if err := minicli.Validate(); err != nil {
+			log.Fatalln(err)
+		}
+
 		doc, err := minicli.Doc()
 		if err != nil {
 			log.Fatal("failed to generate docs: %v", err)
@@ -95,11 +98,7 @@ func main() {
 
 	// rebase f_iomBase if f_base changed but iomBase did not
 	if *f_base != BASE_PATH && *f_iomBase == IOM_PATH {
-		*f_iomBase = *f_base + "files"
-	}
-
-	if !strings.HasSuffix(*f_iomBase, "/") {
-		*f_iomBase += "/"
+		*f_iomBase = filepath.Join(*f_base, "files")
 	}
 
 	if *f_version {
@@ -127,6 +126,7 @@ func main() {
 		if err != nil {
 			log.Fatalln(err)
 		}
+		mm.Pager = minipager.DefaultPager
 
 		if *f_e {
 			a := flag.Args()
@@ -154,13 +154,13 @@ func main() {
 	}
 
 	// check for a running instance of minimega
-	_, err = os.Stat(*f_base + "minimega")
+	_, err = os.Stat(filepath.Join(*f_base, "minimega"))
 	if err == nil {
 		if !*f_force {
 			log.Fatalln("minimega appears to already be running, override with -force")
 		}
 		log.Warn("minimega may already be running, proceed with caution")
-		err = os.Remove(*f_base + "minimega")
+		err = os.Remove(filepath.Join(*f_base, "minimega"))
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -196,12 +196,10 @@ func main() {
 	if err != nil {
 		log.Fatal("mkdir base path: %v", err)
 	}
+
 	pid := os.Getpid()
-	err = ioutil.WriteFile(*f_base+"minimega.pid", []byte(fmt.Sprintf("%v", pid)), 0664)
-	if err != nil {
-		log.Error("write minimega pid: %v", err)
-		teardown()
-	}
+	writeOrDie(filepath.Join(*f_base, "minimega.pid"), strconv.Itoa(pid))
+
 	go commandSocketStart()
 
 	// create a node for meshage
@@ -248,19 +246,18 @@ func teardown() {
 	clearAllCaptures()
 	vms.kill(Wildcard)
 	dnsmasqKillAll()
+	ksmDisable()
+	vms.flush()
+	vms.cleanDirs()
+	containerTeardown()
 	err := bridgesDestroy()
 	if err != nil {
 		log.Errorln(err)
 	}
-	ksmDisable()
-	vms.cleanDirs()
+	reapTaps()
 	commandSocketRemove()
 	goreadline.Rlcleanup()
-	err = os.Remove(CGROUP_PATH)
-	if err != nil {
-		log.Debugln(err)
-	}
-	err = os.Remove(*f_base + "minimega.pid")
+	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
 	if err != nil {
 		log.Fatalln(err)
 	}

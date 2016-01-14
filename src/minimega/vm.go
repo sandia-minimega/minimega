@@ -340,20 +340,6 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	for i := range vm.Networks {
-		net := vm.Networks[i]
-
-		if err := vm.NetworkDisconnect(i); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to disconnect VM: %v %v %v", vm.ID, i, err)
-		}
-
-		if err := delTap(net.Tap); err != nil {
-			// Keep trying even if there's an error...
-			log.Error("unable to destroy tap: %v %v %v", vm.ID, net.Tap, err)
-		}
-	}
-
 	return os.RemoveAll(vm.instancePath)
 }
 
@@ -532,7 +518,7 @@ func (vm *BaseVM) setState(s VMState) {
 	defer vm.lock.Unlock()
 
 	vm.State = s
-	err := ioutil.WriteFile(vm.instancePath+"state", []byte(s.String()), 0666)
+	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}
@@ -661,28 +647,33 @@ func processVMNet(spec string) (NetConfig, error) {
 	}, nil
 }
 
-// Get the VM info from all hosts optionally applying column/row filters.
-// Returns a map with keys for the hostnames and values as the tabular data
-// from the host.
-func globalVmInfo() map[string]VMs {
-	cmdStr := "vm info"
+// Get the VM info from all hosts in the mesh. Callers must specify whether
+// they already hold the cmdLock or not. Returns a map where each key is a
+// hostname and the value is the VMs for that host.
+func globalVMs(hasLock bool) map[string]VMs {
+	if !hasLock {
+		cmdLock.Lock()
+		defer cmdLock.Unlock()
+	}
 
 	res := map[string]VMs{}
 
-	cmd := minicli.MustCompile(cmdStr)
+	cmd := minicli.MustCompile("vm info")
 	cmd.Record = false
 
-	for resps := range runCommandGlobally(cmd) {
+	cmds := makeCommandHosts(meshageNode.BroadcastRecipients(), cmd)
+	cmds = append(cmds, cmd) // add local node
+
+	for resps := range processCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
 				continue
 			}
 
-			switch data := resp.Data.(type) {
-			case VMs:
-				res[resp.Host] = data
-			default:
+			if vms, ok := resp.Data.(VMs); ok {
+				res[resp.Host] = vms
+			} else {
 				log.Error("unknown data field in vm info")
 			}
 		}

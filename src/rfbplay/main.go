@@ -194,10 +194,11 @@ func main() {
 		log.Debug("transcoding %v to %v", in, out)
 
 		path := filepath.Dir(in)
+		fname := filepath.Base(in)
 		http.Handle("/", &playbackServer{http.Dir(path)})
 		go http.ListenAndServe(addr, nil)
 
-		err := transcode(in, out)
+		err := transcode(fname, out)
 		if err != nil {
 			log.Fatalln(err)
 		}

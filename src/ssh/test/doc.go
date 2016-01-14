@@ -4,4 +4,4 @@
 
 // This package contains integration tests for the
 // ssh package.
-package test
+package test // import "ssh/test"

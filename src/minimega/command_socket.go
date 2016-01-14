@@ -12,10 +12,11 @@ import (
 	log "minilog"
 	"net"
 	"os"
+	"path/filepath"
 )
 
 func commandSocketStart() {
-	l, err := net.Listen("unix", *f_base+"minimega")
+	l, err := net.Listen("unix", filepath.Join(*f_base, "minimega"))
 	if err != nil {
 		log.Error("commandSocketStart: %v", err)
 		teardown()
@@ -33,7 +34,7 @@ func commandSocketStart() {
 }
 
 func commandSocketRemove() {
-	f := *f_base + "minimega"
+	f := filepath.Join(*f_base, "minimega")
 	err := os.Remove(f)
 	if err != nil {
 		log.Errorln(err)

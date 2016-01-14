@@ -18,15 +18,25 @@ chmod a+rx /
 # minimega needs
 modprobe igb
 modprobe ixgbe
+modprobe mlx4_core
 modprobe loop
 modprobe tun
 modprobe nbd max_part=10
 modprobe kvm-intel
 
-# enumerate devices, autoload modules where needed
-udevd --daemon
-udevadm trigger
-udevadm settle
+# local disks
+modprobe sd
+modprobe sd_mod
+modprobe scsi_transport_sas
+modprobe scsi_mod
+modprobe libata
+modprobe ext4
+modprobe libsas
+modprobe ahci
+modprobe isci
+
+# settle :(
+sleep 10
 
 # local disk for scratch
 mount /dev/sda1 /scratch
@@ -34,17 +44,10 @@ mount /dev/sda1 /scratch
 # bump open file handle limits
 ulimit -n 999999
 
-# bond all 10G interfaces
-# modprobe bonding
-# for i in `ls /sys/class/net | grep eth10G`;
-# do
-# 	#ifenslave bond0 $i
-# 	NETS="${NETS} $i"
-# 	ifconfig $i up
-# done
+# bond all 10G/40G interfaces
 for i in `ls /sys/class/net`
 do
-        G=`ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep ixgbe`
+        G=`ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep -e "ixgbe" -e "mlx4_core"`
         if [ -n "$G" ]
         then
                 NETS="$NETS $i"
@@ -59,9 +62,6 @@ modprobe openvswitch_mod
 /etc/init.d/openvswitch-switch start
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
-#ovs-vsctl add-port mega_bridge eth10G
-#ovs-vsctl add-port mega_bridge bond0
-#numnets=`ls /sys/class/net | grep eth10G | wc -l`
 numnets=`echo $NETS | wc -w`
 if [ $numnets -eq 1 ]
 then
@@ -72,7 +72,6 @@ else
 fi
 
 ifconfig lo up
-#ifconfig eth10G up 0.0.0.0
 dhclient -v mega_bridge
 dhclient -v eth0
 

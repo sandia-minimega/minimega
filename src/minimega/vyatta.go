@@ -12,6 +12,7 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"text/template"
@@ -491,7 +492,7 @@ func vyattaWrite(filename string) (string, error) {
 		}
 	} else { // named file
 		if !strings.Contains(filename, "/") {
-			filename = *f_iomBase + filename
+			filename = filepath.Join(*f_iomBase, filename)
 		}
 		f, err = os.Create(filename)
 		if err != nil {
@@ -523,7 +524,7 @@ func vyattaWrite(filename string) (string, error) {
 	}
 
 	// create <floppy>/config/config.boot from vc
-	err = os.Mkdir(td+"/config", 0774)
+	err = os.Mkdir(filepath.Join(td, "config"), 0774)
 	if err != nil {
 		out, err2 = processWrapper("umount", td)
 		if err2 != nil {
@@ -537,7 +538,7 @@ func vyattaWrite(filename string) (string, error) {
 	if vyatta.ConfigFile == "" {
 		vc := vyattaGenConfig()
 
-		err = ioutil.WriteFile(td+"/config/config.boot", []byte(vc), 0664)
+		err = ioutil.WriteFile(filepath.Join(td, "config", "config.boot"), []byte(vc), 0664)
 		if err != nil {
 			out, err2 = processWrapper("umount", td)
 			if err2 != nil {
@@ -559,7 +560,7 @@ func vyattaWrite(filename string) (string, error) {
 			return "", err
 		}
 
-		err = ioutil.WriteFile(td+"/config/config.boot", vc, 0664)
+		err = ioutil.WriteFile(filepath.Join(td, "config", "config.boot"), vc, 0664)
 		if err != nil {
 			out, err2 = processWrapper("umount", td)
 			if err2 != nil {

@@ -50,25 +50,19 @@ func isIPv6(ip string) bool {
 
 type sshConn struct {
 	Config  *ssh.ClientConfig
-	Client  *ssh.ClientConn
+	Client  *ssh.Client
 	Session *ssh.Session
 	Host    string
 	Stdin   io.Writer
 	Stdout  io.Reader
 }
 
-type sshPassword string
-
-func (p sshPassword) Password(user string) (string, error) {
-	return string(p), nil
-}
-
 func sshClientConnect(host, port, user, password string) (*sshConn, error) {
 	sc := &sshConn{}
 	sc.Config = &ssh.ClientConfig{
 		User: user,
-		Auth: []ssh.ClientAuth{
-			ssh.ClientAuthPassword(sshPassword(password)),
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
 		},
 	}
 
