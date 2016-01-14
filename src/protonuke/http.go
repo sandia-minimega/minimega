@@ -13,6 +13,7 @@ import (
 	"image/png"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -356,7 +357,11 @@ func httpMakeImage() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 
-	m := image.NewRGBA(image.Rect(0, 0, 1024, 768))
+	pixelcount := *f_httpImageSize * 1024 * 1024 / 4
+	side := int(math.Sqrt(float64(pixelcount)))
+	log.Debug("Image served will be %v by %v", side, side)
+
+	m := image.NewRGBA(image.Rect(0, 0, side, side))
 	for i := 0; i < len(m.Pix); i++ {
 		m.Pix[i] = uint8(r.Int())
 	}
