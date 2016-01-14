@@ -357,7 +357,7 @@ func httpMakeImage() {
 	r := rand.New(s)
 
 	m := image.NewRGBA(image.Rect(0, 0, 1024, 768))
-	for i := 0; i < 1024*768; i++ {
+	for i := 0; i < len(m.Pix); i++ {
 		m.Pix[i] = uint8(r.Int())
 	}
 
