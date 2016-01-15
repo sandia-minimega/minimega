@@ -38,7 +38,9 @@ func init() {
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {
-		vals = append(vals, err.Error())
+		if err != nil {
+			vals = append(vals, err.Error())
+		}
 	}
 	return strings.Join(vals, "\n")
 }

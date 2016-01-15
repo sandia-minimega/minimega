@@ -573,12 +573,11 @@ func NewContainer(name string) *ContainerVM {
 	return vm
 }
 
-func (vm *ContainerVM) Launch(ack chan int) {
+func (vm *ContainerVM) Launch() error {
 	vm.Lock()
 	defer vm.Unlock()
 
-	vm.launch()
-	ack <- vm.ID
+	return vm.launch()
 }
 
 func (vm *ContainerVM) Start() (err error) {

@@ -111,12 +111,11 @@ func NewKVM(name string) *KvmVM {
 }
 
 // Launch a new KVM VM.
-func (vm *KvmVM) Launch(ack chan int) {
+func (vm *KvmVM) Launch() error {
 	vm.Lock()
 	defer vm.Unlock()
 
-	vm.launch()
-	ack <- vm.ID
+	return vm.launch()
 }
 
 func (vm *KvmVM) Flush() error {

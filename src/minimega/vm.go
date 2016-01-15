@@ -55,10 +55,7 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 
-	// Launch asynchronously launches the VM and acknoledges the launch via the
-	// provided channel.
-	Launch(chan int)
-
+	Launch() error
 	Kill() error
 	Start() error
 	Stop() error
@@ -495,6 +492,7 @@ func (vm *BaseVM) info(mask string) (string, error) {
 // setState updates the vm state, and write the state to file. Assumes that the
 // caller has locked the vm.
 func (vm *BaseVM) setState(s VMState) {
+	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
 	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
