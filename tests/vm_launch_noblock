@@ -1,4 +1,0 @@
-vm launch kvm foo[0-9] noblock
-.columns name,state vm info
-vm start all
-.columns name,state vm info
