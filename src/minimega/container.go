@@ -695,8 +695,8 @@ func (vm *ContainerVM) checkDisks() error {
 	return nil
 }
 
-// launch is the low-level launch function for KVM VMs. The caller should hold
-// the VM's lock.
+// launch is the low-level launch function for Container VMs. The caller should
+// hold the VM's lock.
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
