@@ -30,7 +30,7 @@ const (
 
 var (
 	killAck  chan int   // channel that all VMs ack on when killed
-	vmIdChan chan int   // channel of new VM IDs
+	vmIDChan chan int   // channel of new VM IDs
 	vmLock   sync.Mutex // lock for synchronizing access to vms
 
 	vmConfig VMConfig // current vm config, updated by CLI
@@ -55,6 +55,7 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 
+	// Life cycle functions
 	Launch() error
 	Kill() error
 	Start() error
@@ -92,15 +93,6 @@ type BaseConfig struct {
 	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
 }
 
-// VMConfig contains all the configs possible for a VM. When a VM of a
-// particular kind is launched, only the pertinent configuration is copied so
-// fields from other configs will have the zero value for the field type.
-type VMConfig struct {
-	BaseConfig
-	KVMConfig
-	ContainerConfig
-}
-
 // NetConfig contains all the network-related config for an interface. The IP
 // addresses are automagically populated by snooping ARP traffic. The bandwidth
 // stats are updated on-demand by calling the UpdateBW function of BaseConfig.
@@ -122,9 +114,9 @@ type NetConfig struct {
 type BaseVM struct {
 	BaseConfig // embed
 
-	sync.Mutex // embed, vm is lockble to synchronize changes to VM
+	sync.Mutex // embed, vm is lockble to synchronize changes to vm
 
-	kill chan bool // channel to signal the VM to shut down
+	kill chan bool // channel to signal the vm to shut down
 
 	ID    int
 	Name  string
@@ -146,7 +138,7 @@ var vmMasks = []string{
 func init() {
 	killAck = make(chan int)
 
-	vmIdChan = makeIDChan()
+	vmIDChan = makeIDChan()
 
 	// Reset everything to default
 	for _, fns := range baseConfigFns {
@@ -165,7 +157,7 @@ func NewVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
-	vm.ID = <-vmIdChan
+	vm.ID = <-vmIDChan
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
@@ -209,16 +201,20 @@ func ParseVMType(s string) (VMType, error) {
 	}
 }
 
-func (old *VMConfig) Copy() *VMConfig {
-	return &VMConfig{
-		BaseConfig:      *old.BaseConfig.Copy(),
-		KVMConfig:       *old.KVMConfig.Copy(),
-		ContainerConfig: *old.ContainerConfig.Copy(),
+// TODO: Handle if there are spaces or commas in the tap/bridge names
+func (net NetConfig) String() (s string) {
+	parts := []string{}
+	if net.Bridge != "" {
+		parts = append(parts, net.Bridge)
 	}
-}
 
-func (vm VMConfig) String() string {
-	return vm.BaseConfig.String() + vm.KVMConfig.String() + vm.ContainerConfig.String()
+	parts = append(parts, strconv.Itoa(net.VLAN))
+
+	if net.MAC != "" {
+		parts = append(parts, net.MAC)
+	}
+
+	return strings.Join(parts, ",")
 }
 
 func (old *BaseConfig) Copy() *BaseConfig {
@@ -259,22 +255,6 @@ func (vm *BaseConfig) NetworkString() string {
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
 }
 
-// TODO: Handle if there are spaces or commas in the tap/bridge names
-func (net NetConfig) String() (s string) {
-	parts := []string{}
-	if net.Bridge != "" {
-		parts = append(parts, net.Bridge)
-	}
-
-	parts = append(parts, strconv.Itoa(net.VLAN))
-
-	if net.MAC != "" {
-		parts = append(parts, net.MAC)
-	}
-
-	return strings.Join(parts, ",")
-}
-
 func (vm *BaseVM) GetID() int {
 	return vm.ID
 }
@@ -311,7 +291,6 @@ func (vm *BaseVM) Kill() error {
 	// http://golang.org/ref/spec#Receive_operator
 	close(vm.kill)
 
-	// TODO: ACK if killed?
 	return nil
 }
 
@@ -423,8 +402,9 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	return nil
 }
 
-func (vm *BaseVM) info(mask string) (string, error) {
-	if fns, ok := baseConfigFns[mask]; ok {
+// info returns information about the VM for the provided key.
+func (vm *BaseVM) info(key string) (string, error) {
+	if fns, ok := baseConfigFns[key]; ok {
 		return fns.Print(&vm.BaseConfig), nil
 	}
 
@@ -433,15 +413,15 @@ func (vm *BaseVM) info(mask string) (string, error) {
 	vm.Lock()
 	defer vm.Unlock()
 
-	switch mask {
+	switch key {
 	case "id":
-		return fmt.Sprintf("%v", vm.ID), nil
+		return strconv.Itoa(vm.ID), nil
 	case "name":
-		return fmt.Sprintf("%v", vm.Name), nil
+		return vm.Name, nil
 	case "state":
 		return vm.State.String(), nil
 	case "type":
-		return vm.GetType().String(), nil
+		return vm.Type.String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
 			if net.VLAN == DisconnectedVLAN {
@@ -501,13 +481,15 @@ func (vm *BaseVM) setState(s VMState) {
 	}
 }
 
-// setError updates the vm state and records the error in the VM's tags.
+// setError updates the vm state and records the error in the vm's tags.
 // Assumes that the caller has locked the vm.
 func (vm *BaseVM) setError(err error) {
 	vm.Tags["error"] = err.Error()
 	vm.setState(VM_ERROR)
 }
 
+// macSnooper listens for updates from the ipmac learner and updates the
+// specified network config.
 func (vm *BaseVM) macSnooper(net *NetConfig, updates chan ipmac.IP) {
 	for update := range updates {
 		// TODO: need to acquire VM lock?
@@ -519,6 +501,7 @@ func (vm *BaseVM) macSnooper(net *NetConfig, updates chan ipmac.IP) {
 	}
 }
 
+// writeTaps writes the vm's taps to disk in the vm's instance path.
 func (vm *BaseVM) writeTaps() error {
 	taps := []string{}
 	for _, net := range vm.Networks {
@@ -550,8 +533,8 @@ func (vm *BaseVM) checkInterfaces() error {
 		macs[net.MAC] = true
 	}
 
-	// Ensure that no new VMs are added while we check our interfaces. If a new
-	// VM has a conflict with us, it will be noted during thier
+	// Ensure that we don't add new VMs while we are checking our interfaces.
+	// If a new VM has a conflict with us, it will be noted during their
 	// checkInterfaces. This also ensures that only one VM's checkInterfaces
 	// can be running at a given time.
 	vmLock.Lock()
@@ -600,94 +583,6 @@ func vmNotRunning(idOrName string) error {
 
 func vmNotPhotogenic(idOrName string) error {
 	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
-}
-
-// processVMNet processes the input specifying the bridge, vlan, and mac for
-// one interface to a VM and updates the vm config accordingly. This takes a
-// bit of parsing, because the entry can be in a few forms:
-// 	vlan
-//
-//	vlan,mac
-//	bridge,vlan
-//	vlan,driver
-//
-//	bridge,vlan,mac
-//	vlan,mac,driver
-//	bridge,vlan,driver
-//
-//	bridge,vlan,mac,driver
-// If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(spec string) (res NetConfig, err error) {
-	// example: my_bridge,100,00:00:00:00:00:00
-	f := strings.Split(spec, ",")
-
-	var b, v, m, d string
-	switch len(f) {
-	case 1:
-		v = f[0]
-	case 2:
-		if isMac(f[1]) {
-			// vlan, mac
-			v, m = f[0], f[1]
-		} else if _, err := strconv.Atoi(f[0]); err == nil {
-			// vlan, driver
-			v, d = f[0], f[1]
-		} else {
-			// bridge, vlan
-			b, v = f[0], f[1]
-		}
-	case 3:
-		if isMac(f[2]) {
-			// bridge, vlan, mac
-			b, v, m = f[0], f[1], f[2]
-		} else if isMac(f[1]) {
-			// vlan, mac, driver
-			v, m, d = f[0], f[1], f[2]
-		} else {
-			// bridge, vlan, driver
-			b, v, d = f[0], f[1], f[2]
-		}
-	case 4:
-		b, v, m, d = f[0], f[1], f[2], f[3]
-	default:
-		err = errors.New("malformed netspec")
-		return
-	}
-
-	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
-
-	// VLAN ID, with optional bridge
-	vlan, err := strconv.Atoi(v) // the vlan id
-	if err != nil {
-		err = errors.New("malformed netspec, vlan must be an integer")
-		return
-	}
-
-	if m != "" && !isMac(m) {
-		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
-	}
-
-	// warn on valid but not allocated macs
-	if m != "" && !allocatedMac(m) {
-		log.Warn("unallocated mac address: %v", m)
-	}
-
-	if b == "" {
-		b = DEFAULT_BRIDGE
-	}
-	if d == "" {
-		d = VM_NET_DRIVER_DEFAULT
-	}
-
-	res = NetConfig{
-		VLAN:   vlan,
-		Bridge: b,
-		MAC:    strings.ToLower(m),
-		Driver: d,
-	}
-
-	return
 }
 
 // Get the VM info from all hosts in the mesh. Callers must specify whether

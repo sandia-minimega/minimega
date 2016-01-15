@@ -118,6 +118,8 @@ func (vm *KvmVM) Launch() error {
 	return vm.launch()
 }
 
+// Flush cleans up all resources allocated to the VM which includes all the
+// network taps.
 func (vm *KvmVM) Flush() error {
 	vm.Lock()
 	defer vm.Unlock()
