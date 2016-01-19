@@ -166,7 +166,9 @@ func (vms VMs) findVm(idOrName string) VM {
 
 // launch one VM of a given type.
 func (vms VMs) launch(name string, vmType VMType) error {
-	// Make sure that there isn't another VM with the same name
+	vmLock.Lock()
+
+	// Make sure that there isn't an existing VM with the same name
 	if name != "" {
 		for _, vm := range vms {
 			if vm.GetName() == name {
@@ -185,8 +187,10 @@ func (vms VMs) launch(name string, vmType VMType) error {
 		// TODO
 	}
 
-	vmLock.Lock()
 	vms[vm.GetID()] = vm
+
+	// Done with lock -- actually launching the VM should acquire the VM's
+	// lock, as needed.
 	vmLock.Unlock()
 
 	return vm.Launch()
