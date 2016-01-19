@@ -1154,7 +1154,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	for _, name := range names {
+	for i, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
@@ -1166,8 +1166,8 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		}
 
 		// Check for conflicts within the provided names
-		for _, name2 := range names {
-			if name == name2 {
+		for j, name2 := range names {
+			if i != j && name == name2 {
 				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
 				return resp
 			}
