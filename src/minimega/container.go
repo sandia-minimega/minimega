@@ -574,15 +574,15 @@ func NewContainer(name string) *ContainerVM {
 }
 
 func (vm *ContainerVM) Launch() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	return vm.launch()
 }
 
 func (vm *ContainerVM) Start() (err error) {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if vm.State&VM_RUNNING != 0 {
 		return nil
@@ -614,8 +614,8 @@ func (vm *ContainerVM) Start() (err error) {
 }
 
 func (vm *ContainerVM) Stop() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if vm.State != VM_RUNNING {
 		return vmNotRunning(strconv.Itoa(vm.ID))
@@ -872,8 +872,8 @@ func (vm *ContainerVM) launch() error {
 		defer close(waitChan)
 		err := cmd.Wait()
 
-		vm.Lock()
-		defer vm.Unlock()
+		vm.lock.Lock()
+		defer vm.lock.Unlock()
 
 		if err != nil && err.Error() != "signal: killed" { // because we killed it
 			log.Error("kill container: %v", err)

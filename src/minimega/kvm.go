@@ -112,8 +112,8 @@ func NewKVM(name string) *KvmVM {
 
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	return vm.launch()
 }
@@ -121,8 +121,8 @@ func (vm *KvmVM) Launch() error {
 // Flush cleans up all resources allocated to the VM which includes all the
 // network taps.
 func (vm *KvmVM) Flush() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	for _, net := range vm.Networks {
 		// Handle already disconnected taps differently since they aren't
@@ -156,8 +156,8 @@ func (vm *KvmVM) Config() *BaseConfig {
 }
 
 func (vm *KvmVM) Start() (err error) {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if vm.State&VM_RUNNING != 0 {
 		return nil
@@ -189,8 +189,8 @@ func (vm *KvmVM) Start() (err error) {
 }
 
 func (vm *KvmVM) Stop() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if vm.State != VM_RUNNING {
 		return vmNotRunning(strconv.Itoa(vm.ID))
@@ -489,8 +489,8 @@ func (vm *KvmVM) launch() error {
 		defer close(waitChan)
 		err := cmd.Wait()
 
-		vm.Lock()
-		defer vm.Unlock()
+		vm.lock.Lock()
+		defer vm.lock.Unlock()
 
 		// Check if the process quit for some reason other than being killed
 		if err != nil && err.Error() != "signal: killed" {

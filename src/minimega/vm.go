@@ -114,7 +114,7 @@ type NetConfig struct {
 type BaseVM struct {
 	BaseConfig // embed
 
-	sync.Mutex // embed, vm is lockble to synchronize changes to vm
+	lock sync.Mutex // synchronizes changes to this VM
 
 	kill chan bool // channel to signal the vm to shut down
 
@@ -264,8 +264,8 @@ func (vm *BaseVM) GetName() string {
 }
 
 func (vm *BaseVM) GetState() VMState {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	return vm.State
 }
@@ -279,8 +279,8 @@ func (vm *BaseVM) GetInstancePath() string {
 }
 
 func (vm *BaseVM) Kill() error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if vm.State&VM_KILLABLE == 0 {
 		return fmt.Errorf("invalid VM state to kill: %d %v", vm.ID, vm.State)
@@ -325,8 +325,8 @@ func (vm *BaseVM) UpdateCCActive() {
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
@@ -370,8 +370,8 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 }
 
 func (vm *BaseVM) NetworkDisconnect(pos int) error {
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
@@ -410,8 +410,8 @@ func (vm *BaseVM) info(key string) (string, error) {
 
 	var vals []string
 
-	vm.Lock()
-	defer vm.Unlock()
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	switch key {
 	case "id":
