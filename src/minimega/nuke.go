@@ -55,7 +55,6 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 
 	// remove all mega_taps
 	bNames := nukeBridgeNames(true)
-	log.Info("bName = %s", bNames)
 	dirs, err := ioutil.ReadDir("/sys/class/net")
 	if err != nil {
 		log.Errorln(err)
@@ -63,7 +62,6 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		for _, n := range dirs {
 			if strings.Contains(n.Name(), "mega_tap") {
 				for _, b := range bNames {
-					log.Info("nuking tap %s", n.Name())
 					nukeTap(b, n.Name())
 				}
 			}
