@@ -547,6 +547,13 @@ func (vm *BaseVM) checkInterfaces() error {
 		}
 
 		for _, net := range vmOther.Config().Networks {
+			// VM must still be in the pre-building stage so it hasn't been
+			// assigned a MAC yet. We skip this case in order to supress
+			// duplicate MAC errors on an empty string.
+			if net.MAC == "" {
+				continue
+			}
+
 			// Warn if we see a conflict
 			if _, ok := macs[net.MAC]; ok {
 				log.Warn("VMs share MAC (%v) -- %v %v", net.MAC, vm.ID, vmOther.GetID())
