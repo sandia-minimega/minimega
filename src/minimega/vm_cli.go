@@ -1165,9 +1165,10 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		// Check for conflicts within the provided names
+		// Check for conflicts within the provided names. Don't conflict with
+		// ourselves or if the name is unspecified.
 		for j, name2 := range names {
-			if i != j && name == name2 {
+			if i != j && name == name2 && name != "" {
 				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
 				return resp
 			}
