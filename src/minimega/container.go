@@ -1495,10 +1495,11 @@ func containerNuke() {
 			}
 		}
 
-		// umount CGROUP_ROOT
+		// umount cgroup
 		err = syscall.Unmount(CGROUP_ROOT, 0)
 		if err != nil {
-			log.Errorln(err)
+			// this may have been removed previously, try the mount name
+			syscall.Unmount("minicgroup", 0)
 		}
 	}
 

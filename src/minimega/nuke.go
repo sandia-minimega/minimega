@@ -53,23 +53,35 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		log.Errorln(err)
 	}
 
-	// remove all mega_taps
-	bNames := nukeBridgeNames(true)
+	// get all mega_tap names
+	var tNames []string
 	dirs, err := ioutil.ReadDir("/sys/class/net")
 	if err != nil {
 		log.Errorln(err)
 	} else {
 		for _, n := range dirs {
 			if strings.Contains(n.Name(), "mega_tap") {
-				for _, b := range bNames {
-					nukeTap(b, n.Name())
-				}
+				tNames = append(tNames, n.Name())
 			}
 		}
 	}
 
-	// remove bridges that have preExist == false
-	nukeBridges()
+	// remove all mega_taps
+	if _, err := os.Stat(filepath.Join(*f_base, "bridges")); err == nil {
+		bNames := nukeBridgeNames(true)
+		for _, t := range tNames {
+			for _, b := range bNames {
+				nukeTap(b, t)
+			}
+		}
+		// remove bridges that have preExist == false
+		nukeBridges()
+	} else {
+		// could not open bridges file, clean up any leftover mega_taps
+		for _, t := range tNames {
+			nukeTap("", t)
+		}
+	}
 
 	// clean up the base path
 	log.Info("cleaning up base path: %v", *f_base)
@@ -163,8 +175,10 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 }
 
 func nukeTap(b, tap string) {
-	if err := ovsDelPort(b, tap); err != nil && err != ErrNoSuchPort {
-		log.Error("%v, %v -- %v", b, tap, err)
+	if b != "" {
+		if err := ovsDelPort(b, tap); err != nil && err != ErrNoSuchPort {
+			log.Error("%v, %v -- %v", b, tap, err)
+		}
 	}
 
 	if err := delTap(tap); err != nil {
