@@ -1473,67 +1473,95 @@ func containerMountDefaults(fsPath string) error {
 
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
-	// walk /sys/fs/cgroup/minimega for tasks, killing each one
-	err := filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+	// walk CGROUP_PATH for tasks, killing each one
+	if _, err := os.Stat(CGROUP_PATH); err == nil {
+		err := filepath.Walk(CGROUP_PATH, containerNukeWalker)
 		if err != nil {
-			return nil
+			log.Errorln(err)
 		}
-
-		log.Debug("walking file: %v", path)
-
-		switch info.Name() {
-		case "tasks":
-			d, err := ioutil.ReadFile(path)
-			pids := strings.Fields(string(d))
-			for _, pid := range pids {
-				log.Debug("found pid: %v", pid)
-
-				log.Infoln("killing process:", pid)
-				out, err := processWrapper("kill", "-9", pid)
-				if err != nil {
-					log.Error("%v: %v", err, out)
-				}
-			}
-			// remove the directory for this vm
-			dir := filepath.Dir(path)
-			err = os.Remove(dir)
-			if err != nil {
-				log.Errorln(err)
-			}
-		}
-		return nil
-	})
+	}
 
 	// remove cgroup structure
-	err = os.Remove(CGROUP_PATH)
-	if err != nil {
-		log.Errorln(err)
-	}
-
-	// umount megamount_*
-	d, err := ioutil.ReadFile("/proc/mounts")
-	mounts := strings.Fields(string(d))
-	for _, m := range mounts {
-		if strings.Contains(m, "megamount") {
-			err := syscall.Unmount(m, 0)
-			if err != nil {
-				log.Error("overlay unmount: %v", err)
-			}
-		}
-	}
-
-	// remove meganet_* from /var/run/netns
-	netns, err := ioutil.ReadDir("/var/run/netns")
-	if err != nil {
-		log.Errorln(err)
-	} else {
-		for _, n := range netns {
-			if strings.Contains(n.Name(), "meganet") {
-				err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
+	if _, err := os.Stat(CGROUP_ROOT); err == nil {
+		contents, err := ioutil.ReadDir(CGROUP_ROOT)
+		if err != nil {
+			log.Errorln(err)
+		} else {
+			for _, f := range contents {
+				err := os.Remove(f.Name())
 				if err != nil {
 					log.Errorln(err)
 				}
 			}
 		}
+
+		// umount CGROUP_ROOT
+		err = syscall.Unmount(CGROUP_ROOT, 0)
+		if err != nil {
+			log.Errorln(err)
+		}
 	}
+
+	// umount megamount_*, this include overlayfs mounts
+	d, err := ioutil.ReadFile("/proc/mounts")
+	if err != nil {
+		log.Errorln(err)
+	} else {
+		mounts := strings.Fields(string(d))
+		for _, m := range mounts {
+			if strings.Contains(m, "megamount") {
+				err := syscall.Unmount(m, 0)
+				if err != nil {
+					log.Error("overlay unmount: %v", err)
+				}
+			}
+		}
+	}
+
+	// remove meganet_* from /var/run/netns
+	if _, err := os.Stat("/var/run/netns"); err == nil {
+		netns, err := ioutil.ReadDir("/var/run/netns")
+		if err != nil {
+			log.Errorln(err)
+		} else {
+			for _, n := range netns {
+				if strings.Contains(n.Name(), "meganet") {
+					err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
+					if err != nil {
+						log.Errorln(err)
+					}
+				}
+			}
+		}
+	}
+}
+
+func containerNukeWalker(path string, info os.FileInfo, err error) error {
+
+	if err != nil {
+		return nil
+	}
+
+	log.Debug("walking file: %v", path)
+
+	switch info.Name() {
+	case "tasks":
+		d, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		pids := strings.Fields(string(d))
+		for _, pid := range pids {
+			log.Debug("found pid: %v", pid)
+
+			log.Infoln("killing process:", pid)
+			out, err := processWrapper("kill", "-9", pid)
+			if err != nil {
+				log.Error("%v: %v", err, out)
+			}
+		}
+	}
+	return nil
+
 }
