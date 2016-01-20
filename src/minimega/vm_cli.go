@@ -16,6 +16,7 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -1153,7 +1154,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	for _, name := range names {
+	for i, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
@@ -1164,9 +1165,11 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		for _, vm := range vms {
-			if vm.GetName() == name {
-				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
+		// Check for conflicts within the provided names. Don't conflict with
+		// ourselves or if the name is unspecified.
+		for j, name2 := range names {
+			if i != j && name == name2 && name != "" {
+				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
 				return resp
 			}
 		}
@@ -1188,26 +1191,39 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	log.Info("launching %v %v vms", len(names), vmType)
 
-	ack := make(chan int)
-	waitForAcks := func(count int) {
-		// get acknowledgements from each vm
-		for i := 0; i < count; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
-		}
+	errChan := make(chan error)
+
+	var wg sync.WaitGroup
+
+	for _, name := range names {
+		wg.Add(1)
+
+		go func(name string) {
+			defer wg.Done()
+
+			errChan <- vms.launch(name, vmType)
+		}(name)
 	}
 
-	for i, name := range names {
-		if err := vms.launch(name, vmType, ack); err != nil {
-			resp.Error = err.Error()
-			go waitForAcks(i)
-			return resp
+	go func() {
+		defer close(errChan)
+
+		wg.Wait()
+	}()
+
+	// Collect all the errors from errChan and turn them into a string
+	collectErrs := func() string {
+		errs := []error{}
+		for err := range errChan {
+			errs = append(errs, err)
 		}
+		return errSlice(errs).String()
 	}
 
 	if noblock {
-		go waitForAcks(len(names))
+		go collectErrs()
 	} else {
-		waitForAcks(len(names))
+		resp.Error = collectErrs()
 	}
 
 	return resp
