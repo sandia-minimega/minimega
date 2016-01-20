@@ -164,10 +164,11 @@ func (vms VMs) findVm(idOrName string) VM {
 	return vms[id]
 }
 
-// launch one VM of a given type. This call should be "non-blocking" -- the VM
-// will ack on the provided channel when it has finished launching.
-func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
-	// Make sure that there isn't another VM with the same name
+// launch one VM of a given type.
+func (vms VMs) launch(name string, vmType VMType) error {
+	vmLock.Lock()
+
+	// Make sure that there isn't an existing VM with the same name
 	if name != "" {
 		for _, vm := range vms {
 			if vm.GetName() == name {
@@ -186,11 +187,13 @@ func (vms VMs) launch(name string, vmType VMType, ack chan int) error {
 		// TODO
 	}
 
-	vmLock.Lock()
 	vms[vm.GetID()] = vm
+
+	// Done with lock -- actually launching the VM should acquire the VM's
+	// lock, as needed.
 	vmLock.Unlock()
 
-	return vm.Launch(ack)
+	return vm.Launch()
 }
 
 func (vms VMs) start(target string) []error {
