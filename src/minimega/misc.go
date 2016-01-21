@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"gopacket/macs"
 	_ "gopnm"
@@ -38,7 +39,9 @@ func init() {
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {
-		vals = append(vals, err.Error())
+		if err != nil {
+			vals = append(vals, err.Error())
+		}
 	}
 	return strings.Join(vals, "\n")
 }
@@ -355,4 +358,92 @@ func PermStrings(source []string) []string {
 	}
 
 	return res
+}
+
+// processVMNet processes the input specifying the bridge, vlan, and mac for
+// one interface to a VM and updates the vm config accordingly. This takes a
+// bit of parsing, because the entry can be in a few forms:
+// 	vlan
+//
+//	vlan,mac
+//	bridge,vlan
+//	vlan,driver
+//
+//	bridge,vlan,mac
+//	vlan,mac,driver
+//	bridge,vlan,driver
+//
+//	bridge,vlan,mac,driver
+// If there are 2 or 3 fields, just the last field for the presence of a mac
+func processVMNet(spec string) (res NetConfig, err error) {
+	// example: my_bridge,100,00:00:00:00:00:00
+	f := strings.Split(spec, ",")
+
+	var b, v, m, d string
+	switch len(f) {
+	case 1:
+		v = f[0]
+	case 2:
+		if isMac(f[1]) {
+			// vlan, mac
+			v, m = f[0], f[1]
+		} else if _, err := strconv.Atoi(f[0]); err == nil {
+			// vlan, driver
+			v, d = f[0], f[1]
+		} else {
+			// bridge, vlan
+			b, v = f[0], f[1]
+		}
+	case 3:
+		if isMac(f[2]) {
+			// bridge, vlan, mac
+			b, v, m = f[0], f[1], f[2]
+		} else if isMac(f[1]) {
+			// vlan, mac, driver
+			v, m, d = f[0], f[1], f[2]
+		} else {
+			// bridge, vlan, driver
+			b, v, d = f[0], f[1], f[2]
+		}
+	case 4:
+		b, v, m, d = f[0], f[1], f[2], f[3]
+	default:
+		err = errors.New("malformed netspec")
+		return
+	}
+
+	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+
+	// VLAN ID, with optional bridge
+	vlan, err := strconv.Atoi(v) // the vlan id
+	if err != nil {
+		err = errors.New("malformed netspec, vlan must be an integer")
+		return
+	}
+
+	if m != "" && !isMac(m) {
+		err = errors.New("malformed netspec, invalid mac address: " + m)
+		return
+	}
+
+	// warn on valid but not allocated macs
+	if m != "" && !allocatedMac(m) {
+		log.Warn("unallocated mac address: %v", m)
+	}
+
+	if b == "" {
+		b = DEFAULT_BRIDGE
+	}
+	if d == "" {
+		d = VM_NET_DRIVER_DEFAULT
+	}
+
+	res = NetConfig{
+		VLAN:   vlan,
+		Bridge: b,
+		MAC:    strings.ToLower(m),
+		Driver: d,
+	}
+
+	return
 }

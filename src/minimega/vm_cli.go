@@ -16,6 +16,7 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -1217,6 +1218,27 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
+	for i, name := range names {
+		if isReserved(name) {
+			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
+			return resp
+		}
+
+		if _, err := strconv.Atoi(name); err == nil {
+			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
+			return resp
+		}
+
+		// Check for conflicts within the provided names. Don't conflict with
+		// ourselves or if the name is unspecified.
+		for j, name2 := range names {
+			if i != j && name == name2 && name != "" {
+				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
+				return resp
+			}
+		}
+	}
+
 	noblock := c.BoolArgs["noblock"]
 
 	vmType, err := findVMType(c.BoolArgs)
@@ -1227,29 +1249,39 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	log.Info("launching %v %v vms", len(names), vmType)
 
-	ack := make(chan int)
+	errChan := make(chan error)
 
-	// Collect acks from each of the launched VM
-	waitForAcks := func(count int) {
-		for i := 0; i < count; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
-		}
+	var wg sync.WaitGroup
+
+	for _, name := range names {
+		wg.Add(1)
+
+		go func(name string) {
+			defer wg.Done()
+
+			errChan <- vms.launch(name, vmType)
+		}(name)
 	}
 
-	for i, name := range names {
-		if err := vms.launch(name, vmType, ack); err != nil {
-			resp.Error = err.Error()
-			// Ending early, launch a goroutine to record the acks from the vms
-			// that we have launched so far.
-			go waitForAcks(i)
-			return resp
+	go func() {
+		defer close(errChan)
+
+		wg.Wait()
+	}()
+
+	// Collect all the errors from errChan and turn them into a string
+	collectErrs := func() string {
+		errs := []error{}
+		for err := range errChan {
+			errs = append(errs, err)
 		}
+		return errSlice(errs).String()
 	}
 
 	if noblock {
-		go waitForAcks(len(names))
+		go collectErrs()
 	} else {
-		waitForAcks(len(names))
+		resp.Error = collectErrs()
 	}
 
 	return resp
