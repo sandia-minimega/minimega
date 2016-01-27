@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	log "minilog"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 
 const BlacklistedVLAN = "BLACKLISTED"
 const VLANAliasSep = "."
+const VLANStart = 2
 
 // AllocatedVLANs stores the state for the VLANs that we've allocated so far
 type AllocatedVLANs struct {
@@ -26,6 +28,7 @@ type AllocatedVLANs struct {
 var allocatedVLANs = AllocatedVLANs{
 	byVLAN:  make(map[int]string),
 	byAlias: make(map[string]int),
+	next:    VLANStart,
 }
 
 // GetOrAllocate looks up the VLAN for the provided alias. If one has not
@@ -36,7 +39,6 @@ func (v *AllocatedVLANs) GetOrAllocate(alias string) int {
 	}
 
 	// Not assigned, find the next VLAN
-
 	v.Lock()
 	defer v.Unlock()
 
@@ -56,6 +58,26 @@ func (v *AllocatedVLANs) GetOrAllocate(alias string) int {
 	v.byAlias[alias] = v.next
 
 	return v.next
+}
+
+// AddAlias sets the VLAN for the provided alias.
+func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
+	v.Lock()
+	defer v.Unlock()
+
+	log.Debug("adding VLAN alias %v => %v", alias, vlan)
+
+	if _, ok := v.byAlias[alias]; ok {
+		return errors.New("alias already in use")
+	}
+	if _, ok := v.byVLAN[vlan]; ok {
+		return errors.New("vlan already in use")
+	}
+
+	v.byVLAN[vlan] = alias
+	v.byAlias[alias] = vlan
+
+	return nil
 }
 
 // GetVLAN returns the alias for a given VLAN or DisconnectedVLAN if it has not
@@ -88,7 +110,7 @@ func (v *AllocatedVLANs) Delete(prefix string) {
 	}
 
 	// Reset next counter so that we can find the recently freed VLANs
-	v.next = 0
+	v.next = VLANStart
 }
 
 // Blacklist marks a VLAN as manually configured which removes it from the

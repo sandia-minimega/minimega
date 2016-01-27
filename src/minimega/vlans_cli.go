@@ -16,7 +16,8 @@ var vlansCLIHandlers = []minicli.Handler{
 		HelpLong: `
 Display information about allocated VLANs.`,
 		Patterns: []string{
-			"vlans [alias or VLAN]",
+			"vlans",
+			"vlans <add,> <alias> <vlan>",
 		},
 		Call: wrapSimpleCLI(cliVLANs),
 	},
@@ -35,24 +36,29 @@ VLANs once you have killed all the VMs connected to them.`,
 func cliVLANs(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if alias, ok := c.StringArgs["alias"]; ok {
-		if vlan, err := strconv.Atoi(alias); err != nil {
-			resp.Response = allocatedVLANs.GetAlias(vlan)
-		} else if vlan := allocatedVLANs.GetVLAN(alias); vlan != DisconnectedVLAN {
-			resp.Response = strconv.Itoa(vlan)
+	if c.BoolArgs["add"] {
+		alias := namespace + VLANAliasSep + c.StringArgs["alias"]
+
+		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+		if err != nil {
+			resp.Error = "expected integer VLAN"
+		} else if err := allocatedVLANs.AddAlias(alias, vlan); err != nil {
+			resp.Error = err.Error()
 		}
 	} else {
-		resp.Header = []string{"Alias", "VLAN"}
+		resp.Header = []string{"namespace", "alias", "vlan"}
 		resp.Tabular = [][]string{}
 
 		for alias, vlan := range allocatedVLANs.byAlias {
-			if namespace != "" && !strings.HasPrefix(alias, namespace) {
+			parts := strings.Split(alias, ".")
+			if namespace != "" && namespace != parts[0] {
 				continue
 			}
 
 			resp.Tabular = append(resp.Tabular,
 				[]string{
-					alias,
+					parts[0],
+					strings.Join(parts[1:], "."),
 					strconv.Itoa(vlan),
 				})
 		}

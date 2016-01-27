@@ -15,5 +15,3 @@ namespace foo
 vm config net A
 vlans
 vm config net
-clear namespace
-clear vlans

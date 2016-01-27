@@ -141,6 +141,10 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 		if _, ok := namespaces[name]; !ok && name != "" {
 			log.Info("creating new namespace -- %v", name)
 
+			if strings.Contains(name, ".") {
+				log.Warn("namespace names probably shouldn't contain `.`")
+			}
+
 			ns := Namespace{
 				Hosts:    map[string]bool{},
 				vmIDChan: makeIDChan(),
