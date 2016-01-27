@@ -1221,8 +1221,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		wg.Wait()
 	}()
 
+	vmLaunch.Add(1)
+
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() string {
+		defer vmLaunch.Done()
+
 		errs := []error{}
 		for err := range errChan {
 			errs = append(errs, err)
@@ -1243,6 +1247,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 // ``target'' of the command. This is useful as many VM-related commands take a
 // single target (e.g. start, stop).
 func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
+	// Ensure that we have finished creating all the vms launched in previous
+	// commands (possibly with noblock) before trying to apply the command.
+	// This prevents a race condition where a vm could be launched with noblock
+	// and then immediately used as the target of a start command.
+	vmLaunch.Wait()
+
 	resp := &minicli.Response{Host: hostname}
 
 	errs := fn(c.StringArgs["target"])
