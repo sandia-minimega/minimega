@@ -62,7 +62,12 @@ func cliVLANs(c *minicli.Command) *minicli.Response {
 }
 
 func cliClearVLANs(c *minicli.Command) *minicli.Response {
-	allocatedVLANs.Delete(c.StringArgs["prefix"])
+	prefix := c.StringArgs["prefix"]
+	if namespace != "" {
+		prefix = namespace + VLANAliasSep + prefix
+	}
+
+	allocatedVLANs.Delete(prefix)
 
 	return &minicli.Response{Host: hostname}
 }
