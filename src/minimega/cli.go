@@ -290,6 +290,14 @@ func cliLocal() {
 
 // cliPreprocessor allows modifying commands post-compile but pre-process.
 // Currently the only preprocessor is the "file:" handler.
+//
+// Node: we don't run preprocessors when namespaces are active to avoid
+// expanding files before we're running the command on the correct machine.
 func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
+	if namespace != "" && c.Source != "" {
+		return c, nil
+	}
+
 	return iomPreprocessor(c)
+
 }
