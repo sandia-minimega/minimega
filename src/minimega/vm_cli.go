@@ -1198,10 +1198,20 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	for _, name := range names {
 		wg.Add(1)
 
+		var vm VM
+		switch vmType {
+		case KVM:
+			vm = NewKVM(name)
+		case CONTAINER:
+			vm = NewContainer(name)
+		default:
+			// TODO
+		}
+
 		go func(name string) {
 			defer wg.Done()
 
-			errChan <- vms.launch(name, vmType)
+			errChan <- vms.launch(vm)
 		}(name)
 	}
 
