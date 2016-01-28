@@ -406,6 +406,8 @@ func (vm *KvmVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
 	if vm.State != VM_QUIT {
+		ccNode.RegisterClient(vm.UUID, vm.Namespace)
+
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}

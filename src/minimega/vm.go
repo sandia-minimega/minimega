@@ -317,6 +317,8 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
+	ccNode.UnregisterClient(vm.UUID)
+
 	return os.RemoveAll(vm.instancePath)
 }
 

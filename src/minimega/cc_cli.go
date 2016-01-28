@@ -52,6 +52,9 @@ example, to filter on VMs that are running windows and have a specific IP.
 
 	cc filter os=windows ip=10.0.0.1
 
+When a namespace is active, there is an implicit filter for vms with the
+provided namespace.
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
@@ -76,7 +79,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
 		},
-		Call: wrapSimpleCLI(cliCC),
+		Call: wrapBroadcastCLI(cliCC),
 	},
 	{ // clear cc
 		HelpShort: "reset command and control state",
@@ -90,7 +93,7 @@ See "help cc" for more information.`,
 			"clear cc <prefix,>",
 			"clear cc <responses,>",
 		},
-		Call: wrapSimpleCLI(cliCCClear),
+		Call: wrapBroadcastCLI(cliCCClear),
 	},
 }
 
@@ -340,6 +343,9 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 func cliCCFileSend(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	// Set implicit filter
+	ccFilter.Namespace = namespace
+
 	cmd := &ron.Command{
 		Filter: ccFilter,
 	}
@@ -388,6 +394,9 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	// Set implicit filter
+	ccFilter.Namespace = namespace
+
 	cmd := &ron.Command{
 		Filter: ccFilter,
 	}
@@ -411,6 +420,9 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 func cliCCBackground(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	// Set implicit filter
+	ccFilter.Namespace = namespace
+
 	cmd := &ron.Command{
 		Background: true,
 		Command:    c.ListArgs["command"],
@@ -428,6 +440,9 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 // exec
 func cliCCExec(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
+
+	// Set implicit filter
+	ccFilter.Namespace = namespace
 
 	cmd := &ron.Command{
 		Command: c.ListArgs["command"],
