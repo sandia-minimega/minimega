@@ -123,3 +123,12 @@ outer:
 
 	return &cmd, len(pattern) - 1, exact
 }
+
+// SetSource sets the Source field for a command and all nested subcommands.
+func (c *Command) SetSource(source string) {
+	c.Source = source
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetSource(source)
+	}
+}

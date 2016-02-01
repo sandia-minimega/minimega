@@ -214,7 +214,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		// Copy the command and clear the Source flag
 		copied := new(minicli.Command)
 		*copied = *cmd
-		copied.Source = ""
+		copied.SetSource("")
 
 		cmds = append(cmds, copied)
 	}
@@ -269,7 +269,7 @@ func cliLocal() {
 		if cmd == nil {
 			continue
 		}
-		cmd.Source = SourceLocalCLI
+		cmd.SetSource(SourceLocalCLI)
 
 		// HAX: Don't record the read command
 		if hasCommand(cmd, "read") {

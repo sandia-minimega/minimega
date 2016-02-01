@@ -147,7 +147,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			continue
 		}
 
-		cmd.Source = SourceRead
+		cmd.SetSource(SourceRead)
 
 		// HAX: Make sure we don't have a recursive read command
 		if hasCommand(cmd, "read") {
