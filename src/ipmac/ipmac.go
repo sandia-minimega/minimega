@@ -8,58 +8,53 @@
 // particular interface, and providing one or more MAC addresses to filter on.
 package ipmac
 
-// #cgo LDFLAGS: -lpcap
-// #include <stdlib.h>
-// #include "ipmac.h"
-import "C"
-
 import (
-	"fmt"
+	"gopacket"
+	"gopacket/layers"
+	"gopacket/pcap"
+	"io"
 	log "minilog"
+	"net"
 	"sync"
-	"unsafe"
 )
 
 type IPMacLearner struct {
-	handle unsafe.Pointer
-	pairs  map[string]chan IP
-	closed bool
+	handle *pcap.Handle
+	pairs  map[string]chan net.IP
 	lock   sync.Mutex
-}
-
-type IP struct {
-	IP4 string // string representation of the IPv4 address, if known
-	IP6 string // string representation of the IPv6 address, if known
 }
 
 // NewLearner returns an IPMacLearner object bound to a particular interface.
 func NewLearner(dev string) (*IPMacLearner, error) {
-	ret := &IPMacLearner{
-		pairs: make(map[string]chan IP),
+	handle, err := pcap.OpenLive(dev, 1600, true, pcap.BlockForever)
+	if err != nil {
+		return nil, err
 	}
-	p := C.CString(dev)
-	handle := C.pcapInit(p)
-	C.free(unsafe.Pointer(p))
-	if handle == nil {
-		return ret, fmt.Errorf("could not open device %v", dev)
+
+	// Interested in:
+	//  * ARP
+	//  * Neighbor Solicitation (NDP)
+	if err := handle.SetBPFFilter("(arp or (icmp6 and ip6[40] == 135))"); err != nil {
+		handle.Close()
+		return nil, err
 	}
-	ret.handle = unsafe.Pointer(handle)
 
-	filter := "(arp or (icmp6 and ip6[40] == 135))"
-	p = C.CString(filter)
-	C.pcapFilter(ret.handle, p)
-	C.free(unsafe.Pointer(p))
+	iml := &IPMacLearner{
+		handle: handle,
+		pairs:  make(map[string]chan net.IP),
+	}
 
-	go ret.learner()
+	go iml.learner()
 
-	return ret, nil
+	return iml, nil
 }
 
 // Add a MAC address to the list of addresses to search for. IPMacLearner will
 // not gather information on MAC addresses not in the list.
-func (iml *IPMacLearner) AddMac(mac string, out chan IP) {
+func (iml *IPMacLearner) AddMac(mac string, out chan net.IP) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
+
 	log.Debugln("adding mac to filter:", mac)
 	iml.pairs[mac] = out
 }
@@ -69,59 +64,79 @@ func (iml *IPMacLearner) DelMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
 
-	if c, ok := iml.pairs[mac]; ok {
-		close(c)
-		delete(iml.pairs, mac)
+	// Ensure channel exists before trying to close it
+	if _, ok := iml.pairs[mac]; ok {
+		close(iml.pairs[mac])
 	}
-}
 
-// Remove all MAC addresses from the search list.
-func (iml *IPMacLearner) Flush() {
-	iml.lock.Lock()
-	defer iml.lock.Unlock()
-	iml.pairs = make(map[string]chan IP)
+	delete(iml.pairs, mac)
 }
 
 // Stop searching for IP addresses.
 func (iml *IPMacLearner) Close() {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
-	iml.closed = true
-	C.pcapClose(iml.handle)
+
+	for _, chn := range iml.pairs {
+		close(chn)
+	}
+
+	iml.handle.Close()
 }
 
 func (iml *IPMacLearner) learner() {
-	for {
-		pair := C.pcapRead(iml.handle)
-		if pair == nil {
-			if iml.closed {
-				return
-			}
-			continue
-		}
-		mac := C.GoString(pair.mac)
-
-		var ip, ip6 string
-		if pair.ip != nil {
-			ip = C.GoString(pair.ip)
-		}
-		if pair.ip6 != nil {
-			ip6 = C.GoString(pair.ip6)
-		}
-
-		log.Debug("got mac/ip pair:", mac, ip, ip6)
-
-		iml.lock.Lock()
-
-		// skip macs we aren't tracking
-		if _, ok := iml.pairs[mac]; !ok {
-			iml.lock.Unlock()
-			continue
-		}
-
-		// TODO: Need to send from goroutine?
-		iml.pairs[mac] <- IP{ip, ip6}
-
-		iml.lock.Unlock()
+	var packet struct {
+		dot1q layers.Dot1Q
+		eth   layers.Ethernet
+		ip4   layers.IPv4
+		ip6   layers.IPv6
+		arp   layers.ARP
 	}
+
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet,
+		&packet.dot1q,
+		&packet.eth,
+		&packet.ip4,
+		&packet.ip6,
+		&packet.arp,
+	)
+
+	decodedLayers := []gopacket.LayerType{}
+
+	for {
+		data, _, err := iml.handle.ReadPacketData()
+		if err != nil {
+			if err != io.EOF {
+				log.Error("Error reading packet data: ", err)
+			}
+			break
+		}
+
+		if err := parser.DecodeLayers(data, &decodedLayers); err != nil {
+			log.Error("Error parsing packet: %v", err)
+		}
+
+		for _, layerType := range decodedLayers {
+			switch layerType {
+			case layers.LayerTypeICMPv6:
+				iml.sendUpdate(packet.eth.SrcMAC, packet.ip6.SrcIP)
+			case layers.LayerTypeARP:
+				iml.sendUpdate(packet.eth.SrcMAC, net.IP(packet.arp.SourceProtAddress))
+			}
+		}
+	}
+}
+
+func (iml *IPMacLearner) sendUpdate(mac net.HardwareAddr, ip net.IP) {
+	log.Debug("got mac/ip pair:", mac, ip)
+
+	iml.lock.Lock()
+	defer iml.lock.Unlock()
+
+	// skip macs we aren't tracking
+	if _, ok := iml.pairs[mac.String()]; !ok {
+		return
+	}
+
+	iml.pairs[mac.String()] <- ip
 }

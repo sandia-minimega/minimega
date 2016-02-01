@@ -12,8 +12,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"ipmac"
 	log "minilog"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -745,13 +745,17 @@ func (vm *BaseVM) setError(err error) {
 
 // macSnooper listens for updates from the ipmac learner and updates the
 // specified network config.
-func (vm *BaseVM) macSnooper(net *NetConfig, updates <-chan ipmac.IP) {
-	for update := range updates {
+func (vm *BaseVM) macSnooper(nic *NetConfig, updates <-chan net.IP) {
+	for ip := range updates {
+		if ip == nil || ip.IsLinkLocalUnicast() {
+			continue
+		}
+
 		// TODO: need to acquire VM lock?
-		if update.IP4 != "" {
-			net.IP4 = update.IP4
-		} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
-			net.IP6 = update.IP6
+		if ip := ip.To4(); ip != nil {
+			nic.IP4 = ip.String()
+		} else {
+			nic.IP6 = ip.String()
 		}
 	}
 }

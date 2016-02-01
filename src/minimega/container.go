@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"ipmac"
 	log "minilog"
 	"net"
 	"os"
@@ -1067,7 +1066,7 @@ func (vm *ContainerVM) launchNetwork() error {
 			return fmt.Errorf("create tap: %v", err)
 		}
 
-		updates := make(chan ipmac.IP)
+		updates := make(chan net.IP)
 		go vm.macSnooper(nic, updates)
 
 		br.AddMac(nic.MAC, updates)
