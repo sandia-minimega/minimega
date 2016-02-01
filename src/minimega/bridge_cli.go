@@ -47,7 +47,9 @@ To delete a host tap, use the delete command and tap name from the tap list:
 
 To delete all host taps, use id all, or 'clear tap':
 
-	tap delete all`,
+	tap delete all
+
+Note: tap is not a namespace-aware command.`,
 		Patterns: []string{
 			"tap",
 			"tap <create,> <vlan>",
@@ -83,7 +85,9 @@ to add interface bar to bridge foo:
 
 To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 
-	bridge tunnel vxlan, mega_bridge 10.0.0.1`,
+	bridge tunnel vxlan, mega_bridge 10.0.0.1
+
+Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
 			"bridge trunk <bridge> <interface>",
