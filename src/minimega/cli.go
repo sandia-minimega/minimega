@@ -84,6 +84,97 @@ func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc 
 	}
 }
 
+// wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
+// broadcasts the command to all hosts in the namespace and collects all the
+// responses together.
+func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		log.Debug("namespace: %v, source: %v", namespace, c.Source)
+
+		// Just invoke the handler if there's no namespace specified or we
+		// received the command via meshage
+		if namespace == "" || c.Source == SourceMeshage {
+			respChan <- minicli.Responses{fn(c)}
+			return
+		}
+
+		hosts := namespaces[namespace].hostSlice()
+
+		res := minicli.Responses{}
+
+		cmds := makeCommandHosts(hosts, c)
+		for _, cmd := range cmds {
+			cmd.Record = false
+		}
+
+		// Broadcast to all machines, collecting errors and forwarding
+		// successful commands.
+		for resps := range processCommands(cmds...) {
+			// TODO: we are flattening commands that return multiple responses
+			// by doing this... should we implement proper buffering? Only a
+			// problem if commands that return multiple responses are wrapped
+			// by this (which *currently* is not the case).
+			for _, resp := range resps {
+				res = append(res, resp)
+			}
+		}
+
+		respChan <- res
+	}
+}
+
+// wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
+// or more VMs. This is used by commands like `vm start` and `vm kill`.
+func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan minicli.Responses) {
+		log.Debug("namespace: %v, source: %v", namespace, c.Source)
+
+		// Just invoke the handler if there's no namespace specified or we
+		// received the command via meshage
+		if namespace == "" || c.Source == SourceMeshage {
+			respChan <- minicli.Responses{fn(c)}
+			return
+		}
+
+		hosts := []string{}
+		for host := range namespaces[namespace].Hosts {
+			hosts = append(hosts, host)
+		}
+
+		res := minicli.Responses{}
+
+		var ok bool
+
+		cmds := makeCommandHosts(hosts, c)
+		for _, cmd := range cmds {
+			cmd.Record = false
+		}
+
+		// Broadcast to all machines, collecting errors and forwarding
+		// successful commands.
+		for resps := range processCommands(cmds...) {
+			for _, resp := range resps {
+				ok = ok || (resp.Error == "")
+
+				if resp.Error == "" || !isVmNotFound(resp.Error) {
+					// Record successes and unexpected errors
+					res = append(res, resp)
+				}
+			}
+		}
+
+		if !ok && len(res) == 0 {
+			// Presumably, we weren't able to find the VM
+			res = append(res, &minicli.Response{
+				Host:  hostname,
+				Error: vmNotFound(c.StringArgs["target"]).Error(),
+			})
+		}
+
+		respChan <- res
+	}
+}
+
 // forward receives minicli.Responses from in and forwards them to out.
 func forward(in, out chan minicli.Responses) {
 	for v := range in {
@@ -294,10 +385,9 @@ func cliLocal() {
 // Node: we don't run preprocessors when namespaces are active to avoid
 // expanding files before we're running the command on the correct machine.
 func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	if namespace != "" && c.Source != "" {
+	if namespace != "" && c.Source != SourceMeshage {
 		return c, nil
 	}
 
 	return iomPreprocessor(c)
-
 }

@@ -1202,7 +1202,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if c.Source != "" && namespace != "" {
+	if namespace != "" && c.Source != SourceMeshage {
 		if len(c.StringArgs) > 0 {
 			namespaceQueue(c, resp)
 		} else {
