@@ -75,6 +75,8 @@ type scheduleStat struct {
 }
 
 type Namespace struct {
+	Name string
+
 	Hosts map[string]bool
 
 	vmIDChan chan int
@@ -109,7 +111,7 @@ func (n Namespace) hostSlice() []string {
 func (n Namespace) VMs() VMs {
 	res := VMs{}
 
-	cmd := minicli.MustCompilef(`namespace %q vm info`, namespace)
+	cmd := minicli.MustCompilef(`namespace %q vm info`, n.Name)
 	cmd.Record = false
 
 	cmds := makeCommandHosts(n.hostSlice(), cmd)
@@ -146,6 +148,7 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 			}
 
 			ns := Namespace{
+				Name:     name,
 				Hosts:    map[string]bool{},
 				vmIDChan: makeIDChan(),
 			}
@@ -279,7 +282,7 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 			resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
 		} else {
 			if len(ns.VMs()) > 0 {
-				log.Warn("deleting VMs when there are still VMs running")
+				log.Warn("deleting namespace when there are still VMs")
 			}
 
 			for _, stats := range ns.scheduleStats {
