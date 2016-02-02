@@ -1256,10 +1256,20 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	for _, name := range names {
 		wg.Add(1)
 
+		var vm VM
+		switch vmType {
+		case KVM:
+			vm = NewKVM(name)
+		case CONTAINER:
+			vm = NewContainer(name)
+		default:
+			// TODO
+		}
+
 		go func(name string) {
 			defer wg.Done()
 
-			errChan <- vms.launch(name, vmType)
+			errChan <- vms.launch(vm)
 		}(name)
 	}
 
@@ -1269,8 +1279,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		wg.Wait()
 	}()
 
+	vmLaunch.Add(1)
+
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() string {
+		defer vmLaunch.Done()
+
 		errs := []error{}
 		for err := range errChan {
 			errs = append(errs, err)

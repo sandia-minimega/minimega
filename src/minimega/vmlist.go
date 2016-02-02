@@ -167,26 +167,14 @@ func (vms VMs) findVm(idOrName string) (vm VM) {
 }
 
 // launch one VM of a given type.
-func (vms VMs) launch(name string, vmType VMType) error {
+func (vms VMs) launch(vm VM) error {
 	vmLock.Lock()
 
 	// Make sure that there isn't an existing VM with the same name
-	if name != "" {
-		for _, vm := range vms {
-			if vm.GetName() == name {
-				return fmt.Errorf("vm launch duplicate VM name: %s", name)
-			}
+	for _, vm2 := range vms {
+		if vm.GetName() == vm2.GetName() {
+			return fmt.Errorf("vm launch duplicate VM name: %s", vm.GetName())
 		}
-	}
-
-	var vm VM
-	switch vmType {
-	case KVM:
-		vm = NewKVM(name)
-	case CONTAINER:
-		vm = NewContainer(name)
-	default:
-		// TODO
 	}
 
 	vms[vm.GetID()] = vm
