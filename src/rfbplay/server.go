@@ -58,7 +58,13 @@ func serveFile(w http.ResponseWriter, r *http.Request, fs http.FileSystem, name 
 		dirList(w, f)
 	} else {
 		// Actually playback a recording
-		streamRecording(w, f)
+		offset, err := time.ParseDuration(r.FormValue("offset"))
+		if err != nil {
+			log.Error("parse offset: %v: %v", err, r.FormValue("offset"))
+			offset = 0
+		}
+
+		streamRecording(w, f, offset)
 	}
 }
 
@@ -88,7 +94,7 @@ func dirList(w http.ResponseWriter, f http.File) {
 	fmt.Fprintf(w, "</pre>\n")
 }
 
-func streamRecording(w http.ResponseWriter, f http.File) {
+func streamRecording(w http.ResponseWriter, f http.File, start time.Duration) {
 	updateChan, _ := readFile(f)
 	imageChan := make(chan image.Image, 10)
 
@@ -98,9 +104,20 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 
 		prev := time.Now()
 		img := image.NewRGBA(image.Rect(0, 0, X, Y))
+		var startOffset int64
 
 		// for each jpeg image
 		for update := range updateChan {
+			var skip bool
+			// fast forward to start
+			// we set skip instead of just continuing the outer
+			// loop so we can do other checks like resolution
+			// changes
+			if startOffset < start.Nanoseconds() {
+				startOffset += update.Offset
+				skip = true
+			}
+
 			// Check if the resolution has changed
 			last := update.Rectangles[len(update.Rectangles)-1]
 			if last.EncodingType == DesktopSize || X == 0 || Y == 0 {
@@ -121,6 +138,12 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 			}
 
 			offset := time.Now().Sub(prev).Nanoseconds()
+			img = nimg
+
+			if skip {
+				continue
+			}
+
 			prev = time.Now()
 
 			if offset < update.Offset {
@@ -131,7 +154,6 @@ func streamRecording(w http.ResponseWriter, f http.File) {
 			}
 
 			imageChan <- nimg
-			img = nimg
 		}
 
 		close(imageChan)
