@@ -122,7 +122,14 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	if hosts == Wildcard {
 		if namespace != "" {
 			// Broadcast command to hosts in the same namespace
-			recipients = namespaces[namespace].hostSlice()
+			for _, host := range namespaces[namespace].hostSlice() {
+				if host == hostname {
+					// Log it and drop it
+					log.Warn("all includes local host but cannot mesh send yourself, dropping meshage")
+				} else {
+					recipients = append(recipients, host)
+				}
+			}
 		} else {
 			// Broadcast command to all hosts
 			recipients = meshageNode.BroadcastRecipients()

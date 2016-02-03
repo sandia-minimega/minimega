@@ -447,19 +447,15 @@ func HostVMs(host string) VMs {
 // namespace, if applicable. Unlike LocalVMs, the keys of the returned map do
 // not match the VM's ID. Caller should hold cmdLock.
 func GlobalVMs() VMs {
-	// Figure out list of hosts... ones in namespace or all connected hosts
-	// plus ourselves
+	// Figure out which hosts to query:
+	//  * Hosts in the active namespace
+	//  * Hosts connected via meshage plus ourselves
 	var hosts []string
 	if namespace != "" {
-		// filter local host since we will populate the local VMs directly
-		// (this avoid calling `vm info` which would cause a deadlock).
-		for _, host := range namespaces[namespace].hostSlice() {
-			if host != hostname {
-				hosts = append(hosts, host)
-			}
-		}
+		hosts = namespaces[namespace].hostSlice()
 	} else {
 		hosts = meshageNode.BroadcastRecipients()
+		hosts = append(hosts, hostname)
 	}
 
 	// Compile info command and set it not to record
@@ -468,8 +464,8 @@ func GlobalVMs() VMs {
 
 	cmds := makeCommandHosts(hosts, cmd)
 
-	// Start with local VMs
-	res := LocalVMs()
+	// Collected VMs
+	vms := VMs{}
 
 	for resps := range processCommands(cmds...) {
 		for _, resp := range resps {
@@ -478,9 +474,9 @@ func GlobalVMs() VMs {
 				continue
 			}
 
-			if vms, ok := resp.Data.(VMs); ok {
-				for _, vm := range vms {
-					res[len(res)] = vm
+			if vms2, ok := resp.Data.(VMs); ok {
+				for _, vm := range vms2 {
+					vms[len(vms)] = vm
 				}
 			} else {
 				log.Error("unknown data field in vm info from %v", resp.Host)
@@ -488,5 +484,5 @@ func GlobalVMs() VMs {
 		}
 	}
 
-	return res
+	return vms
 }

@@ -330,7 +330,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	}
 
 	if len(ns.queuedVMs) == 0 {
-		resp.Error = "namespace must contain at least one host to launch VMs"
+		resp.Error = "namespace must contain at least one queued VM to launch VMs"
 		return
 	}
 

@@ -113,17 +113,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 
 		res := minicli.Responses{}
 
-		var hosts []string
-		for _, host := range namespaces[namespace].hostSlice() {
-			if host == hostname {
-				// HAX: Run the local command directly so that we avoid a
-				// deadlock on cmdLock. Set the source to SourceMeshage so that
-				// we process the command as if it were received via meshage.
-				res = append(res, fn(c))
-			} else {
-				hosts = append(hosts, host)
-			}
-		}
+		hosts := namespaces[namespace].hostSlice()
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
@@ -312,9 +302,11 @@ func runCommandHosts(hosts []string, cmd *minicli.Command) chan minicli.Response
 }
 
 // makeCommandHosts creates commands to run the given command on a set of hosts
-// handling the case where the local node is included in the list.
+// handling the special case where the local node is included in the list.
+// makeCommandHosts is namespace-aware -- it generates commands based on the
+// currently active namespace.
 func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
-	// filter out local node, if included
+	// filter out the local host, if included
 	var includeLocal bool
 	var hosts2 []string
 
@@ -327,35 +319,31 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		}
 	}
 
-	targets := strings.Join(hosts2, ",")
-
 	var cmds = []*minicli.Command{}
 
 	if includeLocal {
-		// Copy the command and clear the Source flag
-		copied := new(minicli.Command)
-		*copied = *cmd
-		copied.SetSource("")
+		// Create a deep copy of the command by recompiling it
+		cmd2 := minicli.MustCompile(cmd.Original)
+		cmd2.SetRecord(cmd.Record)
 
-		cmds = append(cmds, copied)
+		cmds = append(cmds, cmd2)
 	}
 
 	if len(hosts2) > 0 {
+		targets := strings.Join(hosts2, ",")
+
 		// Keep the original CLI input
 		original := cmd.Original
-		record := cmd.Record
 
+		// Prefix with namespace, if one is set
 		if namespace != "" {
 			original = fmt.Sprintf("namespace %q %v", namespace, original)
 		}
 
-		cmd, err := minicli.Compilef("mesh send %s %s", targets, original)
-		if err != nil {
-			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
-		}
-		cmd.SetRecord(record)
+		cmd2 := minicli.MustCompilef("mesh send %s %s", targets, original)
+		cmd2.SetRecord(cmd.Record)
 
-		cmds = append(cmds, cmd)
+		cmds = append(cmds, cmd2)
 	}
 
 	return cmds
