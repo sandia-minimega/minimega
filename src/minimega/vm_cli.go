@@ -58,6 +58,7 @@ Additional fields are available for KVM-based VMs:
 Additional fields are available for container-based VMs:
 
 - init	     : process to invoke as init
+- preinit    : process to invoke at container launch before isolation
 - filesystem : root filesystem for the container
 
 Examples:

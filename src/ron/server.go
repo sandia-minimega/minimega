@@ -193,7 +193,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 			}
 			err := enc.Encode(m)
 			if err != nil {
-				if err != io.EOF {
+				if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 					log.Errorln(err)
 				}
 				s.removeClient(c.UUID)
@@ -206,7 +206,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		var m Message
 		err := dec.Decode(&m)
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
 				log.Errorln(err)
 			}
 			s.removeClient(c.UUID)

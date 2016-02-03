@@ -137,6 +137,9 @@ var containerConfigFns = map[string]VMConfigFns{
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
 	},
+	"preinit": vmConfigString(func(vm interface{}) *string {
+		return &mustContainerConfig(vm).Preinit
+	}, ""),
 	"fifo": vmConfigInt(func(vm interface{}) *int {
 		return &mustContainerConfig(vm).Fifos
 	}, "number", 0),
