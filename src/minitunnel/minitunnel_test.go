@@ -5,10 +5,87 @@
 package minitunnel_test
 
 import (
+	"fmt"
+	log "minilog"
 	. "minitunnel"
 	"net"
+	"os"
 	"testing"
 )
+
+func init() {
+	log.AddLogger("stdio", os.Stderr, log.DEBUG, true)
+}
+
+type DummyServer struct {
+	net.Listener
+
+	err error // any error that occured while being a dummy
+}
+
+func NewDummyServer(typ, laddr string) (*DummyServer, error) {
+	ln, err := net.Listen(typ, laddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DummyServer{ln, nil}, nil
+}
+
+func (d *DummyServer) Expect(input, output string) {
+	rconn, err := d.Accept()
+	if err != nil {
+		d.err = err
+		return
+	}
+	defer rconn.Close()
+
+	var buf = make([]byte, 10)
+	n, err := rconn.Read(buf)
+	if err != nil {
+		d.err = fmt.Errorf("%v %v %v", err, n, string(buf[:n]))
+		return
+	}
+
+	if string(buf[:n]) != input {
+		d.err = fmt.Errorf("invalid message: `%v` != `%v`", string(buf[:n]), input)
+		return
+	}
+
+	_, d.err = rconn.Write([]byte(output))
+}
+
+type DummyClient struct {
+	net.Conn
+}
+
+func NewDummyClient(typ, addr string) (*DummyClient, error) {
+	conn, err := net.Dial(typ, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &DummyClient{conn}, nil
+}
+
+func (d *DummyClient) Send(s string) error {
+	_, err := d.Write([]byte(s))
+	return err
+}
+
+func (d *DummyClient) Receive(expect string) error {
+	var buf = make([]byte, 10)
+	n, err := d.Read(buf)
+	if err != nil {
+		return fmt.Errorf("%v %v %v", err, n, string(buf[:n]))
+	}
+
+	if string(buf[:n]) != expect {
+		return fmt.Errorf("invalid message: `%v` != `%v`", string(buf[:n]), expect)
+	}
+
+	return nil
+}
 
 func TestHandshake(t *testing.T) {
 	g, h := net.Pipe()
@@ -41,53 +118,34 @@ func TestTunnel(t *testing.T) {
 		t.Fatalf("Dial: %v", errDial)
 	}
 
-	ln, err := net.Listen("tcp", ":4445")
+	s, err := NewDummyServer("tcp", ":4445")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-
-	go func() {
-		rconn, err := ln.Accept()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		var buf = make([]byte, 10)
-		n, err := rconn.Read(buf)
-		if err != nil {
-			t.Fatalf("%v %v %v", err, n, string(buf[:n]))
-		}
-		if string(buf[:n]) != "hello" {
-			t.Fatalf("invalid message: %v", string(buf[:n]))
-		}
-		_, err = rconn.Write([]byte("world"))
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		rconn.Close()
-	}()
+	go s.Expect("hello", "world")
+	defer s.Close()
 
 	err = tun.Forward(4444, "localhost", 4445)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
-	conn, err := net.Dial("tcp", ":4444")
+	c, err := NewDummyClient("tcp", ":4444")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	_, err = conn.Write([]byte("hello"))
-	if err != nil {
+	defer c.Close()
+
+	if err := c.Send("hello"); err != nil {
 		t.Fatalf("%v", err)
 	}
-	var buf = make([]byte, 10)
-	n, err := conn.Read(buf)
-	if err != nil {
-		t.Fatalf("%v %v %v", err, n, string(buf[:n]))
+	if err := c.Receive("world"); err != nil {
+		t.Fatalf("%v", err)
 	}
-	if string(buf[:n]) != "world" {
-		t.Fatalf("invalid message: %v", string(buf[:n]))
+
+	if s.err != nil {
+		t.Fatalf("%v", s.err)
 	}
-	conn.Close()
 }
 
 func TestMultiTunnel(t *testing.T) {
@@ -105,55 +163,19 @@ func TestMultiTunnel(t *testing.T) {
 		t.Fatalf("Dial: %v", errDial)
 	}
 
-	ln, err := net.Listen("tcp", ":4447")
+	s, err := NewDummyServer("tcp", ":4447")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
+	go s.Expect("hello", "world")
+	defer s.Close()
 
-	ln2, err := net.Listen("tcp", ":4449")
+	s2, err := NewDummyServer("tcp", ":4449")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-
-	go func() {
-		rconn, err := ln.Accept()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		var buf = make([]byte, 10)
-		n, err := rconn.Read(buf)
-		if err != nil {
-			t.Fatalf("%v %v %v", err, n, string(buf[:n]))
-		}
-		if string(buf[:n]) != "hello" {
-			t.Fatalf("invalid message: %v", string(buf[:n]))
-		}
-		_, err = rconn.Write([]byte("world"))
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		rconn.Close()
-	}()
-
-	go func() {
-		rconn, err := ln2.Accept()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		var buf = make([]byte, 10)
-		n, err := rconn.Read(buf)
-		if err != nil {
-			t.Fatalf("%v %v %v", err, n, string(buf[:n]))
-		}
-		if string(buf[:n]) != "yellow" {
-			t.Fatalf("invalid message: %v", string(buf[:n]))
-		}
-		_, err = rconn.Write([]byte("mellow"))
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		rconn.Close()
-	}()
+	go s2.Expect("yellow", "mellow")
+	defer s2.Close()
 
 	err = tun.Forward(4446, "localhost", 4447)
 	if err != nil {
@@ -165,47 +187,28 @@ func TestMultiTunnel(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
-	conn, err := net.Dial("tcp", ":4446")
+	c, err := NewDummyClient("tcp", ":4446")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	conn2, err := net.Dial("tcp", ":4448")
+	defer c.Close()
+	c2, err := NewDummyClient("tcp", ":4448")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
+	defer c2.Close()
 
-	_, err = conn.Write([]byte("hello"))
-	if err != nil {
-		t.Fatalf("%v", err)
+	errs := []error{
+		c.Send("hello"),
+		c2.Send("yellow"),
+		c.Receive("world"),
+		c2.Receive("mellow"),
 	}
-
-	_, err = conn2.Write([]byte("yellow"))
-	if err != nil {
-		t.Fatalf("%v", err)
+	for _, err := range errs {
+		if err != nil {
+			t.Fatalf("%v", err)
+		}
 	}
-
-	var buf = make([]byte, 10)
-	var buf2 = make([]byte, 10)
-
-	n, err := conn.Read(buf)
-	if err != nil {
-		t.Fatalf("%v %v %v", err, n, string(buf[:n]))
-	}
-
-	if string(buf[:n]) != "world" {
-		t.Fatalf("invalid message: %v", string(buf[:n]))
-	}
-
-	n, err = conn2.Read(buf2)
-	if err != nil {
-		t.Fatalf("%v %v %v", err, n, string(buf2[:n]))
-	}
-
-	if string(buf2[:n]) != "mellow" {
-		t.Fatalf("invalid message: %v", string(buf2[:n]))
-	}
-	conn.Close()
-	conn2.Close()
 }
 
 func TestReverse(t *testing.T) {
@@ -223,53 +226,34 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("Dial: %v", errDial)
 	}
 
-	ln, err := net.Listen("tcp", ":4450")
+	s, err := NewDummyServer("tcp", ":4450")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-
-	go func() {
-		rconn, err := ln.Accept()
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		var buf = make([]byte, 10)
-		n, err := rconn.Read(buf)
-		if err != nil {
-			t.Fatalf("%v %v %v", err, n, string(buf[:n]))
-		}
-		if string(buf[:n]) != "hello" {
-			t.Fatalf("invalid message: %v", string(buf[:n]))
-		}
-		_, err = rconn.Write([]byte("world"))
-		if err != nil {
-			t.Fatalf("%v", err)
-		}
-		rconn.Close()
-	}()
+	go s.Expect("hello", "world")
+	defer s.Close()
 
 	err = tun.Reverse(4451, "localhost", 4450)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
 
-	conn, err := net.Dial("tcp", ":4451")
+	c, err := NewDummyClient("tcp", ":4451")
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	_, err = conn.Write([]byte("hello"))
-	if err != nil {
+	defer c.Close()
+
+	if err := c.Send("hello"); err != nil {
 		t.Fatalf("%v", err)
 	}
-	var buf = make([]byte, 10)
-	n, err := conn.Read(buf)
-	if err != nil {
-		t.Fatalf("%v %v %v", err, n, string(buf[:n]))
+	if err := c.Receive("world"); err != nil {
+		t.Fatalf("%v", err)
 	}
-	if string(buf[:n]) != "world" {
-		t.Fatalf("invalid message: %v", string(buf[:n]))
+
+	if s.err != nil {
+		t.Fatalf("%v", s.err)
 	}
-	conn.Close()
 }
 
 func TestFowardInvalid(t *testing.T) {
