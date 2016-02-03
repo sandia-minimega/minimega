@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"math/rand"
 	"minicli"
 	log "minilog"
 	"os"
@@ -86,8 +85,11 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 	}
 	log.Debug("got expanded hosts: %v", hostsExpanded)
 
-	suffix := rand.New(rand.NewSource(time.Now().UnixNano())).Int31()
-	remotePath := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_deploy_%v", suffix))
+	// Append timestamp to filename so that each deploy produces a new binary
+	// on the remote system. Using the timestamp allows us to quickly identify
+	// the latest binary after multiple deployments.
+	fname := fmt.Sprintf("minimega_deploy_%v", time.Now().Unix())
+	remotePath := filepath.Join(os.TempDir(), fname)
 	log.Debug("remotePath: %v", remotePath)
 
 	// copy minimega
