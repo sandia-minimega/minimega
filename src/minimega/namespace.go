@@ -104,38 +104,6 @@ func (n Namespace) hostSlice() []string {
 	return hosts
 }
 
-// VMs retrieves all the VMs across a namespace. Note that the keys for the
-// returned map are arbitrary -- multiple VMs may share the same ID if they are
-// on separate hosts so we cannot key off of ID. Note: this assumes that the
-// caller has the cmdLock.
-func (n Namespace) VMs() VMs {
-	res := VMs{}
-
-	cmd := minicli.MustCompilef(`namespace %q vm info`, n.Name)
-	cmd.Record = false
-
-	cmds := makeCommandHosts(n.hostSlice(), cmd)
-
-	for resps := range processCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if vms, ok := resp.Data.(VMs); ok {
-				for _, vm := range vms {
-					res[len(res)] = vm
-				}
-			} else {
-				log.Error("unknown data field in `vm info`")
-			}
-		}
-	}
-
-	return res
-}
-
 func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
@@ -281,9 +249,8 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 		if ns, ok := namespaces[name]; !ok {
 			resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
 		} else {
-			if len(ns.VMs()) > 0 {
-				log.Warn("deleting namespace when there are still VMs")
-			}
+			// TODO: do we care about looking for VMs that are part of the
+			// namespace? When we delete it?
 
 			for _, stats := range ns.scheduleStats {
 				// TODO: We could kill the scheduler -- that wouldn't be too
@@ -318,7 +285,7 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	ns := namespaces[namespace]
 
-	names, err := expandVMLaunchNames(c.StringArgs["name"], ns.VMs())
+	names, err := expandVMLaunchNames(c.StringArgs["name"], GlobalVMs())
 	if err != nil {
 		resp.Error = err.Error()
 		return
@@ -448,7 +415,7 @@ func namespaceHostLaunch(host, ns string, queuedVMs []queuedVM, respChan chan mi
 
 			for _, cmd := range cmds {
 				cmd := minicli.MustCompile(cmd)
-				cmd.Record = false
+				cmd.SetRecord(false)
 
 				if host == hostname {
 					forward(processCommands(cmd), configChan)
@@ -473,8 +440,10 @@ func namespaceHostLaunch(host, ns string, queuedVMs []queuedVM, respChan chan mi
 		if !abort {
 			names := strings.Join(queued.names, ",")
 			log.Debug("launch vms on host %v -- %v", host, names)
+
 			cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", ns, queued.vmType, names)
-			cmd.Record = false
+			cmd.SetRecord(false)
+
 			if host == hostname {
 				forward(processCommands(cmd), respChan)
 			} else {

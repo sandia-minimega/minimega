@@ -70,9 +70,22 @@ func cliSetup() {
 	registerHandlers("shell", shellCLIHandlers)
 	registerHandlers("vlans", vlansCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
+	registerHandlers("vmconfig", vmconfigCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
 	registerHandlers("vyatta", vyattaCLIHandlers)
 	registerHandlers("web", webCLIHandlers)
+}
+
+// isUserSource tests whether the provided source comes from the user or not.
+// User-generated commands are treated differently than programmatically
+// generated commands or commands received over Meshage.
+func isUserSource(source string) bool {
+	switch source {
+	case SourceLocalCLI, SourceAttachCLI, SourceRead:
+		return true
+	}
+
+	return false
 }
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
@@ -93,18 +106,28 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 
 		// Just invoke the handler if there's no namespace specified or we
 		// received the command via meshage
-		if namespace == "" || c.Source == SourceMeshage {
+		if namespace == "" || !isUserSource(c.Source) {
 			respChan <- minicli.Responses{fn(c)}
 			return
 		}
 
-		hosts := namespaces[namespace].hostSlice()
-
 		res := minicli.Responses{}
+
+		var hosts []string
+		for _, host := range namespaces[namespace].hostSlice() {
+			if host == hostname {
+				// HAX: Run the local command directly so that we avoid a
+				// deadlock on cmdLock. Set the source to SourceMeshage so that
+				// we process the command as if it were received via meshage.
+				res = append(res, fn(c))
+			} else {
+				hosts = append(hosts, host)
+			}
+		}
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
-			cmd.Record = false
+			cmd.SetRecord(false)
 		}
 
 		// Broadcast to all machines, collecting errors and forwarding
@@ -131,7 +154,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFun
 
 		// Just invoke the handler if there's no namespace specified or we
 		// received the command via meshage
-		if namespace == "" || c.Source == SourceMeshage {
+		if namespace == "" || !isUserSource(c.Source) {
 			// Ensure that we have finished creating all the vms launched in previous
 			// commands (possibly with noblock) before trying to apply the command.
 			// This prevents a race condition where a vm could be launched with noblock
@@ -153,7 +176,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFun
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
-			cmd.Record = false
+			cmd.SetRecord(false)
 		}
 
 		// Broadcast to all machines, collecting errors and forwarding
@@ -229,6 +252,7 @@ func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
 	for _, c := range cmd {
 		wg.Add(1)
 
+		log.Info("processing: `%v` from `%v`", c.Original, c.Source)
 		in := minicli.ProcessCommand(c)
 
 		go func() {
@@ -273,11 +297,11 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	original := cmd.Original
 	record := cmd.Record
 
-	cmd, err := minicli.Compilef("mesh send %s .record %t %s", Wildcard, record, original)
+	cmd, err := minicli.Compilef("mesh send %s %s", Wildcard, original)
 	if err != nil {
 		log.Fatal("cannot run `%v` globally -- %v", original, err)
 	}
-	cmd.Record = record
+	cmd.SetRecord(record)
 
 	return runCommand(cmd, cmd.Subcommand)
 }
@@ -325,11 +349,11 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 			original = fmt.Sprintf("namespace %q %v", namespace, original)
 		}
 
-		cmd, err := minicli.Compilef("mesh send %s .record %t %s", targets, record, original)
+		cmd, err := minicli.Compilef("mesh send %s %s", targets, original)
 		if err != nil {
 			log.Fatal("cannot run `%v` on hosts -- %v", original, err)
 		}
-		cmd.Record = record
+		cmd.SetRecord(record)
 
 		cmds = append(cmds, cmd)
 	}
@@ -370,7 +394,7 @@ func cliLocal() {
 
 		// HAX: Don't record the read command
 		if hasCommand(cmd, "read") {
-			cmd.Record = false
+			cmd.SetRecord(false)
 		}
 
 		for resp := range runCommand(cmd) {
@@ -391,7 +415,7 @@ func cliLocal() {
 // Node: we don't run preprocessors when namespaces are active to avoid
 // expanding files before we're running the command on the correct machine.
 func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	if namespace != "" && c.Source != SourceMeshage {
+	if namespace != "" && isUserSource(c.Source) {
 		return c, nil
 	}
 

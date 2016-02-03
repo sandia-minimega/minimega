@@ -95,6 +95,7 @@ func clearCapture(captureType, id string) (err error) {
 // startCapturePcap starts a new capture for a specified interface on a VM,
 // writing the packets to the specified filename in PCAP format.
 func startCapturePcap(vm string, iface int, filename string) error {
+	// TODO: filter by namespace?
 	// get the vm
 	v := vms.findVm(vm)
 	if v == nil {

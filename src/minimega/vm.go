@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"ipmac"
-	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -54,6 +53,7 @@ type VM interface {
 	GetID() int           // GetID returns the VM's per-host unique ID
 	GetName() string      // GetName returns the VM's per-host unique name
 	GetNamespace() string // GetNamespace returns the VM's namespace
+	GetHost() string      // GetHost returns the hostname that the VM is running on
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
@@ -86,7 +86,8 @@ type VM interface {
 
 // BaseConfig contains all fields common to all VM types.
 type BaseConfig struct {
-	Namespace string // namespace this VM belongs to, set by scheduler
+	Namespace string // namespace this VM belongs to
+	Host      string // hostname where this VM is running
 
 	Vcpus  string // number of virtual cpus
 	Memory string // memory for the vm, in megabytes
@@ -171,6 +172,7 @@ func NewVM(name string) *BaseVM {
 	}
 
 	vm.Namespace = namespace
+	vm.Host = hostname
 
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
@@ -285,6 +287,10 @@ func (vm *BaseVM) GetName() string {
 
 func (vm *BaseVM) GetNamespace() string {
 	return vm.Namespace
+}
+
+func (vm *BaseVM) GetHost() string {
+	return vm.Host
 }
 
 func (vm *BaseVM) GetState() VMState {
@@ -626,39 +632,4 @@ func vmNotKVM(idOrName string) error {
 
 func isVmNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
-}
-
-// Get the VM info from all hosts in the mesh. Callers must specify whether
-// they already hold the cmdLock or not. Returns a map where each key is a
-// hostname and the value is the VMs for that host.
-func globalVMs(hasLock bool) map[string]VMs {
-	if !hasLock {
-		cmdLock.Lock()
-		defer cmdLock.Unlock()
-	}
-
-	res := map[string]VMs{}
-
-	cmd := minicli.MustCompile("vm info")
-	cmd.Record = false
-
-	cmds := makeCommandHosts(meshageNode.BroadcastRecipients(), cmd)
-	cmds = append(cmds, cmd) // add local node
-
-	for resps := range processCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if vms, ok := resp.Data.(VMs); ok {
-				res[resp.Host] = vms
-			} else {
-				log.Error("unknown data field in vm info")
-			}
-		}
-	}
-
-	return res
 }

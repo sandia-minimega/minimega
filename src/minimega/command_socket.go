@@ -67,7 +67,7 @@ outer:
 
 			// HAX: Don't record the read command
 			if hasCommand(cmd, "read") {
-				cmd.Record = false
+				cmd.SetRecord(false)
 			}
 
 			// HAX: Work around so that we can add the more boolean

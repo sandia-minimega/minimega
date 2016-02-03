@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"minicli"
 	log "minilog"
 	"os"
 	"ranges"
@@ -17,12 +18,18 @@ import (
 // VMs contains all the VMs running on this host, the key is the VM's ID
 type VMs map[int]VM
 
+// vmApplyFunc is passed into VMs.apply
+type vmApplyFunc func(VM, bool) (bool, error)
+
 // namespace returns the VMs that are part of the currently active namespace,
 // if there is one. Otherwise, returns itself.
 func (vms VMs) namespace() VMs {
 	if namespace == "" {
 		return vms
 	}
+
+	vmLock.Lock()
+	defer vmLock.Unlock()
 
 	res := map[int]VM{}
 	for id, vm := range vms {
@@ -34,37 +41,14 @@ func (vms VMs) namespace() VMs {
 	return res
 }
 
-// apply applies the provided function to the vm in VMs whose name or ID
-// matches the provided vm parameter.
-func (vms VMs) apply(idOrName string, fn func(VM) error) error {
-	vm := vms.findVm(idOrName)
-	if vm == nil {
-		return vmNotFound(idOrName)
-	}
-	return fn(vm)
-}
-
-func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
-	var cmds = []string{}
-
-	for k, fns := range fns {
-		if fns.PrintCLI != nil {
-			if v := fns.PrintCLI(configs); len(v) > 0 {
-				cmds = append(cmds, v)
-			}
-		} else if v := fns.Print(configs); len(v) > 0 {
-			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
-		}
-	}
-
-	return cmds
-}
-
 func (vms VMs) save(file *os.File, target string) error {
 	// Stop on the first error
 	var err error
 
-	expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
+	// For each VM, dump a list of commands to launch a VM of the same
+	// configuration. Should not be run in parallel since we want to stop on
+	// the first err.
+	applyFunc := func(vm VM, _ bool) (bool, error) {
 		if err != nil {
 			return true, err
 		}
@@ -100,7 +84,9 @@ func (vms VMs) save(file *os.File, target string) error {
 		}
 
 		return true, nil
-	})
+	}
+
+	vms.apply(target, false, applyFunc)
 
 	return err
 }
@@ -144,29 +130,25 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	return vmNotKVM(idOrName)
 }
 
-// findVm finds a VM based on it's ID or Name, ensuring that the VM is part of
-// the current namespace, if one is active. Returns nil if no such VM exists.
-func (vms VMs) findVm(idOrName string) (vm VM) {
+// findVm finds a VM based on it's ID or Name.
+func (vms VMs) findVm(idOrName string) VM {
+	// Search for VM by ID
 	if id, err := strconv.Atoi(idOrName); err == nil {
-		vm = vms[id]
-	} else {
-		// Search for VM by name
-		for _, v := range vms {
-			if v.GetName() == idOrName {
-				vm = v
-				break
-			}
+		return vms[id]
+	}
+
+	// Search for VM by name
+	for _, v := range vms {
+		if v.GetName() == idOrName {
+			return v
 		}
 	}
 
-	if vm != nil && (namespace != "" && vm.GetNamespace() != namespace) {
-		vm = nil
-	}
-
-	return
+	return nil
 }
 
-// launch one VM of a given type.
+// launch one VM of a given type. This needs to be called without VMs.namespace
+// as we need to add the VM to the global VMs.
 func (vms VMs) launch(vm VM) error {
 	vmLock.Lock()
 
@@ -187,7 +169,9 @@ func (vms VMs) launch(vm VM) error {
 }
 
 func (vms VMs) start(target string) []error {
-	return expandVmTargets(target, true, func(vm VM, wild bool) (bool, error) {
+	// For each VM, start it if it's in a startable state. Can be run in
+	// parallel.
+	applyFunc := func(vm VM, wild bool) (bool, error) {
 		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
@@ -197,23 +181,30 @@ func (vms VMs) start(target string) []error {
 		}
 
 		return false, nil
-	})
+	}
+
+	return vms.apply(target, true, applyFunc)
 }
 
 func (vms VMs) stop(target string) []error {
-	return expandVmTargets(target, true, func(vm VM, _ bool) (bool, error) {
+	// For each VM, stop it if it's running. Can be run in parallel.
+	applyFunc := func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
 
 		return false, nil
-	})
+	}
+
+	return vms.apply(target, true, applyFunc)
 }
 
 func (vms VMs) kill(target string) []error {
 	killedVms := map[int]bool{}
 
-	errs := expandVmTargets(target, false, func(vm VM, _ bool) (bool, error) {
+	// For each VM, kill it if it's in a killable state. Should not be run in
+	// parallel because we record the IDs of the VMs we kill in killedVms.
+	applyFunc := func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -224,7 +215,9 @@ func (vms VMs) kill(target string) []error {
 			killedVms[vm.GetID()] = true
 		}
 		return true, nil
-	})
+	}
+
+	errs := vms.apply(target, false, applyFunc)
 
 outer:
 	for len(killedVms) > 0 {
@@ -245,15 +238,24 @@ outer:
 	return errs
 }
 
+// flush deletes VMs that are in the QUIT or ERROR state. This needs to be
+// called without VMs.namespace as we need to delete VMs from the global VMs.
 func (vms VMs) flush() {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	for i, vm := range vms.namespace() {
-		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
-			log.Infoln("deleting VM: ", i)
+	for i, vm := range vms {
+		// Skip VMs outside of current namespace
+		if namespace != "" && vm.GetNamespace() != namespace {
+			continue
+		}
 
-			vm.Flush()
+		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+			log.Info("deleting VM: %v", i)
+
+			if err := vm.Flush(); err != nil {
+				log.Error("clogged VM: %v", err)
+			}
 
 			delete(vms, i)
 		}
@@ -263,7 +265,7 @@ func (vms VMs) flush() {
 func (vms VMs) info() ([]string, [][]string, error) {
 	table := [][]string{}
 
-	for _, vm := range vms.namespace() {
+	for _, vm := range vms {
 		row := []string{}
 
 		for _, mask := range vmMasks {
@@ -284,7 +286,7 @@ func (vms VMs) info() ([]string, [][]string, error) {
 // cleanDirs removes all isntance directories in the minimega base directory
 func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
-	for _, vm := range vms.namespace() {
+	for _, vm := range vms {
 		path := vm.GetInstancePath()
 		log.Debug("cleaning instance path: %v", path)
 		err := os.RemoveAll(path)
@@ -294,8 +296,8 @@ func (vms VMs) cleanDirs() {
 	}
 }
 
-// expandVmTargets is the fan out/in method to apply a function to a set of VMs
-// specified by target. Specifically, it:
+// apply is the fan out/in method to apply a function to a set of VMs specified
+// by target. Specifically, it:
 //
 // 	1. Expands target to a list of VM names and IDs (or wild)
 // 	2. Invokes fn on all the matching VMs
@@ -310,7 +312,7 @@ func (vms VMs) cleanDirs() {
 // The concurrent boolean controls whether fn is run concurrently on multiple
 // VMs or not. If the fns alter state they can set this flag to false rather
 // than dealing with locking.
-func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, error)) []error {
+func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	names := map[string]bool{} // Names of VMs for which to apply fn
 	ids := map[int]bool{}      // IDs of VMs for which to apply fn
 
@@ -351,7 +353,7 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 		results[strconv.Itoa(vm.GetID())] = ok
 	}
 
-	for _, vm := range vms.namespace() {
+	for _, vm := range vms {
 		if wild || names[vm.GetName()] || ids[vm.GetID()] {
 			delete(names, vm.GetName())
 			delete(ids, vm.GetID())
@@ -401,4 +403,90 @@ func expandVmTargets(target string, concurrent bool, fn func(VM, bool) (bool, er
 	}
 
 	return errs
+}
+
+// LocalVMs gets all the VMs running on the local host, filtered to the current
+// namespace, if applicable.
+func LocalVMs() VMs {
+	return vms.namespace()
+}
+
+// HostVMs gets all the VMs running on the specified remote host, filtered to
+// the current namespace, if applicable.
+func HostVMs(host string) VMs {
+	// Compile info command and set it not to record
+	cmd := minicli.MustCompile("vm info")
+	cmd.SetRecord(false)
+
+	cmds := makeCommandHosts([]string{host}, cmd)
+
+	var vms VMs
+
+	for resps := range processCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if vms2, ok := resp.Data.(VMs); ok {
+				if vms != nil {
+					// odd... should only be one vms per host and we're
+					// querying a single host
+					log.Warn("so many vms")
+				}
+				vms = vms2
+			}
+		}
+	}
+
+	return vms
+}
+
+// GlobalVMs gets the VMs from all hosts in the mesh, filtered to the current
+// namespace, if applicable. Unlike LocalVMs, the keys of the returned map do
+// not match the VM's ID. Caller should hold cmdLock.
+func GlobalVMs() VMs {
+	// Figure out list of hosts... ones in namespace or all connected hosts
+	// plus ourselves
+	var hosts []string
+	if namespace != "" {
+		// filter local host since we will populate the local VMs directly
+		// (this avoid calling `vm info` which would cause a deadlock).
+		for _, host := range namespaces[namespace].hostSlice() {
+			if host != hostname {
+				hosts = append(hosts, host)
+			}
+		}
+	} else {
+		hosts = meshageNode.BroadcastRecipients()
+	}
+
+	// Compile info command and set it not to record
+	cmd := minicli.MustCompile("vm info")
+	cmd.SetRecord(false)
+
+	cmds := makeCommandHosts(hosts, cmd)
+
+	// Start with local VMs
+	res := LocalVMs()
+
+	for resps := range processCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if vms, ok := resp.Data.(VMs); ok {
+				for _, vm := range vms {
+					res[len(res)] = vm
+				}
+			} else {
+				log.Error("unknown data field in vm info from %v", resp.Host)
+			}
+		}
+	}
+
+	return res
 }

@@ -201,58 +201,29 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find the VM ID of a VM by name or ID on a remote
-// minimega node. It returns the ID of the VM on the remote host or an error,
-// which may also be an error communicating with the remote node.
-func findRemoteVM(host, vm string) (int, string, error) {
-	log.Debug("findRemoteVM: %v %v", host, vm)
+// findRemoteVM attempts to find a VM based on it's ID or Name on a given host.
+func findRemoteVM(host, idOrName string) VM {
+	log.Debug("findRemoteVM: %v %v", host, idOrName)
 
-	// check for our own host
+	var vms VMs
+
 	if host == hostname || host == Localhost {
-		log.Debugln("host is local node")
-		vm := vms.findVm(vm)
-		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.GetID, vm.GetName())
-			return vm.GetID(), vm.GetName(), nil
-		}
+		vms = LocalVMs()
 	} else {
-		log.Debugln("remote host")
+		vms = HostVMs(host)
+	}
 
-		var cmdStr string
-		v, err := strconv.Atoi(vm)
-		if err == nil {
-			cmdStr = fmt.Sprintf(".filter id=%v .columns name,id .record false vm info", v)
-		} else {
-			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id .record false vm info", vm)
-		}
+	id, err := strconv.Atoi(idOrName)
 
-		cmd := minicli.MustCompile(cmdStr)
-
-		remoteRespChan := make(chan minicli.Responses)
-		go func() {
-			meshageSend(cmd, host, remoteRespChan)
-			close(remoteRespChan)
-		}()
-
-		for resps := range remoteRespChan {
-			// Find a response that is not an error
-			for _, resp := range resps {
-				if resp.Error == "" && len(resp.Tabular) > 0 {
-					// Found it!
-					row := resp.Tabular[0] // should be name,id
-					name := row[0]
-					id, err := strconv.Atoi(row[1])
-					if err != nil {
-						log.Debug("malformed response: %#v", resp)
-					} else {
-						return id, name, nil
-					}
-				}
-			}
+	for _, vm := range vms {
+		if err == nil && id == vm.GetID() {
+			return vm
+		} else if idOrName == vm.GetName() {
+			return vm
 		}
 	}
 
-	return 0, "", vmNotFound(vm)
+	return nil
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking

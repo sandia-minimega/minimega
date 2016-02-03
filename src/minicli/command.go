@@ -132,3 +132,12 @@ func (c *Command) SetSource(source string) {
 		c.Subcommand.SetSource(source)
 	}
 }
+
+// SetRecord sets the Record field for a command and all nested subcommands.
+func (c *Command) SetRecord(record bool) {
+	c.Record = record
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetRecord(record)
+	}
+}

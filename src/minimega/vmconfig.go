@@ -282,3 +282,19 @@ func vmConfigSlice(fn func(interface{}) *[]string, name string) VMConfigFns {
 		},
 	}
 }
+
+func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
+	var cmds = []string{}
+
+	for k, fns := range fns {
+		if fns.PrintCLI != nil {
+			if v := fns.PrintCLI(configs); len(v) > 0 {
+				cmds = append(cmds, v)
+			}
+		} else if v := fns.Print(configs); len(v) > 0 {
+			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
+		}
+	}
+
+	return cmds
+}
