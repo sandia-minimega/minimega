@@ -66,7 +66,7 @@ Set the number of virtual CPUs to allocate for a VM.`,
 			return cliVmConfigField(c, "vcpus")
 		}),
 	},
-	{ // vm config cpus
+	{ // vm config cpu
 		HelpShort: "set the virtual CPU architecture",
 		HelpLong: `
 Set the virtual CPU architecture.
@@ -438,7 +438,7 @@ to the default value.`,
 		Patterns: []string{
 			"clear vm config",
 			// VMConfig
-			"clear vm config <namespace,>",
+			"clear vm config <cpu,>",
 			"clear vm config <memory,>",
 			"clear vm config <net,>",
 			"clear vm config <vcpus,>",
