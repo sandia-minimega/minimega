@@ -149,23 +149,34 @@ func (vms VMs) findVm(idOrName string) VM {
 
 // launch one VM of a given type. This needs to be called without VMs.namespace
 // as we need to add the VM to the global VMs.
-func (vms VMs) launch(vm VM) error {
+func (vms VMs) launch(vm VM) (err error) {
+	// Actually launch the VM from a defered func when there's no error. This
+	// happens *after* we've released the vmLock so that launching can happen
+	// in parallel.
+	defer func() {
+		if err == nil {
+			err = vm.Launch()
+		}
+	}()
+
 	vmLock.Lock()
+	defer vmLock.Unlock()
 
 	// Make sure that there isn't an existing VM with the same name
 	for _, vm2 := range vms {
-		if vm.GetName() == vm2.GetName() {
+		// We only care about name collisions if the VMs are running in the
+		// same namespace or if the collision is a non-namespaced VM with an
+		// already running namespaced VM.
+		namesEq := vm.GetName() == vm2.GetName()
+		namespaceEq := (vm.GetNamespace() == vm2.GetNamespace())
+
+		if namesEq && (namespaceEq || vm.GetNamespace() == "") {
 			return fmt.Errorf("vm launch duplicate VM name: %s", vm.GetName())
 		}
 	}
 
 	vms[vm.GetID()] = vm
-
-	// Done with lock -- actually launching the VM should acquire the VM's
-	// lock, as needed.
-	vmLock.Unlock()
-
-	return vm.Launch()
+	return
 }
 
 func (vms VMs) start(target string) []error {

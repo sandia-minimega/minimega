@@ -1,0 +1,73 @@
+## # Launch three foos, one in global namespace, others in ns1 and ns2
+## vm launch kvm foo
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns1
+## nsmod add-host localhost
+## .columns name,state vm info
+## vm launch kvm foo
+## vm launch
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns2
+## nsmod add-host localhost
+## .columns name,state vm info
+## vm launch kvm foo
+## vm launch
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## clear namespace
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | BUILDING
+foo  | ns2       | BUILDING
+## 
+## # Change VM states, all should only apply within a given namespace
+## namespace ns1 vm start all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | RUNNING
+foo  | ns2       | BUILDING
+## namespace ns2 vm start all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | RUNNING
+foo  | ns2       | RUNNING
+## vm stop all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | PAUSED
+foo  | ns2       | PAUSED
+## namespace ns2 vm kill all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | PAUSED
+foo  | ns2       | QUIT
+## namespace ns2 vm flush
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | PAUSED
+## namespace ns1 vm kill all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+foo  | ns1       | QUIT
+## vm flush
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | BUILDING
+## vm kill all
+## .columns name,namespace,state vm info
+name | namespace | state
+foo  |           | QUIT
+## vm flush
+## .columns name,namespace,state vm info

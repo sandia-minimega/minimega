@@ -219,9 +219,14 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 
 		// Test that the host is actually in the mesh. If it's not, we could
 		// try to mesh dial it... Returning an error is simpler, for now.
-		for _, host := range hosts {
-			if host != hostname && !peers[host] {
-				resp.Error = fmt.Sprintf("unknown host: `%v`", host)
+		for i := range hosts {
+			// Resolve localhost
+			if hosts[i] == Localhost {
+				hosts[i] = hostname
+			}
+
+			if hosts[i] != hostname && !peers[hosts[i]] {
+				resp.Error = fmt.Sprintf("unknown host: `%v`", hosts[i])
 				return resp
 			}
 		}

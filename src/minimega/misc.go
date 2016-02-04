@@ -20,6 +20,7 @@ import (
 	"os/exec"
 	"regexp"
 	"resize"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -27,6 +28,12 @@ import (
 )
 
 type errSlice []error
+
+// loggingMutex logs whenever it is locked or unlocked with the file and line
+// number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
+type loggingMutex struct {
+	sync.Mutex // embed
+}
 
 var validMACPrefix [][3]byte
 
@@ -44,6 +51,22 @@ func (errs errSlice) String() string {
 		}
 	}
 	return strings.Join(vals, "\n")
+}
+
+func (m *loggingMutex) Lock() {
+	_, file, line, _ := runtime.Caller(1)
+
+	log.Info("locking: %v:%v", file, line)
+	m.Mutex.Lock()
+	log.Info("locked: %v:%v", file, line)
+}
+
+func (m *loggingMutex) Unlock() {
+	_, file, line, _ := runtime.Caller(1)
+
+	log.Info("unlocking: %v:%v", file, line)
+	m.Mutex.Unlock()
+	log.Info("unlocked: %v:%v", file, line)
 }
 
 // generate a random mac address and return as a string

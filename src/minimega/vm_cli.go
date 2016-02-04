@@ -766,7 +766,11 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	}
 
 	if noblock {
-		go collectErrs()
+		go func() {
+			if err := collectErrs(); err != "" {
+				log.Errorln(err)
+			}
+		}()
 	} else {
 		resp.Error = collectErrs()
 	}
