@@ -487,40 +487,6 @@ func (s *Server) clientReaper() {
 	}
 }
 
-// Return the list of currently connected serial ports. This does not indicate
-// which serial connections have active clients, simply which serial
-// connections the server is attached to.
-func (s *Server) GetActiveSerialPorts() []string {
-	s.serialLock.Lock()
-	defer s.serialLock.Unlock()
-
-	var ret []string
-	for k, _ := range s.serialConns {
-		ret = append(ret, k)
-	}
-
-	log.Debug("ron GetActiveSerialPorts: %v", ret)
-
-	return ret
-}
-
-// Return the list of currently listening UDS ports. This does not indicate
-// which connections have active clients, simply which connections the server
-// is attached to.
-func (s *Server) GetActiveUDSPorts() []string {
-	s.udsLock.Lock()
-	defer s.udsLock.Unlock()
-
-	var ret []string
-	for k, _ := range s.udsConns {
-		ret = append(ret, k)
-	}
-
-	log.Debug("ron GetActiveUDSPorts: %v", ret)
-
-	return ret
-}
-
 func (s *Server) CloseUDS(path string) error {
 	s.udsLock.Lock()
 	defer s.udsLock.Unlock()
