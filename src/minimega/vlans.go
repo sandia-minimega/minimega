@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"minicli"
 	log "minilog"
 	"strings"
 	"sync"
@@ -56,6 +57,21 @@ func (v *AllocatedVLANs) GetOrAllocate(alias string) int {
 
 	v.byVLAN[v.next] = alias
 	v.byAlias[alias] = v.next
+
+	// Update the cluster! We don't really care if this fails...
+	cmd := minicli.MustCompilef("vlans add %v %v", alias, v.next)
+	respChan := make(chan minicli.Responses)
+
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Debug("unable to send alias %v -> %v to %v: %v", alias, v.next, resp.Host, resp.Error)
+				}
+			}
+		}
+	}()
+	go meshageSend(cmd, Wildcard, respChan)
 
 	return v.next
 }

@@ -37,7 +37,12 @@ func cliVLANs(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["add"] {
-		alias := namespace + VLANAliasSep + c.StringArgs["alias"]
+		// Prepend `<namespace>//` if it doesn't look like the user already
+		// included it.
+		alias := c.StringArgs["alias"]
+		if !strings.Contains(alias, VLANAliasSep) {
+			alias = namespace + VLANAliasSep + alias
+		}
 
 		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
