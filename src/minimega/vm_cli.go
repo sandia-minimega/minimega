@@ -58,6 +58,7 @@ Additional fields are available for KVM-based VMs:
 Additional fields are available for container-based VMs:
 
 - init	     : process to invoke as init
+- preinit    : process to invoke at container launch before isolation
 - filesystem : root filesystem for the container
 
 Examples:
@@ -747,6 +748,30 @@ PID 1 in the container.`,
 			return cliVmConfigField(c, "init")
 		}),
 	},
+	{ // vm config preinit
+		HelpShort: "container preinit program",
+		HelpLong: `
+Containers start in a highly restricted environment. vm config preinit allows
+running processes before isolation mechanisms are enabled. This occurs when the
+vm is launched and before the vm is put in the building state. preinit
+processes must finish before the vm will be allowed to start. 
+
+Specifically, the preinit command will be run after entering namespaces, and
+mounting dependent filesystems, but before cgroups and root capabilities are
+set, and before entering the chroot. This means that the preinit command is run
+as root and can control the host.
+
+For example, to run a script that enables ip forwarding, which is not allowed
+during runtime because /proc is mounted read-only, add a preinit script:
+
+	vm config preinit enable_ip_forwarding.sh`,
+		Patterns: []string{
+			"vm config preinit [preinit]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "preinit")
+		}),
+	},
 	{ // vm config filesystem
 		HelpShort: "set the filesystem for containers",
 		HelpLong: `
@@ -810,6 +835,7 @@ to the default value.`,
 			"clear vm config <hostname,>",
 			"clear vm config <filesystem,>",
 			"clear vm config <init,>",
+			"clear vm config <preinit,>",
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
