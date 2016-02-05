@@ -12,7 +12,7 @@ import (
 )
 
 const BlacklistedVLAN = "BLACKLISTED"
-const VLANAliasSep = "."
+const VLANAliasSep = "//"
 const VLANStart = 2
 
 // AllocatedVLANs stores the state for the VLANs that we've allocated so far
@@ -83,6 +83,9 @@ func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
 // GetVLAN returns the alias for a given VLAN or DisconnectedVLAN if it has not
 // been assigned an alias.
 func (v *AllocatedVLANs) GetVLAN(alias string) int {
+	v.Lock()
+	defer v.Unlock()
+
 	if vlan, ok := v.byAlias[alias]; ok {
 		return vlan
 	}
@@ -94,6 +97,9 @@ func (v *AllocatedVLANs) GetVLAN(alias string) int {
 // not been assigned an alias. Note that previously Blacklist'ed VLANs will
 // return the const BlacklistedVLAN.
 func (v *AllocatedVLANs) GetAlias(vlan int) string {
+	v.Lock()
+	defer v.Unlock()
+
 	return v.byVLAN[vlan]
 }
 

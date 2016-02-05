@@ -50,7 +50,7 @@ func cliVLANs(c *minicli.Command) *minicli.Response {
 		resp.Tabular = [][]string{}
 
 		for alias, vlan := range allocatedVLANs.byAlias {
-			parts := strings.Split(alias, ".")
+			parts := strings.Split(alias, VLANAliasSep)
 			if namespace != "" && namespace != parts[0] {
 				continue
 			}
@@ -58,7 +58,7 @@ func cliVLANs(c *minicli.Command) *minicli.Response {
 			resp.Tabular = append(resp.Tabular,
 				[]string{
 					parts[0],
-					strings.Join(parts[1:], "."),
+					strings.Join(parts[1:], VLANAliasSep),
 					strconv.Itoa(vlan),
 				})
 		}

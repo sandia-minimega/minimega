@@ -226,11 +226,22 @@ func findVMType(args map[string]bool) (VMType, error) {
 // TODO: Handle if there are spaces or commas in the tap/bridge names
 func (net NetConfig) String() (s string) {
 	parts := []string{}
-	if net.Bridge != "" {
+	if net.Bridge != "" && net.Bridge != DEFAULT_BRIDGE {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, strconv.Itoa(net.VLAN))
+	if alias := allocatedVLANs.GetAlias(net.VLAN); alias != "" {
+		// If we're in the namespace identified by the alias, we can trim off
+		// the `<namespace>//` prefix.
+		parts2 := strings.Split(alias, VLANAliasSep)
+		if namespace == parts2[0] {
+			alias = strings.Join(parts2[1:], VLANAliasSep)
+		}
+
+		parts = append(parts, alias)
+	} else {
+		parts = append(parts, strconv.Itoa(net.VLAN))
+	}
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)
