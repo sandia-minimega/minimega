@@ -29,6 +29,9 @@ var (
 )
 
 func generateCerts() (string, string) {
+	if *f_httpTLSCert != "" && *f_httpTLSKey != "" {
+		return *f_httpTLSCert, *f_httpTLSKey
+	}
 	host, err := os.Hostname()
 	if err != nil {
 		log.Fatalln(err)
