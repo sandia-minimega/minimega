@@ -16,6 +16,10 @@ import (
 	"strings"
 	"time"
 	"version"
+	"path/filepath"
+	"io/ioutil"
+	"bytes"
+	"os/exec"
 )
 
 const RETRY_TIMEOUT = 10
@@ -89,7 +93,7 @@ func (c *Client) commandHandler() {
 				}
 				log.Debug("ron commandHandler match: %v", id)
 				c.CommandCounter = id
-				c.Commands <- commands[id]
+				c.processCommand(commands[id])
 			}
 		}
 	}
@@ -203,36 +207,13 @@ func (c *Client) mux() {
 			log.Debugln("ron MESSAGE_COMMAND")
 			c.commands <- m.Commands
 		case MESSAGE_FILE:
-			// let GetFile know we have this file or an error
+			// let getFiles know we have this file or an error
 			c.files <- m
 		default:
 			log.Error("unknown message type: %v", m.Type)
 			return
 		}
 	}
-}
-
-// GetFile asks a ron server to transmit a named file to the client. If
-// successful, the file contents will be returned. A nil byte slice response
-// with a nil error implies the file was empty.
-func (c *Client) GetFile(file string) ([]byte, error) {
-	m := &Message{
-		Type:     MESSAGE_FILE,
-		UUID:     c.UUID,
-		Filename: file,
-	}
-	c.out <- m
-
-	resp := <-c.files
-	if resp.Filename != file {
-		return nil, fmt.Errorf("filename mismatch: %v : %v", file, resp.Filename)
-	}
-
-	if resp.Error != "" {
-		return nil, fmt.Errorf("%v", resp.Error)
-	}
-
-	return resp.File, nil
 }
 
 func getNetworkInfo() ([]string, []string) {
@@ -404,4 +385,181 @@ func toInt32(ip string) uint32 {
 		ret |= uint32(octet) & 0x000000ff
 	}
 	return ret
+}
+
+func prepareRecvFiles(files []*File) []*File {
+	log.Debugln("prepareRecvFiles")
+
+	var r []*File
+
+	// expand everything
+	var nfiles []string
+	for _, f := range files {
+		tmp, err := filepath.Glob(f.Name)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		nfiles = append(nfiles, tmp...)
+	}
+	for _, f := range nfiles {
+		log.Debug("reading file %v", f)
+		d, err := ioutil.ReadFile(f)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+
+		fi, err := os.Stat(f)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+		perm := fi.Mode() & os.ModePerm
+
+		r = append(r, &File{
+			Name: f,
+			Perm: perm,
+			Data: d,
+		})
+	}
+	return r
+}
+
+func (c *Client) processCommand(command *Command) {
+	log.Debug("processCommand %v", command.ID)
+	resp := &Response{
+		ID: command.ID,
+	}
+
+	// get any files needed for the command
+	if len(command.FilesSend) != 0 {
+		c.getFiles(command.FilesSend)
+	}
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	if len(command.Command) != 0 {
+		path, err := exec.LookPath(command.Command[0])
+		if err != nil {
+			log.Errorln(err)
+			resp.Stderr = err.Error()
+		} else {
+			cmd := &exec.Cmd{
+				Path:   path,
+				Args:   command.Command,
+				Env:    nil,
+				Dir:    "",
+				Stdout: &stdout,
+				Stderr: &stderr,
+			}
+			log.Debug("executing %v", strings.Join(command.Command, " "))
+
+			if command.Background {
+				log.Debug("starting command %v in background", command.Command)
+				err = cmd.Start()
+				if err != nil {
+					log.Errorln(err)
+					resp.Stderr = stderr.String()
+				} else {
+					pid := cmd.Process.Pid
+					c.processLock.Lock()
+					c.Processes[pid] = &Process{
+						PID: pid,
+						Command: command.Command,
+						process: cmd.Process,
+					}
+					c.processLock.Unlock()
+
+					go func() {
+						cmd.Wait()
+						log.Info("command %v exited", strings.Join(command.Command, " "))
+						log.Info(stdout.String())
+						log.Info(stderr.String())
+						c.processLock.Lock()
+						delete(c.Processes, pid)
+						c.processLock.Unlock()
+					}()
+				}
+			} else {
+				err := cmd.Run()
+				if err != nil {
+					log.Errorln(err)
+				}
+				resp.Stdout = stdout.String()
+				resp.Stderr = stderr.String()
+			}
+		}
+	}
+
+	if len(command.FilesRecv) != 0 {
+		resp.Files = prepareRecvFiles(command.FilesRecv)
+	}
+
+	if command.PID != 0 {
+		c.processLock.Lock()
+		if p, ok := c.Processes[command.PID]; ok {
+			err := p.process.Signal(command.Signal)
+			if err != nil {
+				log.Errorln(err)
+			}
+		} else {
+			log.Errorln("no such process: %v", command.PID)
+		}
+		c.processLock.Unlock()
+	}
+
+	c.Respond(resp)
+}
+
+func (c *Client) getFiles(files []*File) {
+	start := time.Now()
+	var byteCount int64
+	for _, v := range files {
+		log.Debug("get file %v", v)
+		path := filepath.Join(c.path, "files", v.Name)
+
+		if _, err := os.Stat(path); err == nil {
+			// file exists
+			continue
+		}
+
+		m := &Message{
+			Type:     MESSAGE_FILE,
+			UUID:     c.UUID,
+			Filename: v.Name,
+		}
+		c.out <- m
+
+		resp := <-c.files
+		if resp.Filename != v.Name {
+			log.Error("filename mismatch: %v : %v", v.Name, resp.Filename)
+			continue
+		}
+
+		if resp.Error != "" {
+			log.Error("%v", resp.Error)
+			continue
+		}
+
+		dir := filepath.Dir(path)
+		err := os.MkdirAll(dir, os.FileMode(0770))
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+
+		err = ioutil.WriteFile(path, resp.File, v.Perm)
+		if err != nil {
+			log.Errorln(err)
+			continue
+		}
+
+		byteCount += int64(len(resp.File))
+	}
+	end := time.Now()
+	elapsed := end.Sub(start)
+	kbytesPerSecond := (float64(byteCount) / 1024.0) / elapsed.Seconds()
+	log.Debug("received %v bytes in %v (%v kbytes/second)", byteCount, elapsed, kbytesPerSecond)
 }

@@ -11,6 +11,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"os"
 )
 
 // Ron message types to inform the mux on either end how to route the message
@@ -57,22 +58,31 @@ type Client struct {
 	tunnel         *minitunnel.Tunnel
 
 	// client parameters
-	UUID     string
-	Hostname string
-	Arch     string
-	OS       string
-	IP       []string
-	MAC      []string
+	UUID      string
+	Hostname  string
+	Arch      string
+	OS        string
+	IP        []string
+	MAC       []string
+
+	Processes map[int]*Process // list of processes backgrounded (cc background in minimega)
+	processLock sync.Mutex
 
 	Version string
 
 	Responses     []*Response   // response queue, consumed and cleared by the heartbeat
-	Commands      chan *Command // ordered list of commands to be processed by the client
 	responseLock  sync.Mutex
+
 	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
 	lastHeartbeat time.Time             // last heartbeat watchdog time
 	files         chan *Message         // incoming files sent by the server and requested by GetFile()
 	hold          sync.Mutex            // held while attempting to redial to prevent heartbeats, otherwise they get stacked
+}
+
+type Process struct {
+	PID int
+	Command []string
+	process *os.Process
 }
 
 type Message struct {
@@ -121,10 +131,10 @@ func NewClient(family string, port int, parent, serial, path string) (*Client, e
 		path:          path,
 		in:            make(chan *Message, 1024),
 		out:           make(chan *Message, 1024),
-		Commands:      make(chan *Command, 1024),
 		commands:      make(chan map[int]*Command, 1024),
 		lastHeartbeat: time.Now(),
 		files:         make(chan *Message, 1024),
+		Processes: 	make(map[int]*Process),
 	}
 
 	if serial != "" {
