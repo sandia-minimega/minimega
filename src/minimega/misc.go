@@ -212,7 +212,7 @@ func findRemoteVM(host, vm string) (int, string, error) {
 		log.Debugln("host is local node")
 		vm := vms.findVm(vm)
 		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.GetID, vm.GetName())
+			log.Debug("got vm: %v %v %v", host, vm.GetID(), vm.GetName())
 			return vm.GetID(), vm.GetName(), nil
 		}
 	} else {
