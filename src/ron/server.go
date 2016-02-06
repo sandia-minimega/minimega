@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -41,6 +42,31 @@ func (s *Server) GetCommands() map[int]*Command {
 	log.Debug("ron GetCommands: %v", ret)
 
 	return ret
+}
+
+func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
+	var p []*Process
+
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	for _, c := range s.clients {
+		if c.UUID == uuid {
+			// ordered list of pids
+
+			var pids []int
+			for k, _ := range c.Processes {
+				pids = append(pids, k)
+			}
+			sort.Ints(pids)
+
+			for _, v := range pids {
+				p = append(p, c.Processes[v])
+			}
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("no client with uuid: %v", uuid)
 }
 
 // GetActiveClients returns a list of every active client

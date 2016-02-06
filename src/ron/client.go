@@ -5,21 +5,21 @@
 package ron
 
 import (
+	"bytes"
 	"encoding/gob"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"version"
-	"path/filepath"
-	"io/ioutil"
-	"bytes"
-	"os/exec"
 )
 
 const RETRY_TIMEOUT = 10
@@ -466,7 +466,7 @@ func (c *Client) processCommand(command *Command) {
 					pid := cmd.Process.Pid
 					c.processLock.Lock()
 					c.Processes[pid] = &Process{
-						PID: pid,
+						PID:     pid,
 						Command: command.Command,
 						process: cmd.Process,
 					}

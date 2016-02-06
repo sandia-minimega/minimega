@@ -25,7 +25,7 @@ type Command struct {
 
 	// PID of the process to signal
 	PID int
-	
+
 	// Signal to send to PID
 	Signal os.Signal
 
