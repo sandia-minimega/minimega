@@ -36,8 +36,8 @@ may include regular commands, backgrounded commands, and any number of sent
 and/or received files. Commands will be executed in command creation order. For
 example, to send a file 'foo' and display the contents on a remote VM:
 
-	cc send=foo
-	cc exec="cat foo"
+	cc send foo
+	cc exec cat foo
 
 Files to be sent must be in the filepath directory, as set by the -filepath
 flag when launching minimega.
@@ -63,6 +63,9 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <recv,> <file>...",
 			"cc <exec,> <command>...",
 			"cc <background,> <command>...",
+
+			"cc <process,> <list,> <vm id, name or uuid>",
+			"cc <process,> <kill,> <pid>",
 
 			"cc <commands,>",
 
@@ -108,6 +111,7 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"clients":    cliCCClients,
 	"tunnel":     cliCCTunnel,
 	"rtunnel":    cliCCTunnel,
+	"process":    cliCCProcess,
 }
 
 func cliCC(c *minicli.Command) *minicli.Response {
@@ -421,6 +425,60 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 	log.Debug("generated command %v : %v", id, cmd)
 
 	ccMapPrefix(id)
+
+	return resp
+}
+
+// process
+func cliCCProcess(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if c.BoolArgs["kill"] {
+		pid, err := strconv.Atoi(c.StringArgs["pid"])
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+
+		cmd := &ron.Command{
+			PID:    pid,
+			Filter: ccFilter,
+		}
+
+		id := ccNode.NewCommand(cmd)
+		log.Debug("generated command %v :%v", id, cmd)
+
+		ccMapPrefix(id)
+	} else {
+		// list processes
+
+		v := c.StringArgs["vm"]
+
+		// get the vm uuid
+		var uuid string
+		vm := vms.findVm(v)
+		if vm != nil {
+			log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+			uuid = vm.GetUUID()
+		} else {
+			uuid = v
+		}
+		log.Debug("using uuid %v", uuid)
+
+		processes, err := ccNode.GetProcesses(uuid)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+
+		resp.Header = []string{"pid", "command"}
+		for _, p := range processes {
+			resp.Tabular = append(resp.Tabular, []string{
+				fmt.Sprintf("%v", p.PID),
+				strings.Join(p.Command, " "),
+			})
+		}
+	}
 
 	return resp
 }
