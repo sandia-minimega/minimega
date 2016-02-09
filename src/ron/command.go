@@ -26,9 +26,6 @@ type Command struct {
 	// PID of the process to signal
 	PID int
 
-	// Signal to send to PID
-	Signal os.Signal
-
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
 	// to be processed.

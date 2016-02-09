@@ -155,6 +155,11 @@ func (c *Client) heartbeat() {
 		Hostname:       hostname,
 		CommandCounter: c.CommandCounter,
 		Version:        version.Revision,
+		Processes:      make(map[int]*Process),
+	}
+
+	for k, v := range c.Processes {
+		cin.Processes[k] = v
 	}
 
 	macs, ips := getNetworkInfo()
@@ -427,7 +432,7 @@ func prepareRecvFiles(files []*File) []*File {
 }
 
 func (c *Client) processCommand(command *Command) {
-	log.Debug("processCommand %v", command.ID)
+	log.Debug("processCommand %v", command)
 	resp := &Response{
 		ID: command.ID,
 	}
@@ -498,9 +503,10 @@ func (c *Client) processCommand(command *Command) {
 	}
 
 	if command.PID != 0 {
+		log.Debug("killing PID %v", command.PID)
 		c.processLock.Lock()
 		if p, ok := c.Processes[command.PID]; ok {
-			err := p.process.Signal(command.Signal)
+			err := p.process.Kill()
 			if err != nil {
 				log.Errorln(err)
 			}

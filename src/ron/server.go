@@ -36,6 +36,7 @@ func (s *Server) GetCommands() map[int]*Command {
 			FilesRecv:  v.FilesRecv,
 			CheckedIn:  v.CheckedIn,
 			Filter:     v.Filter,
+			PID:        v.PID,
 		}
 	}
 
@@ -395,6 +396,7 @@ func (s *Server) responseHandler() {
 			c.IP = cin.IP
 			c.MAC = cin.MAC
 			c.Checkin = time.Now()
+			c.Processes = cin.Processes
 		} else {
 			log.Error("unknown client %v", cin.UUID)
 			s.clientLock.Unlock()
