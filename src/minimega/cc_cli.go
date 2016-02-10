@@ -64,7 +64,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <exec,> <command>...",
 			"cc <background,> <command>...",
 
-			"cc <process,> <list,> <vm id, name or uuid>",
+			"cc <process,> <list,> <vm id, name, uuid or all>",
 			"cc <process,> <kill,> <pid>",
 
 			"cc <commands,>",
@@ -454,29 +454,46 @@ func cliCCProcess(c *minicli.Command) *minicli.Response {
 
 		v := c.StringArgs["vm"]
 
-		// get the vm uuid
-		var uuid string
-		vm := vms.findVm(v)
-		if vm != nil {
-			log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
-			uuid = vm.GetUUID()
+		var activeVms []string
+
+		if v == Wildcard {
+			clients := ccNode.GetActiveClients()
+			for _, client := range clients {
+				activeVms = append(activeVms, client.UUID)
+			}
 		} else {
-			uuid = v
+			// get the vm uuid
+			vm := vms.findVm(v)
+			if vm == nil {
+				resp.Error = vmNotFound(v).Error()
+				return resp
+			}
+			log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+			activeVms = []string{vm.GetUUID()}
 		}
-		log.Debug("using uuid %v", uuid)
 
-		processes, err := ccNode.GetProcesses(uuid)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+		resp.Header = []string{"name", "uuid", "pid", "command"}
+		for _, uuid := range activeVms {
+			vm := vms.findVm(uuid)
+			if vm == nil {
+				resp.Error = vmNotFound(v).Error()
+				return resp
+			}
 
-		resp.Header = []string{"pid", "command"}
-		for _, p := range processes {
-			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", p.PID),
-				strings.Join(p.Command, " "),
-			})
+			processes, err := ccNode.GetProcesses(uuid)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+
+			for _, p := range processes {
+				resp.Tabular = append(resp.Tabular, []string{
+					vm.GetName(),
+					vm.GetUUID(),
+					fmt.Sprintf("%v", p.PID),
+					strings.Join(p.Command, " "),
+				})
+			}
 		}
 	}
 
