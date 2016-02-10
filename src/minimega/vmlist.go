@@ -148,14 +148,17 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	return kvm.Migrate(filename)
 }
 
-// findVm finds a VM based on it's ID or Name. Returns nil if no such VM
+// findVm finds a VM based on it's ID, name, or UUID. Returns nil if no such VM
 // exists.
-func (vms VMs) findVm(idOrName string) VM {
-	id, err := strconv.Atoi(idOrName)
+func (vms VMs) findVm(s string) VM {
+	id, err := strconv.Atoi(s)
 	if err != nil {
-		// Search for VM by name
+		// Search for VM by name or UUID
 		for _, v := range vms {
-			if v.GetName() == idOrName {
+			if v.GetName() == s {
+				return v
+			}
+			if v.GetUUID() == s {
 				return v
 			}
 		}
