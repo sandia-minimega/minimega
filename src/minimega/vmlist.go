@@ -151,20 +151,21 @@ func (vms VMs) migrate(idOrName, filename string) error {
 // findVm finds a VM based on it's ID, name, or UUID. Returns nil if no such VM
 // exists.
 func (vms VMs) findVm(s string) VM {
-	id, err := strconv.Atoi(s)
-	if err != nil {
-		// Search for VM by name or UUID
-		for _, v := range vms {
-			if v.GetName() == s {
-				return v
-			}
-			if v.GetUUID() == s {
-				return v
-			}
+	if id, err := strconv.Atoi(s); err == nil {
+		return vms[id]
+	}
+
+	// Search for VM by name or UUID
+	for _, v := range vms {
+		if v.GetName() == s {
+			return v
+		}
+		if v.GetUUID() == s {
+			return v
 		}
 	}
 
-	return vms[id]
+	return nil
 }
 
 // launch one VM of a given type.
