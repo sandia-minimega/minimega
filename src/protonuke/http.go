@@ -58,12 +58,18 @@ func httpClient(protocol string) {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
-			return net.Dial(protocol, addr)
+			dialer := &net.Dialer{
+				Timeout: 30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}
+			return dialer.Dial(protocol, addr)
 		},
 	}
 
+	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
+		Timeout: 30 * time.Second,
 	}
 
 	for {
@@ -87,12 +93,19 @@ func httpTLSClient(protocol string) {
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		Proxy:           http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
-			return net.Dial(protocol, addr)
+			dialer := &net.Dialer{
+				Timeout: 30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}
+			return dialer.Dial(protocol, addr)
 		},
+		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
+	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
+		Timeout: 30 * time.Second,
 	}
 
 	for {
