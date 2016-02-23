@@ -104,6 +104,7 @@ func webStart(port int, root string) {
 	}
 
 	mux.HandleFunc("/", webIndex)
+	mux.HandleFunc("/tilevnc", webTileVNC)
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/vms", webVMs)
 	mux.HandleFunc("/vnc/", webVNC)
@@ -198,6 +199,10 @@ func webIndex(w http.ResponseWriter, r *http.Request) {
 	} else {
 		http.ServeFile(w, r, filepath.Join(web.Root, "index.html"))
 	}
+}
+
+func webTileVNC(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(web.Root, "tilevnc.html"))
 }
 
 func webVNC(w http.ResponseWriter, r *http.Request) {

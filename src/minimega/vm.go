@@ -57,6 +57,7 @@ type VM interface {
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
+	GetUUID() string
 
 	// Life cycle functions
 	Launch() error
@@ -302,6 +303,10 @@ func (vm *BaseVM) GetNamespace() string {
 
 func (vm *BaseVM) GetHost() string {
 	return vm.Host
+}
+
+func (vm *BaseVM) GetUUID() string {
+	return vm.UUID
 }
 
 func (vm *BaseVM) GetState() VMState {

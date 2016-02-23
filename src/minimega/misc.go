@@ -225,9 +225,10 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find a VM based on it's ID or Name on a given host.
-func findRemoteVM(host, idOrName string) VM {
-	log.Debug("findRemoteVM: %v %v", host, idOrName)
+// findRemoteVM attempts to find a VM based on it's ID, name, or UUID on a
+// given host. Returns nil if no such VM exists.
+func findRemoteVM(host, s string) VM {
+	log.Debug("findRemoteVM: %v %v", host, s)
 
 	var vms VMs
 
@@ -237,14 +238,8 @@ func findRemoteVM(host, idOrName string) VM {
 		vms = HostVMs(host)
 	}
 
-	id, err := strconv.Atoi(idOrName)
-
-	for _, vm := range vms {
-		if err == nil && id == vm.GetID() {
-			return vm
-		} else if idOrName == vm.GetName() {
-			return vm
-		}
+	if vms != nil {
+		return vms.findVm(s)
 	}
 
 	return nil

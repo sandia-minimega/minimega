@@ -16,12 +16,15 @@ type Command struct {
 	// command, and any other elements as the arguments
 	Command []string
 
-	// Files to transfer to the client if type == COMMAND_EXEC | COMMAND_FILE_SEND
-	// Any path given in a file specified here will be rooted at <BASE>/files
+	// Files to transfer to the client. Any path given in a file specified
+	// here will be rooted at <BASE>/files
 	FilesSend []*File
 
-	// Files to transfer back to the master if type == COMMAND_EXEC | COMMAND_FILE_RECV
+	// Files to transfer back to the master
 	FilesRecv []*File
+
+	// PID of the process to signal
+	PID int
 
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
@@ -29,8 +32,6 @@ type Command struct {
 	Filter *Client
 
 	// clients that have responded to this command
-	// leave this private as we don't want to bother sending this
-	// downstream
 	CheckedIn []string
 }
 

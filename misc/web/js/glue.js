@@ -216,7 +216,7 @@ function updateTables () {
                 { "sTitle": "Name", "mDataProp": "name", "visible": false },
                 { "sTitle": "Model", "mDataProp": "model", "searchable": false },
             ],
-            "lengthMenu": [6, 12, 30],
+            "lengthMenu": [[6, 12, 30, -1], [6, 12, 30, "All"]],
             "fnRowCallback": loadOrRestoreImage
         });
         setInterval((function (closureTable) {

@@ -64,8 +64,6 @@ func main() {
 
 	log.Debug("starting ron client with UUID: %v", c.UUID)
 
-	go client()
-
 	<-sig
 	// terminate
 }
