@@ -80,6 +80,13 @@ func qosCmd(qos *Qos, t string) error {
 		delete(qosTaps, t)
 	}
 
+	// Only remove qos from taps which have constraints
+	if qos == nil {
+		if _, ok := qosTaps[t]; !ok {
+			return nil
+		}
+	}
+
 	// Update the tap qos field
 	tap.qos = qos
 	b.Taps[t] = tap
