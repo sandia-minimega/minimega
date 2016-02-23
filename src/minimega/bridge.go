@@ -54,6 +54,7 @@ type Bridge struct {
 type Tap struct {
 	lan  int
 	host bool
+	qos  *Qos
 }
 
 const (

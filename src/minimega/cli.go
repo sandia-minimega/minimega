@@ -56,6 +56,7 @@ func cliSetup() {
 	registerHandlers("misc", miscCLIHandlers)
 	registerHandlers("nuke", nukeCLIHandlers)
 	registerHandlers("optimize", optimizeCLIHandlers)
+	registerHandlers("qos", qosCLIHandlers)
 	registerHandlers("shell", shellCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
