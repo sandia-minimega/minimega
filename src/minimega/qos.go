@@ -6,16 +6,9 @@ import (
 	"minicli"
 )
 
-// Map of tap names to bridges
-var qosTaps map[string]*Bridge
-
 // Tap field enumerating qos parameters
 type Qos struct {
 	params map[string]string
-}
-
-func init() {
-	qosTaps = make(map[string]*Bridge)
 }
 
 // Qos initializer
@@ -54,7 +47,6 @@ func qosCmd(qos *Qos, t string) error {
 	}
 
 	// Get bridge, grab bridge lock
-	// This also guards qosTaps modifications
 	b, err := getBridgeFromTap(t)
 	if err != nil {
 		return err
@@ -77,12 +69,12 @@ func qosCmd(qos *Qos, t string) error {
 		if err != nil {
 			return errors.New(out)
 		}
-		delete(qosTaps, t)
+		tap.qos = nil
 	}
 
 	// Only remove qos from taps which have constraints
 	if qos == nil {
-		if _, ok := qosTaps[t]; !ok {
+		if tap.qos == nil {
 			return nil
 		}
 	}
@@ -96,27 +88,23 @@ func qosCmd(qos *Qos, t string) error {
 		return errors.New(out)
 	}
 
-	// Update qosTaps
-	if qos != nil {
-		qosTaps[t] = b
-	} else {
-		delete(qosTaps, t)
-	}
-
 	return nil
 }
 
 // Remove qos contraints from all taps
 func qosRemoveAll() {
-	for t, b := range qosTaps {
-		b.Lock()
-		cmd := qosRemoveCmd(t)
-		processWrapper(cmd...)
-		tap := b.Taps[t]
-		tap.qos = nil
-		b.Taps[t] = tap
-		delete(qosTaps, t)
-		b.Unlock()
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	for _, b := range bridges {
+		for tapName, t := range b.Taps {
+			if t.qos != nil {
+				cmd := qosRemoveCmd(tapName)
+				processWrapper(cmd...)
+				t.qos = nil
+				b.Taps[tapName] = t
+			}
+		}
 	}
 }
 
@@ -125,16 +113,18 @@ func qosList(resp *minicli.Response) {
 	resp.Header = []string{"bridge", "tap", "loss", "delay"}
 	resp.Tabular = [][]string{}
 
-	// Not thread safe
-	for t, b := range qosTaps {
-
-		// Get the qos params
-		qos := b.Taps[t].qos
-		loss := qos.params["loss"]
-		delay := qos.params["delay"]
-
-		resp.Tabular = append(resp.Tabular, []string{
-			b.Name, t, loss, delay,
-		})
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	
+	for _, b := range bridges {
+		for tapName, t := range b.Taps {
+			if t.qos != nil {
+				loss := t.qos.params["loss"]
+				delay := t.qos.params["delay"]
+				resp.Tabular = append(resp.Tabular, []string{
+					b.Name, tapName, loss, delay,
+				})
+			}
+		}
 	}
 }
