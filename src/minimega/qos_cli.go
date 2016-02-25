@@ -11,23 +11,70 @@ import (
 var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
-		HelpLong:  "Fritz Fritz Fritz",
+		HelpLong:  "add qos constraints to an interface",
 		Patterns: []string{
-			"qos list",
 			"qos <add,> <interface> <loss,> <percent>",
 			"qos <add,> <interface> <delay,> <duration>",
 			"qos <add,> <interface> <loss,> <percent> <delay,> <duration>",
 			"qos <remove,> <interface>",
 		}, Call: wrapSimpleCLI(cliQos),
 	},
+	{
+		HelpShort: "list qos constraints on all interfaces",
+		HelpLong:  "list qos constraints on all interfaces",
+		Patterns: []string{
+			"qos list",
+		}, Call: wrapSimpleCLI(cliQosList),
+	},
+}
+
+func cliQosList(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	qosList(resp)
+	return resp
 }
 
 func cliQos(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
-	qos := newQos()
 	tap := c.StringArgs["interface"]
 
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	// Wildcard command
+	if tap == "all" {
+		if c.BoolArgs["remove"] {
+			qosRemoveAll()
+		} else {
+			resp.Error = fmt.Sprintf("not implemented")
+		}
+		return resp
+	}
+
+	// Get *Tap
+	b, err := getBridgeFromTap(tap)
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
+	}
+
+	t, ok := b.Taps[tap]
+	if !ok {
+		resp.Error = fmt.Sprintf("qosCmd: tap %s not found", tap)
+		return resp
+	}
+
 	if c.BoolArgs["add"] {
+		if t.qos == nil {
+			t.qos = newQos()
+		} else {
+			t.qos.change = true
+		}
+
 		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
 			loss := c.StringArgs["percent"]
@@ -37,7 +84,7 @@ func cliQos(c *minicli.Command) *minicli.Response {
 				resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
 				return resp
 			}
-			qos.params["loss"] = loss
+			t.qos.params["loss"] = loss
 		}
 
 		if c.BoolArgs["delay"] {
@@ -53,31 +100,27 @@ func cliQos(c *minicli.Command) *minicli.Response {
 					return resp
 				}
 			}
-			qos.params["delay"] = delay
+			t.qos.params["delay"] = delay
 		}
 
 		// Execute the qos command
-		err := qos.qosCmd(tap)
+		err := t.qosCmd()
 		if err != nil {
 			resp.Error = err.Error()
 		}
 
-	} else if c.BoolArgs["remove"] {
-		// Remove command
-		qos.params = nil
-
-		if tap != "all" {
-			err := qos.qosCmd(tap)
-			if err != nil {
-				resp.Error = err.Error()
-			}
-		} else {
-			// Remove all qos
-			qosRemoveAll()
-		}
 	} else {
-		// List command
-		qosList(resp)
+		// Remove command
+		// Only remove qos from taps which had previous constraints
+		if t.qos == nil {
+			return resp
+		} else {
+			t.qos = nil
+		}
+		err := t.qosCmd()
+		if err != nil {
+			resp.Error = err.Error()
+		}
 	}
 
 	return resp

@@ -41,7 +41,7 @@ type Bridge struct {
 	Trunk    []string
 	Tunnel   []string
 
-	Taps        map[string]Tap
+	Taps        map[string]*Tap
 	defunctTaps []string
 
 	// Embedded mutex
@@ -54,6 +54,7 @@ type Bridge struct {
 type Tap struct {
 	lan  int
 	host bool
+	name string
 	qos  *Qos
 }
 
@@ -104,7 +105,7 @@ func NewBridge(name string) (*Bridge, error) {
 	log.Debug("creating new bridge -- %v", name)
 	b := &Bridge{
 		Name: name,
-		Taps: make(map[string]Tap),
+		Taps: make(map[string]*Tap),
 	}
 
 	// Create the bridge
@@ -232,9 +233,10 @@ func (b *Bridge) TapAdd(tap string, lan int, host bool) (err error) {
 		return
 	}
 
-	b.Taps[tap] = Tap{
+	b.Taps[tap] = &Tap{
 		lan:  lan,
 		host: host,
+		name: tap,
 	}
 
 	return
