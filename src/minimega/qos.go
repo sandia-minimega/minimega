@@ -60,7 +60,7 @@ func qosCmd(qos *Qos, t string) error {
 
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
-	
+
 	b, err := getBridgeFromTap(t)
 	if err != nil {
 		return err
@@ -89,16 +89,20 @@ func qosCmd(qos *Qos, t string) error {
 		}
 	}
 
+	// Execute the qos command
+	out, err := processWrapper(cmd...)
+	if err != nil {
+		// Clean up
+		err = errors.New(out)
+		qos = nil
+		processWrapper(qosRemoveCmd(t)...)
+	}
+
 	// Update the tap qos field
 	tap.qos = qos
 	b.Taps[t] = tap
 
-	out, err := processWrapper(cmd...)
-	if err != nil {
-		return errors.New(out)
-	}
-
-	return nil
+	return err
 }
 
 // Remove qos contraints from all taps

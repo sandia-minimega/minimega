@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"minicli"
 	"strconv"
+	"time"
+	"strings"
 )
 
 var qosCLIHandlers = []minicli.Handler{
@@ -13,8 +15,8 @@ var qosCLIHandlers = []minicli.Handler{
 		Patterns: []string{
 			"qos list",
 			"qos <add,> <interface> <loss,> <percent>",
-			"qos <add,> <interface> <delay,> <ms>",
-			"qos <add,> <interface> <loss,> <percent> <delay,> <ms>",
+			"qos <add,> <interface> <delay,> <duration>",
+			"qos <add,> <interface> <loss,> <percent> <delay,> <duration>",
 			"qos <remove,> <interface>",
 		}, Call: wrapSimpleCLI(cliQos),
 	},
@@ -39,12 +41,17 @@ func cliQos(c *minicli.Command) *minicli.Response {
 		}
 
 		if c.BoolArgs["delay"] {
-			delay := c.StringArgs["ms"]
+			delay := c.StringArgs["duration"]
+			_, err:= time.ParseDuration(delay)
 
-			_, err := strconv.ParseUint(delay, 10, 64)
 			if err != nil {
-				resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", delay)
-				return resp
+				if strings.Contains(err.Error(), "time: missing unit in duration") {
+					// Default to ms
+					delay = fmt.Sprintf("%s%s", delay, "ms")
+				} else {
+					resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", c.StringArgs["duration"])
+					return resp
+				}
 			}
 			qos.params["delay"] = delay
 		}
