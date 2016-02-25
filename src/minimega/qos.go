@@ -27,6 +27,25 @@ func qosAddCmd(qos *Qos, t string) []string {
 	return cmd
 }
 
+// Generate a change command string from the qos.params map
+// initialized in cliQos
+func qosChangeCmd(oldQos *Qos, newQos *Qos, t string) []string {
+	cmd := []string{"tc", "qdisc", "change", "dev", t, "root", "netem"}
+
+	// Populate the newQos map with existing qos params
+	for p, v := range oldQos.params {
+		if _, ok := newQos.params[p]; !ok {
+			newQos.params[p] = v
+		}
+	}
+
+	for p, v := range newQos.params {
+		cmd = append(cmd, p, v)
+	}
+	return cmd
+}
+
+
 // Generate a qos remove command for a given tap name
 func qosRemoveCmd(t string) []string {
 	return []string{"tc", "qdisc", "del", "dev", t, "root"}
@@ -39,20 +58,13 @@ func qosRemoveCmd(t string) []string {
 func qosCmd(qos *Qos, t string) error {
 	var cmd []string
 
-	// Build the command
-	if qos == nil {
-		cmd = qosRemoveCmd(t)
-	} else {
-		cmd = qosAddCmd(qos, t)
-	}
-
-	// Get bridge, grab bridge lock
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+	
 	b, err := getBridgeFromTap(t)
 	if err != nil {
 		return err
 	}
-	b.Lock()
-	defer b.Unlock()
 
 	tap, ok := b.Taps[t]
 	if !ok {
@@ -61,15 +73,13 @@ func qosCmd(qos *Qos, t string) error {
 		)
 	}
 
-	// If there is already a qos parameter associated with this tap
-	// clear it before updating to the new parameter
-	if tap.qos != nil && qos != nil {
-		clearCmd := qosRemoveCmd(t)
-		out, err := processWrapper(clearCmd...)
-		if err != nil {
-			return errors.New(out)
-		}
-		tap.qos = nil
+	// Build the command
+	if qos == nil {
+		cmd = qosRemoveCmd(t)
+	} else if tap.qos != nil {
+		cmd = qosChangeCmd(tap.qos, qos, t)
+	} else {
+		cmd = qosAddCmd(qos, t)
 	}
 
 	// Only remove qos from taps which have constraints
