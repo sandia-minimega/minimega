@@ -32,6 +32,7 @@ type vncClient struct {
 	Rhost string
 
 	done chan bool
+	skip chan bool
 	file *os.File
 
 	err error
@@ -78,6 +79,7 @@ func NewVNCClient(host, vm string) (*vncClient, error) {
 		Name:  vmName,
 		ID:    vmID,
 		done:  make(chan bool),
+		skip:  make(chan bool),
 	}
 
 	return c, nil
@@ -229,6 +231,7 @@ func (v *vncKBPlayback) playFile() {
 		wait := time.After(duration)
 		select {
 		case <-wait:
+		case <-v.skip:
 		case <-v.done:
 			return
 		}

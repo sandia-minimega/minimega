@@ -26,13 +26,18 @@ keyboard actions by the user or of the framebuffer for the VM.
 
 If playback is selected, the specified file (created using vnc record) will be
 read and processed as a sequence of time-stamped mouse/keyboard events to send
-to the specified VM.`,
+to the specified VM.
+
+The skip command causes the specified VM to immediately play the pending VNC 
+action, skipping over any delay period specified in the VNC playback file.
+`,
 		Patterns: []string{
 			"vnc",
 			"vnc <kb,fb> <record,> <host> <vm id or name> <filename>",
 			"vnc <kb,fb> <norecord,> <host> <vm id or name>",
 			"vnc <playback,> <host> <vm id or name> <filename>",
 			"vnc <noplayback,> <host> <vm id or name>",
+			"vnc <skip,> <host> <vm id or name>",
 		},
 		Call: wrapSimpleCLI(cliVNC),
 	},
@@ -102,6 +107,14 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 				log.Error("%v", err)
 			}
 			err = nil
+		}
+	} else if c.BoolArgs["skip"] {
+		for _, v := range vncKBPlaying {
+			if v.Matches(host, vm) {
+				client := v.vncClient
+				client.skip <- true
+				break
+			}
 		}
 	} else if c.BoolArgs["playback"] {
 		// Start keyboard playback
