@@ -25,7 +25,7 @@ var qosCLIHandlers = []minicli.Handler{
 func cliQos(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	qos := newQos()
-	tapName := c.StringArgs["interface"]
+	tap := c.StringArgs["interface"]
 
 	if c.BoolArgs["add"] {
 		// Drop packets randomly with probability = loss
@@ -49,7 +49,7 @@ func cliQos(c *minicli.Command) *minicli.Response {
 					// Default to ms
 					delay = fmt.Sprintf("%s%s", delay, "ms")
 				} else {
-					resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", c.StringArgs["duration"])
+					resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", delay)
 					return resp
 				}
 			}
@@ -57,15 +57,17 @@ func cliQos(c *minicli.Command) *minicli.Response {
 		}
 
 		// Execute the qos command
-		err := qosCmd(qos, tapName)
+		err := qos.qosCmd(tap)
 		if err != nil {
 			resp.Error = err.Error()
 		}
 
 	} else if c.BoolArgs["remove"] {
 		// Remove command
-		if tapName != "all" {
-			err := qosCmd(nil, tapName)
+		qos.params = nil
+
+		if tap != "all" {
+			err := qos.qosCmd(tap)
 			if err != nil {
 				resp.Error = err.Error()
 			}
