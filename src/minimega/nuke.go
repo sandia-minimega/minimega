@@ -54,38 +54,29 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		log.Errorln(err)
 	}
 
-	// Allow udev to sync
+	// allow udev to sync
 	time.Sleep(time.Second * 1)
 
-	// get all mega_tap names
-	var tNames []string
+	// remove all live mega_tap names
+	var tapNames []string
 	dirs, err := ioutil.ReadDir("/sys/class/net")
 	if err != nil {
 		log.Errorln(err)
 	} else {
 		for _, n := range dirs {
 			if strings.Contains(n.Name(), "mega_tap") {
-				tNames = append(tNames, n.Name())
+				tapNames = append(tapNames, n.Name())
 			}
 		}
 	}
+	nukeTaps(tapNames)
 
-	// remove all mega_taps
-	if _, err := os.Stat(filepath.Join(*f_base, "bridges")); err == nil {
-		bNames := nukeBridgeNames(true)
-		for _, t := range tNames {
-			for _, b := range bNames {
-				nukeTap(b, t)
-			}
-		}
-		// remove bridges that have preExist == false
-		nukeBridges()
-	} else {
-		// could not open bridges file, clean up any leftover mega_taps
-		for _, t := range tNames {
-			nukeTap("", t)
-		}
-	}
+	// remove any stale mega_taps from open vswitch
+	tapNames = ovsGetTaps()
+	nukeTaps(tapNames)
+
+	// remove bridges that have preExist == false
+	nukeBridges()
 
 	// clean up the base path
 	log.Info("cleaning up base path: %v", *f_base)
@@ -99,6 +90,24 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 
 	os.Exit(0)
 	return nil
+}
+
+// Nuke a list of tap names
+func nukeTaps(taps []string) {
+	// Stack ovs commands for |\/|aximum power
+	var args []string
+
+	for _, t := range taps {
+		// Delete the tap device
+		nukeTap(t)
+
+		// Add to the ovs cmd
+		args = append(args, "del-port", t, "--")
+	}
+
+	if len(args) > 0 {
+		ovsCmdWrapper(args)
+	}
 }
 
 // Nuke all possible leftover state
@@ -178,14 +187,7 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
-func nukeTap(b, tap string) {
-	if b != "" {
-		if err := ovsDelPort(b, tap); err != nil {
-			if !strings.Contains(err.Error(), "no such port") {
-				log.Error("%v, %v -- %v", b, tap, err)
-			}
-		}
-	}
+func nukeTap(tap string) {
 
 	if err := delTap(tap); err != nil {
 		log.Error("%v -- %v", tap, err)
