@@ -47,17 +47,17 @@ snapshot will be stored in the 'file' directory.
 
 To inject files into an image:
 
-	disk inject window7_miniccc.qc2 "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc
 
 Each argument after the image should be a source and destination pair,
 separated by a ':'. If the file paths contain spaces, use double quotes. Optionally,
 you may specify a partition (partition 1 will be used by default):
 
-	disk inject window7_miniccc.qc2:2 "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc
 
 You can optionally specify mount arguments to use with inject. Multiple options should be quoted. For example:
 
-	disk inject foo.qcow2 "-t fat -o offset=100" foo:bar`,
+	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <src image> [dst image]",

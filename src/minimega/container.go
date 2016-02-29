@@ -212,6 +212,7 @@ type ContainerConfig struct {
 	FSPath   string
 	Hostname string
 	Init     []string
+	Preinit  string
 	Fifos    int
 }
 
@@ -335,10 +336,11 @@ func containerTeardown() {
 //	6 :  memory in megabytes
 //	7 :  uuid
 //	8 :  number of fifos
-//	9 :  init program (relative to filesystem path)
-//	10:  init args
+//	9 :  preinit program
+//	10:  init program (relative to filesystem path)
+//	11:  init args
 func containerShim() {
-	if len(os.Args) < 10 { // 10 because init args can be nil
+	if len(os.Args) < 11 { // 11 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -382,7 +384,8 @@ func containerShim() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmInit := os.Args[9:]
+	vmPreinit := os.Args[9]
+	vmInit := os.Args[10:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -419,6 +422,18 @@ func containerShim() {
 	err = containerPtmx(vmFSPath)
 	if err != nil {
 		log.Fatal("containerPtmx: %v", err)
+	}
+
+	// preinit
+	if vmPreinit != CONTAINER_NONE {
+		log.Debug("preinit: %v", vmPreinit)
+		out, err := exec.Command(vmPreinit, vmPreinit).CombinedOutput()
+		if err != nil {
+			log.Fatal("containerPreinit: %v: %v", err, string(out))
+		}
+		if len(out) != 0 {
+			log.Debug("containerPreinit: %v", string(out))
+		}
 	}
 
 	// symlinks
@@ -818,6 +833,10 @@ func (vm *ContainerVM) launch() error {
 	if hn == "" {
 		hn = CONTAINER_NONE
 	}
+	preinit := vm.Preinit
+	if preinit == "" {
+		preinit = CONTAINER_NONE
+	}
 	args := []string{
 		os.Args[0],
 		CONTAINER_MAGIC,
@@ -828,6 +847,7 @@ func (vm *ContainerVM) launch() error {
 		vm.Memory,
 		uuidPath,
 		fmt.Sprintf("%v", vm.Fifos),
+		preinit,
 	}
 	args = append(args, vm.Init...)
 

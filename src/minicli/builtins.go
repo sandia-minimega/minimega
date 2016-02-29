@@ -272,7 +272,7 @@ outer:
 			newResps = append(newResps, r)
 		}
 
-		out <- resps
+		out <- newResps
 	}
 }
 

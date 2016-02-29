@@ -33,6 +33,8 @@ var (
 	vmIDChan chan int   // channel of new VM IDs
 	vmLock   sync.Mutex // lock for synchronizing access to vms
 
+	vmLaunch sync.WaitGroup // waitgroup for noblock vms
+
 	vmConfig VMConfig // current vm config, updated by CLI
 
 	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
@@ -54,6 +56,7 @@ type VM interface {
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
+	GetUUID() string
 
 	// Life cycle functions
 	Launch() error
@@ -261,6 +264,10 @@ func (vm *BaseVM) GetID() int {
 
 func (vm *BaseVM) GetName() string {
 	return vm.Name
+}
+
+func (vm *BaseVM) GetUUID() string {
+	return vm.UUID
 }
 
 func (vm *BaseVM) GetState() VMState {

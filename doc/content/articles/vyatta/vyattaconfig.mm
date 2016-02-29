@@ -5,7 +5,7 @@ vyatta interfaces 5.5.5.5/24 192.168.0.1/24
 vyatta ospf 5.5.5.0/24 192.168.0.1/24
 
 # Enable internal DHCP, with 8.8.8.8 as your DNS server.
-vyatta dhcp add 192.168.0.0/24 129.168.0.1 192.168.0.2 192.168.0.250 8.8.8.8
+vyatta dhcp add 192.168.0.0/24 192.168.0.1 192.168.0.2 192.168.0.250 8.8.8.8
 
 # Set up IPv6 too
 vyatta interfaces6 2001:5:5:5::5/64 2001:192:168:0::1/64
