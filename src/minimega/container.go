@@ -33,6 +33,7 @@ import (
 	"sync"
 	"syscall"
 	"text/tabwriter"
+	"time"
 	"unsafe"
 )
 
@@ -1433,42 +1434,29 @@ func containerNuke() {
 		}
 	}
 
-	// remove cgroup structure
-	if _, err := os.Stat(CGROUP_ROOT); err == nil {
-		contents, err := ioutil.ReadDir(CGROUP_ROOT)
-		if err != nil {
-			log.Errorln(err)
-		} else {
-			for _, f := range contents {
-				err := os.Remove(f.Name())
-				if err != nil {
-					log.Errorln(err)
-				}
-			}
-		}
-
-		// umount cgroup
-		err = syscall.Unmount(CGROUP_ROOT, 0)
-		if err != nil {
-			// this may have been removed previously, try the mount name
-			syscall.Unmount("minicgroup", 0)
-		}
-	}
+	// Allow udev to sync
+	time.Sleep(time.Second * 1)
 
 	// umount megamount_*, this include overlayfs mounts
 	d, err := ioutil.ReadFile("/proc/mounts")
 	if err != nil {
 		log.Errorln(err)
 	} else {
-		mounts := strings.Fields(string(d))
+		mounts := strings.Split(string(d), "\n")
 		for _, m := range mounts {
 			if strings.Contains(m, "megamount") {
-				err := syscall.Unmount(m, 0)
-				if err != nil {
-					log.Error("overlay unmount: %v", err)
+				mount := strings.Split(m, " ")[1]
+				if err := syscall.Unmount(mount, 0); err != nil {
+					log.Error("overlay unmount %s: %v", m, err)
 				}
 			}
 		}
+	}
+
+	// umount cgroup_root
+	err = syscall.Unmount(CGROUP_ROOT, 0)
+	if err != nil {
+		log.Error("cgroup_root unmount: %v", err)
 	}
 
 	// remove meganet_* from /var/run/netns
@@ -1508,13 +1496,11 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 		for _, pid := range pids {
 			log.Debug("found pid: %v", pid)
 
-			log.Infoln("killing process:", pid)
-			out, err := processWrapper("kill", "-9", pid)
-			if err != nil {
-				log.Error("%v: %v", err, out)
-			}
+			fmt.Println("killing process:", pid)
+			processWrapper("kill", "-9", pid)
 		}
 	}
+
 	return nil
 
 }

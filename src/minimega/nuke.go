@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var nukeCLIHandlers = []minicli.Handler{
@@ -52,6 +53,9 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 	if err != nil {
 		log.Errorln(err)
 	}
+
+	// Allow udev to sync
+	time.Sleep(time.Second * 1)
 
 	// get all mega_tap names
 	var tNames []string
@@ -176,8 +180,10 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 
 func nukeTap(b, tap string) {
 	if b != "" {
-		if err := ovsDelPort(b, tap); err != nil && err != ErrNoSuchPort {
-			log.Error("%v, %v -- %v", b, tap, err)
+		if err := ovsDelPort(b, tap); err != nil {
+			if !strings.Contains(err.Error(), "no such port") {
+				log.Error("%v, %v -- %v", b, tap, err)
+			}
 		}
 	}
 
