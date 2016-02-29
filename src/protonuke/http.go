@@ -76,10 +76,7 @@ func httpClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("http host %v from %v", h, o)
-		elapsed := httpClientRequest(h, client)
-		if elapsed != 0 {
-			log.Info("http %v %vns", h, elapsed)
-		}
+		httpClientRequest(h, client)
 		httpReportChan <- 1
 	}
 }
@@ -112,10 +109,7 @@ func httpTLSClient(protocol string) {
 		t.Tick()
 		h, o := randomHost()
 		log.Debug("https host %v from %v", h, o)
-		elapsed := httpTLSClientRequest(h, client)
-		if elapsed != 0 {
-			log.Info("https %v %vns", client, elapsed)
-		}
+		httpTLSClientRequest(h, client)
 		httpTLSReportChan <- 1
 	}
 }
@@ -151,6 +145,10 @@ func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
+	log.Info("http %v %v %vns", h, url, elapsed)
+
 	// make sure to grab any images, javascript, css
 	extraFiles := parseBody(string(body))
 	for _, v := range extraFiles {
@@ -165,9 +163,6 @@ func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 			httpSiteCache = httpSiteCache[len(httpSiteCache)-MAX_CACHE:]
 		}
 	}
-
-	stop := time.Now().UnixNano()
-	elapsed = uint64(stop - start)
 
 	return
 }
@@ -202,6 +197,9 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	stop := time.Now().UnixNano()
+	elapsed = uint64(stop - start)
+	log.Info("https %v %v %vns", client, url, elapsed)
 
 	// make sure to grab any images, javascript, css
 	extraFiles := parseBody(string(body))
@@ -218,9 +216,6 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 		}
 	}
 
-	stop := time.Now().UnixNano()
-	elapsed = uint64(stop - start)
-
 	return
 }
 
@@ -234,6 +229,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 		if !strings.HasPrefix(file, "https://") {
 			file = url + "/" + file
 		}
+		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
 		if err != nil {
 			log.Errorln(err)
@@ -243,12 +239,15 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 				log.Error("httpGet: %v, only copied %v bytes", err, n)
 			}
 			resp.Body.Close()
+			stop := time.Now().UnixNano()
+			log.Info("https %v %v %vns", client, file, stop-start)
 			httpTLSReportChan <- 1
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
 			file = url + "/" + file
 		}
+		start := time.Now().UnixNano()
 		resp, err := client.Get(file)
 		if err != nil {
 			log.Errorln(err)
@@ -258,6 +257,8 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 				log.Error("httpGet: %v, only copied %v bytes", err, n)
 			}
 			resp.Body.Close()
+			stop := time.Now().UnixNano()
+			log.Info("http %v %v %vns", client, file, stop-start)
 			httpReportChan <- 1
 		}
 	}
@@ -306,7 +307,6 @@ func httpSetup() {
 
 	http.HandleFunc("/", httpHandler)
 	httpMakeImage()
-	http.HandleFunc("/image.png", httpImageHandler)
 
 	var err error
 	htmlTemplate, err = template.New("output").Parse(htmlsrc)
@@ -400,20 +400,6 @@ func hitTLSCounter() {
 	}
 }
 
-func httpImageHandler(w http.ResponseWriter, r *http.Request) {
-	start := time.Now().UnixNano()
-	w.Write(httpImage)
-	stop := time.Now().UnixNano()
-	elapsed := uint64(stop - start)
-	if r.TLS != nil {
-		log.Info("https %v %v %vns", r.RemoteAddr, r.URL, elapsed)
-		hitTLSChan <- 1
-	} else {
-		log.Info("http %v %v %vns", r.RemoteAddr, r.URL, elapsed)
-		hitChan <- 1
-	}
-}
-
 func httpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debug("request: %v %v", r.RemoteAddr, r.URL.String())
 	var usingTLS bool
@@ -426,16 +412,20 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
 	} else {
-		h := &HtmlContent{
-			URLs:   randomURLs(),
-			Hits:   hits,
-			URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
-			Host:   r.Host,
-			Secure: usingTLS,
-		}
-		err := htmlTemplate.Execute(w, h)
-		if err != nil {
-			log.Errorln(err)
+		if strings.HasSuffix(r.URL.Path, "image.png") {
+			w.Write(httpImage)
+		} else {
+			h := &HtmlContent{
+				URLs:   randomURLs(),
+				Hits:   hits,
+				URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
+				Host:   r.Host,
+				Secure: usingTLS,
+			}
+			err := htmlTemplate.Execute(w, h)
+			if err != nil {
+				log.Errorln(err)
+			}
 		}
 	}
 
