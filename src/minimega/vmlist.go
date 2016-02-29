@@ -169,8 +169,18 @@ func (vms VMs) findVm(s string) VM {
 }
 
 // launch one VM of a given type.
-func (vms VMs) launch(vm VM) error {
+func (vms VMs) launch(vm VM) (err error) {
+	// Actually launch the VM from a defered func when there's no error. This
+	// happens *after* we've released the vmLock so that launching can happen
+	// in parallel.
+	defer func() {
+		if err == nil {
+			err = vm.Launch()
+		}
+	}()
+
 	vmLock.Lock()
+	defer vmLock.Unlock()
 
 	// Make sure that there isn't an existing VM with the same name
 	for _, vm2 := range vms {
@@ -180,12 +190,7 @@ func (vms VMs) launch(vm VM) error {
 	}
 
 	vms[vm.GetID()] = vm
-
-	// Done with lock -- actually launching the VM should acquire the VM's
-	// lock, as needed.
-	vmLock.Unlock()
-
-	return vm.Launch()
+	return
 }
 
 func (vms VMs) start(target string) []error {
