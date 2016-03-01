@@ -267,7 +267,7 @@ func (_ ContainerIniter) init() error {
 		return fmt.Errorf("cgroup mkdir: %v", err)
 	}
 
-	err = syscall.Mount("minicgroup", CGROUP_ROOT, "cgroup", 0, "")
+	err = syscall.Mount("minicgroup", CGROUP_ROOT, "tmpfs", 0, "")
 	if err != nil {
 		return fmt.Errorf("cgroup mount: %v", err)
 	}
