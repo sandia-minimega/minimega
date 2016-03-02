@@ -3,7 +3,7 @@ minimega 2.2 release notes
 * Introduction
 
 The minimega development team is pleased to announce the release of minimega
-2.2. This release includes several bugfixes and tweaks to the 2.1 release, as
+2.2. This release includes numerous bugfixes and tweaks to the 2.1 release, as
 well as support for the container VM type.
 
 * What's new
@@ -60,6 +60,18 @@ patterns before dumping a JSON-formatted object describing the command API.
 As a result of adding this validation, we uncovered several ambiguous APIs
 within minimega. Specifically, the `tap`, `capture`, and `host` patterns
 have been updated to remove ambiguities.
+
+*** protonuke improvements
+
+We have made several improvements to protonuke including several bug fixes.
+protonuke now allows the user to specify the size of the generated images and
+set a custom certificate for the HTTPS server.
+
+*** miniccc process management
+
+Previously, miniccc would fire off processes and not retain any information
+about them. miniccc now keeps track of the PIDs of the launched processes so
+that you can list them and kill them, if needed.
 
 ** Additional new features
 
