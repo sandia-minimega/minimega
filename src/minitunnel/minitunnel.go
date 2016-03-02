@@ -169,9 +169,9 @@ func (t *Tunnel) mux() error {
 
 		// create new session if necessary
 		if m.Type == CONNECT {
-			go t.handleRemote(&m)
+			t.handleRemote(&m)
 		} else if m.Type == FORWARD {
-			go t.handleReverse(&m)
+			t.handleReverse(&m)
 		} else if c, ok := t.tids[m.TID]; ok {
 			// route the message to the handler by TID
 			c <- &m
@@ -289,7 +289,7 @@ func (t *Tunnel) handleRemote(m *tunnelMessage) {
 		return
 	}
 
-	t.handle(in, conn, TID)
+	go t.handle(in, conn, TID)
 }
 
 func (t *Tunnel) handleTunnel(conn net.Conn, host string, dest int) {

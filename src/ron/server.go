@@ -13,6 +13,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -35,12 +36,38 @@ func (s *Server) GetCommands() map[int]*Command {
 			FilesRecv:  v.FilesRecv,
 			CheckedIn:  v.CheckedIn,
 			Filter:     v.Filter,
+			PID:        v.PID,
 		}
 	}
 
 	log.Debug("ron GetCommands: %v", ret)
 
 	return ret
+}
+
+func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
+	var p []*Process
+
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	for _, c := range s.clients {
+		if c.UUID == uuid {
+			// ordered list of pids
+
+			var pids []int
+			for k, _ := range c.Processes {
+				pids = append(pids, k)
+			}
+			sort.Ints(pids)
+
+			for _, v := range pids {
+				p = append(p, c.Processes[v])
+			}
+			return p, nil
+		}
+	}
+	return nil, fmt.Errorf("no client with uuid: %v", uuid)
 }
 
 // GetActiveClients returns a list of every active client
@@ -193,7 +220,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 			}
 			err := enc.Encode(m)
 			if err != nil {
-				if err != io.EOF {
+				if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
 					log.Errorln(err)
 				}
 				s.removeClient(c.UUID)
@@ -206,7 +233,7 @@ func (s *Server) clientHandler(conn io.ReadWriteCloser) {
 		var m Message
 		err := dec.Decode(&m)
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
 				log.Errorln(err)
 			}
 			s.removeClient(c.UUID)
@@ -369,6 +396,7 @@ func (s *Server) responseHandler() {
 			c.IP = cin.IP
 			c.MAC = cin.MAC
 			c.Checkin = time.Now()
+			c.Processes = cin.Processes
 		} else {
 			log.Error("unknown client %v", cin.UUID)
 			s.clientLock.Unlock()
@@ -485,40 +513,6 @@ func (s *Server) clientReaper() {
 		}
 		s.clientLock.Unlock()
 	}
-}
-
-// Return the list of currently connected serial ports. This does not indicate
-// which serial connections have active clients, simply which serial
-// connections the server is attached to.
-func (s *Server) GetActiveSerialPorts() []string {
-	s.serialLock.Lock()
-	defer s.serialLock.Unlock()
-
-	var ret []string
-	for k, _ := range s.serialConns {
-		ret = append(ret, k)
-	}
-
-	log.Debug("ron GetActiveSerialPorts: %v", ret)
-
-	return ret
-}
-
-// Return the list of currently listening UDS ports. This does not indicate
-// which connections have active clients, simply which connections the server
-// is attached to.
-func (s *Server) GetActiveUDSPorts() []string {
-	s.udsLock.Lock()
-	defer s.udsLock.Unlock()
-
-	var ret []string
-	for k, _ := range s.udsConns {
-		ret = append(ret, k)
-	}
-
-	log.Debug("ron GetActiveUDSPorts: %v", ret)
-
-	return ret
 }
 
 func (s *Server) CloseUDS(path string) error {

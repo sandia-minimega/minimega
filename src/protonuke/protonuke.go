@@ -15,27 +15,30 @@ import (
 )
 
 var (
-	f_serve    = flag.Bool("serve", false, "act as a server for enabled services")
-	f_http     = flag.Bool("http", false, "enable http service")
-	f_https    = flag.Bool("https", false, "enable https (TLS) service")
-	f_httproot = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
-	f_ssh      = flag.Bool("ssh", false, "enable ssh service")
-	f_smtp     = flag.Bool("smtp", false, "enable smtp service")
-	f_smtpUser = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
-	f_smtpTls  = flag.Bool("smtptls", true, "enable or disable sending mail with TLS")
-	f_smtpmail = flag.String("smtpmail", "", "send email from a given file instead of the builtin email corpus")
-	f_mean     = flag.Duration("u", time.Duration(1000*time.Millisecond), "mean time between actions")
-	f_stddev   = flag.Duration("s", time.Duration(0), "standard deviation between actions")
-	f_min      = flag.Duration("min", time.Duration(0), "minimum time allowable for events")
-	f_max      = flag.Duration("max", time.Duration(60000*time.Millisecond), "maximum time allowable for events")
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("log", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_v4       = flag.Bool("ipv4", true, "use IPv4. Can be used together with -ipv6")
-	f_v6       = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
-	f_report   = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
-	hosts      map[string]string
-	keys       []string
+	f_serve         = flag.Bool("serve", false, "act as a server for enabled services")
+	f_http          = flag.Bool("http", false, "enable http service")
+	f_https         = flag.Bool("https", false, "enable https (TLS) service")
+	f_httproot      = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
+	f_ssh           = flag.Bool("ssh", false, "enable ssh service")
+	f_smtp          = flag.Bool("smtp", false, "enable smtp service")
+	f_smtpUser      = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
+	f_smtpTls       = flag.Bool("smtptls", true, "enable or disable sending mail with TLS")
+	f_smtpmail      = flag.String("smtpmail", "", "send email from a given file instead of the builtin email corpus")
+	f_mean          = flag.Duration("u", time.Duration(1000*time.Millisecond), "mean time between actions")
+	f_stddev        = flag.Duration("s", time.Duration(0), "standard deviation between actions")
+	f_min           = flag.Duration("min", time.Duration(0), "minimum time allowable for events")
+	f_max           = flag.Duration("max", time.Duration(60000*time.Millisecond), "maximum time allowable for events")
+	f_loglevel      = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
+	f_log           = flag.Bool("log", true, "log on stderr")
+	f_logfile       = flag.String("logfile", "", "also log to file")
+	f_v4            = flag.Bool("ipv4", true, "use IPv4. Can be used together with -ipv6")
+	f_v6            = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
+	f_report        = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
+	f_httpImageSize = flag.Int("httpimagesize", 3, "size of image, in megabytes, to serve in http/https pages")
+	f_httpTLSCert   = flag.String("httptlscert", "", "file containing public certificate for TLS")
+	f_httpTLSKey    = flag.String("httptlskey", "", "file containing private key for TLS")
+	hosts           map[string]string
+	keys            []string
 )
 
 func usage() {
@@ -61,6 +64,11 @@ func main() {
 	// make sure at least one service is enabled
 	if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
+	}
+
+	// make sure we have both a cert & a key if the specified one
+	if (*f_httpTLSCert != "" && *f_httpTLSKey == "") || (*f_httpTLSCert == "" && *f_httpTLSKey != "") {
+		log.Fatalln("must provide both TLS cert & private key")
 	}
 
 	// make sure mean and variance are > 0

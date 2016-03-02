@@ -45,7 +45,7 @@ var (
 	f_namespace  = flag.String("namespace", "minimega", "meshage namespace for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
-	f_cli        = flag.Bool("cli", false, "print the minimega cli, in markdown, to stdout and exit")
+	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 
 	vms      VMs
@@ -84,6 +84,10 @@ func main() {
 	cliSetup()
 
 	if *f_cli {
+		if err := minicli.Validate(); err != nil {
+			log.Fatalln(err)
+		}
+
 		doc, err := minicli.Doc()
 		if err != nil {
 			log.Fatal("failed to generate docs: %v", err)

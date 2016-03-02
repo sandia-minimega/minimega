@@ -16,6 +16,7 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -57,6 +58,7 @@ Additional fields are available for KVM-based VMs:
 Additional fields are available for container-based VMs:
 
 - init	     : process to invoke as init
+- preinit    : process to invoke at container launch before isolation
 - filesystem : root filesystem for the container
 
 Examples:
@@ -746,6 +748,30 @@ PID 1 in the container.`,
 			return cliVmConfigField(c, "init")
 		}),
 	},
+	{ // vm config preinit
+		HelpShort: "container preinit program",
+		HelpLong: `
+Containers start in a highly restricted environment. vm config preinit allows
+running processes before isolation mechanisms are enabled. This occurs when the
+vm is launched and before the vm is put in the building state. preinit
+processes must finish before the vm will be allowed to start. 
+
+Specifically, the preinit command will be run after entering namespaces, and
+mounting dependent filesystems, but before cgroups and root capabilities are
+set, and before entering the chroot. This means that the preinit command is run
+as root and can control the host.
+
+For example, to run a script that enables ip forwarding, which is not allowed
+during runtime because /proc is mounted read-only, add a preinit script:
+
+	vm config preinit enable_ip_forwarding.sh`,
+		Patterns: []string{
+			"vm config preinit [preinit]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "preinit")
+		}),
+	},
 	{ // vm config filesystem
 		HelpShort: "set the filesystem for containers",
 		HelpLong: `
@@ -809,6 +835,7 @@ to the default value.`,
 			"clear vm config <hostname,>",
 			"clear vm config <filesystem,>",
 			"clear vm config <init,>",
+			"clear vm config <preinit,>",
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
@@ -1153,7 +1180,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	for _, name := range names {
+	for i, name := range names {
 		if isReserved(name) {
 			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
 			return resp
@@ -1164,9 +1191,11 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 
-		for _, vm := range vms {
-			if vm.GetName() == name {
-				resp.Error = fmt.Sprintf("`%s` is already the name of a VM", name)
+		// Check for conflicts within the provided names. Don't conflict with
+		// ourselves or if the name is unspecified.
+		for j, name2 := range names {
+			if i != j && name == name2 && name != "" {
+				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
 				return resp
 			}
 		}
@@ -1188,26 +1217,53 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	log.Info("launching %v %v vms", len(names), vmType)
 
-	ack := make(chan int)
-	waitForAcks := func(count int) {
-		// get acknowledgements from each vm
-		for i := 0; i < count; i++ {
-			log.Debug("launch ack from VM %v", <-ack)
+	errChan := make(chan error)
+
+	var wg sync.WaitGroup
+
+	for _, name := range names {
+		wg.Add(1)
+
+		var vm VM
+		switch vmType {
+		case KVM:
+			vm = NewKVM(name)
+		case CONTAINER:
+			vm = NewContainer(name)
+		default:
+			// TODO
 		}
+
+		go func(name string) {
+			defer wg.Done()
+
+			errChan <- vms.launch(vm)
+		}(name)
 	}
 
-	for i, name := range names {
-		if err := vms.launch(name, vmType, ack); err != nil {
-			resp.Error = err.Error()
-			go waitForAcks(i)
-			return resp
+	go func() {
+		defer close(errChan)
+
+		wg.Wait()
+	}()
+
+	vmLaunch.Add(1)
+
+	// Collect all the errors from errChan and turn them into a string
+	collectErrs := func() string {
+		defer vmLaunch.Done()
+
+		errs := []error{}
+		for err := range errChan {
+			errs = append(errs, err)
 		}
+		return errSlice(errs).String()
 	}
 
 	if noblock {
-		go waitForAcks(len(names))
+		go collectErrs()
 	} else {
-		waitForAcks(len(names))
+		resp.Error = collectErrs()
 	}
 
 	return resp
@@ -1217,6 +1273,12 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 // ``target'' of the command. This is useful as many VM-related commands take a
 // single target (e.g. start, stop).
 func cliVmApply(c *minicli.Command, fn func(string) []error) *minicli.Response {
+	// Ensure that we have finished creating all the vms launched in previous
+	// commands (possibly with noblock) before trying to apply the command.
+	// This prevents a race condition where a vm could be launched with noblock
+	// and then immediately used as the target of a start command.
+	vmLaunch.Wait()
+
 	resp := &minicli.Response{Host: hostname}
 
 	errs := fn(c.StringArgs["target"])

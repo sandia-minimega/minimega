@@ -12,11 +12,32 @@ import (
 	"strings"
 )
 
+// VMConfig contains all the configs possible for a VM. When a VM of a
+// particular kind is launched, only the pertinent configuration is copied so
+// fields from other configs will have the zero value for the field type.
+type VMConfig struct {
+	BaseConfig
+	KVMConfig
+	ContainerConfig
+}
+
 type VMConfigFns struct {
 	Update   func(interface{}, *minicli.Command) error
 	Clear    func(interface{})
 	Print    func(interface{}) string
 	PrintCLI func(interface{}) string // If not specified, Print is used
+}
+
+func (old *VMConfig) Copy() *VMConfig {
+	return &VMConfig{
+		BaseConfig:      *old.BaseConfig.Copy(),
+		KVMConfig:       *old.KVMConfig.Copy(),
+		ContainerConfig: *old.ContainerConfig.Copy(),
+	}
+}
+
+func (vm VMConfig) String() string {
+	return vm.BaseConfig.String() + vm.KVMConfig.String() + vm.ContainerConfig.String()
 }
 
 func mustBaseConfig(val interface{}) *BaseConfig {
@@ -116,6 +137,9 @@ var containerConfigFns = map[string]VMConfigFns{
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
 	},
+	"preinit": vmConfigString(func(vm interface{}) *string {
+		return &mustContainerConfig(vm).Preinit
+	}, ""),
 	"fifo": vmConfigInt(func(vm interface{}) *int {
 		return &mustContainerConfig(vm).Fifos
 	}, "number", 0),
