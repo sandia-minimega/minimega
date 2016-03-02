@@ -46,11 +46,27 @@ type patternItem struct {
 
 type patternItems []patternItem
 
-func (p patternItem) Optional() bool {
+func (p patternItem) IsOptional() bool {
 	return p.Type&optionalItem != 0
 }
 
-func (p patternItem) List() bool {
+func (p patternItem) IsListeral() bool {
+	return p.Type&literalItem != 0
+}
+
+func (p patternItem) IsCommand() bool {
+	return p.Type&commandItem != 0
+}
+
+func (p patternItem) IsString() bool {
+	return p.Type&stringItem != 0
+}
+
+func (p patternItem) IsChoice() bool {
+	return p.Type&choiceItem != 0
+}
+
+func (p patternItem) IsList() bool {
 	return p.Type&listItem != 0
 }
 
