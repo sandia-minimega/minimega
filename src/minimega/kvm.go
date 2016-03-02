@@ -77,7 +77,7 @@ func init() {
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
-		fns.Clear(&vmConfig.KVMConfig)
+		fns.Clear(&vmConfig.KVMConfig, nil)
 	}
 }
 

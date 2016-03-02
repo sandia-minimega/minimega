@@ -241,7 +241,7 @@ var _ VM = (*ContainerVM)(nil)
 func init() {
 	// Reset everything to default
 	for _, fns := range containerConfigFns {
-		fns.Clear(&vmConfig.ContainerConfig)
+		fns.Clear(&vmConfig.ContainerConfig, nil)
 	}
 	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
 	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")

@@ -33,7 +33,7 @@ func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []st
 	for k, fns := range fns {
 		if fns.PrintCLI != nil {
 			if v := fns.PrintCLI(configs); len(v) > 0 {
-				cmds = append(cmds, v)
+				cmds = append(cmds, v...)
 			}
 		} else if v := fns.Print(configs); len(v) > 0 {
 			cmds = append(cmds, fmt.Sprintf("vm %s config %s %s", ns, k, v))
