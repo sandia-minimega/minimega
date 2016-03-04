@@ -557,13 +557,13 @@ Note: this configuration only applies to KVM-based VMs.`,
 		HelpShort: "override parts of the QEMU launch string",
 		HelpLong: `
 Override parts of the QEMU launch string by supplying a string to match, and a
-replacement string.
+replacement string. Calling with no arguments prints out the current overrides
+and the resulting QEMU launch string.
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-override",
-			"vm config qemu-override add <match> <replacement>",
-			"vm config qemu-override delete <id or all>",
+			"vm config qemu-override <match> <replacement>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
@@ -838,7 +838,7 @@ to the default value.`,
 			"clear vm config <kernel,>",
 			"clear vm config <qemu,>",
 			"clear vm config <qemu-append,>",
-			"clear vm config <qemu-override,>",
+			"clear vm config <qemu-override,> [id]",
 			"clear vm config <snapshot,>",
 			"clear vm config <uuid,>",
 			"clear vm config <serial,>",

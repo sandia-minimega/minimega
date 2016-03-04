@@ -23,7 +23,7 @@ type VMConfig struct {
 
 type VMConfigFns struct {
 	Update   func(interface{}, *minicli.Command) error
-	Clear    func(interface{}, *minicli.Command)
+	Clear    func(interface{}, *minicli.Command) error
 	Print    func(interface{}) string
 	PrintCLI func(interface{}) []string // If not specified, Print is used
 }
@@ -95,8 +95,9 @@ var baseConfigFns = map[string]VMConfigFns{
 
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			mustBaseConfig(vm).Networks = []NetConfig{}
+			return nil
 		},
 		Print: func(vm interface{}) string {
 			return mustBaseConfig(vm).NetworkString()
@@ -119,7 +120,7 @@ var baseConfigFns = map[string]VMConfigFns{
 		// see cliVmConfigTag
 		Update: nil,
 		Print:  nil,
-		Clear: func(v interface{}, c *minicli.Command) {
+		Clear: func(v interface{}, c *minicli.Command) error {
 			vm := mustBaseConfig(v)
 
 			if c != nil && c.StringArgs["key"] != "" {
@@ -127,6 +128,8 @@ var baseConfigFns = map[string]VMConfigFns{
 			} else {
 				vm.Tags = map[string]string{}
 			}
+
+			return nil
 		},
 		PrintCLI: func(v interface{}) []string {
 			vm := mustBaseConfig(v)
@@ -155,8 +158,10 @@ var containerConfigFns = map[string]VMConfigFns{
 			vm.Init = c.ListArgs["init"]
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			mustContainerConfig(vm).Init = []string{"/init"}
+
+			return nil
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
 	},
@@ -203,8 +208,9 @@ var kvmConfigFns = map[string]VMConfigFns{
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			mustKVMConfig(vm).Append = ""
+			return nil
 		},
 		Print: func(vm interface{}) string { return mustKVMConfig(vm).Append },
 	},
@@ -213,24 +219,25 @@ var kvmConfigFns = map[string]VMConfigFns{
 			customExternalProcesses["qemu"] = c.StringArgs["path"]
 			return nil
 		},
-		Clear: func(_ interface{}, _ *minicli.Command) {
+		Clear: func(_ interface{}, _ *minicli.Command) error {
 			delete(customExternalProcesses, "qemu")
+			return nil
 		},
 		Print: func(_ interface{}) string { return process("qemu") },
 	},
 	"qemu-override": {
 		Update: func(_ interface{}, c *minicli.Command) error {
-			if c.StringArgs["match"] != "" {
-				return addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
-			} else if c.StringArgs["id"] != "" {
+			m := c.StringArgs["match"]
+			r := c.StringArgs["replacement"]
+
+			return addVMQemuOverride(m, r)
+		},
+		Clear: func(_ interface{}, c *minicli.Command) error {
+			if c != nil && c.StringArgs["id"] != "" {
 				return delVMQemuOverride(c.StringArgs["id"])
 			}
 
-			log.Fatalln("someone goofed the qemu-override patterns")
-			return nil
-		},
-		Clear: func(_ interface{}, _ *minicli.Command) {
-			QemuOverrides = make(map[int]*qemuOverride)
+			return delVMQemuOverride(Wildcard)
 		},
 		Print: func(_ interface{}) string {
 			return qemuOverrideString()
@@ -255,8 +262,9 @@ func vmConfigString(fn func(interface{}) *string, defaultVal string) VMConfigFns
 			}
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			*fn(vm) = defaultVal
+			return nil
 		},
 		Print: func(vm interface{}) string { return *fn(vm) },
 	}
@@ -272,8 +280,9 @@ func vmConfigBool(fn func(interface{}) *bool, defaultVal bool) VMConfigFns {
 			}
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			*fn(vm) = defaultVal
+			return nil
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
 	}
@@ -290,8 +299,9 @@ func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfig
 			*fn(vm) = v
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			*fn(vm) = defaultVal
+			return nil
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
 	}
@@ -310,8 +320,9 @@ func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns 
 
 			return nil
 		},
-		Clear: func(vm interface{}, _ *minicli.Command) {
+		Clear: func(vm interface{}, _ *minicli.Command) error {
 			*fn(vm) = []string{}
+			return nil
 		},
 		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
 		PrintCLI: func(vm interface{}) []string {
