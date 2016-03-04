@@ -203,17 +203,9 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
 	}, "disk", "kvm"),
-	"append": {
-		Update: func(vm interface{}, c *minicli.Command) error {
-			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
-			return nil
-		},
-		Clear: func(vm interface{}, _ *minicli.Command) error {
-			mustKVMConfig(vm).Append = ""
-			return nil
-		},
-		Print: func(vm interface{}) string { return mustKVMConfig(vm).Append },
-	},
+	"append": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustKVMConfig(vm).Append
+	}, "append", "kvm"),
 	"qemu": {
 		Update: func(_ interface{}, c *minicli.Command) error {
 			customExternalProcesses["qemu"] = c.StringArgs["path"]

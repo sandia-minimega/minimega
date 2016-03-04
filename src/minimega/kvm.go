@@ -31,7 +31,6 @@ const (
 )
 
 type KVMConfig struct {
-	Append     string
 	CdromPath  string
 	InitrdPath string
 	KernelPath string
@@ -43,6 +42,7 @@ type KVMConfig struct {
 	SerialPorts int
 	VirtioPorts int
 
+	Append     []string // kernel parameters
 	DiskPaths  []string
 	QemuAppend []string // extra arguments for QEMU
 }
@@ -89,6 +89,8 @@ func (old *KVMConfig) Copy() *KVMConfig {
 	*res = *old
 
 	// Make deep copy of slices
+	res.Append = make([]string, len(old.Append))
+	copy(res.Append, old.Append)
 	res.DiskPaths = make([]string, len(old.DiskPaths))
 	copy(res.DiskPaths, old.DiskPaths)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
@@ -237,7 +239,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
-	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
+	fmt.Fprintf(w, "Kernel Append:\t%v\n", strings.Join(vm.Append, " "))
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
@@ -641,9 +643,9 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, "-initrd")
 		args = append(args, vm.InitrdPath)
 	}
-	if vm.Append != "" {
+	if len(vm.Append) > 0 {
 		args = append(args, "-append")
-		args = append(args, vm.Append)
+		args = append(args, strings.Join(vm.Append, " "))
 	}
 
 	if vm.CdromPath != "" {
