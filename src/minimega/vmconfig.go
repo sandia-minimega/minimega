@@ -316,7 +316,12 @@ func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns 
 			*fn(vm) = []string{}
 			return nil
 		},
-		Print: func(vm interface{}) string { return fmt.Sprintf("%v", *fn(vm)) },
+		Print: func(vm interface{}) string {
+			if v := *fn(vm); len(v) > 0 {
+				return fmt.Sprintf("%v", *fn(vm))
+			}
+			return ""
+		},
 		PrintCLI: func(vm interface{}) []string {
 			if v := *fn(vm); len(v) > 0 {
 				res := fmt.Sprintf("vm %s config %s %s", ns, name, strings.Join(v, " "))
