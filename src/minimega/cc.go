@@ -15,7 +15,6 @@ import (
 )
 
 const (
-	CC_PORT          = 9002
 	CC_SERIAL_PERIOD = 5
 )
 
@@ -50,7 +49,7 @@ func ccPrefixIDs(prefix string) []int {
 
 func ccStart() {
 	var err error
-	ccNode, err = ron.NewServer(CC_PORT, *f_iomBase)
+	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase)
 	if err != nil {
 		log.Fatalln(fmt.Errorf("creating cc node %v", err))
 	}
