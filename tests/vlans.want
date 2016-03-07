@@ -1,31 +1,79 @@
-## vm config net 0 1 2
-## # Should be VLAN 3
-## vm config net A
+## # Simple tests
+## vm config net 2
+## vm config net A # should be 3
 ## vlans
 namespace | alias | vlan
           | A     | 3
 ## vm config net
-[mega_bridge,3]
-## # Should be VLAN 4
-## vm config net B
-## vlans
-namespace | alias | vlan
-          | A     | 3
-          | B     | 4
-## vm config net
-[mega_bridge,4]
-## vm config net A
+[A]
+## vm config net B # should be 4
 ## vlans
 namespace | alias | vlan
           | A     | 3
           | B     | 4
 ## vm config net
-[mega_bridge,3]
+[B]
+## vm config net A # should be 3
+## vlans
+namespace | alias | vlan
+          | A     | 3
+          | B     | 4
+## vm config net
+[A]
+
+## # Manually add aliases
+## vlans add foo 10
+## vlans add foo 11
+E: alias already in use
+## vlans add bar 12
+## vlans
+namespace | alias | vlan
+          | A     | 3
+          | B     | 4
+          | bar   | 12
+          | foo   | 10
+## vm config net foo
+## vm config net
+[foo]
+
+## # Tests with namespaces
 ## namespace foo
-## # Should be VLAN 5
-## vm config net A
+## vm config net A # should be 5
 ## vlans
 namespace | alias | vlan
 foo       | A     | 5
 ## vm config net
-[mega_bridge,5]
+[A]
+## namespace bar
+## vm config net A # should be 6
+## vlans
+namespace | alias | vlan
+bar       | A     | 6
+## vm config net
+[A]
+## vm config net //A # should be 3
+## vlans
+namespace | alias | vlan
+bar       | A     | 6
+## vm config net
+[//A]
+## vm config net foo//A # should be 5
+## vlans
+namespace | alias | vlan
+bar       | A     | 6
+## vm config net
+[foo//A]
+## clear namespace
+
+## # Specify ranges
+## namespace foo
+## nsmod vlans 30 20
+E: expected min > max
+## nsmod vlans 20 30
+## vm config net B # should be 20
+## vlans
+namespace | alias | vlan
+foo       | A     | 5
+foo       | B     | 20
+## vm config net
+[B]

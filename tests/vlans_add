@@ -1,7 +1,0 @@
-vlans
-vlans add foo 40
-vlans add foo 50
-vlans add bar 40
-vlans
-vm config net foo
-vm config net

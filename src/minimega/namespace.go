@@ -10,6 +10,7 @@ import (
 	"minicli"
 	log "minilog"
 	"ranges"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -35,10 +36,16 @@ Control and run commands in namespace environments.`,
 	{ // nsmod
 		HelpShort: "modify namespace environments",
 		HelpLong: `
-Modify settings of the currently active namespace.`,
+Modify settings of the currently active namespace.
+
+add-host - add comma-separated list of hosts to the namespace.
+del-host - delete comma-separated list of hosts from the namespace.
+vlans    - set the range of allowed VLANs for this namespace.
+`,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
+			"nsmod <vlans,> <min> <max>",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
@@ -238,6 +245,17 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 	} else if c.BoolArgs["del-host"] {
 		for _, host := range hosts {
 			delete(ns.Hosts, host)
+		}
+	} else if c.BoolArgs["vlans"] {
+		min, err := strconv.Atoi(c.StringArgs["min"])
+		max, err2 := strconv.Atoi(c.StringArgs["max"])
+
+		if err != nil || err2 != nil {
+			resp.Error = "expected integer values for min/max"
+		} else if max < min {
+			resp.Error = "expected min > max"
+		} else if err := allocatedVLANs.SetRange(namespace, min, max); err != nil {
+			resp.Error = err.Error()
 		}
 	} else {
 		// oops...
