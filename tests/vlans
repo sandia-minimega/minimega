@@ -37,8 +37,8 @@ clear namespace
 
 # Specify ranges
 namespace foo
-nsmod vlans 30 20
-nsmod vlans 20 30
+vlans range 30 20
+vlans range 20 30
 vm config net B # should be 20
 vlans
 vm config net

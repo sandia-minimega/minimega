@@ -31,16 +31,20 @@ type AllocatedVLANs struct {
 	sync.Mutex
 }
 
-var allocatedVLANs = AllocatedVLANs{
-	byVLAN:  make(map[int]string),
-	byAlias: make(map[string]int),
-	ranges: map[string]*Range{
-		"": &Range{
-			min:  VLANStart,
-			max:  VLANEnd,
-			next: VLANStart,
+var allocatedVLANs = NewAllocatedVLANs()
+
+func NewAllocatedVLANs() *AllocatedVLANs {
+	return &AllocatedVLANs{
+		byVLAN:  make(map[int]string),
+		byAlias: make(map[string]int),
+		ranges: map[string]*Range{
+			"": &Range{
+				min:  VLANStart,
+				max:  VLANEnd,
+				next: VLANStart,
+			},
 		},
-	},
+	}
 }
 
 // broadcastUpdate sends out the updated VLAN mapping to all the nodes so that
@@ -172,11 +176,17 @@ func (v *AllocatedVLANs) Delete(prefix string) {
 	v.Lock()
 	defer v.Unlock()
 
+	log.Debug("deleting VLAN aliases with prefix: `%v`", prefix)
+
 	for alias, vlan := range v.byAlias {
 		if strings.HasPrefix(alias, prefix) {
 			delete(v.byVLAN, vlan)
 			delete(v.byAlias, alias)
 		}
+	}
+
+	if prefix != "" {
+		delete(v.ranges, strings.TrimSuffix(prefix, VLANAliasSep))
 	}
 
 	// Reset next counter so that we can find the recently freed VLANs
@@ -220,9 +230,6 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 // Blacklist marks a VLAN as manually configured which removes it from the
 // allocation pool. For instance, if a user runs `vm config net 100`, VLAN 100
 // would be marked as blacklisted.
-//
-// TODO: Currently there is no way to free the Blacklist'ed VLAN, even when
-// calling `clear vlans`. Should we be able to free them?
 func (v *AllocatedVLANs) Blacklist(vlan int) {
 	v.Lock()
 	defer v.Unlock()

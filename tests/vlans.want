@@ -20,7 +20,7 @@ namespace | alias | vlan
           | B     | 4
 ## vm config net
 [A]
-
+## 
 ## # Manually add aliases
 ## vlans add foo 10
 ## vlans add foo 11
@@ -35,7 +35,7 @@ namespace | alias | vlan
 ## vm config net foo
 ## vm config net
 [foo]
-
+## 
 ## # Tests with namespaces
 ## namespace foo
 ## vm config net A # should be 5
@@ -64,12 +64,12 @@ bar       | A     | 6
 ## vm config net
 [foo//A]
 ## clear namespace
-
+## 
 ## # Specify ranges
 ## namespace foo
-## nsmod vlans 30 20
+## vlans range 30 20
 E: expected min > max
-## nsmod vlans 20 30
+## vlans range 20 30
 ## vm config net B # should be 20
 ## vlans
 namespace | alias | vlan
