@@ -231,7 +231,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	if alias := allocatedVLANs.GetAlias(net.VLAN); alias != "" {
+	if alias := allocatedVLANs.GetAlias(net.VLAN); alias != "" && alias != BlacklistedVLAN {
 		// If we're in the namespace identified by the alias, we can trim off
 		// the `<namespace>//` prefix.
 		parts2 := strings.Split(alias, VLANAliasSep)
