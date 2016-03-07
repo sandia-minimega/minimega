@@ -61,6 +61,17 @@ the file in manually except that it stops after the first error.`,
 		},
 		Call: wrapSimpleCLI(cliDebug),
 	},
+	{ // debug qemu-args
+		HelpShort: "debug qemu launch arguments",
+		HelpLong: `
+Prints out the qemu launch arguments for the current VM configuration. The
+"overrides" flag can be used to toggle whether the active "qemu-overrides" are
+applied to the launch arguments or not (default not).`,
+		Patterns: []string{
+			"debug qemu-args [overrides,]",
+		},
+		Call: wrapSimpleCLI(cliDebugQemuArgs),
+	},
 	{ // version
 		HelpShort: "display the minimega version",
 		Patterns: []string{
@@ -188,6 +199,19 @@ func cliDebug(c *minicli.Command) *minicli.Response {
 			},
 		},
 	}
+}
+
+func cliDebugQemuArgs(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- for testing
+
+	if c.BoolArgs["overrides"] {
+		args = ParseQemuOverrides(args)
+	}
+
+	resp.Response = quotedJoin(args)
+	return resp
 }
 
 func cliVersion(c *minicli.Command) *minicli.Response {
