@@ -1,6 +1,6 @@
 ## vm config net
 []
-## 
+
 ## # Just VLAN
 ## vm config net 1
 ## vm config net
@@ -9,7 +9,7 @@
 ## .filter name=vm0 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm0  | [mega_bridge] | [1]
-## 
+
 ## # VLAN and MAC address
 ## vm config net 1,13:37:13:37:00:00
 ## vm config net
@@ -18,7 +18,7 @@ vm0  | [mega_bridge] | [1]
 ## .filter name=vm1 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan | mac
 vm1  | [mega_bridge] | [1]  | [13:37:13:37:00:00]
-## 
+
 ## # VLAN and Bridge
 ## vm config net test_bridge,1
 ## vm config net
@@ -27,7 +27,7 @@ vm1  | [mega_bridge] | [1]  | [13:37:13:37:00:00]
 ## .filter name=vm2 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm2  | [test_bridge] | [1]
-## 
+
 ## # VLAN, MAC address, and Bridge
 ## vm config net test_bridge,1,13:37:13:37:00:01
 ## vm config net
@@ -36,7 +36,7 @@ vm2  | [test_bridge] | [1]
 ## .filter name=vm3 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan | mac
 vm3  | [test_bridge] | [1]  | [13:37:13:37:00:01]
-## 
+
 ## # VLAN and Network Driver
 ## vm config net 1,e1000
 ## vm config net
@@ -45,15 +45,9 @@ vm3  | [test_bridge] | [1]  | [13:37:13:37:00:01]
 ## .filter name=vm4 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm4  | [mega_bridge] | [1]
-## vm config qemu-override
-id	match	replacement
-
-Before overrides:
+## debug qemu-args
 /bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=,bus=pci.1,addr=0x1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x2 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
-After overrides:
-/bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=,bus=pci.1,addr=0x1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x2 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
-## 
 ## # VLAN, MAC address, Bridge, and Network Driver
 ## vm config net test_bridge,1,13:37:13:37:00:02,e1000
 ## vm config net
@@ -62,15 +56,9 @@ After overrides:
 ## .filter name=vm5 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan | mac
 vm5  | [test_bridge] | [1]  | [13:37:13:37:00:02]
-## vm config qemu-override
-id	match	replacement
-
-Before overrides:
+## debug qemu-args
 /bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:02,bus=pci.1,addr=0x1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x2 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
-After overrides:
-/bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:02,bus=pci.1,addr=0x1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x2 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
-## 
 ## # Almost two of everything
 ## vm config net test_bridge,1,13:37:13:37:00:03 test_bridge,5,13:37:13:37:00:04,e1000
 ## vm config net
@@ -79,11 +67,5 @@ After overrides:
 ## .filter name=vm6 .columns name,bridge,vlan,mac vm info
 name | bridge                    | vlan  | mac
 vm6  | [test_bridge test_bridge] | [1 5] | [13:37:13:37:00:03 13:37:13:37:00:04]
-## vm config qemu-override
-id	match	replacement
-
-Before overrides:
-/bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:03,bus=pci.1,addr=0x1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:04,bus=pci.1,addr=0x2 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x3 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
-
-After overrides:
+## debug qemu-args
 /bin/kvm -enable-kvm -name 0 -m 2048 -nographic -balloon none -vnc 0.0.0.0:0 -usbdevice tablet -smp 1 -qmp unix:qmp,server -vga cirrus -rtc clock=vm,base=utc -device virtio-serial -pidfile qemu.pid -k en-us -cpu host -net none -S -snapshot -device pci-bridge,id=pci.1,chassis_nr=1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:03,bus=pci.1,addr=0x1 -netdev tap,id=,script=no,ifname= -device driver=e1000,netdev=,mac=13:37:13:37:00:04,bus=pci.1,addr=0x2 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x3 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid

@@ -38,3 +38,21 @@ func TestHasCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestQuotedJoin(t *testing.T) {
+	testData := []struct {
+		v    []string
+		want string
+	}{
+		{[]string{"a", "b"}, `a b`},
+		{[]string{"a b", "c"}, `"a b" c`},
+		{[]string{"a\tb", "c\nd"}, `"a\tb" "c\nd"`},
+	}
+
+	for _, d := range testData {
+		got := quotedJoin(d.v)
+		if got != d.want {
+			t.Errorf("got: `%v` != want: `%v`", got, d.want)
+		}
+	}
+}

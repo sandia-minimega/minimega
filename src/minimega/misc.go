@@ -152,24 +152,29 @@ func trimQuote(c string, input string) string {
 	return ret
 }
 
-func unescapeString(input []string) string {
-	var ret string
+// quotedJoin joins the input string with spaces, quoting individual elements
+// if they contain whitespace.
+func quotedJoin(input []string) string {
+	res := []string{}
+
 	for _, v := range input {
-		containsWhite := false
-		for _, x := range v {
-			if unicode.IsSpace(x) {
-				containsWhite = true
+		space := false
+		for _, c := range v {
+			if unicode.IsSpace(c) {
+				space = true
 				break
 			}
 		}
-		if containsWhite {
-			ret += fmt.Sprintf(" \"%v\"", v)
-		} else {
-			ret += fmt.Sprintf(" %v", v)
+
+		if space {
+			v = fmt.Sprintf("%q", v)
 		}
+
+		res = append(res, v)
 	}
-	log.Debug("unescapeString generated: %v", ret)
-	return strings.TrimSpace(ret)
+	log.Debug("quotedJoin generated: %v", res)
+
+	return strings.Join(res, " ")
 }
 
 // cmdTimeout runs the command c and returns a timeout if it doesn't complete

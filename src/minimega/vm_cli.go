@@ -511,6 +511,17 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 			return cliVmConfigField(c, "net")
 		}),
 	},
+	{ // vm config tag
+		HelpShort: "set tags for newly launched VMs",
+		HelpLong: `
+Set tags in the same manner as "vm tag". These tags will apply to all newly
+launched VMs.`,
+		Patterns: []string{
+			"vm config tag [key]",
+			"vm config tag <key> <value>",
+		},
+		Call: wrapSimpleCLI(cliVmConfigTag),
+	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
 		HelpLong: `
@@ -546,13 +557,13 @@ Note: this configuration only applies to KVM-based VMs.`,
 		HelpShort: "override parts of the QEMU launch string",
 		HelpLong: `
 Override parts of the QEMU launch string by supplying a string to match, and a
-replacement string.
+replacement string. If the replacement string is omitted, the matched text is
+simply deleted. See "debug qemu-args" for printing the resulting qemu-command.
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-override",
-			"vm config qemu-override add <match> <replacement>",
-			"vm config qemu-override delete <id or all>",
+			"vm config qemu-override <match> [replacement]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "qemu-override")
@@ -754,7 +765,7 @@ PID 1 in the container.`,
 Containers start in a highly restricted environment. vm config preinit allows
 running processes before isolation mechanisms are enabled. This occurs when the
 vm is launched and before the vm is put in the building state. preinit
-processes must finish before the vm will be allowed to start. 
+processes must finish before the vm will be allowed to start.
 
 Specifically, the preinit command will be run after entering namespaces, and
 mounting dependent filesystems, but before cgroups and root capabilities are
@@ -817,6 +828,7 @@ to the default value.`,
 			"clear vm config <memory,>",
 			"clear vm config <net,>",
 			"clear vm config <vcpus,>",
+			"clear vm config <tag,> [key]",
 			// KVMConfig
 			"clear vm config <append,>",
 			"clear vm config <cdrom,>",
@@ -826,7 +838,7 @@ to the default value.`,
 			"clear vm config <kernel,>",
 			"clear vm config <qemu,>",
 			"clear vm config <qemu-append,>",
-			"clear vm config <qemu-override,>",
+			"clear vm config <qemu-override,> [id]",
 			"clear vm config <snapshot,>",
 			"clear vm config <uuid,>",
 			"clear vm config <serial,>",
@@ -1120,6 +1132,26 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	return resp
 }
 
+func cliVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	k := c.StringArgs["key"]
+	v := c.StringArgs["value"]
+
+	if v != "" {
+		// Setting a new value
+		vmConfig.Tags[k] = v
+	} else if k != "" {
+		// Printing a single tag
+		resp.Response = vmConfig.Tags[k]
+	} else {
+		// Printing all configured tags
+		resp.Response = vmConfig.TagsString()
+	}
+
+	return resp
+}
+
 func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -1130,19 +1162,19 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 
 	for k, fns := range baseConfigFns {
 		if clearAll || c.BoolArgs[k] {
-			fns.Clear(&vmConfig.BaseConfig)
+			fns.Clear(&vmConfig.BaseConfig, c)
 			cleared = true
 		}
 	}
 	for k, fns := range kvmConfigFns {
 		if clearKVM || c.BoolArgs[k] {
-			fns.Clear(&vmConfig.KVMConfig)
+			fns.Clear(&vmConfig.KVMConfig, c)
 			cleared = true
 		}
 	}
 	for k, fns := range containerConfigFns {
 		if clearContainer || c.BoolArgs[k] {
-			fns.Clear(&vmConfig.ContainerConfig)
+			fns.Clear(&vmConfig.ContainerConfig, c)
 			cleared = true
 		}
 	}

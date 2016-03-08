@@ -31,7 +31,6 @@ const (
 )
 
 type KVMConfig struct {
-	Append     string
 	CdromPath  string
 	InitrdPath string
 	KernelPath string
@@ -43,6 +42,7 @@ type KVMConfig struct {
 	SerialPorts int
 	VirtioPorts int
 
+	Append     []string // kernel parameters
 	DiskPaths  []string
 	QemuAppend []string // extra arguments for QEMU
 }
@@ -77,7 +77,7 @@ func init() {
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
-		fns.Clear(&vmConfig.KVMConfig)
+		fns.Clear(&vmConfig.KVMConfig, nil)
 	}
 }
 
@@ -89,6 +89,8 @@ func (old *KVMConfig) Copy() *KVMConfig {
 	*res = *old
 
 	// Make deep copy of slices
+	res.Append = make([]string, len(old.Append))
+	copy(res.Append, old.Append)
 	res.DiskPaths = make([]string, len(old.DiskPaths))
 	copy(res.DiskPaths, old.DiskPaths)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
@@ -237,7 +239,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
-	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
+	fmt.Fprintf(w, "Kernel Append:\t%v\n", quotedJoin(vm.Append))
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
@@ -641,9 +643,9 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, "-initrd")
 		args = append(args, vm.InitrdPath)
 	}
-	if vm.Append != "" {
+	if len(vm.Append) > 0 {
 		args = append(args, "-append")
-		args = append(args, vm.Append)
+		args = append(args, quotedJoin(vm.Append))
 	}
 
 	if vm.CdromPath != "" {
@@ -764,25 +766,21 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 }
 
 func qemuOverrideString() string {
-	// create output
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "id\tmatch\treplacement")
-	for i, v := range QemuOverrides {
-		fmt.Fprintf(&o, "%v\t\"%v\"\t\"%v\"\n", i, v.match, v.repl)
+	if len(QemuOverrides) == 0 {
+		return ""
 	}
+
+	var buf bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&buf, 5, 0, 1, ' ', 0)
+
+	fmt.Fprintln(&buf, "id\tmatch\treplacement")
+	for i, v := range QemuOverrides {
+		fmt.Fprintf(&buf, "%v\t\"%v\"\t\"%v\"\n", i, v.match, v.repl)
+	}
+
 	w.Flush()
-
-	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- just testing
-	preArgs := unescapeString(args)
-	postArgs := strings.Join(ParseQemuOverrides(args), " ")
-
-	r := o.String()
-	r += fmt.Sprintf("\nBefore overrides:\n%v\n", preArgs)
-	r += fmt.Sprintf("\nAfter overrides:\n%v\n", postArgs)
-
-	return r
+	return buf.String()
 }
 
 func delVMQemuOverride(arg string) error {
@@ -812,9 +810,10 @@ func addVMQemuOverride(match, repl string) error {
 }
 
 func ParseQemuOverrides(input []string) []string {
-	ret := unescapeString(input)
+	res := quotedJoin(input)
 	for _, v := range QemuOverrides {
-		ret = strings.Replace(ret, v.match, v.repl, -1)
+		res = strings.Replace(res, v.match, v.repl, -1)
 	}
-	return fieldsQuoteEscape("\"", ret)
+
+	return fieldsQuoteEscape("\"", res)
 }
