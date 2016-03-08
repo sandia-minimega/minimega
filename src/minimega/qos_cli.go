@@ -14,12 +14,14 @@ var qosCLIHandlers = []minicli.Handler{
 		HelpLong: `
 Add quality-of-service (qos) constraints on mega interfaces to
 simulate network impairments. Qos constrains cannot be stacked, and must
-be specified explicitly 
+be specified explicitly. Any existing constraints will be overwritten by
+additional calls to <add>.
 
 Qos constraints include:
 
 - loss		: packets will be randomly dropped with a specified probability
 - delay		: delay packets for configured unit of time
+- rate		: impose a maximum bandwidth on an interface
 
 Examples:
 
@@ -31,6 +33,7 @@ Examples:
 		Patterns: []string{
 			"qos <add,> <interface> <loss,> <percent>",
 			"qos <add,> <interface> <delay,> <duration>",
+			"qos <add,> <interface> <rate,> <bw>",
 		}, Call: wrapSimpleCLI(cliQos),
 	},
 	{
@@ -42,6 +45,7 @@ Columns returned by qos list include:
 - host		: the host the the VM is running on
 - bridge	: bridge name
 - tap		: tap name
+- rate		: maximum bandwidth of the interface
 - loss		: probability of dropping packets
 - delay		: packet delay in milliseconds`,
 		Patterns: []string{
@@ -64,8 +68,8 @@ Example:
 }
 
 func cliQosClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
 
+	resp := &minicli.Response{Host: hostname}
 	tap := c.StringArgs["interface"]
 
 	bridgeLock.Lock()
@@ -90,10 +94,8 @@ func cliQosClear(c *minicli.Command) *minicli.Response {
 		// Only remove qos from taps which had previous constraints
 		if t.qos == nil {
 			return resp
-		} else {
-			t.qos = nil
 		}
-		err = t.qosCmd()
+		err = t.qosCmd("remove", "")
 		if err != nil {
 			resp.Error = err.Error()
 		}
@@ -114,6 +116,8 @@ func cliQosList(c *minicli.Command) *minicli.Response {
 func cliQos(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 	tap := c.StringArgs["interface"]
+
+	var qdisc, op string
 
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
@@ -139,8 +143,23 @@ func cliQos(c *minicli.Command) *minicli.Response {
 
 	if t.qos == nil {
 		t.qos = newQos()
+	}
+
+	// Determine qdisc and operation
+	if c.BoolArgs["rate"] {
+		qdisc = "tbf"
+		if len(t.qos.tbfParams) == 0 {
+			op = "add"
+		} else {
+			op = "change"
+		}
 	} else {
-		t.qos.change = true
+		qdisc = "netem"
+		if len(t.qos.netemParams) == 0 {
+			op = "add"
+		} else {
+			op = "change"
+		}
 	}
 
 	// Drop packets randomly with probability = loss
@@ -152,7 +171,7 @@ func cliQos(c *minicli.Command) *minicli.Response {
 			resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
 			return resp
 		}
-		t.qos.params["loss"] = loss
+		t.qos.netemParams["loss"] = loss
 	}
 
 	// Add delay of time duration to each packet
@@ -169,11 +188,21 @@ func cliQos(c *minicli.Command) *minicli.Response {
 				return resp
 			}
 		}
-		t.qos.params["delay"] = delay
+		t.qos.netemParams["delay"] = delay
 	}
 
+	// Add a bandwidth limit on the interface using the token bucket filter (tbf) qdisc
+	if c.BoolArgs["rate"] {
+		rate := c.StringArgs["bw"]
+
+		// TODO - Update parameters. Using defaults right now
+		t.qos.tbfParams["rate"] = rate
+		t.qos.tbfParams["burst"] = "32kbit"
+		t.qos.tbfParams["latency"] = "5ms"
+
+	}
 	// Execute the qos command
-	err = t.qosCmd()
+	err = t.qosCmd(op, qdisc)
 	if err != nil {
 		resp.Error = err.Error()
 	}
