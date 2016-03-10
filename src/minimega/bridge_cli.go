@@ -106,8 +106,15 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	if c.BoolArgs["create"] {
 		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
 		if err != nil {
-			resp.Error = fmt.Sprintf("`%s` is not a valid VLAN", c.StringArgs["vlan"])
-			return resp
+			v := c.StringArgs["vlan"]
+
+			// Probably trying to use a VLAN alias... get or create a VLAN for
+			// this alias in the current namespace.
+			if !strings.Contains(v, VLANAliasSep) {
+				v = namespace + VLANAliasSep + v
+			}
+
+			vlan = allocatedVLANs.GetOrAllocate(v)
 		}
 
 		bridge := c.StringArgs["bridge"]
@@ -235,11 +242,11 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 				vlans[tap.lan] = true
 			}
 
-			vlans2 := []int{}
+			vlans2 := []string{}
 			for k, _ := range vlans {
-				vlans2 = append(vlans2, k)
+				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(k))
 			}
-			sort.Ints(vlans2)
+			sort.Strings(vlans2)
 
 			row := []string{
 				v.Name,

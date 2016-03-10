@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -238,4 +239,24 @@ func (v *AllocatedVLANs) Blacklist(vlan int) {
 		delete(v.byAlias, alias)
 	}
 	v.byVLAN[vlan] = BlacklistedVLAN
+}
+
+// PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the
+// namespace prefix if it matches the currently active namespace.
+func (v *AllocatedVLANs) PrintVLAN(vlan int) string {
+	v.Lock()
+	defer v.Unlock()
+
+	if alias, ok := v.byVLAN[vlan]; ok && alias != BlacklistedVLAN {
+		// If we're in the namespace identified by the alias, we can trim off
+		// the `<namespace>//` prefix.
+		parts := strings.Split(alias, VLANAliasSep)
+		if namespace == parts[0] {
+			alias = strings.Join(parts[1:], VLANAliasSep)
+		}
+
+		return fmt.Sprintf("%v (%d)", alias, vlan)
+	}
+
+	return strconv.Itoa(vlan)
 }

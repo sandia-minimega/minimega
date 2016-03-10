@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -721,7 +720,7 @@ func hostTapList(resp *minicli.Response) {
 		for name, tap := range b.Taps {
 			if tap.host {
 				resp.Tabular = append(resp.Tabular, []string{
-					k, name, strconv.Itoa(tap.lan),
+					k, name, allocatedVLANs.PrintVLAN(tap.lan),
 				})
 			}
 		}
