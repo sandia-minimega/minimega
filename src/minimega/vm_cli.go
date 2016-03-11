@@ -284,6 +284,8 @@ To move a connection, specify the new VLAN tag and bridge:
 		Suggest: func(val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
+			} else if val == "vlan" {
+				return suggestVLAN(prefix)
 			} else {
 				return nil
 			}

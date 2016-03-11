@@ -63,6 +63,13 @@ Note: tap is not a namespace-aware command.`,
 			"tap <delete,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
+		Suggest: func(val, prefix string) []string {
+			if val == "vlan" {
+				return suggestVLAN(prefix)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // clear tap
 		HelpShort: "reset tap state",

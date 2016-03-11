@@ -165,3 +165,20 @@ func cliClearVLANs(c *minicli.Command) *minicli.Response {
 
 	return &minicli.Response{Host: hostname}
 }
+
+// suggestVLAN returns a list of VLAN suggestions for tab completion. Performs
+// a bit of extra work to make sure that the suggestions are in the current
+// namespace (or complete across namespaces if the user included VLANAliasSep).
+func suggestVLAN(prefix string) []string {
+	if !strings.Contains(prefix, VLANAliasSep) && namespace != "" {
+		prefix = namespace + VLANAliasSep + prefix
+	}
+
+	res := allocatedVLANs.GetAliases(prefix)
+
+	for i, v := range res {
+		res[i] = strings.TrimPrefix(v, namespace+VLANAliasSep)
+	}
+
+	return res
+}

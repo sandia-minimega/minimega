@@ -178,6 +178,21 @@ func (v *AllocatedVLANs) GetAlias(vlan int) string {
 	return v.byVLAN[vlan]
 }
 
+// GetAliases returns a list of aliases with the given prefix.
+func (v *AllocatedVLANs) GetAliases(prefix string) []string {
+	v.Lock()
+	defer v.Unlock()
+
+	res := []string{}
+	for k := range v.byAlias {
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, k)
+		}
+	}
+
+	return res
+}
+
 // Delete allocation for aliases matching a given prefix.
 func (v *AllocatedVLANs) Delete(prefix string) {
 	v.Lock()
