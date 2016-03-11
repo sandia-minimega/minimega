@@ -20,7 +20,7 @@ known VLAN aliases. The following subcommands are supported:
 
 range		- view or set the VLAN range
 add   		- add an alias
-blacklist 	- blacklist a VLAN so that it is not used, even if it is in range
+blacklist 	- view or create blacklisted VLAN
 
 Note: this command is namespace aware so, for example, adding a range applies
 to all *new* VLAN aliases in the current namespace.`,
@@ -29,7 +29,7 @@ to all *new* VLAN aliases in the current namespace.`,
 			"vlans <range,>",
 			"vlans <range,> <min> <max>",
 			"vlans <add,> <alias> <vlan>",
-			"vlans <blacklist,> <vlan>",
+			"vlans <blacklist,> [vlan]",
 		},
 		Call: wrapSimpleCLI(cliVLANs),
 	},
@@ -141,13 +141,27 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) {
 }
 
 func cliVLANsBlacklist(c *minicli.Command, resp *minicli.Response) {
-	vlan, err := strconv.Atoi(c.StringArgs["vlan"])
-	if err != nil {
-		resp.Error = "expected integer VLAN"
+	if v := c.StringArgs["vlan"]; v != "" {
+		vlan, err := strconv.Atoi(v)
+		if err != nil {
+			resp.Error = "expected integer VLAN"
+			return
+		}
+
+		allocatedVLANs.Blacklist(vlan)
 		return
 	}
 
-	allocatedVLANs.Blacklist(vlan)
+	// Must want to display the blacklisted VLANs
+	resp.Header = []string{"vlan"}
+	resp.Tabular = [][]string{}
+
+	for _, v := range allocatedVLANs.GetBlacklist() {
+		resp.Tabular = append(resp.Tabular,
+			[]string{
+				strconv.Itoa(v),
+			})
+	}
 }
 
 func cliClearVLANs(c *minicli.Command) *minicli.Response {

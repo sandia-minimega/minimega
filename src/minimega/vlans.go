@@ -268,6 +268,21 @@ func (v *AllocatedVLANs) blacklist(vlan int) {
 	v.byVLAN[vlan] = BlacklistedVLAN
 }
 
+// GetBlacklist returns a list of VLANs that have been blacklisted.
+func (v *AllocatedVLANs) GetBlacklist() []int {
+	v.Lock()
+	defer v.Unlock()
+
+	res := []int{}
+	for vlan, alias := range v.byVLAN {
+		if alias == BlacklistedVLAN {
+			res = append(res, vlan)
+		}
+	}
+
+	return res
+}
+
 // ParseVLAN parses v and returns a VLAN. If v can be parsed as an integer, the
 // resulting integer is returned. If v matches an existing alias, that VLAN is
 // returned. Lastly, if none of the other cases are true and create is true, we
