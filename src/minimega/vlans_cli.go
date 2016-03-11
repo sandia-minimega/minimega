@@ -112,7 +112,7 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) {
 
 		if err != nil || err2 != nil {
 			resp.Error = "expected integer values for min/max"
-		} else if max < min {
+		} else if max <= min {
 			resp.Error = "expected min > max"
 		} else if err := allocatedVLANs.SetRange(namespace, min, max); err != nil {
 			resp.Error = err.Error()
@@ -125,7 +125,7 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) {
 	resp.Header = []string{"namespace", "min", "max", "next"}
 	resp.Tabular = [][]string{}
 
-	for prefix, r := range allocatedVLANs.ranges {
+	for prefix, r := range allocatedVLANs.GetRanges() {
 		if namespace != "" && namespace != prefix {
 			continue
 		}

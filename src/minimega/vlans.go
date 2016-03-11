@@ -16,7 +16,7 @@ import (
 
 const BlacklistedVLAN = "BLACKLISTED"
 const VLANAliasSep = "//"
-const VLANStart, VLANEnd = 2, 4095
+const VLANStart, VLANEnd = 2, 4096
 
 type Range struct {
 	min, max, next int
@@ -83,6 +83,8 @@ func (v *AllocatedVLANs) GetOrAllocate(alias string) int {
 // allocate a VLAN for the alias. This should only be invoked if the caller has
 // acquired the lock for v.
 func (v *AllocatedVLANs) allocate(alias string) int {
+	log.Debug("creating alias for %v", alias)
+
 	// Find the next unallocated VLAN, taking into account that a range may be
 	// specified for the supplied alias.
 	r := v.ranges[""] // default
@@ -101,7 +103,7 @@ outer:
 		}
 
 		// Ensure that we're within the specified bounds
-		if r.next > r.max {
+		if r.next >= r.max {
 			// Ran out of VLANs... what is the right behavior?
 			log.Fatal("ran out of VLANs")
 		}
@@ -114,8 +116,8 @@ outer:
 					continue
 				}
 
-				if r.next >= r2.min && r.next <= r2.max {
-					r.next = r.max + 1
+				if r.next >= r2.min && r.next < r2.max {
+					r.next = r2.max
 					continue outer
 				}
 			}
@@ -247,6 +249,20 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 	}
 
 	return nil
+}
+
+// GetRanges returns a copy of the ranges currently in use.
+func (v *AllocatedVLANs) GetRanges() map[string]Range {
+	v.Lock()
+	defer v.Unlock()
+
+	res := map[string]Range{}
+	for k := range v.ranges {
+		// Create copy
+		res[k] = *v.ranges[k]
+	}
+
+	return res
 }
 
 // Blacklist marks a VLAN as manually configured which removes it from the
