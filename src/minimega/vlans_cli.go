@@ -18,8 +18,9 @@ var vlansCLIHandlers = []minicli.Handler{
 Display information about allocated VLANs. With no arguments, prints out the
 known VLAN aliases. The following subcommands are supported:
 
-range - view or set the VLAN range
-add   - add an alias
+range		- view or set the VLAN range
+add   		- add an alias
+blacklist 	- blacklist a VLAN so that it is not used, even if it is in range
 
 Note: this command is namespace aware so, for example, adding a range applies
 to all *new* VLAN aliases in the current namespace.`,
@@ -28,6 +29,7 @@ to all *new* VLAN aliases in the current namespace.`,
 			"vlans <range,>",
 			"vlans <range,> <min> <max>",
 			"vlans <add,> <alias> <vlan>",
+			"vlans <blacklist,> <vlan>",
 		},
 		Call: wrapSimpleCLI(cliVLANs),
 	},
@@ -47,8 +49,9 @@ about managed VLANs is cleared.`,
 }
 
 var vlansCLISubHandlers = map[string]func(*minicli.Command, *minicli.Response){
-	"add":   cliVLANsAdd,
-	"range": cliVLANsRange,
+	"add":       cliVLANsAdd,
+	"range":     cliVLANsRange,
+	"blacklist": cliVLANsBlacklist,
 }
 
 func cliVLANs(c *minicli.Command) *minicli.Response {
@@ -135,6 +138,16 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) {
 				strconv.Itoa(r.next),
 			})
 	}
+}
+
+func cliVLANsBlacklist(c *minicli.Command, resp *minicli.Response) {
+	vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+	if err != nil {
+		resp.Error = "expected integer VLAN"
+		return
+	}
+
+	allocatedVLANs.Blacklist(vlan)
 }
 
 func cliClearVLANs(c *minicli.Command) *minicli.Response {

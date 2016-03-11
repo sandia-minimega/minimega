@@ -77,6 +77,12 @@ func (v *AllocatedVLANs) GetOrAllocate(alias string) int {
 	v.Lock()
 	defer v.Unlock()
 
+	return v.allocate(alias)
+}
+
+// allocate a VLAN for the alias. This should only be invoked if the caller has
+// acquired the lock for v.
+func (v *AllocatedVLANs) allocate(alias string) int {
 	// Find the next unallocated VLAN, taking into account that a range may be
 	// specified for the supplied alias.
 	r := v.ranges[""] // default
@@ -235,10 +241,63 @@ func (v *AllocatedVLANs) Blacklist(vlan int) {
 	v.Lock()
 	defer v.Unlock()
 
+	v.blacklist(vlan)
+}
+
+// blacklist the VLAN. This should only be invoked if the caller has acquired
+// the lock for v.
+func (v *AllocatedVLANs) blacklist(vlan int) {
 	if alias, ok := v.byVLAN[vlan]; ok {
 		delete(v.byAlias, alias)
 	}
 	v.byVLAN[vlan] = BlacklistedVLAN
+}
+
+// ParseVLAN parses v and returns a VLAN. If v can be parsed as an integer, the
+// resulting integer is returned. If v matches an existing alias, that VLAN is
+// returned. Lastly, if none of the other cases are true and create is true, we
+// will allocate a new alias for v, in the current namespace. Returns an error
+// when create is false and v is not an integer or an alias.
+func (v *AllocatedVLANs) ParseVLAN(s string, create bool) (int, error) {
+	v.Lock()
+	defer v.Unlock()
+
+	vlan, err := strconv.Atoi(s)
+	if err == nil {
+		// Check to ensure that VLAN is sane
+		if vlan < 0 || vlan >= 4096 {
+			return 0, errors.New("invalid VLAN (0 <= vlan < 4096)")
+		}
+
+		if alias, ok := v.byVLAN[vlan]; ok && alias != BlacklistedVLAN {
+			// Warn the user if they supplied an integer and it matches a VLAN
+			// that has an alias.
+			log.Warn("VLAN %d has alias %v", vlan, alias)
+		} else if !ok {
+			// Blacklist the VLAN if the user entered it manually and we don't
+			// have an alias for it already.
+			log.Warn("Blacklisting manually specified VLAN %v", vlan)
+			allocatedVLANs.blacklist(vlan)
+		}
+
+		return vlan, nil
+	}
+
+	// Prepend active namespace if it doesn't look like the user is trying to
+	// supply a namespace already.
+	if !strings.Contains(s, VLANAliasSep) {
+		s = namespace + VLANAliasSep + s
+	}
+
+	if vlan, ok := v.byAlias[s]; ok {
+		return vlan, nil
+	}
+
+	if create {
+		return v.allocate(s), nil
+	}
+
+	return 0, errors.New("unable to parse VLAN")
 }
 
 // PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the

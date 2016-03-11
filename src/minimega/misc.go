@@ -407,26 +407,9 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
-	// VLAN ID, with optional bridge
-	vlan, err := strconv.Atoi(v) // the vlan id
+	vlan, err := allocatedVLANs.ParseVLAN(v, true)
 	if err != nil {
-		// Probably trying to use a VLAN alias... get or create a VLAN for this
-		// alias in the current namespace.
-		if !strings.Contains(v, VLANAliasSep) {
-			v = namespace + VLANAliasSep + v
-		}
-
-		vlan = allocatedVLANs.GetOrAllocate(v)
-	} else {
-		alias := allocatedVLANs.GetAlias(vlan)
-		if alias != "" && alias != BlacklistedVLAN {
-			log.Warn("VLAN %d has alias %v", vlan, alias)
-		}
-
-		// Always blacklist the VLAN, even if it was previously allocated since
-		// we can't assume that it's safe to reclaim after we delete the
-		// namespace it was associated with.
-		allocatedVLANs.Blacklist(vlan)
+		return NetConfig{}, err
 	}
 
 	if m != "" && !isMac(m) {

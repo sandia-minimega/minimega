@@ -104,17 +104,10 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+		vlan, err := allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
 		if err != nil {
-			v := c.StringArgs["vlan"]
-
-			// Probably trying to use a VLAN alias... get or create a VLAN for
-			// this alias in the current namespace.
-			if !strings.Contains(v, VLANAliasSep) {
-				v = namespace + VLANAliasSep + v
-			}
-
-			vlan = allocatedVLANs.GetOrAllocate(v)
+			resp.Error = err.Error()
+			return resp
 		}
 
 		bridge := c.StringArgs["bridge"]

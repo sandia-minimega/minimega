@@ -1002,12 +1002,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	} else {
 		vlan := 0
 
-		vlan, err = strconv.Atoi(c.StringArgs["vlan"])
-
-		if vlan < 0 || vlan >= 4096 {
-			err = fmt.Errorf("invalid vlan tag %v", vlan)
-		}
-
+		vlan, err = allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
 		if err == nil {
 			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 		}
