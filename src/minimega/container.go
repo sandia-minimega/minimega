@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -227,15 +226,6 @@ type ContainerVM struct {
 	netns         string
 }
 
-type ContainerIniter struct {
-	// Guards
-	once sync.Once
-
-	Success bool
-}
-
-var ContainerInit ContainerIniter
-
 // Ensure that ContainerVM implements the VM interface
 var _ VM = (*ContainerVM)(nil)
 
@@ -248,44 +238,53 @@ func init() {
 	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 }
 
-func (c *ContainerIniter) Init() {
-	c.once.Do(func() {
-		if err := c.init(); err != nil {
-			log.Errorln(err)
-		} else {
-			c.Success = true
-		}
-	})
-}
+var (
+	containerInitLock sync.Mutex
+	containerInitOnce bool
+	containerInitSuccess bool = true
+)
 
-func (_ ContainerIniter) init() error {
+func containerInit() error {
+	containerInitLock.Lock()
+	defer containerInitLock.Unlock()
+
+	if containerInitOnce {
+		return nil
+	}
+	containerInitOnce = true
+
 	// mount our own cgroup namespace to avoid having to ever ever ever
 	// deal with systemd
 	log.Debug("cgroup mkdir: %v", CGROUP_ROOT)
 
 	err := os.MkdirAll(CGROUP_ROOT, 0755)
 	if err != nil {
+		containerInitSuccess = false
 		return fmt.Errorf("cgroup mkdir: %v", err)
 	}
 
 	err = syscall.Mount("minicgroup", CGROUP_ROOT, "cgroup", 0, "")
 	if err != nil {
+		containerInitSuccess = false
 		return fmt.Errorf("cgroup mount: %v", err)
 	}
 
 	// inherit cpusets
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
 	if err != nil {
+		containerInitSuccess = false
 		return fmt.Errorf("setting cgroup: %v", err)
 	}
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
 	if err != nil {
+		containerInitSuccess = false
 		return fmt.Errorf("setting use_hierarchy: %v", err)
 	}
 
 	// create a minimega cgroup
 	err = os.MkdirAll(CGROUP_PATH, 0755)
 	if err != nil {
+		containerInitSuccess = false
 		return fmt.Errorf("creating minimega cgroup: %v", err)
 	}
 
@@ -293,13 +292,15 @@ func (_ ContainerIniter) init() error {
 }
 
 func containerTeardown() {
-	if ContainerInit.Success {
-		err := os.Remove(CGROUP_PATH)
-		if err != nil {
+	err := os.Remove(CGROUP_PATH)
+	if err != nil {
+		if containerInitSuccess {
 			log.Errorln(err)
 		}
-		err = syscall.Unmount(CGROUP_ROOT, 0)
-		if err != nil {
+	}
+	err = syscall.Unmount(CGROUP_ROOT, 0)
+	if err != nil {
+		if containerInitSuccess {
 			log.Errorln(err)
 		}
 	}
@@ -716,9 +717,14 @@ func (vm *ContainerVM) checkDisks() error {
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
-	ContainerInit.Init()
-	if !ContainerInit.Success {
-		err := errors.New("cannot launch container VMs -- cgroups failed to initialize")
+	err := containerInit()
+	if err != nil {
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
+	if !containerInitSuccess {
+		err = fmt.Errorf("cgroups are not initialized, cannot continue")
 		log.Errorln(err)
 		vm.setError(err)
 		return err
