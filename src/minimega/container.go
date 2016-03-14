@@ -239,9 +239,9 @@ func init() {
 }
 
 var (
-	containerInitLock sync.Mutex
-	containerInitOnce bool
-	containerInitSuccess bool = true
+	containerInitLock    sync.Mutex
+	containerInitOnce    bool
+	containerInitSuccess bool
 )
 
 func containerInit() error {
@@ -259,35 +259,31 @@ func containerInit() error {
 
 	err := os.MkdirAll(CGROUP_ROOT, 0755)
 	if err != nil {
-		containerInitSuccess = false
 		return fmt.Errorf("cgroup mkdir: %v", err)
 	}
 
 	err = syscall.Mount("minicgroup", CGROUP_ROOT, "cgroup", 0, "")
 	if err != nil {
-		containerInitSuccess = false
 		return fmt.Errorf("cgroup mount: %v", err)
 	}
 
 	// inherit cpusets
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
 	if err != nil {
-		containerInitSuccess = false
 		return fmt.Errorf("setting cgroup: %v", err)
 	}
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
 	if err != nil {
-		containerInitSuccess = false
 		return fmt.Errorf("setting use_hierarchy: %v", err)
 	}
 
 	// create a minimega cgroup
 	err = os.MkdirAll(CGROUP_PATH, 0755)
 	if err != nil {
-		containerInitSuccess = false
 		return fmt.Errorf("creating minimega cgroup: %v", err)
 	}
 
+	containerInitSuccess = true
 	return nil
 }
 
