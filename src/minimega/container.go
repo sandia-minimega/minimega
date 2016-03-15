@@ -1002,10 +1002,12 @@ func (vm *ContainerVM) launch() error {
 
 			// containers cannot return unless thawed, so thaw the
 			// process if necessary
+			vm.lock.Lock()
 			if err = vm.thaw(); err != nil {
 				log.Errorln(err)
 				vm.setError(err)
 			}
+			vm.lock.Unlock()
 
 			// wait for the taskset to actually exit (from
 			// uninterruptible sleep state), or timeout.
