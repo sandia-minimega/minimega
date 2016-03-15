@@ -38,8 +38,9 @@ import (
 )
 
 const (
-	CONTAINER_MAGIC = "CONTAINER"
-	CONTAINER_NONE  = "CONTAINER_NONE"
+	CONTAINER_MAGIC        = "CONTAINER"
+	CONTAINER_NONE         = "CONTAINER_NONE"
+	CONTAINER_KILL_TIMEOUT = 5 * time.Second
 )
 
 const (
@@ -281,6 +282,12 @@ func (_ ContainerIniter) init() error {
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
 	if err != nil {
 		return fmt.Errorf("setting use_hierarchy: %v", err)
+	}
+
+	// clean potentially old cgroup noise
+	err = containerCleanCgroupDirs()
+	if err != nil {
+		return err
 	}
 
 	// create a minimega cgroup
@@ -983,6 +990,7 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	go func() {
+		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
 
 		select {
@@ -990,6 +998,10 @@ func (vm *ContainerVM) launch() error {
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
+
+			vm.lock.Lock()
+			defer vm.lock.Unlock()
+
 			cmd.Process.Kill()
 
 			// containers cannot return unless thawed, so thaw the
@@ -997,6 +1009,29 @@ func (vm *ContainerVM) launch() error {
 			if err = vm.thaw(); err != nil {
 				log.Errorln(err)
 				vm.setError(err)
+			}
+
+			// wait for the taskset to actually exit (from
+			// uninterruptible sleep state), or timeout.
+			start := time.Now()
+
+			for {
+				if time.Since(start) > CONTAINER_KILL_TIMEOUT {
+					err = fmt.Errorf("container kill timeout")
+					log.Errorln(err)
+					vm.setError(err)
+					break
+				}
+				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
+				if err != nil {
+					log.Errorln(err)
+					vm.setError(err)
+					break
+				}
+				if len(t) == 0 {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			sendKillAck = true // wait to ack until we've cleaned up
@@ -1021,7 +1056,6 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// clean up the cgroup directory
-		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		err = os.Remove(cgroupPath)
 		if err != nil {
 			log.Errorln(err)
@@ -1453,6 +1487,11 @@ func containerNuke() {
 		}
 	}
 
+	err = containerCleanCgroupDirs()
+	if err != nil {
+		log.Errorln(err)
+	}
+
 	// umount cgroup_root
 	err = syscall.Unmount(CGROUP_ROOT, 0)
 	if err != nil {
@@ -1478,7 +1517,6 @@ func containerNuke() {
 }
 
 func containerNukeWalker(path string, info os.FileInfo, err error) error {
-
 	if err != nil {
 		return nil
 	}
@@ -1502,5 +1540,39 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 	}
 
 	return nil
+}
 
+// remove state across cgroup mounts
+func containerCleanCgroupDirs() error {
+	_, err := os.Stat(CGROUP_PATH)
+	if err != nil {
+		return nil
+	}
+
+	err = filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if path == CGROUP_PATH {
+			return nil
+		}
+
+		log.Debug("walking file: %v", path)
+
+		if info.IsDir() {
+			err = os.Remove(path)
+			if err != nil {
+				log.Errorln(err)
+				return err
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	return os.Remove(CGROUP_PATH)
 }
