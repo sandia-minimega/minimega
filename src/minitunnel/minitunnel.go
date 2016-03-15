@@ -12,6 +12,7 @@ import (
 	log "minilog"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -37,6 +38,7 @@ type Tunnel struct {
 	out       chan *tunnelMessage           // message queue to be sent out over the transport
 	quit      chan bool                     // tell the message pump to quit
 	tids      map[int32]chan *tunnelMessage // maps of transaction id/incoming channel pairs for routing multiple tunnels
+	tidLock   sync.Mutex
 	rnum      *rand.Rand
 }
 
@@ -255,6 +257,9 @@ func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
 
 // register a transaction ID, adding a return channel to the mux
 func (t *Tunnel) registerTID(TID int32) chan *tunnelMessage {
+	t.tidLock.Lock()
+	defer t.tidLock.Unlock()
+
 	if _, ok := t.tids[TID]; ok {
 		log.Fatal("tid %v already exists!", TID)
 	}
@@ -264,6 +269,9 @@ func (t *Tunnel) registerTID(TID int32) chan *tunnelMessage {
 }
 
 func (t *Tunnel) unregisterTID(TID int32) {
+	t.tidLock.Lock()
+	defer t.tidLock.Unlock()
+
 	if _, ok := t.tids[TID]; ok {
 		delete(t.tids, TID)
 	}
