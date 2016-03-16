@@ -94,7 +94,11 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 				continue
 			}
 
-			res += fmt.Sprintf("## %v\n", cmd.Original)
+			if len(cmd.Original) > 0 {
+				res += fmt.Sprintf("## %v\n", cmd.Original)
+			} else {
+				res += "\n"
+			}
 
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
