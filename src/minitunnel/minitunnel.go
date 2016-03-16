@@ -174,7 +174,7 @@ func (t *Tunnel) mux() error {
 			t.handleRemote(&m)
 		} else if m.Type == FORWARD {
 			t.handleReverse(&m)
-		} else if c, ok := t.tids[m.TID]; ok {
+		} else if c := t.findTID(m.TID); c != nil {
 			// route the message to the handler by TID
 			c <- &m
 		} else {
@@ -275,6 +275,17 @@ func (t *Tunnel) unregisterTID(TID int32) {
 	if _, ok := t.tids[TID]; ok {
 		delete(t.tids, TID)
 	}
+}
+
+// find an existing TID, returning the return channel if it exists, or nil.
+func (t *Tunnel) findTID(TID int32) chan *tunnelMessage {
+	t.tidLock.Lock()
+	defer t.tidLock.Unlock()
+
+	if c, ok := t.tids[TID]; ok {
+		return c
+	}
+	return nil
 }
 
 func (t *Tunnel) handleRemote(m *tunnelMessage) {
