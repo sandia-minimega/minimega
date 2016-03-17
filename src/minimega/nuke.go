@@ -6,12 +6,14 @@ package main
 
 import (
 	"bufio"
+	"goreadline"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 var nukeCLIHandlers = []minicli.Handler{
@@ -30,15 +32,20 @@ Should be run with caution.`,
 	},
 }
 
-// clean up after an especially bad crash, hopefully we don't have to call
-// this one much :)
+// clean up after an especially bad crash
 // currently this will:
 // 	kill all qemu instances
 //	kill all taps
+//  kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
+//  exit()
 func cliNuke(c *minicli.Command) *minicli.Response {
 	// nuke any container related items
 	containerNuke()
+
+	// hold the reaper lock so nothing is deleted from under us
+	// this is never released as we Exit() at the end of this function
+	reapTapsLock.Lock()
 
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
@@ -47,27 +54,26 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		log.Errorln(err)
 	}
 
-	// force bridge info to update (and make sure that at least the default
-	// bridge tracked by minimega).
-	getBridge(DEFAULT_BRIDGE)
-	bridgeLock.Lock()
-	updateBridgeInfo()
-	bridgeLock.Unlock()
+	// allow udev to sync
+	time.Sleep(time.Second * 1)
 
-	// remove all mega_taps
-	bNames := nukeBridgeNames(true)
+	// remove all live mega_tap names
+	var tapNames []string
 	dirs, err := ioutil.ReadDir("/sys/class/net")
 	if err != nil {
 		log.Errorln(err)
 	} else {
 		for _, n := range dirs {
 			if strings.Contains(n.Name(), "mega_tap") {
-				for _, b := range bNames {
-					nukeTap(b, n.Name())
-				}
+				tapNames = append(tapNames, n.Name())
 			}
 		}
 	}
+	nukeTaps(tapNames)
+
+	// remove any stale mega_taps from open vswitch
+	tapNames = ovsGetTaps()
+	nukeTaps(tapNames)
 
 	// remove bridges that have preExist == false
 	nukeBridges()
@@ -79,8 +85,39 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 		log.Errorln(err)
 	}
 
-	teardown()
+	// clean up possibly leftover state
+	nukeState()
+
+	os.Exit(0)
 	return nil
+}
+
+// Nuke a list of tap names
+func nukeTaps(taps []string) {
+	// Stack ovs commands for |\/|aximum power
+	var args []string
+
+	for _, t := range taps {
+		// Delete the tap device
+		nukeTap(t)
+
+		// Add to the ovs cmd
+		args = append(args, "del-port", t, "--")
+	}
+
+	if len(args) > 0 {
+		ovsCmdWrapper(args)
+	}
+}
+
+// Nuke all possible leftover state
+// Similar to teardown(), but designed to be called from nuke
+func nukeState() {
+	goreadline.Rlcleanup()
+	vncClear()
+	clearAllCaptures()
+	ksmDisable()
+	vms.cleanDirs()
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include
@@ -118,6 +155,8 @@ func nukeBridges() {
 	}
 }
 
+// Walks the f_base directory and kills procs read from any qemu or
+// dnsmasq pid files
 func nukeWalker(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		return nil
@@ -148,10 +187,7 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
-func nukeTap(b, tap string) {
-	if err := ovsDelPort(b, tap); err != nil && err != ErrNoSuchPort {
-		log.Error("%v, %v -- %v", b, tap, err)
-	}
+func nukeTap(tap string) {
 
 	if err := delTap(tap); err != nil {
 		log.Error("%v -- %v", tap, err)

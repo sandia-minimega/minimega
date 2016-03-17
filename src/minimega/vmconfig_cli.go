@@ -135,6 +135,17 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 			return cliVmConfigField(c, "net")
 		}),
 	},
+	{ // vm config tag
+		HelpShort: "set tags for newly launched VMs",
+		HelpLong: `
+Set tags in the same manner as "vm tag". These tags will apply to all newly
+launched VMs.`,
+		Patterns: []string{
+			"vm config tag [key]",
+			"vm config tag <key> <value>",
+		},
+		Call: wrapSimpleCLI(cliVmConfigTag),
+	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
 		HelpLong: `
@@ -464,6 +475,15 @@ to the default value.`,
 		},
 		Call: wrapSimpleCLI(cliClearVmConfig),
 	},
+	{ // clear vm config tag
+		HelpShort: "remove tags for newly launched VMs",
+		HelpLong: `
+Remove tags in the same manner as "clear vm tag".`,
+		Patterns: []string{
+			"clear vm config tag [key]",
+		},
+		Call: wrapSimpleCLI(cliClearVmConfigTag),
+	},
 }
 
 func cliVmConfig(c *minicli.Command) *minicli.Response {
@@ -542,6 +562,26 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	return resp
 }
 
+func cliVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	k := c.StringArgs["key"]
+	v := c.StringArgs["value"]
+
+	if v != "" {
+		// Setting a new value
+		vmConfig.Tags[k] = v
+	} else if k != "" {
+		// Printing a single tag
+		resp.Response = vmConfig.Tags[k]
+	} else {
+		// Printing all configured tags
+		resp.Response = vmConfig.TagsString()
+	}
+
+	return resp
+}
+
 func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -571,6 +611,19 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 
 	if !cleared {
 		log.Fatalln("no callback defined for clear")
+	}
+
+	return resp
+}
+
+func cliClearVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if k := c.StringArgs["key"]; k == "" || k == Wildcard {
+		// Clearing all tags
+		vmConfig.Tags = map[string]string{}
+	} else {
+		delete(vmConfig.Tags, k)
 	}
 
 	return resp
