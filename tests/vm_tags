@@ -1,0 +1,21 @@
+# Set some tags and launch VMs
+vm config tag color red
+vm config tag
+vm launch kvm vm0
+vm config tag shape square
+vm launch kvm vm[1,2]
+.column tags vm info
+
+# Test clearing tags
+clear vm config tag color
+vm launch kvm vm3
+.column tags vm info
+
+# Make sure Tags are truely separate structures
+vm tag vm1 color blue
+.column tags vm info
+
+# Make sure that clear only affects the configured tags
+clear vm config tag
+vm config tag
+.column tags vm info
