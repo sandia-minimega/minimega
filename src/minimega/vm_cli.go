@@ -1242,6 +1242,10 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		err = errors.New("no VMs to launch")
 	}
 
+	if len(names) > 1 && vmConfig.UUID != "" {
+		err = errors.New("cannot launch multiple VMs with a pre-configured UUID")
+	}
+
 	if err != nil {
 		resp.Error = err.Error()
 		return resp

@@ -188,8 +188,12 @@ func (vms VMs) launch(vm VM) (err error) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	// Make sure that there isn't an existing VM with the same name
+	// Make sure that there isn't an existing VM with the same name or UUID
 	for _, vm2 := range vms {
+		if vm.GetUUID() == vm2.GetUUID() {
+			return fmt.Errorf("vm launch duplicate UUID: %s", vm.GetUUID())
+		}
+
 		if vm.GetName() == vm2.GetName() {
 			return fmt.Errorf("vm launch duplicate VM name: %s", vm.GetName())
 		}
