@@ -1,11 +1,13 @@
-.columns bridge,tap,vlan tap
-tap create 10 t0
-.columns bridge,tap,vlan tap
-tap create 10 bridge mega_test0 t1
-.columns bridge,tap,vlan tap
-tap create 10 ip 192.168.123.100 t2
-.columns bridge,tap,vlan tap
-tap create 10 bridge mega_test0 ip 192.168.123.101 t3
-.columns bridge,tap,vlan tap
+# Create a tap, second time should fail
+.filter bridge=minitest tap
+tap create 10 bridge minitest name minitest_tap0
+.filter bridge=minitest tap
+tap create 10 bridge minitest name minitest_tap0
+
+# Create another tap with a static IP
+tap create 10 bridge minitest ip 192.168.100.1 minitest_tap1
+.filter bridge=minitest tap
+
+# Clean up taps
 tap delete all
-.columns bridge,tap,vlan tap
+.filter bridge=minitest tap
