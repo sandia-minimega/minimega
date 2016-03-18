@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -56,6 +57,7 @@ type VM interface {
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
+	GetUUID() string
 
 	// Life cycle functions
 	Launch() error
@@ -93,6 +95,8 @@ type BaseConfig struct {
 	Snapshot bool
 	UUID     string
 	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
+
+	Tags map[string]string
 }
 
 // NetConfig contains all the network-related config for an interface. The IP
@@ -126,8 +130,6 @@ type BaseVM struct {
 	Type  VMType
 
 	instancePath string
-
-	Tags map[string]string
 }
 
 // Valid names for output masks for vm info, in preferred output order
@@ -176,7 +178,6 @@ func NewVM(name string) *BaseVM {
 	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
-	vm.Tags = make(map[string]string)
 
 	return vm
 }
@@ -229,6 +230,12 @@ func (old *BaseConfig) Copy() *BaseConfig {
 	res.Networks = make([]NetConfig, len(old.Networks))
 	copy(res.Networks, old.Networks)
 
+	// Make deep copy of tags
+	res.Tags = map[string]string{}
+	for k, v := range old.Tags {
+		res.Tags[k] = v
+	}
+
 	return res
 }
 
@@ -243,6 +250,7 @@ func (vm *BaseConfig) String() string {
 	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
+	fmt.Fprintf(w, "Tags:\t%v\n", vm.TagsString())
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -257,12 +265,26 @@ func (vm *BaseConfig) NetworkString() string {
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
 }
 
+func (vm *BaseConfig) TagsString() string {
+	res, err := json.Marshal(vm.Tags)
+	if err != nil {
+		log.Error("unable to marshal vm.Tags: %v", err)
+		return ""
+	}
+
+	return string(res)
+}
+
 func (vm *BaseVM) GetID() int {
 	return vm.ID
 }
 
 func (vm *BaseVM) GetName() string {
 	return vm.Name
+}
+
+func (vm *BaseVM) GetUUID() string {
+	return vm.UUID
 }
 
 func (vm *BaseVM) GetState() VMState {
@@ -461,7 +483,7 @@ func (vm *BaseVM) info(key string) (string, error) {
 			}
 		}
 	case "tags":
-		return fmt.Sprintf("%v", vm.Tags), nil
+		return vm.TagsString(), nil
 	case "cc_active":
 		return fmt.Sprintf("%v", vm.ActiveCC), nil
 	default:

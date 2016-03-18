@@ -33,12 +33,14 @@ import (
 	"sync"
 	"syscall"
 	"text/tabwriter"
+	"time"
 	"unsafe"
 )
 
 const (
-	CONTAINER_MAGIC = "CONTAINER"
-	CONTAINER_NONE  = "CONTAINER_NONE"
+	CONTAINER_MAGIC        = "CONTAINER"
+	CONTAINER_NONE         = "CONTAINER_NONE"
+	CONTAINER_KILL_TIMEOUT = 5 * time.Second
 )
 
 const (
@@ -280,6 +282,12 @@ func (_ ContainerIniter) init() error {
 	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
 	if err != nil {
 		return fmt.Errorf("setting use_hierarchy: %v", err)
+	}
+
+	// clean potentially old cgroup noise
+	err = containerCleanCgroupDirs()
+	if err != nil {
+		return err
 	}
 
 	// create a minimega cgroup
@@ -982,6 +990,7 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	go func() {
+		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
 
 		select {
@@ -989,6 +998,10 @@ func (vm *ContainerVM) launch() error {
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
+
+			vm.lock.Lock()
+			defer vm.lock.Unlock()
+
 			cmd.Process.Kill()
 
 			// containers cannot return unless thawed, so thaw the
@@ -996,6 +1009,29 @@ func (vm *ContainerVM) launch() error {
 			if err = vm.thaw(); err != nil {
 				log.Errorln(err)
 				vm.setError(err)
+			}
+
+			// wait for the taskset to actually exit (from
+			// uninterruptible sleep state), or timeout.
+			start := time.Now()
+
+			for {
+				if time.Since(start) > CONTAINER_KILL_TIMEOUT {
+					err = fmt.Errorf("container kill timeout")
+					log.Errorln(err)
+					vm.setError(err)
+					break
+				}
+				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
+				if err != nil {
+					log.Errorln(err)
+					vm.setError(err)
+					break
+				}
+				if len(t) == 0 {
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
 			}
 
 			sendKillAck = true // wait to ack until we've cleaned up
@@ -1020,7 +1056,6 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// clean up the cgroup directory
-		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		err = os.Remove(cgroupPath)
 		if err != nil {
 			log.Errorln(err)
@@ -1425,67 +1460,119 @@ func containerMountDefaults(fsPath string) error {
 
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
-	// walk /sys/fs/cgroup/minimega for tasks, killing each one
-	err := filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+	// walk CGROUP_PATH for tasks, killing each one
+	if _, err := os.Stat(CGROUP_PATH); err == nil {
+		err := filepath.Walk(CGROUP_PATH, containerNukeWalker)
 		if err != nil {
+			log.Errorln(err)
+		}
+	}
+
+	// Allow udev to sync
+	time.Sleep(time.Second * 1)
+
+	// umount megamount_*, this include overlayfs mounts
+	d, err := ioutil.ReadFile("/proc/mounts")
+	if err != nil {
+		log.Errorln(err)
+	} else {
+		mounts := strings.Split(string(d), "\n")
+		for _, m := range mounts {
+			if strings.Contains(m, "megamount") {
+				mount := strings.Split(m, " ")[1]
+				if err := syscall.Unmount(mount, 0); err != nil {
+					log.Error("overlay unmount %s: %v", m, err)
+				}
+			}
+		}
+	}
+
+	err = containerCleanCgroupDirs()
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	// umount cgroup_root
+	err = syscall.Unmount(CGROUP_ROOT, 0)
+	if err != nil {
+		log.Error("cgroup_root unmount: %v", err)
+	}
+
+	// remove meganet_* from /var/run/netns
+	if _, err := os.Stat("/var/run/netns"); err == nil {
+		netns, err := ioutil.ReadDir("/var/run/netns")
+		if err != nil {
+			log.Errorln(err)
+		} else {
+			for _, n := range netns {
+				if strings.Contains(n.Name(), "meganet") {
+					err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
+					if err != nil {
+						log.Errorln(err)
+					}
+				}
+			}
+		}
+	}
+}
+
+func containerNukeWalker(path string, info os.FileInfo, err error) error {
+	if err != nil {
+		return nil
+	}
+
+	log.Debug("walking file: %v", path)
+
+	switch info.Name() {
+	case "tasks":
+		d, err := ioutil.ReadFile(path)
+		if err != nil {
+			return nil
+		}
+
+		pids := strings.Fields(string(d))
+		for _, pid := range pids {
+			log.Debug("found pid: %v", pid)
+
+			fmt.Println("killing process:", pid)
+			processWrapper("kill", "-9", pid)
+		}
+	}
+
+	return nil
+}
+
+// remove state across cgroup mounts
+func containerCleanCgroupDirs() error {
+	_, err := os.Stat(CGROUP_PATH)
+	if err != nil {
+		return nil
+	}
+
+	err = filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+
+		if path == CGROUP_PATH {
 			return nil
 		}
 
 		log.Debug("walking file: %v", path)
 
-		switch info.Name() {
-		case "tasks":
-			d, err := ioutil.ReadFile(path)
-			pids := strings.Fields(string(d))
-			for _, pid := range pids {
-				log.Debug("found pid: %v", pid)
-
-				log.Infoln("killing process:", pid)
-				out, err := processWrapper("kill", "-9", pid)
-				if err != nil {
-					log.Error("%v: %v", err, out)
-				}
-			}
-			// remove the directory for this vm
-			dir := filepath.Dir(path)
-			err = os.Remove(dir)
+		if info.IsDir() {
+			err = os.Remove(path)
 			if err != nil {
 				log.Errorln(err)
+				return err
 			}
 		}
+
 		return nil
 	})
-
-	// remove cgroup structure
-	err = os.Remove(CGROUP_PATH)
 	if err != nil {
-		log.Errorln(err)
+		return err
 	}
 
-	// umount megamount_*
-	d, err := ioutil.ReadFile("/proc/mounts")
-	mounts := strings.Fields(string(d))
-	for _, m := range mounts {
-		if strings.Contains(m, "megamount") {
-			err := syscall.Unmount(m, 0)
-			if err != nil {
-				log.Error("overlay unmount: %v", err)
-			}
-		}
-	}
-
-	// remove meganet_* from /var/run/netns
-	netns, err := ioutil.ReadDir("/var/run/netns")
-	if err != nil {
-		log.Errorln(err)
-	} else {
-		for _, n := range netns {
-			if strings.Contains(n.Name(), "meganet") {
-				err := os.Remove(filepath.Join("/var/run/netns", n.Name()))
-				if err != nil {
-					log.Errorln(err)
-				}
-			}
-		}
-	}
+	return os.Remove(CGROUP_PATH)
 }

@@ -511,6 +511,17 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 			return cliVmConfigField(c, "net")
 		}),
 	},
+	{ // vm config tag
+		HelpShort: "set tags for newly launched VMs",
+		HelpLong: `
+Set tags in the same manner as "vm tag". These tags will apply to all newly
+launched VMs.`,
+		Patterns: []string{
+			"vm config tag [key]",
+			"vm config tag <key> <value>",
+		},
+		Call: wrapSimpleCLI(cliVmConfigTag),
+	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
 		HelpLong: `
@@ -754,7 +765,7 @@ PID 1 in the container.`,
 Containers start in a highly restricted environment. vm config preinit allows
 running processes before isolation mechanisms are enabled. This occurs when the
 vm is launched and before the vm is put in the building state. preinit
-processes must finish before the vm will be allowed to start. 
+processes must finish before the vm will be allowed to start.
 
 Specifically, the preinit command will be run after entering namespaces, and
 mounting dependent filesystems, but before cgroups and root capabilities are
@@ -864,6 +875,15 @@ Clear all tags from all VMs:
 			"clear vm tag <target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
+	},
+	{ // clear vm config tag
+		HelpShort: "remove tags for newly launched VMs",
+		HelpLong: `
+Remove tags in the same manner as "clear vm tag".`,
+		Patterns: []string{
+			"clear vm config tag [key]",
+		},
+		Call: wrapSimpleCLI(cliClearVmConfigTag),
 	},
 }
 
@@ -1115,6 +1135,39 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 		if err := fns.Update(config, c); err != nil {
 			resp.Error = err.Error()
 		}
+	}
+
+	return resp
+}
+
+func cliVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	k := c.StringArgs["key"]
+	v := c.StringArgs["value"]
+
+	if v != "" {
+		// Setting a new value
+		vmConfig.Tags[k] = v
+	} else if k != "" {
+		// Printing a single tag
+		resp.Response = vmConfig.Tags[k]
+	} else {
+		// Printing all configured tags
+		resp.Response = vmConfig.TagsString()
+	}
+
+	return resp
+}
+
+func cliClearVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if k := c.StringArgs["key"]; k == "" || k == Wildcard {
+		// Clearing all tags
+		vmConfig.Tags = map[string]string{}
+	} else {
+		delete(vmConfig.Tags, k)
 	}
 
 	return resp

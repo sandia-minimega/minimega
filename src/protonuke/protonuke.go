@@ -35,6 +35,8 @@ var (
 	f_v6            = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
 	f_report        = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
 	f_httpImageSize = flag.Int("httpimagesize", 3, "size of image, in megabytes, to serve in http/https pages")
+	f_httpTLSCert   = flag.String("httptlscert", "", "file containing public certificate for TLS")
+	f_httpTLSKey    = flag.String("httptlskey", "", "file containing private key for TLS")
 	hosts           map[string]string
 	keys            []string
 )
@@ -62,6 +64,11 @@ func main() {
 	// make sure at least one service is enabled
 	if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
+	}
+
+	// make sure we have both a cert & a key if the specified one
+	if (*f_httpTLSCert != "" && *f_httpTLSKey == "") || (*f_httpTLSCert == "" && *f_httpTLSKey != "") {
+		log.Fatalln("must provide both TLS cert & private key")
 	}
 
 	// make sure mean and variance are > 0

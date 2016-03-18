@@ -33,7 +33,7 @@ func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []st
 	for k, fns := range fns {
 		if fns.PrintCLI != nil {
 			if v := fns.PrintCLI(configs); len(v) > 0 {
-				cmds = append(cmds, v)
+				cmds = append(cmds, v...)
 			}
 		} else if v := fns.Print(configs); len(v) > 0 {
 			cmds = append(cmds, fmt.Sprintf("vm %s config %s %s", ns, k, v))
@@ -148,25 +148,39 @@ func (vms VMs) migrate(idOrName, filename string) error {
 	return kvm.Migrate(filename)
 }
 
-// findVm finds a VM based on it's ID or Name. Returns nil if no such VM
+// findVm finds a VM based on it's ID, name, or UUID. Returns nil if no such VM
 // exists.
-func (vms VMs) findVm(idOrName string) VM {
-	id, err := strconv.Atoi(idOrName)
-	if err != nil {
-		// Search for VM by name
-		for _, v := range vms {
-			if v.GetName() == idOrName {
-				return v
-			}
+func (vms VMs) findVm(s string) VM {
+	if id, err := strconv.Atoi(s); err == nil {
+		return vms[id]
+	}
+
+	// Search for VM by name or UUID
+	for _, v := range vms {
+		if v.GetName() == s {
+			return v
+		}
+		if v.GetUUID() == s {
+			return v
 		}
 	}
 
-	return vms[id]
+	return nil
 }
 
 // launch one VM of a given type.
-func (vms VMs) launch(vm VM) error {
+func (vms VMs) launch(vm VM) (err error) {
+	// Actually launch the VM from a defered func when there's no error. This
+	// happens *after* we've released the vmLock so that launching can happen
+	// in parallel.
+	defer func() {
+		if err == nil {
+			err = vm.Launch()
+		}
+	}()
+
 	vmLock.Lock()
+	defer vmLock.Unlock()
 
 	// Make sure that there isn't an existing VM with the same name
 	for _, vm2 := range vms {
@@ -176,12 +190,7 @@ func (vms VMs) launch(vm VM) error {
 	}
 
 	vms[vm.GetID()] = vm
-
-	// Done with lock -- actually launching the VM should acquire the VM's
-	// lock, as needed.
-	vmLock.Unlock()
-
-	return vm.Launch()
+	return
 }
 
 func (vms VMs) start(target string) []error {
