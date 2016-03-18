@@ -189,10 +189,10 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}, "number", 0),
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
-	}, "qemu-append", "kvm"),
+	}, "qemu-append"),
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
-	}, "disk", "kvm"),
+	}, "disk"),
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
@@ -227,7 +227,7 @@ var kvmConfigFns = map[string]VMConfigFns{
 		PrintCLI: func(_ interface{}) []string {
 			res := []string{}
 			for _, q := range QemuOverrides {
-				res = append(res, fmt.Sprintf("vm kvm config qemu-override add %s %s", q.match, q.repl))
+				res = append(res, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
 			}
 
 			return res
@@ -280,7 +280,7 @@ func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfig
 	}
 }
 
-func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns {
+func vmConfigSlice(fn func(interface{}) *[]string, name string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
 			// Reset to empty list
@@ -296,13 +296,13 @@ func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns 
 		Clear: func(vm interface{}) { *fn(vm) = []string{} },
 		Print: func(vm interface{}) string {
 			if v := *fn(vm); len(v) > 0 {
-				return fmt.Sprintf("%v", *fn(vm))
+				return fmt.Sprintf("%v", v)
 			}
 			return ""
 		},
 		PrintCLI: func(vm interface{}) []string {
 			if v := *fn(vm); len(v) > 0 {
-				res := fmt.Sprintf("vm %s config %s %s", ns, name, strings.Join(v, " "))
+				res := fmt.Sprintf("vm config %s %s", name, strings.Join(v, " "))
 				return []string{res}
 			}
 			return nil

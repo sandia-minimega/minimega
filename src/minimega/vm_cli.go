@@ -530,7 +530,7 @@ using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
 
-	vm kvm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
+	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
@@ -574,7 +574,7 @@ Note: this configuration only applies to KVM-based VMs.`,
 		HelpLong: `
 Add additional arguments to be passed to the QEMU instance. For example:
 
-	vm kvm config qemu-append -serial tcp:localhost:4001
+	vm config qemu-append -serial tcp:localhost:4001
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
@@ -626,6 +626,20 @@ Note: this configuration only applies to KVM-based VMs.`,
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "cdrom")
+		}),
+	},
+	{ // vm config cpu
+		HelpShort: "set the virtual CPU architecture",
+		HelpLong: `
+Set the virtual CPU architecture.
+
+By default, set to 'host' which matches the host architecture. See 'kvm -cpu
+help' for a list of architectures available for your version of kvm.`,
+		Patterns: []string{
+			"vm config cpu [cpu]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "cpu")
 		}),
 	},
 	{ // vm config kernel
