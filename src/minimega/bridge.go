@@ -42,7 +42,7 @@ type Bridge struct {
 	Tunnel   []string
 
 	Taps        map[string]Tap
-	defunctTaps []string
+	defunctTaps map[string]bool
 
 	// Embedded mutex
 	sync.Mutex
@@ -102,8 +102,9 @@ func init() {
 func NewBridge(name string) (*Bridge, error) {
 	log.Debug("creating new bridge -- %v", name)
 	b := &Bridge{
-		Name: name,
-		Taps: make(map[string]Tap),
+		Name:        name,
+		Taps:        make(map[string]Tap),
+		defunctTaps: make(map[string]bool),
 	}
 
 	// Create the bridge
@@ -642,8 +643,10 @@ func bridgeInfo() string {
 	fmt.Fprintf(w, "Bridge\tExisted before minimega\tActive VLANS\n")
 	for _, v := range bridges {
 		vlans := map[int]bool{}
-		for _, tap := range v.Taps {
-			vlans[tap.lan] = true
+		for name, tap := range v.Taps {
+			if !v.defunctTaps[name] {
+				vlans[tap.lan] = true
+			}
 		}
 
 		vlans2 := []int{}
@@ -719,7 +722,7 @@ func hostTapList(resp *minicli.Response) {
 	// find all the host taps first
 	for k, b := range bridges {
 		for name, tap := range b.Taps {
-			if tap.host {
+			if tap.host && !b.defunctTaps[name] {
 				resp.Tabular = append(resp.Tabular, []string{
 					k, name, strconv.Itoa(tap.lan),
 				})
@@ -933,7 +936,7 @@ func (b *Bridge) queueRemove(tap string) error {
 		return fmt.Errorf("no such tap %v", tap)
 	}
 
-	b.defunctTaps = append(b.defunctTaps, tap)
+	b.defunctTaps[tap] = true
 	return nil
 }
 
@@ -975,11 +978,11 @@ func reapTaps() {
 			defer b.Unlock()
 
 			// just build up the arg string directly
-			for _, t := range b.defunctTaps {
+			for t := range b.defunctTaps {
 				args = append(args, "--", "del-port", b.Name, t)
 				delete(b.Taps, t)
 			}
-			b.defunctTaps = []string{}
+			b.defunctTaps = map[string]bool{}
 		}
 	}
 
