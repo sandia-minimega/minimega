@@ -41,6 +41,9 @@ func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
 		}
 	}
 
+	// Return in predictable order (nothing here should be order-sensitive)
+	sort.Strings(cmds)
+
 	return cmds
 }
 
