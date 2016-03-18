@@ -9,6 +9,7 @@ import (
 	log "minilog"
 	"os"
 	"ranges"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -27,7 +28,7 @@ func (vms VMs) apply(idOrName string, fn func(VM) error) error {
 	return fn(vm)
 }
 
-func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []string {
+func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
 	var cmds = []string{}
 
 	for k, fns := range fns {
@@ -36,9 +37,12 @@ func saveConfig(ns string, fns map[string]VMConfigFns, configs interface{}) []st
 				cmds = append(cmds, v...)
 			}
 		} else if v := fns.Print(configs); len(v) > 0 {
-			cmds = append(cmds, fmt.Sprintf("vm %s config %s %s", ns, k, v))
+			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
 		}
 	}
+
+	// Return in predictable order (nothing here should be order-sensitive)
+	sort.Strings(cmds)
 
 	return cmds
 }
@@ -65,6 +69,9 @@ func (vms VMs) save(file *os.File, args []string) error {
 		toSave = args
 	}
 
+	// save VMs in a predictable order
+	sort.Strings(toSave)
+
 	for _, vmStr := range toSave { // iterate over the vm id's specified
 		vm := vms.findVm(vmStr)
 		if vm == nil {
@@ -75,23 +82,22 @@ func (vms VMs) save(file *os.File, args []string) error {
 		// previous configuration.
 		cmds := []string{"clear vm config"}
 
-		cmds = append(cmds, saveConfig("", baseConfigFns, vm.Config())...)
+		cmds = append(cmds, saveConfig(baseConfigFns, vm.Config())...)
 
 		switch vm := vm.(type) {
 		case *KvmVM:
-			cmds = append(cmds, "vm config kvm true")
-			cmds = append(cmds, saveConfig("kvm", kvmConfigFns, &vm.KVMConfig)...)
+			cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
 		case *ContainerVM:
-			cmds = append(cmds, "vm config container true")
-			cmds = append(cmds, saveConfig("container", containerConfigFns, &vm.ContainerConfig)...)
+			cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
 		default:
 		}
 
-		if vm.GetName() != "" {
-			cmds = append(cmds, "vm launch "+vm.GetName())
-		} else {
-			cmds = append(cmds, "vm launch 1")
+		// build the string to actually launch the VM
+		arg := vm.GetName()
+		if arg == "" {
+			arg = "1"
 		}
+		cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.GetType(), arg))
 
 		// and a blank line
 		cmds = append(cmds, "")
