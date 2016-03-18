@@ -511,6 +511,17 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 			return cliVmConfigField(c, "net")
 		}),
 	},
+	{ // vm config tag
+		HelpShort: "set tags for newly launched VMs",
+		HelpLong: `
+Set tags in the same manner as "vm tag". These tags will apply to all newly
+launched VMs.`,
+		Patterns: []string{
+			"vm config tag [key]",
+			"vm config tag <key> <value>",
+		},
+		Call: wrapSimpleCLI(cliVmConfigTag),
+	},
 	{ // vm config append
 		HelpShort: "set an append string to pass to a kernel set with vm kernel",
 		HelpLong: `
@@ -519,7 +530,7 @@ using vm kernel will result in an error.
 
 For example, to set a static IP for a linux VM:
 
-	vm kvm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
+	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
@@ -563,7 +574,7 @@ Note: this configuration only applies to KVM-based VMs.`,
 		HelpLong: `
 Add additional arguments to be passed to the QEMU instance. For example:
 
-	vm kvm config qemu-append -serial tcp:localhost:4001
+	vm config qemu-append -serial tcp:localhost:4001
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
@@ -615,6 +626,20 @@ Note: this configuration only applies to KVM-based VMs.`,
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
 			return cliVmConfigField(c, "cdrom")
+		}),
+	},
+	{ // vm config cpu
+		HelpShort: "set the virtual CPU architecture",
+		HelpLong: `
+Set the virtual CPU architecture.
+
+By default, set to 'host' which matches the host architecture. See 'kvm -cpu
+help' for a list of architectures available for your version of kvm.`,
+		Patterns: []string{
+			"vm config cpu [cpu]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
+			return cliVmConfigField(c, "cpu")
 		}),
 	},
 	{ // vm config kernel
@@ -754,7 +779,7 @@ PID 1 in the container.`,
 Containers start in a highly restricted environment. vm config preinit allows
 running processes before isolation mechanisms are enabled. This occurs when the
 vm is launched and before the vm is put in the building state. preinit
-processes must finish before the vm will be allowed to start. 
+processes must finish before the vm will be allowed to start.
 
 Specifically, the preinit command will be run after entering namespaces, and
 mounting dependent filesystems, but before cgroups and root capabilities are
@@ -864,6 +889,15 @@ Clear all tags from all VMs:
 			"clear vm tag <target> [tag]",
 		},
 		Call: wrapSimpleCLI(cliClearVmTag),
+	},
+	{ // clear vm config tag
+		HelpShort: "remove tags for newly launched VMs",
+		HelpLong: `
+Remove tags in the same manner as "clear vm tag".`,
+		Patterns: []string{
+			"clear vm config tag [key]",
+		},
+		Call: wrapSimpleCLI(cliClearVmConfigTag),
 	},
 }
 
@@ -1120,6 +1154,39 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	return resp
 }
 
+func cliVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	k := c.StringArgs["key"]
+	v := c.StringArgs["value"]
+
+	if v != "" {
+		// Setting a new value
+		vmConfig.Tags[k] = v
+	} else if k != "" {
+		// Printing a single tag
+		resp.Response = vmConfig.Tags[k]
+	} else {
+		// Printing all configured tags
+		resp.Response = vmConfig.TagsString()
+	}
+
+	return resp
+}
+
+func cliClearVmConfigTag(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if k := c.StringArgs["key"]; k == "" || k == Wildcard {
+		// Clearing all tags
+		vmConfig.Tags = map[string]string{}
+	} else {
+		delete(vmConfig.Tags, k)
+	}
+
+	return resp
+}
+
 func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
@@ -1173,6 +1240,10 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	if len(names) == 0 && err == nil {
 		err = errors.New("no VMs to launch")
+	}
+
+	if len(names) > 1 && vmConfig.UUID != "" {
+		err = errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
 	if err != nil {

@@ -89,12 +89,16 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 		// handlers with minicli
 		cmd := &minicli.Command{Original: s.Text()}
 
+		if len(cmd.Original) > 0 {
+			res += fmt.Sprintf("## %v\n", cmd.Original)
+		} else {
+			res += "\n"
+		}
+
 		for resps := range mm.Run(cmd) {
 			if err != nil {
 				continue
 			}
-
-			res += fmt.Sprintf("## %v\n", cmd.Original)
 
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
