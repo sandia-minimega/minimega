@@ -898,26 +898,6 @@ func (vm *ContainerVM) launch() error {
 
 	go vm.console(parentStdin, parentStdout, parentStderr)
 
-	// Channel to signal when the process has exited
-	var waitChan = make(chan bool)
-
-	// Create goroutine to wait for process to exit
-	go func() {
-		defer close(waitChan)
-		err := cmd.Wait()
-
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
-		if err != nil && err.Error() != "signal: killed" { // because we killed it
-			log.Error("kill container: %v", err)
-			vm.setError(err)
-		} else if vm.State != VM_ERROR {
-			// Set to QUIT unless we've already been put into the error state
-			vm.setState(VM_QUIT)
-		}
-	}()
-
 	// TODO: add affinity funcs for containers
 	// vm.CheckAffinity()
 
@@ -996,12 +976,32 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	go func() {
+		var err error
 		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
+
+		// Channel to signal when the process has exited
+		var waitChan = make(chan bool)
+
+		// Create goroutine to wait for process to exit
+		go func() {
+			err = cmd.Wait()
+			close(waitChan)
+		}()
 
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
+
+			vm.lock.Lock()
+			defer vm.lock.Unlock()
+
+			// we don't need to check the error for a clean kill,
+			// as there's no way to get here if we killed it.
+			if err != nil {
+				log.Error("kill container: %v", err)
+				vm.setError(err)
+			}
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
 
@@ -1065,6 +1065,11 @@ func (vm *ContainerVM) launch() error {
 		err = os.Remove(cgroupPath)
 		if err != nil {
 			log.Errorln(err)
+		}
+
+		if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
 		}
 
 		if sendKillAck {
