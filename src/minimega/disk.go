@@ -43,24 +43,29 @@ Example of taking a snapshot of a disk:
 	disk snapshot windows7.qc2 window7_miniccc.qc2
 
 If the destination name is omitted, a name will be randomly generated and the
-snapshot will be stored in the 'file' directory.
+snapshot will be stored in the 'files' directory. Snapshots are always created
+in the 'files' directory.
 
 To inject files into an image:
 
 	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc
 
 Each argument after the image should be a source and destination pair,
-separated by a ':'. If the file paths contain spaces, use double quotes. Optionally,
-you may specify a partition (partition 1 will be used by default):
+separated by a ':'. If the file paths contain spaces, use double quotes.
+Optionally, you may specify a partition (partition 1 will be used by default):
 
 	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc
 
-You can optionally specify mount arguments to use with inject. Multiple options should be quoted. For example:
+You can optionally specify mount arguments to use with inject. Multiple options
+should be quoted. For example:
 
-	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar`,
+	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
+
+Disk image paths are always relative to the 'files' directory. Users may also
+use absolute paths if desired.`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
-			"disk <snapshot,> <src image> [dst image]",
+			"disk <snapshot,> <image> [dst image]",
 			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
 		},
@@ -68,8 +73,8 @@ You can optionally specify mount arguments to use with inject. Multiple options 
 	},
 }
 
+// diskSnapshot creates a new image, dst, using src as the backing image.
 func diskSnapshot(src, dst string) error {
-	// create the new img
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
 	if err != nil {
 		return fmt.Errorf("%v: %v", out, err)
@@ -78,9 +83,9 @@ func diskSnapshot(src, dst string) error {
 	return nil
 }
 
-func diskCreate(t, i, s string) error {
-	path := filepath.Join(*f_iomBase, i)
-	out, err := processWrapper("qemu-img", "create", "-f", t, path, s)
+// diskCreate creates a new disk image, dst, of given size/format.
+func diskCreate(format, dst, size string) error {
+	out, err := processWrapper("qemu-img", "create", "-f", format, dst, size)
 	if err != nil {
 		log.Error("diskCreate: %v", out)
 		return err
@@ -88,6 +93,9 @@ func diskCreate(t, i, s string) error {
 	return nil
 }
 
+// diskInject injects files into a disk image. dst/partition specify the image
+// and the partition number, pairs is the dst, src filepaths. options can be
+// used to supply mount arguments.
 func diskInject(dst, partition string, pairs map[string]string, options []string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
@@ -223,15 +231,16 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 func cliDisk(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if c.BoolArgs["snapshot"] {
-		var err error
-		src, dst := c.StringArgs["src"], c.StringArgs["dst"]
+	image := c.StringArgs["image"]
 
-		src, err = filepath.Abs(src)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(image) {
+		image = path.Join(*f_iomBase, image)
+	}
+	log.Debug("image: %v", image)
+
+	if c.BoolArgs["snapshot"] {
+		dst := c.StringArgs["dst"]
 
 		if dst == "" {
 			if f, err := ioutil.TempFile(*f_iomBase, "snapshot"); err != nil {
@@ -249,11 +258,11 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 		}
 		log.Debug("destination image: %v", dst)
 
-		if err := diskSnapshot(src, dst); err != nil {
+		if err := diskSnapshot(image, dst); err != nil {
 			resp.Error = err.Error()
 		}
 	} else if c.BoolArgs["inject"] {
-		image, partition := c.StringArgs["image"], "1"
+		partition := "1"
 
 		if strings.Contains(image, ":") {
 			parts := strings.Split(image, ":")
@@ -263,12 +272,6 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			}
 
 			image, partition = parts[0], parts[1]
-		}
-
-		image, err := filepath.Abs(image)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
 		}
 
 		options := fieldsQuoteEscape("\"", c.StringArgs["options"])
@@ -284,16 +287,14 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			resp.Error = err.Error()
 		}
 	} else if c.BoolArgs["create"] {
-		i := c.StringArgs["image"]
-		s := c.StringArgs["size"]
-		var t string
+		size := c.StringArgs["size"]
+
+		format := "raw"
 		if _, ok := c.BoolArgs["qcow2"]; ok {
-			t = "qcow2"
-		} else {
-			t = "raw"
+			format = "qcow2"
 		}
 
-		if err := diskCreate(t, i, s); err != nil {
+		if err := diskCreate(format, image, size); err != nil {
 			resp.Error = err.Error()
 		}
 	} else {

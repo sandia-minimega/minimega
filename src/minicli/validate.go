@@ -43,22 +43,22 @@ func ambiguous(p0, p1 []patternItem) bool {
 	} else if len(p0) == 0 && len(p1) > 0 {
 		// If the next element of p1 is optional, patterns are ambiguous since
 		// optional arguments have to come last.
-		return p1[0].Optional()
+		return p1[0].IsOptional()
 	} else if len(p0) > 0 && len(p1) == 0 {
 		// Same case as above.
-		return p0[0].Optional()
+		return p0[0].IsOptional()
 	}
 
 	// At least one item in each pattern
 	item0, item1 := p0[0], p1[0]
 
 	// Both optional
-	if item0.Optional() && item1.Optional() {
+	if item0.IsOptional() && item1.IsOptional() {
 		return true
 	}
 
 	// A list can always match anything in the other pattern
-	if item0.List() || item1.List() {
+	if item0.IsList() || item1.IsList() {
 		return true
 	}
 
@@ -97,7 +97,7 @@ func allowedValues(item patternItem) []string {
 		vals = append(vals, "*")
 	}
 
-	if item.Optional() {
+	if item.IsOptional() {
 		vals = append(vals, "")
 	}
 

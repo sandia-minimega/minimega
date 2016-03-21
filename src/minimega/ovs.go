@@ -93,6 +93,31 @@ func ovsDelPort(bridge, tap string) error {
 	return nil
 }
 
+func ovsGetTaps() []string {
+	var tapList []string
+
+	args := []string{
+		"show",
+	}
+
+	sOut, _, _ := ovsCmdWrapper(args)
+
+	taps := strings.Split(sOut, "\n")
+
+	for _, t := range taps {
+		if strings.Contains(t, "Port") &&
+			strings.Contains(t, "mega_tap") {
+
+			name := strings.Split(t, "\"")
+			if len(name) > 1 {
+				tapList = append(tapList, name[1])
+			}
+		}
+	}
+
+	return tapList
+}
+
 func ovsCmdWrapper(args []string) (string, string, error) {
 	ovsLock.Lock()
 	defer ovsLock.Unlock()
