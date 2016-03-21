@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -228,15 +227,6 @@ type ContainerVM struct {
 	netns         string
 }
 
-type ContainerIniter struct {
-	// Guards
-	once sync.Once
-
-	Success bool
-}
-
-var ContainerInit ContainerIniter
-
 // Ensure that ContainerVM implements the VM interface
 var _ VM = (*ContainerVM)(nil)
 
@@ -249,17 +239,21 @@ func init() {
 	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 }
 
-func (c *ContainerIniter) Init() {
-	c.once.Do(func() {
-		if err := c.init(); err != nil {
-			log.Errorln(err)
-		} else {
-			c.Success = true
-		}
-	})
-}
+var (
+	containerInitLock    sync.Mutex
+	containerInitOnce    bool
+	containerInitSuccess bool
+)
 
-func (_ ContainerIniter) init() error {
+func containerInit() error {
+	containerInitLock.Lock()
+	defer containerInitLock.Unlock()
+
+	if containerInitOnce {
+		return nil
+	}
+	containerInitOnce = true
+
 	// mount our own cgroup namespace to avoid having to ever ever ever
 	// deal with systemd
 	log.Debug("cgroup mkdir: %v", CGROUP_ROOT)
@@ -296,17 +290,20 @@ func (_ ContainerIniter) init() error {
 		return fmt.Errorf("creating minimega cgroup: %v", err)
 	}
 
+	containerInitSuccess = true
 	return nil
 }
 
 func containerTeardown() {
-	if ContainerInit.Success {
-		err := os.Remove(CGROUP_PATH)
-		if err != nil {
+	err := os.Remove(CGROUP_PATH)
+	if err != nil {
+		if containerInitSuccess {
 			log.Errorln(err)
 		}
-		err = syscall.Unmount(CGROUP_ROOT, 0)
-		if err != nil {
+	}
+	err = syscall.Unmount(CGROUP_ROOT, 0)
+	if err != nil {
+		if containerInitSuccess {
 			log.Errorln(err)
 		}
 	}
@@ -681,6 +678,10 @@ func (vm *ContainerConfig) String() string {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "Current container configuration:")
 	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FSPath)
+	fmt.Fprintf(w, "Hostname:\t%v\n", vm.Hostname)
+	fmt.Fprintf(w, "Init:\t%v\n", vm.Init)
+	fmt.Fprintf(w, "Pre-init:\t%v\n", vm.Preinit)
+	fmt.Fprintf(w, "FIFOs:\t%v\n", vm.Fifos)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -723,9 +724,14 @@ func (vm *ContainerVM) checkDisks() error {
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
-	ContainerInit.Init()
-	if !ContainerInit.Success {
-		err := errors.New("cannot launch container VMs -- cgroups failed to initialize")
+	err := containerInit()
+	if err != nil {
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
+	if !containerInitSuccess {
+		err = fmt.Errorf("cgroups are not initialized, cannot continue")
 		log.Errorln(err)
 		vm.setError(err)
 		return err
@@ -894,26 +900,6 @@ func (vm *ContainerVM) launch() error {
 
 	go vm.console(parentStdin, parentStdout, parentStderr)
 
-	// Channel to signal when the process has exited
-	var waitChan = make(chan bool)
-
-	// Create goroutine to wait for process to exit
-	go func() {
-		defer close(waitChan)
-		err := cmd.Wait()
-
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
-		if err != nil && err.Error() != "signal: killed" { // because we killed it
-			log.Error("kill container: %v", err)
-			vm.setError(err)
-		} else if vm.State != VM_ERROR {
-			// Set to QUIT unless we've already been put into the error state
-			vm.setState(VM_QUIT)
-		}
-	}()
-
 	// TODO: add affinity funcs for containers
 	// vm.CheckAffinity()
 
@@ -992,12 +978,32 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	go func() {
+		var err error
 		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
+
+		// Channel to signal when the process has exited
+		var waitChan = make(chan bool)
+
+		// Create goroutine to wait for process to exit
+		go func() {
+			err = cmd.Wait()
+			close(waitChan)
+		}()
 
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
+
+			vm.lock.Lock()
+			defer vm.lock.Unlock()
+
+			// we don't need to check the error for a clean kill,
+			// as there's no way to get here if we killed it.
+			if err != nil {
+				log.Error("kill container: %v", err)
+				vm.setError(err)
+			}
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
 
@@ -1061,6 +1067,11 @@ func (vm *ContainerVM) launch() error {
 		err = os.Remove(cgroupPath)
 		if err != nil {
 			log.Errorln(err)
+		}
+
+		if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
 		}
 
 		if sendKillAck {

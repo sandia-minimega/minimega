@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"os"
 	"ranges"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -67,11 +68,12 @@ func (vms VMs) save(file *os.File, target string) error {
 		default:
 		}
 
+		// build the string to actually launch the VM
 		arg := vm.GetName()
 		if arg == "" {
 			arg = "1"
 		}
-		cmds = append(cmds, fmt.Sprintf("vm launch %v %v", vm.GetType(), arg))
+		cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.GetType(), arg))
 
 		// and a blank line
 		cmds = append(cmds, "")
@@ -165,13 +167,18 @@ func (vms VMs) launch(vm VM) (err error) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	// Make sure that there isn't an existing VM with the same name
+	// Make sure that there isn't an existing VM with the same name or UUID
 	for _, vm2 := range vms {
 		// We only care about name collisions if the VMs are running in the
 		// same namespace or if the collision is a non-namespaced VM with an
 		// already running namespaced VM.
 		namesEq := vm.GetName() == vm2.GetName()
+		uuidEq := vm.GetUUID() == vm2.GetUUID()
 		namespaceEq := (vm.GetNamespace() == vm2.GetNamespace())
+
+		if uuidEq && (namespaceEq || vm.GetNamespace() == "") {
+			return fmt.Errorf("vm launch duplicate UUID: %s", vm.GetUUID())
+		}
 
 		if namesEq && (namespaceEq || vm.GetNamespace() == "") {
 			return fmt.Errorf("vm launch duplicate VM name: %s", vm.GetName())

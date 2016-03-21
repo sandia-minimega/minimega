@@ -227,8 +227,7 @@ var kvmConfigFns = map[string]VMConfigFns{
 		PrintCLI: func(_ interface{}) []string {
 			res := []string{}
 			for _, q := range QemuOverrides {
-				override := fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl)
-				res = append(res, override)
+				res = append(res, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
 			}
 
 			return res
@@ -297,7 +296,7 @@ func vmConfigSlice(fn func(interface{}) *[]string, name string) VMConfigFns {
 		Clear: func(vm interface{}) { *fn(vm) = []string{} },
 		Print: func(vm interface{}) string {
 			if v := *fn(vm); len(v) > 0 {
-				return fmt.Sprintf("%v", *fn(vm))
+				return fmt.Sprintf("%v", v)
 			}
 			return ""
 		},
@@ -323,6 +322,9 @@ func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
 			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
 		}
 	}
+
+	// Return in predictable order (nothing here should be order-sensitive)
+	sort.Strings(cmds)
 
 	return cmds
 }
