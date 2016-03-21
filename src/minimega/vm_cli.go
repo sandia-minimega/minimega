@@ -839,6 +839,7 @@ to the default value.`,
 		Patterns: []string{
 			"clear vm config",
 			// VMConfig
+			"clear vm config <cpu,>",
 			"clear vm config <memory,>",
 			"clear vm config <net,>",
 			"clear vm config <vcpus,>",
