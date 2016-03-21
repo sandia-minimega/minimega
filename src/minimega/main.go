@@ -139,7 +139,7 @@ func main() {
 
 			mm.RunAndPrint(cmd, false)
 		} else {
-			mm.Attach()
+			AttachCLI(mm)
 		}
 
 		return
@@ -231,6 +231,70 @@ func main() {
 		}
 	}
 	teardown()
+}
+
+// AttachCLI creates a CLI interface to the dialed minimega instance
+func AttachCLI(mm *miniclient.Conn) {
+	// set up signal handling
+	sig := make(chan os.Signal, 1024)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sig
+		log.Debug("caught signal, disconnecting")
+		goreadline.Rlcleanup()
+		os.Exit(0)
+	}()
+
+	// start our own rlwrap
+	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
+	fmt.Println("use 'disconnect' or ^d to exit just the minimega command line")
+	fmt.Println()
+	defer goreadline.Rlcleanup()
+
+	var exitNext bool
+	for {
+		prompt := fmt.Sprintf("minimega:%v$ ", mm.URL)
+		line, err := goreadline.Rlwrap(prompt, true)
+		if err != nil {
+			return
+		}
+		command := string(line)
+		log.Debug("got from stdin: `%s`", line)
+
+		// HAX: Shortcut some commands without using minicli
+		if command == "disconnect" {
+			log.Debugln("disconnecting")
+			return
+		} else if command == "quit" {
+			if !exitNext {
+				fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
+				fmt.Println("If you really want to stop the minimega daemon, enter 'quit' again")
+				exitNext = true
+				continue
+			}
+		}
+
+		exitNext = false
+
+		cmd, err := minicli.Compile(command)
+		if err != nil {
+			log.Error("%v", err)
+			//fmt.Println("closest match: TODO")
+			continue
+		}
+
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
+			continue
+		}
+
+		mm.RunAndPrint(cmd, true)
+
+		if command == "quit" {
+			return
+		}
+	}
 }
 
 func teardownf(format string, args ...interface{}) {
