@@ -25,7 +25,7 @@ name | namespace | state
 foo  |           | BUILDING
 foo  | ns1       | BUILDING
 foo  | ns2       | BUILDING
-## 
+
 ## # Change VM states, all should only apply within a given namespace
 ## namespace ns1 vm start all
 ## .columns name,namespace,state vm info

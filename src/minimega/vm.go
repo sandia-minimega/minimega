@@ -227,7 +227,7 @@ func findVMType(args map[string]bool) (VMType, error) {
 // TODO: Handle if there are spaces or commas in the tap/bridge names
 func (net NetConfig) String() (s string) {
 	parts := []string{}
-	if net.Bridge != "" && net.Bridge != DEFAULT_BRIDGE {
+	if net.Bridge != "" {
 		parts = append(parts, net.Bridge)
 	}
 

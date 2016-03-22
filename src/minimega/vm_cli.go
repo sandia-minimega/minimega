@@ -84,7 +84,7 @@ launch configuration.
 
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm save <target> <name>",
+			"vm save <name> <target>",
 		},
 		Call: wrapVMTargetCLI(cliVmSave),
 		Suggest: func(val, prefix string) []string {
@@ -907,6 +907,7 @@ func cliVmSave(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 		return resp
 	}
+	defer file.Close()
 
 	if err := LocalVMs().save(file, c.StringArgs["target"]); err != nil {
 		resp.Error = err.Error()

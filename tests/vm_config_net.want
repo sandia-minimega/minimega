@@ -4,7 +4,7 @@
 ## # Just VLAN
 ## vm config net 100
 ## vm config net
-[100]
+[mega_bridge,100]
 ## vm launch kvm vm0
 ## .filter name=vm0 .columns name,bridge,vlan vm info
 name | bridge        | vlan
@@ -13,7 +13,7 @@ vm0  | [mega_bridge] | [100]
 ## # VLAN and MAC address
 ## vm config net 100,13:37:13:37:00:00
 ## vm config net
-[100,13:37:13:37:00:00]
+[mega_bridge,100,13:37:13:37:00:00]
 ## vm launch kvm vm1
 ## .filter name=vm1 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan  | mac
@@ -40,7 +40,7 @@ vm3  | [test_bridge] | [100] | [13:37:13:37:00:01]
 ## # VLAN and Network Driver
 ## vm config net 100,e1000
 ## vm config net
-[100]
+[mega_bridge,100]
 ## vm launch kvm vm4
 ## .filter name=vm4 .columns name,bridge,vlan vm info
 name | bridge        | vlan
