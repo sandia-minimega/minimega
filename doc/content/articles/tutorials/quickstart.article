@@ -1,43 +1,64 @@
 minimega Quickstart
 
-John Floren
+The minimega authors
 17 Mar 2015
 
 * Introduction
 
-This quickstart will show you how to get bare-minimum Linux VMs running in minimega. It assumes that you have already followed the steps in [[/articles/installing.article][the build guide]] to compile minimega; if your copy of the repository has a bin/ directory with programs inside, you should be ready to go!
+This quickstart will show you how to get bare-minimum Linux VMs running in
+minimega. It assumes that you have already followed the steps in
+[[/articles/installing.article][the build guide]] to compile minimega; if your
+copy of the repository has a bin/ directory with programs inside, you should be
+ready to go!
 
-To properly use minimega, you need sudo access. The minimega tools will warn you at startup if a particular program they expect (e.g. dnsmasq) doesn't seem to be installed.
+To properly use minimega, you need sudo access. The minimega tools will warn
+you at startup if a particular program they expect (e.g. dnsmasq) doesn't seem
+to be installed.
 
 * Step One: Make a VM image with vmbetter
 
-If you want to skip straight to working with minimega, download [[https://storage.googleapis.com/minimega-files/generic_vm.iso][this file]] and skip ahead to Step Two.
+If you want to skip straight to working with minimega, download
+[[https://storage.googleapis.com/minimega-files/generic_vm.iso][this file]] and
+skip ahead to Step Two.
 
-We're assuming you're starting from a completely blank slate and don't have any particular VM you want to run. We'll build a disk image for a basic Linux system and use that to start with. If you have another hard disk image (QCOW2 format), you can skip ahead.
+We're assuming you're starting from a completely blank slate and don't have any
+particular VM you want to run. We'll build a disk image for a basic Linux
+system and use that to start with. If you have another hard disk image (QCOW2
+format), you can skip ahead.
 
 If you don't already have Syslinux installed, install it:
 
     sudo apt-get install syslinux
 
-The tool to build a VM is called "vmbetter". It should already have been compiled along with minimega, so all we have to do is point it at one of the provided config files and let it know we want a QCOW disk image:
+The tool to build a VM is called "vmbetter". It should already have been
+compiled along with minimega, so all we have to do is point it at one of the
+provided config files and let it know we want a QCOW disk image:
 
     sudo ./bin/vmbetter -level debug -qcow ./misc/vmbetter_configs/generic_vm.conf
 
-This will grind for a while as it fetches a bunch of Debian packages and creates a disk image. We added -level=debug to the flags so we can see more information as it works.
+This will grind for a while as it fetches a bunch of Debian packages and
+creates a disk image. We added -level=debug to the flags so we can see more
+information as it works.
 
-In some cases, vmbetter may fail because syslinux's mbr.bin file isn't where it expects; if this happens, you should locate your mbr.bin file and use the -mbr flag to specify its location. For instance, on Debian Unstable you may need to run this instead:
+In some cases, vmbetter may fail because syslinux's mbr.bin file isn't where it
+expects; if this happens, you should locate your mbr.bin file and use the -mbr
+flag to specify its location. For instance, on Debian Unstable you may need to
+run this instead:
 
     sudo ./bin/vmbetter -mbr /usr/lib/syslinux/mbr/mbr.bin -level debug -qcow ./misc/vmbetter_configs/generic_vm.conf
 
-Eventually, vmbetter should finish and leave you with a disk image called generic_vm.qcow2
+Eventually, vmbetter should finish and leave you with a disk image called
+generic_vm.qcow2
 
 * Step Two: Run minimega and set up the VM
 
-You can just launch minimega from the repository root; for our purposes, it doesn't need any arguments:
+You can just launch minimega from the repository root; for our purposes, it
+doesn't need any arguments:
 
     sudo ./bin/minimega
 
-You should get a copyright notice followed by a prompt. If it printed any warning messages, you may need to install missing programs.
+You should get a copyright notice followed by a prompt. If it printed any
+warning messages, you may need to install missing programs.
 
 ** Configure the VM itself
 
@@ -63,15 +84,21 @@ The very first thing we can do is check the default configuration:
 	SerialPorts:        0
 	Virtio-SerialPorts: 0
 
-By default, very little is configured beyond the memory size and number of CPUs. Note the "Snapshot: true" parameter--this indicates that by default, changes will not be written to the virtual disk file, meaning you can launch multiple copies of the same VM. If you wanted to make permanent changes to the disk, you would set "snapshot" to false.
+By default, very little is configured beyond the memory size and number of
+CPUs. Note the "Snapshot: true" parameter--this indicates that by default,
+changes will not be written to the virtual disk file, meaning you can launch
+multiple copies of the same VM. If you wanted to make permanent changes to the
+disk, you would set "snapshot" to false.
 
-For our simple purposes, we just need to tell it to use the disk we just created:
+For our simple purposes, we just need to tell it to use the disk we just
+created:
 
    minimega$ vm config disk generic_vm.qcow2
 
 ** Configure the network
 
-minimega can do a lot of complex things with the network. For this quickstart, we'll do the following:
+minimega can do a lot of complex things with the network. For this quickstart,
+we'll do the following:
 
 - Put the VM onto virtual network #100
 - Connect the host to that same virtual network
@@ -81,25 +108,34 @@ First, we'll configure the VM to use virtual network #100:
 
       minimega$ vm config net 100
 
-Then, we'll create a tap interface on the host, also on virtual network #100, and specify an IP for the host:
+Then, we'll create a tap interface on the host, also on virtual network #100,
+and specify an IP for the host:
 
       minimega$ tap create 100 ip 10.0.0.1/24
 
-Now, when the VM is launched, it will be able to communicate with the host via the virtual network.
+Now, when the VM is launched, it will be able to communicate with the host via
+the virtual network.
 
-Finally, we need to start dnsmasq on the virtual interface so the client can get an IP:
+Finally, we need to start dnsmasq on the virtual interface so the client can
+get an IP:
 
 	minimega$ dnsmasq start 10.0.0.1 10.0.0.2 10.0.0.254
 
-If this fails, it's possible that you don't have dnsmasq installed, or that dnsmasq is already running. You don't *need* dnsmasq, but without it you'll have to access the VM through VNC, since SSH won't work.
+If this fails, it's possible that you don't have dnsmasq installed, or that
+dnsmasq is already running. You don't *need* dnsmasq, but without it you'll
+have to access the VM through VNC, since SSH won't work.
 	 
 * Step 3: Launch and start the VM
 
-Although we've configured the VM parameters, we have not actually started any virtual machines yet. We'll use the "vm launch" command to start a single KVM-based VM named "test":
+Although we've configured the VM parameters, we have not actually started any
+virtual machines yet. We'll use the "vm launch" command to start a single
+KVM-based VM named "test":
 
 	 minimega$ vm launch kvm test
 
-This creates the VM, but leaves it in an inactive state until we explicitly start it. If we run "vm info", we see a single VM named "test" in the "BUILDING" state:
+This creates the VM, but leaves it in an inactive state until we explicitly
+start it. If we run "vm info", we see a single VM named "test" in the
+"BUILDING" state:
 
      minimega$ vm info
      host  | id | name | state    | memory | vcpus | disk                 | snapshot |
@@ -113,17 +149,23 @@ Our "test" VM should now be booting!
 
 * Step 4: Connect to the VM
 
-Although we've started the VM, it would be nice to be able to interact with it. minimega provides VNC access to the VM's console, either directly or through the web interface.
+Although we've started the VM, it would be nice to be able to interact with it.
+minimega provides VNC access to the VM's console, either directly or through
+the web interface.
 
-Note that most vmbetter configurations provided with minimega will set up passwordless login for the root user.
+Note that most vmbetter configurations provided with minimega will set up
+passwordless login for the root user.
 
 ** Web interface
 
-The web interface is the friendliest way to see VMs. Assuming you ran minimega from the root of the minimega repository, you can start the web interface like this:
+The web interface is the friendliest way to see VMs. Assuming you ran minimega
+from the root of the minimega repository, you can start the web interface like
+this:
 
     minimega$ web
 
-Now point your web browser to [[http://localhost:9001]] and scroll down to the section "VM Screenshots". You should see something like this:
+Now point your web browser to [[http://localhost:9001]] and scroll down to the
+section "VM Screenshots". You should see something like this:
 
 .image quickstart/mm-web.png
 
@@ -131,15 +173,24 @@ Click on "Connect" to open a VNC session to the VM.
 
 ** Direct VNC
 
-If you'd rather connect directly using your preferred VNC client, just run "vm info" and look at the "id" field for your desired VM, then add 5900 to that number to get your VNC port. In our case, the "test" VM should be ID #0; 5900+0 = 5900, so we can connect our VNC client to localhost:5900.
+If you'd rather connect directly using your preferred VNC client, just run "vm
+info" and look at the "id" field for your desired VM, then add 5900 to that
+number to get your VNC port. In our case, the "test" VM should be ID #0; 5900+0
+= 5900, so we can connect our VNC client to localhost:5900.
 
 ** SSH
 
-If all goes well, your VM should have picked up an IP. If you run "vm info" and look for the "ip" column, you'll see the address that dnsmasq assigned to the VM. You can then SSH to that IP; be sure to specify the root user!
+If all goes well, your VM should have picked up an IP. If you run "vm info" and
+look for the "ip" column, you'll see the address that dnsmasq assigned to the
+VM. You can then SSH to that IP; be sure to specify the root user!
 
 * Starting more VMs
 
-If you want to start more VMs, you can just use "vm launch". It will use the same configuration as before, unless you change something. You don't have to give each VM a name, you can instead just tell minimega how many VMs you want and let it pick names for you. Then, "vm start all" will specify that all VMs should start running:
+If you want to start more VMs, you can just use "vm launch". It will use the
+same configuration as before, unless you change something. You don't have to
+give each VM a name, you can instead just tell minimega how many VMs you want
+and let it pick names for you. Then, "vm start all" will specify that all VMs
+should start running:
 
 	minimega$ vm launch kvm 5
 	minimega$ vm start all
@@ -154,8 +205,12 @@ If you want to start more VMs, you can just use "vm launch". It will use the sam
 
 * Shutting down
 
-When you're done working with minimega, simply type "quit". When it exits, minimega does its best to clean up after itself, by killing all VMs, stopping dnsmasq and any other processes it started, and removing any host taps you may have created.
+When you're done working with minimega, simply type "quit". When it exits,
+minimega does its best to clean up after itself, by killing all VMs, stopping
+dnsmasq and any other processes it started, and removing any host taps you may
+have created.
 
 * Further reading
 
-The [[/articles/usage.article][Usage Guide]] contains more details on running minimega, including information on how to distribute minimega across a cluster.
+The [[/articles/usage.article][Usage Guide]] contains more details on running
+minimega, including information on how to distribute minimega across a cluster.

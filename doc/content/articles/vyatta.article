@@ -1,21 +1,30 @@
 Using Vyatta with minimega
 
-John Floren
+The minimega authors
 13 Aug 2015
 
 * Introduction
 
-minimega includes commands to configure a Vyatta router for use in your experiment. This document explains some common use cases; see the [[/articles/api.article#TOC_5.35.][`vyatta` API]] documentation for more information.
+minimega includes commands to configure a Vyatta router for use in your
+experiment. This document explains some common use cases; see the
+[[/articles/api.article#TOC_5.35.][`vyatta` API]] documentation for more
+information.
 
 * Test environment
 
-For the purposes of this document, we are assuming you wish to set up a router between an internal network (192.168.0.0/24) and an external network (5.5.5.0/24). Your router will have an external IP of 5.5.5.5 and an internal IP of 192.168.0.1.
+For the purposes of this document, we are assuming you wish to set up a router
+between an internal network (192.168.0.0/24) and an external network
+(5.5.5.0/24). Your router will have an external IP of 5.5.5.5 and an internal
+IP of 192.168.0.1.
 
-Your router will provide DHCP services to the internal network and directs internal nodes to use 8.8.8.8 as their DNS server.
+Your router will provide DHCP services to the internal network and directs
+internal nodes to use 8.8.8.8 as their DNS server.
 
 * Preparing the Vyatta config
 
-To specify the configuration of our Vyatta VM, we use the `vyatta` commands. Once we have specified our desired setup, the `vyatta`write` command writes it out as a floppy disk image, which we then pass to QEMU
+To specify the configuration of our Vyatta VM, we use the `vyatta` commands.
+Once we have specified our desired setup, the `vyatta`write` command writes it
+out as a floppy disk image, which we then pass to QEMU
 
 ** Configuring Vyatta
 
@@ -23,8 +32,11 @@ To specify the configuration of our Vyatta VM, we use the `vyatta` commands. Onc
 
 ** Configuring the VM
 
-You'll need the Vyatta ISO file somewhere accessible; it is not included with minimega.
+You'll need the Vyatta ISO file somewhere accessible; it is not included with
+minimega.
 
 .mega vyatta/vmconfig.mm
 
-The Vyatta VM should boot and start routing traffic for you. You should be able to ssh to the router if necessary by adding a host tap to one of the VLANs used.
+The Vyatta VM should boot and start routing traffic for you. You should be able
+to ssh to the router if necessary by adding a host tap to one of the VLANs
+used.
