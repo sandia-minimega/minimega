@@ -678,13 +678,13 @@ running the web interface only, and have connections automatically tunneled
 into the cluster nodes which may not be directly routable from outside the
 cluster.
 
-In order to run the web interface, minimega must have access to a novnc
-installation. One is packaged with minimega under `misc/novnc`, and by default,
-minimega will look for a novnc installation in `${PWD}/misc/novnc`.
+In order to run the web interface, minimega must have access to included static
+content. This is provided in the distribution under `misc/web`. 
 
-To change the path minimega should use for novnc, use the `web` command:
+To change the path minimega should use for static content, use the `web`
+command:
 
-	minimega$ web novnc /path/to/novnc
+	minimega$ web root /path/to/web
 
 To start the web interface, use the `web` command with no arguments:
 
@@ -699,18 +699,6 @@ The hostname is optional. To have minimega listen on all interfaces, simply
 omit the hostname:
 
 	minimega$ web :80
-
-With the web interface started, point your browser to the hostname and port
-that minimega is listening on, with the `/vnc` path:
-
-	http://localhost:9001/vnc
-
-minimega will list the hostnames of all connected nodes with the number of
-running VMs in parenthesis. To view a VM running on a particular node, simply
-click on that hostname. Within a hostname listing, minimega will enumerate all
-running VMs using information from `vm`info`. To view a particular VM, click on
-the ID. minimega will then create a tunnel (if necessary) and connect you with
-novnc.
 
 * Multi-node Usage
 

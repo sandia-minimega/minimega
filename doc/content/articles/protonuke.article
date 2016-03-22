@@ -2,7 +2,7 @@ protonuke
 simple traffic generation
 
 The minimega authors
-11 Mar 2015
+22 Mar 2016
 
 * Introduction
 
@@ -135,6 +135,13 @@ images, as shown below.
 
 User provided content can be served instead of the built-in webserver by
 specifying a directory with the `-httproot` flag.
+
+The user can adjust the size of the image served in the built-in webserver by
+using the `-httpimagesize` flag. This argument takes a number in megabytes. 
+
+The user can also specify a TLS certificate and key, instead of having
+protonuke generate a cert at launch time, by using the `-httptlscert` and
+`-httptlskey` flags.
 
 ** SSH and SMTP
 

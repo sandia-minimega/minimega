@@ -7,7 +7,7 @@ The minimega authors
 
 minimega includes commands to configure a Vyatta router for use in your
 experiment. This document explains some common use cases; see the
-[[/articles/api.article#TOC_5.35.][`vyatta` API]] documentation for more
+[[/articles/api.article#TOC_5.38.][`vyatta` API]] documentation for more
 information.
 
 * Test environment

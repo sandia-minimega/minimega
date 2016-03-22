@@ -120,18 +120,15 @@ trunking mode. Doing so will disallow the physical interface from having an IP,
 although you can assign/obtain an IP in place of the physical interface by
 assigning/obtaining an IP on the access port of the bridge device. 
 
-For example, if you have only one physical interface, eth0, on your node which
-is normally assigned an IP via DHCP, and you want to bridge that interface to
-Open vSwitch to support vlan tagged traffic between nodes:
+For example, if you have only one physical interface, eth0, on your node and
+you want to bridge that interface to Open vSwitch to support vlan tagged
+traffic between nodes:
 
-	ovs-vsctl add-port mega_bridge eth0
-	dhclient -v mega_bridge
+	bridge trunk mega_bridge eth0
 
 The above adds eth0 to the default minimega bridge `mega_bridge` as a trunk
-port, and then obtains an IP on `mega_bridge`, which has the same MAC as eth0
-and will behave as eth0 did before you added it to the bridge. Do this on each
-node running minimega. We typically add this command to our Linux startup
-scripts, so the node will configure mega_bridge at boot-time.
+port, which has the same MAC as eth0 and will behave as eth0 did before you
+added it to the bridge. Do this on each node running minimega. 
 
 * Getting help
 

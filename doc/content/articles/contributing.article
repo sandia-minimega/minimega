@@ -49,6 +49,8 @@ running `all.bash` in the repo. If your code revision applies to windows
 binaries (`protonuke`, `miniccc`, etc.), then make sure your change works on
 Windows as well.
 
+Write runtime tests using [[minitest.article][minitest]]. 
+
 * Documentation
 
 Always include updates and additions to the documents, API help, and tutorials
