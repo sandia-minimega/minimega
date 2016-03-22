@@ -10,7 +10,6 @@ import (
 	log "minilog"
 	"os"
 	"ranges"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
