@@ -18,7 +18,7 @@ var (
 	f_port     = flag.Int("port", 9003, "HTTP port")
 	f_root     = flag.String("root", "doc/content/", "HTTP root directory")
 	f_base     = flag.String("base", "doc/template/", "base path for static content and templates")
-	f_exec     = flag.Bool("exec", true, "allow minimega commands")
+	f_exec     = flag.Bool("exec", false, "allow minimega commands")
 	f_loglevel = flag.String("level", "debug", "log level: [debug, info, warn, error, fatal]")
 	f_log      = flag.Bool("v", true, "log on stderr")
 	f_logfile  = flag.String("logfile", "", "log to file")
