@@ -1,27 +1,43 @@
 File transfer with minimega
 
-David Fritz
-01 Oct 2015
+The minimega authors
+22 Mar 2016
 
 * Introduction
 
-This tutorial illustrates iomeshage, the meshage-based file transfer layer provided by minimega. iomeshage is a distributed file transfer layer that provides a means to very quickly copy files between minimega nodes. By leveraging minimega's meshage message passing protocol, iomeshage can exceed transfer speeds obtained with one-to-one copying. 
+This tutorial illustrates iomeshage, the meshage-based file transfer layer
+provided by minimega. iomeshage is a distributed file transfer layer that
+provides a means to very quickly copy files between minimega nodes. By
+leveraging minimega's meshage message passing protocol, iomeshage can exceed
+transfer speeds obtained with one-to-one copying. 
 
 * Overview
 
-There are two ways to use iomeshage - through the `file` API and via an inline `file:` prefix available anywhere on the command line. In order for iomeshage to locate files on remote nodes, the files must be located in the `filepath` directory provided to minimega (by default `/tmp/minimega/files`). 
+There are two ways to use iomeshage - through the `file` API and via an inline
+`file:` prefix available anywhere on the command line. In order for iomeshage
+to locate files on remote nodes, the files must be located in the `filepath`
+directory provided to minimega (by default `/tmp/minimega/files`). 
 
-iomeshage supports transferring single files, globs (wildcard files such as foo*), and entire directories. Permissions on transferred files are preserved.
+iomeshage supports transferring single files, globs (wildcard files such as
+foo*), and entire directories. Permissions on transferred files are preserved.
 
-*CAUTION*: iomeshage uses filenames (including the path) as the unique identifier for that file. For example, if two nodes have a file "foo", which is different on each node, iomeshage will have undefined behavior when transferring the file.
+*CAUTION*: iomeshage uses filenames (including the path) as the unique
+identifier for that file. For example, if two nodes have a file "foo", which is
+different on each node, iomeshage will have undefined behavior when
+transferring the file.
 
 ** `file` API
 
-iomeshage can be invoked using the `file` API on any node. It doesn't matter which remote node the file is on, so long as it exists on at least one node. For example, to find and transfer a file 'foo' to the requesting node's filepath directory:
+iomeshage can be invoked using the `file` API on any node. It doesn't matter
+which remote node the file is on, so long as it exists on at least one node.
+For example, to find and transfer a file 'foo' to the requesting node's
+filepath directory:
 
 	file get foo
 
-If the file exists, the command will return with no error. The `file` API is non-blocking - it will return immediately and enqueue the file transfer. To see the status of existing file transfers, use the `file`status` API:
+If the file exists, the command will return with no error. The `file` API is
+non-blocking - it will return immediately and enqueue the file transfer. To see
+the status of existing file transfers, use the `file`status` API:
 
 	minimega$ file get bigfile
 	minimega$ file status
@@ -37,21 +53,30 @@ You can also list and delete files using the `file` API:
 	minimega$ file list
 	minimega$ 
 
-File transfers are always done by 'pulling' the file to the requesting node. There is no way to transfer a file to a remote node directly. In such cases, you will need to tell the remote node to pull the file using the `mesh` API. For example, to have remote node `foo` pull a file `bar` from the mesh:
+File transfers are always done by 'pulling' the file to the requesting node.
+There is no way to transfer a file to a remote node directly. In such cases,
+you will need to tell the remote node to pull the file using the `mesh` API.
+For example, to have remote node `foo` pull a file `bar` from the mesh:
 
 	mesh send foo file get bar
 
 ** file: prefix
 
-iomeshage can also be invoked anywhere on the command line by prefixing the file you want to transfer to the local node with `file:`. For example, if a remote node has a file `foo.qcow2`, and you want to use it locally as a disk image:
+iomeshage can also be invoked anywhere on the command line by prefixing the
+file you want to transfer to the local node with `file:`. For example, if a
+remote node has a file `foo.qcow2`, and you want to use it locally as a disk
+image:
 
 	vm config disk file:foo.qcow2
 
-This will transfer the file foo.qcow2 to the local node, and block until the file transfer is complete. Once complete, the path will be replaced with local reference to the file:
+This will transfer the file foo.qcow2 to the local node, and block until the
+file transfer is complete. Once complete, the path will be replaced with local
+reference to the file:
 
 	minimega$ vm config disk file:foo.qcow2
 	minimega$ vm config disk
 	[/tmp/minimega/files/foo.qcow2]
 	minimega$ 
 
-Additionally, `file:` can by tab completed across the mesh in the same way as bash.
+Additionally, `file:` can by tab completed across the mesh in the same way as
+bash.
