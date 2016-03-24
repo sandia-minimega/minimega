@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"ipmac"
-	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -52,8 +51,10 @@ const (
 type VM interface {
 	Config() *BaseConfig
 
-	GetID() int      // GetID returns the VM's per-host unique ID
-	GetName() string // GetName returns the VM's per-host unique name
+	GetID() int           // GetID returns the VM's per-host unique ID
+	GetName() string      // GetName returns the VM's per-host unique name
+	GetNamespace() string // GetNamespace returns the VM's namespace
+	GetHost() string      // GetHost returns the hostname that the VM is running on
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
@@ -87,6 +88,9 @@ type VM interface {
 
 // BaseConfig contains all fields common to all VM types.
 type BaseConfig struct {
+	Namespace string // namespace this VM belongs to
+	Host      string // hostname where this VM is running
+
 	Vcpus  string // number of virtual cpus
 	Memory string // memory for the vm, in megabytes
 
@@ -134,9 +138,10 @@ type BaseVM struct {
 
 // Valid names for output masks for vm info, in preferred output order
 var vmMasks = []string{
-	"id", "name", "state", "memory", "vcpus", "type", "vlan", "bridge", "tap",
-	"mac", "ip", "ip6", "bandwidth", "migrate", "disk", "snapshot", "initrd",
-	"kernel", "cdrom", "append", "uuid", "cc_active", "tags",
+	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
+	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
+	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
+	"tags",
 }
 
 func init() {
@@ -167,6 +172,9 @@ func NewVM(name string) *BaseVM {
 	} else {
 		vm.Name = name
 	}
+
+	vm.Namespace = namespace
+	vm.Host = hostname
 
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
@@ -200,8 +208,20 @@ func ParseVMType(s string) (VMType, error) {
 	case "container":
 		return CONTAINER, nil
 	default:
-		return -1, errors.New("invalid VMType")
+		return 0, errors.New("invalid VMType")
 	}
+}
+
+// findVMType tries to find a key that parses to a valid VMType. Useful for
+// hunting through a command's BoolArgs.
+func findVMType(args map[string]bool) (VMType, error) {
+	for k := range args {
+		if res, err := ParseVMType(k); err == nil {
+			return res, nil
+		}
+	}
+
+	return 0, errors.New("invalid VMType")
 }
 
 // TODO: Handle if there are spaces or commas in the tap/bridge names
@@ -211,7 +231,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, strconv.Itoa(net.VLAN))
+	parts = append(parts, allocatedVLANs.PrintVLAN(net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)
@@ -283,6 +303,14 @@ func (vm *BaseVM) GetName() string {
 	return vm.Name
 }
 
+func (vm *BaseVM) GetNamespace() string {
+	return vm.Namespace
+}
+
+func (vm *BaseVM) GetHost() string {
+	return vm.Host
+}
+
 func (vm *BaseVM) GetUUID() string {
 	return vm.UUID
 }
@@ -319,6 +347,8 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
+	ccNode.UnregisterClient(vm.UUID)
+
 	return os.RemoveAll(vm.instancePath)
 }
 
@@ -442,6 +472,8 @@ func (vm *BaseVM) info(key string) (string, error) {
 		return strconv.Itoa(vm.ID), nil
 	case "name":
 		return vm.Name, nil
+	case "namespace":
+		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
 	case "type":
@@ -616,37 +648,10 @@ func vmNotPhotogenic(idOrName string) error {
 	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
 }
 
-// Get the VM info from all hosts in the mesh. Callers must specify whether
-// they already hold the cmdLock or not. Returns a map where each key is a
-// hostname and the value is the VMs for that host.
-func globalVMs(hasLock bool) map[string]VMs {
-	if !hasLock {
-		cmdLock.Lock()
-		defer cmdLock.Unlock()
-	}
+func vmNotKVM(idOrName string) error {
+	return fmt.Errorf("vm is not a KVM: %v", idOrName)
+}
 
-	res := map[string]VMs{}
-
-	cmd := minicli.MustCompile("vm info")
-	cmd.Record = false
-
-	cmds := makeCommandHosts(meshageNode.BroadcastRecipients(), cmd)
-	cmds = append(cmds, cmd) // add local node
-
-	for resps := range processCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if vms, ok := resp.Data.(VMs); ok {
-				res[resp.Host] = vms
-			} else {
-				log.Error("unknown data field in vm info")
-			}
-		}
-	}
-
-	return res
+func isVmNotFound(err string) bool {
+	return strings.HasPrefix(err, "vm not found: ")
 }

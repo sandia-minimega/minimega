@@ -59,25 +59,23 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	vlans := make(map[int]bool)
 
-	for host, vms := range globalVMs(true) {
-		for _, vm := range vms {
-			ip, err := vm.Info("ip")
-			ip6, err2 := vm.Info("ip6")
-			if err != nil || err2 != nil {
-				// Should never happen
-				log.Error("bad VM info for %v:%v", host, vm.GetID(), err)
-				continue
-			}
+	for _, vm := range GlobalVMs() {
+		ip, err := vm.Info("ip")
+		ip6, err2 := vm.Info("ip6")
+		if err != nil || err2 != nil {
+			// Should never happen
+			log.Error("bad VM info for %v:%v", vm.GetHost(), vm.GetID(), err)
+			continue
+		}
 
-			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.GetName(), vm.GetID(), ip, ip6)
-			color := stateToColor[vm.GetState()]
+		text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, vm.GetHost(), vm.GetName(), vm.GetID(), ip, ip6)
+		color := stateToColor[vm.GetState()]
 
-			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
+		fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
-			for _, net := range vm.Config().Networks {
-				fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
-				vlans[net.VLAN] = true
-			}
+		for _, net := range vm.Config().Networks {
+			fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
+			vlans[net.VLAN] = true
 		}
 	}
 

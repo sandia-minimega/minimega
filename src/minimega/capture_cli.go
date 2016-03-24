@@ -50,7 +50,9 @@ capture, use the delete commands:
 	capture pcap delete <id>
 
 To stop all captures of a particular kind, replace id with "all". To stop all
-capture of all types, use "clear capture".`,
+capture of all types, use "clear capture".
+
+Note: capture is not a namespace-aware command.`,
 		Patterns: []string{
 			"capture",
 

@@ -360,9 +360,22 @@ func (s *Server) route(m *Message) {
 	defer s.clientLock.Unlock()
 
 	if m.UUID == "" {
-		// all clients
+		// send commands to all clients
 		for _, c := range s.clients {
-			c.out <- m
+			// filter commands by namespace
+			ns := s.namespaces[c.UUID]
+			cmds := map[int]*Command{}
+			for k, cmd := range m.Commands {
+				if ns == "" || cmd.Filter.Namespace == ns {
+					cmds[k] = cmd
+				}
+			}
+
+			// clone message
+			m2 := *m
+			m2.Commands = cmds
+
+			c.out <- &m2
 		}
 	} else {
 		if c, ok := s.clients[m.UUID]; ok {
@@ -604,4 +617,18 @@ func (s *Server) DialSerial(path string) error {
 	}()
 
 	return nil
+}
+
+func (s *Server) RegisterClient(uuid, namespace string) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	s.namespaces[uuid] = namespace
+}
+
+func (s *Server) UnregisterClient(uuid string) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	delete(s.namespaces, uuid)
 }

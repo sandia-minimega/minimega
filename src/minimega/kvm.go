@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"qmp"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -69,6 +71,11 @@ type qemuOverride struct {
 var (
 	QemuOverrides      map[int]*qemuOverride
 	qemuOverrideIdChan chan int
+
+	KVMNetworkDrivers struct {
+		drivers []string
+		sync.Once
+	}
 )
 
 func init() {
@@ -399,6 +406,8 @@ func (vm *KvmVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
 	if vm.State != VM_QUIT {
+		ccNode.RegisterClient(vm.UUID, vm.Namespace)
+
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
@@ -817,4 +826,49 @@ func ParseQemuOverrides(input []string) []string {
 		ret = strings.Replace(ret, v.match, v.repl, -1)
 	}
 	return fieldsQuoteEscape("\"", ret)
+}
+
+func isNetworkDriver(driver string) bool {
+	KVMNetworkDrivers.Do(func() {
+		drivers := []string{}
+
+		cmd := exec.Command(process("qemu"), "-device", "help")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Error("unable to determine kvm network drivers -- %v", err)
+			return
+		}
+
+		var foundHeader bool
+
+		scanner := bufio.NewScanner(bytes.NewBuffer(out))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !foundHeader && strings.Contains(line, "Network devices:") {
+				foundHeader = true
+			} else if foundHeader && line == "" {
+				break
+			} else if foundHeader {
+				parts := strings.Split(line, " ")
+				driver := strings.Trim(parts[1], `",`)
+				drivers = append(drivers, driver)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Error("unable to determine kvm network drivers -- %v", err)
+			return
+		}
+
+		log.Debug("detected network drivers: %v", drivers)
+		KVMNetworkDrivers.drivers = drivers
+	})
+
+	for _, d := range KVMNetworkDrivers.drivers {
+		if d == driver {
+			return true
+		}
+	}
+
+	return false
 }

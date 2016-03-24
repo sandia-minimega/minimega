@@ -47,7 +47,9 @@ To delete a host tap, use the delete command and tap name from the tap list:
 
 To delete all host taps, use id all, or 'clear tap':
 
-	tap delete all`,
+	tap delete all
+
+Note: tap is not a namespace-aware command.`,
 		Patterns: []string{
 			"tap",
 			"tap <create,> <vlan>",
@@ -61,6 +63,13 @@ To delete all host taps, use id all, or 'clear tap':
 			"tap <delete,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
+		Suggest: func(val, prefix string) []string {
+			if val == "vlan" {
+				return suggestVLAN(prefix)
+			} else {
+				return nil
+			}
+		},
 	},
 	{ // clear tap
 		HelpShort: "reset tap state",
@@ -83,7 +92,9 @@ to add interface bar to bridge foo:
 
 To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 
-	bridge tunnel vxlan, mega_bridge 10.0.0.1`,
+	bridge tunnel vxlan, mega_bridge 10.0.0.1
+
+Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
 			"bridge trunk <bridge> <interface>",
@@ -100,9 +111,9 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan, err := strconv.Atoi(c.StringArgs["vlan"])
+		vlan, err := allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
 		if err != nil {
-			resp.Error = fmt.Sprintf("`%s` is not a valid VLAN", c.StringArgs["vlan"])
+			resp.Error = err.Error()
 			return resp
 		}
 
@@ -231,11 +242,11 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 				vlans[tap.lan] = true
 			}
 
-			vlans2 := []int{}
+			vlans2 := []string{}
 			for k, _ := range vlans {
-				vlans2 = append(vlans2, k)
+				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(k))
 			}
-			sort.Ints(vlans2)
+			sort.Strings(vlans2)
 
 			row := []string{
 				v.Name,

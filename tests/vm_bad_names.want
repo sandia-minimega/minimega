@@ -1,8 +1,8 @@
 ## vm launch kvm [0]
-E: `0` is an integer -- cannot use for vm name
+E: invalid vm name, `0` is an integer
 ## vm launch kvm all
-E: `all` is a reserved word -- cannot use for vm name
+E: invalid vm name, `all` is a reserved word
 ## vm launch kvm foo,[0]
-E: `0` is an integer -- cannot use for vm name
+E: invalid vm name, `0` is an integer
 ## vm launch kvm foo,all
-E: `all` is a reserved word -- cannot use for vm name
+E: invalid vm name, `all` is a reserved word

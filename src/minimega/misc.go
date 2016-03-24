@@ -20,13 +20,21 @@ import (
 	"os/exec"
 	"regexp"
 	"resize"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 )
 
 type errSlice []error
+
+// loggingMutex logs whenever it is locked or unlocked with the file and line
+// number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
+type loggingMutex struct {
+	sync.Mutex // embed
+}
 
 var validMACPrefix [][3]byte
 
@@ -44,6 +52,22 @@ func (errs errSlice) String() string {
 		}
 	}
 	return strings.Join(vals, "\n")
+}
+
+func (m *loggingMutex) Lock() {
+	_, file, line, _ := runtime.Caller(1)
+
+	log.Info("locking: %v:%v", file, line)
+	m.Mutex.Lock()
+	log.Info("locked: %v:%v", file, line)
+}
+
+func (m *loggingMutex) Unlock() {
+	_, file, line, _ := runtime.Caller(1)
+
+	log.Info("unlocking: %v:%v", file, line)
+	m.Mutex.Unlock()
+	log.Info("unlocked: %v:%v", file, line)
 }
 
 // generate a random mac address and return as a string
@@ -201,58 +225,24 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find the VM ID of a VM by name or ID on a remote
-// minimega node. It returns the ID of the VM on the remote host or an error,
-// which may also be an error communicating with the remote node.
-func findRemoteVM(host, vm string) (int, string, error) {
-	log.Debug("findRemoteVM: %v %v", host, vm)
+// findRemoteVM attempts to find a VM based on it's ID, name, or UUID on a
+// given host. Returns nil if no such VM exists.
+func findRemoteVM(host, s string) VM {
+	log.Debug("findRemoteVM: %v %v", host, s)
 
-	// check for our own host
+	var vms VMs
+
 	if host == hostname || host == Localhost {
-		log.Debugln("host is local node")
-		vm := vms.findVm(vm)
-		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.GetID(), vm.GetName())
-			return vm.GetID(), vm.GetName(), nil
-		}
+		vms = LocalVMs()
 	} else {
-		log.Debugln("remote host")
-
-		var cmdStr string
-		v, err := strconv.Atoi(vm)
-		if err == nil {
-			cmdStr = fmt.Sprintf(".filter id=%v .columns name,id .record false vm info", v)
-		} else {
-			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id .record false vm info", vm)
-		}
-
-		cmd := minicli.MustCompile(cmdStr)
-
-		remoteRespChan := make(chan minicli.Responses)
-		go func() {
-			meshageSend(cmd, host, remoteRespChan)
-			close(remoteRespChan)
-		}()
-
-		for resps := range remoteRespChan {
-			// Find a response that is not an error
-			for _, resp := range resps {
-				if resp.Error == "" && len(resp.Tabular) > 0 {
-					// Found it!
-					row := resp.Tabular[0] // should be name,id
-					name := row[0]
-					id, err := strconv.Atoi(row[1])
-					if err != nil {
-						log.Debug("malformed response: %#v", resp)
-					} else {
-						return id, name, nil
-					}
-				}
-			}
-		}
+		vms = HostVMs(host)
 	}
 
-	return 0, "", vmNotFound(vm)
+	if vms != nil {
+		return vms.findVm(s)
+	}
+
+	return nil
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking
@@ -263,13 +253,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 		if err != nil {
 			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
 		}
-	}
-}
-
-func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		resp := fn(c)
-		respChan <- minicli.Responses{resp}
 	}
 }
 
@@ -351,6 +334,22 @@ func writeOrDie(fpath, data string) {
 	}
 }
 
+// PermStrings creates a random permutation of the source slice using the
+// "inside-out" version of the Fisher-Yates algorithm.
+func PermStrings(source []string) []string {
+	res := make([]string, len(source))
+
+	for i := range source {
+		j := rand.Intn(i + 1)
+		if j != i {
+			res[i] = res[j]
+		}
+		res[j] = source[i]
+	}
+
+	return res
+}
+
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
 // bit of parsing, because the entry can be in a few forms:
@@ -378,7 +377,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		if isMac(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
-		} else if _, err := strconv.Atoi(f[0]); err == nil {
+		} else if isNetworkDriver(f[1]) {
 			// vlan, driver
 			v, d = f[0], f[1]
 		} else {
@@ -399,22 +398,22 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	case 4:
 		b, v, m, d = f[0], f[1], f[2], f[3]
 	default:
-		err = errors.New("malformed netspec")
-		return
+		return NetConfig{}, errors.New("malformed netspec")
+	}
+
+	if d != "" && !isNetworkDriver(d) {
+		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
 	}
 
 	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
-	// VLAN ID, with optional bridge
-	vlan, err := strconv.Atoi(v) // the vlan id
+	vlan, err := allocatedVLANs.ParseVLAN(v, true)
 	if err != nil {
-		err = errors.New("malformed netspec, vlan must be an integer")
-		return
+		return NetConfig{}, err
 	}
 
 	if m != "" && !isMac(m) {
-		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
+		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
 	}
 
 	// warn on valid but not allocated macs
@@ -429,12 +428,10 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	res = NetConfig{
+	return NetConfig{
 		VLAN:   vlan,
 		Bridge: b,
 		MAC:    strings.ToLower(m),
 		Driver: d,
-	}
-
-	return
+	}, nil
 }

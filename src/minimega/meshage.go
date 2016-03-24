@@ -120,10 +120,24 @@ func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Respons
 	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
 	if hosts == Wildcard {
-		// Broadcast command to all VMs
-		recipients = meshageNode.BroadcastRecipients()
+		if namespace != "" {
+			// Broadcast command to hosts in the same namespace
+			for _, host := range namespaces[namespace].hostSlice() {
+				if host == hostname {
+					// Log it and drop it
+					log.Warn("all includes local host but cannot mesh send yourself, dropping meshage")
+				} else {
+					recipients = append(recipients, host)
+				}
+			}
+		} else {
+			// Broadcast command to all hosts
+			recipients = meshageNode.BroadcastRecipients()
+		}
 	} else {
 		// Send to specified list of recipients
+		// TODO: Do we want to enforce that the recipients are in the currently
+		// active namespace, if there is one?
 		recipients, err = ranges.SplitList(hosts)
 	}
 

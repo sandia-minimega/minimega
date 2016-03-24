@@ -59,24 +59,24 @@ func init() {
 	vncKBPlaying = make(map[string]*vncKBPlayback)
 }
 
-func NewVNCClient(host, vm string) (*vncClient, error) {
+func NewVNCClient(host, idOrName string) (*vncClient, error) {
 	// Resolve localhost to the actual hostname
 	if host == Localhost {
 		host = hostname
 	}
 
-	vmID, vmName, err := findRemoteVM(host, vm)
-	if err != nil {
-		return nil, err
+	vm := findRemoteVM(host, idOrName)
+	if vm == nil {
+		return nil, vmNotFound(host + ":" + idOrName)
 	}
 
-	rhost := fmt.Sprintf("%v:%v", host, 5900+vmID)
+	rhost := fmt.Sprintf("%v:%v", host, 5900+vm.GetID())
 
 	c := &vncClient{
 		Rhost: rhost,
 		Host:  host,
-		Name:  vmName,
-		ID:    vmID,
+		Name:  vm.GetName(),
+		ID:    vm.GetID(),
 		done:  make(chan bool),
 	}
 

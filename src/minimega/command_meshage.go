@@ -89,7 +89,7 @@ vm info from nodes kn1 and kn2:
 
 You can use 'all' to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh send <vms or all> (command)",
+			"mesh send <clients or all> (command)",
 		},
 		Call: cliMeshageSend,
 	},
@@ -105,6 +105,14 @@ func meshageHandler() {
 			if err != nil {
 				log.Error("invalid command from mesh: `%s`", mCmd.Original)
 				return
+			}
+			cmd.SetSource(SourceMeshage)
+
+			// Copy the Record flag at each level of nested command
+			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
+				// could all be the post statement...
+				c.Record = c2.Record
+				c, c2 = c.Subcommand, c2.Subcommand
 			}
 
 			resps := []minicli.Responses{}
@@ -221,7 +229,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 			strconv.Itoa(nodes),
 			strconv.FormatUint(uint64(degree), 10),
 			strconv.Itoa(len(mesh[hostname])),
-			*f_namespace,
+			*f_nameshpace,
 			strconv.Itoa(*f_port),
 		},
 	}
@@ -247,5 +255,5 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c.Subcommand, c.StringArgs["vms"], respChan)
+	meshageSend(c.Subcommand, c.StringArgs["clients"], respChan)
 }

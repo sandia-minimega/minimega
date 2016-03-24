@@ -43,7 +43,7 @@ var (
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
-	f_namespace  = flag.String("namespace", "minimega", "meshage namespace for discovery")
+	f_nameshpace = flag.String("nameshpace", "minimega", "meshage namespace for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
@@ -208,7 +208,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	meshageInit(host, *f_namespace, uint(*f_degree), *f_port)
+	meshageInit(host, *f_nameshpace, uint(*f_degree), *f_port)
 
 	// start the cc service
 	ccStart()
@@ -240,6 +240,9 @@ func teardownf(format string, args ...interface{}) {
 }
 
 func teardown() {
+	// Clear namespace so that we hit all the VMs
+	namespace = ""
+
 	vncClear()
 	clearAllCaptures()
 	vms.kill(Wildcard)

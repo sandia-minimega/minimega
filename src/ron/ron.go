@@ -40,10 +40,11 @@ type Server struct {
 	commandCounterLock sync.Mutex
 	clients            map[string]*Client // map of active clients, each of which have a running handler
 	clientLock         sync.Mutex
-	in                 chan *Message // incoming message queue, consumed by the mux
-	path               string        // path for serving files
-	lastBroadcast      time.Time     // watchdog time of last command list broadcast
-	responses          chan *Client  // queue of incoming responses, consumed by the response processor
+	namespaces         map[string]string // map of uuid -> namespace
+	in                 chan *Message     // incoming message queue, consumed by the mux
+	path               string            // path for serving files
+	lastBroadcast      time.Time         // watchdog time of last command list broadcast
+	responses          chan *Client      // queue of incoming responses, consumed by the response processor
 }
 
 type Client struct {
@@ -58,12 +59,13 @@ type Client struct {
 	tunnel         *minitunnel.Tunnel
 
 	// client parameters
-	UUID     string
-	Hostname string
-	Arch     string
-	OS       string
-	IP       []string
-	MAC      []string
+	UUID      string
+	Hostname  string
+	Arch      string
+	OS        string
+	IP        []string
+	MAC       []string
+	Namespace string
 
 	Processes   map[int]*Process // list of processes backgrounded (cc background in minimega)
 	processLock sync.Mutex
@@ -103,6 +105,7 @@ func NewServer(port int, path string) (*Server, error) {
 		udsConns:      make(map[string]net.Listener),
 		commands:      make(map[int]*Command),
 		clients:       make(map[string]*Client),
+		namespaces:    make(map[string]string),
 		path:          path,
 		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),
