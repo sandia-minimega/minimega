@@ -142,9 +142,7 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 			namespace = name
 
 			// Run the subcommand and forward the responses
-			for resp := range minicli.ProcessCommand(c.Subcommand) {
-				respChan <- resp
-			}
+			forward(minicli.ProcessCommand(c.Subcommand), respChan)
 			return
 		}
 
@@ -331,6 +329,11 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 }
 
 func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
+	// Copy the active namespace to the local scope so that if it gets changed,
+	// we still use the namespace that was active at the time this was called
+	// for our goroutine.
+	namespace := namespace
+
 	ns := namespaces[namespace]
 
 	if len(ns.Hosts) == 0 {
