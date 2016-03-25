@@ -145,12 +145,6 @@ func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFun
 		// Just invoke the handler if there's no namespace specified or we
 		// received the command via meshage
 		if namespace == "" || !isUserSource(c.Source) {
-			// Ensure that we have finished creating all the vms launched in previous
-			// commands (possibly with noblock) before trying to apply the command.
-			// This prevents a race condition where a vm could be launched with noblock
-			// and then immediately used as the target of a start command.
-			vmLaunch.Wait()
-
 			respChan <- minicli.Responses{fn(c)}
 			return
 		}

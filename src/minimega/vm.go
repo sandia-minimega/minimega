@@ -33,8 +33,6 @@ var (
 	vmIDChan chan int   // channel of new VM IDs
 	vmLock   sync.Mutex // lock for synchronizing access to vms
 
-	vmLaunch sync.WaitGroup // waitgroup for noblock vms
-
 	vmConfig VMConfig // current vm config, updated by CLI
 
 	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
@@ -186,6 +184,10 @@ func NewVM(name string) *BaseVM {
 	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
+
+	// New VMs are returned pre-locked. This ensures that the first operation
+	// called on a new VM is Launch.
+	vm.lock.Lock()
 
 	return vm
 }

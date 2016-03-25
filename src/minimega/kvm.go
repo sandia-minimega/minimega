@@ -119,7 +119,6 @@ func NewKVM(name string) *KvmVM {
 
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
-	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	return vm.launch()
@@ -545,9 +544,6 @@ func (vm *KvmVM) launch() error {
 			killAck <- vm.ID
 		}
 	}()
-
-	// No errors.. ready to go!
-	vm.setState(VM_BUILDING)
 
 	return nil
 }

@@ -759,12 +759,8 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		wg.Wait()
 	}()
 
-	vmLaunch.Add(1)
-
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() string {
-		defer vmLaunch.Done()
-
 		errs := []error{}
 		for err := range errChan {
 			errs = append(errs, err)
@@ -788,6 +784,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 func cliVmFlush(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
+	// See VMs.flush for why we don't use LocalVMs
 	vms.flush()
 
 	return resp
