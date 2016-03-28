@@ -251,44 +251,48 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 func cliClearNamespace(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if name, ok := c.StringArgs["name"]; ok {
-		// Trying to delete a namespace
-		if ns, ok := namespaces[name]; !ok {
-			resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
-		} else {
-			// TODO: do we care about looking for VMs that are part of the
-			// namespace? When we delete it?
-
-			for _, stats := range ns.scheduleStats {
-				// TODO: We could kill the scheduler -- that wouldn't be too
-				// hard to do (add a kill channel and close it here). Easier to
-				// make the user wait, for now.
-				if stats.state != SchedulerCompleted {
-					resp.Error = "cannot kill namespace -- scheduler still running"
-					return resp
-				}
-			}
-
-			// Free up any VLANs associated with the namespace
-			allocatedVLANs.Delete(namespace + VLANAliasSep)
-
-			// If we're deleting the currently active namespace, we should get
-			// out of that namespace
-			if namespace == name {
-				namespace = ""
-			}
-
-			delete(namespaces, name)
-		}
-
+	name := c.StringArgs["name"]
+	if name == "" {
+		// Clearing the namespace global
+		namespace = ""
 		return resp
 	}
 
-	// Clearing the namespace global
-	namespace = ""
+	// Trying to delete a namespace
+	ns, exists := namespaces[name]
+	if !exists {
+		resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
+		return resp
+	}
+
+	// TODO: should we ensure that there are no VMs running in the namespace
+	// before we delete it?
+
+	for _, stats := range ns.scheduleStats {
+		// TODO: We could kill the scheduler -- that wouldn't be too hard to do
+		// (add a kill channel and close it here). Easier to make the user
+		// wait, for now.
+		if stats.state != SchedulerCompleted {
+			resp.Error = "cannot kill namespace -- scheduler still running"
+			return resp
+		}
+	}
+
+	// Free up any VLANs associated with the namespace
+	allocatedVLANs.Delete(namespace + VLANAliasSep)
+
+	// If we're deleting the currently active namespace, we should get
+	// out of that namespace
+	if namespace == name {
+		namespace = ""
+	}
+
+	delete(namespaces, name)
 	return resp
 }
 
+// namespaceQueue handles storing the current VM config to the namespace's
+// queuedVMs so that we can launch it in the future.
 func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	ns := namespaces[namespace]
 
@@ -328,12 +332,9 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	})
 }
 
+// namespaceLaunch runs the scheduler and launches VMs across the namespace.
+// Blocks until all the `vm launch ... noblock` commands are in-flight.
 func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
-	// Copy the active namespace to the local scope so that if it gets changed,
-	// we still use the namespace that was active at the time this was called
-	// for our goroutine.
-	namespace := namespace
-
 	ns := namespaces[namespace]
 
 	if len(ns.Hosts) == 0 {
@@ -359,112 +360,109 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 
 	ns.scheduleStats = append(ns.scheduleStats, stats)
 
+	// Result of vm launch commands
+	respChan := make(chan minicli.Responses)
+
+	var wg sync.WaitGroup
+
+	for host, queuedVMs := range assignment {
+		wg.Add(1)
+
+		go func(host string, queuedVMs []queuedVM) {
+			defer wg.Done()
+
+			for _, q := range queuedVMs {
+				namespaceHostLaunch(host, namespace, q, respChan)
+			}
+		}(host, queuedVMs)
+	}
+
 	go func() {
-		// Result of vm launch commands
-		respChan := make(chan minicli.Responses)
+		wg.Wait()
+		close(respChan)
+	}()
 
-		var wg sync.WaitGroup
-
-		for host, queuedVMs := range assignment {
-			wg.Add(1)
-
-			go func(host string, queuedVMs []queuedVM) {
-				defer wg.Done()
-
-				namespaceHostLaunch(host, namespace, queuedVMs, respChan)
-			}(host, queuedVMs)
-		}
-
-		go func() {
-			wg.Wait()
-			close(respChan)
-		}()
-
-		// Collect all the responses and log them
-		for resps := range respChan {
-			for _, resp := range resps {
-				stats.launched += 1
-				if resp.Error != "" {
-					stats.failures += 1
-					log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
-				} else if resp.Response != "" {
-					log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
-				}
+	// Collect all the responses and log them
+	for resps := range respChan {
+		for _, resp := range resps {
+			stats.launched += 1
+			if resp.Error != "" {
+				stats.failures += 1
+				log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
+			} else if resp.Response != "" {
+				log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
 			}
 		}
+	}
 
-		stats.end = time.Now()
-		stats.state = SchedulerCompleted
-	}()
+	stats.end = time.Now()
+	stats.state = SchedulerCompleted
+
 }
 
-func namespaceHostLaunch(host, ns string, queuedVMs []queuedVM, respChan chan minicli.Responses) {
-	for _, queued := range queuedVMs {
-		// Mesh send all the config commands
-		cmds := []string{"clear vm config"}
-		cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
+// namespaceHostLaunch launches a queuedVM on the specified host and namespace.
+// We blast a bunch of `vm config` commands at the host and then call `vm
+// launch ... noblock` if there are no errors. We assume that this is
+// serialized on a per-host basis -- it's fine to run multiple of these in
+// parallel, as long as they target different hosts.
+func namespaceHostLaunch(host, ns string, queued queuedVM, respChan chan minicli.Responses) {
+	// Mesh send all the config commands
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
 
-		switch queued.vmType {
-		case KVM:
-			cmds = append(cmds, saveConfig(kvmConfigFns, &queued.KVMConfig)...)
-		case CONTAINER:
-			cmds = append(cmds, saveConfig(containerConfigFns, &queued.ContainerConfig)...)
-		default:
-		}
+	switch queued.vmType {
+	case KVM:
+		cmds = append(cmds, saveConfig(kvmConfigFns, &queued.KVMConfig)...)
+	case CONTAINER:
+		cmds = append(cmds, saveConfig(containerConfigFns, &queued.ContainerConfig)...)
+	default:
+	}
 
-		// Channel for all the `vm config ...` responses
-		configChan := make(chan minicli.Responses)
+	// Run all the config commands on the local or remote node, sending all the
+	// responses to configChan.
+	configChan := make(chan minicli.Responses)
 
-		// TODO: Add .atomic built-in? Runs all the commands which are
-		// separated by -- and stop when .Error != "". Otherwise, we have to
-		// have this giant lock to make sure that the VM we configure is the VM
-		// we launch (assuming no one else is issuing commands to the same
-		// remote host).
-		cmdLock.Lock()
+	go func() {
+		defer close(configChan)
 
-		go func() {
-			defer close(configChan)
-
-			for _, cmd := range cmds {
-				cmd := minicli.MustCompile(cmd)
-				cmd.SetRecord(false)
-
-				if host == hostname {
-					forward(processCommands(cmd), configChan)
-				} else {
-					meshageSend(cmd, host, configChan)
-				}
-			}
-		}()
-
-		var abort bool
-
-		for resps := range configChan {
-			for _, resp := range resps {
-				if resp.Error != "" {
-					log.Error("config error, host %v -- %v", resp.Host, resp.Error)
-					abort = true
-				}
-			}
-		}
-
-		// Send the launch command
-		if !abort {
-			names := strings.Join(queued.names, ",")
-			log.Debug("launch vms on host %v -- %v", host, names)
-
-			cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", ns, queued.vmType, names)
+		for _, cmd := range cmds {
+			cmd := minicli.MustCompile(cmd)
 			cmd.SetRecord(false)
 
 			if host == hostname {
-				forward(processCommands(cmd), respChan)
+				forward(processCommands(cmd), configChan)
 			} else {
-				meshageSend(cmd, host, respChan)
+				meshageSend(cmd, host, configChan)
 			}
 		}
+	}()
 
-		// Unlock so that we can boot VMs on other hosts and handle inputs from
-		// the user.
-		cmdLock.Unlock()
+	var abort bool
+
+	// Read all the configChan responses, set abort if we find a single error.
+	for resps := range configChan {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Error("config error, host %v -- %v", resp.Host, resp.Error)
+				abort = true
+			}
+		}
+	}
+
+	if abort {
+		return
+	}
+
+	// Send the launch command
+	names := strings.Join(queued.names, ",")
+	log.Debug("launch vms on host %v -- %v", host, names)
+
+	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", ns, queued.vmType, names)
+	cmd.SetRecord(false)
+
+	if host == hostname {
+		forward(processCommands(cmd), respChan)
+	} else {
+		meshageSend(cmd, host, respChan)
 	}
 }

@@ -594,7 +594,6 @@ func NewContainer(name string) *ContainerVM {
 }
 
 func (vm *ContainerVM) Launch() error {
-	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	return vm.launch()
@@ -1078,9 +1077,6 @@ func (vm *ContainerVM) launch() error {
 			killAck <- vm.ID
 		}
 	}()
-
-	// No errors.. ready to go!
-	vm.setState(VM_BUILDING)
 
 	return nil
 }
