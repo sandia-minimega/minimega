@@ -407,7 +407,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
-	vlan, err := allocatedVLANs.ParseVLAN(v, true)
+	vlan, err := allocatedVLANs.ParseVLAN(namespace, v, true)
 	if err != nil {
 		return NetConfig{}, err
 	}

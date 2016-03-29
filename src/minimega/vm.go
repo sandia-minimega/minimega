@@ -233,7 +233,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, allocatedVLANs.PrintVLAN(net.VLAN))
+	parts = append(parts, allocatedVLANs.PrintVLAN(namespace, net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)

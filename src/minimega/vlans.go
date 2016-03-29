@@ -304,7 +304,7 @@ func (v *AllocatedVLANs) GetBlacklist() []int {
 // returned. Lastly, if none of the other cases are true and create is true, we
 // will allocate a new alias for v, in the current namespace. Returns an error
 // when create is false and v is not an integer or an alias.
-func (v *AllocatedVLANs) ParseVLAN(s string, create bool) (int, error) {
+func (v *AllocatedVLANs) ParseVLAN(namespace, s string, create bool) (int, error) {
 	v.Lock()
 	defer v.Unlock()
 
@@ -348,7 +348,7 @@ func (v *AllocatedVLANs) ParseVLAN(s string, create bool) (int, error) {
 
 // PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the
 // namespace prefix if it matches the currently active namespace.
-func (v *AllocatedVLANs) PrintVLAN(vlan int) string {
+func (v *AllocatedVLANs) PrintVLAN(namespace string, vlan int) string {
 	v.Lock()
 	defer v.Unlock()
 
