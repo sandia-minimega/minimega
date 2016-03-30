@@ -279,7 +279,7 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 	}
 
 	// Free up any VLANs associated with the namespace
-	allocatedVLANs.Delete(namespace + VLANAliasSep)
+	allocatedVLANs.Delete(namespace, "")
 
 	// If we're deleting the currently active namespace, we should get
 	// out of that namespace

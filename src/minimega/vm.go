@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
+	"vlans"
 )
 
 const (
@@ -400,7 +401,7 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	}
 
 	// Disconnect from the old bridge, if we were connected
-	if net.VLAN != DisconnectedVLAN {
+	if net.VLAN != vlans.DisconnectedVLAN {
 		oldBridge, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
@@ -436,7 +437,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	net := &vm.Networks[pos]
 
 	// Don't try to diconnect an interface that is already disconnected...
-	if net.VLAN == DisconnectedVLAN {
+	if net.VLAN == vlans.DisconnectedVLAN {
 		return nil
 	}
 
@@ -453,7 +454,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	}
 
 	net.Bridge = ""
-	net.VLAN = DisconnectedVLAN
+	net.VLAN = vlans.DisconnectedVLAN
 
 	return nil
 }
@@ -482,7 +483,7 @@ func (vm *BaseVM) info(key string) (string, error) {
 		return vm.Type.String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
-			if net.VLAN == DisconnectedVLAN {
+			if net.VLAN == vlans.DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
 				vals = append(vals, fmt.Sprintf("%v", net.VLAN))

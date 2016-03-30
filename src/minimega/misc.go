@@ -26,6 +26,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"vlans"
 )
 
 type errSlice []error
@@ -407,7 +408,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
 
-	vlan, err := allocatedVLANs.ParseVLAN(namespace, v, true)
+	vlan, err := lookupVLAN(v)
 	if err != nil {
 		return NetConfig{}, err
 	}
@@ -434,4 +435,43 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		MAC:    strings.ToLower(m),
 		Driver: d,
 	}, nil
+}
+
+// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
+// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
+// cluster.
+func lookupVLAN(alias string) (int, error) {
+	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	if err != vlans.ErrNotFound {
+		// nil or other error
+		return vlan, err
+	}
+
+	vlan, existed, err := allocatedVLANs.Allocate(namespace, alias)
+	if err != nil {
+		return 0, err
+	}
+
+	if existed {
+		return vlan, nil
+	}
+
+	cmd := minicli.MustCompilef("vlans add %q %v", alias, vlan)
+	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
+		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
+	}
+	respChan := make(chan minicli.Responses)
+
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Debug("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+				}
+			}
+		}
+	}()
+	go meshageSend(cmd, Wildcard, respChan)
+
+	return vlan, nil
 }

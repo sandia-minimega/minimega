@@ -111,8 +111,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		arg := c.StringArgs["vlan"]
-		vlan, err := allocatedVLANs.ParseVLAN(namespace, arg, true)
+		vlan, err := lookupVLAN(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp

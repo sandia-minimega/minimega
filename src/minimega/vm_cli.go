@@ -1007,8 +1007,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	} else {
 		vlan := 0
 
-		arg := c.StringArgs["vlan"]
-		vlan, err = allocatedVLANs.ParseVLAN(namespace, arg, true)
+		vlan, err := lookupVLAN(c.StringArgs["vlan"])
 		if err == nil {
 			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 		}

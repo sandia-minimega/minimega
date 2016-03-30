@@ -20,11 +20,7 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
-)
-
-const (
-	DisconnectedVLAN = -1
-	TrunkVLAN        = -2
+	"vlans"
 )
 
 const (
@@ -437,7 +433,7 @@ func (b *Bridge) TrunkAdd(iface string) error {
 	b.Lock()
 	defer b.Unlock()
 
-	err := ovsAddPort(b.Name, iface, TrunkVLAN, false)
+	err := ovsAddPort(b.Name, iface, vlans.TrunkVLAN, false)
 	if err == nil {
 		b.Trunk = append(b.Trunk, iface)
 	}
