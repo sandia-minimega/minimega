@@ -89,6 +89,8 @@ func (v *AllocatedVLANs) allocate(alias string) (int, error) {
 		}
 	}
 
+	log.Info("found range: %v", r)
+
 	// Find the next unallocated VLAN
 outer:
 	for {
@@ -135,7 +137,7 @@ func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
 	v.Lock()
 	defer v.Unlock()
 
-	log.Debug("adding VLAN alias %v => %v", alias, vlan)
+	log.Info("adding VLAN alias %v => %v", alias, vlan)
 
 	if _, ok := v.byAlias[alias]; ok {
 		return errors.New("alias already in use")
@@ -230,6 +232,8 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 	v.Lock()
 	defer v.Unlock()
 
+	log.Info("setting range for %v: [%v, %v)", prefix, min, max)
+
 	// Test for conflicts with other ranges
 	for prefix2, r := range v.ranges {
 		if prefix == prefix2 || prefix2 == "" {
@@ -284,6 +288,8 @@ func (v *AllocatedVLANs) Blacklist(vlan int) {
 // blacklist the VLAN. This should only be invoked if the caller has acquired
 // the lock for v.
 func (v *AllocatedVLANs) blacklist(vlan int) {
+	log.Info("blacklisting %v", vlan)
+
 	if alias, ok := v.byVLAN[vlan]; ok {
 		delete(v.byAlias, alias)
 	}
@@ -311,6 +317,8 @@ func (v *AllocatedVLANs) GetBlacklist() []int {
 func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
+
+	log.Info("parsing vlan: %v namespace: %v", s, namespace)
 
 	vlan, err := strconv.Atoi(s)
 	if err == nil {
