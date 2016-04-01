@@ -102,8 +102,6 @@ func httpTLSClient(protocol string) {
 	if *f_tlsVersion != "" {
 		var version uint16
 		switch *f_tlsVersion {
-		case "ssl3":
-			version = tls.VersionSSL30
 		case "tls1.0":
 			version = tls.VersionTLS10
 		case "tls1.1":
