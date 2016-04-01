@@ -37,7 +37,7 @@ var (
 	f_httpImageSize = flag.Int("httpimagesize", 3, "size of image, in megabytes, to serve in http/https pages")
 	f_httpTLSCert   = flag.String("httptlscert", "", "file containing public certificate for TLS")
 	f_httpTLSKey    = flag.String("httptlskey", "", "file containing private key for TLS")
-	f_tlsVersion		= flag.String("tlsversion", "", "Select an SSL/TLS version for the client: ssl3, tls1.0, tls1.1, tls1.2")
+	f_tlsVersion		= flag.String("tlsversion", "", "Select a TLS version for the client: tls1.0, tls1.1, tls1.2")
 	hosts           map[string]string
 	keys            []string
 )
