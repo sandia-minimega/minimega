@@ -99,6 +99,22 @@ func httpTLSClient(protocol string) {
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
+	if *f_tlsVersion != "" {
+		var version uint16
+		switch *f_tlsVersion {
+		case "ssl3":
+			version = tls.VersionSSL30
+		case "tls1.0":
+			version = tls.VersionTLS10
+		case "tls1.1":
+			version = tls.VersionTLS11
+		case "tls1.2":
+			version = tls.VersionTLS12
+		}
+		transport.TLSClientConfig.MinVersion = tls.VersionSSL30
+		transport.TLSClientConfig.MaxVersion = version
+	}
+
 	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
@@ -241,7 +257,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 			resp.Body.Close()
 			stop := time.Now().UnixNano()
 			log.Info("https %v %v %vns", client, file, stop-start)
-			httpTLSReportChan <- 1
+			//httpTLSReportChan <- 1
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
@@ -259,7 +275,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 			resp.Body.Close()
 			stop := time.Now().UnixNano()
 			log.Info("http %v %v %vns", client, file, stop-start)
-			httpReportChan <- 1
+			//httpReportChan <- 1
 		}
 	}
 }
@@ -349,6 +365,8 @@ func httpTLSServer(p string) {
 	if config.NextProtos == nil {
 		config.NextProtos = []string{"http/1.1"}
 	}
+	config.MinVersion = tls.VersionTLS10
+	config.MaxVersion = tls.VersionTLS12
 
 	var err error
 	config.Certificates = make([]tls.Certificate, 1)
