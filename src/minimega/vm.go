@@ -394,27 +394,27 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 
 	// Do this before disconnecting from the old bridge in case the new one was
 	// mistyped or invalid.
-	newBridge, err := getBridge(bridge)
+	dst, err := getBridge(bridge)
 	if err != nil {
 		return err
 	}
 
 	// Disconnect from the old bridge, if we were connected
 	if net.VLAN != DisconnectedVLAN {
-		oldBridge, err := getBridge(net.Bridge)
+		src, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
 
-		err = oldBridge.TapRemove(net.Tap)
-		if err != nil {
+		if err := src.RemoveTap(net.Tap); err != nil {
 			return err
 		}
+
+		src.ReapTaps()
 	}
 
 	// Connect to the new bridge
-	err = newBridge.TapAdd(net.Tap, vlan, false)
-	if err != nil {
+	if err := dst.AddTap(net.Tap, vlan, false); err != nil {
 		return err
 	}
 
@@ -442,13 +442,12 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 
 	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
 
-	b, err := getBridge(net.Bridge)
+	br, err := getBridge(net.Bridge)
 	if err != nil {
 		return err
 	}
 
-	err = b.TapRemove(net.Tap)
-	if err != nil {
+	if err := br.RemoveTap(net.Tap); err != nil {
 		return err
 	}
 

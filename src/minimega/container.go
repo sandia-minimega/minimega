@@ -917,15 +917,14 @@ func (vm *ContainerVM) launch() error {
 	if err == nil {
 		for i := range vm.Networks {
 			net := &vm.Networks[i]
-			var b *Bridge
 
-			b, err = getBridge(net.Bridge)
+			br, err := bridges.Get(net.Bridge)
 			if err != nil {
 				log.Error("get bridge: %v", err)
 				break
 			}
 
-			net.Tap, err = b.ContainerTapCreate(net.Tap, net.VLAN, vm.netns, net.MAC, i)
+			net.Tap, err = br.CreateContainerTap(net.Tap, vm.netns, net.MAC, net.VLAN, i)
 			if err != nil {
 				break
 			}
@@ -933,7 +932,7 @@ func (vm *ContainerVM) launch() error {
 			updates := make(chan ipmac.IP)
 			go vm.macSnooper(net, updates)
 
-			b.iml.AddMac(net.MAC, updates)
+			br.AddMac(net.MAC, updates)
 		}
 	}
 
@@ -1053,12 +1052,12 @@ func (vm *ContainerVM) launch() error {
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
-			b, err := getBridge(net.Bridge)
+			br, err := bridges.Get(net.Bridge)
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			} else {
-				b.iml.DelMac(net.MAC)
-				b.ContainerTapDestroy(net.VLAN, net.Tap)
+				br.DelMac(net.MAC)
+				br.DestroyTap(net.Tap)
 			}
 		}
 

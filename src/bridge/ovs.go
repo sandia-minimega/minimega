@@ -1,8 +1,8 @@
-// Copyright (2012) Sandia Corporation.
+// Copyright (2016) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
-package main
+package bridge
 
 import (
 	"bytes"
@@ -11,15 +11,19 @@ import (
 	log "minilog"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 var (
-	ErrAlreadyExists = errors.New("already exists")
-	ErrNoSuchPort    = errors.New("no such port")
+	errAlreadyExists = errors.New("already exists")
+	errNoSuchPort    = errors.New("no such port")
 )
 
-// ovsAddBridge creates a new OVS bridge. Returns whether the bridge was new or
-// not, or any error that occurred.
+// timeout for openvswitch commands.
+const ovsTimeout = time.Duration(5 * time.Second)
+
+// ovsAddBridge creates a new openvswitch bridge. Returns whether the bridge
+// was created or not, or any error that occurred.
 func ovsAddBridge(name string) (bool, error) {
 	args := []string{
 		"add-br",
@@ -27,16 +31,16 @@ func ovsAddBridge(name string) (bool, error) {
 	}
 
 	_, sErr, err := ovsCmdWrapper(args)
-	if err == ErrAlreadyExists {
+	if err == errAlreadyExists {
 		return false, nil
 	} else if err != nil {
-		return false, fmt.Errorf("ovsAddBridge: %v: %v", err, sErr)
+		return false, fmt.Errorf("add bridge failed: %v: %v", err, sErr)
 	}
 
 	return true, nil
 }
 
-// ovsDelBridge deletes a OVS bridge.
+// ovsDelBridge deletes a openvswitch bridge.
 func ovsDelBridge(name string) error {
 	args := []string{
 		"del-br",
@@ -44,21 +48,23 @@ func ovsDelBridge(name string) error {
 	}
 
 	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("ovsDelBridge: %v: %v", err, sErr)
+		return fmt.Errorf("delete bridge failed: %v: %v", err, sErr)
 	}
 
 	return nil
 }
 
-func ovsAddPort(bridge, tap string, lan int, host bool) error {
+// ovsAddPort adds a port to an openvswitch bridge. If the vlan is 0, it will
+// not be vlan-tagged.
+func ovsAddPort(bridge, tap string, vlan int, host bool) error {
 	args := []string{
 		"add-port",
 		bridge,
 		tap,
 	}
 
-	if lan != TrunkVLAN {
-		args = append(args, fmt.Sprintf("tag=%v", lan))
+	if vlan != 0 {
+		args = append(args, fmt.Sprintf("tag=%v", vlan))
 	}
 
 	if host {
@@ -69,15 +75,16 @@ func ovsAddPort(bridge, tap string, lan int, host bool) error {
 		args = append(args, "type=internal")
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err == ErrAlreadyExists {
-		return ErrAlreadyExists
+	if _, sErr, err := ovsCmdWrapper(args); err == errAlreadyExists {
+		return err
 	} else if err != nil {
-		return fmt.Errorf("ovsAddPort: %v: %v", err, sErr)
+		return fmt.Errorf("add port failed: %v: %v", err, sErr)
 	}
 
 	return nil
 }
 
+// ovsDelPort removes a port from an openvswitch bridge.
 func ovsDelPort(bridge, tap string) error {
 	args := []string{
 		"del-port",
@@ -87,54 +94,29 @@ func ovsDelPort(bridge, tap string) error {
 
 	_, sErr, err := ovsCmdWrapper(args)
 	if err != nil {
-		return fmt.Errorf("ovsDelPort: %v: %v", err, sErr)
+		return fmt.Errorf("remove port failed: %v: %v", err, sErr)
 	}
 
 	return nil
 }
 
-func ovsGetTaps() []string {
-	var tapList []string
-
-	args := []string{
-		"show",
-	}
-
-	sOut, _, _ := ovsCmdWrapper(args)
-
-	taps := strings.Split(sOut, "\n")
-
-	for _, t := range taps {
-		if strings.Contains(t, "Port") &&
-			strings.Contains(t, "mega_tap") {
-
-			name := strings.Split(t, "\"")
-			if len(name) > 1 {
-				tapList = append(tapList, name[1])
-			}
-		}
-	}
-
-	return tapList
-}
-
+// ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
+// error produced running the command. Commands are run with a timeout of
+// ovsTimeout.
 func ovsCmdWrapper(args []string) (string, string, error) {
-	ovsLock.Lock()
-	defer ovsLock.Unlock()
-
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
-	cmd := exec.Command(process("ovs"), args...)
+	cmd := exec.Command("ovs-vsctl", args...)
 	cmd.Stdout = &sOut
 	cmd.Stderr = &sErr
 	log.Debug("running ovs cmd: %v", cmd)
 
-	if err := cmdTimeout(cmd, OVS_TIMEOUT); err != nil {
+	if err := cmdTimeout(cmd, ovsTimeout); err != nil {
 		if strings.Contains(sErr.String(), "already exists") {
-			err = ErrAlreadyExists
+			err = errAlreadyExists
 		} else if strings.Contains(sErr.String(), "no port named") {
-			err = ErrNoSuchPort
+			err = errNoSuchPort
 		} else {
 			log.Error("openvswitch cmd failed: %v %v", cmd, sErr.String())
 		}
