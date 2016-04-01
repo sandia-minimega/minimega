@@ -59,7 +59,7 @@ func httpClient(protocol string) {
 		Proxy: http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
-				Timeout: 30 * time.Second,
+				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			return dialer.Dial(protocol, addr)
@@ -69,7 +69,7 @@ func httpClient(protocol string) {
 	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -91,7 +91,7 @@ func httpTLSClient(protocol string) {
 		Proxy:           http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
-				Timeout: 30 * time.Second,
+				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			return dialer.Dial(protocol, addr)
@@ -102,8 +102,6 @@ func httpTLSClient(protocol string) {
 	if *f_tlsVersion != "" {
 		var version uint16
 		switch *f_tlsVersion {
-		case "ssl3":
-			version = tls.VersionSSL30
 		case "tls1.0":
 			version = tls.VersionTLS10
 		case "tls1.1":
@@ -118,7 +116,7 @@ func httpTLSClient(protocol string) {
 	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	for {
