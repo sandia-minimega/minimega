@@ -8,15 +8,23 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"minicli"
 	log "minilog"
 	"os"
+	"path"
+	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"time"
 	"version"
 )
+
+// cpuProfileOut is the output file for the active CPU profile. This is created
+// by `debug cpu start ...` and closed by `debug cpu stop` and teardown.
+var cpuProfileOut io.WriteCloser
 
 var miscCLIHandlers = []minicli.Handler{
 	{ // quit
@@ -58,6 +66,9 @@ the file in manually except that it stops after the first error.`,
 		HelpShort: "display internal debug information",
 		Patterns: []string{
 			"debug",
+			"debug <memory,> <file>",
+			"debug <cpu,> <start,> <file>",
+			"debug <cpu,> <stop,>",
 		},
 		Call: wrapSimpleCLI(cliDebug),
 	},
@@ -179,6 +190,64 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 }
 
 func cliDebug(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	if c.BoolArgs["memory"] {
+		dst := c.StringArgs["file"]
+		if !filepath.IsAbs(dst) {
+			dst = path.Join(*f_iomBase, dst)
+		}
+
+		log.Info("writing memory profile to %v", dst)
+
+		f, err := os.Create(dst)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+		defer f.Close()
+
+		pprof.WriteHeapProfile(f)
+
+		return resp
+	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
+		if cpuProfileOut != nil {
+			resp.Error = "old CPU profile still running"
+			return resp
+		}
+
+		dst := c.StringArgs["file"]
+		if !filepath.IsAbs(dst) {
+			dst = path.Join(*f_iomBase, dst)
+		}
+
+		log.Info("writing cpu profile to %v", dst)
+
+		f, err := os.Create(dst)
+		if err != nil {
+			resp.Error = err.Error()
+			return resp
+		}
+		cpuProfileOut = f
+
+		pprof.StartCPUProfile(cpuProfileOut)
+
+		return resp
+	} else if c.BoolArgs["cpu"] && c.BoolArgs["stop"] {
+		if cpuProfileOut == nil {
+			resp.Error = "CPU profile is not running"
+			return resp
+		}
+
+		pprof.StopCPUProfile()
+		cpuProfileOut.Close()
+
+		cpuProfileOut = nil
+
+		return resp
+	}
+
+	// Otherwise, return information about the runtime environment
 	return &minicli.Response{
 		Host:   hostname,
 		Header: []string{"Go version", "Goroutines", "CGO calls"},
