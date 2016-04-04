@@ -20,7 +20,7 @@ const (
 
 const BlacklistedVLAN = "BLACKLISTED"
 const AliasSep = "//"
-const VLANStart, VLANEnd = 2, 4096
+const VLANStart, VLANEnd = 101, 4096
 
 var ErrNotFound = errors.New("VLAN not found")
 var ErrOutOfVLANs = errors.New("out of VLANs")
@@ -240,7 +240,7 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 			continue
 		}
 
-		if min <= r.Max && r.Min <= max {
+		if min < r.Max && r.Min <= max {
 			return fmt.Errorf("range overlaps with another namespace: %v", prefix2)
 		}
 	}
