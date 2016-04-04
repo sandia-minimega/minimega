@@ -90,6 +90,9 @@ type Namespace struct {
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
+
+	// Names of host taps associated with this namespace
+	Taps map[string]bool
 }
 
 var namespace string
@@ -122,6 +125,7 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 			ns := Namespace{
 				Name:     name,
 				Hosts:    map[string]bool{},
+				Taps:     map[string]bool{},
 				vmIDChan: makeIDChan(),
 			}
 
@@ -274,6 +278,14 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 		// wait, for now.
 		if stats.state != SchedulerCompleted {
 			resp.Error = "cannot kill namespace -- scheduler still running"
+			return resp
+		}
+	}
+
+	// Delete any Taps associated with the namespace
+	for tap := range ns.Taps {
+		if err := hostTapDelete(tap); err != nil {
+			resp.Error = err.Error()
 			return resp
 		}
 	}

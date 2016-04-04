@@ -135,11 +135,37 @@ func hostTapList(resp *minicli.Response) {
 	resp.Header = []string{"bridge", "tap", "vlan"}
 	resp.Tabular = [][]string{}
 
+	// no namespace active => add an extra column
+	if namespace == "" {
+		resp.Header = append(resp.Header, "namespace")
+	}
+
 	// find all the host taps first
 	for _, tap := range bridges.HostTaps() {
-		resp.Tabular = append(resp.Tabular, []string{
+		// skip taps that don't belong to the active namespace
+		if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
+			continue
+		}
+
+		row := []string{
 			tap.Bridge, tap.Name, allocatedVLANs.PrintVLAN(tap.VLAN),
-		})
+		}
+
+		// no namespace active => find namespace tap belongs to so that we can
+		// populate that column
+		if namespace == "" {
+			v := ""
+			for _, ns := range namespaces {
+				if ns.Taps[tap.Name] {
+					v = ns.Name
+					break
+				}
+			}
+
+			row = append(row, v)
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
 	}
 }
 
@@ -152,11 +178,25 @@ func hostTapDelete(s string) error {
 			return err
 		}
 
-		return br.DestroyTap(t.Name)
+		if err := br.DestroyTap(t.Name); err != nil {
+			return err
+		}
+
+		// update the host taps for the namespace
+		if namespace != "" {
+			delete(namespaces[namespace].Taps, t.Name)
+		}
+
+		return nil
 	}
 
 	if s == Wildcard {
 		for _, tap := range bridges.HostTaps() {
+			// skip taps that don't belong to the active namespace
+			if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
+				continue
+			}
+
 			if err := delTap(tap); err != nil {
 				return err
 			}
@@ -170,6 +210,8 @@ func hostTapDelete(s string) error {
 		return err
 	} else if !tap.Host {
 		return errors.New("not a host tap")
+	} else if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
+		return errors.New("not a host tap in active namespace")
 	}
 
 	return delTap(tap)

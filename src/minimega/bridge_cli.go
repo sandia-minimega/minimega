@@ -50,7 +50,10 @@ To delete all host taps, use id all, or 'clear tap':
 
 	tap delete all
 
-Note: tap is not a namespace-aware command.`,
+Note: taps created while a namespace is active belong to that namespace and
+will only be listed when that namespace is active (or no namespace is active).
+Similarly, delete only applies to the taps in the active namespace. Unlike the
+"vlans" API, taps with the same name cannot exist in different namespaces.`,
 		Patterns: []string{
 			"tap",
 			"tap <create,> <vlan>",
@@ -147,6 +150,10 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			}
 		} else {
 			// Success!
+			if namespace != "" {
+				namespaces[namespace].Taps[tap] = true
+			}
+
 			resp.Response = tap
 		}
 
