@@ -103,6 +103,33 @@ func bridgeInfo() string {
 	return o.String()
 }
 
+// hostTapCreate creates a host tap based on the supplied arguments.
+func hostTapCreate(b, tap, v string) (string, error) {
+	if b == "" {
+		b = DefaultBridge
+	}
+
+	if isReserved(b) {
+		return "", fmt.Errorf("`%s` is a reserved word -- cannot use for bridge name", b)
+	}
+
+	if isReserved(tap) {
+		return "", fmt.Errorf("`%s` is a reserved word -- cannot use for tap name", tap)
+	}
+
+	vlan, err := allocatedVLANs.ParseVLAN(v, true)
+	if err != nil {
+		return "", err
+	}
+
+	br, err := getBridge(b)
+	if err != nil {
+		return "", err
+	}
+
+	return br.CreateTap(tap, vlan, true)
+}
+
 // hostTapList populates resp with information about all the host taps.
 func hostTapList(resp *minicli.Response) {
 	resp.Header = []string{"bridge", "tap", "vlan"}

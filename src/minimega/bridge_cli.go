@@ -11,7 +11,6 @@ import (
 	log "minilog"
 	"sort"
 	"strconv"
-	"strings"
 )
 
 var bridgeCLIHandlers = []minicli.Handler{
@@ -99,10 +98,10 @@ To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For exam
 Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
-			"bridge trunk <bridge> <interface>",
-			"bridge notrunk <bridge> <interface>",
-			"bridge tunnel <vxlan,gre> <bridge> <remote ip>",
-			"bridge notunnel <bridge> <interface>",
+			"bridge <trunk,> <bridge> <interface>",
+			"bridge <notrunk,> <bridge> <interface>",
+			"bridge <tunnel,> <vxlan,gre> <bridge> <remote ip>",
+			"bridge <notunnel,> <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
 	},
@@ -113,35 +112,9 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan, err := allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+		b := c.StringArgs["bridge"]
 
-		bridge := c.StringArgs["bridge"]
-		if bridge == "" {
-			bridge = DefaultBridge
-		}
-
-		if isReserved(bridge) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for bridge name", bridge)
-			return resp
-		}
-
-		tap := c.StringArgs["tap"]
-		if isReserved(tap) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for tap name", tap)
-			return resp
-		}
-
-		b, err := getBridge(bridge)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-
-		tap, err = b.CreateTap(tap, vlan, true)
+		tap, err := hostTapCreate(b, c.StringArgs["tap"], c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
@@ -166,26 +139,28 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 			}
 		}
 
-		// One of the above cases failed, try to clean up the tap
 		if resp.Error != "" {
-			if err := b.DestroyTap(tap); err != nil {
+			// One of the above cases failed, try to clean up the tap
+			if err := hostTapDelete(tap); err != nil {
 				// Welp, we're boned
 				log.Error("zombie tap -- %v %v", tap, err)
 			}
-
-			return resp
+		} else {
+			// Success!
+			resp.Response = tap
 		}
 
-		resp.Response = tap
+		return resp
 	} else if c.BoolArgs["delete"] {
-		err := hostTapDelete(c.StringArgs["id"])
-		if err != nil {
+		if err := hostTapDelete(c.StringArgs["id"]); err != nil {
 			resp.Error = err.Error()
 		}
-	} else {
-		// Must be the list command
-		hostTapList(resp)
+
+		return resp
 	}
+
+	// Must be the list command
+	hostTapList(resp)
 
 	return resp
 }
@@ -215,18 +190,18 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	if strings.HasPrefix(c.Original, "bridge notrunk") {
-		err = br.RemoveTrunk(iface)
-	} else if strings.HasPrefix(c.Original, "bridge trunk") {
+	if c.BoolArgs["trunk"] {
 		err = br.AddTrunk(iface)
-	} else if strings.HasPrefix(c.Original, "bridge tunnel") {
+	} else if c.BoolArgs["notrunk"] {
+		err = br.RemoveTrunk(iface)
+	} else if c.BoolArgs["tunnel"] {
 		t := bridge.TunnelVXLAN
 		if c.BoolArgs["gre"] {
 			t = bridge.TunnelGRE
 		}
 
 		err = br.AddTunnel(t, remoteIP)
-	} else if strings.HasPrefix(c.Original, "bridge notunnel") {
+	} else if c.BoolArgs["notunnel"] {
 		err = br.RemoveTunnel(iface)
 	} else {
 		resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANs", "Trunk ports", "Tunnels"}
