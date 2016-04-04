@@ -6,7 +6,7 @@ minitest_tap0
 bridge   | tap           | vlan
 minitest | minitest_tap0 | 10
 ## tap create 10 bridge minitest name minitest_tap0
-E: tap is already connected to bridge: minitest minitest_tap0
+E: tap already on bridge
 
 ## # Create another tap with a static IP
 ## tap create 10 bridge minitest ip 192.168.100.1 minitest_tap1
