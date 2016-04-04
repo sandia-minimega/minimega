@@ -170,7 +170,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 		if resp.Error != "" {
 			if err := b.DestroyTap(tap); err != nil {
 				// Welp, we're boned
-				log.Error("defunct tap -- %v %v", tap, err)
+				log.Error("zombie tap -- %v %v", tap, err)
 			}
 
 			return resp

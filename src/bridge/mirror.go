@@ -49,8 +49,16 @@ func (b *Bridge) CreateMirror() (string, error) {
 	}
 
 	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+		// Clean up the tap we just created
+		if err := destroyTap(tap); err != nil {
+			// Welp, we're boned
+			log.Error("zombie tap -- %v %v", tap, err)
+		}
+
 		return "", fmt.Errorf("add mirror failed: %v: %v", err, sErr)
 	}
+
+	b.mirror = tap
 
 	return tap, nil
 }

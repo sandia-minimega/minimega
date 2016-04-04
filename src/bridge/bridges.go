@@ -73,7 +73,7 @@ func (b Bridges) newBridge(name string) error {
 	if err := upInterface(br.Name, false); err != nil {
 		if err := ovsDelBridge(br.Name); err != nil {
 			// Welp, we're boned
-			log.Error("defunct bridge -- %v %v", br.Name, err)
+			log.Error("zombie bridge -- %v %v", br.Name, err)
 		}
 
 		return err

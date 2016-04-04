@@ -46,7 +46,7 @@ func (b *Bridge) createTap(t string, lan int, host bool) (tap string, err error)
 		if err != nil && !existed {
 			if err := destroyTap(tap); err != nil {
 				// Welp, we're boned
-				log.Error("defunct tap -- %v %v", tap, err)
+				log.Error("zombie tap -- %v %v", tap, err)
 			}
 			tap = ""
 		}

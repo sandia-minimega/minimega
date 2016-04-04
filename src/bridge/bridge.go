@@ -166,3 +166,12 @@ func (b *Bridge) reapTaps() error {
 
 	return nil
 }
+
+// DestroyBridge deletes an `unmanaged` bridge. This can be used when cleaning
+// up from a crash. See `Bride.Destroy` for managed bridges.
+func DestroyBridge(name string) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	return ovsDelBridge(name)
+}
