@@ -189,7 +189,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if screenshot != nil {
-		if (do_encode) {
+		if do_encode {
 			base64string := "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 			w.Write([]byte(base64string))
 		} else {

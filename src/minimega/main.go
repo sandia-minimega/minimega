@@ -17,6 +17,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -261,6 +262,10 @@ func teardown() {
 	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
 	if err != nil {
 		log.Fatalln(err)
+	}
+	if cpuProfileOut != nil {
+		pprof.StopCPUProfile()
+		cpuProfileOut.Close()
 	}
 	os.Exit(0)
 }

@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -212,9 +211,9 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 func diskInjectCleanup(mntDir, nbdPath string) {
 	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
 
-	err := syscall.Unmount(mntDir, 0)
+	out, err := processWrapper("umount", mntDir)
 	if err != nil {
-		log.Error("injectCleanup: %v", err)
+		log.Error("injectCleanup: %v, %v", out, err)
 	}
 
 	if err := nbd.DisconnectDevice(nbdPath); err != nil {
