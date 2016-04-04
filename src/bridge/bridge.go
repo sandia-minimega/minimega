@@ -135,7 +135,7 @@ func (b *Bridge) ReapTaps() error {
 //
 // You can check yourself with `getconf ARG_MAX` or `xargs --show-limits`
 func (b *Bridge) reapTaps() error {
-	log.Info("reaping taps on bridge: %v", b.Name)
+	log.Debug("reaping taps on bridge: %v", b.Name)
 
 	var args []string
 
