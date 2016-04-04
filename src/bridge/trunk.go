@@ -33,7 +33,7 @@ func (b *Bridge) RemoveTrunk(iface string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.removeTunnel(iface)
+	return b.removeTrunk(iface)
 }
 
 func (b *Bridge) removeTrunk(iface string) error {

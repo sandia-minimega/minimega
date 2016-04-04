@@ -58,6 +58,8 @@ func (b Bridges) newBridge(name string) error {
 	br := &Bridge{
 		Name:     name,
 		taps:     make(map[string]*Tap),
+		trunks:   make(map[string]bool),
+		tunnels:  make(map[string]bool),
 		nameChan: b.nameChan,
 	}
 
