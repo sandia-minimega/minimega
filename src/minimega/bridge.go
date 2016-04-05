@@ -23,7 +23,9 @@ import (
 )
 
 const (
-	TAP_REAP_RATE = time.Second
+	DisconnectedVLAN = -1
+	TrunkVLAN        = -2
+	TAP_REAP_RATE    = time.Second
 )
 
 // Bridge represents a bridge on the host and the Taps connected to it.

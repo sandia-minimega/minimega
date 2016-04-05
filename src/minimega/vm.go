@@ -28,11 +28,6 @@ const (
 	QMP_CONNECT_DELAY     = 100
 )
 
-const (
-	DisconnectedVLAN = -1
-	TrunkVLAN        = -2
-)
-
 var (
 	killAck  chan int   // channel that all VMs ack on when killed
 	vmIDChan chan int   // channel of new VM IDs

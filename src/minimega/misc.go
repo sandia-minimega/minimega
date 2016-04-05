@@ -447,12 +447,12 @@ func lookupVLAN(alias string) (int, error) {
 		return vlan, err
 	}
 
-	vlan, existed, err := allocatedVLANs.Allocate(namespace, alias)
+	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
 	if err != nil {
 		return 0, err
 	}
 
-	if existed {
+	if !created {
 		return vlan, nil
 	}
 
