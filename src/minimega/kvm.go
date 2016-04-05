@@ -23,7 +23,6 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
-	"vlans"
 )
 
 const (
@@ -134,7 +133,7 @@ func (vm *KvmVM) Flush() error {
 	for _, net := range vm.Networks {
 		// Handle already disconnected taps differently since they aren't
 		// assigned to any bridges.
-		if net.VLAN == vlans.DisconnectedVLAN {
+		if net.VLAN == DisconnectedVLAN {
 			if err := delTap(net.Tap); err != nil {
 				log.Error("leaked tap %v: %v", net.Tap, err)
 			}

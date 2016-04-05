@@ -13,16 +13,12 @@ import (
 	"sync"
 )
 
-const (
-	DisconnectedVLAN = -1
-	TrunkVLAN        = -2
-)
-
 const BlacklistedVLAN = "BLACKLISTED"
 const AliasSep = "//"
 const VLANStart, VLANEnd = 101, 4096
 
-var ErrNotFound = errors.New("VLAN not found")
+var ErrUnknownVLAN = errors.New("unknown VLAN")
+var ErrUnknownAlias = errors.New("unknown alias")
 var ErrOutOfVLANs = errors.New("out of VLANs")
 
 type Range struct {
@@ -55,24 +51,24 @@ func NewAllocatedVLANs() *AllocatedVLANs {
 
 // Allocate looks up the VLAN for the provided alias. If one has not already
 // been assigned, it will allocate the next available VLAN. Returns the VLAN
-// and flag for whether the alias already existed or not.
+// and flag for whether the alias was created or not.
 func (v *AllocatedVLANs) Allocate(namespace, s string) (int, bool, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	// Prepend active namespace if it doesn't look like the user is trying to
-	// supply a namespace already.
+	// Prepend the namespace if the alias doesn't look like it contains a
+	// namespace already.
 	if !strings.Contains(s, AliasSep) {
 		s = namespace + AliasSep + s
 	}
 
 	if vlan, ok := v.byAlias[s]; ok {
-		return vlan, true, nil
+		return vlan, false, nil
 	}
 
 	// Not assigned, allocate a new VLAN
 	vlan, err := v.allocate(s)
-	return vlan, false, err
+	return vlan, true, err
 }
 
 // allocate a VLAN for the alias. This should only be invoked if the caller has
@@ -152,27 +148,29 @@ func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
 	return nil
 }
 
-// GetVLAN returns the alias for a given VLAN or DisconnectedVLAN if it has not
-// been assigned an alias.
-func (v *AllocatedVLANs) GetVLAN(alias string) int {
+// GetVLAN returns the alias for a given VLAN or ErrUnknownVLAN.
+func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
 
 	if vlan, ok := v.byAlias[alias]; ok {
-		return vlan
+		return vlan, nil
 	}
 
-	return DisconnectedVLAN
+	return 0, ErrUnknownVLAN
 }
 
-// GetAlias returns the alias for a given VLAN or the empty string if it has
-// not been assigned an alias. Note that previously Blacklist'ed VLANs will
-// return the const BlacklistedVLAN.
-func (v *AllocatedVLANs) GetAlias(vlan int) string {
+// GetAlias returns the alias for a given VLAN or ErrUnknownAlias. Note that
+// previously Blacklisted VLANs will return the const BlacklistedVLAN.
+func (v *AllocatedVLANs) GetAlias(vlan int) (string, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	return v.byVLAN[vlan]
+	if alias, ok := v.byVLAN[vlan]; ok {
+		return alias, nil
+	}
+
+	return "", ErrUnknownAlias
 }
 
 // GetAliases returns a list of aliases with the given prefix.
@@ -313,7 +311,7 @@ func (v *AllocatedVLANs) GetBlacklist() []int {
 
 // ParseVLAN parses s and returns a VLAN. If s can be parsed as an integer, the
 // resulting integer is returned. If s matches an existing alias, that VLAN is
-// returned. Otherwise, returns ErrNotFound.
+// returned. Otherwise, returns ErrUnknownVLAN.
 func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
@@ -351,7 +349,7 @@ func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 		return vlan, nil
 	}
 
-	return 0, ErrNotFound
+	return 0, ErrUnknownVLAN
 }
 
 // PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the

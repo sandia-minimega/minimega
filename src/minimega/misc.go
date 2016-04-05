@@ -442,7 +442,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // cluster.
 func lookupVLAN(alias string) (int, error) {
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
-	if err != vlans.ErrNotFound {
+	if err != vlans.ErrUnknownVLAN {
 		// nil or other error
 		return vlan, err
 	}

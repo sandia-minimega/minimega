@@ -13,13 +13,13 @@ func TestAllocate(t *testing.T) {
 	v := NewAllocatedVLANs()
 
 	for i := 0; i < 10; i++ {
-		want, existed, _ := v.Allocate("", strconv.Itoa(i))
-		if existed {
+		want, created, _ := v.Allocate("", strconv.Itoa(i))
+		if !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 
-		got, existed, _ := v.Allocate("", strconv.Itoa(i))
-		if !existed {
+		got, created, _ := v.Allocate("", strconv.Itoa(i))
+		if created {
 			t.Errorf("VLAN doesn't exist: %v", i)
 		}
 
@@ -33,13 +33,13 @@ func TestAllocateNamespace(t *testing.T) {
 	v := NewAllocatedVLANs()
 
 	for i := 0; i < 10; i++ {
-		got1, existed, _ := v.Allocate("foo", strconv.Itoa(i))
-		if existed {
+		got1, created, _ := v.Allocate("foo", strconv.Itoa(i))
+		if !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 
-		got2, existed, _ := v.Allocate("bar", strconv.Itoa(i))
-		if existed {
+		got2, created, _ := v.Allocate("bar", strconv.Itoa(i))
+		if !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 
@@ -71,13 +71,13 @@ func TestAllocateDeleteAllocate(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		alias := strconv.Itoa(i)
 
-		if _, existed, _ := v.Allocate("", alias); existed {
+		if _, created, _ := v.Allocate("", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 
 		v.Delete("", alias)
 
-		if _, existed, _ := v.Allocate("", alias); existed {
+		if _, created, _ := v.Allocate("", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 	}
@@ -89,10 +89,10 @@ func TestAllocateDeleteAllocateNamespace(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		alias := strconv.Itoa(i)
 
-		if _, existed, _ := v.Allocate("foo", alias); existed {
+		if _, created, _ := v.Allocate("foo", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
-		if _, existed, _ := v.Allocate("bar", alias); existed {
+		if _, created, _ := v.Allocate("bar", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 	}
@@ -105,10 +105,10 @@ func TestAllocateDeleteAllocateNamespace(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		alias := strconv.Itoa(i)
 
-		if _, existed, _ := v.Allocate("foo", alias); existed {
+		if _, created, _ := v.Allocate("foo", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		}
-		if _, existed, _ := v.Allocate("bar", alias); !existed {
+		if _, created, _ := v.Allocate("bar", alias); created {
 			t.Errorf("VLAN didn't exist: %v", i)
 		}
 	}
@@ -122,7 +122,7 @@ func TestAllocateRange(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		alias := strconv.Itoa(i)
 
-		if v, existed, _ := v.Allocate("", alias); existed {
+		if v, created, _ := v.Allocate("", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		} else if v < 0 || v >= 100 {
 			t.Errorf("VLAN outside of specified bounds")
@@ -139,13 +139,13 @@ func TestAllocateRangeNamespace(t *testing.T) {
 	for i := 0; i < 100; i++ {
 		alias := strconv.Itoa(i)
 
-		if v, existed, _ := v.Allocate("foo", alias); existed {
+		if v, created, _ := v.Allocate("foo", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		} else if v < 0 || v >= 100 {
 			t.Errorf("VLAN outside of specified bounds")
 		}
 
-		if v, existed, _ := v.Allocate("bar", alias); existed {
+		if v, created, _ := v.Allocate("bar", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
 		} else if v < 100 || v >= 200 {
 			t.Errorf("VLAN outside of specified bounds")

@@ -19,7 +19,6 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
-	"vlans"
 )
 
 const (
@@ -27,6 +26,11 @@ const (
 	VM_NET_DRIVER_DEFAULT = "e1000"
 	QMP_CONNECT_RETRY     = 50
 	QMP_CONNECT_DELAY     = 100
+)
+
+const (
+	DisconnectedVLAN = -1
+	TrunkVLAN        = -2
 )
 
 var (
@@ -401,7 +405,7 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	}
 
 	// Disconnect from the old bridge, if we were connected
-	if net.VLAN != vlans.DisconnectedVLAN {
+	if net.VLAN != DisconnectedVLAN {
 		oldBridge, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
@@ -437,7 +441,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	net := &vm.Networks[pos]
 
 	// Don't try to diconnect an interface that is already disconnected...
-	if net.VLAN == vlans.DisconnectedVLAN {
+	if net.VLAN == DisconnectedVLAN {
 		return nil
 	}
 
@@ -454,7 +458,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	}
 
 	net.Bridge = ""
-	net.VLAN = vlans.DisconnectedVLAN
+	net.VLAN = DisconnectedVLAN
 
 	return nil
 }
@@ -483,7 +487,7 @@ func (vm *BaseVM) info(key string) (string, error) {
 		return vm.Type.String(), nil
 	case "vlan":
 		for _, net := range vm.Networks {
-			if net.VLAN == vlans.DisconnectedVLAN {
+			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
 				vals = append(vals, fmt.Sprintf("%v", net.VLAN))

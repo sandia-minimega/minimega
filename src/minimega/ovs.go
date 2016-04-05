@@ -11,7 +11,6 @@ import (
 	log "minilog"
 	"os/exec"
 	"strings"
-	"vlans"
 )
 
 var (
@@ -58,7 +57,7 @@ func ovsAddPort(bridge, tap string, lan int, host bool) error {
 		tap,
 	}
 
-	if lan != vlans.TrunkVLAN {
+	if lan != TrunkVLAN {
 		args = append(args, fmt.Sprintf("tag=%v", lan))
 	}
 
