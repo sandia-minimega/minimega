@@ -35,7 +35,7 @@ func schedule(namespace string) (*scheduleStat, map[string][]queuedVM) {
 		// Replace empty VM names with generic name
 		for i, name := range queued.names {
 			if name == "" {
-				queued.names[i] = fmt.Sprintf("vm-%v-%v", namespace, <-ns.vmIDChan)
+				queued.names[i] = fmt.Sprintf("vm-%v-%v", namespace, ns.vmID.Next())
 			}
 		}
 

@@ -97,6 +97,16 @@ func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc 
 	}
 }
 
+// errResp creates a minicli.Responses from a single error.
+func errResp(err error) minicli.Responses {
+	resp := &minicli.Response{
+		Host:  hostname,
+		Error: err.Error(),
+	}
+
+	return minicli.Responses{resp}
+}
+
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
@@ -217,16 +227,9 @@ func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
 			// receive from this channel until processCommands returns and we
 			// don't want to create a deadlock.
 			go func() {
-				out <- minicli.Responses{
-					&minicli.Response{
-						Host:  hostname,
-						Error: err.Error(),
-					},
-				}
-
+				out <- errResp(err)
 				close(out)
 			}()
-
 			return out
 		}
 	}

@@ -29,9 +29,9 @@ const (
 )
 
 var (
-	killAck  chan int   // channel that all VMs ack on when killed
-	vmIDChan chan int   // channel of new VM IDs
-	vmLock   sync.Mutex // lock for synchronizing access to vms
+	killAck chan int   // channel that all VMs ack on when killed
+	vmID    *Counter   // channel of new VM IDs
+	vmLock  sync.Mutex // lock for synchronizing access to vms
 
 	vmConfig VMConfig // current vm config, updated by CLI
 
@@ -145,7 +145,7 @@ var vmMasks = []string{
 func init() {
 	killAck = make(chan int)
 
-	vmIDChan = makeIDChan()
+	vmID = NewCounter()
 
 	// Reset everything to default
 	for _, fns := range baseConfigFns {
@@ -164,7 +164,7 @@ func NewVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
-	vm.ID = <-vmIDChan
+	vm.ID = vmID.Next()
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {

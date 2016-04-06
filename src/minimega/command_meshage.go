@@ -255,5 +255,11 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c.Subcommand, c.StringArgs["clients"], respChan)
+	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
+
+	forward(in, respChan)
 }

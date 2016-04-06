@@ -257,21 +257,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-// makeIDChan creates a channel of IDs and a goroutine to populate the channel
-// with a counter. This is useful for assigning UIDs to fields since the
-// goroutine will (almost) never repeat the same value (unless we hit IntMax).
-func makeIDChan() chan int {
-	idChan := make(chan int)
-
-	go func() {
-		for i := 0; ; i++ {
-			idChan <- i
-		}
-	}()
-
-	return idChan
-}
-
 // convert a src ppm image to a dst png image, resizing to a largest dimension
 // max if max != 0
 func ppmToPng(src []byte, max int) ([]byte, error) {
@@ -460,18 +445,25 @@ func lookupVLAN(alias string) (int, error) {
 	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
 		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
 	}
-	respChan := make(chan minicli.Responses)
 
+	respChan, err := meshageSend(cmd, Wildcard)
+	if err != nil {
+		// don't propagate the error since this is supposed to be best-effort.
+		log.Error("unable to broadcast alias update: %v", err)
+		return vlan, nil
+	}
+
+	// read all the responses, looking for errors
 	go func() {
 		for resps := range respChan {
 			for _, resp := range resps {
 				if resp.Error != "" {
-					log.Debug("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
 				}
 			}
 		}
+
 	}()
-	go meshageSend(cmd, Wildcard, respChan)
 
 	return vlan, nil
 }

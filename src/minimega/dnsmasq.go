@@ -33,7 +33,7 @@ type dnsmasqServer struct {
 
 var (
 	dnsmasqServers map[int]*dnsmasqServer
-	dnsmasqIdChan  = makeIDChan()
+	dnsmasqID      = NewCounter()
 )
 
 var dnsmasqCLIHandlers = []minicli.Handler{
@@ -401,8 +401,6 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
-	id := <-dnsmasqIdChan
-
 	d := &dnsmasqServer{
 		Addr:     ip,
 		MinRange: min,
@@ -469,6 +467,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
+	id := dnsmasqID.Next()
 	dnsmasqServers[id] = d
 
 	// wait on the server to finish or be killed
