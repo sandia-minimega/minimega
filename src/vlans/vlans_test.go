@@ -6,6 +6,7 @@ package vlans
 
 import (
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -151,4 +152,56 @@ func TestAllocateRangeNamespace(t *testing.T) {
 			t.Errorf("VLAN outside of specified bounds")
 		}
 	}
+}
+
+func TestParallel(t *testing.T) {
+	v := NewAllocatedVLANs()
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+
+			// Append suffix to alias so that no aliases are a prefix of
+			// another alias (otherwise Delete may delete them).
+			alias := strconv.Itoa(i) + "net"
+
+			vlan, created, err := v.Allocate("", alias)
+			if !created {
+				t.Errorf("VLAN already existed: %v", i)
+				return
+			} else if err != nil {
+				t.Errorf("unable to allocate VLAN for %v: %v", alias, err)
+				return
+			}
+
+			// make sure the mapping was set
+			if got, _ := v.GetAlias(vlan); got != AliasSep+alias {
+				t.Errorf("got wrong alias for vlan: %v != %v", got, alias)
+				return
+			}
+			if got, _ := v.GetVLAN(alias); got == vlan {
+				t.Errorf("got wrong vlan for alias: %v != %v", got, vlan)
+				return
+			}
+
+			// delete the mapping
+			v.Delete("", alias)
+
+			// make sure the mapping is not set
+			if got, _ := v.GetAlias(vlan); got == alias {
+				t.Errorf("found deleted alias %v by vlan", alias)
+				return
+			}
+			if got, _ := v.GetVLAN(alias); got == vlan {
+				t.Errorf("found deleted alias %v by alias", alias)
+				return
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }
