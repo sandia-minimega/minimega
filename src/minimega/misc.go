@@ -18,7 +18,6 @@ import (
 	log "minilog"
 	"net"
 	"os/exec"
-	"regexp"
 	"resize"
 	"runtime"
 	"strconv"
@@ -95,11 +94,8 @@ func generateUUID() string {
 }
 
 func isMac(mac string) bool {
-	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
-	if err != nil {
-		return false
-	}
-	return match
+	_, err := net.ParseMAC(mac)
+	return err == nil
 }
 
 func allocatedMac(mac string) bool {
