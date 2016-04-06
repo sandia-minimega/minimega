@@ -14,7 +14,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /bin/kvm
+QEMU Path:          /usr/bin/kvm
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -48,7 +48,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /bin/kvm
+QEMU Path:          /usr/bin/kvm
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -79,7 +79,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /bin/kvm
+QEMU Path:          /usr/bin/kvm
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -107,7 +107,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /bin/kvm
+QEMU Path:          /usr/bin/kvm
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -132,7 +132,7 @@ vm config snapshot true
 vm config uuid 9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 vm config vcpus 4
 vm config cpu host
-vm config qemu /bin/kvm
+vm config qemu /usr/bin/kvm
 vm config qemu-append -k en-us
 vm config serial 0
 vm config virtio-serial 0
