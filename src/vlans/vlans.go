@@ -17,8 +17,7 @@ const BlacklistedVLAN = "BLACKLISTED"
 const AliasSep = "//"
 const VLANStart, VLANEnd = 101, 4096
 
-var ErrUnknownVLAN = errors.New("unknown VLAN")
-var ErrUnknownAlias = errors.New("unknown alias")
+var ErrUnallocated = errors.New("unallocated")
 var ErrOutOfVLANs = errors.New("out of VLANs")
 
 type Range struct {
@@ -148,7 +147,7 @@ func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
 	return nil
 }
 
-// GetVLAN returns the alias for a given VLAN or ErrUnknownVLAN.
+// GetVLAN returns the alias for a given VLAN or ErrUnallocated.
 func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
@@ -157,10 +156,10 @@ func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
 		return vlan, nil
 	}
 
-	return 0, ErrUnknownVLAN
+	return 0, ErrUnallocated
 }
 
-// GetAlias returns the alias for a given VLAN or ErrUnknownAlias. Note that
+// GetAlias returns the alias for a given VLAN or ErrUnallocated. Note that
 // previously Blacklisted VLANs will return the const BlacklistedVLAN.
 func (v *AllocatedVLANs) GetAlias(vlan int) (string, error) {
 	v.Lock()
@@ -170,7 +169,7 @@ func (v *AllocatedVLANs) GetAlias(vlan int) (string, error) {
 		return alias, nil
 	}
 
-	return "", ErrUnknownAlias
+	return "", ErrUnallocated
 }
 
 // GetAliases returns a list of aliases with the given prefix.
@@ -311,7 +310,7 @@ func (v *AllocatedVLANs) GetBlacklist() []int {
 
 // ParseVLAN parses s and returns a VLAN. If s can be parsed as an integer, the
 // resulting integer is returned. If s matches an existing alias, that VLAN is
-// returned. Otherwise, returns ErrUnknownVLAN.
+// returned. Otherwise, returns ErrUnallocated.
 func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
@@ -349,7 +348,7 @@ func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 		return vlan, nil
 	}
 
-	return 0, ErrUnknownVLAN
+	return 0, ErrUnallocated
 }
 
 // PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the
