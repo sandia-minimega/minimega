@@ -391,7 +391,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
 	}
 
-	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
 
 	vlan, err := lookupVLAN(v)
 	if err != nil {
