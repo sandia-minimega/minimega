@@ -46,6 +46,15 @@ var defaultFlags = Flags{
 var handlers []*Handler
 var history []string // command history for the write command
 
+// HistoryLen is the length of the history of commands that minicli stores.
+// This may be increased or decreased as needed. If set to 0 or less, the
+// history will grow unbounded and may cause an OOM crash.
+var HistoryLen = 10000
+
+// firstHistoryTruncate stores a flag so that we can warn the user the first
+// time that we're truncating history.
+var firstHistoryTruncate = true
+
 type Responses []*Response
 
 // A response as populated by handler functions.
@@ -133,6 +142,15 @@ func ProcessCommand(c *Command) chan Responses {
 		// Append the command to the history
 		if c.Record {
 			history = append(history, c.Original)
+
+			if len(history) > HistoryLen && HistoryLen > 0 {
+				if firstHistoryTruncate {
+					log.Warn("history length exceeds limit, truncating to %v entries", HistoryLen)
+					firstHistoryTruncate = false
+				}
+
+				history = history[len(history)-HistoryLen:]
+			}
 		}
 
 		close(respChan)
