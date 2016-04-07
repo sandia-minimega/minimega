@@ -9,6 +9,7 @@ import (
 	"minicli"
 	log "minilog"
 	"strconv"
+	"time"
 )
 
 var vncCLIHandlers = []minicli.Handler{
@@ -21,7 +22,7 @@ users can watch a video of interactions with the VM.
 
 With no arguments, vnc will list currently recording or playing VNC sessions.
 
-If record is selected, a file will be created containing a record of mouse and
+Ifr reecord is selected, a file will be created containing a record of mouse and
 keyboard actions by the user or of the framebuffer for the VM.
 
 If playback is selected, the specified file (created using vnc record) will be
@@ -108,13 +109,14 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 		err = vncPlaybackKB(host, vm, fname)
 	} else {
 		// List all active recordings and playbacks
-		resp.Header = []string{"host", "name", "id", "type", "filename"}
+		resp.Header = []string{"host", "name", "id", "type", "time", "filename"}
 		resp.Tabular = [][]string{}
 
 		for _, v := range vncKBRecording {
 			resp.Tabular = append(resp.Tabular, []string{
 				v.Host, v.Name, strconv.Itoa(v.ID),
 				"record kb",
+				time.Since(v.start).String(),
 				v.file.Name(),
 			})
 		}
@@ -123,6 +125,7 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 			resp.Tabular = append(resp.Tabular, []string{
 				v.Host, v.Name, strconv.Itoa(v.ID),
 				"record fb",
+				time.Since(v.start).String(),
 				v.file.Name(),
 			})
 		}
@@ -131,6 +134,7 @@ func cliVNC(c *minicli.Command) *minicli.Response {
 			resp.Tabular = append(resp.Tabular, []string{
 				v.Host, v.Name, strconv.Itoa(v.ID),
 				"playback kb",
+				v.timeRemaining() + " remaining",
 				v.file.Name(),
 			})
 		}

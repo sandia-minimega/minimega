@@ -37,6 +37,8 @@ type vncClient struct {
 	err error
 
 	Conn *vnc.Conn
+
+	start time.Time
 }
 
 type vncKBRecord struct {
@@ -51,6 +53,10 @@ type vncFBRecord struct {
 
 type vncKBPlayback struct {
 	*vncClient
+
+	duration time.Duration
+	step     chan bool
+	scanner  bufio.Scanner
 }
 
 func init() {
@@ -146,6 +152,8 @@ func (v *vncFBRecord) Run() {
 		return
 	}
 
+	v.start = time.Now()
+
 	go func() {
 		prev := time.Now()
 		buf := make([]byte, 4096)
@@ -214,9 +222,44 @@ func ParseLoadFileEvent(arg string) (string, error) {
 	return filename, nil
 }
 
-func (v *vncKBPlayback) playFile() {
-	scanner := bufio.NewScanner(v.file)
+// Returns the duration of a given kbrecording file
+func getDuration(filename string) time.Duration {
+	d := 0
 
+	f, err := os.Open(filename)
+	if err != nil {
+		log.Errorln(err)
+		return 0
+	}
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		s := strings.SplitN(scanner.Text(), ":", 2)
+		i, err := strconv.Atoi(s[0])
+		if err != nil {
+			log.Errorln(err)
+			return 0
+		}
+		d += i
+	}
+
+	duration, err := time.ParseDuration(strconv.Itoa(d) + "ns")
+	if err != nil {
+		log.Errorln(err)
+		return 0
+	}
+	return duration
+}
+
+func (v *vncKBPlayback) timeRemaining() string {
+	elapsed := time.Since(v.start)
+	return (v.duration - elapsed).String()
+}
+
+func (v *vncKBPlayback) playFile() {
+	v.start = time.Now()
+
+	scanner := bufio.NewScanner(v.file)
 	for scanner.Scan() && v.err == nil {
 		s := strings.SplitN(scanner.Text(), ":", 2)
 
@@ -229,6 +272,7 @@ func (v *vncKBPlayback) playFile() {
 		wait := time.After(duration)
 		select {
 		case <-wait:
+		case <-v.step:
 		case <-v.done:
 			return
 		}
@@ -250,7 +294,7 @@ func (v *vncKBPlayback) playFile() {
 				log.Error("Couldn't load VNC playback file %v: %v", file, err)
 				v.err = err
 			} else {
-				r := &vncKBPlayback{v.vncClient}
+				r := &vncKBPlayback{v.vncClient, 0}
 				// We will wait until this file has played fully.
 				r.playFile()
 			}
@@ -279,6 +323,14 @@ func (v *vncKBPlayback) Run() {
 	// Block until we receive the done flag if we finished the playback
 	<-v.done
 	delete(vncKBPlaying, v.Rhost)
+}
+
+func (v *vncKBPlayback) Step() {
+	select {
+	v.step <- true:
+	default:
+		return
+	}
 }
 
 func vncRecordKB(host, vm, filename string) error {
@@ -355,7 +407,8 @@ func vncPlaybackKB(host, vm, filename string) error {
 		return err
 	}
 
-	r := &vncKBPlayback{c}
+	d := getDuration(filename)
+	r := &vncKBPlayback{c, d}
 	vncKBPlaying[c.Rhost] = r
 
 	go r.Run()
