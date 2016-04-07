@@ -59,7 +59,7 @@ func httpClient(protocol string) {
 		Proxy: http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
-				Timeout: 30 * time.Second,
+				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			return dialer.Dial(protocol, addr)
@@ -69,7 +69,7 @@ func httpClient(protocol string) {
 	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -91,7 +91,7 @@ func httpTLSClient(protocol string) {
 		Proxy:           http.ProxyFromEnvironment,
 		Dial: func(network, addr string) (net.Conn, error) {
 			dialer := &net.Dialer{
-				Timeout: 30 * time.Second,
+				Timeout:   30 * time.Second,
 				KeepAlive: 30 * time.Second,
 			}
 			return dialer.Dial(protocol, addr)
@@ -99,10 +99,24 @@ func httpTLSClient(protocol string) {
 		TLSHandshakeTimeout: 10 * time.Second,
 	}
 
+	if *f_tlsVersion != "" {
+		var version uint16
+		switch *f_tlsVersion {
+		case "tls1.0":
+			version = tls.VersionTLS10
+		case "tls1.1":
+			version = tls.VersionTLS11
+		case "tls1.2":
+			version = tls.VersionTLS12
+		}
+		transport.TLSClientConfig.MinVersion = tls.VersionSSL30
+		transport.TLSClientConfig.MaxVersion = version
+	}
+
 	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout: 30 * time.Second,
+		Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -241,7 +255,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 			resp.Body.Close()
 			stop := time.Now().UnixNano()
 			log.Info("https %v %v %vns", client, file, stop-start)
-			httpTLSReportChan <- 1
+			//httpTLSReportChan <- 1
 		}
 	} else {
 		if !strings.HasPrefix(file, "http://") {
@@ -259,7 +273,7 @@ func httpGet(url, file string, useTLS bool, client *http.Client) {
 			resp.Body.Close()
 			stop := time.Now().UnixNano()
 			log.Info("http %v %v %vns", client, file, stop-start)
-			httpReportChan <- 1
+			//httpReportChan <- 1
 		}
 	}
 }
@@ -349,6 +363,8 @@ func httpTLSServer(p string) {
 	if config.NextProtos == nil {
 		config.NextProtos = []string{"http/1.1"}
 	}
+	config.MinVersion = tls.VersionTLS10
+	config.MaxVersion = tls.VersionTLS12
 
 	var err error
 	config.Certificates = make([]tls.Certificate, 1)
