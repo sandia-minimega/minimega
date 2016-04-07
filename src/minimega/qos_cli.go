@@ -8,6 +8,10 @@ import (
 	"time"
 )
 
+// Used to calulate burst rate for the token bucket filter
+const KERNEL_TIMER_FREQ uint64 = 250
+const MIN_BURST_SIZE uint64 = 2048
+
 var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
@@ -21,7 +25,7 @@ Qos constraints include:
 
 - loss		: packets will be randomly dropped with a specified probability
 - delay		: delay packets for configured unit of time
-- rate		: impose a maximum bandwidth on an interface
+- rate		: impose a maximum bandwidth on an interface, in kbit, mbit, or gbit
 
 Examples:
 
@@ -29,7 +33,10 @@ Examples:
 	qos add mega_tap1 loss 0.25
 
 	Add a 100ms delay to every packet on the mega_tap1 interface
-	qos add mega_tap1 delay 100ms`,
+	qos add mega_tap1 delay 100ms
+
+	Rate limit an interface to 1mbit/s
+	qos add mega_tap1 rate 1mbit`,
 		Patterns: []string{
 			"qos <add,> <interface> <loss,> <percent>",
 			"qos <add,> <interface> <delay,> <duration>",
@@ -75,7 +82,7 @@ func cliQosClear(c *minicli.Command) *minicli.Response {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	if tap == "all" {
+	if tap == Wildcard {
 		qosRemoveAll()
 	} else {
 		// Get *Tap
@@ -123,7 +130,7 @@ func cliQos(c *minicli.Command) *minicli.Response {
 	defer bridgeLock.Unlock()
 
 	// Wildcard command
-	if tap == "all" {
+	if tap == Wildcard {
 		resp.Error = fmt.Sprintf("not implemented")
 		return resp
 	}
@@ -147,60 +154,90 @@ func cliQos(c *minicli.Command) *minicli.Response {
 
 	// Determine qdisc and operation
 	if c.BoolArgs["rate"] {
+
+		// token bucket filter (tbf) qdisc operation
 		qdisc = "tbf"
 		if len(t.qos.tbfParams) == 0 {
 			op = "add"
 		} else {
 			op = "change"
 		}
+
+		// Add a bandwidth limit on the interface
+		rate := c.StringArgs["bw"]
+		unit := rate[len(rate)-4:]
+		var bps uint64
+		switch unit {
+		case "kbit":
+			bps = 1 << 10
+		case "mbit":
+			bps = 1 << 20
+		case "gbit":
+			bps = 1 << 30
+		default:
+			resp.Error = fmt.Sprintf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
+			return resp
+		}
+
+		burst, err := strconv.ParseUint(rate[:len(rate)-4], 10, 64)
+		if err != nil {
+			resp.Error = fmt.Sprintf("`%s` is not a valid rate parameter", rate)
+			return resp
+		}
+
+		// Burst size is in bytes
+		burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
+		if burst < MIN_BURST_SIZE {
+			burst = MIN_BURST_SIZE
+		}
+
+		// Default parameters
+		// Burst must be at least rate / hz
+		// See http://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
+		t.qos.tbfParams["rate"] = rate
+		t.qos.tbfParams["burst"] = fmt.Sprintf("%db", burst)
+		t.qos.tbfParams["latency"] = "100ms"
+
 	} else {
+
+		// netem qdisc operation
 		qdisc = "netem"
 		if len(t.qos.netemParams) == 0 {
 			op = "add"
 		} else {
 			op = "change"
 		}
-	}
 
-	// Drop packets randomly with probability = loss
-	if c.BoolArgs["loss"] {
-		loss := c.StringArgs["percent"]
+		// Drop packets randomly with probability = loss
+		if c.BoolArgs["loss"] {
+			loss := c.StringArgs["percent"]
 
-		_, err := strconv.ParseFloat(loss, 64)
-		if err != nil {
-			resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
-			return resp
-		}
-		t.qos.netemParams["loss"] = loss
-	}
-
-	// Add delay of time duration to each packet
-	if c.BoolArgs["delay"] {
-		delay := c.StringArgs["duration"]
-		_, err := time.ParseDuration(delay)
-
-		if err != nil {
-			if strings.Contains(err.Error(), "time: missing unit in duration") {
-				// Default to ms
-				delay = fmt.Sprintf("%s%s", delay, "ms")
-			} else {
-				resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", delay)
+			_, err := strconv.ParseFloat(loss, 64)
+			if err != nil {
+				resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
 				return resp
 			}
+			t.qos.netemParams["loss"] = loss
 		}
-		t.qos.netemParams["delay"] = delay
+
+		// Add delay of time duration to each packet
+		if c.BoolArgs["delay"] {
+			delay := c.StringArgs["duration"]
+			_, err := time.ParseDuration(delay)
+
+			if err != nil {
+				if strings.Contains(err.Error(), "time: missing unit in duration") {
+					// Default to ms
+					delay = fmt.Sprintf("%s%s", delay, "ms")
+				} else {
+					resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", delay)
+					return resp
+				}
+			}
+			t.qos.netemParams["delay"] = delay
+		}
 	}
 
-	// Add a bandwidth limit on the interface using the token bucket filter (tbf) qdisc
-	if c.BoolArgs["rate"] {
-		rate := c.StringArgs["bw"]
-
-		// TODO - Update parameters. Using defaults right now
-		t.qos.tbfParams["rate"] = rate
-		t.qos.tbfParams["burst"] = "32kbit"
-		t.qos.tbfParams["latency"] = "5ms"
-
-	}
 	// Execute the qos command
 	err = t.qosCmd(op, qdisc)
 	if err != nil {
