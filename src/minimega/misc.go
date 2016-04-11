@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"vlans"
 )
 
 type errSlice []error
@@ -252,21 +253,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-// makeIDChan creates a channel of IDs and a goroutine to populate the channel
-// with a counter. This is useful for assigning UIDs to fields since the
-// goroutine will (almost) never repeat the same value (unless we hit IntMax).
-func makeIDChan() chan int {
-	idChan := make(chan int)
-
-	go func() {
-		for i := 0; ; i++ {
-			idChan <- i
-		}
-	}()
-
-	return idChan
-}
-
 // convert a src ppm image to a dst png image, resizing to a largest dimension
 // max if max != 0
 func ppmToPng(src []byte, max int) ([]byte, error) {
@@ -401,9 +387,9 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
 	}
 
-	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
 
-	vlan, err := allocatedVLANs.ParseVLAN(v, true)
+	vlan, err := lookupVLAN(v)
 	if err != nil {
 		return NetConfig{}, err
 	}
@@ -430,4 +416,50 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		MAC:    strings.ToLower(m),
 		Driver: d,
 	}, nil
+}
+
+// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
+// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
+// cluster.
+func lookupVLAN(alias string) (int, error) {
+	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	if err != vlans.ErrUnallocated {
+		// nil or other error
+		return vlan, err
+	}
+
+	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	if err != nil {
+		return 0, err
+	}
+
+	if !created {
+		return vlan, nil
+	}
+
+	cmd := minicli.MustCompilef("vlans add %q %v", alias, vlan)
+	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
+		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
+	}
+
+	respChan, err := meshageSend(cmd, Wildcard)
+	if err != nil {
+		// don't propagate the error since this is supposed to be best-effort.
+		log.Error("unable to broadcast alias update: %v", err)
+		return vlan, nil
+	}
+
+	// read all the responses, looking for errors
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+				}
+			}
+		}
+
+	}()
+
+	return vlan, nil
 }

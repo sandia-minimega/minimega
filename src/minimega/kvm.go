@@ -69,8 +69,8 @@ type qemuOverride struct {
 }
 
 var (
-	QemuOverrides      map[int]*qemuOverride
-	qemuOverrideIdChan chan int
+	QemuOverrides  map[int]*qemuOverride
+	qemuOverrideID *Counter
 
 	KVMNetworkDrivers struct {
 		drivers []string
@@ -80,7 +80,7 @@ var (
 
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
-	qemuOverrideIdChan = makeIDChan()
+	qemuOverrideID = NewCounter()
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
@@ -806,7 +806,7 @@ func delVMQemuOverride(arg string) error {
 }
 
 func addVMQemuOverride(match, repl string) error {
-	id := <-qemuOverrideIdChan
+	id := qemuOverrideID.Next()
 
 	QemuOverrides[id] = &qemuOverride{
 		match: match,
