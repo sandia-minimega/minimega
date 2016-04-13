@@ -362,13 +362,30 @@ func (s *Server) route(m *Message) {
 	if m.UUID == "" {
 		// send commands to all clients
 		for _, c := range s.clients {
-			// filter commands by namespace
-			ns := s.namespaces[c.UUID]
+			vm := s.vms[c.UUID]
 			cmds := map[int]*Command{}
+
+		cmdLoop:
 			for k, cmd := range m.Commands {
-				if ns == "" || cmd.Filter.Namespace == ns {
-					cmds[k] = cmd
+				// filter commands by namespace
+				if v := vm.GetNamespace(); v != "" && v != cmd.Filter.Namespace {
+					continue
 				}
+
+				tags := vm.GetTags()
+
+				// filter commands by tags
+				for k, v := range cmd.Filter.Tags {
+					v2, ok := tags[k]
+
+					// if v is empty, tag must be set on VM
+					// otherwise, must match tag value on VM
+					if (v == "" && !ok) || v != v2 {
+						continue cmdLoop
+					}
+				}
+
+				cmds[k] = cmd
 			}
 
 			// clone message
@@ -619,16 +636,16 @@ func (s *Server) DialSerial(path string) error {
 	return nil
 }
 
-func (s *Server) RegisterClient(uuid, namespace string) {
+func (s *Server) RegisterVM(uuid string, f VM) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	s.namespaces[uuid] = namespace
+	s.vms[uuid] = f
 }
 
-func (s *Server) UnregisterClient(uuid string) {
+func (s *Server) UnregisterVM(uuid string) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	delete(s.namespaces, uuid)
+	delete(s.vms, uuid)
 }

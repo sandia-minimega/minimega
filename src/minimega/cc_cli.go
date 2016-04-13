@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"minicli"
@@ -297,15 +298,26 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 	if len(c.ListArgs["filter"]) == 0 {
 		// Summary of current filter
 		if ccFilter != nil {
-			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
-			resp.Tabular = append(resp.Tabular, []string{
+			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC", "Tags"}
+			row := []string{
 				ccFilter.UUID,
 				ccFilter.Hostname,
 				ccFilter.Arch,
 				ccFilter.OS,
 				fmt.Sprintf("%v", ccFilter.IP),
 				fmt.Sprintf("%v", ccFilter.MAC),
-			})
+			}
+
+			// encode the tags using JSON
+			tags, err := json.Marshal(ccFilter.Tags)
+			if err != nil {
+				log.Warn("Unable to json marshal tags: %v", err)
+			} else if ccFilter.Tags == nil {
+				tags = []byte("{}")
+			}
+			row = append(row, string(tags))
+
+			resp.Tabular = append(resp.Tabular, row)
 		}
 	} else {
 		filter := &ron.Client{}
@@ -331,9 +343,29 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 				filter.IP = append(filter.IP, parts[1])
 			case "mac":
 				filter.MAC = append(filter.MAC, parts[1])
+			case "tag":
+				// Explicit filter on tag
+				parts = parts[1:]
+				fallthrough
 			default:
-				resp.Error = fmt.Sprintf("no such filter field %v", parts[0])
-				return resp
+				// Implicit filter on a tag
+				if filter.Tags == nil {
+					filter.Tags = make(map[string]string)
+				}
+
+				// Split on `=` or `:` -- who cares if they did `tag=foo=bar`,
+				// `tag=foo:bar` or `foo=bar`. `=` takes precedence.
+				if strings.Contains(parts[0], "=") {
+					parts = strings.SplitN(parts[0], "=", 2)
+				} else if strings.Contains(parts[0], ":") {
+					parts = strings.SplitN(parts[0], ":", 2)
+				}
+
+				if len(parts) == 1 {
+					filter.Tags[parts[0]] = ""
+				} else if len(parts) == 2 {
+					filter.Tags[parts[0]] = parts[1]
+				}
 			}
 		}
 

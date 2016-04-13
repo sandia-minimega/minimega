@@ -349,7 +349,7 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	ccNode.UnregisterClient(vm.UUID)
+	ccNode.UnregisterVM(vm.UUID)
 
 	return os.RemoveAll(vm.instancePath)
 }
