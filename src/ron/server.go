@@ -20,6 +20,20 @@ import (
 	"version"
 )
 
+// GetCommand returns copy of a command by ID or nil if it doesn't exist
+func (s *Server) GetCommand(id int) *Command {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	log.Debug("ron GetCommand: %v", id)
+
+	if v, ok := s.commands[id]; ok {
+		return v.Copy()
+	}
+
+	return nil
+}
+
 // GetCommands returns a copy of the current command list
 func (s *Server) GetCommands() map[int]*Command {
 	// return a deep copy of the command list
@@ -28,16 +42,7 @@ func (s *Server) GetCommands() map[int]*Command {
 	defer s.commandLock.Unlock()
 
 	for k, v := range s.commands {
-		ret[k] = &Command{
-			ID:         v.ID,
-			Background: v.Background,
-			Command:    v.Command,
-			FilesSend:  v.FilesSend,
-			FilesRecv:  v.FilesRecv,
-			CheckedIn:  v.CheckedIn,
-			Filter:     v.Filter,
-			PID:        v.PID,
-		}
+		ret[k] = v.Copy()
 	}
 
 	log.Debug("ron GetCommands: %v", ret)

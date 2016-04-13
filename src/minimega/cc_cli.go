@@ -217,6 +217,17 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 		if err != nil {
 			return err
 		}
+
+		// Test if the file looks like a UUID. If it does, and a namespace is
+		// active, check whether the VM is part of the active namespace. This
+		// is a fairly naive way to filter the responses...
+		if namespace != "" && isUUID(info.Name()) {
+			vm := vms.findVm(info.Name())
+			if vm != nil && vm.GetNamespace() != namespace {
+				return filepath.SkipDir
+			}
+		}
+
 		if !info.IsDir() {
 			files = append(files, path)
 			log.Debug("add to response files: %v", path)
@@ -599,7 +610,12 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 
 	var commandIDs []int
 	commands := ccNode.GetCommands()
-	for k, _ := range commands {
+	for k, v := range commands {
+		// only show commands for the active namespace
+		if !ccMatchNamespace(v) {
+			continue
+		}
+
 		commandIDs = append(commandIDs, k)
 	}
 	sort.Ints(commandIDs)
@@ -642,6 +658,17 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		ids := ccPrefixIDs(id)
 		if len(ids) != 0 {
 			for _, v := range ids {
+				c := ccNode.GetCommand(v)
+				if c == nil {
+					resp.Error = fmt.Sprintf("cc delete unknown command %v", v)
+					return resp
+				}
+
+				if !ccMatchNamespace(c) {
+					// skip without warning
+					continue
+				}
+
 				err := ccNode.DeleteCommand(v)
 				if err != nil {
 					resp.Error = fmt.Sprintf("cc delete command %v : %v", v, err)
@@ -655,6 +682,17 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		val, err := strconv.Atoi(id)
 		if err != nil {
 			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
+			return resp
+		}
+
+		c := ccNode.GetCommand(val)
+		if c == nil {
+			resp.Error = fmt.Sprintf("cc delete unknown command %v", val)
+			return resp
+		}
+
+		if !ccMatchNamespace(c) {
+			resp.Error = fmt.Sprintf("cc command not part of active namespace")
 			return resp
 		}
 
