@@ -70,18 +70,6 @@ func (m *loggingMutex) Unlock() {
 	log.Info("unlocked: %v:%v", file, line)
 }
 
-// generate a random mac address and return as a string
-func randomMac() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	//
-	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
-
-	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
-	log.Info("generated mac: %v", mac)
-	return mac
-}
-
 func generateUUID() string {
 	log.Debugln("generateUUID")
 	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
@@ -92,6 +80,41 @@ func generateUUID() string {
 	uuid = uuid[:len(uuid)-1]
 	log.Debug("generated UUID: %v", string(uuid))
 	return string(uuid)
+}
+
+func isUUID(s string) bool {
+	if len(s) != 36 {
+		return false
+	}
+
+	parts := strings.Split(s, "-")
+	if len(parts) != 5 {
+		return false
+	}
+
+	for i, v := range []int{8, 4, 4, 4, 12} {
+		if len(parts[i]) != v {
+			return false
+		}
+
+		if _, err := strconv.ParseInt(parts[i], 16, 64); err != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+// generate a random mac address and return as a string
+func randomMac() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	//
+	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+
+	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
+	log.Info("generated mac: %v", mac)
+	return mac
 }
 
 func isMac(mac string) bool {

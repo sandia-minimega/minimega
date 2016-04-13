@@ -741,7 +741,7 @@ func (vm *ContainerVM) launch() error {
 
 	// don't repeat the preamble if we're just in the quit state
 	if s != VM_QUIT {
-		ccNode.RegisterClient(vm.UUID, vm.Namespace)
+		ccNode.RegisterVM(vm.UUID, vm)
 
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)

@@ -56,3 +56,17 @@ type Response struct {
 	Stdout string
 	Stderr string
 }
+
+// Creates a copy of c
+func (c *Command) Copy() *Command {
+	return &Command{
+		ID:         c.ID,
+		Background: c.Background,
+		Command:    c.Command,
+		FilesSend:  c.FilesSend,
+		FilesRecv:  c.FilesRecv,
+		CheckedIn:  c.CheckedIn,
+		Filter:     c.Filter,
+		PID:        c.PID,
+	}
+}

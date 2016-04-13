@@ -69,6 +69,7 @@ type VM interface {
 	Info(string) (string, error)
 
 	Tag(tag string) string
+	SetTag(k, v string)
 	GetTags() map[string]string
 	ClearTags()
 
@@ -349,20 +350,41 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	ccNode.UnregisterClient(vm.UUID)
+	ccNode.UnregisterVM(vm.UUID)
 
 	return os.RemoveAll(vm.instancePath)
 }
 
 func (vm *BaseVM) Tag(tag string) string {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	return vm.Tags[tag]
 }
 
+func (vm *BaseVM) SetTag(k, v string) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm.Tags[k] = v
+}
+
 func (vm *BaseVM) GetTags() map[string]string {
-	return vm.Tags
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	res := map[string]string{}
+	for k, v := range vm.Tags {
+		res[k] = v
+	}
+
+	return res
 }
 
 func (vm *BaseVM) ClearTags() {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	vm.Tags = make(map[string]string)
 }
 
