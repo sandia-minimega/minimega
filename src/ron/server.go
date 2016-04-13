@@ -367,8 +367,11 @@ func (s *Server) route(m *Message) {
 
 		cmdLoop:
 			for k, cmd := range m.Commands {
+				want := cmd.Filter.Namespace
+				got := vm.GetNamespace()
+
 				// filter commands by namespace
-				if v := vm.GetNamespace(); v != "" && v != cmd.Filter.Namespace {
+				if want != "" && want != got {
 					continue
 				}
 

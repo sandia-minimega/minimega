@@ -190,7 +190,7 @@ func cliCCTunnel(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["rtunnel"] {
-		err := ccNode.Reverse(ccFilter, src, host, dst)
+		err := ccNode.Reverse(ccGetFilter(), src, host, dst)
 		if err != nil {
 			resp.Error = err.Error()
 		}
@@ -379,11 +379,8 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 func cliCCFileSend(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to send, expand globs
@@ -430,11 +427,8 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to receive
@@ -456,13 +450,10 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 func cliCCBackground(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
 		Background: true,
 		Command:    c.ListArgs["command"],
-		Filter:     ccFilter,
+		Filter:     ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -486,7 +477,7 @@ func cliCCProcess(c *minicli.Command) *minicli.Response {
 
 		cmd := &ron.Command{
 			PID:    pid,
-			Filter: ccFilter,
+			Filter: ccGetFilter(),
 		}
 
 		id := ccNode.NewCommand(cmd)
@@ -548,12 +539,9 @@ func cliCCProcess(c *minicli.Command) *minicli.Response {
 func cliCCExec(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
 		Command: c.ListArgs["command"],
-		Filter:  ccFilter,
+		Filter:  ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)

@@ -105,6 +105,18 @@ func ccClients() map[string]bool {
 	return nil
 }
 
+// ccGetFilter returns a filter for cc clients, adding the implicit namespace
+// filter, if a namespace is active.
+func ccGetFilter() *ron.Client {
+	filter := ron.Client{}
+	if ccFilter != nil {
+		filter = *ccFilter
+	}
+
+	filter.Namespace = namespace
+	return &filter
+}
+
 func filterString(f *ron.Client) string {
 	if f == nil {
 		return ""
