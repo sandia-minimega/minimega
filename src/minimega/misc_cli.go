@@ -62,6 +62,18 @@ the file in manually except that it stops after the first error.`,
 		},
 		Call: cliRead,
 	},
+	{ // validate
+		HelpShort: "read and valid a command file",
+		HelpLong: `
+Read a command file and check that all the commands are syntactically valid.
+This can identify mistyped commands in scripts before you read them. It cannot
+check for semantic errors (e.g. killing a non-existent VM). Stops on the first
+invalid command.`,
+		Patterns: []string{
+			"validate <file>",
+		},
+		Call: wrapSimpleCLI(cliValidate),
+	},
 	{ // debug
 		HelpShort: "display internal debug information",
 		Patterns: []string{
@@ -145,7 +157,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		var cmd *minicli.Command
 
 		command := scanner.Text()
-		log.Debug("read command: %v", command) // commands don't have their newlines removed
+		log.Debug("read command: %v", command)
 
 		cmd, err = minicli.Compile(command)
 		if err != nil {
@@ -187,6 +199,35 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		resp.Error = err.Error()
 		respChan <- minicli.Responses{resp}
 	}
+}
+
+func cliValidate(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	file, err := os.Open(c.StringArgs["file"])
+	if err != nil {
+		resp.Error = err.Error()
+		return resp
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		command := scanner.Text()
+		log.Debug("read command: %v", command)
+
+		if _, err := minicli.Compile(command); err != nil {
+			resp.Error = err.Error()
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
 }
 
 func cliDebug(c *minicli.Command) *minicli.Response {
