@@ -37,8 +37,8 @@ var (
 	f_logfile    = flag.String("logfile", "", "also log to file")
 	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
 	f_e          = flag.Bool("e", false, "execute command on running minimega")
-	f_degree     = flag.Int("degree", 0, "meshage starting degree")
-	f_msaTimeout = flag.Int("msa", 10, "meshage MSA timeout")
+	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
+	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
 	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
@@ -208,7 +208,7 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	meshageInit(host, *f_context, uint(*f_degree), *f_port)
+	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port)
 
 	// start the cc service
 	ccStart()
