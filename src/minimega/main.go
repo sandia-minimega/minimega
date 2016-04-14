@@ -50,7 +50,8 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 
-	vms      VMs
+	vms = VMs{}
+
 	hostname string
 	reserved = []string{Wildcard}
 )
@@ -117,8 +118,6 @@ func main() {
 	if isReserved(hostname) {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
-
-	vms = make(map[int]VM)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
