@@ -246,11 +246,11 @@ func teardown() {
 
 	vncClear()
 	clearAllCaptures()
-	vms.kill(Wildcard)
+	vms.Kill(Wildcard)
 	dnsmasqKillAll()
 	ksmDisable()
-	vms.flush()
-	vms.cleanDirs()
+	vms.Flush()
+	vms.CleanDirs()
 	containerTeardown()
 	err := bridgesDestroy()
 	if err != nil {

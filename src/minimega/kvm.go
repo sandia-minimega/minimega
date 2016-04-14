@@ -343,42 +343,6 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 
 }
 
-func (vm *KvmVM) checkDisks() error {
-	// Disk path to whether it is a snapshot or not
-	disks := map[string]bool{}
-
-	// See note about vmLock in vm.checkInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	// Record which disks are in use and whether they are being used as a
-	// snapshot or not by other VMs. If the same disk happens to be in use by
-	// different VMs and they have mismatched snapshot flags, assume that the
-	// disk is not being used in snapshot mode.
-	for _, vmOther := range vms {
-		// Skip ourself
-		if vm == vmOther {
-			continue
-		}
-
-		if vmOther, ok := vmOther.(*KvmVM); ok {
-			for _, disk := range vmOther.DiskPaths {
-				disks[disk] = vmOther.Snapshot || disks[disk]
-			}
-		}
-	}
-
-	// Check our disks to see if we're trying to use a disk that is in use by
-	// another VM (unless both are being used in snapshot mode).
-	for _, disk := range vm.DiskPaths {
-		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
-			return fmt.Errorf("disk path %v is already in use by another vm", disk)
-		}
-	}
-
-	return nil
-}
-
 func (vm *KvmVM) connectQMP() (err error) {
 	delay := QMP_CONNECT_DELAY * time.Millisecond
 
@@ -412,9 +376,9 @@ func (vm *KvmVM) launch() error {
 		}
 
 		// Check the disks and network interfaces are sane
-		err := vm.checkInterfaces()
+		err := vms.CheckInterfaces(vm)
 		if err == nil {
-			err = vm.checkDisks()
+			err = vms.CheckDisks(vm)
 		}
 
 		if err != nil {

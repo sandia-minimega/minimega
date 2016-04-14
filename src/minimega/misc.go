@@ -245,26 +245,6 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find a VM based on it's ID, name, or UUID on a
-// given host. Returns nil if no such VM exists.
-func findRemoteVM(host, s string) VM {
-	log.Debug("findRemoteVM: %v %v", host, s)
-
-	var vms VMs
-
-	if host == hostname || host == Localhost {
-		vms = LocalVMs()
-	} else {
-		vms = HostVMs(host)
-	}
-
-	if vms != nil {
-		return vms.findVm(s)
-	}
-
-	return nil
-}
-
 // registerHandlers registers all the provided handlers with minicli, panicking
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {

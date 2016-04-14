@@ -117,7 +117,7 @@ func nukeState() {
 	vncClear()
 	clearAllCaptures()
 	ksmDisable()
-	vms.cleanDirs()
+	vms.CleanDirs()
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include

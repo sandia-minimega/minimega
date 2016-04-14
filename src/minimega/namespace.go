@@ -308,7 +308,9 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	ns := namespaces[namespace]
 
-	names, err := expandVMLaunchNames(c.StringArgs["name"], GlobalVMs())
+	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
+	// call globalVMs instead of GlobalVMs).
+	names, err := expandLaunchNames(c.StringArgs["name"], globalVMs())
 	if err != nil {
 		resp.Error = err.Error()
 		return
