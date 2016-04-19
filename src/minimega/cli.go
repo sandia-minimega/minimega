@@ -76,18 +76,6 @@ func cliSetup() {
 	registerHandlers("web", webCLIHandlers)
 }
 
-// isUserSource tests whether the provided source comes from the user or not.
-// User-generated commands are treated differently than programmatically
-// generated commands or commands received over Meshage.
-func isUserSource(source string) bool {
-	switch source {
-	case SourceLocalCLI, SourceAttachCLI, SourceRead:
-		return true
-	}
-
-	return false
-}
-
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
 func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
@@ -117,14 +105,23 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		log.Debug("namespace: %v, source: %v", namespace, c.Source)
 
-		// Just invoke the handler if there's no namespace specified or we
-		// received the command via meshage
-		if namespace == "" || !isUserSource(c.Source) {
+		// Wrapped commands have two behaviors:
+		//   `fan out` -- send the command to all hosts in the active namespace
+		//   `local`   -- invoke the underlying handler
+		// We use the source field to track whether we have already performed
+		// the `fan out` phase for this command. By default, the source is the
+		// empty string, so when a namespace is not active, we will always have
+		// the `local` behavior. When a namespace is active, the source will
+		// not match the active namespace so we will perform the `fan out`
+		// phase. We immediately set the source to the active namespace so that
+		// when we send the command via mesh, the source will be propagated and
+		// the remote nodes will execute the `local` behavior rather than
+		// trying to `fan out`.
+		if c.Source == namespace {
 			respChan <- minicli.Responses{fn(c)}
 			return
 		}
-
-		res := minicli.Responses{}
+		c.SetSource(namespace)
 
 		hosts := namespaces[namespace].hostSlice()
 
@@ -132,6 +129,8 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 		for _, cmd := range cmds {
 			cmd.SetRecord(false)
 		}
+
+		res := minicli.Responses{}
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
@@ -155,26 +154,22 @@ func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFun
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		log.Debug("namespace: %v, source: %v", namespace, c.Source)
 
-		// Just invoke the handler if there's no namespace specified or we
-		// received the command via meshage
-		if namespace == "" || !isUserSource(c.Source) {
+		// See note in wrapBroadcastCLI.
+		if c.Source == namespace {
 			respChan <- minicli.Responses{fn(c)}
 			return
 		}
+		c.SetSource(namespace)
 
-		hosts := []string{}
-		for host := range namespaces[namespace].Hosts {
-			hosts = append(hosts, host)
-		}
-
-		res := minicli.Responses{}
-
-		var ok bool
+		hosts := namespaces[namespace].hostSlice()
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
 			cmd.SetRecord(false)
 		}
+
+		res := minicli.Responses{}
+		var ok bool
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
@@ -325,6 +320,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 		// Create a deep copy of the command by recompiling it
 		cmd2 := minicli.MustCompile(cmd.Original)
 		cmd2.SetRecord(cmd.Record)
+		cmd2.SetSource(cmd.Source)
 
 		cmds = append(cmds, cmd2)
 	}
@@ -342,6 +338,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 
 		cmd2 := minicli.MustCompilef("mesh send %s %s", targets, original)
 		cmd2.SetRecord(cmd.Record)
+		cmd2.SetSource(cmd.Source)
 
 		cmds = append(cmds, cmd2)
 	}
@@ -378,7 +375,6 @@ func cliLocal() {
 		if cmd == nil {
 			continue
 		}
-		cmd.SetSource(SourceLocalCLI)
 
 		// HAX: Don't record the read command
 		if hasCommand(cmd, "read") {
@@ -400,10 +396,11 @@ func cliLocal() {
 // cliPreprocessor allows modifying commands post-compile but pre-process.
 // Currently the only preprocessor is the "file:" handler.
 //
-// Node: we don't run preprocessors when namespaces are active to avoid
-// expanding files before we're running the command on the correct machine.
+// Note: we don't run preprocessors when we're not running the `local` behavior
+// (see wrapBroadcastCLI) to avoid expanding files before we're running the
+// command on the correct machine.
 func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	if namespace != "" && isUserSource(c.Source) {
+	if c.Source != namespace {
 		return c, nil
 	}
 

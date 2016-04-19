@@ -470,6 +470,7 @@ func namespaceHostLaunch(host, namespace string, queued queuedVM, respChan chan 
 
 	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", namespace, queued.vmType, names)
 	cmd.SetRecord(false)
+	cmd.SetSource(namespace)
 
 	if host == hostname {
 		forward(processCommands(cmd), respChan)

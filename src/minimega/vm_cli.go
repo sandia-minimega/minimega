@@ -666,7 +666,8 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("invalid command when namespace is not active")
 	}
 
-	if namespace != "" && isUserSource(c.Source) {
+	// see note in wrapBroadcastCLI
+	if c.Source != namespace {
 		if len(c.StringArgs) > 0 {
 			return namespaceQueue(c, resp)
 		}

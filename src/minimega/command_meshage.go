@@ -106,7 +106,6 @@ func meshageHandler() {
 				log.Error("invalid command from mesh: `%s`", mCmd.Original)
 				return
 			}
-			cmd.SetSource(SourceMeshage)
 
 			// Copy the Record flag at each level of nested command
 			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
