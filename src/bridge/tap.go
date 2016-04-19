@@ -22,6 +22,10 @@ func (b *Bridge) CreateTap(tap string, lan int, host bool) (string, error) {
 func (b *Bridge) createTap(t string, lan int, host bool) (tap string, err error) {
 	log.Info("creating tap on bridge: %v %v", b.Name, t)
 
+	// reap taps before creating to avoid someone killing/restarting a vm
+	// faster than the periodic tap reaper
+	b.reapTaps()
+
 	if _, ok := b.taps[t]; ok {
 		return t, fmt.Errorf("tap already on bridge")
 	}

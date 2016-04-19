@@ -229,7 +229,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 			strconv.Itoa(nodes),
 			strconv.FormatUint(uint64(degree), 10),
 			strconv.Itoa(len(mesh[hostname])),
-			*f_nameshpace,
+			*f_context,
 			strconv.Itoa(*f_port),
 		},
 	}
@@ -255,5 +255,11 @@ func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c.Subcommand, c.StringArgs["clients"], respChan)
+	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
+
+	forward(in, respChan)
 }

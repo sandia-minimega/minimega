@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -83,7 +84,7 @@ type Namespace struct {
 
 	Hosts map[string]bool
 
-	vmIDChan chan int
+	vmID *Counter
 
 	// Queued VMs to launch,
 	queuedVMs []queuedVM
@@ -111,6 +112,27 @@ func (n Namespace) hostSlice() []string {
 	return hosts
 }
 
+func (n Namespace) Destroy() error {
+	// TODO: should we ensure that there are no VMs running in the namespace
+	// before we delete it?
+
+	for _, stats := range n.scheduleStats {
+		// TODO: We could kill the scheduler -- that wouldn't be too hard to do
+		// (add a kill channel and close it here). Easier to make the user
+		// wait, for now.
+		if stats.state != SchedulerCompleted {
+			return errors.New("scheduler still running for namespace")
+		}
+	}
+
+	// Free up any VLANs associated with the namespace
+	allocatedVLANs.Delete(n.Name, "")
+
+	n.vmID.Stop()
+
+	return nil
+}
+
 func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
@@ -123,10 +145,10 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 			}
 
 			ns := Namespace{
-				Name:     name,
-				Hosts:    map[string]bool{},
-				Taps:     map[string]bool{},
-				vmIDChan: makeIDChan(),
+				Name:  name,
+				Hosts: map[string]bool{},
+				Taps:  map[string]bool{},
+				vmID:  NewCounter(),
 			}
 
 			// By default, every mesh-reachable node is part of the namespace
@@ -269,17 +291,10 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	// TODO: should we ensure that there are no VMs running in the namespace
-	// before we delete it?
-
-	for _, stats := range ns.scheduleStats {
-		// TODO: We could kill the scheduler -- that wouldn't be too hard to do
-		// (add a kill channel and close it here). Easier to make the user
-		// wait, for now.
-		if stats.state != SchedulerCompleted {
-			resp.Error = "cannot kill namespace -- scheduler still running"
-			return resp
-		}
+	// Attempt to destroy the namespace
+	if err := ns.Destroy(); err != nil {
+		resp.Error = err.Error()
+		return resp
 	}
 
 	// Delete any Taps associated with the namespace
@@ -289,9 +304,6 @@ func cliClearNamespace(c *minicli.Command) *minicli.Response {
 			return resp
 		}
 	}
-
-	// Free up any VLANs associated with the namespace
-	allocatedVLANs.Delete(namespace + VLANAliasSep)
 
 	// If we're deleting the currently active namespace, we should get
 	// out of that namespace
@@ -417,7 +429,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 // launch ... noblock` if there are no errors. We assume that this is
 // serialized on a per-host basis -- it's fine to run multiple of these in
 // parallel, as long as they target different hosts.
-func namespaceHostLaunch(host, ns string, queued queuedVM, respChan chan minicli.Responses) {
+func namespaceHostLaunch(host, namespace string, queued queuedVM, respChan chan minicli.Responses) {
 	// Mesh send all the config commands
 	cmds := []string{"clear vm config"}
 	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
@@ -434,6 +446,7 @@ func namespaceHostLaunch(host, ns string, queued queuedVM, respChan chan minicli
 	// responses to configChan.
 	configChan := make(chan minicli.Responses)
 
+	// run all the config commands
 	go func() {
 		defer close(configChan)
 
@@ -444,7 +457,13 @@ func namespaceHostLaunch(host, ns string, queued queuedVM, respChan chan minicli
 			if host == hostname {
 				forward(processCommands(cmd), configChan)
 			} else {
-				meshageSend(cmd, host, configChan)
+				in, err := meshageSend(cmd, host)
+				if err != nil {
+					configChan <- errResp(err)
+					break
+				}
+
+				forward(in, configChan)
 			}
 		}
 	}()
@@ -469,12 +488,18 @@ func namespaceHostLaunch(host, ns string, queued queuedVM, respChan chan minicli
 	names := strings.Join(queued.names, ",")
 	log.Debug("launch vms on host %v -- %v", host, names)
 
-	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", ns, queued.vmType, names)
+	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", namespace, queued.vmType, names)
 	cmd.SetRecord(false)
 
 	if host == hostname {
 		forward(processCommands(cmd), respChan)
 	} else {
-		meshageSend(cmd, host, respChan)
+		in, err := meshageSend(cmd, host)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		forward(in, respChan)
 	}
 }

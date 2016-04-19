@@ -117,7 +117,7 @@ func hostTapCreate(b, tap, v string) (string, error) {
 		return "", fmt.Errorf("`%s` is a reserved word -- cannot use for tap name", tap)
 	}
 
-	vlan, err := allocatedVLANs.ParseVLAN(v, true)
+	vlan, err := lookupVLAN(v)
 	if err != nil {
 		return "", err
 	}
@@ -148,7 +148,7 @@ func hostTapList(resp *minicli.Response) {
 		}
 
 		row := []string{
-			tap.Bridge, tap.Name, allocatedVLANs.PrintVLAN(tap.VLAN),
+			tap.Bridge, tap.Name, allocatedVLANs.PrintVLAN(namespace, tap.VLAN),
 		}
 
 		// no namespace active => find namespace tap belongs to so that we can

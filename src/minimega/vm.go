@@ -29,9 +29,9 @@ const (
 )
 
 var (
-	killAck  chan int   // channel that all VMs ack on when killed
-	vmIDChan chan int   // channel of new VM IDs
-	vmLock   sync.Mutex // lock for synchronizing access to vms
+	killAck chan int   // channel that all VMs ack on when killed
+	vmID    *Counter   // channel of new VM IDs
+	vmLock  sync.Mutex // lock for synchronizing access to vms
 
 	vmConfig VMConfig // current vm config, updated by CLI
 
@@ -69,6 +69,7 @@ type VM interface {
 	Info(string) (string, error)
 
 	Tag(tag string) string
+	SetTag(k, v string)
 	GetTags() map[string]string
 	ClearTags()
 
@@ -145,7 +146,7 @@ var vmMasks = []string{
 func init() {
 	killAck = make(chan int)
 
-	vmIDChan = makeIDChan()
+	vmID = NewCounter()
 
 	// Reset everything to default
 	for _, fns := range baseConfigFns {
@@ -164,7 +165,7 @@ func NewVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
-	vm.ID = <-vmIDChan
+	vm.ID = vmID.Next()
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
 	} else {
@@ -233,7 +234,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, allocatedVLANs.PrintVLAN(net.VLAN))
+	parts = append(parts, allocatedVLANs.PrintVLAN(namespace, net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)
@@ -349,20 +350,41 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	ccNode.UnregisterClient(vm.UUID)
+	ccNode.UnregisterVM(vm.UUID)
 
 	return os.RemoveAll(vm.instancePath)
 }
 
 func (vm *BaseVM) Tag(tag string) string {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	return vm.Tags[tag]
 }
 
+func (vm *BaseVM) SetTag(k, v string) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm.Tags[k] = v
+}
+
 func (vm *BaseVM) GetTags() map[string]string {
-	return vm.Tags
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	res := map[string]string{}
+	for k, v := range vm.Tags {
+		res[k] = v
+	}
+
+	return res
 }
 
 func (vm *BaseVM) ClearTags() {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	vm.Tags = make(map[string]string)
 }
 

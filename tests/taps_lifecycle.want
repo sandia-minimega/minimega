@@ -3,8 +3,8 @@
 ## tap create 10 bridge minitest name minitest_tap0
 minitest_tap0
 ## .filter bridge=minitest tap
-bridge   | tap           | vlan
-minitest | minitest_tap0 | 10
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   |
 ## tap create 10 bridge minitest name minitest_tap0
 E: tap already on bridge
 
@@ -12,9 +12,9 @@ E: tap already on bridge
 ## tap create 10 bridge minitest ip 192.168.100.1 minitest_tap1
 minitest_tap1
 ## .filter bridge=minitest tap
-bridge   | tap           | vlan
-minitest | minitest_tap0 | 10
-minitest | minitest_tap1 | 10
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   | 
+minitest | minitest_tap1 | 10   |
 
 ## # Clean up taps
 ## tap delete all

@@ -608,7 +608,7 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 	// in parallel since it updates resp.Tabular.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
 		if setOp {
-			vm.GetTags()[key] = value
+			vm.SetTag(key, value)
 		} else if key == Wildcard {
 			for k, v := range vm.GetTags() {
 				resp.Tabular = append(resp.Tabular, []string{
@@ -620,7 +620,7 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 			// TODO: return false if tag not set?
 			resp.Tabular = append(resp.Tabular, []string{
 				strconv.Itoa(vm.GetID()),
-				vm.GetTags()[key],
+				vm.Tag(key),
 			})
 		}
 
@@ -1007,7 +1007,7 @@ func cliVmNetMod(c *minicli.Command) *minicli.Response {
 	} else {
 		vlan := 0
 
-		vlan, err = allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
+		vlan, err := lookupVLAN(c.StringArgs["vlan"])
 		if err == nil {
 			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 		}

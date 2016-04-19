@@ -5,6 +5,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"minicli"
@@ -189,7 +190,7 @@ func cliCCTunnel(c *minicli.Command) *minicli.Response {
 	}
 
 	if c.BoolArgs["rtunnel"] {
-		err := ccNode.Reverse(ccFilter, src, host, dst)
+		err := ccNode.Reverse(ccGetFilter(), src, host, dst)
 		if err != nil {
 			resp.Error = err.Error()
 		}
@@ -216,6 +217,17 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 		if err != nil {
 			return err
 		}
+
+		// Test if the file looks like a UUID. If it does, and a namespace is
+		// active, check whether the VM is part of the active namespace. This
+		// is a fairly naive way to filter the responses...
+		if namespace != "" && isUUID(info.Name()) {
+			vm := vms.findVm(info.Name())
+			if vm != nil && vm.GetNamespace() != namespace {
+				return filepath.SkipDir
+			}
+		}
+
 		if !info.IsDir() {
 			files = append(files, path)
 			log.Debug("add to response files: %v", path)
@@ -297,15 +309,26 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 	if len(c.ListArgs["filter"]) == 0 {
 		// Summary of current filter
 		if ccFilter != nil {
-			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
-			resp.Tabular = append(resp.Tabular, []string{
+			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC", "Tags"}
+			row := []string{
 				ccFilter.UUID,
 				ccFilter.Hostname,
 				ccFilter.Arch,
 				ccFilter.OS,
 				fmt.Sprintf("%v", ccFilter.IP),
 				fmt.Sprintf("%v", ccFilter.MAC),
-			})
+			}
+
+			// encode the tags using JSON
+			tags, err := json.Marshal(ccFilter.Tags)
+			if err != nil {
+				log.Warn("Unable to json marshal tags: %v", err)
+			} else if ccFilter.Tags == nil {
+				tags = []byte("{}")
+			}
+			row = append(row, string(tags))
+
+			resp.Tabular = append(resp.Tabular, row)
 		}
 	} else {
 		filter := &ron.Client{}
@@ -331,9 +354,29 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 				filter.IP = append(filter.IP, parts[1])
 			case "mac":
 				filter.MAC = append(filter.MAC, parts[1])
+			case "tag":
+				// Explicit filter on tag
+				parts = parts[1:]
+				fallthrough
 			default:
-				resp.Error = fmt.Sprintf("no such filter field %v", parts[0])
-				return resp
+				// Implicit filter on a tag
+				if filter.Tags == nil {
+					filter.Tags = make(map[string]string)
+				}
+
+				// Split on `=` or `:` -- who cares if they did `tag=foo=bar`,
+				// `tag=foo:bar` or `foo=bar`. `=` takes precedence.
+				if strings.Contains(parts[0], "=") {
+					parts = strings.SplitN(parts[0], "=", 2)
+				} else if strings.Contains(parts[0], ":") {
+					parts = strings.SplitN(parts[0], ":", 2)
+				}
+
+				if len(parts) == 1 {
+					filter.Tags[parts[0]] = ""
+				} else if len(parts) == 2 {
+					filter.Tags[parts[0]] = parts[1]
+				}
 			}
 		}
 
@@ -347,11 +390,8 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 func cliCCFileSend(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to send, expand globs
@@ -398,11 +438,8 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to receive
@@ -424,13 +461,10 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 func cliCCBackground(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
 		Background: true,
 		Command:    c.ListArgs["command"],
-		Filter:     ccFilter,
+		Filter:     ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -454,7 +488,7 @@ func cliCCProcess(c *minicli.Command) *minicli.Response {
 
 		cmd := &ron.Command{
 			PID:    pid,
-			Filter: ccFilter,
+			Filter: ccGetFilter(),
 		}
 
 		id := ccNode.NewCommand(cmd)
@@ -516,12 +550,9 @@ func cliCCProcess(c *minicli.Command) *minicli.Response {
 func cliCCExec(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	// Set implicit filter
-	ccFilter.Namespace = namespace
-
 	cmd := &ron.Command{
 		Command: c.ListArgs["command"],
-		Filter:  ccFilter,
+		Filter:  ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -579,7 +610,12 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 
 	var commandIDs []int
 	commands := ccNode.GetCommands()
-	for k, _ := range commands {
+	for k, v := range commands {
+		// only show commands for the active namespace
+		if !ccMatchNamespace(v) {
+			continue
+		}
+
 		commandIDs = append(commandIDs, k)
 	}
 	sort.Ints(commandIDs)
@@ -622,6 +658,17 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		ids := ccPrefixIDs(id)
 		if len(ids) != 0 {
 			for _, v := range ids {
+				c := ccNode.GetCommand(v)
+				if c == nil {
+					resp.Error = fmt.Sprintf("cc delete unknown command %v", v)
+					return resp
+				}
+
+				if !ccMatchNamespace(c) {
+					// skip without warning
+					continue
+				}
+
 				err := ccNode.DeleteCommand(v)
 				if err != nil {
 					resp.Error = fmt.Sprintf("cc delete command %v : %v", v, err)
@@ -635,6 +682,17 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		val, err := strconv.Atoi(id)
 		if err != nil {
 			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
+			return resp
+		}
+
+		c := ccNode.GetCommand(val)
+		if c == nil {
+			resp.Error = fmt.Sprintf("cc delete unknown command %v", val)
+			return resp
+		}
+
+		if !ccMatchNamespace(c) {
+			resp.Error = fmt.Sprintf("cc command not part of active namespace")
 			return resp
 		}
 

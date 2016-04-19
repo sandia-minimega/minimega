@@ -20,6 +20,20 @@ import (
 	"version"
 )
 
+// GetCommand returns copy of a command by ID or nil if it doesn't exist
+func (s *Server) GetCommand(id int) *Command {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	log.Debug("ron GetCommand: %v", id)
+
+	if v, ok := s.commands[id]; ok {
+		return v.Copy()
+	}
+
+	return nil
+}
+
 // GetCommands returns a copy of the current command list
 func (s *Server) GetCommands() map[int]*Command {
 	// return a deep copy of the command list
@@ -28,16 +42,7 @@ func (s *Server) GetCommands() map[int]*Command {
 	defer s.commandLock.Unlock()
 
 	for k, v := range s.commands {
-		ret[k] = &Command{
-			ID:         v.ID,
-			Background: v.Background,
-			Command:    v.Command,
-			FilesSend:  v.FilesSend,
-			FilesRecv:  v.FilesRecv,
-			CheckedIn:  v.CheckedIn,
-			Filter:     v.Filter,
-			PID:        v.PID,
-		}
+		ret[k] = v.Copy()
 	}
 
 	log.Debug("ron GetCommands: %v", ret)
@@ -362,13 +367,33 @@ func (s *Server) route(m *Message) {
 	if m.UUID == "" {
 		// send commands to all clients
 		for _, c := range s.clients {
-			// filter commands by namespace
-			ns := s.namespaces[c.UUID]
+			vm := s.vms[c.UUID]
 			cmds := map[int]*Command{}
+
+		cmdLoop:
 			for k, cmd := range m.Commands {
-				if ns == "" || cmd.Filter.Namespace == ns {
-					cmds[k] = cmd
+				want := cmd.Filter.Namespace
+				got := vm.GetNamespace()
+
+				// filter commands by namespace
+				if want != "" && want != got {
+					continue
 				}
+
+				tags := vm.GetTags()
+
+				// filter commands by tags
+				for k, v := range cmd.Filter.Tags {
+					v2, ok := tags[k]
+
+					// if v is empty, tag must be set on VM
+					// otherwise, must match tag value on VM
+					if (v == "" && !ok) || v != v2 {
+						continue cmdLoop
+					}
+				}
+
+				cmds[k] = cmd
 			}
 
 			// clone message
@@ -619,16 +644,16 @@ func (s *Server) DialSerial(path string) error {
 	return nil
 }
 
-func (s *Server) RegisterClient(uuid, namespace string) {
+func (s *Server) RegisterVM(uuid string, f VM) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	s.namespaces[uuid] = namespace
+	s.vms[uuid] = f
 }
 
-func (s *Server) UnregisterClient(uuid string) {
+func (s *Server) UnregisterVM(uuid string) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	delete(s.namespaces, uuid)
+	delete(s.vms, uuid)
 }
