@@ -101,7 +101,10 @@ func errResp(err error) minicli.Responses {
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
-func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+	// for the `local` behavior
+	localFunc := wrapSimpleCLI(fn)
+
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		log.Debug("namespace: %v, source: %v", namespace, c.Source)
 
@@ -118,7 +121,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 		// the remote nodes will execute the `local` behavior rather than
 		// trying to `fan out`.
 		if c.Source == namespace {
-			respChan <- minicli.Responses{fn(c)}
+			localFunc(c, respChan)
 			return
 		}
 		c.SetSource(namespace)
@@ -150,13 +153,16 @@ func wrapBroadcastCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFu
 
 // wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
 // or more VMs. This is used by commands like `vm start` and `vm kill`.
-func wrapVMTargetCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+	// for the `local` behavior
+	localFunc := wrapSimpleCLI(fn)
+
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
 		log.Debug("namespace: %v, source: %v", namespace, c.Source)
 
 		// See note in wrapBroadcastCLI.
 		if c.Source == namespace {
-			respChan <- minicli.Responses{fn(c)}
+			localFunc(c, respChan)
 			return
 		}
 		c.SetSource(namespace)

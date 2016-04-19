@@ -77,7 +77,7 @@ the file in manually except that it stops after the first error.`,
 		Patterns: []string{
 			"version",
 		},
-		Call: wrapSimpleCLI(cliVersion),
+		Call: wrapBroadcastCLI(cliVersion),
 	},
 	{ // echo
 		HelpShort: "display input text after comment removal",
