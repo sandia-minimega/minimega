@@ -5,9 +5,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
-	"log"
 	"minicli"
+)
+
+var (
+	vmConfig  VMConfig                    // current vm config, updated by CLI
+	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
 )
 
 var vmconfigCLIHandlers = []minicli.Handler{
@@ -51,8 +56,8 @@ Set the amount of physical memory to allocate in megabytes.`,
 		Patterns: []string{
 			"vm config memory [memory in megabytes]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "memory")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "memory")
 		}),
 	},
 	{ // vm config vcpus
@@ -62,8 +67,8 @@ Set the number of virtual CPUs to allocate for a VM.`,
 		Patterns: []string{
 			"vm config vcpus [number of CPUs]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "vcpus")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "vcpus")
 		}),
 	},
 	{ // vm config cpu
@@ -76,8 +81,8 @@ help' for a list of architectures available for your version of kvm.`,
 		Patterns: []string{
 			"vm config cpu [cpu]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "cpu")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "cpu")
 		}),
 	},
 	{ // vm config net
@@ -131,8 +136,8 @@ Calling vm net with no parameters will list the current networks for this VM.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "net")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "net")
 		}),
 	},
 	{ // vm config tag
@@ -160,8 +165,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config append [arg]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "append")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "append")
 		}),
 	},
 	{ // vm config qemu
@@ -173,8 +178,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu [path to qemu]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "qemu")
 		}),
 	},
 	{ // vm config qemu-override
@@ -189,8 +194,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 			"vm config qemu-override add <match> <replacement>",
 			"vm config qemu-override delete <id or all>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu-override")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "qemu-override")
 		}),
 	},
 	{ // vm config qemu-append
@@ -204,8 +209,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-append [argument]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "qemu-append")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "qemu-append")
 		}),
 	},
 	{ // vm config migrate
@@ -219,8 +224,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config migrate [path to migration image]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "migrate")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "migrate")
 		}),
 	},
 	{ // vm config disk
@@ -234,8 +239,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config disk [path to disk image]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "disk")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "disk")
 		}),
 	},
 	{ // vm config cdrom
@@ -248,8 +253,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config cdrom [path to cdrom image]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "cdrom")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "cdrom")
 		}),
 	},
 	{ // vm config kernel
@@ -262,8 +267,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config kernel [path to kernel]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "kernel")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "kernel")
 		}),
 	},
 	{ // vm config initrd
@@ -276,8 +281,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config initrd [path to initrd]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "initrd")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "initrd")
 		}),
 	},
 	{ // vm config uuid
@@ -290,8 +295,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config uuid [uuid]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "uuid")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "uuid")
 		}),
 	},
 	{ // vm config serial
@@ -317,8 +322,8 @@ another number.`,
 		Patterns: []string{
 			"vm config serial [number of serial ports]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "serial")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "serial")
 		}),
 	},
 	{ // vm config virtio-serial
@@ -339,8 +344,8 @@ To create three virtio-serial ports:
 		Patterns: []string{
 			"vm config virtio-serial [number of virtio-serial ports]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "virtio-serial")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "virtio-serial")
 		}),
 	},
 	{ // vm config snapshot
@@ -354,8 +359,8 @@ Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "snapshot")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "snapshot")
 		}),
 	},
 	{ // vm config hostname
@@ -367,8 +372,8 @@ the init program or other root process in the container.`,
 		Patterns: []string{
 			"vm config hostname [hostname]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "hostname")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "hostname")
 		}),
 	},
 	{ // vm config init
@@ -379,8 +384,8 @@ PID 1 in the container.`,
 		Patterns: []string{
 			"vm config init [init]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "init")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "init")
 		}),
 	},
 	{ // vm config preinit
@@ -403,8 +408,8 @@ during runtime because /proc is mounted read-only, add a preinit script:
 		Patterns: []string{
 			"vm config preinit [preinit]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "preinit")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "preinit")
 		}),
 	},
 	{ // vm config filesystem
@@ -415,8 +420,8 @@ filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)`,
 		Patterns: []string{
 			"vm config filesystem [filesystem]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "filesystem")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "filesystem")
 		}),
 	},
 	{ // vm config fifo
@@ -430,8 +435,8 @@ Fifos are created using mkfifo() and have all of the same usage constraints.`,
 		Patterns: []string{
 			"vm config fifo [number]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliVmConfigField(c, "fifo")
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "fifo")
 		}),
 	},
 	{ // clear vm config
@@ -486,53 +491,56 @@ Remove tags in the same manner as "clear vm tag".`,
 	},
 }
 
-func cliVmConfig(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmConfig(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = *vmConfig.Copy()
+		savedInfo[c.StringArgs["name"]] = vmConfig.Copy()
+
+		return nil
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
-			if s, ok := savedInfo[name]; ok {
-				vmConfig = *s.Copy()
-			} else {
-				resp.Error = fmt.Sprintf("config %v does not exist", name)
+			if _, ok := savedInfo[name]; !ok {
+				return fmt.Errorf("config %v does not exist", name)
 			}
+
+			vmConfig = savedInfo[name].Copy()
+
+			return nil
 		} else if len(savedInfo) == 0 {
-			resp.Error = "no vm configs saved"
-		} else {
-			// List the save configs
-			for k := range savedInfo {
-				resp.Response += fmt.Sprintln(k)
-			}
+			return errors.New("no vm configs saved")
 		}
+
+		// List the save configs
+		for k := range savedInfo {
+			resp.Response += fmt.Sprintln(k)
+		}
+
+		return nil
 	} else if c.BoolArgs["clone"] {
 		// Clone the config of an existing vm
 		vm := LocalVMs().findVm(c.StringArgs["vm"])
 		if vm == nil {
-			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
-		} else {
-			vmConfig.BaseConfig = *vm.Config().Copy()
-			switch vm := vm.(type) {
-			case *KvmVM:
-				vmConfig.KVMConfig = *vm.KVMConfig.Copy()
-			case *ContainerVM:
-				vmConfig.ContainerConfig = *vm.ContainerConfig.Copy()
-			}
+			return vmNotFound(c.StringArgs["vm"])
 		}
-	} else {
-		// Print the config
-		resp.Response = vmConfig.String()
+
+		vmConfig.BaseConfig = vm.Config().Copy()
+		switch vm := vm.(type) {
+		case *KvmVM:
+			vmConfig.KVMConfig = vm.KVMConfig.Copy()
+		case *ContainerVM:
+			vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
+		}
+
+		return nil
 	}
 
-	return resp
+	// Print the config
+	resp.Response = vmConfig.String()
+	return nil
 }
 
-func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmConfigField(c *minicli.Command, resp *minicli.Response, field string) error {
 	// If there are no args it means that we want to display the current value
 	nArgs := len(c.StringArgs) + len(c.ListArgs) + len(c.BoolArgs)
 
@@ -548,23 +556,18 @@ func cliVmConfigField(c *minicli.Command, field string) *minicli.Response {
 	} else if fns, ok = containerConfigFns[field]; ok {
 		config = &vmConfig.ContainerConfig
 	} else {
-		log.Fatal("unknown config field: `%s`", field)
+		return fmt.Errorf("unknown config field: `%s`", field)
 	}
 
 	if nArgs == 0 {
 		resp.Response = fns.Print(config)
-	} else {
-		if err := fns.Update(config, c); err != nil {
-			resp.Error = err.Error()
-		}
+		return nil
 	}
 
-	return resp
+	return fns.Update(config, c)
 }
 
-func cliVmConfigTag(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmConfigTag(c *minicli.Command, resp *minicli.Response) error {
 	k := c.StringArgs["key"]
 	v := c.StringArgs["value"]
 
@@ -579,12 +582,10 @@ func cliVmConfigTag(c *minicli.Command) *minicli.Response {
 		resp.Response = vmConfig.TagsString()
 	}
 
-	return resp
+	return nil
 }
 
-func cliClearVmConfig(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliClearVmConfig(c *minicli.Command, resp *minicli.Response) error {
 	var clearAll = len(c.BoolArgs) == 0
 	var clearKVM = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["kvm"])
 	var clearContainer = clearAll || (len(c.BoolArgs) == 1 && c.BoolArgs["container"])
@@ -610,15 +611,13 @@ func cliClearVmConfig(c *minicli.Command) *minicli.Response {
 	}
 
 	if !cleared {
-		log.Fatalln("no callback defined for clear")
+		return errors.New("no callback defined for clear")
 	}
 
-	return resp
+	return nil
 }
 
-func cliClearVmConfigTag(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliClearVmConfigTag(c *minicli.Command, resp *minicli.Response) error {
 	if k := c.StringArgs["key"]; k == "" || k == Wildcard {
 		// Clearing all tags
 		vmConfig.Tags = map[string]string{}
@@ -626,5 +625,5 @@ func cliClearVmConfigTag(c *minicli.Command) *minicli.Response {
 		delete(vmConfig.Tags, k)
 	}
 
-	return resp
+	return nil
 }

@@ -44,6 +44,30 @@ func init() {
 	}
 }
 
+// makeErrSlice turns a slice of errors into an errSlice which implements the
+// Error interface. This checks to make sure that there is at least one non-nil
+// error in the slice and returns nil otherwise.
+func makeErrSlice(errs []error) error {
+	var found bool
+
+	for _, err := range errs {
+		if err != nil {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	return errSlice(errs)
+}
+
+func (errs errSlice) Error() string {
+	return errs.String()
+}
+
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {

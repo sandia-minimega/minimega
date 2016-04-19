@@ -123,17 +123,13 @@ func checkExternal() error {
 	return nil
 }
 
-func cliCheckExternal(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := checkExternal()
-	if err != nil {
-		resp.Error = err.Error()
-	} else {
-		resp.Response = "all external dependencies met"
+func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
+	if err := checkExternal(); err == nil {
+		return err
 	}
 
-	return resp
+	resp.Response = "all external dependencies met"
+	return nil
 }
 
 // processWrapper executes the given arg list and returns a combined

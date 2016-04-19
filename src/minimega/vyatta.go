@@ -132,9 +132,7 @@ func init() {
 	vyatta.Dhcp = make(map[string]*vyattaDhcp)
 }
 
-func cliVyatta(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVyatta(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["dhcp"] {
 		net := c.StringArgs["network"]
 
@@ -259,17 +257,15 @@ func cliVyatta(c *minicli.Command) *minicli.Response {
 		}}
 	}
 
-	return resp
+	return nil
 }
 
-func cliVyattaClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVyattaClear(c *minicli.Command, resp *minicli.Response) error {
 	vyatta = vyattaConfig{
 		Dhcp: make(map[string]*vyattaDhcp),
 	}
 
-	return resp
+	return nil
 }
 
 func vyattaUpdateRoutes(routes []string) error {

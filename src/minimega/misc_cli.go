@@ -88,37 +88,34 @@ the file in manually except that it stops after the first error.`,
 	},
 }
 
-func cliQuit(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			go func() {
-				time.Sleep(time.Duration(delay) * time.Second)
-				teardown()
-			}()
-			resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
+			return err
 		}
-	} else {
-		teardown()
+
+		go func() {
+			time.Sleep(time.Duration(delay) * time.Second)
+			teardown()
+		}()
+
+		resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
+		return nil
 	}
 
-	return resp
+	teardown()
+	return errors.New("unreachable")
 }
 
-func cliHelp(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
 	}
 
 	resp.Response = minicli.Help(input)
-	return resp
+	return nil
 }
 
 func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
@@ -189,9 +186,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	}
 }
 
-func cliDebug(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["memory"] {
 		dst := c.StringArgs["file"]
 		if !filepath.IsAbs(dst) {
@@ -202,18 +197,14 @@ func cliDebug(c *minicli.Command) *minicli.Response {
 
 		f, err := os.Create(dst)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 		defer f.Close()
 
-		pprof.WriteHeapProfile(f)
-
-		return resp
+		return pprof.WriteHeapProfile(f)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
-			resp.Error = "old CPU profile still running"
-			return resp
+			return errors.New("CPU profile still running")
 		}
 
 		dst := c.StringArgs["file"]
@@ -225,52 +216,44 @@ func cliDebug(c *minicli.Command) *minicli.Response {
 
 		f, err := os.Create(dst)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 		cpuProfileOut = f
 
-		pprof.StartCPUProfile(cpuProfileOut)
-
-		return resp
+		return pprof.StartCPUProfile(cpuProfileOut)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["stop"] {
 		if cpuProfileOut == nil {
-			resp.Error = "CPU profile is not running"
-			return resp
+			return errors.New("CPU profile not running")
 		}
 
 		pprof.StopCPUProfile()
-		cpuProfileOut.Close()
+		if err := cpuProfileOut.Close(); err != nil {
+			return err
+		}
 
 		cpuProfileOut = nil
-
-		return resp
+		return nil
 	}
 
 	// Otherwise, return information about the runtime environment
-	return &minicli.Response{
-		Host:   hostname,
-		Header: []string{"Go version", "Goroutines", "CGO calls"},
-		Tabular: [][]string{
-			[]string{
-				runtime.Version(),
-				strconv.Itoa(runtime.NumGoroutine()),
-				strconv.FormatInt(runtime.NumCgoCall(), 10),
-			},
+	resp.Header = []string{"Go version", "Goroutines", "CGO calls"}
+	resp.Tabular = [][]string{
+		[]string{
+			runtime.Version(),
+			strconv.Itoa(runtime.NumGoroutine()),
+			strconv.FormatInt(runtime.NumCgoCall(), 10),
 		},
 	}
+
+	return nil
 }
 
-func cliVersion(c *minicli.Command) *minicli.Response {
-	return &minicli.Response{
-		Host:     hostname,
-		Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
-	}
+func cliVersion(c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
+	return nil
 }
 
-func cliEcho(c *minicli.Command) *minicli.Response {
-	return &minicli.Response{
-		Host:     hostname,
-		Response: strings.Join(c.ListArgs["args"], " "),
-	}
+func cliEcho(c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = strings.Join(c.ListArgs["args"], " ")
+	return nil
 }

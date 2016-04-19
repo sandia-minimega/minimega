@@ -566,11 +566,9 @@ func containerFifos(vmFSPath string, vmInstancePath string, vmFifos int) error {
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
-func (old *ContainerConfig) Copy() *ContainerConfig {
-	res := new(ContainerConfig)
-
+func (old ContainerConfig) Copy() ContainerConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	// none yet - placeholder
@@ -588,7 +586,7 @@ func NewContainer(name string) *ContainerVM {
 	vm.BaseVM = *NewVM(name)
 	vm.Type = CONTAINER
 
-	vm.ContainerConfig = *vmConfig.ContainerConfig.Copy() // deep-copy configured fields
+	vm.ContainerConfig = vmConfig.ContainerConfig.Copy() // deep-copy configured fields
 
 	return vm
 }

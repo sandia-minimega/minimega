@@ -90,9 +90,12 @@ func isUserSource(source string) bool {
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
-func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
+func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		resp := fn(c)
+		resp := &minicli.Response{Host: hostname}
+		if err := fn(c, resp); err != nil {
+			resp.Error = err.Error()
+		}
 		respChan <- minicli.Responses{resp}
 	}
 }

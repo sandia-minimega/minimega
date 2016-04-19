@@ -633,9 +633,7 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func cliClearVmTag(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliClearVmTag(c *minicli.Command, resp *minicli.Response) error {
 	key := c.StringArgs["key"]
 	if key == "" {
 		// If they didn't specify a key then they probably want all the tags
@@ -660,61 +658,48 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 		return true, nil
 	}
 
-	errs := LocalVMs().apply(target, true, applyFunc)
-	resp.Error = errSlice(errs).String()
-
-	return resp
+	return errSlice(LocalVMs().apply(target, true, applyFunc))
 }
 
-func cliVmLaunch(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 	if namespace == "" && len(c.StringArgs) == 0 {
-		resp.Error = "invalid command when namespace is not active"
-		return resp
+		return fmt.Errorf("invalid command when namespace is not active")
 	}
 
 	if namespace != "" && isUserSource(c.Source) {
 		if len(c.StringArgs) > 0 {
-			namespaceQueue(c, resp)
-		} else {
-			namespaceLaunch(c, resp)
+			return namespaceQueue(c, resp)
 		}
 
-		return resp
+		return namespaceLaunch(c, resp)
 	}
 
 	// Only need to check collisions with VMs running locally, scheduler
 	// *should* have done checks to make sure that the VMs it was launching we
 	// globally unique.
 	names, err := expandVMLaunchNames(c.StringArgs["name"], LocalVMs())
-
-	if len(names) > 1 && vmConfig.UUID != "" {
-		err = errors.New("cannot launch multiple VMs with a pre-configured UUID")
+	if err != nil {
+		return err
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
+	if len(names) > 1 && vmConfig.UUID != "" {
+		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
 	for i, name := range names {
 		if isReserved(name) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
-			return resp
+			return fmt.Errorf("`%s` is a reserved word -- cannot use for vm name", name)
 		}
 
 		if _, err := strconv.Atoi(name); err == nil {
-			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
-			return resp
+			return fmt.Errorf("`%s` is an integer -- cannot use for vm name", name)
 		}
 
 		// Check for conflicts within the provided names. Don't conflict with
 		// ourselves or if the name is unspecified.
 		for j, name2 := range names {
 			if i != j && name == name2 && name != "" {
-				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
-				return resp
+				return fmt.Errorf("`%s` is specified twice in VMs to launch", name)
 			}
 		}
 	}
@@ -723,8 +708,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	vmType, err := findVMType(c.BoolArgs)
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	log.Info("launching %v %v vms", len(names), vmType)
@@ -760,25 +744,26 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	}()
 
 	// Collect all the errors from errChan and turn them into a string
-	collectErrs := func() string {
+	collectErrs := func() error {
 		errs := []error{}
 		for err := range errChan {
 			errs = append(errs, err)
 		}
-		return errSlice(errs).String()
+
+		return makeErrSlice(errs)
 	}
 
 	if noblock {
 		go func() {
-			if err := collectErrs(); err != "" {
+			if err := collectErrs(); err != nil {
 				log.Errorln(err)
 			}
 		}()
-	} else {
-		resp.Error = collectErrs()
+
+		return nil
 	}
 
-	return resp
+	return collectErrs()
 }
 
 func cliVmFlush(c *minicli.Command) *minicli.Response {
@@ -987,37 +972,27 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 	return resp
 }
 
-func cliVmNetMod(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
 	vm := LocalVMs().findVm(c.StringArgs["vm"])
 	if vm == nil {
-		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
-		return resp
+		return vmNotFound(c.StringArgs["vm"])
 	}
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	if c.BoolArgs["disconnect"] {
-		err = vm.NetworkDisconnect(pos)
-	} else {
-		vlan := 0
-
-		vlan, err := lookupVLAN(c.StringArgs["vlan"])
-		if err == nil {
-			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
-		}
+		return vm.NetworkDisconnect(pos)
 	}
 
+	vlan, err := lookupVLAN(c.StringArgs["vlan"])
 	if err != nil {
-		resp.Error = err.Error()
+		return err
 	}
 
-	return resp
+	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 }
 
 // cliVMSuggest takes a prefix that could be the start of a VM name or a VM ID

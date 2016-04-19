@@ -139,63 +139,41 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func cliMeshageDegree(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageDegree(c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["degree"] != "" {
 		degree, err := strconv.ParseUint(c.StringArgs["degree"], 0, 10)
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			meshageNode.SetDegree(uint(degree))
+			return err
 		}
-	} else {
-		resp.Response = fmt.Sprintf("%d", meshageNode.GetDegree())
+
+		meshageNode.SetDegree(uint(degree))
+		return nil
 	}
 
-	return resp
+	resp.Response = fmt.Sprintf("%d", meshageNode.GetDegree())
+	return nil
 }
 
-func cliMeshageDial(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := meshageNode.Dial(c.StringArgs["hostname"])
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+func cliMeshageDial(c *minicli.Command, resp *minicli.Response) error {
+	return meshageNode.Dial(c.StringArgs["hostname"])
 }
 
-func cliMeshageDot(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliMeshageHangup(c *minicli.Command, resp *minicli.Response) error {
+	return meshageNode.Hangup(c.StringArgs["hostname"])
+}
 
+func cliMeshageDot(c *minicli.Command, resp *minicli.Response) error {
 	f, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	defer f.Close()
 
-	f.WriteString(meshageNode.Dot())
-
-	return resp
+	_, err = f.WriteString(meshageNode.Dot())
+	return err
 }
 
-func cliMeshageHangup(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := meshageNode.Hangup(c.StringArgs["hostname"])
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
-}
-
-func cliMeshageList(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageList(c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 
 	var keys []string
@@ -213,12 +191,10 @@ func cliMeshageList(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	return resp
+	return nil
 }
 
-func cliMeshageStatus(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageStatus(c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 	degree := meshageNode.GetDegree()
 	nodes := len(mesh)
@@ -234,24 +210,23 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 		},
 	}
 
-	return resp
+	return nil
 }
 
-func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageTimeout(c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["timeout"] != "" {
 		timeout, err := strconv.Atoi(c.StringArgs["timeout"])
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			meshageTimeout = time.Duration(timeout) * time.Second
+			return err
 		}
-	} else {
-		resp.Response = fmt.Sprintf("%v", meshageTimeout)
+
+		meshageTimeout = time.Duration(timeout) * time.Second
+		return nil
 	}
 
-	return resp
+	// get current value
+	resp.Response = fmt.Sprintf("%v", meshageTimeout)
+	return nil
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {

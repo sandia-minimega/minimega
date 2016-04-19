@@ -218,12 +218,9 @@ Schedules:
 	respChan <- minicli.Responses{resp}
 }
 
-func cliNamespaceMod(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 	if namespace == "" {
-		resp.Error = "cannot run nsmod without active namespace"
-		return resp
+		return errors.New("cannot run nsmod without active namespace")
 	}
 
 	ns := namespaces[namespace]
@@ -231,8 +228,7 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 	// Empty string should parse fine...
 	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
 	if err != nil {
-		resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
-		return resp
+		return fmt.Errorf("invalid hosts -- %v", err)
 	}
 
 	if c.BoolArgs["add-host"] {
@@ -250,8 +246,7 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 			}
 
 			if hosts[i] != hostname && !peers[hosts[i]] {
-				resp.Error = fmt.Sprintf("unknown host: `%v`", hosts[i])
-				return resp
+				return fmt.Errorf("unknown host: `%v`", hosts[i])
 			}
 		}
 
@@ -259,59 +254,57 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 		for _, host := range hosts {
 			ns.Hosts[host] = true
 		}
+
+		return nil
 	} else if c.BoolArgs["del-host"] {
 		for _, host := range hosts {
 			delete(ns.Hosts, host)
 		}
-	} else {
-		// oops...
+
+		return nil
 	}
 
-	return resp
+	// boo, should be unreachable
+	return errors.New("unreachable")
 }
 
-func cliClearNamespace(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Clearing the namespace global
 		namespace = ""
-		return resp
+		return nil
 	}
 
 	// Trying to delete a namespace
 	ns, exists := namespaces[name]
 	if !exists {
-		resp.Error = fmt.Sprintf("unknown namespace `%v`", name)
-		return resp
+		return fmt.Errorf("unknown namespace `%v`", name)
 	}
 
 	// Attempt to destroy the namespace
 	if err := ns.Destroy(); err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
-	// If we're deleting the currently active namespace, we should get
-	// out of that namespace
+	// If we're deleting the currently active namespace, we should get out of
+	// that namespace
 	if namespace == name {
 		namespace = ""
 	}
 
 	delete(namespaces, name)
-	return resp
+	return nil
 }
 
 // namespaceQueue handles storing the current VM config to the namespace's
 // queuedVMs so that we can launch it in the future.
-func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
+func namespaceQueue(c *minicli.Command, resp *minicli.Response) error {
 	ns := namespaces[namespace]
 
 	names, err := expandVMLaunchNames(c.StringArgs["name"], GlobalVMs())
 	if err != nil {
-		resp.Error = err.Error()
-		return
+		return err
 	}
 
 	// Create a map so that we can look up existence in constant time
@@ -325,38 +318,36 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) {
 	for _, queued := range ns.queuedVMs {
 		for _, name := range queued.names {
 			if namesMap[name] {
-				resp.Error = fmt.Sprintf("vm already queued with name `%s`", name)
-				return
+				return fmt.Errorf("vm already queued with name `%s`", name)
 			}
 		}
 	}
 
 	vmType, err := findVMType(c.BoolArgs)
 	if err != nil {
-		resp.Error = err.Error()
-		return
+		return err
 	}
 
 	ns.queuedVMs = append(ns.queuedVMs, queuedVM{
-		VMConfig: *vmConfig.Copy(),
+		VMConfig: vmConfig.Copy(),
 		names:    names,
 		vmType:   vmType,
 	})
+
+	return nil
 }
 
 // namespaceLaunch runs the scheduler and launches VMs across the namespace.
 // Blocks until all the `vm launch ... noblock` commands are in-flight.
-func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
+func namespaceLaunch(c *minicli.Command, resp *minicli.Response) error {
 	ns := namespaces[namespace]
 
 	if len(ns.Hosts) == 0 {
-		resp.Error = "namespace must contain at least one host to launch VMs"
-		return
+		return errors.New("namespace must contain at least one host to launch VMs")
 	}
 
 	if len(ns.queuedVMs) == 0 {
-		resp.Error = "namespace must contain at least one queued VM to launch VMs"
-		return
+		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
 	// Create the host -> VMs assignment
@@ -410,6 +401,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) {
 	stats.end = time.Now()
 	stats.state = SchedulerCompleted
 
+	return nil
 }
 
 // namespaceHostLaunch launches a queuedVM on the specified host and namespace.

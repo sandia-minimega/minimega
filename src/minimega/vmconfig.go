@@ -29,11 +29,11 @@ type VMConfigFns struct {
 	PrintCLI func(interface{}) []string // If not specified, Print is used
 }
 
-func (old *VMConfig) Copy() *VMConfig {
-	return &VMConfig{
-		BaseConfig:      *old.BaseConfig.Copy(),
-		KVMConfig:       *old.KVMConfig.Copy(),
-		ContainerConfig: *old.ContainerConfig.Copy(),
+func (old VMConfig) Copy() VMConfig {
+	return VMConfig{
+		BaseConfig:      old.BaseConfig.Copy(),
+		KVMConfig:       old.KVMConfig.Copy(),
+		ContainerConfig: old.ContainerConfig.Copy(),
 	}
 }
 

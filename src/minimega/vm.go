@@ -32,10 +32,6 @@ var (
 	killAck chan int   // channel that all VMs ack on when killed
 	vmID    *Counter   // channel of new VM IDs
 	vmLock  sync.Mutex // lock for synchronizing access to vms
-
-	vmConfig VMConfig // current vm config, updated by CLI
-
-	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
 )
 
 type VMType int
@@ -164,7 +160,7 @@ func init() {
 func NewVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
-	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
+	vm.BaseConfig = vmConfig.BaseConfig.Copy() // deep-copy configured fields
 	vm.ID = vmID.Next()
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
@@ -243,11 +239,9 @@ func (net NetConfig) String() (s string) {
 	return strings.Join(parts, ",")
 }
 
-func (old *BaseConfig) Copy() *BaseConfig {
-	res := new(BaseConfig)
-
+func (old BaseConfig) Copy() BaseConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	res.Networks = make([]NetConfig, len(old.Networks))

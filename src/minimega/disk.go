@@ -227,9 +227,7 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 	}
 }
 
-func cliDisk(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 	image := c.StringArgs["image"]
 
 	// Ensure that relative paths are always relative to /files/
@@ -242,32 +240,29 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 		dst := c.StringArgs["dst"]
 
 		if dst == "" {
-			if f, err := ioutil.TempFile(*f_iomBase, "snapshot"); err != nil {
-				resp.Error = "could not create a dst image"
-				return resp
-			} else {
-				dst = f.Name()
-				resp.Response = dst
+			f, err := ioutil.TempFile(*f_iomBase, "snapshot")
+			if err != nil {
+				return errors.New("could not create a dst image")
 			}
+
+			dst = f.Name()
+			resp.Response = dst
 		} else if strings.Contains(dst, "/") {
-			resp.Error = "dst image must filename without path"
-			return resp
+			return errors.New("dst image must filename without path")
 		} else {
 			dst = path.Join(*f_iomBase, dst)
 		}
+
 		log.Debug("destination image: %v", dst)
 
-		if err := diskSnapshot(image, dst); err != nil {
-			resp.Error = err.Error()
-		}
+		return diskSnapshot(image, dst)
 	} else if c.BoolArgs["inject"] {
 		partition := "1"
 
 		if strings.Contains(image, ":") {
 			parts := strings.Split(image, ":")
 			if len(parts) != 2 {
-				resp.Error = "found way too many ':'s, expected <path/to/image>:<partition>"
-				return resp
+				return errors.New("found way too many ':'s, expected <path/to/image>:<partition>")
 			}
 
 			image, partition = parts[0], parts[1]
@@ -278,13 +273,10 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 
 		pairs, err := parseInjectPairs(c.ListArgs["files"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
-		if err := diskInject(image, partition, pairs, options); err != nil {
-			resp.Error = err.Error()
-		}
+		return diskInject(image, partition, pairs, options)
 	} else if c.BoolArgs["create"] {
 		size := c.StringArgs["size"]
 
@@ -293,12 +285,9 @@ func cliDisk(c *minicli.Command) *minicli.Response {
 			format = "qcow2"
 		}
 
-		if err := diskCreate(format, image, size); err != nil {
-			resp.Error = err.Error()
-		}
-	} else {
-		// boo, should be unreachable
+		return diskCreate(format, image, size)
 	}
 
-	return resp
+	// boo, should be unreachable
+	return errors.New("unreachable")
 }
