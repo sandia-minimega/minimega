@@ -1,0 +1,17 @@
+## # Start a VM
+## vm launch kvm foo
+
+## # Should fail, VM not running
+## # TODO: can't test this right now since the error includes the VM ID
+## #vm screenshot foo file /tmp/minitest.png
+
+## # Get a screenshot
+## vm start foo
+## vm screenshot foo file /tmp/minitest.png
+
+## # Look for PNG in header
+## shell xxd -l 4 /tmp/minitest.png
+00000000: 8950 4e47                                .PNG
+
+## # Clean up
+## shell rm /tmp/minitest.png
