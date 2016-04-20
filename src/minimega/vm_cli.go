@@ -875,7 +875,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 				fmt.Sprintf("%.2f", complete)})
 		}
 		if len(resp.Tabular) != 0 {
-			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
+			resp.Header = []string{"id", "name", "status", "%% complete"}
 		}
 		return resp
 	}
