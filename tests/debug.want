@@ -1,0 +1,20 @@
+## # Test we can create a memory profile
+## debug memory /tmp/minitest-mem.pprof
+## shell ls /tmp/minitest-mem.pprof
+/tmp/minitest-mem.pprof
+
+## # Try to start cpu profile, second time should fail
+## debug cpu start /tmp/minitest-cpu.pprof
+## debug cpu start /tmp/minitest-cpu.pprof
+E: old CPU profile still running
+
+## # Try to stop cpu profile, second time should fail
+## debug cpu stop
+## debug cpu stop
+E: CPU profile is not running
+
+## shell ls /tmp/minitest-cpu.pprof
+/tmp/minitest-cpu.pprof
+
+## # Cleanup profiles
+## shell rm /tmp/minitest-cpu.pprof /tmp/minitest-mem.pprof

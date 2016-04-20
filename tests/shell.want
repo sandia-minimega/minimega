@@ -1,0 +1,10 @@
+## # Should run, only get output from shell
+## shell echo hello world
+hello world
+## background echo hello world
+
+## # Should have errors
+## shell definitelynotarealcommand
+E: exec: "definitelynotarealcommand": executable file not found in $PATH
+## background definitelynotarealcommand
+E: exec: "definitelynotarealcommand": executable file not found in $PATH
