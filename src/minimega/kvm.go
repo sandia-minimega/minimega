@@ -69,8 +69,8 @@ type qemuOverride struct {
 }
 
 var (
-	QemuOverrides      map[int]*qemuOverride
-	qemuOverrideIdChan chan int
+	QemuOverrides  map[int]*qemuOverride
+	qemuOverrideID *Counter
 
 	KVMNetworkDrivers struct {
 		drivers []string
@@ -80,7 +80,7 @@ var (
 
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
-	qemuOverrideIdChan = makeIDChan()
+	qemuOverrideID = NewCounter()
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
@@ -405,7 +405,7 @@ func (vm *KvmVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
 	if vm.State != VM_QUIT {
-		ccNode.RegisterClient(vm.UUID, vm.Namespace)
+		ccNode.RegisterVM(vm.UUID, vm)
 
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
@@ -806,7 +806,7 @@ func delVMQemuOverride(arg string) error {
 }
 
 func addVMQemuOverride(match, repl string) error {
-	id := <-qemuOverrideIdChan
+	id := qemuOverrideID.Next()
 
 	QemuOverrides[id] = &qemuOverride{
 		match: match,

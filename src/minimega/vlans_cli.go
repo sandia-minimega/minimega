@@ -9,7 +9,10 @@ import (
 	log "minilog"
 	"strconv"
 	"strings"
+	"vlans"
 )
+
+var allocatedVLANs = vlans.NewAllocatedVLANs()
 
 var vlansCLIHandlers = []minicli.Handler{
 	{ // vlans
@@ -70,21 +73,7 @@ func cliVLANs(c *minicli.Command) *minicli.Response {
 
 	// No match, must want to just print
 	resp.Header = []string{"namespace", "alias", "vlan"}
-	resp.Tabular = [][]string{}
-
-	for alias, vlan := range allocatedVLANs.byAlias {
-		parts := strings.Split(alias, VLANAliasSep)
-		if namespace != "" && namespace != parts[0] {
-			continue
-		}
-
-		resp.Tabular = append(resp.Tabular,
-			[]string{
-				parts[0],
-				strings.Join(parts[1:], VLANAliasSep),
-				strconv.Itoa(vlan),
-			})
-	}
+	resp.Tabular = allocatedVLANs.Tabular(namespace)
 
 	return resp
 }
@@ -93,8 +82,8 @@ func cliVLANsAdd(c *minicli.Command, resp *minicli.Response) {
 	// Prepend `<namespace>//` if it doesn't look like the user already
 	// included it.
 	alias := c.StringArgs["alias"]
-	if !strings.Contains(alias, VLANAliasSep) {
-		alias = namespace + VLANAliasSep + alias
+	if !strings.Contains(alias, vlans.AliasSep) {
+		alias = namespace + vlans.AliasSep + alias
 	}
 
 	vlan, err := strconv.Atoi(c.StringArgs["vlan"])
@@ -133,9 +122,9 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) {
 		resp.Tabular = append(resp.Tabular,
 			[]string{
 				prefix,
-				strconv.Itoa(r.min),
-				strconv.Itoa(r.max),
-				strconv.Itoa(r.next),
+				strconv.Itoa(r.Min),
+				strconv.Itoa(r.Max),
+				strconv.Itoa(r.Next),
 			})
 	}
 }
@@ -167,14 +156,14 @@ func cliVLANsBlacklist(c *minicli.Command, resp *minicli.Response) {
 func cliClearVLANs(c *minicli.Command) *minicli.Response {
 	prefix := c.StringArgs["prefix"]
 	if namespace != "" {
-		prefix = namespace + VLANAliasSep + prefix
+		prefix = namespace + vlans.AliasSep + prefix
 	}
 
 	if prefix == "" {
 		// Clearing everything
-		allocatedVLANs = NewAllocatedVLANs()
+		allocatedVLANs = vlans.NewAllocatedVLANs()
 	} else {
-		allocatedVLANs.Delete(prefix)
+		allocatedVLANs.Delete(namespace, prefix)
 	}
 
 	return &minicli.Response{Host: hostname}
@@ -182,16 +171,16 @@ func cliClearVLANs(c *minicli.Command) *minicli.Response {
 
 // suggestVLAN returns a list of VLAN suggestions for tab completion. Performs
 // a bit of extra work to make sure that the suggestions are in the current
-// namespace (or complete across namespaces if the user included VLANAliasSep).
+// namespace (or complete across namespaces if the user included vlans.AliasSep).
 func suggestVLAN(prefix string) []string {
-	if !strings.Contains(prefix, VLANAliasSep) && namespace != "" {
-		prefix = namespace + VLANAliasSep + prefix
+	if !strings.Contains(prefix, vlans.AliasSep) && namespace != "" {
+		prefix = namespace + vlans.AliasSep + prefix
 	}
 
 	res := allocatedVLANs.GetAliases(prefix)
 
 	for i, v := range res {
-		res[i] = strings.TrimPrefix(v, namespace+VLANAliasSep)
+		res[i] = strings.TrimPrefix(v, namespace+vlans.AliasSep)
 	}
 
 	return res

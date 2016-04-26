@@ -111,7 +111,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if c.BoolArgs["create"] {
-		vlan, err := allocatedVLANs.ParseVLAN(c.StringArgs["vlan"], true)
+		vlan, err := lookupVLAN(c.StringArgs["vlan"])
 		if err != nil {
 			resp.Error = err.Error()
 			return resp
@@ -244,7 +244,7 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 
 			vlans2 := []string{}
 			for k, _ := range vlans {
-				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(k))
+				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(namespace, k))
 			}
 			sort.Strings(vlans2)
 

@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"iomeshage"
+	"math"
 	"math/rand"
 	"meshage"
 	"minicli"
@@ -16,10 +17,6 @@ import (
 	"reflect"
 	"time"
 	"version"
-)
-
-const (
-	MESH_TIMEOUT_DEFAULT = 10
 )
 
 type meshageCommand struct {
@@ -37,7 +34,7 @@ var (
 	meshageMessages     chan *meshage.Message
 	meshageCommandChan  chan *meshage.Message
 	meshageResponseChan chan *meshage.Message
-	meshageTimeout      time.Duration
+	meshageTimeout      time.Duration // default is no timeout
 )
 
 func init() {
@@ -51,8 +48,6 @@ func meshageInit(host string, namespace string, degree uint, port int) {
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
-
-	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 
 	meshageNode.Snoop = meshageSnooper
 
@@ -90,104 +85,125 @@ func meshageSnooper(m *meshage.Message) {
 	}
 }
 
-func meshageBroadcast(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c, Wildcard, respChan)
+// meshageRecipients expands a hosts into a list of hostnames. Supports
+// expanding Wildcard to all hosts in the mesh or all hosts in the active
+// namespace.
+func meshageRecipients(hosts string) ([]string, error) {
+	if hosts == Wildcard {
+		if namespace == "" {
+			return meshageNode.BroadcastRecipients(), nil
+		}
+
+		recipients := []string{}
+
+		// Wildcard expands to all hosts in the namespace, except the local
+		// host, if included
+		for host := range namespaces[namespace].Hosts {
+			if host == hostname {
+				log.Info("excluding localhost, %v, from `%v`", hostname, Wildcard)
+				continue
+			}
+
+			recipients = append(recipients, host)
+		}
+
+		return recipients, nil
+	}
+
+	recipients, err := ranges.SplitList(hosts)
+	if err != nil {
+		return nil, err
+	}
+
+	// If a namespace is active, warn if the user is trying to mesh send hosts
+	// outside the namespace
+	if namespace != "" {
+		for _, host := range recipients {
+			if !namespaces[namespace].Hosts[host] {
+				log.Warn("%v is not part of namespace %v", host, namespace)
+			}
+		}
+	}
+
+	return recipients, nil
 }
 
-func meshageSend(c *minicli.Command, hosts string, respChan chan minicli.Responses) {
-	var (
-		err        error
-		recipients []string
-	)
-
-	meshageCommandLock.Lock()
-	defer meshageCommandLock.Unlock()
-
-	orig := c.Original
-
+// meshageSend sends a command to a list of hosts, returning a channel that the
+// responses will be sent to. This is non-blocking -- the channel is created
+// and then returned after a couple of sanity checks. Should be not be invoked
+// as a goroutine as it uses the global namespace variable to expand the hosts.
+func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, error) {
 	// HAX: Ensure we aren't sending read or mesh send commands over meshage
 	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		resp := &minicli.Response{
-			Host:  hostname,
-			Error: fmt.Sprintf("cannot run `%s` over mesh", orig),
-		}
-		respChan <- minicli.Responses{resp}
-		return
+		return nil, fmt.Errorf("cannot run `%s` over mesh", c.Original)
 	}
 
+	// expand the hosts to a list of recipients, must be done synchronously
+	recipients, err := meshageRecipients(hosts)
+	if err != nil {
+		return nil, err
+	}
+
+	meshageCommandLock.Lock()
+	out := make(chan minicli.Responses)
+
+	// Build a mesh command from the command, assigning a random ID
 	meshageID := rand.Int31()
-	// Build a mesh command from the subcommand, assigning a random ID
 	meshageCmd := meshageCommand{Command: *c, TID: meshageID}
 
-	if hosts == Wildcard {
-		if namespace != "" {
-			// Broadcast command to hosts in the same namespace
-			for _, host := range namespaces[namespace].hostSlice() {
-				if host == hostname {
-					// Log it and drop it
-					log.Warn("all includes local host but cannot mesh send yourself, dropping meshage")
-				} else {
-					recipients = append(recipients, host)
-				}
-			}
-		} else {
-			// Broadcast command to all hosts
-			recipients = meshageNode.BroadcastRecipients()
-		}
-	} else {
-		// Send to specified list of recipients
-		// TODO: Do we want to enforce that the recipients are in the currently
-		// active namespace, if there is one?
-		recipients, err = ranges.SplitList(hosts)
-	}
+	go func() {
+		defer meshageCommandLock.Unlock()
+		defer close(out)
 
-	if err == nil {
 		recipients, err = meshageNode.Set(recipients, meshageCmd)
-	}
-
-	if err != nil {
-		resp := &minicli.Response{
-			Host:  hostname,
-			Error: err.Error(),
+		if err != nil {
+			out <- errResp(err)
+			return
 		}
-		respChan <- minicli.Responses{resp}
-		return
-	}
 
-	log.Debug("meshage sent, waiting on %d responses", len(recipients))
-	meshResps := map[string]*minicli.Response{}
+		log.Debug("meshage sent, waiting on %d responses", len(recipients))
 
-	// wait on a response from each recipient
-loop:
-	for len(meshResps) < len(recipients) {
-		select {
-		case resp := <-meshageResponseChan:
-			body := resp.Body.(meshageResponse)
-			if body.TID != meshageID {
-				log.Warn("invalid TID from response channel: %d", body.TID)
-			} else {
-				meshResps[body.Host] = &body.Response
+		// host -> response
+		resps := map[string]*minicli.Response{}
+
+		timeout := meshageTimeout
+		// If the timeout is 0, set to "unlimited"
+		if timeout == 0 {
+			timeout = math.MaxInt64
+		}
+
+		// wait on a response from each recipient
+	recvLoop:
+		for len(resps) < len(recipients) {
+			select {
+			case resp := <-meshageResponseChan:
+				body := resp.Body.(meshageResponse)
+				if body.TID != meshageID {
+					log.Warn("invalid TID from response channel: %d", body.TID)
+				} else {
+					resps[body.Host] = &body.Response
+				}
+			case <-time.After(timeout):
+				// Didn't hear back from any node within the timeout
+				break recvLoop
 			}
-		case <-time.After(meshageTimeout):
-			// Didn't hear back from any node within the timeout
-			log.Info("meshage send timed out")
-			break loop
 		}
-	}
 
-	// Fill in the responses for recipients that timed out
-	resp := minicli.Responses{}
-	for _, host := range recipients {
-		if v, ok := meshResps[host]; ok {
-			resp = append(resp, v)
-		} else if host != hostname {
-			resp = append(resp, &minicli.Response{
-				Host:  host,
-				Error: "timed out",
-			})
+		// Fill in the responses for recipients that timed out
+		resp := minicli.Responses{}
+		for _, host := range recipients {
+			if v, ok := resps[host]; ok {
+				resp = append(resp, v)
+			} else if host != hostname {
+				resp = append(resp, &minicli.Response{
+					Host:  host,
+					Error: "timed out",
+				})
+			}
 		}
-	}
 
-	respChan <- resp
-	return
+		out <- resp
+	}()
+
+	return out, nil
 }

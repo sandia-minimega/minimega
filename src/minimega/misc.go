@@ -18,7 +18,6 @@ import (
 	log "minilog"
 	"net"
 	"os/exec"
-	"regexp"
 	"resize"
 	"runtime"
 	"strconv"
@@ -26,6 +25,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"vlans"
 )
 
 type errSlice []error
@@ -70,18 +70,6 @@ func (m *loggingMutex) Unlock() {
 	log.Info("unlocked: %v:%v", file, line)
 }
 
-// generate a random mac address and return as a string
-func randomMac() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	//
-	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
-
-	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
-	log.Info("generated mac: %v", mac)
-	return mac
-}
-
 func generateUUID() string {
 	log.Debugln("generateUUID")
 	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
@@ -94,12 +82,44 @@ func generateUUID() string {
 	return string(uuid)
 }
 
-func isMac(mac string) bool {
-	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
-	if err != nil {
+func isUUID(s string) bool {
+	if len(s) != 36 {
 		return false
 	}
-	return match
+
+	parts := strings.Split(s, "-")
+	if len(parts) != 5 {
+		return false
+	}
+
+	for i, v := range []int{8, 4, 4, 4, 12} {
+		if len(parts[i]) != v {
+			return false
+		}
+
+		if _, err := strconv.ParseInt(parts[i], 16, 64); err != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+// generate a random mac address and return as a string
+func randomMac() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	//
+	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+
+	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
+	log.Info("generated mac: %v", mac)
+	return mac
+}
+
+func isMac(mac string) bool {
+	_, err := net.ParseMAC(mac)
+	return err == nil
 }
 
 func allocatedMac(mac string) bool {
@@ -256,21 +276,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 	}
 }
 
-// makeIDChan creates a channel of IDs and a goroutine to populate the channel
-// with a counter. This is useful for assigning UIDs to fields since the
-// goroutine will (almost) never repeat the same value (unless we hit IntMax).
-func makeIDChan() chan int {
-	idChan := make(chan int)
-
-	go func() {
-		for i := 0; ; i++ {
-			idChan <- i
-		}
-	}()
-
-	return idChan
-}
-
 // convert a src ppm image to a dst png image, resizing to a largest dimension
 // max if max != 0
 func ppmToPng(src []byte, max int) ([]byte, error) {
@@ -405,9 +410,9 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
 	}
 
-	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
 
-	vlan, err := allocatedVLANs.ParseVLAN(v, true)
+	vlan, err := lookupVLAN(v)
 	if err != nil {
 		return NetConfig{}, err
 	}
@@ -434,4 +439,50 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		MAC:    strings.ToLower(m),
 		Driver: d,
 	}, nil
+}
+
+// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
+// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
+// cluster.
+func lookupVLAN(alias string) (int, error) {
+	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	if err != vlans.ErrUnallocated {
+		// nil or other error
+		return vlan, err
+	}
+
+	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	if err != nil {
+		return 0, err
+	}
+
+	if !created {
+		return vlan, nil
+	}
+
+	cmd := minicli.MustCompilef("vlans add %q %v", alias, vlan)
+	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
+		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
+	}
+
+	respChan, err := meshageSend(cmd, Wildcard)
+	if err != nil {
+		// don't propagate the error since this is supposed to be best-effort.
+		log.Error("unable to broadcast alias update: %v", err)
+		return vlan, nil
+	}
+
+	// read all the responses, looking for errors
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+				}
+			}
+		}
+
+	}()
+
+	return vlan, nil
 }

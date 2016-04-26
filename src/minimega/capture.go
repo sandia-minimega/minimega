@@ -30,7 +30,7 @@ type capture struct {
 
 var (
 	captureEntries   map[int]*capture
-	captureIDCount   chan int
+	captureID        *Counter
 	captureLock      sync.Mutex
 	captureNFTimeout int
 )
@@ -38,7 +38,7 @@ var (
 func init() {
 	captureNFTimeout = 10
 	captureEntries = make(map[int]*capture)
-	captureIDCount = makeIDChan()
+	captureID = NewCounter()
 }
 
 func clearAllCaptures() (err error) {
@@ -118,7 +118,7 @@ func startCapturePcap(vm string, iface int, filename string) error {
 
 	// success! add it to the list
 	ce := &capture{
-		ID:        <-captureIDCount,
+		ID:        captureID.Next(),
 		Type:      "pcap",
 		VM:        v.GetID(),
 		Interface: iface,
@@ -156,7 +156,7 @@ func startBridgeCapturePcap(bridge, filename string) error {
 
 	// success! add it to the list
 	ce := &capture{
-		ID:        <-captureIDCount,
+		ID:        captureID.Next(),
 		Type:      "pcap",
 		Bridge:    bridge,
 		VM:        -1,
@@ -196,7 +196,7 @@ func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) erro
 	}
 
 	ce := &capture{
-		ID:       <-captureIDCount,
+		ID:       captureID.Next(),
 		Type:     "netflow",
 		Bridge:   bridge,
 		Path:     filename,
@@ -234,7 +234,7 @@ func startCaptureNetflowSocket(bridge, transport, host string, ascii bool) error
 	}
 
 	ce := &capture{
-		ID:     <-captureIDCount,
+		ID:     captureID.Next(),
 		Type:   "netflow",
 		Bridge: bridge,
 		Path:   fmt.Sprintf("%v:%v", transport, host),

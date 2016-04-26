@@ -66,6 +66,11 @@ func ccClear(what string) (err error) {
 	case "commands":
 		errs := []string{}
 		for _, v := range ccNode.GetCommands() {
+			// only delete commands for the active namespace
+			if !ccMatchNamespace(v) {
+				continue
+			}
+
 			err := ccNode.DeleteCommand(v.ID)
 			if err != nil {
 				errMsg := fmt.Sprintf("cc delete command %v : %v", v.ID, err)
@@ -77,6 +82,7 @@ func ccClear(what string) (err error) {
 			err = errors.New(strings.Join(errs, "\n"))
 		}
 	case "responses": // delete everything in miniccc_responses
+		// TODO: limit to the active namespace
 		path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
 		err := os.RemoveAll(path)
 		if err != nil {
@@ -103,6 +109,24 @@ func ccClients() map[string]bool {
 		return clients
 	}
 	return nil
+}
+
+// ccGetFilter returns a filter for cc clients, adding the implicit namespace
+// filter, if a namespace is active.
+func ccGetFilter() *ron.Client {
+	filter := ron.Client{}
+	if ccFilter != nil {
+		filter = *ccFilter
+	}
+
+	filter.Namespace = namespace
+	return &filter
+}
+
+// ccMatchNamespace tests whether a command is relavant to the active
+// namespace.
+func ccMatchNamespace(c *ron.Command) bool {
+	return namespace == "" || c.Filter == nil || c.Filter.Namespace == namespace
 }
 
 func filterString(f *ron.Client) string {
