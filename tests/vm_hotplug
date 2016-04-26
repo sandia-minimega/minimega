@@ -1,0 +1,20 @@
+# Create test "image"
+shell touch /tmp/minitest0.img
+shell touch /tmp/minitest1.img
+
+# Launch a VM to hotplug
+vm launch kvm foo
+
+# Add and then remove drives
+vm hotplug show foo
+vm hotplug add foo /tmp/minitest0.img
+vm hotplug show foo
+vm hotplug add foo /tmp/minitest1.img
+vm hotplug show foo
+vm hotplug remove foo 0
+vm hotplug show foo
+vm hotplug remove foo 1
+vm hotplug show foo
+
+# Remove test files
+shell rm /tmp/minitest0.img /tmp/minitest1.img

@@ -411,7 +411,9 @@ during runtime because /proc is mounted read-only, add a preinit script:
 		HelpShort: "set the filesystem for containers",
 		HelpLong: `
 Set the filesystem to use for launching a container. This should be a root
-filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)`,
+filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)
+
+This must be specified in order to launch a container.`,
 		Patterns: []string{
 			"vm config filesystem [filesystem]",
 		},

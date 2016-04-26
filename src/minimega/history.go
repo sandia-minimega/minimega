@@ -59,6 +59,7 @@ func cliHistoryClear(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	minicli.ClearHistory()
+	c.Record = false
 
 	return resp
 }

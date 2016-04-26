@@ -1,0 +1,19 @@
+# Create "isos" for testing
+shell touch /tmp/minitest0.iso
+shell touch /tmp/minitest1.iso
+
+# Launch a VM with the iso
+vm config cdrom /tmp/minitest0.iso
+vm launch kvm foo
+
+# Eject and change the cdrom
+.column name,cdrom vm info
+vm cdrom eject foo
+.column name,cdrom vm info
+vm cdrom change foo /tmp/minitest1.iso
+.column name,cdrom vm info
+vm cdrom change foo /tmp/minitest0.iso
+.column name,cdrom vm info
+
+# Remove test files
+shell rm /tmp/minitest0.iso /tmp/minitest1.iso

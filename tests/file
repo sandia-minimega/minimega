@@ -1,0 +1,22 @@
+# Shouldn't have any files
+file list /minitest
+file get /minitest/foo
+
+# Create files in directory
+shell mkdir /tmp/minimega/files/minitest
+shell touch /tmp/minimega/files/minitest/foo
+shell touch /tmp/minimega/files/minitest/bar
+
+# See if files are there
+file list /minitest
+file get /minitest/foo
+file get /minitest/bar
+
+# Try to delete the files
+file delete /minitest/foo
+file list /minitest
+file delete /minitest/bar
+file list /minitest
+
+# Clean up
+file delete /minitest

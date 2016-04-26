@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"iomeshage"
+	"math"
 	"math/rand"
 	"meshage"
 	"minicli"
@@ -16,10 +17,6 @@ import (
 	"reflect"
 	"time"
 	"version"
-)
-
-const (
-	MESH_TIMEOUT_DEFAULT = 10
 )
 
 type meshageCommand struct {
@@ -37,7 +34,7 @@ var (
 	meshageMessages     chan *meshage.Message
 	meshageCommandChan  chan *meshage.Message
 	meshageResponseChan chan *meshage.Message
-	meshageTimeout      time.Duration
+	meshageTimeout      time.Duration // default is no timeout
 )
 
 func init() {
@@ -51,8 +48,6 @@ func meshageInit(host string, namespace string, degree, msaTimeout uint, port in
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
-
-	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
 
 	meshageNode.Snoop = meshageSnooper
 
@@ -168,7 +163,14 @@ func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, erro
 
 		log.Debug("meshage sent, waiting on %d responses", len(recipients))
 
+		// host -> response
 		resps := map[string]*minicli.Response{}
+
+		timeout := meshageTimeout
+		// If the timeout is 0, set to "unlimited"
+		if timeout == 0 {
+			timeout = math.MaxInt64
+		}
 
 		// wait on a response from each recipient
 	recvLoop:
@@ -181,9 +183,8 @@ func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, erro
 				} else {
 					resps[body.Host] = &body.Response
 				}
-			case <-time.After(meshageTimeout):
+			case <-time.After(timeout):
 				// Didn't hear back from any node within the timeout
-				log.Info("meshage send timed out")
 				break recvLoop
 			}
 		}

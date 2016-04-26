@@ -800,7 +800,7 @@ func cliVmMigrate(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
+		resp.Header = []string{"id", "name", "status", "%% complete"}
 
 		for _, vm := range vms.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
