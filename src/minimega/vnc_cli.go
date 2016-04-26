@@ -45,6 +45,7 @@ Play a previously recorded VNC kb`,
 			"vnc <pause,> <host> <vm id or name>",
 			"vnc <continue,> <host> <vm id or name>",
 			"vnc <step,> <host> <vm id or name>",
+			"vnc <inject,> <host> <vm id or name> <cmd>",
 		},
 		Call: wrapSimpleCLI(cliVNCPlay),
 	},
@@ -84,7 +85,6 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 			err = vncPlaybackKB(host, vm, fname)
 		}
 	} else {
-
 		// Need a valid playback for all other operations
 		if p == nil {
 			err = fmt.Errorf("kb playback %v %v not found", host, vm)
@@ -98,8 +98,10 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 			err = p.Pause()
 		} else if c.BoolArgs["continue"] {
 			err = p.Continue()
-		} else {
+		} else if c.BoolArgs["step"] {
 			err = p.Step()
+		} else {
+			err = p.Inject(c.StringArgs["cmd"])
 		}
 	}
 

@@ -58,7 +58,6 @@ func (v *vncClient) Matches(host, vm string) bool {
 }
 
 func (v *vncClient) Stop() error {
-	v.done <- true
 
 	if v.file != nil {
 		v.file.Close()
