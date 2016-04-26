@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -745,6 +746,13 @@ func (vm *ContainerVM) launch() error {
 
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
+		}
+
+		// check that there's a FS configured for this VM
+		if vm.FSPath == "" {
+			err := errors.New("unable to launch container without a configured filesystem")
+			vm.setError(err)
+			return err
 		}
 
 		// Check the disks and network interfaces are sane
