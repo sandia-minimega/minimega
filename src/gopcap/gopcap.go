@@ -15,8 +15,6 @@ import "C"
 
 import (
 	"fmt"
-	//	log "minilog"
-	//	"strings"
 	"sync"
 	"unsafe"
 )
@@ -30,19 +28,23 @@ type Pcap struct {
 // NewLearner returns an IPMacLearner object bound to a particular interface.
 func NewPCAP(dev string, file string) (*Pcap, error) {
 	ret := &Pcap{}
-	p := C.CString(dev)
-	handle := C.gopcapInit(p)
-	C.free(unsafe.Pointer(p))
+
+	devC := C.CString(dev)
+	fileC := C.CString(file)
+	defer C.free(unsafe.Pointer(devC))
+	defer C.free(unsafe.Pointer(fileC))
+
+	handle := C.gopcapInit(devC)
 	if handle == nil {
 		return ret, fmt.Errorf("could not open device %v", dev)
 	}
 	ret.handle = unsafe.Pointer(handle)
 
 	// start pcap
-	dumperHandle := C.gopcapPrepare(handle, C.CString(file))
-	C.free(unsafe.Pointer(p))
+	dumperHandle := C.gopcapPrepare(handle, fileC)
 	if dumperHandle == nil {
-		return ret, fmt.Errorf("could not open output file %v", file)
+		C.gopcapClose(ret.handle, nil)
+		return nil, fmt.Errorf("could not open output file %v", file)
 	}
 	ret.dumperHandle = unsafe.Pointer(dumperHandle)
 
@@ -55,5 +57,9 @@ func NewPCAP(dev string, file string) (*Pcap, error) {
 func (p *Pcap) Close() {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
 	C.gopcapClose(p.handle, p.dumperHandle)
+
+	p.handle = nil
+	p.dumperHandle = nil
 }
