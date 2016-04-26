@@ -67,26 +67,21 @@ func NewChan(in chan Event) *Chan {
 		defer close(c.out)
 		defer close(c.control)
 
-	outerLoop:
 		// Receive events on e
-		for e := range c.in {
-			for {
-				select {
-				case v := <-c.control:
-					if v == Close {
-						return
-					}
-					// Block until resumed or closed
-					v = <-c.control
-					if v == Close {
-						return
-					}
-
-				case c.out <- e:
-					continue outerLoop
+		for {
+			select {
+			case v := <-c.control:
+				if v == Close {
+					return
 				}
+				// Block until resumed or closed
+				v = <-c.control
+				if v == Close {
+					return
+				}
+			case e := <-c.in:
+				c.out <- e
 			}
-
 		}
 	}()
 
@@ -165,12 +160,11 @@ func (v *vncKBPlayback) playFile() {
 
 		wait := time.After(duration)
 		select {
+		case <-v.done:
+			v.wg.Done()
+			return
 		case <-wait:
 		case <-v.step:
-		}
-
-		if v.state == Close {
-			return
 		}
 
 		if res, err := vnc.ParseKeyEvent(s[1]); err == nil {
@@ -200,8 +194,10 @@ func (v *vncKBPlayback) playFile() {
 		}
 	}
 
-	v.Stop()
-
+	// Playback finished, stop ourselves
+	go v.Stop()
+	<-v.done
+	v.wg.Done()
 }
 
 func ParseLoadFileEvent(arg string) (string, error) {
@@ -227,11 +223,10 @@ func (v *vncKBPlayback) Play() {
 
 	v.Lock()
 	defer v.Unlock()
-	v.state = Play
 
+	v.state = Play
 	go v.playEvents()
 	go v.playFile()
-
 }
 
 func (v *vncKBPlayback) Step() error {
@@ -287,12 +282,17 @@ func (v *vncKBPlayback) Stop() error {
 		return errors.New("kbplayback already stopped")
 	}
 
-	v.state = Close
+	// Signal the playfile
 	go func() {
-		v.control <- Close
+		v.done <- true
 	}()
 
-	v.in <- &vnc.KeyEvent{}
+	// Close the Chan and playEvent loop
+	v.state = Close
+	v.control <- Close
+
+	// Wait for playFile before we close the in channel
+	v.wg.Wait()
 	close(v.in)
 
 	delete(vncKBPlaying, v.Rhost)
