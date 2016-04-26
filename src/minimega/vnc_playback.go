@@ -38,8 +38,10 @@ func init() {
 }
 
 type vncKBPlayback struct {
+	// Embedded
 	*vncClient
 	*Chan
+	sync.Mutex
 
 	duration time.Duration
 	paused   time.Time
@@ -49,7 +51,6 @@ type vncKBPlayback struct {
 
 	step chan bool
 
-	sync.Mutex
 	state Control
 }
 
@@ -67,7 +68,6 @@ func NewChan(in chan Event) *Chan {
 		defer close(c.out)
 		defer close(c.control)
 
-		// Receive events on e
 		for {
 			select {
 			case v := <-c.control:
@@ -79,6 +79,7 @@ func NewChan(in chan Event) *Chan {
 				if v == Close {
 					return
 				}
+			// Receive events on e
 			case e := <-c.in:
 				c.out <- e
 			}
@@ -161,16 +162,24 @@ func (v *vncKBPlayback) playFile() {
 		wait := time.After(duration)
 		select {
 		case <-v.done:
-			v.wg.Done()
 			return
 		case <-wait:
 		case <-v.step:
+			// TODO fix time
 		}
 
 		if res, err := vnc.ParseKeyEvent(s[1]); err == nil {
-			v.in <- res
+			select {
+			case v.in <- res:
+			case <-v.done:
+				return
+			}
 		} else if res, err := vnc.ParsePointerEvent(s[1]); err == nil {
-			v.in <- res
+			select {
+			case v.in <- res:
+			case <-v.done:
+				return
+			}
 		} else if file, err := ParseLoadFileEvent(s[1]); err == nil {
 			if !filepath.IsAbs(file) {
 				// Our file is in the same directory as the parent
@@ -197,7 +206,6 @@ func (v *vncKBPlayback) playFile() {
 	// Playback finished, stop ourselves
 	go v.Stop()
 	<-v.done
-	v.wg.Done()
 }
 
 func ParseLoadFileEvent(arg string) (string, error) {
@@ -282,17 +290,11 @@ func (v *vncKBPlayback) Stop() error {
 		return errors.New("kbplayback already stopped")
 	}
 
-	// Signal the playfile
-	go func() {
-		v.done <- true
-	}()
-
-	// Close the Chan and playEvent loop
 	v.state = Close
-	v.control <- Close
 
 	// Wait for playFile before we close the in channel
-	v.wg.Wait()
+	v.control <- Close
+	v.done <- true
 	close(v.in)
 
 	delete(vncKBPlaying, v.Rhost)
