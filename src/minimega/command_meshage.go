@@ -225,7 +225,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 	degree := meshageNode.GetDegree()
 	nodes := len(mesh)
 
-	resp.Header = []string{"mesh size", "degree", "peers", "namespace", "port"}
+	resp.Header = []string{"mesh size", "degree", "peers", "context", "port"}
 	resp.Tabular = [][]string{
 		[]string{
 			strconv.Itoa(nodes),
