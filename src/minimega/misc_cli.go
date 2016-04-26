@@ -56,23 +56,17 @@ commands.`,
 		HelpShort: "read and execute a command file",
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
-the file in manually except that it stops after the first error.`,
+the file in manually except that it stops after the first error.
+
+If the optional argument check is specified then read doesn't execute any of
+the commands in the file. Instead, it checks that all the commands are
+syntactically valid. This can identify mistyped commands in scripts before you
+read them. It cannot check for semantic errors (e.g. killing a non-existent
+VM). Stops on the first invalid command.`,
 		Patterns: []string{
-			"read <file>",
+			"read <file> [check,]",
 		},
 		Call: cliRead,
-	},
-	{ // validate
-		HelpShort: "read and valid a command file",
-		HelpLong: `
-Read a command file and check that all the commands are syntactically valid.
-This can identify mistyped commands in scripts before you read them. It cannot
-check for semantic errors (e.g. killing a non-existent VM). Stops on the first
-invalid command.`,
-		Patterns: []string{
-			"validate <file>",
-		},
-		Call: wrapSimpleCLI(cliValidate),
 	},
 	{ // debug
 		HelpShort: "display internal debug information",
@@ -136,6 +130,8 @@ func cliHelp(c *minicli.Command) *minicli.Response {
 func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
+	check := c.BoolArgs["check"]
+
 	file, err := os.Open(c.StringArgs["file"])
 	if err != nil {
 		resp.Error = err.Error()
@@ -178,6 +174,11 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			break
 		}
 
+		// If we're checking the syntax, don't actually execute the command
+		if check {
+			continue
+		}
+
 		for resp := range runCommand(cmd) {
 			respChan <- resp
 
@@ -199,35 +200,6 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		resp.Error = err.Error()
 		respChan <- minicli.Responses{resp}
 	}
-}
-
-func cliValidate(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	file, err := os.Open(c.StringArgs["file"])
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	for scanner.Scan() {
-		command := scanner.Text()
-		log.Debug("read command: %v", command)
-
-		if _, err := minicli.Compile(command); err != nil {
-			resp.Error = err.Error()
-			break
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
 }
 
 func cliDebug(c *minicli.Command) *minicli.Response {
