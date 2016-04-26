@@ -1,0 +1,7 @@
+# Should run, only get output from shell
+shell echo hello world
+background echo hello world
+
+# Should have errors
+shell definitelynotarealcommand
+background definitelynotarealcommand
