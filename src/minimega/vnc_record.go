@@ -193,7 +193,7 @@ func vncRecordFB(host, vm, filename string) error {
 }
 
 // Returns the duration of a given kbrecording file
-func duration(filename string) time.Duration {
+func getDuration(filename string) time.Duration {
 	d := 0
 
 	f, _ := os.Open(filename)

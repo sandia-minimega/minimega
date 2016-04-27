@@ -33,6 +33,11 @@ type Chan struct {
 	control chan Control
 }
 
+type PlaybackReader struct {
+	scanner *bufio.Scanner
+	file    *os.File
+}
+
 func init() {
 	vncKBPlaying = make(map[string]*vncKBPlayback)
 }
@@ -43,11 +48,11 @@ type vncKBPlayback struct {
 	*Chan
 	sync.Mutex
 
-	duration time.Duration
 	paused   time.Time
+	duration time.Duration
 
-	scanner *bufio.Scanner
-	err     error
+	prs []*PlaybackReader
+	err error
 
 	step chan bool
 
@@ -86,13 +91,13 @@ func NewChan(in chan Event) *Chan {
 	return c
 }
 
-func NewVncKbPlayback(c *vncClient) *vncKBPlayback {
+func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 
 	kbp := &vncKBPlayback{
 		vncClient: c,
+		duration:  getDuration(pr.file.Name()),
 		Chan:      NewChan(make(chan (Event))),
-		duration:  duration(c.file.Name()),
-		scanner:   bufio.NewScanner(c.file),
+		prs:       []*PlaybackReader{pr},
 		step:      make(chan bool),
 		state:     Play,
 	}
@@ -121,7 +126,12 @@ func vncPlaybackKB(host, vm, filename string) error {
 		return err
 	}
 
-	p := NewVncKbPlayback(c)
+	pr := &PlaybackReader{
+		file:    c.file,
+		scanner: bufio.NewScanner(c.file),
+	}
+
+	p := NewVncKbPlayback(c, pr)
 
 	vncKBPlaying[c.Rhost] = p
 
@@ -145,47 +155,59 @@ func (v *vncKBPlayback) playFile() {
 	v.start = time.Now()
 	defer close(v.in)
 
-	for v.scanner.Scan() && v.err == nil {
-		s := strings.SplitN(v.scanner.Text(), ":", 2)
+outerLoop:
+	for {
+		for _, pr := range v.prs {
+			// Update the file we are playing
+			v.file = pr.file
 
-		duration, err := time.ParseDuration(s[0] + "ns")
-		if err != nil {
-			log.Errorln(err)
-			continue
-		}
+			for pr.scanner.Scan() && v.err == nil {
+				s := strings.SplitN(pr.scanner.Text(), ":", 2)
 
-		// Wait for the computed duration
-		wait := time.After(duration)
-		select {
-		case <-v.done:
-			return
-		case <-wait:
-		case <-v.step:
-			// TODO fix time
-		}
+				duration, err := time.ParseDuration(s[0] + "ns")
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
 
-		res, err := v.parseEvent(s[1])
-		if err != nil {
-			log.Error("invalid vnc message: `%s`", s[1])
-			continue
-		}
+				// Wait for the computed duration
+				wait := time.After(duration)
+				select {
+				case <-v.done:
+					return
+				case <-wait:
+				case <-v.step:
+					// TODO fix time
+				}
 
-		switch event := res.(type) {
-		case Event:
-			select {
-			case <-v.done:
-				return
-			case v.in <- event:
+				// Get the event
+				res, err := v.parseEvent(s[1])
+				if err != nil {
+					log.Error("invalid vnc message: `%s`", s[1])
+					continue
+				}
+
+				switch event := res.(type) {
+				case Event:
+					// Vnc event
+					select {
+					case <-v.done:
+						return
+					case v.in <- event:
+					}
+				case string:
+					// LoadFileEvent
+					err = v.loadFile(res.(string))
+					if err != nil {
+						log.Error(err.Error())
+					} else {
+						continue outerLoop
+					}
+				}
 			}
-		case string:
-			// LoadFileEvent
-			err = v.loadFile(res.(string))
-			if err != nil {
-				log.Error(err.Error())
-			}
 		}
+		break
 	}
-
 	// Playback finished, stop ourselves
 	go v.Stop()
 	<-v.done
@@ -193,15 +215,10 @@ func (v *vncKBPlayback) playFile() {
 
 func (v *vncKBPlayback) loadFile(f string) error {
 	v.Lock()
+	defer v.Unlock()
 	if v.state == Close {
-		v.Unlock()
 		return nil
 	}
-
-	// Save our old state
-	oldkbp := vncKBPlaying[v.Rhost]
-	oldstart := v.start
-	oldfile := v.file
 
 	if !filepath.IsAbs(f) {
 		// Our file is in the same directory as the parent
@@ -209,38 +226,18 @@ func (v *vncKBPlayback) loadFile(f string) error {
 	}
 
 	var err error
+	pr := &PlaybackReader{}
 
 	// Load the new file
-	v.file, err = os.Open(f)
+	pr.file, err = os.Open(f)
 	if err != nil {
-		v.err = err
-		v.file = oldfile
-		v.Unlock()
 		return fmt.Errorf("Couldn't load VNC playback file %v: %v", f, err)
 	} else {
-		r := NewVncKbPlayback(v.vncClient)
-		r.duration += v.duration
-		vncKBPlaying[v.Rhost] = r
-		v.Unlock()
-
-		// We will wait until this file has played fully.
-		r.playFile()
-
-		// Restore our old state
-		r.Lock()
-		v.Lock()
-		defer r.Unlock()
-		defer v.Unlock()
-
-		v.file = oldfile
-		v.start = oldstart
-		vncKBPlaying[v.Rhost] = oldkbp
-
-		// Check if child playback was killed
-		if r.state == Close {
-			go v.Stop()
-		}
+		v.duration += getDuration(f)
+		pr.scanner = bufio.NewScanner(pr.file)
 	}
+
+	v.prs = append([]*PlaybackReader{pr}, v.prs...)
 
 	return nil
 }
@@ -263,6 +260,7 @@ func (v *vncKBPlayback) parseEvent(cmd string) (interface{}, error) {
 
 func ParseLoadFileEvent(arg string) (string, error) {
 	var filename string
+
 	format := "LoadFile,%s"
 	_, err := fmt.Sscanf(arg, format, &filename)
 	if err != nil {
@@ -338,7 +336,7 @@ func (v *vncKBPlayback) Continue() error {
 func (v *vncKBPlayback) Stop() error {
 	v.Lock()
 	defer v.Unlock()
-	log.Info("kbplayback stopping")
+
 	if v.state == Close {
 		return errors.New("kbplayback already stopped")
 	}
