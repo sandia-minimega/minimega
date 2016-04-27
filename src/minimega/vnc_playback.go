@@ -56,6 +56,9 @@ type vncKBPlayback struct {
 
 	step chan bool
 
+	// Current event
+	e string
+
 	state Control
 }
 
@@ -163,6 +166,15 @@ outerLoop:
 
 			for pr.scanner.Scan() && v.err == nil {
 				s := strings.SplitN(pr.scanner.Text(), ":", 2)
+
+				// Comment
+				if s[0] == "#" {
+					log.Info("vncplayback: %s", s)
+					continue
+				}
+
+				// Set the current event
+				v.e = s
 
 				duration, err := time.ParseDuration(s[0] + "ns")
 				if err != nil {
@@ -370,6 +382,16 @@ func (v *vncKBPlayback) Inject(cmd string) error {
 	}
 
 	return nil
+}
+
+func (v *vncKBPlayback) GetStep() (string, error) {
+	v.Lock()
+	defer v.Unlock()
+
+	if v.state == Close {
+		return nil, errors.New("kbplayback already stopped")
+	}
+	return v.e, nil
 }
 
 func (v *vncKBPlayback) timeRemaining() string {

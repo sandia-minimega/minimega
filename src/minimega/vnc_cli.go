@@ -16,18 +16,14 @@ var vncCLIHandlers = []minicli.Handler{
 	{ // vnc
 		HelpShort: "record VNC kb or fb",
 		HelpLong: `
-Record or playback keyboard and mouse events sent via the web interface to the
+Record keyboard and mouse events sent via the web interface to the
 selected VM. Can also record the framebuffer for the specified VM so that a
-users can watch a video of interactions with the VM.
+user can watch a video of interactions with the VM.
 
 With no arguments, vnc will list currently recording or playing VNC sessions.
 
-Ifr reecord is selected, a file will be created containing a record of mouse and
-keyboard actions by the user or of the framebuffer for the VM.
-
-If playback is selected, the specified file (created using vnc record) will be
-read and processed as a sequence of time-stamped mouse/keyboard events to send
-to the specified VM.`,
+If record is selected, a file will be created containing a record of mouse and
+keyboard actions by the user or of the framebuffer for the VM.`,
 		Patterns: []string{
 			"vnc",
 			"vnc <kb,fb> <record,> <host> <vm id or name> <filename>",
@@ -38,13 +34,30 @@ to the specified VM.`,
 	{ // play vnc kb
 		HelpShort: "play VNC kb",
 		HelpLong: `
-Play a previously recorded VNC kb`,
+Playback and interact with a previously recorded vnc kb session file.
+
+If play is selected, the specified file (created using vnc record) will be
+read and processed as a sequence of time-stamped mouse/keyboard events to send
+to the specified VM.
+
+Playbacks can be paused with the pause command, and resumed using continue.
+The step command will immediately move to the next event contained in the playback
+file. Use the getstep command to view the current vnc event. Calling stop will a
+playback.
+
+Vnc playback also supports injecting mouse/keyboard events in the format found in
+the playback file.
+
+Comments in the playback file are logged at the info level. An example is given below.
+
+#: This is an example of a vnc playback comment`,
 		Patterns: []string{
 			"vnc <play,> <host> <vm id or name> <filename>",
 			"vnc <stop,> <host> <vm id or name>",
 			"vnc <pause,> <host> <vm id or name>",
 			"vnc <continue,> <host> <vm id or name>",
 			"vnc <step,> <host> <vm id or name>",
+			"vnc <getstep,> <host> <vm id or name>",
 			"vnc <inject,> <host> <vm id or name> <cmd>",
 		},
 		Call: wrapSimpleCLI(cliVNCPlay),
@@ -100,6 +113,8 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 			err = p.Continue()
 		} else if c.BoolArgs["step"] {
 			err = p.Step()
+		} else if c.BoolArgs["getstep"] {
+			resp.Response, err = p.GetStep()
 		} else {
 			err = p.Inject(c.StringArgs["cmd"])
 		}
@@ -109,7 +124,6 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 		resp.Error = err.Error()
 	}
 	return resp
-
 }
 
 func cliVNCRecord(c *minicli.Command) *minicli.Response {
