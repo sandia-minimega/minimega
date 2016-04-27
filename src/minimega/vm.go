@@ -171,7 +171,7 @@ func NewVM(name string) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Namespace = namespace
+	vm.Namespace = GetNamespaceName()
 	vm.Host = hostname
 
 	// generate a UUID if we don't have one
@@ -233,7 +233,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, allocatedVLANs.PrintVLAN(namespace, net.VLAN))
+	parts = append(parts, printVLAN(net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)
@@ -611,6 +611,8 @@ func inNamespace(vm VM) bool {
 	if vm == nil {
 		return false
 	}
+
+	namespace := GetNamespaceName()
 
 	return namespace == "" || vm.GetNamespace() == namespace
 }

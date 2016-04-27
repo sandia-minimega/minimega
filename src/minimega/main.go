@@ -244,7 +244,7 @@ func teardownf(format string, args ...interface{}) {
 
 func teardown() {
 	// Clear namespace so that we hit all the VMs
-	namespace = ""
+	SetNamespace("")
 
 	vncClear()
 	clearAllCaptures()

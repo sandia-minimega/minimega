@@ -721,7 +721,7 @@ func hostTapList(resp *minicli.Response) {
 		for name, tap := range b.Taps {
 			if tap.host && !b.defunctTaps[name] {
 				resp.Tabular = append(resp.Tabular, []string{
-					k, name, allocatedVLANs.PrintVLAN(namespace, tap.lan),
+					k, name, printVLAN(tap.lan),
 				})
 			}
 		}

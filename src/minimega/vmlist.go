@@ -777,8 +777,8 @@ func globalVMs() VMs {
 	//  * Hosts in the active namespace
 	//  * Hosts connected via meshage plus ourselves
 	var hosts []string
-	if namespace != "" {
-		hosts = namespaces[namespace].hostSlice()
+	if ns := GetNamespace(); ns != nil {
+		hosts = ns.hostSlice()
 	} else {
 		hosts = meshageNode.BroadcastRecipients()
 		hosts = append(hosts, hostname)

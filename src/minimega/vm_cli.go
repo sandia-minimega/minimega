@@ -613,16 +613,30 @@ func cliClearVmTag(c *minicli.Command) *minicli.Response {
 func cliVmLaunch(c *minicli.Command) *minicli.Response {
 	resp := &minicli.Response{Host: hostname}
 
-	if namespace == "" && len(c.StringArgs) == 0 {
+	ns := GetNamespace()
+
+	if ns == nil && len(c.StringArgs) == 0 {
 		resp.Error = "invalid command when namespace is not active"
 		return resp
 	}
 
-	if namespace != "" && isUserSource(c.Source) {
+	if ns != nil && isUserSource(c.Source) {
 		if len(c.StringArgs) > 0 {
-			namespaceQueue(c, resp)
+			arg := c.StringArgs["name"]
+
+			vmType, err := findVMType(c.BoolArgs)
+			if err != nil {
+				resp.Error = err.Error()
+				return resp
+			}
+
+			if err := ns.Queue(arg, vmType); err != nil {
+				resp.Error = err.Error()
+			}
 		} else {
-			namespaceLaunch(c, resp)
+			if err := ns.Launch(); err != nil {
+				resp.Error = err.Error()
+			}
 		}
 
 		return resp

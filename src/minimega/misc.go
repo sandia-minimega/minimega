@@ -425,6 +425,8 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
 func lookupVLAN(alias string) (int, error) {
+	namespace := GetNamespaceName()
+
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
@@ -465,4 +467,11 @@ func lookupVLAN(alias string) (int, error) {
 	}()
 
 	return vlan, nil
+}
+
+// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+func printVLAN(vlan int) string {
+	namespace := GetNamespaceName()
+
+	return allocatedVLANs.PrintVLAN(namespace, vlan)
 }
