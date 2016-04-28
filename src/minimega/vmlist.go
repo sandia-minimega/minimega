@@ -290,20 +290,50 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-// Launch provided VM after checking for name or UUID collisions.
-func (vms VMs) Launch(vm VM) (err error) {
-	// Actually launch the VM from a defered func when there's no error. This
-	// happens *after* we've released the vmLock so that launching can happen
-	// in parallel.
-	defer func() {
-		if err == nil {
-			err = vm.Launch()
+func (vms VMs) Launch(names []string, vmType VMType) chan error {
+	vmLock.Lock()
+
+	out := make(chan error)
+
+	go func() {
+		// Don't unlock until we've finished launching all the VMs
+		defer vmLock.Unlock()
+		defer close(out)
+
+		log.Info("launching %v %v vms", len(names), vmType)
+
+		var wg sync.WaitGroup
+
+		for _, name := range names {
+			vm := NewVM(name, vmType)
+
+			if err := vms.check(vm); err != nil {
+				out <- err
+				continue
+			}
+
+			// Record newly created VM
+			vms[vm.GetID()] = vm
+
+			// The actual launching can happen in parallel, we just want to
+			// make sure that we complete all the one-vs-all VM checks and add
+			// to vms while holding the vmLock.
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+
+				out <- vm.Launch()
+			}(name)
 		}
+
+		wg.Wait()
 	}()
 
-	vmLock.Lock()
-	defer vmLock.Unlock()
+	return out
+}
 
+// check VM doesn't have any conflicts with the existing VMs
+func (vms VMs) check(vm VM) error {
 	// Make sure that there isn't an existing VM with the same name or UUID
 	for _, vm2 := range vms {
 		// We only care about name collisions if the VMs are running in the
@@ -322,8 +352,19 @@ func (vms VMs) Launch(vm VM) (err error) {
 		}
 	}
 
-	vms[vm.GetID()] = vm
-	return
+	// Check the interfaces/disks/filesystem is sane
+	if err := vms.checkInterfaces(vm); err != nil {
+		return err
+	}
+
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vms.checkDisks(vm)
+	case *ContainerVM:
+		return vms.checkFilesystem(vm)
+	}
+
+	return errors.New("unknown VM type")
 }
 
 // Start VMs matching target.
@@ -568,12 +609,12 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	return errs
 }
 
-// CheckInterfaces checks to make sure that a VM's MAC addresses are unique.
+// checkInterfaces checks to make sure that a VM's MAC addresses are unique.
 // Only returns an error if the MAC addresses are not unique for the interfaces
 // on the same VM. If multiple VMs share the same MAC address, logs a warning.
 // If a VM's MAC address is empty for a given interface, it randomly assigns a
 // valid, unique, MAC to that interface.
-func (vms VMs) CheckInterfaces(vm VM) error {
+func (vms VMs) checkInterfaces(vm VM) error {
 	macs := map[string]bool{}
 
 	for _, net := range vm.Config().Networks {
@@ -589,12 +630,6 @@ func (vms VMs) CheckInterfaces(vm VM) error {
 
 		macs[net.MAC] = true
 	}
-
-	// Ensure that we don't add new VMs while we are checking our interfaces.
-	// If a new VM has a conflict with us, it will be found when they call
-	// CheckInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
 
 	for _, vm2 := range vms {
 		// Skip ourself
@@ -649,13 +684,9 @@ func (vms VMs) CheckInterfaces(vm VM) error {
 	return nil
 }
 
-// CheckDisks looks for Kvm VMs that share the same disk image and don't have
+// checkDisks looks for Kvm VMs that share the same disk image and don't have
 // Snapshot set to true.
-func (vms VMs) CheckDisks(vm *KvmVM) error {
-	// See note about vmLock in VMs.CheckInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
+func (vms VMs) checkDisks(vm *KvmVM) error {
 	// Disk path to whether it is a snapshot or not
 	disks := map[string]bool{}
 
@@ -687,12 +718,12 @@ func (vms VMs) CheckDisks(vm *KvmVM) error {
 	return nil
 }
 
-// CheckFilesystem looks for Container VMs that share the same filesystem
+// checkFilesystem looks for Container VMs that share the same filesystem
 // directory and don't have Snapshot set to true.
-func (vms VMs) CheckFilesystem(vm *ContainerVM) error {
-	// See note about vmLock in VMs.CheckInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
+func (vms VMs) checkFilesystem(vm *ContainerVM) error {
+	if vm.FSPath == "" {
+		return errors.New("unable to launch container without a configured filesystem")
+	}
 
 	// Disk path to whether it is a snapshot or not
 	disks := map[string]bool{}

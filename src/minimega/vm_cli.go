@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -684,37 +683,7 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 		return resp
 	}
 
-	log.Info("launching %v %v vms", len(names), vmType)
-
-	errChan := make(chan error)
-
-	var wg sync.WaitGroup
-
-	for _, name := range names {
-		wg.Add(1)
-
-		var vm VM
-		switch vmType {
-		case KVM:
-			vm = NewKVM(name)
-		case CONTAINER:
-			vm = NewContainer(name)
-		default:
-			// TODO
-		}
-
-		go func(name string) {
-			defer wg.Done()
-
-			errChan <- vms.Launch(vm)
-		}(name)
-	}
-
-	go func() {
-		defer close(errChan)
-
-		wg.Wait()
-	}()
+	errChan := vms.Launch(names, vmType)
 
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() string {

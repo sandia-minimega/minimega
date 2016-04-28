@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -586,7 +585,7 @@ func (vm *ContainerVM) Config() *BaseConfig {
 func NewContainer(name string) *ContainerVM {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewVM(name)
+	vm.BaseVM = *NewBaseVM(name)
 	vm.Type = CONTAINER
 
 	vm.ContainerConfig = *vmConfig.ContainerConfig.Copy() // deep-copy configured fields
@@ -596,28 +595,6 @@ func NewContainer(name string) *ContainerVM {
 
 func (vm *ContainerVM) Launch() error {
 	defer vm.lock.Unlock()
-
-	// check that there's a FS configured for this VM
-	if vm.FSPath == "" {
-		err := errors.New("unable to launch container without a configured filesystem")
-		vm.unlaunchable = true
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
-
-	// Check the disks and network interfaces are sane
-	err := vms.CheckInterfaces(vm)
-	if err == nil {
-		err = vms.CheckFilesystem(vm)
-	}
-
-	if err != nil {
-		vm.unlaunchable = true
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
 
 	return vm.launch()
 }
@@ -713,10 +690,6 @@ func (vm *ContainerConfig) String() string {
 // hold the VM's lock.
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
-
-	if vm.unlaunchable {
-		return errors.New("vm unlaunchable, probably misconfigured")
-	}
 
 	err := containerInit()
 	if err != nil {

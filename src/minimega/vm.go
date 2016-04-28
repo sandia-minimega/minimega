@@ -122,8 +122,6 @@ type NetConfig struct {
 type BaseVM struct {
 	BaseConfig // embed
 
-	unlaunchable bool // if CheckInterfaces/Disks/Filesystem fail
-
 	lock sync.Mutex // synchronizes changes to this VM
 
 	kill chan bool // channel to signal the vm to shut down
@@ -160,9 +158,20 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-// NewVM creates a new VM, copying the currently set configs. After a VM is
+func NewVM(name string, vmType VMType) VM {
+	switch vmType {
+	case KVM:
+		return NewKVM(name)
+	case CONTAINER:
+		return NewContainer(name)
+	}
+
+	return nil
+}
+
+// NewBaseVM creates a new VM, copying the currently set configs. After a VM is
 // created, it can be Launched.
-func NewVM(name string) *BaseVM {
+func NewBaseVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields

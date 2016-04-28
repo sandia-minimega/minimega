@@ -107,7 +107,7 @@ func (old *KVMConfig) Copy() *KVMConfig {
 func NewKVM(name string) *KvmVM {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewVM(name)
+	vm.BaseVM = *NewBaseVM(name)
 	vm.Type = KVM
 
 	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
@@ -120,19 +120,6 @@ func NewKVM(name string) *KvmVM {
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
 	defer vm.lock.Unlock()
-
-	// Check the disks and network interfaces are sane
-	err := vms.CheckInterfaces(vm)
-	if err == nil {
-		err = vms.CheckDisks(vm)
-	}
-
-	if err != nil {
-		vm.unlaunchable = true
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
 
 	return vm.launch()
 }
@@ -378,10 +365,6 @@ func (vm *KvmVM) connectQMP() (err error) {
 // the VM's lock.
 func (vm *KvmVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
-
-	if vm.unlaunchable {
-		return errors.New("vm unlaunchable, probably misconfigured")
-	}
 
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
