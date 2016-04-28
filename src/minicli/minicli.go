@@ -9,6 +9,7 @@ import (
 	"fmt"
 	log "minilog"
 	"strings"
+	"sync"
 )
 
 // Output modes
@@ -30,6 +31,8 @@ type Flags struct {
 	Mode     int
 	Record   bool
 }
+
+var flagsLock sync.Mutex
 
 var defaultFlags = Flags{
 	// Output flags
@@ -196,6 +199,9 @@ func Compile(input string) (*Command, error) {
 
 	_, cmd := closestMatch(in)
 	if cmd != nil {
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		cmd.Record = defaultFlags.Record
 		return cmd, nil
 	}
@@ -340,4 +346,14 @@ func ClearHistory() {
 func Doc() (string, error) {
 	bytes, err := json.Marshal(handlers)
 	return string(bytes), err
+}
+
+// copyFlags returns a copy of the default flags
+func copyFlags() *Flags {
+	flagsLock.Lock()
+	defer flagsLock.Unlock()
+
+	res := &Flags{}
+	*res = defaultFlags
+	return res
 }
