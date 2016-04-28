@@ -174,7 +174,7 @@ outerLoop:
 				}
 
 				// Set the current event
-				v.e = s
+				v.e = pr.scanner.Text()
 
 				duration, err := time.ParseDuration(s[0] + "ns")
 				if err != nil {
@@ -389,7 +389,7 @@ func (v *vncKBPlayback) GetStep() (string, error) {
 	defer v.Unlock()
 
 	if v.state == Close {
-		return nil, errors.New("kbplayback already stopped")
+		return "", errors.New("kbplayback already stopped")
 	}
 	return v.e, nil
 }

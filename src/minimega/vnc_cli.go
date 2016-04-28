@@ -46,7 +46,10 @@ file. Use the getstep command to view the current vnc event. Calling stop will a
 playback.
 
 Vnc playback also supports injecting mouse/keyboard events in the format found in
-the playback file.
+the playback file. Injected commands must omit the time delta as they are sent
+immediately.
+
+vnc host vm_id inject PointerEvent,0,465,245
 
 Comments in the playback file are logged at the info level. An example is given below.
 
