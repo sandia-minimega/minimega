@@ -483,7 +483,7 @@ func (vm *KvmVM) launch() error {
 		return err
 	}
 
-	go vm.asyncLogger()
+	go qmpLogger(vm.ID, vm.q)
 
 	// connect cc
 	ccPath := filepath.Join(vm.instancePath, "cc")
@@ -698,17 +698,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	return args
 }
 
-// log any asynchronous messages, such as vnc connects, to log.Info
-func (vm *KvmVM) asyncLogger() {
-	for {
-		v := vm.q.Message()
-		if v == nil {
-			return
-		}
-		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
-	}
-}
-
 func (vm *KvmVM) hotplugRemove(id int) error {
 	hid := fmt.Sprintf("hotplug%v", id)
 	log.Debugln("hotplug id:", hid)
@@ -730,6 +719,13 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
+}
+
+// log any asynchronous messages, such as vnc connects, to log.Info
+func qmpLogger(id int, q qmp.Conn) {
+	for v := q.Message(); v != nil; v = q.Message() {
+		log.Info("VM %v received asynchronous message: %v", id, v)
+	}
 }
 
 func qemuOverrideString() string {
