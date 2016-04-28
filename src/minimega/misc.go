@@ -446,6 +446,7 @@ func lookupVLAN(alias string) (int, error) {
 	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
 		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
 	}
+	cmd.SetRecord(false)
 
 	respChan, err := meshageSend(cmd, Wildcard)
 	if err != nil {

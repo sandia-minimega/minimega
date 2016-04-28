@@ -194,6 +194,8 @@ func (n *Namespace) Launch() error {
 // serialized on a per-host basis -- it's fine to run multiple of these in
 // parallel, as long as they target different hosts.
 func (n *Namespace) HostLaunch(host string, queued queuedVM, respChan chan minicli.Responses) {
+	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
+
 	// Mesh send all the config commands
 	cmds := []string{"clear vm config"}
 	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)

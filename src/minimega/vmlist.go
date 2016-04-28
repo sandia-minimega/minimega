@@ -11,6 +11,7 @@ import (
 	log "minilog"
 	"os"
 	"ranges"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -295,38 +296,50 @@ func (vms VMs) Launch(names []string, vmType VMType) chan error {
 
 	out := make(chan error)
 
+	log.Info("launching %v %v vms", len(names), vmType)
+	start := time.Now()
+
+	var wg sync.WaitGroup
+
+	for _, name := range names {
+		// This uses the global vmConfigs so we have to create the VMs in the
+		// CLI thread (before the next command gets processed which could
+		// change the vmConfigs).
+		vm := NewVM(name, vmType)
+
+		if err := vms.check(vm); err != nil {
+			// Send from new goroutine to prevent deadlock since we haven't
+			// even returned the output channel yet... hopefully we won't spawn
+			// too many goroutines.
+			go func() {
+				out <- err
+			}()
+			continue
+		}
+
+		// Record newly created VM
+		vms[vm.GetID()] = vm
+
+		// The actual launching can happen in parallel, we just want to
+		// make sure that we complete all the one-vs-all VM checks and add
+		// to vms while holding the vmLock.
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			out <- vm.Launch()
+		}(name)
+	}
+
 	go func() {
 		// Don't unlock until we've finished launching all the VMs
 		defer vmLock.Unlock()
 		defer close(out)
 
-		log.Info("launching %v %v vms", len(names), vmType)
-
-		var wg sync.WaitGroup
-
-		for _, name := range names {
-			vm := NewVM(name, vmType)
-
-			if err := vms.check(vm); err != nil {
-				out <- err
-				continue
-			}
-
-			// Record newly created VM
-			vms[vm.GetID()] = vm
-
-			// The actual launching can happen in parallel, we just want to
-			// make sure that we complete all the one-vs-all VM checks and add
-			// to vms while holding the vmLock.
-			wg.Add(1)
-			go func(name string) {
-				defer wg.Done()
-
-				out <- vm.Launch()
-			}(name)
-		}
-
 		wg.Wait()
+
+		stop := time.Now()
+		log.Info("launched %v %v vms in %v", len(names), vmType, stop.Sub(start))
 	}()
 
 	return out
@@ -517,6 +530,13 @@ func (vms VMs) CleanDirs() {
 // VMs or not. If the fns alter state they can set this flag to false rather
 // than dealing with locking.
 func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
+	// Some callstack voodoo magic
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		if fn := runtime.FuncForPC(pc); fn != nil {
+			log.Debug("applying %v to %v (concurrent = %t)", fn.Name(), target, concurrent)
+		}
+	}
+
 	names := map[string]bool{} // Names of VMs for which to apply fn
 	ids := map[int]bool{}      // IDs of VMs for which to apply fn
 
