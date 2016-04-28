@@ -213,6 +213,9 @@ func main() {
 	// start the cc service
 	ccStart()
 
+	// start tap reaper
+	go periodicReapTaps()
+
 	fmt.Println(banner)
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable is

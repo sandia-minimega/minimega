@@ -93,8 +93,6 @@ func init() {
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
-
-	go periodicReapTaps()
 }
 
 // NewBridge creates a new bridge with ovs, assumes that the bridgeLock is held.
