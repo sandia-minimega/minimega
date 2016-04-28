@@ -395,6 +395,9 @@ func (vm *BaseVM) UpdateBW() {
 	bandwidthLock.Lock()
 	defer bandwidthLock.Unlock()
 
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	for i := range vm.Networks {
 		net := &vm.Networks[i]
 		net.Stats = bandwidthStats[net.Tap]
@@ -402,6 +405,9 @@ func (vm *BaseVM) UpdateBW() {
 }
 
 func (vm *BaseVM) UpdateCCActive() {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
