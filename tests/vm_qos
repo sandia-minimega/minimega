@@ -1,0 +1,33 @@
+.annotate false
+
+qos add mega_tapNaN loss 0.25
+
+clear qos mega_tapNaN
+
+tap create 100 name qos_test_tap0
+qos add qos_test_tap0 loss 0.25
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 delay 100ms
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 rate 1mbit
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 delay 200ms
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 rate 2mbit
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 loss 0.50
+.columns tap,max_bandwidth,loss,delay qos list 
+
+qos add qos_test_tap0 rate 2xbit
+
+qos add qos_test_tap0 loss 150
+
+qos add qos_test_tap0 delay 100xbit
+
+clear qos qos_test_tap0
+qos list

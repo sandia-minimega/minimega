@@ -24,7 +24,7 @@ additional calls to <add>.
 Qos constraints include:
 
 - loss		: packets will be randomly dropped with a specified probability
-- delay		: delay packets for configured unit of time
+- delay		: delay packets for specified unit of time (ms, ns, etc)
 - rate		: impose a maximum bandwidth on an interface, in kbit, mbit, or gbit
 
 Examples:
@@ -212,8 +212,8 @@ func cliQos(c *minicli.Command) *minicli.Response {
 		if c.BoolArgs["loss"] {
 			loss := c.StringArgs["percent"]
 
-			_, err := strconv.ParseFloat(loss, 64)
-			if err != nil {
+			v, err := strconv.ParseFloat(loss, 64)
+			if err != nil || v >= float64(100) {
 				resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
 				return resp
 			}

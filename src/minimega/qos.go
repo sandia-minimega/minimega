@@ -54,35 +54,34 @@ func (t *Tap) qosGetCmd(op string, ns []string) []string {
 // Given a tc qdisc (netem, tbf) generate the correct namespace for a tc command.
 // This is required because to chain together qdiscs
 func (t *Tap) qosNamespace(qdisc string) []string {
+	var ns []string
 
 	if qdisc == "netem" {
 		// This is the root qdisc
 		if t.qos.tbfNs == nil {
 			t.qos.netemNs = []string{"root", "handle", "1:", "netem"}
+			ns = t.qos.netemNs
 		} else {
 			// Chain the netem qdisc to the existing tbf qdisc
-			t.qos.netemNs = []string{"parent", "1:", "handle", "2:", "netem"}
+			ns = []string{"parent", "1:", "handle", "2:", "netem"}
 		}
 		// Update the command parameters
 		t.qos.params = t.qos.netemParams
-
-		return t.qos.netemNs
 	}
 
 	if qdisc == "tbf" {
 		// This is the root qdisc
 		if t.qos.netemNs == nil {
 			t.qos.tbfNs = []string{"root", "handle", "1:", "tbf"}
+			ns = t.qos.tbfNs
 		} else {
 			// Chain the tbf qdisc to the existing tbf disc
-			t.qos.tbfNs = []string{"parent", "1:", "handle", "2:", "tbf"}
+			ns = []string{"parent", "1:", "handle", "2:", "tbf"}
 		}
 		// Update the command parameters
 		t.qos.params = t.qos.tbfParams
-
-		return t.qos.tbfNs
 	}
-	return nil
+	return ns
 }
 
 // Execute a qos command

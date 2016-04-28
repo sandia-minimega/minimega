@@ -1,0 +1,52 @@
+## .annotate false
+
+## qos add mega_tapNaN loss 0.25
+E: tap mega_tapNaN not found
+
+## clear qos mega_tapNaN
+E: tap mega_tapNaN not found
+
+## tap create 100 name qos_test_tap0
+qos_test_tap0
+
+## qos add qos_test_tap0 loss 0.25
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 |               | 0.25 |
+
+## qos add qos_test_tap0 delay 100ms
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 |               | 0.25 | 100ms
+
+## qos add qos_test_tap0 rate 1mbit
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 | 1mbit         | 0.25 | 100ms
+
+## qos add qos_test_tap0 delay 200ms
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 | 1mbit         | 0.25 | 200ms
+
+## qos add qos_test_tap0 rate 2mbit
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 | 2mbit         | 0.25 | 200ms
+
+## qos add qos_test_tap0 loss 0.50
+## .columns tap,max_bandwidth,loss,delay qos list 
+tap           | max_bandwidth | loss | delay
+qos_test_tap0 | 2mbit         | 0.50 | 200ms
+
+## qos add qos_test_tap0 rate 2xbit
+E: `2xbit` invalid: must specify rate as <kbit, mbit, or gbit>
+
+## qos add qos_test_tap0 loss 150
+E: `150` is not a valid loss percentage
+
+## qos add qos_test_tap0 delay 100xbit
+E: `100xbit` is not a valid delay parameter
+
+## clear qos qos_test_tap0
+## qos list
