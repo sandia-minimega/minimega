@@ -122,6 +122,8 @@ type NetConfig struct {
 type BaseVM struct {
 	BaseConfig // embed
 
+	unlaunchable bool // if CheckInterfaces/Disks/Filesystem fail
+
 	lock sync.Mutex // synchronizes changes to this VM
 
 	kill chan bool // channel to signal the vm to shut down

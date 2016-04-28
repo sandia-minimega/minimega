@@ -121,6 +121,19 @@ func NewKVM(name string) *KvmVM {
 func (vm *KvmVM) Launch() error {
 	defer vm.lock.Unlock()
 
+	// Check the disks and network interfaces are sane
+	err := vms.CheckInterfaces(vm)
+	if err == nil {
+		err = vms.CheckDisks(vm)
+	}
+
+	if err != nil {
+		vm.unlaunchable = true
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
+
 	return vm.launch()
 }
 
@@ -366,25 +379,17 @@ func (vm *KvmVM) connectQMP() (err error) {
 func (vm *KvmVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
+	if vm.unlaunchable {
+		return errors.New("vm unlaunchable, probably misconfigured")
+	}
+
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
-	if vm.State != VM_QUIT {
+	if vm.State == VM_BUILDING {
 		ccNode.RegisterVM(vm.UUID, vm)
 
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
-		}
-
-		// Check the disks and network interfaces are sane
-		err := vms.CheckInterfaces(vm)
-		if err == nil {
-			err = vms.CheckDisks(vm)
-		}
-
-		if err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
 		}
 	}
 

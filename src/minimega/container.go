@@ -597,6 +597,28 @@ func NewContainer(name string) *ContainerVM {
 func (vm *ContainerVM) Launch() error {
 	defer vm.lock.Unlock()
 
+	// check that there's a FS configured for this VM
+	if vm.FSPath == "" {
+		err := errors.New("unable to launch container without a configured filesystem")
+		vm.unlaunchable = true
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
+
+	// Check the disks and network interfaces are sane
+	err := vms.CheckInterfaces(vm)
+	if err == nil {
+		err = vms.CheckFilesystem(vm)
+	}
+
+	if err != nil {
+		vm.unlaunchable = true
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
+
 	return vm.launch()
 }
 
@@ -692,6 +714,10 @@ func (vm *ContainerConfig) String() string {
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
+	if vm.unlaunchable {
+		return errors.New("vm unlaunchable, probably misconfigured")
+	}
+
 	err := containerInit()
 	if err != nil {
 		log.Errorln(err)
@@ -705,42 +731,15 @@ func (vm *ContainerVM) launch() error {
 		return err
 	}
 
-	s := vm.State
-	restart := s == VM_QUIT || s == VM_ERROR
-
-	// don't repeat the preamble if we're just in the quit state
-	if s != VM_QUIT {
+	// If this is the first time launching the VM, do the final configuration
+	// check, create a directory for it, and setup the FS.
+	if vm.State == VM_BUILDING {
 		ccNode.RegisterVM(vm.UUID, vm)
 
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
 
-		// check that there's a FS configured for this VM
-		if vm.FSPath == "" {
-			err := errors.New("unable to launch container without a configured filesystem")
-			vm.setError(err)
-			return err
-		}
-
-		// Check the disks and network interfaces are sane
-		err := vms.CheckInterfaces(vm)
-		if err == nil {
-			err = vms.CheckFilesystem(vm)
-		}
-
-		if err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
-		}
-	}
-
-	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
-	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
-
-	if !restart {
 		if vm.Snapshot {
 			if err := vm.overlayMount(); err != nil {
 				log.Error("overlayMount: %v", err)
@@ -751,6 +750,10 @@ func (vm *ContainerVM) launch() error {
 			vm.effectivePath = vm.FSPath
 		}
 	}
+
+	// write the config for this vm
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
 	// to mimic stdio, and a fourth pipe for logging before the child execs
