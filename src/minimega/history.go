@@ -53,6 +53,7 @@ func cliHistory(c *minicli.Command, resp *minicli.Response) error {
 
 func cliHistoryClear(c *minicli.Command, resp *minicli.Response) error {
 	minicli.ClearHistory()
+	c.Record = false
 	return nil
 }
 
