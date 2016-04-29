@@ -244,7 +244,7 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 
 			vlans2 := []string{}
 			for k, _ := range vlans {
-				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(namespace, k))
+				vlans2 = append(vlans2, printVLAN(k))
 			}
 			sort.Strings(vlans2)
 

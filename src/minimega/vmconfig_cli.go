@@ -512,7 +512,7 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		}
 	} else if c.BoolArgs["clone"] {
 		// Clone the config of an existing vm
-		vm := LocalVMs().findVm(c.StringArgs["vm"])
+		vm := vms.FindVM(c.StringArgs["vm"])
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {

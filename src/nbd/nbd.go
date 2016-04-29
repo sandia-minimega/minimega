@@ -6,6 +6,7 @@ package nbd
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	log "minilog"
 	"os"
@@ -28,9 +29,7 @@ const (
 func Modprobe() error {
 	// Load the kernel module
 	// This will probably fail unless you are root
-	p := process("modprobe")
-	cmd := exec.Command(p, "nbd", "max_part=10")
-	err := cmd.Run()
+	err := exec.Command(process("modprobe"), "nbd", "max_part=10").Run()
 	if err != nil {
 		return err
 	}
@@ -44,8 +43,7 @@ func Modprobe() error {
 // after this function returns no error.
 func Ready() error {
 	// Ensure that the kernel module has been loaded
-	p := process("lsmod")
-	cmd := exec.Command(p)
+	cmd := exec.Command(process("lsmod"))
 	result, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
@@ -122,68 +120,27 @@ func ConnectImage(image string) (string, error) {
 	}
 
 	// connect it to qemu-nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-c",
-			nbdPath,
-			image,
-		},
-		Env: nil,
-		Dir: "",
-	}
+	cmd := exec.Command(process("qemu-nbd"), "-c", nbdPath, image)
 	log.Debug("connecting to nbd with cmd: %v", cmd)
 
-	stdout, err := cmd.StdoutPipe()
+	result, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to connect to nbd: %v", string(result))
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return "", err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	err = cmd.Run()
-	if err != nil {
-		return "", err
-	}
 	return nbdPath, nil
 }
 
 // DisconnectDevice disconnects a given NBD using qemu-nbd.
 func DisconnectDevice(dev string) error {
 	// disconnect nbd
-	p := process("qemu-nbd")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-d",
-			dev,
-		},
-		Env: nil,
-		Dir: "",
-	}
+	cmd := exec.Command(process("qemu-nbd"), "-d", dev)
+	log.Debug("disconnect nbd with cmd: %v", cmd)
 
-	stdout, err := cmd.StdoutPipe()
+	result, err := cmd.CombinedOutput()
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to disconnect nbd: %v", string(result))
 	}
 
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	log.LogAll(stdout, log.INFO, "qemu-nbd")
-	log.LogAll(stderr, log.ERROR, "qemu-nbd")
-
-	log.Debug("disconnecting nbd with cmd: %v", cmd)
-	return cmd.Run()
+	return nil
 }

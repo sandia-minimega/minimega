@@ -119,13 +119,15 @@ func ccGetFilter() *ron.Client {
 		filter = *ccFilter
 	}
 
-	filter.Namespace = namespace
+	filter.Namespace = GetNamespaceName()
 	return &filter
 }
 
 // ccMatchNamespace tests whether a command is relavant to the active
 // namespace.
 func ccMatchNamespace(c *ron.Command) bool {
+	namespace := GetNamespaceName()
+
 	return namespace == "" || c.Filter == nil || c.Filter.Namespace == namespace
 }
 

@@ -37,8 +37,8 @@ var (
 	f_logfile    = flag.String("logfile", "", "also log to file")
 	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
 	f_e          = flag.Bool("e", false, "execute command on running minimega")
-	f_degree     = flag.Int("degree", 0, "meshage starting degree")
-	f_msaTimeout = flag.Int("msa", 10, "meshage MSA timeout")
+	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
+	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
 	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
@@ -50,7 +50,8 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 
-	vms      VMs
+	vms = VMs{}
+
 	hostname string
 	reserved = []string{Wildcard}
 )
@@ -117,8 +118,6 @@ func main() {
 	if isReserved(hostname) {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
-
-	vms = make(map[int]VM)
 
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
@@ -209,10 +208,13 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	meshageInit(host, *f_context, uint(*f_degree), *f_port)
+	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port)
 
 	// start the cc service
 	ccStart()
+
+	// start tap reaper
+	go periodicReapTaps()
 
 	fmt.Println(banner)
 
@@ -242,15 +244,15 @@ func teardownf(format string, args ...interface{}) {
 
 func teardown() {
 	// Clear namespace so that we hit all the VMs
-	namespace = ""
+	SetNamespace("")
 
 	vncClear()
 	clearAllCaptures()
-	vms.kill(Wildcard)
+	vms.Kill(Wildcard)
 	dnsmasqKillAll()
 	ksmDisable()
-	vms.flush()
-	vms.cleanDirs()
+	vms.Flush()
+	vms.CleanDirs()
 	containerTeardown()
 	err := bridgesDestroy()
 	if err != nil {

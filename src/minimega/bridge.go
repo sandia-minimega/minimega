@@ -93,8 +93,6 @@ func init() {
 			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
-
-	go periodicReapTaps()
 }
 
 // NewBridge creates a new bridge with ovs, assumes that the bridgeLock is held.
@@ -723,7 +721,7 @@ func hostTapList(resp *minicli.Response) {
 		for name, tap := range b.Taps {
 			if tap.host && !b.defunctTaps[name] {
 				resp.Tabular = append(resp.Tabular, []string{
-					k, name, allocatedVLANs.PrintVLAN(namespace, tap.lan),
+					k, name, printVLAN(tap.lan),
 				})
 			}
 		}
