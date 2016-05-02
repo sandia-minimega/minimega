@@ -789,12 +789,14 @@ func hostVMs(host string) VMs {
 	// Compile info command and set it not to record
 	cmd := minicli.MustCompile("vm info")
 	cmd.SetRecord(false)
+	cmd.SetSource(GetNamespaceName())
 
 	cmds := makeCommandHosts([]string{host}, cmd)
 
 	var vms VMs
 
-	for resps := range processCommands(cmds...) {
+	// LOCK: see func description.
+	for resps := range runCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -827,6 +829,11 @@ func GlobalVMs() VMs {
 
 // globalVMs is GlobalVMs without locking cmdLock.
 func globalVMs() VMs {
+	// Compile info command and set it not to record
+	cmd := minicli.MustCompile("vm info")
+	cmd.SetRecord(false)
+	cmd.SetSource(GetNamespaceName())
+
 	// Figure out which hosts to query:
 	//  * Hosts in the active namespace
 	//  * Hosts connected via meshage plus ourselves
@@ -838,16 +845,15 @@ func globalVMs() VMs {
 		hosts = append(hosts, hostname)
 	}
 
-	// Compile info command and set it not to record
-	cmd := minicli.MustCompile("vm info")
-	cmd.SetRecord(false)
+	log.Info("globalVMs command: %#v", cmd)
 
 	cmds := makeCommandHosts(hosts, cmd)
 
 	// Collected VMs
 	vms := VMs{}
 
-	for resps := range processCommands(cmds...) {
+	// LOCK: see func description.
+	for resps := range runCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)

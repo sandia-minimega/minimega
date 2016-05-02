@@ -69,8 +69,11 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 			defer RevertNamespace(ns, ns2)
 			SetNamespace(name)
 
-			// Run the subcommand and forward the responses
-			forward(processCommands(c.Subcommand), respChan)
+			// Run the subcommand and forward the responses.
+			//
+			// LOCK: This is a CLI so we already hold cmdLock (can call
+			// runCommands instead of RunCommands).
+			forward(runCommands(c.Subcommand), respChan)
 			return
 		}
 

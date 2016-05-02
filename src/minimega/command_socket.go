@@ -69,7 +69,7 @@ outer:
 			}
 
 			// HAX: Work around so that we can add the more boolean
-			for resp := range runCommand(cmd) {
+			for resp := range RunCommands(cmd) {
 				if prevResp != nil {
 					err = sendLocalResp(enc, prevResp, true)
 					if err != nil {

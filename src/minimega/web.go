@@ -158,7 +158,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	var screenshot []byte
 
-	for resps := range runCommand(cmd) {
+	for resps := range RunCommands(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {

@@ -113,11 +113,12 @@ func meshageHandler() {
 			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
 				// could all be the post statement...
 				c.Record = c2.Record
+				c.Source = c2.Source
 				c, c2 = c.Subcommand, c2.Subcommand
 			}
 
 			resps := []minicli.Responses{}
-			for resp := range runCommand(cmd) {
+			for resp := range RunCommands(cmd) {
 				resps = append(resps, resp)
 			}
 

@@ -108,7 +108,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
-		log.Debug("namespace: %v, source: %v", ns, c.Source)
+		log.Debug("namespace: %v, command: %#v", ns, c)
 
 		// Wrapped commands have two behaviors:
 		//   `fan out` -- send the command to all hosts in the active namespace
@@ -139,7 +139,9 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
-		for resps := range processCommands(cmds...) {
+		//
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		for resps := range runCommands(cmds...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
 			// problem if commands that return multiple responses are wrapped
@@ -183,7 +185,9 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
-		for resps := range processCommands(cmds...) {
+		//
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		for resps := range runCommands(cmds...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
@@ -213,14 +217,9 @@ func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	}
 }
 
-// processCommands wraps minicli.ProcessCommand for multiple commands,
-// combining their outputs into a single channel. This function does not
-// acquire the cmdLock so it should only be called by functions that do.
-func processCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
-	// Forward the responses and unlock when all are passed through
+// runCommands is RunCommands without locking cmdLock.
+func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
-
-	var wg sync.WaitGroup
 
 	// Preprocess all the commands so that if there's an error, we haven't
 	// already started to run some of the commands.
@@ -232,8 +231,8 @@ func processCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 			log.Errorln(err)
 
 			// Send the error from a separate goroutine because nothing will
-			// receive from this channel until processCommands returns and we
-			// don't want to create a deadlock.
+			// receive from this channel until we return. Otherwise, we will
+			// cause a deadlock.
 			go func() {
 				out <- errResp(err)
 				close(out)
@@ -242,35 +241,22 @@ func processCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 		}
 	}
 
-	// Completed preprocessing... start all the commands and forward all
-	// responses to out.
-	for _, c := range cmd {
-		wg.Add(1)
-
-		log.Info("processing: `%v` from `%v`", c.Original, c.Source)
-		in := minicli.ProcessCommand(c)
-
-		go func() {
-			// Mark done after we have read all the responses from in
-			defer wg.Done()
-
-			forward(in, out)
-		}()
-	}
-
-	// Wait for all the de-muxing goroutines to complete
+	// Completed preprocessing run commands serially and forward all the
+	// responses to out
 	go func() {
 		defer close(out)
 
-		wg.Wait()
+		for _, c := range cmd {
+			forward(minicli.ProcessCommand(c), out)
+		}
 	}()
 
 	return out
 }
 
-// runCommand wraps processCommands, ensuring that the command execution lock
-// is acquired before running the command.
-func runCommand(cmd ...*minicli.Command) <-chan minicli.Responses {
+// RunCommands wraps minicli.ProcessCommand for multiple commands, combining
+// their outputs into a single channel.
+func RunCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	cmdLock.Lock()
 
 	out := make(chan minicli.Responses)
@@ -279,7 +265,7 @@ func runCommand(cmd ...*minicli.Command) <-chan minicli.Responses {
 		defer cmdLock.Unlock()
 		defer close(out)
 
-		forward(processCommands(cmd...), out)
+		forward(runCommands(cmd...), out)
 	}()
 
 	return out
@@ -298,7 +284,7 @@ func runCommandGlobally(cmd *minicli.Command) <-chan minicli.Responses {
 	}
 	cmd.SetRecord(record)
 
-	return runCommand(cmd, cmd.Subcommand)
+	return runCommands(cmd, cmd.Subcommand)
 }
 
 // makeCommandHosts creates commands to run the given command on a set of hosts
@@ -397,7 +383,7 @@ func cliLocal() {
 			log.Warn("namespace changed between prompt and execution")
 		}
 
-		for resp := range runCommand(cmd) {
+		for resp := range RunCommands(cmd) {
 			// print the responses
 			minipager.DefaultPager.Page(resp.String())
 

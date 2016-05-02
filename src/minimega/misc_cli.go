@@ -139,7 +139,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	// HACK: We *don't* want long-running read commands to cause all other
 	// commands to block so we *unlock* the command lock here and *lock* it
-	// again for each command that we read (well, `runCommand` handles the
+	// again for each command that we read (well, `RunCommands` handles the
 	// locking for us).
 	cmdLock.Unlock()
 	defer cmdLock.Lock()
@@ -174,7 +174,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			continue
 		}
 
-		for resp := range runCommand(cmd) {
+		for resp := range RunCommands(cmd) {
 			respChan <- resp
 
 			// Stop processing if any of the responses have an error.
