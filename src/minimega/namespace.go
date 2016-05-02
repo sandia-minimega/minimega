@@ -5,15 +5,12 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
-	"ranges"
 	"strings"
 	"sync"
-	"text/tabwriter"
 	"time"
 )
 
@@ -21,48 +18,6 @@ const (
 	SchedulerRunning   = "running"
 	SchedulerCompleted = "completed"
 )
-
-var namespaceCLIHandlers = []minicli.Handler{
-	{ // namespace
-		HelpShort: "control namespace environments",
-		HelpLong: `
-Control and run commands in namespace environments.`,
-		Patterns: []string{
-			"namespace [name]",
-			"namespace <name> (command)",
-		},
-		Call: cliNamespace,
-	},
-	{ // nsmod
-		HelpShort: "modify namespace environments",
-		HelpLong: `
-Modify settings of the currently active namespace.
-
-add-host - add comma-separated list of hosts to the namespace.
-del-host - delete comma-separated list of hosts from the namespace.
-`,
-		Patterns: []string{
-			"nsmod <add-host,> <hosts>",
-			"nsmod <del-host,> <hosts>",
-		},
-		Call: wrapSimpleCLI(cliNamespaceMod),
-	},
-	{ // clear namespace
-		HelpShort: "unset namespace",
-		HelpLong: `
-Without a namespace, clear namespace unsets the current namespace.
-
-With a namespace, clear namespace deletes the specified namespace.`,
-		Patterns: []string{
-			"clear namespace [name]",
-		},
-		Call: wrapSimpleCLI(cliClearNamespace),
-	},
-}
-
-func init() {
-	registerHandlers("namespace", namespaceCLIHandlers)
-}
 
 type queuedVM struct {
 	VMConfig // embed
@@ -93,20 +48,14 @@ type Namespace struct {
 	scheduleStats []*scheduleStat
 }
 
-var namespace string
-var namespaces map[string]*Namespace
+var (
+	namespace     string
+	namespaces    = map[string]*Namespace{}
+	namespaceLock sync.Mutex
+)
 
-func init() {
-	namespaces = map[string]*Namespace{}
-}
-
-func (n Namespace) hostSlice() []string {
-	hosts := []string{}
-	for host := range n.Hosts {
-		hosts = append(hosts, host)
-	}
-
-	return hosts
+func (n Namespace) String() string {
+	return n.Name
 }
 
 func (n Namespace) Destroy() error {
@@ -130,179 +79,21 @@ func (n Namespace) Destroy() error {
 	return nil
 }
 
-func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
-	resp := &minicli.Response{Host: hostname}
-
-	if name, ok := c.StringArgs["name"]; ok {
-		if _, ok := namespaces[name]; !ok && name != "" {
-			log.Info("creating new namespace -- %v", name)
-
-			if strings.Contains(name, ".") {
-				log.Warn("namespace names probably shouldn't contain `.`")
-			}
-
-			ns := Namespace{
-				Name:  name,
-				Hosts: map[string]bool{},
-				vmID:  NewCounter(),
-			}
-
-			// By default, every mesh-reachable node is part of the namespace
-			// except for the local node which is typically the "head" node.
-			for _, host := range meshageNode.BroadcastRecipients() {
-				ns.Hosts[host] = true
-			}
-
-			namespaces[name] = &ns
-		}
-
-		if c.Subcommand != nil {
-			// Setting namespace for a single command, revert back afterwards
-			defer func(old string) {
-				namespace = old
-			}(namespace)
-			namespace = name
-
-			// Run the subcommand and forward the responses
-			forward(minicli.ProcessCommand(c.Subcommand), respChan)
-			return
-		}
-
-		// Setting namespace for future commands
-		namespace = name
-		respChan <- minicli.Responses{resp}
-		return
+func (n Namespace) hostSlice() []string {
+	hosts := []string{}
+	for host := range n.Hosts {
+		hosts = append(hosts, host)
 	}
 
-	if namespace == "" {
-		names := []string{}
-		for name := range namespaces {
-			names = append(names, name)
-		}
-
-		resp.Response = fmt.Sprintf("Namespaces: %v", names)
-	} else {
-		// TODO: Make this pretty or divide it up somehow
-		ns := namespaces[namespace]
-		resp.Response = fmt.Sprintf(`Namespace: "%v"
-Hosts: %v
-Number of queuedVMs: %v
-
-Schedules:
-`, namespace, ns.Hosts, len(ns.queuedVMs))
-
-		var o bytes.Buffer
-		w := new(tabwriter.Writer)
-		w.Init(&o, 5, 0, 1, ' ', 0)
-		fmt.Fprintln(w, "start\tend\tstate\tlaunched\tfailures\ttotal\thosts")
-		for _, stats := range ns.scheduleStats {
-			var end string
-			if !stats.end.IsZero() {
-				end = fmt.Sprintf("%v", stats.end)
-			}
-
-			fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-				stats.start,
-				end,
-				stats.state,
-				stats.launched,
-				stats.failures,
-				stats.total,
-				stats.hosts)
-		}
-		w.Flush()
-
-		resp.Response += o.String()
-	}
-
-	respChan <- minicli.Responses{resp}
+	return hosts
 }
 
-func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
-	if namespace == "" {
-		return errors.New("cannot run nsmod without active namespace")
-	}
-
-	ns := namespaces[namespace]
-
-	// Empty string should parse fine...
-	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
-	if err != nil {
-		return fmt.Errorf("invalid hosts -- %v", err)
-	}
-
-	if c.BoolArgs["add-host"] {
-		peers := map[string]bool{}
-		for _, peer := range meshageNode.BroadcastRecipients() {
-			peers[peer] = true
-		}
-
-		// Test that the host is actually in the mesh. If it's not, we could
-		// try to mesh dial it... Returning an error is simpler, for now.
-		for i := range hosts {
-			// Resolve localhost
-			if hosts[i] == Localhost {
-				hosts[i] = hostname
-			}
-
-			if hosts[i] != hostname && !peers[hosts[i]] {
-				return fmt.Errorf("unknown host: `%v`", hosts[i])
-			}
-		}
-
-		// After all have been checked, updated the namespace
-		for _, host := range hosts {
-			ns.Hosts[host] = true
-		}
-
-		return nil
-	} else if c.BoolArgs["del-host"] {
-		for _, host := range hosts {
-			delete(ns.Hosts, host)
-		}
-
-		return nil
-	}
-
-	// boo, should be unreachable
-	return errors.New("unreachable")
-}
-
-func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
-	name := c.StringArgs["name"]
-	if name == "" {
-		// Clearing the namespace global
-		namespace = ""
-		return nil
-	}
-
-	// Trying to delete a namespace
-	ns, exists := namespaces[name]
-	if !exists {
-		return fmt.Errorf("unknown namespace `%v`", name)
-	}
-
-	// Attempt to destroy the namespace
-	if err := ns.Destroy(); err != nil {
-		return err
-	}
-
-	// If we're deleting the currently active namespace, we should get out of
-	// that namespace
-	if namespace == name {
-		namespace = ""
-	}
-
-	delete(namespaces, name)
-	return nil
-}
-
-// namespaceQueue handles storing the current VM config to the namespace's
-// queuedVMs so that we can launch it in the future.
-func namespaceQueue(c *minicli.Command, resp *minicli.Response) error {
-	ns := namespaces[namespace]
-
-	names, err := expandVMLaunchNames(c.StringArgs["name"], GlobalVMs())
+// Queue handles storing the current VM config to the namespace's queuedVMs so
+// that we can launch it in the future.
+func (n *Namespace) Queue(arg string, vmType VMType) error {
+	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
+	// call globalVMs instead of GlobalVMs).
+	names, err := expandLaunchNames(arg, globalVMs())
 	if err != nil {
 		return err
 	}
@@ -315,7 +106,7 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) error {
 	delete(namesMap, "") // delete unconfigured name
 
 	// Extra check for name collisions -- look in the already queued VMs
-	for _, queued := range ns.queuedVMs {
+	for _, queued := range n.queuedVMs {
 		for _, name := range queued.names {
 			if namesMap[name] {
 				return fmt.Errorf("vm already queued with name `%s`", name)
@@ -323,12 +114,7 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) error {
 		}
 	}
 
-	vmType, err := findVMType(c.BoolArgs)
-	if err != nil {
-		return err
-	}
-
-	ns.queuedVMs = append(ns.queuedVMs, queuedVM{
+	n.queuedVMs = append(n.queuedVMs, queuedVM{
 		VMConfig: vmConfig.Copy(),
 		names:    names,
 		vmType:   vmType,
@@ -337,31 +123,29 @@ func namespaceQueue(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-// namespaceLaunch runs the scheduler and launches VMs across the namespace.
-// Blocks until all the `vm launch ... noblock` commands are in-flight.
-func namespaceLaunch(c *minicli.Command, resp *minicli.Response) error {
-	ns := namespaces[namespace]
-
-	if len(ns.Hosts) == 0 {
+// Launch runs the scheduler and launches VMs across the namespace. Blocks
+// until all the `vm launch ... noblock` commands are in-flight.
+func (n *Namespace) Launch() error {
+	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
 
-	if len(ns.queuedVMs) == 0 {
+	if len(n.queuedVMs) == 0 {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
 	// Create the host -> VMs assignment
 	// TODO: This is a static assignment... should it be updated periodically
 	// during the launching process?
-	stats, assignment := schedule(namespace)
+	stats, assignment := schedule(n.queuedVMs, n.hostSlice())
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
-	ns.queuedVMs = nil
+	n.queuedVMs = nil
 
 	stats.start = time.Now()
 	stats.state = SchedulerRunning
 
-	ns.scheduleStats = append(ns.scheduleStats, stats)
+	n.scheduleStats = append(n.scheduleStats, stats)
 
 	// Result of vm launch commands
 	respChan := make(chan minicli.Responses)
@@ -375,7 +159,7 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) error {
 			defer wg.Done()
 
 			for _, q := range queuedVMs {
-				namespaceHostLaunch(host, namespace, q, respChan)
+				n.HostLaunch(host, q, respChan)
 			}
 		}(host, queuedVMs)
 	}
@@ -409,7 +193,9 @@ func namespaceLaunch(c *minicli.Command, resp *minicli.Response) error {
 // launch ... noblock` if there are no errors. We assume that this is
 // serialized on a per-host basis -- it's fine to run multiple of these in
 // parallel, as long as they target different hosts.
-func namespaceHostLaunch(host, namespace string, queued queuedVM, respChan chan minicli.Responses) {
+func (n *Namespace) HostLaunch(host string, queued queuedVM, respChan chan minicli.Responses) {
+	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
+
 	// Mesh send all the config commands
 	cmds := []string{"clear vm config"}
 	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
@@ -464,11 +250,18 @@ func namespaceHostLaunch(host, namespace string, queued queuedVM, respChan chan 
 		return
 	}
 
+	// Replace empty VM names with generic name
+	for i, name := range queued.names {
+		if name == "" {
+			queued.names[i] = fmt.Sprintf("vm-%v-%v", n.Name, n.vmID.Next())
+		}
+	}
+
 	// Send the launch command
 	names := strings.Join(queued.names, ",")
 	log.Debug("launch vms on host %v -- %v", host, names)
 
-	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", namespace, queued.vmType, names)
+	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", n.Name, queued.vmType, names)
 	cmd.SetRecord(false)
 	cmd.SetSource(namespace)
 
@@ -483,4 +276,113 @@ func namespaceHostLaunch(host, namespace string, queued queuedVM, respChan chan 
 
 		forward(in, respChan)
 	}
+}
+
+// GetNamespace returns the active namespace. Returns nil if there isn't a
+// namespace active.
+func GetNamespace() *Namespace {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	return namespaces[namespace]
+}
+
+func GetNamespaceName() string {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	return namespace
+}
+
+// GetOrCreateNamespace returns the specified namespace, creating one if it
+// doesn't already exist.
+func GetOrCreateNamespace(name string) *Namespace {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	if _, ok := namespaces[name]; !ok {
+		log.Info("creating new namespace -- `%v`", name)
+
+		ns := &Namespace{
+			Name:  name,
+			Hosts: map[string]bool{},
+			vmID:  NewCounter(),
+		}
+
+		// By default, every mesh-reachable node is part of the namespace
+		// except for the local node which is typically the "head" node.
+		for _, host := range meshageNode.BroadcastRecipients() {
+			ns.Hosts[host] = true
+		}
+
+		namespaces[name] = ns
+	}
+
+	return namespaces[name]
+}
+
+// SetNamespace sets the active namespace
+func SetNamespace(name string) {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	log.Info("setting active namespace: %v", name)
+
+	namespace = name
+}
+
+// RevertNamespace reverts the active namespace (which should match curr) back
+// to the old namespace.
+func RevertNamespace(old, curr *Namespace) {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	// This is very odd and should *never* happen unless something has gone
+	// horribly wrong.
+	if namespace != curr.Name {
+		log.Warn("unexpected namespace, `%v` != `%v`, when reverting to `%v`", namespace, curr, old)
+	}
+
+	if old == nil {
+		namespace = ""
+	} else {
+		namespace = old.Name
+	}
+}
+
+func DestroyNamespace(name string) error {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	log.Info("destroying namespace: %v", name)
+
+	ns, ok := namespaces[namespace]
+	if !ok {
+		return fmt.Errorf("unknown namespace: %v", name)
+	}
+
+	if err := ns.Destroy(); err != nil {
+		return err
+	}
+
+	// If we're deleting the currently active namespace, we should get out of
+	// that namespace
+	if namespace == name {
+		namespace = ""
+	}
+
+	delete(namespaces, name)
+	return nil
+}
+
+func ListNamespaces() []string {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	res := []string{}
+	for n := range namespaces {
+		res = append(res, n)
+	}
+
+	return res
 }

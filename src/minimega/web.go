@@ -163,7 +163,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm does not support screenshots") {
+				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
 					continue
 				}
 
@@ -251,9 +251,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
-	cmdLock.Lock()
 	vms := GlobalVMs()
-	cmdLock.Unlock()
 
 	for _, vm := range vms {
 		stateMask := VM_QUIT | VM_ERROR

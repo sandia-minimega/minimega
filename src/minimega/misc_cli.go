@@ -56,9 +56,15 @@ commands.`,
 		HelpShort: "read and execute a command file",
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
-the file in manually except that it stops after the first error.`,
+the file in manually except that it stops after the first error.
+
+If the optional argument check is specified then read doesn't execute any of
+the commands in the file. Instead, it checks that all the commands are
+syntactically valid. This can identify mistyped commands in scripts before you
+read them. It cannot check for semantic errors (e.g. killing a non-existent
+VM). Stops on the first invalid command.`,
 		Patterns: []string{
-			"read <file>",
+			"read <file> [check,]",
 		},
 		Call: cliRead,
 	},
@@ -121,6 +127,8 @@ func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
+	check := c.BoolArgs["check"]
+
 	file, err := os.Open(c.StringArgs["file"])
 	if err != nil {
 		resp.Error = err.Error()
@@ -142,7 +150,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		var cmd *minicli.Command
 
 		command := scanner.Text()
-		log.Debug("read command: %v", command) // commands don't have their newlines removed
+		log.Debug("read command: %v", command)
 
 		cmd, err = minicli.Compile(command)
 		if err != nil {
@@ -159,6 +167,11 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		if hasCommand(cmd, "read") {
 			err = errors.New("cannot run nested `read` commands")
 			break
+		}
+
+		// If we're checking the syntax, don't actually execute the command
+		if check {
+			continue
 		}
 
 		for resp := range runCommand(cmd) {

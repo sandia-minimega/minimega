@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,6 +22,9 @@ const (
 	MIN_OVS     = 1.4
 	MIN_DNSMASQ = 2.73
 )
+
+// externalProcessesLock mediates access to customExternalProcesses.
+var externalProcessesLock sync.Mutex
 
 // defaultExternalProcesses is the default mapping between a command and the
 // actual binary name. This should *never* be modified. If the user needs to
@@ -69,24 +73,22 @@ versions not met.`,
 	},
 }
 
+func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
+	if err := checkExternal(); err != nil {
+		return err
+	}
+
+	// TODO: Remove? This goes against the unix philosophy
+	resp.Response = "all external dependencies met"
+	return nil
+}
+
 // checkExternal checks for the presence of each of the external processes we
 // may call, and error if any aren't in our path.
 func checkExternal() error {
-	var errs []string
-	for name, proc := range defaultExternalProcesses {
-		if alt, ok := customExternalProcesses[name]; ok {
-			proc = alt
-		}
-
-		path, err := exec.LookPath(proc)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%v not found", err.Error()))
-		} else {
-			log.Info("%v found at: %v", proc, path)
-		}
-	}
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "\n"))
+	// make sure we have all binaries first
+	if err := checkProcesses(); err != nil {
+		return err
 	}
 
 	// everything we want exists, but we have a few minimum versions to check
@@ -123,12 +125,29 @@ func checkExternal() error {
 	return nil
 }
 
-func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
-	if err := checkExternal(); err == nil {
-		return err
+// checkProcesses checks each of the processes in defaultExternalProcesses exists
+func checkProcesses() error {
+	externalProcessesLock.Lock()
+	defer externalProcessesLock.Unlock()
+
+	var errs []string
+	for name, proc := range defaultExternalProcesses {
+		if alt, ok := customExternalProcesses[name]; ok {
+			proc = alt
+		}
+
+		path, err := exec.LookPath(proc)
+		if err != nil {
+			errs = append(errs, err.Error())
+		} else {
+			log.Info("%v found at: %v", proc, path)
+		}
 	}
 
-	resp.Response = "all external dependencies met"
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "\n"))
+	}
+
 	return nil
 }
 
@@ -159,6 +178,9 @@ func processWrapper(args ...string) (string, error) {
 }
 
 func process(p string) string {
+	externalProcessesLock.Lock()
+	defer externalProcessesLock.Unlock()
+
 	name, ok := customExternalProcesses[p]
 	if !ok {
 		name = defaultExternalProcesses[p]

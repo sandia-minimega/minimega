@@ -300,16 +300,11 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, vm := range vms {
-		switch vm := vm.(type) {
-		case *KvmVM:
-			cpu := affinitySelectCPU(vm)
-			err := vm.AffinitySet(cpu)
-			if err != nil {
-				return err
-			}
-		default:
-			// TODO: Need to do anything?
+	for _, vm := range vms.FindKvmVMs() {
+		cpu := affinitySelectCPU(vm)
+		err := vm.AffinitySet(cpu)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -317,16 +312,11 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, vm := range vms {
-		switch vm := vm.(type) {
-		case *KvmVM:
-			affinityUnselectCPU(vm)
-			err := vm.AffinityUnset()
-			if err != nil {
-				return err
-			}
-		default:
-			// TODO: Need to do anything?
+	for _, vm := range vms.FindKvmVMs() {
+		affinityUnselectCPU(vm)
+		err := vm.AffinityUnset()
+		if err != nil {
+			return err
 		}
 	}
 	return nil

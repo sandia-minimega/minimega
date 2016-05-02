@@ -106,7 +106,9 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		log.Debug("namespace: %v, source: %v", namespace, c.Source)
+		ns := GetNamespace()
+
+		log.Debug("namespace: %v, source: %v", ns, c.Source)
 
 		// Wrapped commands have two behaviors:
 		//   `fan out` -- send the command to all hosts in the active namespace
@@ -120,13 +122,13 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 		// when we send the command via mesh, the source will be propagated and
 		// the remote nodes will execute the `local` behavior rather than
 		// trying to `fan out`.
-		if c.Source == namespace {
+		if ns == nil || c.Source == ns.Name {
 			localFunc(c, respChan)
 			return
 		}
-		c.SetSource(namespace)
+		c.SetSource(ns.Name)
 
-		hosts := namespaces[namespace].hostSlice()
+		hosts := ns.hostSlice()
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
@@ -158,16 +160,18 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		log.Debug("namespace: %v, source: %v", namespace, c.Source)
+		ns := GetNamespace()
+
+		log.Debug("namespace: %v, source: %v", ns, c.Source)
 
 		// See note in wrapBroadcastCLI.
-		if c.Source == namespace {
+		if ns == nil || c.Source == ns.Name {
 			localFunc(c, respChan)
 			return
 		}
-		c.SetSource(namespace)
+		c.SetSource(ns.Name)
 
-		hosts := namespaces[namespace].hostSlice()
+		hosts := ns.hostSlice()
 
 		cmds := makeCommandHosts(hosts, c)
 		for _, cmd := range cmds {
@@ -332,14 +336,16 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 	}
 
 	if len(hosts2) > 0 {
+		ns := GetNamespace()
+
 		targets := strings.Join(hosts2, ",")
 
 		// Keep the original CLI input
 		original := cmd.Original
 
 		// Prefix with namespace, if one is set
-		if namespace != "" {
-			original = fmt.Sprintf("namespace %q %v", namespace, original)
+		if ns != nil {
+			original = fmt.Sprintf("namespace %q %v", ns.Name, original)
 		}
 
 		cmd2 := minicli.MustCompilef("mesh send %s %s", targets, original)
@@ -357,6 +363,8 @@ func cliLocal() {
 	goreadline.FilenameCompleter = iomCompleter
 
 	for {
+		namespace := GetNamespaceName()
+
 		prompt := "minimega$ "
 		if namespace != "" {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
@@ -387,6 +395,13 @@ func cliLocal() {
 			cmd.SetRecord(false)
 		}
 
+		// The namespace changed between when we prompted the user (and could
+		// still change before we actually run the command).
+		if namespace != GetNamespaceName() {
+			// TODO: should we abort the command?
+			log.Warn("namespace changed between prompt and execution")
+		}
+
 		for resp := range runCommand(cmd) {
 			// print the responses
 			minipager.DefaultPager.Page(resp.String())
@@ -406,7 +421,7 @@ func cliLocal() {
 // (see wrapBroadcastCLI) to avoid expanding files before we're running the
 // command on the correct machine.
 func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	if c.Source != namespace {
+	if c.Source != GetNamespaceName() {
 		return c, nil
 	}
 

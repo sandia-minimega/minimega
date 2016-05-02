@@ -382,6 +382,9 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 			Host: hostname,
 		}
 
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		if c.BoolArgs["true"] {
 			defaultFlags.Mode = newMode
 		} else if c.BoolArgs["false"] && defaultFlags.Mode == newMode {
@@ -397,8 +400,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			if c.BoolArgs["true"] {
@@ -418,6 +420,9 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 			Host: hostname,
 		}
 
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		if c.BoolArgs["true"] || c.BoolArgs["false"] {
 			// Update the flag, can just get value for "true" since the default
 			// value is false.
@@ -433,8 +438,7 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			*get(r[0].Flags) = c.BoolArgs["true"]

@@ -269,26 +269,6 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find a VM based on it's ID, name, or UUID on a
-// given host. Returns nil if no such VM exists.
-func findRemoteVM(host, s string) VM {
-	log.Debug("findRemoteVM: %v %v", host, s)
-
-	var vms VMs
-
-	if host == hostname || host == Localhost {
-		vms = LocalVMs()
-	} else {
-		vms = HostVMs(host)
-	}
-
-	if vms != nil {
-		return vms.findVm(s)
-	}
-
-	return nil
-}
-
 // registerHandlers registers all the provided handlers with minicli, panicking
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {
@@ -469,6 +449,8 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
 func lookupVLAN(alias string) (int, error) {
+	namespace := GetNamespaceName()
+
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
@@ -488,6 +470,7 @@ func lookupVLAN(alias string) (int, error) {
 	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
 		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
 	}
+	cmd.SetRecord(false)
 
 	respChan, err := meshageSend(cmd, Wildcard)
 	if err != nil {
@@ -509,4 +492,11 @@ func lookupVLAN(alias string) (int, error) {
 	}()
 
 	return vlan, nil
+}
+
+// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+func printVLAN(vlan int) string {
+	namespace := GetNamespaceName()
+
+	return allocatedVLANs.PrintVLAN(namespace, vlan)
 }
