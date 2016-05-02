@@ -291,7 +291,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(names []string, vmType VMType) chan error {
+func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 	vmLock.Lock()
 
 	out := make(chan error)

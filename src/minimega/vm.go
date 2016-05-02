@@ -584,7 +584,7 @@ func (vm *BaseVM) setError(err error) {
 
 // macSnooper listens for updates from the ipmac learner and updates the
 // specified network config.
-func (vm *BaseVM) macSnooper(net *NetConfig, updates chan ipmac.IP) {
+func (vm *BaseVM) macSnooper(net *NetConfig, updates <-chan ipmac.IP) {
 	for update := range updates {
 		// TODO: need to acquire VM lock?
 		if update.IP4 != "" {

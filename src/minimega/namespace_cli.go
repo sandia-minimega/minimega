@@ -55,7 +55,7 @@ func init() {
 	registerHandlers("namespace", namespaceCLIHandlers)
 }
 
-func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
+func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	// Get the active namespace

@@ -73,7 +73,7 @@ type Response struct {
 	*Flags `json:"-"`
 }
 
-type CLIFunc func(*Command, chan Responses)
+type CLIFunc func(*Command, chan<- Responses)
 
 // MustRegister calls Register for a handler and panics if the handler has an
 // error registering.
@@ -108,7 +108,7 @@ func Register(h *Handler) error {
 
 // Process raw input text. An error is returned if parsing the input text
 // failed.
-func ProcessString(input string, record bool) (chan Responses, error) {
+func ProcessString(input string, record bool) (<-chan Responses, error) {
 	c, err := Compile(input)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func ProcessString(input string, record bool) (chan Responses, error) {
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command) chan Responses {
+func ProcessCommand(c *Command) <-chan Responses {
 	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}

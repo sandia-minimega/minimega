@@ -79,7 +79,7 @@ func cliSetup() {
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
 func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		resp := &minicli.Response{Host: hostname}
 		if err := fn(c, resp); err != nil {
 			resp.Error = err.Error()
@@ -105,7 +105,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
 		log.Debug("namespace: %v, source: %v", ns, c.Source)
@@ -159,7 +159,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
 		log.Debug("namespace: %v, source: %v", ns, c.Source)
@@ -207,7 +207,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 }
 
 // forward receives minicli.Responses from in and forwards them to out.
-func forward(in, out chan minicli.Responses) {
+func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	for v := range in {
 		out <- v
 	}
@@ -216,7 +216,7 @@ func forward(in, out chan minicli.Responses) {
 // processCommands wraps minicli.ProcessCommand for multiple commands,
 // combining their outputs into a single channel. This function does not
 // acquire the cmdLock so it should only be called by functions that do.
-func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
+func processCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	// Forward the responses and unlock when all are passed through
 	out := make(chan minicli.Responses)
 
@@ -270,7 +270,7 @@ func processCommands(cmd ...*minicli.Command) chan minicli.Responses {
 
 // runCommand wraps processCommands, ensuring that the command execution lock
 // is acquired before running the command.
-func runCommand(cmd ...*minicli.Command) chan minicli.Responses {
+func runCommand(cmd ...*minicli.Command) <-chan minicli.Responses {
 	cmdLock.Lock()
 
 	out := make(chan minicli.Responses)
@@ -287,7 +287,7 @@ func runCommand(cmd ...*minicli.Command) chan minicli.Responses {
 
 // runCommandGlobally runs the given command across all nodes on meshage,
 // including the local node and combines the results into a single channel.
-func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
+func runCommandGlobally(cmd *minicli.Command) <-chan minicli.Responses {
 	// Keep the original CLI input
 	original := cmd.Original
 	record := cmd.Record
@@ -299,11 +299,6 @@ func runCommandGlobally(cmd *minicli.Command) chan minicli.Responses {
 	cmd.SetRecord(record)
 
 	return runCommand(cmd, cmd.Subcommand)
-}
-
-// runCommandHosts runs the given command on a set of hosts.
-func runCommandHosts(hosts []string, cmd *minicli.Command) chan minicli.Responses {
-	return runCommand(makeCommandHosts(hosts, cmd)...)
 }
 
 // makeCommandHosts creates commands to run the given command on a set of hosts

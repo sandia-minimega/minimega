@@ -124,7 +124,7 @@ func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
+func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	check := c.BoolArgs["check"]
