@@ -86,7 +86,7 @@ func MustRegister(h *Handler) {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.PatternItems = make([][]patternItem, len(h.Patterns))
+	h.PatternItems = make([][]PatternItem, len(h.Patterns))
 
 	for i, pattern := range h.Patterns {
 		items, err := lexPattern(pattern)
