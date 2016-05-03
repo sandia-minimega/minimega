@@ -120,7 +120,6 @@ func (vms VMs) Info(resp *minicli.Response) {
 
 		// Update dynamic fields before querying info
 		vm.UpdateBW()
-		vm.UpdateCCActive()
 
 		res[vm.GetID()] = vm
 

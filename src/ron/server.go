@@ -554,9 +554,14 @@ func (s *Server) clientReaper() {
 		t := time.Now()
 		s.clientLock.Lock()
 		for k, v := range s.clients {
-			if t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second) {
+			active := t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second)
+			if !active {
 				log.Debug("client %v expired", k)
 				go s.removeClient(k) // hack: put this in a goroutine to simplify locking
+			}
+
+			if vm, ok := s.vms[k]; ok {
+				vm.SetCCActive(active)
 			}
 		}
 		s.clientLock.Unlock()

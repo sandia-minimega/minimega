@@ -68,8 +68,8 @@ type VM interface {
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
 
+	SetCCActive(bool)
 	UpdateBW()
-	UpdateCCActive()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
 	// connected to the specified bridge and VLAN.
@@ -92,7 +92,7 @@ type BaseConfig struct {
 
 	Snapshot bool
 	UUID     string
-	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
+	ActiveCC bool // set when CC is active
 
 	Tags map[string]string
 }
@@ -409,11 +409,11 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
-func (vm *BaseVM) UpdateCCActive() {
+func (vm *BaseVM) SetCCActive(active bool) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	vm.ActiveCC = ccHasClient(vm.UUID)
+	vm.ActiveCC = active
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {

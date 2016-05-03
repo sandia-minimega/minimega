@@ -92,6 +92,7 @@ type Process struct {
 type VM interface {
 	GetNamespace() string
 	GetTags() map[string]string
+	SetCCActive(bool)
 }
 
 type Message struct {
