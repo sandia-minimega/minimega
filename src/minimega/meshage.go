@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"iomeshage"
+	"math"
 	"math/rand"
 	"meshage"
 	"minicli"
@@ -16,10 +17,6 @@ import (
 	"reflect"
 	"time"
 	"version"
-)
-
-const (
-	MESH_TIMEOUT_DEFAULT = 10
 )
 
 type meshageCommand struct {
@@ -37,7 +34,7 @@ var (
 	meshageMessages     chan *meshage.Message
 	meshageCommandChan  chan *meshage.Message
 	meshageResponseChan chan *meshage.Message
-	meshageTimeout      time.Duration
+	meshageTimeout      time.Duration // default is no timeout
 )
 
 func init() {
@@ -46,17 +43,15 @@ func init() {
 	gob.Register(iomeshage.IOMMessage{})
 }
 
-func meshageInit(host string, namespace string, degree uint, port int) {
+func meshageInit(host string, namespace string, degree, msaTimeout uint, port int) {
 	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
 
-	meshageTimeout = time.Duration(MESH_TIMEOUT_DEFAULT) * time.Second
-
 	meshageNode.Snoop = meshageSnooper
 
-	meshageNode.SetMSATimeout(uint(*f_msaTimeout))
+	meshageNode.SetMSATimeout(msaTimeout)
 
 	go meshageMux()
 	go meshageHandler()
@@ -94,8 +89,10 @@ func meshageSnooper(m *meshage.Message) {
 // expanding Wildcard to all hosts in the mesh or all hosts in the active
 // namespace.
 func meshageRecipients(hosts string) ([]string, error) {
+	ns := GetNamespace()
+
 	if hosts == Wildcard {
-		if namespace == "" {
+		if ns == nil {
 			return meshageNode.BroadcastRecipients(), nil
 		}
 
@@ -103,7 +100,7 @@ func meshageRecipients(hosts string) ([]string, error) {
 
 		// Wildcard expands to all hosts in the namespace, except the local
 		// host, if included
-		for host := range namespaces[namespace].Hosts {
+		for host := range ns.Hosts {
 			if host == hostname {
 				log.Info("excluding localhost, %v, from `%v`", hostname, Wildcard)
 				continue
@@ -122,10 +119,10 @@ func meshageRecipients(hosts string) ([]string, error) {
 
 	// If a namespace is active, warn if the user is trying to mesh send hosts
 	// outside the namespace
-	if namespace != "" {
+	if ns != nil {
 		for _, host := range recipients {
-			if !namespaces[namespace].Hosts[host] {
-				log.Warn("%v is not part of namespace %v", host, namespace)
+			if !ns.Hosts[host] {
+				log.Warn("%v is not part of namespace %v", host, ns.Name)
 			}
 		}
 	}
@@ -136,7 +133,7 @@ func meshageRecipients(hosts string) ([]string, error) {
 // meshageSend sends a command to a list of hosts, returning a channel that the
 // responses will be sent to. This is non-blocking -- the channel is created
 // and then returned after a couple of sanity checks. Should be not be invoked
-// as a goroutine as it uses the global namespace variable to expand the hosts.
+// as a goroutine as it checks the active namespace when expanding hosts.
 func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, error) {
 	// HAX: Ensure we aren't sending read or mesh send commands over meshage
 	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
@@ -168,7 +165,14 @@ func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, erro
 
 		log.Debug("meshage sent, waiting on %d responses", len(recipients))
 
+		// host -> response
 		resps := map[string]*minicli.Response{}
+
+		timeout := meshageTimeout
+		// If the timeout is 0, set to "unlimited"
+		if timeout == 0 {
+			timeout = math.MaxInt64
+		}
 
 		// wait on a response from each recipient
 	recvLoop:
@@ -181,9 +185,8 @@ func meshageSend(c *minicli.Command, hosts string) (chan minicli.Responses, erro
 				} else {
 					resps[body.Host] = &body.Response
 				}
-			case <-time.After(meshageTimeout):
+			case <-time.After(timeout):
 				// Didn't hear back from any node within the timeout
-				log.Info("meshage send timed out")
 				break recvLoop
 			}
 		}

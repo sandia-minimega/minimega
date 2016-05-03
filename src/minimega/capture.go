@@ -97,7 +97,7 @@ func clearCapture(captureType, id string) (err error) {
 func startCapturePcap(vm string, iface int, filename string) error {
 	// TODO: filter by namespace?
 	// get the vm
-	v := vms.findVm(vm)
+	v := vms.FindVM(vm)
 	if v == nil {
 		return vmNotFound(vm)
 	}

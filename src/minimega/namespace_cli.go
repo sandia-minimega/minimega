@@ -1,0 +1,189 @@
+// Copyright (2015) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"minicli"
+	"ranges"
+	"text/tabwriter"
+)
+
+var namespaceCLIHandlers = []minicli.Handler{
+	{ // namespace
+		HelpShort: "control namespace environments",
+		HelpLong: `
+Control and run commands in namespace environments.`,
+		Patterns: []string{
+			"namespace [name]",
+			"namespace <name> (command)",
+		},
+		Call: cliNamespace,
+	},
+	{ // nsmod
+		HelpShort: "modify namespace environments",
+		HelpLong: `
+Modify settings of the currently active namespace.
+
+add-host - add comma-separated list of hosts to the namespace.
+del-host - delete comma-separated list of hosts from the namespace.
+`,
+		Patterns: []string{
+			"nsmod <add-host,> <hosts>",
+			"nsmod <del-host,> <hosts>",
+		},
+		Call: wrapSimpleCLI(cliNamespaceMod),
+	},
+	{ // clear namespace
+		HelpShort: "unset namespace",
+		HelpLong: `
+Without a namespace, clear namespace unsets the current namespace.
+
+With a namespace, clear namespace deletes the specified namespace.`,
+		Patterns: []string{
+			"clear namespace [name]",
+		},
+		Call: wrapSimpleCLI(cliClearNamespace),
+	},
+}
+
+func init() {
+	registerHandlers("namespace", namespaceCLIHandlers)
+}
+
+func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
+	resp := &minicli.Response{Host: hostname}
+
+	// Get the active namespace
+	ns := GetNamespace()
+
+	if name, ok := c.StringArgs["name"]; ok {
+		ns2 := GetOrCreateNamespace(name)
+
+		if c.Subcommand != nil {
+			// Setting namespace for a single command, revert back afterwards
+			defer RevertNamespace(ns, ns2)
+			SetNamespace(name)
+
+			// Run the subcommand and forward the responses
+			forward(processCommands(c.Subcommand), respChan)
+			return
+		}
+
+		// Setting namespace for future commands
+		SetNamespace(name)
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if ns == nil {
+		resp.Response = fmt.Sprintf("Namespaces: %v", ListNamespaces())
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// TODO: Make this pretty or divide it up somehow
+	resp.Response = fmt.Sprintf(`Namespace: "%v"
+Hosts: %v
+Taps: %v
+Number of queuedVMs: %v
+
+Schedules:
+`, namespace, ns.Hosts, ns.Taps, len(ns.queuedVMs))
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintln(w, "start\tend\tstate\tlaunched\tfailures\ttotal\thosts")
+	for _, stats := range ns.scheduleStats {
+		var end string
+		if !stats.end.IsZero() {
+			end = fmt.Sprintf("%v", stats.end)
+		}
+
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
+			stats.start,
+			end,
+			stats.state,
+			stats.launched,
+			stats.failures,
+			stats.total,
+			stats.hosts)
+	}
+	w.Flush()
+
+	resp.Response += o.String()
+
+	respChan <- minicli.Responses{resp}
+}
+
+func cliNamespaceMod(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	ns := GetNamespace()
+	if ns == nil {
+		resp.Error = "cannot run nsmod without active namespace"
+		return resp
+	}
+
+	// Empty string should parse fine...
+	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+	if err != nil {
+		resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
+		return resp
+	}
+
+	if c.BoolArgs["add-host"] {
+		peers := map[string]bool{}
+		for _, peer := range meshageNode.BroadcastRecipients() {
+			peers[peer] = true
+		}
+
+		// Test that the host is actually in the mesh. If it's not, we could
+		// try to mesh dial it... Returning an error is simpler, for now.
+		for i := range hosts {
+			// Resolve localhost
+			if hosts[i] == Localhost {
+				hosts[i] = hostname
+			}
+
+			if hosts[i] != hostname && !peers[hosts[i]] {
+				resp.Error = fmt.Sprintf("unknown host: `%v`", hosts[i])
+				return resp
+			}
+		}
+
+		// After all have been checked, updated the namespace
+		for _, host := range hosts {
+			ns.Hosts[host] = true
+		}
+	} else if c.BoolArgs["del-host"] {
+		for _, host := range hosts {
+			delete(ns.Hosts, host)
+		}
+	} else {
+		// oops...
+	}
+
+	return resp
+}
+
+func cliClearNamespace(c *minicli.Command) *minicli.Response {
+	resp := &minicli.Response{Host: hostname}
+
+	name := c.StringArgs["name"]
+	if name == "" {
+		// Clearing the namespace global
+		SetNamespace("")
+		return resp
+	}
+
+	if err := DestroyNamespace(name); err != nil {
+		resp.Error = err.Error()
+	}
+
+	return resp
+}

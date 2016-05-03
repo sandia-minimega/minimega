@@ -5,11 +5,18 @@
 package minicli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 )
+
+type filter struct {
+	Negate   bool
+	Fuzzy    bool
+	Col, Val string
+}
 
 var builtinCLIHandlers = []Handler{
 	{ // csv
@@ -120,9 +127,17 @@ Filters can also be inverted:
 
 Filters are case insensitive and may be stacked:
 
-	.filter state=running .filter vcpus=4 vm info`,
+	.filter state=RUNNING .filter vcpus=4 vm info
+
+If the column value is a list or an object (i.e. "[...]", "{...}"), then
+.filter implicitly uses substring matching.
+
+Substring matching can be specified explicity:
+
+	.filter state~run vm info
+	.filter state!~run vm info`,
 		Patterns: []string{
-			".filter <column=value> (command)",
+			".filter <filter> (command)",
 		},
 		Call: cliFilter,
 	},
@@ -176,6 +191,18 @@ Enable or disable the recording of a given command in the command history.`,
 
 var hostname string
 
+// Match tests is a case-insensitive match for s. If s is a list or an object,
+// then enables fuzzy filtering implicitly.
+func (f filter) Match(s string) bool {
+	s = strings.ToLower(s)
+
+	fuzzy := hasPrefixSuffix(s, "[", "]") || hasPrefixSuffix(s, "{", "}")
+	fuzzy = fuzzy || f.Fuzzy
+
+	match := (s == f.Val) || (fuzzy && strings.Contains(s, f.Val))
+	return f.Negate != match
+}
+
 func init() {
 	var err error
 
@@ -200,76 +227,98 @@ func runSubCommand(c *Command) chan Responses {
 	return pipe
 }
 
-func cliFilter(c *Command, out chan Responses) {
-	var negate bool
+// hasPrefixSuffix wraps strings.HasPrefix and strings.HasSuffix.
+func hasPrefixSuffix(s, prefix, suffix string) bool {
+	return strings.HasPrefix(s, prefix) && strings.HasSuffix(s, suffix)
+}
 
-	parts := strings.Split(c.StringArgs["column=value"], "!=")
-	if len(parts) == 2 {
-		negate = true
-	} else {
-		parts = strings.Split(c.StringArgs["column=value"], "=")
-		if len(parts) != 2 {
-			resp := &Response{
-				Host:  hostname,
-				Error: "malformed filter term, expected column=value",
-			}
-			out <- Responses{resp}
-			return
+func parseFilter(s string) (filter, error) {
+	filters := []struct {
+		Sep    string
+		Filter filter
+	}{
+		// Important that negate versions come first for proper Split
+		{"!~", filter{Fuzzy: true, Negate: true}},
+		{"~", filter{Fuzzy: true}},
+		{"!=", filter{Negate: true}},
+		{"=", filter{}},
+	}
+
+	for _, f := range filters {
+		parts := strings.Split(s, f.Sep)
+		if len(parts) == 2 {
+			f.Filter.Col = strings.ToLower(parts[0])
+			f.Filter.Val = strings.ToLower(parts[1])
+			return f.Filter, nil
 		}
 	}
 
-	col, filter := strings.ToLower(parts[0]), strings.ToLower(parts[1])
+	return filter{}, errors.New("invalid filter, see help")
+}
+
+// filterResp filters Response r based on the filter f. Returns bool for
+// whether to keep the response or not or an error.
+func filterResp(f filter, r *Response) (bool, error) {
+	// HAX: Special case for when the column name is host which is not part of
+	// the actual tabular data.
+	if f.Col == "host" {
+		return f.Match(r.Host), nil
+	}
+
+	// Can't filter if it's a non-tabular response
+	if r.Header == nil || r.Tabular == nil {
+		return true, nil
+	}
+
+	for i, header := range r.Header {
+		if strings.ToLower(header) != f.Col {
+			continue
+		}
+
+		// Found right column, filter tabular rows
+		tabular := [][]string{}
+
+		for _, row := range r.Tabular {
+			if f.Match(row[i]) {
+				tabular = append(tabular, row)
+			}
+		}
+
+		r.Tabular = tabular
+		return true, nil
+	}
+
+	// Didn't find the requested column in the responses
+	return false, fmt.Errorf("no such column `%s`", f.Col)
+}
+
+func cliFilter(c *Command, out chan Responses) {
+	f, err := parseFilter(c.StringArgs["filter"])
+	if err != nil {
+		resp := &Response{
+			Host:  hostname,
+			Error: err.Error(),
+		}
+		out <- Responses{resp}
+		return
+	}
 
 outer:
 	for resps := range runSubCommand(c) {
 		newResps := Responses{}
 
 		for _, r := range resps {
-			// HAX: Special case for when the column name is host which is not
-			// part of the actual tabular data.
-			if col == "host" {
-				if negate != (r.Host != filter) {
-					continue
-				}
-			} else if r.Header != nil && r.Tabular != nil {
-				var found bool
+			keep, err := filterResp(f, r)
 
-				for j, header := range r.Header {
-					// Found right column, check whether filter matches
-					if strings.ToLower(header) == col {
-						tabular := [][]string{}
-
-						for _, row := range r.Tabular {
-							elem := strings.ToLower(row[j])
-
-							// If the element looks like a list, do substring matching
-							if strings.HasPrefix(elem, "[") && strings.HasSuffix(elem, "]") {
-								if negate != strings.Contains(elem, filter) {
-									tabular = append(tabular, row)
-								}
-							} else if negate != (elem == filter) {
-								tabular = append(tabular, row)
-							}
-						}
-
-						r.Tabular = tabular
-						found = true
-						break
-					}
-				}
-
-				// Didn't find the requested column in the responses
-				if !found {
-					resp := &Response{
-						Host:  hostname,
-						Error: fmt.Sprintf("no such column `%s`", col),
-					}
-					out <- Responses{resp}
-					continue outer
-				}
+			if err != nil {
+				resp := &Response{Host: hostname, Error: err.Error()}
+				out <- Responses{resp}
+				continue outer
 			}
 
-			newResps = append(newResps, r)
+			if keep {
+				newResps = append(newResps, r)
+			}
 		}
 
 		out <- newResps
@@ -333,6 +382,9 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 			Host: hostname,
 		}
 
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		if c.BoolArgs["true"] {
 			defaultFlags.Mode = newMode
 		} else if c.BoolArgs["false"] && defaultFlags.Mode == newMode {
@@ -348,8 +400,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			if c.BoolArgs["true"] {
@@ -369,6 +420,9 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 			Host: hostname,
 		}
 
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		if c.BoolArgs["true"] || c.BoolArgs["false"] {
 			// Update the flag, can just get value for "true" since the default
 			// value is false.
@@ -384,8 +438,7 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			*get(r[0].Flags) = c.BoolArgs["true"]

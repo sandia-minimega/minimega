@@ -411,7 +411,9 @@ during runtime because /proc is mounted read-only, add a preinit script:
 		HelpShort: "set the filesystem for containers",
 		HelpLong: `
 Set the filesystem to use for launching a container. This should be a root
-filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)`,
+filesystem for a linux distribution (containing /dev, /proc, /sys, etc.)
+
+This must be specified in order to launch a container.`,
 		Patterns: []string{
 			"vm config filesystem [filesystem]",
 		},
@@ -510,7 +512,7 @@ func cliVmConfig(c *minicli.Command) *minicli.Response {
 		}
 	} else if c.BoolArgs["clone"] {
 		// Clone the config of an existing vm
-		vm := LocalVMs().findVm(c.StringArgs["vm"])
+		vm := vms.FindVM(c.StringArgs["vm"])
 		if vm == nil {
 			resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
 		} else {

@@ -32,17 +32,7 @@ type Tap struct {
 	host bool
 }
 
-var (
-	bridges *bridge.Bridges
-)
-
-// create the default bridge struct and create a goroutine to generate
-// tap names for this host.
-func init() {
-	bridges = bridge.NewBridges(DefaultBridge, TapFmt)
-
-	go periodicReapTaps()
-}
+var bridges = bridge.NewBridges(DefaultBridge, TapFmt)
 
 // periodicReapTaps should be run as a goroutine to reap defunct taps.
 func periodicReapTaps() {
@@ -136,27 +126,28 @@ func hostTapList(resp *minicli.Response) {
 	resp.Tabular = [][]string{}
 
 	// no namespace active => add an extra column
-	if namespace == "" {
+	ns := GetNamespace()
+	if ns == nil {
 		resp.Header = append(resp.Header, "namespace")
 	}
 
 	// find all the host taps first
 	for _, tap := range bridges.HostTaps() {
 		// skip taps that don't belong to the active namespace
-		if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
+		if ns != "" && !ns.HasTap(tap.Name) {
 			continue
 		}
 
 		row := []string{
-			tap.Bridge, tap.Name, allocatedVLANs.PrintVLAN(namespace, tap.VLAN),
+			tap.Bridge, tap.Name, printVLAN(tap.VLAN),
 		}
 
 		// no namespace active => find namespace tap belongs to so that we can
 		// populate that column
-		if namespace == "" {
+		if ns == nil {
 			v := ""
-			for _, ns := range namespaces {
-				if ns.Taps[tap.Name] {
+			for _, n := range ListNamespaces() {
+				if ns := GetOrCreateNamespace(n); ns.HasTap(tap.Name) {
 					v = ns.Name
 					break
 				}
@@ -172,6 +163,8 @@ func hostTapList(resp *minicli.Response) {
 // hostTapDelete deletes a host tap by name or all host taps if Wildcard is
 // specified.
 func hostTapDelete(s string) error {
+	ns := GetNamespace()
+
 	delTap := func(t bridge.Tap) error {
 		br, err := getBridge(t.Bridge)
 		if err != nil {
@@ -183,8 +176,8 @@ func hostTapDelete(s string) error {
 		}
 
 		// update the host taps for the namespace
-		if namespace != "" {
-			delete(namespaces[namespace].Taps, t.Name)
+		if ns != nil {
+			ns.RemoveTap(t.Name)
 		}
 
 		return nil
@@ -193,7 +186,7 @@ func hostTapDelete(s string) error {
 	if s == Wildcard {
 		for _, tap := range bridges.HostTaps() {
 			// skip taps that don't belong to the active namespace
-			if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
+			if ns != nil && !ns.HasTap(tap.Name) {
 				continue
 			}
 

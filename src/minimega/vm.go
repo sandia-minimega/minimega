@@ -29,9 +29,8 @@ const (
 )
 
 var (
-	killAck chan int   // channel that all VMs ack on when killed
-	vmID    *Counter   // channel of new VM IDs
-	vmLock  sync.Mutex // lock for synchronizing access to vms
+	killAck chan int // channel that all VMs ack on when killed
+	vmID    *Counter // channel of new VM IDs
 
 	vmConfig VMConfig // current vm config, updated by CLI
 
@@ -68,10 +67,10 @@ type VM interface {
 	String() string
 	Info(string) (string, error)
 
-	Tag(tag string) string
-	SetTag(k, v string)
-	GetTags() map[string]string
-	ClearTags()
+	Tag(string) string          // Tag gets the value of the given tag
+	SetTag(string, string)      // SetTag updates the given tag
+	GetTags() map[string]string // GetTags returns a copy of the tags
+	ClearTag(string)            // ClearTag deletes one or all tags
 
 	UpdateBW()
 	UpdateCCActive()
@@ -159,9 +158,20 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-// NewVM creates a new VM, copying the currently set configs. After a VM is
+func NewVM(name string, vmType VMType) VM {
+	switch vmType {
+	case KVM:
+		return NewKVM(name)
+	case CONTAINER:
+		return NewContainer(name)
+	}
+
+	return nil
+}
+
+// NewBaseVM creates a new VM, copying the currently set configs. After a VM is
 // created, it can be Launched.
-func NewVM(name string) *BaseVM {
+func NewBaseVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
@@ -172,7 +182,7 @@ func NewVM(name string) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Namespace = namespace
+	vm.Namespace = GetNamespaceName()
 	vm.Host = hostname
 
 	// generate a UUID if we don't have one
@@ -234,7 +244,7 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, allocatedVLANs.PrintVLAN(namespace, net.VLAN))
+	parts = append(parts, printVLAN(net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)
@@ -355,18 +365,18 @@ func (vm *BaseVM) Flush() error {
 	return os.RemoveAll(vm.instancePath)
 }
 
-func (vm *BaseVM) Tag(tag string) string {
+func (vm *BaseVM) Tag(t string) string {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	return vm.Tags[tag]
+	return vm.Tags[t]
 }
 
-func (vm *BaseVM) SetTag(k, v string) {
+func (vm *BaseVM) SetTag(t, v string) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	vm.Tags[k] = v
+	vm.Tags[t] = v
 }
 
 func (vm *BaseVM) GetTags() map[string]string {
@@ -381,16 +391,23 @@ func (vm *BaseVM) GetTags() map[string]string {
 	return res
 }
 
-func (vm *BaseVM) ClearTags() {
+func (vm *BaseVM) ClearTag(t string) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	vm.Tags = make(map[string]string)
+	if t == Wildcard {
+		vm.Tags = make(map[string]string)
+	} else {
+		delete(vm.Tags, t)
+	}
 }
 
 func (vm *BaseVM) UpdateBW() {
 	bandwidthLock.Lock()
 	defer bandwidthLock.Unlock()
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	for i := range vm.Networks {
 		net := &vm.Networks[i]
@@ -399,6 +416,9 @@ func (vm *BaseVM) UpdateBW() {
 }
 
 func (vm *BaseVM) UpdateCCActive() {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	vm.ActiveCC = ccHasClient(vm.UUID)
 }
 
@@ -595,68 +615,16 @@ func (vm *BaseVM) writeTaps() error {
 	return nil
 }
 
-func (vm *BaseVM) checkInterfaces() error {
-	macs := map[string]bool{}
-
-	for _, net := range vm.Networks {
-		// Skip unassigned MACs
-		if net.MAC == "" {
-			continue
-		}
-
-		// Check if the VM already has this MAC for one of its interfaces
-		if _, ok := macs[net.MAC]; ok {
-			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
-		}
-
-		macs[net.MAC] = true
+// inNamespace tests whether vm is part of active namespace, if there is one.
+// When there isn't an active namespace, all vms return true.
+func inNamespace(vm VM) bool {
+	if vm == nil {
+		return false
 	}
 
-	// Ensure that we don't add new VMs while we are checking our interfaces.
-	// If a new VM has a conflict with us, it will be noted during their
-	// checkInterfaces. This also ensures that only one VM's checkInterfaces
-	// can be running at a given time.
-	vmLock.Lock()
-	defer vmLock.Unlock()
+	namespace := GetNamespaceName()
 
-	for _, vmOther := range vms {
-		// Skip ourself
-		if vm.ID == vmOther.GetID() {
-			continue
-		}
-
-		for _, net := range vmOther.Config().Networks {
-			// VM must still be in the pre-building stage so it hasn't been
-			// assigned a MAC yet. We skip this case in order to supress
-			// duplicate MAC errors on an empty string.
-			if net.MAC == "" {
-				continue
-			}
-
-			// Warn if we see a conflict
-			if _, ok := macs[net.MAC]; ok {
-				log.Warn("VMs share MAC (%v) -- %v %v", net.MAC, vm.ID, vmOther.GetID())
-			}
-
-			macs[net.MAC] = true
-		}
-	}
-
-	// Find any unassigned MACs and randomly generate a MAC for them
-	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		if net.MAC != "" {
-			continue
-		}
-
-		for exists := true; exists; _, exists = macs[net.MAC] {
-			net.MAC = randomMac()
-		}
-
-		macs[net.MAC] = true
-	}
-
-	return nil
+	return namespace == "" || vm.GetNamespace() == namespace
 }
 
 func vmNotFound(idOrName string) error {
@@ -667,12 +635,8 @@ func vmNotRunning(idOrName string) error {
 	return fmt.Errorf("vm not running: %v", idOrName)
 }
 
-func vmNotPhotogenic(idOrName string) error {
-	return fmt.Errorf("vm does not support screenshots: %v", idOrName)
-}
-
 func vmNotKVM(idOrName string) error {
-	return fmt.Errorf("vm is not a KVM: %v", idOrName)
+	return fmt.Errorf("vm not KVM: %v", idOrName)
 }
 
 func isVmNotFound(err string) bool {

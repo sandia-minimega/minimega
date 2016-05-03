@@ -69,11 +69,13 @@ Output a graphviz formatted dot file representing the connected topology.`,
 		HelpLong: `
 View or set the timeout on sending mesh commands.
 
-When a mesh command is issued, if a response isn't sent within mesh_timeout
+When a mesh command is issued, if a response isn't sent within mesh timeout
 seconds, the command will be dropped and any future response will be discarded.
 Note that this does not cancel the outstanding command - the node receiving the
 command may still complete - but rather this node will stop waiting on a
-response.`,
+response.
+
+By default, the mesh timeout is 0 which disables timeouts.`,
 		Patterns: []string{
 			"mesh timeout [timeout]",
 		},
@@ -223,7 +225,7 @@ func cliMeshageStatus(c *minicli.Command) *minicli.Response {
 	degree := meshageNode.GetDegree()
 	nodes := len(mesh)
 
-	resp.Header = []string{"mesh size", "degree", "peers", "namespace", "port"}
+	resp.Header = []string{"mesh size", "degree", "peers", "context", "port"}
 	resp.Tabular = [][]string{
 		[]string{
 			strconv.Itoa(nodes),

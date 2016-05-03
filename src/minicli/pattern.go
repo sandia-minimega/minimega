@@ -33,7 +33,7 @@ var terminalsToTypes = map[string]itemType{
 
 var requireEOLItems = listItem | commandItem | optionalItem
 
-type patternItem struct {
+type PatternItem struct {
 	// The item type e.g. string literal, required string
 	Type itemType `json:"type"`
 	// Key is usually the first word, so "<foo bar>"->"foo"
@@ -44,29 +44,29 @@ type patternItem struct {
 	Options []string `json:"options,omitempty"`
 }
 
-type patternItems []patternItem
+type patternItems []PatternItem
 
-func (p patternItem) IsOptional() bool {
+func (p PatternItem) IsOptional() bool {
 	return p.Type&optionalItem != 0
 }
 
-func (p patternItem) IsListeral() bool {
+func (p PatternItem) IsLiteral() bool {
 	return p.Type&literalItem != 0
 }
 
-func (p patternItem) IsCommand() bool {
+func (p PatternItem) IsCommand() bool {
 	return p.Type&commandItem != 0
 }
 
-func (p patternItem) IsString() bool {
+func (p PatternItem) IsString() bool {
 	return p.Type&stringItem != 0
 }
 
-func (p patternItem) IsChoice() bool {
+func (p PatternItem) IsChoice() bool {
 	return p.Type&choiceItem != 0
 }
 
-func (p patternItem) IsList() bool {
+func (p PatternItem) IsList() bool {
 	return p.Type&listItem != 0
 }
 
@@ -109,15 +109,15 @@ type stateFn func() (stateFn, error)
 
 type patternLexer struct {
 	s        *bufio.Scanner
-	items    []patternItem
-	newItem  patternItem
+	items    []PatternItem
+	newItem  PatternItem
 	terminal string
 }
 
-func lexPattern(pattern string) ([]patternItem, error) {
+func lexPattern(pattern string) ([]PatternItem, error) {
 	s := bufio.NewScanner(strings.NewReader(pattern))
 	s.Split(bufio.ScanRunes)
-	l := patternLexer{s: s, items: make([]patternItem, 0)}
+	l := patternLexer{s: s, items: make([]PatternItem, 0)}
 
 	if err := l.Run(); err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (l *patternLexer) lexOutside() (fn stateFn, err error) {
 
 	defer func() {
 		if err == nil && len(content) > 0 {
-			item := patternItem{Type: literalItem, Text: content}
+			item := PatternItem{Type: literalItem, Text: content}
 			l.items = append(l.items, item)
 		}
 	}()
@@ -187,7 +187,7 @@ func (l *patternLexer) lexVariable() (stateFn, error) {
 	// Content scanned so far
 	var content string
 
-	l.newItem = patternItem{Type: terminalsToTypes[l.terminal]}
+	l.newItem = PatternItem{Type: terminalsToTypes[l.terminal]}
 
 	// Scan until EOF, checking each token
 	for l.s.Scan() {

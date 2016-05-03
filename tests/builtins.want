@@ -1,0 +1,59 @@
+## # Launch some VMs
+## vm launch kvm foo[1-3],bar
+
+## # Test different filters
+## .filter name=bar .column name vm info
+name
+bar
+## .filter name!=bar .column name vm info
+name
+foo1
+foo2
+foo3
+## .filter name=foo .column name vm info
+## .filter name~foo .column name vm info
+name
+foo1
+foo2
+foo3
+## .filter name!~foo .column name vm info
+name
+bar
+
+## # Test disable headers
+## .headers false .column name vm info
+bar
+foo1
+foo2
+foo3
+## .headers false
+## .column name vm info
+bar
+foo1
+foo2
+foo3
+## .headers true
+
+## # Test csv mode
+## .csv true .column name,state vm info
+name,state
+bar,BUILDING
+foo1,BUILDING
+foo2,BUILDING
+foo3,BUILDING
+## .csv true
+## .column name,state vm info
+name,state
+bar,BUILDING
+foo1,BUILDING
+foo2,BUILDING
+foo3,BUILDING
+## .csv false
+
+## # Test json mode
+## # TODO: the output includes the hostname even when .annotate set to false, so
+## # testing this for exact match won't work.
+## #.json true .column name,state vm info
+## #.json true
+## #.column name,state vm info
+## #.json false
