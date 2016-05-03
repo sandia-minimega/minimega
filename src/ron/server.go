@@ -367,7 +367,17 @@ func (s *Server) route(m *Message) {
 	if m.UUID == "" {
 		// send commands to all clients
 		for _, c := range s.clients {
-			vm := s.vms[c.UUID]
+			vm, ok := s.vms[c.UUID]
+			if !ok {
+				// The client is connected but not registered:
+				//  * client connected before it was registered
+				//  * client was unregistered before it disconnected
+				// Either way, we have to skip it since we doin't know what
+				// namespace it belongs to.
+
+				log.Error("unregistered client %v", m.UUID)
+				continue
+			}
 			cmds := map[int]*Command{}
 
 		cmdLoop:
