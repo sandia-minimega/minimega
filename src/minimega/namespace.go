@@ -383,8 +383,7 @@ func DestroyNamespace(name string) error {
 	// Delete any Taps associated with the namespace
 	for tap := range ns.Taps {
 		if err := hostTapDelete(tap); err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 	}
 

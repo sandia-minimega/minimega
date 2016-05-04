@@ -134,7 +134,7 @@ func hostTapList(resp *minicli.Response) {
 	// find all the host taps first
 	for _, tap := range bridges.HostTaps() {
 		// skip taps that don't belong to the active namespace
-		if ns != "" && !ns.HasTap(tap.Name) {
+		if ns != nil && !ns.HasTap(tap.Name) {
 			continue
 		}
 
