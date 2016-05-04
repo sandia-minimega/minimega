@@ -362,7 +362,7 @@ func DestroyNamespace(name string) error {
 
 	log.Info("destroying namespace: %v", name)
 
-	ns, ok := namespaces[namespace]
+	ns, ok := namespaces[name]
 	if !ok {
 		return fmt.Errorf("unknown namespace: %v", name)
 	}
