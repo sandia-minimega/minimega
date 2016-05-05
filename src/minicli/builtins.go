@@ -27,7 +27,7 @@ Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 			".csv [true,false]",
 			".csv <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliModeHelper(c, out, csvMode)
 		},
 	},
@@ -39,7 +39,7 @@ Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 			".json [true,false]",
 			".json <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliModeHelper(c, out, jsonMode)
 		},
 	},
@@ -51,7 +51,7 @@ Enable or disable headers for tabular data.`,
 			".headers [true,false]",
 			".headers <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Headers })
 		},
 	},
@@ -63,7 +63,7 @@ Enable or disable hostname annotation for responses.`,
 			".annotate [true,false]",
 			".annotate <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Annotate })
 		},
 	},
@@ -76,7 +76,7 @@ column. Sorting is based on string comparison.`,
 			".sort [true,false]",
 			".sort <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Sort })
 		},
 	},
@@ -109,7 +109,7 @@ Compression is not applied when the output mode is JSON.`,
 			".compress [true,false]",
 			".compress <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Compress })
 		},
 	},
@@ -177,7 +177,7 @@ Enable or disable the recording of a given command in the command history.`,
 			".record [true,false]",
 			".record <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			if c.Subcommand != nil {
 				c.Record = c.BoolArgs["true"]
 			} else if !c.BoolArgs["true"] {
@@ -216,7 +216,7 @@ func init() {
 	}
 }
 
-func runSubCommand(c *Command) chan Responses {
+func runSubCommand(c *Command) <-chan Responses {
 	pipe := make(chan Responses)
 
 	go func() {
@@ -292,7 +292,7 @@ func filterResp(f filter, r *Response) (bool, error) {
 	return false, fmt.Errorf("no such column `%s`", f.Col)
 }
 
-func cliFilter(c *Command, out chan Responses) {
+func cliFilter(c *Command, out chan<- Responses) {
 	f, err := parseFilter(c.StringArgs["filter"])
 	if err != nil {
 		resp := &Response{
@@ -325,7 +325,7 @@ outer:
 	}
 }
 
-func cliColumns(c *Command, out chan Responses) {
+func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
 outer:
@@ -376,7 +376,7 @@ outer:
 	}
 }
 
-func cliModeHelper(c *Command, out chan Responses, newMode int) {
+func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 	if c.Subcommand == nil {
 		resp := &Response{
 			Host: hostname,
@@ -414,7 +414,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 	}
 }
 
-func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
+func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 	if c.Subcommand == nil {
 		resp := &Response{
 			Host: hostname,

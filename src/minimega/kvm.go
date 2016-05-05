@@ -90,11 +90,9 @@ func init() {
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
-func (old *KVMConfig) Copy() *KVMConfig {
-	res := new(KVMConfig)
-
+func (old KVMConfig) Copy() KVMConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	res.DiskPaths = make([]string, len(old.DiskPaths))
@@ -111,7 +109,7 @@ func NewKVM(name string) *KvmVM {
 	vm.BaseVM = *NewBaseVM(name)
 	vm.Type = KVM
 
-	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
+	vm.KVMConfig = vmConfig.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]string)
 

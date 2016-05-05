@@ -44,6 +44,30 @@ func init() {
 	}
 }
 
+// makeErrSlice turns a slice of errors into an errSlice which implements the
+// Error interface. This checks to make sure that there is at least one non-nil
+// error in the slice and returns nil otherwise.
+func makeErrSlice(errs []error) error {
+	var found bool
+
+	for _, err := range errs {
+		if err != nil {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	return errSlice(errs)
+}
+
+func (errs errSlice) Error() string {
+	return errs.String()
+}
+
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {
@@ -442,11 +466,15 @@ func lookupVLAN(alias string) (int, error) {
 		return vlan, nil
 	}
 
-	cmd := minicli.MustCompilef("vlans add %q %v", alias, vlan)
+	// Broadcast out vlan alias to everyone so that we have a record of the
+	// aliases, should this node crash.
+	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
 	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
-		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
+		s = fmt.Sprintf("namespace %q %v", namespace, s)
 	}
+	cmd := minicli.MustCompile(s)
 	cmd.SetRecord(false)
+	cmd.SetSource(namespace)
 
 	respChan, err := meshageSend(cmd, Wildcard)
 	if err != nil {

@@ -6,12 +6,12 @@
 ## # Try to start cpu profile, second time should fail
 ## debug cpu start /tmp/minitest-cpu.pprof
 ## debug cpu start /tmp/minitest-cpu.pprof
-E: old CPU profile still running
+E: CPU profile still running
 
 ## # Try to stop cpu profile, second time should fail
 ## debug cpu stop
 ## debug cpu stop
-E: CPU profile is not running
+E: CPU profile not running
 
 ## shell ls /tmp/minitest-cpu.pprof
 /tmp/minitest-cpu.pprof

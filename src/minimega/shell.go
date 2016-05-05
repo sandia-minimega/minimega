@@ -22,8 +22,8 @@ that does not return.`,
 		Patterns: []string{
 			"shell <command>...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliShell(c, false)
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliShell(c, resp, false)
 		}),
 	},
 	{ // background
@@ -36,22 +36,19 @@ logged at the "info" level.`,
 		Patterns: []string{
 			"background <command>...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command) *minicli.Response {
-			return cliShell(c, true)
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliShell(c, resp, true)
 		}),
 	},
 }
 
-func cliShell(c *minicli.Command, background bool) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliShell(c *minicli.Command, resp *minicli.Response, background bool) error {
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
 	p, err := exec.LookPath(c.ListArgs["command"][0])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	args := []string{p}
@@ -68,16 +65,13 @@ func cliShell(c *minicli.Command, background bool) *minicli.Response {
 		Stderr: &sErr,
 	}
 	log.Info("starting: %v", args)
-	err = cmd.Start()
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
+	if err := cmd.Start(); err != nil {
+		return err
 	}
 
 	if background {
 		go func() {
-			err = cmd.Wait()
-			if err != nil {
+			if err := cmd.Wait(); err != nil {
 				log.Error(err.Error())
 				return
 			}
@@ -90,16 +84,16 @@ func cliShell(c *minicli.Command, background bool) *minicli.Response {
 				log.Info(err)
 			}
 		}()
-	} else {
-		err = cmd.Wait()
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
 
-		resp.Response = sOut.String()
-		resp.Error = sErr.String()
+		return nil
 	}
 
-	return resp
+	if err = cmd.Wait(); err != nil {
+		return err
+	}
+
+	resp.Response = sOut.String()
+	resp.Error = sErr.String()
+
+	return nil
 }

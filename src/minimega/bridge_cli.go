@@ -111,81 +111,68 @@ Note: bridge is not a namespace-aware command.`,
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["create"] {
 		b := c.StringArgs["bridge"]
 
 		tap, err := hostTapCreate(b, c.StringArgs["tap"], c.StringArgs["vlan"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		if c.BoolArgs["dhcp"] {
 			log.Debug("obtaining dhcp on tap %v", tap)
 
-			out, err := processWrapper("dhcp", tap)
+			var out string
+			out, err = processWrapper("dhcp", tap)
 			if err != nil {
-				resp.Error = fmt.Sprintf("dhcp error %v: `%v`", err, out)
+				err = fmt.Errorf("dhcp error %v: `%v`", err, out)
 			}
 		} else if c.StringArgs["ip"] != "" {
 			ip := c.StringArgs["ip"]
 
 			log.Debug("setting ip on tap %v: %v", tap, ip)
 
-			// Must be a static IP
-			out, err := processWrapper("ip", "addr", "add", "dev", tap, ip)
+			var out string
+			out, err = processWrapper("ip", "addr", "add", "dev", tap, ip)
 			if err != nil {
-				resp.Error = fmt.Sprintf("ip error %v: `%v`", err, out)
+				err = fmt.Errorf("ip error %v: `%v`", err, out)
 			}
 		}
 
-		if resp.Error != "" {
+		if err != nil {
 			// One of the above cases failed, try to clean up the tap
 			if err := hostTapDelete(tap); err != nil {
 				// Welp, we're boned
 				log.Error("zombie tap -- %v %v", tap, err)
 			}
-		} else {
-			// Success!
-			if namespace != "" {
-				namespaces[namespace].Taps[tap] = true
-			}
 
-			resp.Response = tap
+			return err
+		}
+		// Success!
+		if ns := GetNamespace(); ns != nil {
+			// TODO: probably need lock...
+			ns.Taps[tap] = true
 		}
 
-		return resp
+		resp.Response = tap
+
+		return nil
 	} else if c.BoolArgs["delete"] {
-		if err := hostTapDelete(c.StringArgs["id"]); err != nil {
-			resp.Error = err.Error()
-		}
-
-		return resp
+		return hostTapDelete(c.StringArgs["id"])
 	}
 
 	// Must be the list command
 	hostTapList(resp)
 
-	return resp
+	return nil
 }
 
-func cliHostTapClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := hostTapDelete(Wildcard)
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+func cliHostTapClear(c *minicli.Command, resp *minicli.Response) error {
+	return hostTapDelete(Wildcard)
 }
 
-func cliBridge(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
 
@@ -193,47 +180,43 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 	// default bridge which should be fine.
 	br, err := getBridge(c.StringArgs["bridge"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	if c.BoolArgs["trunk"] {
-		err = br.AddTrunk(iface)
+		return br.AddTrunk(iface)
 	} else if c.BoolArgs["notrunk"] {
-		err = br.RemoveTrunk(iface)
+		return br.RemoveTrunk(iface)
 	} else if c.BoolArgs["tunnel"] {
 		t := bridge.TunnelVXLAN
 		if c.BoolArgs["gre"] {
 			t = bridge.TunnelGRE
 		}
 
-		err = br.AddTunnel(t, remoteIP)
+		return br.AddTunnel(t, remoteIP)
 	} else if c.BoolArgs["notunnel"] {
-		err = br.RemoveTunnel(iface)
-	} else {
-		resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANs", "Trunk ports", "Tunnels"}
-		resp.Tabular = [][]string{}
+		return br.RemoveTunnel(iface)
+	}
 
-		for _, info := range bridges.Info() {
-			vlans := []string{}
-			for k, _ := range info.VLANs {
-				vlans = append(vlans, printVLAN(k))
-			}
-			sort.Strings(vlans)
+	// Must want to list bridges
+	resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANs", "Trunk ports", "Tunnels"}
+	resp.Tabular = [][]string{}
 
-			row := []string{
-				info.Name,
-				strconv.FormatBool(info.PreExist),
-				fmt.Sprintf("%v", vlans),
-				fmt.Sprintf("%v", info.Trunks),
-				fmt.Sprintf("%v", info.Tunnels)}
-			resp.Tabular = append(resp.Tabular, row)
+	for _, info := range bridges.Info() {
+		vlans := []string{}
+		for k, _ := range info.VLANs {
+			vlans = append(vlans, printVLAN(k))
 		}
+		sort.Strings(vlans)
+
+		row := []string{
+			info.Name,
+			strconv.FormatBool(info.PreExist),
+			fmt.Sprintf("%v", vlans),
+			fmt.Sprintf("%v", info.Trunks),
+			fmt.Sprintf("%v", info.Tunnels)}
+		resp.Tabular = append(resp.Tabular, row)
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return nil
 }

@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	"ranges"
@@ -54,7 +55,7 @@ func init() {
 	registerHandlers("namespace", namespaceCLIHandlers)
 }
 
-func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
+func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	// Get the active namespace
@@ -68,8 +69,11 @@ func cliNamespace(c *minicli.Command, respChan chan minicli.Responses) {
 			defer RevertNamespace(ns, ns2)
 			SetNamespace(name)
 
-			// Run the subcommand and forward the responses
-			forward(processCommands(c.Subcommand), respChan)
+			// Run the subcommand and forward the responses.
+			//
+			// LOCK: This is a CLI so we already hold cmdLock (can call
+			// runCommands instead of RunCommands).
+			forward(runCommands(c.Subcommand), respChan)
 			return
 		}
 
@@ -120,20 +124,16 @@ Schedules:
 	respChan <- minicli.Responses{resp}
 }
 
-func cliNamespaceMod(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 	ns := GetNamespace()
 	if ns == nil {
-		resp.Error = "cannot run nsmod without active namespace"
-		return resp
+		return errors.New("cannot run nsmod without active namespace")
 	}
 
 	// Empty string should parse fine...
 	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
 	if err != nil {
-		resp.Error = fmt.Sprintf("invalid hosts -- %v", err)
-		return resp
+		return fmt.Errorf("invalid hosts -- %v", err)
 	}
 
 	if c.BoolArgs["add-host"] {
@@ -151,8 +151,7 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 			}
 
 			if hosts[i] != hostname && !peers[hosts[i]] {
-				resp.Error = fmt.Sprintf("unknown host: `%v`", hosts[i])
-				return resp
+				return fmt.Errorf("unknown host: `%v`", hosts[i])
 			}
 		}
 
@@ -160,30 +159,27 @@ func cliNamespaceMod(c *minicli.Command) *minicli.Response {
 		for _, host := range hosts {
 			ns.Hosts[host] = true
 		}
+
+		return nil
 	} else if c.BoolArgs["del-host"] {
 		for _, host := range hosts {
 			delete(ns.Hosts, host)
 		}
-	} else {
-		// oops...
+
+		return nil
 	}
 
-	return resp
+	// boo, should be unreachable
+	return errors.New("unreachable")
 }
 
-func cliClearNamespace(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Clearing the namespace global
 		SetNamespace("")
-		return resp
+		return nil
 	}
 
-	if err := DestroyNamespace(name); err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return DestroyNamespace(name)
 }

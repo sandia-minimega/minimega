@@ -7,6 +7,7 @@ package main
 import (
 	"bridge"
 	"bufio"
+	"errors"
 	"goreadline"
 	"io/ioutil"
 	"minicli"
@@ -40,7 +41,7 @@ Should be run with caution.`,
 //  kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 //  exit()
-func cliNuke(c *minicli.Command) *minicli.Response {
+func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 	// nuke any container related items
 	containerNuke()
 
@@ -82,7 +83,7 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 	nukeState()
 
 	os.Exit(0)
-	return nil
+	return errors.New("unreachable")
 }
 
 // nukeTaps removes a list of tap devices
