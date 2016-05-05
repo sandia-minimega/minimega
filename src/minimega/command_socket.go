@@ -63,15 +63,13 @@ outer:
 		var prevResp minicli.Responses
 
 		if cmd != nil {
-			cmd.SetSource(SourceAttachCLI)
-
 			// HAX: Don't record the read command
 			if hasCommand(cmd, "read") {
 				cmd.SetRecord(false)
 			}
 
 			// HAX: Work around so that we can add the more boolean
-			for resp := range runCommand(cmd) {
+			for resp := range RunCommands(cmd) {
 				if prevResp != nil {
 					err = sendLocalResp(enc, prevResp, true)
 					if err != nil {

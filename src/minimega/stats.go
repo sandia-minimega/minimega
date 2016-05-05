@@ -97,19 +97,16 @@ func (t TapStat) String() string {
 	return fmt.Sprintf("%.1f/%.1f", rx, tx)
 }
 
-func cliHost(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliHost(c *minicli.Command, resp *minicli.Response) error {
 	// If they selected one of the fields to display
 	for k := range c.BoolArgs {
 		val, err := hostInfoFns[k]()
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			resp.Response = val
+			return err
 		}
 
-		return resp
+		resp.Response = val
+		return nil
 	}
 
 	// Must want all fields
@@ -119,15 +116,14 @@ func cliHost(c *minicli.Command) *minicli.Response {
 	for _, k := range resp.Header {
 		val, err := hostInfoFns[k]()
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		row = append(row, val)
 	}
 	resp.Tabular = [][]string{row}
 
-	return resp
+	return nil
 }
 
 func hostStatsLoad() (string, error) {

@@ -115,7 +115,7 @@ func (n *Namespace) Queue(arg string, vmType VMType) error {
 	}
 
 	n.queuedVMs = append(n.queuedVMs, queuedVM{
-		VMConfig: *vmConfig.Copy(),
+		VMConfig: vmConfig.Copy(),
 		names:    names,
 		vmType:   vmType,
 	})
@@ -159,7 +159,7 @@ func (n *Namespace) Launch() error {
 			defer wg.Done()
 
 			for _, q := range queuedVMs {
-				n.HostLaunch(host, q, respChan)
+				n.hostLaunch(host, q, respChan)
 			}
 		}(host, queuedVMs)
 	}
@@ -188,12 +188,12 @@ func (n *Namespace) Launch() error {
 	return nil
 }
 
-// namespaceHostLaunch launches a queuedVM on the specified host and namespace.
-// We blast a bunch of `vm config` commands at the host and then call `vm
-// launch ... noblock` if there are no errors. We assume that this is
-// serialized on a per-host basis -- it's fine to run multiple of these in
-// parallel, as long as they target different hosts.
-func (n *Namespace) HostLaunch(host string, queued queuedVM, respChan chan minicli.Responses) {
+// hostLaunch launches a queuedVM on the specified host and namespace.  We
+// blast a bunch of `vm config` commands at the host and then call `vm launch
+// ... noblock` if there are no errors. We assume that this is serialized on a
+// per-host basis -- it's fine to run multiple of these in parallel, as long as
+// they target different hosts.
+func (n *Namespace) hostLaunch(host string, queued queuedVM, respChan chan<- minicli.Responses) {
 	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
 
 	// Mesh send all the config commands
@@ -219,9 +219,14 @@ func (n *Namespace) HostLaunch(host string, queued queuedVM, respChan chan minic
 		for _, cmd := range cmds {
 			cmd := minicli.MustCompile(cmd)
 			cmd.SetRecord(false)
+			cmd.SetSource(n.Name)
 
 			if host == hostname {
-				forward(processCommands(cmd), configChan)
+				// LOCK: we use runCommands instead of RunCommands because
+				// Namespace.Launch is only invoked by the CLI and
+				// Namespace.hostLaunch is serialized per-host (and localhost
+				// can't appear more than once).
+				forward(runCommands(cmd), configChan)
 			} else {
 				in, err := meshageSend(cmd, host)
 				if err != nil {
@@ -263,9 +268,11 @@ func (n *Namespace) HostLaunch(host string, queued queuedVM, respChan chan minic
 
 	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", n.Name, queued.vmType, names)
 	cmd.SetRecord(false)
+	cmd.SetSource(n.Name)
 
 	if host == hostname {
-		forward(processCommands(cmd), respChan)
+		// LOCK: see above.
+		forward(runCommands(cmd), respChan)
 	} else {
 		in, err := meshageSend(cmd, host)
 		if err != nil {
@@ -353,9 +360,9 @@ func DestroyNamespace(name string) error {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	log.Info("setting active namespace: %v", name)
+	log.Info("destroying namespace: %v", name)
 
-	ns, ok := namespaces[namespace]
+	ns, ok := namespaces[name]
 	if !ok {
 		return fmt.Errorf("unknown namespace: %v", name)
 	}

@@ -31,10 +31,6 @@ const (
 var (
 	killAck chan int // channel that all VMs ack on when killed
 	vmID    *Counter // channel of new VM IDs
-
-	vmConfig VMConfig // current vm config, updated by CLI
-
-	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
 )
 
 type VMType int
@@ -72,8 +68,8 @@ type VM interface {
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
 
+	SetCCActive(bool)
 	UpdateBW()
-	UpdateCCActive()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
 	// connected to the specified bridge and VLAN.
@@ -96,7 +92,7 @@ type BaseConfig struct {
 
 	Snapshot bool
 	UUID     string
-	ActiveCC bool // Whether CC is active, updated by calling UpdateCCActive
+	ActiveCC bool // set when CC is active
 
 	Tags map[string]string
 }
@@ -174,7 +170,7 @@ func NewVM(name string, vmType VMType) VM {
 func NewBaseVM(name string) *BaseVM {
 	vm := new(BaseVM)
 
-	vm.BaseConfig = *vmConfig.BaseConfig.Copy() // deep-copy configured fields
+	vm.BaseConfig = vmConfig.BaseConfig.Copy() // deep-copy configured fields
 	vm.ID = vmID.Next()
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
@@ -253,11 +249,9 @@ func (net NetConfig) String() (s string) {
 	return strings.Join(parts, ",")
 }
 
-func (old *BaseConfig) Copy() *BaseConfig {
-	res := new(BaseConfig)
-
+func (old BaseConfig) Copy() BaseConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	res.Networks = make([]NetConfig, len(old.Networks))
@@ -415,11 +409,11 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
-func (vm *BaseVM) UpdateCCActive() {
+func (vm *BaseVM) SetCCActive(active bool) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	vm.ActiveCC = ccHasClient(vm.UUID)
+	vm.ActiveCC = active
 }
 
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
@@ -590,7 +584,7 @@ func (vm *BaseVM) setError(err error) {
 
 // macSnooper listens for updates from the ipmac learner and updates the
 // specified network config.
-func (vm *BaseVM) macSnooper(net *NetConfig, updates chan ipmac.IP) {
+func (vm *BaseVM) macSnooper(net *NetConfig, updates <-chan ipmac.IP) {
 	for update := range updates {
 		// TODO: need to acquire VM lock?
 		if update.IP4 != "" {

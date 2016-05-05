@@ -73,17 +73,14 @@ versions not met.`,
 	},
 }
 
-func cliCheckExternal(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := checkExternal()
-	if err != nil {
-		resp.Error = err.Error()
-	} else {
-		resp.Response = "all external dependencies met"
+func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
+	if err := checkExternal(); err != nil {
+		return err
 	}
 
-	return resp
+	// TODO: Remove? This goes against the unix philosophy
+	resp.Response = "all external dependencies met"
+	return nil
 }
 
 // checkExternal checks for the presence of each of the external processes we
