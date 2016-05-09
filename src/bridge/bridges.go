@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 // Bridges manages a collection of `Bridge` structs.
@@ -44,11 +45,22 @@ func NewBridges(d, f string) *Bridges {
 		}
 	}()
 
-	return &Bridges{
+	b := &Bridges{
 		Default:  d,
 		nameChan: nameChan,
 		bridges:  map[string]*Bridge{},
 	}
+
+	// Start a goroutine to collect bandwidth stats every 5 seconds
+	go func() {
+		for {
+			time.Sleep(5 * time.Second)
+
+			b.updateBandwidthStats()
+		}
+	}()
+
+	return b
 }
 
 // newBridge creates a new bridge with ovs, assumes that bridgeLock is held.

@@ -108,7 +108,8 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
-	Stats  *TapStat // Most recent bandwidth measurements for Tap
+
+	RxRate, TxRate float64 // Most recent bandwidth measurements for Tap
 }
 
 // BaseVM provides the bare-bones for base VM functionality. It implements
@@ -397,15 +398,19 @@ func (vm *BaseVM) ClearTag(t string) {
 }
 
 func (vm *BaseVM) UpdateBW() {
-	bandwidthLock.Lock()
-	defer bandwidthLock.Unlock()
-
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		net.Stats = bandwidthStats[net.Tap]
+		n := &vm.Networks[i]
+		tap, err := bridges.FindTap(n.Tap)
+		if err != nil {
+			// weird...
+			n.RxRate, n.TxRate = 0, 0
+			continue
+		}
+
+		n.RxRate, n.TxRate = tap.BandwidthStats()
 	}
 }
 
@@ -545,11 +550,8 @@ func (vm *BaseVM) info(key string) (string, error) {
 		}
 	case "bandwidth":
 		for _, v := range vm.Networks {
-			if v.Stats == nil {
-				vals = append(vals, "N/A")
-			} else {
-				vals = append(vals, fmt.Sprintf("%v", v.Stats))
-			}
+			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
+			vals = append(vals, s)
 		}
 	case "tags":
 		return vm.TagsString(), nil

@@ -11,6 +11,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Global lock for all bridge operations
@@ -55,6 +56,15 @@ type Tap struct {
 	Host      bool   // Set when created as a host tap (and, thus, promiscuous)
 	Container bool   // Set when created via CreateContainerTap
 	Defunct   bool   // Set when Tap should be reaped
+
+	stats []tapStat
+}
+
+type tapStat struct {
+	t time.Time
+
+	RxBytes int
+	TxBytes int
 }
 
 // Destroy a bridge, removing all of the taps, etc. associated with it
