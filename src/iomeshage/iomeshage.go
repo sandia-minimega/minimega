@@ -36,6 +36,7 @@ type IOMeshage struct {
 	node         *meshage.Node         // meshage node to use
 	Messages     chan *meshage.Message // Incoming messages from meshage
 	TIDs         map[int64]chan *IOMMessage
+	tidLock      sync.Mutex
 	transfers    map[string]*Transfer // current transfers
 	drainLock    sync.RWMutex
 	transferLock sync.RWMutex
