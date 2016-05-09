@@ -21,6 +21,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Log levels supported:
@@ -34,7 +35,11 @@ const (
 )
 
 var (
-	loggers    map[string]*minilogger
+	loggers = make(map[string]*minilogger)
+	logLock sync.Mutex
+)
+
+var (
 	colorLine  = FgYellow
 	colorDebug = FgBlue
 	colorInfo  = FgGreen
@@ -50,23 +55,28 @@ type minilogger struct {
 	filters []string
 }
 
-func init() {
-	loggers = make(map[string]*minilogger)
-}
-
 // Adds a logger set to log only events at level specified or higher.
 // output: io.Writer instance to which to log (can be os.Stderr or os.Stdout)
 // level:  one of the minilogging levels defined as a constant
 func AddLogger(name string, output io.Writer, level int, color bool) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	loggers[name] = &minilogger{log.New(output, "", log.LstdFlags), level, color, nil}
 }
 
 // Remove a named logger that was added using AddLogger
 func DelLogger(name string) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	delete(loggers, name)
 }
 
 func Loggers() []string {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	var ret []string
 	for k, _ := range loggers {
 		ret = append(ret, k)
@@ -77,6 +87,9 @@ func Loggers() []string {
 // WillLog returns true if logging to a specific log level will result in
 // actual logging. Useful if the logging text itself is expensive to produce.
 func WillLog(level int) bool {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, v := range loggers {
 		if v.Level <= level {
 			return true
@@ -87,6 +100,9 @@ func WillLog(level int) bool {
 
 // Change a log level for a named logger.
 func SetLevel(name string, level int) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if loggers[name] == nil {
 		return errors.New("logger does not exist")
 	}
@@ -96,6 +112,9 @@ func SetLevel(name string, level int) error {
 
 // Return the log level for a named logger.
 func GetLevel(name string) (int, error) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if loggers[name] == nil {
 		return -1, errors.New("logger does not exist")
 	}
@@ -104,6 +123,8 @@ func GetLevel(name string) (int, error) {
 
 // Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and
 // returns immediately.
+//
+// TODO: How to lock properly for this?
 func LogAll(i io.Reader, level int, name string) {
 	go func(i io.Reader, level int, name string) {
 		r := bufio.NewReader(i)
@@ -146,6 +167,9 @@ func LevelInt(l string) (int, error) {
 }
 
 func Filters(name string) ([]string, error) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		var ret = make([]string, len(l.filters))
 		copy(ret, l.filters)
@@ -156,6 +180,9 @@ func Filters(name string) ([]string, error) {
 }
 
 func AddFilter(name string, filter string) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		for _, f := range l.filters {
 			if f == filter {
@@ -170,6 +197,9 @@ func AddFilter(name string, filter string) error {
 }
 
 func DelFilter(name string, filter string) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		for i, f := range l.filters {
 			if f == filter {
@@ -257,6 +287,9 @@ func (l *minilogger) logln(level int, arg ...interface{}) {
 }
 
 func Debug(format string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= DEBUG {
 			logger.log(DEBUG, format, arg...)
@@ -265,6 +298,9 @@ func Debug(format string, arg ...interface{}) {
 }
 
 func Info(format string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= INFO {
 			logger.log(INFO, format, arg...)
@@ -273,6 +309,9 @@ func Info(format string, arg ...interface{}) {
 }
 
 func Warn(format string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= WARN {
 			logger.log(WARN, format, arg...)
@@ -281,6 +320,9 @@ func Warn(format string, arg ...interface{}) {
 }
 
 func Error(format string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= ERROR {
 			logger.log(ERROR, format, arg...)
@@ -289,6 +331,9 @@ func Error(format string, arg ...interface{}) {
 }
 
 func Fatal(format string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= FATAL {
 			logger.log(FATAL, format, arg...)
@@ -298,6 +343,9 @@ func Fatal(format string, arg ...interface{}) {
 }
 
 func Debugln(arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= DEBUG {
 			logger.logln(DEBUG, arg...)
@@ -306,6 +354,9 @@ func Debugln(arg ...interface{}) {
 }
 
 func Infoln(arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= INFO {
 			logger.logln(INFO, arg...)
@@ -314,6 +365,9 @@ func Infoln(arg ...interface{}) {
 }
 
 func Warnln(arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= WARN {
 			logger.logln(WARN, arg...)
@@ -322,6 +376,9 @@ func Warnln(arg ...interface{}) {
 }
 
 func Errorln(arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= ERROR {
 			logger.logln(ERROR, arg...)
@@ -330,6 +387,9 @@ func Errorln(arg ...interface{}) {
 }
 
 func Fatalln(arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, logger := range loggers {
 		if logger.Level <= FATAL {
 			logger.logln(FATAL, arg...)
