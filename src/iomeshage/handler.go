@@ -73,6 +73,9 @@ func (iom *IOMeshage) handleMessages() {
 // the receiver gives up. If we try to send on a closed channel, recover and
 // move on.
 func (iom *IOMeshage) handleResponse(m *IOMMessage) {
+	TIDLock.Lock()
+	defer TIDLock.Unlock()
+
 	if c, ok := iom.TIDs[m.TID]; ok {
 		defer func() {
 			recover()
