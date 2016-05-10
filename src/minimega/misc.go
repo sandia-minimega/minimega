@@ -12,12 +12,16 @@ import (
 	_ "gopnm"
 	"image"
 	"image/png"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"minicli"
 	log "minilog"
 	"net"
+	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"resize"
 	"runtime"
 	"strconv"
@@ -503,4 +507,27 @@ func printVLAN(vlan int) string {
 	namespace := GetNamespaceName()
 
 	return allocatedVLANs.PrintVLAN(namespace, vlan)
+}
+
+// wget downloads a URL and writes it to disk, creates parent directories if
+// needed.
+func wget(u, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	resp, err := http.Get(u)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }
