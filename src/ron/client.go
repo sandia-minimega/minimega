@@ -502,7 +502,18 @@ func (c *Client) processCommand(command *Command) {
 		resp.Files = prepareRecvFiles(command.FilesRecv)
 	}
 
-	if command.PID != 0 {
+	if command.PID == -1 {
+		// Wildcard
+		log.Debug("killing all processes")
+		c.processLock.Lock()
+		for _, p := range c.Processes {
+			err := p.process.Kill()
+			if err != nil {
+				log.Errorln(err)
+			}
+		}
+		c.processLock.Unlock()
+	} else if command.PID != 0 {
 		log.Debug("killing PID %v", command.PID)
 		c.processLock.Lock()
 		if p, ok := c.Processes[command.PID]; ok {

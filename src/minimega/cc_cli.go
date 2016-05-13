@@ -437,16 +437,7 @@ func ccProcessKill(pid int) {
 func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
-		for _, client := range ccNode.GetActiveClients() {
-			processes, err := ccNode.GetProcesses(client.UUID)
-			if err != nil {
-				return err
-			}
-
-			for _, p := range processes {
-				ccProcessKill(p.PID)
-			}
-		}
+		ccProcessKill(-1)
 
 		return nil
 	}
