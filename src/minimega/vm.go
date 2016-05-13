@@ -130,12 +130,17 @@ type BaseVM struct {
 	instancePath string
 }
 
-// Valid names for output masks for vm info, in preferred output order
-var vmMasks = []string{
+// Valid names for output masks for `vm info`, in preferred output order
+var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
 	"tags",
+}
+
+// Valid names for output masks for `vm summary`, in preferred output order
+var vmInfoLite = []string{
+	"id", "name", "state", "namespace", "type", "vlan", "uuid", "cc_active",
 }
 
 func init() {
