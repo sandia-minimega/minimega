@@ -20,6 +20,19 @@ foo3
 name
 bar
 
+## # Test aliases
+## vm start foo2
+## .alias
+## .alias vmr=.column name .filter state=running vm info
+## .alias
+alias | expansion
+vmr   | .column name .filter state=running vm info
+## vmr
+name
+foo2
+## .unalias vmr
+## .alias
+
 ## # Test disable headers
 ## .headers false .column name vm info
 bar
@@ -39,14 +52,14 @@ foo3
 name,state
 bar,BUILDING
 foo1,BUILDING
-foo2,BUILDING
+foo2,RUNNING
 foo3,BUILDING
 ## .csv true
 ## .column name,state vm info
 name,state
 bar,BUILDING
 foo1,BUILDING
-foo2,BUILDING
+foo2,RUNNING
 foo3,BUILDING
 ## .csv false
 
@@ -57,3 +70,4 @@ foo3,BUILDING
 ## #.json true
 ## #.column name,state vm info
 ## #.json false
+

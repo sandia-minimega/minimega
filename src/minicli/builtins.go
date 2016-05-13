@@ -187,6 +187,41 @@ Enable or disable the recording of a given command in the command history.`,
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Record })
 		},
 	},
+	{ // alias
+		HelpShort: "create an alias",
+		HelpLong: `
+Create a new alias similar to bash aliases. Aliases can be used as a shortcut
+to avoid typing out a long command. Only one alias is applied per command and
+only to the beginning of a command. For example:
+
+.alias vmr=.filter state=running vm info
+
+The alias is interpreted as the text up to the first "=". Runing .alias without
+any argument will list the existing aliases.
+
+This alias allows the user to type "vmr" rather than the using a filter to list
+the running VMs.
+
+.unalias removes a previously set alias.
+
+Note: we *strongly* recommend that you avoid aliases, unless you are using the
+shell interactively. Aliases save typing which should not be necessary if you
+are writing a script.`,
+		Patterns: []string{
+			".alias",
+			".alias <alias>...",
+		},
+		Call: cliAlias,
+	},
+	{ // unalias
+		HelpShort: "remove an alias",
+		HelpLong: `
+Removes an alias by name. See .alias for a listing of aliases.`,
+		Patterns: []string{
+			".unalias <alias>",
+		},
+		Call: cliUnalias,
+	},
 }
 
 var hostname string
@@ -446,4 +481,42 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 
 		out <- r
 	}
+}
+
+func cliAlias(c *Command, out chan<- Responses) {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	resp := &Response{Host: hostname}
+
+	alias := strings.Join(c.ListArgs["alias"], " ")
+	parts := strings.SplitN(alias, "=", 2)
+
+	if alias == "" {
+		resp.Header = []string{"alias", "expansion"}
+
+		for k, v := range aliases {
+			resp.Tabular = append(resp.Tabular, []string{k, v})
+		}
+	} else if len(parts) != 2 {
+		resp.Error = "expected alias of format `alias=expansion`"
+	} else {
+		aliases[parts[0]] = parts[1]
+	}
+
+	out <- Responses{resp}
+	return
+}
+
+func cliUnalias(c *Command, out chan<- Responses) {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	// don't care if doesn't exist
+	delete(aliases, c.StringArgs["alias"])
+
+	resp := &Response{Host: hostname}
+
+	out <- Responses{resp}
+	return
 }
