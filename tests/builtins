@@ -8,6 +8,15 @@ vm launch kvm foo[1-3],bar
 .filter name~foo .column name vm info
 .filter name!~foo .column name vm info
 
+# Test aliases
+vm start foo2
+.alias
+.alias vmr=.column name .filter state=running vm info
+.alias
+vmr
+.unalias vmr
+.alias
+
 # Test disable headers
 .headers false .column name vm info
 .headers false
@@ -27,3 +36,4 @@ vm launch kvm foo[1-3],bar
 #.json true
 #.column name,state vm info
 #.json false
+

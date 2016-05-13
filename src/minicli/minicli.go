@@ -34,6 +34,11 @@ type Flags struct {
 
 var flagsLock sync.Mutex
 
+var (
+	aliases     = map[string]string{}
+	aliasesLock sync.Mutex
+)
+
 var defaultFlags = Flags{
 	// Output flags
 	Annotate: true,
@@ -187,6 +192,8 @@ func Compile(input string) (*Command, error) {
 		return nil, nil
 	}
 
+	input = expandAliases(input)
+
 	in, err := lexInput(input)
 	if err != nil {
 		return nil, err
@@ -212,6 +219,21 @@ func Compile(input string) (*Command, error) {
 // Compilef wraps fmt.Sprintf and Compile
 func Compilef(format string, args ...interface{}) (*Command, error) {
 	return Compile(fmt.Sprintf(format, args...))
+}
+
+// expandAliases finds the first alias match in input and replaces it with it's expansion.
+func expandAliases(input string) string {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	for k, v := range aliases {
+		if strings.HasPrefix(input, k) {
+			log.Info("expanding %v -> %v", k, v)
+			return strings.Replace(input, k, v, 1)
+		}
+	}
+
+	return input
 }
 
 func suggest(input *Input) []string {
