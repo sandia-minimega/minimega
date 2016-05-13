@@ -9,14 +9,14 @@ This tutorial illustrates iomeshage, the meshage-based file transfer layer
 provided by minimega. iomeshage is a distributed file transfer layer that
 provides a means to very quickly copy files between minimega nodes. By
 leveraging minimega's meshage message passing protocol, iomeshage can exceed
-transfer speeds obtained with one-to-one copying. 
+transfer speeds obtained with one-to-one copying.
 
 * Overview
 
 There are two ways to use iomeshage - through the `file` API and via an inline
 `file:` prefix available anywhere on the command line. In order for iomeshage
 to locate files on remote nodes, the files must be located in the `filepath`
-directory provided to minimega (by default `/tmp/minimega/files`). 
+directory provided to minimega (by default `/tmp/minimega/files`).
 
 iomeshage supports transferring single files, globs (wildcard files such as
 foo*), and entire directories. Permissions on transferred files are preserved.
@@ -51,7 +51,7 @@ You can also list and delete files using the `file` API:
 	foo   |     | bigfile | 1073741824
 	minimega$ file delete bigfile
 	minimega$ file list
-	minimega$ 
+	minimega$
 
 File transfers are always done by 'pulling' the file to the requesting node.
 There is no way to transfer a file to a remote node directly. In such cases,
@@ -76,7 +76,32 @@ reference to the file:
 	minimega$ vm config disk file:foo.qcow2
 	minimega$ vm config disk
 	[/tmp/minimega/files/foo.qcow2]
-	minimega$ 
+	minimega$
 
 Additionally, `file:` can by tab completed across the mesh in the same way as
 bash.
+
+** http://, https:// prefix
+
+Similar to the `file:` prefix, an HTTP(s) URL can be supplied anywhere minimega
+expects a file on disk. minimega will block while it downloads the file to the
+iomeshage directory. If the file already exists in iomeshage (on any node), the
+iomeshage version will be fetched instead of requesting the file from the URL.
+For example, to create a VM based on an Ubuntu cloud image:
+
+    minimega$ vm config disk https://uec-images.ubuntu.com/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img
+    minimega$ vm config disk
+    [/tmp/minimega/files/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img]
+    minimega$ file list
+    dir   | name              | size
+    <dir> | miniccc_responses | 40
+    <dir> | releases          | 60
+    minimega$ file list releases
+    dir   | name  | size
+    <dir> | 14.04 | 60
+    minimega$ file list releases/14.04
+    dir   | name    | size
+    <dir> | release | 60
+    minimega$ file list releases/14.04/release/
+    dir  | name                                         | size
+         | ubuntu-14.04-server-cloudimg-amd64-disk1.img | 259785216
