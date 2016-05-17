@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -72,34 +73,31 @@ Resets state for logging. See "help log ..." for more information.`,
 	},
 }
 
-func cliLogLevel(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.BoolArgs) == 0 {
 		// Print the level
 		resp.Response = *f_loglevel
-	} else {
-		// Bool args should only have a single key that is the log level
-		for k := range c.BoolArgs {
-			level, err := log.LevelInt(k)
-			if err != nil {
-				log.Fatalln("someone goofed on the patterns")
-			}
-
-			*f_loglevel = k
-			// forget the error, if they don't exist we shouldn't be setting
-			// their level, so we're fine.
-			log.SetLevel("stdio", level)
-			log.SetLevel("file", level)
-		}
+		return nil
 	}
 
-	return resp
+	// Bool args should only have a single key that is the log level
+	for k := range c.BoolArgs {
+		level, err := log.LevelInt(k)
+		if err != nil {
+			return errors.New("unreachable")
+		}
+
+		*f_loglevel = k
+		// forget the error, if they don't exist we shouldn't be setting
+		// their level, so we're fine.
+		log.SetLevel("stdio", level)
+		log.SetLevel("file", level)
+	}
+
+	return nil
 }
 
-func cliLogStderr(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["false"] {
 		// Turn off logging to stderr
 		log.DelLogger("stdio")
@@ -120,50 +118,44 @@ func cliLogStderr(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	return resp
+	return nil
 }
 
-func cliLogFile(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		// Print true or false depending on whether file is enabled
 		if logFile != nil {
 			resp.Response = logFile.Name()
 		}
-	} else {
-		var err error
 
-		// Enable logging to file if it's not already enabled
-		level, _ := log.LevelInt(*f_loglevel)
+		return nil
+	}
 
-		if logFile != nil {
-			if err = stopFileLogger(); err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-		}
+	// Enable logging to file if it's not already enabled
+	level, _ := log.LevelInt(*f_loglevel)
 
-		err = os.MkdirAll(filepath.Dir(c.StringArgs["file"]), 0755)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-		flags := os.O_WRONLY | os.O_APPEND | os.O_CREATE
-		logFile, err = os.OpenFile(c.StringArgs["file"], flags, 0660)
-		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			log.AddLogger("file", logFile, level, false)
+	if logFile != nil {
+		if err := stopFileLogger(); err != nil {
+			return err
 		}
 	}
 
-	return resp
+	err := os.MkdirAll(filepath.Dir(c.StringArgs["file"]), 0755)
+	if err != nil {
+		return err
+	}
+
+	flags := os.O_WRONLY | os.O_APPEND | os.O_CREATE
+	logFile, err = os.OpenFile(c.StringArgs["file"], flags, 0660)
+	if err != nil {
+		return err
+	}
+
+	log.AddLogger("file", logFile, level, false)
+	return nil
 }
 
-func cliLogFilter(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		var filters []string
 		loggers := log.Loggers()
@@ -182,33 +174,31 @@ func cliLogFilter(c *minicli.Command) *minicli.Response {
 				}
 			}
 		}
+
 		if len(filters) != 0 {
 			resp.Response = fmt.Sprintf("%v", filters)
 		}
-	} else {
-		filter := c.StringArgs["filter"]
 
-		loggers := log.Loggers()
-		for _, l := range loggers {
-			err := log.AddFilter(l, filter)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
+		return nil
+	}
+
+	filter := c.StringArgs["filter"]
+
+	for _, l := range log.Loggers() {
+		err := log.AddFilter(l, filter)
+		if err != nil {
+			return err
 		}
 	}
 
-	return resp
+	return nil
 }
 
-func cliLogClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 	// Reset file if explicitly cleared or we're clearing everything
 	if c.BoolArgs["file"] || len(c.BoolArgs) == 0 {
 		if err := stopFileLogger(); err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 	}
 
@@ -237,7 +227,7 @@ func cliLogClear(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	return resp
+	return nil
 }
 
 // stopFileLogger gets rid of the previous file logger

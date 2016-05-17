@@ -566,11 +566,9 @@ func containerFifos(vmFSPath string, vmInstancePath string, vmFifos int) error {
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
-func (old *ContainerConfig) Copy() *ContainerConfig {
-	res := new(ContainerConfig)
-
+func (old ContainerConfig) Copy() ContainerConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	// none yet - placeholder
@@ -585,16 +583,15 @@ func (vm *ContainerVM) Config() *BaseConfig {
 func NewContainer(name string) *ContainerVM {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewVM(name)
+	vm.BaseVM = *NewBaseVM(name)
 	vm.Type = CONTAINER
 
-	vm.ContainerConfig = *vmConfig.ContainerConfig.Copy() // deep-copy configured fields
+	vm.ContainerConfig = vmConfig.ContainerConfig.Copy() // deep-copy configured fields
 
 	return vm
 }
 
 func (vm *ContainerVM) Launch() error {
-	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	return vm.launch()
@@ -687,38 +684,6 @@ func (vm *ContainerConfig) String() string {
 	return o.String()
 }
 
-func (vm *ContainerVM) checkDisks() error {
-	// Disk path to whether it is a snapshot or not
-	disks := map[string]bool{}
-
-	// See note about vmLock in vm.checkInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	// Record which disks are in use and whether they are being used as a
-	// snapshot or not by other VMs. If the same disk happens to be in use by
-	// different VMs and they have mismatched snapshot flags, assume that the
-	// disk is not being used in snapshot mode.
-	for _, vmOther := range vms {
-		// Skip ourself
-		if vm == vmOther { // ignore this vm
-			continue
-		}
-
-		if vmOther, ok := vmOther.(*ContainerVM); ok {
-			disks[vmOther.FSPath] = vmOther.Snapshot
-		}
-	}
-
-	// Check our disk to see if we're trying to use a disk that is in use by
-	// another VM (unless both are being used in snapshot mode).
-	if snapshot, ok := disks[vm.FSPath]; ok && (snapshot != vm.Snapshot) {
-		return fmt.Errorf("disk path %v is already in use by another vm", vm.FSPath)
-	}
-
-	return nil
-}
-
 // launch is the low-level launch function for Container VMs. The caller should
 // hold the VM's lock.
 func (vm *ContainerVM) launch() error {
@@ -737,33 +702,15 @@ func (vm *ContainerVM) launch() error {
 		return err
 	}
 
-	s := vm.State
-	restart := s == VM_QUIT || s == VM_ERROR
+	// If this is the first time launching the VM, do the final configuration
+	// check, create a directory for it, and setup the FS.
+	if vm.State == VM_BUILDING {
+		ccNode.RegisterVM(vm.UUID, vm)
 
-	// don't repeat the preamble if we're just in the quit state
-	if s != VM_QUIT {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
 
-		// Check the disks and network interfaces are sane
-		err := vm.checkInterfaces()
-		if err == nil {
-			err = vm.checkDisks()
-		}
-
-		if err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
-		}
-	}
-
-	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
-	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
-
-	if !restart {
 		if vm.Snapshot {
 			if err := vm.overlayMount(); err != nil {
 				log.Error("overlayMount: %v", err)
@@ -774,6 +721,10 @@ func (vm *ContainerVM) launch() error {
 			vm.effectivePath = vm.FSPath
 		}
 	}
+
+	// write the config for this vm
+	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
 	// to mimic stdio, and a fourth pipe for logging before the child execs
@@ -898,26 +849,6 @@ func (vm *ContainerVM) launch() error {
 
 	go vm.console(parentStdin, parentStdout, parentStderr)
 
-	// Channel to signal when the process has exited
-	var waitChan = make(chan bool)
-
-	// Create goroutine to wait for process to exit
-	go func() {
-		defer close(waitChan)
-		err := cmd.Wait()
-
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
-		if err != nil && err.Error() != "signal: killed" { // because we killed it
-			log.Error("kill container: %v", err)
-			vm.setError(err)
-		} else if vm.State != VM_ERROR {
-			// Set to QUIT unless we've already been put into the error state
-			vm.setState(VM_QUIT)
-		}
-	}()
-
 	// TODO: add affinity funcs for containers
 	// vm.CheckAffinity()
 
@@ -996,12 +927,32 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	go func() {
+		var err error
 		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
+
+		// Channel to signal when the process has exited
+		var waitChan = make(chan bool)
+
+		// Create goroutine to wait for process to exit
+		go func() {
+			err = cmd.Wait()
+			close(waitChan)
+		}()
 
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
+
+			vm.lock.Lock()
+			defer vm.lock.Unlock()
+
+			// we don't need to check the error for a clean kill,
+			// as there's no way to get here if we killed it.
+			if err != nil {
+				log.Error("kill container: %v", err)
+				vm.setError(err)
+			}
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
 
@@ -1067,13 +1018,15 @@ func (vm *ContainerVM) launch() error {
 			log.Errorln(err)
 		}
 
+		if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
+		}
+
 		if sendKillAck {
 			killAck <- vm.ID
 		}
 	}()
-
-	// No errors.. ready to go!
-	vm.setState(VM_BUILDING)
 
 	return nil
 }

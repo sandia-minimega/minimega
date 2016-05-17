@@ -5,6 +5,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"minicli"
@@ -52,6 +54,9 @@ example, to filter on VMs that are running windows and have a specific IP.
 
 	cc filter os=windows ip=10.0.0.1
 
+When a namespace is active, there is an implicit filter for vms with the
+provided namespace.
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
@@ -79,7 +84,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
 		},
-		Call: wrapSimpleCLI(cliCC),
+		Call: wrapBroadcastCLI(cliCC),
 	},
 	{ // clear cc
 		HelpShort: "reset command and control state",
@@ -93,12 +98,12 @@ See "help cc" for more information.`,
 			"clear cc <prefix,>",
 			"clear cc <responses,>",
 		},
-		Call: wrapSimpleCLI(cliCCClear),
+		Call: wrapBroadcastCLI(cliCCClear),
 	},
 }
 
 // Functions pointers to the various handlers for the subcommands
-var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
+var ccCliSubHandlers = map[string]func(*minicli.Command, *minicli.Response) error{
 	"responses":  cliCCResponses,
 	"commands":   cliCCCommand,
 	"filter":     cliCCFilter,
@@ -114,14 +119,10 @@ var ccCliSubHandlers = map[string]func(*minicli.Command) *minicli.Response{
 	"process":    cliCCProcess,
 }
 
-func cliCC(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliCC(c *minicli.Command, resp *minicli.Response) error {
 	// Ensure that cc is running before proceeding
 	if ccNode == nil {
-		resp.Error = "cc service not running"
-		return resp
+		return errors.New("cc service not running")
 	}
 
 	if len(c.BoolArgs) > 0 {
@@ -129,81 +130,60 @@ func cliCC(c *minicli.Command) *minicli.Response {
 		for k, fn := range ccCliSubHandlers {
 			if c.BoolArgs[k] {
 				log.Debug("cc handler %v", k)
-				return fn(c)
+				return fn(c, resp)
 			}
 		}
-	} else {
-		// Getting status
-		clients := ccNode.GetActiveClients()
 
-		resp.Header = []string{"number of clients"}
-		resp.Tabular = [][]string{
-			[]string{
-				fmt.Sprintf("%v", len(clients)),
-			},
-		}
+		return errors.New("unreachable")
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
+	// Getting status
+	clients := ccNode.GetActiveClients()
+
+	resp.Header = []string{"number of clients"}
+	resp.Tabular = [][]string{
+		[]string{
+			fmt.Sprintf("%v", len(clients)),
+		},
 	}
 
-	return resp
+	return nil
 }
 
 // prefix
-func cliCCPrefix(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	prefix, ok := c.StringArgs["prefix"]
-
-	if !ok {
-		resp.Response = ccPrefix
-		return resp
-	} else {
+func cliCCPrefix(c *minicli.Command, resp *minicli.Response) error {
+	if prefix, ok := c.StringArgs["prefix"]; ok {
 		ccPrefix = prefix
+		return nil
 	}
 
-	return resp
+	resp.Response = ccPrefix
+	return nil
 }
 
 // tunnel
-func cliCCTunnel(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCTunnel(c *minicli.Command, resp *minicli.Response) error {
 	src, err := strconv.Atoi(c.StringArgs["src"])
 	if err != nil {
-		resp.Error = fmt.Sprintf("non-integer src: %v : %v", c.StringArgs["src"], err)
-		return resp
+		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
 	}
 
 	host := c.StringArgs["host"]
 
 	dst, err := strconv.Atoi(c.StringArgs["dst"])
 	if err != nil {
-		resp.Error = fmt.Sprintf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
-		return resp
+		return fmt.Errorf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
 	}
 
 	if c.BoolArgs["rtunnel"] {
-		err := ccNode.Reverse(ccFilter, src, host, dst)
-		if err != nil {
-			resp.Error = err.Error()
-		}
-	} else {
-		err := ccNode.Forward(c.StringArgs["uuid"], src, host, dst)
-		if err != nil {
-			resp.Error = err.Error()
-		}
+		return ccNode.Reverse(ccGetFilter(), src, host, dst)
 	}
 
-	return resp
+	return ccNode.Forward(c.StringArgs["uuid"], src, host, dst)
 }
 
 // responses
-func cliCCResponses(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 	raw := c.BoolArgs["raw"]
 	id := c.StringArgs["id"]
 
@@ -213,106 +193,82 @@ func cliCCResponses(c *minicli.Command) *minicli.Response {
 		if err != nil {
 			return err
 		}
+
+		// Test if the file looks like a UUID. If it does, and a namespace is
+		// active, check whether the VM is part of the active namespace. This
+		// is a fairly naive way to filter the responses...
+		if namespace != "" && isUUID(info.Name()) {
+			if vm := vms.FindVM(info.Name()); vm == nil {
+				log.Debug("skipping VM: %v", info.Name())
+				return filepath.SkipDir
+			}
+		}
+
 		if !info.IsDir() {
-			files = append(files, path)
 			log.Debug("add to response files: %v", path)
+			files = append(files, path)
 		}
 		return nil
 	}
 
 	if id == Wildcard {
 		// all responses
-		err := filepath.Walk(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), walker)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+		return filepath.Walk(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), walker)
 	} else if _, err := strconv.Atoi(id); err == nil {
 		p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, id)
-		_, err := os.Stat(p)
-		if err != nil {
-			resp.Error = fmt.Sprintf("no such response dir %v", p)
-			return resp
-		}
-		err = filepath.Walk(p, walker)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-	} else {
-		// try a prefix. First, do we even have anything with this prefix?
-		ids := ccPrefixIDs(id)
-		if len(ids) == 0 {
-			resp.Error = fmt.Sprintf("no such prefix %v", id)
-			return resp
+		if _, err := os.Stat(p); err != nil {
+			return fmt.Errorf("no such response dir %v", p)
 		}
 
-		var totalFiles []string
-		for _, i := range ids {
-			p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", i))
-			_, err := os.Stat(p)
-			if err != nil {
-				resp.Error = fmt.Sprintf("no such response dir %v", p)
-				return resp
-			}
-			err = filepath.Walk(p, walker)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-			totalFiles = append(totalFiles, files...)
-			files = []string{}
+		return filepath.Walk(p, walker)
+	}
+
+	// try a prefix. First, do we even have anything with this prefix?
+	ids := ccPrefixIDs(id)
+	if len(ids) == 0 {
+		return fmt.Errorf("no such prefix %v", id)
+	}
+
+	for _, i := range ids {
+		p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", i))
+		if _, err := os.Stat(p); err != nil {
+			return fmt.Errorf("no such response dir %v", p)
 		}
-		files = totalFiles
+		if err := filepath.Walk(p, walker); err != nil {
+			return err
+		}
 	}
 
 	// now output files
 	for _, file := range files {
 		data, err := ioutil.ReadFile(file)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
+
 		if !raw {
 			path, err := filepath.Rel(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), file)
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
 			resp.Response += fmt.Sprintf("%v:\n", path)
 		}
 		resp.Response += fmt.Sprintf("%v\n", string(data))
 	}
 
-	return resp
+	return nil
 }
 
 // filter
-func cliCCFilter(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	if len(c.ListArgs["filter"]) == 0 {
-		// Summary of current filter
-		if ccFilter != nil {
-			resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC"}
-			resp.Tabular = append(resp.Tabular, []string{
-				ccFilter.UUID,
-				ccFilter.Hostname,
-				ccFilter.Arch,
-				ccFilter.OS,
-				fmt.Sprintf("%v", ccFilter.IP),
-				fmt.Sprintf("%v", ccFilter.MAC),
-			})
-		}
-	} else {
+func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
+	if len(c.ListArgs["filter"]) > 0 {
 		filter := &ron.Client{}
 
 		// Process the id=value pairs
 		for _, v := range c.ListArgs["filter"] {
 			parts := strings.SplitN(v, "=", 2)
 			if len(parts) != 2 {
-				resp.Error = fmt.Sprintf("malformed id=value pair: %v", v)
-				return resp
+				return fmt.Errorf("malformed id=value pair: %v", v)
 			}
 
 			switch strings.ToLower(parts[0]) {
@@ -328,50 +284,90 @@ func cliCCFilter(c *minicli.Command) *minicli.Response {
 				filter.IP = append(filter.IP, parts[1])
 			case "mac":
 				filter.MAC = append(filter.MAC, parts[1])
+			case "tag":
+				// Explicit filter on tag
+				parts = parts[1:]
+				fallthrough
 			default:
-				resp.Error = fmt.Sprintf("no such filter field %v", parts[0])
-				return resp
+				// Implicit filter on a tag
+				if filter.Tags == nil {
+					filter.Tags = make(map[string]string)
+				}
+
+				// Split on `=` or `:` -- who cares if they did `tag=foo=bar`,
+				// `tag=foo:bar` or `foo=bar`. `=` takes precedence.
+				if strings.Contains(parts[0], "=") {
+					parts = strings.SplitN(parts[0], "=", 2)
+				} else if strings.Contains(parts[0], ":") {
+					parts = strings.SplitN(parts[0], ":", 2)
+				}
+
+				if len(parts) == 1 {
+					filter.Tags[parts[0]] = ""
+				} else if len(parts) == 2 {
+					filter.Tags[parts[0]] = parts[1]
+				}
 			}
 		}
 
 		ccFilter = filter
+		return nil
 	}
 
-	return resp
+	// Summary of current filter
+	if ccFilter != nil {
+		resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC", "Tags"}
+		row := []string{
+			ccFilter.UUID,
+			ccFilter.Hostname,
+			ccFilter.Arch,
+			ccFilter.OS,
+			fmt.Sprintf("%v", ccFilter.IP),
+			fmt.Sprintf("%v", ccFilter.MAC),
+		}
+
+		// encode the tags using JSON
+		tags, err := json.Marshal(ccFilter.Tags)
+		if err != nil {
+			log.Warn("Unable to json marshal tags: %v", err)
+		} else if ccFilter.Tags == nil {
+			tags = []byte("{}")
+		}
+		row = append(row, string(tags))
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
 }
 
 // send
-func cliCCFileSend(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCFileSend(c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to send, expand globs
 	for _, fglob := range c.ListArgs["file"] {
 		files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
 		if err != nil {
-			resp.Error = fmt.Sprintf("non-existent files %v", fglob)
-			return resp
+			return fmt.Errorf("non-existent files %v", fglob)
 		}
 
 		if len(files) == 0 {
-			resp.Error = fmt.Sprintf("no such file %v", fglob)
-			return resp
+			return fmt.Errorf("no such file %v", fglob)
 		}
 
 		for _, f := range files {
 			file, err := filepath.Rel(*f_iomBase, f)
 			if err != nil {
-				resp.Error = fmt.Sprintf("parsing filesend: %v", err)
-				return resp
+				return fmt.Errorf("parsing filesend: %v", err)
 			}
 			fi, err := os.Stat(f)
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
+
 			perm := fi.Mode() & os.ModePerm
 			cmd.FilesSend = append(cmd.FilesSend, &ron.File{
 				Name: file,
@@ -385,15 +381,13 @@ func cliCCFileSend(c *minicli.Command) *minicli.Response {
 
 	ccMapPrefix(id)
 
-	return resp
+	return nil
 }
 
 // recv
-func cliCCFileRecv(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCFileRecv(c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
-		Filter: ccFilter,
+		Filter: ccGetFilter(),
 	}
 
 	// Add new files to receive
@@ -408,17 +402,15 @@ func cliCCFileRecv(c *minicli.Command) *minicli.Response {
 
 	ccMapPrefix(id)
 
-	return resp
+	return nil
 }
 
 // background (just exec with background==true)
-func cliCCBackground(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCBackground(c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
 		Background: true,
 		Command:    c.ListArgs["command"],
-		Filter:     ccFilter,
+		Filter:     ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -426,87 +418,80 @@ func cliCCBackground(c *minicli.Command) *minicli.Response {
 
 	ccMapPrefix(id)
 
-	return resp
+	return nil
 }
 
 // process
-func cliCCProcess(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["kill"] {
 		pid, err := strconv.Atoi(c.StringArgs["pid"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		cmd := &ron.Command{
 			PID:    pid,
-			Filter: ccFilter,
+			Filter: ccGetFilter(),
 		}
 
 		id := ccNode.NewCommand(cmd)
 		log.Debug("generated command %v :%v", id, cmd)
 
 		ccMapPrefix(id)
+
+		return nil
+	}
+
+	// list processes
+	v := c.StringArgs["vm"]
+
+	var activeVms []string
+
+	if v == Wildcard {
+		clients := ccNode.GetActiveClients()
+		for _, client := range clients {
+			activeVms = append(activeVms, client.UUID)
+		}
 	} else {
-		// list processes
+		// get the vm uuid
+		vm := vms.FindVM(v)
+		if vm == nil {
+			return vmNotFound(v)
+		}
+		log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+		activeVms = []string{vm.GetUUID()}
+	}
 
-		v := c.StringArgs["vm"]
-
-		var activeVms []string
-
-		if v == Wildcard {
-			clients := ccNode.GetActiveClients()
-			for _, client := range clients {
-				activeVms = append(activeVms, client.UUID)
-			}
-		} else {
-			// get the vm uuid
-			vm := vms.findVm(v)
-			if vm == nil {
-				resp.Error = vmNotFound(v).Error()
-				return resp
-			}
-			log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
-			activeVms = []string{vm.GetUUID()}
+	resp.Header = []string{"name", "uuid", "pid", "command"}
+	for _, uuid := range activeVms {
+		vm := vms.FindVM(uuid)
+		if vm == nil {
+			return vmNotFound(v)
 		}
 
-		resp.Header = []string{"name", "uuid", "pid", "command"}
-		for _, uuid := range activeVms {
-			vm := vms.findVm(uuid)
-			if vm == nil {
-				resp.Error = vmNotFound(v).Error()
-				return resp
-			}
+		processes, err := ccNode.GetProcesses(uuid)
+		if err != nil {
+			return err
+		}
 
-			processes, err := ccNode.GetProcesses(uuid)
-			if err != nil {
-				resp.Error = err.Error()
-				return resp
-			}
-
-			for _, p := range processes {
-				resp.Tabular = append(resp.Tabular, []string{
-					vm.GetName(),
-					vm.GetUUID(),
-					fmt.Sprintf("%v", p.PID),
-					strings.Join(p.Command, " "),
-				})
-			}
+		for _, p := range processes {
+			resp.Tabular = append(resp.Tabular, []string{
+				vm.GetName(),
+				vm.GetUUID(),
+				fmt.Sprintf("%v", p.PID),
+				strings.Join(p.Command, " "),
+			})
 		}
 	}
 
-	return resp
+	return nil
 }
 
 // exec
-func cliCCExec(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
 		Command: c.ListArgs["command"],
-		Filter:  ccFilter,
+		Filter:  ccGetFilter(),
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -514,13 +499,11 @@ func cliCCExec(c *minicli.Command) *minicli.Response {
 
 	ccMapPrefix(id)
 
-	return resp
+	return nil
 }
 
 // clients
-func cliCCClients(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"UUID", "hostname", "arch", "OS",
 		"IP", "MAC",
@@ -549,13 +532,11 @@ func cliCCClients(c *minicli.Command) *minicli.Response {
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
-	return resp
+	return nil
 }
 
 // command
-func cliCCCommand(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"ID", "prefix", "command", "responses", "background",
 		"send files", "receive files", "filter",
@@ -564,7 +545,12 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 
 	var commandIDs []int
 	commands := ccNode.GetCommands()
-	for k, _ := range commands {
+	for k, v := range commands {
+		// only show commands for the active namespace
+		if !ccMatchNamespace(v) {
+			continue
+		}
+
 		commandIDs = append(commandIDs, k)
 	}
 	sort.Ints(commandIDs)
@@ -585,59 +571,65 @@ func cliCCCommand(c *minicli.Command) *minicli.Response {
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
-	return resp
+	return nil
 }
 
-func cliCCDelete(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliCCDelete(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["command"] {
 		id := c.StringArgs["id"]
 
 		if id == Wildcard {
 			// delete all commands, same as 'clear cc command'
-			err := ccClear("commands")
-			if err != nil {
-				resp.Error = fmt.Sprintf("delete command %v: %v", Wildcard, err)
-			}
-			return resp
+			return ccClear("commands")
 		}
 
 		// attempt to delete by prefix
 		ids := ccPrefixIDs(id)
 		if len(ids) != 0 {
 			for _, v := range ids {
+				c := ccNode.GetCommand(v)
+				if c == nil {
+					return fmt.Errorf("cc delete unknown command %v", v)
+				}
+
+				if !ccMatchNamespace(c) {
+					// skip without warning
+					continue
+				}
+
 				err := ccNode.DeleteCommand(v)
 				if err != nil {
-					resp.Error = fmt.Sprintf("cc delete command %v : %v", v, err)
-					return resp
+					return fmt.Errorf("cc delete command %v : %v", v, err)
 				}
 				ccUnmapPrefix(v)
 			}
-			return resp
+
+			return nil
 		}
 
 		val, err := strconv.Atoi(id)
 		if err != nil {
-			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
-			return resp
+			return fmt.Errorf("no such id or prefix %v", id)
 		}
 
-		err = ccNode.DeleteCommand(val)
-		if err != nil {
-			resp.Error = fmt.Sprintf("cc delete command %v : %v", val, err)
-			return resp
+		c := ccNode.GetCommand(val)
+		if c == nil {
+			return fmt.Errorf("cc delete unknown command %v", val)
+		}
+
+		if !ccMatchNamespace(c) {
+			return fmt.Errorf("cc command not part of active namespace")
+		}
+
+		if err := ccNode.DeleteCommand(val); err != nil {
+			return fmt.Errorf("cc delete command %v: %v", val, err)
 		}
 		ccUnmapPrefix(val)
 	} else if c.BoolArgs["response"] {
 		id := c.StringArgs["id"]
 
 		if id == Wildcard {
-			err := ccClear("responses")
-			if err != nil {
-				resp.Error = fmt.Sprintf("delete response %v: %v", Wildcard, err)
-			}
-			return resp
+			return ccClear("responses")
 		}
 
 		// attemp to delete by prefix
@@ -645,41 +637,32 @@ func cliCCDelete(c *minicli.Command) *minicli.Response {
 		if len(ids) != 0 {
 			for _, v := range ids {
 				path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", v))
-				err := os.RemoveAll(path)
-				if err != nil {
-					resp.Error = fmt.Sprintf("cc delete response %v: %v", v, err)
-					return resp
+				if err := os.RemoveAll(path); err != nil {
+					return fmt.Errorf("cc delete response %v: %v", v, err)
 				}
 			}
-			return resp
+
+			return nil
 		}
 
-		_, err := strconv.Atoi(id)
-		if err != nil {
-			resp.Error = fmt.Sprintf("no such id or prefix %v", id)
-			return resp
+		if _, err := strconv.Atoi(id); err != nil {
+			return fmt.Errorf("no such id or prefix %v", id)
 		}
 
 		path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, fmt.Sprintf("%v", id))
 
-		err = os.RemoveAll(path)
-		if err != nil {
-			resp.Error = fmt.Sprintf("cc delete response %v: %v", id, err)
-			return resp
+		if err := os.RemoveAll(path); err != nil {
+			return fmt.Errorf("cc delete response %v: %v", id, err)
 		}
 	}
 
-	return resp
+	return nil
 }
 
-func cliCCClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliCCClear(c *minicli.Command, resp *minicli.Response) error {
 	// Ensure that cc is running before proceeding
 	if ccNode == nil {
-		resp.Error = "cc service not running"
-		return resp
+		return errors.New("cc service not running")
 	}
 
 	for k := range ccCliSubHandlers {
@@ -687,16 +670,11 @@ func cliCCClear(c *minicli.Command) *minicli.Response {
 		// command line or if we're clearing everything (nothing was
 		// specified).
 		if c.BoolArgs[k] || len(c.BoolArgs) == 0 {
-			err = ccClear(k)
-			if err != nil {
-				break
+			if err := ccClear(k); err != nil {
+				return err
 			}
 		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return nil
 }

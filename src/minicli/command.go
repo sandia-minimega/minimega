@@ -27,6 +27,10 @@ type Command struct {
 	// contains just a comment). This was added to ensure that lines containing
 	// only a comment are recorded in the history.
 	noOp bool
+
+	// Source allows developers to keep track of where the command originated
+	// from. Setting and using this is entirely up to developers using minicli.
+	Source string
 }
 
 func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
@@ -118,4 +122,22 @@ outer:
 	}
 
 	return &cmd, len(pattern) - 1, exact
+}
+
+// SetSource sets the Source field for a command and all nested subcommands.
+func (c *Command) SetSource(source string) {
+	c.Source = source
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetSource(source)
+	}
+}
+
+// SetRecord sets the Record field for a command and all nested subcommands.
+func (c *Command) SetRecord(record bool) {
+	c.Record = record
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetRecord(record)
+	}
 }

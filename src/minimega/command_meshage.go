@@ -69,11 +69,13 @@ Output a graphviz formatted dot file representing the connected topology.`,
 		HelpLong: `
 View or set the timeout on sending mesh commands.
 
-When a mesh command is issued, if a response isn't sent within mesh_timeout
+When a mesh command is issued, if a response isn't sent within mesh timeout
 seconds, the command will be dropped and any future response will be discarded.
 Note that this does not cancel the outstanding command - the node receiving the
 command may still complete - but rather this node will stop waiting on a
-response.`,
+response.
+
+By default, the mesh timeout is 0 which disables timeouts.`,
 		Patterns: []string{
 			"mesh timeout [timeout]",
 		},
@@ -89,7 +91,7 @@ vm info from nodes kn1 and kn2:
 
 You can use 'all' to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh send <vms or all> (command)",
+			"mesh send <clients or all> (command)",
 		},
 		Call: cliMeshageSend,
 	},
@@ -107,8 +109,16 @@ func meshageHandler() {
 				return
 			}
 
+			// Copy the Record flag at each level of nested command
+			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
+				// could all be the post statement...
+				c.Record = c2.Record
+				c.Source = c2.Source
+				c, c2 = c.Subcommand, c2.Subcommand
+			}
+
 			resps := []minicli.Responses{}
-			for resp := range runCommand(cmd) {
+			for resp := range RunCommands(cmd) {
 				resps = append(resps, resp)
 			}
 
@@ -131,63 +141,41 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func cliMeshageDegree(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageDegree(c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["degree"] != "" {
 		degree, err := strconv.ParseUint(c.StringArgs["degree"], 0, 10)
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			meshageNode.SetDegree(uint(degree))
+			return err
 		}
-	} else {
-		resp.Response = fmt.Sprintf("%d", meshageNode.GetDegree())
+
+		meshageNode.SetDegree(uint(degree))
+		return nil
 	}
 
-	return resp
+	resp.Response = fmt.Sprintf("%d", meshageNode.GetDegree())
+	return nil
 }
 
-func cliMeshageDial(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := meshageNode.Dial(c.StringArgs["hostname"])
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+func cliMeshageDial(c *minicli.Command, resp *minicli.Response) error {
+	return meshageNode.Dial(c.StringArgs["hostname"])
 }
 
-func cliMeshageDot(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliMeshageHangup(c *minicli.Command, resp *minicli.Response) error {
+	return meshageNode.Hangup(c.StringArgs["hostname"])
+}
 
+func cliMeshageDot(c *minicli.Command, resp *minicli.Response) error {
 	f, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	defer f.Close()
 
-	f.WriteString(meshageNode.Dot())
-
-	return resp
+	_, err = f.WriteString(meshageNode.Dot())
+	return err
 }
 
-func cliMeshageHangup(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := meshageNode.Hangup(c.StringArgs["hostname"])
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
-}
-
-func cliMeshageList(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageList(c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 
 	var keys []string
@@ -205,47 +193,50 @@ func cliMeshageList(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	return resp
+	return nil
 }
 
-func cliMeshageStatus(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageStatus(c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 	degree := meshageNode.GetDegree()
 	nodes := len(mesh)
 
-	resp.Header = []string{"mesh size", "degree", "peers", "namespace", "port"}
+	resp.Header = []string{"mesh size", "degree", "peers", "context", "port"}
 	resp.Tabular = [][]string{
 		[]string{
 			strconv.Itoa(nodes),
 			strconv.FormatUint(uint64(degree), 10),
 			strconv.Itoa(len(mesh[hostname])),
-			*f_namespace,
+			*f_context,
 			strconv.Itoa(*f_port),
 		},
 	}
 
-	return resp
+	return nil
 }
 
-func cliMeshageTimeout(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliMeshageTimeout(c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["timeout"] != "" {
 		timeout, err := strconv.Atoi(c.StringArgs["timeout"])
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			meshageTimeout = time.Duration(timeout) * time.Second
+			return err
 		}
-	} else {
-		resp.Response = fmt.Sprintf("%v", meshageTimeout)
+
+		meshageTimeout = time.Duration(timeout) * time.Second
+		return nil
 	}
 
-	return resp
+	// get current value
+	resp.Response = fmt.Sprintf("%v", meshageTimeout)
+	return nil
 }
 
-func cliMeshageSend(c *minicli.Command, respChan chan minicli.Responses) {
-	meshageSend(c.Subcommand, c.StringArgs["vms"], respChan)
+func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
+	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
+
+	forward(in, respChan)
 }

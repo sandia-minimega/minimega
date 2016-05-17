@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"qmp"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -67,13 +69,18 @@ type qemuOverride struct {
 }
 
 var (
-	QemuOverrides      map[int]*qemuOverride
-	qemuOverrideIdChan chan int
+	QemuOverrides  map[int]*qemuOverride
+	qemuOverrideID *Counter
+
+	KVMNetworkDrivers struct {
+		drivers []string
+		sync.Once
+	}
 )
 
 func init() {
 	QemuOverrides = make(map[int]*qemuOverride)
-	qemuOverrideIdChan = makeIDChan()
+	qemuOverrideID = NewCounter()
 
 	// Reset everything to default
 	for _, fns := range kvmConfigFns {
@@ -82,11 +89,9 @@ func init() {
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
-func (old *KVMConfig) Copy() *KVMConfig {
-	res := new(KVMConfig)
-
+func (old KVMConfig) Copy() KVMConfig {
 	// Copy all fields
-	*res = *old
+	res := old
 
 	// Make deep copy of slices
 	res.DiskPaths = make([]string, len(old.DiskPaths))
@@ -100,10 +105,10 @@ func (old *KVMConfig) Copy() *KVMConfig {
 func NewKVM(name string) *KvmVM {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewVM(name)
+	vm.BaseVM = *NewBaseVM(name)
 	vm.Type = KVM
 
-	vm.KVMConfig = *vmConfig.KVMConfig.Copy() // deep-copy configured fields
+	vm.KVMConfig = vmConfig.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]string)
 
@@ -112,7 +117,6 @@ func NewKVM(name string) *KvmVM {
 
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
-	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	return vm.launch()
@@ -337,42 +341,6 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 
 }
 
-func (vm *KvmVM) checkDisks() error {
-	// Disk path to whether it is a snapshot or not
-	disks := map[string]bool{}
-
-	// See note about vmLock in vm.checkInterfaces.
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	// Record which disks are in use and whether they are being used as a
-	// snapshot or not by other VMs. If the same disk happens to be in use by
-	// different VMs and they have mismatched snapshot flags, assume that the
-	// disk is not being used in snapshot mode.
-	for _, vmOther := range vms {
-		// Skip ourself
-		if vm == vmOther {
-			continue
-		}
-
-		if vmOther, ok := vmOther.(*KvmVM); ok {
-			for _, disk := range vmOther.DiskPaths {
-				disks[disk] = vmOther.Snapshot || disks[disk]
-			}
-		}
-	}
-
-	// Check our disks to see if we're trying to use a disk that is in use by
-	// another VM (unless both are being used in snapshot mode).
-	for _, disk := range vm.DiskPaths {
-		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
-			return fmt.Errorf("disk path %v is already in use by another vm", disk)
-		}
-	}
-
-	return nil
-}
-
 func (vm *KvmVM) connectQMP() (err error) {
 	delay := QMP_CONNECT_DELAY * time.Millisecond
 
@@ -398,21 +366,11 @@ func (vm *KvmVM) launch() error {
 
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
-	if vm.State != VM_QUIT {
+	if vm.State == VM_BUILDING {
+		ccNode.RegisterVM(vm.UUID, vm)
+
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
-		}
-
-		// Check the disks and network interfaces are sane
-		err := vm.checkInterfaces()
-		if err == nil {
-			err = vm.checkDisks()
-		}
-
-		if err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
 		}
 	}
 
@@ -511,7 +469,7 @@ func (vm *KvmVM) launch() error {
 		return err
 	}
 
-	go vm.asyncLogger()
+	go qmpLogger(vm.ID, vm.q)
 
 	// connect cc
 	ccPath := filepath.Join(vm.instancePath, "cc")
@@ -536,9 +494,6 @@ func (vm *KvmVM) launch() error {
 			killAck <- vm.ID
 		}
 	}()
-
-	// No errors.. ready to go!
-	vm.setState(VM_BUILDING)
 
 	return nil
 }
@@ -729,17 +684,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	return args
 }
 
-// log any asynchronous messages, such as vnc connects, to log.Info
-func (vm *KvmVM) asyncLogger() {
-	for {
-		v := vm.q.Message()
-		if v == nil {
-			return
-		}
-		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
-	}
-}
-
 func (vm *KvmVM) hotplugRemove(id int) error {
 	hid := fmt.Sprintf("hotplug%v", id)
 	log.Debugln("hotplug id:", hid)
@@ -761,6 +705,13 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
+}
+
+// log any asynchronous messages, such as vnc connects, to log.Info
+func qmpLogger(id int, q qmp.Conn) {
+	for v := q.Message(); v != nil; v = q.Message() {
+		log.Info("VM %v received asynchronous message: %v", id, v)
+	}
 }
 
 func qemuOverrideString() string {
@@ -801,7 +752,7 @@ func delVMQemuOverride(arg string) error {
 }
 
 func addVMQemuOverride(match, repl string) error {
-	id := <-qemuOverrideIdChan
+	id := qemuOverrideID.Next()
 
 	QemuOverrides[id] = &qemuOverride{
 		match: match,
@@ -817,4 +768,49 @@ func ParseQemuOverrides(input []string) []string {
 		ret = strings.Replace(ret, v.match, v.repl, -1)
 	}
 	return fieldsQuoteEscape("\"", ret)
+}
+
+func isNetworkDriver(driver string) bool {
+	KVMNetworkDrivers.Do(func() {
+		drivers := []string{}
+
+		cmd := exec.Command(process("qemu"), "-device", "help")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Error("unable to determine kvm network drivers -- %v", err)
+			return
+		}
+
+		var foundHeader bool
+
+		scanner := bufio.NewScanner(bytes.NewBuffer(out))
+		for scanner.Scan() {
+			line := scanner.Text()
+			if !foundHeader && strings.Contains(line, "Network devices:") {
+				foundHeader = true
+			} else if foundHeader && line == "" {
+				break
+			} else if foundHeader {
+				parts := strings.Split(line, " ")
+				driver := strings.Trim(parts[1], `",`)
+				drivers = append(drivers, driver)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Error("unable to determine kvm network drivers -- %v", err)
+			return
+		}
+
+		log.Debug("detected network drivers: %v", drivers)
+		KVMNetworkDrivers.drivers = drivers
+	})
+
+	for _, d := range KVMNetworkDrivers.drivers {
+		if d == driver {
+			return true
+		}
+	}
+
+	return false
 }

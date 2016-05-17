@@ -33,7 +33,7 @@ type dnsmasqServer struct {
 
 var (
 	dnsmasqServers map[int]*dnsmasqServer
-	dnsmasqIdChan  = makeIDChan()
+	dnsmasqID      = NewCounter()
 )
 
 var dnsmasqCLIHandlers = []minicli.Handler{
@@ -232,151 +232,132 @@ func (d *dnsmasqServer) writeDHCPopts() {
 	ioutil.WriteFile(filepath.Join(d.DHCPoptsdir, "dhcp-options"), []byte(contents), 0755)
 }
 
-func cliDnsmasqConfigure(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	// Figure out the appropriate dnsmasq ID
+func cliDnsmasqConfigure(c *minicli.Command, resp *minicli.Response) error {
+	argID := c.StringArgs["ID"]
+	id, err := strconv.Atoi(argID)
+	if argID != Wildcard && err != nil {
+		return errors.New("invalid dnsmasq ID")
+	} else if err == nil {
+		// Make sure we have a dnsmasq instance with that ID
+		if _, ok := dnsmasqServers[id]; !ok {
+			return errors.New("invalid dnsmasq ID")
+		}
+	}
 
 	if c.BoolArgs["ip"] {
 		mac := c.StringArgs["mac"]
 		ip := c.StringArgs["ip"]
+
 		// They either want info, or they want to configure an IP
 		if mac != "" && ip != "" {
 			// Configure a mac->ip mapping
-			if c.StringArgs["ID"] == Wildcard {
+			if argID == Wildcard {
 				for _, v := range dnsmasqServers {
 					v.DHCPhosts[mac] = ip
 					v.writeDHCPhosts()
 				}
 			} else {
-				id, err := strconv.Atoi(c.StringArgs["ID"])
-				if err != nil {
-					resp.Error = "Invalid dnsmasq ID"
-					return resp
-				}
-				if _, ok := dnsmasqServers[id]; ok {
-					dnsmasqServers[id].DHCPhosts[mac] = ip
-					dnsmasqServers[id].writeDHCPhosts()
-				} else {
-					resp.Error = "Invalid dnsmasq ID"
-				}
+				dnsmasqServers[id].DHCPhosts[mac] = ip
+				dnsmasqServers[id].writeDHCPhosts()
 			}
 		} else {
 			dnsmasqHostInfo(c, resp)
 		}
+
+		return nil
 	} else if c.BoolArgs["dns"] {
 		hostname := c.StringArgs["hostname"]
 		ip := c.StringArgs["ip"]
+
 		if hostname != "" && ip != "" {
 			// Configure an ip->hostname mapping
-			if c.StringArgs["ID"] == Wildcard {
+			if argID == Wildcard {
 				for _, v := range dnsmasqServers {
 					v.Hostnames[ip] = hostname
 					v.writeHostFile()
 				}
 			} else {
-				id, err := strconv.Atoi(c.StringArgs["ID"])
-				if err != nil {
-					resp.Error = "Invalid dnsmasq ID"
-					return resp
-				}
-				if _, ok := dnsmasqServers[id]; ok {
-					dnsmasqServers[id].Hostnames[ip] = hostname
-					dnsmasqServers[id].writeHostFile()
-				} else {
-					resp.Error = "Invalid dnsmasq ID"
-				}
+				dnsmasqServers[id].Hostnames[ip] = hostname
+				dnsmasqServers[id].writeHostFile()
 			}
 		} else {
 			dnsmasqDNSInfo(c, resp)
 		}
+
+		return nil
 	} else if c.BoolArgs["options"] {
 		optionstring := c.StringArgs["optionstring"]
+
 		if optionstring != "" {
-			if c.StringArgs["ID"] == Wildcard {
+			if argID == Wildcard {
 				for _, v := range dnsmasqServers {
 					v.DHCPopts = append(v.DHCPopts, optionstring)
 					v.writeDHCPopts()
 				}
 			} else {
-				id, err := strconv.Atoi(c.StringArgs["ID"])
-				if err != nil {
-					resp.Error = "Invalid dnsmasq ID"
-					return resp
-				}
 				dnsmasqServers[id].DHCPopts = append(dnsmasqServers[id].DHCPopts, optionstring)
 				dnsmasqServers[id].writeDHCPopts()
 			}
 		} else {
 			dnsmasqDHCPOptionInfo(c, resp)
 		}
-	} else {
-		// wtf
-		resp.Error = "Bad command"
+
+		return nil
 	}
-	return resp
+
+	// boo, should be unreachable
+	return errors.New("unreachable")
 }
 
-func cliDnsmasq(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliDnsmasq(c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["id"] == Wildcard {
 		// Must be "kill all"
-		err = dnsmasqKillAll()
+		return dnsmasqKillAll()
 	} else if c.StringArgs["id"] != "" {
 		// Must be "kill <id>"
-		var id int
-		id, err = strconv.Atoi(c.StringArgs["id"])
-		if err == nil {
-			err = dnsmasqKill(id)
+		id, err := strconv.Atoi(c.StringArgs["id"])
+		if err != nil {
+			return err
 		}
+
+		return dnsmasqKill(id)
 	} else if c.StringArgs["listen"] != "" || c.StringArgs["config"] != "" {
 		// Must be "start"
 		// We don't need to differentiate between the two start commands
 		// because dnsmasqStart expects the zero string value when values
 		// are not specified.
-		err = dnsmasqStart(
+		return dnsmasqStart(
 			c.StringArgs["listen"],
 			c.StringArgs["low"],
 			c.StringArgs["high"],
 			c.StringArgs["config"])
-	} else {
-		// Must be "list"
-		resp.Header = []string{"ID", "Listening Address", "Min", "Max", "Path", "PID"}
-		resp.Tabular = [][]string{}
-		for id, c := range dnsmasqServers {
-			pid := dnsmasqPID(id)
-			resp.Tabular = append(resp.Tabular, []string{
-				strconv.Itoa(id),
-				c.Addr,
-				c.MinRange,
-				c.MaxRange,
-				c.Path,
-				strconv.Itoa(pid)})
-		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
+	// Must be "list"
+	resp.Header = []string{"ID", "Listening Address", "Min", "Max", "Path", "PID"}
+	resp.Tabular = [][]string{}
+	for id, c := range dnsmasqServers {
+		pid := dnsmasqPID(id)
+		resp.Tabular = append(resp.Tabular, []string{
+			strconv.Itoa(id),
+			c.Addr,
+			c.MinRange,
+			c.MaxRange,
+			c.Path,
+			strconv.Itoa(pid)})
 	}
-	return resp
+
+	return nil
 }
 
 func dnsmasqKillAll() error {
-	errs := []string{}
+	errs := []error{}
 
 	for c, _ := range dnsmasqServers {
-		err := dnsmasqKill(c)
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("%v", err))
-		}
+		errs = append(errs, dnsmasqKill(c))
 	}
 
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "\n"))
-	}
-	return nil
+	return makeErrSlice(errs)
 }
 
 func dnsmasqKill(id int) error {
@@ -400,8 +381,6 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 	if err != nil {
 		return err
 	}
-
-	id := <-dnsmasqIdChan
 
 	d := &dnsmasqServer{
 		Addr:     ip,
@@ -469,6 +448,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
+	id := dnsmasqID.Next()
 	dnsmasqServers[id] = d
 
 	// wait on the server to finish or be killed

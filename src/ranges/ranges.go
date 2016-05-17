@@ -13,7 +13,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,26 +36,27 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	var result []string
 	dedup := make(map[int]int)
 
-	// Make sure it's something like kn[1-50]
-	match, err := regexp.MatchString(r.Prefix+"\\[.*\\]", s)
-	if err != nil {
-		return nil, err
+	if !strings.HasPrefix(s, r.Prefix) {
+		return nil, errors.New("invalid range specification")
 	}
-	if !match {
-		if m2, err := regexp.MatchString(r.Prefix, s); m2 && err == nil {
-			// assume they just handed us "kn1" or similar
-			result = append(result, s)
-			return result, nil
-		} else {
-			return nil, errors.New("Invalid range specification")
+
+	s = strings.TrimPrefix(s, r.Prefix)
+
+	if strings.HasPrefix(s, "[") && !strings.HasSuffix(s, "]") {
+		return nil, errors.New("invalid range specification")
+	}
+
+	if !strings.HasPrefix(s, "[") {
+		// assume they just handed us "kn1" or similar
+		if _, err := strconv.Atoi(s); err != nil {
+			return nil, errors.New("invalid range specification")
 		}
+
+		return []string{r.Prefix + s}, nil
 	}
 
-	// Get rid of the kn[] parts
-	s = strings.Replace(s, r.Prefix+"[", "", 1)
-	s = strings.Replace(s, "]", "", 1)
-
-	parts := strings.Split(s, ",")
+	// Must be a range like "kn[1-50]" (without prefix at this point)
+	parts := strings.Split(s[1:len(s)-1], ",")
 
 	pad := -1
 	for _, part := range parts {
@@ -163,25 +163,19 @@ func SplitList(in string) ([]string, error) {
 }
 
 // Turn an array of node names into a single string like kn[1-5,20]
-func (r *Range) UnsplitRange(nodes []string) (string, error) {
+func (r *Range) UnsplitRange(names []string) (string, error) {
 	var nums []int
-	// Remove the prefix from every name and put the
-	// numbers into an array of ints
-	for _, node := range nodes {
-		// make sure it's a valid node
-		match, err := regexp.MatchString(r.Prefix+"[0-9]+", node)
-		if err != nil {
-			return "", err
+
+	// Remove the prefix from every name and put into an array of ints
+	for _, s := range names {
+		if !strings.HasPrefix(s, r.Prefix) {
+			return "", fmt.Errorf("invalid name: %v (expected prefix %v)", s, r.Prefix)
 		}
-		if !match {
-			return "", errors.New("Invalid node: " + node)
-		}
-		// strip out "kn"
-		tmp := strings.Replace(node, r.Prefix, "", -1)
-		if i, err := strconv.Atoi(tmp); err == nil {
+
+		if i, err := strconv.Atoi(strings.TrimPrefix(s, r.Prefix)); err == nil {
 			nums = append(nums, i)
 		} else {
-			return "", errors.New("couldn't parse node " + node)
+			return "", fmt.Errorf("invalid name: %v (expected numbers after prefix)", s)
 		}
 	}
 

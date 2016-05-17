@@ -40,6 +40,7 @@ type Server struct {
 	commandCounterLock sync.Mutex
 	clients            map[string]*Client // map of active clients, each of which have a running handler
 	clientLock         sync.Mutex
+	vms                map[string]VM // map of uuid -> VM
 	in                 chan *Message // incoming message queue, consumed by the mux
 	path               string        // path for serving files
 	lastBroadcast      time.Time     // watchdog time of last command list broadcast
@@ -65,6 +66,9 @@ type Client struct {
 	IP       []string
 	MAC      []string
 
+	Namespace string
+	Tags      map[string]string
+
 	Processes   map[int]*Process // list of processes backgrounded (cc background in minimega)
 	processLock sync.Mutex
 
@@ -85,6 +89,12 @@ type Process struct {
 	process *os.Process
 }
 
+type VM interface {
+	GetNamespace() string
+	GetTags() map[string]string
+	SetCCActive(bool)
+}
+
 type Message struct {
 	Type     int
 	UUID     string
@@ -103,6 +113,7 @@ func NewServer(port int, path string) (*Server, error) {
 		udsConns:      make(map[string]net.Listener),
 		commands:      make(map[int]*Command),
 		clients:       make(map[string]*Client),
+		vms:           make(map[string]VM),
 		path:          path,
 		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),

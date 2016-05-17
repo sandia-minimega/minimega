@@ -40,14 +40,11 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
-func cliDot(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDot(c *minicli.Command, resp *minicli.Response) error {
 	// Create the file before running any commands incase there is an error
 	fout, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	defer fout.Close()
 
@@ -59,25 +56,25 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	vlans := make(map[int]bool)
 
-	for host, vms := range globalVMs(true) {
-		for _, vm := range vms {
-			ip, err := vm.Info("ip")
-			ip6, err2 := vm.Info("ip6")
-			if err != nil || err2 != nil {
-				// Should never happen
-				log.Error("bad VM info for %v:%v", host, vm.GetID(), err)
-				continue
-			}
+	// LOCK: This is a CLI handler so we already hold cmdLock (can call
+	// globalVMs instaed of GlobalVMs).
+	for _, vm := range globalVMs() {
+		ip, err := vm.Info("ip")
+		ip6, err2 := vm.Info("ip6")
+		if err != nil || err2 != nil {
+			// Should never happen
+			log.Error("bad VM info for %v:%v", vm.GetHost(), vm.GetID(), err)
+			continue
+		}
 
-			text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, host, vm.GetName(), vm.GetID(), ip, ip6)
-			color := stateToColor[vm.GetState()]
+		text := fmt.Sprintf(`"%v:%v:%v:%v:%v"`, vm.GetHost(), vm.GetName(), vm.GetID(), ip, ip6)
+		color := stateToColor[vm.GetState()]
 
-			fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
+		fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
-			for _, net := range vm.Config().Networks {
-				fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
-				vlans[net.VLAN] = true
-			}
+		for _, net := range vm.Config().Networks {
+			fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
+			vlans[net.VLAN] = true
 		}
 	}
 
@@ -86,9 +83,5 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	}
 
 	fmt.Fprint(writer, "}")
-	if err = writer.Flush(); err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return writer.Flush()
 }

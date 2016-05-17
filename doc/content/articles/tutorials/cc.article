@@ -1,93 +1,145 @@
 Command and Control API Tutorial
 
-David Fritz
-26 Feb 2015
+The minimega authors
+21 Mar 2016
 
 * Introduction
 
-This tutorial illustrates the use of each feature present in the command and control (cc) API, including executing commands, file i/o, and TCP tunnels. This is an interactive tutorial, and can be run against a running minimega instance when minidoc is run with `-exec`true`. 
+This tutorial illustrates the use of each feature present in the command and
+control (cc) API, including executing commands, file i/o, and TCP tunnels. This
+is an interactive tutorial, and can be run against a running minimega instance
+when minidoc is run with `-exec`true`. 
 
 ** Setup
 
-In order to run the given in this tutorial, you will need a running minimega instance, and at least one virtual machine. We use a standard debian linux VM in the examples given here. To use the virtio service described below, your VM and host both need to have virtio support available. 
+In order to run the content in this tutorial you will need a running minimega
+instance and at least one virtual machine. We use a standard debian linux VM in
+the examples given here. To use the virtio service described below, your VM and
+host both need to have virtio support available. 
 
 * About cc
 
-The Command and Control (cc) API in minimega provides a mechanism to programmatically execute programs, send and receive files to VMs launched by minimega. In addition, the cc API allows creating TCP tunnels (as well as reverse tunnels) from the host machine to/from any VM. 
+The Command and Control (cc) API in minimega provides a mechanism to
+programmatically execute programs and send and receive files to VMs launched by
+minimega. In addition, the cc API allows creating TCP tunnels (as well as
+reverse tunnels) from the host machine to/from any VM. 
 
-The cc API supports two modes of communication with VMs. The first is a simple TCP connection from the VM to the host via some routable network. In this mode the VMs must be able to communicate directly with the host they are launched on. This can be accomplished with the `tap` API, or through several other means. 
+The cc API supports two modes of communication with VMs. The first is a simple
+TCP connection from the VM to the host via some routable network. In this mode
+the VMs must be able to communicate directly with the host they are launched
+on. This can be accomplished with the `tap` API, or through several other
+means. 
 
-The second connection mode is over virtio-serial, which provides a simple i/o layer, similar to a UNIX pipe between the host and VM. In order to use the virtio-serial mode, both host and VM must have virtio-serial support. Most modern linux distributions have this enabled by default. Windows VMs must install virtio-serial drivers, available from [[http://www.linux-kvm.org/page/WindowsGuestDrivers/Download_Drivers][here]]. 
+The second connection mode is over either virtio-serial (for kvm-based VMs), or
+over a UNIX domain socket (for container-based VMs), which provides a simple
+i/o layer, similar to a UNIX pipe between the host and VM. In order to use the
+virtio-serial mode, both host and VM must have virtio-serial support. Most
+modern linux distributions have this enabled by default. Windows VMs must
+install virtio-serial drivers, available from
+[[http://www.linux-kvm.org/page/WindowsGuestDrivers/Download_Drivers][here]]. 
+Domain sockets for container-based VMs are created by default when launching
+containers.
 
-Both connection modes provide the same features, although the TCP mode can be significantly faster, depending on the underlying network. 
+Both connection modes provide the same features, although the TCP mode can be
+significantly faster, depending on the underlying network. 
 
-Commands issued with the cc API (including file i/o) are always executed _in_order_ on the client. This means you can chain commands, such as "send a file, execute that file, then receive the output from that file". 
+Commands issued with the cc API (including file I/O) are always executed
+_in_order_ on the client. This means you can chain commands, such as "send a
+file, execute that file, then receive the output from that file". 
 
-Commands can also contain filters, which allow you to select which VMs execute that command. Filters are stacked, meaning you can apply filters such as "execute this command on windows VMs with an IP in the network 10.0.0.0/24."
-
-* Starting the cc Service
-
-Enable the cc TCP service by issuing `cc`start`. You can optionally start the service on another port by providing the port as an optional suffix. 
-
-.mega cc/start.mm
-
-The cc service must be running in order to issue any other cc commands, including the virtio-serial service. 
-
-** virtio Service
-
-To enable the virtio-serial service, first issue `cc`start`, then `cc`serial`. The serial service will watch for new VMs to launch, and connect to the first virtio-serial port (if available) for each VM. When a VM stops or reboots, the serial service will attempt to reconnect automatically. 
-
-.mega cc/serial.mm
+Commands can also contain filters, which allow you to select which VMs execute
+that command. Filters are stacked, meaning you can apply filters such as
+"execute this command on windows VMs with an IP in the network 10.0.0.0/24."
 
 ** Starting miniccc, the cc client
 
-The miniccc client uses several command line switch to control how to connect to minimega, as well as where to store files received for the client. To connect over TCP, provide the `-parent` flag with the host/ip of host running minimega. 
+The miniccc client uses several command line switches to control how to connect
+to minimega, as well as where to store files received for the client. To
+connect over TCP, provide the `-parent` flag with the host/ip of host running
+minimega. 
 
 	miniccc -parent 10.0.0.1
 
-To use virtio-serial, instead use the `-serial` flag, with the path to the virtio-serial file. 
+To use virtio-serial, instead use the `-serial` flag, with the path to the
+virtio-serial file. 
 
-	miniccc -serial /dev/virtio-ports/serial0
+	miniccc -serial /dev/virtio-ports/cc
 
-*NOTE:* In linux, the virtio-serial devices usually enumerate in `/dev/virtio-ports`. In Windows, virtio files are enumerated in `\\.\Global\`. 
+*NOTE:* In linux, the default virtio-serial cc port is `/dev/virtio-ports/cc`.
+In Windows, the path is `\\.\Global\cc`. 
 
-By default, miniccc will create the directory `/tmp/miniccc` to store state and files in. Files sent to the client will be stored in `/tmp/miniccc/files`. You can change this directory with the `-base` flag. 
+By default, miniccc will create the directory `/tmp/miniccc` to store state and
+files in. Files sent to the client will be stored in `/tmp/miniccc/files`. You
+can change this directory with the `-base` flag. 
 
 * Client Information
 
-Clients report their UUID, hostname, OS, architecture, IP and MAC addresses to minimega. This information is updated periodically, so if an IP changes, minimega will see the change. 
+Clients report their UUID, hostname, OS, architecture, IP and MAC addresses to
+minimega. This information is updated periodically, so if an IP changes,
+minimega will see the change. 
 
-To list clients, use the `cc clients` API. If you've been following the steps so far, you should have one connected client.
+To list clients, use the `cc clients` API.
 
 .mega cc/clients.mm
 
-Client information is stored by UUID in minimega. When a client responds to a command, the response is logged by minimega in a subdirectory named after the UUID for that client. We'll discuss responses later.
+Client information is stored by UUID in minimega. When a client responds to a
+command, the response is logged by minimega in a subdirectory named after the
+UUID for that client. We'll discuss responses later.
 
 * Executing Commands
 
-Executing commands is simple - just issue `cc`exec` with the command you want to execute. You may need to wrap your command in quotes or escape special characters. You can inspect current in-flight commands with `cc`commands`, which shows the contents of the command, any applied filters (more on that later), and how many clients have responded. 
+Executing commands is simple - just issue `cc`exec` with the command you want
+to execute. You may need to wrap your command in quotes or escape special
+characters. You can inspect current in-flight commands with `cc`commands`,
+which shows the contents of the command, any applied filters (more on that
+later), and how many clients have responded. 
 
 .mega cc/exec.mm
 
-There are two things to note at this point. First, commands don't go away until you delete them with `cc`delete`command`. This means that if you were to reset a VM or start new VMs, they would all see and execute this command. Second, the response from the client isn't printed to screen. Instead, responses are logged in a special directory structure in minimega's base path. You can browse to the responses yourself, or use the `cc`responses` command to view responses from clients (more on that later). 
+There are two things to note at this point. First, commands don't go away until
+you delete them with `cc`delete`command`. This means that if you were to reset
+a VM or start new VMs, they would all see and execute this command. Second, the
+response from the client isn't printed to screen. Instead, responses are logged
+in a special directory structure in minimega's base path. You can browse to the
+responses yourself, or use the `cc`responses` command to view responses from
+clients (more on that later). 
 
-For now, we'll simply wait for the client to respond by checking `cc`commands`, and then ask minimega to print the response.
+For now, we'll simply wait for the client to respond by checking `cc`commands`,
+and then ask minimega to print the response.
 
 .mega cc/exec2.mm
 
-When the client responds to a `cc`exec` command, standard out and error are stored in the files `stdout` and `stderr` respectively. 
+When the client responds to a `cc`exec` command, standard out and error are
+stored in the files `stdout` and `stderr` respectively. 
 
 ** Background commands
 
-Sometimes you want to execute a command on the client that doesn't return, such as a daemon or other agent. To tell cc not to wait on a response for a given command, use `cc`background` instead of `cc`exec`. When using background mode, miniccc will execute the command and immediately move on to the next command queued to run. 
+Sometimes you want to execute a command on the client that doesn't return, such
+as a daemon or other agent. To tell cc not to wait on a response for a given
+command, use `cc`background` instead of `cc`exec`. When using background mode,
+miniccc will execute the command and immediately move on to the next command
+queued to run. 
+
+** Process control
+
+Processes started in the background can later be listed and killed using the
+`cc`process` API. For example:
+
+.mega cc/process.mm
 
 * File I/O
 
-The cc API supports sending and receiving files to and from the client. Files can be specified by name or glob (wildcard). When sending files, they must be rooted in a specific directory provided by minimega. 
+The cc API supports sending and receiving files to and from the client. Files
+can be specified by name or glob (wildcard). When sending files, they must be
+rooted in a specific directory provided by minimega. 
 
 ** Sending Files
 
-In order to send files to a client, the files must be rooted in the `files` subdirectory in the minimega base directory. By default minimega uses `/tmp/minimega/files`. Let's send a simple bash script to the client by placing a file `foo.bash` in `/tmp/minimega/files` (or whatever base directory your minimega uses). Have `foo.bash` do something simple, like `echo`:
+In order to send files to a client, the files must be rooted in the `files`
+subdirectory in the minimega base directory. By default minimega uses
+`/tmp/minimega/files`. Let's send a simple bash script to the client by placing
+a file `foo.bash` in `/tmp/minimega/files` (or whatever base directory your
+minimega uses). Have `foo.bash` do something simple, like `echo`:
 
 	#!/bin/bash
 	echo "hello cc!"
@@ -96,15 +148,19 @@ Now we'll send it to the client by using the `cc`send` command.
 
 .mega cc/send.mm
 
-Clients will fetch the files from minimega before moving on to any other commands. You can inspect file send commands with `cc`commands`, just like we did with `cc`exec` before. 
+Clients will fetch the files from minimega before moving on to any other
+commands. You can inspect file send commands with `cc`commands`, just like we
+did with `cc`exec` before. 
 
 We can also send globs (wildcard) of files, using the * operator. For example:
 
 	minimega$ cc send somedirectory/*
 
-Files will appear in the `files` subdirectory in the client's base directory. By default, this is `/tmp/miniccc/files`. 
+Files will appear in the `files` subdirectory in the client's base directory.
+By default, this is `/tmp/miniccc/files`. 
 
-At this point we can both send and execute a file on the client. Let's execute the script we sent a moment ago:
+At this point we can both send and execute a file on the client. Let's execute
+the script we sent a moment ago:
 
 .mega cc/send2.mm
 
@@ -114,9 +170,13 @@ After the client responds to the `cc`exec` command, we can check the output.
 
 ** Receiving Files
 
-Receiving files is just like sending files, except that you can specify any path on the client to receive files from. Globs (wildcards) work with receiving files too, so you can receive entire directories of files. 
+Receiving files is just like sending files, except that you can specify any
+path on the client to receive files from. Globs (wildcards) work with receiving
+files too, so you can receive entire directories of files. 
 
-Let's modify our example above and send a bash script that creates a file, execute it, and then get that file back. We'll have our bash script create the file `/foo/bar.out`, and name is `bar.bash`:
+Let's modify our example above and send a bash script that creates a file,
+execute it, and then get that file back. We'll have our bash script create the
+file `/foo/bar.out`, and name is `bar.bash`:
 
 	#!/bin/bash
 	mkdir /foo
@@ -124,23 +184,33 @@ Let's modify our example above and send a bash script that creates a file, execu
 
 .mega cc/recv.mm
 
-Use `cc`responses` to check the file received after it completes. You'll notice in the output that the file `bar.out` was received and stored in the response subdirectory `/foo`. This is because the `/foo` subdirectory was specified with the receive command. 
+Use `cc`responses` to check the file received after it completes. You'll notice
+in the output that the file `bar.out` was received and stored in the response
+subdirectory `/foo`. This is because the `/foo` subdirectory was specified with
+the receive command. 
 
 .mega cc/recv2.mm
 
 * Examining Responses
 
-We've seen the use of `cc`responses` several times so far. The `responses` command simply outputs all files of the specified command, indexed by id as shown in `cc`commands`, with the name of the file. If you don't want the filename shown, you can suffix the response command with `raw`:
+We've seen the use of `cc`responses` several times so far. The `responses`
+command simply outputs all files of the specified command, indexed by id as
+shown in `cc`commands`, with the name of the file. If you don't want the
+filename shown, you can suffix the response command with `raw`:
 
 .mega cc/recv3.mm
 
-You can also print *all* responses by using the `all` keyword instead of a command id:
+You can also print *all* responses by using the `all` keyword instead of a
+command id:
 
 .mega cc/recv4.mm
 
 * Command Prefixes
 
-It's useful to group similar commands into named groups. The `cc`prefix` command allows creating groups of commands by associating all issued commands after a `cc`prefix` command with that prefix. You can then use the prefix name instead of a command id when using `cc`responses`, or when deleting commands. 
+It's useful to group similar commands into named groups. The `cc`prefix`
+command allows creating groups of commands by associating all issued commands
+after a `cc`prefix` command with that prefix. You can then use the prefix name
+instead of a command id when using `cc`responses`, or when deleting commands. 
 
 .mega cc/prefix.mm
 
@@ -150,22 +220,43 @@ After the commands complete, we'll look at the responses.
 
 * Filtering Clients
 
-In all of the examples so far, each command is run by every connecting client. Sometimes you want to only send commands to specific clients, say, by hostname or IP range. The `cc`filter` command allows you to set a client filter that will be applied to every command issued while the filter is assigned. For example to send a command only to clients that have an IP in the network `10.0.0.0/24`:
+In all of the examples so far, each command is run by every connecting client.
+Sometimes you want to only send commands to specific clients, say, by hostname
+or IP range. The `cc`filter` command allows you to set a client filter that
+will be applied to every command issued while the filter is assigned. For
+example to send a command only to clients that have an IP in the network
+`10.0.0.0/24`:
 
 .mega cc/filter.mm
 
-Any commands issued from now on will be executed only by clients that meet all filter fields. You can set multiple filter arguments, such as restricting commands to only windows machines in a specific IP range. 
+Any commands issued from now on will be executed only by clients that meet all
+filter fields. You can set multiple filter arguments, such as restricting
+commands to only windows machines in a specific IP range. 
 
-You can filter on any of UUID, hostname, architecture, OS, IP (including CIDR notation), and MAC address.
+You can filter on any of UUID, hostname, architecture, OS, IP (including CIDR
+notation), and MAC address.
 
 To clear the current filter, use `clear`cc`filter`.
 
 * TCP Tunnels
 
-The `cc` interface allows creating forward and reverse TCP tunnels over the `cc` connection, including over virtio-serial connections. This is similar to the forward and reverse tunnel support in `ssh`. To create a forward tunnel, that is, a listening port on the minimega host that is tunneled to a destination host and port from the perspective of the client, use `cc`tunnel`. When creating a forward tunnel the UUID of the client *must* be specified. The destination host can be `localhost` or any other host reachable from the client. 
+The `cc` interface allows creating forward and reverse TCP tunnels over the
+`cc` connection, including over virtio-serial connections. This is similar to
+the forward and reverse tunnel support in `ssh`. To create a forward tunnel,
+that is, a listening port on the minimega host that is tunneled to a
+destination host and port from the perspective of the client, use `cc`tunnel`.
+When creating a forward tunnel the UUID of the client *must* be specified. The
+destination host can be `localhost` or any other host reachable from the
+client. 
 
-Similarly, a reverse tunnel, a listening port on the client tunneled to a host and port reachable from the minimega host, can be created by using `cc`rtunnel`. Reverse tunnels do not require a UUID to be specified, and instead use the current client filter to restrict which clients create the tunnel. That means you can tunnel a port for every client to a resource outside of the experiment. 
+Similarly, a reverse tunnel, a listening port on the client tunneled to a host
+and port reachable from the minimega host, can be created by using
+`cc`rtunnel`. Reverse tunnels do not require a UUID to be specified, and
+instead use the current client filter to restrict which clients create the
+tunnel. That means you can tunnel a port for every client to a resource outside
+of the experiment. 
 
-For example, to tunnel local port 4444 on each client to a web server reachable from the minimega host:
+For example, to tunnel local port 4444 on each client to a web server reachable
+from the minimega host:
 
 	minimega$ cc rtunnel 4444 myserver 80

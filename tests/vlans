@@ -1,0 +1,44 @@
+# Simple tests
+vm config net 101
+vm config net A # should be 102
+vlans
+vm config net
+vm config net B # should be 103
+vlans
+vm config net
+vm config net A # should be 102
+vlans
+vm config net
+
+# Manually add aliases
+vlans add foo 200
+vlans add foo 201
+vlans add bar 300
+vlans
+vm config net foo
+vm config net
+
+# Tests with namespaces
+namespace foo
+vm config net A # should be 104
+vlans
+vm config net
+namespace bar
+vm config net A # should be 105
+vlans
+vm config net
+vm config net //A # should be 102
+vlans
+vm config net
+vm config net foo//A # should be 104
+vlans
+vm config net
+clear namespace
+
+# Specify ranges
+namespace foo
+vlans range 130 120
+vlans range 120 130
+vm config net B # should be 120
+vlans
+vm config net

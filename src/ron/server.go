@@ -20,6 +20,20 @@ import (
 	"version"
 )
 
+// GetCommand returns copy of a command by ID or nil if it doesn't exist
+func (s *Server) GetCommand(id int) *Command {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	log.Debug("ron GetCommand: %v", id)
+
+	if v, ok := s.commands[id]; ok {
+		return v.Copy()
+	}
+
+	return nil
+}
+
 // GetCommands returns a copy of the current command list
 func (s *Server) GetCommands() map[int]*Command {
 	// return a deep copy of the command list
@@ -28,16 +42,7 @@ func (s *Server) GetCommands() map[int]*Command {
 	defer s.commandLock.Unlock()
 
 	for k, v := range s.commands {
-		ret[k] = &Command{
-			ID:         v.ID,
-			Background: v.Background,
-			Command:    v.Command,
-			FilesSend:  v.FilesSend,
-			FilesRecv:  v.FilesRecv,
-			CheckedIn:  v.CheckedIn,
-			Filter:     v.Filter,
-			PID:        v.PID,
-		}
+		ret[k] = v.Copy()
 	}
 
 	log.Debug("ron GetCommands: %v", ret)
@@ -360,9 +365,52 @@ func (s *Server) route(m *Message) {
 	defer s.clientLock.Unlock()
 
 	if m.UUID == "" {
-		// all clients
+		// send commands to all clients
 		for _, c := range s.clients {
-			c.out <- m
+			vm, ok := s.vms[c.UUID]
+			if !ok {
+				// The client is connected but not registered:
+				//  * client connected before it was registered
+				//  * client was unregistered before it disconnected
+				// Either way, we have to skip it since we doin't know what
+				// namespace it belongs to.
+
+				log.Error("unregistered client %v", m.UUID)
+				continue
+			}
+			cmds := map[int]*Command{}
+
+		cmdLoop:
+			for k, cmd := range m.Commands {
+				want := cmd.Filter.Namespace
+				got := vm.GetNamespace()
+
+				// filter commands by namespace
+				if want != "" && want != got {
+					continue
+				}
+
+				tags := vm.GetTags()
+
+				// filter commands by tags
+				for k, v := range cmd.Filter.Tags {
+					v2, ok := tags[k]
+
+					// if v is empty, tag must be set on VM
+					// otherwise, must match tag value on VM
+					if (v == "" && !ok) || v != v2 {
+						continue cmdLoop
+					}
+				}
+
+				cmds[k] = cmd
+			}
+
+			// clone message
+			m2 := *m
+			m2.Commands = cmds
+
+			c.out <- &m2
 		}
 	} else {
 		if c, ok := s.clients[m.UUID]; ok {
@@ -506,9 +554,14 @@ func (s *Server) clientReaper() {
 		t := time.Now()
 		s.clientLock.Lock()
 		for k, v := range s.clients {
-			if t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second) {
+			active := t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second)
+			if !active {
 				log.Debug("client %v expired", k)
 				go s.removeClient(k) // hack: put this in a goroutine to simplify locking
+			}
+
+			if vm, ok := s.vms[k]; ok {
+				vm.SetCCActive(active)
 			}
 		}
 		s.clientLock.Unlock()
@@ -604,4 +657,18 @@ func (s *Server) DialSerial(path string) error {
 	}()
 
 	return nil
+}
+
+func (s *Server) RegisterVM(uuid string, f VM) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	s.vms[uuid] = f
+}
+
+func (s *Server) UnregisterVM(uuid string) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	delete(s.vms, uuid)
 }

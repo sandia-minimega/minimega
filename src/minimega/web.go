@@ -6,6 +6,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"minicli"
@@ -68,16 +69,13 @@ NOTE: If you start the webserver with an invalid root, you can safely re-run
 	},
 }
 
-func cliWeb(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliWeb(c *minicli.Command, resp *minicli.Response) error {
 	port := defaultWebPort
 	if c.StringArgs["port"] != "" {
 		// Check if port is an integer
 		p, err := strconv.Atoi(c.StringArgs["port"])
 		if err != nil {
-			resp.Error = fmt.Sprintf("'%v' is not a valid port", c.StringArgs["port"])
-			return resp
+			return fmt.Errorf("'%v' is not a valid port", c.StringArgs["port"])
 		}
 
 		port = p
@@ -90,7 +88,7 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 
 	go webStart(port, root)
 
-	return resp
+	return nil
 }
 
 func webStart(port int, root string) {
@@ -148,23 +146,24 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	size := r.URL.Query().Get("size")
 	host := fields[0]
 	id := strings.TrimSuffix(fields[1], ".png")
+	do_encode := r.URL.Query().Get("base64") != ""
 
 	cmdStr := fmt.Sprintf("vm screenshot %s file /dev/null %s", id, size)
 	if host != hostname {
-		cmdStr = fmt.Sprintf("mesh send %s .record false %s", host, cmdStr)
+		cmdStr = fmt.Sprintf("mesh send %s %s", host, cmdStr)
 	}
 
 	cmd := minicli.MustCompile(cmdStr)
-	cmd.Record = false
+	cmd.SetRecord(false)
 
 	var screenshot []byte
 
-	for resps := range runCommand(cmd) {
+	for resps := range RunCommands(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm does not support screenshots") {
+				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
 					continue
 				}
 
@@ -187,7 +186,12 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if screenshot != nil {
-		w.Write(screenshot)
+		if do_encode {
+			base64string := "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
+			w.Write([]byte(base64string))
+		} else {
+			w.Write(screenshot)
+		}
 	} else {
 		http.NotFound(w, r)
 	}
@@ -213,7 +217,7 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 	hosts := [][]interface{}{}
 
 	cmd := minicli.MustCompile("host")
-	cmd.Record = false
+	cmd.SetRecord(false)
 
 	for resps := range runCommandGlobally(cmd) {
 		for _, resp := range resps {
@@ -247,43 +251,41 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
-	for host, vms := range globalVMs(false) {
-		for _, vm := range vms {
-			stateMask := VM_QUIT | VM_ERROR
+	vms := GlobalVMs()
 
-			if vm.GetState()&stateMask != 0 {
-				continue
-			}
+	for _, vm := range vms {
+		stateMask := VM_QUIT | VM_ERROR
 
-			config := vm.Config()
-
-			vmMap := map[string]interface{}{
-				"host": host,
-
-				"id":    vm.GetID(),
-				"name":  vm.GetName(),
-				"state": vm.GetState().String(),
-				"type":  vm.GetType().String(),
-
-				"vcpus":  config.Vcpus,
-				"memory": config.Memory,
-			}
-
-			if config.Networks == nil {
-				vmMap["network"] = make([]int, 0)
-			} else {
-				vmMap["network"] = config.Networks
-			}
-
-			if vm.GetTags() == nil {
-				vmMap["tags"] = make(map[string]string, 0)
-			} else {
-				vmMap["tags"] = vm.GetTags()
-			}
-
-			// The " " is invalid as a hostname, so we use it as a separator.
-			infovms[host+" "+strconv.Itoa(vm.GetID())] = vmMap
+		if vm.GetState()&stateMask != 0 {
+			continue
 		}
+
+		config := vm.Config()
+
+		vmMap := map[string]interface{}{
+			"host":   vm.GetHost(),
+			"id":     vm.GetID(),
+			"name":   vm.GetName(),
+			"state":  vm.GetState().String(),
+			"type":   vm.GetType().String(),
+			"vcpus":  config.Vcpus,
+			"memory": config.Memory,
+		}
+
+		if config.Networks == nil {
+			vmMap["network"] = make([]int, 0)
+		} else {
+			vmMap["network"] = config.Networks
+		}
+
+		if vm.GetTags() == nil {
+			vmMap["tags"] = make(map[string]string, 0)
+		} else {
+			vmMap["tags"] = vm.GetTags()
+		}
+
+		// The " " is invalid as a hostname, so we use it as a separator.
+		infovms[vm.GetHost()+" "+strconv.Itoa(vm.GetID())] = vmMap
 	}
 
 	// We need to pass it as an array for the JSON generation (so the weird keys don't show up)

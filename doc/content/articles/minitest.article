@@ -1,0 +1,90 @@
+Testing with minitest
+
+Jon Crussell
+22 Mar 2016
+
+* Introduction
+
+This article describes a tool that we use to test minimega: `minitest`. minitest
+provides a framework to run a series of minimega commands and compare the output
+against a known-correct version. Since release 2.1, we've been adding more test
+cases for minitest to run to help ensure that minimega behaves correctly.
+
+* Overview
+
+minitest is a simple program: it attaches to a running minimega instance, reads
+a series of commands from a test case, and then compares the output against the
+expected output (`.want` files). Any differences are reported. There is no
+output by default.
+
+** Test case
+
+A test case consists of two files: one containing the commands to run and the
+other containing the expected output. minitests looks in a directory for tests
+(by default `/tests/` in the current directory). Test cases are files without a
+`.want` or `.got` extension. As mentioned above, the `.want` files contain the
+expected output from executing a test. For convenience, minitest records the
+output from the most recent execution of a test in `.got`. When developing a
+new test case, a developer may simply copy the `.got` file and change the
+extension to `.want` when the output is as expected.
+
+For demonstration purposes lets look at a test case that checks whether
+minimega correctly rejects VMs with the same UUID:
+
+    $ cat tests/vm_uuid
+    # Launch VM with specified UUID
+    vm config uuid a5082fed-bc6f-4f77-8c1b-692ce5ef6302
+    vm launch kvm 1
+
+    # Try to launch another without clearing the UUID
+    vm launch kvm 1
+
+    # Try to launch two VMs with the same UUID
+    vm config uuid f3b8b039-2f26-43d0-908c-b0de030a44ed
+    vm launch kvm 2
+
+Here we can see that the test case looks exactly like a minimega script. Below
+is the expected output:
+
+    $ cat tests/vm_uuid.want
+    ## # Launch VM with specified UUID
+    ## vm config uuid a5082fed-bc6f-4f77-8c1b-692ce5ef6302
+    ## vm launch kvm 1
+
+    ## # Try to launch another without clearing the UUID
+    ## vm launch kvm 1
+    E: vm launch duplicate UUID: a5082fed-bc6f-4f77-8c1b-692ce5ef6302
+
+    ## # Try to launch two VMs with the same UUID
+    ## vm config uuid f3b8b039-2f26-43d0-908c-b0de030a44ed
+    ## vm launch kvm 2
+    E: cannot launch multiple VMs with a pre-configured UUID
+
+For reference, minitest includes the input line prefixed by `## ` above the
+command output. minitest prefixes the output from commands that return an error
+with `E: `. Blank lines are preserved.
+
+** prolog/epilog
+
+Before and after running each test case, minitest runs the commands in `prolog`
+and `epilog`, respectively.
+
+`prolog` contains commands that prepare minimega to run the test. Currently,
+this is limited to turning off the hostname annotations so that tests are more
+consistent across machines.
+
+`epilog` contains commands that reset minimega after running a test. Ideally,
+minimega would restart after each test but our current framework is not
+sophisticated enough to do so. Instead, we try to clean up all state such as
+flushing all VMs and deleting all taps. Some state is not reset such as the IDs
+for VMs. Test cases should be written to exclude these fields, if possible.
+
+** Gotchas
+
+Writing new test cases can be tricky because some values are dynamically
+allocated. For example, if a test included the full output from `vm info` it
+would be very unlikely to be useful because of the dynamically allocated fields
+such as tap names and the UUID, which may change on each run. For this reason,
+tests should be very specific -- take advantage of `.filter` and `.columns` to
+limit the output to just the fields of interest. See `tests/tap_lifecycle` and
+`tests/vm_lifecycle` for examples of this.

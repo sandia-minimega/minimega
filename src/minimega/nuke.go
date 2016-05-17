@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"goreadline"
 	"io/ioutil"
 	"minicli"
@@ -39,7 +40,7 @@ Should be run with caution.`,
 //  kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 //  exit()
-func cliNuke(c *minicli.Command) *minicli.Response {
+func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 	// nuke any container related items
 	containerNuke()
 
@@ -89,7 +90,7 @@ func cliNuke(c *minicli.Command) *minicli.Response {
 	nukeState()
 
 	os.Exit(0)
-	return nil
+	return errors.New("unreachable")
 }
 
 // Nuke a list of tap names
@@ -117,7 +118,7 @@ func nukeState() {
 	vncClear()
 	clearAllCaptures()
 	ksmDisable()
-	vms.cleanDirs()
+	vms.CleanDirs()
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include
