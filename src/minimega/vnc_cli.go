@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"minicli"
-	log "minilog"
 	"strconv"
 	"time"
 )
@@ -72,15 +71,16 @@ Resets the state for VNC recordings. See "help vnc" for more information.`,
 		Patterns: []string{
 			"clear vnc",
 		},
-		Call: wrapSimpleCLI(cliVNCClear),
+		Call: wrapSimpleCLI(func(_ *minicli.Command, _ *minicli.Response) error {
+			return vncClear()
+		}),
 	},
 }
 
-func cliVNCPlay(c *minicli.Command) *minicli.Response {
+func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 	var err error
 	var p *vncKBPlayback
 
-	resp := &minicli.Response{Host: hostname}
 	host := c.StringArgs["host"]
 	vm := c.StringArgs["vm"]
 	fname := c.StringArgs["filename"]
@@ -103,9 +103,7 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 	} else {
 		// Need a valid playback for all other operations
 		if p == nil {
-			err = fmt.Errorf("kb playback %v %v not found", host, vm)
-			resp.Error = err.Error()
-			return resp
+			return fmt.Errorf("kb playback %v %v not found", host, vm)
 		}
 
 		if c.BoolArgs["stop"] {
@@ -123,14 +121,10 @@ func cliVNCPlay(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-	return resp
+	return err
 }
 
-func cliVNCRecord(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 	var err error
 
 	host := c.StringArgs["host"]
@@ -144,8 +138,8 @@ func cliVNCRecord(c *minicli.Command) *minicli.Response {
 	var client *vncClient
 
 	if c.BoolArgs["record"] {
+		// Start a keyboard / framebuffer recording
 		if c.BoolArgs["kb"] {
-			// Starting keyboard recording
 			err = vncRecordKB(host, vm, fname)
 		} else {
 			err = vncRecordFB(host, vm, fname)
@@ -171,10 +165,7 @@ func cliVNCRecord(c *minicli.Command) *minicli.Response {
 			}
 		}
 		if client != nil {
-			if err := client.Stop(); err != nil {
-				log.Error("%v", err)
-			}
-			err = nil
+			return client.Stop()
 		}
 	} else {
 		// List all active recordings and playbacks
@@ -216,19 +207,5 @@ func cliVNCRecord(c *minicli.Command) *minicli.Response {
 		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-	return resp
-}
-
-func cliVNCClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := vncClear()
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return err
 }

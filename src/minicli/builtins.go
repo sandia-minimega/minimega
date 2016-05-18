@@ -5,11 +5,18 @@
 package minicli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
 	"strings"
 )
+
+type filter struct {
+	Negate   bool
+	Fuzzy    bool
+	Col, Val string
+}
 
 var builtinCLIHandlers = []Handler{
 	{ // csv
@@ -20,7 +27,7 @@ Enable or disable CSV mode. Enabling CSV mode disables JSON mode, if enabled.`,
 			".csv [true,false]",
 			".csv <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliModeHelper(c, out, csvMode)
 		},
 	},
@@ -32,7 +39,7 @@ Enable or disable JSON mode. Enabling JSON mode disables CSV mode, if enabled.`,
 			".json [true,false]",
 			".json <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliModeHelper(c, out, jsonMode)
 		},
 	},
@@ -44,7 +51,7 @@ Enable or disable headers for tabular data.`,
 			".headers [true,false]",
 			".headers <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Headers })
 		},
 	},
@@ -56,7 +63,7 @@ Enable or disable hostname annotation for responses.`,
 			".annotate [true,false]",
 			".annotate <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Annotate })
 		},
 	},
@@ -69,7 +76,7 @@ column. Sorting is based on string comparison.`,
 			".sort [true,false]",
 			".sort <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Sort })
 		},
 	},
@@ -102,7 +109,7 @@ Compression is not applied when the output mode is JSON.`,
 			".compress [true,false]",
 			".compress <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Compress })
 		},
 	},
@@ -120,9 +127,17 @@ Filters can also be inverted:
 
 Filters are case insensitive and may be stacked:
 
-	.filter state=running .filter vcpus=4 vm info`,
+	.filter state=RUNNING .filter vcpus=4 vm info
+
+If the column value is a list or an object (i.e. "[...]", "{...}"), then
+.filter implicitly uses substring matching.
+
+Substring matching can be specified explicity:
+
+	.filter state~run vm info
+	.filter state!~run vm info`,
 		Patterns: []string{
-			".filter <column=value> (command)",
+			".filter <filter> (command)",
 		},
 		Call: cliFilter,
 	},
@@ -162,7 +177,7 @@ Enable or disable the recording of a given command in the command history.`,
 			".record [true,false]",
 			".record <true,false> (command)",
 		},
-		Call: func(c *Command, out chan Responses) {
+		Call: func(c *Command, out chan<- Responses) {
 			if c.Subcommand != nil {
 				c.Record = c.BoolArgs["true"]
 			} else if !c.BoolArgs["true"] {
@@ -172,9 +187,56 @@ Enable or disable the recording of a given command in the command history.`,
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Record })
 		},
 	},
+	{ // alias
+		HelpShort: "create an alias",
+		HelpLong: `
+Create a new alias similar to bash aliases. Aliases can be used as a shortcut
+to avoid typing out a long command. Only one alias is applied per command and
+only to the beginning of a command. For example:
+
+.alias vmr=.filter state=running vm info
+
+The alias is interpreted as the text up to the first "=". Runing .alias without
+any argument will list the existing aliases.
+
+This alias allows the user to type "vmr" rather than the using a filter to list
+the running VMs.
+
+.unalias removes a previously set alias.
+
+Note: we *strongly* recommend that you avoid aliases, unless you are using the
+shell interactively. Aliases save typing which should not be necessary if you
+are writing a script.`,
+		Patterns: []string{
+			".alias",
+			".alias <alias>...",
+		},
+		Call: cliAlias,
+	},
+	{ // unalias
+		HelpShort: "remove an alias",
+		HelpLong: `
+Removes an alias by name. See .alias for a listing of aliases.`,
+		Patterns: []string{
+			".unalias <alias>",
+		},
+		Call: cliUnalias,
+	},
 }
 
 var hostname string
+
+// Match tests is a case-insensitive match for s. If s is a list or an object,
+// then enables fuzzy filtering implicitly.
+func (f filter) Match(s string) bool {
+	s = strings.ToLower(s)
+
+	fuzzy := hasPrefixSuffix(s, "[", "]") || hasPrefixSuffix(s, "{", "}")
+	fuzzy = fuzzy || f.Fuzzy
+
+	match := (s == f.Val) || (fuzzy && strings.Contains(s, f.Val))
+	return f.Negate != match
+}
 
 func init() {
 	var err error
@@ -189,7 +251,7 @@ func init() {
 	}
 }
 
-func runSubCommand(c *Command) chan Responses {
+func runSubCommand(c *Command) <-chan Responses {
 	pipe := make(chan Responses)
 
 	go func() {
@@ -200,83 +262,105 @@ func runSubCommand(c *Command) chan Responses {
 	return pipe
 }
 
-func cliFilter(c *Command, out chan Responses) {
-	var negate bool
+// hasPrefixSuffix wraps strings.HasPrefix and strings.HasSuffix.
+func hasPrefixSuffix(s, prefix, suffix string) bool {
+	return strings.HasPrefix(s, prefix) && strings.HasSuffix(s, suffix)
+}
 
-	parts := strings.Split(c.StringArgs["column=value"], "!=")
-	if len(parts) == 2 {
-		negate = true
-	} else {
-		parts = strings.Split(c.StringArgs["column=value"], "=")
-		if len(parts) != 2 {
-			resp := &Response{
-				Host:  hostname,
-				Error: "malformed filter term, expected column=value",
-			}
-			out <- Responses{resp}
-			return
+func parseFilter(s string) (filter, error) {
+	filters := []struct {
+		Sep    string
+		Filter filter
+	}{
+		// Important that negate versions come first for proper Split
+		{"!~", filter{Fuzzy: true, Negate: true}},
+		{"~", filter{Fuzzy: true}},
+		{"!=", filter{Negate: true}},
+		{"=", filter{}},
+	}
+
+	for _, f := range filters {
+		parts := strings.Split(s, f.Sep)
+		if len(parts) == 2 {
+			f.Filter.Col = strings.ToLower(parts[0])
+			f.Filter.Val = strings.ToLower(parts[1])
+			return f.Filter, nil
 		}
 	}
 
-	col, filter := strings.ToLower(parts[0]), strings.ToLower(parts[1])
+	return filter{}, errors.New("invalid filter, see help")
+}
+
+// filterResp filters Response r based on the filter f. Returns bool for
+// whether to keep the response or not or an error.
+func filterResp(f filter, r *Response) (bool, error) {
+	// HAX: Special case for when the column name is host which is not part of
+	// the actual tabular data.
+	if f.Col == "host" {
+		return f.Match(r.Host), nil
+	}
+
+	// Can't filter if it's a non-tabular response
+	if r.Header == nil || r.Tabular == nil {
+		return true, nil
+	}
+
+	for i, header := range r.Header {
+		if strings.ToLower(header) != f.Col {
+			continue
+		}
+
+		// Found right column, filter tabular rows
+		tabular := [][]string{}
+
+		for _, row := range r.Tabular {
+			if f.Match(row[i]) {
+				tabular = append(tabular, row)
+			}
+		}
+
+		r.Tabular = tabular
+		return true, nil
+	}
+
+	// Didn't find the requested column in the responses
+	return false, fmt.Errorf("no such column `%s`", f.Col)
+}
+
+func cliFilter(c *Command, out chan<- Responses) {
+	f, err := parseFilter(c.StringArgs["filter"])
+	if err != nil {
+		resp := &Response{
+			Host:  hostname,
+			Error: err.Error(),
+		}
+		out <- Responses{resp}
+		return
+	}
 
 outer:
 	for resps := range runSubCommand(c) {
 		newResps := Responses{}
 
 		for _, r := range resps {
-			// HAX: Special case for when the column name is host which is not
-			// part of the actual tabular data.
-			if col == "host" {
-				if negate != (r.Host != filter) {
-					continue
-				}
-			} else if r.Header != nil && r.Tabular != nil {
-				var found bool
+			keep, err := filterResp(f, r)
 
-				for j, header := range r.Header {
-					// Found right column, check whether filter matches
-					if strings.ToLower(header) == col {
-						tabular := [][]string{}
-
-						for _, row := range r.Tabular {
-							elem := strings.ToLower(row[j])
-
-							// If the element looks like a list, do substring matching
-							if strings.HasPrefix(elem, "[") && strings.HasSuffix(elem, "]") {
-								if negate != strings.Contains(elem, filter) {
-									tabular = append(tabular, row)
-								}
-							} else if negate != (elem == filter) {
-								tabular = append(tabular, row)
-							}
-						}
-
-						r.Tabular = tabular
-						found = true
-						break
-					}
-				}
-
-				// Didn't find the requested column in the responses
-				if !found {
-					resp := &Response{
-						Host:  hostname,
-						Error: fmt.Sprintf("no such column `%s`", col),
-					}
-					out <- Responses{resp}
-					continue outer
-				}
+			if err != nil {
+				resp := &Response{Host: hostname, Error: err.Error()}
+				out <- Responses{resp}
+				continue outer
 			}
 
-			newResps = append(newResps, r)
+			if keep {
+				newResps = append(newResps, r)
+			}
 		}
 
 		out <- newResps
 	}
 }
 
-func cliColumns(c *Command, out chan Responses) {
+func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
 outer:
@@ -327,11 +411,14 @@ outer:
 	}
 }
 
-func cliModeHelper(c *Command, out chan Responses, newMode int) {
+func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 	if c.Subcommand == nil {
 		resp := &Response{
 			Host: hostname,
 		}
+
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
 
 		if c.BoolArgs["true"] {
 			defaultFlags.Mode = newMode
@@ -348,8 +435,7 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			if c.BoolArgs["true"] {
@@ -363,11 +449,14 @@ func cliModeHelper(c *Command, out chan Responses, newMode int) {
 	}
 }
 
-func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
+func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 	if c.Subcommand == nil {
 		resp := &Response{
 			Host: hostname,
 		}
+
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
 
 		if c.BoolArgs["true"] || c.BoolArgs["false"] {
 			// Update the flag, can just get value for "true" since the default
@@ -384,8 +473,7 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 	for r := range runSubCommand(c) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
-				r[0].Flags = new(Flags)
-				*r[0].Flags = defaultFlags
+				r[0].Flags = copyFlags()
 			}
 
 			*get(r[0].Flags) = c.BoolArgs["true"]
@@ -393,4 +481,42 @@ func cliFlagHelper(c *Command, out chan Responses, get func(*Flags) *bool) {
 
 		out <- r
 	}
+}
+
+func cliAlias(c *Command, out chan<- Responses) {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	resp := &Response{Host: hostname}
+
+	alias := strings.Join(c.ListArgs["alias"], " ")
+	parts := strings.SplitN(alias, "=", 2)
+
+	if alias == "" {
+		resp.Header = []string{"alias", "expansion"}
+
+		for k, v := range aliases {
+			resp.Tabular = append(resp.Tabular, []string{k, v})
+		}
+	} else if len(parts) != 2 {
+		resp.Error = "expected alias of format `alias=expansion`"
+	} else {
+		aliases[parts[0]] = parts[1]
+	}
+
+	out <- Responses{resp}
+	return
+}
+
+func cliUnalias(c *Command, out chan<- Responses) {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	// don't care if doesn't exist
+	delete(aliases, c.StringArgs["alias"])
+
+	resp := &Response{Host: hostname}
+
+	out <- Responses{resp}
+	return
 }

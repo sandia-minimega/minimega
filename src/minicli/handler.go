@@ -23,7 +23,7 @@ type Handler struct {
 
 	// the processed patterns, will be automatically populated when the command
 	// is registered
-	PatternItems [][]patternItem `json:"parsed_patterns"`
+	PatternItems [][]PatternItem `json:"parsed_patterns"`
 
 	// Suggest provides suggestions for variable completion. For example, the
 	// `vm stop` command might provide a listing of the currently running VM
@@ -65,7 +65,7 @@ func (h *Handler) suggest(input *Input) []string {
 outer:
 	for _, pattern := range h.PatternItems {
 		var i int
-		var item patternItem
+		var item PatternItem
 
 		for i, item = range pattern {
 			// We ran out of input items before pattern items, make suggestion

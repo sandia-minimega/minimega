@@ -56,9 +56,15 @@ commands.`,
 		HelpShort: "read and execute a command file",
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
-the file in manually except that it stops after the first error.`,
+the file in manually except that it stops after the first error.
+
+If the optional argument check is specified then read doesn't execute any of
+the commands in the file. Instead, it checks that all the commands are
+syntactically valid. This can identify mistyped commands in scripts before you
+read them. It cannot check for semantic errors (e.g. killing a non-existent
+VM). Stops on the first invalid command.`,
 		Patterns: []string{
-			"read <file>",
+			"read <file> [check,]",
 		},
 		Call: cliRead,
 	},
@@ -77,7 +83,7 @@ the file in manually except that it stops after the first error.`,
 		Patterns: []string{
 			"version",
 		},
-		Call: wrapSimpleCLI(cliVersion),
+		Call: wrapBroadcastCLI(cliVersion),
 	},
 	{ // echo
 		HelpShort: "display input text after comment removal",
@@ -88,41 +94,40 @@ the file in manually except that it stops after the first error.`,
 	},
 }
 
-func cliQuit(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
-			resp.Error = err.Error()
-		} else {
-			go func() {
-				time.Sleep(time.Duration(delay) * time.Second)
-				teardown()
-			}()
-			resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
+			return err
 		}
-	} else {
-		teardown()
+
+		go func() {
+			time.Sleep(time.Duration(delay) * time.Second)
+			teardown()
+		}()
+
+		resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
+		return nil
 	}
 
-	return resp
+	teardown()
+	return errors.New("unreachable")
 }
 
-func cliHelp(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
 	}
 
 	resp.Response = minicli.Help(input)
-	return resp
+	return nil
 }
 
-func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
+func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
+
+	check := c.BoolArgs["check"]
 
 	file, err := os.Open(c.StringArgs["file"])
 	if err != nil {
@@ -134,7 +139,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 
 	// HACK: We *don't* want long-running read commands to cause all other
 	// commands to block so we *unlock* the command lock here and *lock* it
-	// again for each command that we read (well, `runCommand` handles the
+	// again for each command that we read (well, `RunCommands` handles the
 	// locking for us).
 	cmdLock.Unlock()
 	defer cmdLock.Lock()
@@ -145,7 +150,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 		var cmd *minicli.Command
 
 		command := scanner.Text()
-		log.Debug("read command: %v", command) // commands don't have their newlines removed
+		log.Debug("read command: %v", command)
 
 		cmd, err = minicli.Compile(command)
 		if err != nil {
@@ -158,15 +163,18 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 			continue
 		}
 
-		cmd.SetSource(SourceRead)
-
 		// HAX: Make sure we don't have a recursive read command
 		if hasCommand(cmd, "read") {
 			err = errors.New("cannot run nested `read` commands")
 			break
 		}
 
-		for resp := range runCommand(cmd) {
+		// If we're checking the syntax, don't actually execute the command
+		if check {
+			continue
+		}
+
+		for resp := range RunCommands(cmd) {
 			respChan <- resp
 
 			// Stop processing if any of the responses have an error.
@@ -189,9 +197,7 @@ func cliRead(c *minicli.Command, respChan chan minicli.Responses) {
 	}
 }
 
-func cliDebug(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["memory"] {
 		dst := c.StringArgs["file"]
 		if !filepath.IsAbs(dst) {
@@ -202,18 +208,14 @@ func cliDebug(c *minicli.Command) *minicli.Response {
 
 		f, err := os.Create(dst)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 		defer f.Close()
 
-		pprof.WriteHeapProfile(f)
-
-		return resp
+		return pprof.WriteHeapProfile(f)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
-			resp.Error = "old CPU profile still running"
-			return resp
+			return errors.New("CPU profile still running")
 		}
 
 		dst := c.StringArgs["file"]
@@ -225,52 +227,44 @@ func cliDebug(c *minicli.Command) *minicli.Response {
 
 		f, err := os.Create(dst)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 		cpuProfileOut = f
 
-		pprof.StartCPUProfile(cpuProfileOut)
-
-		return resp
+		return pprof.StartCPUProfile(cpuProfileOut)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["stop"] {
 		if cpuProfileOut == nil {
-			resp.Error = "CPU profile is not running"
-			return resp
+			return errors.New("CPU profile not running")
 		}
 
 		pprof.StopCPUProfile()
-		cpuProfileOut.Close()
+		if err := cpuProfileOut.Close(); err != nil {
+			return err
+		}
 
 		cpuProfileOut = nil
-
-		return resp
+		return nil
 	}
 
 	// Otherwise, return information about the runtime environment
-	return &minicli.Response{
-		Host:   hostname,
-		Header: []string{"Go version", "Goroutines", "CGO calls"},
-		Tabular: [][]string{
-			[]string{
-				runtime.Version(),
-				strconv.Itoa(runtime.NumGoroutine()),
-				strconv.FormatInt(runtime.NumCgoCall(), 10),
-			},
+	resp.Header = []string{"Go version", "Goroutines", "CGO calls"}
+	resp.Tabular = [][]string{
+		[]string{
+			runtime.Version(),
+			strconv.Itoa(runtime.NumGoroutine()),
+			strconv.FormatInt(runtime.NumCgoCall(), 10),
 		},
 	}
+
+	return nil
 }
 
-func cliVersion(c *minicli.Command) *minicli.Response {
-	return &minicli.Response{
-		Host:     hostname,
-		Response: fmt.Sprintf("minimega %v %v", version.Revision, version.Date),
-	}
+func cliVersion(c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
+	return nil
 }
 
-func cliEcho(c *minicli.Command) *minicli.Response {
-	return &minicli.Response{
-		Host:     hostname,
-		Response: strings.Join(c.ListArgs["args"], " "),
-	}
+func cliEcho(c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = strings.Join(c.ListArgs["args"], " ")
+	return nil
 }

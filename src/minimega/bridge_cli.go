@@ -107,14 +107,11 @@ Note: bridge is not a namespace-aware command.`,
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["create"] {
 		vlan, err := lookupVLAN(c.StringArgs["vlan"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		bridge := c.StringArgs["bridge"]
@@ -123,8 +120,7 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 		}
 
 		if isReserved(bridge) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for bridge name", bridge)
-			return resp
+			return fmt.Errorf("`%s` is a reserved word -- cannot use for bridge name", bridge)
 		}
 
 		ip := c.StringArgs["ip"]
@@ -136,42 +132,28 @@ func cliHostTap(c *minicli.Command) *minicli.Response {
 
 		tap := c.StringArgs["tap"]
 		if isReserved(tap) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for tap name", tap)
-			return resp
+			return fmt.Errorf("`%s` is a reserved word -- cannot use for tap name", tap)
 		}
 
-		if tap, err := hostTapCreate(bridge, ip, tap, vlan); err != nil {
-			resp.Error = err.Error()
-		} else {
+		tap, err = hostTapCreate(bridge, ip, tap, vlan)
+		if err == nil {
 			resp.Response = tap
 		}
+		return err
 	} else if c.BoolArgs["delete"] {
-		err := hostTapDelete(c.StringArgs["id"])
-		if err != nil {
-			resp.Error = err.Error()
-		}
-	} else {
-		// Must be the list command
-		hostTapList(resp)
+		return hostTapDelete(c.StringArgs["id"])
 	}
 
-	return resp
+	// Must be the list command
+	hostTapList(resp)
+	return nil
 }
 
-func cliHostTapClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := hostTapDelete(Wildcard)
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+func cliHostTapClear(c *minicli.Command, resp *minicli.Response) error {
+	return hostTapDelete(Wildcard)
 }
 
-func cliBridge(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	bridge := c.StringArgs["bridge"]
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
@@ -179,30 +161,21 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 	if strings.HasPrefix(c.Original, "bridge notrunk") {
 		b, err := getBridge(bridge)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
-		err = b.TrunkRemove(iface)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+
+		return b.TrunkRemove(iface)
 	} else if strings.HasPrefix(c.Original, "bridge trunk") {
 		b, err := getBridge(bridge)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
-		err = b.TrunkAdd(iface)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+
+		return b.TrunkAdd(iface)
 	} else if strings.HasPrefix(c.Original, "bridge tunnel") {
 		b, err := getBridge(bridge)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		var t int
@@ -212,51 +185,43 @@ func cliBridge(c *minicli.Command) *minicli.Response {
 			t = TYPE_VXLAN
 		}
 
-		err = b.TunnelAdd(t, remoteIP)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+		return b.TunnelAdd(t, remoteIP)
 	} else if strings.HasPrefix(c.Original, "bridge notunnel") {
 		b, err := getBridge(bridge)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
-		err = b.TunnelRemove(iface)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
-	} else {
-		resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
-		resp.Tabular = [][]string{}
-
-		bridgeLock.Lock()
-		defer bridgeLock.Unlock()
-
-		for _, v := range bridges {
-			vlans := map[int]bool{}
-			for _, tap := range v.Taps {
-				vlans[tap.lan] = true
-			}
-
-			vlans2 := []string{}
-			for k, _ := range vlans {
-				vlans2 = append(vlans2, allocatedVLANs.PrintVLAN(namespace, k))
-			}
-			sort.Strings(vlans2)
-
-			row := []string{
-				v.Name,
-				strconv.FormatBool(v.preExist),
-				fmt.Sprintf("%v", vlans2),
-				fmt.Sprintf("%v", v.Trunk),
-				fmt.Sprintf("%v", v.Tunnel)}
-			resp.Tabular = append(resp.Tabular, row)
-		}
+		return b.TunnelRemove(iface)
 	}
 
-	return resp
+	// must want to list bridges
+	resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANS", "Trunk ports", "Tunnels"}
+	resp.Tabular = [][]string{}
+
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	for _, v := range bridges {
+		vlans := map[int]bool{}
+		for _, tap := range v.Taps {
+			vlans[tap.lan] = true
+		}
+
+		vlans2 := []string{}
+		for k, _ := range vlans {
+			vlans2 = append(vlans2, printVLAN(k))
+		}
+		sort.Strings(vlans2)
+
+		row := []string{
+			v.Name,
+			strconv.FormatBool(v.preExist),
+			fmt.Sprintf("%v", vlans2),
+			fmt.Sprintf("%v", v.Trunk),
+			fmt.Sprintf("%v", v.Tunnel)}
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
 }

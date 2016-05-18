@@ -5,11 +5,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
 	"os"
 	"ranges"
+	"runtime"
 	"strconv"
 	"sync"
 	"time"
@@ -21,27 +23,34 @@ type VMs map[int]VM
 // vmApplyFunc is passed into VMs.apply
 type vmApplyFunc func(VM, bool) (bool, error)
 
-// namespace returns the VMs that are part of the currently active namespace,
-// if there is one. Otherwise, returns itself.
-func (vms VMs) namespace() VMs {
-	if namespace == "" {
-		return vms
-	}
+type Tag struct {
+	ID         int
+	Key, Value string
+}
 
+var vmLock sync.Mutex // lock for synchronizing access to vms
+
+// Clone creates a snapshot of the currently running VMs. It should be safe to
+// range over the returned value without holding the vmLock to perform
+// read-only operations. Does *not* filter the returned VMs to just those in
+// the active namespace.
+func (vms VMs) Clone() VMs {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	res := map[int]VM{}
-	for id, vm := range vms {
-		if vm.GetNamespace() == namespace {
-			res[id] = vm
-		}
+	res := VMs{}
+	for k, v := range res {
+		res[k] = v
 	}
 
 	return res
 }
 
-func (vms VMs) save(file *os.File, target string) error {
+// Save the commands to configure the targeted VMs to file.
+func (vms VMs) Save(file *os.File, target string) error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	// Stop on the first error
 	var err error
 
@@ -51,6 +60,10 @@ func (vms VMs) save(file *os.File, target string) error {
 	applyFunc := func(vm VM, _ bool) (bool, error) {
 		if err != nil {
 			return true, err
+		}
+
+		if !inNamespace(vm) {
+			return false, nil
 		}
 
 		// build up the command list to re-launch this vm, first clear all
@@ -92,80 +105,250 @@ func (vms VMs) save(file *os.File, target string) error {
 	return err
 }
 
-func (vms VMs) qmp(idOrName, qmp string) (string, error) {
-	vm := vms.findVm(idOrName)
-	if vm == nil {
-		return "", vmNotFound(idOrName)
+// Info populates resp with info about the VMs running in the active namespace.
+func (vms VMs) Info(resp *minicli.Response) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	resp.Header = vmMasks
+	res := VMs{} // for res.Data
+
+	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
+		// Update dynamic fields before querying info
+		vm.UpdateBW()
+
+		res[vm.GetID()] = vm
+
+		row := []string{}
+
+		for _, mask := range vmMasks {
+			if v, err := vm.Info(mask); err != nil {
+				// Field most likely not set for VM type
+				row = append(row, "N/A")
+			} else {
+				row = append(row, v)
+			}
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
 	}
 
-	if vm, ok := vm.(*KvmVM); ok {
-		return vm.QMPRaw(qmp)
-	}
-
-	return "", vmNotKVM(idOrName)
+	resp.Data = res
 }
 
-func (vms VMs) screenshot(idOrName string, max int) ([]byte, error) {
-	vm := vms.findVm(idOrName)
-	if vm == nil {
-		return nil, vmNotFound(idOrName)
+func (vms VMs) SetTag(target, key, value string) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// For each VM, set tag using key/value. Can be run in parallel.
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
+		vm.SetTag(key, value)
+
+		return true, nil
 	}
 
-	if vm, ok := vm.(*KvmVM); ok {
-		return vm.Screenshot(max)
-	}
-
-	return nil, vmNotPhotogenic(idOrName)
+	vms.apply(target, true, applyFunc)
 }
 
-func (vms VMs) migrate(idOrName, filename string) error {
-	vm := vms.findVm(idOrName)
-	if vm == nil {
-		return vmNotFound(idOrName)
+func (vms VMs) GetTags(target, key string) []Tag {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	res := []Tag{}
+
+	// For each VM, start it if it's in a startable state. Cannot be run in parallel since
+	// it aggregates results in res.
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
+		if key == Wildcard {
+			for k, v := range vm.GetTags() {
+				res = append(res, Tag{
+					Key:   k,
+					Value: v,
+					ID:    vm.GetID(),
+				})
+			}
+
+			return true, nil
+		}
+
+		// TODO: return false if tag not set?
+		res = append(res, Tag{
+			Key:   key,
+			Value: vm.Tag(key),
+			ID:    vm.GetID(),
+		})
+
+		return true, nil
 	}
 
-	if vm, ok := vm.(*KvmVM); ok {
-		return vm.Migrate(filename)
-	}
+	vms.apply(target, false, applyFunc)
 
-	return vmNotKVM(idOrName)
+	return res
 }
 
-// findVm finds a VM based on it's ID, name, or UUID. Returns nil if no such VM
-// exists.
-func (vms VMs) findVm(s string) VM {
+func (vms VMs) ClearTags(target, key string) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// For each VM, set tag using key/value. Can be run in parallel.
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
+		vm.ClearTag(key)
+
+		return true, nil
+	}
+
+	vms.apply(target, true, applyFunc)
+}
+
+// FindVM finds a VM in the active namespace based on its ID, name, or UUID.
+func (vms VMs) FindVM(s string) VM {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.findVM(s)
+}
+
+// findVM assumes vmLock is held.
+func (vms VMs) findVM(s string) VM {
 	if id, err := strconv.Atoi(s); err == nil {
-		return vms[id]
+		if vm := vms[id]; inNamespace(vm) {
+			return vm
+		}
+
+		return nil
 	}
 
 	// Search for VM by name or UUID
-	for _, v := range vms {
-		if v.GetName() == s {
-			return v
+	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
 		}
-		if v.GetUUID() == s {
-			return v
+
+		if vm.GetName() == s || vm.GetUUID() == s {
+			return vm
 		}
 	}
 
 	return nil
 }
 
-// launch one VM of a given type. This needs to be called without VMs.namespace
-// as we need to add the VM to the global VMs.
-func (vms VMs) launch(vm VM) (err error) {
-	// Actually launch the VM from a defered func when there's no error. This
-	// happens *after* we've released the vmLock so that launching can happen
-	// in parallel.
-	defer func() {
-		if err == nil {
-			err = vm.Launch()
-		}
-	}()
-
+// FindKvmVM finds a VM in the active namespace based on its ID, name, or UUID.
+func (vms VMs) FindKvmVM(s string) (*KvmVM, error) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
+	return vms.findKvmVM(s)
+}
+
+// findKvmVm is FindKvmVM without locking vmLock.
+func (vms VMs) findKvmVM(s string) (*KvmVM, error) {
+	vm := vms.findVM(s)
+	if vm == nil {
+		return nil, vmNotFound(s)
+	}
+
+	if vm, ok := vm.(*KvmVM); ok {
+		return vm, nil
+	}
+
+	return nil, vmNotKVM(s)
+}
+
+// FindKvmVMs finds all KvmVMs in the active namespace.
+func (vms VMs) FindKvmVMs() []*KvmVM {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	res := []*KvmVM{}
+
+	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
+		if vm, ok := vm.(*KvmVM); ok {
+			res = append(res, vm)
+		}
+	}
+
+	return res
+}
+
+func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
+	vmLock.Lock()
+
+	out := make(chan error)
+
+	log.Info("launching %v %v vms", len(names), vmType)
+	start := time.Now()
+
+	var wg sync.WaitGroup
+
+	for _, name := range names {
+		// This uses the global vmConfigs so we have to create the VMs in the
+		// CLI thread (before the next command gets processed which could
+		// change the vmConfigs).
+		vm := NewVM(name, vmType)
+
+		if err := vms.check(vm); err != nil {
+			// Send from new goroutine to prevent deadlock since we haven't
+			// even returned the output channel yet... hopefully we won't spawn
+			// too many goroutines.
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				out <- err
+			}()
+			continue
+		}
+
+		// Record newly created VM
+		vms[vm.GetID()] = vm
+
+		// The actual launching can happen in parallel, we just want to
+		// make sure that we complete all the one-vs-all VM checks and add
+		// to vms while holding the vmLock.
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+
+			out <- vm.Launch()
+		}(name)
+	}
+
+	go func() {
+		// Don't unlock until we've finished launching all the VMs
+		defer vmLock.Unlock()
+		defer close(out)
+
+		wg.Wait()
+
+		stop := time.Now()
+		log.Info("launched %v %v vms in %v", len(names), vmType, stop.Sub(start))
+	}()
+
+	return out
+}
+
+// check VM doesn't have any conflicts with the existing VMs
+func (vms VMs) check(vm VM) error {
 	// Make sure that there isn't an existing VM with the same name or UUID
 	for _, vm2 := range vms {
 		// We only care about name collisions if the VMs are running in the
@@ -184,14 +367,33 @@ func (vms VMs) launch(vm VM) (err error) {
 		}
 	}
 
-	vms[vm.GetID()] = vm
-	return
+	// Check the interfaces/disks/filesystem is sane
+	if err := vms.checkInterfaces(vm); err != nil {
+		return err
+	}
+
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vms.checkDisks(vm)
+	case *ContainerVM:
+		return vms.checkFilesystem(vm)
+	}
+
+	return errors.New("unknown VM type")
 }
 
-func (vms VMs) start(target string) []error {
+// Start VMs matching target.
+func (vms VMs) Start(target string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	// For each VM, start it if it's in a startable state. Can be run in
 	// parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
 		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
@@ -206,9 +408,17 @@ func (vms VMs) start(target string) []error {
 	return vms.apply(target, true, applyFunc)
 }
 
-func (vms VMs) stop(target string) []error {
+// Stop VMs matching target.
+func (vms VMs) Stop(target string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	// For each VM, stop it if it's running. Can be run in parallel.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
 		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
@@ -219,12 +429,20 @@ func (vms VMs) stop(target string) []error {
 	return vms.apply(target, true, applyFunc)
 }
 
-func (vms VMs) kill(target string) []error {
+// Kill VMs matching target.
+func (vms VMs) Kill(target string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
 	killedVms := map[int]bool{}
 
 	// For each VM, kill it if it's in a killable state. Should not be run in
 	// parallel because we record the IDs of the VMs we kill in killedVms.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
+		if !inNamespace(vm) {
+			return false, nil
+		}
+
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -258,15 +476,14 @@ outer:
 	return errs
 }
 
-// flush deletes VMs that are in the QUIT or ERROR state. This needs to be
-// called without VMs.namespace as we need to delete VMs from the global VMs.
-func (vms VMs) flush() {
+// Flush deletes VMs that are in the QUIT or ERROR state.
+func (vms VMs) Flush() {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	for i, vm := range vms {
 		// Skip VMs outside of current namespace
-		if namespace != "" && vm.GetNamespace() != namespace {
+		if !inNamespace(vm) {
 			continue
 		}
 
@@ -282,29 +499,11 @@ func (vms VMs) flush() {
 	}
 }
 
-func (vms VMs) info() ([]string, [][]string, error) {
-	table := [][]string{}
+// CleanDirs removes all instance directories in the minimega base directory
+func (vms VMs) CleanDirs() {
+	vmLock.Lock()
+	defer vmLock.Unlock()
 
-	for _, vm := range vms {
-		row := []string{}
-
-		for _, mask := range vmMasks {
-			if v, err := vm.Info(mask); err != nil {
-				// Field not set for VM type, replace with placeholder
-				row = append(row, "N/A")
-			} else {
-				row = append(row, v)
-			}
-		}
-
-		table = append(table, row)
-	}
-
-	return vmMasks, table, nil
-}
-
-// cleanDirs removes all isntance directories in the minimega base directory
-func (vms VMs) cleanDirs() {
 	log.Debugln("cleanDirs")
 	for _, vm := range vms {
 		path := vm.GetInstancePath()
@@ -333,6 +532,13 @@ func (vms VMs) cleanDirs() {
 // VMs or not. If the fns alter state they can set this flag to false rather
 // than dealing with locking.
 func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
+	// Some callstack voodoo magic
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		if fn := runtime.FuncForPC(pc); fn != nil {
+			log.Debug("applying %v to %v (concurrent = %t)", fn.Name(), target, concurrent)
+		}
+	}
+
 	names := map[string]bool{} // Names of VMs for which to apply fn
 	ids := map[int]bool{}      // IDs of VMs for which to apply fn
 
@@ -425,24 +631,171 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	return errs
 }
 
-// LocalVMs gets all the VMs running on the local host, filtered to the current
-// namespace, if applicable.
-func LocalVMs() VMs {
-	return vms.namespace()
+// checkInterfaces checks to make sure that a VM's MAC addresses are unique.
+// Only returns an error if the MAC addresses are not unique for the interfaces
+// on the same VM. If multiple VMs share the same MAC address, logs a warning.
+// If a VM's MAC address is empty for a given interface, it randomly assigns a
+// valid, unique, MAC to that interface.
+func (vms VMs) checkInterfaces(vm VM) error {
+	macs := map[string]bool{}
+
+	for _, net := range vm.Config().Networks {
+		// Skip unassigned MACs
+		if net.MAC == "" {
+			continue
+		}
+
+		// Check if the VM already has this MAC for one of its interfaces
+		if _, ok := macs[net.MAC]; ok {
+			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
+		}
+
+		macs[net.MAC] = true
+	}
+
+	for _, vm2 := range vms {
+		// Skip ourself
+		if vm.GetID() == vm2.GetID() {
+			continue
+		}
+
+		for _, net := range vm2.Config().Networks {
+			// VM must still be in the pre-building stage so it hasn't been
+			// assigned a MAC yet. We skip this case in order to supress
+			// duplicate MAC errors on an empty string.
+			if net.MAC == "" {
+				continue
+			}
+
+			// Warn if we see a conflict
+			if _, ok := macs[net.MAC]; ok {
+				log.Warn("VMs share MAC (%v) -- %v %v", net.MAC, vm.GetID(), vm2.GetID())
+			}
+
+			macs[net.MAC] = true
+		}
+	}
+
+	// Get a handle to the VM's actual Networks so that we can update them
+	var networks []NetConfig
+	switch vm := vm.(type) {
+	case *KvmVM:
+		networks = vm.Networks
+	case *ContainerVM:
+		networks = vm.Networks
+	default:
+		return errors.New("unable to CheckInterfaces for unknown VM type")
+	}
+
+	// Find any unassigned MACs and randomly generate a MAC for them
+	for i := range networks {
+		n := &networks[i]
+
+		if n.MAC != "" {
+			continue
+		}
+
+		// Loop until we don't have a conflict
+		for exists := true; exists; _, exists = macs[n.MAC] {
+			n.MAC = randomMac()
+		}
+
+		macs[n.MAC] = true
+	}
+
+	return nil
+}
+
+// checkDisks looks for Kvm VMs that share the same disk image and don't have
+// Snapshot set to true.
+func (vms VMs) checkDisks(vm *KvmVM) error {
+	// Disk path to whether it is a snapshot or not
+	disks := map[string]bool{}
+
+	// Record which disks are in use and whether they are being used as a
+	// snapshot or not by other VMs. If the same disk happens to be in use by
+	// different VMs and they have mismatched snapshot flags, assume that the
+	// disk is not being used in snapshot mode.
+	for _, vm2 := range vms {
+		// Skip ourself
+		if vm == vm2 {
+			continue
+		}
+
+		if vm2, ok := vm2.(*KvmVM); ok {
+			for _, disk := range vm2.DiskPaths {
+				disks[disk] = vm2.Snapshot || disks[disk]
+			}
+		}
+	}
+
+	// Check our disks to see if we're trying to use a disk that is in use by
+	// another VM (unless both are being used in snapshot mode).
+	for _, disk := range vm.DiskPaths {
+		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
+			return fmt.Errorf("disk path %v is already in use by another vm", disk)
+		}
+	}
+
+	return nil
+}
+
+// checkFilesystem looks for Container VMs that share the same filesystem
+// directory and don't have Snapshot set to true.
+func (vms VMs) checkFilesystem(vm *ContainerVM) error {
+	if vm.FSPath == "" {
+		return errors.New("unable to launch container without a configured filesystem")
+	}
+
+	// Disk path to whether it is a snapshot or not
+	disks := map[string]bool{}
+
+	// Record which disks are in use and whether they are being used as a
+	// snapshot or not by other VMs. If the same disk happens to be in use by
+	// different VMs and they have mismatched snapshot flags, assume that the
+	// disk is not being used in snapshot mode.
+	for _, vm2 := range vms {
+		// Skip ourself
+		if vm == vm2 { // ignore this vm
+			continue
+		}
+
+		if vm2, ok := vm2.(*ContainerVM); ok {
+			disks[vm2.FSPath] = vm2.Snapshot
+		}
+	}
+
+	// Check our disk to see if we're trying to use a disk that is in use by
+	// another VM (unless both are being used in snapshot mode).
+	if snapshot, ok := disks[vm.FSPath]; ok && (snapshot != vm.Snapshot) {
+		return fmt.Errorf("disk path %v is already in use by another vm", vm.FSPath)
+	}
+
+	return nil
 }
 
 // HostVMs gets all the VMs running on the specified remote host, filtered to
 // the current namespace, if applicable.
 func HostVMs(host string) VMs {
+	cmdLock.Lock()
+	defer cmdLock.Unlock()
+
+	return hostVMs(host)
+}
+
+// hostVMs is HostVMs without locking cmdLock.
+func hostVMs(host string) VMs {
 	// Compile info command and set it not to record
 	cmd := minicli.MustCompile("vm info")
 	cmd.SetRecord(false)
+	cmd.SetSource(GetNamespaceName())
 
 	cmds := makeCommandHosts([]string{host}, cmd)
 
 	var vms VMs
 
-	for resps := range processCommands(cmds...) {
+	// LOCK: see func description.
+	for resps := range runCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -464,30 +817,42 @@ func HostVMs(host string) VMs {
 }
 
 // GlobalVMs gets the VMs from all hosts in the mesh, filtered to the current
-// namespace, if applicable. Unlike LocalVMs, the keys of the returned map do
-// not match the VM's ID. Caller should hold cmdLock.
+// namespace, if applicable. The keys of the returned map do not match the VM's
+// ID.
 func GlobalVMs() VMs {
+	cmdLock.Lock()
+	defer cmdLock.Unlock()
+
+	return globalVMs()
+}
+
+// globalVMs is GlobalVMs without locking cmdLock.
+func globalVMs() VMs {
+	// Compile info command and set it not to record
+	cmd := minicli.MustCompile("vm info")
+	cmd.SetRecord(false)
+	cmd.SetSource(GetNamespaceName())
+
 	// Figure out which hosts to query:
 	//  * Hosts in the active namespace
 	//  * Hosts connected via meshage plus ourselves
 	var hosts []string
-	if namespace != "" {
-		hosts = namespaces[namespace].hostSlice()
+	if ns := GetNamespace(); ns != nil {
+		hosts = ns.hostSlice()
 	} else {
 		hosts = meshageNode.BroadcastRecipients()
 		hosts = append(hosts, hostname)
 	}
 
-	// Compile info command and set it not to record
-	cmd := minicli.MustCompile("vm info")
-	cmd.SetRecord(false)
+	log.Info("globalVMs command: %#v", cmd)
 
 	cmds := makeCommandHosts(hosts, cmd)
 
 	// Collected VMs
 	vms := VMs{}
 
-	for resps := range processCommands(cmds...) {
+	// LOCK: see func description.
+	for resps := range runCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -505,4 +870,59 @@ func GlobalVMs() VMs {
 	}
 
 	return vms
+}
+
+// ExpandLaunchNames takes a VM name, range, or count and expands it into a
+// list of names of VMs that should be launched. Does several sanity checks on
+// the names to make sure that they aren't reserved words and don't collide
+// with any existing VMs (as supplied via the vms argument).
+func ExpandLaunchNames(arg string, vms VMs) ([]string, error) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return expandLaunchNames(arg, vms)
+}
+
+// expandLaunchNames is ExpandLaunchNames without locking vmLock.
+func expandLaunchNames(arg string, vms VMs) ([]string, error) {
+	names := []string{}
+
+	count, err := strconv.ParseInt(arg, 10, 32)
+	if err != nil {
+		names, err = ranges.SplitList(arg)
+	} else if count <= 0 {
+		err = errors.New("invalid number of vms (must be > 0)")
+	} else {
+		names = make([]string, count)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(names) == 0 {
+		return nil, errors.New("no VMs to launch")
+	}
+
+	for _, name := range names {
+		if isReserved(name) {
+			return nil, fmt.Errorf("invalid vm name, `%s` is a reserved word", name)
+		}
+
+		if _, err := strconv.Atoi(name); err == nil {
+			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
+		}
+
+		for _, vm := range vms {
+			if !inNamespace(vm) {
+				continue
+			}
+
+			if vm.GetName() == name {
+				return nil, fmt.Errorf("vm already exists with name `%s`", name)
+			}
+		}
+	}
+
+	return names, nil
 }

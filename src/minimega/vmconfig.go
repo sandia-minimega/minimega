@@ -29,11 +29,11 @@ type VMConfigFns struct {
 	PrintCLI func(interface{}) []string // If not specified, Print is used
 }
 
-func (old *VMConfig) Copy() *VMConfig {
-	return &VMConfig{
-		BaseConfig:      *old.BaseConfig.Copy(),
-		KVMConfig:       *old.KVMConfig.Copy(),
-		ContainerConfig: *old.ContainerConfig.Copy(),
+func (old VMConfig) Copy() VMConfig {
+	return VMConfig{
+		BaseConfig:      old.BaseConfig.Copy(),
+		KVMConfig:       old.KVMConfig.Copy(),
+		ContainerConfig: old.ContainerConfig.Copy(),
 	}
 }
 
@@ -145,17 +145,9 @@ var containerConfigFns = map[string]VMConfigFns{
 	"hostname": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Hostname
 	}, ""),
-	"init": {
-		Update: func(v interface{}, c *minicli.Command) error {
-			vm := mustContainerConfig(v)
-			vm.Init = c.ListArgs["init"]
-			return nil
-		},
-		Clear: func(vm interface{}) {
-			mustContainerConfig(vm).Init = []string{"/init"}
-		},
-		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
-	},
+	"init": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustContainerConfig(vm).Init
+	}, "init", []string{"/init"}),
 	"preinit": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Preinit
 	}, ""),
@@ -190,10 +182,10 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}, "number", 0),
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
-	}, "qemu-append"),
+	}, "qemu-append", nil),
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
-	}, "disk"),
+	}, "disk", nil),
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
@@ -281,7 +273,7 @@ func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfig
 	}
 }
 
-func vmConfigSlice(fn func(interface{}) *[]string, name string) VMConfigFns {
+func vmConfigSlice(fn func(interface{}) *[]string, name string, defaultVal []string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
 			// Reset to empty list
@@ -294,7 +286,14 @@ func vmConfigSlice(fn func(interface{}) *[]string, name string) VMConfigFns {
 
 			return nil
 		},
-		Clear: func(vm interface{}) { *fn(vm) = []string{} },
+		Clear: func(vm interface{}) {
+			*fn(vm) = []string{}
+
+			if defaultVal != nil {
+				// copy values so that we don't change the defaults
+				*fn(vm) = append(*fn(vm), defaultVal...)
+			}
+		},
 		Print: func(vm interface{}) string {
 			if v := *fn(vm); len(v) > 0 {
 				return fmt.Sprintf("%v", v)

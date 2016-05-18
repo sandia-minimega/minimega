@@ -82,9 +82,9 @@ start() {
     return 1
   fi
   mkdir -p $MM_RUN_PATH
-	pushd $MINIMEGA_DIR &>/dev/null
-  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -namespace=$MM_NAMESPACE -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &> /dev/null &
-	popd &>/dev/null
+  pushd $MINIMEGA_DIR &>/dev/null
+  $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &> /dev/null &
+  popd &>/dev/null
   sleep 1
   new_pid=`cat $MM_RUN_PATH/minimega.pid 2> /dev/null`
   if [ "$?" != "0" ]; then # if the process has already died

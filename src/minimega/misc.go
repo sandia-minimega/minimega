@@ -44,6 +44,30 @@ func init() {
 	}
 }
 
+// makeErrSlice turns a slice of errors into an errSlice which implements the
+// Error interface. This checks to make sure that there is at least one non-nil
+// error in the slice and returns nil otherwise.
+func makeErrSlice(errs []error) error {
+	var found bool
+
+	for _, err := range errs {
+		if err != nil {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	return errSlice(errs)
+}
+
+func (errs errSlice) Error() string {
+	return errs.String()
+}
+
 func (errs errSlice) String() string {
 	vals := []string{}
 	for _, err := range errs {
@@ -245,26 +269,6 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find a VM based on it's ID, name, or UUID on a
-// given host. Returns nil if no such VM exists.
-func findRemoteVM(host, s string) VM {
-	log.Debug("findRemoteVM: %v %v", host, s)
-
-	var vms VMs
-
-	if host == hostname || host == Localhost {
-		vms = LocalVMs()
-	} else {
-		vms = HostVMs(host)
-	}
-
-	if vms != nil {
-		return vms.findVm(s)
-	}
-
-	return nil
-}
-
 // registerHandlers registers all the provided handlers with minicli, panicking
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {
@@ -445,6 +449,8 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
 func lookupVLAN(alias string) (int, error) {
+	namespace := GetNamespaceName()
+
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
@@ -460,10 +466,15 @@ func lookupVLAN(alias string) (int, error) {
 		return vlan, nil
 	}
 
-	cmd := minicli.MustCompilef("vlans add %q %v", alias, vlan)
+	// Broadcast out vlan alias to everyone so that we have a record of the
+	// aliases, should this node crash.
+	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
 	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
-		cmd = minicli.MustCompilef("namespace %q vlans add %q %v", namespace, alias, vlan)
+		s = fmt.Sprintf("namespace %q %v", namespace, s)
 	}
+	cmd := minicli.MustCompile(s)
+	cmd.SetRecord(false)
+	cmd.SetSource(namespace)
 
 	respChan, err := meshageSend(cmd, Wildcard)
 	if err != nil {
@@ -485,4 +496,11 @@ func lookupVLAN(alias string) (int, error) {
 	}()
 
 	return vlan, nil
+}
+
+// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+func printVLAN(vlan int) string {
+	namespace := GetNamespaceName()
+
+	return allocatedVLANs.PrintVLAN(namespace, vlan)
 }

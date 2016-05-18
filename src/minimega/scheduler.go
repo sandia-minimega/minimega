@@ -1,24 +1,19 @@
 package main
 
-import (
-	"fmt"
-	log "minilog"
-)
+import log "minilog"
 
-func schedule(namespace string) (*scheduleStat, map[string][]queuedVM) {
-	ns := namespaces[namespace]
-
+func schedule(queuedVMs []queuedVM, hosts []string) (*scheduleStat, map[string][]queuedVM) {
 	res := map[string][]queuedVM{}
 
 	// Total number of VMs to launch
 	var total int
 
-	for _, queued := range ns.queuedVMs {
+	for _, queued := range queuedVMs {
 		total += len(queued.names)
 	}
 
 	// Simplest scheduler -- roughly equal allocation per node
-	hosts := PermStrings(ns.hostSlice())
+	hosts = PermStrings(hosts)
 
 	// Number of VMs per host, need to round up
 	perHost := total / len(hosts)
@@ -31,14 +26,7 @@ func schedule(namespace string) (*scheduleStat, map[string][]queuedVM) {
 	// allocated is the number of VMs that have been allocated on that host
 	var host, allocated int
 
-	for _, queued := range ns.queuedVMs {
-		// Replace empty VM names with generic name
-		for i, name := range queued.names {
-			if name == "" {
-				queued.names[i] = fmt.Sprintf("vm-%v-%v", namespace, ns.vmID.Next())
-			}
-		}
-
+	for _, queued := range queuedVMs {
 		// Process queued VMs until all names have been allocated
 		for len(queued.names) > 0 {
 			// Splitter for names based on how many VMs should be allocated to

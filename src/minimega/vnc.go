@@ -28,13 +28,25 @@ type vncClient struct {
 	done  chan bool
 }
 
+// NewVNCClient creates a new VNC client. NewVNCClient is only called via the
+// cli so we can assume that cmdLock is held.
 func NewVNCClient(host, idOrName string) (*vncClient, error) {
 	// Resolve localhost to the actual hostname
 	if host == Localhost {
 		host = hostname
 	}
 
-	vm := findRemoteVM(host, idOrName)
+	var vm VM
+	if host == hostname {
+		vm = vms.FindVM(idOrName)
+	} else {
+		// LOCK: This is only invoked via the CLI so we already hold cmdLock
+		// (can call hostVMs instead of HostVMs). Since we're using not using
+		// the vms global, we don't need to acquire the vmLock (can call findVM
+		// instead of FindVM).
+		vm = hostVMs(host).findVM(idOrName)
+	}
+
 	if vm == nil {
 		return nil, vmNotFound(host + ":" + idOrName)
 	}

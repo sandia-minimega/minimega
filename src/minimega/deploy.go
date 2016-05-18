@@ -59,11 +59,7 @@ flags used when launching minimega.`,
 
 var deployFlags []string
 
-func cliDeploy(c *minicli.Command) *minicli.Response {
-	log.Debugln("deploy")
-
-	resp := &minicli.Response{Host: hostname}
-
+func cliDeploy(c *minicli.Command, resp *minicli.Response) error {
 	hosts := c.StringArgs["hosts"]
 	user := c.StringArgs["user"]
 	sudo := c.BoolArgs["sudo"]
@@ -72,16 +68,16 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 	if c.BoolArgs["flags"] {
 		if flagsList == nil {
 			resp.Response = deployGetFlags()
-		} else {
-			deployFlags = flagsList
+			return nil
 		}
-		return resp
+
+		deployFlags = flagsList
+		return nil
 	}
 
 	hostsExpanded, err := ranges.SplitList(hosts)
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	log.Debug("got expanded hosts: %v", hostsExpanded)
 
@@ -94,22 +90,11 @@ func cliDeploy(c *minicli.Command) *minicli.Response {
 
 	// copy minimega
 	errs := deployCopy(hostsExpanded, user, remotePath)
-	if errs != nil {
-		// just report the errors and keep trying
-		for _, e := range errs {
-			resp.Error += fmt.Sprintf("%v\n", e.Error())
-		}
-	}
 
 	// launch minimega on each remote node
-	errs = deployRun(hostsExpanded, user, remotePath, sudo)
-	if errs != nil {
-		for _, e := range errs {
-			resp.Error += fmt.Sprintf("%v\n", e.Error())
-		}
-	}
+	errs2 := deployRun(hostsExpanded, user, remotePath, sudo)
 
-	return resp
+	return makeErrSlice(append(errs, errs2...))
 }
 
 func deployCopy(hosts []string, user, remotePath string) []error {
@@ -192,10 +177,7 @@ func deployGetFlags() string {
 	return strings.Join(flags, " ")
 }
 
-func cliDeployClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDeployClear(c *minicli.Command, resp *minicli.Response) error {
 	deployFlags = nil
-
-	return resp
+	return nil
 }

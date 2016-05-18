@@ -40,14 +40,11 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
-func cliDot(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliDot(c *minicli.Command, resp *minicli.Response) error {
 	// Create the file before running any commands incase there is an error
 	fout, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	defer fout.Close()
 
@@ -59,7 +56,9 @@ func cliDot(c *minicli.Command) *minicli.Response {
 
 	vlans := make(map[int]bool)
 
-	for _, vm := range GlobalVMs() {
+	// LOCK: This is a CLI handler so we already hold cmdLock (can call
+	// globalVMs instaed of GlobalVMs).
+	for _, vm := range globalVMs() {
 		ip, err := vm.Info("ip")
 		ip6, err2 := vm.Info("ip6")
 		if err != nil || err2 != nil {
@@ -84,9 +83,5 @@ func cliDot(c *minicli.Command) *minicli.Response {
 	}
 
 	fmt.Fprint(writer, "}")
-	if err = writer.Flush(); err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return writer.Flush()
 }

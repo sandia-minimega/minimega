@@ -69,16 +69,13 @@ NOTE: If you start the webserver with an invalid root, you can safely re-run
 	},
 }
 
-func cliWeb(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliWeb(c *minicli.Command, resp *minicli.Response) error {
 	port := defaultWebPort
 	if c.StringArgs["port"] != "" {
 		// Check if port is an integer
 		p, err := strconv.Atoi(c.StringArgs["port"])
 		if err != nil {
-			resp.Error = fmt.Sprintf("'%v' is not a valid port", c.StringArgs["port"])
-			return resp
+			return fmt.Errorf("'%v' is not a valid port", c.StringArgs["port"])
 		}
 
 		port = p
@@ -91,7 +88,7 @@ func cliWeb(c *minicli.Command) *minicli.Response {
 
 	go webStart(port, root)
 
-	return resp
+	return nil
 }
 
 func webStart(port int, root string) {
@@ -161,12 +158,12 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 
 	var screenshot []byte
 
-	for resps := range runCommand(cmd) {
+	for resps := range RunCommands(cmd) {
 		for _, resp := range resps {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm does not support screenshots") {
+				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
 					continue
 				}
 
@@ -254,9 +251,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
-	cmdLock.Lock()
 	vms := GlobalVMs()
-	cmdLock.Unlock()
 
 	for _, vm := range vms {
 		stateMask := VM_QUIT | VM_ERROR

@@ -13,10 +13,8 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"ranges"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -367,37 +365,6 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			}
 		},
 	},
-	{ // vm tag
-		HelpShort: "display or set a tag for the specified VM",
-		HelpLong: `
-Display or set a tag for one or more virtual machines. See "vm start" for a
-full description of allowable targets.
-
-Tags are key-value pairs. A VM can have any number of tags associated with it.
-They can be used to attach additional information to a virtual machine, for
-example specifying a VM "group", or the correct rendering color for some
-external visualization tool.
-
-To set a tag "foo" to "bar" for VM 2:
-
-        vm tag 2 foo bar
-
-To read a tag:
-
-        vm tag <target> <key or all>`,
-		Patterns: []string{
-			"vm tag <target> [key or all]",  // get
-			"vm tag <target> <key> <value>", // set
-		},
-		Call: wrapVMTargetCLI(cliVmTag),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
-	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
 		HelpLong: `
@@ -429,6 +396,37 @@ Change a VM to use a new ISO:
 			}
 		},
 	},
+	{ // vm tag
+		HelpShort: "display or set a tag for the specified VM",
+		HelpLong: `
+Display or set a tag for one or more virtual machines. See "vm start" for a
+full description of allowable targets.
+
+Tags are key-value pairs. A VM can have any number of tags associated with it.
+They can be used to attach additional information to a virtual machine, for
+example specifying a VM "group", or the correct rendering color for some
+external visualization tool.
+
+To set a tag "foo" to "bar" for VM 2:
+
+        vm tag 2 foo bar
+
+To read a tag:
+
+        vm tag <target> <key or all>`,
+		Patterns: []string{
+			"vm tag <target> [key or all]",  // get
+			"vm tag <target> <key> <value>", // set
+		},
+		Call: wrapVMTargetCLI(cliVmTag),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
+	},
 	{ // clear vm tag
 		HelpShort: "remove tags from a VM",
 		HelpLong: `
@@ -453,7 +451,14 @@ Clear all tags from all VMs:
 			"clear vm tag",
 			"clear vm tag <target> [tag]",
 		},
-		Call: wrapSimpleCLI(cliClearVmTag),
+		Call: wrapVMTargetCLI(cliClearVmTag),
+		Suggest: func(val, prefix string) []string {
+			if val == "target" {
+				return cliVMSuggest(prefix, VM_ANY_STATE)
+			} else {
+				return nil
+			}
+		},
 	},
 }
 
@@ -464,83 +469,38 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func cliVmStart(c *minicli.Command) *minicli.Response {
-	errs := LocalVMs().start(c.StringArgs["target"])
-
-	return &minicli.Response{
-		Host:  hostname,
-		Error: errSlice(errs).String(),
-	}
+func cliVmStart(c *minicli.Command, resp *minicli.Response) error {
+	return makeErrSlice(vms.Start(c.StringArgs["target"]))
 }
 
-func cliVmStop(c *minicli.Command) *minicli.Response {
-	errs := LocalVMs().stop(c.StringArgs["target"])
-
-	return &minicli.Response{
-		Host:  hostname,
-		Error: errSlice(errs).String(),
-	}
+func cliVmStop(c *minicli.Command, resp *minicli.Response) error {
+	return makeErrSlice(vms.Stop(c.StringArgs["target"]))
 }
 
-func cliVmKill(c *minicli.Command) *minicli.Response {
-	errs := LocalVMs().kill(c.StringArgs["target"])
-
-	return &minicli.Response{
-		Host:  hostname,
-		Error: errSlice(errs).String(),
-	}
+func cliVmKill(c *minicli.Command, resp *minicli.Response) error {
+	return makeErrSlice(vms.Kill(c.StringArgs["target"]))
 }
 
-func cliVmInfo(c *minicli.Command) *minicli.Response {
-	var err error
-	resp := &minicli.Response{Host: hostname}
+func cliVmInfo(c *minicli.Command, resp *minicli.Response) error {
+	vms.Info(resp)
 
-	// Create locally scoped copy of vms in current namespace
-	vms := LocalVMs()
-
-	// Populate "dynamic" fields for all VMs, when running outside of the
-	// namespace environment.
-	for _, vm := range vms {
-		vm.UpdateBW()
-		vm.UpdateCCActive()
-	}
-
-	resp.Header, resp.Tabular, err = vms.info()
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
-	resp.Data = vms
-
-	return resp
+	return nil
 }
 
-func cliVmCdrom(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliVmCdrom(c *minicli.Command, resp *minicli.Response) error {
+	arg := c.StringArgs["vm"]
 
-	vmstring := c.StringArgs["vm"]
 	doVms := make([]*KvmVM, 0)
-	if vmstring == Wildcard {
-		for _, vm := range LocalVMs() {
-			switch vm := vm.(type) {
-			case *KvmVM:
-				doVms = append(doVms, vm)
-			default:
-				// TODO: Do anything?
-			}
-		}
+
+	if arg == Wildcard {
+		doVms = vms.FindKvmVMs()
 	} else {
-		vm := LocalVMs().findVm(vmstring)
-		if vm == nil {
-			resp.Error = vmNotFound(vmstring).Error()
-			return resp
+		vm, err := vms.FindKvmVM(arg)
+		if err != nil {
+			return err
 		}
-		if vm, ok := vm.(*KvmVM); ok {
-			doVms = append(doVms, vm)
-		} else {
-			resp.Error = "cdrom commands are only supported for kvm vms"
-			return resp
-		}
+
+		doVms = append(doVms, vm)
 	}
 
 	if c.BoolArgs["eject"] {
@@ -548,8 +508,7 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			err := v.q.BlockdevEject("ide0-cd1")
 			v.CdromPath = ""
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
 		}
 	} else if c.BoolArgs["change"] {
@@ -558,26 +517,21 @@ func cliVmCdrom(c *minicli.Command) *minicli.Response {
 			err := v.q.BlockdevEject("ide0-cd1")
 			v.CdromPath = ""
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
 
 			err = v.q.BlockdevChange("ide0-cd1", c.StringArgs["path"])
-			v.CdromPath = c.StringArgs["path"]
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
+			v.CdromPath = c.StringArgs["path"]
 		}
-
 	}
 
-	return resp
+	return nil
 }
 
-func cliVmTag(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmTag(c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
 	key := c.StringArgs["key"]
@@ -587,134 +541,103 @@ func cliVmTag(c *minicli.Command) *minicli.Response {
 		key = Wildcard
 	}
 
-	value, setOp := c.StringArgs["value"]
-	if setOp {
+	value, write := c.StringArgs["value"]
+	if write {
 		if key == Wildcard {
-			// Can't assign a value to wildcard!
-			resp.Error = "cannot assign to wildcard"
-			return resp
+			return errors.New("cannot assign to wildcard")
 		}
+
+		vms.SetTag(target, key, value)
+
+		return nil
+	}
+
+	if key == Wildcard {
+		resp.Header = []string{"ID", "Tag", "Value"}
 	} else {
+		resp.Header = []string{"ID", "Value"}
+	}
+
+	for _, tag := range vms.GetTags(target, key) {
+		row := []string{strconv.Itoa(tag.ID)}
+
 		if key == Wildcard {
-			resp.Header = []string{"ID", "Tag", "Value"}
-		} else {
-			resp.Header = []string{"ID", "Value"}
+			row = append(row, tag.Key)
 		}
 
-		resp.Tabular = make([][]string, 0)
+		row = append(row, tag.Value)
+		resp.Tabular = append(resp.Tabular, row)
 	}
 
-	// For each VM, get or set tags based on key/value/setOp. Should not be run
-	// in parallel since it updates resp.Tabular.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if setOp {
-			vm.SetTag(key, value)
-		} else if key == Wildcard {
-			for k, v := range vm.GetTags() {
-				resp.Tabular = append(resp.Tabular, []string{
-					strconv.Itoa(vm.GetID()),
-					k, v,
-				})
-			}
-		} else {
-			// TODO: return false if tag not set?
-			resp.Tabular = append(resp.Tabular, []string{
-				strconv.Itoa(vm.GetID()),
-				vm.Tag(key),
-			})
-		}
-
-		return true, nil
-	}
-
-	errs := LocalVMs().apply(target, false, applyFunc)
-	resp.Error = errSlice(errs).String()
-
-	return resp
+	return nil
 }
 
-func cliClearVmTag(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	key := c.StringArgs["key"]
-	if key == "" {
-		// If they didn't specify a key then they probably want all the tags
-		// for a given VM
+func cliClearVmTag(c *minicli.Command, resp *minicli.Response) error {
+	// Get the specified tag name or use Wildcard if not provided
+	key, ok := c.StringArgs["key"]
+	if !ok {
 		key = Wildcard
 	}
 
+	// Get the specified VM target or use Wildcard if not provided
 	target, ok := c.StringArgs["target"]
 	if !ok {
-		// No target specified, must want to clear all
 		target = Wildcard
 	}
 
-	// For each VM, clear the appropriate tag. Can be run in parallel.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if key == Wildcard {
-			vm.ClearTags()
-		} else {
-			delete(vm.GetTags(), key)
-		}
+	vms.ClearTags(target, key)
 
-		return true, nil
-	}
-
-	errs := LocalVMs().apply(target, true, applyFunc)
-	resp.Error = errSlice(errs).String()
-
-	return resp
+	return nil
 }
 
-func cliVmLaunch(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
+	ns := GetNamespace()
 
-	if namespace == "" && len(c.StringArgs) == 0 {
-		resp.Error = "invalid command when namespace is not active"
-		return resp
+	if ns == nil && len(c.StringArgs) == 0 {
+		return errors.New("invalid command when namespace is not active")
 	}
 
-	if namespace != "" && isUserSource(c.Source) {
+	// see note in wrapBroadcastCLI
+	if ns != nil && c.Source != ns.Name {
 		if len(c.StringArgs) > 0 {
-			namespaceQueue(c, resp)
-		} else {
-			namespaceLaunch(c, resp)
+			arg := c.StringArgs["name"]
+
+			vmType, err := findVMType(c.BoolArgs)
+			if err != nil {
+				return err
+			}
+
+			return ns.Queue(arg, vmType)
 		}
 
-		return resp
+		return ns.Launch()
 	}
 
-	// Only need to check collisions with VMs running locally, scheduler
-	// *should* have done checks to make sure that the VMs it was launching we
+	// expand the names to launch, scheduler should have ensured that they were
 	// globally unique.
-	names, err := expandVMLaunchNames(c.StringArgs["name"], LocalVMs())
+	names, err := ExpandLaunchNames(c.StringArgs["name"], vms)
+	if err != nil {
+		return err
+	}
 
 	if len(names) > 1 && vmConfig.UUID != "" {
-		err = errors.New("cannot launch multiple VMs with a pre-configured UUID")
-	}
-
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
 	for i, name := range names {
 		if isReserved(name) {
-			resp.Error = fmt.Sprintf("`%s` is a reserved word -- cannot use for vm name", name)
-			return resp
+			return fmt.Errorf("`%s` is a reserved word -- cannot use for vm name", name)
 		}
 
 		if _, err := strconv.Atoi(name); err == nil {
-			resp.Error = fmt.Sprintf("`%s` is an integer -- cannot use for vm name", name)
-			return resp
+			return fmt.Errorf("`%s` is an integer -- cannot use for vm name", name)
 		}
 
 		// Check for conflicts within the provided names. Don't conflict with
 		// ourselves or if the name is unspecified.
 		for j, name2 := range names {
 			if i != j && name == name2 && name != "" {
-				resp.Error = fmt.Sprintf("`%s` is specified twice in VMs to launch", name)
-				return resp
+				return fmt.Errorf("`%s` is specified twice in VMs to launch", name)
 			}
 		}
 	}
@@ -723,215 +646,153 @@ func cliVmLaunch(c *minicli.Command) *minicli.Response {
 
 	vmType, err := findVMType(c.BoolArgs)
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
-	log.Info("launching %v %v vms", len(names), vmType)
-
-	errChan := make(chan error)
-
-	var wg sync.WaitGroup
-
-	for _, name := range names {
-		wg.Add(1)
-
-		var vm VM
-		switch vmType {
-		case KVM:
-			vm = NewKVM(name)
-		case CONTAINER:
-			vm = NewContainer(name)
-		default:
-			// TODO
-		}
-
-		go func(name string) {
-			defer wg.Done()
-
-			errChan <- vms.launch(vm)
-		}(name)
-	}
-
-	go func() {
-		defer close(errChan)
-
-		wg.Wait()
-	}()
+	errChan := vms.Launch(names, vmType)
 
 	// Collect all the errors from errChan and turn them into a string
-	collectErrs := func() string {
+	collectErrs := func() error {
 		errs := []error{}
 		for err := range errChan {
 			errs = append(errs, err)
 		}
-		return errSlice(errs).String()
+
+		return makeErrSlice(errs)
 	}
 
 	if noblock {
 		go func() {
-			if err := collectErrs(); err != "" {
+			if err := collectErrs(); err != nil {
 				log.Errorln(err)
 			}
 		}()
-	} else {
-		resp.Error = collectErrs()
+
+		return nil
 	}
 
-	return resp
+	return collectErrs()
 }
 
-func cliVmFlush(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliVmFlush(c *minicli.Command, resp *minicli.Response) error {
+	vms.Flush()
 
-	// See VMs.flush for why we don't use LocalVMs
-	vms.flush()
-
-	return resp
+	return nil
 }
 
-func cliVmQmp(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	var err error
-	resp.Response, err = LocalVMs().qmp(c.StringArgs["vm"], c.StringArgs["qmp"])
+func cliVmQmp(c *minicli.Command, resp *minicli.Response) error {
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
-		resp.Error = err.Error()
+		return err
 	}
 
-	return resp
+	out, err := vm.QMPRaw(c.StringArgs["qmp"])
+	if err != nil {
+		return err
+	}
+
+	resp.Response = out
+	return nil
 }
 
-func cliVmScreenshot(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	vm := c.StringArgs["vm"]
-	maximum := c.StringArgs["maximum"]
+func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 	file := c.StringArgs["filename"]
 
 	var max int
-	var err error
-	if maximum != "" {
-		max, err = strconv.Atoi(maximum)
+
+	if arg := c.StringArgs["maximum"]; arg != "" {
+		v, err := strconv.Atoi(arg)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
+		max = v
 	}
 
-	pngData, err := LocalVMs().screenshot(vm, max)
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
-	// VM has to exist if we got pngData without an error
-	id := LocalVMs().findVm(vm).GetID()
+	data, err := vm.Screenshot(max)
+	if err != nil {
+		return err
+	}
 
-	path := filepath.Join(*f_base, strconv.Itoa(id), "screenshot.png")
+	path := filepath.Join(*f_base, strconv.Itoa(vm.GetID()), "screenshot.png")
 	if file != "" {
 		path = file
 	}
 
 	// add user data in case this is going across meshage
-	err = ioutil.WriteFile(path, pngData, os.FileMode(0644))
+	err = ioutil.WriteFile(path, data, os.FileMode(0644))
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
-	resp.Data = pngData
+	resp.Data = data
 
-	return resp
+	return nil
 }
 
-func cliVmMigrate(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	var err error
-
+func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		// tabular data is
-		// 	vm id, vm name, migrate status, % complete
-		for _, vm := range LocalVMs() {
-			vm, ok := vm.(*KvmVM)
-			if !ok {
-				// TODO: remove?
-				continue
-			}
+		resp.Header = []string{"id", "name", "status", "%% complete"}
 
+		for _, vm := range vms.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
-				resp.Error = err.Error()
-				return resp
+				return err
 			}
 			if status == "" {
 				continue
 			}
+
 			resp.Tabular = append(resp.Tabular, []string{
 				fmt.Sprintf("%v", vm.GetID()),
 				vm.GetName(),
 				status,
 				fmt.Sprintf("%.2f", complete)})
 		}
-		if len(resp.Tabular) != 0 {
-			resp.Header = []string{"vm id", "vm name", "status", "%% complete"}
-		}
-		return resp
+
+		return nil
 	}
 
-	err = LocalVMs().migrate(c.StringArgs["vm"], c.StringArgs["filename"])
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
-		resp.Error = err.Error()
+		return err
 	}
 
-	return resp
+	return vm.Migrate(c.StringArgs["filename"])
 }
 
-func cliVmSave(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliVmSave(c *minicli.Command, resp *minicli.Response) error {
 	path := filepath.Join(*f_base, "saved_vms")
 	err := os.MkdirAll(path, 0775)
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	name := c.StringArgs["name"]
 	file, err := os.Create(filepath.Join(path, name))
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 	defer file.Close()
 
-	if err := LocalVMs().save(file, c.StringArgs["target"]); err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return vms.Save(file, c.StringArgs["target"])
 }
 
-func cliVmHotplug(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	vm := LocalVMs().findVm(c.StringArgs["vm"])
-	if vm == nil {
-		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
-		return resp
-	}
-	kvm, ok := vm.(*KvmVM)
-	if !ok {
-		resp.Error = vmNotKVM(c.StringArgs["vm"]).Error()
-		return resp
+func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
 	}
 
 	if c.BoolArgs["add"] {
 		// generate an id by adding 1 to the highest in the list for the
 		// hotplug devices, 0 if it's empty
 		id := 0
-		for k, _ := range kvm.hotplug {
+		for k, _ := range vm.hotplug {
 			if k >= id {
 				id = k + 1
 			}
@@ -939,85 +800,72 @@ func cliVmHotplug(c *minicli.Command) *minicli.Response {
 		hid := fmt.Sprintf("hotplug%v", id)
 		log.Debugln("hotplug generated id:", hid)
 
-		r, err := kvm.q.DriveAdd(hid, c.StringArgs["filename"])
+		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		log.Debugln("hotplug drive_add response:", r)
-		r, err = kvm.q.USBDeviceAdd(hid)
+		r, err = vm.q.USBDeviceAdd(hid)
 		if err != nil {
-			resp.Error = err.Error()
-			return resp
+			return err
 		}
 
 		log.Debugln("hotplug usb device add response:", r)
-		kvm.hotplug[id] = c.StringArgs["filename"]
+		vm.hotplug[id] = c.StringArgs["filename"]
+
+		return nil
 	} else if c.BoolArgs["remove"] {
 		if c.StringArgs["disk"] == Wildcard {
-			for k := range kvm.hotplug {
-				if err := kvm.hotplugRemove(k); err != nil {
-					resp.Error = err.Error()
-					// TODO: try to remove the rest if there's an error?
-					break
+			for k := range vm.hotplug {
+				if err := vm.hotplugRemove(k); err != nil {
+					return err
 				}
 			}
 
-			return resp
+			return nil
 		}
 
 		id, err := strconv.Atoi(c.StringArgs["disk"])
 		if err != nil {
-			resp.Error = err.Error()
-		} else if err := kvm.hotplugRemove(id); err != nil {
-			resp.Error = err.Error()
+			return err
 		}
-	} else if c.BoolArgs["show"] {
-		if len(kvm.hotplug) > 0 {
-			resp.Header = []string{"hotplug ID", "File"}
-			resp.Tabular = [][]string{}
 
-			for k, v := range kvm.hotplug {
-				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
-			}
-		}
+		return vm.hotplugRemove(id)
 	}
 
-	return resp
+	// must be "show"
+	resp.Header = []string{"hotplug ID", "File"}
+	resp.Tabular = [][]string{}
+
+	for k, v := range vm.hotplug {
+		resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
+	}
+
+	return nil
 }
 
-func cliVmNetMod(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	vm := LocalVMs().findVm(c.StringArgs["vm"])
+func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
+	vm := vms.FindVM(c.StringArgs["vm"])
 	if vm == nil {
-		resp.Error = vmNotFound(c.StringArgs["vm"]).Error()
-		return resp
+		return vmNotFound(c.StringArgs["vm"])
 	}
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
-		resp.Error = err.Error()
-		return resp
+		return err
 	}
 
 	if c.BoolArgs["disconnect"] {
-		err = vm.NetworkDisconnect(pos)
-	} else {
-		vlan := 0
-
-		vlan, err := lookupVLAN(c.StringArgs["vlan"])
-		if err == nil {
-			err = vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
-		}
+		return vm.NetworkDisconnect(pos)
 	}
 
+	vlan, err := lookupVLAN(c.StringArgs["vlan"])
 	if err != nil {
-		resp.Error = err.Error()
+		return err
 	}
 
-	return resp
+	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 }
 
 // cliVMSuggest takes a prefix that could be the start of a VM name or a VM ID
@@ -1049,47 +897,4 @@ func cliVMSuggest(prefix string, mask VMState) []string {
 	}
 
 	return res
-}
-
-// expandVMLaunchNames takes a VM name, range, or count and expands the list of
-// names of VMs that should be launch. Does several sanity checks on the names
-// to make sure that they aren't reserved words and don't collide with existing
-// VM names (as supplied via the vms argument).
-func expandVMLaunchNames(arg string, vms VMs) ([]string, error) {
-	names := []string{}
-
-	count, err := strconv.ParseInt(arg, 10, 32)
-	if err != nil {
-		names, err = ranges.SplitList(arg)
-	} else if count <= 0 {
-		err = errors.New("invalid number of vms (must be > 0)")
-	} else {
-		names = make([]string, count)
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(names) == 0 {
-		return nil, errors.New("no VMs to launch")
-	}
-
-	for _, name := range names {
-		if isReserved(name) {
-			return nil, fmt.Errorf("invalid vm name, `%s` is a reserved word", name)
-		}
-
-		if _, err := strconv.Atoi(name); err == nil {
-			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
-		}
-
-		for _, vm := range vms {
-			if vm.GetName() == name {
-				return nil, fmt.Errorf("vm already exists with name `%s`", name)
-			}
-		}
-	}
-
-	return names, nil
 }

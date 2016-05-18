@@ -554,7 +554,7 @@ func (n *Node) handleMSA(m *Message) {
 
 func (n *Node) periodicEffectiveNetwork() {
 	for {
-		time.Sleep(n.msaTimeout)
+		time.Sleep(n.GetMSATimeout())
 		n.checkUpdateNetwork()
 	}
 }
@@ -570,17 +570,23 @@ func (n *Node) checkUpdateNetwork() {
 
 func (n *Node) periodicMSA() {
 	for {
-		time.Sleep(n.msaTimeout)
+		time.Sleep(n.GetMSATimeout())
 		n.MSA()
 	}
 }
 
 // Set the MSA period, in seconds.
 func (n *Node) SetMSATimeout(timeout uint) {
+	n.msaLock.Lock()
+	defer n.msaLock.Unlock()
+
 	n.msaTimeout = time.Duration(timeout) * time.Second
 }
 
 // Return the MSA period, in seconds.
 func (n *Node) GetMSATimeout() time.Duration {
+	n.msaLock.Lock()
+	defer n.msaLock.Unlock()
+
 	return n.msaTimeout
 }
