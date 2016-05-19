@@ -24,7 +24,9 @@ import (
 	"minicli"
 	log "minilog"
 	"minipager"
+	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -224,10 +226,7 @@ func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	// Preprocess all the commands so that if there's an error, we haven't
 	// already started to run some of the commands.
 	for i := range cmd {
-		var err error
-
-		cmd[i], err = cliPreprocessor(cmd[i])
-		if err != nil {
+		if err := cliPreprocessor(cmd[i]); err != nil {
 			log.Errorln(err)
 
 			// Send the error from a separate goroutine because nothing will
@@ -396,15 +395,71 @@ func cliLocal() {
 }
 
 // cliPreprocessor allows modifying commands post-compile but pre-process.
-// Currently the only preprocessor is the "file:" handler.
+// Current preprocessors "file:", "http://", and "http://".
 //
 // Note: we don't run preprocessors when we're not running the `local` behavior
 // (see wrapBroadcastCLI) to avoid expanding files before we're running the
 // command on the correct machine.
-func cliPreprocessor(c *minicli.Command) (*minicli.Command, error) {
+func cliPreprocessor(c *minicli.Command) error {
 	if c.Source != GetNamespaceName() {
-		return c, nil
+		return nil
 	}
 
-	return iomPreprocessor(c)
+	helper := func(v string) (string, error) {
+		if u, err := url.Parse(v); err == nil {
+			switch u.Scheme {
+			case "file":
+				log.Debug("file preprocessor")
+				return iomHelper(u.Opaque)
+			case "http", "https":
+				log.Debug("http/s preprocessor")
+
+				// Check if we've already downloaded the file
+				v2, err := iomHelper(u.Path)
+				if err == nil {
+					return v2, err
+				}
+
+				if err.Error() == "file not found" {
+					log.Info("attempting to download %v", u)
+
+					// Try to download the file, save to files
+					dst := filepath.Join(*f_iomBase, u.Path)
+					if err := wget(v, dst); err != nil {
+						return "", err
+					}
+
+					return dst, nil
+				}
+
+				return "", err
+			}
+		}
+
+		return v, nil
+	}
+
+	for k, v := range c.StringArgs {
+		v2, err := helper(v)
+		if err != nil {
+			return err
+		}
+
+		log.Debug("cliPreprocessor: %v -> %v", v, v2)
+		c.StringArgs[k] = v2
+	}
+
+	for k := range c.ListArgs {
+		for k2, v := range c.ListArgs[k] {
+			v2, err := helper(v)
+			if err != nil {
+				return err
+			}
+
+			log.Debug("cliPreprocessor: %v -> %v", v, v2)
+			c.ListArgs[k][k2] = v2
+		}
+	}
+
+	return nil
 }
