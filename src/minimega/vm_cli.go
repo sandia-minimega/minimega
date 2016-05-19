@@ -71,6 +71,15 @@ Display information about all VMs:
 		},
 		Call: wrapBroadcastCLI(cliVmInfo),
 	},
+	{ // vm summary
+		HelpShort: "print summary information about VMs",
+		HelpLong: `
+Simpler version of "vm info" -- same meanings but fewer columns. `,
+		Patterns: []string{
+			"vm summary",
+		},
+		Call: wrapBroadcastCLI(cliVmSummary),
+	},
 	{ // vm save
 		HelpShort: "save a vm configuration for later use",
 		HelpLong: `
@@ -482,7 +491,13 @@ func cliVmKill(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliVmInfo(c *minicli.Command, resp *minicli.Response) error {
-	vms.Info(resp)
+	vms.Info(vmInfo, resp)
+
+	return nil
+}
+
+func cliVmSummary(c *minicli.Command, resp *minicli.Response) error {
+	vms.Info(vmInfoLite, resp)
 
 	return nil
 }

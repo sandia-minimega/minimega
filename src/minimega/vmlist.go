@@ -106,11 +106,11 @@ func (vms VMs) Save(file *os.File, target string) error {
 }
 
 // Info populates resp with info about the VMs running in the active namespace.
-func (vms VMs) Info(resp *minicli.Response) {
+func (vms VMs) Info(masks []string, resp *minicli.Response) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	resp.Header = vmMasks
+	resp.Header = masks
 	res := VMs{} // for res.Data
 
 	for _, vm := range vms {
@@ -125,7 +125,7 @@ func (vms VMs) Info(resp *minicli.Response) {
 
 		row := []string{}
 
-		for _, mask := range vmMasks {
+		for _, mask := range masks {
 			if v, err := vm.Info(mask); err != nil {
 				// Field most likely not set for VM type
 				row = append(row, "N/A")
