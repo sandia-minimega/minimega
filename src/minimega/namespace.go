@@ -46,6 +46,9 @@ type Namespace struct {
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
+
+	// Names of host taps associated with this namespace
+	Taps map[string]bool
 }
 
 var (
@@ -86,6 +89,18 @@ func (n Namespace) hostSlice() []string {
 	}
 
 	return hosts
+}
+
+func (n Namespace) AddTap(tap string) {
+	n.Taps[tap] = true
+}
+
+func (n Namespace) HasTap(tap string) bool {
+	return n.Taps[tap]
+}
+
+func (n Namespace) RemoveTap(tap string) {
+	delete(n.Taps, tap)
 }
 
 // Queue handles storing the current VM config to the namespace's queuedVMs so
@@ -312,6 +327,7 @@ func GetOrCreateNamespace(name string) *Namespace {
 		ns := &Namespace{
 			Name:  name,
 			Hosts: map[string]bool{},
+			Taps:  map[string]bool{},
 			vmID:  NewCounter(),
 		}
 
@@ -369,6 +385,13 @@ func DestroyNamespace(name string) error {
 
 	if err := ns.Destroy(); err != nil {
 		return err
+	}
+
+	// Delete any Taps associated with the namespace
+	for tap := range ns.Taps {
+		if err := hostTapDelete(tap); err != nil {
+			return err
+		}
 	}
 
 	// If we're deleting the currently active namespace, we should get out of

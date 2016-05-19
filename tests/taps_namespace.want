@@ -1,0 +1,53 @@
+## # Create a tap, second time should fail
+## .filter bridge=minitest tap
+## tap create 10 bridge minitest name minitest_tap0
+minitest_tap0
+
+## # Create a tap in a different namespace
+## namespace foo tap create 10 bridge minitest name minitest_tap1
+minitest_tap1
+## .filter bridge=minitest tap
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   | 
+minitest | minitest_tap1 | 10   | foo
+## namespace foo .filter bridge=minitest tap
+bridge   | tap           | vlan
+minitest | minitest_tap1 | 10
+
+## # Create a tap in another, different namespace
+## namespace bar tap create 10 bridge minitest name minitest_tap2
+minitest_tap2
+## .filter bridge=minitest tap
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   | 
+minitest | minitest_tap1 | 10   | foo
+minitest | minitest_tap2 | 10   | bar
+## namespace bar .filter bridge=minitest tap
+bridge   | tap           | vlan
+minitest | minitest_tap2 | 10
+
+## # Try to delete tap from wrong namespace
+## namespace bar tap delete minitest_tap0
+E: not a host tap in active namespace
+## namespace bar tap delete minitest_tap1
+E: not a host tap in active namespace
+
+## # Delete all the foo taps
+## namespace foo tap delete all
+## .filter bridge=minitest tap
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   | 
+minitest | minitest_tap2 | 10   | bar
+
+## # Delete all the bar taps by deleting the namespace
+## clear namespace bar
+## .filter bridge=minitest tap
+bridge   | tap           | vlan | namespace
+minitest | minitest_tap0 | 10   |
+
+## # Clean up taps
+## tap delete all
+## .filter bridge=minitest tap
+
+## # Clean up foo namespace
+## clear namespace foo

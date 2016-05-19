@@ -431,7 +431,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	}
 
 	if b == "" {
-		b = DEFAULT_BRIDGE
+		b = DefaultBridge
 	}
 	if d == "" {
 		d = VM_NET_DRIVER_DEFAULT

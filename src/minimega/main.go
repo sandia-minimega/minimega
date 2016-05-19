@@ -254,20 +254,22 @@ func teardown() {
 	vms.Flush()
 	vms.CleanDirs()
 	containerTeardown()
-	err := bridgesDestroy()
-	if err != nil {
+
+	if err := bridgesDestroy(); err != nil {
 		log.Errorln(err)
 	}
-	reapTaps()
+
 	commandSocketRemove()
 	goreadline.Rlcleanup()
-	err = os.Remove(filepath.Join(*f_base, "minimega.pid"))
-	if err != nil {
+
+	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
 		log.Fatalln(err)
 	}
+
 	if cpuProfileOut != nil {
 		pprof.StopCPUProfile()
 		cpuProfileOut.Close()
 	}
+
 	os.Exit(0)
 }
