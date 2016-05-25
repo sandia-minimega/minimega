@@ -47,7 +47,7 @@ var (
 	f_context    = flag.String("context", "minimega", "meshage context for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
-	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in markdown, to stdout and exit")
+	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 
 	vms = VMs{}
