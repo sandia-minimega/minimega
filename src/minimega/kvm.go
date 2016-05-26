@@ -244,6 +244,35 @@ func (vm *KvmVM) SaveConfig(w io.Writer) error {
 	return err
 }
 
+func (vm *KvmVM) Conflicts(vm2 VM) error {
+	switch vm2 := vm2.(type) {
+	case *KvmVM:
+		return vm.ConflictsKVM(vm2)
+	case *ContainerVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	}
+
+	return errors.New("unknown VM type")
+}
+
+// ConflictsKVM tests whether vm and vm2 share a disk and returns an
+// error if one of them is not running in snapshot mode. Also checks
+// whether the BaseVMs conflict.
+func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, d := range vm.DiskPaths {
+		for _, d2 := range vm2.DiskPaths {
+			if d == d2 && (!vm.Snapshot || !vm2.Snapshot) {
+				return fmt.Errorf("disk conflict with vm %v: %v", vm.Name, d)
+			}
+		}
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
+}
+
 func (vm *KVMConfig) String() string {
 	// create output
 	var o bytes.Buffer

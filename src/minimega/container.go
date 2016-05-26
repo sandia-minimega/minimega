@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -683,6 +684,31 @@ func (vm *ContainerVM) SaveConfig(w io.Writer) error {
 
 	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
 	return err
+}
+
+func (vm *ContainerVM) Conflicts(vm2 VM) error {
+	switch vm2 := vm2.(type) {
+	case *ContainerVM:
+		return vm.ConflictsContainer(vm2)
+	case *KvmVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	}
+
+	return errors.New("unknown VM type")
+}
+
+// ConflictsContainer tests whether vm and vm2 share a filesystem and
+// returns an error if one of them is not running in snapshot mode. Also
+// checks whether the BaseVMs conflict.
+func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.FSPath == vm2.FSPath && (!vm.Snapshot || !vm2.Snapshot) {
+		return fmt.Errorf("filesystem conflict with vm %v: %v", vm.Name, vm.FSPath)
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
 }
 
 func (vm *ContainerConfig) String() string {
