@@ -152,7 +152,7 @@ func (b *Bridge) RemoveTap(tap string) error {
 }
 
 // startIML starts the MAC listener for this bridge.
-func (b *Bridge) startIML() {
+func (b *Bridge) startIML() error {
 	// use openflow to redirect arp and icmp6 traffic to the local tap
 	filters := []string{
 		"dl_type=0x0806,actions=local,normal",
@@ -161,18 +161,17 @@ func (b *Bridge) startIML() {
 
 	for _, filter := range filters {
 		if err := b.addOpenflow(filter); err != nil {
-			log.Error("cannot start ip learner on bridge: %v", err)
-			return
+			return fmt.Errorf("start ip learner failed: %v", err)
 		}
 	}
 
 	iml, err := ipmac.NewLearner(b.Name)
 	if err != nil {
-		log.Error("cannot start ip learner on bridge: %v", err)
-		return
+		return fmt.Errorf("start ip learner failed: %v", err)
 	}
 
 	b.IPMacLearner = iml
+	return nil
 }
 
 // addOpenflow adds an openflow rule to the bridge using `ovs-ofctl`.

@@ -83,21 +83,27 @@ func (b Bridges) newBridge(name string) error {
 
 	br.preExist = !created
 
-	// Bring the interface up
-	if err := upInterface(br.Name, false); err != nil {
+	// Bring the interface up, start MAC <-> IP learner
+	err = upInterface(br.Name, false)
+	if err == nil {
+		err = br.startIML()
+	}
+
+	// No errors... bridge ready for use
+	if err == nil {
+		b.bridges[br.Name] = br
+		return nil
+	}
+
+	// Try to delete the bridge, if we created it
+	if created {
 		if err := ovsDelBridge(br.Name); err != nil {
 			// Welp, we're boned
 			log.Error("zombie bridge -- %v %v", br.Name, err)
 		}
-
-		return err
 	}
 
-	br.startIML()
-
-	b.bridges[br.Name] = br
-
-	return nil
+	return err
 }
 
 // Names returns a list of all the managed bridge names.
