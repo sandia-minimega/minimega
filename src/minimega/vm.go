@@ -71,6 +71,10 @@ type VM interface {
 	// config to the io.Writer.
 	SaveConfig(io.Writer) error
 
+	// Conflicts checks whether the VMs have conflicting configs. Called
+	// when we create a VM but before adding it to the list of VMs.
+	Conflicts(VM) error
+
 	SetCCActive(bool)
 	UpdateBW()
 
@@ -163,7 +167,7 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func NewVM(name string, vmType VMType) VM {
+func NewVM(name string, vmType VMType) (VM, error) {
 	switch vmType {
 	case KVM:
 		return NewKVM(name)
@@ -171,7 +175,7 @@ func NewVM(name string, vmType VMType) VM {
 		return NewContainer(name)
 	}
 
-	return nil
+	return nil, errors.New("unknown VM type")
 }
 
 // NewBaseVM creates a new VM, copying the currently set configs. After a VM is
@@ -193,6 +197,15 @@ func NewBaseVM(name string) *BaseVM {
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
 		vm.UUID = generateUUID()
+	}
+
+	// generate MAC addresses if any are unassigned. Don't bother checking
+	// for collisions -- based on the birthday paradox, there's only a
+	// 0.016% chance of collisions when running 10K VMs (one interface/VM).
+	for i := range vm.Networks {
+		if vm.Networks[i].MAC == "" {
+			vm.Networks[i].MAC = randomMac()
+		}
 	}
 
 	vm.kill = make(chan bool)
@@ -616,6 +629,22 @@ func (vm *BaseVM) writeTaps() error {
 		return fmt.Errorf("write instance taps file: %v", err)
 	}
 
+	return nil
+}
+
+func (vm *BaseVM) conflicts(vm2 BaseVM) error {
+	// TODO: || vm.Namespace == ""????
+	if vm.Namespace == vm2.Namespace {
+		if vm.Name == vm2.Name {
+			return fmt.Errorf("duplicate VM name: %s", vm.Name)
+		}
+
+		if vm.UUID == vm2.UUID {
+			return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
+		}
+	}
+
+	// TODO: check for MAC address conflicts?
 	return nil
 }
 
