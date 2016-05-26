@@ -668,6 +668,19 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
+func (vm *ContainerVM) SaveConfig(w io.Writer) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
+	cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
+	cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.Type, vm.Name))
+
+	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
+	return err
+}
+
 func (vm *ContainerConfig) String() string {
 	// create output
 	var o bytes.Buffer
@@ -723,7 +736,8 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
+	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes

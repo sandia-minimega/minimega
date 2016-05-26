@@ -86,38 +86,8 @@ func (vms VMs) Save(file *os.File, target string) error {
 			return true, err
 		}
 
-		// build up the command list to re-launch this vm, first clear all
-		// previous configuration.
-		cmds := []string{"clear vm config"}
-
-		cmds = append(cmds, saveConfig(baseConfigFns, vm.Config())...)
-
-		switch vm := vm.(type) {
-		case *KvmVM:
-			cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
-		case *ContainerVM:
-			cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
-		default:
-		}
-
-		// build the string to actually launch the VM
-		arg := vm.GetName()
-		if arg == "" {
-			arg = "1"
-		}
-		cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.GetType(), arg))
-
-		// and a blank line
-		cmds = append(cmds, "")
-
-		// write commands to file
-		for _, cmd := range cmds {
-			if _, err = file.WriteString(cmd + "\n"); err != nil {
-				return true, err
-			}
-		}
-
-		return true, nil
+		err = vm.SaveConfig(file)
+		return true, err
 	}
 
 	vms.apply(target, false, applyFunc)
@@ -635,7 +605,7 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 func (vms VMs) checkInterfaces(vm VM) error {
 	macs := map[string]bool{}
 
-	for _, net := range vm.Config().Networks {
+	for _, net := range getConfig(vm).Networks {
 		// Skip unassigned MACs
 		if net.MAC == "" {
 			continue
@@ -655,7 +625,7 @@ func (vms VMs) checkInterfaces(vm VM) error {
 			continue
 		}
 
-		for _, net := range vm2.Config().Networks {
+		for _, net := range getConfig(vm2).Networks {
 			// VM must still be in the pre-building stage so it hasn't been
 			// assigned a MAC yet. We skip this case in order to supress
 			// duplicate MAC errors on an empty string.

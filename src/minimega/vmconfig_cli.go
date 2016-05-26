@@ -526,11 +526,12 @@ func cliVmConfig(c *minicli.Command, resp *minicli.Response) error {
 			return vmNotFound(c.StringArgs["vm"])
 		}
 
-		vmConfig.BaseConfig = vm.Config().Copy()
 		switch vm := vm.(type) {
 		case *KvmVM:
+			vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			vmConfig.KVMConfig = vm.KVMConfig.Copy()
 		case *ContainerVM:
+			vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
 		}
 
