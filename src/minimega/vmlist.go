@@ -62,10 +62,6 @@ func (vms VMs) Save(file *os.File, target string) error {
 			return true, err
 		}
 
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		// build up the command list to re-launch this vm, first clear all
 		// previous configuration.
 		cmds := []string{"clear vm config"}
@@ -114,10 +110,6 @@ func (vms VMs) Info(masks []string, resp *minicli.Response) {
 	res := VMs{} // for res.Data
 
 	for _, vm := range vms {
-		if !inNamespace(vm) {
-			continue
-		}
-
 		// Update dynamic fields before querying info
 		vm.UpdateBW()
 
@@ -146,10 +138,6 @@ func (vms VMs) SetTag(target, key, value string) {
 
 	// For each VM, set tag using key/value. Can be run in parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		vm.SetTag(key, value)
 
 		return true, nil
@@ -167,10 +155,6 @@ func (vms VMs) GetTags(target, key string) []Tag {
 	// For each VM, start it if it's in a startable state. Cannot be run in parallel since
 	// it aggregates results in res.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if key == Wildcard {
 			for k, v := range vm.GetTags() {
 				res = append(res, Tag{
@@ -204,10 +188,6 @@ func (vms VMs) ClearTags(target, key string) {
 
 	// For each VM, set tag using key/value. Can be run in parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		vm.ClearTag(key)
 
 		return true, nil
@@ -390,10 +370,6 @@ func (vms VMs) Start(target string) []error {
 	// For each VM, start it if it's in a startable state. Can be run in
 	// parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
@@ -415,10 +391,6 @@ func (vms VMs) Stop(target string) []error {
 
 	// For each VM, stop it if it's running. Can be run in parallel.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
@@ -439,10 +411,6 @@ func (vms VMs) Kill(target string) []error {
 	// For each VM, kill it if it's in a killable state. Should not be run in
 	// parallel because we record the IDs of the VMs we kill in killedVms.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -580,6 +548,10 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
 		if wild || names[vm.GetName()] || ids[vm.GetID()] {
 			delete(names, vm.GetName())
 			delete(ids, vm.GetID())
