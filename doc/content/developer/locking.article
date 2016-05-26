@@ -1,0 +1,57 @@
+Locking
+
+The minimega authors
+24 May 2016
+
+* Introduction
+
+minimega is highly concurrent and using many locks in order to avoid data
+races. This leads to many potential deadlocks which this article is aimed to
+prevent by describing those locks and when/how they are used.
+
+* Overview
+
+
+
+** Description of locks
+
+*** `cmdLock`
+
+This is the biggest lock in minimega -- it serializes all commands from the
+CLI, meshage, the domain socket, and other sources.  All `cli*` handlers assume
+that this lock is held when they are invoked.  `RunCommands`, which wraps
+`minicli.ProcessCommand`, acquires it and should be used for all asynchronous
+tasks (e.g. handling web). If a handler needs to run a subsequent command, it
+may use `runCommands` instead which assumes the lock is already held.
+
+Note: the `read` API handler uses the `cmdLock` unnaturally -- it releases the
+lock in the handler and relocks it upon returning. This allows the commands that
+are read from the file to be interleaved with commands from meshage and the web
+so that the user can observe the progression of the `read` command. This may
+create issues if the interleaved commands are not strictly read-only.
+
+*** `vmLock`
+
+This synchronizes all access to the global `VMs` map. All `exported` functions
+on the `VMs` type handle locking automatically.
+
+*** `VM.lock`
+*** `meshageCommandLock`
+*** `containerInitLock`
+*** `captureLock`
+*** `namespaceLock`
+*** `externalProcessesLock`
+
+** Hierarchy of locks
+
+
+** Locking in other packages
+
+Other packages may contain their own locking mechanisms. We need to be careful
+about other packages using callbacks from minimega (or sending via goroutine)
+to ensure that we don't create a deadlock. Below we detail the packages where
+this may occur.
+
+*** ipmac
+*** ron
+*** ???
