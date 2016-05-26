@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
@@ -42,8 +43,6 @@ const (
 )
 
 type VM interface {
-	Config() *BaseConfig
-
 	GetID() int           // GetID returns the VM's per-host unique ID
 	GetName() string      // GetName returns the VM's per-host unique name
 	GetNamespace() string // GetNamespace returns the VM's namespace
@@ -67,6 +66,10 @@ type VM interface {
 	SetTag(string, string)      // SetTag updates the given tag
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
+
+	// SaveConfig writes the commands to relaunch this VM with the same
+	// config to the io.Writer.
+	SaveConfig(io.Writer) error
 
 	SetCCActive(bool)
 	UpdateBW()
@@ -642,4 +645,15 @@ func vmNotKVM(idOrName string) error {
 
 func isVmNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
+}
+
+func getConfig(vm VM) BaseConfig {
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vm.BaseConfig
+	case *ContainerVM:
+		return vm.BaseConfig
+	}
+
+	return BaseConfig{}
 }

@@ -102,7 +102,7 @@ func startCapturePcap(vm string, iface int, filename string) error {
 		return vmNotFound(vm)
 	}
 
-	config := v.Config()
+	config := getConfig(v)
 
 	if len(config.Networks) <= iface {
 		return fmt.Errorf("no such interface %v", iface)

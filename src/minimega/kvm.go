@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	"math/rand"
@@ -230,6 +231,19 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
+func (vm *KvmVM) SaveConfig(w io.Writer) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
+	cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
+	cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.Type, vm.Name))
+
+	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
+	return err
+}
+
 func (vm *KVMConfig) String() string {
 	// create output
 	var o bytes.Buffer
@@ -375,7 +389,8 @@ func (vm *KvmVM) launch() error {
 	}
 
 	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	config := vm.BaseConfig.String() + vm.KVMConfig.String()
+	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
