@@ -104,7 +104,7 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func NewKVM(name string) *KvmVM {
+func NewKVM(name string) (*KvmVM, error) {
 	vm := new(KvmVM)
 
 	vm.BaseVM = *NewBaseVM(name)
@@ -114,7 +114,7 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	return vm
+	return vm, nil
 }
 
 // Launch a new KVM VM.

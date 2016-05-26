@@ -163,7 +163,7 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func NewVM(name string, vmType VMType) VM {
+func NewVM(name string, vmType VMType) (VM, error) {
 	switch vmType {
 	case KVM:
 		return NewKVM(name)
@@ -171,7 +171,7 @@ func NewVM(name string, vmType VMType) VM {
 		return NewContainer(name)
 	}
 
-	return nil
+	return nil, errors.New("unknown VM type")
 }
 
 // NewBaseVM creates a new VM, copying the currently set configs. After a VM is
