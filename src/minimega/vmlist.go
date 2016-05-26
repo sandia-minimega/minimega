@@ -46,6 +46,30 @@ func (vms VMs) Clone() VMs {
 	return res
 }
 
+// Count of VMs in current namespace.
+func (vms VMs) Count() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	i := 0
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			i += 1
+		}
+	}
+
+	return i
+}
+
+// CountAll is Count, regardless of namespace.
+func (vms VMs) CountAll() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return len(vms)
+}
+
 // Save the commands to configure the targeted VMs to file.
 func (vms VMs) Save(file *os.File, target string) error {
 	vmLock.Lock()
