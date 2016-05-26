@@ -30,22 +30,6 @@ type Tag struct {
 
 var vmLock sync.Mutex // lock for synchronizing access to vms
 
-// Clone creates a snapshot of the currently running VMs. It should be safe to
-// range over the returned value without holding the vmLock to perform
-// read-only operations. Does *not* filter the returned VMs to just those in
-// the active namespace.
-func (vms VMs) Clone() VMs {
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	res := VMs{}
-	for k, v := range res {
-		res[k] = v
-	}
-
-	return res
-}
-
 // Save the commands to configure the targeted VMs to file.
 func (vms VMs) Save(file *os.File, target string) error {
 	vmLock.Lock()
