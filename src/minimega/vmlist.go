@@ -88,6 +88,10 @@ func (vms VMs) Info(masks []string, resp *minicli.Response) {
 	res := VMs{} // for res.Data
 
 	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
 		// Update dynamic fields before querying info
 		vm.UpdateBW()
 
