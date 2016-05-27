@@ -633,7 +633,7 @@ func (vm *BaseVM) writeTaps() error {
 }
 
 func (vm *BaseVM) conflicts(vm2 BaseVM) error {
-	// TODO: || vm.Namespace == ""????
+	// Return error if two VMs have same name or UUID
 	if vm.Namespace == vm2.Namespace {
 		if vm.Name == vm2.Name {
 			return fmt.Errorf("duplicate VM name: %s", vm.Name)
@@ -644,7 +644,15 @@ func (vm *BaseVM) conflicts(vm2 BaseVM) error {
 		}
 	}
 
-	// TODO: check for MAC address conflicts?
+	// Warn if we see two VMs that share a MAC on the same VLAN
+	for _, n := range vm.Networks {
+		for _, n2 := range vm2.Networks {
+			if n.MAC == n2.MAC && n.VLAN == n2.VLAN {
+				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", vm.ID, vm2.ID)
+			}
+		}
+	}
+
 	return nil
 }
 
