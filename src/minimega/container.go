@@ -680,7 +680,14 @@ func (vm *ContainerVM) SaveConfig(w io.Writer) error {
 	cmds := []string{"clear vm config"}
 	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
 	cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
-	cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.Type, vm.Name))
+
+	// Build launch string, make sure to preserve namespace if set
+	format := "vm launch %v %v"
+	if vm.Namespace != "" {
+		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
+	}
+	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
+	cmds = append(cmds, "", "") // add a blank line
 
 	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
 	return err
