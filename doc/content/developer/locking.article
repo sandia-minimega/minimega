@@ -9,41 +9,109 @@ minimega is highly concurrent and using many locks in order to avoid data
 races. This leads to many potential deadlocks which this article is aimed to
 prevent by describing those locks and when/how they are used.
 
-* Overview
+** Locking conventions
 
+In general, locks should be only be used in the file where they are defined.
+Files typically include a type definition and some number of functions that
+operate on those types. Therefore, if a file defines a lock, most of the
+functions that are semantically related to the lock should be defined in the
+same file. An exception to this rule is the `cmdLock` which is described below.
 
+We are in the process of moving towards a naming convention within minimega --
+if both an `exported` and `internal` function exist, the exported function
+acquires any necessary locks and then invokes the internal function. For
+example:
 
-** Description of locks
+	// FindVM finds a VM in the active namespace based on its ID, name, or UUID.
+	func (vms VMs) FindVM(s string) VM {
+	    vmLock.Lock()
+	    defer vmLock.Unlock()
+
+	    return vms.findVM(s)
+	}
+
+	// findVM assumes vmLock is held.
+	func (vms VMs) findVM(s string) VM {
+
+Developers should read the function description to determine if call site
+already holds the requisite locks. If the requisite locks are held, the
+developer should annotate the call sites with `// LOCK: ...` to make it clear
+that calling the internal function is indeed correct.
+
+** Locks in minimega
 
 *** `cmdLock`
 
-This is the biggest lock in minimega -- it serializes all commands from the
-CLI, meshage, the domain socket, and other sources.  All `cli*` handlers assume
-that this lock is held when they are invoked.  `RunCommands`, which wraps
+This is the biggest lock in minimega -- it serializes all commands from the CLI,
+meshage, the domain socket, and other sources.  All `cli*` handlers assume that
+this lock is held when they are invoked.  `RunCommands`, which wraps
 `minicli.ProcessCommand`, acquires it and should be used for all asynchronous
 tasks (e.g. handling web). If a handler needs to run a subsequent command, it
 may use `runCommands` instead which assumes the lock is already held.
+`minicli.ProcessCommand` should only be called by `runCommands`.
+
+This lock greatly reduces the overall locking in minimega -- if data is only
+access via a CLI handler, it does not require its own lock.
 
 Note: the `read` API handler uses the `cmdLock` unnaturally -- it releases the
 lock in the handler and relocks it upon returning. This allows the commands that
 are read from the file to be interleaved with commands from meshage and the web
 so that the user can observe the progression of the `read` command. This may
-create issues if the interleaved commands are not strictly read-only.
+create issues if the interleaved commands are not strictly read-only but it was
+unacceptable to lock up minimega for tens of minutes or more while long scripts
+are read.
 
 *** `vmLock`
 
-This synchronizes all access to the global `VMs` map. All `exported` functions
-on the `VMs` type handle locking automatically.
+`vmLock` synchronizes all access to the global `VMs` map. All exported functions
+on the `VMs` type handle locking automatically. Developers should not range over
+the `VMs` map or access a VM by key -- these functionalities should only be
+performed by the exported functions.
 
 *** `VM.lock`
+
+`VM.lock` synchronizes all access to a single VM including performing lifecycle
+operations, updating attributes, and accessing tags.
+
+Note: newly created VMs are returned in the `locked` state. This ensures that
+the only valid operation on a new VM is `Launch`.
+
 *** `meshageCommandLock`
+
+`meshageCommandLock` ensures that only one `meshageSend` operation can occur at
+a time. The lock is released once all the responses are read from the returned
+channel.
+
 *** `containerInitLock`
-*** `captureLock`
+
+`containerInitLock` ensures that we only initialize the container environment
+for minimega once, when we try to launch the first container.
+
 *** `namespaceLock`
+
+`namespaceLock` synchronizes all operations regarding namespaces including
+getting and setting the active namespace and creating a new namespace. The
+exported `*Namespace` functions acquire this lock automatically. We currently do
+not use this lock to synchronize access to the underlying Namespace structs --
+these should be synchronized via the `cmdLock`.
+
 *** `externalProcessesLock`
+
+`externalProcessesLock` synchronizes access the `customExternalProcesses` map.
+This map allows users to update the names of external dependencies and is
+accessed every time minimega creates a process.
 
 ** Hierarchy of locks
 
+One way to prevent deadlocks in programs with multiple locks is to ensure that
+threads always acquire locks in the same order. We attempt to follow this idea
+and have defined the following hierarchy:
+
+    cmdLock > vmLock > VM.lock > all other locks
+    locks in minimega >> locks in other packages
+
+Developers must ensure that any blocking operations on channels do not
+implicitly pass locks to threads in violation with the hierarchy.
 
 ** Locking in other packages
 
@@ -53,5 +121,15 @@ to ensure that we don't create a deadlock. Below we detail the packages where
 this may occur.
 
 *** ipmac
+
+We (incorrectly) allow a data race (but avoid a deadlock!).
+
+Note: this *should* be fixed... (see #549).
+
 *** ron
-*** ???
+
+We register VMs with ron so that it can query a VM's tags, namespace, and set
+that CC is active. These operations all acquire the VM lock. In order to avoid a
+potential deadlock, VMs should not call any ron operations while holding their
+own lock (with the exception of `ron.Server.RegisterVM` -- the VM is not
+registered so it cannot cause a deadlock).
