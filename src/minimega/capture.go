@@ -12,7 +12,6 @@ import (
 	log "minilog"
 	"strconv"
 	"strings"
-	"sync"
 )
 
 type capture struct {
@@ -29,17 +28,10 @@ type capture struct {
 }
 
 var (
-	captureEntries   map[int]*capture
-	captureID        *Counter
-	captureLock      sync.Mutex
-	captureNFTimeout int
-)
-
-func init() {
+	captureEntries   = make(map[int]*capture)
+	captureID        = NewCounter()
 	captureNFTimeout = 10
-	captureEntries = make(map[int]*capture)
-	captureID = NewCounter()
-}
+)
 
 func clearAllCaptures() (err error) {
 	err = clearCapture("netflow", Wildcard)
@@ -51,9 +43,6 @@ func clearAllCaptures() (err error) {
 }
 
 func clearCapture(captureType, id string) (err error) {
-	captureLock.Lock()
-	defer captureLock.Unlock()
-
 	defer func() {
 		// check if we need to remove the nf object
 		if err != nil && captureType == "netflow" {
@@ -126,9 +115,7 @@ func startCapturePcap(vm string, iface int, filename string) error {
 		pcap:      p,
 	}
 
-	captureLock.Lock()
 	captureEntries[ce.ID] = ce
-	captureLock.Unlock()
 
 	return nil
 }
@@ -166,9 +153,7 @@ func startBridgeCapturePcap(b, filename string) error {
 		tap:       tap,
 	}
 
-	captureLock.Lock()
 	captureEntries[ce.ID] = ce
-	captureLock.Unlock()
 
 	return nil
 }
@@ -204,9 +189,7 @@ func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) erro
 		Compress: compress,
 	}
 
-	captureLock.Lock()
 	captureEntries[ce.ID] = ce
-	captureLock.Unlock()
 
 	return nil
 }
@@ -241,15 +224,12 @@ func startCaptureNetflowSocket(bridge, transport, host string, ascii bool) error
 		Mode:   modeStr,
 	}
 
-	captureLock.Lock()
 	captureEntries[ce.ID] = ce
-	captureLock.Unlock()
 
 	return nil
 }
 
-// stopPcapCapture stops the specified pcap capture. Assumes that captureLock
-// has been acquired by the caller.
+// stopPcapCapture stops the specified pcap capture.
 func stopPcapCapture(entry *capture) error {
 	if entry.Type != "pcap" {
 		return errors.New("called stop pcap capture on capture of wrong type")
@@ -274,8 +254,7 @@ func stopPcapCapture(entry *capture) error {
 	return nil
 }
 
-// stopNetflowCapture stops the specified netflow capture. Assumes that
-// captureLock has been acquired by the caller.
+// stopNetflowCapture stops the specified netflow capture.
 func stopNetflowCapture(entry *capture) error {
 	if entry.Type != "netflow" {
 		return errors.New("called stop netflow capture on capture of wrong type")
