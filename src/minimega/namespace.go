@@ -74,6 +74,23 @@ func (n Namespace) Destroy() error {
 		}
 	}
 
+	// Delete any Taps associated with the namespace
+	for t := range n.Taps {
+		tap, err := bridges.FindTap(t)
+		if err != nil {
+			return err
+		}
+
+		br, err := getBridge(tap.Bridge)
+		if err != nil {
+			return err
+		}
+
+		if err := br.DestroyTap(tap.Name); err != nil {
+			return err
+		}
+	}
+
 	// Free up any VLANs associated with the namespace
 	allocatedVLANs.Delete(n.Name, "")
 
@@ -385,13 +402,6 @@ func DestroyNamespace(name string) error {
 
 	if err := ns.Destroy(); err != nil {
 		return err
-	}
-
-	// Delete any Taps associated with the namespace
-	for tap := range ns.Taps {
-		if err := hostTapDelete(tap); err != nil {
-			return err
-		}
 	}
 
 	// If we're deleting the currently active namespace, we should get out of
