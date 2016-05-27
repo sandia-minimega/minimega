@@ -79,9 +79,13 @@ func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 
 	// first get all of the taps off of this bridge and destroy them
-	for tap := range b.taps {
-		log.Debug("destroying tap %v", tap)
-		if err := b.destroyTap(tap); err != nil {
+	for _, tap := range b.taps {
+		if tap.Defunct {
+			continue
+		}
+
+		log.Debug("destroying tap %v", tap.Name)
+		if err := b.destroyTap(tap.Name); err != nil {
 			log.Info("could not destroy tap: %v", err)
 		}
 	}

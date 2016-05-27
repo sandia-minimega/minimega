@@ -390,7 +390,7 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		net.Tap, err = br.CreateTap(net.Tap, net.VLAN, false)
+		net.Tap, err = br.CreateTap(net.Tap, net.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
