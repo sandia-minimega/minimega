@@ -12,14 +12,14 @@ import (
 
 // CreateTap creates and adds a tap to a bridge. If a name is not provided, one
 // will be automatically generated.
-func (b *Bridge) CreateTap(tap string, lan int, host bool) (string, error) {
+func (b *Bridge) CreateTap(tap string, lan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.createTap(tap, lan, host)
+	return b.createTap(tap, lan)
 }
 
-func (b *Bridge) createTap(t string, lan int, host bool) (tap string, err error) {
+func (b *Bridge) createTap(t string, lan int) (string, error) {
 	log.Info("creating tap on bridge: %v %v", b.Name, t)
 
 	// reap taps before creating to avoid someone killing/restarting a vm
@@ -30,14 +30,13 @@ func (b *Bridge) createTap(t string, lan int, host bool) (tap string, err error)
 		return t, fmt.Errorf("tap already on bridge")
 	}
 
-	tap = t
+	tap := t
 	if tap == "" {
 		tap = <-b.nameChan
 	}
 
 	var existed bool
 
-	// TODO: does this make sense? shouldn't create fail if the tap already exists?
 	if err := createTap(tap); err == errAlreadyExists && t != "" {
 		// Caller provided a name so assume it was created for us
 		existed = true
@@ -45,22 +44,64 @@ func (b *Bridge) createTap(t string, lan int, host bool) (tap string, err error)
 		return "", err
 	}
 
-	// Clean up the tap we just created, if it didn't already exist.
-	defer func() {
-		if err != nil && !existed {
-			if err := destroyTap(tap); err != nil {
-				// Welp, we're boned
-				log.Error("zombie tap -- %v %v", tap, err)
-			}
-			tap = ""
-		}
-	}()
+	err := upInterface(tap, false)
+	if err == nil {
+		err = b.addTap(tap, lan, false)
+	}
 
-	if err := upInterface(tap, host); err != nil {
+	// Clean up the tap we just created, if it didn't already exist.
+	if err != nil && !existed {
+		if err := destroyTap(tap); err != nil {
+			// Welp, we're boned
+			log.Error("zombie tap -- %v %v", tap, err)
+		}
+
 		return "", err
 	}
 
-	return tap, b.addTap(tap, lan, host)
+	return tap, nil
+}
+
+// CreateHostTap creates and adds a host tap to a bridge. If a name is not
+// provided, one will be automatically generated.
+func (b *Bridge) CreateHostTap(tap string, lan int) (string, error) {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	return b.createHostTap(tap, lan)
+}
+
+func (b *Bridge) createHostTap(t string, lan int) (string, error) {
+	log.Info("creating host tap on bridge: %v %v", b.Name, t)
+
+	// reap taps before creating to avoid someone killing/restarting a vm
+	// faster than the periodic tap reaper
+	b.reapTaps()
+
+	if _, ok := b.taps[t]; ok {
+		return t, fmt.Errorf("tap already on bridge")
+	}
+
+	tap := t
+	if tap == "" {
+		tap = <-b.nameChan
+	}
+
+	if err := b.addTap(tap, lan, true); err != nil {
+		return "", err
+	}
+
+	if err := upInterface(tap, true); err != nil {
+		// Clean up the tap we just created
+		if err := b.destroyTap(tap); err != nil {
+			// Welp, we're boned
+			log.Error("zombie tap -- %v %v", tap, err)
+		}
+
+		return "", err
+	}
+
+	return tap, nil
 }
 
 // AddTap adds an existing tap to the bridge. Can be used in conjunction with
@@ -127,6 +168,11 @@ func (b *Bridge) destroyTap(t string) error {
 	}
 
 	tap.Defunct = true
+
+	if tap.Host {
+		// Tap is managed by OVS -- calling del-port will delete it for us.
+		return nil
+	}
 
 	return destroyTap(tap.Name)
 }
