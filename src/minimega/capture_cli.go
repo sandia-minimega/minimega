@@ -225,9 +225,6 @@ func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 		)
 	}
 
-	captureLock.Lock()
-	defer captureLock.Unlock()
-
 	// List captures
 	resp.Header = []string{"ID", "Bridge", "Path", "Mode", "Compress"}
 
