@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -580,7 +581,7 @@ func (vm *ContainerVM) Config() *BaseConfig {
 	return &vm.BaseConfig
 }
 
-func NewContainer(name string) *ContainerVM {
+func NewContainer(name string) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
 	vm.BaseVM = *NewBaseVM(name)
@@ -588,7 +589,11 @@ func NewContainer(name string) *ContainerVM {
 
 	vm.ContainerConfig = vmConfig.ContainerConfig.Copy() // deep-copy configured fields
 
-	return vm
+	if vm.FSPath == "" {
+		return nil, errors.New("unable to create container without a configured filesystem")
+	}
+
+	return vm, nil
 }
 
 func (vm *ContainerVM) Launch() error {
@@ -668,6 +673,51 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
+func (vm *ContainerVM) SaveConfig(w io.Writer) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
+	cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
+
+	// Build launch string, make sure to preserve namespace if set
+	format := "vm launch %v %v"
+	if vm.Namespace != "" {
+		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
+	}
+	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
+	cmds = append(cmds, "", "") // add a blank line
+
+	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
+	return err
+}
+
+func (vm *ContainerVM) Conflicts(vm2 VM) error {
+	switch vm2 := vm2.(type) {
+	case *ContainerVM:
+		return vm.ConflictsContainer(vm2)
+	case *KvmVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	}
+
+	return errors.New("unknown VM type")
+}
+
+// ConflictsContainer tests whether vm and vm2 share a filesystem and
+// returns an error if one of them is not running in snapshot mode. Also
+// checks whether the BaseVMs conflict.
+func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.FSPath == vm2.FSPath && (!vm.Snapshot || !vm2.Snapshot) {
+		return fmt.Errorf("filesystem conflict with vm %v: %v", vm.Name, vm.FSPath)
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
+}
+
 func (vm *ContainerConfig) String() string {
 	// create output
 	var o bytes.Buffer
@@ -723,7 +773,8 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
+	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes

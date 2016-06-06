@@ -4,7 +4,7 @@
 
 ## # Try to launch another without clearing the UUID
 ## vm launch kvm 1
-E: vm launch duplicate UUID: a5082fed-bc6f-4f77-8c1b-692ce5ef6302
+E: duplicate VM UUID: a5082fed-bc6f-4f77-8c1b-692ce5ef6302
 
 ## # Try to launch two VMs with the same UUID
 ## vm config uuid f3b8b039-2f26-43d0-908c-b0de030a44ed
