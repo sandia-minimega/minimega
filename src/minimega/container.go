@@ -857,39 +857,8 @@ func (vm *ContainerVM) launch() error {
 	// side of the network namespace. That means that unlike kvm vms, we MUST
 	// create/destroy taps on launch/kill boundaries (kvm destroys taps on
 	// flush).
-
-	// create and add taps if we are associated with any networks
-	// expose the network namespace to iptool
-	if err = vm.symlinkNetns(); err != nil {
-		log.Error("symlinkNetns: %v", err)
-	}
-
-	if err == nil {
-		for i := range vm.Networks {
-			net := &vm.Networks[i]
-
-			br, err := bridges.Get(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-				break
-			}
-
-			net.Tap, err = br.CreateContainerTap(net.Tap, vm.netns, net.MAC, net.VLAN, i)
-			if err != nil {
-				break
-			}
-
-			updates := make(chan ipmac.IP)
-			go vm.macSnooper(net, updates)
-
-			br.AddMac(net.MAC, updates)
-		}
-	}
-
-	if err == nil && len(vm.Networks) > 0 {
-		if err = vm.writeTaps(); err != nil {
-			log.Errorln(err)
-		}
+	if err = vm.launchNetwork(); err != nil {
+		log.Errorln(err)
 	}
 
 	childSync1.Close()
@@ -1002,7 +971,7 @@ func (vm *ContainerVM) launch() error {
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
-			br, err := bridges.Get(net.Bridge)
+			br, err := getBridge(net.Bridge)
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			} else {
@@ -1026,6 +995,41 @@ func (vm *ContainerVM) launch() error {
 			killAck <- vm.ID
 		}
 	}()
+
+	return nil
+}
+
+func (vm *ContainerVM) launchNetwork() error {
+	// create and add taps if we are associated with any networks
+	// expose the network namespace to iptool
+	if err := vm.symlinkNetns(); err != nil {
+		return fmt.Errorf("symlinkNetns: %v", err)
+	}
+
+	for i := range vm.Networks {
+		nic := &vm.Networks[i]
+
+		br, err := getBridge(nic.Bridge)
+		if err != nil {
+			return fmt.Errorf("get bridge: %v", err)
+		}
+
+		nic.Tap, err = br.CreateContainerTap(nic.Tap, vm.netns, nic.MAC, nic.VLAN, i)
+		if err != nil {
+			return fmt.Errorf("create tap: %v", err)
+		}
+
+		updates := make(chan ipmac.IP)
+		go vm.macSnooper(nic, updates)
+
+		br.AddMac(nic.MAC, updates)
+	}
+
+	if len(vm.Networks) > 0 {
+		if err := vm.writeTaps(); err != nil {
+			return fmt.Errorf("write taps: %v", err)
+		}
+	}
 
 	return nil
 }
