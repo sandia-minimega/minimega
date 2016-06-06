@@ -119,37 +119,9 @@ func DestroyTap(name string) error {
 func destroyTap(name string) error {
 	log.Info("destroying tuntap: %v", name)
 
-	out, err := processWrapper("ip", "tuntap", "del", "mode", "tap", name)
+	out, err := processWrapper("ip", "link", "del", name)
 	if err != nil {
 		return fmt.Errorf("destroy tap failed: %v: %v", err, out)
-	}
-
-	return nil
-}
-
-// destroyVeth destroys a veth device.
-func destroyVeth(name string) error {
-	// TODO: Needed?
-	if err := downInterface(name); err != nil {
-		return err
-	}
-
-	log.Info("destroying veth: %v", name)
-
-	args := []string{
-		"ip",
-		"link",
-		"del",
-		name,
-		"type",
-		"veth",
-		"peer",
-		"eth0",
-	}
-
-	out, err := processWrapper(args...)
-	if err != nil {
-		return fmt.Errorf("destroy veth failed: %v: %v", err, out)
 	}
 
 	return nil

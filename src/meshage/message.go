@@ -262,11 +262,9 @@ floodLoop:
 			err := n.clientSend(j, m)
 			if err != nil {
 				// is j still a client?
-				n.clientLock.Lock()
-				if _, ok := n.clients[j]; ok {
+				if n.hasClient(j) {
 					log.Error("flood to client %v: %v", j, err)
 				}
-				n.clientLock.Unlock()
 			}
 		}(k, m)
 	}

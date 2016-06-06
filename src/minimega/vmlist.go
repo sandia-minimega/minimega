@@ -30,20 +30,28 @@ type Tag struct {
 
 var vmLock sync.Mutex // lock for synchronizing access to vms
 
-// Clone creates a snapshot of the currently running VMs. It should be safe to
-// range over the returned value without holding the vmLock to perform
-// read-only operations. Does *not* filter the returned VMs to just those in
-// the active namespace.
-func (vms VMs) Clone() VMs {
+// Count of VMs in current namespace.
+func (vms VMs) Count() int {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	res := VMs{}
-	for k, v := range res {
-		res[k] = v
+	i := 0
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			i += 1
+		}
 	}
 
-	return res
+	return i
+}
+
+// CountAll is Count, regardless of namespace.
+func (vms VMs) CountAll() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return len(vms)
 }
 
 // Save the commands to configure the targeted VMs to file.
@@ -62,42 +70,8 @@ func (vms VMs) Save(file *os.File, target string) error {
 			return true, err
 		}
 
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
-		// build up the command list to re-launch this vm, first clear all
-		// previous configuration.
-		cmds := []string{"clear vm config"}
-
-		cmds = append(cmds, saveConfig(baseConfigFns, vm.Config())...)
-
-		switch vm := vm.(type) {
-		case *KvmVM:
-			cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
-		case *ContainerVM:
-			cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
-		default:
-		}
-
-		// build the string to actually launch the VM
-		arg := vm.GetName()
-		if arg == "" {
-			arg = "1"
-		}
-		cmds = append(cmds, fmt.Sprintf("vm launch %s %s", vm.GetType(), arg))
-
-		// and a blank line
-		cmds = append(cmds, "")
-
-		// write commands to file
-		for _, cmd := range cmds {
-			if _, err = file.WriteString(cmd + "\n"); err != nil {
-				return true, err
-			}
-		}
-
-		return true, nil
+		err = vm.SaveConfig(file)
+		return true, err
 	}
 
 	vms.apply(target, false, applyFunc)
@@ -146,10 +120,6 @@ func (vms VMs) SetTag(target, key, value string) {
 
 	// For each VM, set tag using key/value. Can be run in parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		vm.SetTag(key, value)
 
 		return true, nil
@@ -167,10 +137,6 @@ func (vms VMs) GetTags(target, key string) []Tag {
 	// For each VM, start it if it's in a startable state. Cannot be run in parallel since
 	// it aggregates results in res.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if key == Wildcard {
 			for k, v := range vm.GetTags() {
 				res = append(res, Tag{
@@ -204,10 +170,6 @@ func (vms VMs) ClearTags(target, key string) {
 
 	// For each VM, set tag using key/value. Can be run in parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		vm.ClearTag(key)
 
 		return true, nil
@@ -304,9 +266,16 @@ func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm := NewVM(name, vmType)
+		vm, err := NewVM(name, vmType)
+		if err == nil {
+			for _, vm2 := range vms {
+				if err = vm2.Conflicts(vm); err != nil {
+					break
+				}
+			}
+		}
 
-		if err := vms.check(vm); err != nil {
+		if err != nil {
 			// Send from new goroutine to prevent deadlock since we haven't
 			// even returned the output channel yet... hopefully we won't spawn
 			// too many goroutines.
@@ -347,41 +316,6 @@ func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 	return out
 }
 
-// check VM doesn't have any conflicts with the existing VMs
-func (vms VMs) check(vm VM) error {
-	// Make sure that there isn't an existing VM with the same name or UUID
-	for _, vm2 := range vms {
-		// We only care about name collisions if the VMs are running in the
-		// same namespace or if the collision is a non-namespaced VM with an
-		// already running namespaced VM.
-		namesEq := vm.GetName() == vm2.GetName()
-		uuidEq := vm.GetUUID() == vm2.GetUUID()
-		namespaceEq := (vm.GetNamespace() == vm2.GetNamespace())
-
-		if uuidEq && (namespaceEq || vm.GetNamespace() == "") {
-			return fmt.Errorf("vm launch duplicate UUID: %s", vm.GetUUID())
-		}
-
-		if namesEq && (namespaceEq || vm.GetNamespace() == "") {
-			return fmt.Errorf("vm launch duplicate VM name: %s", vm.GetName())
-		}
-	}
-
-	// Check the interfaces/disks/filesystem is sane
-	if err := vms.checkInterfaces(vm); err != nil {
-		return err
-	}
-
-	switch vm := vm.(type) {
-	case *KvmVM:
-		return vms.checkDisks(vm)
-	case *ContainerVM:
-		return vms.checkFilesystem(vm)
-	}
-
-	return errors.New("unknown VM type")
-}
-
 // Start VMs matching target.
 func (vms VMs) Start(target string) []error {
 	vmLock.Lock()
@@ -390,10 +324,6 @@ func (vms VMs) Start(target string) []error {
 	// For each VM, start it if it's in a startable state. Can be run in
 	// parallel.
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
@@ -415,10 +345,6 @@ func (vms VMs) Stop(target string) []error {
 
 	// For each VM, stop it if it's running. Can be run in parallel.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
@@ -439,10 +365,6 @@ func (vms VMs) Kill(target string) []error {
 	// For each VM, kill it if it's in a killable state. Should not be run in
 	// parallel because we record the IDs of the VMs we kill in killedVms.
 	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if !inNamespace(vm) {
-			return false, nil
-		}
-
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -580,6 +502,10 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
 		if wild || names[vm.GetName()] || ids[vm.GetID()] {
 			delete(names, vm.GetName())
 			delete(ids, vm.GetID())
@@ -629,149 +555,6 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	return errs
-}
-
-// checkInterfaces checks to make sure that a VM's MAC addresses are unique.
-// Only returns an error if the MAC addresses are not unique for the interfaces
-// on the same VM. If multiple VMs share the same MAC address, logs a warning.
-// If a VM's MAC address is empty for a given interface, it randomly assigns a
-// valid, unique, MAC to that interface.
-func (vms VMs) checkInterfaces(vm VM) error {
-	macs := map[string]bool{}
-
-	for _, net := range vm.Config().Networks {
-		// Skip unassigned MACs
-		if net.MAC == "" {
-			continue
-		}
-
-		// Check if the VM already has this MAC for one of its interfaces
-		if _, ok := macs[net.MAC]; ok {
-			return fmt.Errorf("VM has same MAC for more than one interface -- %s", net.MAC)
-		}
-
-		macs[net.MAC] = true
-	}
-
-	for _, vm2 := range vms {
-		// Skip ourself
-		if vm.GetID() == vm2.GetID() {
-			continue
-		}
-
-		for _, net := range vm2.Config().Networks {
-			// VM must still be in the pre-building stage so it hasn't been
-			// assigned a MAC yet. We skip this case in order to supress
-			// duplicate MAC errors on an empty string.
-			if net.MAC == "" {
-				continue
-			}
-
-			// Warn if we see a conflict
-			if _, ok := macs[net.MAC]; ok {
-				log.Warn("VMs share MAC (%v) -- %v %v", net.MAC, vm.GetID(), vm2.GetID())
-			}
-
-			macs[net.MAC] = true
-		}
-	}
-
-	// Get a handle to the VM's actual Networks so that we can update them
-	var networks []NetConfig
-	switch vm := vm.(type) {
-	case *KvmVM:
-		networks = vm.Networks
-	case *ContainerVM:
-		networks = vm.Networks
-	default:
-		return errors.New("unable to CheckInterfaces for unknown VM type")
-	}
-
-	// Find any unassigned MACs and randomly generate a MAC for them
-	for i := range networks {
-		n := &networks[i]
-
-		if n.MAC != "" {
-			continue
-		}
-
-		// Loop until we don't have a conflict
-		for exists := true; exists; _, exists = macs[n.MAC] {
-			n.MAC = randomMac()
-		}
-
-		macs[n.MAC] = true
-	}
-
-	return nil
-}
-
-// checkDisks looks for Kvm VMs that share the same disk image and don't have
-// Snapshot set to true.
-func (vms VMs) checkDisks(vm *KvmVM) error {
-	// Disk path to whether it is a snapshot or not
-	disks := map[string]bool{}
-
-	// Record which disks are in use and whether they are being used as a
-	// snapshot or not by other VMs. If the same disk happens to be in use by
-	// different VMs and they have mismatched snapshot flags, assume that the
-	// disk is not being used in snapshot mode.
-	for _, vm2 := range vms {
-		// Skip ourself
-		if vm == vm2 {
-			continue
-		}
-
-		if vm2, ok := vm2.(*KvmVM); ok {
-			for _, disk := range vm2.DiskPaths {
-				disks[disk] = vm2.Snapshot || disks[disk]
-			}
-		}
-	}
-
-	// Check our disks to see if we're trying to use a disk that is in use by
-	// another VM (unless both are being used in snapshot mode).
-	for _, disk := range vm.DiskPaths {
-		if snapshot, ok := disks[disk]; ok && (snapshot != vm.Snapshot) {
-			return fmt.Errorf("disk path %v is already in use by another vm", disk)
-		}
-	}
-
-	return nil
-}
-
-// checkFilesystem looks for Container VMs that share the same filesystem
-// directory and don't have Snapshot set to true.
-func (vms VMs) checkFilesystem(vm *ContainerVM) error {
-	if vm.FSPath == "" {
-		return errors.New("unable to launch container without a configured filesystem")
-	}
-
-	// Disk path to whether it is a snapshot or not
-	disks := map[string]bool{}
-
-	// Record which disks are in use and whether they are being used as a
-	// snapshot or not by other VMs. If the same disk happens to be in use by
-	// different VMs and they have mismatched snapshot flags, assume that the
-	// disk is not being used in snapshot mode.
-	for _, vm2 := range vms {
-		// Skip ourself
-		if vm == vm2 { // ignore this vm
-			continue
-		}
-
-		if vm2, ok := vm2.(*ContainerVM); ok {
-			disks[vm2.FSPath] = vm2.Snapshot
-		}
-	}
-
-	// Check our disk to see if we're trying to use a disk that is in use by
-	// another VM (unless both are being used in snapshot mode).
-	if snapshot, ok := disks[vm.FSPath]; ok && (snapshot != vm.Snapshot) {
-		return fmt.Errorf("disk path %v is already in use by another vm", vm.FSPath)
-	}
-
-	return nil
 }
 
 // HostVMs gets all the VMs running on the specified remote host, filtered to
