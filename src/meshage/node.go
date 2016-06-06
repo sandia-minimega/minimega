@@ -141,6 +141,35 @@ func (n *Node) GetDegree() uint {
 	return n.degree
 }
 
+// numClients returns the number of clients for the node.
+func (n *Node) numClients() uint {
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
+
+	return uint(len(n.clients))
+}
+
+// getClient returns the number client or an error if not connected.
+func (n *Node) getClient(c string) (*client, error) {
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
+
+	if c, ok := n.clients[c]; ok {
+		return c, nil
+	}
+
+	return nil, fmt.Errorf("no such client %v", c)
+}
+
+// hasClient returns whether we are connected to a client already or not.
+func (n *Node) hasClient(client string) bool {
+	n.clientLock.Lock()
+	defer n.clientLock.Unlock()
+
+	_, ok := n.clients[client]
+	return ok
+}
+
 // Mesh returns the current known topology as an adjacency list.
 func (n *Node) Mesh() mesh {
 	n.meshLock.Lock()
@@ -180,7 +209,7 @@ func (n *Node) newConnection(conn net.Conn) {
 
 	// are we soliciting connections?
 	var solicited bool
-	if uint(len(n.clients)) < n.degree {
+	if n.numClients() < n.degree {
 		solicited = true
 	} else {
 		solicited = false
@@ -296,7 +325,7 @@ func (n *Node) broadcastListener() {
 		// to avoid spamming the node with connections, only 1/8 of the
 		// nodes should try to connect. If there are < 16 nodes, then
 		// always try.
-		if len(n.clients) > SOLICIT_LIMIT {
+		if n.numClients() > SOLICIT_LIMIT {
 			s := rand.NewSource(time.Now().UnixNano())
 			r := rand.New(s)
 			n := r.Intn(SOLICIT_RATIO)
@@ -320,10 +349,7 @@ func (n *Node) checkDegree() {
 	var backoff uint = 1
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
-	n.clientLock.Lock()
-	numClients := uint(len(n.clients))
-	n.clientLock.Unlock()
-	for numClients < n.degree {
+	for n.numClients() < n.degree {
 		log.Debugln("soliciting connections")
 		b := net.IPv4(255, 255, 255, 255)
 		addr := net.UDPAddr{
@@ -347,9 +373,6 @@ func (n *Node) checkDegree() {
 		if backoff < 7 { // maximum wait won't exceed 128 seconds
 			backoff++
 		}
-		n.clientLock.Lock()
-		numClients = uint(len(n.clients))
-		n.clientLock.Unlock()
 	}
 }
 
@@ -413,11 +436,9 @@ func (n *Node) dial(host string, solicited bool) error {
 	}
 
 	// are we already connected to this node?
-	for k, _ := range n.clients {
-		if k == remoteHost {
-			conn.Close()
-			return fmt.Errorf("already connected to %v", remoteHost)
-		}
+	if n.hasClient(remoteHost) {
+		conn.Close()
+		return fmt.Errorf("already connected to %v", remoteHost)
 	}
 
 	// we should hangup if the connection no longer wants solicited connections and we're solicited
