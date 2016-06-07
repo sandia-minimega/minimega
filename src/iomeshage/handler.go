@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 )
 
 const (
@@ -23,10 +22,6 @@ const (
 
 const (
 	PART_SIZE = 10485760 // 10MB
-)
-
-var (
-	TIDLock sync.Mutex
 )
 
 // IOMessage is the only structure sent between iomeshage nodes (including
@@ -73,17 +68,23 @@ func (iom *IOMeshage) handleMessages() {
 // the receiver gives up. If we try to send on a closed channel, recover and
 // move on.
 func (iom *IOMeshage) handleResponse(m *IOMMessage) {
-	if c, ok := iom.TIDs[m.TID]; ok {
-		defer func() {
-			recover()
-			if log.WillLog(log.DEBUG) {
-				log.Debugln("send on closed channel recovered")
-			}
-		}()
-		c <- m
-	} else {
+	iom.tidLock.Lock()
+	c, ok := iom.TIDs[m.TID]
+	iom.tidLock.Unlock()
+
+	if !ok {
 		log.Errorln("dropping message for invalid TID: ", m.TID)
+		return
 	}
+
+	defer func() {
+		recover()
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("send on closed channel recovered")
+		}
+	}()
+
+	c <- m
 }
 
 // Handle incoming "get file info" messages by looking up if we have the file
@@ -197,8 +198,9 @@ func (iom *IOMeshage) fileInfo(filename string) ([]string, int64, error) {
 // Transactions need unique TIDs, and a corresponing channel to return
 // responses along. Register a TID and channel for the mux to respond along.
 func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
-	TIDLock.Lock()
-	defer TIDLock.Unlock()
+	iom.tidLock.Lock()
+	defer iom.tidLock.Unlock()
+
 	if _, ok := iom.TIDs[TID]; ok {
 		return fmt.Errorf("TID already exists, collision?")
 	}
@@ -208,8 +210,9 @@ func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
 
 // Unregister TIDs from the mux.
 func (iom *IOMeshage) unregisterTID(TID int64) {
-	TIDLock.Lock()
-	defer TIDLock.Unlock()
+	iom.tidLock.Lock()
+	defer iom.tidLock.Unlock()
+
 	if _, ok := iom.TIDs[TID]; !ok {
 		log.Errorln("TID does not exist")
 	} else {

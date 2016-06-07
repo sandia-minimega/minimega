@@ -23,7 +23,7 @@ type Command struct {
 	// Files to transfer back to the master
 	FilesRecv []*File
 
-	// PID of the process to signal
+	// PID of the process to signal, -1 signals all processes
 	PID int
 
 	// Filter for clients to process commands. Not all fields in a client
@@ -55,4 +55,18 @@ type Response struct {
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+}
+
+// Creates a copy of c
+func (c *Command) Copy() *Command {
+	return &Command{
+		ID:         c.ID,
+		Background: c.Background,
+		Command:    c.Command,
+		FilesSend:  c.FilesSend,
+		FilesRecv:  c.FilesRecv,
+		CheckedIn:  c.CheckedIn,
+		Filter:     c.Filter,
+		PID:        c.PID,
+	}
 }

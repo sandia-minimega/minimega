@@ -1,0 +1,15 @@
+## .record false echo hello, nobody
+hello, nobody
+## .record true echo hello, world
+hello, world
+## .record false
+## echo hello, off the record
+hello, off the record
+## .record true
+## echo hello again, world
+hello again, world
+## history
+.record true echo hello, world
+echo hello again, world
+## clear history
+## history

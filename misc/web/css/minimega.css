@@ -7,16 +7,14 @@ body.modal-open {
 }
 
 #logo {
-	float: left;
-	margin: 5px;
 	width: 200px;
+	margin: 0 22px;
+	position: relative;
+	top: -5px;
 }
 
 #global-search {
 	display: none;
-	/*display: block;*/
-	margin: 10px;
-	float: right;
 	width: 180px;
 }
 
@@ -25,21 +23,21 @@ body.modal-open {
 	border: 1px solid #ccc !important;
 }
 
-.nav {
-	background: "#22313F";
-}
-
 #nav-container {
 	background: #22313F;
-	float: left;
-	height: 100vh;
+	width: 100%;
 	position: fixed;
-	overflow-y: auto;
-	overflow-x: hidden;
+	overflow-y: hidden;
+	overflow-x: auto;
+	z-index: 10;
+}
+
+nav {
+	display: inline-block;
 }
 
 nav a {
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	padding: 20px;
 }
@@ -98,7 +96,7 @@ nav a span {
 }
 
 #content {
-	padding: 20px;
+	padding: 90px 20px 20px;
 	box-sizing: border-box;
 }
 

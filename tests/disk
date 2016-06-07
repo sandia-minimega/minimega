@@ -1,0 +1,50 @@
+# Create temporary files to inject
+shell touch /tmp/minimega/XXX /tmp/minimega/YYY /tmp/minimega/ZZZ
+
+# Create a disk image with two partitions, each with a FAT filesystem
+disk create qcow2 foo.qcow2 2G
+shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
+shell parted /dev/nbd0 mklabel msdos unit GB mkpart primary fat32 0 1 mkpart primary fat32 1 2
+shell mkfs.fat /dev/nbd0p1
+shell mkfs.fat /dev/nbd0p2
+shell qemu-nbd -d /dev/nbd0
+
+# Inject a file into base image
+disk inject foo.qcow2 files /tmp/minimega/XXX:/tmp/minimega/XXX
+shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
+shell mount /dev/nbd0p1 /mnt
+shell ls -R /mnt
+shell umount /mnt
+shell qemu-nbd -d /dev/nbd0
+
+# Create snapshot, inject a file into first partition of snapshot
+disk snapshot foo.qcow2 bar.qcow2
+disk inject bar.qcow2 files /tmp/minimega/YYY:/tmp/minimega/YYY
+shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
+shell mount /dev/nbd0p1 /mnt
+shell ls -R /mnt
+shell umount /mnt
+shell qemu-nbd -d /dev/nbd0
+
+# Inject a file into second partition of snapshot
+disk inject bar.qcow2:2 files /tmp/minimega/ZZZ:/tmp/minimega/ZZZ
+shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
+shell mount /dev/nbd0p2 /mnt
+shell ls -R /mnt
+shell umount /mnt
+shell qemu-nbd -d /dev/nbd0
+
+# Check that the "snapshot" was actually a snapshot
+shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
+shell mount /dev/nbd0p1 /mnt
+shell ls -R /mnt
+shell umount /mnt
+shell mount /dev/nbd0p2 /mnt
+shell ls -R /mnt
+shell umount /mnt
+shell qemu-nbd -d /dev/nbd0
+
+# Clean up temp files and images
+shell rm /tmp/minimega/XXX /tmp/minimega/YYY /tmp/minimega/ZZZ
+file delete foo.qcow2
+file delete bar.qcow2

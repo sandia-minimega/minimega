@@ -12,21 +12,33 @@ import (
 	_ "gopnm"
 	"image"
 	"image/png"
+	"io"
 	"io/ioutil"
 	"math/rand"
 	"minicli"
 	log "minilog"
 	"net"
+	"net/http"
+	"os"
 	"os/exec"
-	"regexp"
+	"path/filepath"
 	"resize"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
+	"vlans"
 )
 
 type errSlice []error
+
+// loggingMutex logs whenever it is locked or unlocked with the file and line
+// number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
+type loggingMutex struct {
+	sync.Mutex // embed
+}
 
 var validMACPrefix [][3]byte
 
@@ -34,6 +46,30 @@ func init() {
 	for k, _ := range macs.ValidMACPrefixMap {
 		validMACPrefix = append(validMACPrefix, k)
 	}
+}
+
+// makeErrSlice turns a slice of errors into an errSlice which implements the
+// Error interface. This checks to make sure that there is at least one non-nil
+// error in the slice and returns nil otherwise.
+func makeErrSlice(errs []error) error {
+	var found bool
+
+	for _, err := range errs {
+		if err != nil {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return nil
+	}
+
+	return errSlice(errs)
+}
+
+func (errs errSlice) Error() string {
+	return errs.String()
 }
 
 func (errs errSlice) String() string {
@@ -46,16 +82,20 @@ func (errs errSlice) String() string {
 	return strings.Join(vals, "\n")
 }
 
-// generate a random mac address and return as a string
-func randomMac() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+func (m *loggingMutex) Lock() {
+	_, file, line, _ := runtime.Caller(1)
 
-	//
-	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+	log.Info("locking: %v:%v", file, line)
+	m.Mutex.Lock()
+	log.Info("locked: %v:%v", file, line)
+}
 
-	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
-	log.Info("generated mac: %v", mac)
-	return mac
+func (m *loggingMutex) Unlock() {
+	_, file, line, _ := runtime.Caller(1)
+
+	log.Info("unlocking: %v:%v", file, line)
+	m.Mutex.Unlock()
+	log.Info("unlocked: %v:%v", file, line)
 }
 
 func generateUUID() string {
@@ -70,12 +110,44 @@ func generateUUID() string {
 	return string(uuid)
 }
 
-func isMac(mac string) bool {
-	match, err := regexp.MatchString("^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$", mac)
-	if err != nil {
+func isUUID(s string) bool {
+	if len(s) != 36 {
 		return false
 	}
-	return match
+
+	parts := strings.Split(s, "-")
+	if len(parts) != 5 {
+		return false
+	}
+
+	for i, v := range []int{8, 4, 4, 4, 12} {
+		if len(parts[i]) != v {
+			return false
+		}
+
+		if _, err := strconv.ParseInt(parts[i], 16, 64); err != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+// generate a random mac address and return as a string
+func randomMac() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	//
+	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+
+	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
+	log.Info("generated mac: %v", mac)
+	return mac
+}
+
+func isMac(mac string) bool {
+	_, err := net.ParseMAC(mac)
+	return err == nil
 }
 
 func allocatedMac(mac string) bool {
@@ -201,60 +273,6 @@ func cmdTimeout(c *exec.Cmd, t time.Duration) error {
 	}
 }
 
-// findRemoteVM attempts to find the VM ID of a VM by name or ID on a remote
-// minimega node. It returns the ID of the VM on the remote host or an error,
-// which may also be an error communicating with the remote node.
-func findRemoteVM(host, vm string) (int, string, error) {
-	log.Debug("findRemoteVM: %v %v", host, vm)
-
-	// check for our own host
-	if host == hostname || host == Localhost {
-		log.Debugln("host is local node")
-		vm := vms.findVm(vm)
-		if vm != nil {
-			log.Debug("got vm: %v %v %v", host, vm.GetID(), vm.GetName())
-			return vm.GetID(), vm.GetName(), nil
-		}
-	} else {
-		log.Debugln("remote host")
-
-		var cmdStr string
-		v, err := strconv.Atoi(vm)
-		if err == nil {
-			cmdStr = fmt.Sprintf(".filter id=%v .columns name,id .record false vm info", v)
-		} else {
-			cmdStr = fmt.Sprintf(".filter name=%v .columns name,id .record false vm info", vm)
-		}
-
-		cmd := minicli.MustCompile(cmdStr)
-
-		remoteRespChan := make(chan minicli.Responses)
-		go func() {
-			meshageSend(cmd, host, remoteRespChan)
-			close(remoteRespChan)
-		}()
-
-		for resps := range remoteRespChan {
-			// Find a response that is not an error
-			for _, resp := range resps {
-				if resp.Error == "" && len(resp.Tabular) > 0 {
-					// Found it!
-					row := resp.Tabular[0] // should be name,id
-					name := row[0]
-					id, err := strconv.Atoi(row[1])
-					if err != nil {
-						log.Debug("malformed response: %#v", resp)
-					} else {
-						return id, name, nil
-					}
-				}
-			}
-		}
-	}
-
-	return 0, "", vmNotFound(vm)
-}
-
 // registerHandlers registers all the provided handlers with minicli, panicking
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {
@@ -264,28 +282,6 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
 		}
 	}
-}
-
-func wrapSimpleCLI(fn func(*minicli.Command) *minicli.Response) minicli.CLIFunc {
-	return func(c *minicli.Command, respChan chan minicli.Responses) {
-		resp := fn(c)
-		respChan <- minicli.Responses{resp}
-	}
-}
-
-// makeIDChan creates a channel of IDs and a goroutine to populate the channel
-// with a counter. This is useful for assigning UIDs to fields since the
-// goroutine will (almost) never repeat the same value (unless we hit IntMax).
-func makeIDChan() chan int {
-	idChan := make(chan int)
-
-	go func() {
-		for i := 0; ; i++ {
-			idChan <- i
-		}
-	}()
-
-	return idChan
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
@@ -351,6 +347,22 @@ func writeOrDie(fpath, data string) {
 	}
 }
 
+// PermStrings creates a random permutation of the source slice using the
+// "inside-out" version of the Fisher-Yates algorithm.
+func PermStrings(source []string) []string {
+	res := make([]string, len(source))
+
+	for i := range source {
+		j := rand.Intn(i + 1)
+		if j != i {
+			res[i] = res[j]
+		}
+		res[j] = source[i]
+	}
+
+	return res
+}
+
 // processVMNet processes the input specifying the bridge, vlan, and mac for
 // one interface to a VM and updates the vm config accordingly. This takes a
 // bit of parsing, because the entry can be in a few forms:
@@ -378,7 +390,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 		if isMac(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
-		} else if _, err := strconv.Atoi(f[0]); err == nil {
+		} else if isNetworkDriver(f[1]) {
 			// vlan, driver
 			v, d = f[0], f[1]
 		} else {
@@ -399,22 +411,22 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	case 4:
 		b, v, m, d = f[0], f[1], f[2], f[3]
 	default:
-		err = errors.New("malformed netspec")
-		return
+		return NetConfig{}, errors.New("malformed netspec")
 	}
 
-	log.Debug("vm_net got b=%v, v=%v, m=%v, d=%v", b, v, m, d)
+	if d != "" && !isNetworkDriver(d) {
+		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
+	}
 
-	// VLAN ID, with optional bridge
-	vlan, err := strconv.Atoi(v) // the vlan id
+	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
+
+	vlan, err := lookupVLAN(v)
 	if err != nil {
-		err = errors.New("malformed netspec, vlan must be an integer")
-		return
+		return NetConfig{}, err
 	}
 
 	if m != "" && !isMac(m) {
-		err = errors.New("malformed netspec, invalid mac address: " + m)
-		return
+		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
 	}
 
 	// warn on valid but not allocated macs
@@ -423,18 +435,99 @@ func processVMNet(spec string) (res NetConfig, err error) {
 	}
 
 	if b == "" {
-		b = DEFAULT_BRIDGE
+		b = DefaultBridge
 	}
 	if d == "" {
 		d = VM_NET_DRIVER_DEFAULT
 	}
 
-	res = NetConfig{
+	return NetConfig{
 		VLAN:   vlan,
 		Bridge: b,
 		MAC:    strings.ToLower(m),
 		Driver: d,
+	}, nil
+}
+
+// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
+// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
+// cluster.
+func lookupVLAN(alias string) (int, error) {
+	namespace := GetNamespaceName()
+
+	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	if err != vlans.ErrUnallocated {
+		// nil or other error
+		return vlan, err
 	}
 
-	return
+	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	if err != nil {
+		return 0, err
+	}
+
+	if !created {
+		return vlan, nil
+	}
+
+	// Broadcast out vlan alias to everyone so that we have a record of the
+	// aliases, should this node crash.
+	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
+	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
+		s = fmt.Sprintf("namespace %q %v", namespace, s)
+	}
+	cmd := minicli.MustCompile(s)
+	cmd.SetRecord(false)
+	cmd.SetSource(namespace)
+
+	respChan, err := meshageSend(cmd, Wildcard)
+	if err != nil {
+		// don't propagate the error since this is supposed to be best-effort.
+		log.Error("unable to broadcast alias update: %v", err)
+		return vlan, nil
+	}
+
+	// read all the responses, looking for errors
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+				}
+			}
+		}
+
+	}()
+
+	return vlan, nil
+}
+
+// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+func printVLAN(vlan int) string {
+	namespace := GetNamespaceName()
+
+	return allocatedVLANs.PrintVLAN(namespace, vlan)
+}
+
+// wget downloads a URL and writes it to disk, creates parent directories if
+// needed.
+func wget(u, dst string) error {
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	resp, err := http.Get(u)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	_, err = io.Copy(out, resp.Body)
+	return err
 }

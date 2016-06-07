@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -28,11 +29,11 @@ type VMConfigFns struct {
 	PrintCLI func(interface{}) []string // If not specified, Print is used
 }
 
-func (old *VMConfig) Copy() *VMConfig {
-	return &VMConfig{
-		BaseConfig:      *old.BaseConfig.Copy(),
-		KVMConfig:       *old.KVMConfig.Copy(),
-		ContainerConfig: *old.ContainerConfig.Copy(),
+func (old VMConfig) Copy() VMConfig {
+	return VMConfig{
+		BaseConfig:      old.BaseConfig.Copy(),
+		KVMConfig:       old.KVMConfig.Copy(),
+		ContainerConfig: old.ContainerConfig.Copy(),
 	}
 }
 
@@ -144,17 +145,9 @@ var containerConfigFns = map[string]VMConfigFns{
 	"hostname": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Hostname
 	}, ""),
-	"init": {
-		Update: func(v interface{}, c *minicli.Command) error {
-			vm := mustContainerConfig(v)
-			vm.Init = c.ListArgs["init"]
-			return nil
-		},
-		Clear: func(vm interface{}) {
-			mustContainerConfig(vm).Init = []string{"/init"}
-		},
-		Print: func(vm interface{}) string { return fmt.Sprintf("%v", mustContainerConfig(vm).Init) },
-	},
+	"init": vmConfigSlice(func(vm interface{}) *[]string {
+		return &mustContainerConfig(vm).Init
+	}, "init", []string{"/init"}),
 	"preinit": vmConfigString(func(vm interface{}) *string {
 		return &mustContainerConfig(vm).Preinit
 	}, ""),
@@ -189,10 +182,10 @@ var kvmConfigFns = map[string]VMConfigFns{
 	}, "number", 0),
 	"qemu-append": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).QemuAppend
-	}, "qemu-append", "kvm"),
+	}, "qemu-append", nil),
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
-	}, "disk", "kvm"),
+	}, "disk", nil),
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")
@@ -227,7 +220,7 @@ var kvmConfigFns = map[string]VMConfigFns{
 		PrintCLI: func(_ interface{}) []string {
 			res := []string{}
 			for _, q := range QemuOverrides {
-				res = append(res, fmt.Sprintf("vm kvm config qemu-override add %s %s", q.match, q.repl))
+				res = append(res, fmt.Sprintf("vm config qemu-override add %s %s", q.match, q.repl))
 			}
 
 			return res
@@ -280,7 +273,7 @@ func vmConfigInt(fn func(interface{}) *int, arg string, defaultVal int) VMConfig
 	}
 }
 
-func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns {
+func vmConfigSlice(fn func(interface{}) *[]string, name string, defaultVal []string) VMConfigFns {
 	return VMConfigFns{
 		Update: func(vm interface{}, c *minicli.Command) error {
 			// Reset to empty list
@@ -293,19 +286,45 @@ func vmConfigSlice(fn func(interface{}) *[]string, name, ns string) VMConfigFns 
 
 			return nil
 		},
-		Clear: func(vm interface{}) { *fn(vm) = []string{} },
+		Clear: func(vm interface{}) {
+			*fn(vm) = []string{}
+
+			if defaultVal != nil {
+				// copy values so that we don't change the defaults
+				*fn(vm) = append(*fn(vm), defaultVal...)
+			}
+		},
 		Print: func(vm interface{}) string {
 			if v := *fn(vm); len(v) > 0 {
-				return fmt.Sprintf("%v", *fn(vm))
+				return fmt.Sprintf("%v", v)
 			}
 			return ""
 		},
 		PrintCLI: func(vm interface{}) []string {
 			if v := *fn(vm); len(v) > 0 {
-				res := fmt.Sprintf("vm %s config %s %s", ns, name, strings.Join(v, " "))
+				res := fmt.Sprintf("vm config %s %s", name, strings.Join(v, " "))
 				return []string{res}
 			}
 			return nil
 		},
 	}
+}
+
+func saveConfig(fns map[string]VMConfigFns, configs interface{}) []string {
+	var cmds = []string{}
+
+	for k, fns := range fns {
+		if fns.PrintCLI != nil {
+			if v := fns.PrintCLI(configs); len(v) > 0 {
+				cmds = append(cmds, v...)
+			}
+		} else if v := fns.Print(configs); len(v) > 0 {
+			cmds = append(cmds, fmt.Sprintf("vm config %s %s", k, v))
+		}
+	}
+
+	// Return in predictable order (nothing here should be order-sensitive)
+	sort.Strings(cmds)
+
+	return cmds
 }

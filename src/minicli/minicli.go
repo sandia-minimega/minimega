@@ -9,6 +9,7 @@ import (
 	"fmt"
 	log "minilog"
 	"strings"
+	"sync"
 )
 
 // Output modes
@@ -31,6 +32,13 @@ type Flags struct {
 	Record   bool
 }
 
+var flagsLock sync.Mutex
+
+var (
+	aliases     = map[string]string{}
+	aliasesLock sync.Mutex
+)
+
 var defaultFlags = Flags{
 	// Output flags
 	Annotate: true,
@@ -45,6 +53,15 @@ var defaultFlags = Flags{
 
 var handlers []*Handler
 var history []string // command history for the write command
+
+// HistoryLen is the length of the history of commands that minicli stores.
+// This may be increased or decreased as needed. If set to 0 or less, the
+// history will grow unbounded and may cause an OOM crash.
+var HistoryLen = 10000
+
+// firstHistoryTruncate stores a flag so that we can warn the user the first
+// time that we're truncating history.
+var firstHistoryTruncate = true
 
 type Responses []*Response
 
@@ -61,7 +78,7 @@ type Response struct {
 	*Flags `json:"-"`
 }
 
-type CLIFunc func(*Command, chan Responses)
+type CLIFunc func(*Command, chan<- Responses)
 
 // MustRegister calls Register for a handler and panics if the handler has an
 // error registering.
@@ -74,7 +91,7 @@ func MustRegister(h *Handler) {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.PatternItems = make([][]patternItem, len(h.Patterns))
+	h.PatternItems = make([][]PatternItem, len(h.Patterns))
 
 	for i, pattern := range h.Patterns {
 		items, err := lexPattern(pattern)
@@ -96,7 +113,7 @@ func Register(h *Handler) error {
 
 // Process raw input text. An error is returned if parsing the input text
 // failed.
-func ProcessString(input string, record bool) (chan Responses, error) {
+func ProcessString(input string, record bool) (<-chan Responses, error) {
 	c, err := Compile(input)
 	if err != nil {
 		return nil, err
@@ -118,7 +135,7 @@ func ProcessString(input string, record bool) (chan Responses, error) {
 }
 
 // Process a prepopulated Command
-func ProcessCommand(c *Command) chan Responses {
+func ProcessCommand(c *Command) <-chan Responses {
 	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
@@ -133,6 +150,15 @@ func ProcessCommand(c *Command) chan Responses {
 		// Append the command to the history
 		if c.Record {
 			history = append(history, c.Original)
+
+			if len(history) > HistoryLen && HistoryLen > 0 {
+				if firstHistoryTruncate {
+					log.Warn("history length exceeds limit, truncating to %v entries", HistoryLen)
+					firstHistoryTruncate = false
+				}
+
+				history = history[len(history)-HistoryLen:]
+			}
 		}
 
 		close(respChan)
@@ -141,6 +167,9 @@ func ProcessCommand(c *Command) chan Responses {
 	return respChan
 }
 
+// MustCompile compiles the string, calling log.Fatal if the string is not a
+// valid command. Should be used when providing a known command rather than
+// processing user input.
 func MustCompile(input string) *Command {
 	c, err := Compile(input)
 	if err != nil {
@@ -150,6 +179,11 @@ func MustCompile(input string) *Command {
 	return c
 }
 
+// MustCompilef wraps fmt.Sprintf and MustCompile
+func MustCompilef(format string, args ...interface{}) *Command {
+	return MustCompile(fmt.Sprintf(format, args...))
+}
+
 // Create a command from raw input text. An error is returned if parsing the
 // input text failed.
 func Compile(input string) (*Command, error) {
@@ -157,6 +191,8 @@ func Compile(input string) (*Command, error) {
 	if len(input) == 0 {
 		return nil, nil
 	}
+
+	input = expandAliases(input)
 
 	in, err := lexInput(input)
 	if err != nil {
@@ -170,6 +206,9 @@ func Compile(input string) (*Command, error) {
 
 	_, cmd := closestMatch(in)
 	if cmd != nil {
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
 		cmd.Record = defaultFlags.Record
 		return cmd, nil
 	}
@@ -180,6 +219,21 @@ func Compile(input string) (*Command, error) {
 // Compilef wraps fmt.Sprintf and Compile
 func Compilef(format string, args ...interface{}) (*Command, error) {
 	return Compile(fmt.Sprintf(format, args...))
+}
+
+// expandAliases finds the first alias match in input and replaces it with it's expansion.
+func expandAliases(input string) string {
+	aliasesLock.Lock()
+	defer aliasesLock.Unlock()
+
+	for k, v := range aliases {
+		if strings.HasPrefix(input, k) {
+			log.Info("expanding %v -> %v", k, v)
+			return strings.Replace(input, k, v, 1)
+		}
+	}
+
+	return input
 }
 
 func suggest(input *Input) []string {
@@ -314,4 +368,14 @@ func ClearHistory() {
 func Doc() (string, error) {
 	bytes, err := json.Marshal(handlers)
 	return string(bytes), err
+}
+
+// copyFlags returns a copy of the default flags
+func copyFlags() *Flags {
+	flagsLock.Lock()
+	defer flagsLock.Unlock()
+
+	res := &Flags{}
+	*res = defaultFlags
+	return res
 }

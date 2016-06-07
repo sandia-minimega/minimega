@@ -7,6 +7,7 @@ package main
 import (
 	"html/template"
 	"io"
+	"io/ioutil"
 	log "minilog"
 	"net/http"
 	"os"
@@ -159,7 +160,7 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 			return true, nil
 		}
 
-		if fi.IsDir() && showDir(e.Name) {
+		if fi.IsDir() && showDir(e) {
 			d.Dirs = append(d.Dirs, e)
 			continue
 		}
@@ -202,11 +203,24 @@ func showFile(n string) bool {
 }
 
 // showDir reports whether the given directory should be displayed in the list.
-func showDir(n string) bool {
+func showDir(e dirEntry) bool {
+	n := e.Name
 	if len(n) > 0 && (n[0] == '.' || n[0] == '_') || n == "present" {
 		return false
 	}
-	return true
+
+	// make sure the directory has at least one displayed file
+	files, err := ioutil.ReadDir(filepath.Join(*f_root, e.Path))
+	if err != nil {
+		return false
+	}
+	for _, f := range files {
+		if showFile(f.Name()) {
+			return true
+		}
+	}
+
+	return false
 }
 
 type dirListData struct {

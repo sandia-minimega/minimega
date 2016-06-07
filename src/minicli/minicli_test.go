@@ -98,7 +98,7 @@ var testPrefixes = []struct {
 
 var testHandler = &Handler{
 	Patterns: []string{"test"},
-	Call: func(c *Command, out chan Responses) {
+	Call: func(c *Command, out chan<- Responses) {
 		// Do nothing
 	},
 }

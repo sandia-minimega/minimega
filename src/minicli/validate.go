@@ -6,7 +6,7 @@ import (
 
 // Validate checks for ambiguous patterns
 func Validate() error {
-	patterns := map[string][]patternItem{}
+	patterns := map[string][]PatternItem{}
 
 	// Collect all the patterns across all the handlers
 	for _, h := range handlers {
@@ -37,7 +37,7 @@ func Validate() error {
 	return nil
 }
 
-func ambiguous(p0, p1 []patternItem) bool {
+func ambiguous(p0, p1 []PatternItem) bool {
 	if len(p0) == 0 && len(p1) == 0 {
 		return true
 	} else if len(p0) == 0 && len(p1) > 0 {
@@ -78,7 +78,7 @@ func ambiguous(p0, p1 []patternItem) bool {
 	return ambiguous(p0[1:], p1[1:])
 }
 
-func allowedValues(item patternItem) []string {
+func allowedValues(item PatternItem) []string {
 	vals := []string{}
 
 	switch item.Type {

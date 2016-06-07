@@ -26,11 +26,11 @@ all data seen on that interface is captured to file.
 For example, to capture netflow data on bridge mega_bridge to file in ascii
 mode and with gzip compression:
 
-	capture netflow mega_bridge file foo.netflow ascii gzip
+	capture netflow bridge mega_bridge file foo.netflow ascii gzip
 
 You can change the active flow timeout with:
 
-	capture netflow mega_bridge timeout <timeout>
+	capture netflow timeout <timeout>
 
 With <timeout> in seconds.
 
@@ -50,7 +50,9 @@ capture, use the delete commands:
 	capture pcap delete <id>
 
 To stop all captures of a particular kind, replace id with "all". To stop all
-capture of all types, use "clear capture".`,
+capture of all types, use "clear capture".
+
+Note: capture is not a namespace-aware command.`,
 		Patterns: []string{
 			"capture",
 
@@ -80,16 +82,14 @@ Resets state for captures. See "help capture" for more information.`,
 	},
 }
 
-func cliCapture(c *minicli.Command) *minicli.Response {
+func cliCapture(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["netflow"] {
 		// Capture to netflow
-		return cliCaptureNetflow(c)
+		return cliCaptureNetflow(c, resp)
 	} else if c.BoolArgs["pcap"] {
 		// Capture to pcap
-		return cliCapturePcap(c)
+		return cliCapturePcap(c, resp)
 	}
-
-	resp := &minicli.Response{Host: hostname}
 
 	// Print capture info
 	resp.Header = []string{
@@ -116,6 +116,8 @@ func cliCapture(c *minicli.Command) *minicli.Response {
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
+	return nil
+
 	// TODO: How does this fit in?
 	//
 	// get netflow stats for each bridge
@@ -137,76 +139,55 @@ func cliCapture(c *minicli.Command) *minicli.Response {
 	//}
 
 	//out := o.String() + "\n" + nfstats
-
-	return resp
 }
 
-func cliCaptureClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
-	err := clearAllCaptures()
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
-
+func cliCaptureClear(c *minicli.Command, resp *minicli.Response) error {
+	return clearAllCaptures()
 }
 
 // cliCapturePcap manages the CLI for starting and stopping captures to pcap.
-func cliCapturePcap(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliCapturePcap(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["delete"] {
 		// Stop a capture
-		err = clearCapture("pcap", c.StringArgs["id"])
+		return clearCapture("pcap", c.StringArgs["id"])
 	} else if c.StringArgs["bridge"] != "" {
 		// Capture bridge -> pcap
-		err = startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
+		return startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
 	} else if c.StringArgs["vm"] != "" {
 		// Capture VM:interface -> pcap
-		var iface int
-		iface, err = strconv.Atoi(c.StringArgs["interface"])
+		iface, err := strconv.Atoi(c.StringArgs["interface"])
 		if err != nil {
-			err = fmt.Errorf("invalid interface: `%v`", c.StringArgs["interface"])
-		} else {
-			err = startCapturePcap(c.StringArgs["vm"], iface, c.StringArgs["filename"])
+			return fmt.Errorf("invalid interface: `%v`", c.StringArgs["interface"])
 		}
-	} else {
-		// List captures
-		resp.Header = []string{"ID", "Bridge", "VM/interface", "Path"}
 
-		resp.Tabular = [][]string{}
-		for _, v := range captureEntries {
-			if v.Type == "pcap" {
-				iface := fmt.Sprintf("%v/%v", v.VM, v.Interface)
-				row := []string{
-					strconv.Itoa(v.ID),
-					v.Bridge,
-					iface,
-					v.Path,
-				}
-				resp.Tabular = append(resp.Tabular, row)
+		return startCapturePcap(c.StringArgs["vm"], iface, c.StringArgs["filename"])
+	}
+
+	// List captures
+	resp.Header = []string{"ID", "Bridge", "VM/interface", "Path"}
+
+	resp.Tabular = [][]string{}
+	for _, v := range captureEntries {
+		if v.Type == "pcap" {
+			iface := fmt.Sprintf("%v/%v", v.VM, v.Interface)
+			row := []string{
+				strconv.Itoa(v.ID),
+				v.Bridge,
+				iface,
+				v.Path,
 			}
+			resp.Tabular = append(resp.Tabular, row)
 		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
+	return nil
 }
 
 // cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.
-func cliCaptureNetflow(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["delete"] {
 		// Stop a capture
-		err = clearCapture("netflow", c.StringArgs["id"])
+		return clearCapture("netflow", c.StringArgs["id"])
 	} else if c.BoolArgs["timeout"] {
 		// Set or get the netflow timeout
 		timeout := c.StringArgs["timeout"]
@@ -214,14 +195,16 @@ func cliCaptureNetflow(c *minicli.Command) *minicli.Response {
 		if timeout != "" {
 			resp.Response = strconv.Itoa(captureNFTimeout)
 		} else if err != nil {
-			resp.Error = fmt.Sprintf("invalid timeout parameter: `%v`", timeout)
+			return fmt.Errorf("invalid timeout parameter: `%v`", timeout)
 		} else {
 			captureNFTimeout = val
 			captureUpdateNFTimeouts()
 		}
+
+		return nil
 	} else if c.BoolArgs["file"] {
 		// Capture -> netflow (file)
-		err = startCaptureNetflowFile(
+		return startCaptureNetflowFile(
 			c.StringArgs["bridge"],
 			c.StringArgs["filename"],
 			c.BoolArgs["ascii"],
@@ -233,39 +216,32 @@ func cliCaptureNetflow(c *minicli.Command) *minicli.Response {
 		if c.BoolArgs["udp"] {
 			transport = "udp"
 		}
-		err = startCaptureNetflowSocket(
+
+		return startCaptureNetflowSocket(
 			c.StringArgs["bridge"],
 			transport,
 			c.StringArgs["hostname:port"],
 			c.BoolArgs["ascii"],
 		)
-	} else {
-		captureLock.Lock()
-		defer captureLock.Unlock()
+	}
 
-		// List captures
-		resp.Header = []string{"ID", "Bridge", "Path", "Mode", "Compress"}
+	// List captures
+	resp.Header = []string{"ID", "Bridge", "Path", "Mode", "Compress"}
 
-		for _, v := range captureEntries {
-			if v.Type == "netflow" {
-				row := []string{
-					strconv.Itoa(v.ID),
-					v.Bridge,
-					v.Path,
-					v.Mode,
-					strconv.FormatBool(v.Compress),
-				}
-				resp.Tabular = append(resp.Tabular, row)
+	for _, v := range captureEntries {
+		if v.Type == "netflow" {
+			row := []string{
+				strconv.Itoa(v.ID),
+				v.Bridge,
+				v.Path,
+				v.Mode,
+				strconv.FormatBool(v.Compress),
 			}
+			resp.Tabular = append(resp.Tabular, row)
 		}
-
-		// TODO: netflow stats?
-
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
+	return nil
 
-	return resp
+	// TODO: netflow stats?
 }

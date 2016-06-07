@@ -1,4 +1,6 @@
 Igor: A Node Reservation System
+
+The minimega authors
 3 Mar 2015
 
 * Introduction
@@ -23,11 +25,13 @@ addresses to the compute nodes.
 
 * Building/Installing
 
-Igor is included as part of the minimega distribution. All the compilation and installation tasks should be done on your head node.
+Igor is included as part of the minimega distribution. All the compilation and
+installation tasks should be done on your head node.
 
 ** Compilation
 
-First, make sure you have a [[http://golang.org][Go compiler]] installed, then install the other packages minimega needs to build:
+First, make sure you have a [[http://golang.org][Go compiler]] installed, then
+install the other packages minimega needs to build:
 
 	apt-get install libpcap-dev libreadline-dev
 
@@ -37,7 +41,10 @@ Now, you can fetch and buld the minimega source:
 	cd minimega
 	./all.bash
 
-This will build and test each of the libraries and tools in the minimega distribution and create a bin/ sudirectory containing each of the minimega tools. If you have a windows cross compiler for Go setup, it will also build windows binaries of several tools.
+This will build and test each of the libraries and tools in the minimega
+distribution and create a bin/ sudirectory containing each of the minimega
+tools. If you have a windows cross compiler for Go setup, it will also build
+windows binaries of several tools.
 
 The igor binary will be in the bin/ subdirectory.
 
@@ -51,7 +58,9 @@ set up the default PXE configuration in
 /tftpboot/pxelinux.cfg/default. This setup is simple but is outside
 the scope of this document.
 
-We have provided a shell script to ease the installation of igor. It will show you the commands it intends to run before running them, in case you wish to change anything. (Remember to run this on the head node, not any other node)
+We have provided a shell script to ease the installation of igor. It will show
+you the commands it intends to run before running them, in case you wish to
+change anything. (Remember to run this on the head node, not any other node)
 
         cd minimega/src/igor
 	./setup.sh
@@ -123,29 +132,45 @@ To see what reservations already exist:
 
         igor show
 
-This will show a diagram of the nodes in your cluster; nodes that are already reserved will be highlighted in a specific color. A key at the bottom matches colors to reservations. An example from one of our clusters is shown below; you'll note that the user "djfritz" has a reservation named "fritz" that claims the entire cluster for the next 9687 hours--a rather long time!
+This will show a diagram of the nodes in your cluster; nodes that are already
+reserved will be highlighted in a specific color. A key at the bottom matches
+colors to reservations. An example from one of our clusters is shown below;
+you'll note that the user "djfritz" has a reservation named "fritz" that claims
+the entire cluster for the next 9687 hours--a rather long time!
 
 .image igorshow.png
 
-This cluster consists of 14 nodes in a single rack, as illustrated in the diagram. All 14 are currently running and in the "fritz" reservation; if any were powered off, they would be highlighted in red. Any nodes not currently reserved would be un-highlighted.
+This cluster consists of 14 nodes in a single rack, as illustrated in the
+diagram. All 14 are currently running and in the "fritz" reservation; if any
+were powered off, they would be highlighted in red. Any nodes not currently
+reserved would be un-highlighted.
 
 ** Making a reservation
 
-To make a reservation, use the "igor sub" command. "Sub" comes from "submit", as used in HPC batch schedulers. You'll need to specify the reservation name, a path to a kernel, a path to an initrd, and the list of nodes you wish to reserve. For example, if nodes back_ccc10 through back_ccc14 are not reserved, I can make a reservation called "testing" like this:
+To make a reservation, use the "igor sub" command. "Sub" comes from "submit",
+as used in HPC batch schedulers. You'll need to specify the reservation name, a
+path to a kernel, a path to an initrd, and the list of nodes you wish to
+reserve. For example, if nodes back_ccc10 through back_ccc14 are not reserved,
+I can make a reservation called "testing" like this:
 
         igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w back_ccc[10-14]
 
-This reservation will default to 12 hours duration; if I wanted to reserve it for longer, I'd use the -t flag.
+This reservation will default to 12 hours duration; if I wanted to reserve it
+for longer, I'd use the -t flag.
 
 ** Deleting a reservation
 
-Although reservations will be automatically deleted when they run out of time, it is polite to delete your reservation immediately when you're finished with it. To get rid of our "testing" reservation from above, simply run:
+Although reservations will be automatically deleted when they run out of time,
+it is polite to delete your reservation immediately when you're finished with
+it. To get rid of our "testing" reservation from above, simply run:
 
         igor del testing
 
 ** Extending a reservation
 
-If you find that you didn't make your reservation long enough, you can extend the time left on it with the "addtime" command. To add an additional 2 hours to the "testing" reservation, we could do this:
+If you find that you didn't make your reservation long enough, you can extend
+the time left on it with the "addtime" command. To add an additional 2 hours to
+the "testing" reservation, we could do this:
 
         igor addtime -r testing -t 2
 	

@@ -81,14 +81,11 @@ func iomeshageInit(node *meshage.Node) {
 	}
 }
 
-func cliFile(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-	var err error
-
+func cliFile(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["get"] {
-		err = iom.Get(c.StringArgs["file"])
+		return iom.Get(c.StringArgs["file"])
 	} else if c.BoolArgs["delete"] {
-		err = iom.Delete(c.StringArgs["file"])
+		return iom.Delete(c.StringArgs["file"])
 	} else if c.BoolArgs["status"] {
 		transfers := iom.Status()
 		resp.Header = []string{"Filename", "Temporary directory", "Completed parts", "Queued"}
@@ -99,64 +96,33 @@ func cliFile(c *minicli.Command) *minicli.Response {
 			row := []string{f.Filename, f.Dir, completed, fmt.Sprintf("%v", f.Queued)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
-	} else if c.BoolArgs["list"] {
-		path := c.StringArgs["path"]
-		if path == "" {
-			path = "/"
-		}
 
-		resp.Header = []string{"dir", "name", "size"}
-		resp.Tabular = [][]string{}
+		return nil
+	}
 
-		files, err := iom.List(path)
-		if err == nil && files != nil {
-			for _, f := range files {
-				var dir string
-				if f.Dir {
-					dir = "<dir>"
-				}
+	// must be "list"
+	path := c.StringArgs["path"]
+	if path == "" {
+		path = "/"
+	}
 
-				row := []string{dir, f.Name, strconv.FormatInt(f.Size, 10)}
-				resp.Tabular = append(resp.Tabular, row)
+	resp.Header = []string{"dir", "name", "size"}
+	resp.Tabular = [][]string{}
+
+	files, err := iom.List(path)
+	if err == nil && files != nil {
+		for _, f := range files {
+			var dir string
+			if f.Dir {
+				dir = "<dir>"
 			}
+
+			row := []string{dir, f.Name, strconv.FormatInt(f.Size, 10)}
+			resp.Tabular = append(resp.Tabular, row)
 		}
 	}
 
-	if err != nil {
-		resp.Error = err.Error()
-	}
-
-	return resp
-}
-
-// walk every arg looking for "file:" and calling iomHelper on the suffix.
-// Replace the arg with the local file if found.
-func iomPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	for k, v := range c.StringArgs {
-		if strings.HasPrefix(v, IOM_HELPER_MATCH) {
-			file := strings.TrimPrefix(v, IOM_HELPER_MATCH)
-			local, err := iomHelper(file)
-			if err != nil {
-				return nil, err
-			}
-			log.Debug("iomPreProcessor: %v -> %v", v, local)
-			c.StringArgs[k] = local
-		}
-	}
-	for k, v := range c.ListArgs {
-		for x, y := range v {
-			if strings.HasPrefix(y, IOM_HELPER_MATCH) {
-				file := strings.TrimPrefix(y, IOM_HELPER_MATCH)
-				local, err := iomHelper(file)
-				if err != nil {
-					return nil, err
-				}
-				log.Debug("iomPreProcessor: %v -> %v", y, local)
-				c.ListArgs[k][x] = local
-			}
-		}
-	}
-	return c, nil
+	return nil
 }
 
 // iomHelper supports grabbing files for internal minimega operations. It

@@ -95,9 +95,7 @@ func init() {
 	affinityClearFilter()
 }
 
-func cliOptimize(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliOptimize(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["ksm"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print ksm status
@@ -109,6 +107,8 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			// Must want to update ksm status to false
 			ksmDisable()
 		}
+
+		return nil
 	} else if c.BoolArgs["hugepages"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print hugepage path
@@ -116,6 +116,8 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 		} else {
 			hugepagesMountPath = c.StringArgs["path"]
 		}
+
+		return nil
 	} else if c.BoolArgs["affinity"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print affinity status
@@ -141,14 +143,12 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 		} else if c.BoolArgs["filter"] {
 			r, err := ranges.NewRange("", 0, runtime.NumCPU()-1)
 			if err != nil {
-				resp.Error = fmt.Sprintf("cpu affinity ranges: %v", err)
-				return resp
+				return fmt.Errorf("cpu affinity ranges: %v", err)
 			}
 
 			cpus, err := r.SplitRange(c.StringArgs["filter"])
 			if err != nil {
-				resp.Error = fmt.Sprintf("cannot expand CPU range: %v", err)
-				return resp
+				return fmt.Errorf("cannot expand CPU range: %v", err)
 			}
 
 			affinityCPUSets = make(map[string][]*KvmVM)
@@ -166,21 +166,20 @@ func cliOptimize(c *minicli.Command) *minicli.Response {
 			// Disabling affinity
 			affinityDisable()
 		}
-	} else {
-		// Summary of optimizations
-		var err error
-		resp.Response, err = optimizeStatus()
-		if err != nil {
-			resp.Error = err.Error()
-		}
+
+		return nil
 	}
 
-	return resp
+	// Summary of optimizations
+	out, err := optimizeStatus()
+	if err == nil {
+		resp.Response = out
+	}
+
+	return err
 }
 
-func cliOptimizeClear(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
-
+func cliOptimizeClear(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["affinity"] && c.BoolArgs["filter"] {
 		// Reset affinity filter
 		affinityClearFilter()
@@ -196,7 +195,7 @@ func cliOptimizeClear(c *minicli.Command) *minicli.Response {
 		clearOptimize()
 	}
 
-	return resp
+	return nil
 }
 
 // TODO: Rewrite this to use Header/Tabular.
@@ -301,16 +300,11 @@ func clearOptimize() {
 
 func affinityEnable() error {
 	affinityEnabled = true
-	for _, vm := range vms {
-		switch vm := vm.(type) {
-		case *KvmVM:
-			cpu := affinitySelectCPU(vm)
-			err := vm.AffinitySet(cpu)
-			if err != nil {
-				return err
-			}
-		default:
-			// TODO: Need to do anything?
+	for _, vm := range vms.FindKvmVMs() {
+		cpu := affinitySelectCPU(vm)
+		err := vm.AffinitySet(cpu)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -318,16 +312,11 @@ func affinityEnable() error {
 
 func affinityDisable() error {
 	affinityEnabled = false
-	for _, vm := range vms {
-		switch vm := vm.(type) {
-		case *KvmVM:
-			affinityUnselectCPU(vm)
-			err := vm.AffinityUnset()
-			if err != nil {
-				return err
-			}
-		default:
-			// TODO: Need to do anything?
+	for _, vm := range vms.FindKvmVMs() {
+		affinityUnselectCPU(vm)
+		err := vm.AffinityUnset()
+		if err != nil {
+			return err
 		}
 	}
 	return nil
