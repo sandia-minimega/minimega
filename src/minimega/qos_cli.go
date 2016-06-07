@@ -1,10 +1,10 @@
 package main
 
 import (
+	"bridge"
 	"errors"
 	"fmt"
 	"minicli"
-	log "minilog"
 	"strconv"
 	"strings"
 	"time"
@@ -40,8 +40,8 @@ Examples:
 		Patterns: []string{
 			"qos <add,> <target> <interface> <loss,> <percent>",
 			"qos <add,> <target> <interface> <delay,> <duration>",
-			"qos <add,> <target> <interface> <rate,> <bw>",
-		}, Call: wrapVMTargetCLI(cliQos),
+			"qos <add,> <target> <interface> <rate,> <kbit, mbit, gbit>",
+		}, Call: wrapVMTargetCLI(cliUpdateQos),
 	},
 	{
 		HelpShort: "list qos constraints on all interfaces",
@@ -57,7 +57,7 @@ Columns returned by qos list include:
 - delay		: packet delay in milliseconds`,
 		Patterns: []string{
 			"qos list",
-		}, Call: wrapVMTargetCLI(cliQosList),
+		}, Call: wrapVMTargetCLI(cliListQos),
 	},
 	{
 		HelpShort: "clear qos constraints on an interface",
@@ -70,145 +70,95 @@ Example:
 	clear qos mega_tap1`,
 		Patterns: []string{
 			"clear qos <target> [interface]",
-		}, Call: wrapVMTargetCLI(cliQosClear),
+		}, Call: wrapVMTargetCLI(cliClearQos),
 	},
 }
 
-func cliQosClear(c *minicli.Command, resp *minicli.Response) error {
-	vmLock.Lock()
-	defer vmLock.Unlock()
+func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 
-	tap := c.StringArgs["interface"]
 	target := c.StringArgs["target"]
 
-	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if tap == Wildcard {
-			var seen map[string]bool
-
-			// Remove qos from all taps
-			for _, b := range bridges {
-				if !seen[b.Name] {
-					b.QosClearAll()
-					seen[b.Name] = true
-				}
-			}
-
-			return true, nil
-		} else {
-
-			bridgeName := vm.Config().GetBridgeFromTap(tap)
-
-			if bridgeName == "" {
-				return true, fmt.Errorf("interface %s on vm %s not found", tap, vm.GetName())
-			}
-
-			b, err := getBridge(bridgeName)
-
-			if err != nil {
-				return true, err
-			}
-
-			return true, b.QosClear(tap)
-		}
+	tap, err := strconv.Atoi(c.StringArgs["tap"])
+	if err != nil {
+		return errors.New("specify a valid tap index")
 	}
-	return makeErrSlice(vms.apply(target, true, applyFunc))
+
+	return makeErrSlice(vms.ClearQoS(target, tap))
 }
 
-func cliQosList(c *minicli.Command, resp *minicli.Response) error {
-	var nsBridges map[string]bool
-
-	resp.Header = []string{"bridge", "tap", "max_bandwidth", "loss", "delay"}
-	resp.Tabular = [][]string{}
-
-	// Build a list of bridges used in the current namespace
-	for _, vm := range vms {
-		if !inNamespace(vm) {
-			continue
-		}
-
-		for _, nc := range vm.Config().Networks {
-			if nsBridges[nc.Bridge] {
-				continue
-			}
-			nsBridges[nc.Bridge] = true
-		}
-	}
-
-	// Iterate over all bridges and collect qos information
-	for nsBridge, _ := range nsBridges {
-		b, err := getBridge(nsBridge)
-
-		if err != nil {
-			log.Error("qosList: failed to get bridge %s", nsBridge)
-			continue
-		}
-
-		for _, v := range b.QosList() {
-			resp.Tabular = append(resp.Tabular, v)
-		}
-	}
+func cliListQos(c *minicli.Command, resp *minicli.Response) error {
+	vms.ListQoS(resp)
 	return nil
 }
 
-func cliQos(c *minicli.Command, resp *minicli.Response) error {
-	vmLock.Lock()
-	defer vmLock.Unlock()
+func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 
-	var params map[string]string
-
+	var err error
 	target := c.StringArgs["target"]
-	tap := c.StringArgs["interface"]
 
 	// Wildcard command
-	if tap == Wildcard {
+	if c.StringArgs["tap"] == Wildcard {
 		return errors.New("wildcard qos not implemented")
 	}
 
-	params["tap"] = tap
+	tap, err := strconv.Atoi(c.StringArgs["tap"])
+	if err != nil {
+		return errors.New("specify a valid tap index")
+	}
+
+	// Build qos parameters
+	qosp, err := cliParseQos(c)
+	if err != nil {
+		return err
+	}
+
+	return makeErrSlice(vms.UpdateQos(target, tap, qosp))
+
+}
+
+func cliParseQos(c *minicli.Command) (*bridge.QosParams, error) {
+
+	qosp := &bridge.QosParams{}
 
 	// Determine qdisc and set the parameters
 	if c.BoolArgs["rate"] {
+		qosp.Qdisc = "tbf"
 
-		// token bucket filter (tbf) qdisc operation
-		params["qdisc"] = "tbf"
-
-		// Add a bandwidth limit on the interface
+		var unit string
 		rate := c.StringArgs["bw"]
-		unit := rate[len(rate)-4:]
-		var bps uint64
-		switch unit {
-		case "kbit":
-			bps = 1 << 10
-		case "mbit":
-			bps = 1 << 20
-		case "gbit":
-			bps = 1 << 30
-		default:
-			return fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
+
+		if c.BoolArgs["kbit"] {
+			qosp.Bps = 1 << 10
+			unit = "kbit"
+		} else if c.BoolArgs["mbit"] {
+			qosp.Bps = 1 << 20
+			unit = "mbit"
+		} else if c.BoolArgs["gbit"] {
+			qosp.Bps = 1 << 30
+			unit = "gbit"
+		} else {
+			return nil, fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
 		}
 
-		_, err := strconv.ParseUint(rate[:len(rate)-4], 10, 64)
+		burst, err := strconv.ParseUint(rate, 10, 64)
 		if err != nil {
-			return fmt.Errorf("`%s` is not a valid rate parameter", rate)
+			return nil, fmt.Errorf("`%s` is not a valid rate parameter", rate)
 		}
 
-		params["burst"] = rate[:len(rate)-4]
-		params["bps"] = strconv.FormatUint(bps, 10)
-		params["rate"] = rate
+		qosp.Burst = burst
+		qosp.Rate = fmt.Sprintf("%s%s", rate, unit)
 
 	} else {
-
-		// netem qdisc operation
-		params["qdisc"] = "netem"
+		qosp.Qdisc = "netem"
 
 		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
 			loss := c.StringArgs["percent"]
 			v, err := strconv.ParseFloat(loss, 64)
 			if err != nil || v >= float64(100) {
-				return fmt.Errorf("`%s` is not a valid loss percentage", loss)
+				return nil, fmt.Errorf("`%s` is not a valid loss percentage", loss)
 			}
-			params["loss"] = loss
+			qosp.Loss = loss
 		}
 
 		// Add delay of time duration to each packet
@@ -221,30 +171,11 @@ func cliQos(c *minicli.Command, resp *minicli.Response) error {
 					// Default to ms
 					delay = fmt.Sprintf("%s%s", delay, "ms")
 				} else {
-					return fmt.Errorf("`%s` is not a valid delay parameter", delay)
+					return nil, fmt.Errorf("`%s` is not a valid delay parameter", delay)
 				}
 			}
-			params["delay"] = delay
+			qosp.Delay = delay
 		}
 	}
-
-	applyFunc := func(vm VM, _ bool) (bool, error) {
-		// Get bridge
-		bridgeName := vm.GetBridgeFromTap(tap)
-
-		if bridgeName == "" {
-			return true, fmt.Errorf("interface %s on vm %s not found", tap, vm.GetName())
-		}
-
-		b, err := getBridge(bridgeName)
-
-		if err != nil {
-			return true, err
-		}
-
-		// Execute the qos command
-		return true, b.QosCommand(params)
-	}
-
-	return makeErrSlice(vms.apply(target, true, applyFunc))
+	return qosp, nil
 }

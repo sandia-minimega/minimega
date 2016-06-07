@@ -128,6 +128,8 @@ func (b *Bridge) destroyTap(t string) error {
 
 	tap.Defunct = true
 
+	b.clearQos(tap)
+
 	if tap.Container {
 		return destroyVeth(tap.Name)
 	}

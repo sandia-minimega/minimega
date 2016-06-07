@@ -4,12 +4,20 @@ import (
 	"errors"
 	"fmt"
 	log "minilog"
-	"strconv"
 )
 
 // Used to calulate burst rate for the token bucket filter
 const KERNEL_TIMER_FREQ uint64 = 250
 const MIN_BURST_SIZE uint64 = 2048
+
+type QosParams struct {
+	Qdisc string
+	Loss  string
+	Delay string
+	Rate  string
+	Bps   uint64
+	Burst uint64
+}
 
 // Tap field enumerating qos parameters
 type Qos struct {
@@ -114,67 +122,44 @@ func (t *Tap) qosCmd(op, qdisc string) error {
 	return err
 }
 
-func (b *Bridge) QosClearAll() {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-
-	for _, t := range b.taps {
-		if t.Qos != nil {
-			err := t.qosCmd("remove", "")
-			if err != nil {
-				log.Error("failed to remove qos from tap %s", t.Name)
-			}
-		}
-	}
-}
-
-func (b *Bridge) QosClear(tap string) error {
+func (b *Bridge) ClearQos(tap string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
 	t, ok := b.taps[tap]
 	if !ok {
-		return fmt.Errorf("QosClear: tap %s not found", tap)
+		return fmt.Errorf("tap %s not found", tap)
 	}
 
-	err := t.qosCmd("remove", "")
-	if err != nil {
-		return err
-	}
-	return nil
+	return b.clearQos(t)
 }
 
-func (b *Bridge) QosList() [][]string {
-	var resp [][]string
-	for _, t := range b.taps {
-		if t.Qos != nil {
-			loss := t.Qos.netemParams["loss"]
-			delay := t.Qos.netemParams["delay"]
-			rate := t.Qos.tbfParams["rate"]
-			resp = append(resp, []string{
-				b.Name, t.Name, rate, loss, delay,
-			})
-		}
-	}
-	return resp
+func (b *Bridge) clearQos(t *Tap) error {
+	return t.qosCmd("remove", "")
 }
 
-func (b *Bridge) QosCommand(params map[string]string) error {
+func (b *Bridge) UpdateQos(tap string, qosp *QosParams) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
 
-	var op string
+	log.Info("updating qos for tap %s", tap)
 
-	t, ok := b.taps[params["tap"]]
+	t, ok := b.taps[tap]
 	if !ok {
-		return fmt.Errorf("QosCommand: tap %s not found", params["tap"])
+		return fmt.Errorf("tap %s not found", tap)
 	}
+
+	return b.updateQos(t, qosp)
+}
+
+func (b *Bridge) updateQos(t *Tap, qosp *QosParams) error {
+	var op string
 
 	if t.Qos == nil {
 		t.Qos = newQos()
 	}
 
-	// Determine qdisc and operation
-	if params["qdisc"] == "tbf" {
-
+	if qosp.Qdisc == "tbf" {
 		// token bucket filter (tbf) qdisc operation
 		if len(t.Qos.tbfParams) == 0 {
 			op = "add"
@@ -182,11 +167,8 @@ func (b *Bridge) QosCommand(params map[string]string) error {
 			op = "change"
 		}
 
-		bps, _ := strconv.ParseUint(params["bps"], 10, 64)
-		burst, _ := strconv.ParseUint(params["burst"], 10, 64)
-
 		// Burst size is in bytes
-		burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
+		burst := ((qosp.Burst * qosp.Bps) / KERNEL_TIMER_FREQ) / 8
 		if burst < MIN_BURST_SIZE {
 			burst = MIN_BURST_SIZE
 		}
@@ -194,12 +176,10 @@ func (b *Bridge) QosCommand(params map[string]string) error {
 		// Default parameters
 		// Burst must be at least rate / hz
 		// See http://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
-		t.Qos.tbfParams["rate"] = params["rate"]
+		t.Qos.tbfParams["rate"] = qosp.Rate
 		t.Qos.tbfParams["burst"] = fmt.Sprintf("%db", burst)
 		t.Qos.tbfParams["latency"] = "100ms"
-
 	} else {
-
 		// netem qdisc operation
 		if len(t.Qos.netemParams) == 0 {
 			op = "add"
@@ -208,16 +188,46 @@ func (b *Bridge) QosCommand(params map[string]string) error {
 		}
 
 		// Drop packets randomly with probability = loss
-		if loss, ok := params["loss"]; ok {
-			t.Qos.netemParams["loss"] = loss
+		if qosp.Loss != "" {
+			t.Qos.netemParams["loss"] = qosp.Loss
 		}
 
 		// Add delay of time duration to each packet
-		if delay, ok := params["delay"]; ok {
-			t.Qos.netemParams["delay"] = delay
+		if qosp.Delay != "" {
+			t.Qos.netemParams["delay"] = qosp.Delay
 		}
 	}
 
 	// Execute the qos command
-	return t.qosCmd(op, params["qdisc"])
+	return t.qosCmd(op, qosp.Qdisc)
+}
+
+func (b *Bridge) GetQos(tap string) *QosParams {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	t, ok := b.taps[tap]
+	if !ok {
+		return nil
+	}
+
+	if t.Qos == nil {
+		return nil
+	}
+	return b.getQos(t)
+}
+
+func (b *Bridge) getQos(t *Tap) *QosParams {
+	q := &QosParams{}
+
+	if t.Qos.netemParams != nil {
+		q.Loss = t.Qos.netemParams["loss"]
+		q.Delay = t.Qos.netemParams["delay"]
+	}
+
+	if t.Qos.tbfParams != nil {
+		q.Rate = t.Qos.tbfParams["rate"]
+	}
+
+	return q
 }

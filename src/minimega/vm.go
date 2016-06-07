@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
@@ -78,6 +79,11 @@ type VM interface {
 	// NetworkDisconnect updates the VM's config to reflect that the specified
 	// tap has been disconnected.
 	NetworkDisconnect(int) error
+
+	// Qos functions
+	GetQos() [][]string
+	UpdateQos(int, *bridge.QosParams) error
+	ClearQos(int) error
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -419,6 +425,80 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
+// Qos functions
+func (vm *BaseVM) UpdateQos(tap int, qosp *bridge.QosParams) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if tap >= len(vm.Networks) {
+		return fmt.Errorf("invalid tap index specified: %d", tap)
+	}
+
+	bName := vm.Networks[tap].Bridge
+	tapName := vm.Networks[tap].Tap
+
+	br, err := getBridge(bName)
+	if err != nil {
+		return err
+	}
+
+	return br.UpdateQos(tapName, qosp)
+}
+
+func (vm *BaseVM) ClearAllQos() {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, nc := range vm.Networks {
+		b, err := getBridge(nc.Bridge)
+		if err != nil {
+			continue
+		}
+		b.ClearQos(nc.Tap)
+	}
+}
+
+func (vm *BaseVM) ClearQos(tap int) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// Negative tap indexes?
+	if tap >= len(vm.Networks) {
+		return fmt.Errorf("invalid tap index specified: %d", tap)
+	}
+	nc := vm.Networks[tap]
+	b, err := getBridge(nc.Bridge)
+	if err != nil {
+		return err
+	}
+
+	b.ClearQos(nc.Tap)
+
+	return nil
+}
+
+func (vm *BaseVM) GetQos() [][]string {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	var res [][]string
+
+	for _, nc := range vm.Networks {
+		b, err := getBridge(nc.Bridge)
+		if err != nil {
+			continue // TODO??
+		}
+
+		q := b.GetQos(nc.Tap)
+
+		if q != nil {
+			res = append(res, []string{vm.GetName(), nc.Bridge, nc.Tap,
+				q.Rate, q.Loss, q.Delay})
+		}
+	}
+	return res
+}
+
 func (vm *BaseVM) SetCCActive(active bool) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -614,16 +694,6 @@ func (vm *BaseVM) writeTaps() error {
 	}
 
 	return nil
-}
-
-// return the bridge name which contains tap n
-func (vm *BaseVM) GetBridgeFromTap(n string) string {
-	for _, net := range vm.Networks {
-		if net.Tap == n {
-			return net.Bridge
-		}
-	}
-	return ""
 }
 
 // inNamespace tests whether vm is part of active namespace, if there is one.
