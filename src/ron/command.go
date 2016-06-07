@@ -23,7 +23,7 @@ type Command struct {
 	// Files to transfer back to the master
 	FilesRecv []*File
 
-	// PID of the process to signal
+	// PID of the process to signal, -1 signals all processes
 	PID int
 
 	// Filter for clients to process commands. Not all fields in a client

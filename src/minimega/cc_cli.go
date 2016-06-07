@@ -70,7 +70,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <background,> <command>...",
 
 			"cc <process,> <list,> <vm id, name, uuid or all>",
-			"cc <process,> <kill,> <pid>",
+			"cc <process,> <kill,> <pid or all>",
 
 			"cc <commands,>",
 
@@ -421,25 +421,42 @@ func cliCCBackground(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+// ccProcessKill kills a process by PID for VMs that aren't filtered.
+func ccProcessKill(pid int) {
+	cmd := &ron.Command{
+		PID:    pid,
+		Filter: ccGetFilter(),
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v :%v", id, cmd)
+
+	ccMapPrefix(id)
+}
+
+func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
+	// kill all processes
+	if c.StringArgs["pid"] == Wildcard {
+		ccProcessKill(-1)
+
+		return nil
+	}
+
+	// kill single process
+	pid, err := strconv.Atoi(c.StringArgs["pid"])
+	if err != nil {
+		return err
+	}
+
+	ccProcessKill(pid)
+
+	return nil
+}
+
 // process
 func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["kill"] {
-		pid, err := strconv.Atoi(c.StringArgs["pid"])
-		if err != nil {
-			return err
-		}
-
-		cmd := &ron.Command{
-			PID:    pid,
-			Filter: ccGetFilter(),
-		}
-
-		id := ccNode.NewCommand(cmd)
-		log.Debug("generated command %v :%v", id, cmd)
-
-		ccMapPrefix(id)
-
-		return nil
+		return cliCCProcessKill(c, resp)
 	}
 
 	// list processes

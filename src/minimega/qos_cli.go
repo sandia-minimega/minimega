@@ -1,16 +1,16 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"minicli"
+	log "minilog"
 	"strconv"
 	"strings"
 	"time"
 )
 
-// Used to calulate burst rate for the token bucket filter
-const KERNEL_TIMER_FREQ uint64 = 250
-const MIN_BURST_SIZE uint64 = 2048
+var qosInfo = []string{"bridge", "tap", "max_bandwidth", "loss", "delay"}
 
 var qosCLIHandlers = []minicli.Handler{
 	{
@@ -38,10 +38,10 @@ Examples:
 	Rate limit an interface to 1mbit/s
 	qos add mega_tap1 rate 1mbit`,
 		Patterns: []string{
-			"qos <add,> <interface> <loss,> <percent>",
-			"qos <add,> <interface> <delay,> <duration>",
-			"qos <add,> <interface> <rate,> <bw>",
-		}, Call: wrapSimpleCLI(cliQos),
+			"qos <add,> <target> <interface> <loss,> <percent>",
+			"qos <add,> <target> <interface> <delay,> <duration>",
+			"qos <add,> <target> <interface> <rate,> <bw>",
+		}, Call: wrapVMTargetCLI(cliQos),
 	},
 	{
 		HelpShort: "list qos constraints on all interfaces",
@@ -57,7 +57,7 @@ Columns returned by qos list include:
 - delay		: packet delay in milliseconds`,
 		Patterns: []string{
 			"qos list",
-		}, Call: wrapSimpleCLI(cliQosList),
+		}, Call: wrapVMTargetCLI(cliQosList),
 	},
 	{
 		HelpShort: "clear qos constraints on an interface",
@@ -69,99 +69,108 @@ Example:
 	Remove all qos constraints from mega_tap1
 	clear qos mega_tap1`,
 		Patterns: []string{
-			"clear qos [interface]",
-		}, Call: wrapSimpleCLI(cliQosClear),
+			"clear qos <target> [interface]",
+		}, Call: wrapVMTargetCLI(cliQosClear),
 	},
 }
 
-func cliQosClear(c *minicli.Command) *minicli.Response {
+func cliQosClear(c *minicli.Command, resp *minicli.Response) error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
 
-	resp := &minicli.Response{Host: hostname}
 	tap := c.StringArgs["interface"]
+	target := c.StringArgs["target"]
 
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
+	applyFunc := func(vm VM, _ bool) (bool, error) {
+		if tap == Wildcard {
+			var seen map[string]bool
 
-	if tap == Wildcard {
-		qosRemoveAll()
-	} else {
-		// Get *Tap
-		b, err := getBridgeFromTap(tap)
-		if err != nil {
-			resp.Error = err.Error()
-			return resp
-		}
+			// Remove qos from all taps
+			for _, b := range bridges {
+				if !seen[b.Name] {
+					b.QosClearAll()
+					seen[b.Name] = true
+				}
+			}
 
-		t, ok := b.Taps[tap]
-		if !ok {
-			resp.Error = fmt.Sprintf("qosCmd: tap %s not found", tap)
-			return resp
-		}
+			return true, nil
+		} else {
 
-		// Only remove qos from taps which had previous constraints
-		if t.qos == nil {
-			return resp
-		}
-		err = t.qosCmd("remove", "")
-		if err != nil {
-			resp.Error = err.Error()
+			bridgeName := vm.Config().GetBridgeFromTap(tap)
+
+			if bridgeName == "" {
+				return true, fmt.Errorf("interface %s on vm %s not found", tap, vm.GetName())
+			}
+
+			b, err := getBridge(bridgeName)
+
+			if err != nil {
+				return true, err
+			}
+
+			return true, b.QosClear(tap)
 		}
 	}
-	return resp
+	return makeErrSlice(vms.apply(target, true, applyFunc))
 }
 
-func cliQosList(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliQosList(c *minicli.Command, resp *minicli.Response) error {
+	var nsBridges map[string]bool
 
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
+	resp.Header = []string{"bridge", "tap", "max_bandwidth", "loss", "delay"}
+	resp.Tabular = [][]string{}
 
-	qosList(resp)
-	return resp
+	// Build a list of bridges used in the current namespace
+	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
+		for _, nc := range vm.Config().Networks {
+			if nsBridges[nc.Bridge] {
+				continue
+			}
+			nsBridges[nc.Bridge] = true
+		}
+	}
+
+	// Iterate over all bridges and collect qos information
+	for nsBridge, _ := range nsBridges {
+		b, err := getBridge(nsBridge)
+
+		if err != nil {
+			log.Error("qosList: failed to get bridge %s", nsBridge)
+			continue
+		}
+
+		for _, v := range b.QosList() {
+			resp.Tabular = append(resp.Tabular, v)
+		}
+	}
+	return nil
 }
 
-func cliQos(c *minicli.Command) *minicli.Response {
-	resp := &minicli.Response{Host: hostname}
+func cliQos(c *minicli.Command, resp *minicli.Response) error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	var params map[string]string
+
+	target := c.StringArgs["target"]
 	tap := c.StringArgs["interface"]
-
-	var qdisc, op string
-
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
 
 	// Wildcard command
 	if tap == Wildcard {
-		resp.Error = fmt.Sprintf("not implemented")
-		return resp
+		return errors.New("wildcard qos not implemented")
 	}
 
-	// Get *Tap
-	b, err := getBridgeFromTap(tap)
-	if err != nil {
-		resp.Error = err.Error()
-		return resp
-	}
+	params["tap"] = tap
 
-	t, ok := b.Taps[tap]
-	if !ok {
-		resp.Error = fmt.Sprintf("qosCmd: tap %s not found", tap)
-		return resp
-	}
-
-	if t.qos == nil {
-		t.qos = newQos()
-	}
-
-	// Determine qdisc and operation
+	// Determine qdisc and set the parameters
 	if c.BoolArgs["rate"] {
 
 		// token bucket filter (tbf) qdisc operation
-		qdisc = "tbf"
-		if len(t.qos.tbfParams) == 0 {
-			op = "add"
-		} else {
-			op = "change"
-		}
+		params["qdisc"] = "tbf"
 
 		// Add a bandwidth limit on the interface
 		rate := c.StringArgs["bw"]
@@ -175,49 +184,31 @@ func cliQos(c *minicli.Command) *minicli.Response {
 		case "gbit":
 			bps = 1 << 30
 		default:
-			resp.Error = fmt.Sprintf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
-			return resp
+			return fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
 		}
 
-		burst, err := strconv.ParseUint(rate[:len(rate)-4], 10, 64)
+		_, err := strconv.ParseUint(rate[:len(rate)-4], 10, 64)
 		if err != nil {
-			resp.Error = fmt.Sprintf("`%s` is not a valid rate parameter", rate)
-			return resp
+			return fmt.Errorf("`%s` is not a valid rate parameter", rate)
 		}
 
-		// Burst size is in bytes
-		burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
-		if burst < MIN_BURST_SIZE {
-			burst = MIN_BURST_SIZE
-		}
-
-		// Default parameters
-		// Burst must be at least rate / hz
-		// See http://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
-		t.qos.tbfParams["rate"] = rate
-		t.qos.tbfParams["burst"] = fmt.Sprintf("%db", burst)
-		t.qos.tbfParams["latency"] = "100ms"
+		params["burst"] = rate[:len(rate)-4]
+		params["bps"] = strconv.FormatUint(bps, 10)
+		params["rate"] = rate
 
 	} else {
 
 		// netem qdisc operation
-		qdisc = "netem"
-		if len(t.qos.netemParams) == 0 {
-			op = "add"
-		} else {
-			op = "change"
-		}
+		params["qdisc"] = "netem"
 
 		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
 			loss := c.StringArgs["percent"]
-
 			v, err := strconv.ParseFloat(loss, 64)
 			if err != nil || v >= float64(100) {
-				resp.Error = fmt.Sprintf("`%s` is not a valid loss percentage", loss)
-				return resp
+				return fmt.Errorf("`%s` is not a valid loss percentage", loss)
 			}
-			t.qos.netemParams["loss"] = loss
+			params["loss"] = loss
 		}
 
 		// Add delay of time duration to each packet
@@ -230,19 +221,30 @@ func cliQos(c *minicli.Command) *minicli.Response {
 					// Default to ms
 					delay = fmt.Sprintf("%s%s", delay, "ms")
 				} else {
-					resp.Error = fmt.Sprintf("`%s` is not a valid delay parameter", delay)
-					return resp
+					return fmt.Errorf("`%s` is not a valid delay parameter", delay)
 				}
 			}
-			t.qos.netemParams["delay"] = delay
+			params["delay"] = delay
 		}
 	}
 
-	// Execute the qos command
-	err = t.qosCmd(op, qdisc)
-	if err != nil {
-		resp.Error = err.Error()
+	applyFunc := func(vm VM, _ bool) (bool, error) {
+		// Get bridge
+		bridgeName := vm.GetBridgeFromTap(tap)
+
+		if bridgeName == "" {
+			return true, fmt.Errorf("interface %s on vm %s not found", tap, vm.GetName())
+		}
+
+		b, err := getBridge(bridgeName)
+
+		if err != nil {
+			return true, err
+		}
+
+		// Execute the qos command
+		return true, b.QosCommand(params)
 	}
 
-	return resp
+	return makeErrSlice(vms.apply(target, true, applyFunc))
 }

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"bufio"
 	"errors"
 	"goreadline"
@@ -44,10 +45,6 @@ func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 	// nuke any container related items
 	containerNuke()
 
-	// hold the reaper lock so nothing is deleted from under us
-	// this is never released as we Exit() at the end of this function
-	reapTapsLock.Lock()
-
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
 	err := filepath.Walk(*f_base, nukeWalker)
@@ -57,6 +54,9 @@ func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 
 	// allow udev to sync
 	time.Sleep(time.Second * 1)
+
+	// remove bridges that have preExist == false
+	nukeBridges()
 
 	// remove all live mega_tap names
 	var tapNames []string
@@ -72,13 +72,6 @@ func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 	}
 	nukeTaps(tapNames)
 
-	// remove any stale mega_taps from open vswitch
-	tapNames = ovsGetTaps()
-	nukeTaps(tapNames)
-
-	// remove bridges that have preExist == false
-	nukeBridges()
-
 	// clean up the base path
 	log.Info("cleaning up base path: %v", *f_base)
 	err = os.RemoveAll(*f_base)
@@ -93,21 +86,12 @@ func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 	return errors.New("unreachable")
 }
 
-// Nuke a list of tap names
+// nukeTaps removes a list of tap devices
 func nukeTaps(taps []string) {
-	// Stack ovs commands for |\/|aximum power
-	var args []string
-
 	for _, t := range taps {
-		// Delete the tap device
-		nukeTap(t)
-
-		// Add to the ovs cmd
-		args = append(args, "del-port", t, "--")
-	}
-
-	if len(args) > 0 {
-		ovsCmdWrapper(args)
+		if err := bridge.DestroyTap(t); err != nil {
+			log.Error("%v -- %v", t, err)
+		}
 	}
 }
 
@@ -125,11 +109,15 @@ func nukeState() {
 // bridges that existed before minimega was launched
 func nukeBridgeNames(preExist bool) []string {
 	var ret []string
+
 	b, err := os.Open(filepath.Join(*f_base, "bridges"))
-	if err != nil {
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
 		log.Errorln(err)
 		return nil
 	}
+
 	scanner := bufio.NewScanner(b)
 	// skip the first line
 	scanner.Scan()
@@ -148,9 +136,8 @@ func nukeBridgeNames(preExist bool) []string {
 }
 
 func nukeBridges() {
-	bNames := nukeBridgeNames(false)
-	for _, b := range bNames {
-		if err := ovsDelBridge(b); err != nil {
+	for _, b := range nukeBridgeNames(false) {
+		if err := bridge.DestroyBridge(b); err != nil {
 			log.Error("%v -- %v", b, err)
 		}
 	}
@@ -186,11 +173,4 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		}
 	}
 	return nil
-}
-
-func nukeTap(tap string) {
-
-	if err := delTap(tap); err != nil {
-		log.Error("%v -- %v", tap, err)
-	}
 }
