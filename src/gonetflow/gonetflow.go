@@ -293,7 +293,7 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 			EpochSec:  (uint32(b[8]) << 24) + (uint32(b[9]) << 16) + (uint32(b[10]) << 8) + (uint32(b[11])),
 			EpochNsec: (uint32(b[12]) << 24) + (uint32(b[13]) << 16) + (uint32(b[14]) << 8) + (uint32(b[15])),
 		},
-		Raw: b[:n-1],
+		Raw: b[:n],
 	}
 
 	for i := 0; i < numRecords; i++ {
