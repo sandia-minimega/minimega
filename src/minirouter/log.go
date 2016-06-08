@@ -11,7 +11,6 @@ import (
 	"io"
 	log "minilog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -53,12 +52,12 @@ func logSetup() {
 
 	// a special logger for pushing logs up to minimega
 	if *f_miniccc != "" {
-		f := tagLogger(*f_miniccc)
+		f := tagLogger()
 		log.AddLogger("taglogger", f, level, false)
 	}
 }
 
-func tagLogger(path string) io.Writer {
+func tagLogger() io.Writer {
 	var buf bytes.Buffer
 	var lines []string
 
@@ -70,7 +69,7 @@ func tagLogger(path string) io.Writer {
 				lines = lines[1:]
 			}
 			output := strings.Join(lines, "\n")
-			err := exec.Command(path, "-tag", "minirouter_log", output).Run()
+			err := tag("minirouter_log", output)
 			if err != nil {
 				log.Errorln(err)
 				break
