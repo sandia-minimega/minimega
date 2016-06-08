@@ -452,6 +452,7 @@ func (vm *BaseVM) ClearAllQos() {
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
 		if err != nil {
+			log.Errorf("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
 			continue
 		}
 		b.ClearQos(nc.Tap)
@@ -462,7 +463,6 @@ func (vm *BaseVM) ClearQos(tap int) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	// Negative tap indexes?
 	if tap >= len(vm.Networks) {
 		return fmt.Errorf("invalid tap index specified: %d", tap)
 	}
@@ -486,7 +486,8 @@ func (vm *BaseVM) GetQos() [][]string {
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
 		if err != nil {
-			continue // TODO??
+			log.Errorf("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
+			continue
 		}
 
 		q := b.GetQos(nc.Tap)

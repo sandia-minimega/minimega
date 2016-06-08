@@ -10,16 +10,18 @@ import (
 	"time"
 )
 
-var qosInfo = []string{"bridge", "tap", "max_bandwidth", "loss", "delay"}
-
 var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
 		HelpLong: `
 Add quality-of-service (qos) constraints on mega interfaces to
-simulate network impairments. Qos constrains cannot be stacked, and must
+simulate network impairments. Qos constraints cannot be stacked, and must
 be specified explicitly. Any existing constraints will be overwritten by
-additional calls to <add>.
+additional calls to <add>. Virtual machines can be specified with the same
+target syntax as the "vm start" api.
+
+Note that qos is namespace aware, and specifying the wildcard as the target
+will apply qos to all virtual machines within the active namespace.
 
 Qos constraints include:
 
@@ -29,14 +31,14 @@ Qos constraints include:
 
 Examples:
 
-	Randomly drop packets on mega_tap1 with probably 0.25%
-	qos add mega_tap1 loss 0.25
+	Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with probably 0.25%
+	qos add foo[0-2] 0 loss 0.25
 
-	Add a 100ms delay to every packet on the mega_tap1 interface
-	qos add mega_tap1 delay 100ms
+	Add a 100ms delay to every packet on the 0th interface for vm foo and bar
+	qos add foo,bar 0 delay 100ms
 
-	Rate limit an interface to 1mbit/s
-	qos add mega_tap1 rate 1mbit`,
+	Rate limit the 0th interface on all vms in the active namespace to 1mbit/s
+	qos add all 0 rate 1 mbit`,
 		Patterns: []string{
 			"qos <add,> <target> <interface> <loss,> <percent>",
 			"qos <add,> <target> <interface> <delay,> <duration>",
@@ -47,6 +49,8 @@ Examples:
 		HelpShort: "list qos constraints on all interfaces",
 		HelpLong: `
 List quality-of-service constraints on all mega interfaces in tabular form.
+This command is namespace aware and will only list the qos constraints within
+the active namespace.
 Columns returned by qos list include:
 
 - host		: the host the the VM is running on
@@ -62,12 +66,13 @@ Columns returned by qos list include:
 	{
 		HelpShort: "clear qos constraints on an interface",
 		HelpLong: `
-Remove quality-of-service constraints on a mega interface.
+Remove quality-of-service constraints on a mega interface. This command is namespace
+aware and will only clear the qos from vms within the active namespace.
 
 Example:
 
-	Remove all qos constraints from mega_tap1
-	clear qos mega_tap1`,
+	Remove all qos constraints on the 1st interface for the vms foo and bar
+	clear qos foo,bar 1`,
 		Patterns: []string{
 			"clear qos <target> [interface]",
 		}, Call: wrapVMTargetCLI(cliClearQos),
@@ -78,12 +83,21 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 
 	target := c.StringArgs["target"]
 
-	tap, err := strconv.Atoi(c.StringArgs["tap"])
-	if err != nil {
-		return errors.New("specify a valid tap index")
+	if tap == Wildcard {
+		vms.ClearAllQos()
+		return nil
 	}
 
-	return makeErrSlice(vms.ClearQoS(target, tap))
+	tap, err := strconv.Atoi(c.StringArgs["tap"])
+	if err != nil {
+		return errors.New("invalid tap index %s", c.StringArgs["tap"])
+	}
+
+	if tap < 0 {
+		return errors.New("invalid tap index %d", tap)
+	}
+
+	return makeErrSlice(vms.ClearQoS(target, t))
 }
 
 func cliListQos(c *minicli.Command, resp *minicli.Response) error {
@@ -103,7 +117,11 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 
 	tap, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
-		return errors.New("specify a valid tap index")
+		return errors.New("invalid tap index %s", c.StringArgs["tap"])
+	}
+
+	if tap < 0 {
+		return errors.New("invalid tap index %d", tap)
 	}
 
 	// Build qos parameters

@@ -573,6 +573,19 @@ func (vms VMs) UpdateQos(target string, tap int, qosp *bridge.QosParams) []error
 	return vms.apply(target, true, applyFunc)
 }
 
+func (vms VMs) ClearAllQos() {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// Clear qos for all vm taps
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.ClearAllQos()
+	}
+
+	vms.apply(target, true, applyFunc)
+	return nil
+}
+
 func (vms VMs) ClearQoS(target string, tap int) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
