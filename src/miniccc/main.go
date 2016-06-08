@@ -28,7 +28,7 @@ var (
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
 	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
-	f_tag      = flag.String("tag", "", "add a key:value tag in minimega for this vm")
+	f_tag      = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
 	c          *ron.Client
 )
 
@@ -55,12 +55,25 @@ func main() {
 
 	logSetup()
 
+	if *f_tag {
+		err := updateTag()
+		if err != nil {
+			log.Errorln(err)
+		}
+		return
+	}
+
 	// signal handling
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 
+	// attempt to set up the base path
+	err := os.MkdirAll(*f_path, os.FileMode(0777))
+	if err != nil {
+		log.Fatal("mkdir base path: %v", err)
+	}
+
 	// start a ron client
-	var err error
 	c, err = ron.NewClient(*f_family, *f_port, *f_parent, *f_serial, *f_path)
 	if err != nil {
 		log.Fatal("creating ron node: %v", err)
@@ -113,4 +126,35 @@ func commandSocketHandle(conn net.Conn) {
 
 	log.Debug("adding key/value: %v : %v", k, v)
 	c.Tag(k, v)
+}
+
+func updateTag() error {
+	host := filepath.Join(*f_path, "miniccc")
+
+	args := flag.Args()
+	if len(args) != 2 {
+		return fmt.Errorf("inavlid arguments: %v", args)
+	}
+
+	k := args[0]
+	v := args[1]
+
+	conn, err := net.Dial("unix", host)
+	if err != nil {
+		return err
+	}
+
+	enc := gob.NewEncoder(conn)
+
+	err = enc.Encode(k)
+	if err != nil {
+		return err
+	}
+
+	err = enc.Encode(v)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
