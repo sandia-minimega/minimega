@@ -5,11 +5,20 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	log "minilog"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
+)
+
+const (
+	LOG_TAG_SIZE = 10
 )
 
 func logSetup() {
@@ -41,4 +50,37 @@ func logSetup() {
 		}
 		log.AddLogger("file", logfile, level, false)
 	}
+
+	// a special logger for pushing logs up to minimega
+	if *f_miniccc != "" {
+		f := tagLogger(*f_miniccc)
+		log.AddLogger("taglogger", f, level, false)
+	}
+}
+
+func tagLogger(path string) io.Writer {
+	var buf bytes.Buffer
+	var lines []string
+
+	go func() {
+		scanner := bufio.NewScanner(&buf)
+		for scanner.Scan() {
+			lines = append(lines, scanner.Text())
+			if len(lines) > LOG_TAG_SIZE {
+				lines = lines[1:]
+			}
+			output := strings.Join(lines, "\n")
+			err := exec.Command(path, "-tag", "minirouter_log", output).Run()
+			if err != nil {
+				log.Errorln(err)
+				break
+			}
+		}
+		// we'll actually log our own errors and hope they show up in
+		// another logger
+		if err := scanner.Err(); err != nil {
+			log.Errorln(err)
+		}
+	}()
+	return &buf
 }
