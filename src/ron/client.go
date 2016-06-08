@@ -78,6 +78,8 @@ func (c *Client) Tag(k, v string) {
 	c.lock.Lock()
 	c.Tags[k] = v
 	c.lock.Unlock()
+
+	go c.heartbeat()
 }
 
 // commandHandler sorts and filters incoming commands from a ron server.
