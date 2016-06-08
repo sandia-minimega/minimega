@@ -231,7 +231,7 @@ func (vms VMs) FindKvmVM(s string) (*KvmVM, error) {
 
 // findKvmVm is FindKvmVM without locking vmLock.
 func (vms VMs) findKvmVM(s string) (*KvmVM, error) {
-	vm := vms.findVM(s)
+	vm := vms.findVM(s, true)
 	if vm == nil {
 		return nil, vmNotFound(s)
 	}

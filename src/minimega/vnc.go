@@ -75,7 +75,12 @@ func NewVNCClient(host, idOrName string) (*vncClient, error) {
 		// (can call hostVMs instead of HostVMs). Since we're using not using
 		// the vms global, we don't need to acquire the vmLock (can call findVM
 		// instead of FindVM).
-		vm = hostVMs(host).findVM(idOrName)
+
+		// TODO(fritz): should this be namespace aware? If someone sets
+		// a namespace on the cli and then someone on the web interface
+		// attempts to connect and this is checking namespaces then it
+		// will fail right?
+		vm = hostVMs(host).findVM(idOrName, false)
 	}
 
 	if vm == nil {

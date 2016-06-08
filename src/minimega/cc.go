@@ -49,12 +49,23 @@ func ccPrefixIDs(prefix string) []int {
 
 func ccStart() {
 	var err error
-	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase)
+	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase, ccUpdateTags)
 	if err != nil {
 		log.Fatalln(fmt.Errorf("creating cc node %v", err))
 	}
 
 	log.Debug("created ron node at %v %v", ccPort, *f_base)
+}
+
+// TODO: this is currently global and should filter on the client's namespace,
+// but cc isn't fully namespace aware, so here we are...
+func ccUpdateTags(uuid string, t map[string]string) {
+	vm := vms.FindVMNoNamespace(uuid)
+	if vm != nil {
+		for k, v := range t {
+			vm.SetTag(k, v)
+		}
+	}
 }
 
 func ccClear(what string) (err error) {
