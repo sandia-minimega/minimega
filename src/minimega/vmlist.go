@@ -627,8 +627,6 @@ func globalVMs() VMs {
 		hosts = append(hosts, hostname)
 	}
 
-	log.Info("globalVMs command: %#v", cmd)
-
 	cmds := makeCommandHosts(hosts, cmd)
 
 	// Collected VMs
