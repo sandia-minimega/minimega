@@ -214,6 +214,8 @@ func (n *Namespace) Launch() error {
 		}
 	}
 
+	log.Info("scheduling complete")
+
 	stats.end = time.Now()
 	stats.state = SchedulerCompleted
 
