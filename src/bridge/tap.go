@@ -128,7 +128,10 @@ func (b *Bridge) destroyTap(t string) error {
 
 	tap.Defunct = true
 
-	b.clearQos(tap)
+	err := b.clearQos(tap)
+	if err != nil {
+		log.Error("failed to clear qos from tap: %v", t)
+	}
 
 	if tap.Container {
 		return destroyVeth(tap.Name)

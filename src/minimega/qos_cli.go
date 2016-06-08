@@ -42,7 +42,7 @@ Examples:
 		Patterns: []string{
 			"qos <add,> <target> <interface> <loss,> <percent>",
 			"qos <add,> <target> <interface> <delay,> <duration>",
-			"qos <add,> <target> <interface> <rate,> <kbit, mbit, gbit>",
+			"qos <add,> <target> <interface> <rate,> <kbit,mbit,gbit>",
 		}, Call: wrapVMTargetCLI(cliUpdateQos),
 	},
 	{
@@ -83,21 +83,21 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 
 	target := c.StringArgs["target"]
 
-	if tap == Wildcard {
-		vms.ClearAllQos()
+	if c.StringArgs["tap"] == Wildcard {
+		vms.ClearAllQos(target)
 		return nil
 	}
 
 	tap, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
-		return errors.New("invalid tap index %s", c.StringArgs["tap"])
+		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
 	}
 
 	if tap < 0 {
-		return errors.New("invalid tap index %d", tap)
+		return fmt.Errorf("invalid tap index %d", tap)
 	}
 
-	return makeErrSlice(vms.ClearQoS(target, t))
+	return makeErrSlice(vms.ClearQoS(target, tap))
 }
 
 func cliListQos(c *minicli.Command, resp *minicli.Response) error {
@@ -117,11 +117,11 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 
 	tap, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
-		return errors.New("invalid tap index %s", c.StringArgs["tap"])
+		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
 	}
 
 	if tap < 0 {
-		return errors.New("invalid tap index %d", tap)
+		return fmt.Errorf("invalid tap index %d", tap)
 	}
 
 	// Build qos parameters

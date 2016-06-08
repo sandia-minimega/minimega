@@ -84,6 +84,7 @@ type VM interface {
 	GetQos() [][]string
 	UpdateQos(int, *bridge.QosParams) error
 	ClearQos(int) error
+	ClearAllQos()
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -452,7 +453,7 @@ func (vm *BaseVM) ClearAllQos() {
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
 		if err != nil {
-			log.Errorf("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
+			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
 			continue
 		}
 		b.ClearQos(nc.Tap)
@@ -486,7 +487,7 @@ func (vm *BaseVM) GetQos() [][]string {
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
 		if err != nil {
-			log.Errorf("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
+			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
 			continue
 		}
 

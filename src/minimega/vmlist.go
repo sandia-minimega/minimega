@@ -548,10 +548,6 @@ func (vms VMs) ListQoS(resp *minicli.Response) {
 	var data [][]string
 
 	for _, vm := range vms {
-		if !inNamespace(vm) {
-			continue
-		}
-
 		qos := vm.GetQos()
 		for _, q := range qos {
 			data = append(data, q)
@@ -573,17 +569,17 @@ func (vms VMs) UpdateQos(target string, tap int, qosp *bridge.QosParams) []error
 	return vms.apply(target, true, applyFunc)
 }
 
-func (vms VMs) ClearAllQos() {
+func (vms VMs) ClearAllQos(target string) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	// Clear qos for all vm taps
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		return true, vm.ClearAllQos()
+		vm.ClearAllQos()
+		return true, nil
 	}
 
 	vms.apply(target, true, applyFunc)
-	return nil
 }
 
 func (vms VMs) ClearQoS(target string, tap int) []error {
