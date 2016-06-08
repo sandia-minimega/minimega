@@ -183,14 +183,25 @@ func (vms VMs) FindVM(s string) VM {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	return vms.findVM(s)
+	return vms.findVM(s, true)
+}
+
+// FindVMNoNamespace finds a VM, ignoring the current namespace, based on its
+// ID, name, or UUID.
+func (vms VMs) FindVMNoNamespace(s string) VM {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.findVM(s, false)
 }
 
 // findVM assumes vmLock is held.
-func (vms VMs) findVM(s string) VM {
+func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	if id, err := strconv.Atoi(s); err == nil {
-		if vm := vms[id]; inNamespace(vm) {
-			return vm
+		if vm, ok := vms[id]; ok {
+			if inNamespace(vm) || !checkNamespace {
+				return vm
+			}
 		}
 
 		return nil
@@ -198,7 +209,7 @@ func (vms VMs) findVM(s string) VM {
 
 	// Search for VM by name or UUID
 	for _, vm := range vms {
-		if !inNamespace(vm) {
+		if checkNamespace && !inNamespace(vm) {
 			continue
 		}
 
