@@ -74,8 +74,9 @@ type Client struct {
 
 	Version string
 
-	Responses    []*Response // response queue, consumed and cleared by the heartbeat
-	responseLock sync.Mutex
+	Responses []*Response // response queue, consumed and cleared by the heartbeat
+
+	lock sync.Mutex // lock for ephemeral data to send up (responses, new tags)
 
 	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
 	lastHeartbeat time.Time             // last heartbeat watchdog time
