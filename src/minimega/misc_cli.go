@@ -174,15 +174,21 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			continue
 		}
 
+		var abort bool
+
 		for resp := range RunCommands(cmd) {
 			respChan <- resp
 
 			// Stop processing if any of the responses have an error.
 			for _, r := range resp {
 				if r.Error != "" {
-					break
+					abort = true
 				}
 			}
+		}
+
+		if abort {
+			break
 		}
 	}
 
