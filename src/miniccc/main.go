@@ -5,11 +5,14 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	log "minilog"
+	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"ron"
 	"syscall"
 	"version"
@@ -25,6 +28,7 @@ var (
 	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
 	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
+	f_tag      = flag.String("tag", "", "add a key:value tag in minimega for this vm")
 	c          *ron.Client
 )
 
@@ -64,6 +68,49 @@ func main() {
 
 	log.Debug("starting ron client with UUID: %v", c.UUID)
 
+	// create a listening domain socket for tag updates
+	go commandSocketStart()
+
 	<-sig
 	// terminate
+}
+
+func commandSocketStart() {
+	l, err := net.Listen("unix", filepath.Join(*f_path, "miniccc"))
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Error("command socket: %v", err)
+		}
+		log.Debugln("client connected")
+		go commandSocketHandle(conn)
+	}
+}
+
+func commandSocketHandle(conn net.Conn) {
+	var err error
+	var k string
+	var v string
+
+	defer conn.Close()
+
+	dec := gob.NewDecoder(conn)
+
+	err = dec.Decode(&k)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+	err = dec.Decode(&v)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	log.Debug("adding key/value: %v : %v", k, v)
+	c.Tag(k, v)
 }
