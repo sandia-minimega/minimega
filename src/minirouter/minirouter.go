@@ -9,6 +9,7 @@ import (
 	log "minilog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 )
 
@@ -18,6 +19,7 @@ var (
 	f_logfile  = flag.String("logfile", "", "also log to file")
 	f_miniccc  = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
 	f_path     = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
+	f_force    = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
 )
 
 func main() {
@@ -26,8 +28,21 @@ func main() {
 
 	logSetup()
 
+	// check for a running instance of minirouter
+	_, err := os.Stat(filepath.Join(*f_path, "minirouter"))
+	if err == nil {
+		if !*f_force {
+			log.Fatalln("minirouter appears to already be running, override with -force")
+		}
+		log.Warn("minirouter may already be running, proceed with caution")
+		err = os.Remove(filepath.Join(*f_path, "minirouter"))
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
 	// attempt to set up the base path
-	err := os.MkdirAll(*f_path, os.FileMode(0770))
+	err = os.MkdirAll(*f_path, os.FileMode(0770))
 	if err != nil {
 		log.Fatal("mkdir base path: %v", err)
 	}
