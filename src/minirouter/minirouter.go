@@ -57,4 +57,8 @@ func main() {
 	<-sig
 
 	// cleanup
+	err = os.Remove(filepath.Join(*f_path, "minirouter"))
+	if err != nil {
+		log.Fatalln(err)
+	}
 }
