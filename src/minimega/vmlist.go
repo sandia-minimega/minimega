@@ -540,30 +540,13 @@ func (vms VMs) CleanDirs() {
 	}
 }
 
-func (vms VMs) ListQoS(resp *minicli.Response) {
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	resp.Header = []string{"vm", "bridge", "tap", "max_bandwidth", "loss", "delay"}
-	var data [][]string
-
-	for _, vm := range vms {
-		qos := vm.GetQos()
-		for _, q := range qos {
-			data = append(data, q)
-		}
-
-	}
-	resp.Tabular = data
-}
-
-func (vms VMs) UpdateQos(target string, tap int, qosp *bridge.QosParams) []error {
+func (vms VMs) UpdateQos(target string, tap uint, qos *bridge.Qos) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	// For each VM, update the tap Qos
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		return true, vm.UpdateQos(tap, qosp)
+		return true, vm.UpdateQos(tap, qos)
 	}
 
 	return vms.apply(target, true, applyFunc)
@@ -582,7 +565,7 @@ func (vms VMs) ClearAllQos(target string) {
 	vms.apply(target, true, applyFunc)
 }
 
-func (vms VMs) ClearQoS(target string, tap int) []error {
+func (vms VMs) ClearQoS(target string, tap uint) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 

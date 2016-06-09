@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// Used to calulate burst rate for the token bucket filter qdisc
+const KERNEL_TIMER_FREQ uint64 = 250
+const MIN_BURST_SIZE uint64 = 2048
+
 var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
@@ -46,24 +50,6 @@ Examples:
 		}, Call: wrapVMTargetCLI(cliUpdateQos),
 	},
 	{
-		HelpShort: "list qos constraints on all interfaces",
-		HelpLong: `
-List quality-of-service constraints on all mega interfaces in tabular form.
-This command is namespace aware and will only list the qos constraints within
-the active namespace.
-Columns returned by qos list include:
-
-- host		: the host the the VM is running on
-- bridge	: bridge name
-- tap		: tap name
-- rate		: maximum bandwidth of the interface
-- loss		: probability of dropping packets
-- delay		: packet delay in milliseconds`,
-		Patterns: []string{
-			"qos list",
-		}, Call: wrapVMTargetCLI(cliListQos),
-	},
-	{
 		HelpShort: "clear qos constraints on an interface",
 		HelpLong: `
 Remove quality-of-service constraints on a mega interface. This command is namespace
@@ -84,11 +70,10 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
 	if c.StringArgs["tap"] == Wildcard {
-		vms.ClearAllQos(target)
-		return nil
+		return fmt.Errorf("qos for wildcard taps not supported")
 	}
 
-	tap, err := strconv.Atoi(c.StringArgs["tap"])
+	tap, err := strconv.ParseUint(c.StringArgs["tap"], 10, 32)
 	if err != nil {
 		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
 	}
@@ -97,12 +82,7 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("invalid tap index %d", tap)
 	}
 
-	return makeErrSlice(vms.ClearQoS(target, tap))
-}
-
-func cliListQos(c *minicli.Command, resp *minicli.Response) error {
-	vms.ListQoS(resp)
-	return nil
+	return makeErrSlice(vms.ClearQoS(target, uint(tap)))
 }
 
 func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
@@ -115,44 +95,42 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 		return errors.New("wildcard qos not implemented")
 	}
 
-	tap, err := strconv.Atoi(c.StringArgs["tap"])
+	tap, err := strconv.ParseUint(c.StringArgs["tap"], 10, 32)
 	if err != nil {
 		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
 	}
 
-	if tap < 0 {
-		return fmt.Errorf("invalid tap index %d", tap)
-	}
-
 	// Build qos parameters
-	qosp, err := cliParseQos(c)
+	qos, err := cliParseQos(c)
 	if err != nil {
 		return err
 	}
 
-	return makeErrSlice(vms.UpdateQos(target, tap, qosp))
+	return makeErrSlice(vms.UpdateQos(target, uint(tap), qos))
 
 }
 
-func cliParseQos(c *minicli.Command) (*bridge.QosParams, error) {
+func cliParseQos(c *minicli.Command) (*bridge.Qos, error) {
 
-	qosp := &bridge.QosParams{}
+	qos := &bridge.Qos{}
 
 	// Determine qdisc and set the parameters
 	if c.BoolArgs["rate"] {
-		qosp.Qdisc = "tbf"
+
+		qos.TbfParams = &bridge.TbfParams{}
 
 		var unit string
+		var bps uint64
 		rate := c.StringArgs["bw"]
 
 		if c.BoolArgs["kbit"] {
-			qosp.Bps = 1 << 10
+			bps = 1 << 10
 			unit = "kbit"
 		} else if c.BoolArgs["mbit"] {
-			qosp.Bps = 1 << 20
+			bps = 1 << 20
 			unit = "mbit"
 		} else if c.BoolArgs["gbit"] {
-			qosp.Bps = 1 << 30
+			bps = 1 << 30
 			unit = "gbit"
 		} else {
 			return nil, fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
@@ -163,11 +141,18 @@ func cliParseQos(c *minicli.Command) (*bridge.QosParams, error) {
 			return nil, fmt.Errorf("`%s` is not a valid rate parameter", rate)
 		}
 
-		qosp.Burst = burst
-		qosp.Rate = fmt.Sprintf("%s%s", rate, unit)
+		// Burst size is in bytes
+		burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
+		if burst < MIN_BURST_SIZE {
+			burst = MIN_BURST_SIZE
+		}
+
+		qos.Burst = fmt.Sprintf("%db", burst)
+		qos.Rate = fmt.Sprintf("%s%s", rate, unit)
 
 	} else {
-		qosp.Qdisc = "netem"
+
+		qos.NetemParams = &bridge.NetemParams{}
 
 		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
@@ -176,7 +161,7 @@ func cliParseQos(c *minicli.Command) (*bridge.QosParams, error) {
 			if err != nil || v >= float64(100) {
 				return nil, fmt.Errorf("`%s` is not a valid loss percentage", loss)
 			}
-			qosp.Loss = loss
+			qos.Loss = loss
 		}
 
 		// Add delay of time duration to each packet
@@ -192,8 +177,8 @@ func cliParseQos(c *minicli.Command) (*bridge.QosParams, error) {
 					return nil, fmt.Errorf("`%s` is not a valid delay parameter", delay)
 				}
 			}
-			qosp.Delay = delay
+			qos.Delay = delay
 		}
 	}
-	return qosp, nil
+	return qos, nil
 }

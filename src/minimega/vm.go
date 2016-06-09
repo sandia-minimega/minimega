@@ -81,9 +81,9 @@ type VM interface {
 	NetworkDisconnect(int) error
 
 	// Qos functions
-	GetQos() [][]string
-	UpdateQos(int, *bridge.QosParams) error
-	ClearQos(int) error
+	GetQos() []*bridge.Qos
+	UpdateQos(uint, *bridge.Qos) error
+	ClearQos(uint) error
 	ClearAllQos()
 }
 
@@ -427,11 +427,11 @@ func (vm *BaseVM) UpdateBW() {
 }
 
 // Qos functions
-func (vm *BaseVM) UpdateQos(tap int, qosp *bridge.QosParams) error {
+func (vm *BaseVM) UpdateQos(tap uint, qos *bridge.Qos) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	if tap >= len(vm.Networks) {
+	if tap >= uint(len(vm.Networks)) {
 		return fmt.Errorf("invalid tap index specified: %d", tap)
 	}
 
@@ -443,7 +443,7 @@ func (vm *BaseVM) UpdateQos(tap int, qosp *bridge.QosParams) error {
 		return err
 	}
 
-	return br.UpdateQos(tapName, qosp)
+	return br.UpdateQos(tapName, qos)
 }
 
 func (vm *BaseVM) ClearAllQos() {
@@ -460,11 +460,11 @@ func (vm *BaseVM) ClearAllQos() {
 	}
 }
 
-func (vm *BaseVM) ClearQos(tap int) error {
+func (vm *BaseVM) ClearQos(tap uint) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	if tap >= len(vm.Networks) {
+	if tap >= uint(len(vm.Networks)) {
 		return fmt.Errorf("invalid tap index specified: %d", tap)
 	}
 	nc := vm.Networks[tap]
@@ -478,11 +478,11 @@ func (vm *BaseVM) ClearQos(tap int) error {
 	return nil
 }
 
-func (vm *BaseVM) GetQos() [][]string {
+func (vm *BaseVM) GetQos() []*bridge.Qos {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	var res [][]string
+	var res []*bridge.Qos
 
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
@@ -494,8 +494,7 @@ func (vm *BaseVM) GetQos() [][]string {
 		q := b.GetQos(nc.Tap)
 
 		if q != nil {
-			res = append(res, []string{vm.GetName(), nc.Bridge, nc.Tap,
-				q.Rate, q.Loss, q.Delay})
+			res = append(res, q)
 		}
 	}
 	return res

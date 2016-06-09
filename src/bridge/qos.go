@@ -6,117 +6,68 @@ import (
 	log "minilog"
 )
 
-// Used to calulate burst rate for the token bucket filter
-const KERNEL_TIMER_FREQ uint64 = 250
-const MIN_BURST_SIZE uint64 = 2048
+var (
+	netemNs string = "root handle 1: netem delay %s loss %s"
+	tbfNs   string = "parent 1: handle 2: tbf rate %s latency 100ms burst %s"
+)
 
-type QosParams struct {
-	Qdisc string
+type TbfParams struct {
+	Rate  string
+	Burst string
+}
+
+type NetemParams struct {
 	Loss  string
 	Delay string
-	Rate  string
-	Bps   uint64
-	Burst uint64
 }
 
 // Tap field enumerating qos parameters
 type Qos struct {
-	// current command parameters
-	params map[string]string
-
-	// tbf queue discipline
-	tbfNs     []string
-	tbfParams map[string]string
-
-	// netem queue discipline
-	netemNs     []string
-	netemParams map[string]string
+	*TbfParams   // embed
+	*NetemParams // embed
 }
 
-// Qos initializer
-func newQos() *Qos {
-	return &Qos{params: make(map[string]string),
-		tbfParams:   make(map[string]string),
-		netemParams: make(map[string]string),
-	}
+// Set the initial qdisc namespace
+func (t *Tap) qosInitialize() error {
+	t.Qos = &Qos{NetemParams: &NetemParams{Loss: "0ms", Delay: "0%"}}
+	cmd := t.qosGetCmd("update", "netem")
+	return t.qosCmd(cmd)
 }
 
 // Generate a add command string from the qos.params map
 // and the qdisc namespace
-func (t *Tap) qosGetCmd(op string, ns []string) []string {
+func (t *Tap) qosGetCmd(op, qdisc string) []string {
+
+	var ns string
 
 	if op == "remove" {
-		t.Qos = nil
 		return []string{"tc", "qdisc", "del", "dev", t.Name, "root"}
 	}
 
 	// Base cmd
-	cmd := []string{"tc", "qdisc", op, "dev", t.Name}
-
-	// Add qdisc namespace
-	for _, n := range ns {
-		cmd = append(cmd, n)
-	}
-
-	// Add tc constraint parameters
-	for p, v := range t.Qos.params {
-		cmd = append(cmd, p, v)
-	}
-	return cmd
-}
-
-// Given a tc qdisc (netem, tbf) generate the correct namespace for a tc command.
-// This is required because in order to have both netem and tbf qdiscs they
-// must be "chained" together.
-func (t *Tap) qosNamespace(qdisc string) []string {
-	var ns []string
-
-	if qdisc == "netem" {
-		// This is the root qdisc
-		if t.Qos.tbfNs == nil {
-			t.Qos.netemNs = []string{"root", "handle", "1:", "netem"}
-			ns = t.Qos.netemNs
-		} else {
-			// Chain the netem qdisc to the existing tbf qdisc
-			ns = []string{"parent", "1:", "handle", "2:", "netem"}
-		}
-		// Update the command parameters
-		t.Qos.params = t.Qos.netemParams
-	}
+	cmd := fmt.Sprintf("tc qdisc change dev %s", t.Name)
 
 	if qdisc == "tbf" {
-		// This is the root qdisc
-		if t.Qos.netemNs == nil {
-			t.Qos.tbfNs = []string{"root", "handle", "1:", "tbf"}
-			ns = t.Qos.tbfNs
-		} else {
-			// Chain the tbf qdisc to the existing tbf disc
-			ns = []string{"parent", "1:", "handle", "2:", "tbf"}
-		}
-		// Update the command parameters
-		t.Qos.params = t.Qos.tbfParams
+		ns = fmt.Sprintf(tbfNs, t.Qos.Rate, t.Qos.Burst)
+	} else {
+		ns = fmt.Sprintf(netemNs, t.Qos.Delay, t.Qos.Loss)
 	}
-	return ns
+
+	return []string{cmd, ns}
 }
 
 // Execute a qos command
 // Called from the qos cli handlers
 // Op represents either add, change, or remove operations
 // Qdisc is the qdisc class of the cli argument (netem, tbf)
-func (t *Tap) qosCmd(op, qdisc string) error {
-
-	// Build the namespace for the qdisc
-	ns := t.qosNamespace(qdisc)
-
-	// Get the command
-	cmd := t.qosGetCmd(op, ns)
+func (t *Tap) qosCmd(cmd []string) error {
 
 	// Execute the qos command
 	out, err := processWrapper(cmd...)
 	if err != nil {
 		// Clean up
 		err = errors.New(out)
-		processWrapper(t.qosGetCmd("remove", nil)...)
+		processWrapper(t.qosGetCmd("remove", "")...)
 	}
 
 	return err
@@ -125,6 +76,8 @@ func (t *Tap) qosCmd(op, qdisc string) error {
 func (b *Bridge) ClearQos(tap string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
+
+	log.Info("clearing qos for tap %s", tap)
 
 	t, ok := b.taps[tap]
 	if !ok {
@@ -135,10 +88,12 @@ func (b *Bridge) ClearQos(tap string) error {
 }
 
 func (b *Bridge) clearQos(t *Tap) error {
-	return t.qosCmd("remove", "")
+	t.Qos = nil
+	cmd := t.qosGetCmd("remove", "")
+	return t.qosCmd(cmd)
 }
 
-func (b *Bridge) UpdateQos(tap string, qosp *QosParams) error {
+func (b *Bridge) UpdateQos(tap string, qos *Qos) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -149,60 +104,33 @@ func (b *Bridge) UpdateQos(tap string, qosp *QosParams) error {
 		return fmt.Errorf("tap %s not found", tap)
 	}
 
-	return b.updateQos(t, qosp)
+	return b.updateQos(t, qos)
 }
 
-func (b *Bridge) updateQos(t *Tap, qosp *QosParams) error {
-	var op string
+func (b *Bridge) updateQos(t *Tap, qos *Qos) error {
+	var qdisc string
 
 	if t.Qos == nil {
-		t.Qos = newQos()
+		err := t.qosInitialize()
+		if err != nil {
+			return err
+		}
 	}
 
-	if qosp.Qdisc == "tbf" {
-		// token bucket filter (tbf) qdisc operation
-		if len(t.Qos.tbfParams) == 0 {
-			op = "add"
-		} else {
-			op = "change"
-		}
-
-		// Burst size is in bytes
-		burst := ((qosp.Burst * qosp.Bps) / KERNEL_TIMER_FREQ) / 8
-		if burst < MIN_BURST_SIZE {
-			burst = MIN_BURST_SIZE
-		}
-
-		// Default parameters
-		// Burst must be at least rate / hz
-		// See http://unix.stackexchange.com/questions/100785/bucket-size-in-tbf
-		t.Qos.tbfParams["rate"] = qosp.Rate
-		t.Qos.tbfParams["burst"] = fmt.Sprintf("%db", burst)
-		t.Qos.tbfParams["latency"] = "100ms"
+	if qos.TbfParams != nil {
+		t.Qos.TbfParams = qos.TbfParams
+		qdisc = "tbf"
 	} else {
-		// netem qdisc operation
-		if len(t.Qos.netemParams) == 0 {
-			op = "add"
-		} else {
-			op = "change"
-		}
-
-		// Drop packets randomly with probability = loss
-		if qosp.Loss != "" {
-			t.Qos.netemParams["loss"] = qosp.Loss
-		}
-
-		// Add delay of time duration to each packet
-		if qosp.Delay != "" {
-			t.Qos.netemParams["delay"] = qosp.Delay
-		}
+		t.Qos.NetemParams = qos.NetemParams
+		qdisc = "netem"
 	}
 
 	// Execute the qos command
-	return t.qosCmd(op, qosp.Qdisc)
+	cmd := t.qosGetCmd("update", qdisc)
+	return t.qosCmd(cmd)
 }
 
-func (b *Bridge) GetQos(tap string) *QosParams {
+func (b *Bridge) GetQos(tap string) *Qos {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -217,17 +145,10 @@ func (b *Bridge) GetQos(tap string) *QosParams {
 	return b.getQos(t)
 }
 
-func (b *Bridge) getQos(t *Tap) *QosParams {
-	q := &QosParams{}
-
-	if t.Qos.netemParams != nil {
-		q.Loss = t.Qos.netemParams["loss"]
-		q.Delay = t.Qos.netemParams["delay"]
-	}
-
-	if t.Qos.tbfParams != nil {
-		q.Rate = t.Qos.tbfParams["rate"]
-	}
-
-	return q
+// Return a copy of the tap's Qos struct
+func (b *Bridge) getQos(t *Tap) *Qos {
+	qos := &Qos{}
+	qos.TbfParams = t.Qos.TbfParams
+	qos.NetemParams = t.Qos.NetemParams
+	return qos
 }
