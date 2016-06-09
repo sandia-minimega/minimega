@@ -23,6 +23,13 @@ const (
 	GET_BACKING_IMAGE_COMMAND
 )
 
+type DiskInfo struct {
+	Format      string
+	VirtualSize string
+	DiskSize    string
+	BackingFile string
+}
+
 var diskCLIHandlers = []minicli.Handler{
 	{ // disk
 		HelpShort: "manipulate qcow disk images image",
@@ -67,6 +74,7 @@ use absolute paths if desired.`,
 			"disk <snapshot,> <image> [dst image]",
 			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
+			"disk <info,> <image>",
 		},
 		Call: wrapSimpleCLI(cliDisk),
 	},
@@ -80,6 +88,36 @@ func diskSnapshot(src, dst string) error {
 	}
 
 	return nil
+}
+
+// diskInfo return information about the disk.
+func diskInfo(image string) (DiskInfo, error) {
+	info := DiskInfo{}
+
+	out, err := processWrapper("qemu-img", "info", image)
+	if err != nil {
+		return info, fmt.Errorf("%v: %v", out, err)
+	}
+
+	for _, line := range strings.Split(out, "\n") {
+		parts := strings.SplitN(line, ": ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+
+		switch parts[0] {
+		case "file format":
+			info.Format = parts[1]
+		case "virtual size":
+			info.VirtualSize = parts[1]
+		case "disk size":
+			info.DiskSize = parts[1]
+		case "backing file":
+			info.BackingFile = parts[1]
+		}
+	}
+
+	return info, nil
 }
 
 // diskCreate creates a new disk image, dst, of given size/format.
@@ -286,6 +324,18 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		return diskCreate(format, image, size)
+	} else if c.BoolArgs["info"] {
+		info, err := diskInfo(image)
+		if err != nil {
+			return err
+		}
+
+		resp.Header = []string{"image", "format", "virtual size", "disk size", "backing file"}
+		resp.Tabular = append(resp.Tabular, []string{
+			image, info.Format, info.VirtualSize, info.DiskSize, info.BackingFile,
+		})
+
+		return nil
 	}
 
 	// boo, should be unreachable
