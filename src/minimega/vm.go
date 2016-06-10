@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
@@ -43,8 +44,6 @@ const (
 )
 
 type VM interface {
-	Config() *BaseConfig
-
 	GetID() int           // GetID returns the VM's per-host unique ID
 	GetName() string      // GetName returns the VM's per-host unique name
 	GetNamespace() string // GetNamespace returns the VM's namespace
@@ -68,6 +67,14 @@ type VM interface {
 	SetTag(string, string)      // SetTag updates the given tag
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
+
+	// SaveConfig writes the commands to relaunch this VM with the same
+	// config to the io.Writer.
+	SaveConfig(io.Writer) error
+
+	// Conflicts checks whether the VMs have conflicting configs. Called
+	// when we create a VM but before adding it to the list of VMs.
+	Conflicts(VM) error
 
 	SetCCActive(bool)
 	UpdateBW()
@@ -167,7 +174,7 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func NewVM(name string, vmType VMType) VM {
+func NewVM(name string, vmType VMType) (VM, error) {
 	switch vmType {
 	case KVM:
 		return NewKVM(name)
@@ -175,7 +182,7 @@ func NewVM(name string, vmType VMType) VM {
 		return NewContainer(name)
 	}
 
-	return nil
+	return nil, errors.New("unknown VM type")
 }
 
 // NewBaseVM creates a new VM, copying the currently set configs. After a VM is
@@ -197,6 +204,15 @@ func NewBaseVM(name string) *BaseVM {
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
 		vm.UUID = generateUUID()
+	}
+
+	// generate MAC addresses if any are unassigned. Don't bother checking
+	// for collisions -- based on the birthday paradox, there's only a
+	// 0.016% chance of collisions when running 10K VMs (one interface/VM).
+	for i := range vm.Networks {
+		if vm.Networks[i].MAC == "" {
+			vm.Networks[i].MAC = randomMac()
+		}
 	}
 
 	vm.kill = make(chan bool)
@@ -696,6 +712,30 @@ func (vm *BaseVM) writeTaps() error {
 	return nil
 }
 
+func (vm *BaseVM) conflicts(vm2 BaseVM) error {
+	// Return error if two VMs have same name or UUID
+	if vm.Namespace == vm2.Namespace {
+		if vm.Name == vm2.Name {
+			return fmt.Errorf("duplicate VM name: %s", vm.Name)
+		}
+
+		if vm.UUID == vm2.UUID {
+			return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
+		}
+	}
+
+	// Warn if we see two VMs that share a MAC on the same VLAN
+	for _, n := range vm.Networks {
+		for _, n2 := range vm2.Networks {
+			if n.MAC == n2.MAC && n.VLAN == n2.VLAN {
+				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", vm.ID, vm2.ID)
+			}
+		}
+	}
+
+	return nil
+}
+
 // inNamespace tests whether vm is part of active namespace, if there is one.
 // When there isn't an active namespace, all vms return true.
 func inNamespace(vm VM) bool {
@@ -722,4 +762,15 @@ func vmNotKVM(idOrName string) error {
 
 func isVmNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
+}
+
+func getConfig(vm VM) BaseConfig {
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vm.BaseConfig
+	case *ContainerVM:
+		return vm.BaseConfig
+	}
+
+	return BaseConfig{}
 }

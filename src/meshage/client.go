@@ -7,7 +7,6 @@ package meshage
 import (
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"io"
 	log "minilog"
 	"net"
@@ -33,30 +32,33 @@ func (n *Node) clientSend(host string, m *Message) error {
 	if log.WillLog(log.DEBUG) {
 		log.Debug("clientSend %s: %v", host, m)
 	}
-	if c, ok := n.clients[host]; ok {
-		c.lock.Lock()
-		defer c.lock.Unlock()
 
-		err := c.enc.Encode(m)
-		if err != nil {
-			c.conn.Close()
-			return err
-		}
+	c, err := n.getClient(host)
+	if err != nil {
+		return err
+	}
 
-		// wait for a response
-		for {
-			select {
-			case ID := <-c.ack:
-				if ID == m.ID {
-					return nil
-				}
-			case <-time.After(n.timeout):
-				c.conn.Close()
-				return errors.New("timeout")
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	err = c.enc.Encode(m)
+	if err != nil {
+		c.conn.Close()
+		return err
+	}
+
+	// wait for a response
+	for {
+		select {
+		case ID := <-c.ack:
+			if ID == m.ID {
+				return nil
 			}
+		case <-time.After(n.timeout):
+			c.conn.Close()
+			return errors.New("timeout")
 		}
 	}
-	return fmt.Errorf("no such client %s", host)
 }
 
 // clientHandler is called as a goroutine after a successful handshake. It
@@ -65,9 +67,11 @@ func (n *Node) clientSend(host string, m *Message) error {
 func (n *Node) clientHandler(host string) {
 	log.Debug("clientHandler: %v", host)
 
-	n.clientLock.Lock()
-	c := n.clients[host]
-	n.clientLock.Unlock()
+	c, err := n.getClient(host)
+	if err != nil {
+		log.Error("client %v vanished -- %v", host, err)
+		return
+	}
 
 	n.MSA()
 
@@ -118,9 +122,12 @@ func (n *Node) clientHandler(host string) {
 // Dicconnect from the specified host.
 func (n *Node) Hangup(host string) error {
 	log.Debug("hangup: %v", host)
-	if c, ok := n.clients[host]; ok {
-		c.conn.Close()
-		return nil
+
+	c, err := n.getClient(host)
+	if err != nil {
+		return err
 	}
-	return fmt.Errorf("no such client: %s", host)
+
+	c.conn.Close()
+	return nil
 }
