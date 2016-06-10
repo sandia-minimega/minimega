@@ -426,7 +426,6 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
-// Qos functions
 func (vm *BaseVM) UpdateQos(tap uint, qos *bridge.Qos) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -442,11 +441,10 @@ func (vm *BaseVM) UpdateQos(tap uint, qos *bridge.Qos) error {
 	if err != nil {
 		return err
 	}
-
 	return br.UpdateQos(tapName, qos)
 }
 
-func (vm *BaseVM) ClearAllQos() {
+func (vm *BaseVM) ClearAllQos() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -454,9 +452,13 @@ func (vm *BaseVM) ClearAllQos() {
 		b, err := getBridge(nc.Bridge)
 		if err != nil {
 			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
-			continue
+			return err
 		}
-		b.ClearQos(nc.Tap)
+		err = b.ClearQos(nc.Tap)
+		if err != nil {
+			log.Error("failed to remove qos from vm %s", vm.GetName())
+			return err
+		}
 	}
 }
 
@@ -473,9 +475,7 @@ func (vm *BaseVM) ClearQos(tap uint) error {
 		return err
 	}
 
-	b.ClearQos(nc.Tap)
-
-	return nil
+	return b.ClearQos(nc.Tap)
 }
 
 func (vm *BaseVM) GetQos() []*bridge.Qos {
@@ -492,7 +492,6 @@ func (vm *BaseVM) GetQos() []*bridge.Qos {
 		}
 
 		q := b.GetQos(nc.Tap)
-
 		if q != nil {
 			res = append(res, q)
 		}

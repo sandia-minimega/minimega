@@ -66,7 +66,6 @@ Example:
 }
 
 func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
-
 	target := c.StringArgs["target"]
 
 	if c.StringArgs["tap"] == Wildcard {
@@ -78,16 +77,10 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
 	}
 
-	if tap < 0 {
-		return fmt.Errorf("invalid tap index %d", tap)
-	}
-
 	return makeErrSlice(vms.ClearQoS(target, uint(tap)))
 }
 
 func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
-
-	var err error
 	target := c.StringArgs["target"]
 
 	// Wildcard command
@@ -107,11 +100,9 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return makeErrSlice(vms.UpdateQos(target, uint(tap), qos))
-
 }
 
 func cliParseQos(c *minicli.Command) (*bridge.Qos, error) {
-
 	qos := &bridge.Qos{}
 
 	// Determine qdisc and set the parameters
@@ -151,14 +142,13 @@ func cliParseQos(c *minicli.Command) (*bridge.Qos, error) {
 		qos.Rate = fmt.Sprintf("%s%s", rate, unit)
 
 	} else {
-
 		qos.NetemParams = &bridge.NetemParams{}
 
 		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
 			loss := c.StringArgs["percent"]
 			v, err := strconv.ParseFloat(loss, 64)
-			if err != nil || v >= float64(100) {
+			if err != nil || v >= float64(100) || v < 0 {
 				return nil, fmt.Errorf("`%s` is not a valid loss percentage", loss)
 			}
 			qos.Loss = loss

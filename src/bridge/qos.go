@@ -34,10 +34,8 @@ func (t *Tap) qosInitialize() error {
 	return t.qosCmd(cmd)
 }
 
-// Generate a add command string from the qos.params map
-// and the qdisc namespace
+// Generate a qos command string given the requested qdisc
 func (t *Tap) qosGetCmd(op, qdisc string) []string {
-
 	var ns string
 
 	if op == "remove" {
@@ -52,17 +50,11 @@ func (t *Tap) qosGetCmd(op, qdisc string) []string {
 	} else {
 		ns = fmt.Sprintf(netemNs, t.Qos.Delay, t.Qos.Loss)
 	}
-
 	return []string{cmd, ns}
 }
 
-// Execute a qos command
-// Called from the qos cli handlers
-// Op represents either add, change, or remove operations
-// Qdisc is the qdisc class of the cli argument (netem, tbf)
+// Execute a qos command string
 func (t *Tap) qosCmd(cmd []string) error {
-
-	// Execute the qos command
 	out, err := processWrapper(cmd...)
 	if err != nil {
 		// Clean up
@@ -83,7 +75,6 @@ func (b *Bridge) ClearQos(tap string) error {
 	if !ok {
 		return fmt.Errorf("tap %s not found", tap)
 	}
-
 	return b.clearQos(t)
 }
 
@@ -103,7 +94,6 @@ func (b *Bridge) UpdateQos(tap string, qos *Qos) error {
 	if !ok {
 		return fmt.Errorf("tap %s not found", tap)
 	}
-
 	return b.updateQos(t, qos)
 }
 
@@ -125,7 +115,6 @@ func (b *Bridge) updateQos(t *Tap, qos *Qos) error {
 		qdisc = "netem"
 	}
 
-	// Execute the qos command
 	cmd := t.qosGetCmd("update", qdisc)
 	return t.qosCmd(cmd)
 }

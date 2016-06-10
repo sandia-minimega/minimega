@@ -558,8 +558,7 @@ func (vms VMs) ClearAllQos(target string) {
 
 	// Clear qos for all vm taps
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		vm.ClearAllQos()
-		return true, nil
+		return true, vm.ClearAllQos()
 	}
 
 	vms.apply(target, true, applyFunc)
