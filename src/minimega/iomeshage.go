@@ -134,24 +134,44 @@ func iomHelper(file string) (string, error) {
 		return "", err
 	}
 
-	// poll until the file transfer is completed
-	for {
-		var waiting bool
-		transfers := iom.Status()
-		for _, f := range transfers {
-			if strings.Contains(f.Filename, file) {
-				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
-				waiting = true
-			}
-		}
-		if !waiting {
-			break
-		}
-		time.Sleep(IOM_HELPER_WAIT)
-	}
+	iomWait(file)
 
 	dst := filepath.Join(*f_iomBase, file)
+
+	info, err := diskInfo(dst)
+	if err == nil && info.BackingFile != "" {
+		// try to fetch backing image too
+		if !strings.HasPrefix(info.BackingFile, *f_iomBase) {
+			return "", fmt.Errorf("cannot fetch backing image from outside files directory: %v", info.BackingFile)
+		}
+
+		file := strings.TrimPrefix(info.BackingFile, *f_iomBase)
+		log.Info("fetching backing image: %v", file)
+
+		if _, err := iomHelper(file); err != nil {
+			return "", fmt.Errorf("failed to fetch backing image %v: %v", file, err)
+		}
+	}
+
 	return dst, nil
+}
+
+// iomWait polls until the file transfer is completed
+func iomWait(file string) {
+	log.Info("waiting on file: %v", file)
+
+outer:
+	for {
+		for _, f := range iom.Status() {
+			if strings.Contains(f.Filename, file) {
+				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
+				time.Sleep(IOM_HELPER_WAIT)
+				continue outer
+			}
+		}
+
+		break
+	}
 }
 
 // a filename completer for goreadline that searches for the file: prefix,
