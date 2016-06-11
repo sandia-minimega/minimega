@@ -12,7 +12,6 @@ import (
 	"net"
 	"path/filepath"
 	"ron"
-	"strings"
 	"sync"
 	"text/tabwriter"
 )
@@ -23,17 +22,9 @@ var (
 )
 
 type Router struct {
-	vmID int     // local (and unique regardless of namespace) vm id
-	IPs  [][]*IP // positional ipv4 address (index 0 is the first listed network in vm config net)
+	vmID int        // local (and unique regardless of namespace) vm id
+	IPs  [][]string // positional ipv4 address (index 0 is the first listed network in vm config net)
 	lock sync.Mutex
-}
-
-// a configured interface which can be in 2 states - an ipv4 or v6 address, or
-// dhcp, otherwise the interface is taken down.
-type IP struct {
-	ip   net.IP
-	net  *net.IPNet
-	dhcp bool
 }
 
 func (r *Router) String() string {
@@ -48,15 +39,6 @@ func (r *Router) String() string {
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
-}
-
-func (ip *IP) String() string {
-	if ip.dhcp {
-		return "dhcp"
-	}
-	network := ip.net.String()
-	nm := strings.Split(network, "/")
-	return fmt.Sprintf("%v/%v", ip.ip.String(), nm[1])
 }
 
 func init() {
@@ -89,11 +71,11 @@ func routerCreate(vm VM) *Router {
 	}
 	r := &Router{
 		vmID: id,
-		IPs:  [][]*IP{},
+		IPs:  [][]string{},
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
-		r.IPs = append(r.IPs, []*IP{})
+		r.IPs = append(r.IPs, []string{})
 	}
 
 	routers[id] = r
@@ -197,14 +179,13 @@ func RouterInterfaceAdd(vm VM, n int, i string) error {
 		return fmt.Errorf("no such network index: %v", n)
 	}
 
-	ip, err := routerParseIP(i)
-	if err != nil {
-		return err
+	if !routerIsValidIP(i) {
+		return fmt.Errorf("invalid IP: %v", i)
 	}
 
-	log.Debug("adding ip %v", ip)
+	log.Debug("adding ip %v", i)
 
-	r.IPs[n] = append(r.IPs[n], ip)
+	r.IPs[n] = append(r.IPs[n], i)
 
 	return nil
 }
@@ -223,39 +204,29 @@ func RouterInterfaceDel(vm VM, n int, i string) error {
 		return fmt.Errorf("no such network index: %v", n)
 	}
 
-	ip, err := routerParseIP(i)
-	if err != nil {
-		return err
+	if !routerIsValidIP(i) {
+		return fmt.Errorf("invalid IP: %v", i)
 	}
 
 	var found bool
 	for j, v := range r.IPs[n] {
-		if ip.String() == v.String() {
-			log.Debug("removing ip %v", ip)
+		if i == v {
+			log.Debug("removing ip %v", i)
 			r.IPs[n] = append(r.IPs[n][:j], r.IPs[n][j+1:]...)
 			found = true
 			break
 		}
 	}
 	if !found {
-		return fmt.Errorf("no such network: %v", ip)
+		return fmt.Errorf("no such network: %v", i)
 	}
 
 	return nil
 }
 
-func routerParseIP(i string) (*IP, error) {
-	ip := &IP{}
-
-	if i == "dhcp" {
-		ip.dhcp = true
-	} else {
-		var err error
-		ip.ip, ip.net, err = net.ParseCIDR(i)
-		if err != nil {
-			return nil, err
-		}
+func routerIsValidIP(i string) bool {
+	if _, _, err := net.ParseCIDR(i); err != nil && i != "dhcp" {
+		return false
 	}
-
-	return ip, nil
+	return true
 }
