@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"minicli"
 	log "minilog"
 	"net"
 	"path/filepath"
@@ -24,5 +26,18 @@ func commandSocketStart() {
 }
 
 func commandSocketHandle(conn net.Conn) {
-
+	// just read comments off the wire
+	scanner := bufio.NewScanner(conn)
+	for scanner.Scan() {
+		line := scanner.Text()
+		log.Debug("got command: %v", line)
+		_, err := minicli.ProcessString(line, false)
+		if err != nil {
+			log.Errorln(err)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Errorln(err)
+	}
+	conn.Close()
 }

@@ -20,6 +20,7 @@ var (
 	f_miniccc  = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
 	f_path     = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
 	f_force    = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
+	f_u        = flag.String("u", "", "update minirouter with a given file")
 )
 
 func main() {
@@ -27,6 +28,22 @@ func main() {
 	flag.Parse()
 
 	logSetup()
+
+	if *f_u != "" {
+		if *f_miniccc != "" {
+			// disable tagLogger so we don't clobber the parent minirouter
+			log.DelLogger("taglogger")
+		}
+
+		log.Debug("updating with file: %v", *f_u)
+
+		err := update(filepath.Join(*f_path, "minirouter"), *f_u)
+		if err != nil {
+			log.Errorln(err)
+		}
+
+		return
+	}
 
 	// check for a running instance of minirouter
 	_, err := os.Stat(filepath.Join(*f_path, "minirouter"))
