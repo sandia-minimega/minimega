@@ -1,4 +1,4 @@
-## # a single router - interfaces
+## # router interfaces
 ## vm config net 100 200
 ## vm launch kvm vm0
 ## router vm0 interface add 0 1.2.3.4/24
@@ -16,3 +16,12 @@ IPs: [[dhcp] [5.6.7.8/16]]
 ## router vm0 interface del 1 5.6.7.8/16
 ## .annotate false router vm0
 IPs: [[dhcp] []]
+
+## # router commit
+## router vm0 interface add 0 1.2.3.4/24
+## router vm0 interface add 1 5.6.7.8/24
+## router vm0 commit
+## .annotate false shell cat /tmp/minimega/files/minirouter-0
+ip 0 dhcp
+ip 0 1.2.3.4/24
+ip 1 5.6.7.8/24
