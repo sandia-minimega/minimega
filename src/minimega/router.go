@@ -67,9 +67,10 @@ func (r *Router) generateConfig() error {
 	var out bytes.Buffer
 
 	// ips
+	fmt.Fprintf(&out, "ip flush\n") // no need to manage state - just start over
 	for i, v := range r.IPs {
 		for _, w := range v {
-			fmt.Fprintf(&out, "ip %v %v\n", i, w)
+			fmt.Fprintf(&out, "ip add %v %v\n", i, w)
 		}
 	}
 
