@@ -1,0 +1,18 @@
+## # a single router - interfaces
+## vm config net 100 200
+## vm launch kvm vm0
+## router vm0 interface add 0 1.2.3.4/24
+## router vm0 interface add 0 dhcp
+## router vm0 interface add 1 5.6.7.8/16
+## .annotate false router vm0
+IPs: [[1.2.3.4/24 dhcp] [5.6.7.8/16]]
+## router vm0 interface del 0 1.2.3.4/24
+## .annotate false router vm0
+IPs: [[dhcp] [5.6.7.8/16]]
+## router vm0 interface del 1 5.6.7.8/24
+E: no such network: 5.6.7.8/24
+## .annotate false router vm0
+IPs: [[dhcp] [5.6.7.8/16]]
+## router vm0 interface del 1 5.6.7.8/16
+## .annotate false router vm0
+IPs: [[dhcp] []]
