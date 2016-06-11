@@ -9,6 +9,7 @@ import (
 	"fmt"
 	log "minilog"
 	"net"
+	"strings"
 	"sync"
 	"text/tabwriter"
 )
@@ -27,6 +28,7 @@ type Router struct {
 // a configured interface which can be in 2 states - an ipv4 or v6 address, or
 // dhcp, otherwise the interface is taken down.
 type IP struct {
+	ip   net.IP
 	net  *net.IPNet
 	dhcp bool
 }
@@ -49,7 +51,9 @@ func (ip *IP) String() string {
 	if ip.dhcp {
 		return "dhcp"
 	}
-	return ip.net.String()
+	network := ip.net.String()
+	nm := strings.Split(network, "/")
+	return fmt.Sprintf("%v/%v", ip.ip.String(), nm[1])
 }
 
 func init() {
@@ -156,7 +160,7 @@ func RouterInterfaceDel(vm VM, n int, i string) error {
 	for j, v := range r.IPs[n] {
 		if ip.String() == v.String() {
 			log.Debug("removing ip %v", ip)
-			r.IPs = append(r.IPs[:j], r.IPs[j+1:]...)
+			r.IPs[n] = append(r.IPs[n][:j], r.IPs[n][j+1:]...)
 			found = true
 			break
 		}
@@ -175,7 +179,7 @@ func routerParseIP(i string) (*IP, error) {
 		ip.dhcp = true
 	} else {
 		var err error
-		_, ip.net, err = net.ParseCIDR(i)
+		ip.ip, ip.net, err = net.ParseCIDR(i)
 		if err != nil {
 			return nil, err
 		}
