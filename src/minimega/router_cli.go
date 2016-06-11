@@ -18,8 +18,8 @@ var routerCLIHandlers = []minicli.Handler{
 			"router",
 			"router <vm>",
 			"router <vm> <commit,>",
-			"router <vm> <interface,> <add,> <network> [IPv4/MASK or IPv6/MASK or dhcp]...",
-			"router <vm> <interface,> <del,> <network> [IPv4/MASK or IPv6/MASK or dhcp]...",
+			"router <vm> <interface,> <add,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"router <vm> <interface,> <del,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -58,7 +58,11 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 			}
 		}
 	} else if vmName != "" { // a summary of a specific router
-		resp.Response = "implement me"
+		r := FindRouter(vm)
+		if r == nil {
+			return fmt.Errorf("vm %v not a router", vmName)
+		}
+		resp.Response = r.String()
 	} else { // a summary of all routers
 		resp.Response = "implement me"
 	}

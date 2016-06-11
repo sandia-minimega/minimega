@@ -5,9 +5,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	log "minilog"
 	"net"
 	"sync"
+	"text/tabwriter"
 )
 
 var (
@@ -18,6 +21,7 @@ var (
 type Router struct {
 	vmID int     // local (and unique regardless of namespace) vm id
 	IPs  [][]*IP // positional ipv4 address (index 0 is the first listed network in vm config net)
+	lock sync.Mutex
 }
 
 // a configured interface which can be in 2 states - an ipv4 or v6 address, or
@@ -25,6 +29,20 @@ type Router struct {
 type IP struct {
 	net  *net.IPNet
 	dhcp bool
+}
+
+func (r *Router) String() string {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	// create output
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "IPs:\t%v\n", r.IPs)
+	w.Flush()
+	fmt.Fprintln(&o)
+	return o.String()
 }
 
 func (ip *IP) String() string {
@@ -41,22 +59,41 @@ func init() {
 // routerCreate creates a new router for vm, or returns an existing router if
 // it already exists
 func routerCreate(vm VM) *Router {
+	log.Debug("routerCreate: %v", vm)
+
 	id := vm.GetID()
 	if r, ok := routers[id]; ok {
 		return r
 	}
 	r := &Router{
 		vmID: id,
+		IPs:  [][]*IP{},
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
 		r.IPs = append(r.IPs, []*IP{})
 	}
 
-	return routers[id]
+	routers[id] = r
+
+	return r
+}
+
+// FindRouter returns an existing router if it exists, otherwise nil
+func FindRouter(vm VM) *Router {
+	routerLock.Lock()
+	defer routerLock.Unlock()
+
+	id := vm.GetID()
+	if r, ok := routers[id]; ok {
+		return r
+	}
+	return nil
 }
 
 func RouterCommit(vm VM) error {
+	log.Debug("routerCommit: %v", vm)
+
 	routerLock.Lock()
 	defer routerLock.Unlock()
 
@@ -71,10 +108,14 @@ func RouterCommit(vm VM) error {
 }
 
 func RouterInterfaceAdd(vm VM, n int, i string) error {
-	routerLock.Lock()
-	defer routerLock.Unlock()
+	log.Debug("RouterInterfaceAdd: %v, %v, %v", vm, n, i)
 
+	routerLock.Lock()
 	r := routerCreate(vm)
+	routerLock.Unlock()
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	if n >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", n)
@@ -85,16 +126,22 @@ func RouterInterfaceAdd(vm VM, n int, i string) error {
 		return err
 	}
 
+	log.Debug("adding ip %v", ip)
+
 	r.IPs[n] = append(r.IPs[n], ip)
 
 	return nil
 }
 
 func RouterInterfaceDel(vm VM, n int, i string) error {
-	routerLock.Lock()
-	defer routerLock.Unlock()
+	log.Debug("RouterInterfaceDel: %v, %v, %v", vm, n, i)
 
+	routerLock.Lock()
 	r := routerCreate(vm)
+	routerLock.Unlock()
+
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	if n >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", n)
@@ -108,6 +155,7 @@ func RouterInterfaceDel(vm VM, n int, i string) error {
 	var found bool
 	for j, v := range r.IPs[n] {
 		if ip.String() == v.String() {
+			log.Debug("removing ip %v", ip)
 			r.IPs = append(r.IPs[:j], r.IPs[j+1:]...)
 			found = true
 			break
