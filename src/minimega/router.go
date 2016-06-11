@@ -173,7 +173,7 @@ func RouterCommit(vm VM) error {
 
 	cmd = &ron.Command{
 		Filter:  filter,
-		Command: []string{"minirouter", "-u", prefix},
+		Command: []string{"minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
 	}
 	id = ccNode.NewCommand(cmd)
 	log.Debug("generated command %v : %v", id, cmd)
