@@ -7,8 +7,11 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"net"
+	"path/filepath"
+	"ron"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -60,6 +63,20 @@ func init() {
 	routers = make(map[int]*Router)
 }
 
+func (r *Router) generateConfig() error {
+	var out bytes.Buffer
+
+	// ips
+	for i, v := range r.IPs {
+		for _, w := range v {
+			fmt.Fprintf(&out, "ip %v %v\n", i, w)
+		}
+	}
+
+	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
+	return ioutil.WriteFile(filename, out.Bytes(), 0644)
+}
+
 // routerCreate creates a new router for vm, or returns an existing router if
 // it already exists
 func routerCreate(vm VM) *Router {
@@ -80,6 +97,8 @@ func routerCreate(vm VM) *Router {
 
 	routers[id] = r
 
+	vm.SetTag("minirouter", fmt.Sprintf("%v", id))
+
 	return r
 }
 
@@ -99,14 +118,66 @@ func RouterCommit(vm VM) error {
 	log.Debug("routerCommit: %v", vm)
 
 	routerLock.Lock()
-	defer routerLock.Unlock()
+	r := routerCreate(vm)
+	routerLock.Unlock()
 
-	//r := routerCreate(vm)
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	// build a command list from the router
-	// c := r.generateConfig()
+	err := r.generateConfig()
+	if err != nil {
+		return err
+	}
 
-	// update cc commands for this router
+	// remove any previous commands
+	prefix := fmt.Sprintf("minirouter-%v", r.vmID)
+	ids := ccPrefixIDs(prefix)
+	if len(ids) != 0 {
+		for _, v := range ids {
+			c := ccNode.GetCommand(v)
+			if c == nil {
+				return fmt.Errorf("cc delete unknown command %v", v)
+			}
+
+			if !ccMatchNamespace(c) {
+				// skip without warning
+				continue
+			}
+
+			err := ccNode.DeleteCommand(v)
+			if err != nil {
+				return fmt.Errorf("cc delete command %v : %v", v, err)
+			}
+			ccUnmapPrefix(v)
+		}
+	}
+
+	// filter on the minirouter tag
+	filter := &ron.Client{
+		Tags: make(map[string]string),
+	}
+	filter.Tags["minirouter"] = fmt.Sprintf("%v", r.vmID)
+
+	// issue cc commands for this router
+	cmd := &ron.Command{
+		Filter: filter,
+	}
+	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
+		Name: prefix,
+		Perm: 0644,
+	})
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+	ccPrefixMap[id] = prefix
+
+	cmd = &ron.Command{
+		Filter:  filter,
+		Command: []string{"minirouter", "-u", prefix},
+	}
+	id = ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+	ccPrefixMap[id] = prefix
 
 	return nil
 }
