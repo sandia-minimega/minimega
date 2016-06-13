@@ -546,7 +546,7 @@ func (vm *BaseVM) info(key string) (string, error) {
 			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
-				vals = append(vals, fmt.Sprintf("%v", net.VLAN))
+				vals = append(vals, printVLAN(net.VLAN))
 			}
 		}
 	case "bridge":
