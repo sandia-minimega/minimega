@@ -89,9 +89,9 @@ type VM interface {
 
 	// Qos functions
 	GetQos() []*bridge.Qos
-	UpdateQos(uint, *bridge.Qos) error
+	UpdateQos(uint, bridge.QosOption) error
 	ClearQos(uint) error
-	ClearAllQos()
+	ClearAllQos() error
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -442,7 +442,7 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
-func (vm *BaseVM) UpdateQos(tap uint, qos *bridge.Qos) error {
+func (vm *BaseVM) UpdateQos(tap uint, op bridge.QosOption) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -457,7 +457,7 @@ func (vm *BaseVM) UpdateQos(tap uint, qos *bridge.Qos) error {
 	if err != nil {
 		return err
 	}
-	return br.UpdateQos(tapName, qos)
+	return br.UpdateQos(tapName, op)
 }
 
 func (vm *BaseVM) ClearAllQos() error {
@@ -476,6 +476,7 @@ func (vm *BaseVM) ClearAllQos() error {
 			return err
 		}
 	}
+	return nil
 }
 
 func (vm *BaseVM) ClearQos(tap uint) error {
@@ -654,6 +655,9 @@ func (vm *BaseVM) info(key string) (string, error) {
 			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
 			vals = append(vals, s)
 		}
+	case "qos_loss":
+	case "qos_delay":
+	case "qos_bandwidth":
 	case "tags":
 		return vm.TagsString(), nil
 	case "cc_active":

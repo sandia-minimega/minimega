@@ -46,7 +46,7 @@ Examples:
 		Patterns: []string{
 			"qos <add,> <target> <interface> <loss,> <percent>",
 			"qos <add,> <target> <interface> <delay,> <duration>",
-			"qos <add,> <target> <interface> <rate,> <kbit,mbit,gbit>",
+			"qos <add,> <target> <interface> <rate,> <bw> <kbit,mbit,gbit>",
 		}, Call: wrapVMTargetCLI(cliUpdateQos),
 	},
 	{
@@ -68,13 +68,13 @@ Example:
 func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
-	if c.StringArgs["tap"] == Wildcard {
+	if c.StringArgs["interface"] == Wildcard {
 		return fmt.Errorf("qos for wildcard taps not supported")
 	}
 
-	tap, err := strconv.ParseUint(c.StringArgs["tap"], 10, 32)
+	tap, err := strconv.ParseUint(c.StringArgs["interface"], 10, 32)
 	if err != nil {
-		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
+		return fmt.Errorf("invalid tap index %s", c.StringArgs["interface"])
 	}
 
 	return makeErrSlice(vms.ClearQoS(target, uint(tap)))
@@ -84,91 +84,75 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
 	// Wildcard command
-	if c.StringArgs["tap"] == Wildcard {
+	if c.StringArgs["interface"] == Wildcard {
 		return errors.New("wildcard qos not implemented")
 	}
 
-	tap, err := strconv.ParseUint(c.StringArgs["tap"], 10, 32)
+	tap, err := strconv.ParseUint(c.StringArgs["interface"], 10, 32)
 	if err != nil {
-		return fmt.Errorf("invalid tap index %s", c.StringArgs["tap"])
+		return fmt.Errorf("invalid tap index %s", c.StringArgs["interface"])
 	}
 
-	// Build qos parameters
-	qos, err := cliParseQos(c)
+	// Build qos options
+	op, err := cliParseQos(c)
 	if err != nil {
 		return err
 	}
 
-	return makeErrSlice(vms.UpdateQos(target, uint(tap), qos))
+	return makeErrSlice(vms.UpdateQos(target, uint(tap), op))
 }
 
-func cliParseQos(c *minicli.Command) (*bridge.Qos, error) {
-	qos := &bridge.Qos{}
+func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
+	op := bridge.QosOption{}
 
-	// Determine qdisc and set the parameters
 	if c.BoolArgs["rate"] {
-
-		qos.TbfParams = &bridge.TbfParams{}
+		op.Type = bridge.Rate
 
 		var unit string
-		var bps uint64
 		rate := c.StringArgs["bw"]
 
 		if c.BoolArgs["kbit"] {
-			bps = 1 << 10
 			unit = "kbit"
 		} else if c.BoolArgs["mbit"] {
-			bps = 1 << 20
 			unit = "mbit"
 		} else if c.BoolArgs["gbit"] {
-			bps = 1 << 30
 			unit = "gbit"
 		} else {
-			return nil, fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
+			return op, fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
 		}
 
-		burst, err := strconv.ParseUint(rate, 10, 64)
+		_, err := strconv.ParseUint(rate, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("`%s` is not a valid rate parameter", rate)
+			return op, fmt.Errorf("`%s` is not a valid rate parameter", rate)
 		}
 
-		// Burst size is in bytes
-		burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
-		if burst < MIN_BURST_SIZE {
-			burst = MIN_BURST_SIZE
-		}
-
-		qos.Burst = fmt.Sprintf("%db", burst)
-		qos.Rate = fmt.Sprintf("%s%s", rate, unit)
-
+		op.Value = fmt.Sprintf("%s%s", rate, unit)
 	} else {
-		qos.NetemParams = &bridge.NetemParams{}
-
-		// Drop packets randomly with probability = loss
 		if c.BoolArgs["loss"] {
+			op.Type = bridge.Loss
+
 			loss := c.StringArgs["percent"]
 			v, err := strconv.ParseFloat(loss, 64)
 			if err != nil || v >= float64(100) || v < 0 {
-				return nil, fmt.Errorf("`%s` is not a valid loss percentage", loss)
+				return op, fmt.Errorf("`%s` is not a valid loss percentage", loss)
 			}
-			qos.Loss = loss
+			op.Value = loss
 		}
-
-		// Add delay of time duration to each packet
 		if c.BoolArgs["delay"] {
+			op.Type = bridge.Delay
+
 			delay := c.StringArgs["duration"]
 			_, err := time.ParseDuration(delay)
-
 			if err != nil {
 				if strings.Contains(err.Error(), "time: missing unit in duration") {
 					// Default to ms
 					delay = fmt.Sprintf("%s%s", delay, "ms")
 				} else {
-					return nil, fmt.Errorf("`%s` is not a valid delay parameter", delay)
+					return op, fmt.Errorf("`%s` is not a valid delay parameter", delay)
 				}
 			}
-			qos.Delay = delay
+			op.Value = delay
 		}
 	}
-	return qos, nil
+	return op, nil
 }

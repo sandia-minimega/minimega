@@ -438,13 +438,13 @@ func (vms VMs) CleanDirs() {
 	}
 }
 
-func (vms VMs) UpdateQos(target string, tap uint, qos *bridge.Qos) []error {
+func (vms VMs) UpdateQos(target string, tap uint, op bridge.QosOption) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	// For each VM, update the tap Qos
 	applyFunc := func(vm VM, wild bool) (bool, error) {
-		return true, vm.UpdateQos(tap, qos)
+		return true, vm.UpdateQos(tap, op)
 	}
 
 	return vms.apply(target, true, applyFunc)
