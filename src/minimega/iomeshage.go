@@ -141,11 +141,17 @@ func iomHelper(file string) (string, error) {
 	info, err := diskInfo(dst)
 	if err == nil && info.BackingFile != "" {
 		// try to fetch backing image too
-		if !strings.HasPrefix(info.BackingFile, *f_iomBase) {
-			return "", fmt.Errorf("cannot fetch backing image from outside files directory: %v", info.BackingFile)
+		file := filepath.Clean(info.BackingFile)
+
+		if !strings.HasPrefix(file, *f_iomBase) {
+			return "", fmt.Errorf("cannot fetch backing image from outside files directory: %v", file)
 		}
 
-		file := strings.TrimPrefix(info.BackingFile, *f_iomBase)
+		file, err = filepath.Rel(*f_iomBase, file)
+		if err != nil {
+			return "", err
+		}
+
 		log.Info("fetching backing image: %v", file)
 
 		if _, err := iomHelper(file); err != nil {
