@@ -59,14 +59,15 @@ func newQos() *qos {
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
 	t.Qos = newQos()
-
 	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
 	ns := []string{"root", "handle", "1:", "netem", "loss", "0"}
-
 	return t.qosCmd(append(cmd, ns...))
 }
 
 func (t *Tap) destroyQos() error {
+	if t.Qos == nil {
+		return nil
+	}
 	t.Qos = nil
 	cmd := []string{"tc", "qdisc", tcDel, "dev", t.Name, "root"}
 	return t.qosCmd(cmd)
@@ -99,8 +100,8 @@ func (t *Tap) setQos(op QosOption) error {
 			action = tcUpdate
 		}
 		burst := getQosBurst(op.Value)
-		ns = []string{"root", "parent", "1:", "handle", "2:", "tbf",
-			"rate", op.Value, "latency", DEFAULT_LATENCY, "burst", burst}
+		ns = []string{"parent", "1:", "handle", "2:", "tbf", "rate", op.Value,
+			"latency", DEFAULT_LATENCY, "burst", burst}
 		t.Qos.tbfParams.rate = op.Value
 		t.Qos.tbfParams.burst = burst
 	}
@@ -111,7 +112,7 @@ func (t *Tap) setQos(op QosOption) error {
 
 // Execute a qos command string
 func (t *Tap) qosCmd(cmd []string) error {
-	log.Error("recieved qos command %v", cmd)
+	log.Debug("recieved qos command %v", cmd)
 	out, err := processWrapper(cmd...)
 	if err != nil {
 		// Clean up
@@ -142,7 +143,7 @@ func (b *Bridge) UpdateQos(tap string, op QosOption) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	log.Error("updating qos for tap %s", tap)
+	log.Info("updating qos for tap %s", tap)
 
 	t, ok := b.taps[tap]
 	if !ok {
@@ -164,7 +165,6 @@ func (b *Bridge) GetQos(tap string) []QosOption {
 	if !ok {
 		return nil
 	}
-
 	if t.Qos == nil {
 		return nil
 	}

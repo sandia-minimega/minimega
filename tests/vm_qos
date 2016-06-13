@@ -1,33 +1,34 @@
 .annotate false
 
-qos add mega_tapNaN loss 0.25
+vm config net 100
+vm launch kvm vm0
 
-clear qos mega_tapNaN
-
-tap create 100 name qos_test_tap0
-qos add qos_test_tap0 loss 0.25
-.columns tap,max_bandwidth,loss,delay qos list 
+qos add vm0 0 loss 5
+.columns qos vm info
 
 qos add qos_test_tap0 delay 100ms
-.columns tap,max_bandwidth,loss,delay qos list 
+.columns qos qos list 
+.columns qos vm info
 
-qos add qos_test_tap0 rate 1mbit
-.columns tap,max_bandwidth,loss,delay qos list 
+qos add qos_test_tap0 rate 1 mbit
+.columns qos vm info
 
 qos add qos_test_tap0 delay 200ms
-.columns tap,max_bandwidth,loss,delay qos list 
+.columns qos vm info
 
-qos add qos_test_tap0 rate 2mbit
-.columns tap,max_bandwidth,loss,delay qos list 
+qos add qos_test_tap0 rate 2 mbit
+.columns qos vm info
 
 qos add qos_test_tap0 loss 0.50
-.columns tap,max_bandwidth,loss,delay qos list 
+.columns qos vm info
 
-qos add qos_test_tap0 rate 2xbit
+qos add qos_test_tap0 rate 2 xbit
 
 qos add qos_test_tap0 loss 150
 
 qos add qos_test_tap0 delay 100xbit
 
-clear qos qos_test_tap0
-qos list
+qos add vm0 100 delay 100ms
+
+clear qos vm0 0
+.column qos vm info

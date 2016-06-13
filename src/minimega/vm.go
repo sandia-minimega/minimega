@@ -150,7 +150,7 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
-	"tags",
+	"tags", "qos",
 }
 
 // Valid names for output masks for `vm summary`, in preferred output order
@@ -337,7 +337,7 @@ func (vm *BaseConfig) QosString(b, t string) string {
 			val += fmt.Sprintf("loss %s ", op.Value)
 		}
 		if op.Type == bridge.Rate {
-			val += fmt.Sprintf("rate %s", op.Value)
+			val += fmt.Sprintf("rate %s ", op.Value)
 		}
 	}
 	return val

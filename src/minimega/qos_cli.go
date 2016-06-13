@@ -24,8 +24,8 @@ be specified explicitly. Any existing constraints will be overwritten by
 additional calls to <add>. Virtual machines can be specified with the same
 target syntax as the "vm start" api.
 
-Note that qos is namespace aware, and specifying the wildcard as the target
-will apply qos to all virtual machines within the active namespace.
+Note that qos is namespace aware, and any qos commands will be matched to
+target vms within the currently active namespace.
 
 Qos constraints include:
 
