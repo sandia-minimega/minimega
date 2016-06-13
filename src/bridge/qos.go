@@ -8,24 +8,26 @@ import (
 )
 
 // Used to calulate burst rate for the token bucket filter qdisc
-const KERNEL_TIMER_FREQ uint64 = 250
-const MIN_BURST_SIZE uint64 = 2048
+const (
+	KERNEL_TIMER_FREQ uint64 = 250
+	MIN_BURST_SIZE    uint64 = 2048
+	DEFAULT_LATENCY   string = "100ms"
+)
 
 // Traffic control actions
-var (
+const (
 	tcAdd    string = "add"
 	tcDel    string = "del"
 	tcUpdate string = "change"
 )
 
+// Qos option types
 type QosType int
 
 const (
 	Rate QosType = iota
 	Loss
 	Delay
-	Remove
-	Init
 )
 
 type QosOption struct {
@@ -33,55 +35,78 @@ type QosOption struct {
 	Value string
 }
 
-type TbfParams struct {
-	Rate  string
-	Burst string
+type tbfParams struct {
+	rate  string
+	burst string
 }
 
-type NetemParams struct {
-	Loss  string
-	Delay string
+type netemParams struct {
+	loss  string
+	delay string
 }
 
 // Tap field enumerating qos parameters
-type Qos struct {
-	*TbfParams   // embed
-	*NetemParams // embed
+type qos struct {
+	*tbfParams   // embed
+	*netemParams // embed
 }
 
-func NewQos() *Qos {
-	return &Qos{NetemParams: &NetemParams{}}
+func newQos() *qos {
+	return &qos{netemParams: &netemParams{},
+		tbfParams: &tbfParams{}}
 }
 
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
-	t.Qos = NewQos()
-	op := QosOption{Type: Init}
-	cmd := t.getQosCmd(tcAdd, op)
+	t.Qos = newQos()
+
+	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
+	ns := []string{"root", "handle", "1:", "netem", "loss", "0"}
+
+	return t.qosCmd(append(cmd, ns...))
+}
+
+func (t *Tap) destroyQos() error {
+	t.Qos = nil
+	cmd := []string{"tc", "qdisc", tcDel, "dev", t.Name, "root"}
 	return t.qosCmd(cmd)
 }
 
-// Generate a qos command string given a QosOption
-func (t *Tap) getQosCmd(action string, op QosOption) []string {
+func (t *Tap) setQos(op QosOption) error {
+	var action string
 	var ns []string
 
-	cmd := []string{"tc", "qdisc", action, "dev", t.Name}
+	if t.Qos == nil {
+		err := t.initializeQos()
+		if err != nil {
+			return err
+		}
+	}
 
 	switch op.Type {
-	case Init:
-		ns = []string{"root", "handle", "1:", "netem", "loss", "0"}
-	case Remove:
-		ns = []string{"root"}
 	case Loss:
+		action = tcUpdate
 		ns = []string{"root", "handle", "1:", "netem", "loss", op.Value}
+		t.Qos.netemParams.loss = op.Value
 	case Delay:
+		action = tcUpdate
 		ns = []string{"root", "handle", "1:", "netem", "delay", op.Value}
+		t.Qos.netemParams.delay = op.Value
 	case Rate:
-		// Burst is set dynamically in updateQos
+		if t.Qos.tbfParams.rate == "" {
+			action = tcAdd
+		} else {
+			action = tcUpdate
+		}
+		burst := getQosBurst(op.Value)
 		ns = []string{"root", "parent", "1:", "handle", "2:", "tbf",
-			"rate", op.Value, "latency", "100ms", "burst", t.Qos.TbfParams.Burst}
+			"rate", op.Value, "latency", DEFAULT_LATENCY, "burst", burst}
+		t.Qos.tbfParams.rate = op.Value
+		t.Qos.tbfParams.burst = burst
 	}
-	return append(cmd, ns...)
+
+	cmd := []string{"tc", "qdisc", action, "dev", t.Name}
+	return t.qosCmd(append(cmd, ns...))
 }
 
 // Execute a qos command string
@@ -91,7 +116,7 @@ func (t *Tap) qosCmd(cmd []string) error {
 	if err != nil {
 		// Clean up
 		err = errors.New(out)
-		processWrapper(t.getQosCmd(tcDel, QosOption{Type: Remove})...)
+		t.destroyQos()
 	}
 	return err
 }
@@ -110,10 +135,7 @@ func (b *Bridge) ClearQos(tap string) error {
 }
 
 func (b *Bridge) clearQos(t *Tap) error {
-	t.Qos = nil
-	op := QosOption{Type: Remove}
-	cmd := t.getQosCmd(tcDel, op)
-	return t.qosCmd(cmd)
+	return t.destroyQos()
 }
 
 func (b *Bridge) UpdateQos(tap string, op QosOption) error {
@@ -131,42 +153,10 @@ func (b *Bridge) UpdateQos(tap string, op QosOption) error {
 }
 
 func (b *Bridge) updateQos(t *Tap, op QosOption) error {
-	if t.Qos == nil {
-		err := t.initializeQos()
-		if err != nil {
-			return err
-		}
-	}
-
-	var action string
-
-	if op.Type == Rate {
-		if t.Qos.TbfParams == nil {
-			action = tcAdd
-			t.Qos.TbfParams = &TbfParams{}
-		} else {
-			action = tcUpdate
-		}
-		t.Qos.TbfParams.Rate = op.Value
-		t.Qos.TbfParams.Burst = getQosBurst(op.Value)
-	} else {
-		// the netem qdisc will always be an update action as there
-		// is a default netem rule applied in initializeQos()
-		action = tcUpdate
-
-		if op.Type == Loss {
-			t.Qos.NetemParams.Loss = op.Value
-		}
-		if op.Type == Delay {
-			t.Qos.NetemParams.Delay = op.Value
-		}
-	}
-
-	cmd := t.getQosCmd(action, op)
-	return t.qosCmd(cmd)
+	return t.setQos(op)
 }
 
-func (b *Bridge) GetQos(tap string) *Qos {
+func (b *Bridge) GetQos(tap string) []QosOption {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -181,12 +171,19 @@ func (b *Bridge) GetQos(tap string) *Qos {
 	return b.getQos(t)
 }
 
-// Return a copy of the tap's Qos struct
-func (b *Bridge) getQos(t *Tap) *Qos {
-	qos := &Qos{}
-	qos.TbfParams = t.Qos.TbfParams
-	qos.NetemParams = t.Qos.NetemParams
-	return qos
+func (b *Bridge) getQos(t *Tap) []QosOption {
+	var ops []QosOption
+
+	if t.Qos.tbfParams.rate != "" {
+		ops = append(ops, QosOption{Rate, t.Qos.tbfParams.rate})
+	}
+	if t.Qos.netemParams.loss != "" {
+		ops = append(ops, QosOption{Loss, t.Qos.netemParams.loss})
+	}
+	if t.Qos.netemParams.delay != "" {
+		ops = append(ops, QosOption{Delay, t.Qos.netemParams.delay})
+	}
+	return ops
 }
 
 func getQosBurst(rate string) string {

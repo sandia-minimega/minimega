@@ -88,7 +88,7 @@ type VM interface {
 	NetworkDisconnect(int) error
 
 	// Qos functions
-	GetQos() []*bridge.Qos
+	GetQos() [][]bridge.QosOption
 	UpdateQos(uint, bridge.QosOption) error
 	ClearQos(uint) error
 	ClearAllQos() error
@@ -321,6 +321,28 @@ func (vm *BaseConfig) NetworkString() string {
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
 }
 
+func (vm *BaseConfig) QosString(b, t string) string {
+	var val string
+	br, err := getBridge(b)
+	if err != nil {
+		return val
+	}
+
+	ops := br.GetQos(t)
+	for _, op := range ops {
+		if op.Type == bridge.Delay {
+			val += fmt.Sprintf("delay %s ", op.Value)
+		}
+		if op.Type == bridge.Loss {
+			val += fmt.Sprintf("loss %s ", op.Value)
+		}
+		if op.Type == bridge.Rate {
+			val += fmt.Sprintf("rate %s", op.Value)
+		}
+	}
+	return val
+}
+
 func (vm *BaseConfig) TagsString() string {
 	res, err := json.Marshal(vm.Tags)
 	if err != nil {
@@ -495,11 +517,11 @@ func (vm *BaseVM) ClearQos(tap uint) error {
 	return b.ClearQos(nc.Tap)
 }
 
-func (vm *BaseVM) GetQos() []*bridge.Qos {
+func (vm *BaseVM) GetQos() [][]bridge.QosOption {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	var res []*bridge.Qos
+	var res [][]bridge.QosOption
 
 	for _, nc := range vm.Networks {
 		b, err := getBridge(nc.Bridge)
@@ -655,9 +677,13 @@ func (vm *BaseVM) info(key string) (string, error) {
 			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
 			vals = append(vals, s)
 		}
-	case "qos_loss":
-	case "qos_delay":
-	case "qos_bandwidth":
+	case "qos":
+		for _, v := range vm.Networks {
+			s := vm.QosString(v.Bridge, v.Tap)
+			if s != "" {
+				vals = append(vals, s)
+			}
+		}
 	case "tags":
 		return vm.TagsString(), nil
 	case "cc_active":
