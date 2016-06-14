@@ -329,6 +329,11 @@ func (vm *BaseConfig) QosString(b, t string) string {
 	}
 
 	ops := br.GetQos(t)
+	if ops == nil {
+		return ""
+	}
+
+	val += fmt.Sprintf("%s: ", t)
 	for _, op := range ops {
 		if op.Type == bridge.Delay {
 			val += fmt.Sprintf("delay %s ", op.Value)
@@ -340,7 +345,7 @@ func (vm *BaseConfig) QosString(b, t string) string {
 			val += fmt.Sprintf("rate %s ", op.Value)
 		}
 	}
-	return val
+	return strings.Trim(val, " ")
 }
 
 func (vm *BaseConfig) TagsString() string {
