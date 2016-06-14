@@ -31,17 +31,21 @@ Qos constraints include:
 
 - loss		: packets will be randomly dropped with a specified probability
 - delay		: delay packets for specified unit of time (ms, ns, etc)
-- rate		: impose a maximum bandwidth on an interface, in kbit, mbit, or gbit
+- rate		: impose a maximum bandwidth on an interface in kbit, mbit, or gbit
 
 Examples:
 
-	Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with probably 0.25%
+	Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with
+	probably 0.25%
+
 	qos add foo[0-2] 0 loss 0.25
 
 	Add a 100ms delay to every packet on the 0th interface for vm foo and bar
+
 	qos add foo,bar 0 delay 100ms
 
 	Rate limit the 0th interface on all vms in the active namespace to 1mbit/s
+
 	qos add all 0 rate 1 mbit`,
 		Patterns: []string{
 			"qos <add,> <target> <interface> <loss,> <percent>",
@@ -52,8 +56,9 @@ Examples:
 	{
 		HelpShort: "clear qos constraints on an interface",
 		HelpLong: `
-Remove quality-of-service constraints on a mega interface. This command is namespace
-aware and will only clear the qos from vms within the active namespace.
+Remove quality-of-service constraints on a mega interface. This command is
+namespace aware and will only clear the qos from vms within the active
+namespace.
 
 Example:
 
@@ -118,7 +123,7 @@ func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
 		} else if c.BoolArgs["gbit"] {
 			unit = "gbit"
 		} else {
-			return op, fmt.Errorf("`%s` invalid: must specify rate as <kbit, mbit, or gbit>", rate)
+			return op, fmt.Errorf("`%s` invalid: must specify rate as <kbit,mbit, or gbit>", rate)
 		}
 
 		_, err := strconv.ParseUint(rate, 10, 64)
@@ -134,7 +139,8 @@ func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
 			loss := c.StringArgs["percent"]
 			v, err := strconv.ParseFloat(loss, 64)
 			if err != nil || v >= float64(100) || v < 0 {
-				return op, fmt.Errorf("`%s` is not a valid loss percentage", loss)
+				return op, fmt.Errorf("`%s` is not a valid loss percentage",
+					loss)
 			}
 			op.Value = loss
 		}

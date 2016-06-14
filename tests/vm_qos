@@ -6,27 +6,24 @@ vm launch kvm vm0
 qos add vm0 0 loss 5
 .columns qos vm info
 
-qos add qos_test_tap0 delay 100ms
-.columns qos qos list 
+qos add vm0 0 delay 100ms
 .columns qos vm info
 
-qos add qos_test_tap0 rate 1 mbit
+qos add vm0 0 rate 1 mbit
 .columns qos vm info
 
-qos add qos_test_tap0 delay 200ms
+qos add vm0 0 delay 200ms
 .columns qos vm info
 
-qos add qos_test_tap0 rate 2 mbit
+qos add vm0 0 rate 2 mbit
 .columns qos vm info
 
-qos add qos_test_tap0 loss 0.50
+qos add vm0 0 loss 0.50
 .columns qos vm info
 
-qos add qos_test_tap0 rate 2 xbit
+qos add vm0 0 loss 150
 
-qos add qos_test_tap0 loss 150
-
-qos add qos_test_tap0 delay 100xbit
+qos add vm0 0 delay 100xbit
 
 qos add vm0 100 delay 100ms
 

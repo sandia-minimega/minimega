@@ -132,10 +132,6 @@ func (b *Bridge) ClearQos(tap string) error {
 	if !ok {
 		return fmt.Errorf("tap %s not found", tap)
 	}
-	return b.clearQos(t)
-}
-
-func (b *Bridge) clearQos(t *Tap) error {
 	return t.destroyQos()
 }
 
@@ -150,10 +146,6 @@ func (b *Bridge) UpdateQos(tap string, op QosOption) error {
 		return fmt.Errorf("tap %s not found", tap)
 	}
 
-	return b.updateQos(t, op)
-}
-
-func (b *Bridge) updateQos(t *Tap, op QosOption) error {
 	return t.setQos(op)
 }
 

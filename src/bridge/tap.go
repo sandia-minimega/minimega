@@ -169,7 +169,7 @@ func (b *Bridge) destroyTap(t string) error {
 
 	tap.Defunct = true
 
-	err := b.clearQos(tap)
+	err := tap.destroyQos()
 	if err != nil {
 		log.Error("failed to clear qos from tap: %v", t)
 	}
