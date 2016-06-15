@@ -297,6 +297,8 @@ func smtpServer(p string) {
 		client := NewSMTPClientSession(conn)
 
 		go client.Handler()
+
+		smtpReportChan <- 1
 	}
 }
 
