@@ -40,11 +40,12 @@ type Server struct {
 	commandCounterLock sync.Mutex
 	clients            map[string]*Client // map of active clients, each of which have a running handler
 	clientLock         sync.Mutex
-	vms                map[string]VM // map of uuid -> VM
-	in                 chan *Message // incoming message queue, consumed by the mux
-	path               string        // path for serving files
-	lastBroadcast      time.Time     // watchdog time of last command list broadcast
-	responses          chan *Client  // queue of incoming responses, consumed by the response processor
+	vms                map[string]VM                   // map of uuid -> VM
+	in                 chan *Message                   // incoming message queue, consumed by the mux
+	path               string                          // path for serving files
+	lastBroadcast      time.Time                       // watchdog time of last command list broadcast
+	responses          chan *Client                    // queue of incoming responses, consumed by the response processor
+	updateTags         func(string, map[string]string) // callback into minimega to update tags sent by the client
 }
 
 type Client struct {
@@ -67,15 +68,17 @@ type Client struct {
 	MAC      []string
 
 	Namespace string
-	Tags      map[string]string
+
+	Tags map[string]string
 
 	Processes   map[int]*Process // list of processes backgrounded (cc background in minimega)
 	processLock sync.Mutex
 
 	Version string
 
-	Responses    []*Response // response queue, consumed and cleared by the heartbeat
-	responseLock sync.Mutex
+	Responses []*Response // response queue, consumed and cleared by the heartbeat
+
+	lock sync.Mutex // lock for ephemeral data to send up (responses, new tags)
 
 	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
 	lastHeartbeat time.Time             // last heartbeat watchdog time
@@ -107,7 +110,7 @@ type Message struct {
 }
 
 // NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string) (*Server, error) {
+func NewServer(port int, path string, updateTags func(string, map[string]string)) (*Server, error) {
 	s := &Server{
 		serialConns:   make(map[string]net.Conn),
 		udsConns:      make(map[string]net.Listener),
@@ -118,6 +121,7 @@ func NewServer(port int, path string) (*Server, error) {
 		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		updateTags:    updateTags,
 	}
 	err := s.Start(port)
 	if err != nil {

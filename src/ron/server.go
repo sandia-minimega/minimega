@@ -445,6 +445,7 @@ func (s *Server) responseHandler() {
 			c.MAC = cin.MAC
 			c.Checkin = time.Now()
 			c.Processes = cin.Processes
+			s.updateTags(cin.UUID, cin.Tags)
 		} else {
 			log.Error("unknown client %v", cin.UUID)
 			s.clientLock.Unlock()
