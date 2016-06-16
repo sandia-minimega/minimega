@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"errors"
 	"fmt"
 	"minicli"
@@ -435,6 +436,42 @@ func (vms VMs) CleanDirs() {
 			log.Error("clearDirs: %v", err)
 		}
 	}
+}
+
+func (vms VMs) UpdateQos(target string, tap uint, op bridge.QosOption) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// For each VM, update the tap Qos
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.UpdateQos(tap, op)
+	}
+
+	return vms.apply(target, true, applyFunc)
+}
+
+func (vms VMs) ClearAllQos(target string) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// Clear qos for all vm taps
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.ClearAllQos()
+	}
+
+	vms.apply(target, true, applyFunc)
+}
+
+func (vms VMs) ClearQoS(target string, tap uint) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// Clear Qos for each vm
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.ClearQos(tap)
+	}
+
+	return vms.apply(target, true, applyFunc)
 }
 
 // apply is the fan out/in method to apply a function to a set of VMs specified

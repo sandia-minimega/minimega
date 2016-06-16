@@ -56,6 +56,7 @@ type Tap struct {
 	Host      bool   // Set when created as a host tap (and, thus, promiscuous)
 	Container bool   // Set when created via CreateContainerTap
 	Defunct   bool   // Set when Tap should be reaped
+	Qos       *qos   // Quality-of-service constraints
 
 	stats []tapStat
 }
