@@ -150,6 +150,7 @@ func NewClient(family string, port int, parent, serial, path string) (*Client, e
 		lastHeartbeat: time.Now(),
 		files:         make(chan *Message, 1024),
 		Processes:     make(map[int]*Process),
+		Tags:          make(map[string]string),
 	}
 
 	if serial != "" {
