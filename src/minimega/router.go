@@ -22,8 +22,8 @@ var (
 )
 
 type Router struct {
-	vmID int        // local (and unique regardless of namespace) vm id
-	IPs  [][]string // positional ipv4 address (index 0 is the first listed network in vm config net)
+	vmID int        // local (and effectively unique regardless of namespace) vm id
+	IPs  [][]string // positional ip address (index 0 is the first listed network in vm config net)
 	lock sync.Mutex
 }
 
