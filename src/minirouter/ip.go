@@ -6,7 +6,13 @@ import (
 	"minicli"
 	log "minilog"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"time"
+)
+
+const (
+	INTERFACE_STATS_PERIOD = time.Second
 )
 
 var (
@@ -21,6 +27,48 @@ func init() {
 		},
 		Call: handleIP,
 	})
+	go interfaceStats()
+}
+
+func interfaceStats() {
+	if *f_miniccc == "" {
+		return
+	}
+	for {
+		dirs, err := ioutil.ReadDir("/sys/class/net")
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+
+		for _, n := range dirs {
+			f := n.Name()
+			if f == "lo" {
+				continue
+			}
+			rx, err := ioutil.ReadFile(filepath.Join("/sys/class/net", f, "statistics/rx_bytes"))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			tx, err := ioutil.ReadFile(filepath.Join("/sys/class/net", f, "statistics/tx_bytes"))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			err = tag("minirouter_"+f+"_rx_bytes", string(rx))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+			err = tag("minirouter_"+f+"_tx_bytes", string(tx))
+			if err != nil {
+				log.Errorln(err)
+				continue
+			}
+		}
+		time.Sleep(INTERFACE_STATS_PERIOD)
+	}
 }
 
 func handleIP(c *minicli.Command, _ chan<- minicli.Responses) {
