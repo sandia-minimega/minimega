@@ -5,10 +5,7 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"fmt"
-	"io"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -51,35 +48,25 @@ func logSetup() {
 	}
 
 	// a special logger for pushing logs up to minimega
-	if *f_miniccc != "" {
-		f := tagLogger()
-		log.AddLogger("taglogger", f, level, false)
+	if *f_miniccc != "" && *f_u == "" {
+		var f tagLogger
+		log.AddLogger("taglogger", &f, level, false)
 	}
 }
 
-func tagLogger() io.Writer {
-	var buf bytes.Buffer
-	var lines []string
+type tagLogger struct {
+	lines []string
+}
 
-	go func() {
-		scanner := bufio.NewScanner(&buf)
-		for scanner.Scan() {
-			lines = append(lines, scanner.Text())
-			if len(lines) > LOG_TAG_SIZE {
-				lines = lines[1:]
-			}
-			output := strings.Join(lines, "\n")
-			err := tag("minirouter_log", output)
-			if err != nil {
-				log.Errorln(err)
-				break
-			}
-		}
-		// we'll actually log our own errors and hope they show up in
-		// another logger
-		if err := scanner.Err(); err != nil {
-			log.Errorln(err)
-		}
-	}()
-	return &buf
+func (t *tagLogger) Write(p []byte) (int, error) {
+	t.lines = append(t.lines, string(p))
+	if len(t.lines) > LOG_TAG_SIZE {
+		t.lines = t.lines[1:]
+	}
+	output := strings.Join(t.lines, "")
+	err := tag("minirouter_log", output)
+	if err != nil {
+		return len(p), err
+	}
+	return len(p), nil
 }

@@ -30,11 +30,6 @@ func main() {
 	logSetup()
 
 	if *f_u != "" {
-		if *f_miniccc != "" {
-			// disable tagLogger so we don't clobber the parent minirouter
-			log.DelLogger("taglogger")
-		}
-
 		log.Debug("updating with file: %v", *f_u)
 
 		err := update(filepath.Join(*f_path, "minirouter"), *f_u)
@@ -57,6 +52,8 @@ func main() {
 			log.Fatalln(err)
 		}
 	}
+
+	log.Debug("using path: %v", *f_path)
 
 	// attempt to set up the base path
 	err = os.MkdirAll(*f_path, os.FileMode(0770))
