@@ -73,7 +73,7 @@ func (v *AllocatedVLANs) Allocate(namespace, s string) (int, bool, error) {
 // allocate a VLAN for the alias. This should only be invoked if the caller has
 // acquired the lock for v.
 func (v *AllocatedVLANs) allocate(alias string) (int, error) {
-	log.Info("creating alias for %v", alias)
+	log.Debug("creating alias for %v", alias)
 
 	// Find the next unallocated VLAN, taking into account that a range may be
 	// specified for the supplied alias.
@@ -84,7 +84,7 @@ func (v *AllocatedVLANs) allocate(alias string) (int, error) {
 		}
 	}
 
-	log.Info("found range: %v", r)
+	log.Debug("found range for alias %v: %v", alias, r)
 
 	// Find the next unallocated VLAN
 outer:
@@ -315,7 +315,7 @@ func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	log.Info("parsing vlan: %v namespace: %v", s, namespace)
+	log.Debug("parsing vlan: %v namespace: %v", s, namespace)
 
 	vlan, err := strconv.Atoi(s)
 	if err == nil {

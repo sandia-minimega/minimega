@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"errors"
 	"fmt"
 	"minicli"
@@ -183,14 +184,25 @@ func (vms VMs) FindVM(s string) VM {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	return vms.findVM(s)
+	return vms.findVM(s, true)
+}
+
+// FindVMNoNamespace finds a VM, ignoring the current namespace, based on its
+// ID, name, or UUID.
+func (vms VMs) FindVMNoNamespace(s string) VM {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.findVM(s, false)
 }
 
 // findVM assumes vmLock is held.
-func (vms VMs) findVM(s string) VM {
+func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	if id, err := strconv.Atoi(s); err == nil {
-		if vm := vms[id]; inNamespace(vm) {
-			return vm
+		if vm, ok := vms[id]; ok {
+			if inNamespace(vm) || !checkNamespace {
+				return vm
+			}
 		}
 
 		return nil
@@ -198,7 +210,7 @@ func (vms VMs) findVM(s string) VM {
 
 	// Search for VM by name or UUID
 	for _, vm := range vms {
-		if !inNamespace(vm) {
+		if checkNamespace && !inNamespace(vm) {
 			continue
 		}
 
@@ -220,7 +232,7 @@ func (vms VMs) FindKvmVM(s string) (*KvmVM, error) {
 
 // findKvmVm is FindKvmVM without locking vmLock.
 func (vms VMs) findKvmVM(s string) (*KvmVM, error) {
-	vm := vms.findVM(s)
+	vm := vms.findVM(s, true)
 	if vm == nil {
 		return nil, vmNotFound(s)
 	}
@@ -437,6 +449,42 @@ func (vms VMs) CleanDirs() {
 	}
 }
 
+func (vms VMs) UpdateQos(target string, tap uint, op bridge.QosOption) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// For each VM, update the tap Qos
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.UpdateQos(tap, op)
+	}
+
+	return vms.apply(target, true, applyFunc)
+}
+
+func (vms VMs) ClearAllQos(target string) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// Clear qos for all vm taps
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.ClearAllQos()
+	}
+
+	vms.apply(target, true, applyFunc)
+}
+
+func (vms VMs) ClearQoS(target string, tap uint) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	// Clear Qos for each vm
+	applyFunc := func(vm VM, wild bool) (bool, error) {
+		return true, vm.ClearQos(tap)
+	}
+
+	return vms.apply(target, true, applyFunc)
+}
+
 // apply is the fan out/in method to apply a function to a set of VMs specified
 // by target. Specifically, it:
 //
@@ -626,8 +674,6 @@ func globalVMs() VMs {
 		hosts = meshageNode.BroadcastRecipients()
 		hosts = append(hosts, hostname)
 	}
-
-	log.Info("globalVMs command: %#v", cmd)
 
 	cmds := makeCommandHosts(hosts, cmd)
 

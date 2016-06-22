@@ -67,9 +67,19 @@ func (c *Client) dial(family string, parent string, port int) {
 func (c *Client) Respond(r *Response) {
 	log.Debug("ron Respond: %v", r.ID)
 
-	c.responseLock.Lock()
+	c.lock.Lock()
 	c.Responses = append(c.Responses, r)
-	c.responseLock.Unlock()
+	c.lock.Unlock()
+}
+
+func (c *Client) Tag(k, v string) {
+	log.Debug("ron Tag: %v %v", k, v)
+
+	c.lock.Lock()
+	c.Tags[k] = v
+	c.lock.Unlock()
+
+	go c.heartbeat()
 }
 
 // commandHandler sorts and filters incoming commands from a ron server.
@@ -166,10 +176,12 @@ func (c *Client) heartbeat() {
 	cin.MAC = macs
 	cin.IP = ips
 
-	c.responseLock.Lock()
+	c.lock.Lock()
 	cin.Responses = c.Responses
 	c.Responses = []*Response{}
-	c.responseLock.Unlock()
+	cin.Tags = c.Tags
+	c.Tags = make(map[string]string)
+	c.lock.Unlock()
 
 	m := &Message{
 		Type:   MESSAGE_CLIENT,
@@ -180,10 +192,11 @@ func (c *Client) heartbeat() {
 	log.Debug("heartbeat %v", cin)
 
 	c.out <- m
+
 	c.lastHeartbeat = time.Now()
 }
 
-// periodically sent the client heartbeat.
+// periodically send the client heartbeat.
 func (c *Client) periodic() {
 	rate := time.Duration(HEARTBEAT_RATE * time.Second)
 	for {
