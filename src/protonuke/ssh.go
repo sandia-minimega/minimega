@@ -56,9 +56,10 @@ type sshConn struct {
 	StdoutBuf bytes.Buffer
 }
 
+// Non-default port used because there was a port binding issue with port 22
 var (
 	sshConns []*sshConn
-	PORT     = ":22"
+	PORT     = ":8080"
 )
 
 // ssh client events include connecting, disconnecting, or typing in an

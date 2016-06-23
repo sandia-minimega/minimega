@@ -17,11 +17,13 @@ var (
 	httpTLSReportChan chan uint64
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
+	udpReportChan	  chan uint64
 
 	httpReportHits    uint64
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
 	smtpReportMail    uint64
+	udpReportHits	  uint64
 )
 
 func init() {
@@ -29,6 +31,7 @@ func init() {
 	httpTLSReportChan = make(chan uint64, 1024)
 	sshReportChan = make(chan uint64, 1024)
 	smtpReportChan = make(chan uint64, 1024)
+	udpReportChan = make(chan uint64, 1024)
 
 	go func() {
 		for {
@@ -41,6 +44,8 @@ func init() {
 				sshReportBytes += i
 			case <-smtpReportChan:
 				smtpReportMail++
+			case <-udpReportChan:
+				udpReportHits++
 			}
 		}
 	}()
@@ -53,6 +58,7 @@ func report(reportWait time.Duration) {
 	lasthttpTLSReportHits := httpTLSReportHits
 	lastsshReportBytes := sshReportBytes
 	lastsmtpReportMail := smtpReportMail
+	lastudpReportHits := udpReportHits
 
 	for {
 		time.Sleep(reportWait)
@@ -63,10 +69,12 @@ func report(reportWait time.Duration) {
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
 		esmtp := smtpReportMail - lastsmtpReportMail
+		eudp := udpReportHits - lastudpReportHits
 		lasthttpReportHits = httpReportHits
 		lasthttpTLSReportHits = httpTLSReportHits
 		lastsshReportBytes = sshReportBytes
 		lastsmtpReportMail = smtpReportMail
+		lastudpReportHits = udpReportHits
 
 		log.Debugln("total elapsed time: ", elapsedTime)
 
@@ -85,6 +93,9 @@ func report(reportWait time.Duration) {
 		}
 		if *f_smtp {
 			fmt.Fprintf(w, "smtp\t%v\t%.01f mails/min\n", smtpReportMail, float64(esmtp)/elapsedTime.Minutes())
+		}
+		if *f_udp {
+			fmt.Fprintf(w, "udp\t%v\t%.01f hits/min\n", udpReportHits, float64(eudp)/elapsedTime.Minutes())
 		}
 		w.Flush()
 		fmt.Println(buf.String())
