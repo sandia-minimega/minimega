@@ -23,9 +23,10 @@ var (
 )
 
 type Router struct {
-	vmID int        // local (and effectively unique regardless of namespace) vm id
-	IPs  [][]string // positional ip address (index 0 is the first listed network in vm config net)
-	lock sync.Mutex
+	vmID     int        // local (and effectively unique regardless of namespace) vm id
+	IPs      [][]string // positional ip address (index 0 is the first listed network in vm config net)
+	lock     sync.Mutex
+	logLevel string
 }
 
 func (r *Router) String() string {
@@ -63,6 +64,9 @@ func init() {
 func (r *Router) generateConfig() error {
 	var out bytes.Buffer
 
+	// log level
+	fmt.Fprintf(&out, "log level %v\n", r.logLevel)
+
 	// ips
 	fmt.Fprintf(&out, "ip flush\n") // no need to manage state - just start over
 	for i, v := range r.IPs {
@@ -85,8 +89,9 @@ func routerCreate(vm VM) *Router {
 		return r
 	}
 	r := &Router{
-		vmID: id,
-		IPs:  [][]string{},
+		vmID:     id,
+		IPs:      [][]string{},
+		logLevel: "error",
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -178,6 +183,18 @@ func RouterCommit(vm VM) error {
 	ccPrefixMap[id] = prefix
 
 	return nil
+}
+
+func RouterLogLevel(vm VM, level string) {
+	log.Debug("RouterLogLevel: %v, %v", vm, level)
+
+	routerLock.Lock()
+	r := routerCreate(vm)
+	routerLock.Unlock()
+
+	r.lock.Lock()
+	r.logLevel = level
+	r.lock.Unlock()
 }
 
 func RouterInterfaceAdd(vm VM, n int, i string) error {

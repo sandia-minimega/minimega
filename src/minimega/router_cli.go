@@ -18,8 +18,15 @@ var routerCLIHandlers = []minicli.Handler{
 			"router",
 			"router <vm>",
 			"router <vm> <commit,>",
+			"router <vm> <log,> <level,> <fatal,error,warn,info,debug>",
 			"router <vm> <interface,> <add,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
 			"router <vm> <interface,> <del,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			//			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
+			//			"router <vm> <dhcp,> <listen address> <router,> <router address>",
+			//			"router <vm> <dhcp,> <listen address> <dns server,> <dns address>",
+			//			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
+			//			"router <vm> <dns,> <ip> <hostname>",
+			//			"router <vm> <ra,> <subnet>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -39,6 +46,21 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		if err != nil {
 			return err
 		}
+	} else if c.BoolArgs["log"] {
+		var level string
+		if c.BoolArgs["fatal"] {
+			level = "fatal"
+		} else if c.BoolArgs["error"] {
+			level = "error"
+		} else if c.BoolArgs["warn"] {
+			level = "warn"
+		} else if c.BoolArgs["info"] {
+			level = "info"
+		} else if c.BoolArgs["debug"] {
+			level = "debug"
+		}
+		RouterLogLevel(vm, level)
+		return nil
 	} else if c.BoolArgs["interface"] {
 		network, err := strconv.Atoi(c.StringArgs["network"])
 		if err != nil {

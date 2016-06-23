@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -69,4 +70,33 @@ func (t *tagLogger) Write(p []byte) (int, error) {
 		return len(p), err
 	}
 	return len(p), nil
+}
+
+func init() {
+	minicli.Register(&minicli.Handler{
+		Patterns: []string{
+			"log level <fatal,error,warn,info,debug>",
+		},
+		Call: handleLog,
+	})
+}
+
+func handleLog(c *minicli.Command, _ chan<- minicli.Responses) {
+	var level int
+	if c.BoolArgs["fatal"] {
+		level = log.FATAL
+	} else if c.BoolArgs["error"] {
+		level = log.ERROR
+	} else if c.BoolArgs["warn"] {
+		level = log.WARN
+	} else if c.BoolArgs["info"] {
+		level = log.INFO
+	} else if c.BoolArgs["debug"] {
+		level = log.DEBUG
+	}
+
+	loggers := log.Loggers()
+	for _, l := range loggers {
+		log.SetLevel(l, level)
+	}
 }
