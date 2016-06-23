@@ -3,20 +3,34 @@ vm config net 100 200
 vm config filesystem minirouterfs
 vm launch container vm0
 vm start all
-router vm0 interface add 0 1.2.3.4/24
-router vm0 interface add 0 dhcp
-router vm0 interface add 1 5.6.7.8/16
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+router vm0 interface 1 5.6.7.8/16
 .annotate false router vm0
-router vm0 interface del 0 1.2.3.4/24
+clear router vm0 interface 0 1.2.3.4/24
 .annotate false router vm0
-router vm0 interface del 1 5.6.7.8/24
+clear router vm0 interface 1 5.6.7.8/24
 .annotate false router vm0
-router vm0 interface del 1 5.6.7.8/16
+clear router vm0 interface 1 5.6.7.8/16
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+router vm0 interface 1 5.6.7.8/16
+clear router vm0 interface 0
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+clear router vm0 interface
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+router vm0 interface 1 5.6.7.8/16
+clear router vm0
 .annotate false router vm0
 
 # router commit
-router vm0 interface add 0 1.2.3.4/24
-router vm0 interface add 1 5.6.7.8/24
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 1 5.6.7.8/24
 router vm0 commit
 .annotate false shell cat /tmp/minimega/files/minirouter-0
 

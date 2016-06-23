@@ -19,8 +19,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"router <vm>",
 			"router <vm> <commit,>",
 			"router <vm> <log,> <level,> <fatal,error,warn,info,debug>",
-			"router <vm> <interface,> <add,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
-			"router <vm> <interface,> <del,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
 			//			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
 			//			"router <vm> <dhcp,> <listen address> <router,> <router address>",
 			//			"router <vm> <dhcp,> <listen address> <dns server,> <dns address>",
@@ -30,7 +29,17 @@ var routerCLIHandlers = []minicli.Handler{
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
-	// TODO: clear?
+	{ // clear router
+		HelpShort: "",
+		HelpLong:  ``,
+		Patterns: []string{
+			"clear router <vm>",
+			"clear router <vm> <interface,>",
+			"clear router <vm> <interface,> <network>",
+			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+		},
+		Call: wrapBroadcastCLI(cliClearRouter),
+	},
 }
 
 func cliRouter(c *minicli.Command, resp *minicli.Response) error {
@@ -68,16 +77,9 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		}
 		ip := c.StringArgs["IPv4/MASK"]
 
-		if c.BoolArgs["add"] {
-			err := RouterInterfaceAdd(vm, network, ip)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := RouterInterfaceDel(vm, network, ip)
-			if err != nil {
-				return err
-			}
+		err = RouterInterfaceAdd(vm, network, ip)
+		if err != nil {
+			return err
 		}
 	} else if vmName != "" { // a summary of a specific router
 		r := FindRouter(vm)
@@ -89,5 +91,31 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		resp.Response = "implement me"
 	}
 
+	return nil
+}
+
+func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
+	vmName := c.StringArgs["vm"]
+
+	vm := vms.FindVM(vmName)
+	if vm == nil {
+		return fmt.Errorf("no such vm %v", vmName)
+	}
+
+	if c.BoolArgs["interface"] {
+		network := c.StringArgs["network"]
+		ip := c.StringArgs["IPv4/MASK"]
+
+		err := RouterInterfaceDel(vm, network, ip)
+		if err != nil {
+			return err
+		}
+	} else {
+		// remove everything about this router
+		err := RouterInterfaceDel(vm, "", "")
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

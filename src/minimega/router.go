@@ -12,6 +12,7 @@ import (
 	"net"
 	"path/filepath"
 	"ron"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -222,8 +223,20 @@ func RouterInterfaceAdd(vm VM, n int, i string) error {
 	return nil
 }
 
-func RouterInterfaceDel(vm VM, n int, i string) error {
+func RouterInterfaceDel(vm VM, n string, i string) error {
 	log.Debug("RouterInterfaceDel: %v, %v, %v", vm, n, i)
+
+	var network int
+	var err error
+
+	if n == "" {
+		network = -1 // delete all interfaces on all networks
+	} else {
+		network, err = strconv.Atoi(n)
+		if err != nil {
+			return err
+		}
+	}
 
 	routerLock.Lock()
 	r := routerCreate(vm)
@@ -232,8 +245,18 @@ func RouterInterfaceDel(vm VM, n int, i string) error {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 
-	if n >= len(r.IPs) {
-		return fmt.Errorf("no such network index: %v", n)
+	if network == -1 {
+		r.IPs = make([][]string, len(r.IPs))
+		return nil
+	}
+
+	if network >= len(r.IPs) {
+		return fmt.Errorf("no such network index: %v", network)
+	}
+
+	if i == "" {
+		r.IPs[network] = []string{}
+		return nil
 	}
 
 	if !routerIsValidIP(i) {
@@ -241,10 +264,10 @@ func RouterInterfaceDel(vm VM, n int, i string) error {
 	}
 
 	var found bool
-	for j, v := range r.IPs[n] {
+	for j, v := range r.IPs[network] {
 		if i == v {
 			log.Debug("removing ip %v", i)
-			r.IPs[n] = append(r.IPs[n][:j], r.IPs[n][j+1:]...)
+			r.IPs[network] = append(r.IPs[network][:j], r.IPs[network][j+1:]...)
 			found = true
 			break
 		}
