@@ -12,6 +12,7 @@ import (
 	"net"
 	"path/filepath"
 	"ron"
+	"strings"
 	"sync"
 	"text/tabwriter"
 )
@@ -38,6 +39,20 @@ func (r *Router) String() string {
 	fmt.Fprintf(w, "IPs:\t%v\n", r.IPs)
 	w.Flush()
 	fmt.Fprintln(&o)
+
+	vm := vms[r.vmID]
+	if vm == nil { // this really shouldn't ever happen
+		log.Error("could not find vm: %v", r.vmID)
+		return ""
+	}
+
+	lines := strings.Split(vm.Tag("minirouter_log"), "\n")
+
+	fmt.Fprintln(&o, "Log:")
+	for _, v := range lines {
+		fmt.Fprintf(&o, "\t%v\n", v)
+	}
+
 	return o.String()
 }
 
