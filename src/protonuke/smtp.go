@@ -54,11 +54,11 @@ type SMTPClientSession struct {
 }
 
 const (
-	INIT     = 0
-	COMMANDS = 10
-	STARTTLS = 11
-	DATA	 = 12
-	QUIT	 = 13
+	INIT     = iota
+	COMMANDS
+	STARTTLS
+	DATA	
+	QUIT	
 )
 
 const (
@@ -84,9 +84,9 @@ var (
 )
 
 func smtpClient(protocol string) {
-	log.Debugln("smtp client")
+	log.Debugln("smtpClient")
 
-	// replace the email corpus (list) if specified
+	// replace the email corpus if specified
 	if *f_smtpmail != "" {
 		f, err := os.Open(*f_smtpmail)
 		if err != nil {
@@ -239,11 +239,14 @@ func smtpSendMail(server string, m mail, protocol string) error {
 
 	boundary := "PROTONUKE-MIME-BOUNDARY"
 
+	// header
 	header := fmt.Sprintf("Subject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%s\r\n--%s", m.Subject, boundary, boundary)
 
+	// body
 	body := fmt.Sprintf("\r\nContent-Type: text/html\r\nContent-Transfer-Encoding:8bit\r\n\r\n%s\r\n--%s", m.Msg, boundary)
 
 	wc.Write([]byte(header + body))
+
 	if len(filedata) != 0 {
 		var buf bytes.Buffer
 
@@ -263,8 +266,6 @@ func smtpSendMail(server string, m mail, protocol string) error {
 	}
 
 	wc.Close()
-	c.Close()
-	conn.Close()
 
 	return nil
 }
@@ -312,7 +313,6 @@ func (s *SMTPClientSession) Close() {
 }
 
 func (s *SMTPClientSession) Handler() {
-
 	defer s.Close()
 	start := time.Now().UnixNano()
 	for {

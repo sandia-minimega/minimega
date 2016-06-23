@@ -65,7 +65,6 @@ func main() {
 
 	// make sure at least one service is enabled
 	if !*f_http && !*f_https && !*f_ssh && !*f_smtp && !*f_udp {
-	//if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -145,5 +144,4 @@ func main() {
 		}
 	} 
 	<-sig
-	fmt.Println(hosts)
 }
