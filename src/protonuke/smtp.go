@@ -322,11 +322,12 @@ func (s *SMTPClientSession) Handler() {
 				s.state = COMMANDS
 			case COMMANDS:
 				input, err := s.readSmtp()
-				if err != nil {
-					return
-				}
 				input = strings.Trim(input, "\r\n")
 				cmd := strings.ToUpper(input)
+				if err != nil {
+					log.Debugln(err)
+					return
+				}
 				
 				switch {
 					case strings.HasPrefix(cmd, "HELO"):
