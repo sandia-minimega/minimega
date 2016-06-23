@@ -54,11 +54,11 @@ type SMTPClientSession struct {
 }
 
 const (
-	INIT     = iota
+	INIT = iota
 	COMMANDS
 	STARTTLS
-	DATA	
-	QUIT	
+	DATA
+	QUIT
 )
 
 const (
@@ -304,7 +304,6 @@ func smtpServer(p string) {
 		go client.Handler()
 
 		smtpReportChan <- 1
-
 	}
 }
 
@@ -317,83 +316,83 @@ func (s *SMTPClientSession) Handler() {
 	start := time.Now().UnixNano()
 	for {
 		switch s.state {
-			case INIT:
-				s.addResponse("220 protonuke: Less for outcasts, more for weirdos.")
-				s.state = COMMANDS
-			case COMMANDS:
-				input, err := s.readSmtp()
-				input = strings.Trim(input, "\r\n")
-				cmd := strings.ToUpper(input)
-				if err != nil {
-					log.Debugln(err)
-					return
-				}
-				
-				switch {
-					case strings.HasPrefix(cmd, "HELO"):
-						s.addResponse("250 You're all so great and we're gonna keep you listening all day")
-					case strings.HasPrefix(cmd, "EHLO"):
-						r := "250-" + myFQDN + " Serving mail almost makes you wish for a nuclear winter\r\n"
-						r += "250-8BITMIME\r\n250-STARTTLS\r\n250 HELP"
-						s.addResponse(r)
-					case strings.HasPrefix(cmd, "MAIL FROM:"):
-						if len(input) > 10 {
-							s.mail_from = input[10:]
-						}
-						s.addResponse("250 Ok")
-					case strings.HasPrefix(cmd, "RCPT TO:"):
-						if len(input) > 8 {
-							s.rcpt_to = append(s.rcpt_to, input[8:])
-						}
-						s.addResponse("250 Ok")
-					case strings.HasPrefix(cmd, "DATA"):
-						s.addResponse("354 End data with <CR><LF>.<CR><LF>")
-						s.state = DATA
-					case strings.HasPrefix(cmd, "STARTTLS") && !s.tls_on:
-						s.addResponse("220 They asked what do you know about theoretical physics? I said I had a theoretical degree in physics.")
-						s.state = STARTTLS
-					case strings.HasPrefix(cmd, "QUIT"):
-						s.addResponse("221 Beware the Battle Cattle!")
-						s.state = QUIT
-					case strings.HasPrefix(cmd, "NOOP"):
-						s.addResponse("250 Is it time?")
-					case strings.HasPrefix(cmd, "RSET"):
-						s.mail_from = ""
-						s.rcpt_to = []string{}
-						s.addResponse("250 I forgot to remember to forget")			
-					default:
-						s.addResponse("500 unrecognized command")
-						break
-				}
-			case DATA:
-				input, err := s.readSmtp()
-				
-				if err != nil {
-					log.Debugln(err)
-				}
-				s.data = input
-				log.Debugln("Got email message:")
-				log.Debugln(s)
-				s.addResponse("250 Ok: Now that is a delivery service you can count on")
-				s.state = COMMANDS
-			case STARTTLS:
-				// I'm just going to pull this from GoGuerrilla, thanks guys
-				var tlsConn *tls.Conn
-				tlsConn = tls.Server(s.conn, TLSconfig)
-				err := tlsConn.Handshake() // not necessary to call here, but might as well
-				if err == nil {
-					s.conn = net.Conn(tlsConn)
-					s.bufin = bufio.NewReader(s.conn)
-					s.bufout = bufio.NewWriter(s.conn)
-					s.tls_on = true
-				} else {
-					log.Debugln("Could not TLS handshake:", err)
-				}
-				s.state = COMMANDS
-			case QUIT:
-				stop := time.Now().UnixNano()
-				log.Info("smtp %v %vns", s.conn.RemoteAddr(), uint64(stop-start))
+		case INIT:
+			s.addResponse("220 protonuke: Less for outcasts, more for weirdos.")
+			s.state = COMMANDS
+		case COMMANDS:
+			input, err := s.readSmtp()
+			input = strings.Trim(input, "\r\n")
+			cmd := strings.ToUpper(input)
+			if err != nil {
+				log.Debugln(err)
 				return
+			}
+		
+			switch {
+			case strings.HasPrefix(cmd, "HELO"):
+				s.addResponse("250 You're all so great and we're gonna keep you listening all day")
+			case strings.HasPrefix(cmd, "EHLO"):
+				r := "250-" + myFQDN + " Serving mail almost makes you wish for a nuclear winter\r\n"
+				r += "250-8BITMIME\r\n250-STARTTLS\r\n250 HELP"
+				s.addResponse(r)
+			case strings.HasPrefix(cmd, "MAIL FROM:"):
+				if len(input) > 10 {
+					s.mail_from = input[10:]
+				}
+				s.addResponse("250 Ok")
+			case strings.HasPrefix(cmd, "RCPT TO:"):
+				if len(input) > 8 {
+					s.rcpt_to = append(s.rcpt_to, input[8:])
+				}
+				s.addResponse("250 Ok")
+			case strings.HasPrefix(cmd, "DATA"):
+				s.addResponse("354 End data with <CR><LF>.<CR><LF>")
+				s.state = DATA
+			case strings.HasPrefix(cmd, "STARTTLS") && !s.tls_on:
+				s.addResponse("220 They asked what do you know about theoretical physics? I said I had a theoretical degree in physics.")
+				s.state = STARTTLS
+			case strings.HasPrefix(cmd, "QUIT"):
+				s.addResponse("221 Beware the Battle Cattle!")
+				s.state = QUIT
+			case strings.HasPrefix(cmd, "NOOP"):
+				s.addResponse("250 Is it time?")
+			case strings.HasPrefix(cmd, "RSET"):
+				s.mail_from = ""
+				s.rcpt_to = []string{}
+				s.addResponse("250 I forgot to remember to forget")			
+			default:
+				s.addResponse("500 unrecognized command")
+				break
+			}
+		case DATA:
+			input, err := s.readSmtp()
+		
+			if err != nil {
+				log.Debugln(err)
+			}
+			s.data = input
+			log.Debugln("Got email message:")
+			log.Debugln(s)
+			s.addResponse("250 Ok: Now that is a delivery service you can count on")
+			s.state = COMMANDS
+		case STARTTLS:
+			// I'm just going to pull this from GoGuerrilla, thanks guys
+			var tlsConn *tls.Conn
+			tlsConn = tls.Server(s.conn, TLSconfig)
+			err := tlsConn.Handshake() // not necessary to call here, but might as well
+			if err == nil {
+				s.conn = net.Conn(tlsConn)
+				s.bufin = bufio.NewReader(s.conn)
+				s.bufout = bufio.NewWriter(s.conn)
+				s.tls_on = true
+			} else {
+				log.Debugln("Could not TLS handshake:", err)
+			}
+			s.state = COMMANDS
+		case QUIT:
+			stop := time.Now().UnixNano()
+			log.Info("smtp %v %vns", s.conn.RemoteAddr(), uint64(stop-start))
+			return
 		}
 		size, _ := s.bufout.WriteString(s.response)
 		s.bufout.Flush()
