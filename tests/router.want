@@ -92,6 +92,7 @@ ip
 ## router vm0 dhcp 1.2.3.4 dns 8.8.8.8
 ## router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:55 1.2.3.66
 ## router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56 1.2.3.67
+## router vm0 dhcp 5.6.7.8 range 1.1.1.1 1.1.1.2
 ## .annotate false router vm0
 IPs:
 Network: 0: []
@@ -105,6 +106,13 @@ DNS:            8.8.8.8
 Static IPs:     
      00:11:22:33:44:55 1.2.3.66
      00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
 
 Log:
 ## router vm0 dhcp 5.6.7.8 static 00:11:22:33:44:60 5.6.7.9
@@ -123,11 +131,174 @@ Static IPs:
      00:11:22:33:44:56 1.2.3.67
 
 Listen address: 5.6.7.8
-Low address:    
-High address:   
+Low address:    1.1.1.1
+High address:   1.1.1.2
 Router:         
 DNS:            
 Static IPs:     
      00:11:22:33:44:60 5.6.7.9
 
 Log:
+## clear router vm0 dhcp 1.2.3.4 router
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            8.8.8.8
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 dns
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 static
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 range
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 5.6.7.8
+## .annotate false router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+
+Log:
+
+## vm config net 100,00:1f:53:02:0b:51 200
+## vm config tag vm1 vm1
+## vm launch container vm1
+## vm start all
+
+## clear router vm0
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 0 5.6.7.8/24
+## router 0 dhcp 1.2.3.4 router 1.2.3.254
+## router 0 dhcp 1.2.3.4 dns 8.8.8.8
+## router 0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+## router 0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
+## router vm0 commit
+## .annotate false shell cat /tmp/minimega/files/minirouter-0
+log level error
+ip flush
+ip add 0 1.2.3.4/24
+ip add 0 5.6.7.8/24
+dnsmasq flush
+dnsmasq range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq option router 1.2.3.4 1.2.3.254
+dnsmasq option dns 1.2.3.4 8.8.8.8
+dnsmasq static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq commit
+
+## cc filter tag=vm1=vm1
+## cc exec dhclient -v veth0
+## clear cc filter
+## shell sleep 15
+## .annotate false .columns ip .filter name=vm1 vm info
+ip
+[1.2.3.250 ]
+
