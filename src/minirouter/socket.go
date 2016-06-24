@@ -31,10 +31,11 @@ func commandSocketHandle(conn net.Conn) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		log.Debug("got command: %v", line)
-		_, err := minicli.ProcessString(line, false)
+		r, err := minicli.ProcessString(line, false)
 		if err != nil {
 			log.Errorln(err)
 		}
+		<-r
 	}
 	if err := scanner.Err(); err != nil {
 		log.Errorln(err)

@@ -4,6 +4,7 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
+	"os/exec"
 	"text/template"
 )
 
@@ -26,6 +27,7 @@ type Dhcp struct {
 
 var (
 	dnsmasqData *Dnsmasq
+	dnsmasqCmd  *exec.Cmd
 )
 
 func init() {
@@ -45,13 +47,18 @@ func init() {
 	}
 }
 
-func handleDnsmasq(c *minicli.Command, _ chan<- minicli.Responses) {
+func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
+	defer func() {
+		r <- nil
+	}()
+
 	if c.BoolArgs["flush"] {
 		dnsmasqData = &Dnsmasq{
 			DHCP: make(map[string]*Dhcp),
 		}
 	} else if c.BoolArgs["commit"] {
 		dnsmasqConfig()
+		dnsmasqRestart()
 	} else if c.BoolArgs["range"] {
 		addr := c.StringArgs["addr"]
 		low := c.StringArgs["low"]
@@ -115,6 +122,28 @@ func DHCPFindOrCreate(addr string) *Dhcp {
 	return d
 }
 
+func dnsmasqRestart() {
+	if dnsmasqCmd != nil {
+		err := dnsmasqCmd.Process.Kill()
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		_, err = dnsmasqCmd.Process.Wait()
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+	}
+
+	dnsmasqCmd = exec.Command("dnsmasq", "-k")
+	err := dnsmasqCmd.Start()
+	if err != nil {
+		log.Errorln(err)
+		dnsmasqCmd = nil
+	}
+}
+
 var dnsmasqTmpl = `
 # minirouter dnsmasq template
 
@@ -125,8 +154,7 @@ no-resolv
 # address=/foo.com/1.2.3.4
 
 # dhcp
-# dhcp-range=192.168.0.1,192.168.0.100,255.255.255.0
-# dhcp-host=00:11:22:33:44:55,192.168.0.1,foo
+dhcp-lease-max=4294967295
 {{ range $v := .DHCP }}
 # {{ $v.Addr }}
 {{ if ne $v.Low "" }}

@@ -81,7 +81,11 @@ func init() {
 	})
 }
 
-func handleLog(c *minicli.Command, _ chan<- minicli.Responses) {
+func handleLog(c *minicli.Command, r chan<- minicli.Responses) {
+	defer func() {
+		r <- nil
+	}()
+
 	var level int
 	if c.BoolArgs["fatal"] {
 		level = log.FATAL

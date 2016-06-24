@@ -71,7 +71,10 @@ func interfaceStats() {
 	}
 }
 
-func handleIP(c *minicli.Command, _ chan<- minicli.Responses) {
+func handleIP(c *minicli.Command, r chan<- minicli.Responses) {
+	defer func() {
+		r <- nil
+	}()
 	if c.BoolArgs["flush"] {
 		ips := make([][]string, len(IPs))
 		for i, v := range IPs {
