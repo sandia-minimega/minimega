@@ -24,10 +24,11 @@ var (
 )
 
 type Router struct {
-	vmID     int        // local (and effectively unique regardless of namespace) vm id
-	IPs      [][]string // positional ip address (index 0 is the first listed network in vm config net)
-	lock     sync.Mutex
-	logLevel string
+	vmID      int        // local (and effectively unique regardless of namespace) vm id
+	IPs       [][]string // positional ip address (index 0 is the first listed network in vm config net)
+	lock      sync.Mutex
+	logLevel  string
+	updateIPs bool // only update IPs if we've made changes
 }
 
 func (r *Router) String() string {
@@ -68,11 +69,15 @@ func (r *Router) generateConfig() error {
 	// log level
 	fmt.Fprintf(&out, "log level %v\n", r.logLevel)
 
-	// ips
-	fmt.Fprintf(&out, "ip flush\n") // no need to manage state - just start over
-	for i, v := range r.IPs {
-		for _, w := range v {
-			fmt.Fprintf(&out, "ip add %v %v\n", i, w)
+	// only writeout ip changes if it's changed from the last commit in
+	// order to avoid upsetting existing connections the device may have
+	if r.updateIPs {
+		// ips
+		fmt.Fprintf(&out, "ip flush\n") // no need to manage state - just start over
+		for i, v := range r.IPs {
+			for _, w := range v {
+				fmt.Fprintf(&out, "ip add %v %v\n", i, w)
+			}
 		}
 	}
 
@@ -133,6 +138,7 @@ func RouterCommit(vm VM) error {
 	if err != nil {
 		return err
 	}
+	r.updateIPs = false // IPs are no longer stale
 
 	// remove any previous commands
 	prefix := fmt.Sprintf("minirouter-%v", r.vmID)
@@ -219,6 +225,7 @@ func RouterInterfaceAdd(vm VM, n int, i string) error {
 	log.Debug("adding ip %v", i)
 
 	r.IPs[n] = append(r.IPs[n], i)
+	r.updateIPs = true
 
 	return nil
 }
@@ -247,6 +254,7 @@ func RouterInterfaceDel(vm VM, n string, i string) error {
 
 	if network == -1 {
 		r.IPs = make([][]string, len(r.IPs))
+		r.updateIPs = true
 		return nil
 	}
 
@@ -256,6 +264,7 @@ func RouterInterfaceDel(vm VM, n string, i string) error {
 
 	if i == "" {
 		r.IPs[network] = []string{}
+		r.updateIPs = true
 		return nil
 	}
 
@@ -275,6 +284,7 @@ func RouterInterfaceDel(vm VM, n string, i string) error {
 	if !found {
 		return fmt.Errorf("no such network: %v", i)
 	}
+	r.updateIPs = true
 
 	return nil
 }
