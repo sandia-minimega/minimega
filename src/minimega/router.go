@@ -210,13 +210,21 @@ func (r *Router) Commit() error {
 
 	// issue cc commands for this router
 	cmd := &ron.Command{
+		Filter:  filter,
+		Command: []string{"rm", filepath.Join("/tmp/miniccc/files", prefix)},
+	}
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v : %v", id, cmd)
+	ccPrefixMap[id] = prefix
+
+	cmd = &ron.Command{
 		Filter: filter,
 	}
 	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
 		Name: prefix,
 		Perm: 0644,
 	})
-	id := ccNode.NewCommand(cmd)
+	id = ccNode.NewCommand(cmd)
 	log.Debug("generated command %v : %v", id, cmd)
 	ccPrefixMap[id] = prefix
 
