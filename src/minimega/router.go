@@ -12,6 +12,7 @@ import (
 	"net"
 	"path/filepath"
 	"ron"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,6 +34,7 @@ type Router struct {
 }
 
 type dhcp struct {
+	addr   string
 	low    string
 	high   string
 	router string
@@ -46,11 +48,25 @@ func (r *Router) String() string {
 
 	// create output
 	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "IPs:\t%v\n", r.IPs)
-	w.Flush()
+	fmt.Fprintf(&o, "IPs:\n")
+	for i, v := range r.IPs {
+		fmt.Fprintf(&o, "Network: %v: %v\n", i, v)
+	}
 	fmt.Fprintln(&o)
+
+	if len(r.dhcp) > 0 {
+
+		var keys []string
+		for k, _ := range r.dhcp {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			d := r.dhcp[k]
+			fmt.Fprintf(&o, "%v", d)
+		}
+		fmt.Fprintln(&o)
+	}
 
 	vm := vms[r.vmID]
 	if vm == nil { // this really shouldn't ever happen
@@ -89,6 +105,24 @@ func (r *Router) generateConfig() error {
 			}
 		}
 	}
+
+	// dnsmasq
+	fmt.Fprintf(&out, "dnsmasq flush\n")
+	for _, d := range r.dhcp {
+		if d.low != "" {
+			fmt.Fprintf(&out, "dnsmasq range %v %v %v\n", d.addr, d.low, d.high)
+		}
+		if d.router != "" {
+			fmt.Fprintf(&out, "dnsmasq option router %v %v\n", d.addr, d.router)
+		}
+		if d.dns != "" {
+			fmt.Fprintf(&out, "dnsmasq option dns %v %v\n", d.addr, d.dns)
+		}
+		for mac, ip := range d.static {
+			fmt.Fprintf(&out, "dnsmasq static %v %v %v\n", d.addr, mac, ip)
+		}
+	}
+	fmt.Fprintf(&out, "dnsmasq commit\n")
 
 	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
@@ -340,8 +374,34 @@ func (r *Router) dhcpFindOrCreate(addr string) *dhcp {
 		return d
 	}
 	d := &dhcp{
+		addr:   addr,
 		static: make(map[string]string),
 	}
 	r.dhcp[addr] = d
 	return d
+}
+
+func (d *dhcp) String() string {
+	var o bytes.Buffer
+
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+
+	fmt.Fprintf(w, "Listen address:\t%v\n", d.addr)
+	fmt.Fprintf(w, "Low address:\t%v\n", d.low)
+	fmt.Fprintf(w, "High address:\t%v\n", d.high)
+	fmt.Fprintf(w, "Router:\t%v\n", d.router)
+	fmt.Fprintf(w, "DNS:\t%v\n", d.dns)
+	fmt.Fprintf(w, "Static IPs:\t\n")
+	w.Flush()
+
+	w = new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+
+	for mac, ip := range d.static {
+		fmt.Fprintf(w, "\t%v\t%v\n", mac, ip)
+	}
+	w.Flush()
+
+	return o.String()
 }

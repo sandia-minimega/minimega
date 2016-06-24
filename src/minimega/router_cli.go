@@ -21,7 +21,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
 			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
 			"router <vm> <dhcp,> <listen address> <router,> <router address>",
-			"router <vm> <dhcp,> <listen address> <dns server,> <dns address>",
+			"router <vm> <dhcp,> <listen address> <dns,> <address>",
 			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <ra,> <subnet>",
@@ -95,7 +95,7 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 			r := c.StringArgs["router"]
 			return rtr.DHCPAddRouter(addr, r)
 		} else if c.BoolArgs["dns"] {
-			dns := c.StringArgs["dns"]
+			dns := c.StringArgs["address"]
 			return rtr.DHCPAddDNS(addr, dns)
 		} else if c.BoolArgs["static"] {
 			mac := c.StringArgs["mac"]

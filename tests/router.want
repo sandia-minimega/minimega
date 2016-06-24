@@ -7,23 +7,31 @@
 ## router vm0 interface 0 dhcp
 ## router vm0 interface 1 5.6.7.8/16
 ## .annotate false router vm0
-IPs: [[1.2.3.4/24 dhcp] [5.6.7.8/16]]
+IPs:
+Network: 0: [1.2.3.4/24 dhcp]
+Network: 1: [5.6.7.8/16]
 
 Log:
 ## clear router vm0 interface 0 1.2.3.4/24
 ## .annotate false router vm0
-IPs: [[dhcp] [5.6.7.8/16]]
+IPs:
+Network: 0: [dhcp]
+Network: 1: [5.6.7.8/16]
 
 Log:
 ## clear router vm0 interface 1 5.6.7.8/24
 E: no such network: 5.6.7.8/24
 ## .annotate false router vm0
-IPs: [[dhcp] [5.6.7.8/16]]
+IPs:
+Network: 0: [dhcp]
+Network: 1: [5.6.7.8/16]
 
 Log:
 ## clear router vm0 interface 1 5.6.7.8/16
 ## .annotate false router vm0
-IPs: [[dhcp] []]
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
 
 Log:
 ## router vm0 interface 0 1.2.3.4/24
@@ -31,14 +39,18 @@ Log:
 ## router vm0 interface 1 5.6.7.8/16
 ## clear router vm0 interface 0
 ## .annotate false router vm0
-IPs: [[] [5.6.7.8/16]]
+IPs:
+Network: 0: []
+Network: 1: [5.6.7.8/16]
 
 Log:
 ## router vm0 interface 0 1.2.3.4/24
 ## router vm0 interface 0 dhcp
 ## clear router vm0 interface
 ## .annotate false router vm0
-IPs: [[] []]
+IPs:
+Network: 0: []
+Network: 1: []
 
 Log:
 ## router vm0 interface 0 1.2.3.4/24
@@ -46,7 +58,9 @@ Log:
 ## router vm0 interface 1 5.6.7.8/16
 ## clear router vm0
 ## .annotate false router vm0
-IPs: [[] []]
+IPs:
+Network: 0: []
+Network: 1: []
 
 Log:
 
@@ -59,6 +73,8 @@ log level error
 ip flush
 ip add 0 1.2.3.4/24
 ip add 1 5.6.7.8/24
+dnsmasq flush
+dnsmasq commit
 
 ## # check on interface ips
 ## shell sleep 15
