@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	LOG_TAG_SIZE = 10
+	LOG_TAG_SIZE = 20
 )
 
 func logSetup() {
