@@ -29,6 +29,15 @@ type Router struct {
 	lock      sync.Mutex
 	logLevel  string
 	updateIPs bool // only update IPs if we've made changes
+	dhcp      map[string]*dhcp
+}
+
+type dhcp struct {
+	low    string
+	high   string
+	router string
+	dns    string
+	static map[string]string
 }
 
 func (r *Router) String() string {
@@ -98,6 +107,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		vmID:     id,
 		IPs:      [][]string{},
 		logLevel: "error",
+		dhcp:     make(map[string]*dhcp),
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -281,17 +291,57 @@ func routerIsValidIP(i string) bool {
 }
 
 func (r *Router) DHCPAddRange(addr, low, high string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	d := r.dhcpFindOrCreate(addr)
+
+	d.low = low
+	d.high = high
+
 	return nil
 }
 
 func (r *Router) DHCPAddRouter(addr, rtr string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	d := r.dhcpFindOrCreate(addr)
+
+	d.router = rtr
+
 	return nil
 }
 
 func (r *Router) DHCPAddDNS(addr, dns string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	d := r.dhcpFindOrCreate(addr)
+
+	d.dns = dns
+
 	return nil
 }
 
 func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	d := r.dhcpFindOrCreate(addr)
+
+	d.static[mac] = ip
+
 	return nil
+}
+
+func (r *Router) dhcpFindOrCreate(addr string) *dhcp {
+	if d, ok := r.dhcp[addr]; ok {
+		return d
+	}
+	d := &dhcp{
+		static: make(map[string]string),
+	}
+	r.dhcp[addr] = d
+	return d
 }
