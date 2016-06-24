@@ -85,10 +85,10 @@ func (r *Router) generateConfig() error {
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
-// routerCreate creates a new router for vm, or returns an existing router if
-// it already exists
-func routerCreate(vm VM) *Router {
-	log.Debug("routerCreate: %v", vm)
+// Create a new router for vm, or returns an existing router if it already
+// exists
+func FindOrCreateRouter(vm VM) *Router {
+	log.Debug("FindOrCreateRouter: %v", vm)
 
 	id := vm.GetID()
 	if r, ok := routers[id]; ok {
@@ -123,12 +123,8 @@ func FindRouter(vm VM) *Router {
 	return nil
 }
 
-func RouterCommit(vm VM) error {
-	log.Debug("routerCommit: %v", vm)
-
-	routerLock.Lock()
-	r := routerCreate(vm)
-	routerLock.Unlock()
+func (r *Router) Commit() error {
+	log.Debugln("Commit")
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -192,24 +188,16 @@ func RouterCommit(vm VM) error {
 	return nil
 }
 
-func RouterLogLevel(vm VM, level string) {
-	log.Debug("RouterLogLevel: %v, %v", vm, level)
-
-	routerLock.Lock()
-	r := routerCreate(vm)
-	routerLock.Unlock()
+func (r *Router) LogLevel(level string) {
+	log.Debug("RouterLogLevel: %v", level)
 
 	r.lock.Lock()
 	r.logLevel = level
 	r.lock.Unlock()
 }
 
-func RouterInterfaceAdd(vm VM, n int, i string) error {
-	log.Debug("RouterInterfaceAdd: %v, %v, %v", vm, n, i)
-
-	routerLock.Lock()
-	r := routerCreate(vm)
-	routerLock.Unlock()
+func (r *Router) InterfaceAdd(n int, i string) error {
+	log.Debug("RouterInterfaceAdd: %v, %v", n, i)
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -230,8 +218,8 @@ func RouterInterfaceAdd(vm VM, n int, i string) error {
 	return nil
 }
 
-func RouterInterfaceDel(vm VM, n string, i string) error {
-	log.Debug("RouterInterfaceDel: %v, %v, %v", vm, n, i)
+func (r *Router) InterfaceDel(n string, i string) error {
+	log.Debug("RouterInterfaceDel: %v, %v", n, i)
 
 	var network int
 	var err error
@@ -244,10 +232,6 @@ func RouterInterfaceDel(vm VM, n string, i string) error {
 			return err
 		}
 	}
-
-	routerLock.Lock()
-	r := routerCreate(vm)
-	routerLock.Unlock()
 
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -294,4 +278,20 @@ func routerIsValidIP(i string) bool {
 		return false
 	}
 	return true
+}
+
+func (r *Router) DHCPAddRange(addr, low, high string) error {
+	return nil
+}
+
+func (r *Router) DHCPAddRouter(addr, rtr string) error {
+	return nil
+}
+
+func (r *Router) DHCPAddDNS(addr, dns string) error {
+	return nil
+}
+
+func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
+	return nil
 }

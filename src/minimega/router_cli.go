@@ -15,17 +15,16 @@ var routerCLIHandlers = []minicli.Handler{
 		HelpShort: "",
 		HelpLong:  ``,
 		Patterns: []string{
-			"router",
 			"router <vm>",
 			"router <vm> <commit,>",
 			"router <vm> <log,> <level,> <fatal,error,warn,info,debug>",
 			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
-			//			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
-			//			"router <vm> <dhcp,> <listen address> <router,> <router address>",
-			//			"router <vm> <dhcp,> <listen address> <dns server,> <dns address>",
-			//			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
-			//			"router <vm> <dns,> <ip> <hostname>",
-			//			"router <vm> <ra,> <subnet>",
+			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
+			"router <vm> <dhcp,> <listen address> <router,> <router address>",
+			"router <vm> <dhcp,> <listen address> <dns server,> <dns address>",
+			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
+			"router <vm> <dns,> <ip> <hostname>",
+			"router <vm> <ra,> <subnet>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -50,11 +49,18 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("no such vm %v", vmName)
 	}
 
-	if c.BoolArgs["commit"] {
-		err := RouterCommit(vm)
-		if err != nil {
-			return err
+	if vmName != "" && len(c.BoolArgs) == 0 { // a summary of a specific router
+		rtr := FindRouter(vm)
+		if rtr == nil {
+			return fmt.Errorf("vm %v not a router", vmName)
 		}
+		resp.Response = rtr.String()
+	}
+
+	rtr := FindOrCreateRouter(vm)
+
+	if c.BoolArgs["commit"] {
+		return rtr.Commit()
 	} else if c.BoolArgs["log"] {
 		var level string
 		if c.BoolArgs["fatal"] {
@@ -68,7 +74,7 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		} else if c.BoolArgs["debug"] {
 			level = "debug"
 		}
-		RouterLogLevel(vm, level)
+		rtr.LogLevel(level)
 		return nil
 	} else if c.BoolArgs["interface"] {
 		network, err := strconv.Atoi(c.StringArgs["network"])
@@ -77,20 +83,26 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		}
 		ip := c.StringArgs["IPv4/MASK"]
 
-		err = RouterInterfaceAdd(vm, network, ip)
-		if err != nil {
-			return err
-		}
-	} else if vmName != "" { // a summary of a specific router
-		r := FindRouter(vm)
-		if r == nil {
-			return fmt.Errorf("vm %v not a router", vmName)
-		}
-		resp.Response = r.String()
-	} else { // a summary of all routers
-		resp.Response = "implement me"
-	}
+		return rtr.InterfaceAdd(network, ip)
+	} else if c.BoolArgs["dhcp"] {
+		addr := c.StringArgs["listen"]
 
+		if c.BoolArgs["range"] {
+			low := c.StringArgs["low"]
+			high := c.StringArgs["high"]
+			return rtr.DHCPAddRange(addr, low, high)
+		} else if c.BoolArgs["router"] {
+			r := c.StringArgs["router"]
+			return rtr.DHCPAddRouter(addr, r)
+		} else if c.BoolArgs["dns"] {
+			dns := c.StringArgs["dns"]
+			return rtr.DHCPAddDNS(addr, dns)
+		} else if c.BoolArgs["static"] {
+			mac := c.StringArgs["mac"]
+			ip := c.StringArgs["ip"]
+			return rtr.DHCPAddStatic(addr, mac, ip)
+		}
+	}
 	return nil
 }
 
@@ -101,18 +113,22 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 	if vm == nil {
 		return fmt.Errorf("no such vm %v", vmName)
 	}
+	rtr := FindRouter(vm)
+	if rtr == nil {
+		return fmt.Errorf("no such router %v", vmName)
+	}
 
 	if c.BoolArgs["interface"] {
 		network := c.StringArgs["network"]
 		ip := c.StringArgs["IPv4/MASK"]
 
-		err := RouterInterfaceDel(vm, network, ip)
+		err := rtr.InterfaceDel(network, ip)
 		if err != nil {
 			return err
 		}
 	} else {
 		// remove everything about this router
-		err := RouterInterfaceDel(vm, "", "")
+		err := rtr.InterfaceDel("", "")
 		if err != nil {
 			return err
 		}
