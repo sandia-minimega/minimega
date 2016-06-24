@@ -405,7 +405,13 @@ func (d *dhcp) String() string {
 	w = new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 
-	for mac, ip := range d.static {
+	var keys []string
+	for k, _ := range d.static {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, mac := range keys {
+		ip := d.static[mac]
 		fmt.Fprintf(w, "\t%v\t%v\n", mac, ip)
 	}
 	w.Flush()

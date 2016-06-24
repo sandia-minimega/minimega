@@ -36,6 +36,13 @@ var routerCLIHandlers = []minicli.Handler{
 			"clear router <vm> <interface,>",
 			"clear router <vm> <interface,> <network>",
 			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"clear router <vm> <dhcp,>",
+			"clear router <vm> <dhcp,> <listen address>",
+			"clear router <vm> <dhcp,> <listen address> <range,>",
+			"clear router <vm> <dhcp,> <listen address> <router,>",
+			"clear router <vm> <dhcp,> <listen address> <dns,>",
+			"clear router <vm> <dhcp,> <listen address> <static,>",
+			"clear router <vm> <dhcp,> <listen address> <static,> <mac>",
 		},
 		Call: wrapBroadcastCLI(cliClearRouter),
 	},
@@ -125,6 +132,41 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 		err := rtr.InterfaceDel(network, ip)
 		if err != nil {
 			return err
+		}
+	} else if c.BoolArgs["dhcp"] {
+		addr := c.StringArgs["listen"]
+
+		if addr == "" {
+			// clear all of it
+			rtr.dhcp = make(map[string]*dhcp)
+			return nil
+		}
+
+		d, ok := rtr.dhcp[addr]
+		if !ok {
+			return fmt.Errorf("no such address: %v", addr)
+		}
+
+		if c.BoolArgs["range"] {
+			d.low = ""
+			d.high = ""
+		} else if c.BoolArgs["router"] {
+			d.router = ""
+		} else if c.BoolArgs["dns"] {
+			d.dns = ""
+		} else if c.BoolArgs["static"] {
+			mac := c.StringArgs["mac"]
+			if mac == "" {
+				d.static = make(map[string]string)
+			} else {
+				if _, ok := d.static[mac]; ok {
+					delete(d.static, mac)
+				} else {
+					return fmt.Errorf("no such mac: %v", mac)
+				}
+			}
+		} else {
+			delete(rtr.dhcp, addr)
 		}
 	} else {
 		// remove everything about this router
