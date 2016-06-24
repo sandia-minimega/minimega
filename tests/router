@@ -40,3 +40,14 @@ cc background ping -c 1 1.2.3.5
 cc background ping -c 1 5.6.7.9
 shell sleep 15
 .annotate false .columns ip vm info
+
+# router dhcp
+clear router vm0
+router vm0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+router vm0 dhcp 1.2.3.4 router 1.2.3.1
+router vm0 dhcp 1.2.3.4 dns 8.8.8.8
+router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:55 1.2.3.66
+router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56 1.2.3.67
+.annotate false router vm0
+router vm0 dhcp 5.6.7.8 static 00:11:22:33:44:60 5.6.7.9
+.annotate false router vm0

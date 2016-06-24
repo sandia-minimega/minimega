@@ -1,4 +1,4 @@
-// Copyright (2012) Sandia Corporation.
+// Copyright (2016) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
@@ -63,9 +63,8 @@ func (r *Router) String() string {
 		sort.Strings(keys)
 		for _, k := range keys {
 			d := r.dhcp[k]
-			fmt.Fprintf(&o, "%v", d)
+			fmt.Fprintf(&o, "%v\n", d)
 		}
-		fmt.Fprintln(&o)
 	}
 
 	vm := vms[r.vmID]
