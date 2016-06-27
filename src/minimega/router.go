@@ -32,6 +32,7 @@ type Router struct {
 	updateIPs bool // only update IPs if we've made changes
 	dhcp      map[string]*dhcp
 	dns       map[string]string
+	rad       map[string]bool // using a bool placeholder here for later RAD options
 }
 
 type dhcp struct {
@@ -77,6 +78,19 @@ func (r *Router) String() string {
 		for _, ip := range keys {
 			host := r.dns[ip]
 			fmt.Fprintf(&o, "%v\t%v\n", ip, host)
+		}
+		fmt.Fprintln(&o)
+	}
+
+	if len(r.rad) > 0 {
+		fmt.Fprintf(&o, "Router Advertisements:\n")
+		var keys []string
+		for k, _ := range r.rad {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, subnet := range keys {
+			fmt.Fprintf(&o, "%v\n", subnet)
 		}
 		fmt.Fprintln(&o)
 	}
@@ -138,6 +152,9 @@ func (r *Router) generateConfig() error {
 	for ip, host := range r.dns {
 		fmt.Fprintf(&out, "dnsmasq dns %v %v\n", ip, host)
 	}
+	for subnet, _ := range r.rad {
+		fmt.Fprintf(&out, "dnsmasq ra %v\n", subnet)
+	}
 	fmt.Fprintf(&out, "dnsmasq commit\n")
 
 	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
@@ -159,6 +176,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		logLevel: "error",
 		dhcp:     make(map[string]*dhcp),
 		dns:      make(map[string]string),
+		rad:      make(map[string]bool),
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -454,6 +472,28 @@ func (r *Router) DNSDel(ip string) error {
 			delete(r.dns, ip)
 		} else {
 			return fmt.Errorf("no such ip: %v", ip)
+		}
+	}
+	return nil
+}
+
+func (r *Router) RADAdd(subnet string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.rad[subnet] = true
+}
+
+func (r *Router) RADDel(subnet string) error {
+	r.lock.Lock()
+	r.lock.Unlock()
+
+	if subnet == "" {
+		r.rad = make(map[string]bool)
+	} else {
+		if _, ok := r.rad[subnet]; ok {
+			delete(r.rad, subnet)
+		} else {
+			return fmt.Errorf("no such subnet: %v", subnet)
 		}
 	}
 	return nil

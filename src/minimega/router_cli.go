@@ -45,6 +45,8 @@ var routerCLIHandlers = []minicli.Handler{
 			"clear router <vm> <dhcp,> <listen address> <static,> <mac>",
 			"clear router <vm> <dns,>",
 			"clear router <vm> <dns,> <ip>",
+			"clear router <vm> <ra,>",
+			"clear router <vm> <ra,> <subnet>",
 		},
 		Call: wrapBroadcastCLI(cliClearRouter),
 	},
@@ -116,6 +118,10 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		hostname := c.StringArgs["hostname"]
 		rtr.DNSAdd(ip, hostname)
 		return nil
+	} else if c.BoolArgs["ra"] {
+		subnet := c.StringArgs["subnet"]
+		rtr.RADAdd(subnet)
+		return nil
 	}
 	return nil
 }
@@ -178,6 +184,9 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 	} else if c.BoolArgs["dns"] {
 		ip := c.StringArgs["ip"]
 		return rtr.DNSDel(ip)
+	} else if c.BoolArgs["ra"] {
+		subnet := c.StringArgs["subnet"]
+		return rtr.RADDel(subnet)
 	} else {
 		// remove everything about this router
 		err := rtr.InterfaceDel("", "")
@@ -185,6 +194,7 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 			return err
 		}
 		rtr.DNSDel("")
+		rtr.RADDel("")
 		rtr.dhcp = make(map[string]*dhcp)
 	}
 	return nil
