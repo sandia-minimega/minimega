@@ -15,6 +15,7 @@ const (
 type Dnsmasq struct {
 	DHCP map[string]*Dhcp
 	DNS  map[string][]string
+	RAD  map[string]bool
 }
 
 type Dhcp struct {
@@ -41,12 +42,14 @@ func init() {
 			"dnsmasq <dhcp,> option <dns,> <addr> <server>",
 			"dnsmasq <dhcp,> <static,> <addr> <mac> <ip>",
 			"dnsmasq <dns,> <ip> <host>",
+			"dnsmasq <ra,> <subnet>",
 		},
 		Call: handleDnsmasq,
 	})
 	dnsmasqData = &Dnsmasq{
 		DHCP: make(map[string]*Dhcp),
 		DNS:  make(map[string][]string),
+		RAD:  make(map[string]bool),
 	}
 }
 
@@ -59,6 +62,7 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 		dnsmasqData = &Dnsmasq{
 			DHCP: make(map[string]*Dhcp),
 			DNS:  make(map[string][]string),
+			RAD:  make(map[string]bool),
 		}
 	} else if c.BoolArgs["commit"] {
 		dnsmasqConfig()
@@ -93,6 +97,9 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 		host := c.StringArgs["host"]
 		dnsmasqData.DNS[host] = append(dnsmasqData.DNS[host], ip)
 		log.Debugln("added ip %v to host %v", ip, host)
+	} else if c.BoolArgs["ra"] {
+		subnet := c.StringArgs["subnet"]
+		dnsmasqData.RAD[subnet] = true
 	}
 }
 
@@ -107,11 +114,6 @@ func dnsmasqConfig() {
 	if err != nil {
 		log.Errorln(err)
 		return
-	}
-
-	log.Debug("executing with data:\n")
-	for _, v := range dnsmasqData.DHCP {
-		log.Debugln(v)
 	}
 
 	err = t.Execute(f, dnsmasqData)
@@ -184,8 +186,7 @@ dhcp-lease-max=4294967295
 {{ range $host, $ips := .DNS }}
 host-record={{ $host }}{{ range $v := $ips }},{{ $v }}{{ end }}
 {{ end }}
-
-# todo: ipv6 route advertisements for SLAAC
-
-# todo: logging, stats, etc. that minirouter can consume
+{{ range $rad, $option := .RAD }}
+dhcp-range={{ $rad }},ra-names
+{{ end }}
 `
