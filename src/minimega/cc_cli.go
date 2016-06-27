@@ -187,8 +187,6 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 	raw := c.BoolArgs["raw"]
 	id := c.StringArgs["id"]
 
-	var files []string
-
 	walker := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -206,7 +204,20 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 
 		if !info.IsDir() {
 			log.Debug("add to response files: %v", path)
-			files = append(files, path)
+
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			if !raw {
+				relPath, err := filepath.Rel(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), path)
+				if err != nil {
+					return err
+				}
+				resp.Response += fmt.Sprintf("%v:\n", relPath)
+			}
+			resp.Response += fmt.Sprintf("%v\n", string(data))
 		}
 		return nil
 	}
@@ -237,23 +248,6 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 		if err := filepath.Walk(p, walker); err != nil {
 			return err
 		}
-	}
-
-	// now output files
-	for _, file := range files {
-		data, err := ioutil.ReadFile(file)
-		if err != nil {
-			return err
-		}
-
-		if !raw {
-			path, err := filepath.Rel(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), file)
-			if err != nil {
-				return err
-			}
-			resp.Response += fmt.Sprintf("%v:\n", path)
-		}
-		resp.Response += fmt.Sprintf("%v\n", string(data))
 	}
 
 	return nil
