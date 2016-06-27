@@ -14,6 +14,7 @@ const (
 
 type Dnsmasq struct {
 	DHCP map[string]*Dhcp
+	DNS  map[string][]string
 }
 
 type Dhcp struct {
@@ -35,15 +36,17 @@ func init() {
 		Patterns: []string{
 			"dnsmasq <flush,>",
 			"dnsmasq <commit,>",
-			"dnsmasq <range,> <addr> <low> <high>",
-			"dnsmasq option <router,> <addr> <server>",
-			"dnsmasq option <dns,> <addr> <server>",
-			"dnsmasq <static,> <addr> <mac> <ip>",
+			"dnsmasq <dhcp,> <range,> <addr> <low> <high>",
+			"dnsmasq <dhcp,> option <router,> <addr> <server>",
+			"dnsmasq <dhcp,> option <dns,> <addr> <server>",
+			"dnsmasq <dhcp,> <static,> <addr> <mac> <ip>",
+			"dnsmasq <dns,> <ip> <host>",
 		},
 		Call: handleDnsmasq,
 	})
 	dnsmasqData = &Dnsmasq{
 		DHCP: make(map[string]*Dhcp),
+		DNS:  make(map[string][]string),
 	}
 }
 
@@ -55,33 +58,41 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 	if c.BoolArgs["flush"] {
 		dnsmasqData = &Dnsmasq{
 			DHCP: make(map[string]*Dhcp),
+			DNS:  make(map[string][]string),
 		}
 	} else if c.BoolArgs["commit"] {
 		dnsmasqConfig()
 		dnsmasqRestart()
-	} else if c.BoolArgs["range"] {
-		addr := c.StringArgs["addr"]
-		low := c.StringArgs["low"]
-		high := c.StringArgs["high"]
-		d := DHCPFindOrCreate(addr)
-		d.Low = low
-		d.High = high
-	} else if c.BoolArgs["router"] {
-		addr := c.StringArgs["addr"]
-		server := c.StringArgs["server"]
-		d := DHCPFindOrCreate(addr)
-		d.Router = server
+	} else if c.BoolArgs["dhcp"] {
+		if c.BoolArgs["range"] {
+			addr := c.StringArgs["addr"]
+			low := c.StringArgs["low"]
+			high := c.StringArgs["high"]
+			d := DHCPFindOrCreate(addr)
+			d.Low = low
+			d.High = high
+		} else if c.BoolArgs["router"] {
+			addr := c.StringArgs["addr"]
+			server := c.StringArgs["server"]
+			d := DHCPFindOrCreate(addr)
+			d.Router = server
+		} else if c.BoolArgs["dns"] {
+			addr := c.StringArgs["addr"]
+			server := c.StringArgs["server"]
+			d := DHCPFindOrCreate(addr)
+			d.DNS = server
+		} else if c.BoolArgs["static"] {
+			addr := c.StringArgs["addr"]
+			mac := c.StringArgs["mac"]
+			ip := c.StringArgs["ip"]
+			d := DHCPFindOrCreate(addr)
+			d.Static[mac] = ip
+		}
 	} else if c.BoolArgs["dns"] {
-		addr := c.StringArgs["addr"]
-		server := c.StringArgs["server"]
-		d := DHCPFindOrCreate(addr)
-		d.DNS = server
-	} else if c.BoolArgs["static"] {
-		addr := c.StringArgs["addr"]
-		mac := c.StringArgs["mac"]
 		ip := c.StringArgs["ip"]
-		d := DHCPFindOrCreate(addr)
-		d.Static[mac] = ip
+		host := c.StringArgs["host"]
+		dnsmasqData.DNS[host] = append(dnsmasqData.DNS[host], ip)
+		log.Debugln("added ip %v to host %v", ip, host)
 	}
 }
 
@@ -169,6 +180,9 @@ dhcp-lease-max=4294967295
 {{ if ne $v.DNS "" }}
 	dhcp-option = tag:{{ $v.Addr }}, option:dns-server, {{ $v.DNS }}
 {{ end }}
+{{ end }}
+{{ range $host, $ips := .DNS }}
+host-record={{ $host }}{{ range $v := $ips }},{{ $v }}{{ end }}
 {{ end }}
 
 # todo: ipv6 route advertisements for SLAAC

@@ -31,6 +31,7 @@ type Router struct {
 	logLevel  string
 	updateIPs bool // only update IPs if we've made changes
 	dhcp      map[string]*dhcp
+	dns       map[string]string
 }
 
 type dhcp struct {
@@ -55,7 +56,6 @@ func (r *Router) String() string {
 	fmt.Fprintln(&o)
 
 	if len(r.dhcp) > 0 {
-
 		var keys []string
 		for k, _ := range r.dhcp {
 			keys = append(keys, k)
@@ -65,6 +65,20 @@ func (r *Router) String() string {
 			d := r.dhcp[k]
 			fmt.Fprintf(&o, "%v\n", d)
 		}
+	}
+
+	if len(r.dns) > 0 {
+		fmt.Fprintf(&o, "DNS:\n")
+		var keys []string
+		for k, _ := range r.dns {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, ip := range keys {
+			host := r.dns[ip]
+			fmt.Fprintf(&o, "%v\t%v\n", ip, host)
+		}
+		fmt.Fprintln(&o)
 	}
 
 	vm := vms[r.vmID]
@@ -109,17 +123,20 @@ func (r *Router) generateConfig() error {
 	fmt.Fprintf(&out, "dnsmasq flush\n")
 	for _, d := range r.dhcp {
 		if d.low != "" {
-			fmt.Fprintf(&out, "dnsmasq range %v %v %v\n", d.addr, d.low, d.high)
+			fmt.Fprintf(&out, "dnsmasq dhcp range %v %v %v\n", d.addr, d.low, d.high)
 		}
 		if d.router != "" {
-			fmt.Fprintf(&out, "dnsmasq option router %v %v\n", d.addr, d.router)
+			fmt.Fprintf(&out, "dnsmasq dhcp option router %v %v\n", d.addr, d.router)
 		}
 		if d.dns != "" {
-			fmt.Fprintf(&out, "dnsmasq option dns %v %v\n", d.addr, d.dns)
+			fmt.Fprintf(&out, "dnsmasq dhcp option dns %v %v\n", d.addr, d.dns)
 		}
 		for mac, ip := range d.static {
-			fmt.Fprintf(&out, "dnsmasq static %v %v %v\n", d.addr, mac, ip)
+			fmt.Fprintf(&out, "dnsmasq dhcp static %v %v %v\n", d.addr, mac, ip)
 		}
+	}
+	for ip, host := range r.dns {
+		fmt.Fprintf(&out, "dnsmasq dns %v %v\n", ip, host)
 	}
 	fmt.Fprintf(&out, "dnsmasq commit\n")
 
@@ -141,6 +158,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		IPs:      [][]string{},
 		logLevel: "error",
 		dhcp:     make(map[string]*dhcp),
+		dns:      make(map[string]string),
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -417,4 +435,26 @@ func (d *dhcp) String() string {
 	w.Flush()
 
 	return o.String()
+}
+
+func (r *Router) DNSAdd(ip, hostname string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.dns[ip] = hostname
+}
+
+func (r *Router) DNSDel(ip string) error {
+	r.lock.Lock()
+	r.lock.Unlock()
+
+	if ip == "" {
+		r.dns = make(map[string]string)
+	} else {
+		if _, ok := r.dns[ip]; ok {
+			delete(r.dns, ip)
+		} else {
+			return fmt.Errorf("no such ip: %v", ip)
+		}
+	}
+	return nil
 }
