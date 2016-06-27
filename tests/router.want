@@ -391,4 +391,89 @@ Address:	1.2.3.4#53
 Name:	bar.com
 Address: 2.2.2.2
 
+## # router advertisements
+## vm kill all
+## router vm0 interface 0 2001:1::1/64
+## router vm0 ra 2001:1::
+## router vm0 ra 2001:2::
+## .annotate false router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
 
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Router Advertisements:
+2001:1::
+2001:2::
+
+Log:
+## clear router vm0 ra 2001:2::
+## .annotate false router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Router Advertisements:
+2001:1::
+
+Log:
+## clear router vm0 ra 
+## .annotate false router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Log:
+## router vm0 ra 2001:1::
+## router vm0 commit
+## .annotate false shell cat /tmp/minimega/files/minirouter-0
+log level error
+ip flush
+ip add 0 1.2.3.4/24
+ip add 0 5.6.7.8/24
+ip add 0 2001:1::1/64
+dnsmasq flush
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq dns 1.1.1.1 foo.com
+dnsmasq dns 2.2.2.2 bar.com
+dnsmasq ra 2001:1::
+dnsmasq commit
+## # we don't have a reliable way to test SLAAC addressing so we don't do it
