@@ -74,7 +74,7 @@ clear router vm0
 router vm0 interface 0 1.2.3.4/24
 router vm0 interface 0 5.6.7.8/24
 router 0 dhcp 1.2.3.4 router 1.2.3.254
-router 0 dhcp 1.2.3.4 dns 8.8.8.8
+router 0 dhcp 1.2.3.4 dns 1.2.3.4
 router 0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
 router 0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
 router vm0 commit
@@ -85,4 +85,27 @@ cc exec dhclient -v veth0
 clear cc filter
 shell sleep 15
 .annotate false .columns ip .filter name=vm1 vm info
+
+# dns and dynamic updates
+router vm0 dns 1.1.1.1 foo.com
+router vm0 dns 2.2.2.2 bar.com
+router vm0 dns 3.3.3.3 foobar.com
+.annotate false router vm0
+clear router vm0 dns 1.1.1.1
+.annotate false router vm0
+clear router vm0 dns
+.annotate false router vm0
+router vm0 dns 1.1.1.1 foo.com
+router vm0 dns 2.2.2.2 bar.com
+router vm0 commit
+.annotate false shell cat /tmp/minimega/files/minirouter-0
+shell sleep 15
+clear cc responses
+cc filter tag=vm1=vm1
+cc exec nslookup foo.com
+cc exec nslookup bar.com
+shell sleep 10
+cc response 13 raw
+cc response 14 raw
+
 
