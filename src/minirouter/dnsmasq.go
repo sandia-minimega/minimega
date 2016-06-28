@@ -172,6 +172,8 @@ dhcp-lease-max=4294967295
 # {{ $v.Addr }}
 {{ if ne $v.Low "" }}
 	dhcp-range=set:{{ $v.Addr }},{{ $v.Low }},{{ $v.High }}
+{{ else }}
+	dhcp-range=set:{{ $v.Addr }},{{ $v.Addr }},static
 {{ end }}
 {{ range $mac, $ip := $v.Static }}
 	dhcp-host=set:{{ $v.Addr }},{{ $mac }},{{ $ip }}
