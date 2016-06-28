@@ -25,14 +25,15 @@ var (
 )
 
 type Router struct {
-	vmID      int        // local (and effectively unique regardless of namespace) vm id
-	IPs       [][]string // positional ip address (index 0 is the first listed network in vm config net)
-	lock      sync.Mutex
-	logLevel  string
-	updateIPs bool // only update IPs if we've made changes
-	dhcp      map[string]*dhcp
-	dns       map[string]string
-	rad       map[string]bool // using a bool placeholder here for later RAD options
+	vmID         int        // local (and effectively unique regardless of namespace) vm id
+	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
+	lock         sync.Mutex
+	logLevel     string
+	updateIPs    bool // only update IPs if we've made changes
+	dhcp         map[string]*dhcp
+	dns          map[string]string
+	rad          map[string]bool // using a bool placeholder here for later RAD options
+	staticRoutes map[string]string
 }
 
 type dhcp struct {
@@ -91,6 +92,19 @@ func (r *Router) String() string {
 		sort.Strings(keys)
 		for _, subnet := range keys {
 			fmt.Fprintf(&o, "%v\n", subnet)
+		}
+		fmt.Fprintln(&o)
+	}
+
+	if len(r.staticRoutes) > 0 {
+		fmt.Fprintf(&o, "Static Routes:\n")
+		var keys []string
+		for k, _ := range r.staticRoutes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, network := range keys {
+			fmt.Fprintf(&o, "%v\t%v\n", network, r.staticRoutes[network])
 		}
 		fmt.Fprintln(&o)
 	}
@@ -157,6 +171,13 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "dnsmasq commit\n")
 
+	// bird
+	fmt.Fprintf(&out, "bird flush\n")
+	for network, nh := range r.staticRoutes {
+		fmt.Fprintf(&out, "bird static %v %v\n", network, nh)
+	}
+	fmt.Fprintf(&out, "bird commit\n")
+
 	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
@@ -171,12 +192,13 @@ func FindOrCreateRouter(vm VM) *Router {
 		return r
 	}
 	r := &Router{
-		vmID:     id,
-		IPs:      [][]string{},
-		logLevel: "error",
-		dhcp:     make(map[string]*dhcp),
-		dns:      make(map[string]string),
-		rad:      make(map[string]bool),
+		vmID:         id,
+		IPs:          [][]string{},
+		logLevel:     "error",
+		dhcp:         make(map[string]*dhcp),
+		dns:          make(map[string]string),
+		rad:          make(map[string]bool),
+		staticRoutes: make(map[string]string),
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -494,6 +516,28 @@ func (r *Router) RADDel(subnet string) error {
 			delete(r.rad, subnet)
 		} else {
 			return fmt.Errorf("no such subnet: %v", subnet)
+		}
+	}
+	return nil
+}
+
+func (r *Router) RouteStaticAdd(network, nh string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.staticRoutes[network] = nh
+}
+
+func (r *Router) RouteStaticDel(network string) error {
+	r.lock.Lock()
+	r.lock.Unlock()
+
+	if network == "" {
+		r.staticRoutes = make(map[string]string)
+	} else {
+		if _, ok := r.staticRoutes[network]; ok {
+			delete(r.staticRoutes, network)
+		} else {
+			return fmt.Errorf("no such network: %v", network)
 		}
 	}
 	return nil

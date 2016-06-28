@@ -25,6 +25,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <ra,> <subnet>",
+			"router <vm> <route,> <static,> <network> <next-hop>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -47,6 +48,9 @@ var routerCLIHandlers = []minicli.Handler{
 			"clear router <vm> <dns,> <ip>",
 			"clear router <vm> <ra,>",
 			"clear router <vm> <ra,> <subnet>",
+			"clear router <vm> <route,>",
+			"clear router <vm> <route,> <static,>",
+			"clear router <vm> <route,> <static,> <network>",
 		},
 		Call: wrapBroadcastCLI(cliClearRouter),
 	},
@@ -122,7 +126,15 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 		subnet := c.StringArgs["subnet"]
 		rtr.RADAdd(subnet)
 		return nil
+	} else if c.BoolArgs["route"] {
+		if c.BoolArgs["static"] {
+			network := c.StringArgs["network"]
+			nh := c.StringArgs["next-hop"]
+			rtr.RouteStaticAdd(network, nh)
+			return nil
+		}
 	}
+
 	return nil
 }
 
@@ -187,6 +199,14 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 	} else if c.BoolArgs["ra"] {
 		subnet := c.StringArgs["subnet"]
 		return rtr.RADDel(subnet)
+	} else if c.BoolArgs["route"] {
+		if c.BoolArgs["static"] {
+			network := c.StringArgs["network"]
+			return rtr.RouteStaticDel(network)
+		} else {
+			// clear all routes on all protocols
+			rtr.RouteStaticDel("")
+		}
 	} else {
 		// remove everything about this router
 		err := rtr.InterfaceDel("", "")
@@ -195,6 +215,7 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 		}
 		rtr.DNSDel("")
 		rtr.RADDel("")
+		rtr.RouteStaticDel("")
 		rtr.dhcp = make(map[string]*dhcp)
 	}
 	return nil
