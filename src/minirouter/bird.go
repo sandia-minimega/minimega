@@ -12,8 +12,13 @@ const (
 	BIRD_CONFIG = "/etc/bird.conf"
 )
 
+type Bird struct {
+	Static map[string]string
+}
+
 var (
-	birdCmd *exec.Cmd
+	birdData *Bird
+	birdCmd  *exec.Cmd
 )
 
 func init() {
@@ -21,9 +26,13 @@ func init() {
 		Patterns: []string{
 			"bird <flush,>",
 			"bird <commit,>",
+			"bird <static,> <network> <nh>",
 		},
 		Call: handleBird,
 	})
+	birdData = &Bird{
+		Static: make(map[string]string),
+	}
 }
 
 func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
@@ -32,10 +41,16 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	}()
 
 	if c.BoolArgs["flush"] {
-
+		birdData = &Bird{
+			Static: make(map[string]string),
+		}
 	} else if c.BoolArgs["commit"] {
 		birdConfig()
 		birdRestart()
+	} else if c.BoolArgs["static"] {
+		network := c.StringArgs["network"]
+		nh := c.StringArgs["nh"]
+		birdData.Static[network] = nh
 	}
 }
 
@@ -52,7 +67,7 @@ func birdConfig() {
 		return
 	}
 
-	err = t.Execute(f, nil)
+	err = t.Execute(f, birdData)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -73,7 +88,7 @@ func birdRestart() {
 		}
 	}
 
-	birdCmd = exec.Command("bird", "-f")
+	birdCmd = exec.Command("bird", "-f", "-s", "/bird.sock", "-P", "/bird.pid")
 	err := birdCmd.Start()
 	if err != nil {
 		log.Errorln(err)
@@ -83,4 +98,24 @@ func birdRestart() {
 
 var birdTmpl = `
 # minirouter bird template
+
+protocol kernel {
+        scan time 60;
+        import none;
+        export all;   # Actually insert routes into the kernel routing table
+}
+
+# The Device protocol is not a real routing protocol. It doesn't generate any
+# routes and it only serves as a module for getting information about network
+# interfaces from the kernel.
+protocol device {
+        scan time 60;
+}
+
+protocol static {
+	check link;
+{{ range $network, $nh := .Static }}
+	route {{ $network }} via {{ $nh }};
+{{ end }}
+}
 `

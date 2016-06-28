@@ -1,5 +1,6 @@
 ## # static routes
 ## vm config filesystem minirouterfs
+## vm config preinit minirouterfs/preinit
 ## vm config net a b
 ## vm launch container routerA
 ## vm config net b c

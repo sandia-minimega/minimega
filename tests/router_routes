@@ -1,5 +1,6 @@
 # static routes
 vm config filesystem minirouterfs
+vm config preinit minirouterfs/preinit
 vm config net a b
 vm launch container routerA
 vm config net b c
@@ -38,9 +39,11 @@ shell sleep 5
 vm start vmA,vmB
 shell sleep 10
 cc filter tag=vm=vmA
-cc exec traceroute 3.0.0.3
+cc exec ping -c 1 3.0.0.3
 clear cc filter
 cc filter tag=vm=vmB
-cc exec traceroute 1.0.0.3
+cc exec ping -c 1 1.0.0.3
 clear cc filter
-# cc responses
+# cc responses 
+# TODO: ping isn't always the same as it shows timing information, fix minitest
+# or fix the test
