@@ -26,7 +26,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <ra,> <subnet>",
 			"router <vm> <route,> <static,> <network> <next-hop>",
-			"router <vm> <route,> <ospf,> <area> <interface>",
+			"router <vm> <route,> <ospf,> <area> <network>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -54,7 +54,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"clear router <vm> <route,> <static,> <network>",
 			"clear router <vm> <route,> <ospf,>",
 			"clear router <vm> <route,> <ospf,> <area>",
-			"clear router <vm> <route,> <ospf,> <area> <interface>",
+			"clear router <vm> <route,> <ospf,> <area> <network>",
 		},
 		Call: wrapBroadcastCLI(cliClearRouter),
 	},
@@ -138,7 +138,7 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 			return nil
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["interface"]
+			iface := c.StringArgs["network"]
 			rtr.RouteOSPFAdd(area, iface)
 		}
 	}
@@ -213,7 +213,7 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 			return rtr.RouteStaticDel(network)
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["interface"]
+			iface := c.StringArgs["network"]
 			return rtr.RouteOSPFDel(area, iface)
 		} else {
 			// clear all routes on all protocols

@@ -5,6 +5,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"strconv"
 	"text/template"
 )
 
@@ -33,7 +34,7 @@ func init() {
 			"bird <flush,>",
 			"bird <commit,>",
 			"bird <static,> <network> <nh>",
-			"bird <ospf,> <area> <interface>",
+			"bird <ospf,> <area> <network>",
 		},
 		Call: handleBird,
 	})
@@ -62,7 +63,21 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		birdData.Static[network] = nh
 	} else if c.BoolArgs["ospf"] {
 		area := c.StringArgs["area"]
-		iface := c.StringArgs["interface"]
+		network := c.StringArgs["network"]
+
+		// get an interface from the index
+		idx, err := strconv.Atoi(network)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+
+		iface, err := findEth(idx)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+
 		o := OSPFFindOrCreate(area)
 		o.Interfaces[iface] = true
 	}

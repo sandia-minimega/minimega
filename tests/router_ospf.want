@@ -17,8 +17,8 @@
 ## router routerA interface 0 1.0.0.1/24
 ## router routerA interface 1 2.0.0.1/24
 ## router routerA dhcp 1.0.0.0 static 00:1f:53:02:0b:51 1.0.0.3
-## router routerA route ospf 0.0.0.0 veth0
-## router routerA route ospf 0.0.0.0 veth1
+## router routerA route ospf 0.0.0.0 0
+## router routerA route ospf 0.0.0.0 1
 ## router routerA route ospf foo bar
 ## .annotate false router routerA
 IPs:
@@ -35,15 +35,15 @@ Static IPs:
 
 OSPF Area:	0.0.0.0
 Interfaces:
-	veth0
-	veth1
+	0
+	1
 
 OSPF Area:	foo
 Interfaces:
 	bar
 
 Log:
-## clear router routerA route ospf 0.0.0.0 veth1
+## clear router routerA route ospf 0.0.0.0 1
 ## .annotate false router routerA
 IPs:
 Network: 0: [1.0.0.1/24]
@@ -59,7 +59,7 @@ Static IPs:
 
 OSPF Area:	0.0.0.0
 Interfaces:
-	veth0
+	0
 
 OSPF Area:	foo
 Interfaces:
@@ -82,7 +82,7 @@ Static IPs:
 
 OSPF Area:	0.0.0.0
 Interfaces:
-	veth0
+	0
 
 OSPF Area:	foo
 Interfaces:
@@ -103,8 +103,8 @@ Static IPs:
      00:1f:53:02:0b:51 1.0.0.3
 
 Log:
-## router routerA route ospf 0 veth0
-## router routerA route ospf 0 veth1
+## router routerA route ospf 0 0
+## router routerA route ospf 0 1
 ## router routerA commit
 ## .annotate false shell cat /tmp/minimega/files/minirouter-0
 log level error
@@ -115,14 +115,14 @@ dnsmasq flush
 dnsmasq dhcp static 1.0.0.0 00:1f:53:02:0b:51 1.0.0.3
 dnsmasq commit
 bird flush
-bird ospf 0 veth0
-bird ospf 0 veth1
+bird ospf 0 1
+bird ospf 0 0
 bird commit
 ## router routerB interface 0 2.0.0.2/24
 ## router routerB interface 1 3.0.0.2/24
 ## router routerB dhcp 3.0.0.0 static 00:1f:53:02:0b:52 3.0.0.3
-## router routerB route ospf 0 veth0
-## router routerB route ospf 0 veth1
+## router routerB route ospf 0 0
+## router routerB route ospf 0 1
 ## router routerB commit
 ## router vmA interface 0 dhcp
 ## router vmA commit
