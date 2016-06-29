@@ -34,6 +34,12 @@ type Router struct {
 	dns          map[string]string
 	rad          map[string]bool // using a bool placeholder here for later RAD options
 	staticRoutes map[string]string
+	ospfRoutes   map[string]*ospf
+}
+
+type ospf struct {
+	area       string
+	interfaces map[string]bool
 }
 
 type dhcp struct {
@@ -109,6 +115,18 @@ func (r *Router) String() string {
 		fmt.Fprintln(&o)
 	}
 
+	if len(r.ospfRoutes) > 0 {
+		var keys []string
+		for k, _ := range r.ospfRoutes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			ospfRoute := r.ospfRoutes[k]
+			fmt.Fprintf(&o, "%v\n", ospfRoute)
+		}
+	}
+
 	vm := vms[r.vmID]
 	if vm == nil { // this really shouldn't ever happen
 		log.Error("could not find vm: %v", r.vmID)
@@ -176,6 +194,11 @@ func (r *Router) generateConfig() error {
 	for network, nh := range r.staticRoutes {
 		fmt.Fprintf(&out, "bird static %v %v\n", network, nh)
 	}
+	for _, o := range r.ospfRoutes {
+		for iface, _ := range o.interfaces {
+			fmt.Fprintf(&out, "bird ospf %v %v\n", o.area, iface)
+		}
+	}
 	fmt.Fprintf(&out, "bird commit\n")
 
 	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
@@ -199,6 +222,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		dns:          make(map[string]string),
 		rad:          make(map[string]bool),
 		staticRoutes: make(map[string]string),
+		ospfRoutes:   make(map[string]*ospf),
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -541,4 +565,69 @@ func (r *Router) RouteStaticDel(network string) error {
 		}
 	}
 	return nil
+}
+
+func (r *Router) ospfFindOrCreate(area string) *ospf {
+	if o, ok := r.ospfRoutes[area]; ok {
+		return o
+	}
+	o := &ospf{
+		area:       area,
+		interfaces: make(map[string]bool),
+	}
+	r.ospfRoutes[area] = o
+	return o
+}
+
+func (o *ospf) String() string {
+	var out bytes.Buffer
+
+	fmt.Fprintf(&out, "OSPF Area:\t%v\n", o.area)
+	fmt.Fprintf(&out, "Interfaces:\n")
+
+	var keys []string
+	for k, _ := range o.interfaces {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, iface := range keys {
+		fmt.Fprintf(&out, "\t%v\n", iface)
+	}
+
+	return out.String()
+}
+
+func (r *Router) RouteOSPFAdd(area, iface string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	o := r.ospfFindOrCreate(area)
+	o.interfaces[iface] = true
+}
+
+func (r *Router) RouteOSPFDel(area, iface string) error {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+
+	if area == "" {
+		r.ospfRoutes = make(map[string]*ospf)
+		return nil
+	}
+
+	o, ok := r.ospfRoutes[area]
+	if !ok {
+		return fmt.Errorf("no such area: %v", area)
+	}
+
+	if iface == "" {
+		o.interfaces = make(map[string]bool)
+		return nil
+	}
+
+	if _, ok := o.interfaces[iface]; ok {
+		delete(o.interfaces, iface)
+		return nil
+	}
+
+	return fmt.Errorf("no such interface: %v", iface)
 }

@@ -26,6 +26,7 @@ var routerCLIHandlers = []minicli.Handler{
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <ra,> <subnet>",
 			"router <vm> <route,> <static,> <network> <next-hop>",
+			"router <vm> <route,> <ospf,> <area> <interface>",
 		},
 		Call: wrapBroadcastCLI(cliRouter),
 	},
@@ -51,6 +52,9 @@ var routerCLIHandlers = []minicli.Handler{
 			"clear router <vm> <route,>",
 			"clear router <vm> <route,> <static,>",
 			"clear router <vm> <route,> <static,> <network>",
+			"clear router <vm> <route,> <ospf,>",
+			"clear router <vm> <route,> <ospf,> <area>",
+			"clear router <vm> <route,> <ospf,> <area> <interface>",
 		},
 		Call: wrapBroadcastCLI(cliClearRouter),
 	},
@@ -132,6 +136,10 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 			nh := c.StringArgs["next-hop"]
 			rtr.RouteStaticAdd(network, nh)
 			return nil
+		} else if c.BoolArgs["ospf"] {
+			area := c.StringArgs["area"]
+			iface := c.StringArgs["interface"]
+			rtr.RouteOSPFAdd(area, iface)
 		}
 	}
 
@@ -203,9 +211,14 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 		if c.BoolArgs["static"] {
 			network := c.StringArgs["network"]
 			return rtr.RouteStaticDel(network)
+		} else if c.BoolArgs["ospf"] {
+			area := c.StringArgs["area"]
+			iface := c.StringArgs["interface"]
+			return rtr.RouteOSPFDel(area, iface)
 		} else {
 			// clear all routes on all protocols
 			rtr.RouteStaticDel("")
+			rtr.RouteOSPFDel("", "")
 		}
 	} else {
 		// remove everything about this router
@@ -216,6 +229,7 @@ func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 		rtr.DNSDel("")
 		rtr.RADDel("")
 		rtr.RouteStaticDel("")
+		rtr.RouteOSPFDel("", "")
 		rtr.dhcp = make(map[string]*dhcp)
 	}
 	return nil

@@ -14,6 +14,7 @@ const (
 
 type Bird struct {
 	Static map[string]string
+	OSPF   map[string]*OSPF
 }
 
 var (
@@ -21,17 +22,24 @@ var (
 	birdCmd  *exec.Cmd
 )
 
+type OSPF struct {
+	Area       string
+	Interfaces map[string]bool // bool placeholder for later options
+}
+
 func init() {
 	minicli.Register(&minicli.Handler{
 		Patterns: []string{
 			"bird <flush,>",
 			"bird <commit,>",
 			"bird <static,> <network> <nh>",
+			"bird <ospf,> <area> <interface>",
 		},
 		Call: handleBird,
 	})
 	birdData = &Bird{
 		Static: make(map[string]string),
+		OSPF:   make(map[string]*OSPF),
 	}
 }
 
@@ -43,6 +51,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
 			Static: make(map[string]string),
+			OSPF:   make(map[string]*OSPF),
 		}
 	} else if c.BoolArgs["commit"] {
 		birdConfig()
@@ -51,6 +60,11 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		network := c.StringArgs["network"]
 		nh := c.StringArgs["nh"]
 		birdData.Static[network] = nh
+	} else if c.BoolArgs["ospf"] {
+		area := c.StringArgs["area"]
+		iface := c.StringArgs["interface"]
+		o := OSPFFindOrCreate(area)
+		o.Interfaces[iface] = true
 	}
 }
 
@@ -88,12 +102,24 @@ func birdRestart() {
 		}
 	}
 
-	birdCmd = exec.Command("bird", "-f", "-s", "/bird.sock", "-P", "/bird.pid")
+	birdCmd = exec.Command("bird", "-f", "-s", "/bird.sock", "-P", "/bird.pid", "-c", BIRD_CONFIG)
 	err := birdCmd.Start()
 	if err != nil {
 		log.Errorln(err)
 		birdCmd = nil
 	}
+}
+
+func OSPFFindOrCreate(area string) *OSPF {
+	if o, ok := birdData.OSPF[area]; ok {
+		return o
+	}
+	o := &OSPF{
+		Area:       area,
+		Interfaces: make(map[string]bool),
+	}
+	birdData.OSPF[area] = o
+	return o
 }
 
 var birdTmpl = `
@@ -116,6 +142,16 @@ protocol static {
 	check link;
 {{ range $network, $nh := .Static }}
 	route {{ $network }} via {{ $nh }};
+{{ end }}
+}
+
+protocol ospf {
+{{ range $v := .OSPF }} 
+	area {{ $v.Area }} {
+		{{ range $int, $options := $v.Interfaces }}
+		interface "{{ $int }}";
+		{{ end }}
+	};
 {{ end }}
 }
 `
