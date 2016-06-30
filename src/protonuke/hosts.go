@@ -132,7 +132,7 @@ func isIPv6(ip string) bool {
 		if len(d) <= 6 && i == len(d)-1 && isIPv4(v) {
 			return true
 		}
-		octet, err := strconv.Atoi(v)
+		octet, err := strconv.ParseInt(v, 16, 64)
 		if err != nil {
 			return false
 		}
