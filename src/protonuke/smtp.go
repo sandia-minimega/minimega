@@ -65,7 +65,6 @@ const (
 	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
 )
 
-
 type mail struct {
 	To      string
 	From    string
@@ -359,10 +358,9 @@ func (s *SMTPClientSession) Handler() {
 			case strings.HasPrefix(cmd, "RSET"):
 				s.mail_from = ""
 				s.rcpt_to = []string{}
-				s.addResponse("250 I forgot to remember to forget")			
+				s.addResponse("250 I forgot to remember to forget")		
 			default:
 				s.addResponse("500 unrecognized command")
-				break
 			}
 		case DATA:
 			input, err := s.readSmtp()
