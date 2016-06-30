@@ -79,7 +79,7 @@ var (
 	max_size  = 131072
 	myFQDN    = "protonuke.local"
 	TLSconfig *tls.Config
-	smtpPort  = ":587" // nonstandard port used to evade blocking by a firewall
+	smtpPort  = ":25" // nonstandard port may be used to evade blocking by a firewall, spammers typically use :587
 	email     []mail
 )
 
