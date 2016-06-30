@@ -22,7 +22,7 @@ func (b *Bridge) CreateMirror() (string, error) {
 	}
 
 	// get a host tap on VLAN 0
-	tap, err := b.createTap("", 0, true)
+	tap, err := b.createHostTap("", 0)
 	if err != nil {
 		return "", err
 	}
@@ -50,7 +50,7 @@ func (b *Bridge) CreateMirror() (string, error) {
 
 	if _, sErr, err := ovsCmdWrapper(args); err != nil {
 		// Clean up the tap we just created
-		if err := destroyTap(tap); err != nil {
+		if err := b.destroyTap(tap); err != nil {
 			// Welp, we're boned
 			log.Error("zombie tap -- %v %v", tap, err)
 		}

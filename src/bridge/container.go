@@ -30,7 +30,7 @@ func (b *Bridge) CreateContainerTap(t string, ns, mac string, vlan, index int) (
 	// Clean up the tap we just created, if it didn't already exist.
 	defer func() {
 		if err != nil {
-			if err := destroyVeth(tap); err != nil {
+			if err := destroyTap(tap); err != nil {
 				// Welp, we're boned
 				log.Error("zombie tap -- %v %v", tap, err)
 			}

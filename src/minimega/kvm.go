@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	"math/rand"
@@ -103,7 +104,7 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func NewKVM(name string) *KvmVM {
+func NewKVM(name string) (*KvmVM, error) {
 	vm := new(KvmVM)
 
 	vm.BaseVM = *NewBaseVM(name)
@@ -113,7 +114,7 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	return vm
+	return vm, nil
 }
 
 // Launch a new KVM VM.
@@ -228,6 +229,55 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
+}
+
+func (vm *KvmVM) SaveConfig(w io.Writer) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
+	cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
+
+	// Build launch string, make sure to preserve namespace if set
+	format := "vm launch %v %v"
+	if vm.Namespace != "" {
+		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
+	}
+	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
+	cmds = append(cmds, "", "") // add a blank line
+
+	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
+	return err
+}
+
+func (vm *KvmVM) Conflicts(vm2 VM) error {
+	switch vm2 := vm2.(type) {
+	case *KvmVM:
+		return vm.ConflictsKVM(vm2)
+	case *ContainerVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	}
+
+	return errors.New("unknown VM type")
+}
+
+// ConflictsKVM tests whether vm and vm2 share a disk and returns an
+// error if one of them is not running in snapshot mode. Also checks
+// whether the BaseVMs conflict.
+func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, d := range vm.DiskPaths {
+		for _, d2 := range vm2.DiskPaths {
+			if d == d2 && (!vm.Snapshot || !vm2.Snapshot) {
+				return fmt.Errorf("disk conflict with vm %v: %v", vm.Name, d)
+			}
+		}
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
 }
 
 func (vm *KVMConfig) String() string {
@@ -375,7 +425,8 @@ func (vm *KvmVM) launch() error {
 	}
 
 	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	config := vm.BaseConfig.String() + vm.KVMConfig.String()
+	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
@@ -390,7 +441,7 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		net.Tap, err = br.CreateTap(net.Tap, net.VLAN, false)
+		net.Tap, err = br.CreateTap(net.Tap, net.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)

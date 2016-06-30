@@ -5,11 +5,13 @@
 package main
 
 import (
+	"bridge"
 	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
@@ -42,8 +44,6 @@ const (
 )
 
 type VM interface {
-	Config() *BaseConfig
-
 	GetID() int           // GetID returns the VM's per-host unique ID
 	GetName() string      // GetName returns the VM's per-host unique name
 	GetNamespace() string // GetNamespace returns the VM's namespace
@@ -68,6 +68,14 @@ type VM interface {
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
 
+	// SaveConfig writes the commands to relaunch this VM with the same
+	// config to the io.Writer.
+	SaveConfig(io.Writer) error
+
+	// Conflicts checks whether the VMs have conflicting configs. Called
+	// when we create a VM but before adding it to the list of VMs.
+	Conflicts(VM) error
+
 	SetCCActive(bool)
 	UpdateBW()
 
@@ -78,6 +86,12 @@ type VM interface {
 	// NetworkDisconnect updates the VM's config to reflect that the specified
 	// tap has been disconnected.
 	NetworkDisconnect(int) error
+
+	// Qos functions
+	GetQos() [][]bridge.QosOption
+	UpdateQos(uint, bridge.QosOption) error
+	ClearQos(uint) error
+	ClearAllQos() error
 }
 
 // BaseConfig contains all fields common to all VM types.
@@ -136,7 +150,7 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
-	"tags",
+	"tags", "qos",
 }
 
 // Valid names for output masks for `vm summary`, in preferred output order
@@ -160,7 +174,7 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func NewVM(name string, vmType VMType) VM {
+func NewVM(name string, vmType VMType) (VM, error) {
 	switch vmType {
 	case KVM:
 		return NewKVM(name)
@@ -168,7 +182,7 @@ func NewVM(name string, vmType VMType) VM {
 		return NewContainer(name)
 	}
 
-	return nil
+	return nil, errors.New("unknown VM type")
 }
 
 // NewBaseVM creates a new VM, copying the currently set configs. After a VM is
@@ -190,6 +204,15 @@ func NewBaseVM(name string) *BaseVM {
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
 		vm.UUID = generateUUID()
+	}
+
+	// generate MAC addresses if any are unassigned. Don't bother checking
+	// for collisions -- based on the birthday paradox, there's only a
+	// 0.016% chance of collisions when running 10K VMs (one interface/VM).
+	for i := range vm.Networks {
+		if vm.Networks[i].MAC == "" {
+			vm.Networks[i].MAC = randomMac()
+		}
 	}
 
 	vm.kill = make(chan bool)
@@ -296,6 +319,33 @@ func (vm *BaseConfig) NetworkString() string {
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
+}
+
+func (vm *BaseConfig) QosString(b, t string) string {
+	var val string
+	br, err := getBridge(b)
+	if err != nil {
+		return val
+	}
+
+	ops := br.GetQos(t)
+	if ops == nil {
+		return ""
+	}
+
+	val += fmt.Sprintf("%s: ", t)
+	for _, op := range ops {
+		if op.Type == bridge.Delay {
+			val += fmt.Sprintf("delay %s ", op.Value)
+		}
+		if op.Type == bridge.Loss {
+			val += fmt.Sprintf("loss %s ", op.Value)
+		}
+		if op.Type == bridge.Rate {
+			val += fmt.Sprintf("rate %s ", op.Value)
+		}
+	}
+	return strings.Trim(val, " ")
 }
 
 func (vm *BaseConfig) TagsString() string {
@@ -419,6 +469,80 @@ func (vm *BaseVM) UpdateBW() {
 	}
 }
 
+func (vm *BaseVM) UpdateQos(tap uint, op bridge.QosOption) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if tap >= uint(len(vm.Networks)) {
+		return fmt.Errorf("invalid tap index specified: %d", tap)
+	}
+
+	bName := vm.Networks[tap].Bridge
+	tapName := vm.Networks[tap].Tap
+
+	br, err := getBridge(bName)
+	if err != nil {
+		return err
+	}
+	return br.UpdateQos(tapName, op)
+}
+
+func (vm *BaseVM) ClearAllQos() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, nc := range vm.Networks {
+		b, err := getBridge(nc.Bridge)
+		if err != nil {
+			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
+			return err
+		}
+		err = b.ClearQos(nc.Tap)
+		if err != nil {
+			log.Error("failed to remove qos from vm %s", vm.GetName())
+			return err
+		}
+	}
+	return nil
+}
+
+func (vm *BaseVM) ClearQos(tap uint) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if tap >= uint(len(vm.Networks)) {
+		return fmt.Errorf("invalid tap index specified: %d", tap)
+	}
+	nc := vm.Networks[tap]
+	b, err := getBridge(nc.Bridge)
+	if err != nil {
+		return err
+	}
+
+	return b.ClearQos(nc.Tap)
+}
+
+func (vm *BaseVM) GetQos() [][]bridge.QosOption {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	var res [][]bridge.QosOption
+
+	for _, nc := range vm.Networks {
+		b, err := getBridge(nc.Bridge)
+		if err != nil {
+			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
+			continue
+		}
+
+		q := b.GetQos(nc.Tap)
+		if q != nil {
+			res = append(res, q)
+		}
+	}
+	return res
+}
+
 func (vm *BaseVM) SetCCActive(active bool) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -530,7 +654,7 @@ func (vm *BaseVM) info(key string) (string, error) {
 			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
-				vals = append(vals, fmt.Sprintf("%v", net.VLAN))
+				vals = append(vals, printVLAN(net.VLAN))
 			}
 		}
 	case "bridge":
@@ -557,6 +681,13 @@ func (vm *BaseVM) info(key string) (string, error) {
 		for _, v := range vm.Networks {
 			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
 			vals = append(vals, s)
+		}
+	case "qos":
+		for _, v := range vm.Networks {
+			s := vm.QosString(v.Bridge, v.Tap)
+			if s != "" {
+				vals = append(vals, s)
+			}
 		}
 	case "tags":
 		return vm.TagsString(), nil
@@ -616,6 +747,30 @@ func (vm *BaseVM) writeTaps() error {
 	return nil
 }
 
+func (vm *BaseVM) conflicts(vm2 BaseVM) error {
+	// Return error if two VMs have same name or UUID
+	if vm.Namespace == vm2.Namespace {
+		if vm.Name == vm2.Name {
+			return fmt.Errorf("duplicate VM name: %s", vm.Name)
+		}
+
+		if vm.UUID == vm2.UUID {
+			return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
+		}
+	}
+
+	// Warn if we see two VMs that share a MAC on the same VLAN
+	for _, n := range vm.Networks {
+		for _, n2 := range vm2.Networks {
+			if n.MAC == n2.MAC && n.VLAN == n2.VLAN {
+				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", vm.ID, vm2.ID)
+			}
+		}
+	}
+
+	return nil
+}
+
 // inNamespace tests whether vm is part of active namespace, if there is one.
 // When there isn't an active namespace, all vms return true.
 func inNamespace(vm VM) bool {
@@ -642,4 +797,15 @@ func vmNotKVM(idOrName string) error {
 
 func isVmNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
+}
+
+func getConfig(vm VM) BaseConfig {
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vm.BaseConfig
+	case *ContainerVM:
+		return vm.BaseConfig
+	}
+
+	return BaseConfig{}
 }

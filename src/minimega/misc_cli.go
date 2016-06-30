@@ -56,7 +56,8 @@ commands.`,
 		HelpShort: "read and execute a command file",
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
-the file in manually except that it stops after the first error.
+the file in manually. read stops if it reads an invalid command. read does not
+stop if a command returns an error.
 
 If the optional argument check is specified then read doesn't execute any of
 the commands in the file. Instead, it checks that all the commands are
@@ -174,16 +175,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			continue
 		}
 
-		for resp := range RunCommands(cmd) {
-			respChan <- resp
-
-			// Stop processing if any of the responses have an error.
-			for _, r := range resp {
-				if r.Error != "" {
-					break
-				}
-			}
-		}
+		forward(RunCommands(cmd), respChan)
 	}
 
 	if err != nil {

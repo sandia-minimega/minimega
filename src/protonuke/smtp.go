@@ -213,10 +213,12 @@ func smtpSendMail(server string, m mail, protocol string) error {
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
 	c, err := smtp.NewClient(conn, server)
 	if err != nil {
 		return err
 	}
+	defer c.Close()
 
 	if *f_smtpTls {
 		err = c.StartTLS(&tls.Config{InsecureSkipVerify: true})
@@ -297,6 +299,8 @@ func smtpServer(p string) {
 		client := NewSMTPClientSession(conn)
 
 		go client.Handler()
+
+		smtpReportChan <- 1
 	}
 }
 
