@@ -66,10 +66,10 @@ func httpClient(protocol string) {
 		},
 	}
 
-	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		// TODO: max client read timeouts configurable?
+		//Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -113,10 +113,10 @@ func httpTLSClient(protocol string) {
 		transport.TLSClientConfig.MaxVersion = version
 	}
 
-	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		// TODO: max client read timeouts configurable?
+		//Timeout:   30 * time.Second,
 	}
 
 	for {
