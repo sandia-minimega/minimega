@@ -149,7 +149,7 @@ func dnsmasqRestart() {
 		}
 	}
 
-	dnsmasqCmd = exec.Command("dnsmasq", "-k")
+	dnsmasqCmd = exec.Command("dnsmasq", "-k", "-u", "root")
 	err := dnsmasqCmd.Start()
 	if err != nil {
 		log.Errorln(err)

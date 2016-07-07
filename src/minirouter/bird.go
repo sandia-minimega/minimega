@@ -153,13 +153,18 @@ protocol device {
         scan time 60;
 }
 
+{{ $DOSTATIC := len .Static }}
+{{ if ne $DOSTATIC 0 }}
 protocol static {
 	check link;
 {{ range $network, $nh := .Static }}
 	route {{ $network }} via {{ $nh }};
 {{ end }}
 }
+{{ end }}
 
+{{ $DOOSPF := len .OSPF }}
+{{ if ne $DOOSPF 0 }}
 protocol ospf {
 {{ range $v := .OSPF }} 
 	area {{ $v.Area }} {
@@ -169,4 +174,5 @@ protocol ospf {
 	};
 {{ end }}
 }
+{{ end }}
 `
