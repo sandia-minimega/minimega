@@ -1,12 +1,15 @@
 package main
 
 import (
+	"math/rand"
 	"minicli"
 	log "minilog"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
 	"text/template"
+	"time"
 )
 
 const (
@@ -14,13 +17,15 @@ const (
 )
 
 type Bird struct {
-	Static map[string]string
-	OSPF   map[string]*OSPF
+	Static   map[string]string
+	OSPF     map[string]*OSPF
+	RouterID string
 }
 
 var (
 	birdData *Bird
 	birdCmd  *exec.Cmd
+	birdID   string
 )
 
 type OSPF struct {
@@ -38,10 +43,13 @@ func init() {
 		},
 		Call: handleBird,
 	})
+	birdID = getRouterID()
 	birdData = &Bird{
-		Static: make(map[string]string),
-		OSPF:   make(map[string]*OSPF),
+		Static:   make(map[string]string),
+		OSPF:     make(map[string]*OSPF),
+		RouterID: birdID,
 	}
+
 }
 
 func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
@@ -51,8 +59,9 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
-			Static: make(map[string]string),
-			OSPF:   make(map[string]*OSPF),
+			Static:   make(map[string]string),
+			OSPF:     make(map[string]*OSPF),
+			RouterID: birdID,
 		}
 	} else if c.BoolArgs["commit"] {
 		birdConfig()
@@ -137,8 +146,21 @@ func OSPFFindOrCreate(area string) *OSPF {
 	return o
 }
 
+func getRouterID() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	p := make([]byte, 4)
+	_, err := r.Read(p)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	ip := net.IPv4(p[0], p[1], p[2], p[3])
+	return ip.String()
+}
+
 var birdTmpl = `
 # minirouter bird template
+
+router id {{ .RouterID }};
 
 protocol kernel {
         scan time 60;
