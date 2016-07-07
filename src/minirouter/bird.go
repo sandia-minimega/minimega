@@ -25,6 +25,7 @@ type Bird struct {
 var (
 	birdData *Bird
 	birdCmd  *exec.Cmd
+	bird6Cmd *exec.Cmd
 	birdID   string
 )
 
@@ -131,6 +132,26 @@ func birdRestart() {
 	if err != nil {
 		log.Errorln(err)
 		birdCmd = nil
+	}
+
+	if bird6Cmd != nil {
+		err := bird6Cmd.Process.Kill()
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		_, err = bird6Cmd.Process.Wait()
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+	}
+
+	bird6Cmd = exec.Command("bird6", "-f", "-s", "/bird6.sock", "-P", "/bird6.pid", "-c", BIRD_CONFIG)
+	err = bird6Cmd.Start()
+	if err != nil {
+		log.Errorln(err)
+		bird6Cmd = nil
 	}
 }
 
