@@ -60,12 +60,22 @@ func ccStart() {
 // TODO: this is currently global and should filter on the client's namespace,
 // but cc isn't fully namespace aware, so here we are...
 func ccUpdateTags(uuid string, t map[string]string) {
-	vm := vms.FindVMNoNamespace(uuid)
-	if vm != nil {
-		for k, v := range t {
-			vm.SetTag(k, v)
+
+	// ccUpdateTags is a callback into two places in the vm subsystem
+	// installed in ron. As such, it gets called asynchronously and
+	// potentially while another thread that holds the global vmLock is
+	// reaching into ron. ron should never block the critical path -
+	// launching vms, and so we throw this into a goroutine to be processed
+	// at the vm subsystem's leisure. This also avoids a deadlock.
+	// Callbacks are dangerous...
+	go func() {
+		vm := vms.FindVMNoNamespace(uuid)
+		if vm != nil {
+			for k, v := range t {
+				vm.SetTag(k, v)
+			}
 		}
-	}
+	}()
 }
 
 func ccClear(what string) (err error) {
