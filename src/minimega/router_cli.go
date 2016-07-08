@@ -12,8 +12,55 @@ import (
 
 var routerCLIHandlers = []minicli.Handler{
 	{ // router
-		HelpShort: "",
-		HelpLong:  ``,
+		HelpShort: "configure running minirouter VMs",
+		HelpLong: `
+Configure running minirouter VMs running minirouter and miniccc.
+
+Routers are configured by specifying or updating a configuration, and then
+applying that configuration with a commit command. For example, to configure
+a router on a running VM named 'foo' to serve DHCP on 10.0.0.0/24 with a
+range of IPs:
+
+	router foo dhcp 10.0.0.0 range 10.0.0.100 10.0.0.200
+	router foo commit
+
+router takes a number of subcommands:
+
+- 'log': Change the log level of the minirouter tool on the VM.
+
+- 'interface': Set IPv4 or IPv6 addresses, or configure an interface to assign
+  using DHCP. The interface field is an integer index of the interface defined
+  with 'vm config net'. For example, to configure the second interface of the
+  router with a static IP:
+
+	vm config net 100 200
+	# ...
+	router foo interface 1 10.0.0.1/24
+
+- 'dhcp': Configure one or more DHCP servers on the router. The API allows you
+  to set several options including static IP assignments and the default route
+  and DNS server. For example, to serve a range of IPs, with 2 static IPs
+  explicitly called out on router with IP 10.0.0.1:
+
+	router vm foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
+	router vm foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.10
+	router vm foo dhcp 10.0.0.0 static 00:11:22:33:44:56 10.0.0.11
+
+- 'dns': Set DNS records for IPv4 or IPv6 hosts.
+
+- 'ra': Enable neighbor discovery protocol router advertisements for a given
+  subnet.
+
+- 'route': Set static or OSPF routes. Static routes include a subnet and
+  next-hop. OSPF routes include an area and a network index corresponding to
+  the interface described in 'vm config net'. For example, to enable OSPF on
+  area 0 for both interfaces of a router:
+
+	vm config net 100 200
+	# ...
+	router foo route ospf 0 0
+	router foo route ospf 0 1
+`,
 		Patterns: []string{
 			"router <vm>",
 			"router <vm> <commit,>",
