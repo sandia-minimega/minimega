@@ -83,7 +83,7 @@ router vm0 commit
 cc filter tag=vm1=vm1
 cc exec dhclient -v veth0
 clear cc filter
-shell sleep 15
+shell sleep 30
 .annotate false .columns ip .filter name=vm1 vm info
 
 # dns and dynamic updates
@@ -102,14 +102,13 @@ router vm0 commit
 shell sleep 15
 clear cc responses
 cc filter tag=vm1=vm1
-cc exec nslookup foo.com
-cc exec nslookup bar.com
-shell sleep 10
-cc response 13 raw
-cc response 14 raw
+cc exec nslookup foo.com 1.2.3.4
+cc exec nslookup bar.com 1.2.3.4
+shell sleep 30
+.annotate false cc response 13 raw
+.annotate false cc response 14 raw
 
 # router advertisements
-vm kill all
 router vm0 interface 0 2001:1::1/64
 router vm0 ra 2001:1::
 router vm0 ra 2001:2::

@@ -301,7 +301,7 @@ bird commit
 ## cc filter tag=vm1=vm1
 ## cc exec dhclient -v veth0
 ## clear cc filter
-## shell sleep 15
+## shell sleep 30
 ## .annotate false .columns ip .filter name=vm1 vm info
 ip
 [1.2.3.250 ]
@@ -381,24 +381,23 @@ bird commit
 ## shell sleep 15
 ## clear cc responses
 ## cc filter tag=vm1=vm1
-## cc exec nslookup foo.com
-## cc exec nslookup bar.com
-## shell sleep 10
-## cc response 13 raw
-ccc17: Server:		1.2.3.4
-Address:	1.2.3.4#53
+## cc exec nslookup foo.com 1.2.3.4
+## cc exec nslookup bar.com 1.2.3.4
+## shell sleep 30
+## .annotate false cc response 13 raw
+Server:    1.2.3.4
+Address 1: 1.2.3.4
 
-Name:	foo.com
-Address: 1.1.1.1
-## cc response 14 raw
-ccc17: Server:		1.2.3.4
-Address:	1.2.3.4#53
+Name:      foo.com
+Address 1: 1.1.1.1 foo.com
+## .annotate false cc response 14 raw
+Server:    1.2.3.4
+Address 1: 1.2.3.4
 
-Name:	bar.com
-Address: 2.2.2.2
+Name:      bar.com
+Address 1: 2.2.2.2 bar.com
 
 ## # router advertisements
-## vm kill all
 ## router vm0 interface 0 2001:1::1/64
 ## router vm0 ra 2001:1::
 ## router vm0 ra 2001:2::

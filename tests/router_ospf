@@ -52,6 +52,6 @@ cc filter tag=vm=routerB
 cc exec route -n
 clear cc filter
 shell sleep 10
-cc responses 13 raw
-cc responses 14 raw
+.annotate false cc responses 13 raw
+.annotate false cc responses 14 raw
 
