@@ -509,7 +509,7 @@ func (r *Router) DNSAdd(ip, hostname string) {
 
 func (r *Router) DNSDel(ip string) error {
 	r.lock.Lock()
-	r.lock.Unlock()
+	defer r.lock.Unlock()
 
 	if ip == "" {
 		r.dns = make(map[string]string)
@@ -531,7 +531,7 @@ func (r *Router) RADAdd(subnet string) {
 
 func (r *Router) RADDel(subnet string) error {
 	r.lock.Lock()
-	r.lock.Unlock()
+	defer r.lock.Unlock()
 
 	if subnet == "" {
 		r.rad = make(map[string]bool)
@@ -553,7 +553,7 @@ func (r *Router) RouteStaticAdd(network, nh string) {
 
 func (r *Router) RouteStaticDel(network string) error {
 	r.lock.Lock()
-	r.lock.Unlock()
+	defer r.lock.Unlock()
 
 	if network == "" {
 		r.staticRoutes = make(map[string]string)
