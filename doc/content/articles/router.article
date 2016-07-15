@@ -81,7 +81,7 @@ Multiple addresses can be added to the same interface as well:
 We use [[http://www.thekelleys.org.uk/dnsmasq/doc.html][dnsmasq]] to provide
 DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
 extensive support for various DHCP and DNS options, and `minirouter` uses a
-subnet of common capabilities. 
+subset of common capabilities. 
 
 ** DHCP
 
@@ -129,7 +129,7 @@ the record:
 
 `minirouter` uses the [[http://bird.network.cz/][bird routing daemon]] to
 provide routing using a variety of protocols. Currently, `minirouter` only
-supports static and OSPF routes. Support BGP and others are planned.
+supports static and OSPF routes. Support for BGP and others are planned.
 
 Bird is a lightweight routing daemon that scales well. In our tests we were
 able to scale minirouter with bird to at least 40 gigabit.
