@@ -14,7 +14,6 @@ clear router vm0 interface 1 5.6.7.8/24
 clear router vm0 interface 1 5.6.7.8/16
 .annotate false router vm0
 router vm0 interface 0 1.2.3.4/24
-router vm0 interface 0 dhcp
 router vm0 interface 1 5.6.7.8/16
 clear router vm0 interface 0
 .annotate false router vm0

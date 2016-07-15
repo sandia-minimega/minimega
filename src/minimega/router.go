@@ -20,8 +20,7 @@ import (
 )
 
 var (
-	routers    map[int]*Router
-	routerLock sync.Mutex
+	routers map[int]*Router = make(map[int]*Router)
 )
 
 type Router struct {
@@ -52,9 +51,6 @@ type dhcp struct {
 }
 
 func (r *Router) String() string {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	// create output
 	var o bytes.Buffer
 	fmt.Fprintf(&o, "IPs:\n")
@@ -127,7 +123,7 @@ func (r *Router) String() string {
 		}
 	}
 
-	vm := vms[r.vmID]
+	vm := vms.FindVM(fmt.Sprintf("%v", r.vmID))
 	if vm == nil { // this really shouldn't ever happen
 		log.Error("could not find vm: %v", r.vmID)
 		return ""
@@ -141,10 +137,6 @@ func (r *Router) String() string {
 	}
 
 	return o.String()
-}
-
-func init() {
-	routers = make(map[int]*Router)
 }
 
 func (r *Router) generateConfig() error {
@@ -238,9 +230,6 @@ func FindOrCreateRouter(vm VM) *Router {
 
 // FindRouter returns an existing router if it exists, otherwise nil
 func FindRouter(vm VM) *Router {
-	routerLock.Lock()
-	defer routerLock.Unlock()
-
 	id := vm.GetID()
 	if r, ok := routers[id]; ok {
 		return r
@@ -250,9 +239,6 @@ func FindRouter(vm VM) *Router {
 
 func (r *Router) Commit() error {
 	log.Debugln("Commit")
-
-	r.lock.Lock()
-	defer r.lock.Unlock()
 
 	// build a command list from the router
 	err := r.generateConfig()
@@ -324,16 +310,11 @@ func (r *Router) Commit() error {
 func (r *Router) LogLevel(level string) {
 	log.Debug("RouterLogLevel: %v", level)
 
-	r.lock.Lock()
 	r.logLevel = level
-	r.lock.Unlock()
 }
 
 func (r *Router) InterfaceAdd(n int, i string) error {
 	log.Debug("RouterInterfaceAdd: %v, %v", n, i)
-
-	r.lock.Lock()
-	defer r.lock.Unlock()
 
 	if n >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", n)
@@ -341,6 +322,12 @@ func (r *Router) InterfaceAdd(n int, i string) error {
 
 	if !routerIsValidIP(i) {
 		return fmt.Errorf("invalid IP: %v", i)
+	}
+
+	for _, v := range r.IPs[n] {
+		if v == i {
+			return fmt.Errorf("IP %v already exists", i)
+		}
 	}
 
 	log.Debug("adding ip %v", i)
@@ -365,9 +352,6 @@ func (r *Router) InterfaceDel(n string, i string) error {
 			return err
 		}
 	}
-
-	r.lock.Lock()
-	defer r.lock.Unlock()
 
 	if network == -1 {
 		r.IPs = make([][]string, len(r.IPs))
@@ -414,9 +398,6 @@ func routerIsValidIP(i string) bool {
 }
 
 func (r *Router) DHCPAddRange(addr, low, high string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	d := r.dhcpFindOrCreate(addr)
 
 	d.low = low
@@ -426,9 +407,6 @@ func (r *Router) DHCPAddRange(addr, low, high string) error {
 }
 
 func (r *Router) DHCPAddRouter(addr, rtr string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	d := r.dhcpFindOrCreate(addr)
 
 	d.router = rtr
@@ -437,9 +415,6 @@ func (r *Router) DHCPAddRouter(addr, rtr string) error {
 }
 
 func (r *Router) DHCPAddDNS(addr, dns string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	d := r.dhcpFindOrCreate(addr)
 
 	d.dns = dns
@@ -448,9 +423,6 @@ func (r *Router) DHCPAddDNS(addr, dns string) error {
 }
 
 func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	d := r.dhcpFindOrCreate(addr)
 
 	d.static[mac] = ip
@@ -502,37 +474,25 @@ func (d *dhcp) String() string {
 }
 
 func (r *Router) DNSAdd(ip, hostname string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	r.dns[ip] = hostname
 }
 
 func (r *Router) DNSDel(ip string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	if ip == "" {
 		r.dns = make(map[string]string)
+	} else if _, ok := r.dns[ip]; ok {
+		delete(r.dns, ip)
 	} else {
-		if _, ok := r.dns[ip]; ok {
-			delete(r.dns, ip)
-		} else {
-			return fmt.Errorf("no such ip: %v", ip)
-		}
+		return fmt.Errorf("no such ip: %v", ip)
 	}
 	return nil
 }
 
 func (r *Router) RADAdd(subnet string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	r.rad[subnet] = true
 }
 
 func (r *Router) RADDel(subnet string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	if subnet == "" {
 		r.rad = make(map[string]bool)
 	} else {
@@ -546,15 +506,10 @@ func (r *Router) RADDel(subnet string) error {
 }
 
 func (r *Router) RouteStaticAdd(network, nh string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
 	r.staticRoutes[network] = nh
 }
 
 func (r *Router) RouteStaticDel(network string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	if network == "" {
 		r.staticRoutes = make(map[string]string)
 	} else {
@@ -598,17 +553,11 @@ func (o *ospf) String() string {
 }
 
 func (r *Router) RouteOSPFAdd(area, iface string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	o := r.ospfFindOrCreate(area)
 	o.interfaces[iface] = true
 }
 
 func (r *Router) RouteOSPFDel(area, iface string) error {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-
 	if area == "" {
 		r.ospfRoutes = make(map[string]*ospf)
 		return nil
