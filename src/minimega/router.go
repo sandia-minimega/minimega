@@ -15,7 +15,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"text/tabwriter"
 )
 
@@ -26,7 +25,6 @@ var (
 type Router struct {
 	vmID         int        // local (and effectively unique regardless of namespace) vm id
 	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
-	lock         sync.Mutex
 	logLevel     string
 	updateIPs    bool // only update IPs if we've made changes
 	dhcp         map[string]*dhcp
