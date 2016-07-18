@@ -229,10 +229,7 @@ func FindOrCreateRouter(vm VM) *Router {
 // FindRouter returns an existing router if it exists, otherwise nil
 func FindRouter(vm VM) *Router {
 	id := vm.GetID()
-	if r, ok := routers[id]; ok {
-		return r
-	}
-	return nil
+	return routers[id]
 }
 
 func (r *Router) Commit() error {
