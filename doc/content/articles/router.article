@@ -1,0 +1,168 @@
+Creating routers with minimega
+
+The minimega authors
+11 July 2016
+
+* Introduction
+
+`minirouter` is a simple tool, run in a VM, that orchestrates various router
+functions such as DHCP, DNS, IPv4/IPv6 assignments, and, of course, routing.
+The `minirouter` tool is interfaced by minimega's `router` API, described
+below, and the minimega distribution provides a prebuilt `minirouter` container
+image. 
+
+`minirouter` currently supports several protocols and capabilities including
+DHCP, DNS, router advertisements, OSPF, and static routes. It can route in
+excess of 40 gigabit when running as a container.
+
+* Obtaining a minirouter image
+
+** Prebuilt container image
+
+A prebuilt, busybox-based, container image is available
+[[https://storage.googleapis.com/minimega-files/minimega-2.3-minirouter.tar.bz2][here]].
+This image can be built using the build script in `misc/minirouter` in the
+minimega repo. The minirouter image is configured to start miniccc and
+minirouter at startup.
+
+** Building a `minirouter` image
+
+`minirouter` can run on bare metal, as a container, or a KVM image. To use
+minirouter, you must have the miniccc agent running, and minirouter must be
+able to access the miniccc tool and files directory (see `minirouter`-h` for
+default paths). 
+
+`minirouter` uses `iptool`, `dnsmasq`, `dhclient`, and `bird`, all of which
+must be installed but not already running. `minirouter` must run as root. 
+
+Beyond these few requirements, `minirouter` should run on most linux systems. 
+
+* Starting minirouter
+
+VMs running the `minirouter` tool must have `miniccc` running as well (this is
+already configured in the prebuilt `minirouter` image). Configuring a
+`minirouter` image is similar to describing and launching a VM in minimega. One
+first describes the router parameters, and then commits the configuration,
+which causes the minirouter tool to set IPs and start other necessary tools on
+the router VM. `minirouter` VMs must be running before configuring the router,
+and configurations can be updated at runtime.
+
+The `router` API requires a VM name or ID when configuring a router. For
+example, to set a static IP on a running `minirouter` VM named 'foo':
+
+	router foo interface 0 10.0.0.1/24
+	router foo commit
+
+While the first command above sets the configuration for the router image, the
+second line actually commits the configuration by sending commands to
+minirouter over the command and control layer in minimega. Multiple
+configuration commands can be issued and then later committed with a single
+`commit` command.
+
+* Interfaces
+
+Routers often have statically assigned IP addresses and `minirouter`
+supports both IPv4 and IPv6 address specification using the `interface` API.
+For example, to add the IP 10.0.0.1/24 to the second interface on a
+`minirouter` VM:
+
+	vm config net a b
+	
+	# add an ip to interface b (index 1)
+	router foo interface 1 10.0.0.1/24
+
+Multiple addresses can be added to the same interface as well:
+
+	router foo interface 0 10.0.0.1/24
+	router foo interface 0 2001:1::1/64
+
+* DHCP and DNS
+
+We use [[http://www.thekelleys.org.uk/dnsmasq/doc.html][dnsmasq]] to provide
+DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
+extensive support for various DHCP and DNS options, and `minirouter` uses a
+subset of common capabilities. 
+
+** DHCP
+
+`minirouter` supports DHCP assignment of connected clients and supports both IP
+range and static IP assignment. `minirouter` also supports several DHCP
+options such as setting the default gateway and nameserver.
+
+For example, to serve the IP range 10.0.0.2 - 10.0.0.254 on a 10.0.0.0/24
+network, specify the network prefix and DHCP range:
+
+	router foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
+
+You can also specify static IP assignments with a MAC/IP address pair:
+
+	router foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.100
+
+Additionally, you can specify the default gateway and nameserver:
+
+	router foo dhcp 10.0.0.0 router 10.0.0.254
+	router foo dhcp 10.0.0.0 dns 8.8.8.8
+
+All of these DHCP options can be used together in a single DHCP specification,
+and multiple DHCP servers can be specified on a single `minirouter` instance
+(for serving DHCP on multiple interfaces/networks).
+
+** IPv6 Router Advertisements
+
+`minirouter` supports IPv6 router advertisements using the Neighbor Discovery
+Protocol to enable
+[[https://en.wikipedia.org/wiki/IPv6#Stateless_address_autoconfiguration_.28SLAAC.29][SLAAC]]
+addressing. To enable route advertisements simply provide the subnet. Only the
+subnet prefix is required as SLAAC addressing requires a /64 and is implied.
+
+	router foo ra 2001:1:2:3::
+
+** DNS
+
+`minirouter` provides a simple mechanism to add `A` or `AAAA` records for
+any host/IP (including IPv6) pair. Simply specify the host and IP address of
+the record:
+
+	router foo dns 1.2.3.4 foo.com
+
+* Routing
+
+`minirouter` uses the [[http://bird.network.cz/][bird routing daemon]] to
+provide routing using a variety of protocols. Currently, `minirouter` only
+supports static and OSPF routes. Support for BGP and others are planned.
+
+Bird is a lightweight routing daemon that scales well. In our tests we were
+able to scale minirouter with bird to at least 40 gigabit.
+
+** Static routes
+
+`minirouter` makes possible adding IPv4 or IPv6 static routes by simply
+specifying the destination network and net-hop IP. For example, to add a static
+IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
+
+	router foo route static 1.2.3.0/24 1.2.3.254
+
+IPv6 routes are added in the same way:
+
+	router foo route static 2001:1:2:3::/64 2001:1:2:3::1
+
+** OSPF
+
+`minirouter` provides basic support for OSPF and OSPFv3 (IPv6 enabled OSPF) by
+specifying the OSPF area and *interface* to include in the area. OSPF generally
+supports specifying networks and many other options, which `minirouter` may add
+in the future. For now, specifying an interface (and all of the networks on
+that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`. 
+
+Interfaces are identified by the index in which they were added by the
+`vm`config`net` API. For example, to add the first and third network of the
+router VM to area 0 in an OSPF route:
+	
+	vm config net a b c
+	
+	# add interface 'a', index 0
+	router foo route ospf 0 0
+	
+	# add interface 'c', index 2
+	router foo route ospf 0 2
+

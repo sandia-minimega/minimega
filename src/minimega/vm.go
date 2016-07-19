@@ -44,10 +44,11 @@ const (
 )
 
 type VM interface {
-	GetID() int           // GetID returns the VM's per-host unique ID
-	GetName() string      // GetName returns the VM's per-host unique name
-	GetNamespace() string // GetNamespace returns the VM's namespace
-	GetHost() string      // GetHost returns the hostname that the VM is running on
+	GetID() int               // GetID returns the VM's per-host unique ID
+	GetName() string          // GetName returns the VM's per-host unique name
+	GetNamespace() string     // GetNamespace returns the VM's namespace
+	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
+	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
 	GetType() VMType
 	GetInstancePath() string
@@ -368,6 +369,17 @@ func (vm *BaseVM) GetName() string {
 
 func (vm *BaseVM) GetNamespace() string {
 	return vm.Namespace
+}
+
+func (vm *BaseVM) GetNetworks() []NetConfig {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// Make a deep copy of the NetConfigs
+	n := make([]NetConfig, len(vm.Networks))
+	copy(n, vm.Networks)
+
+	return n
 }
 
 func (vm *BaseVM) GetHost() string {

@@ -1,5 +1,0 @@
-#!/bin/sh -e
-
-mount -o remount,rw /
-dhclient eth0
-exit 0
