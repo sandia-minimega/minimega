@@ -755,8 +755,6 @@ func (vm *ContainerVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
-		ccNode.RegisterVM(vm.UUID, vm)
-
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
