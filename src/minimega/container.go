@@ -236,8 +236,6 @@ func init() {
 	for _, fns := range containerConfigFns {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
-	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
-	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 }
 
 var (
@@ -254,6 +252,10 @@ func containerInit() error {
 		return nil
 	}
 	containerInitOnce = true
+
+	// Set the globals now that flags have been parsed
+	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
+	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 
 	// mount our own cgroup namespace to avoid having to ever ever ever
 	// deal with systemd
