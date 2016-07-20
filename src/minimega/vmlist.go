@@ -391,7 +391,6 @@ func (vms VMs) Kill(target string) []error {
 
 	errs := vms.apply(target, false, applyFunc)
 
-outer:
 	for len(killedVms) > 0 {
 		id := <-killAck
 		log.Info("VM %v killed", id)
