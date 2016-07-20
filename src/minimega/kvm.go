@@ -530,7 +530,6 @@ func (vm *KvmVM) launch() error {
 
 	// Create goroutine to wait to kill the VM
 	go func() {
-		sendKillAck := false
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -538,10 +537,6 @@ func (vm *KvmVM) launch() error {
 			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
-			sendKillAck = true // wait to ack until we've cleaned up
-		}
-
-		if sendKillAck {
 			killAck <- vm.ID
 		}
 	}()

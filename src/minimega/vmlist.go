@@ -393,14 +393,9 @@ func (vms VMs) Kill(target string) []error {
 
 outer:
 	for len(killedVms) > 0 {
-		select {
-		case id := <-killAck:
-			log.Info("VM %v killed", id)
-			delete(killedVms, id)
-		case <-time.After(COMMAND_TIMEOUT * time.Second):
-			log.Error("vm kill timeout")
-			break outer
-		}
+		id := <-killAck
+		log.Info("VM %v killed", id)
+		delete(killedVms, id)
 	}
 
 	for id := range killedVms {
