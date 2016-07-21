@@ -988,16 +988,8 @@ func (vm *ContainerVM) launch() error {
 			}
 
 			// wait for the taskset to actually exit (from
-			// uninterruptible sleep state), or timeout.
-			start := time.Now()
-
+			// uninterruptible sleep state).
 			for {
-				if time.Since(start) > CONTAINER_KILL_TIMEOUT {
-					err = fmt.Errorf("container kill timeout")
-					log.Errorln(err)
-					vm.setError(err)
-					break
-				}
 				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
 				if err != nil {
 					log.Errorln(err)
