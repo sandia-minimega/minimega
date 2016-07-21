@@ -112,7 +112,7 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 
 	vm := vms.FindVM(vmName)
 	if vm == nil {
-		return fmt.Errorf("no such vm %v", vmName)
+		return vmNotFound(vmName)
 	}
 
 	if vmName != "" && len(c.BoolArgs) == 0 { // a summary of a specific router
