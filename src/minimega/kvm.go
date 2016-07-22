@@ -62,7 +62,7 @@ type KvmVM struct {
 	q   qmp.Conn // qmp connection for this vm
 }
 
-// Ensure that vmKVM implements the VM interface
+// Ensure that KvmVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
 
 type qemuOverride struct {
@@ -115,6 +115,21 @@ func NewKVM(name string) (*KvmVM, error) {
 	vm.hotplug = make(map[int]string)
 
 	return vm, nil
+}
+
+func (vm *KvmVM) Copy() VM {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm2 := new(KvmVM)
+
+	// Make shallow copies of all fields
+	*vm2 = *vm
+
+	// Make deep copies
+	vm2.KVMConfig = vm.KVMConfig.Copy()
+
+	return vm2
 }
 
 // Launch a new KVM VM.

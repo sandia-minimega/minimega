@@ -596,6 +596,21 @@ func NewContainer(name string) (*ContainerVM, error) {
 	return vm, nil
 }
 
+func (vm *ContainerVM) Copy() VM {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm2 := new(ContainerVM)
+
+	// Make shallow copies of all fields
+	*vm2 = *vm
+
+	// Make deep copies
+	vm2.ContainerConfig = vm.ContainerConfig.Copy()
+
+	return vm2
+}
+
 func (vm *ContainerVM) Launch() error {
 	defer vm.lock.Unlock()
 
