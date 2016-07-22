@@ -83,12 +83,13 @@ func main() {
 	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
 	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 
+	logSetup()
+
 	// see containerShim()
-	if flag.NArg() > 1 && flag.Arg(1) == CONTAINER_MAGIC {
+	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
 		containerShim()
 	}
 
-	logSetup()
 	cliSetup()
 
 	if *f_cli {

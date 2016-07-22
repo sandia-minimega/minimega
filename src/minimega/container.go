@@ -332,21 +332,20 @@ func containerTeardown() {
 // 	8: stderr
 //
 // A number of arguments are passed on flag.Args to configure the container:
-//	0 :  minimega binary
-// 	1 :  CONTAINER
-//	2 :  instance path
-//	3 :  vm id
-//	4 :  hostname ("CONTAINER_NONE" if none)
-//	5 :  filesystem path
-//	6 :  memory in megabytes
-//	7 :  uuid
-//	8 :  number of fifos
-//	9 :  preinit program
-//	10:  init program (relative to filesystem path)
-//	11:  init args
+// 	0 :  CONTAINER
+//	1 :  instance path
+//	2 :  vm id
+//	3 :  hostname ("CONTAINER_NONE" if none)
+//	4 :  filesystem path
+//	5 :  memory in megabytes
+//	6 :  uuid
+//	7 :  number of fifos
+//	8 :  preinit program
+//	9 :  init program (relative to filesystem path)
+//	10:  init args
 func containerShim() {
 	args := flag.Args()
-	if len(args) < 11 { // 11 because init args can be nil
+	if flag.NArg() < 10 { // 10 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -371,27 +370,27 @@ func containerShim() {
 	}
 
 	// get args
-	vmInstancePath := args[2]
-	vmID, err := strconv.Atoi(args[3])
+	vmInstancePath := args[1]
+	vmID, err := strconv.Atoi(args[2])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmHostname := args[4]
+	vmHostname := args[3]
 	if vmHostname == CONTAINER_NONE {
 		vmHostname = ""
 	}
-	vmFSPath := args[5]
-	vmMemory, err := strconv.Atoi(args[6])
+	vmFSPath := args[4]
+	vmMemory, err := strconv.Atoi(args[5])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmUUID := args[7]
-	vmFifos, err := strconv.Atoi(args[8])
+	vmUUID := args[6]
+	vmFifos, err := strconv.Atoi(args[7])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmPreinit := args[9]
-	vmInit := args[10:]
+	vmPreinit := args[8]
+	vmInit := args[9:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
