@@ -93,6 +93,9 @@ type VM interface {
 	UpdateQos(uint, bridge.QosOption) error
 	ClearQos(uint) error
 	ClearAllQos() error
+
+	// Make a deep copy that shouldn't be used for anything but reads
+	Copy() VM
 }
 
 // BaseConfig contains all fields common to all VM types.
