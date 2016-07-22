@@ -445,7 +445,13 @@ func (s *Server) responseHandler() {
 			c.MAC = cin.MAC
 			c.Checkin = time.Now()
 			c.Processes = cin.Processes
-			s.updateTags(cin.UUID, cin.Tags)
+			if vm, ok := s.vms[cin.UUID]; ok {
+				for k, v := range cin.Tags {
+					vm.SetTag(k, v)
+				}
+			} else {
+				log.Errorln("no registered vm %v", cin.UUID)
+			}
 		} else {
 			log.Error("unknown client %v", cin.UUID)
 			s.clientLock.Unlock()
