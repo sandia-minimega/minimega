@@ -40,12 +40,11 @@ type Server struct {
 	commandCounterLock sync.Mutex
 	clients            map[string]*Client // map of active clients, each of which have a running handler
 	clientLock         sync.Mutex
-	vms                map[string]VM                   // map of uuid -> VM
-	in                 chan *Message                   // incoming message queue, consumed by the mux
-	path               string                          // path for serving files
-	lastBroadcast      time.Time                       // watchdog time of last command list broadcast
-	responses          chan *Client                    // queue of incoming responses, consumed by the response processor
-	updateTags         func(string, map[string]string) // callback into minimega to update tags sent by the client
+	vms                map[string]VM // map of uuid -> VM
+	in                 chan *Message // incoming message queue, consumed by the mux
+	path               string        // path for serving files
+	lastBroadcast      time.Time     // watchdog time of last command list broadcast
+	responses          chan *Client  // queue of incoming responses, consumed by the response processor
 }
 
 type Client struct {
@@ -96,6 +95,7 @@ type VM interface {
 	GetNamespace() string
 	GetTags() map[string]string
 	SetCCActive(bool)
+	SetTag(string, string)
 }
 
 type Message struct {
@@ -110,7 +110,7 @@ type Message struct {
 }
 
 // NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string, updateTags func(string, map[string]string)) (*Server, error) {
+func NewServer(port int, path string) (*Server, error) {
 	s := &Server{
 		serialConns:   make(map[string]net.Conn),
 		udsConns:      make(map[string]net.Listener),
@@ -121,7 +121,6 @@ func NewServer(port int, path string, updateTags func(string, map[string]string)
 		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
-		updateTags:    updateTags,
 	}
 	err := s.Start(port)
 	if err != nil {
