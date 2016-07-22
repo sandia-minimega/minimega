@@ -314,7 +314,11 @@ func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 		go func(name string) {
 			defer wg.Done()
 
-			out <- vm.Launch()
+			err := vm.Launch()
+			if err == nil {
+				ccNode.RegisterVM(vm.GetUUID(), vm)
+			}
+			out <- err
 		}(name)
 	}
 

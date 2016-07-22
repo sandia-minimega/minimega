@@ -236,8 +236,6 @@ func init() {
 	for _, fns := range containerConfigFns {
 		fns.Clear(&vmConfig.ContainerConfig)
 	}
-	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
-	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 }
 
 var (
@@ -254,6 +252,10 @@ func containerInit() error {
 		return nil
 	}
 	containerInitOnce = true
+
+	// Set the globals now that flags have been parsed
+	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
+	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 
 	// mount our own cgroup namespace to avoid having to ever ever ever
 	// deal with systemd
@@ -770,8 +772,6 @@ func (vm *ContainerVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
-		ccNode.RegisterVM(vm.UUID, vm)
-
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
@@ -1003,16 +1003,8 @@ func (vm *ContainerVM) launch() error {
 			}
 
 			// wait for the taskset to actually exit (from
-			// uninterruptible sleep state), or timeout.
-			start := time.Now()
-
+			// uninterruptible sleep state).
 			for {
-				if time.Since(start) > CONTAINER_KILL_TIMEOUT {
-					err = fmt.Errorf("container kill timeout")
-					log.Errorln(err)
-					vm.setError(err)
-					break
-				}
 				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
 				if err != nil {
 					log.Errorln(err)
