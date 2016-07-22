@@ -604,6 +604,9 @@ func (vm *ContainerVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
+	// We copied a locked VM so we have to unlock it too...
+	defer vm2.lock.Unlock()
+
 	// Make deep copies
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
@@ -678,6 +681,9 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	if v, err := vm.BaseVM.info(mask); err == nil {
 		return v, nil
 	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	// If it's a configurable field, use the Print fn.
 	if fns, ok := containerConfigFns[mask]; ok {
