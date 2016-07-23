@@ -178,22 +178,3 @@ func ipAdd(idx int, ip string) error {
 
 	return nil
 }
-
-func findEth(idx int) (string, error) {
-	var ethNames []string
-	dirs, err := ioutil.ReadDir("/sys/class/net")
-	if err != nil {
-		return "", err
-	} else {
-		for _, n := range dirs {
-			if n.Name() == "lo" {
-				continue
-			}
-			ethNames = append(ethNames, n.Name())
-		}
-	}
-	if idx < len(ethNames) {
-		return ethNames[idx], nil
-	}
-	return "", fmt.Errorf("no such network")
-}
