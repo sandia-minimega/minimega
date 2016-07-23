@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -253,10 +254,6 @@ func containerInit() error {
 	}
 	containerInitOnce = true
 
-	// Set the globals now that flags have been parsed
-	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
-	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
-
 	// mount our own cgroup namespace to avoid having to ever ever ever
 	// deal with systemd
 	log.Debug("cgroup mkdir: %v", CGROUP_ROOT)
@@ -334,21 +331,21 @@ func containerTeardown() {
 // 	7: stdout
 // 	8: stderr
 //
-// A number of arguments are passed on os.Args to configure the container:
-//	0 :  minimega binary
-// 	1 :  CONTAINER
-//	2 :  instance path
-//	3 :  vm id
-//	4 :  hostname ("CONTAINER_NONE" if none)
-//	5 :  filesystem path
-//	6 :  memory in megabytes
-//	7 :  uuid
-//	8 :  number of fifos
-//	9 :  preinit program
-//	10:  init program (relative to filesystem path)
-//	11:  init args
+// A number of arguments are passed on flag.Args to configure the container:
+// 	0 :  CONTAINER
+//	1 :  instance path
+//	2 :  vm id
+//	3 :  hostname ("CONTAINER_NONE" if none)
+//	4 :  filesystem path
+//	5 :  memory in megabytes
+//	6 :  uuid
+//	7 :  number of fifos
+//	8 :  preinit program
+//	9 :  init program (relative to filesystem path)
+//	10:  init args
 func containerShim() {
-	if len(os.Args) < 11 { // 11 because init args can be nil
+	args := flag.Args()
+	if flag.NArg() < 10 { // 10 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -356,7 +353,7 @@ func containerShim() {
 	logFile := os.NewFile(uintptr(3), "")
 	log.AddLogger("file", logFile, log.DEBUG, false)
 
-	log.Debug("containerShim: %v", os.Args)
+	log.Debug("containerShim: %v", args)
 
 	// dup2 stdio
 	err := syscall.Dup2(6, syscall.Stdin)
@@ -373,27 +370,27 @@ func containerShim() {
 	}
 
 	// get args
-	vmInstancePath := os.Args[2]
-	vmID, err := strconv.Atoi(os.Args[3])
+	vmInstancePath := args[1]
+	vmID, err := strconv.Atoi(args[2])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmHostname := os.Args[4]
+	vmHostname := args[3]
 	if vmHostname == CONTAINER_NONE {
 		vmHostname = ""
 	}
-	vmFSPath := os.Args[5]
-	vmMemory, err := strconv.Atoi(os.Args[6])
+	vmFSPath := args[4]
+	vmMemory, err := strconv.Atoi(args[5])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmUUID := os.Args[7]
-	vmFifos, err := strconv.Atoi(os.Args[8])
+	vmUUID := args[6]
+	vmFifos, err := strconv.Atoi(args[7])
 	if err != nil {
 		log.Fatalln(err)
 	}
-	vmPreinit := os.Args[9]
-	vmInit := os.Args[10:]
+	vmPreinit := args[8]
+	vmInit := args[9:]
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -607,6 +604,9 @@ func (vm *ContainerVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
+	// We copied a locked VM so we have to unlock it too...
+	defer vm2.lock.Unlock()
+
 	// Make deep copies
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
@@ -681,6 +681,9 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	if v, err := vm.BaseVM.info(mask); err == nil {
 		return v, nil
 	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
 
 	// If it's a configurable field, use the Print fn.
 	if fns, ok := containerConfigFns[mask]; ok {
@@ -870,6 +873,8 @@ func (vm *ContainerVM) launch() error {
 	}
 	args := []string{
 		os.Args[0],
+		"-base",
+		*f_base,
 		CONTAINER_MAGIC,
 		vm.instancePath,
 		fmt.Sprintf("%v", vm.ID),

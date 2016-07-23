@@ -644,14 +644,14 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 
 // info returns information about the VM for the provided key.
 func (vm *BaseVM) info(key string) (string, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	if fns, ok := baseConfigFns[key]; ok {
 		return fns.Print(&vm.BaseConfig), nil
 	}
 
 	var vals []string
-
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
 
 	switch key {
 	case "id":
