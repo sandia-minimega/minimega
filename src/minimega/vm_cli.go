@@ -723,10 +723,7 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 		max = v
 	}
 
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
+	vm := vms.FindVM(c.StringArgs["vm"])
 
 	data, err := vm.Screenshot(max)
 	if err != nil {

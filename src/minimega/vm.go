@@ -64,6 +64,8 @@ type VM interface {
 	String() string
 	Info(string) (string, error)
 
+	Screenshot(int) ([]byte, error)
+
 	Tag(string) string          // Tag gets the value of the given tag
 	SetTag(string, string)      // SetTag updates the given tag
 	GetTags() map[string]string // GetTags returns a copy of the tags
