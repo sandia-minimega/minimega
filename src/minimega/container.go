@@ -739,7 +739,7 @@ func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
 }
 
 func (vm *ContainerVM) Screenshot(size int) ([]byte, error) {
-	return nil, errors.New("Cannot take screenshot of container")
+	return nil, errors.New("cannot take screenshot of container")
 }
 
 func (vm *ContainerConfig) String() string {
