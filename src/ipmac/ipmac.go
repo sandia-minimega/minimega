@@ -68,8 +68,11 @@ func (iml *IPMacLearner) AddMac(mac string, out chan IP) {
 func (iml *IPMacLearner) DelMac(mac string) {
 	iml.lock.Lock()
 	defer iml.lock.Unlock()
-	close(iml.pairs[mac])
-	delete(iml.pairs, mac)
+
+	if c, ok := iml.pairs[mac]; ok {
+		close(c)
+		delete(iml.pairs, mac)
+	}
 }
 
 // Remove all MAC addresses from the search list.
