@@ -120,7 +120,6 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 			err = p.Inject(c.StringArgs["cmd"])
 		}
 	}
-
 	return err
 }
 

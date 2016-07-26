@@ -94,8 +94,18 @@ func NewChan(in chan Event) *Chan {
 	return c
 }
 
-func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
+func (v *vncKBPlayback) playEvents() {
+	for {
+		e, more := <-v.out
+		if more {
+			v.err = e.Write(v.Conn)
+		} else {
+			return
+		}
+	}
+}
 
+func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 	kbp := &vncKBPlayback{
 		vncClient: c,
 		duration:  getDuration(pr.file.Name()),
@@ -104,7 +114,6 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 		step:      make(chan bool),
 		state:     Play,
 	}
-
 	return kbp
 }
 
@@ -135,23 +144,10 @@ func vncPlaybackKB(host, vm, filename string) error {
 	}
 
 	p := NewVncKbPlayback(c, pr)
-
 	vncKBPlaying[c.Rhost] = p
 
 	go p.Play()
-
 	return nil
-}
-
-func (v *vncKBPlayback) playEvents() {
-	for {
-		e, more := <-v.out
-		if more {
-			v.err = e.Write(v.Conn)
-		} else {
-			return
-		}
-	}
 }
 
 func (v *vncKBPlayback) playFile() {
@@ -165,15 +161,21 @@ outerLoop:
 			v.file = pr.file
 
 			for pr.scanner.Scan() && v.err == nil {
+				// Parse the event
 				s := strings.SplitN(pr.scanner.Text(), ":", 2)
+				res, err := v.parseEvent(s[1])
+				if err != nil {
+					log.Error("invalid vnc message: `%s`", s[1])
+					continue
+				}
 
-				// Comment
+				// Ignore comments
 				if s[0] == "#" {
 					log.Info("vncplayback: %s", s)
 					continue
 				}
 
-				// Set the current event
+				// Set the current event context
 				v.e = pr.scanner.Text()
 
 				duration, err := time.ParseDuration(s[0] + "ns")
@@ -190,13 +192,6 @@ outerLoop:
 				case <-wait:
 				case <-v.step:
 					// TODO fix time
-				}
-
-				// Get the event
-				res, err := v.parseEvent(s[1])
-				if err != nil {
-					log.Error("invalid vnc message: `%s`", s[1])
-					continue
 				}
 
 				switch event := res.(type) {
@@ -266,7 +261,7 @@ func (v *vncKBPlayback) parseEvent(cmd string) (interface{}, error) {
 	} else if res, err = ParseLoadFileEvent(cmd); err == nil {
 		return res, err
 	} else {
-		return nil, err
+		return nil, errors.New("invalid event specified")
 	}
 }
 
@@ -283,6 +278,9 @@ func ParseLoadFileEvent(arg string) (string, error) {
 }
 
 func (v *vncKBPlayback) Play() {
+	v.Lock()
+	defer v.Unlock()
+
 	err := (&vnc.SetEncodings{
 		Encodings: []int32{vnc.CursorPseudoEncoding},
 	}).Write(v.Conn)
@@ -291,9 +289,6 @@ func (v *vncKBPlayback) Play() {
 		log.Error("unable to set encodings: %v", err)
 		return
 	}
-
-	v.Lock()
-	defer v.Unlock()
 
 	v.state = Play
 	go v.playEvents()
@@ -305,7 +300,7 @@ func (v *vncKBPlayback) Step() error {
 	defer v.Unlock()
 
 	if v.state != Play {
-		return errors.New("kbplayback currently paused, use continue")
+		return errors.New("kbplayback currently paused, use continue to resume")
 	}
 
 	select {
