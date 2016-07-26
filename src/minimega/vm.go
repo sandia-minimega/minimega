@@ -721,7 +721,7 @@ func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
-	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
+	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}
@@ -754,7 +754,7 @@ func (vm *BaseVM) writeTaps() error {
 		taps = append(taps, net.Tap)
 	}
 
-	f := filepath.Join(vm.instancePath, "taps")
+	f := vm.path("taps")
 	if err := ioutil.WriteFile(f, []byte(strings.Join(taps, "\n")), 0666); err != nil {
 		return fmt.Errorf("write instance taps file: %v", err)
 	}
@@ -784,6 +784,11 @@ func (vm *BaseVM) conflicts(vm2 BaseVM) error {
 	}
 
 	return nil
+}
+
+// path joins instancePath with provided path
+func (vm *BaseVM) path(s string) string {
+	return filepath.Join(vm.instancePath, s)
 }
 
 // inNamespace tests whether vm is part of active namespace, if there is one.

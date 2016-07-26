@@ -416,7 +416,7 @@ func (vm *KvmVM) connectQMP() (err error) {
 	delay := QMP_CONNECT_DELAY * time.Millisecond
 
 	for count := 0; count < QMP_CONNECT_RETRY; count++ {
-		vm.q, err = qmp.Dial(vm.qmpPath())
+		vm.q, err = qmp.Dial(vm.path("qmp"))
 		if err == nil {
 			log.Debug("qmp dial to %v successful", vm.ID)
 			return
@@ -445,8 +445,8 @@ func (vm *KvmVM) launch() error {
 
 	// write the config for this vm
 	config := vm.BaseConfig.String() + vm.KVMConfig.String()
-	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
-	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
+	writeOrDie(vm.path("config"), config)
+	writeOrDie(vm.path("name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
@@ -542,7 +542,7 @@ func (vm *KvmVM) launch() error {
 	go qmpLogger(vm.ID, vm.q)
 
 	// connect cc
-	ccPath := filepath.Join(vm.instancePath, "cc")
+	ccPath := vm.path("cc")
 	if err := ccNode.DialSerial(ccPath); err != nil {
 		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 	}
@@ -561,11 +561,6 @@ func (vm *KvmVM) launch() error {
 	}()
 
 	return nil
-}
-
-// return the path to the qmp socket
-func (vm *KvmVM) qmpPath() string {
-	return filepath.Join(vm.instancePath, "qmp")
 }
 
 // build the horribly long qemu argument string

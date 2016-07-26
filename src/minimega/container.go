@@ -792,8 +792,8 @@ func (vm *ContainerVM) launch() error {
 
 	// write the config for this vm
 	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
-	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
-	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
+	writeOrDie(vm.path("config"), config)
+	writeOrDie(vm.path("name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
 	// to mimic stdio, and a fourth pipe for logging before the child execs
@@ -839,12 +839,12 @@ func (vm *ContainerVM) launch() error {
 
 	// create the uuid path that will bind mount into sysfs in the
 	// container
-	uuidPath := filepath.Join(vm.instancePath, "uuid")
+	uuidPath := vm.path("uuid")
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
 	for i := 0; i < vm.Fifos; i++ {
-		p := filepath.Join(vm.instancePath, fmt.Sprintf("fifo%v", i))
+		p := vm.path(fmt.Sprintf("fifo%v", i))
 		if err = syscall.Mkfifo(p, 0660); err != nil {
 			log.Error("fifo: %v", err)
 			vm.setError(err)
@@ -1127,8 +1127,8 @@ func (vm *ContainerVM) unlinkNetns() error {
 // create an overlay mount (linux 3.18 or greater) is snapshot mode is
 // being used.
 func (vm *ContainerVM) overlayMount() error {
-	vm.effectivePath = filepath.Join(vm.instancePath, "fs")
-	workPath := filepath.Join(vm.instancePath, "fs_work")
+	vm.effectivePath = vm.path("fs")
+	workPath := vm.path("fs_work")
 
 	err := os.MkdirAll(vm.effectivePath, 0755)
 	if err != nil {
@@ -1169,7 +1169,7 @@ func (vm *ContainerVM) overlayUnmount() error {
 }
 
 func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
-	socketPath := filepath.Join(vm.instancePath, "console")
+	socketPath := vm.path("console")
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
 		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
