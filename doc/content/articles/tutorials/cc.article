@@ -260,3 +260,13 @@ For example, to tunnel local port 4444 on each client to a web server reachable
 from the minimega host:
 
 	minimega$ cc rtunnel 4444 myserver 80
+
+* Tags
+
+The `miniccc` client can add tags to the info for the VM the client is running
+on. This enables third party tools to upstream information about a VM to
+minimega via miniccc. Tags are key/value pairs, and are added simply by using
+the `-tag` switch on a running `miniccc` instance. 
+
+    ./miniccc -tag foo bar
+

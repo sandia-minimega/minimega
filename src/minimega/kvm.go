@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"ipmac"
 	"math/rand"
@@ -61,7 +62,7 @@ type KvmVM struct {
 	q   qmp.Conn // qmp connection for this vm
 }
 
-// Ensure that vmKVM implements the VM interface
+// Ensure that KvmVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
 
 type qemuOverride struct {
@@ -103,7 +104,7 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func NewKVM(name string) *KvmVM {
+func NewKVM(name string) (*KvmVM, error) {
 	vm := new(KvmVM)
 
 	vm.BaseVM = *NewBaseVM(name)
@@ -113,7 +114,25 @@ func NewKVM(name string) *KvmVM {
 
 	vm.hotplug = make(map[int]string)
 
-	return vm
+	return vm, nil
+}
+
+func (vm *KvmVM) Copy() VM {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm2 := new(KvmVM)
+
+	// Make shallow copies of all fields
+	*vm2 = *vm
+
+	// We copied a locked VM so we have to unlock it too...
+	defer vm2.lock.Unlock()
+
+	// Make deep copies
+	vm2.KVMConfig = vm.KVMConfig.Copy()
+
+	return vm2
 }
 
 // Launch a new KVM VM.
@@ -222,12 +241,64 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 		return v, nil
 	}
 
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	// If it's a configurable field, use the Print fn.
 	if fns, ok := kvmConfigFns[mask]; ok {
 		return fns.Print(&vm.KVMConfig), nil
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
+}
+
+func (vm *KvmVM) SaveConfig(w io.Writer) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	cmds := []string{"clear vm config"}
+	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
+	cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
+
+	// Build launch string, make sure to preserve namespace if set
+	format := "vm launch %v %v"
+	if vm.Namespace != "" {
+		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
+	}
+	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
+	cmds = append(cmds, "", "") // add a blank line
+
+	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
+	return err
+}
+
+func (vm *KvmVM) Conflicts(vm2 VM) error {
+	switch vm2 := vm2.(type) {
+	case *KvmVM:
+		return vm.ConflictsKVM(vm2)
+	case *ContainerVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	}
+
+	return errors.New("unknown VM type")
+}
+
+// ConflictsKVM tests whether vm and vm2 share a disk and returns an
+// error if one of them is not running in snapshot mode. Also checks
+// whether the BaseVMs conflict.
+func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, d := range vm.DiskPaths {
+		for _, d2 := range vm2.DiskPaths {
+			if d == d2 && (!vm.Snapshot || !vm2.Snapshot) {
+				return fmt.Errorf("disk conflict with vm %v: %v", vm.Name, d)
+			}
+		}
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
 }
 
 func (vm *KVMConfig) String() string {
@@ -367,15 +438,14 @@ func (vm *KvmVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check and create a directory for it.
 	if vm.State == VM_BUILDING {
-		ccNode.RegisterVM(vm.UUID, vm)
-
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			teardownf("unable to create VM dir: %v", err)
 		}
 	}
 
 	// write the config for this vm
-	writeOrDie(filepath.Join(vm.instancePath, "config"), vm.Config().String())
+	config := vm.BaseConfig.String() + vm.KVMConfig.String()
+	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
 	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
@@ -390,7 +460,7 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		net.Tap, err = br.CreateTap(net.Tap, net.VLAN, false)
+		net.Tap, err = br.CreateTap(net.Tap, net.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
@@ -479,7 +549,6 @@ func (vm *KvmVM) launch() error {
 
 	// Create goroutine to wait to kill the VM
 	go func() {
-		sendKillAck := false
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -487,10 +556,6 @@ func (vm *KvmVM) launch() error {
 			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
-			sendKillAck = true // wait to ack until we've cleaned up
-		}
-
-		if sendKillAck {
 			killAck <- vm.ID
 		}
 	}()

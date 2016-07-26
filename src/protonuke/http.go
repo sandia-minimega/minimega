@@ -66,10 +66,10 @@ func httpClient(protocol string) {
 		},
 	}
 
-	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		// TODO: max client read timeouts configurable?
+		//Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -113,10 +113,10 @@ func httpTLSClient(protocol string) {
 		transport.TLSClientConfig.MaxVersion = version
 	}
 
-	// TODO: max client read timeouts configurable?
 	client := &http.Client{
 		Transport: transport,
-		Timeout:   30 * time.Second,
+		// TODO: max client read timeouts configurable?
+		//Timeout:   30 * time.Second,
 	}
 
 	for {
@@ -338,6 +338,7 @@ func httpServer(p string) {
 		Addr:    ":http",
 		Handler: nil,
 	}
+	server.SetKeepAlivesEnabled(false)
 
 	conn, err := net.Listen(p, ":http")
 	if err != nil {
@@ -359,6 +360,8 @@ func httpTLSServer(p string) {
 		Addr:    ":https",
 		Handler: nil,
 	}
+	server.SetKeepAlivesEnabled(false)
+
 	config := &tls.Config{}
 	if config.NextProtos == nil {
 		config.NextProtos = []string{"http/1.1"}
@@ -476,7 +479,7 @@ var htmlsrc = `
 <p>request URI: {{.URI}}</p>
 
 <p>
-{{range $v := .URLs}} 
+{{range $v := .URLs}}
 <a href="http{{if $.Secure}}s{{end}}://{{$.Host}}/{{$v}}">{{$v}}</a><br>
 {{end}}
 </p>

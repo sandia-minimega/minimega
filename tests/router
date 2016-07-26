@@ -1,0 +1,122 @@
+# router interfaces
+vm config net 100 200
+vm config filesystem minirouterfs
+vm launch container vm0
+vm start all
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+router vm0 interface 1 5.6.7.8/16
+.annotate false router vm0
+clear router vm0 interface 0 1.2.3.4/24
+.annotate false router vm0
+clear router vm0 interface 1 5.6.7.8/24
+.annotate false router vm0
+clear router vm0 interface 1 5.6.7.8/16
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 1 5.6.7.8/16
+clear router vm0 interface 0
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+clear router vm0 interface
+.annotate false router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 dhcp
+router vm0 interface 1 5.6.7.8/16
+clear router vm0
+.annotate false router vm0
+
+# router commit
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 1 5.6.7.8/24
+router vm0 commit
+.annotate false shell cat /tmp/minimega/files/minirouter-0
+
+# check on interface ips
+shell sleep 15
+cc background ping -c 1 1.2.3.5
+cc background ping -c 1 5.6.7.9
+shell sleep 15
+.annotate false .columns ip vm info
+
+# router dhcp
+clear router vm0
+router vm0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+router vm0 dhcp 1.2.3.4 router 1.2.3.1
+router vm0 dhcp 1.2.3.4 dns 8.8.8.8
+router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:55 1.2.3.66
+router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56 1.2.3.67
+router vm0 dhcp 5.6.7.8 range 1.1.1.1 1.1.1.2
+.annotate false router vm0
+router vm0 dhcp 5.6.7.8 static 00:11:22:33:44:60 5.6.7.9
+.annotate false router vm0
+clear router vm0 dhcp 1.2.3.4 router
+.annotate false router vm0
+clear router vm0 dhcp 1.2.3.4 dns
+.annotate false router vm0
+clear router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56
+.annotate false router vm0
+clear router vm0 dhcp 1.2.3.4 static
+.annotate false router vm0
+clear router vm0 dhcp 1.2.3.4 range
+.annotate false router vm0
+clear router vm0 dhcp 5.6.7.8
+.annotate false router vm0
+
+vm config net 100,00:1f:53:02:0b:51 200
+vm config tag vm1 vm1
+vm launch container vm1
+vm start all
+
+clear router vm0
+router vm0 interface 0 1.2.3.4/24
+router vm0 interface 0 5.6.7.8/24
+router 0 dhcp 1.2.3.4 router 1.2.3.254
+router 0 dhcp 1.2.3.4 dns 1.2.3.4
+router 0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+router 0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
+router vm0 commit
+.annotate false shell cat /tmp/minimega/files/minirouter-0
+
+cc filter tag=vm1=vm1
+cc exec dhclient -v veth0
+clear cc filter
+shell sleep 30
+.annotate false .columns ip .filter name=vm1 vm info
+
+# dns and dynamic updates
+router vm0 dns 1.1.1.1 foo.com
+router vm0 dns 2.2.2.2 bar.com
+router vm0 dns 3.3.3.3 foobar.com
+.annotate false router vm0
+clear router vm0 dns 1.1.1.1
+.annotate false router vm0
+clear router vm0 dns
+.annotate false router vm0
+router vm0 dns 1.1.1.1 foo.com
+router vm0 dns 2.2.2.2 bar.com
+router vm0 commit
+.annotate false shell cat /tmp/minimega/files/minirouter-0
+shell sleep 15
+clear cc responses
+cc filter tag=vm1=vm1
+cc exec nslookup foo.com 1.2.3.4
+cc exec nslookup bar.com 1.2.3.4
+shell sleep 30
+.annotate false cc response 13 raw
+.annotate false cc response 14 raw
+
+# router advertisements
+router vm0 interface 0 2001:1::1/64
+router vm0 ra 2001:1::
+router vm0 ra 2001:2::
+.annotate false router vm0
+clear router vm0 ra 2001:2::
+.annotate false router vm0
+clear router vm0 ra 
+.annotate false router vm0
+router vm0 ra 2001:1::
+router vm0 commit
+.annotate false shell cat /tmp/minimega/files/minirouter-0
+# we don't have a reliable way to test SLAAC addressing so we don't do it

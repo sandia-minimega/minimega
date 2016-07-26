@@ -67,15 +67,17 @@ type Client struct {
 	MAC      []string
 
 	Namespace string
-	Tags      map[string]string
+
+	Tags map[string]string
 
 	Processes   map[int]*Process // list of processes backgrounded (cc background in minimega)
 	processLock sync.Mutex
 
 	Version string
 
-	Responses    []*Response // response queue, consumed and cleared by the heartbeat
-	responseLock sync.Mutex
+	Responses []*Response // response queue, consumed and cleared by the heartbeat
+
+	lock sync.Mutex // lock for ephemeral data to send up (responses, new tags)
 
 	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
 	lastHeartbeat time.Time             // last heartbeat watchdog time
@@ -93,6 +95,7 @@ type VM interface {
 	GetNamespace() string
 	GetTags() map[string]string
 	SetCCActive(bool)
+	SetTag(string, string)
 }
 
 type Message struct {
@@ -146,6 +149,7 @@ func NewClient(family string, port int, parent, serial, path string) (*Client, e
 		lastHeartbeat: time.Now(),
 		files:         make(chan *Message, 1024),
 		Processes:     make(map[int]*Process),
+		Tags:          make(map[string]string),
 	}
 
 	if serial != "" {

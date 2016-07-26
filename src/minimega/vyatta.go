@@ -133,6 +133,8 @@ func init() {
 }
 
 func cliVyatta(c *minicli.Command, resp *minicli.Response) error {
+	log.Warnln("the vyatta API is deprecated and will be removed in a future release")
+
 	if c.BoolArgs["dhcp"] {
 		net := c.StringArgs["network"]
 

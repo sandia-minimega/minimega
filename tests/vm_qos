@@ -1,0 +1,31 @@
+.annotate false
+
+vm config net 100
+vm launch kvm vm0
+
+qos add vm0 0 loss 5
+.columns qos vm info
+
+qos add vm0 0 delay 100ms
+.columns qos vm info
+
+qos add vm0 0 rate 1 mbit
+.columns qos vm info
+
+qos add vm0 0 delay 200ms
+.columns qos vm info
+
+qos add vm0 0 rate 2 mbit
+.columns qos vm info
+
+qos add vm0 0 loss 0.50
+.columns qos vm info
+
+qos add vm0 0 loss 150
+
+qos add vm0 0 delay 100xbit
+
+qos add vm0 100 delay 100ms
+
+clear qos vm0 0
+.column qos vm info

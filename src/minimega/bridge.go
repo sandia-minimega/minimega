@@ -117,7 +117,7 @@ func hostTapCreate(b, tap, v string) (string, error) {
 		return "", err
 	}
 
-	return br.CreateTap(tap, vlan, true)
+	return br.CreateHostTap(tap, vlan)
 }
 
 // hostTapList populates resp with information about all the host taps.

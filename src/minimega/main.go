@@ -75,15 +75,21 @@ func usage() {
 func main() {
 	var err error
 
-	// see containerShim()
-	if len(os.Args) > 1 && os.Args[1] == CONTAINER_MAGIC {
-		containerShim()
-	}
-
 	flag.Usage = usage
 	flag.Parse()
 
+	// Set the container globals based on the parsed args before we invoke the
+	// containerShim, if applicable.
+	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
+	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
+
 	logSetup()
+
+	// see containerShim()
+	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
+		containerShim()
+	}
+
 	cliSetup()
 
 	if *f_cli {

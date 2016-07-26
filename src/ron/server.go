@@ -445,6 +445,13 @@ func (s *Server) responseHandler() {
 			c.MAC = cin.MAC
 			c.Checkin = time.Now()
 			c.Processes = cin.Processes
+			if vm, ok := s.vms[cin.UUID]; ok {
+				for k, v := range cin.Tags {
+					vm.SetTag(k, v)
+				}
+			} else {
+				log.Errorln("no registered vm %v", cin.UUID)
+			}
 		} else {
 			log.Error("unknown client %v", cin.UUID)
 			s.clientLock.Unlock()
@@ -551,10 +558,12 @@ func (s *Server) clientReaper() {
 	for {
 		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
 		log.Debugln("clientReaper")
-		t := time.Now()
+
 		s.clientLock.Lock()
 		for k, v := range s.clients {
-			active := t.Sub(v.Checkin) > time.Duration(CLIENT_EXPIRED*time.Second)
+			// checked in more recently than expiration time
+			active := time.Now().Sub(v.Checkin) < CLIENT_EXPIRED*time.Second
+
 			if !active {
 				log.Debug("client %v expired", k)
 				go s.removeClient(k) // hack: put this in a goroutine to simplify locking

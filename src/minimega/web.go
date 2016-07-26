@@ -260,7 +260,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		config := vm.Config()
+		config := getConfig(vm)
 
 		vmMap := map[string]interface{}{
 			"host":   vm.GetHost(),
