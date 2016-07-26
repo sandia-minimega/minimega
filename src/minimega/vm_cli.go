@@ -724,6 +724,9 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	vm := vms.FindVM(c.StringArgs["vm"])
+	if vm == nil {
+		return errors.New("no such vm")
+	}
 
 	data, err := vm.Screenshot(max)
 	if err != nil {
