@@ -272,6 +272,10 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 			"memory": config.Memory,
 		}
 
+		if vm, ok := vm.(*KvmVM); ok {
+			vmMap["vnc_port"] = vm.VNCPort
+		}
+
 		if config.Networks == nil {
 			vmMap["network"] = make([]int, 0)
 		} else {

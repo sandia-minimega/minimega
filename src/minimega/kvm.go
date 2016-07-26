@@ -62,7 +62,7 @@ type KvmVM struct {
 	q   qmp.Conn // qmp connection for this vm
 
 	vncShim net.Listener // shim for VNC connections
-	vncPort int
+	VNCPort int
 }
 
 // Ensure that KvmVM implements the VM interface
@@ -254,7 +254,7 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 
 	switch mask {
 	case "vnc_port":
-		return strconv.Itoa(vm.vncPort), nil
+		return strconv.Itoa(vm.VNCPort), nil
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
@@ -446,7 +446,7 @@ func (vm *KvmVM) connectVNC() error {
 
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
-	vm.vncPort = l.Addr().(*net.TCPAddr).Port
+	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
 
 	go func() {
 		defer l.Close()
