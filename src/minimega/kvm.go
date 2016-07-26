@@ -15,9 +15,9 @@ import (
 	"ipmac"
 	"math/rand"
 	log "minilog"
+	"net"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"qmp"
 	"strconv"
@@ -60,6 +60,9 @@ type KvmVM struct {
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
+
+	vncShim net.Listener // shim for VNC connections
+	vncPort int
 }
 
 // Ensure that KvmVM implements the VM interface
@@ -249,6 +252,11 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 		return fns.Print(&vm.KVMConfig), nil
 	}
 
+	switch mask {
+	case "vnc_port":
+		return strconv.Itoa(vm.vncPort), nil
+	}
+
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
@@ -430,6 +438,49 @@ func (vm *KvmVM) connectQMP() (err error) {
 	return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
 }
 
+func (vm *KvmVM) connectVNC() error {
+	l, err := net.Listen("tcp", "")
+	if err != nil {
+		return err
+	}
+
+	// Keep track of shim so that we can close it later
+	vm.vncShim = l
+	vm.vncPort = l.Addr().(*net.TCPAddr).Port
+
+	go func() {
+		defer l.Close()
+
+		for {
+			// Sit waiting for new connections
+			remote, err := l.Accept()
+			if err != nil && strings.Contains(err.Error(), "use of closed network connection") {
+				return
+			} else if err != nil {
+				log.Errorln(err)
+				return
+			}
+
+			go func() {
+				defer remote.Close()
+
+				// Dial domain socket
+				local, err := net.Dial("unix", vm.path("vnc"))
+				if err != nil {
+					log.Error("unable to dial vm vnc: %v", err)
+					return
+				}
+				defer local.Close()
+
+				go io.Copy(local, remote)
+				io.Copy(remote, local)
+			}()
+		}
+	}()
+
+	return nil
+}
+
 // launch is the low-level launch function for KVM VMs. The caller should hold
 // the VM's lock.
 func (vm *KvmVM) launch() error {
@@ -528,6 +579,11 @@ func (vm *KvmVM) launch() error {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)
 		}
+
+		// Kill the VNC shim, if it exists
+		if vm.vncShim != nil {
+			vm.vncShim.Close()
+		}
 	}()
 
 	if err := vm.connectQMP(); err != nil {
@@ -540,6 +596,15 @@ func (vm *KvmVM) launch() error {
 	}
 
 	go qmpLogger(vm.ID, vm.q)
+
+	if err := vm.connectVNC(); err != nil {
+		// Failed to connect to vnc so clean up the process
+		cmd.Process.Kill()
+
+		log.Errorln(err)
+		vm.setError(err)
+		return err
+	}
 
 	// connect cc
 	ccPath := vm.path("cc")
@@ -567,15 +632,12 @@ func (vm *KvmVM) launch() error {
 func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	var args []string
 
-	sId := strconv.Itoa(id)
-	qmpPath := path.Join(vmPath, "qmp")
-
 	args = append(args, process("qemu"))
 
 	args = append(args, "-enable-kvm")
 
 	args = append(args, "-name")
-	args = append(args, sId)
+	args = append(args, strconv.Itoa(id))
 
 	args = append(args, "-m")
 	args = append(args, vm.Memory)
@@ -586,7 +648,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "none")
 
 	args = append(args, "-vnc")
-	args = append(args, "0.0.0.0:"+sId) // if we have more than 10000 vnc sessions, we're in trouble
+	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
 	args = append(args, "-usbdevice") // this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "tablet")
@@ -595,7 +657,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, vm.Vcpus)
 
 	args = append(args, "-qmp")
-	args = append(args, "unix:"+qmpPath+",server")
+	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
 
 	args = append(args, "-vga")
 	args = append(args, "cirrus")
@@ -617,7 +679,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	args = append(args, "-pidfile")
-	args = append(args, path.Join(vmPath, "qemu.pid"))
+	args = append(args, filepath.Join(vmPath, "qemu.pid"))
 
 	args = append(args, "-k")
 	args = append(args, "en-us")

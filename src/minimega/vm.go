@@ -154,12 +154,13 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
-	"tags", "qos",
+	"vnc_port", "tags", "qos",
 }
 
 // Valid names for output masks for `vm summary`, in preferred output order
 var vmInfoLite = []string{
 	"id", "name", "state", "namespace", "type", "vlan", "uuid", "cc_active",
+	"vnc_port",
 }
 
 func init() {
