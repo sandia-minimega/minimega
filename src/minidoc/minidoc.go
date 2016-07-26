@@ -7,7 +7,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	log "minilog"
 	"net/http"
 	"present"
@@ -15,7 +14,7 @@ import (
 )
 
 var (
-	f_port     = flag.Int("port", 9003, "HTTP port")
+	f_server   = flag.String("server", ":9003", "HTTP server \"host:port\"")
 	f_root     = flag.String("root", "doc/content/", "HTTP root directory")
 	f_base     = flag.String("base", "doc/template/", "base path for static content and templates")
 	f_exec     = flag.Bool("exec", false, "allow minimega commands")
@@ -44,6 +43,5 @@ func main() {
 		http.Handle("/socket", NewSocketHandler())
 	}
 
-	host := fmt.Sprintf(":%v", *f_port)
-	log.Fatalln(http.ListenAndServe(host, nil))
+	log.Fatalln(http.ListenAndServe(*f_server, nil))
 }

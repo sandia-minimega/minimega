@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"bufio"
 	"bytes"
 	"errors"
@@ -132,22 +133,21 @@ func (vm *KvmVM) Flush() error {
 		// Handle already disconnected taps differently since they aren't
 		// assigned to any bridges.
 		if net.VLAN == DisconnectedVLAN {
-			if err := delTap(net.Tap); err != nil {
+			if err := bridge.DestroyTap(net.Tap); err != nil {
 				log.Error("leaked tap %v: %v", net.Tap, err)
 			}
 
 			continue
 		}
 
-		b, err := getBridge(net.Bridge)
+		br, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
 
-		b.iml.DelMac(net.MAC)
+		br.DelMac(net.MAC)
 
-		err = b.TapDestroy(net.Tap)
-		if err != nil {
+		if err := br.DestroyTap(net.Tap); err != nil {
 			log.Errorln(err)
 		}
 	}
@@ -383,14 +383,14 @@ func (vm *KvmVM) launch() error {
 		net := &vm.Networks[i]
 		log.Info("%#v", net)
 
-		b, err := getBridge(net.Bridge)
+		br, err := getBridge(net.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.setError(err)
 			return err
 		}
 
-		net.Tap, err = b.TapCreate(net.Tap, net.VLAN, false)
+		net.Tap, err = br.CreateTap(net.Tap, net.VLAN, false)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
@@ -400,7 +400,7 @@ func (vm *KvmVM) launch() error {
 		updates := make(chan ipmac.IP)
 		go vm.macSnooper(net, updates)
 
-		b.iml.AddMac(net.MAC, updates)
+		br.AddMac(net.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {

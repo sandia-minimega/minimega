@@ -125,36 +125,6 @@ func cliFile(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-// walk every arg looking for "file:" and calling iomHelper on the suffix.
-// Replace the arg with the local file if found.
-func iomPreprocessor(c *minicli.Command) (*minicli.Command, error) {
-	for k, v := range c.StringArgs {
-		if strings.HasPrefix(v, IOM_HELPER_MATCH) {
-			file := strings.TrimPrefix(v, IOM_HELPER_MATCH)
-			local, err := iomHelper(file)
-			if err != nil {
-				return nil, err
-			}
-			log.Debug("iomPreProcessor: %v -> %v", v, local)
-			c.StringArgs[k] = local
-		}
-	}
-	for k, v := range c.ListArgs {
-		for x, y := range v {
-			if strings.HasPrefix(y, IOM_HELPER_MATCH) {
-				file := strings.TrimPrefix(y, IOM_HELPER_MATCH)
-				local, err := iomHelper(file)
-				if err != nil {
-					return nil, err
-				}
-				log.Debug("iomPreProcessor: %v -> %v", y, local)
-				c.ListArgs[k][x] = local
-			}
-		}
-	}
-	return c, nil
-}
-
 // iomHelper supports grabbing files for internal minimega operations. It
 // returns the local path of the file or an error if the file doesn't exist or
 // could not transfer. iomHelper blocks until all file transfers are completed.

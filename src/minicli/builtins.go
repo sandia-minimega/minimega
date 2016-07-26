@@ -194,7 +194,7 @@ Create a new alias similar to bash aliases. Aliases can be used as a shortcut
 to avoid typing out a long command. Only one alias is applied per command and
 only to the beginning of a command. For example:
 
-.alias vmr=.filter state=running vm info
+ .alias vmr=.filter state=running vm info
 
 The alias is interpreted as the text up to the first "=". Runing .alias without
 any argument will list the existing aliases.
@@ -202,7 +202,7 @@ any argument will list the existing aliases.
 This alias allows the user to type "vmr" rather than the using a filter to list
 the running VMs.
 
-.unalias removes a previously set alias.
+ .unalias removes a previously set alias.
 
 Note: we *strongly* recommend that you avoid aliases, unless you are using the
 shell interactively. Aliases save typing which should not be necessary if you

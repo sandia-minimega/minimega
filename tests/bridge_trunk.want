@@ -1,0 +1,11 @@
+## bridge trunk minitest minitest_tap0
+## .filter bridge=minitest bridge
+Bridge   | Existed before minimega | Active VLANs | Trunk ports     | Tunnels
+minitest | false                   | []           | [minitest_tap0] | []
+## shell ovs-vsctl list-ports minitest
+minitest_tap0
+## bridge notrunk minitest minitest_tap0
+## .filter bridge=minitest bridge
+Bridge   | Existed before minimega | Active VLANs | Trunk ports | Tunnels
+minitest | false                   | []           | []          | []
+## shell ovs-vsctl list-ports minitest

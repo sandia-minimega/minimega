@@ -108,7 +108,8 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
-	Stats  *TapStat // Most recent bandwidth measurements for Tap
+
+	RxRate, TxRate float64 // Most recent bandwidth measurements for Tap
 }
 
 // BaseVM provides the bare-bones for base VM functionality. It implements
@@ -130,12 +131,17 @@ type BaseVM struct {
 	instancePath string
 }
 
-// Valid names for output masks for vm info, in preferred output order
-var vmMasks = []string{
+// Valid names for output masks for `vm info`, in preferred output order
+var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
 	"tags",
+}
+
+// Valid names for output masks for `vm summary`, in preferred output order
+var vmInfoLite = []string{
+	"id", "name", "state", "namespace", "type", "vlan", "uuid", "cc_active",
 }
 
 func init() {
@@ -397,15 +403,19 @@ func (vm *BaseVM) ClearTag(t string) {
 }
 
 func (vm *BaseVM) UpdateBW() {
-	bandwidthLock.Lock()
-	defer bandwidthLock.Unlock()
-
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		net.Stats = bandwidthStats[net.Tap]
+		n := &vm.Networks[i]
+		tap, err := bridges.FindTap(n.Tap)
+		if err != nil {
+			// weird...
+			n.RxRate, n.TxRate = 0, 0
+			continue
+		}
+
+		n.RxRate, n.TxRate = tap.BandwidthStats()
 	}
 }
 
@@ -430,27 +440,27 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 
 	// Do this before disconnecting from the old bridge in case the new one was
 	// mistyped or invalid.
-	newBridge, err := getBridge(bridge)
+	dst, err := getBridge(bridge)
 	if err != nil {
 		return err
 	}
 
 	// Disconnect from the old bridge, if we were connected
 	if net.VLAN != DisconnectedVLAN {
-		oldBridge, err := getBridge(net.Bridge)
+		src, err := getBridge(net.Bridge)
 		if err != nil {
 			return err
 		}
 
-		err = oldBridge.TapRemove(net.Tap)
-		if err != nil {
+		if err := src.RemoveTap(net.Tap); err != nil {
 			return err
 		}
+
+		src.ReapTaps()
 	}
 
 	// Connect to the new bridge
-	err = newBridge.TapAdd(net.Tap, vlan, false)
-	if err != nil {
+	if err := dst.AddTap(net.Tap, vlan, false); err != nil {
 		return err
 	}
 
@@ -478,13 +488,12 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 
 	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
 
-	b, err := getBridge(net.Bridge)
+	br, err := getBridge(net.Bridge)
 	if err != nil {
 		return err
 	}
 
-	err = b.TapRemove(net.Tap)
-	if err != nil {
+	if err := br.RemoveTap(net.Tap); err != nil {
 		return err
 	}
 
@@ -546,11 +555,8 @@ func (vm *BaseVM) info(key string) (string, error) {
 		}
 	case "bandwidth":
 		for _, v := range vm.Networks {
-			if v.Stats == nil {
-				vals = append(vals, "N/A")
-			} else {
-				vals = append(vals, fmt.Sprintf("%v", v.Stats))
-			}
+			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
+			vals = append(vals, s)
 		}
 	case "tags":
 		return vm.TagsString(), nil
