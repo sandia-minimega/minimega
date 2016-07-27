@@ -113,12 +113,13 @@ When you launch a VM, you supply the type of VM in the launch command.
 Currently, the supported VM types are:
 
 - kvm : QEMU-based vms
+- container: Linux containers
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
 naming scheme:
 
-	vm launch foo[0-9]
+	vm launch kvm foo[0-9]
 
 Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
 
