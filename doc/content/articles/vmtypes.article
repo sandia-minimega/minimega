@@ -172,5 +172,8 @@ required for minimega to boot `container` type VMs. On debian based linux hosts
 
 	cgroup_enable=memory
 
-to the kernel boot parameters (in grub or otherwise) to enable the `memory`
-cgroup.
+to the kernel boot parameters (in GRUB or otherwise) to enable the `memory`
+cgroup. To enable this in GRUB on Debian, open /etc/default/grub and edit the
+`GRUB_CMDLINE_LINUX_DEFAULT` line to include the cgroup parameter. Then run
+`update-grub` to update the GRUB config. When you reboot, the cgroup will be
+enabled.

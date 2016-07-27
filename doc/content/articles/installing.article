@@ -86,6 +86,25 @@ If you plan to launch and maintain VMs, you'll need the following programs:
 - ssh/scp
 - kill
 
+*** Grub note
+
+If you intend to run Linux containers, you need to have the `memory`
+cgroup enabled, but Debian (and some other distros) do not enable it by
+default. If you try to start a container and get an error, you may need
+to enable the memory cgroup.
+
+To enable it, add the following to your kernel boot parameters:
+
+	cgroup_enable=memory
+
+On Debian, you can do this by opening /etc/default/grub and adding that
+parameter to the `GRUB_CMDLINE_LINUX_DEFAULT` line. It should end up
+looking something like this:
+
+	GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory"
+
+Then run update-grub and reboot for the change to take effect.
+
 ** Network configuration
 
 (This section is primarily relevant for people running minimega on a cluster)
