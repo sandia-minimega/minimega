@@ -143,7 +143,7 @@ func (mm *Conn) Attach() {
 	var exitNext bool
 	for {
 		prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
-		line, err := goreadline.Rlwrap(prompt, true)
+		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
 			return
 		}

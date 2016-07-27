@@ -352,7 +352,7 @@ func cliLocal() {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
 		}
 
-		line, err := goreadline.Rlwrap(prompt, true)
+		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
 			break // EOF
 		}
