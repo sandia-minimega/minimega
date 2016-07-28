@@ -108,7 +108,7 @@ func Readline(prompt string, record bool) (string, error) {
 	return C.GoString(ret), nil
 }
 
-// Signal resets readline after a signal. Sup
+// Signal resets readline after a signal, restoring it to a fresh prompt.
 func Signal() {
 	// Set event hook to redisplay the screen after the current line is aborted
 	// by maybe_getc.
