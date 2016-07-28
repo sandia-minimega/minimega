@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"syscall"
 )
 
 type Response struct {
@@ -125,10 +126,16 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 func (mm *Conn) Attach() {
 	// set up signal handling
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		for range sig {
-			goreadline.Signal()
+		for s := range sig {
+			if s == os.Interrupt {
+				goreadline.Signal()
+			} else {
+				log.Debug("caught term signal, disconnecting")
+				goreadline.Rlcleanup()
+				os.Exit(0)
+			}
 		}
 	}()
 	defer signal.Stop(sig)
