@@ -12,10 +12,14 @@ package goreadline
 // #include <readline/history.h>
 //
 // extern char** minicomplete(char*, int, int);
+//
+// extern volatile int abort_getc;
+// extern int maybe_getc(FILE*);
+// extern int mini_redisplay(void);
 import "C"
 
 import (
-	"errors"
+	"io"
 	"minicli"
 	log "minilog"
 	"unsafe"
@@ -32,7 +36,9 @@ var (
 func init() {
 	C.rl_catch_sigwinch = 0
 	C.rl_catch_signals = 0
+
 	C.rl_attempted_completion_function = (*C.rl_completion_func_t)(C.minicomplete)
+	C.rl_getc_function = (*C.rl_getc_func_t)(C.maybe_getc)
 }
 
 //export minicomplete
@@ -91,7 +97,7 @@ func Readline(prompt string, record bool) (string, error) {
 
 	ret := C.readline(p)
 	if ret == nil {
-		return "", errors.New("EOF")
+		return "", io.EOF
 	}
 	defer C.free(unsafe.Pointer(ret))
 
@@ -100,6 +106,15 @@ func Readline(prompt string, record bool) (string, error) {
 	}
 
 	return C.GoString(ret), nil
+}
+
+// Signal resets readline after a signal. Sup
+func Signal() {
+	// Set event hook to redisplay the screen after the current line is aborted
+	// by maybe_getc.
+	C.rl_event_hook = (*C.rl_hook_func_t)(C.mini_redisplay)
+
+	C.abort_getc = 1
 }
 
 // Rlcleanup calls the readline rl_deprep_terminal function, restoring the

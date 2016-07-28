@@ -16,7 +16,6 @@ import (
 	"os"
 	"os/signal"
 	"path"
-	"syscall"
 )
 
 type Response struct {
@@ -125,14 +124,14 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 // Attach creates a CLI interface to the dialed minimega instance
 func (mm *Conn) Attach() {
 	// set up signal handling
-	sig := make(chan os.Signal, 1024)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	sig := make(chan os.Signal)
+	signal.Notify(sig, os.Interrupt)
 	go func() {
-		<-sig
-		log.Debug("caught signal, disconnecting")
-		goreadline.Rlcleanup()
-		os.Exit(0)
+		for range sig {
+			goreadline.Signal()
+		}
 	}()
+	defer signal.Stop(sig)
 
 	// start our own rlwrap
 	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
