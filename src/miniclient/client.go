@@ -124,7 +124,7 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 // Attach creates a CLI interface to the dialed minimega instance
 func (mm *Conn) Attach() {
 	// set up signal handling
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	go func() {
 		for range sig {

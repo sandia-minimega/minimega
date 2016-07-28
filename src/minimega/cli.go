@@ -345,7 +345,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 func cliLocal() {
 	goreadline.FilenameCompleter = iomCompleter
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)
 	go func() {
 		for range sig {
