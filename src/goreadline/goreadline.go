@@ -5,7 +5,7 @@
 // Very simple libreadline binding.
 package goreadline
 
-// #cgo LDFLAGS: -lreadline
+// #cgo LDFLAGS: -lreadline -ltermcap
 // #include <stdio.h>
 // #include <stdlib.h>
 // #include <readline/readline.h>
