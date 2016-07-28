@@ -88,9 +88,9 @@ func minicomplete(text *C.char, start, end C.int) **C.char {
 	return (**C.char)(ptr)
 }
 
-// Rlwrap prompts the user with the given prompt string and calls the
-// underlying readline function. If the input stream closes, Rlwrap returns an
-// EOF error.
+// Readline prompts the user with the given prompt string and calls the
+// underlying readline function. If the input stream closes, Readline returns
+// an io.EOF error.
 func Readline(prompt string, record bool) (string, error) {
 	p := C.CString(prompt)
 	defer C.free(unsafe.Pointer(p))

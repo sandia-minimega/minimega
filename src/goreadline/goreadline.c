@@ -1,3 +1,5 @@
+// Copyright (2016) Sandia Corporation.
+
 #include <stdio.h>
 #include <unistd.h>
 #include <sys/select.h>
