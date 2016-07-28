@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"ipmac"
 	log "minilog"
@@ -70,10 +69,6 @@ type VM interface {
 	SetTag(string, string)      // SetTag updates the given tag
 	GetTags() map[string]string // GetTags returns a copy of the tags
 	ClearTag(string)            // ClearTag deletes one or all tags
-
-	// SaveConfig writes the commands to relaunch this VM with the same
-	// config to the io.Writer.
-	SaveConfig(io.Writer) error
 
 	// Conflicts checks whether the VMs have conflicting configs. Called
 	// when we create a VM but before adding it to the list of VMs.

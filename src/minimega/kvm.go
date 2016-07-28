@@ -10,7 +10,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"ipmac"
 	"math/rand"
@@ -250,26 +249,6 @@ func (vm *KvmVM) Info(mask string) (string, error) {
 	}
 
 	return "", fmt.Errorf("invalid mask: %s", mask)
-}
-
-func (vm *KvmVM) SaveConfig(w io.Writer) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	cmds := []string{"clear vm config"}
-	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
-	cmds = append(cmds, saveConfig(kvmConfigFns, &vm.KVMConfig)...)
-
-	// Build launch string, make sure to preserve namespace if set
-	format := "vm launch %v %v"
-	if vm.Namespace != "" {
-		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
-	}
-	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
-	cmds = append(cmds, "", "") // add a blank line
-
-	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
-	return err
 }
 
 func (vm *KvmVM) Conflicts(vm2 VM) error {
