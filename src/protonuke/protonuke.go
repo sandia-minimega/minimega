@@ -16,6 +16,9 @@ import (
 
 var (
 	f_serve         = flag.Bool("serve", false, "act as a server for enabled services")
+	f_dns           = flag.Bool("dns", false, "enable dns service")
+	f_dnsv4         = flag.Bool("dnsv4", false, "dns client only requests type A records")
+	f_dnsv6         = flag.Bool("dnsv6", false, "dns client only requests type AAAA records")
 	f_http          = flag.Bool("http", false, "enable http service")
 	f_https         = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot      = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
@@ -63,7 +66,7 @@ func main() {
 	logSetup()
 
 	// make sure at least one service is enabled
-	if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
+	if !*f_dns && !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -107,6 +110,13 @@ func main() {
 	}
 
 	// start services
+	if *f_dns {
+		if *f_serve {
+			go dnsServer()
+		} else {
+			go dnsClient()
+		}
+	}
 	if *f_http {
 		if *f_serve {
 			go httpServer(protocol)
