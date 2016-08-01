@@ -251,7 +251,7 @@ func (n *Namespace) hostLaunch(host string, queued queuedVM, respChan chan<- min
 		defer close(configChan)
 
 		for _, cmd := range cmds {
-			cmd := minicli.MustCompile(cmd)
+			cmd := minicli.MustCompilef("namespace %q %v", n.Name, cmd)
 			cmd.SetRecord(false)
 			cmd.SetSource(n.Name)
 

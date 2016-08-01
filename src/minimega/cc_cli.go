@@ -342,14 +342,23 @@ func cliCCFileSend(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Add new files to send, expand globs
-	for _, fglob := range c.ListArgs["file"] {
-		files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
+	for _, arg := range c.ListArgs["file"] {
+		if !filepath.IsAbs(arg) {
+			arg = filepath.Join(*f_iomBase, arg)
+		}
+		arg = filepath.Clean(arg)
+
+		if !strings.HasPrefix(arg, *f_iomBase) {
+			return fmt.Errorf("can only send files from %v", *f_iomBase)
+		}
+
+		files, err := filepath.Glob(arg)
 		if err != nil {
-			return fmt.Errorf("non-existent files %v", fglob)
+			return fmt.Errorf("non-existent files %v", arg)
 		}
 
 		if len(files) == 0 {
-			return fmt.Errorf("no such file %v", fglob)
+			return fmt.Errorf("no such file %v", arg)
 		}
 
 		for _, f := range files {
