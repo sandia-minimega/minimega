@@ -693,26 +693,6 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
-func (vm *ContainerVM) SaveConfig(w io.Writer) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	cmds := []string{"clear vm config"}
-	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
-	cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
-
-	// Build launch string, make sure to preserve namespace if set
-	format := "vm launch %v %v"
-	if vm.Namespace != "" {
-		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
-	}
-	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
-	cmds = append(cmds, "", "") // add a blank line
-
-	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
-	return err
-}
-
 func (vm *ContainerVM) Conflicts(vm2 VM) error {
 	switch vm2 := vm2.(type) {
 	case *ContainerVM:

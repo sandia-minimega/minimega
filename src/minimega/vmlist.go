@@ -55,31 +55,6 @@ func (vms VMs) CountAll() int {
 	return len(vms)
 }
 
-// Save the commands to configure the targeted VMs to file.
-func (vms VMs) Save(file *os.File, target string) error {
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	// Stop on the first error
-	var err error
-
-	// For each VM, dump a list of commands to launch a VM of the same
-	// configuration. Should not be run in parallel since we want to stop on
-	// the first err.
-	applyFunc := func(vm VM, _ bool) (bool, error) {
-		if err != nil {
-			return true, err
-		}
-
-		err = vm.SaveConfig(file)
-		return true, err
-	}
-
-	vms.apply(target, false, applyFunc)
-
-	return err
-}
-
 // Info populates resp with info about the VMs running in the active namespace.
 func (vms VMs) Info(masks []string, resp *minicli.Response) {
 	vmLock.Lock()

@@ -14,19 +14,3 @@ clear vm config
 vm config
 vm config restore test
 vm config
-
-# Launch a VM
-vm launch kvm vm-0
-
-# Write the VMs to disk
-vm save minitest all
-shell cat /tmp/minimega/saved_vms/minitest
-
-# Kill all the VMs, try to relaunch from reading file
-vm kill all
-vm flush
-read /tmp/minimega/saved_vms/minitest
-.column name,memory,vcpus,vlan,uuid vm info
-
-# Clean up saved VMs
-shell rm /tmp/minimega/saved_vms/minitest
