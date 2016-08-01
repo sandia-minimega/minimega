@@ -125,14 +125,20 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 // Attach creates a CLI interface to the dialed minimega instance
 func (mm *Conn) Attach() {
 	// set up signal handling
-	sig := make(chan os.Signal, 1024)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
-		<-sig
-		log.Debug("caught signal, disconnecting")
-		goreadline.Rlcleanup()
-		os.Exit(0)
+		for s := range sig {
+			if s == os.Interrupt {
+				goreadline.Signal()
+			} else {
+				log.Debug("caught term signal, disconnecting")
+				goreadline.Rlcleanup()
+				os.Exit(0)
+			}
+		}
 	}()
+	defer signal.Stop(sig)
 
 	// start our own rlwrap
 	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
@@ -143,7 +149,7 @@ func (mm *Conn) Attach() {
 	var exitNext bool
 	for {
 		prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
-		line, err := goreadline.Rlwrap(prompt, true)
+		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
 			return
 		}

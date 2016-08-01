@@ -10,11 +10,16 @@ package goreadline
 // #include <stdlib.h>
 // #include <readline/readline.h>
 // #include <readline/history.h>
-// extern char** minicli_completion(char* text, int start, int end);
+//
+// extern char** minicomplete(char*, int, int);
+//
+// extern volatile int abort_getc;
+// extern int maybe_getc(FILE*);
+// extern int mini_redisplay(void);
 import "C"
 
 import (
-	"errors"
+	"io"
 	"minicli"
 	log "minilog"
 	"unsafe"
@@ -31,17 +36,19 @@ var (
 func init() {
 	C.rl_catch_sigwinch = 0
 	C.rl_catch_signals = 0
-	C.rl_attempted_completion_function = (*C.rl_completion_func_t)(C.minicli_completion)
+
+	C.rl_attempted_completion_function = (*C.rl_completion_func_t)(C.minicomplete)
+	C.rl_getc_function = (*C.rl_getc_func_t)(C.maybe_getc)
 }
 
-//export minicliCompletion
+//export minicomplete
 //
 // From readline documentation:
 // Returns an array of (char *) which is a list of completions for text. If
 // there are no completions, returns (char **)NULL. The first entry in the
 // returned array is the substitution for text. The remaining entries are the
 // possible completions. The array is terminated with a NULL pointer.
-func minicliCompletion(text *C.char, start, end C.int) **C.char {
+func minicomplete(text *C.char, start, end C.int) **C.char {
 	// Determine the size of a pointer on the current system
 	var b *C.char
 	ptrSize := unsafe.Sizeof(b)
@@ -81,16 +88,16 @@ func minicliCompletion(text *C.char, start, end C.int) **C.char {
 	return (**C.char)(ptr)
 }
 
-// Rlwrap prompts the user with the given prompt string and calls the
-// underlying readline function. If the input stream closes, Rlwrap returns an
-// EOF error.
-func Rlwrap(prompt string, record bool) (string, error) {
+// Readline prompts the user with the given prompt string and calls the
+// underlying readline function. If the input stream closes, Readline returns
+// an io.EOF error.
+func Readline(prompt string, record bool) (string, error) {
 	p := C.CString(prompt)
 	defer C.free(unsafe.Pointer(p))
 
 	ret := C.readline(p)
 	if ret == nil {
-		return "", errors.New("EOF")
+		return "", io.EOF
 	}
 	defer C.free(unsafe.Pointer(ret))
 
@@ -99,6 +106,15 @@ func Rlwrap(prompt string, record bool) (string, error) {
 	}
 
 	return C.GoString(ret), nil
+}
+
+// Signal resets readline after a signal, restoring it to a fresh prompt.
+func Signal() {
+	// Set event hook to redisplay the screen after the current line is aborted
+	// by maybe_getc.
+	C.rl_event_hook = (*C.rl_hook_func_t)(C.mini_redisplay)
+
+	C.abort_getc = 1
 }
 
 // Rlcleanup calls the readline rl_deprep_terminal function, restoring the
