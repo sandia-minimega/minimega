@@ -80,6 +80,8 @@ type Node struct {
 	updateNetwork    bool
 	Snoop            func(m *Message)
 	version          string
+
+	broadcastAddrs	[]*net.UDPAddr	// list of addresses to use as SOURCE addresses for UDP broadcasts
 }
 
 func init() {
@@ -89,7 +91,7 @@ func init() {
 // NewNode returns a new node, receiver channel, and error channel with a given name
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
-func NewNode(name string, namespace string, degree uint, port int, version string) (*Node, chan *Message) {
+func NewNode(name string, namespace string, degree uint, port int, version string, broadcastInterfaces []string) (*Node, chan *Message) {
 	log.Debug("NewNode: %v %v %v", name, degree, port)
 	n := &Node{
 		name:             name,
@@ -107,6 +109,53 @@ func NewNode(name string, namespace string, degree uint, port int, version strin
 		messagePump:      make(chan *Message, RECEIVE_BUFFER),
 		sequences:        make(map[string]uint64),
 		version:          version,
+	}
+
+	n.broadcastAddrs = make([]*net.UDPAddr, 0)
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		log.Fatal("NewNode: %v", err)
+	}
+	for _, iface := range ifaces {
+		// Check if this is one of the broadcast interfaces
+		if len(broadcastInterfaces) > 0 {
+			found := false
+			for _, bc := range broadcastInterfaces {
+				if bc == iface.Name {
+					found = true
+					break
+				}
+			}
+			if !found {
+				break
+			}
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			log.Error("NewNode: %v", err)
+			continue
+		}
+
+		for _, addr := range addrs {
+			ip, _, err := net.ParseCIDR(addr.String())
+			if err != nil {
+				log.Error("NewNode: %v", err)
+				continue
+			}
+
+			// make sure it's IPv4, for now we're only doing IPv4 broadcast
+			if ip.To4() == nil {
+				continue
+			}
+
+			if ip.IsLinkLocalUnicast() || ip.IsLoopback() {
+				continue
+			}
+
+			udpaddr := &net.UDPAddr{ IP: ip }
+
+			n.broadcastAddrs = append(n.broadcastAddrs, udpaddr)
+		}
 	}
 
 	go n.connectionListener()
@@ -356,17 +405,19 @@ func (n *Node) checkDegree() {
 			IP:   b,
 			Port: n.port,
 		}
-		socket, err := net.DialUDP("udp4", nil, &addr)
-		if err != nil {
-			log.Error("checkDegree: %v", err)
-			break
-		}
-		message := fmt.Sprintf("meshage:%s:%s", n.namespace, n.name)
-		_, err = socket.Write([]byte(message))
-		socket.Close()
-		if err != nil {
-			log.Error("checkDegree: %v", err)
-			break
+		for _, laddr := range n.broadcastAddrs {
+			socket, err := net.DialUDP("udp4", laddr, &addr)
+			if err != nil {
+				log.Error("checkDegree: %v", err)
+				continue
+			}
+			message := fmt.Sprintf("meshage:%s:%s", n.namespace, n.name)
+			_, err = socket.Write([]byte(message))
+			socket.Close()
+			if err != nil {
+				log.Error("checkDegree: %v", err)
+				continue
+			}
 		}
 		wait := r.Intn(1 << backoff)
 		time.Sleep(time.Duration(wait) * time.Second)

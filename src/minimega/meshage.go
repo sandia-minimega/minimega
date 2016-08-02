@@ -43,8 +43,8 @@ func init() {
 	gob.Register(iomeshage.IOMMessage{})
 }
 
-func meshageInit(host string, namespace string, degree, msaTimeout uint, port int) {
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
+func meshageInit(host string, namespace string, degree, msaTimeout uint, port int, interfaces []string) {
+	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision, interfaces)
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
