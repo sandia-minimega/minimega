@@ -117,7 +117,7 @@ func NewNode(name string, namespace string, degree uint, port int, version strin
 		log.Fatal("NewNode: %v", err)
 	}
 	for _, iface := range ifaces {
-		// Check if this is one of the broadcast interfaces
+		// Check if this is one of the allowed broadcast interfaces
 		if len(broadcastInterfaces) > 0 {
 			found := false
 			for _, bc := range broadcastInterfaces {
@@ -127,9 +127,11 @@ func NewNode(name string, namespace string, degree uint, port int, version strin
 				}
 			}
 			if !found {
-				break
+				// we specified interfaces, but this is not one of them.
+				continue
 			}
 		}
+
 		addrs, err := iface.Addrs()
 		if err != nil {
 			log.Error("NewNode: %v", err)
