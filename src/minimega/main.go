@@ -219,7 +219,10 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	interfaces := strings.Split(*f_interfaces, ",")
+	var interfaces []string
+	if *f_interfaces != "" {
+		interfaces = strings.Split(*f_interfaces, ",")
+	}
 	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port, interfaces)
 
 	// start the cc service
