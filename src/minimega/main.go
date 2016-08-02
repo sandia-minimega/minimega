@@ -179,8 +179,12 @@ func main() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		first := true
-		for {
-			<-sig
+		for s := range sig {
+			if s == os.Interrupt && first {
+				// do nothing
+				continue
+			}
+
 			if *f_panic {
 				panic("teardown")
 			}

@@ -80,28 +80,6 @@ Simpler version of "vm info" -- same meanings but fewer columns. `,
 		},
 		Call: wrapBroadcastCLI(cliVmSummary),
 	},
-	{ // vm save
-		HelpShort: "save a vm configuration for later use",
-		HelpLong: `
-Saves the configuration of a running virtual machine or set of virtual machines
-so that it/they can be restarted/recovered later, such as after a system crash.
-
-This command does not store the state of the virtual machine itself, only its
-launch configuration.
-
-See "vm start" for a full description of allowable targets.`,
-		Patterns: []string{
-			"vm save <name> <target>",
-		},
-		Call: wrapVMTargetCLI(cliVmSave),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
-	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
 		HelpLong: fmt.Sprintf(`
@@ -779,23 +757,6 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return vm.Migrate(c.StringArgs["filename"])
-}
-
-func cliVmSave(c *minicli.Command, resp *minicli.Response) error {
-	path := filepath.Join(*f_base, "saved_vms")
-	err := os.MkdirAll(path, 0775)
-	if err != nil {
-		return err
-	}
-
-	name := c.StringArgs["name"]
-	file, err := os.Create(filepath.Join(path, name))
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return vms.Save(file, c.StringArgs["target"])
 }
 
 func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {
