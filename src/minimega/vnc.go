@@ -67,9 +67,9 @@ func NewVNCClient(host, idOrName string) (*vncClient, error) {
 		host = hostname
 	}
 
-	var vm *KvmVM
+	var vm VM
 	if host == hostname {
-		vm, _ = vms.FindKvmVM(idOrName)
+		vm = vms.FindVM(idOrName)
 	} else {
 		// LOCK: This is only invoked via the CLI so we already hold cmdLock
 		// (can call hostVMs instead of HostVMs). Since we're using not using
@@ -80,14 +80,14 @@ func NewVNCClient(host, idOrName string) (*vncClient, error) {
 		// a namespace on the cli and then someone on the web interface
 		// attempts to connect and this is checking namespaces then it
 		// will fail right?
-		vm, _ = hostVMs(host).findKvmVM(idOrName)
+		vm = hostVMs(host).findVM(idOrName, false)
 	}
 
 	if vm == nil {
 		return nil, vmNotFound(host + ":" + idOrName)
 	}
 
-	rhost := fmt.Sprintf("%v:%v", host, vm.VNCPort)
+	rhost := fmt.Sprintf("%v:%v", host, 5900+vm.GetID())
 
 	c := &vncClient{
 		Rhost: rhost,

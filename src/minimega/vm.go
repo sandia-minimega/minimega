@@ -151,13 +151,12 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
 	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
 	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
-	"vnc_port", "tags", "qos",
+	"tags", "qos",
 }
 
 // Valid names for output masks for `vm summary`, in preferred output order
 var vmInfoLite = []string{
 	"id", "name", "state", "namespace", "type", "vlan", "uuid", "cc_active",
-	"vnc_port",
 }
 
 func init() {
@@ -719,7 +718,7 @@ func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
-	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
+	err := ioutil.WriteFile(filepath.Join(vm.instancePath, "state"), []byte(s.String()), 0666)
 	if err != nil {
 		log.Error("write instance state file: %v", err)
 	}
@@ -752,7 +751,7 @@ func (vm *BaseVM) writeTaps() error {
 		taps = append(taps, net.Tap)
 	}
 
-	f := vm.path("taps")
+	f := filepath.Join(vm.instancePath, "taps")
 	if err := ioutil.WriteFile(f, []byte(strings.Join(taps, "\n")), 0666); err != nil {
 		return fmt.Errorf("write instance taps file: %v", err)
 	}
@@ -782,11 +781,6 @@ func (vm *BaseVM) conflicts(vm2 BaseVM) error {
 	}
 
 	return nil
-}
-
-// path joins instancePath with provided path
-func (vm *BaseVM) path(s string) string {
-	return filepath.Join(vm.instancePath, s)
 }
 
 // inNamespace tests whether vm is part of active namespace, if there is one.
