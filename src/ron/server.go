@@ -450,7 +450,7 @@ func (s *Server) responseHandler() {
 					vm.SetTag(k, v)
 				}
 			} else {
-				log.Errorln("no registered vm %v", cin.UUID)
+				log.Error("no registered vm %v", cin.UUID)
 			}
 		} else {
 			log.Error("unknown client %v", cin.UUID)
