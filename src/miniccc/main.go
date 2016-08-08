@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"ron"
+	"runtime"
 	"syscall"
 	"version"
 )
@@ -56,6 +57,10 @@ func main() {
 	logSetup()
 
 	if *f_tag {
+		if runtime.GOOS == "windows" {
+			log.Fatalln("tag updates are not available on windows miniccc clients")
+		}
+
 		err := updateTag()
 		if err != nil {
 			log.Errorln(err)
@@ -82,7 +87,9 @@ func main() {
 	log.Debug("starting ron client with UUID: %v", c.UUID)
 
 	// create a listening domain socket for tag updates
-	go commandSocketStart()
+	if runtime.GOOS != "windows" {
+		go commandSocketStart()
+	}
 
 	<-sig
 	// terminate
