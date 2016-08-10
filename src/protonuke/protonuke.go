@@ -65,8 +65,13 @@ func main() {
 
 	logSetup()
 
+	dns := false
+	if *f_dns || *f_dnsv4 || *f_dnsv6 {
+		dns = true
+	}
+
 	// make sure at least one service is enabled
-	if !*f_dns && !*f_http && !*f_https && !*f_ssh && !*f_smtp {
+	if !dns && !*f_http && !*f_https && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -110,7 +115,7 @@ func main() {
 	}
 
 	// start services
-	if *f_dns {
+	if dns {
 		if *f_serve {
 			go dnsServer()
 		} else {

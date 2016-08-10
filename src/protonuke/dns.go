@@ -99,7 +99,7 @@ func handleDnsRequest(w dns.ResponseWriter, req *dns.Msg) {
 				Ttl:    ttl,
 			}
 
-			// If not ipv4 specified, generate a random addr
+			// If no ipv4 hosts specified, generate a random addr
 			h, _ := randomHost()
 			if h == "" || !isIPv4(h) {
 				h = randomIPv4Addr()
@@ -114,8 +114,7 @@ func handleDnsRequest(w dns.ResponseWriter, req *dns.Msg) {
 				Class:  dns.ClassINET,
 				Ttl:    ttl,
 			}
-
-			// If not ipv6 specified, generate a random addr
+			// If no ipv6 hosts specified, generate a random addr
 			h, _ := randomHost()
 			if h == "" || !isIPv6(h) {
 				h = randomIPv6Addr()
