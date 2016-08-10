@@ -217,7 +217,7 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 	return nil
 }
 
-// Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, fdisk, mkfs.ext4,
+// Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, fdisk, mkfs.ext3,
 // cp, and extlinux.
 func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
@@ -391,7 +391,7 @@ func partitionQcow2(dev string) error {
 
 // formatQcow2 formats a partition with the default linux filesystem type.
 func formatQcow2(dev string) error {
-	// make an ext4 filesystem
+	// make an ext3 filesystem
 	p := process("mkfs")
 	cmd := &exec.Cmd{
 		Path: p,
