@@ -40,6 +40,7 @@ info include:
 - ip         : IPv4 address
 - ip6        : IPv6 address
 - bandwidth  : stats regarding bandwidth usage
+- qos        : quality-of-service contraints on network interfaces
 - tags       : any additional information attached to the VM
 - uuid       : QEMU system uuid
 - cc_active  : whether cc is active
