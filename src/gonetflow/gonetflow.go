@@ -309,8 +309,8 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 
 func DecodeHeader(b []byte) *Header {
 	return &Header{
-		Version:   int(b[1]), // skip the first byte
-		Count:     int(b[3]),
+		Version:   int(b[0])<<8 + int(b[1]),
+		Count:     int(b[2])<<8 + int(b[3]),
 		Sequence:  (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
 		Uptime:    (uint32(b[4]) << 24) + (uint32(b[5]) << 16) + (uint32(b[6]) << 8) + (uint32(b[7])),
 		EpochSec:  (uint32(b[8]) << 24) + (uint32(b[9]) << 16) + (uint32(b[10]) << 8) + (uint32(b[11])),
