@@ -40,6 +40,7 @@ info include:
 - ip         : IPv4 address
 - ip6        : IPv6 address
 - bandwidth  : stats regarding bandwidth usage
+- qos        : quality-of-service contraints on network interfaces
 - tags       : any additional information attached to the VM
 - uuid       : QEMU system uuid
 - cc_active  : whether cc is active
@@ -80,28 +81,6 @@ Simpler version of "vm info" -- same meanings but fewer columns. `,
 		},
 		Call: wrapBroadcastCLI(cliVmSummary),
 	},
-	{ // vm save
-		HelpShort: "save a vm configuration for later use",
-		HelpLong: `
-Saves the configuration of a running virtual machine or set of virtual machines
-so that it/they can be restarted/recovered later, such as after a system crash.
-
-This command does not store the state of the virtual machine itself, only its
-launch configuration.
-
-See "vm start" for a full description of allowable targets.`,
-		Patterns: []string{
-			"vm save <name> <target>",
-		},
-		Call: wrapVMTargetCLI(cliVmSave),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
-	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
 		HelpLong: fmt.Sprintf(`
@@ -113,12 +92,13 @@ When you launch a VM, you supply the type of VM in the launch command.
 Currently, the supported VM types are:
 
 - kvm : QEMU-based vms
+- container: Linux containers
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
 naming scheme:
 
-	vm launch foo[0-9]
+	vm launch kvm foo[0-9]
 
 Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
 
@@ -723,9 +703,9 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 		max = v
 	}
 
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
+	vm := vms.FindVM(c.StringArgs["vm"])
+	if vm == nil {
+		return vmNotFound(c.StringArgs["vm"])
 	}
 
 	data, err := vm.Screenshot(max)
@@ -778,23 +758,6 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return vm.Migrate(c.StringArgs["filename"])
-}
-
-func cliVmSave(c *minicli.Command, resp *minicli.Response) error {
-	path := filepath.Join(*f_base, "saved_vms")
-	err := os.MkdirAll(path, 0775)
-	if err != nil {
-		return err
-	}
-
-	name := c.StringArgs["name"]
-	file, err := os.Create(filepath.Join(path, name))
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return vms.Save(file, c.StringArgs["target"])
 }
 
 func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {

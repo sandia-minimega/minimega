@@ -56,7 +56,7 @@ outer:
 			}
 		}
 
-		_, err := goreadline.Rlwrap(prompt, false)
+		_, err := goreadline.Readline(prompt, false)
 		if err != nil {
 			fmt.Println()
 			break outer // EOF

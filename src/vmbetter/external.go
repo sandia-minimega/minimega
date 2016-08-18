@@ -16,7 +16,7 @@ var externalProcesses = map[string]string{
 	"qemu-img":    "qemu-img",
 	"umount":      "umount",
 	"dd":          "dd",
-	"mkfs":        "mkfs.ext4",
+	"mkfs":        "mkfs.ext3",
 	"extlinux":    "extlinux",
 	"cp":          "cp",
 	"fdisk":       "fdisk",

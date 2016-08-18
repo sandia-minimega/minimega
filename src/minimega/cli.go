@@ -26,6 +26,7 @@ import (
 	"minipager"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -344,6 +345,15 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 func cliLocal() {
 	goreadline.FilenameCompleter = iomCompleter
 
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		for range sig {
+			goreadline.Signal()
+		}
+	}()
+	defer signal.Stop(sig)
+
 	for {
 		namespace := GetNamespaceName()
 
@@ -352,9 +362,9 @@ func cliLocal() {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
 		}
 
-		line, err := goreadline.Rlwrap(prompt, true)
+		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
-			break // EOF
+			return
 		}
 		command := string(line)
 		log.Debug("got from stdin: `%v`", command)
