@@ -38,6 +38,7 @@ var (
 	f_httpTLSCert   = flag.String("httptlscert", "", "file containing public certificate for TLS")
 	f_httpTLSKey    = flag.String("httptlskey", "", "file containing private key for TLS")
 	f_tlsVersion    = flag.String("tlsversion", "", "Select a TLS version for the client: tls1.0, tls1.1, tls1.2")
+	f_udp		= flag.Bool("udp", false, "enable udp service") 
 	hosts           map[string]string
 	keys            []string
 )
@@ -63,7 +64,7 @@ func main() {
 	logSetup()
 
 	// make sure at least one service is enabled
-	if !*f_http && !*f_https && !*f_ssh && !*f_smtp {
+	if !*f_http && !*f_https && !*f_ssh && !*f_smtp && !*f_udp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -135,5 +136,12 @@ func main() {
 			go smtpClient(protocol)
 		}
 	}
+	if *f_udp {
+		if *f_serve {
+			go udpServer(protocol)
+		} else {
+			go udpClient(protocol)
+		}
+	} 
 	<-sig
 }

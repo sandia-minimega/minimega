@@ -38,6 +38,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"io"
 )
 
 type SMTPClientSession struct {
@@ -77,7 +78,7 @@ var (
 	max_size  = 131072
 	myFQDN    = "protonuke.local"
 	TLSconfig *tls.Config
-	smtpPort  = ":25"
+	smtpPort  = ":25" // nonstandard port may be used to evade blocking by a firewall, spammers typically use :587
 	email     []mail
 )
 
@@ -141,6 +142,7 @@ func smtpClient(protocol string) {
 			smtpReportChan <- 1
 		}
 	}
+
 }
 
 func smtpGetFile(m mail) ([]byte, string, error) {
@@ -324,6 +326,7 @@ func (s *SMTPClientSession) Handler() {
 				log.Debugln(err)
 				return
 			}
+		
 			switch {
 			case strings.HasPrefix(cmd, "HELO"):
 				s.addResponse("250 You're all so great and we're gonna keep you listening all day")
@@ -355,12 +358,13 @@ func (s *SMTPClientSession) Handler() {
 			case strings.HasPrefix(cmd, "RSET"):
 				s.mail_from = ""
 				s.rcpt_to = []string{}
-				s.addResponse("250 I forgot to remember to forget")
+				s.addResponse("250 I forgot to remember to forget")		
 			default:
 				s.addResponse("500 unrecognized command")
 			}
 		case DATA:
 			input, err := s.readSmtp()
+		
 			if err != nil {
 				log.Debugln(err)
 			}
@@ -392,6 +396,7 @@ func (s *SMTPClientSession) Handler() {
 		s.bufout.Flush()
 		s.response = s.response[size:]
 	}
+	return
 }
 
 func (s *SMTPClientSession) addResponse(r string) {
@@ -419,11 +424,16 @@ func (s *SMTPClientSession) readSmtp() (input string, err error) {
 			}
 		}
 		if err != nil {
+			if err == io.EOF {
+				input = "QUIT"
+				err = nil
+			}
 			break
 		}
 		if strings.HasSuffix(input, suffix) {
 			break
 		}
 	}
+	log.Debugln("Read from the buffer")
 	return input, err
 }

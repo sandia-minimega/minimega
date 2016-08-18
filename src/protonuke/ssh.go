@@ -58,7 +58,7 @@ type sshConn struct {
 
 var (
 	sshConns []*sshConn
-	PORT     = ":22"
+	PORT     = ":22" // may be useful to use a non-standard port if ssh'd into a machine to avoid port binding issue
 )
 
 // ssh client events include connecting, disconnecting, or typing in an
