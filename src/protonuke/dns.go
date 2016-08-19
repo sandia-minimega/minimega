@@ -86,85 +86,97 @@ func handleDnsRequest(w dns.ResponseWriter, req *dns.Msg) {
 	r.SetReply(req)
 	r.Authoritative = true
 
-qloop:
-	for _, q := range req.Question {
-		log.Debug("dns server: question=%v type=%v remote_host=%v", q.Name, q.Qtype, w.RemoteAddr())
+	if len(req.Question) > 1 || req.Rcode != dns.OpcodeQuery {
+		r.SetRcode(req, dns.RcodeNotImplemented)
+	}
 
-		switch q.Qtype {
-		case dns.TypeA:
-			h, _ := randomHost()
-			if h == "" || !isIPv4(h) {
-				if *f_randomhosts {
-					h = randomIPv4Addr()
-				} else {
-					// return NXDOMAIN
-					r.SetRcode(req, dns.RcodeNameError)
-					break qloop
-				}
-			}
+	if len(req.Question) == 0 {
+		r.SetRcode(req, dns.RcodeFormatError)
+	}
 
-			resp := new(dns.A)
-			resp.Hdr = dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeA,
-				Class:  dns.ClassINET,
-				Ttl:    ttl,
-			}
-			resp.A = net.ParseIP(h)
-			r.Answer = append(r.Answer, resp)
-		case dns.TypeAAAA:
-			h, _ := randomHost()
-			if h == "" || !isIPv6(h) {
-				if *f_randomhosts {
-					h = randomIPv6Addr()
-				} else {
-					// return NXDOMAIN
-					r.SetRcode(req, dns.RcodeNameError)
-					break qloop
-				}
-			}
+	if r.Rcode != dns.RcodeSuccess {
+		w.WriteMsg(r)
+		dnsReportChan <- 1
+		return
+	}
 
-			resp := new(dns.AAAA)
-			resp.Hdr = dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeAAAA,
-				Class:  dns.ClassINET,
-				Ttl:    ttl,
+	q := req.Question[0]
+	log.Debug("dns server: question=%v type=%v remote_host=%v", q.Name, q.Qtype, w.RemoteAddr())
+
+	switch q.Qtype {
+	case dns.TypeA:
+		h, _ := randomHost()
+		if h == "" || !isIPv4(h) {
+			if *f_randomhosts {
+				h = randomIPv4Addr()
+			} else {
+				// return NXDOMAIN
+				r.SetRcode(req, dns.RcodeNameError)
+				break
 			}
-			resp.AAAA = net.ParseIP(h)
-			r.Answer = append(r.Answer, resp)
-		case dns.TypeCNAME:
-			resp := new(dns.CNAME)
-			resp.Hdr = dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeCNAME,
-				Class:  dns.ClassINET,
-				Ttl:    ttl,
-			}
-			resp.Target = fmt.Sprintf("cname.%s", q.Name)
-			r.Answer = append(r.Answer, resp)
-		case dns.TypeMX:
-			resp := new(dns.MX)
-			resp.Hdr = dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeMX,
-				Class:  dns.ClassINET,
-				Ttl:    ttl,
-			}
-			resp.Mx = fmt.Sprintf("mx.%s", q.Name)
-			r.Answer = append(r.Answer, resp)
-		case dns.TypeSOA:
-			resp := new(dns.SOA)
-			resp.Hdr = dns.RR_Header{
-				Name:   q.Name,
-				Rrtype: dns.TypeSOA,
-				Class:  dns.ClassINET,
-				Ttl:    ttl,
-			}
-			resp.Ns = fmt.Sprintf("ns.%s", q.Name)
-			resp.Mbox = fmt.Sprintf("admin-%s", q.Name)
-			r.Answer = append(r.Answer, resp)
 		}
+
+		resp := new(dns.A)
+		resp.Hdr = dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeA,
+			Class:  dns.ClassINET,
+			Ttl:    ttl,
+		}
+		resp.A = net.ParseIP(h)
+		r.Answer = append(r.Answer, resp)
+	case dns.TypeAAAA:
+		h, _ := randomHost()
+		if h == "" || !isIPv6(h) {
+			if *f_randomhosts {
+				h = randomIPv6Addr()
+			} else {
+				// return NXDOMAIN
+				r.SetRcode(req, dns.RcodeNameError)
+				break
+			}
+		}
+
+		resp := new(dns.AAAA)
+		resp.Hdr = dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeAAAA,
+			Class:  dns.ClassINET,
+			Ttl:    ttl,
+		}
+		resp.AAAA = net.ParseIP(h)
+		r.Answer = append(r.Answer, resp)
+	case dns.TypeCNAME:
+		resp := new(dns.CNAME)
+		resp.Hdr = dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeCNAME,
+			Class:  dns.ClassINET,
+			Ttl:    ttl,
+		}
+		resp.Target = fmt.Sprintf("cname.%s", q.Name)
+		r.Answer = append(r.Answer, resp)
+	case dns.TypeMX:
+		resp := new(dns.MX)
+		resp.Hdr = dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeMX,
+			Class:  dns.ClassINET,
+			Ttl:    ttl,
+		}
+		resp.Mx = fmt.Sprintf("mx.%s", q.Name)
+		r.Answer = append(r.Answer, resp)
+	case dns.TypeSOA:
+		resp := new(dns.SOA)
+		resp.Hdr = dns.RR_Header{
+			Name:   q.Name,
+			Rrtype: dns.TypeSOA,
+			Class:  dns.ClassINET,
+			Ttl:    ttl,
+		}
+		resp.Ns = fmt.Sprintf("ns.%s", q.Name)
+		resp.Mbox = fmt.Sprintf("admin-%s", q.Name)
+		r.Answer = append(r.Answer, resp)
 	}
 	w.WriteMsg(r)
 	dnsReportChan <- 1
