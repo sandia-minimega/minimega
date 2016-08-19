@@ -86,11 +86,23 @@ func handleDnsRequest(w dns.ResponseWriter, req *dns.Msg) {
 	r.SetReply(req)
 	r.Authoritative = true
 
+qloop:
 	for _, q := range req.Question {
 		log.Debug("dns server: question=%v type=%v remote_host=%v", q.Name, q.Qtype, w.RemoteAddr())
 
 		switch q.Qtype {
 		case dns.TypeA:
+			h, _ := randomHost()
+			if h == "" || !isIPv4(h) {
+				if *f_randomhosts {
+					h = randomIPv4Addr()
+				} else {
+					// return NXDOMAIN
+					r.SetRcode(req, dns.RcodeNameError)
+					break qloop
+				}
+			}
+
 			resp := new(dns.A)
 			resp.Hdr = dns.RR_Header{
 				Name:   q.Name,
@@ -98,26 +110,26 @@ func handleDnsRequest(w dns.ResponseWriter, req *dns.Msg) {
 				Class:  dns.ClassINET,
 				Ttl:    ttl,
 			}
-
-			// If no ipv4 hosts specified, generate a random addr
-			h, _ := randomHost()
-			if h == "" || !isIPv4(h) {
-				h = randomIPv4Addr()
-			}
 			resp.A = net.ParseIP(h)
 			r.Answer = append(r.Answer, resp)
 		case dns.TypeAAAA:
+			h, _ := randomHost()
+			if h == "" || !isIPv6(h) {
+				if *f_randomhosts {
+					h = randomIPv6Addr()
+				} else {
+					// return NXDOMAIN
+					r.SetRcode(req, dns.RcodeNameError)
+					break qloop
+				}
+			}
+
 			resp := new(dns.AAAA)
 			resp.Hdr = dns.RR_Header{
 				Name:   q.Name,
 				Rrtype: dns.TypeAAAA,
 				Class:  dns.ClassINET,
 				Ttl:    ttl,
-			}
-			// If no ipv6 hosts specified, generate a random addr
-			h, _ := randomHost()
-			if h == "" || !isIPv6(h) {
-				h = randomIPv6Addr()
 			}
 			resp.AAAA = net.ParseIP(h)
 			r.Answer = append(r.Answer, resp)
