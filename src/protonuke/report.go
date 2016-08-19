@@ -13,11 +13,13 @@ import (
 )
 
 var (
+	dnsReportChan     chan uint64
 	httpReportChan    chan uint64
 	httpTLSReportChan chan uint64
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
 
+	dnsReportHits     uint64
 	httpReportHits    uint64
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
@@ -25,6 +27,7 @@ var (
 )
 
 func init() {
+	dnsReportChan = make(chan uint64, 1024)
 	httpReportChan = make(chan uint64, 1024)
 	httpTLSReportChan = make(chan uint64, 1024)
 	sshReportChan = make(chan uint64, 1024)
@@ -33,6 +36,8 @@ func init() {
 	go func() {
 		for {
 			select {
+			case <-dnsReportChan:
+				dnsReportHits++
 			case <-httpReportChan:
 				httpReportHits++
 			case <-httpTLSReportChan:
@@ -49,6 +54,7 @@ func init() {
 func report(reportWait time.Duration) {
 	lastTime := time.Now()
 
+	lastDnsReportHits := dnsReportHits
 	lasthttpReportHits := httpReportHits
 	lasthttpTLSReportHits := httpTLSReportHits
 	lastsshReportBytes := sshReportBytes
@@ -59,6 +65,7 @@ func report(reportWait time.Duration) {
 		elapsedTime := time.Since(lastTime)
 		lastTime = time.Now()
 
+		edns := dnsReportHits - lastDnsReportHits
 		ehttp := httpReportHits - lasthttpReportHits
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
@@ -74,6 +81,9 @@ func report(reportWait time.Duration) {
 		w := new(tabwriter.Writer)
 		w.Init(buf, 0, 8, 0, '\t', 0)
 
+		if *f_dns {
+			fmt.Fprintf(w, "dns\t%v\t%.01f hits/min\n", dnsReportHits, float64(edns)/elapsedTime.Minutes())
+		}
 		if *f_http {
 			fmt.Fprintf(w, "http\t%v\t%.01f hits/min\n", httpReportHits, float64(ehttp)/elapsedTime.Minutes())
 		}
