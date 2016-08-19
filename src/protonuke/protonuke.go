@@ -19,7 +19,7 @@ var (
 	f_dns           = flag.Bool("dns", false, "enable dns service")
 	f_dnsv4         = flag.Bool("dnsv4", false, "dns client only requests type A records")
 	f_dnsv6         = flag.Bool("dnsv6", false, "dns client only requests type AAAA records")
-	f_randomhosts   = flag.Bool("random-hosts", false, "if not host range is supplied return a randomly generated ip")
+	f_randomhosts   = flag.Bool("random-hosts", false, "if no host range is supplied return a randomly generated ip")
 	f_http          = flag.Bool("http", false, "enable http service")
 	f_https         = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot      = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
