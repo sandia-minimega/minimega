@@ -31,6 +31,23 @@ type Tag struct {
 
 var vmLock sync.Mutex // lock for synchronizing access to vms
 
+// Slow down VM launching so that KSM doesn't blow up
+var vmThrottle chan bool
+
+func initVMThrottle() {
+	vmThrottle = make(chan bool, *f_vmBurst)
+	tick := time.NewTicker(*f_vmRate)
+
+	go func() {
+		for range tick.C {
+			select {
+			case vmThrottle <- true:
+			default:
+			}
+		} // exits after tick.Stop()
+	}()
+}
+
 // Count of VMs in current namespace.
 func (vms VMs) Count() int {
 	vmLock.Lock()
