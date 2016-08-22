@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 	"version"
 )
 
@@ -42,8 +41,6 @@ var (
 	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
 	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
-	f_vmRate     = flag.Duration("vm-rate", time.Second/4, "average rate to launch KVM VMs")
-	f_vmBurst    = flag.Int("vm-burst", 10, "burst size for launching KVM VMs")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
@@ -213,8 +210,6 @@ func main() {
 
 	pid := os.Getpid()
 	writeOrDie(filepath.Join(*f_base, "minimega.pid"), strconv.Itoa(pid))
-
-	initVMThrottle()
 
 	go commandSocketStart()
 

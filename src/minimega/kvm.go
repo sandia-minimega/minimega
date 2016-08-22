@@ -464,7 +464,7 @@ func (vm *KvmVM) connectVNC() error {
 // launch is the low-level launch function for KVM VMs. The caller should hold
 // the VM's lock.
 func (vm *KvmVM) launch() error {
-	<-vmThrottle
+	vmLimiter.Wait()
 	log.Info("launching vm: %v", vm.ID)
 
 	// If this is the first time launching the VM, do the final configuration
