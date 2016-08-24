@@ -163,6 +163,11 @@ func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 		return nil
 	} else if c.BoolArgs["del-host"] {
 		for _, host := range hosts {
+			if host == Wildcard {
+				ns.Hosts = map[string]bool{}
+				break
+			}
+
 			delete(ns.Hosts, host)
 		}
 
