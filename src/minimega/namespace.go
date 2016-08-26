@@ -7,9 +7,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
+	"math/rand"
 	"minicli"
 	log "minilog"
-	"strings"
 	"sync"
 	"time"
 )
@@ -230,92 +231,47 @@ func (n *Namespace) Launch() error {
 func (n *Namespace) hostLaunch(host string, queued queuedVM, respChan chan<- minicli.Responses) {
 	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
 
-	// Mesh send all the config commands
-	cmds := []string{"clear vm config"}
-	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
+	meshageCommandLock.Lock()
 
-	switch queued.vmType {
-	case KVM:
-		cmds = append(cmds, saveConfig(kvmConfigFns, &queued.KVMConfig)...)
-	case CONTAINER:
-		cmds = append(cmds, saveConfig(containerConfigFns, &queued.ContainerConfig)...)
-	default:
-	}
-
-	// Run all the config commands on the local or remote node, sending all the
-	// responses to configChan.
-	configChan := make(chan minicli.Responses)
-
-	// run all the config commands
 	go func() {
-		defer close(configChan)
+		defer meshageCommandLock.Unlock()
 
-		for _, cmd := range cmds {
-			cmd := minicli.MustCompilef("namespace %q %v", n.Name, cmd)
-			cmd.SetRecord(false)
-			cmd.SetSource(n.Name)
-
-			if host == hostname {
-				// LOCK: we use runCommands instead of RunCommands because
-				// Namespace.Launch is only invoked by the CLI and
-				// Namespace.hostLaunch is serialized per-host (and localhost
-				// can't appear more than once).
-				forward(runCommands(cmd), configChan)
-			} else {
-				in, err := meshageSend(cmd, host)
-				if err != nil {
-					configChan <- errResp(err)
-					break
-				}
-
-				forward(in, configChan)
-			}
+		// Construct appropriate command, assigning a random ID
+		msg := meshageVMLaunch{
+			VMConfig:  queued.VMConfig,
+			VMType:    queued.vmType,
+			Names:     queued.names,
+			Namespace: n.Name,
+			TID:       rand.Int31(),
 		}
-	}()
 
-	var abort bool
+		to := []string{host}
 
-	// Read all the configChan responses, set abort if we find a single error.
-	for resps := range configChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Error("config error, host %v -- %v", resp.Host, resp.Error)
-				abort = true
-			}
-		}
-	}
-
-	if abort {
-		return
-	}
-
-	// Replace empty VM names with generic name
-	for i, name := range queued.names {
-		if name == "" {
-			queued.names[i] = fmt.Sprintf("vm-%v-%v", n.Name, n.vmID.Next())
-		}
-	}
-
-	// Send the launch command
-	names := strings.Join(queued.names, ",")
-	log.Debug("launch vms on host %v -- %v", host, names)
-
-	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", n.Name, queued.vmType, names)
-	cmd.SetRecord(false)
-	cmd.SetSource(n.Name)
-
-	if host == hostname {
-		// LOCK: see above.
-		forward(runCommands(cmd), respChan)
-	} else {
-		in, err := meshageSend(cmd, host)
-		if err != nil {
-			respChan <- errResp(err)
+		if _, err := meshageNode.Set(to, msg); err != nil {
+			log.Errorln(err)
 			return
 		}
 
-		forward(in, respChan)
-	}
+		timeout := meshageTimeout
+		// If the timeout is 0, set to "unlimited"
+		if timeout == 0 {
+			timeout = math.MaxInt64
+		}
+
+		// wait on a response from the client
+		select {
+		case resp := <-meshageResponseChan:
+			body := resp.Body.(meshageResponse)
+			if body.TID != msg.TID {
+				log.Warn("invalid TID from response channel: %d", body.TID)
+			} else {
+				respChan <- minicli.Responses{&body.Response}
+			}
+		case <-time.After(timeout):
+			// Didn't hear back from any node within the timeout
+			break
+		}
+	}()
 }
 
 // GetNamespace returns the active namespace. Returns nil if there isn't a

@@ -8,6 +8,7 @@ import (
 	"bridge"
 	"errors"
 	"fmt"
+	"meshage"
 	"minicli"
 	log "minilog"
 	"os"
@@ -243,7 +244,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
+func (vms VMs) Launch(names []string, vmType VMType, config VMConfig) <-chan error {
 	vmLock.Lock()
 
 	out := make(chan error)
@@ -257,7 +258,7 @@ func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm, err := NewVM(name, vmType)
+		vm, err := NewVM(name, vmType, config)
 		if err == nil {
 			for _, vm2 := range vms {
 				if err = vm2.Conflicts(vm); err != nil {
@@ -580,6 +581,35 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	return errs
+}
+
+// meshageVMLauncher handles VM launches sent by the scheduler
+func meshageVMLauncher() {
+	for m := range meshageVMLaunchChan {
+		go func(m *meshage.Message) {
+			cmd := m.Body.(meshageVMLaunch)
+
+			errs := []error{}
+			for err := range vms.Launch(cmd.Names, cmd.VMType, cmd.VMConfig) {
+				errs = append(errs, err)
+			}
+
+			resp := minicli.Response{}
+
+			if err := makeErrSlice(errs); err != nil {
+				resp.Error = err.Error()
+			} else {
+				resp.Response = "OK"
+			}
+
+			to := []string{m.Source}
+			msg := meshageResponse{Response: resp, TID: cmd.TID}
+
+			if _, err := meshageNode.Set(to, msg); err != nil {
+				log.Errorln(err)
+			}
+		}(m)
+	}
 }
 
 // HostVMs gets all the VMs running on the specified remote host, filtered to

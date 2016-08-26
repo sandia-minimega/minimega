@@ -580,13 +580,13 @@ func (vm *ContainerVM) Config() *BaseConfig {
 	return &vm.BaseConfig
 }
 
-func NewContainer(name string) (*ContainerVM, error) {
+func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewBaseVM(name)
+	vm.BaseVM = *NewBaseVM(name, config)
 	vm.Type = CONTAINER
 
-	vm.ContainerConfig = vmConfig.ContainerConfig.Copy() // deep-copy configured fields
+	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
 
 	if vm.FSPath == "" {
 		return nil, errors.New("unable to create container without a configured filesystem")

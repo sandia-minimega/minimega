@@ -29,11 +29,21 @@ type meshageResponse struct {
 	TID              int32 // unique ID for command/response pair
 }
 
+// meshageVMLaunch is sent by the scheduler to launch VMs on a remote host
+type meshageVMLaunch struct {
+	VMConfig
+	VMType
+	Names     []string
+	Namespace string
+	TID       int32 // unique ID for command/response pair
+}
+
 var (
 	meshageNode         *meshage.Node
 	meshageMessages     chan *meshage.Message
 	meshageCommandChan  chan *meshage.Message
 	meshageResponseChan chan *meshage.Message
+	meshageVMLaunchChan chan *meshage.Message
 	meshageTimeout      time.Duration // default is no timeout
 )
 
@@ -48,6 +58,7 @@ func meshageInit(host string, namespace string, degree, msaTimeout uint, port in
 
 	meshageCommandChan = make(chan *meshage.Message, 1024)
 	meshageResponseChan = make(chan *meshage.Message, 1024)
+	meshageVMLaunchChan = make(chan *meshage.Message, 1024)
 
 	meshageNode.Snoop = meshageSnooper
 
@@ -55,6 +66,7 @@ func meshageInit(host string, namespace string, degree, msaTimeout uint, port in
 
 	go meshageMux()
 	go meshageHandler()
+	go meshageVMLauncher()
 
 	iomeshageInit(meshageNode)
 
@@ -70,6 +82,8 @@ func meshageMux() {
 			meshageCommandChan <- m
 		case meshageResponse:
 			meshageResponseChan <- m
+		case meshageVMLaunch:
+			meshageVMLaunchChan <- m
 		case iomeshage.IOMMessage:
 			iom.Messages <- m
 		default:
