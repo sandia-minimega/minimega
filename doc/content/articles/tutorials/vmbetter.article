@@ -83,7 +83,7 @@ hierarchy of files and directories, based at /, that we want copied into the
 image we build. Let's start by copying over an existing overlay to get a
 baseline:
 
-	$ cp -r misc/vmbetter_configs/generic_vm_overlay misc/vmbetter_configs/wireshark_overlay
+	$ cp -r misc/vmbetter_configs/default_overlay misc/vmbetter_configs/wireshark_overlay
 
 If you look in that directory, you'll see a few basic files in a hierarchy:
 
