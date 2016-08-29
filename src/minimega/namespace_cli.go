@@ -96,7 +96,7 @@ Taps: %v
 Number of queuedVMs: %v
 
 Schedules:
-`, namespace, ns.Hosts, ns.Taps, len(ns.queuedVMs))
+`, namespace, ns.Hosts, ns.Taps, len(ns.queue))
 
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)

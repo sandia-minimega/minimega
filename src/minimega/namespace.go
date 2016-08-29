@@ -7,8 +7,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"math"
-	"math/rand"
 	"minicli"
 	log "minilog"
 	"sync"
@@ -19,13 +17,6 @@ const (
 	SchedulerRunning   = "running"
 	SchedulerCompleted = "completed"
 )
-
-type queuedVM struct {
-	VMConfig // embed
-
-	names  []string
-	vmType VMType
-}
 
 type scheduleStat struct {
 	start, end time.Time
@@ -42,8 +33,8 @@ type Namespace struct {
 
 	vmID *Counter
 
-	// Queued VMs to launch,
-	queuedVMs []queuedVM
+	// Queued VMs to launch
+	queue []QueuedVMs
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
@@ -121,9 +112,9 @@ func (n Namespace) RemoveTap(tap string) {
 	delete(n.Taps, tap)
 }
 
-// Queue handles storing the current VM config to the namespace's queuedVMs so
+// Queue handles storing the current VM config to the namespace's queued VMs so
 // that we can launch it in the future.
-func (n *Namespace) Queue(arg string, vmType VMType) error {
+func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	names, err := expandLaunchNames(arg, globalVMs())
@@ -139,18 +130,18 @@ func (n *Namespace) Queue(arg string, vmType VMType) error {
 	delete(namesMap, "") // delete unconfigured name
 
 	// Extra check for name collisions -- look in the already queued VMs
-	for _, queued := range n.queuedVMs {
-		for _, name := range queued.names {
+	for _, q := range n.queue {
+		for _, name := range q.Names {
 			if namesMap[name] {
 				return fmt.Errorf("vm already queued with name `%s`", name)
 			}
 		}
 	}
 
-	n.queuedVMs = append(n.queuedVMs, queuedVM{
-		VMConfig: vmConfig.Copy(),
-		names:    names,
-		vmType:   vmType,
+	n.queue = append(n.queue, QueuedVMs{
+		VMConfig: vmConfig,
+		VMType:   vmType,
+		Names:    names,
 	})
 
 	return nil
@@ -163,17 +154,17 @@ func (n *Namespace) Launch() error {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
 
-	if len(n.queuedVMs) == 0 {
+	if len(n.queue) == 0 {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
 	// Create the host -> VMs assignment
 	// TODO: This is a static assignment... should it be updated periodically
 	// during the launching process?
-	stats, assignment := schedule(n.queuedVMs, n.hostSlice())
+	stats, assignment := schedule(n.queue, n.hostSlice())
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
-	n.queuedVMs = nil
+	n.queue = nil
 
 	stats.start = time.Now()
 	stats.state = SchedulerRunning
@@ -185,16 +176,16 @@ func (n *Namespace) Launch() error {
 
 	var wg sync.WaitGroup
 
-	for host, queuedVMs := range assignment {
+	for host, queue := range assignment {
 		wg.Add(1)
 
-		go func(host string, queuedVMs []queuedVM) {
+		go func(host string, queue []QueuedVMs) {
 			defer wg.Done()
 
-			for _, q := range queuedVMs {
+			for _, q := range queue {
 				n.hostLaunch(host, q, respChan)
 			}
-		}(host, queuedVMs)
+		}(host, queue)
 	}
 
 	go func() {
@@ -223,55 +214,29 @@ func (n *Namespace) Launch() error {
 	return nil
 }
 
-// hostLaunch launches a queuedVM on the specified host and namespace.  We
-// blast a bunch of `vm config` commands at the host and then call `vm launch
-// ... noblock` if there are no errors. We assume that this is serialized on a
-// per-host basis -- it's fine to run multiple of these in parallel, as long as
-// they target different hosts.
-func (n *Namespace) hostLaunch(host string, queued queuedVM, respChan chan<- minicli.Responses) {
-	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
+// hostLaunch launches a queuedVM on the specified host and namespace.
+func (n *Namespace) hostLaunch(host string, queued QueuedVMs, respChan chan<- minicli.Responses) {
+	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
 
-	meshageCommandLock.Lock()
-
-	go func() {
-		defer meshageCommandLock.Unlock()
-
-		// Construct appropriate command, assigning a random ID
-		msg := meshageVMLaunch{
-			VMConfig:  queued.VMConfig,
-			VMType:    queued.vmType,
-			Names:     queued.names,
-			Namespace: n.Name,
-			TID:       rand.Int31(),
+	// Launching the VMs locally
+	if host == hostname {
+		errs := []error{}
+		for err := range vms.Launch(queued) {
+			errs = append(errs, err)
 		}
 
-		to := []string{host}
+		resp := &minicli.Response{Host: hostname}
 
-		if _, err := meshageNode.Set(to, msg); err != nil {
-			log.Errorln(err)
-			return
+		if err := makeErrSlice(errs); err != nil {
+			resp.Error = err.Error()
 		}
 
-		timeout := meshageTimeout
-		// If the timeout is 0, set to "unlimited"
-		if timeout == 0 {
-			timeout = math.MaxInt64
-		}
+		respChan <- minicli.Responses{resp}
 
-		// wait on a response from the client
-		select {
-		case resp := <-meshageResponseChan:
-			body := resp.Body.(meshageResponse)
-			if body.TID != msg.TID {
-				log.Warn("invalid TID from response channel: %d", body.TID)
-			} else {
-				respChan <- minicli.Responses{&body.Response}
-			}
-		case <-time.After(timeout):
-			// Didn't hear back from any node within the timeout
-			break
-		}
-	}()
+		return
+	}
+
+	forward(meshageLaunch(host, queued), respChan)
 }
 
 // GetNamespace returns the active namespace. Returns nil if there isn't a

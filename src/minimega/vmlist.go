@@ -30,6 +30,13 @@ type Tag struct {
 	Key, Value string
 }
 
+// QueuedVMs stores all the info needed to launch a batch of VMs
+type QueuedVMs struct {
+	Names    []string
+	VMType   // embed
+	VMConfig // embed
+}
+
 var vmLock sync.Mutex // lock for synchronizing access to vms
 
 // Count of VMs in current namespace.
@@ -244,21 +251,21 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(names []string, vmType VMType, config VMConfig) <-chan error {
+func (vms VMs) Launch(q QueuedVMs) <-chan error {
 	vmLock.Lock()
 
 	out := make(chan error)
 
-	log.Info("launching %v %v vms", len(names), vmType)
+	log.Info("launching %v %v vms", len(q.Names), q.VMType)
 	start := time.Now()
 
 	var wg sync.WaitGroup
 
-	for _, name := range names {
+	for _, name := range q.Names {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm, err := NewVM(name, vmType, config)
+		vm, err := NewVM(name, q.VMType, q.VMConfig)
 		if err == nil {
 			for _, vm2 := range vms {
 				if err = vm2.Conflicts(vm); err != nil {
@@ -306,7 +313,7 @@ func (vms VMs) Launch(names []string, vmType VMType, config VMConfig) <-chan err
 		wg.Wait()
 
 		stop := time.Now()
-		log.Info("launched %v %v vms in %v", len(names), vmType, stop.Sub(start))
+		log.Info("launched %v %v vms in %v", len(q.Names), q.VMType, stop.Sub(start))
 	}()
 
 	return out
@@ -590,16 +597,14 @@ func meshageVMLauncher() {
 			cmd := m.Body.(meshageVMLaunch)
 
 			errs := []error{}
-			for err := range vms.Launch(cmd.Names, cmd.VMType, cmd.VMConfig) {
+			for err := range vms.Launch(cmd.QueuedVMs) {
 				errs = append(errs, err)
 			}
 
-			resp := minicli.Response{}
+			resp := minicli.Response{Host: hostname}
 
 			if err := makeErrSlice(errs); err != nil {
 				resp.Error = err.Error()
-			} else {
-				resp.Response = "OK"
 			}
 
 			to := []string{m.Source}

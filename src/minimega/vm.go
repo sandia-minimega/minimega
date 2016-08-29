@@ -200,7 +200,6 @@ func NewBaseVM(name string, config VMConfig) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Namespace = GetNamespaceName()
 	vm.Host = hostname
 
 	// generate a UUID if we don't have one

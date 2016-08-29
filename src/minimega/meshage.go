@@ -31,10 +31,7 @@ type meshageResponse struct {
 
 // meshageVMLaunch is sent by the scheduler to launch VMs on a remote host
 type meshageVMLaunch struct {
-	VMConfig
-	VMType
-	Names     []string
-	Namespace string
+	QueuedVMs       // embed
 	TID       int32 // unique ID for command/response pair
 }
 
@@ -44,7 +41,7 @@ var (
 	meshageCommandChan  chan *meshage.Message
 	meshageResponseChan chan *meshage.Message
 	meshageVMLaunchChan chan *meshage.Message
-	meshageTimeout      time.Duration // default is no timeout
+	meshageTimeout      = time.Duration(math.MaxInt64) // default is no timeout
 )
 
 func init() {
@@ -182,12 +179,6 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 		// host -> response
 		resps := map[string]*minicli.Response{}
 
-		timeout := meshageTimeout
-		// If the timeout is 0, set to "unlimited"
-		if timeout == 0 {
-			timeout = math.MaxInt64
-		}
-
 		// wait on a response from each recipient
 	recvLoop:
 		for len(resps) < len(recipients) {
@@ -199,7 +190,7 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 				} else {
 					resps[body.Host] = &body.Response
 				}
-			case <-time.After(timeout):
+			case <-time.After(meshageTimeout):
 				// Didn't hear back from any node within the timeout
 				break recvLoop
 			}
@@ -222,4 +213,41 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 	}()
 
 	return out, nil
+}
+
+// meshageLaunch sends a command to a launch VMs on the specified hosts,
+// returning a channel for the responses. This is non-blocking -- the channel
+// is created and then returned after a couple of sanity checks.
+func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
+	meshageCommandLock.Lock()
+	out := make(chan minicli.Responses)
+
+	to := []string{host}
+	msg := meshageVMLaunch{QueuedVMs: queued, TID: rand.Int31()}
+
+	go func() {
+		defer meshageCommandLock.Unlock()
+		defer close(out)
+
+		if _, err := meshageNode.Set(to, msg); err != nil {
+			out <- errResp(err)
+			return
+		}
+
+		// wait on a response from the client
+		select {
+		case resp := <-meshageResponseChan:
+			body := resp.Body.(meshageResponse)
+			if body.TID != msg.TID {
+				log.Warn("invalid TID from response channel: %d", body.TID)
+			} else {
+				out <- minicli.Responses{&body.Response}
+			}
+		case <-time.After(meshageTimeout):
+			// Didn't hear back from any node within the timeout
+			break
+		}
+	}()
+
+	return out
 }
