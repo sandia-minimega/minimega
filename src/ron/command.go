@@ -26,6 +26,9 @@ type Command struct {
 	// PID of the process to signal, -1 signals all processes
 	PID int
 
+	// KillAll kills all processes by name
+	KillAll string
+
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
 	// to be processed.
