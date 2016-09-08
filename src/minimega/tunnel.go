@@ -12,7 +12,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	log "minilog"
@@ -51,8 +50,7 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		go func() {
-			decoder := base64.NewDecoder(base64.StdEncoding, ws)
-			tee := io.TeeReader(decoder, remote)
+			tee := io.TeeReader(ws, remote)
 
 			for {
 				// Read
@@ -74,20 +72,18 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 			remote.Close()
 		}()
 		func() {
-			sbuf := make([]byte, VNC_WS_BUF)
-			dbuf := make([]byte, 2*VNC_WS_BUF)
+			rbuf := make([]byte, VNC_WS_BUF)
+
 			for {
-				n, err := remote.Read(sbuf)
+				n, err := remote.Read(rbuf)
 				if err != nil {
 					if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
 						log.Errorln(err)
 					}
 					break
 				}
-				base64.StdEncoding.Encode(dbuf, sbuf[0:n])
-				n = base64.StdEncoding.EncodedLen(n)
 
-				_, err = ws.Write(dbuf[0:n])
+				err = websocket.Message.Send(ws, rbuf[:n])
 				if err != nil {
 					log.Errorln(err)
 					break
