@@ -71,6 +71,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <process,> <list,> <vm id, name, uuid or all>",
 			"cc <process,> <kill,> <pid or all>",
+			"cc <process,> <killall,> <name>",
 
 			"cc <commands,>",
 
@@ -456,10 +457,26 @@ func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+func cliCCProcessKillAll(c *minicli.Command, resp *minicli.Response) error {
+	cmd := &ron.Command{
+		KillAll: c.StringArgs["name"],
+		Filter:  ccGetFilter(),
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v :%v", id, cmd)
+
+	ccMapPrefix(id)
+
+	return nil
+}
+
 // process
 func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["kill"] {
 		return cliCCProcessKill(c, resp)
+	} else if c.BoolArgs["killall"] {
+		return cliCCProcessKillAll(c, resp)
 	}
 
 	// list processes
