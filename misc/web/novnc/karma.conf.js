@@ -115,13 +115,14 @@ module.exports = function(config) {
       'include/base64.js',
       'include/keysym.js',
       'include/keysymdef.js',
+      'include/xtscancodes.js',
       'include/keyboard.js',
       'include/input.js',
       'include/websock.js',
       'include/rfb.js',
-      'include/jsunzip.js',
       'include/des.js',
       'include/display.js',
+      'include/inflator.js',
       'tests/test.*.js'
     ],
 

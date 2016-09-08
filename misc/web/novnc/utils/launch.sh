@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# Copyright 2016 Joel Martin
+# Copyright 2016 Solly Ross
+# Licensed under MPL 2.0 or any later version (see LICENSE.txt)
+
 usage() {
     if [ "$*" ]; then
         echo "$*"
@@ -65,7 +69,7 @@ done
 which netstat >/dev/null 2>&1 \
     || die "Must have netstat installed"
 
-netstat -ltn | grep -qs "${PORT} .*LISTEN" \
+netstat -ltn | grep -qs ":${PORT} .*LISTEN" \
     && die "Port ${PORT} in use. Try --listen PORT"
 
 trap "cleanup" TERM QUIT INT EXIT
@@ -108,7 +112,7 @@ if [[ -e ${HERE}/websockify ]]; then
 
     if [[ ! -x $WEBSOCKIFY ]]; then
         echo "The path ${HERE}/websockify exists, but $WEBSOCKIFY either does not exist or is not executable."
-        echo "If you inteded to use an installed websockify package, please remove ${HERE}/websockify."
+        echo "If you intended to use an installed websockify package, please remove ${HERE}/websockify."
         exit 1
     fi
 

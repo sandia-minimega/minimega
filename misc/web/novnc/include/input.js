@@ -51,8 +51,16 @@ var Keyboard, Mouse;
             if (this._onKeyPress) {
                 Util.Debug("onKeyPress " + (e.type == 'keydown' ? "down" : "up") +
                            ", keysym: " + e.keysym.keysym + "(" + e.keysym.keyname + ")");
-                this._onKeyPress(e.keysym.keysym, e.type == 'keydown');
+                this._onKeyPress(e);
             }
+        },
+
+        setQEMUVNCKeyboardHandler: function () {
+            this._handler = new QEMUKeyEventDecoder(kbdUtil.ModifierSync(),
+                TrackQEMUKeyState(
+                    this._handleRfbEvent.bind(this)
+                )
+            );
         },
 
         _handleKeyDown: function (e) {
@@ -212,7 +220,7 @@ var Keyboard, Mouse;
                 // Touch device
 
                 // When two touches occur within 500 ms of each other and are
-                // closer than 20 pixels together a double click is triggered.
+                // close enough together a double click is triggered.
                 if (down == 1) {
                     if (this._doubleClickTimer === null) {
                         this._lastTouchPos = pos;
@@ -229,7 +237,8 @@ var Keyboard, Mouse;
 
                         // The goal is to trigger on a certain physical width, the
                         // devicePixelRatio brings us a bit closer but is not optimal.
-                        if (d < 20 * window.devicePixelRatio) {
+                        var threshold = 20 * (window.devicePixelRatio || 1);
+                        if (d < threshold) {
                             pos = this._lastTouchPos;
                         }
                     }
