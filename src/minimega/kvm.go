@@ -133,6 +133,7 @@ func (vm *KvmVM) Copy() VM {
 	defer vm2.lock.Unlock()
 
 	// Make deep copies
+	vm2.BaseConfig = vm.BaseConfig.Copy()
 	vm2.KVMConfig = vm.KVMConfig.Copy()
 
 	return vm2

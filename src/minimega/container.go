@@ -608,6 +608,7 @@ func (vm *ContainerVM) Copy() VM {
 	defer vm2.lock.Unlock()
 
 	// Make deep copies
+	vm2.BaseConfig = vm.BaseConfig.Copy()
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
 	return vm2
