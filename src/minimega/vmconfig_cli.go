@@ -94,7 +94,7 @@ interface will be connected on. If the bridge name is omitted, minimega will
 use the default 'mega_bridge'. You can also optionally specify the mac address
 of the interface to connect to that network. If not specifed, the mac address
 will be randomly generated. Additionally, you can optionally specify a driver
-for qemu to use. By default, e1000 is used.
+for qemu to use (ignored by containers). By default, e1000 is used.
 
 Examples:
 
@@ -124,15 +124,15 @@ If you prefer, you can also use aliases for VLANs:
 
 These aliases will be allocated from the pool of available VLANs and is
 namespace-aware (i.e. 'DMZ' in namespace 'foo' will be a different VLAN than
-'DMZ' in namespace 'foo'). Internally, this is implemented by concatenating the
+'DMZ' in namespace 'bar'). Internally, this is implemented by concatenating the
 namespace name with the VLAN alias (e.g. 'DMZ' in namespace 'foo' becomes
-'foo//DMZ'). If you wish to connect VLANs in different namespaces, you may use
-abuse this implementation detail:
+'foo//DMZ'). If you wish to connect VLANs in different namespaces, you may
+use/abuse this implementation detail:
 
 	namespace bar
 	vm config net foo//DMZ
 
-Calling vm net with no parameters will list the current networks for this VM.`,
+Calling vm config net with no arguments prints the current configuration.`,
 		Patterns: []string{
 			"vm config net [netspec]...",
 		},
