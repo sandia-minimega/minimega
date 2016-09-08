@@ -89,6 +89,11 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
+	hosts := []string{}
+	for h := range ns.Hosts {
+		hosts = append(hosts, h)
+	}
+
 	// TODO: Make this pretty or divide it up somehow
 	resp.Response = fmt.Sprintf(`Namespace: "%v"
 Hosts: %v
@@ -96,7 +101,7 @@ Taps: %v
 Number of queuedVMs: %v
 
 Schedules:
-`, namespace, ns.Hosts, ns.Taps, len(ns.queuedVMs))
+`, namespace, ranges.UnsplitList(hosts), ns.Taps, len(ns.queuedVMs))
 
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
