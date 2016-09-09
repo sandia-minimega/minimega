@@ -540,6 +540,21 @@ func (c *Client) processCommand(command *Command) {
 		c.processLock.Unlock()
 	}
 
+	if command.KillAll != "" {
+		log.Debug("killing all processes matching %v", command.KillAll)
+		c.processLock.Lock()
+		for _, p := range c.Processes {
+			if strings.Contains(strings.Join(p.Command, " "), command.KillAll) {
+				log.Debug("killing matched process: %v", p.Command)
+				err := p.process.Kill()
+				if err != nil {
+					log.Errorln(err)
+				}
+			}
+		}
+		c.processLock.Unlock()
+	}
+
 	c.Respond(resp)
 }
 

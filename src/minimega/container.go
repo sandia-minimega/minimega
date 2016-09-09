@@ -608,6 +608,7 @@ func (vm *ContainerVM) Copy() VM {
 	defer vm2.lock.Unlock()
 
 	// Make deep copies
+	vm2.BaseConfig = vm.BaseConfig.Copy()
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
 	return vm2
@@ -1501,10 +1502,12 @@ func containerNuke() {
 		log.Errorln(err)
 	}
 
-	// umount cgroup_root
-	err = syscall.Unmount(CGROUP_ROOT, 0)
-	if err != nil {
-		log.Error("cgroup_root unmount: %v", err)
+	// umount cgroup_root, if it exists
+	if _, err := os.Stat(CGROUP_ROOT); err == nil {
+		err = syscall.Unmount(CGROUP_ROOT, 0)
+		if err != nil {
+			log.Error("cgroup_root unmount: %v", err)
+		}
 	}
 
 	// remove meganet_* from /var/run/netns

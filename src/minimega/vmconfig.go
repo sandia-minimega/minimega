@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -168,9 +170,6 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"kernel": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).KernelPath
 	}, ""),
-	"migrate": vmConfigString(func(vm interface{}) *string {
-		return &mustKVMConfig(vm).MigratePath
-	}, ""),
 	"cpu": vmConfigString(func(vm interface{}) *string {
 		return &mustKVMConfig(vm).CPU
 	}, DefaultKVMCPU),
@@ -186,6 +185,24 @@ var kvmConfigFns = map[string]VMConfigFns{
 	"disk": vmConfigSlice(func(vm interface{}) *[]string {
 		return &mustKVMConfig(vm).DiskPaths
 	}, "disk", nil),
+	"migrate": {
+		Update: func(vm interface{}, c *minicli.Command) error {
+			fname := c.StringArgs["path"]
+			// Ensure that relative paths are always relative to /files/
+			if !filepath.IsAbs(fname) {
+				fname = filepath.Join(*f_iomBase, fname)
+			}
+
+			if _, err := os.Stat(fname); os.IsNotExist(err) {
+				log.Warn("migration file does not exist: %v", fname)
+			}
+
+			mustKVMConfig(vm).MigratePath = fname
+			return nil
+		},
+		Clear: func(vm interface{}) { mustKVMConfig(vm).MigratePath = "" },
+		Print: func(vm interface{}) string { return mustKVMConfig(vm).MigratePath },
+	},
 	"append": {
 		Update: func(vm interface{}, c *minicli.Command) error {
 			mustKVMConfig(vm).Append = strings.Join(c.ListArgs["arg"], " ")

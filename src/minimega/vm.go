@@ -148,15 +148,26 @@ type BaseVM struct {
 
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
-	"id", "name", "state", "namespace", "memory", "vcpus", "type", "vlan",
-	"bridge", "tap", "mac", "ip", "ip6", "bandwidth", "migrate", "disk",
-	"snapshot", "initrd", "kernel", "cdrom", "append", "uuid", "cc_active",
-	"vnc_port", "tags", "qos",
+	// generic fields
+	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	// network fields
+	"vlan", "bridge", "tap", "mac", "ip", "ip6", "bandwidth", "qos",
+	// kvm fields
+	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
+	"migrate", "append", "serial", "virtio-serial", "vnc_port",
+	// container fields
+	"filesystem", "hostname", "init", "preinit", "fifo",
+	// more generic fields (tags can be huge so throw it at the end)
+	"tags",
 }
 
 // Valid names for output masks for `vm summary`, in preferred output order
 var vmInfoLite = []string{
-	"id", "name", "state", "namespace", "type", "vlan", "uuid", "cc_active",
+	// generic fields
+	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	// network fields
+	"vlan",
+	// kvm fields
 	"vnc_port",
 }
 
