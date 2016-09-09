@@ -597,8 +597,29 @@ func meshageVMLauncher() {
 			cmd := m.Body.(meshageVMLaunch)
 
 			errs := []error{}
-			for err := range vms.Launch(cmd.QueuedVMs) {
-				errs = append(errs, err)
+
+			// Run our own version of the cliPreprocessor since some of the vm
+			// configs might need expanding. There's probably a better way to
+			// do this...
+			var err error
+
+			kvm := &cmd.QueuedVMs.KVMConfig
+
+			for _, v := range []*string{&kvm.CdromPath, &kvm.InitrdPath, &kvm.KernelPath} {
+				if *v, err = cliPreprocess(*v); err != nil {
+					errs = append(errs, err)
+				}
+			}
+			for i := range kvm.DiskPaths {
+				if kvm.DiskPaths[i], err = cliPreprocess(kvm.DiskPaths[i]); err != nil {
+					errs = append(errs, err)
+				}
+			}
+
+			if len(errs) == 0 {
+				for err := range vms.Launch(cmd.QueuedVMs) {
+					errs = append(errs, err)
+				}
 			}
 
 			resp := minicli.Response{Host: hostname}
