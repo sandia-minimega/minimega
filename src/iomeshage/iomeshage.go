@@ -67,9 +67,7 @@ var (
 // New returns a new iomeshage object service base directory b on meshage node
 // n
 func New(base string, node *meshage.Node) (*IOMeshage, error) {
-	if !strings.HasSuffix(base, "/") {
-		base += "/"
-	}
+	base = filepath.Clean(base)
 	log.Debug("new iomeshage node on base %v", base)
 	err := os.MkdirAll(base, 0755)
 
@@ -87,7 +85,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 	return r, err
 }
 
-// List files and directories starting at iom.Base+dir
+// List files and directories starting at iom.base+dir
 func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 	dir = iom.dirPrep(dir)
 	files, err := ioutil.ReadDir(dir)
