@@ -35,28 +35,35 @@ type meshageVMLaunch struct {
 	TID       int32 // unique ID for command/response pair
 }
 
+// meshageVMResponse is sent back to the scheduler to notify it of any errors
+// that occured
+type meshageVMResponse struct {
+	Errors []error // Errors that occured during launch
+	TID    int32   // unique ID for command/response pair
+}
+
 var (
-	meshageNode         *meshage.Node
-	meshageMessages     chan *meshage.Message
-	meshageCommandChan  chan *meshage.Message
-	meshageResponseChan chan *meshage.Message
-	meshageVMLaunchChan chan *meshage.Message
-	meshageTimeout      = time.Duration(math.MaxInt64) // default is no timeout
+	meshageNode     *meshage.Node
+	meshageMessages chan *meshage.Message
+
+	meshageCommandChan    = make(chan *meshage.Message, 1024)
+	meshageResponseChan   = make(chan *meshage.Message, 1024)
+	meshageVMLaunchChan   = make(chan *meshage.Message, 1024)
+	meshageVMResponseChan = make(chan *meshage.Message, 1024)
+
+	meshageTimeout = time.Duration(math.MaxInt64) // default is no timeout
 )
 
 func init() {
 	gob.Register(meshageCommand{})
 	gob.Register(meshageResponse{})
 	gob.Register(meshageVMLaunch{})
+	gob.Register(meshageVMResponse{})
 	gob.Register(iomeshage.IOMMessage{})
 }
 
 func meshageInit(host string, namespace string, degree, msaTimeout uint, port int) {
 	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
-
-	meshageCommandChan = make(chan *meshage.Message, 1024)
-	meshageResponseChan = make(chan *meshage.Message, 1024)
-	meshageVMLaunchChan = make(chan *meshage.Message, 1024)
 
 	meshageNode.Snoop = meshageSnooper
 
@@ -82,6 +89,8 @@ func meshageMux() {
 			meshageResponseChan <- m
 		case meshageVMLaunch:
 			meshageVMLaunchChan <- m
+		case meshageVMResponse:
+			meshageVMResponseChan <- m
 		case iomeshage.IOMMessage:
 			iom.Messages <- m
 		default:
@@ -220,14 +229,12 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 // returning a channel for the responses. This is non-blocking -- the channel
 // is created and then returned after a couple of sanity checks.
 func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
-	meshageCommandLock.Lock()
 	out := make(chan minicli.Responses)
 
 	to := []string{host}
 	msg := meshageVMLaunch{QueuedVMs: queued, TID: rand.Int31()}
 
 	go func() {
-		defer meshageCommandLock.Unlock()
 		defer close(out)
 
 		if _, err := meshageNode.Set(to, msg); err != nil {
@@ -239,12 +246,20 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 
 		// wait on a response from the client
 		select {
-		case resp := <-meshageResponseChan:
-			body := resp.Body.(meshageResponse)
+		case resp := <-meshageVMResponseChan:
+			body := resp.Body.(meshageVMResponse)
 			if body.TID != msg.TID {
-				log.Warn("invalid TID from response channel: %d", body.TID)
+				// put it back for another goroutine to pick up...
+				meshageVMResponseChan <- resp
 			} else {
-				out <- minicli.Responses{&body.Response}
+				// wrap it up into a minicli.Response
+				resp := &minicli.Response{Host: host}
+
+				if err := makeErrSlice(body.Errors); err != nil {
+					resp.Error = err.Error()
+				}
+
+				out <- minicli.Responses{resp}
 			}
 		case <-time.After(meshageTimeout):
 			// Didn't hear back from any node within the timeout

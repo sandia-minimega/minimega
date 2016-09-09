@@ -622,14 +622,8 @@ func meshageVMLauncher() {
 				}
 			}
 
-			resp := minicli.Response{Host: hostname}
-
-			if err := makeErrSlice(errs); err != nil {
-				resp.Error = err.Error()
-			}
-
 			to := []string{m.Source}
-			msg := meshageResponse{Response: resp, TID: cmd.TID}
+			msg := meshageVMResponse{Errors: errs, TID: cmd.TID}
 
 			if _, err := meshageNode.Set(to, msg); err != nil {
 				log.Errorln(err)
