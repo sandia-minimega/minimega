@@ -47,6 +47,7 @@ var (
 func init() {
 	gob.Register(meshageCommand{})
 	gob.Register(meshageResponse{})
+	gob.Register(meshageVMLaunch{})
 	gob.Register(iomeshage.IOMMessage{})
 }
 
@@ -234,6 +235,8 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 			return
 		}
 
+		log.Info("VM schedule sent to %v, waiting on response", host)
+
 		// wait on a response from the client
 		select {
 		case resp := <-meshageResponseChan:
@@ -245,6 +248,7 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 			}
 		case <-time.After(meshageTimeout):
 			// Didn't hear back from any node within the timeout
+			log.Error("timed out waiting for %v to launch VMs", host)
 			break
 		}
 	}()
