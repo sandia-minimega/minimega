@@ -627,11 +627,13 @@ func (iom *IOMeshage) Delete(file string) error {
 
 // Get a full path, with the iom base directory and any trailing "/".
 func (iom *IOMeshage) dirPrep(dir string) string {
-	if strings.HasPrefix(dir, "/") {
-		dir = strings.TrimLeft(dir, "/")
-	}
-	log.Debug("dir is %v%v", iom.base, dir)
-	return filepath.Join(iom.base, dir)
+	// prepend a "/" to the directory so that commands can't affect files above
+	// the iom.base directory. For example, filepath.Clean will replace "/../"
+	// with "/".
+	dir = filepath.Join(iom.base, filepath.Clean("/"+dir))
+	log.Info("dir is %v", dir)
+
+	return dir
 }
 
 // Generate a random 63 bit TID (positive int64).
