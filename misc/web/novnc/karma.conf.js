@@ -115,7 +115,6 @@ module.exports = function(config) {
       'include/base64.js',
       'include/keysym.js',
       'include/keysymdef.js',
-      'include/xtscancodes.js',
       'include/keyboard.js',
       'include/input.js',
       'include/websock.js',

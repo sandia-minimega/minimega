@@ -17,7 +17,7 @@ var Display;
 
     var SUPPORTS_IMAGEDATA_CONSTRUCTOR = false;
     try {
-        new ImageData(new Uint8ClampedArray(4), 1, 1);
+        new ImageData(new Uint8ClampedArray(1), 1, 1);
         SUPPORTS_IMAGEDATA_CONSTRUCTOR = true;
     } catch (ex) {
         // ignore failure
@@ -496,7 +496,7 @@ var Display;
                 // NB(directxman12): it's technically more performant here to use preallocated arrays,
                 // but it's a lot of extra work for not a lot of payoff -- if we're using the render queue,
                 // this probably isn't getting called *nearly* as much
-                var new_arr = new Uint8Array(width * height * 3);
+                var new_arr = new Uint8Array(width * height * 4);
                 new_arr.set(new Uint8Array(arr.buffer, 0, new_arr.length));
                 this.renderQ_push({
                     'type': 'blitRgb',

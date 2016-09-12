@@ -18,9 +18,8 @@ var UI;
     // Load supporting scripts
     window.onscriptsload = function () { UI.load(); };
     Util.load_scripts(["webutil.js", "base64.js", "websock.js", "des.js",
-                       "keysymdef.js", "xtscancodes.js", "keyboard.js",
-                       "input.js", "display.js", "rfb.js", "keysym.js",
-                       "inflator.js"]);
+                       "keysymdef.js", "keyboard.js", "input.js", "display.js",
+                       "rfb.js", "keysym.js", "inflator.js"]);
 
     UI = {
 
@@ -34,7 +33,6 @@ var UI;
         connSettingsOpen: false,
         clipboardOpen: false,
         keyboardVisible: false,
-        extraKeysVisible: false,
 
         isTouchDevice: false,
         isSafari: false,
@@ -42,8 +40,10 @@ var UI;
         lastKeyboardinput: null,
         defaultKeyboardinputLen: 100,
 
-        ctrlOn: false,
-        altOn: false,
+        shiftDown: false,
+        ctrlDown: false,
+        altDown: false,
+        altGrDown: false,
 
         // Setup rfb object, load settings from browser storage, then call
         // UI.init to setup the UI/menus
@@ -157,17 +157,11 @@ var UI;
 
             Util.addEvent(window, 'load', UI.keyboardinputReset);
 
-            // While connected we want to display a confirmation dialogue
-            // if the user tries to leave the page
-            Util.addEvent(window, 'beforeunload', function (e) {
+            Util.addEvent(window, 'beforeunload', function () {
                 if (UI.rfb && UI.rfb_state === 'normal') {
-                    var msg = "You are currently connected.";
-                    e.returnValue = msg;
-                    return msg;
-                } else {
-                    return void 0; // To prevent the dialogue when disconnected
+                    return "You are currently connected.";
                 }
-            });
+            } );
 
             // Show description by default when hosted at for kanaka.github.com
             if (location.host === "kanaka.github.io") {
