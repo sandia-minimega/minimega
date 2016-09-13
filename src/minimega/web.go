@@ -210,7 +210,7 @@ func webTileVNC(w http.ResponseWriter, r *http.Request) {
 }
 
 func webVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"))
+	http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {
