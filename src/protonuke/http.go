@@ -431,7 +431,13 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
 	} else {
-		if strings.HasSuffix(r.URL.Path, "image.png") {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+		} else if strings.HasSuffix(r.URL.Path, "image.png") {
+			if *f_httpGzip {
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Content-Type", "image/png")
+			}
 			w.Write(httpImage)
 		} else {
 			h := &HtmlContent{
