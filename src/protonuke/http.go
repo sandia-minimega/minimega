@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"fmt"
 	"html/template"
@@ -400,7 +401,19 @@ func httpMakeImage() {
 
 	b := new(bytes.Buffer)
 	png.Encode(b, m)
-	httpImage = b.Bytes()
+
+	if *f_httpGzip {
+		b2 := new(bytes.Buffer)
+		w := gzip.NewWriter(b2)
+
+		if _, err := io.Copy(w, b); err != nil {
+			log.Fatalln(err)
+		}
+
+		httpImage = b2.Bytes()
+	} else {
+		httpImage = b.Bytes()
+	}
 }
 
 func hitCounter() {
