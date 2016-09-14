@@ -93,6 +93,13 @@ VM). Stops on the first invalid command.`,
 		},
 		Call: wrapSimpleCLI(cliEcho),
 	},
+	{ // uptime
+		HelpShort: "show how long minimega has been running",
+		Patterns: []string{
+			"uptime",
+		},
+		Call: wrapBroadcastCLI(cliUptime),
+	},
 }
 
 func cliQuit(c *minicli.Command, resp *minicli.Response) error {
@@ -258,5 +265,10 @@ func cliVersion(c *minicli.Command, resp *minicli.Response) error {
 
 func cliEcho(c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = strings.Join(c.ListArgs["args"], " ")
+	return nil
+}
+
+func cliUptime(c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = fmt.Sprintf("Started %v up %v", started, time.Since(started))
 	return nil
 }

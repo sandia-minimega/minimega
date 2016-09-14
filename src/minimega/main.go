@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"version"
 )
 
@@ -54,6 +55,8 @@ var (
 
 	hostname string
 	reserved = []string{Wildcard}
+
+	started = time.Now()
 )
 
 const (
