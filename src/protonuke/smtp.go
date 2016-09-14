@@ -61,7 +61,7 @@ const (
 )
 
 const (
-	alphanum = "01234567890abcdefghijklmnopqrstuvwxyz"
+	alphanum = "0123456789abcdefghijklmnopqrstuvwxyz"
 )
 
 type mail struct {
