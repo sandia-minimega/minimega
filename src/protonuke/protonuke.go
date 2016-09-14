@@ -94,12 +94,15 @@ func main() {
 	}
 
 	var err error
-	hosts, keys, err = parseHosts(flag.Args())
+	hosts, err = parseHosts(flag.Args())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if len(hosts) == 0 && !*f_serve {
 		log.Fatalln("no hosts specified")
+	}
+	for k, _ := range hosts {
+		keys = append(keys, k)
 	}
 	log.Debugln("hosts: ", hosts)
 
