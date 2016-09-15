@@ -15,6 +15,7 @@ import (
 	log "minilog"
 	"ranges"
 	"reflect"
+	"strings"
 	"time"
 	"version"
 )
@@ -38,8 +39,8 @@ type meshageVMLaunch struct {
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
 // that occured
 type meshageVMResponse struct {
-	Errors []error // Errors that occured during launch
-	TID    int32   // unique ID for command/response pair
+	Errors []string // Errors from launch, can't actualy encode error type
+	TID    int32    // unique ID for command/response pair
 }
 
 var (
@@ -253,11 +254,10 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 					// put it back for another goroutine to pick up...
 					meshageVMResponseChan <- resp
 				} else {
-					// wrap it up into a minicli.Response
-					resp := &minicli.Response{Host: host}
-
-					if err := makeErrSlice(body.Errors); err != nil {
-						resp.Error = err.Error()
+					// wrap response up into a minicli.Response
+					resp := &minicli.Response{
+						Host:  host,
+						Error: strings.Join(body.Errors, "\n"),
 					}
 
 					out <- minicli.Responses{resp}

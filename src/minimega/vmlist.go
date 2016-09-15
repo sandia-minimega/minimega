@@ -596,7 +596,7 @@ func meshageVMLauncher() {
 		go func(m *meshage.Message) {
 			cmd := m.Body.(meshageVMLaunch)
 
-			errs := []error{}
+			errs := []string{}
 
 			// Run our own version of the cliPreprocessor since some of the vm
 			// configs might need expanding. There's probably a better way to
@@ -607,18 +607,18 @@ func meshageVMLauncher() {
 
 			for _, v := range []*string{&kvm.CdromPath, &kvm.InitrdPath, &kvm.KernelPath} {
 				if *v, err = cliPreprocess(*v); err != nil {
-					errs = append(errs, err)
+					errs = append(errs, err.Error())
 				}
 			}
 			for i := range kvm.DiskPaths {
 				if kvm.DiskPaths[i], err = cliPreprocess(kvm.DiskPaths[i]); err != nil {
-					errs = append(errs, err)
+					errs = append(errs, err.Error())
 				}
 			}
 
 			if len(errs) == 0 {
 				for err := range vms.Launch(cmd.QueuedVMs) {
-					errs = append(errs, err)
+					errs = append(errs, err.Error())
 				}
 			}
 
