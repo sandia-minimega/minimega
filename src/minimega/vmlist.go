@@ -618,7 +618,9 @@ func meshageVMLauncher() {
 
 			if len(errs) == 0 {
 				for err := range vms.Launch(cmd.QueuedVMs) {
-					errs = append(errs, err.Error())
+					if err != nil {
+						errs = append(errs, err.Error())
+					}
 				}
 			}
 
