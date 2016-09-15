@@ -244,27 +244,30 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 
 		log.Info("VM schedule sent to %v, waiting on response", host)
 
-		// wait on a response from the client
-		select {
-		case resp := <-meshageVMResponseChan:
-			body := resp.Body.(meshageVMResponse)
-			if body.TID != msg.TID {
-				// put it back for another goroutine to pick up...
-				meshageVMResponseChan <- resp
-			} else {
-				// wrap it up into a minicli.Response
-				resp := &minicli.Response{Host: host}
+		for {
+			// wait on a response from the client
+			select {
+			case resp := <-meshageVMResponseChan:
+				body := resp.Body.(meshageVMResponse)
+				if body.TID != msg.TID {
+					// put it back for another goroutine to pick up...
+					meshageVMResponseChan <- resp
+				} else {
+					// wrap it up into a minicli.Response
+					resp := &minicli.Response{Host: host}
 
-				if err := makeErrSlice(body.Errors); err != nil {
-					resp.Error = err.Error()
+					if err := makeErrSlice(body.Errors); err != nil {
+						resp.Error = err.Error()
+					}
+
+					out <- minicli.Responses{resp}
+					return
 				}
-
-				out <- minicli.Responses{resp}
+			case <-time.After(meshageTimeout):
+				// Didn't hear back from any node within the timeout
+				log.Error("timed out waiting for %v to launch VMs", host)
+				return
 			}
-		case <-time.After(meshageTimeout):
-			// Didn't hear back from any node within the timeout
-			log.Error("timed out waiting for %v to launch VMs", host)
-			break
 		}
 	}()
 
