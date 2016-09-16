@@ -10,6 +10,7 @@ import (
 	. "minitunnel"
 	"net"
 	"os"
+	"sync"
 	"testing"
 )
 
@@ -18,7 +19,8 @@ func init() {
 }
 
 type DummyServer struct {
-	net.Listener
+	net.Listener // embed
+	sync.Mutex   // embed
 
 	err error // any error that occured while being a dummy
 }
@@ -29,10 +31,13 @@ func NewDummyServer(typ, laddr string) (*DummyServer, error) {
 		return nil, err
 	}
 
-	return &DummyServer{ln, nil}, nil
+	return &DummyServer{Listener: ln}, nil
 }
 
 func (d *DummyServer) Expect(input, output string) {
+	d.Lock()
+	defer d.Unlock()
+
 	rconn, err := d.Accept()
 	if err != nil {
 		d.err = err
@@ -143,6 +148,7 @@ func TestTunnel(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
+	s.Lock()
 	if s.err != nil {
 		t.Fatalf("%v", s.err)
 	}

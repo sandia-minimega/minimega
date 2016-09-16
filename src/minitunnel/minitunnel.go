@@ -6,19 +6,16 @@ package minitunnel
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	log "minilog"
 	"net"
-	"strings"
 	"sync"
-	"time"
 )
 
-const (
-	BUFFER_SIZE = 32768
-)
+const BufferSize = 32768
 
 // tunnel message types
 const (
@@ -35,17 +32,16 @@ type Tunnel struct {
 	transport io.ReadWriteCloser // underlying transport
 	enc       *gob.Encoder
 	dec       *gob.Decoder
-	out       chan *tunnelMessage           // message queue to be sent out over the transport
-	quit      chan bool                     // tell the message pump to quit
-	tids      map[int32]chan *tunnelMessage // maps of transaction id/incoming channel pairs for routing multiple tunnels
-	tidLock   sync.Mutex
-	rnum      *rand.Rand
+	quit      chan bool // tell the message pump to quit
+	chans     chans
+
+	sendLock sync.Mutex
 }
 
 type tunnelMessage struct {
 	Type   int
 	Ack    bool
-	TID    int32
+	TID    int
 	Source int
 	Host   string
 	Port   int
@@ -87,13 +83,12 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 		transport: transport,
 		enc:       enc,
 		dec:       dec,
-		out:       make(chan *tunnelMessage, 1024),
 		quit:      make(chan bool),
-		tids:      make(map[int32]chan *tunnelMessage, 1024),
-		rnum:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		chans:     makeChans(),
 	}
 
-	return t.mux()
+	go t.mux()
+	return nil
 }
 
 // Dial a listening minitunnel. Only one tunnel connection is permitted per
@@ -103,10 +98,8 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		transport: transport,
 		enc:       gob.NewEncoder(transport),
 		dec:       gob.NewDecoder(transport),
-		out:       make(chan *tunnelMessage, 1024),
 		quit:      make(chan bool),
-		tids:      make(map[int32]chan *tunnelMessage, 1024),
-		rnum:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		chans:     makeChans(),
 	}
 
 	handshake := &tunnelMessage{
@@ -128,73 +121,9 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 	}
 
 	// start the message mux
-	go func() {
-		err := t.mux()
-		if err != nil && err != io.ErrClosedPipe {
-			log.Errorln(err)
-		}
-	}()
+	go t.mux()
 
 	return t, nil
-}
-
-// mux to handle i/o over the transport. Data on channel out will be sent over
-// the transport. Data coming in over the transport will be routed to the
-// incoming channel as tagged be the message's TID. This allows us to trunk
-// multiple tunnels over a single transport.
-func (t *Tunnel) mux() error {
-	go func() {
-		for {
-			select {
-			case <-t.quit:
-				return
-			case m := <-t.out:
-				if m == nil {
-					return
-				}
-				err := t.enc.Encode(m)
-				if err != nil {
-					log.Errorln(err)
-				}
-			}
-		}
-	}()
-
-	for {
-		var m tunnelMessage
-		err := t.dec.Decode(&m)
-		if err != nil {
-			close(t.quit) // signal to all listeners that this tunnel is outa here
-			t.transport.Close()
-			return err
-		}
-
-		// create new session if necessary
-		if m.Type == CONNECT {
-			t.handleRemote(&m)
-		} else if m.Type == FORWARD {
-			t.handleReverse(&m)
-		} else if c := t.findTID(m.TID); c != nil {
-			// route the message to the handler by TID
-			c <- &m
-		} else {
-			log.Info("invalid TID: %v", m.TID)
-		}
-	}
-}
-
-// reverse tunnels are made by simply asking the remote end to invoke 'Forward'
-func (t *Tunnel) handleReverse(m *tunnelMessage) {
-	resp := &tunnelMessage{
-		Type: DATA,
-		TID:  m.TID,
-		Ack:  true,
-	}
-	err := t.Forward(m.Source, m.Host, m.Port)
-	if err != nil {
-		resp.Error = err.Error()
-	}
-	t.out <- resp
 }
 
 // Forward a local port to a remote host and destination port
@@ -213,23 +142,27 @@ func (t *Tunnel) Forward(source int, host string, dest int) error {
 // destination host, and destination port on the local end.
 func (t *Tunnel) Reverse(source int, host string, dest int) error {
 	// create a temporary TID registration in order to get an ACK back
-	TID := t.rnum.Int31()
-	in := t.registerTID(TID)
-	defer t.unregisterTID(TID)
+	TID := rand.Int()
+	in := t.chans.add(TID)
+	defer t.chans.remove(TID)
 
 	// send a message to invoke Forward() on the remote side
-	t.out <- &tunnelMessage{
+	m := &tunnelMessage{
 		Type:   FORWARD,
 		TID:    TID,
 		Source: source,
 		Host:   host,
 		Port:   dest,
 	}
+	if err := t.sendMessage(m); err != nil {
+		return err
+	}
 
-	m := <-in
-
-	if m.Error != "" {
-		return fmt.Errorf("%v", m.Error)
+	m = <-in
+	if m == nil {
+		return errors.New("tunnel terminating")
+	} else if m.Error != "" {
+		return errors.New(m.Error)
 	}
 
 	return nil
@@ -245,75 +178,17 @@ func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			if !strings.Contains(err.Error(), errClosing) {
-				log.Errorln(err)
-			}
+			log.Errorln(err)
 			return
 		}
 
-		go t.handleTunnel(conn, host, dest)
+		go t.createTunnel(conn, host, dest)
 	}
 }
 
-// register a transaction ID, adding a return channel to the mux
-func (t *Tunnel) registerTID(TID int32) chan *tunnelMessage {
-	t.tidLock.Lock()
-	defer t.tidLock.Unlock()
-
-	if _, ok := t.tids[TID]; ok {
-		log.Fatal("tid %v already exists!", TID)
-	}
-	c := make(chan *tunnelMessage, 1024)
-	t.tids[TID] = c
-	return c
-}
-
-func (t *Tunnel) unregisterTID(TID int32) {
-	t.tidLock.Lock()
-	defer t.tidLock.Unlock()
-
-	if _, ok := t.tids[TID]; ok {
-		delete(t.tids, TID)
-	}
-}
-
-// find an existing TID, returning the return channel if it exists, or nil.
-func (t *Tunnel) findTID(TID int32) chan *tunnelMessage {
-	t.tidLock.Lock()
-	defer t.tidLock.Unlock()
-
-	if c, ok := t.tids[TID]; ok {
-		return c
-	}
-	return nil
-}
-
-func (t *Tunnel) handleRemote(m *tunnelMessage) {
-	host := m.Host
-	port := m.Port
-	TID := m.TID
-
-	in := t.registerTID(TID)
-
-	// attempt to connect to the host/port
-	conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", host, port))
-	if err != nil {
-		log.Errorln(err)
-		t.out <- &tunnelMessage{
-			Type:  CLOSED,
-			TID:   TID,
-			Error: err.Error(),
-		}
-		t.unregisterTID(TID)
-		return
-	}
-
-	go t.handle(in, conn, TID)
-}
-
-func (t *Tunnel) handleTunnel(conn net.Conn, host string, dest int) {
-	TID := t.rnum.Int31()
-	in := t.registerTID(TID)
+func (t *Tunnel) createTunnel(conn net.Conn, host string, dest int) {
+	TID := rand.Int()
+	in := t.chans.add(TID)
 
 	m := &tunnelMessage{
 		Type: CONNECT,
@@ -322,64 +197,76 @@ func (t *Tunnel) handleTunnel(conn net.Conn, host string, dest int) {
 		TID:  TID,
 	}
 
-	t.out <- m
+	if err := t.sendMessage(m); err != nil {
+		log.Errorln(err)
+		return
+	}
 
-	t.handle(in, conn, TID)
+	t.transfer(in, conn, TID)
 }
 
-func (t *Tunnel) handle(in chan *tunnelMessage, conn net.Conn, TID int32) {
+func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {
+	defer t.chans.remove(TID)
+
 	// begin forwarding until an error occurs
 	go func() {
-		for {
-			select {
-			case <-t.quit:
-				conn.Close()
-				return
-			case m := <-in:
-				if m.Type == CLOSED {
-					if m.Error != "" {
-						log.Errorln(m.Error)
-						conn.Close()
-						break
-					}
-				}
-				_, err := conn.Write(m.Data)
-				if err != nil {
-					log.Errorln(err)
-					conn.Close()
-					t.out <- &tunnelMessage{
-						Type:  CLOSED,
-						TID:   TID,
-						Error: err.Error(),
-					}
+		defer conn.Close()
+
+		for m := range in {
+			if m.Type == CLOSED {
+				if m.Error != "" {
+					log.Errorln(m.Error)
 					break
 				}
+			}
+
+			if _, err := conn.Write(m.Data); err != nil {
+				log.Errorln(err)
+				conn.Close()
+
+				m := &tunnelMessage{
+					Type:  CLOSED,
+					TID:   TID,
+					Error: err.Error(),
+				}
+				if err := t.sendMessage(m); err != nil {
+					log.Errorln(err)
+				}
+				return
 			}
 		}
 	}()
 
-	for {
-		var buf = make([]byte, BUFFER_SIZE)
-		n, err := conn.Read(buf)
-		if err != nil {
-			conn.Close()
-			closeMessage := &tunnelMessage{
-				Type: CLOSED,
+	var n int
+	var err error
+
+	buf := make([]byte, BufferSize)
+
+	for err == nil {
+		n, err = conn.Read(buf)
+
+		if err == nil {
+			m := &tunnelMessage{
+				Type: DATA,
 				TID:  TID,
+				Data: buf[:n],
 			}
-			if err != io.EOF && !strings.Contains(err.Error(), errClosing) {
-				log.Errorln(err)
-				closeMessage.Error = err.Error()
-			}
-			t.out <- closeMessage
-			t.unregisterTID(TID)
-			break
+
+			err = t.sendMessage(m)
 		}
+	}
+
+	if err != io.EOF {
+		log.Errorln(err)
+
 		m := &tunnelMessage{
-			Type: DATA,
-			TID:  TID,
-			Data: buf[:n],
+			Type:  CLOSED,
+			TID:   TID,
+			Error: err.Error(),
 		}
-		t.out <- m
+
+		if err := t.sendMessage(m); err != nil {
+			log.Errorln(err)
+		}
 	}
 }
