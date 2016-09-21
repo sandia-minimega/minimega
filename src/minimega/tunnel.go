@@ -17,8 +17,8 @@ import (
 	log "minilog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
-	"vnc"
 	"websocket"
 )
 
@@ -26,21 +26,29 @@ const VNC_WS_BUF = 32768
 
 func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 	// we assume that if we got here, then the url must be sane and of
-	// the format /ws/<host>/<port>
+	// the format /ws/<vm_name>
 	path := r.URL.Path
 	if !strings.HasSuffix(path, "/") {
 		path += "/"
 	}
+
 	fields := strings.Split(path, "/")
-	if len(fields) != 5 {
+	if len(fields) != 4 {
 		http.NotFound(w, r)
 		return
 	}
-	fields = fields[2:]
+	vmName := fields[2]
 
-	rhost := fmt.Sprintf("%v:%v", fields[0], fields[1])
+	vms := GlobalVMs()
+	vm, err := vms.FindKvmVM(vmName)
+	if err != nil {
+		log.Errorln(err)
+		http.StatusText(404)
+		return
+	}
 
 	// connect to the remote host
+	rhost := fmt.Sprintf("%s:%s", vm.Host, strconv.Itoa(vm.VNCPort))
 	remote, err := net.Dial("tcp", rhost)
 	if err != nil {
 		log.Errorln(err)
@@ -49,47 +57,29 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	websocket.Handler(func(ws *websocket.Conn) {
+		defer ws.Close()
+		defer remote.Close()
+
 		go func() {
-			tee := io.TeeReader(ws, remote)
-
-			for {
-				// Read
-				msg, err := vnc.ReadClientMessage(tee)
-				if err != nil {
-					if err == io.EOF || strings.Contains(err.Error(), "closed network") {
-						break
-					}
-
-					log.Debugln(err)
-					continue
-				}
-
-				if r, ok := vncKBRecording[rhost]; ok {
-					r.RecordMessage(msg)
-				}
-			}
-
-			remote.Close()
+			go io.Copy(ws, remote)
+			io.Copy(remote, ws)
 		}()
-		func() {
-			rbuf := make([]byte, VNC_WS_BUF)
 
-			for {
-				n, err := remote.Read(rbuf)
-				if err != nil {
-					if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
-						log.Errorln(err)
-					}
-					break
-				}
-
-				err = websocket.Message.Send(ws, rbuf[:n])
-				if err != nil {
+		rbuf := make([]byte, VNC_WS_BUF)
+		for {
+			n, err := remote.Read(rbuf)
+			if err != nil {
+				if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
 					log.Errorln(err)
-					break
 				}
+				break
 			}
-			ws.Close()
-		}()
+
+			err = websocket.Message.Send(ws, rbuf[:n])
+			if err != nil {
+				log.Errorln(err)
+				break
+			}
+		}
 	}).ServeHTTP(w, r)
 }

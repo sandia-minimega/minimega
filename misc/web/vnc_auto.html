@@ -211,7 +211,8 @@
             // minimega: use value from template instead of URL
             //path = WebUtil.getConfigVar('path', 'websockify');
             var locationArray = window.location.hash.split(":");
-            path = "ws/" + locationArray[0].substring(1) + "/" + locationArray[1];
+            //path = "ws/" + locationArray[0].substring(1) + "/" + locationArray[1];
+            path = "ws/" + locationArray[2];
 
             // If a token variable is passed in, set the parameter in a cookie.
             // This is used by nova-novncproxy.
