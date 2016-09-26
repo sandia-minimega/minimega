@@ -84,7 +84,7 @@ func getTypeStruct(t types.Type, scope *types.Scope) (*types.Struct, bool) {
 
 func main() {
 	// Import and type-check the package
-	pkg, err := importer.Default().Import("dns")
+	pkg, err := importer.Default().Import("github.com/miekg/dns")
 	fatalIfErr(err)
 	scope := pkg.Scope()
 
