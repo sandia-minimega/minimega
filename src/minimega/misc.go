@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gopacket/macs"
 	"image"
 	"image/png"
 	"io"
@@ -30,6 +29,7 @@ import (
 	"unicode"
 	"vlans"
 
+	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
 )
 
