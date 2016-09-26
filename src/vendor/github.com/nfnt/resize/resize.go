@@ -132,12 +132,42 @@ func Resize(width, height uint, img image.Image, interp InterpolationFunction) i
 		}
 		wg.Wait()
 		return result
+	case *image.NRGBA:
+		// 8-bit precision
+		temp := image.NewRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
+		result := image.NewRGBA(image.Rect(0, 0, int(width), int(height)))
+
+		// horizontal filter, results in transposed temporary image
+		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(temp, i, cpus).(*image.RGBA)
+			go func() {
+				defer wg.Done()
+				resizeNRGBA(input, slice, scaleX, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+
+		// horizontal filter on transposed image, result is not transposed
+		coeffs, offset, filterLength = createWeights8(result.Bounds().Dy(), taps, blur, scaleY, kernel)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(result, i, cpus).(*image.RGBA)
+			go func() {
+				defer wg.Done()
+				resizeRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+		return result
+
 	case *image.YCbCr:
 		// 8-bit precision
 		// accessing the YCbCr arrays in a tight loop is slow.
 		// converting the image to ycc increases performance by 2x.
 		temp := newYCC(image.Rect(0, 0, input.Bounds().Dy(), int(width)), input.SubsampleRatio)
-		result := newYCC(image.Rect(0, 0, int(width), int(height)), input.SubsampleRatio)
+		result := newYCC(image.Rect(0, 0, int(width), int(height)), image.YCbCrSubsampleRatio444)
 
 		coeffs, offset, filterLength := createWeights8(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
 		in := imageYCbCrToYCC(input)
@@ -186,7 +216,36 @@ func Resize(width, height uint, img image.Image, interp InterpolationFunction) i
 			slice := makeSlice(result, i, cpus).(*image.RGBA64)
 			go func() {
 				defer wg.Done()
-				resizeGeneric(temp, slice, scaleY, coeffs, offset, filterLength)
+				resizeRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+		return result
+	case *image.NRGBA64:
+		// 16-bit precision
+		temp := image.NewRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
+		result := image.NewRGBA64(image.Rect(0, 0, int(width), int(height)))
+
+		// horizontal filter, results in transposed temporary image
+		coeffs, offset, filterLength := createWeights16(temp.Bounds().Dy(), taps, blur, scaleX, kernel)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(temp, i, cpus).(*image.RGBA64)
+			go func() {
+				defer wg.Done()
+				resizeNRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+
+		// horizontal filter on transposed image, result is not transposed
+		coeffs, offset, filterLength = createWeights16(result.Bounds().Dy(), taps, blur, scaleY, kernel)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(result, i, cpus).(*image.RGBA64)
+			go func() {
+				defer wg.Done()
+				resizeRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
 			}()
 		}
 		wg.Wait()
@@ -316,12 +375,41 @@ func resizeNearest(width, height uint, scaleX, scaleY float64, img image.Image, 
 		}
 		wg.Wait()
 		return result
+	case *image.NRGBA:
+		// 8-bit precision
+		temp := image.NewNRGBA(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
+		result := image.NewNRGBA(image.Rect(0, 0, int(width), int(height)))
+
+		// horizontal filter, results in transposed temporary image
+		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(temp, i, cpus).(*image.NRGBA)
+			go func() {
+				defer wg.Done()
+				nearestNRGBA(input, slice, scaleX, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+
+		// horizontal filter on transposed image, result is not transposed
+		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(result, i, cpus).(*image.NRGBA)
+			go func() {
+				defer wg.Done()
+				nearestNRGBA(temp, slice, scaleY, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+		return result
 	case *image.YCbCr:
 		// 8-bit precision
 		// accessing the YCbCr arrays in a tight loop is slow.
 		// converting the image to ycc increases performance by 2x.
 		temp := newYCC(image.Rect(0, 0, input.Bounds().Dy(), int(width)), input.SubsampleRatio)
-		result := newYCC(image.Rect(0, 0, int(width), int(height)), input.SubsampleRatio)
+		result := newYCC(image.Rect(0, 0, int(width), int(height)), image.YCbCrSubsampleRatio444)
 
 		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
 		in := imageYCbCrToYCC(input)
@@ -370,7 +458,36 @@ func resizeNearest(width, height uint, scaleX, scaleY float64, img image.Image, 
 			slice := makeSlice(result, i, cpus).(*image.RGBA64)
 			go func() {
 				defer wg.Done()
-				nearestGeneric(temp, slice, scaleY, coeffs, offset, filterLength)
+				nearestRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+		return result
+	case *image.NRGBA64:
+		// 16-bit precision
+		temp := image.NewNRGBA64(image.Rect(0, 0, input.Bounds().Dy(), int(width)))
+		result := image.NewNRGBA64(image.Rect(0, 0, int(width), int(height)))
+
+		// horizontal filter, results in transposed temporary image
+		coeffs, offset, filterLength := createWeightsNearest(temp.Bounds().Dy(), taps, blur, scaleX)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(temp, i, cpus).(*image.NRGBA64)
+			go func() {
+				defer wg.Done()
+				nearestNRGBA64(input, slice, scaleX, coeffs, offset, filterLength)
+			}()
+		}
+		wg.Wait()
+
+		// horizontal filter on transposed image, result is not transposed
+		coeffs, offset, filterLength = createWeightsNearest(result.Bounds().Dy(), taps, blur, scaleY)
+		wg.Add(cpus)
+		for i := 0; i < cpus; i++ {
+			slice := makeSlice(result, i, cpus).(*image.NRGBA64)
+			go func() {
+				defer wg.Done()
+				nearestNRGBA64(temp, slice, scaleY, coeffs, offset, filterLength)
 			}()
 		}
 		wg.Wait()

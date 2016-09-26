@@ -20,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"resize"
 	"runtime"
 	"strconv"
 	"strings"
@@ -31,6 +30,7 @@ import (
 
 	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
+	"github.com/nfnt/resize"
 )
 
 type errSlice []error
