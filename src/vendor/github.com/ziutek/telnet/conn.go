@@ -36,6 +36,8 @@ const (
 const (
 	optEcho            = 1
 	optSuppressGoAhead = 3
+	//	optTerminalType    = 24
+	optNAWS = 31
 )
 
 // Conn implements net.Conn interface for Telnet protocol plus some set of
@@ -104,13 +106,53 @@ func (c *Conn) wont(option byte) error {
 	return err
 }
 
+func (c *Conn) sub(opt byte, data ...byte) error {
+	if _, err := c.Conn.Write([]byte{cmdIAC, cmdSB, opt}); err != nil {
+		return err
+	}
+	if _, err := c.Write(data); err != nil {
+		return err
+	}
+	_, err := c.Conn.Write([]byte{cmdIAC, cmdSE})
+	return err
+}
+
+func (c *Conn) deny(cmd, opt byte) (err error) {
+	switch cmd {
+	case cmdDo:
+		err = c.wont(opt)
+	case cmdDont:
+		// nop
+	case cmdWill, cmdWont:
+		err = c.dont(opt)
+	}
+	return
+}
+
+func (c *Conn) skipSubneg() error {
+	for {
+		if b, err := c.r.ReadByte(); err != nil {
+			return err
+		} else if b == cmdIAC {
+			if b, err = c.r.ReadByte(); err != nil {
+				return err
+			} else if b == cmdSE {
+				return nil
+			}
+		}
+	}
+}
+
 func (c *Conn) cmd(cmd byte) error {
 	switch cmd {
 	case cmdGA:
 		return nil
 	case cmdDo, cmdDont, cmdWill, cmdWont:
+		// Process cmd after this switch.
+	case cmdSB:
+		return c.skipSubneg()
 	default:
-		return fmt.Errorf("unknwn command: %d", cmd)
+		return fmt.Errorf("unknown command: %d", cmd)
 	}
 	// Read an option
 	o, err := c.r.ReadByte()
@@ -156,16 +198,19 @@ func (c *Conn) cmd(cmd byte) error {
 			err = c.dont(o)
 
 		}
+	case optNAWS:
+		if cmd != cmdDo {
+			err = c.deny(cmd, o)
+			break
+		}
+		if err = c.will(o); err != nil {
+			break
+		}
+		// Reply with max window size: 65535x65535
+		err = c.sub(o, 255, 255, 255, 255)
 	default:
 		// Deny any other option
-		switch cmd {
-		case cmdDo:
-			err = c.wont(o)
-		case cmdDont:
-			// nop
-		case cmdWill, cmdWont:
-			err = c.dont(o)
-		}
+		err = c.deny(cmd, o)
 	}
 	return err
 }
