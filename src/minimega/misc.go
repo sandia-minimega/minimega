@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"gopacket/macs"
-	_ "gopnm"
 	"image"
 	"image/png"
 	"io"
@@ -30,6 +29,8 @@ import (
 	"time"
 	"unicode"
 	"vlans"
+
+	_ "github.com/jbuchbinder/gopnm"
 )
 
 type errSlice []error
