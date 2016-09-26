@@ -399,21 +399,17 @@ func httpMakeImage() {
 		m.Pix[i] = uint8(r.Int())
 	}
 
-	b := new(bytes.Buffer)
-	png.Encode(b, m)
+	buf := new(bytes.Buffer)
 
 	if *f_httpGzip {
-		b2 := new(bytes.Buffer)
-		w := gzip.NewWriter(b2)
-
-		if _, err := io.Copy(w, b); err != nil {
-			log.Fatalln(err)
-		}
-
-		httpImage = b2.Bytes()
+		w := gzip.NewWriter(buf)
+		png.Encode(w, m)
+		w.Close()
 	} else {
-		httpImage = b.Bytes()
+		png.Encode(buf, m)
 	}
+
+	httpImage = buf.Bytes()
 }
 
 func hitCounter() {
