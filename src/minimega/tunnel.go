@@ -55,12 +55,13 @@ func vncWsHandler(w http.ResponseWriter, r *http.Request) {
 		http.StatusText(500)
 		return
 	}
+	defer remote.Close()
 
 	websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
-		defer remote.Close()
 
 		go func() {
+			// Copy from remote -> ws
 			go io.Copy(ws, remote)
 			io.Copy(remote, ws)
 		}()

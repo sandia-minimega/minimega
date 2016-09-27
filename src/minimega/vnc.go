@@ -13,7 +13,6 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"vnc"
@@ -61,37 +60,21 @@ func init() {
 
 // NewVNCClient creates a new VNC client. NewVNCClient is only called via the
 // cli so we can assume that cmdLock is held.
-func NewVNCClient(host, idOrName string) (*vncClient, error) {
-	// Resolve localhost to the actual hostname
-	if host == Localhost {
-		host = hostname
-	}
-
+// This is sent via wrapVMTargetCLI so we assume the command will always be
+// delivered to the correct host
+func NewVNCClient(name string) (*vncClient, error) {
 	var vm *KvmVM
-	if host == hostname {
-		vm, _ = vms.FindKvmVM(idOrName)
-	} else {
-		// LOCK: This is only invoked via the CLI so we already hold cmdLock
-		// (can call hostVMs instead of HostVMs). Since we're using not using
-		// the vms global, we don't need to acquire the vmLock (can call findVM
-		// instead of FindVM).
-
-		// TODO(fritz): should this be namespace aware? If someone sets
-		// a namespace on the cli and then someone on the web interface
-		// attempts to connect and this is checking namespaces then it
-		// will fail right?
-		vm, _ = hostVMs(host).findKvmVM(idOrName)
-	}
+	vm, _ = vms.FindKvmVM(name)
 
 	if vm == nil {
-		return nil, vmNotFound(host + ":" + idOrName)
+		return nil, vmNotFound(name)
 	}
 
-	rhost := fmt.Sprintf("%v:%v", host, vm.VNCPort)
+	rhost := fmt.Sprintf("%v:%v", name, vm.VNCPort)
 
 	c := &vncClient{
 		Rhost: rhost,
-		Host:  host,
+		Host:  hostname,
 		Name:  vm.GetName(),
 		ID:    vm.GetID(),
 		done:  make(chan bool),
@@ -101,7 +84,7 @@ func NewVNCClient(host, idOrName string) (*vncClient, error) {
 }
 
 func (v *vncClient) Matches(host, vm string) bool {
-	return v.Host == host && (v.Name == vm || strconv.Itoa(v.ID) == vm)
+	return v.Host == host && v.Name == vm
 }
 
 func (v *vncClient) Stop() error {
@@ -298,15 +281,15 @@ func (v *vncKBPlayback) Run() {
 	delete(vncKBPlaying, v.Rhost)
 }
 
-func vncRecordKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordKB(vm, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this rhost already being recorded?
 	if _, ok := vncKBRecording[c.Rhost]; ok {
-		return fmt.Errorf("kb recording for %v %v already running", host, vm)
+		return fmt.Errorf("kb recording for %v already running", vm)
 	}
 
 	c.file, err = os.Create(filename)
@@ -322,15 +305,15 @@ func vncRecordKB(host, vm, filename string) error {
 	return nil
 }
 
-func vncRecordFB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordFB(vm, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this rhost already being recorded?
 	if _, ok := vncFBRecording[c.Rhost]; ok {
-		return fmt.Errorf("fb recording for %v %v already running", host, vm)
+		return fmt.Errorf("fb recording for %v already running", vm)
 	}
 
 	c.file, err = os.Create(filename)
@@ -351,15 +334,15 @@ func vncRecordFB(host, vm, filename string) error {
 	return nil
 }
 
-func vncPlaybackKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncPlaybackKB(vm, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this rhost already being recorded?
 	if _, ok := vncKBPlaying[c.Rhost]; ok {
-		return fmt.Errorf("kb playback for %v %v already running", host, vm)
+		return fmt.Errorf("kb playback for %v already running", vm)
 	}
 
 	c.file, err = os.Open(filename)
@@ -380,7 +363,7 @@ func vncPlaybackKB(host, vm, filename string) error {
 	return nil
 }
 
-func vncClear() error {
+func vncClear() {
 	for k, v := range vncKBRecording {
 		log.Debug("stopping kb recording for %v", k)
 		if err := v.Stop(); err != nil {
@@ -407,6 +390,4 @@ func vncClear() error {
 
 		delete(vncKBPlaying, k)
 	}
-
-	return nil
 }

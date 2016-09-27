@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	log "minilog"
 	"strconv"
 )
 
@@ -27,68 +28,101 @@ If playback is selected, the specified file (created using vnc record) will be
 read and processed as a sequence of time-stamped mouse/keyboard events to send
 to the specified VM.`,
 		Patterns: []string{
-			"vnc",
-			"vnc <kb,fb> <record,> <host> <vm id or name> <filename>",
-			"vnc <kb,fb> <norecord,> <host> <vm id or name>",
-			"vnc <playback,> <host> <vm id or name> <filename>",
-			"vnc <noplayback,> <host> <vm id or name>",
+			"vnc <kb,fb> <record,> <vm name> <filename>",
+			"vnc <kb,fb> <norecord,> <vm name>",
+			"vnc <playback,> <vm name> <filename>",
+			"vnc <noplayback,> <vm name>",
 		},
-		Call: wrapSimpleCLI(cliVNC),
+		Call: wrapVMTargetCLI(cliVNC),
 	},
-	{ // clear vnc
+	{
 		HelpShort: "reset VNC state",
 		HelpLong: `
 Resets the state for VNC recordings. See "help vnc" for more information.`,
 		Patterns: []string{
 			"clear vnc",
 		},
-		Call: wrapSimpleCLI(func(_ *minicli.Command, _ *minicli.Response) error {
-			return vncClear()
-		}),
+		Call: wrapVMTargetCLI(cliVNCClear),
+	},
+	{
+		HelpShort: "list all running vnc playback/recording instances",
+		HelpLong: `
+List all running vnc playback/recording instances. See "help vnc" for more information.`,
+		Patterns: []string{
+			"vnc",
+		},
+		Call: wrapBroadcastCLI(vncList),
 	},
 }
 
+// List all active recordings and playbacks
+func vncList(c *minicli.Command, resp *minicli.Response) error {
+	resp.Header = []string{"host", "name", "id", "type", "filename"}
+	resp.Tabular = [][]string{}
+
+	for _, v := range vncKBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			hostname, v.Name, strconv.Itoa(v.ID),
+			"record kb",
+			v.file.Name(),
+		})
+	}
+
+	for _, v := range vncFBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			hostname, v.Name, strconv.Itoa(v.ID),
+			"record fb",
+			v.file.Name(),
+		})
+	}
+
+	for _, v := range vncKBPlaying {
+		resp.Tabular = append(resp.Tabular, []string{
+			hostname, v.Name, strconv.Itoa(v.ID),
+			"playback kb",
+			v.file.Name(),
+		})
+	}
+
+	return nil
+}
+
 func cliVNC(c *minicli.Command, resp *minicli.Response) error {
-	host := c.StringArgs["host"]
 	vm := c.StringArgs["vm"]
 	fname := c.StringArgs["filename"]
 
-	if host == Localhost {
-		host = hostname
-	}
-
 	if c.BoolArgs["record"] && c.BoolArgs["kb"] {
 		// Starting keyboard recording
-		return vncRecordKB(host, vm, fname)
+		return vncRecordKB(vm, fname)
 	} else if c.BoolArgs["record"] && c.BoolArgs["fb"] {
 		// Starting framebuffer recording
-		return vncRecordFB(host, vm, fname)
+		return vncRecordFB(vm, fname)
 	} else if c.BoolArgs["norecord"] || c.BoolArgs["noplayback"] {
 		var err error
 		var client *vncClient
 
 		if c.BoolArgs["norecord"] && c.BoolArgs["kb"] {
-			err = fmt.Errorf("kb recording %v %v not found", host, vm)
+			err = fmt.Errorf("kb recording %v %v not found", hostname, vm)
 			for k, v := range vncKBRecording {
-				if v.Matches(host, vm) {
+				if v.Matches(hostname, vm) {
 					client = v.vncClient
 					delete(vncKBRecording, k)
 					break
 				}
 			}
 		} else if c.BoolArgs["norecord"] && c.BoolArgs["fb"] {
-			err = fmt.Errorf("fb recording %v %v not found", host, vm)
+			err = fmt.Errorf("fb recording %v %v not found", hostname, vm)
 			for k, v := range vncFBRecording {
-				if v.Matches(host, vm) {
+				if v.Matches(hostname, vm) {
 					client = v.vncClient
 					delete(vncFBRecording, k)
 					break
 				}
 			}
 		} else if c.BoolArgs["noplayback"] {
-			err = fmt.Errorf("kb playback %v %v not found", host, vm)
+			err = fmt.Errorf("kb playback %v %v not found", hostname, vm)
 			for k, v := range vncKBPlaying {
-				if v.Matches(host, vm) {
+				if v.Matches(hostname, vm) {
 					client = v.vncClient
 					delete(vncKBPlaying, k)
 					break
@@ -103,36 +137,37 @@ func cliVNC(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	} else if c.BoolArgs["playback"] {
 		// Start keyboard playback
-		return vncPlaybackKB(host, vm, fname)
+		return vncPlaybackKB(vm, fname)
+	}
+	return nil
+}
+
+func cliVNCClear(c *minicli.Command, resp *minicli.Response) error {
+	for k, v := range vncKBRecording {
+		log.Debug("stopping kb recording for %v", k)
+		if err := v.Stop(); err != nil {
+			log.Error("%v", err)
+		}
+
+		delete(vncKBRecording, k)
 	}
 
-	// List all active recordings and playbacks
-	resp.Header = []string{"host", "name", "id", "type", "filename"}
-	resp.Tabular = [][]string{}
+	for k, v := range vncFBRecording {
+		log.Debug("stopping fb recording for %v", k)
+		if err := v.Stop(); err != nil {
+			log.Error("%v", err)
+		}
 
-	for _, v := range vncKBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.Host, v.Name, strconv.Itoa(v.ID),
-			"record kb",
-			v.file.Name(),
-		})
+		delete(vncFBRecording, k)
 	}
 
-	for _, v := range vncFBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.Host, v.Name, strconv.Itoa(v.ID),
-			"record fb",
-			v.file.Name(),
-		})
-	}
+	for k, v := range vncKBPlaying {
+		log.Debug("stopping kb playing for %v", k)
+		if err := v.Stop(); err != nil {
+			log.Error("%v", err)
+		}
 
-	for _, v := range vncKBPlaying {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.Host, v.Name, strconv.Itoa(v.ID),
-			"playback kb",
-			v.file.Name(),
-		})
+		delete(vncKBPlaying, k)
 	}
-
 	return nil
 }
