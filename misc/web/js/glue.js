@@ -55,7 +55,7 @@ function screenshotURL (vm, size) {
 
 // Generate the appropriate URL for requesting a VNC connection
 function vncURL (vm) {
-    return "./vnc#" + vm.host + ":" + (vm.vnc_port) + ":" + vm.name
+    return "./vnc#" + vm.name
 }
 
 // Get the screenshot for the requested row, or restore it from the cache of screenshots if available

@@ -207,12 +207,9 @@
             }
 
             password = WebUtil.getConfigVar('password', '');
-            
-            // minimega: use value from template instead of URL
-            //path = WebUtil.getConfigVar('path', 'websockify');
-            var locationArray = window.location.hash.split(":");
-            //path = "ws/" + locationArray[0].substring(1) + "/" + locationArray[1];
-            path = "ws/" + locationArray[2];
+
+            // minimega: grab VM name from URL
+            path = "ws/" + window.location.hash.substring(1);
 
             // If a token variable is passed in, set the parameter in a cookie.
             // This is used by nova-novncproxy.

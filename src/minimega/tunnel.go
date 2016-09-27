@@ -16,71 +16,42 @@ import (
 	"io"
 	log "minilog"
 	"net"
-	"net/http"
-	"strconv"
 	"strings"
 	"websocket"
 )
 
-const VNC_WS_BUF = 32768
-
-func vncWsHandler(w http.ResponseWriter, r *http.Request) {
-	// we assume that if we got here, then the url must be sane and of
-	// the format /ws/<vm_name>
-	path := r.URL.Path
-	if !strings.HasSuffix(path, "/") {
-		path += "/"
-	}
+func vncWsHandler(ws *websocket.Conn) {
+	// URL should be of the form `/ws/<vm_name>`
+	path := strings.Trim(ws.Config().Location.Path, "/")
 
 	fields := strings.Split(path, "/")
-	if len(fields) != 4 {
-		http.NotFound(w, r)
+	if len(fields) != 2 {
 		return
 	}
-	vmName := fields[2]
+	vmName := fields[1]
 
 	vms := GlobalVMs()
 	vm, err := vms.FindKvmVM(vmName)
 	if err != nil {
 		log.Errorln(err)
-		http.StatusText(404)
 		return
 	}
 
+	// Undocumented "feature" of websocket -- need to set to PayloadType in
+	// order for a direct io.Copy to work.
+	ws.PayloadType = websocket.BinaryFrame
+
 	// connect to the remote host
-	rhost := fmt.Sprintf("%s:%s", vm.Host, strconv.Itoa(vm.VNCPort))
+	rhost := fmt.Sprintf("%v:%v", vm.Host, vm.VNCPort)
 	remote, err := net.Dial("tcp", rhost)
 	if err != nil {
 		log.Errorln(err)
-		http.StatusText(500)
 		return
 	}
 	defer remote.Close()
 
-	websocket.Handler(func(ws *websocket.Conn) {
-		defer ws.Close()
+	go io.Copy(remote, ws)
+	io.Copy(ws, remote)
 
-		go func() {
-			// Copy from remote -> ws
-			go io.Copy(ws, remote)
-			io.Copy(remote, ws)
-		}()
-
-		rbuf := make([]byte, VNC_WS_BUF)
-		for {
-			n, err := remote.Read(rbuf)
-			if err != nil {
-				if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
-					log.Errorln(err)
-				}
-				break
-			}
-
-			err = websocket.Message.Send(ws, rbuf[:n])
-			if err != nil {
-				log.Errorln(err)
-				break
-			}
-		}
-	}).ServeHTTP(w, r)
+	log.Info("ws client disconnected from %v", rhost)
 }
