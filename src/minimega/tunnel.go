@@ -31,7 +31,7 @@ func vncWsHandler(ws *websocket.Conn) {
 	vmName := fields[1]
 
 	vms := GlobalVMs()
-	vm, err := vms.FindKvmVM(vmName)
+	vm, err := vms.findKvmVM(vmName)
 	if err != nil {
 		log.Errorln(err)
 		return

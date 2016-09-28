@@ -25,9 +25,8 @@ var (
 )
 
 type vncClient struct {
-	Host  string
-	Name  string
-	ID    int
+	Vm    *KvmVM
+	Ns    string
 	Rhost string
 
 	done chan bool
@@ -70,13 +69,13 @@ func NewVNCClient(name string) (*vncClient, error) {
 		return nil, vmNotFound(name)
 	}
 
-	rhost := fmt.Sprintf("%v:%v", name, vm.VNCPort)
+	rhost := fmt.Sprintf("%v:%v", hostname, vm.VNCPort)
+	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	c := &vncClient{
+		Ns:    ns,
 		Rhost: rhost,
-		Host:  hostname,
-		Name:  vm.GetName(),
-		ID:    vm.GetID(),
+		Vm:    vm,
 		done:  make(chan bool),
 	}
 
@@ -84,7 +83,7 @@ func NewVNCClient(name string) (*vncClient, error) {
 }
 
 func (v *vncClient) Matches(host, vm string) bool {
-	return v.Host == host && v.Name == vm
+	return v.Vm.Host == host && v.Vm.Name == vm
 }
 
 func (v *vncClient) Stop() error {
@@ -278,7 +277,7 @@ func (v *vncKBPlayback) Run() {
 
 	// Block until we receive the done flag if we finished the playback
 	<-v.done
-	delete(vncKBPlaying, v.Rhost)
+	delete(vncKBPlaying, v.Ns)
 }
 
 func vncRecordKB(vm, filename string) error {
@@ -287,8 +286,8 @@ func vncRecordKB(vm, filename string) error {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncKBRecording[c.Rhost]; ok {
+	// is this namespace:vm already being recorded?
+	if _, ok := vncKBRecording[c.Ns]; ok {
 		return fmt.Errorf("kb recording for %v already running", vm)
 	}
 
@@ -298,7 +297,9 @@ func vncRecordKB(vm, filename string) error {
 	}
 
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
-	vncKBRecording[c.Rhost] = r
+
+	// Recordings are stored in the format namespace:vm
+	vncKBRecording[c.Ns] = r
 
 	go r.Run()
 
@@ -311,8 +312,8 @@ func vncRecordFB(vm, filename string) error {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncFBRecording[c.Rhost]; ok {
+	// is this namespace:vm already being recorded?
+	if _, ok := vncFBRecording[c.Ns]; ok {
 		return fmt.Errorf("fb recording for %v already running", vm)
 	}
 
@@ -327,7 +328,7 @@ func vncRecordFB(vm, filename string) error {
 	}
 
 	r := &vncFBRecord{c}
-	vncFBRecording[c.Rhost] = r
+	vncFBRecording[c.Ns] = r
 
 	go r.Run()
 
@@ -341,7 +342,7 @@ func vncPlaybackKB(vm, filename string) error {
 	}
 
 	// is this rhost already being recorded?
-	if _, ok := vncKBPlaying[c.Rhost]; ok {
+	if _, ok := vncKBPlaying[c.Ns]; ok {
 		return fmt.Errorf("kb playback for %v already running", vm)
 	}
 
@@ -356,7 +357,7 @@ func vncPlaybackKB(vm, filename string) error {
 	}
 
 	r := &vncKBPlayback{c}
-	vncKBPlaying[c.Rhost] = r
+	vncKBPlaying[c.Ns] = r
 
 	go r.Run()
 

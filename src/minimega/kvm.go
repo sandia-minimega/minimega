@@ -429,7 +429,7 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
-	host := fmt.Sprintf("%s:%s", vm.Name, strconv.Itoa(vm.VNCPort))
+	ns := fmt.Sprintf("%v:%v", GetNamespaceName(), vm.Name)
 
 	go func() {
 		defer l.Close()
@@ -467,8 +467,9 @@ func (vm *KvmVM) connectVNC() error {
 						if err == io.EOF || strings.Contains(err.Error(), "closed network") {
 							break
 						}
+						log.Errorln(err)
 					}
-					if r, ok := vncKBRecording[host]; ok {
+					if r, ok := vncKBRecording[ns]; ok {
 						r.RecordMessage(msg)
 					}
 				}
