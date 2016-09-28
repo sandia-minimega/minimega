@@ -261,6 +261,7 @@ func TestQuotes(t *testing.T) {
 		[]string{`'"foo bar"'`, `"foo bar"`},
 		[]string{`'"foo\'s bar"'`, `"foo's bar"`},
 		[]string{`"foo \"bar\""`, `foo "bar"`},
+		[]string{`""`, ``},
 	}
 
 	for _, v := range inputs {

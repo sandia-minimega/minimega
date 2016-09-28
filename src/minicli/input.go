@@ -20,6 +20,8 @@ type inputLexer struct {
 	terminal string
 	content  string
 
+	emit bool // force emit, even if content is empty (e.g. "" as input)
+
 	prevState stateFn
 }
 
@@ -74,16 +76,16 @@ func (l *inputLexer) Run() (err error) {
 func (l *inputLexer) lexOutside() (stateFn, error) {
 	emitContent := func() {
 		// Emit item from processed content, if non-empty
-		if len(l.content) > 0 {
+		if len(l.content) > 0 || l.emit {
 			l.items = append(l.items, inputItem{Value: l.content})
 			l.content = ""
+			l.emit = false
 		}
 	}
 
 outer:
 	for l.s.Scan() {
-		token := l.s.Text()
-		switch token {
+		switch token := l.s.Text(); token {
 		case `\`:
 			return l.lexEscape, nil
 		case `"`, `'`:
@@ -114,11 +116,11 @@ outer:
 func (l *inputLexer) lexQuote() (stateFn, error) {
 	// Scan until EOF, checking each token
 	for l.s.Scan() {
-		token := l.s.Text()
-		switch token {
+		switch token := l.s.Text(); token {
 		case `\`:
 			return l.lexEscape, nil
 		case l.terminal:
+			l.emit = true
 			return l.lexOutside, nil
 		default:
 			l.content += token
@@ -135,8 +137,7 @@ func (l *inputLexer) lexEscape() (stateFn, error) {
 		return nil, errors.New("expected escape character")
 	}
 
-	token := l.s.Text()
-	switch token {
+	switch token := l.s.Text(); token {
 	case `\`, `"`, `'`:
 		l.content += token
 		return l.prevState, nil
