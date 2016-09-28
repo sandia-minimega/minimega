@@ -25,8 +25,8 @@ var (
 )
 
 type vncClient struct {
-	Vm    *KvmVM
-	Ns    string
+	VM    *KvmVM
+	ID    string
 	Rhost string
 
 	done chan bool
@@ -61,21 +61,14 @@ func init() {
 // cli so we can assume that cmdLock is held.
 // This is sent via wrapVMTargetCLI so we assume the command will always be
 // delivered to the correct host
-func NewVNCClient(name string) (*vncClient, error) {
-	var vm *KvmVM
-	vm, _ = vms.FindKvmVM(name)
-
-	if vm == nil {
-		return nil, vmNotFound(name)
-	}
-
+func NewVNCClient(vm *KvmVM) (*vncClient, error) {
 	rhost := fmt.Sprintf("%v:%v", hostname, vm.VNCPort)
-	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	c := &vncClient{
-		Ns:    ns,
+		ID:    id, // ID is namespace:name
 		Rhost: rhost,
-		Vm:    vm,
+		VM:    vm,
 		done:  make(chan bool),
 	}
 
@@ -83,7 +76,7 @@ func NewVNCClient(name string) (*vncClient, error) {
 }
 
 func (v *vncClient) Matches(host, vm string) bool {
-	return v.Vm.Host == host && v.Vm.Name == vm
+	return v.VM.Host == host && v.VM.Name == vm
 }
 
 func (v *vncClient) Stop() error {
@@ -277,17 +270,17 @@ func (v *vncKBPlayback) Run() {
 
 	// Block until we receive the done flag if we finished the playback
 	<-v.done
-	delete(vncKBPlaying, v.Ns)
+	delete(vncKBPlaying, v.ID)
 }
 
-func vncRecordKB(vm, filename string) error {
+func vncRecordKB(vm *KvmVM, filename string) error {
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this namespace:vm already being recorded?
-	if _, ok := vncKBRecording[c.Ns]; ok {
+	if _, ok := vncKBRecording[c.ID]; ok {
 		return fmt.Errorf("kb recording for %v already running", vm)
 	}
 
@@ -299,21 +292,21 @@ func vncRecordKB(vm, filename string) error {
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
 
 	// Recordings are stored in the format namespace:vm
-	vncKBRecording[c.Ns] = r
+	vncKBRecording[c.ID] = r
 
 	go r.Run()
 
 	return nil
 }
 
-func vncRecordFB(vm, filename string) error {
+func vncRecordFB(vm *KvmVM, filename string) error {
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this namespace:vm already being recorded?
-	if _, ok := vncFBRecording[c.Ns]; ok {
+	if _, ok := vncFBRecording[c.ID]; ok {
 		return fmt.Errorf("fb recording for %v already running", vm)
 	}
 
@@ -328,21 +321,21 @@ func vncRecordFB(vm, filename string) error {
 	}
 
 	r := &vncFBRecord{c}
-	vncFBRecording[c.Ns] = r
+	vncFBRecording[c.ID] = r
 
 	go r.Run()
 
 	return nil
 }
 
-func vncPlaybackKB(vm, filename string) error {
+func vncPlaybackKB(vm *KvmVM, filename string) error {
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this rhost already being recorded?
-	if _, ok := vncKBPlaying[c.Ns]; ok {
+	if _, ok := vncKBPlaying[c.ID]; ok {
 		return fmt.Errorf("kb playback for %v already running", vm)
 	}
 
@@ -357,7 +350,7 @@ func vncPlaybackKB(vm, filename string) error {
 	}
 
 	r := &vncKBPlayback{c}
-	vncKBPlaying[c.Ns] = r
+	vncKBPlaying[c.ID] = r
 
 	go r.Run()
 
@@ -366,29 +359,35 @@ func vncPlaybackKB(vm, filename string) error {
 
 func vncClear() {
 	for k, v := range vncKBRecording {
-		log.Debug("stopping kb recording for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
-		}
+		if inNamespace(v.VM) {
+			log.Debug("stopping kb recording for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
 
-		delete(vncKBRecording, k)
+			delete(vncKBRecording, k)
+		}
 	}
 
 	for k, v := range vncFBRecording {
-		log.Debug("stopping fb recording for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
-		}
+		if inNamespace(v.VM) {
+			log.Debug("stopping fb recording for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
 
-		delete(vncFBRecording, k)
+			delete(vncFBRecording, k)
+		}
 	}
 
 	for k, v := range vncKBPlaying {
-		log.Debug("stopping kb playing for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
-		}
+		if inNamespace(v.VM) {
+			log.Debug("stopping kb playing for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
 
-		delete(vncKBPlaying, k)
+			delete(vncKBPlaying, k)
+		}
 	}
 }

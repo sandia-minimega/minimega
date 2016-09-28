@@ -429,7 +429,7 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
-	ns := fmt.Sprintf("%v:%v", GetNamespaceName(), vm.Name)
+	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	go func() {
 		defer l.Close()

@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	"minicli"
-	log "minilog"
 	"strconv"
 )
 
@@ -42,7 +41,10 @@ Resets the state for VNC recordings. See "help vnc" for more information.`,
 		Patterns: []string{
 			"clear vnc",
 		},
-		Call: wrapBroadcastCLI(cliVNCClear),
+		Call: wrapBroadcastCLI(func(_ *minicli.Command, _ *minicli.Response) error {
+			vncClear()
+			return nil
+		}),
 	},
 	{
 		HelpShort: "list all running vnc playback/recording instances",
@@ -61,9 +63,9 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 	resp.Tabular = [][]string{}
 
 	for _, v := range vncKBRecording {
-		if inNamespace(v.Vm) {
+		if inNamespace(v.VM) {
 			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.Vm.Name, strconv.Itoa(v.Vm.ID),
+				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
 				"record kb",
 				v.file.Name(),
 			})
@@ -71,9 +73,9 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	for _, v := range vncFBRecording {
-		if inNamespace(v.Vm) {
+		if inNamespace(v.VM) {
 			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.Vm.Name, strconv.Itoa(v.Vm.ID),
+				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
 				"record fb",
 				v.file.Name(),
 			})
@@ -81,9 +83,9 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	for _, v := range vncKBPlaying {
-		if inNamespace(v.Vm) {
+		if inNamespace(v.VM) {
 			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.Vm.Name, strconv.Itoa(v.Vm.ID),
+				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
 				"playback kb",
 				v.file.Name(),
 			})
@@ -103,31 +105,31 @@ func cliVNC(c *minicli.Command, resp *minicli.Response) error {
 
 	if c.BoolArgs["record"] && c.BoolArgs["kb"] {
 		// Starting keyboard recording
-		return vncRecordKB(vm.Name, fname)
+		return vncRecordKB(vm, fname)
 	} else if c.BoolArgs["record"] && c.BoolArgs["fb"] {
 		// Starting framebuffer recording
-		return vncRecordFB(vm.Name, fname)
+		return vncRecordFB(vm, fname)
 	} else if c.BoolArgs["norecord"] || c.BoolArgs["noplayback"] {
 		var client *vncClient
-		ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+		id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 		if c.BoolArgs["norecord"] && c.BoolArgs["kb"] {
 			err = fmt.Errorf("kb recording %v not found", vm.Name)
-			if v, ok := vncKBRecording[ns]; ok {
+			if v, ok := vncKBRecording[id]; ok {
 				client = v.vncClient
-				delete(vncKBRecording, ns)
+				delete(vncKBRecording, id)
 			}
 		} else if c.BoolArgs["norecord"] && c.BoolArgs["fb"] {
 			err = fmt.Errorf("fb recording %v not found", vm.Name)
-			if v, ok := vncFBRecording[ns]; ok {
+			if v, ok := vncFBRecording[id]; ok {
 				client = v.vncClient
-				delete(vncFBRecording, ns)
+				delete(vncFBRecording, id)
 			}
 		} else if c.BoolArgs["noplayback"] {
 			err = fmt.Errorf("kb playback %v not found", vm.Name)
-			if v, ok := vncKBRecording[ns]; ok {
+			if v, ok := vncKBRecording[id]; ok {
 				client = v.vncClient
-				delete(vncKBPlaying, ns)
+				delete(vncKBPlaying, id)
 			}
 		}
 
@@ -138,43 +140,7 @@ func cliVNC(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	} else if c.BoolArgs["playback"] {
 		// Start keyboard playback
-		return vncPlaybackKB(vm.Name, fname)
-	}
-	return nil
-}
-
-func cliVNCClear(c *minicli.Command, resp *minicli.Response) error {
-	for k, v := range vncKBRecording {
-		if inNamespace(v.Vm) {
-			log.Debug("stopping kb recording for %v", k)
-			if err := v.Stop(); err != nil {
-				log.Error("%v", err)
-			}
-
-			delete(vncKBRecording, k)
-		}
-	}
-
-	for k, v := range vncFBRecording {
-		if inNamespace(v.Vm) {
-			log.Debug("stopping fb recording for %v", k)
-			if err := v.Stop(); err != nil {
-				log.Error("%v", err)
-			}
-
-			delete(vncFBRecording, k)
-		}
-	}
-
-	for k, v := range vncKBPlaying {
-		if inNamespace(v.Vm) {
-			log.Debug("stopping kb playing for %v", k)
-			if err := v.Stop(); err != nil {
-				log.Error("%v", err)
-			}
-
-			delete(vncKBPlaying, k)
-		}
+		return vncPlaybackKB(vm, fname)
 	}
 	return nil
 }
