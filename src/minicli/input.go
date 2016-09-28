@@ -6,6 +6,7 @@ package minicli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,8 @@ type inputLexer struct {
 	items    []inputItem
 	terminal string
 	content  string
+
+	prevState stateFn
 }
 
 type inputItem struct {
@@ -58,7 +61,9 @@ func lexInput(input string) (*Input, error) {
 
 func (l *inputLexer) Run() (err error) {
 	for state := l.lexOutside; state != nil && err == nil; {
-		state, err = state()
+		curr := state
+		state, err = curr()
+		l.prevState = curr
 	}
 
 	return err
@@ -79,6 +84,8 @@ outer:
 	for l.s.Scan() {
 		token := l.s.Text()
 		switch token {
+		case `\`:
+			return l.lexEscape, nil
 		case `"`, `'`:
 			l.terminal = token
 			return l.lexQuote, nil
@@ -109,6 +116,8 @@ func (l *inputLexer) lexQuote() (stateFn, error) {
 	for l.s.Scan() {
 		token := l.s.Text()
 		switch token {
+		case `\`:
+			return l.lexEscape, nil
 		case l.terminal:
 			return l.lexOutside, nil
 		default:
@@ -118,4 +127,20 @@ func (l *inputLexer) lexQuote() (stateFn, error) {
 
 	// We must have hit EOF before changing state
 	return nil, fmt.Errorf("missing terminal %s", l.terminal)
+}
+
+func (l *inputLexer) lexEscape() (stateFn, error) {
+	// Must scan one character
+	if !l.s.Scan() {
+		return nil, errors.New("expected escape character")
+	}
+
+	token := l.s.Text()
+	switch token {
+	case `\`, `"`, `'`:
+		l.content += token
+		return l.prevState, nil
+	default:
+		return nil, fmt.Errorf("unexpected escaped character: %v", token)
+	}
 }
