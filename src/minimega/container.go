@@ -950,22 +950,22 @@ func (vm *ContainerVM) launch() error {
 		return err
 	}
 
+	// Channel to signal when the process has exited
+	errChan := make(chan error)
+
+	// Create goroutine to wait for process to exit
 	go func() {
-		var err error
+		defer close(errChan)
+
+		errChan <- cmd.Wait()
+	}()
+
+	go func() {
 		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
 
-		// Channel to signal when the process has exited
-		var waitChan = make(chan bool)
-
-		// Create goroutine to wait for process to exit
-		go func() {
-			err = cmd.Wait()
-			close(waitChan)
-		}()
-
 		select {
-		case <-waitChan:
+		case err := <-errChan:
 			log.Info("VM %v exited", vm.ID)
 
 			vm.lock.Lock()
@@ -985,15 +985,14 @@ func (vm *ContainerVM) launch() error {
 
 			cmd.Process.Kill()
 
-			// containers cannot return unless thawed, so thaw the
-			// process if necessary
-			if err = vm.thaw(); err != nil {
+			// containers cannot exit unless thawed, so thaw it if necessary
+			if err := vm.thaw(); err != nil {
 				log.Errorln(err)
 				vm.setError(err)
 			}
 
-			// wait for the taskset to actually exit (from
-			// uninterruptible sleep state).
+			// wait for the taskset to actually exit (from uninterruptible
+			// sleep state).
 			for {
 				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
 				if err != nil {
@@ -1007,11 +1006,15 @@ func (vm *ContainerVM) launch() error {
 				time.Sleep(100 * time.Millisecond)
 			}
 
+			// drain errChan
+			for err := range errChan {
+				log.Debug("kill container: %v", err)
+			}
+
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
-		err = ccNode.CloseUDS(ccPath)
-		if err != nil {
+		if err := ccNode.CloseUDS(ccPath); err != nil {
 			log.Errorln(err)
 		}
 
@@ -1029,8 +1032,7 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// clean up the cgroup directory
-		err = os.Remove(cgroupPath)
-		if err != nil {
+		if err := os.Remove(cgroupPath); err != nil {
 			log.Errorln(err)
 		}
 
