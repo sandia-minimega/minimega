@@ -36,6 +36,16 @@ type Input struct {
 	items    inputItems
 }
 
+var escapedChars = map[string]string{
+	"r":           "\r",
+	"n":           "\n",
+	"t":           "\t",
+	`\`:           `\`,
+	`"`:           `"`,
+	`'`:           `'`,
+	CommentLeader: CommentLeader,
+}
+
 func (items inputItems) String() string {
 	parts := make([]string, len(items))
 	for i, v := range items {
@@ -137,11 +147,11 @@ func (l *inputLexer) lexEscape() (stateFn, error) {
 		return nil, errors.New("expected escape character")
 	}
 
-	switch token := l.s.Text(); token {
-	case `\`, `"`, `'`:
-		l.content += token
+	token := l.s.Text()
+	if v, ok := escapedChars[token]; ok {
+		l.content += v
 		return l.prevState, nil
-	default:
-		return nil, fmt.Errorf("unexpected escaped character: %v", token)
 	}
+
+	return nil, fmt.Errorf("unexpected escaped character: %v", token)
 }
