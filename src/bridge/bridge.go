@@ -7,7 +7,7 @@ package bridge
 import (
 	"fmt"
 	"gonetflow"
-	"ipmac"
+	"gopacket/pcap"
 	log "minilog"
 	"strings"
 	"sync"
@@ -20,8 +20,6 @@ var bridgeLock sync.Mutex
 // Bridge stores state about an openvswitch bridge including the taps, tunnels,
 // trunks, and netflow.
 type Bridge struct {
-	*ipmac.IPMacLearner // embed
-
 	Name     string
 	preExist bool
 
@@ -36,6 +34,8 @@ type Bridge struct {
 	// nameChan is a reference to the nameChan from the Bridges struct that
 	// this Bridge was created on.
 	nameChan chan string
+
+	handle *pcap.Handle
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -53,10 +53,14 @@ type Tap struct {
 	Name      string // Name of the tap
 	Bridge    string // Bridge that the tap is connected to
 	VLAN      int    // VLAN ID for the tap
+	MAC       string // MAC address
 	Host      bool   // Set when created as a host tap (and, thus, promiscuous)
 	Container bool   // Set when created via CreateContainerTap
 	Defunct   bool   // Set when Tap should be reaped
-	Qos       *qos   // Quality-of-service constraints
+
+	IP4 string // Snooped IPv4 address
+	IP6 string // Snooped IPv6 address
+	Qos *qos   // Quality-of-service constraints
 
 	stats []tapStat
 }
@@ -78,6 +82,10 @@ func (b *Bridge) Destroy() error {
 
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
+
+	if b.handle != nil {
+		b.handle.Close()
+	}
 
 	// first get all of the taps off of this bridge and destroy them
 	for _, tap := range b.taps {

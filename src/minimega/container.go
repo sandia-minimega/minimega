@@ -1022,7 +1022,6 @@ func (vm *ContainerVM) launch() error {
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			} else {
-				br.DelMac(net.MAC)
 				br.DestroyTap(net.Tap)
 			}
 		}
@@ -1065,11 +1064,6 @@ func (vm *ContainerVM) launchNetwork() error {
 		if err != nil {
 			return fmt.Errorf("create tap: %v", err)
 		}
-
-		updates := make(chan net.IP)
-		go vm.macSnooper(nic, updates)
-
-		br.AddMac(nic.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {

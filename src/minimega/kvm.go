@@ -167,8 +167,6 @@ func (vm *KvmVM) Flush() error {
 			return err
 		}
 
-		br.DelMac(net.MAC)
-
 		if err := br.DestroyTap(net.Tap); err != nil {
 			log.Errorln(err)
 		}
@@ -491,17 +489,12 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		nic.Tap, err = br.CreateTap(nic.Tap, nic.VLAN)
+		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
 			return err
 		}
-
-		updates := make(chan net.IP)
-		go vm.macSnooper(nic, updates)
-
-		br.AddMac(nic.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {
