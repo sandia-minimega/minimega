@@ -413,6 +413,8 @@ func (vms VMs) Flush() {
 				log.Error("clogged VM: %v", err)
 			}
 
+			ccNode.UnregisterVM(vm.GetUUID())
+
 			delete(vms, i)
 		}
 	}
