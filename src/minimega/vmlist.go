@@ -8,6 +8,7 @@ import (
 	"bridge"
 	"errors"
 	"fmt"
+	"meshage"
 	"minicli"
 	log "minilog"
 	"os"
@@ -27,6 +28,13 @@ type vmApplyFunc func(VM, bool) (bool, error)
 type Tag struct {
 	ID         int
 	Key, Value string
+}
+
+// QueuedVMs stores all the info needed to launch a batch of VMs
+type QueuedVMs struct {
+	Names    []string
+	VMType   // embed
+	VMConfig // embed
 }
 
 var vmLock sync.Mutex // lock for synchronizing access to vms
@@ -243,21 +251,21 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
+func (vms VMs) Launch(q QueuedVMs) <-chan error {
 	vmLock.Lock()
 
 	out := make(chan error)
 
-	log.Info("launching %v %v vms", len(names), vmType)
+	log.Info("launching %v %v vms", len(q.Names), q.VMType)
 	start := time.Now()
 
 	var wg sync.WaitGroup
 
-	for _, name := range names {
+	for _, name := range q.Names {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm, err := NewVM(name, vmType)
+		vm, err := NewVM(name, q.VMType, q.VMConfig)
 		if err == nil {
 			for _, vm2 := range vms {
 				if err = vm2.Conflicts(vm); err != nil {
@@ -305,7 +313,7 @@ func (vms VMs) Launch(names []string, vmType VMType) <-chan error {
 		wg.Wait()
 
 		stop := time.Now()
-		log.Info("launched %v %v vms in %v", len(names), vmType, stop.Sub(start))
+		log.Info("launched %v %v vms in %v", len(q.Names), q.VMType, stop.Sub(start))
 	}()
 
 	return out
@@ -404,6 +412,8 @@ func (vms VMs) Flush() {
 			if err := vm.Flush(); err != nil {
 				log.Error("clogged VM: %v", err)
 			}
+
+			ccNode.UnregisterVM(vm.GetUUID())
 
 			delete(vms, i)
 		}
@@ -580,6 +590,50 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	return errs
+}
+
+// meshageVMLauncher handles VM launches sent by the scheduler
+func meshageVMLauncher() {
+	for m := range meshageVMLaunchChan {
+		go func(m *meshage.Message) {
+			cmd := m.Body.(meshageVMLaunch)
+
+			errs := []string{}
+
+			// Run our own version of the cliPreprocessor since some of the vm
+			// configs might need expanding. There's probably a better way to
+			// do this...
+			var err error
+
+			kvm := &cmd.QueuedVMs.KVMConfig
+
+			for _, v := range []*string{&kvm.CdromPath, &kvm.InitrdPath, &kvm.KernelPath} {
+				if *v, err = cliPreprocess(*v); err != nil {
+					errs = append(errs, err.Error())
+				}
+			}
+			for i := range kvm.DiskPaths {
+				if kvm.DiskPaths[i], err = cliPreprocess(kvm.DiskPaths[i]); err != nil {
+					errs = append(errs, err.Error())
+				}
+			}
+
+			if len(errs) == 0 {
+				for err := range vms.Launch(cmd.QueuedVMs) {
+					if err != nil {
+						errs = append(errs, err.Error())
+					}
+				}
+			}
+
+			to := []string{m.Source}
+			msg := meshageVMResponse{Errors: errs, TID: cmd.TID}
+
+			if _, err := meshageNode.Set(to, msg); err != nil {
+				log.Errorln(err)
+			}
+		}(m)
+	}
 }
 
 // HostVMs gets all the VMs running on the specified remote host, filtered to

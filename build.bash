@@ -33,7 +33,7 @@ var (
 
 # build packages
 echo "BUILD PACKAGES (linux)"
-for i in `ls $SCRIPT_DIR/src`
+for i in `ls $SCRIPT_DIR/src | grep -v vendor`
 do
 	echo $i
 	go install $i

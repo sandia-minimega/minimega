@@ -26,7 +26,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
-	"websocket"
+
+	"golang.org/x/net/websocket"
 )
 
 const (

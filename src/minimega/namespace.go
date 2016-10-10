@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
-	"strings"
 	"sync"
 	"time"
 )
@@ -18,13 +17,6 @@ const (
 	SchedulerRunning   = "running"
 	SchedulerCompleted = "completed"
 )
-
-type queuedVM struct {
-	VMConfig // embed
-
-	names  []string
-	vmType VMType
-}
 
 type scheduleStat struct {
 	start, end time.Time
@@ -41,8 +33,8 @@ type Namespace struct {
 
 	vmID *Counter
 
-	// Queued VMs to launch,
-	queuedVMs []queuedVM
+	// Queued VMs to launch
+	queue []QueuedVMs
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
@@ -120,9 +112,9 @@ func (n Namespace) RemoveTap(tap string) {
 	delete(n.Taps, tap)
 }
 
-// Queue handles storing the current VM config to the namespace's queuedVMs so
+// Queue handles storing the current VM config to the namespace's queued VMs so
 // that we can launch it in the future.
-func (n *Namespace) Queue(arg string, vmType VMType) error {
+func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	names, err := expandLaunchNames(arg, globalVMs())
@@ -138,18 +130,18 @@ func (n *Namespace) Queue(arg string, vmType VMType) error {
 	delete(namesMap, "") // delete unconfigured name
 
 	// Extra check for name collisions -- look in the already queued VMs
-	for _, queued := range n.queuedVMs {
-		for _, name := range queued.names {
+	for _, q := range n.queue {
+		for _, name := range q.Names {
 			if namesMap[name] {
 				return fmt.Errorf("vm already queued with name `%s`", name)
 			}
 		}
 	}
 
-	n.queuedVMs = append(n.queuedVMs, queuedVM{
-		VMConfig: vmConfig.Copy(),
-		names:    names,
-		vmType:   vmType,
+	n.queue = append(n.queue, QueuedVMs{
+		VMConfig: vmConfig,
+		VMType:   vmType,
+		Names:    names,
 	})
 
 	return nil
@@ -162,17 +154,17 @@ func (n *Namespace) Launch() error {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
 
-	if len(n.queuedVMs) == 0 {
+	if len(n.queue) == 0 {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
 	// Create the host -> VMs assignment
 	// TODO: This is a static assignment... should it be updated periodically
 	// during the launching process?
-	stats, assignment := schedule(n.queuedVMs, n.hostSlice())
+	stats, assignment := schedule(n.queue, n.hostSlice())
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
-	n.queuedVMs = nil
+	n.queue = nil
 
 	stats.start = time.Now()
 	stats.state = SchedulerRunning
@@ -184,16 +176,16 @@ func (n *Namespace) Launch() error {
 
 	var wg sync.WaitGroup
 
-	for host, queuedVMs := range assignment {
+	for host, queue := range assignment {
 		wg.Add(1)
 
-		go func(host string, queuedVMs []queuedVM) {
+		go func(host string, queue []QueuedVMs) {
 			defer wg.Done()
 
-			for _, q := range queuedVMs {
+			for _, q := range queue {
 				n.hostLaunch(host, q, respChan)
 			}
-		}(host, queuedVMs)
+		}(host, queue)
 	}
 
 	go func() {
@@ -222,100 +214,29 @@ func (n *Namespace) Launch() error {
 	return nil
 }
 
-// hostLaunch launches a queuedVM on the specified host and namespace.  We
-// blast a bunch of `vm config` commands at the host and then call `vm launch
-// ... noblock` if there are no errors. We assume that this is serialized on a
-// per-host basis -- it's fine to run multiple of these in parallel, as long as
-// they target different hosts.
-func (n *Namespace) hostLaunch(host string, queued queuedVM, respChan chan<- minicli.Responses) {
-	log.Info("scheduling %v %v VMs on %v", len(queued.names), queued.vmType, host)
+// hostLaunch launches a queuedVM on the specified host and namespace.
+func (n *Namespace) hostLaunch(host string, queued QueuedVMs, respChan chan<- minicli.Responses) {
+	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
 
-	// Mesh send all the config commands
-	cmds := []string{"clear vm config"}
-	cmds = append(cmds, saveConfig(baseConfigFns, &queued.BaseConfig)...)
-
-	switch queued.vmType {
-	case KVM:
-		cmds = append(cmds, saveConfig(kvmConfigFns, &queued.KVMConfig)...)
-	case CONTAINER:
-		cmds = append(cmds, saveConfig(containerConfigFns, &queued.ContainerConfig)...)
-	default:
-	}
-
-	// Run all the config commands on the local or remote node, sending all the
-	// responses to configChan.
-	configChan := make(chan minicli.Responses)
-
-	// run all the config commands
-	go func() {
-		defer close(configChan)
-
-		for _, cmd := range cmds {
-			cmd := minicli.MustCompilef("namespace %q %v", n.Name, cmd)
-			cmd.SetRecord(false)
-			cmd.SetSource(n.Name)
-
-			if host == hostname {
-				// LOCK: we use runCommands instead of RunCommands because
-				// Namespace.Launch is only invoked by the CLI and
-				// Namespace.hostLaunch is serialized per-host (and localhost
-				// can't appear more than once).
-				forward(runCommands(cmd), configChan)
-			} else {
-				in, err := meshageSend(cmd, host)
-				if err != nil {
-					configChan <- errResp(err)
-					break
-				}
-
-				forward(in, configChan)
-			}
+	// Launching the VMs locally
+	if host == hostname {
+		errs := []error{}
+		for err := range vms.Launch(queued) {
+			errs = append(errs, err)
 		}
-	}()
 
-	var abort bool
+		resp := &minicli.Response{Host: hostname}
 
-	// Read all the configChan responses, set abort if we find a single error.
-	for resps := range configChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Error("config error, host %v -- %v", resp.Host, resp.Error)
-				abort = true
-			}
+		if err := makeErrSlice(errs); err != nil {
+			resp.Error = err.Error()
 		}
-	}
 
-	if abort {
+		respChan <- minicli.Responses{resp}
+
 		return
 	}
 
-	// Replace empty VM names with generic name
-	for i, name := range queued.names {
-		if name == "" {
-			queued.names[i] = fmt.Sprintf("vm-%v-%v", n.Name, n.vmID.Next())
-		}
-	}
-
-	// Send the launch command
-	names := strings.Join(queued.names, ",")
-	log.Debug("launch vms on host %v -- %v", host, names)
-
-	cmd := minicli.MustCompilef("namespace %q vm launch %v %v noblock", n.Name, queued.vmType, names)
-	cmd.SetRecord(false)
-	cmd.SetSource(n.Name)
-
-	if host == hostname {
-		// LOCK: see above.
-		forward(runCommands(cmd), respChan)
-	} else {
-		in, err := meshageSend(cmd, host)
-		if err != nil {
-			respChan <- errResp(err)
-			return
-		}
-
-		forward(in, respChan)
-	}
+	forward(meshageLaunch(host, queued), respChan)
 }
 
 // GetNamespace returns the active namespace. Returns nil if there isn't a
