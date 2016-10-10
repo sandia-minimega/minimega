@@ -7,9 +7,10 @@ package main
 import (
 	"io"
 	"log"
-	"ssh"
 	"strconv"
 	"strings"
+
+	"golang.org/x/crypto/ssh"
 )
 
 func isIPv6(ip string) bool {

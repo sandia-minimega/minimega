@@ -17,7 +17,7 @@ var (
 
 # testing
 echo TESTING
-for i in `ls $SCRIPT_DIR/src`
+for i in `ls $SCRIPT_DIR/src | grep -v vendor`
 do
 	go test $i
 done

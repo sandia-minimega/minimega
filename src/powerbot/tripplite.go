@@ -6,7 +6,8 @@ package main
 
 import (
 	"fmt"
-	"telnet"
+
+	"github.com/ziutek/telnet"
 )
 
 // Implementation of a specific Tripp Lite PDU.

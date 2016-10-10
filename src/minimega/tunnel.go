@@ -19,7 +19,8 @@ import (
 	"net/http"
 	"strings"
 	"vnc"
-	"websocket"
+
+	"golang.org/x/net/websocket"
 )
 
 const VNC_WS_BUF = 32768
