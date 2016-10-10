@@ -574,9 +574,8 @@ func cliVmConfigField(c *minicli.Command, resp *minicli.Response, field string) 
 
 func cliVmConfigTag(c *minicli.Command, resp *minicli.Response) error {
 	k := c.StringArgs["key"]
-	v := c.StringArgs["value"]
 
-	if v != "" {
+	if v, ok := c.StringArgs["value"]; ok {
 		// Setting a new value
 		vmConfig.Tags[k] = v
 	} else if k != "" {
