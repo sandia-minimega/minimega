@@ -592,6 +592,12 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 		return errors.New("invalid command when namespace is not active")
 	}
 
+	// nab the current VM config and update with the active namespace
+	vmConfig := vmConfig.Copy()
+	if ns != nil {
+		vmConfig.Namespace = ns.Name
+	}
+
 	// see note in wrapBroadcastCLI
 	if ns != nil && c.Source != ns.Name {
 		if len(c.StringArgs) > 0 {
@@ -602,7 +608,7 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 				return err
 			}
 
-			return ns.Queue(arg, vmType)
+			return ns.Queue(arg, vmType, vmConfig)
 		}
 
 		return ns.Launch()
@@ -644,7 +650,7 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	errChan := vms.Launch(names, vmType)
+	errChan := vms.Launch(QueuedVMs{names, vmType, vmConfig})
 
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() error {
