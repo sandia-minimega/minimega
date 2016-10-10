@@ -23,6 +23,7 @@ var (
 	f_http        = flag.Bool("http", false, "enable http service")
 	f_https       = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot    = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
+	f_httpGzip    = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp        = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser    = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
@@ -94,12 +95,15 @@ func main() {
 	}
 
 	var err error
-	hosts, keys, err = parseHosts(flag.Args())
+	hosts, err = parseHosts(flag.Args())
 	if err != nil {
 		log.Fatalln(err)
 	}
 	if len(hosts) == 0 && !*f_serve {
 		log.Fatalln("no hosts specified")
+	}
+	for k, _ := range hosts {
+		keys = append(keys, k)
 	}
 	log.Debugln("hosts: ", hosts)
 
