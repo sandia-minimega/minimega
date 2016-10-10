@@ -606,15 +606,29 @@ func (iom *IOMeshage) MITM(m *IOMMessage) {
 	}
 }
 
-// Return status on in-flight file transfers
+// Status returns a deep copy of the in-flight file transfers
 func (iom *IOMeshage) Status() []*Transfer {
 	iom.transferLock.RLock()
 	defer iom.transferLock.RUnlock()
-	var ret []*Transfer
+
+	res := []*Transfer{}
+
 	for _, t := range iom.transfers {
-		ret = append(ret, t)
+		t2 := new(Transfer)
+
+		// Make shallow copies of all fields
+		*t2 = *t
+
+		// Make deep copies
+		t2.Parts = make(map[int64]bool)
+		for k, v := range t.Parts {
+			t2.Parts[k] = v
+		}
+
+		res = append(res, t2)
 	}
-	return ret
+
+	return res
 }
 
 // Delete a file
