@@ -21,7 +21,9 @@ First, make sure you have a [[http://golang.org][Go compiler]] installed. Then,
 install some libraries needed to build minimega and the associated tools:
 
 	# fetch pre-requisites
-	$ sudo apt-get install libpcap-dev libreadline-dev syslinux
+	$ sudo apt-get install libpcap-dev libreadline-dev syslinux 
+	# On ubuntu 16.04lts you need these as well
+	$ sudo apt-get debootstrap genisoimage extlinux
 
 With those installed, you can pull down the minimega repo and build:
 
@@ -81,15 +83,13 @@ hierarchy of files and directories, based at /, that we want copied into the
 image we build. Let's start by copying over an existing overlay to get a
 baseline:
 
-	$ cp -r misc/vmbetter_configs/generic_vm_overlay misc/vmbetter_configs/wireshark_overlay
+	$ cp -r misc/vmbetter_configs/default_overlay misc/vmbetter_configs/wireshark_overlay
 
 If you look in that directory, you'll see a few basic files in a hierarchy:
 
 	$ du -a misc/vmbetter_configs/wireshark_overlay/
-	4       generic_vm_overlay/init
-	4       generic_vm_overlay/etc/rc.local
-	8       generic_vm_overlay/etc
-	16      generic_vm_overlay/
+	4       misc/vmbetter_configs/wireshark_overlay/init
+	8       misc/vmbetter_configs/wireshark_overlay/
 
 In order to make the LiveCD automatically launch X and Wireshark as soon as we
 log in as root, we can set up a few configuration files:
@@ -106,6 +106,8 @@ log in as root, we can set up a few configuration files:
 	exec blackbox
 	EOF
 	$ cd ../../..	# go back to the root of the minimega repo
+	# On ubuntu init may not have proper permissions
+	$ chmod 777 misc/vmbetter_conf/wireshark_overlay/init
 
 Our `.profile` launches X automatically as soon as root logs in, and then
 `.xinitrc` starts Wireshark and the Blackbox window manager once X starts.
@@ -115,11 +117,11 @@ Our `.profile` launches X automatically as soon as root logs in, and then
 Now that we've specified *how* to build the image, we can fire up vmbetter and
 actually *build* it. Here's the command I used to build:
 
-	$ sudo ./bin/vmbetter -branch unstable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf 
+	$ sudo ./bin/vmbetter -branch stable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf 
 
 It's rather complex, so I'll break down each part:
 
-- `-branch`unstable` : specifies that vmbetter should use the Debian unstable branch to build
+- `-branch`stable` : specifies that vmbetter should use the Debian stable branch to build
 - `-iso` : specifies that we want an ISO image
 - `-level`debug` : specifies that we want lots of debug output
 - `-mbr`/usr/lib/syslinux/mbr/mbr.bin` : On Debian Unstable, the `syslinux` package puts the `mbr.bin` file in a different place than expected by vmbetter
@@ -141,9 +143,9 @@ the current directory. We can test it using minimega:
 
 	$ sudo ./bin/minimega
 	minimega$ vm config cdrom wireshark.iso
-	minimega$ vm launch 1
-	minimega$ vm start all
-	minimega$ web
+	minimega$ vm launch kvm wireshark
+	minimega$ vm start wireshark
+	minimega$ web 9001
 
 Now, if you point your web browser at
 [[http://localhost:9001/][http://localhost:9001]], you should be able to see
