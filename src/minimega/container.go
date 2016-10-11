@@ -29,7 +29,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"pty"
+	"github.com/kr/pty"
 	"strconv"
 	"strings"
 	"sync"
