@@ -13,9 +13,10 @@ const (
 )
 
 type Dnsmasq struct {
-	DHCP map[string]*Dhcp
-	DNS  map[string][]string
-	RAD  map[string]bool
+	DHCP     map[string]*Dhcp
+	DNS      map[string][]string
+	RAD      map[string]bool
+	Upstream string
 }
 
 type Dhcp struct {
@@ -42,6 +43,7 @@ func init() {
 			"dnsmasq <dhcp,> option <dns,> <addr> <server>",
 			"dnsmasq <dhcp,> <static,> <addr> <mac> <ip>",
 			"dnsmasq <dns,> <ip> <host>",
+			"dnsmasq <upstream,> <ip>",
 			"dnsmasq <ra,> <subnet>",
 		},
 		Call: handleDnsmasq,
@@ -60,9 +62,10 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 
 	if c.BoolArgs["flush"] {
 		dnsmasqData = &Dnsmasq{
-			DHCP: make(map[string]*Dhcp),
-			DNS:  make(map[string][]string),
-			RAD:  make(map[string]bool),
+			DHCP:     make(map[string]*Dhcp),
+			DNS:      make(map[string][]string),
+			RAD:      make(map[string]bool),
+			Upstream: "",
 		}
 	} else if c.BoolArgs["commit"] {
 		dnsmasqConfig()
@@ -97,6 +100,9 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 		host := c.StringArgs["host"]
 		dnsmasqData.DNS[host] = append(dnsmasqData.DNS[host], ip)
 		log.Debugln("added ip %v to host %v", ip, host)
+	} else if c.BoolArgs["upstream"] {
+		ip := c.StringArgs["ip"]
+		dnsmasqData.Upstream = ip
 	} else if c.BoolArgs["ra"] {
 		subnet := c.StringArgs["subnet"]
 		dnsmasqData.RAD[subnet] = true
@@ -162,6 +168,10 @@ var dnsmasqTmpl = `
 
 # don't read /etc/resolv.conf
 no-resolv
+
+{{ if ne .Upstream "" }}
+	server={{.Upstream}}
+{{ end }}
 
 # dns entries
 # address=/foo.com/1.2.3.4

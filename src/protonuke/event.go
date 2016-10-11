@@ -54,8 +54,12 @@ func (e *EventTicker) Tick() {
 // command line. Therefore, if the user specified 10.0.0.0/24, randomHost may
 // return (10.0.0.200, 10.0.0.0/24).
 func randomHost() (host string, original string) {
+	if len(hosts) == 0 || hosts == nil {
+		return "", ""
+	}
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
+
 	v := r.Intn(len(hosts))
 	host = keys[v]
 	original = hosts[host]

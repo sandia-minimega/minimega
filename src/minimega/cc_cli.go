@@ -71,6 +71,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <process,> <list,> <vm id, name, uuid or all>",
 			"cc <process,> <kill,> <pid or all>",
+			"cc <process,> <killall,> <name>",
 
 			"cc <commands,>",
 
@@ -342,14 +343,23 @@ func cliCCFileSend(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Add new files to send, expand globs
-	for _, fglob := range c.ListArgs["file"] {
-		files, err := filepath.Glob(filepath.Join(*f_iomBase, fglob))
+	for _, arg := range c.ListArgs["file"] {
+		if !filepath.IsAbs(arg) {
+			arg = filepath.Join(*f_iomBase, arg)
+		}
+		arg = filepath.Clean(arg)
+
+		if !strings.HasPrefix(arg, *f_iomBase) {
+			return fmt.Errorf("can only send files from %v", *f_iomBase)
+		}
+
+		files, err := filepath.Glob(arg)
 		if err != nil {
-			return fmt.Errorf("non-existent files %v", fglob)
+			return fmt.Errorf("non-existent files %v", arg)
 		}
 
 		if len(files) == 0 {
-			return fmt.Errorf("no such file %v", fglob)
+			return fmt.Errorf("no such file %v", arg)
 		}
 
 		for _, f := range files {
@@ -447,10 +457,26 @@ func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+func cliCCProcessKillAll(c *minicli.Command, resp *minicli.Response) error {
+	cmd := &ron.Command{
+		KillAll: c.StringArgs["name"],
+		Filter:  ccGetFilter(),
+	}
+
+	id := ccNode.NewCommand(cmd)
+	log.Debug("generated command %v :%v", id, cmd)
+
+	ccMapPrefix(id)
+
+	return nil
+}
+
 // process
 func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["kill"] {
 		return cliCCProcessKill(c, resp)
+	} else if c.BoolArgs["killall"] {
+		return cliCCProcessKillAll(c, resp)
 	}
 
 	// list processes

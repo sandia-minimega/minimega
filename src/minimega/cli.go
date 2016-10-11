@@ -26,6 +26,7 @@ import (
 	"minipager"
 	"net/url"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -344,6 +345,15 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 func cliLocal() {
 	goreadline.FilenameCompleter = iomCompleter
 
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		for range sig {
+			goreadline.Signal()
+		}
+	}()
+	defer signal.Stop(sig)
+
 	for {
 		namespace := GetNamespaceName()
 
@@ -352,9 +362,9 @@ func cliLocal() {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
 		}
 
-		line, err := goreadline.Rlwrap(prompt, true)
+		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
-			break // EOF
+			return
 		}
 		command := string(line)
 		log.Debug("got from stdin: `%v`", command)
@@ -396,8 +406,44 @@ func cliLocal() {
 	}
 }
 
+// cliPreprocess performs expansion on a single string and returns the update
+// string or an error.
+func cliPreprocess(v string) (string, error) {
+	if u, err := url.Parse(v); err == nil {
+		switch u.Scheme {
+		case "file":
+			log.Debug("file preprocessor")
+			return iomHelper(u.Opaque)
+		case "http", "https":
+			log.Debug("http/s preprocessor")
+
+			// Check if we've already downloaded the file
+			v2, err := iomHelper(u.Path)
+			if err == nil {
+				return v2, err
+			}
+
+			if err.Error() == "file not found" {
+				log.Info("attempting to download %v", u)
+
+				// Try to download the file, save to files
+				dst := filepath.Join(*f_iomBase, u.Path)
+				if err := wget(v, dst); err != nil {
+					return "", err
+				}
+
+				return dst, nil
+			}
+
+			return "", err
+		}
+	}
+
+	return v, nil
+}
+
 // cliPreprocessor allows modifying commands post-compile but pre-process.
-// Current preprocessors "file:", "http://", and "http://".
+// Current preprocessors "file:", "http://", and "https://".
 //
 // Note: we don't run preprocessors when we're not running the `local` behavior
 // (see wrapBroadcastCLI) to avoid expanding files before we're running the
@@ -407,58 +453,28 @@ func cliPreprocessor(c *minicli.Command) error {
 		return nil
 	}
 
-	helper := func(v string) (string, error) {
-		if u, err := url.Parse(v); err == nil {
-			switch u.Scheme {
-			case "file":
-				log.Debug("file preprocessor")
-				return iomHelper(u.Opaque)
-			case "http", "https":
-				log.Debug("http/s preprocessor")
-
-				// Check if we've already downloaded the file
-				v2, err := iomHelper(u.Path)
-				if err == nil {
-					return v2, err
-				}
-
-				if err.Error() == "file not found" {
-					log.Info("attempting to download %v", u)
-
-					// Try to download the file, save to files
-					dst := filepath.Join(*f_iomBase, u.Path)
-					if err := wget(v, dst); err != nil {
-						return "", err
-					}
-
-					return dst, nil
-				}
-
-				return "", err
-			}
-		}
-
-		return v, nil
-	}
-
 	for k, v := range c.StringArgs {
-		v2, err := helper(v)
+		v2, err := cliPreprocess(v)
 		if err != nil {
 			return err
 		}
 
-		log.Debug("cliPreprocessor: %v -> %v", v, v2)
+		if v != v2 {
+			log.Info("cliPreprocess: [%v] %v -> %v", k, v, v2)
+		}
 		c.StringArgs[k] = v2
 	}
 
 	for k := range c.ListArgs {
 		for k2, v := range c.ListArgs[k] {
-			v2, err := helper(v)
+			v2, err := cliPreprocess(v)
 			if err != nil {
 				return err
 			}
 
-			log.Debug("cliPreprocessor: %v -> %v", v, v2)
+			if v != v2 {
+				log.Info("cliPreprocessor: [%v][%v] %v -> %v", k, k2, v, v2)
+			}
 			c.ListArgs[k][k2] = v2
 		}
 	}

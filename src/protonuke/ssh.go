@@ -13,9 +13,10 @@ import (
 	"math/rand"
 	log "minilog"
 	"net"
-	"ssh"
-	"ssh/terminal"
 	"time"
+
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/terminal"
 )
 
 var id_rsa = `-----BEGIN RSA PRIVATE KEY-----

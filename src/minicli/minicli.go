@@ -80,6 +80,13 @@ type Response struct {
 
 type CLIFunc func(*Command, chan<- Responses)
 
+// Reset minicli state including all registered handlers.
+func Reset() {
+	handlers = nil
+	history = nil
+	firstHistoryTruncate = true
+}
+
 // MustRegister calls Register for a handler and panics if the handler has an
 // error registering.
 func MustRegister(h *Handler) {

@@ -103,7 +103,19 @@ var testHandler = &Handler{
 	},
 }
 
+var echoArgHandler = &Handler{
+	Patterns: []string{"<arg>"},
+	Call: func(c *Command, out chan<- Responses) {
+		resp := &Response{
+			Response: c.StringArgs["arg"],
+		}
+		out <- Responses{resp}
+	},
+}
+
 func TestParse(t *testing.T) {
+	Reset()
+
 	for _, v := range validTestPatterns {
 		t.Logf("Testing pattern: `%s`", v.pattern)
 
@@ -128,6 +140,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestInvalidPatterns(t *testing.T) {
+	Reset()
+
 	for _, p := range invalidTestPatterns {
 		t.Logf("Testing pattern: `%s`", p)
 
@@ -140,6 +154,8 @@ func TestInvalidPatterns(t *testing.T) {
 }
 
 func TestPrefix(t *testing.T) {
+	Reset()
+
 	for i := range testPrefixes {
 		want := testPrefixes[i].Prefix
 		patterns := testPrefixes[i].Patterns
@@ -167,6 +183,7 @@ func TestPrefix(t *testing.T) {
 }
 
 func TestHistoryComments(t *testing.T) {
+	Reset()
 	Register(testHandler)
 
 	comments := []string{
@@ -176,7 +193,6 @@ func TestHistoryComments(t *testing.T) {
 		"# four",
 	}
 
-	ClearHistory()
 	for _, c := range comments {
 		out, err := ProcessString(c, true)
 		if err != nil {
@@ -199,8 +215,8 @@ func TestHistoryComments(t *testing.T) {
 }
 
 func TestWhitespace(t *testing.T) {
+	Reset()
 	Register(testHandler)
-	ClearHistory()
 
 	inputs := []string{
 		"test",
@@ -228,4 +244,43 @@ func TestWhitespace(t *testing.T) {
 	}
 
 	t.Logf("history:\n`%s`", History())
+}
+
+func TestQuotes(t *testing.T) {
+	Reset()
+	Register(echoArgHandler)
+
+	inputs := [][]string{
+		[]string{`foo`, `foo`},
+		[]string{`"foo"`, `foo`},
+		[]string{`"foo bar"`, `foo bar`},
+		[]string{`"\"foo bar\""`, `"foo bar"`},
+		[]string{`"\"foo's bar\""`, `"foo's bar"`},
+		[]string{`'foo'`, `foo`},
+		[]string{`'foo bar'`, `foo bar`},
+		[]string{`'"foo bar"'`, `"foo bar"`},
+		[]string{`'"foo\'s bar"'`, `"foo's bar"`},
+		[]string{`"foo \"bar\""`, `foo "bar"`},
+		[]string{`""`, ``},
+	}
+
+	for _, v := range inputs {
+		t.Logf("processing input: `%s`, want: `%v`", v[0], v[1])
+
+		out, err := ProcessString(v[0], true)
+		if err != nil {
+			t.Fatalf("unable to ProcessString: `%s` -- %v", v[0], err)
+		}
+
+		for r := range out {
+			if len(r) != 1 {
+				t.Errorf("expected one response")
+				continue
+			}
+
+			if r[0].Response != v[1] {
+				t.Errorf("quote mismatch: `%v` != `%v`", r[0].Response, v[1])
+			}
+		}
+	}
 }

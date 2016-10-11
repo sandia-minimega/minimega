@@ -580,13 +580,13 @@ func (vm *ContainerVM) Config() *BaseConfig {
 	return &vm.BaseConfig
 }
 
-func NewContainer(name string) (*ContainerVM, error) {
+func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewBaseVM(name)
+	vm.BaseVM = *NewBaseVM(name, config)
 	vm.Type = CONTAINER
 
-	vm.ContainerConfig = vmConfig.ContainerConfig.Copy() // deep-copy configured fields
+	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
 
 	if vm.FSPath == "" {
 		return nil, errors.New("unable to create container without a configured filesystem")
@@ -608,6 +608,7 @@ func (vm *ContainerVM) Copy() VM {
 	defer vm2.lock.Unlock()
 
 	// Make deep copies
+	vm2.BaseConfig = vm.BaseConfig.Copy()
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
 	return vm2
@@ -693,26 +694,6 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
-func (vm *ContainerVM) SaveConfig(w io.Writer) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	cmds := []string{"clear vm config"}
-	cmds = append(cmds, saveConfig(baseConfigFns, &vm.BaseConfig)...)
-	cmds = append(cmds, saveConfig(containerConfigFns, &vm.ContainerConfig)...)
-
-	// Build launch string, make sure to preserve namespace if set
-	format := "vm launch %v %v"
-	if vm.Namespace != "" {
-		format = fmt.Sprintf("namespace %q %v", vm.Namespace, format)
-	}
-	cmds = append(cmds, fmt.Sprintf(format, vm.Type, vm.Name))
-	cmds = append(cmds, "", "") // add a blank line
-
-	_, err := io.WriteString(w, strings.Join(cmds, "\n"))
-	return err
-}
-
 func (vm *ContainerVM) Conflicts(vm2 VM) error {
 	switch vm2 := vm2.(type) {
 	case *ContainerVM:
@@ -736,6 +717,10 @@ func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
 	}
 
 	return vm.BaseVM.conflicts(vm2.BaseVM)
+}
+
+func (vm *ContainerVM) Screenshot(size int) ([]byte, error) {
+	return nil, errors.New("cannot take screenshot of container")
 }
 
 func (vm *ContainerConfig) String() string {
@@ -792,8 +777,8 @@ func (vm *ContainerVM) launch() error {
 
 	// write the config for this vm
 	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
-	writeOrDie(filepath.Join(vm.instancePath, "config"), config)
-	writeOrDie(filepath.Join(vm.instancePath, "name"), vm.Name)
+	writeOrDie(vm.path("config"), config)
+	writeOrDie(vm.path("name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
 	// to mimic stdio, and a fourth pipe for logging before the child execs
@@ -839,12 +824,12 @@ func (vm *ContainerVM) launch() error {
 
 	// create the uuid path that will bind mount into sysfs in the
 	// container
-	uuidPath := filepath.Join(vm.instancePath, "uuid")
+	uuidPath := vm.path("uuid")
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
 	for i := 0; i < vm.Fifos; i++ {
-		p := filepath.Join(vm.instancePath, fmt.Sprintf("fifo%v", i))
+		p := vm.path(fmt.Sprintf("fifo%v", i))
 		if err = syscall.Mkfifo(p, 0660); err != nil {
 			log.Error("fifo: %v", err)
 			vm.setError(err)
@@ -965,22 +950,22 @@ func (vm *ContainerVM) launch() error {
 		return err
 	}
 
+	// Channel to signal when the process has exited
+	errChan := make(chan error)
+
+	// Create goroutine to wait for process to exit
 	go func() {
-		var err error
+		defer close(errChan)
+
+		errChan <- cmd.Wait()
+	}()
+
+	go func() {
 		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
 
-		// Channel to signal when the process has exited
-		var waitChan = make(chan bool)
-
-		// Create goroutine to wait for process to exit
-		go func() {
-			err = cmd.Wait()
-			close(waitChan)
-		}()
-
 		select {
-		case <-waitChan:
+		case err := <-errChan:
 			log.Info("VM %v exited", vm.ID)
 
 			vm.lock.Lock()
@@ -1000,15 +985,14 @@ func (vm *ContainerVM) launch() error {
 
 			cmd.Process.Kill()
 
-			// containers cannot return unless thawed, so thaw the
-			// process if necessary
-			if err = vm.thaw(); err != nil {
+			// containers cannot exit unless thawed, so thaw it if necessary
+			if err := vm.thaw(); err != nil {
 				log.Errorln(err)
 				vm.setError(err)
 			}
 
-			// wait for the taskset to actually exit (from
-			// uninterruptible sleep state).
+			// wait for the taskset to actually exit (from uninterruptible
+			// sleep state).
 			for {
 				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
 				if err != nil {
@@ -1022,11 +1006,15 @@ func (vm *ContainerVM) launch() error {
 				time.Sleep(100 * time.Millisecond)
 			}
 
+			// drain errChan
+			for err := range errChan {
+				log.Debug("kill container: %v", err)
+			}
+
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
-		err = ccNode.CloseUDS(ccPath)
-		if err != nil {
+		if err := ccNode.CloseUDS(ccPath); err != nil {
 			log.Errorln(err)
 		}
 
@@ -1044,8 +1032,7 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// clean up the cgroup directory
-		err = os.Remove(cgroupPath)
-		if err != nil {
+		if err := os.Remove(cgroupPath); err != nil {
 			log.Errorln(err)
 		}
 
@@ -1127,8 +1114,8 @@ func (vm *ContainerVM) unlinkNetns() error {
 // create an overlay mount (linux 3.18 or greater) is snapshot mode is
 // being used.
 func (vm *ContainerVM) overlayMount() error {
-	vm.effectivePath = filepath.Join(vm.instancePath, "fs")
-	workPath := filepath.Join(vm.instancePath, "fs_work")
+	vm.effectivePath = vm.path("fs")
+	workPath := vm.path("fs_work")
 
 	err := os.MkdirAll(vm.effectivePath, 0755)
 	if err != nil {
@@ -1169,7 +1156,7 @@ func (vm *ContainerVM) overlayUnmount() error {
 }
 
 func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
-	socketPath := filepath.Join(vm.instancePath, "console")
+	socketPath := vm.path("console")
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
 		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
@@ -1517,10 +1504,12 @@ func containerNuke() {
 		log.Errorln(err)
 	}
 
-	// umount cgroup_root
-	err = syscall.Unmount(CGROUP_ROOT, 0)
-	if err != nil {
-		log.Error("cgroup_root unmount: %v", err)
+	// umount cgroup_root, if it exists
+	if _, err := os.Stat(CGROUP_ROOT); err == nil {
+		err = syscall.Unmount(CGROUP_ROOT, 0)
+		if err != nil {
+			log.Error("cgroup_root unmount: %v", err)
+		}
 	}
 
 	// remove meganet_* from /var/run/netns

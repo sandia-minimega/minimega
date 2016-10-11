@@ -11,9 +11,9 @@ import (
 	"fmt"
 	"hash/fnv"
 	"io"
-	"math"
 	"ranges"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 )
@@ -31,6 +31,13 @@ func (t table) Swap(i, j int) {
 func (t table) Less(i, j int) bool {
 	for k := 0; k < len(t[i]) && k < len(t[j]); k++ {
 		if t[i][k] != t[j][k] {
+			// If both convert to ints, compare using int comparison
+			v, err := strconv.Atoi(t[i][k])
+			v2, err2 := strconv.Atoi(t[j][k])
+			if err == nil && err2 == nil {
+				return v < v2
+			}
+
 			return t[i][k] < t[j][k]
 		}
 	}
@@ -170,10 +177,10 @@ func (r Responses) compressString(buf io.Writer) {
 	}
 
 	// Compress hostnames into ranges
-	ranges := map[string]uint64{}
+	res := map[string]uint64{}
 	for hash, resps := range buckets {
 		if len(resps) == 1 {
-			ranges[resps[0].Host] = hash
+			res[resps[0].Host] = hash
 			continue
 		}
 
@@ -182,18 +189,18 @@ func (r Responses) compressString(buf io.Writer) {
 			hosts = append(hosts, r.Host)
 		}
 
-		ranges[compressHosts(hosts)] = hash
+		res[ranges.UnsplitList(hosts)] = hash
 	}
 
 	// Sort the keys of ranges
 	hosts := []string{}
-	for k := range ranges {
+	for k := range res {
 		hosts = append(hosts, k)
 	}
 	sort.Strings(hosts)
 
 	for _, h := range hosts {
-		resp := buckets[ranges[h]][0]
+		resp := buckets[res[h]][0]
 
 		if r.annotate() {
 			buf.Write([]byte(h))
@@ -203,48 +210,6 @@ func (r Responses) compressString(buf io.Writer) {
 		buf.Write([]byte(resp.Response))
 		buf.Write([]byte("\n"))
 	}
-}
-
-func compressHosts(hosts []string) string {
-	var res []string
-
-	// Add all the hosts to a trie
-	trie := newTrie()
-	for _, v := range hosts {
-		trie.Add(v)
-	}
-	prefixes := trie.AlphaPrefixes()
-
-	// Find the longest prefix match for each host
-	groups := map[string][]string{}
-	for _, h := range hosts {
-		longest := ""
-		for _, p := range prefixes {
-			if strings.HasPrefix(h, p) && len(p) > len(longest) {
-				longest = p
-			}
-		}
-
-		groups[longest] = append(groups[longest], h)
-	}
-
-	// Compress each group of hosts that share the same prefix
-	for p, group := range groups {
-		r, _ := ranges.NewRange(p, 0, int(math.MaxInt32))
-
-		s, err := r.UnsplitRange(group)
-		if err != nil {
-			// Fallback, append all the hosts
-			res = append(res, group...)
-			continue
-		}
-
-		res = append(res, s)
-	}
-
-	sort.Strings(res)
-
-	return strings.Join(res, ",")
 }
 
 func (r Responses) printTabular(buf io.Writer, header []string, data [][]string) {

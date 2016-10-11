@@ -162,6 +162,48 @@ func SplitList(in string) ([]string, error) {
 	return res, nil
 }
 
+func UnsplitList(vals []string) string {
+	var res []string
+
+	// Add all the vals to a trie
+	trie := newTrie()
+	for _, v := range vals {
+		trie.Add(v)
+	}
+	prefixes := trie.AlphaPrefixes()
+
+	// Find the longest prefix match for each host
+	groups := map[string][]string{}
+	for _, h := range vals {
+		longest := ""
+		for _, p := range prefixes {
+			if strings.HasPrefix(h, p) && len(p) > len(longest) {
+				longest = p
+			}
+		}
+
+		groups[longest] = append(groups[longest], h)
+	}
+
+	// Compress each group of vals that share the same prefix
+	for p, group := range groups {
+		r, _ := NewRange(p, 0, int(math.MaxInt32))
+
+		s, err := r.UnsplitRange(group)
+		if err != nil {
+			// Fallback, append all the vals
+			res = append(res, group...)
+			continue
+		}
+
+		res = append(res, s)
+	}
+
+	sort.Strings(res)
+
+	return strings.Join(res, ",")
+}
+
 // Turn an array of node names into a single string like kn[1-5,20]
 func (r *Range) UnsplitRange(names []string) (string, error) {
 	var nums []int

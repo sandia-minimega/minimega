@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"crypto/tls"
 	"fmt"
 	"html/template"
@@ -389,7 +390,7 @@ func httpMakeImage() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
 
-	pixelcount := *f_httpImageSize * 1024 * 1024 / 4
+	pixelcount := f_httpImageSize / 4
 	side := int(math.Sqrt(float64(pixelcount)))
 	log.Debug("Image served will be %v by %v", side, side)
 
@@ -398,9 +399,17 @@ func httpMakeImage() {
 		m.Pix[i] = uint8(r.Int())
 	}
 
-	b := new(bytes.Buffer)
-	png.Encode(b, m)
-	httpImage = b.Bytes()
+	buf := new(bytes.Buffer)
+
+	if *f_httpGzip {
+		w := gzip.NewWriter(buf)
+		png.Encode(w, m)
+		w.Close()
+	} else {
+		png.Encode(buf, m)
+	}
+
+	httpImage = buf.Bytes()
 }
 
 func hitCounter() {
@@ -431,7 +440,13 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
 	} else {
-		if strings.HasSuffix(r.URL.Path, "image.png") {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusAccepted)
+		} else if strings.HasSuffix(r.URL.Path, "image.png") {
+			if *f_httpGzip {
+				w.Header().Set("Content-Encoding", "gzip")
+				w.Header().Set("Content-Type", "image/png")
+			}
 			w.Write(httpImage)
 		} else {
 			h := &HtmlContent{

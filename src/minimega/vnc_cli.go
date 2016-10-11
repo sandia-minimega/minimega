@@ -19,14 +19,11 @@ Record keyboard and mouse events sent via the web interface to the
 selected VM. Can also record the framebuffer for the specified VM so that a
 user can watch a video of interactions with the VM.
 
-With no arguments, vnc will list currently recording or playing VNC sessions.
-
 If record is selected, a file will be created containing a record of mouse and
 keyboard actions by the user or of the framebuffer for the VM.`,
 		Patterns: []string{
-			"vnc",
-			"vnc <kb,fb> <record,> <host> <vm id or name> <filename>",
-			"vnc <kb,fb> <stop,> <host> <vm id or name>",
+			"vnc <kb,fb> <record,> <vm name> <filename>",
+			"vnc <kb,fb> <stop,> <vm name>",
 		},
 		Call: wrapSimpleCLI(cliVNCRecord),
 	},
@@ -64,17 +61,70 @@ Comments in the playback file are logged at the info level. An example is given 
 		},
 		Call: wrapSimpleCLI(cliVNCPlay),
 	},
-	{ // clear vnc
+	{
 		HelpShort: "reset VNC state",
 		HelpLong: `
 Resets the state for VNC recordings. See "help vnc" for more information.`,
 		Patterns: []string{
 			"clear vnc",
 		},
-		Call: wrapSimpleCLI(func(_ *minicli.Command, _ *minicli.Response) error {
-			return vncClear()
+		Call: wrapBroadcastCLI(func(_ *minicli.Command, _ *minicli.Response) error {
+			vncClear()
+			return nil
 		}),
 	},
+	{
+		HelpShort: "list all running vnc playback/recording instances",
+		HelpLong: `
+List all running vnc playback/recording instances. See "help vnc" for more information.`,
+		Patterns: []string{
+			"vnc",
+		},
+		Call: wrapBroadcastCLI(cliVNCList),
+	},
+}
+
+// List all active recordings and playbacks
+func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
+	// List all active recordings and playbacks
+	resp.Header = []string{"host", "name", "id", "type", "time", "filename"}
+	resp.Tabular = [][]string{}
+
+	for _, v := range vncKBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			v.Host, v.Name, strconv.Itoa(v.ID),
+			"record kb",
+			time.Since(v.start).String(),
+			v.file.Name(),
+		})
+	}
+
+	for _, v := range vncFBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			v.Host, v.Name, strconv.Itoa(v.ID),
+			"record fb",
+			time.Since(v.start).String(),
+			v.file.Name(),
+		})
+	}
+
+	for _, v := range vncKBPlaying {
+		var r string
+		if v.state == Pause {
+			r = "PAUSED"
+		} else {
+			r = v.timeRemaining() + " remaining"
+		}
+
+		resp.Tabular = append(resp.Tabular, []string{
+			v.Host, v.Name, strconv.Itoa(v.ID),
+			"playback kb",
+			r,
+			v.file.Name(),
+		})
+	}
+
+	return nil
 }
 
 func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
@@ -130,8 +180,9 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 	vm := c.StringArgs["vm"]
 	fname := c.StringArgs["filename"]
 
-	if host == Localhost {
-		host = hostname
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return fmt.Errorf("vm %s not found", c.StringArgs["vm"])
 	}
 
 	var client *vncClient
@@ -143,7 +194,8 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 		} else {
 			err = vncRecordFB(host, vm, fname)
 		}
-	} else if c.BoolArgs["stop"] {
+	}
+	if c.BoolArgs["stop"] {
 		if c.BoolArgs["kb"] {
 			err = fmt.Errorf("kb recording %v %v not found", host, vm)
 			for k, v := range vncKBRecording {
@@ -165,44 +217,6 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 		}
 		if client != nil {
 			return client.Stop()
-		}
-	} else {
-		// List all active recordings and playbacks
-		resp.Header = []string{"host", "name", "id", "type", "time", "filename"}
-		resp.Tabular = [][]string{}
-
-		for _, v := range vncKBRecording {
-			resp.Tabular = append(resp.Tabular, []string{
-				v.Host, v.Name, strconv.Itoa(v.ID),
-				"record kb",
-				time.Since(v.start).String(),
-				v.file.Name(),
-			})
-		}
-
-		for _, v := range vncFBRecording {
-			resp.Tabular = append(resp.Tabular, []string{
-				v.Host, v.Name, strconv.Itoa(v.ID),
-				"record fb",
-				time.Since(v.start).String(),
-				v.file.Name(),
-			})
-		}
-
-		for _, v := range vncKBPlaying {
-			var r string
-			if v.state == Pause {
-				r = "PAUSED"
-			} else {
-				r = v.timeRemaining() + " remaining"
-			}
-
-			resp.Tabular = append(resp.Tabular, []string{
-				v.Host, v.Name, strconv.Itoa(v.ID),
-				"playback kb",
-				r,
-				v.file.Name(),
-			})
 		}
 	}
 

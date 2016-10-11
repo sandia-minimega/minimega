@@ -2,14 +2,14 @@ package main
 
 import log "minilog"
 
-func schedule(queuedVMs []queuedVM, hosts []string) (*scheduleStat, map[string][]queuedVM) {
-	res := map[string][]queuedVM{}
+func schedule(queue []QueuedVMs, hosts []string) (*scheduleStat, map[string][]QueuedVMs) {
+	res := map[string][]QueuedVMs{}
 
 	// Total number of VMs to launch
 	var total int
 
-	for _, queued := range queuedVMs {
-		total += len(queued.names)
+	for _, q := range queue {
+		total += len(q.Names)
 	}
 
 	// Simplest scheduler -- roughly equal allocation per node
@@ -26,23 +26,23 @@ func schedule(queuedVMs []queuedVM, hosts []string) (*scheduleStat, map[string][
 	// allocated is the number of VMs that have been allocated on that host
 	var host, allocated int
 
-	for _, queued := range queuedVMs {
+	for _, q := range queue {
 		// Process queued VMs until all names have been allocated
-		for len(queued.names) > 0 {
+		for len(q.Names) > 0 {
 			// Splitter for names based on how many VMs should be allocated to
 			// the current host
 			split := perHost - allocated
-			if split > len(queued.names) {
-				split = len(queued.names)
+			if split > len(q.Names) {
+				split = len(q.Names)
 			}
 
 			// Copy queued and partition names
-			curr := queued
-			curr.names = queued.names[:split]
-			queued.names = queued.names[split:]
+			curr := q
+			curr.Names = q.Names[:split]
+			q.Names = q.Names[split:]
 
 			res[hosts[host]] = append(res[hosts[host]], curr)
-			allocated += len(curr.names)
+			allocated += len(curr.Names)
 
 			if allocated == perHost {
 				host += 1

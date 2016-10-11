@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -107,7 +109,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/vms", webVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
-	mux.HandleFunc("/ws/", vncWsHandler)
+	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
 
 	if web.Server == nil {
 		web.Server = &http.Server{
@@ -163,7 +165,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
+				} else if resp.Error == "cannot take screenshot of container" {
 					continue
 				}
 
@@ -210,7 +212,7 @@ func webTileVNC(w http.ResponseWriter, r *http.Request) {
 }
 
 func webVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"))
+	http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +272,10 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 			"type":   vm.GetType().String(),
 			"vcpus":  config.Vcpus,
 			"memory": config.Memory,
+		}
+
+		if vm, ok := vm.(*KvmVM); ok {
+			vmMap["vnc_port"] = vm.VNCPort
 		}
 
 		if config.Networks == nil {

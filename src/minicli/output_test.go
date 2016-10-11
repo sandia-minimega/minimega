@@ -5,43 +5,55 @@
 package minicli
 
 import (
-	"fmt"
+	"sort"
+	"strconv"
 	"testing"
 )
 
-func TestCompressHosts(t *testing.T) {
-	hosts := []string{}
+// sortData is in a random order and the third column is the correct order.
+var sortData = [][]string{
+	[]string{"b", "b", "2"},
+	[]string{"a", "a", "0"},
+	[]string{"d", "a", "4"},
+	[]string{"a", "b", "1"},
+	[]string{"e", "a", "5"},
+	[]string{"c", "a", "3"},
+}
 
-	for i := 0; i < 10; i++ {
-		hosts = append(hosts, fmt.Sprintf("node%d", i))
-		hosts = append(hosts, fmt.Sprintf("n%d", i))
-		hosts = append(hosts, fmt.Sprintf("foo%d", i))
-	}
+// sortDataInts is in a random order and the third column is the correct order.
+var sortDataInts = [][]string{
+	[]string{"2", "b", "2"},
+	[]string{"0", "a", "0"},
+	[]string{"4", "a", "4"},
+	[]string{"1", "b", "1"},
+	[]string{"5", "a", "5"},
+	[]string{"3", "a", "3"},
+}
 
-	want := "foo[0-9],n[0-9],node[0-9]"
-	got := compressHosts(hosts)
+func TestSort(t *testing.T) {
+	data := make([][]string, len(sortData))
+	copy(data, sortData)
 
-	if want != got {
-		t.Errorf("got: `%s`, want `%s`", got, want)
+	sort.Sort(table(data))
+
+	for i := 0; i < len(data); i++ {
+		v, _ := strconv.Atoi(data[i][2])
+		if i != v {
+			t.Errorf("out of order, %v: %v", i, data)
+		}
 	}
 }
 
-func TestCompressHostsSkip(t *testing.T) {
-	hosts := []string{}
+func TestSortInts(t *testing.T) {
+	data := make([][]string, len(sortDataInts))
+	copy(data, sortData)
 
-	for i := 0; i < 10; i++ {
-		if i != 5 {
-			hosts = append(hosts, fmt.Sprintf("n%d", i))
+	sort.Sort(table(data))
+
+	for i := 0; i < len(data); i++ {
+		v, _ := strconv.Atoi(data[i][2])
+		if i != v {
+			t.Errorf("out of order, %v: %v", i, data)
 		}
-		if i != 9 {
-			hosts = append(hosts, fmt.Sprintf("node%d", i))
-		}
-	}
-
-	want := "n[0-4,6-9],node[0-8]"
-	got := compressHosts(hosts)
-
-	if want != got {
-		t.Errorf("got: `%s`, want `%s`", got, want)
 	}
 }

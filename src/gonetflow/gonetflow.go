@@ -285,38 +285,15 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 	numRecords := (n - NETFLOW_HEADER_LEN) / NETFLOW_RECORD_LEN
 
 	p := &Packet{
-		Header: &Header{
-			Version:   int(b[1]), // skip the first byte
-			Count:     int(b[3]),
-			Sequence:  (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
-			Uptime:    (uint32(b[4]) << 24) + (uint32(b[5]) << 16) + (uint32(b[6]) << 8) + (uint32(b[7])),
-			EpochSec:  (uint32(b[8]) << 24) + (uint32(b[9]) << 16) + (uint32(b[10]) << 8) + (uint32(b[11])),
-			EpochNsec: (uint32(b[12]) << 24) + (uint32(b[13]) << 16) + (uint32(b[14]) << 8) + (uint32(b[15])),
-		},
-		Raw: b[:n],
+		Header: DecodeHeader(b),
+		Raw:    b[:n],
 	}
 
 	for i := 0; i < numRecords; i++ {
 		offset := (i * NETFLOW_RECORD_LEN) + NETFLOW_HEADER_LEN
 		c := b[offset:]
 
-		r := &Record{
-			Src:        net.IP([]byte{c[0], c[1], c[2], c[3]}),
-			Dst:        net.IP([]byte{c[4], c[5], c[6], c[7]}),
-			Nexthop:    net.IP([]byte{c[8], c[9], c[10], c[11]}),
-			Input:      (uint(c[12]) << 8) + uint(c[13]),
-			Output:     (uint(c[14]) << 8) + uint(c[15]),
-			NumPackets: (uint32(c[16]) << 24) + (uint32(c[17]) << 16) + (uint32(c[18]) << 8) + (uint32(c[19])),
-			NumOctets:  (uint32(c[20]) << 24) + (uint32(c[21]) << 16) + (uint32(c[22]) << 8) + (uint32(c[23])),
-			First:      (uint32(c[24]) << 24) + (uint32(c[25]) << 16) + (uint32(c[26]) << 8) + (uint32(c[27])),
-			Last:       (uint32(c[28]) << 24) + (uint32(c[29]) << 16) + (uint32(c[30]) << 8) + (uint32(c[31])),
-			SrcPort:    (int(c[32]) << 8) + int(c[33]),
-			DstPort:    (int(c[34]) << 8) + int(c[35]),
-			Protocol:   int(c[38]),
-			ToS:        int(c[39]),
-			SrcAS:      (int(c[40]) << 8) + int(c[41]),
-			DstAS:      (int(c[42]) << 8) + int(c[43]),
-		}
+		r := DecodeRecord(c)
 		p.Records = append(p.Records, r)
 
 		nf.statBytes += uint64(r.NumOctets)
@@ -328,4 +305,35 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 	nf.statNFRecords += uint64(len(p.Records))
 
 	return p, nil
+}
+
+func DecodeHeader(b []byte) *Header {
+	return &Header{
+		Version:   int(b[0])<<8 + int(b[1]),
+		Count:     int(b[2])<<8 + int(b[3]),
+		Sequence:  (int32(b[16]) << 24) + (int32(b[17]) << 16) + (int32(b[18]) << 8) + (int32(b[19])),
+		Uptime:    (uint32(b[4]) << 24) + (uint32(b[5]) << 16) + (uint32(b[6]) << 8) + (uint32(b[7])),
+		EpochSec:  (uint32(b[8]) << 24) + (uint32(b[9]) << 16) + (uint32(b[10]) << 8) + (uint32(b[11])),
+		EpochNsec: (uint32(b[12]) << 24) + (uint32(b[13]) << 16) + (uint32(b[14]) << 8) + (uint32(b[15])),
+	}
+}
+
+func DecodeRecord(b []byte) *Record {
+	return &Record{
+		Src:        net.IP([]byte{b[0], b[1], b[2], b[3]}),
+		Dst:        net.IP([]byte{b[4], b[5], b[6], b[7]}),
+		Nexthop:    net.IP([]byte{b[8], b[9], b[10], b[11]}),
+		Input:      (uint(b[12]) << 8) + uint(b[13]),
+		Output:     (uint(b[14]) << 8) + uint(b[15]),
+		NumPackets: (uint32(b[16]) << 24) + (uint32(b[17]) << 16) + (uint32(b[18]) << 8) + (uint32(b[19])),
+		NumOctets:  (uint32(b[20]) << 24) + (uint32(b[21]) << 16) + (uint32(b[22]) << 8) + (uint32(b[23])),
+		First:      (uint32(b[24]) << 24) + (uint32(b[25]) << 16) + (uint32(b[26]) << 8) + (uint32(b[27])),
+		Last:       (uint32(b[28]) << 24) + (uint32(b[29]) << 16) + (uint32(b[30]) << 8) + (uint32(b[31])),
+		SrcPort:    (int(b[32]) << 8) + int(b[33]),
+		DstPort:    (int(b[34]) << 8) + int(b[35]),
+		Protocol:   int(b[38]),
+		ToS:        int(b[39]),
+		SrcAS:      (int(b[40]) << 8) + int(b[41]),
+		DstAS:      (int(b[42]) << 8) + int(b[43]),
+	}
 }
