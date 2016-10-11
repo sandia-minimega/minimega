@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/kr/pty"
 	"io"
 	"io/ioutil"
 	"ipmac"
@@ -29,7 +30,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"github.com/kr/pty"
 	"strconv"
 	"strings"
 	"sync"
@@ -224,10 +224,11 @@ type ContainerVM struct {
 	BaseVM          // embed
 	ContainerConfig // embed
 
-	pid           int
-	effectivePath string
-	listener      net.Listener
-	netns         string
+	pid             int
+	effectivePath   string
+	listener        net.Listener
+	nettermListener net.Listener
+	netns           string
 
 	ConsolePort int
 }
@@ -994,6 +995,7 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		vm.listener.Close()
+		vm.nettermListener.Close()
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
@@ -1145,6 +1147,7 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 		return
 	}
 	defer tcpL.Close()
+	vm.nettermListener = tcpL
 	log.Info("container console listening on %v", tcpL.Addr().String())
 	vm.ConsolePort = tcpL.Addr().(*net.TCPAddr).Port
 	go func() {
