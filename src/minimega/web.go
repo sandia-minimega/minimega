@@ -16,7 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"websocket"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
