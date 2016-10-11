@@ -55,6 +55,9 @@ function screenshotURL (vm, size) {
 
 // Generate the appropriate URL for requesting a VNC connection
 function vncURL (vm) {
+	if (vm.type == "container") {
+        return "./terminal#" + vm.host + ":" + (vm.console_port) + ":" + vm.name
+	}
     return "./vnc#" + vm.name
 }
 
@@ -191,7 +194,7 @@ function updateTables () {
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
 
-        if (vm.type != "kvm") toAppend.find(".connect-vm-button").css("visibility", "hidden");
+        //if (vm.type != "kvm") toAppend.find(".connect-vm-button").css("visibility", "hidden");
 
         screenshotList.push({
             "name": vm.name,

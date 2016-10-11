@@ -1,0 +1,13 @@
+node_modules/
+*.swp
+build/*
+.lock-wscript
+out/
+Makefile.gyp
+*.Makefile
+*.target.gyp.mk
+*.node
+example/*.log
+docs/
+npm-debug.log
+/.idea/

@@ -56,3 +56,51 @@ func vncWsHandler(ws *websocket.Conn) {
 
 	log.Info("ws client disconnected from %v", rhost)
 }
+
+func terminalWsHandler(w http.ResponseWriter, r *http.Request) {
+	// we assume that if we got here, then the url must be sane and of
+	// the format /ws/<host>/<port>
+	path := r.URL.Path
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+	fields := strings.Split(path, "/")
+	if len(fields) != 5 {
+		http.NotFound(w, r)
+		return
+	}
+	fields = fields[2:]
+
+	rhost := fmt.Sprintf("%v:%v", fields[0], fields[1])
+
+	// connect to the remote host
+	remote, err := net.Dial("tcp", rhost)
+	if err != nil {
+		log.Errorln(err)
+		http.StatusText(500)
+		return
+	}
+
+	websocket.Handler(func(ws *websocket.Conn) {
+		go func() {
+			var data []byte
+			for {
+				websocket.Message.Receive(ws, &data)
+				remote.Write(data)
+			}
+			remote.Close()
+		}()
+		rbuf := make([]byte, 1)
+		for {
+			n, err := remote.Read(rbuf)
+			if err != nil {
+				if !strings.Contains(err.Error(), "closed network connection") && err != io.EOF {
+					log.Errorln(err)
+				}
+				break
+			}
+			websocket.Message.Send(ws, string(rbuf[:n]))
+		}
+		ws.Close()
+	}).ServeHTTP(w, r)
+}
