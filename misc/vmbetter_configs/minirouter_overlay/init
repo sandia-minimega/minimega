@@ -1,0 +1,45 @@
+#!/bin/sh
+
+export PATH
+
+# mount volatile filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
+mount -t cgroup cgroup /sys/fs/cgroup
+
+# / needs permissions!?
+chmod a+rx /
+
+# minimega needs
+modprobe loop
+modprobe tun
+modprobe virtio_console
+modprobe virtio_pci
+
+# settle :(
+sleep 10
+
+ifconfig lo up
+
+# ssh
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+# arp tuning
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv4/neigh/default/gc_thresh3
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv6/neigh/default/gc_thresh3
+
+/miniccc -v=false -serial /dev/vport1p1 -logfile /miniccc.log &
+/minirouter -v=false -logfile /minirouter.log &
+
+# attach a real tty to the console
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
