@@ -108,13 +108,13 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func NewKVM(name string) (*KvmVM, error) {
+func NewKVM(name string, config VMConfig) (*KvmVM, error) {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewBaseVM(name)
+	vm.BaseVM = *NewBaseVM(name, config)
 	vm.Type = KVM
 
-	vm.KVMConfig = vmConfig.KVMConfig.Copy() // deep-copy configured fields
+	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]string)
 

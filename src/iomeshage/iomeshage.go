@@ -67,9 +67,7 @@ var (
 // New returns a new iomeshage object service base directory b on meshage node
 // n
 func New(base string, node *meshage.Node) (*IOMeshage, error) {
-	if !strings.HasSuffix(base, "/") {
-		base += "/"
-	}
+	base = filepath.Clean(base)
 	log.Debug("new iomeshage node on base %v", base)
 	err := os.MkdirAll(base, 0755)
 
@@ -87,7 +85,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 	return r, err
 }
 
-// List files and directories starting at iom.Base+dir
+// List files and directories starting at iom.base+dir
 func (iom *IOMeshage) List(dir string) ([]FileInfo, error) {
 	dir = iom.dirPrep(dir)
 	files, err := ioutil.ReadDir(dir)
@@ -608,30 +606,66 @@ func (iom *IOMeshage) MITM(m *IOMMessage) {
 	}
 }
 
-// Return status on in-flight file transfers
+// Status returns a deep copy of the in-flight file transfers
 func (iom *IOMeshage) Status() []*Transfer {
 	iom.transferLock.RLock()
 	defer iom.transferLock.RUnlock()
-	var ret []*Transfer
+
+	res := []*Transfer{}
+
 	for _, t := range iom.transfers {
-		ret = append(ret, t)
+		t2 := new(Transfer)
+
+		// Make shallow copies of all fields
+		*t2 = *t
+
+		// Make deep copies
+		t2.Parts = make(map[int64]bool)
+		for k, v := range t.Parts {
+			t2.Parts[k] = v
+		}
+
+		res = append(res, t2)
 	}
-	return ret
+
+	return res
 }
 
 // Delete a file
 func (iom *IOMeshage) Delete(file string) error {
 	file = iom.dirPrep(file)
+
+	if file == iom.base {
+		// the user *probably* doesn't want to actually remove the iom.base
+		// directory since them they wouldn't be able to transfer any more
+		// files. Instead, remove all it's contents.
+		log.Info("deleting iomeshage directory contents")
+		files, err := ioutil.ReadDir(file)
+		if err != nil {
+			return err
+		}
+
+		for _, file := range files {
+			if err := os.RemoveAll(filepath.Join(iom.base, file.Name())); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
 	return os.RemoveAll(file)
 }
 
 // Get a full path, with the iom base directory and any trailing "/".
 func (iom *IOMeshage) dirPrep(dir string) string {
-	if strings.HasPrefix(dir, "/") {
-		dir = strings.TrimLeft(dir, "/")
-	}
-	log.Debug("dir is %v%v", iom.base, dir)
-	return filepath.Join(iom.base, dir)
+	// prepend a "/" to the directory so that commands can't affect files above
+	// the iom.base directory. For example, filepath.Clean will replace "/../"
+	// with "/".
+	dir = filepath.Join(iom.base, filepath.Clean("/"+dir))
+	log.Info("dir is %v", dir)
+
+	return dir
 }
 
 // Generate a random 63 bit TID (positive int64).

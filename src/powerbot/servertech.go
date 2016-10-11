@@ -10,7 +10,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"telnet"
+
+	"github.com/ziutek/telnet"
 )
 
 var (

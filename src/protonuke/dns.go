@@ -5,12 +5,13 @@
 package main
 
 import (
-	"dns"
 	"fmt"
 	"math/rand"
 	log "minilog"
 	"net"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 const (

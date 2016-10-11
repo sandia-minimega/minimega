@@ -17,7 +17,8 @@ import (
 	log "minilog"
 	"net"
 	"strings"
-	"websocket"
+
+	"golang.org/x/net/websocket"
 )
 
 func vncWsHandler(ws *websocket.Conn) {

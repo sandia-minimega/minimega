@@ -6,6 +6,7 @@ package minicli
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -18,6 +19,10 @@ type inputLexer struct {
 	items    []inputItem
 	terminal string
 	content  string
+
+	emit bool // force emit, even if content is empty (e.g. "" as input)
+
+	prevState stateFn
 }
 
 type inputItem struct {
@@ -29,6 +34,16 @@ type inputItems []inputItem
 type Input struct {
 	Original string
 	items    inputItems
+}
+
+var escapedChars = map[string]string{
+	"r":           "\r",
+	"n":           "\n",
+	"t":           "\t",
+	`\`:           `\`,
+	`"`:           `"`,
+	`'`:           `'`,
+	CommentLeader: CommentLeader,
 }
 
 func (items inputItems) String() string {
@@ -58,7 +73,9 @@ func lexInput(input string) (*Input, error) {
 
 func (l *inputLexer) Run() (err error) {
 	for state := l.lexOutside; state != nil && err == nil; {
-		state, err = state()
+		curr := state
+		state, err = curr()
+		l.prevState = curr
 	}
 
 	return err
@@ -69,16 +86,18 @@ func (l *inputLexer) Run() (err error) {
 func (l *inputLexer) lexOutside() (stateFn, error) {
 	emitContent := func() {
 		// Emit item from processed content, if non-empty
-		if len(l.content) > 0 {
+		if len(l.content) > 0 || l.emit {
 			l.items = append(l.items, inputItem{Value: l.content})
 			l.content = ""
+			l.emit = false
 		}
 	}
 
 outer:
 	for l.s.Scan() {
-		token := l.s.Text()
-		switch token {
+		switch token := l.s.Text(); token {
+		case `\`:
+			return l.lexEscape, nil
 		case `"`, `'`:
 			l.terminal = token
 			return l.lexQuote, nil
@@ -107,9 +126,11 @@ outer:
 func (l *inputLexer) lexQuote() (stateFn, error) {
 	// Scan until EOF, checking each token
 	for l.s.Scan() {
-		token := l.s.Text()
-		switch token {
+		switch token := l.s.Text(); token {
+		case `\`:
+			return l.lexEscape, nil
 		case l.terminal:
+			l.emit = true
 			return l.lexOutside, nil
 		default:
 			l.content += token
@@ -118,4 +139,19 @@ func (l *inputLexer) lexQuote() (stateFn, error) {
 
 	// We must have hit EOF before changing state
 	return nil, fmt.Errorf("missing terminal %s", l.terminal)
+}
+
+func (l *inputLexer) lexEscape() (stateFn, error) {
+	// Must scan one character
+	if !l.s.Scan() {
+		return nil, errors.New("expected escape character")
+	}
+
+	token := l.s.Text()
+	if v, ok := escapedChars[token]; ok {
+		l.content += v
+		return l.prevState, nil
+	}
+
+	return nil, fmt.Errorf("unexpected escaped character: %v", token)
 }

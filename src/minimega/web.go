@@ -164,7 +164,7 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
+				} else if resp.Error == "cannot take screenshot of container" {
 					continue
 				}
 

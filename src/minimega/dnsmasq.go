@@ -416,6 +416,8 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		Path: p,
 		Args: []string{
 			p,
+			"-u",
+			"root",
 			fmt.Sprintf("--pid-file=%v/dnsmasq.pid", d.Path),
 			"-o",
 			"-k",
