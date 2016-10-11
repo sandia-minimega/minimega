@@ -139,15 +139,15 @@ func (v *vncFBRecord) Record() {
 	}
 }
 
-func vncRecordKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordKB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncKBRecording[c.Rhost]; ok {
-		return fmt.Errorf("kb recording for %v %v already running", host, vm)
+	// is this namespace:vm already being recorded?
+	if _, ok := vncKBRecording[c.ID]; ok {
+		return fmt.Errorf("kb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -156,22 +156,22 @@ func vncRecordKB(host, vm, filename string) error {
 	}
 
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
-	vncKBRecording[c.Rhost] = r
+	vncKBRecording[c.ID] = r
 
 	go r.Record()
 
 	return nil
 }
 
-func vncRecordFB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordFB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncFBRecording[c.Rhost]; ok {
-		return fmt.Errorf("fb recording for %v %v already running", host, vm)
+	// is this namespace:vm already being recorded?
+	if _, ok := vncFBRecording[c.ID]; ok {
+		return fmt.Errorf("fb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -185,7 +185,7 @@ func vncRecordFB(host, vm, filename string) error {
 	}
 
 	r := &vncFBRecord{c}
-	vncFBRecording[c.Rhost] = r
+	vncFBRecording[c.ID] = r
 
 	go r.Record()
 

@@ -117,15 +117,10 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 	return kbp
 }
 
-func vncPlaybackKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncPlaybackKB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
-	}
-
-	// is this rhost already being recorded?
-	if _, ok := vncKBPlaying[c.Rhost]; ok {
-		return fmt.Errorf("kb playback for %v %v already running", host, vm)
 	}
 
 	c.file, err = os.Open(filename)
@@ -144,7 +139,7 @@ func vncPlaybackKB(host, vm, filename string) error {
 	}
 
 	p := NewVncKbPlayback(c, pr)
-	vncKBPlaying[c.Rhost] = p
+	vncKBPlaying[c.ID] = p
 
 	go p.Play()
 	return nil
@@ -353,7 +348,7 @@ func (v *vncKBPlayback) Stop() error {
 
 	v.vncClient.Stop()
 
-	delete(vncKBPlaying, v.Rhost)
+	delete(vncKBPlaying, v.ID)
 	return nil
 }
 
