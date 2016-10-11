@@ -111,7 +111,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
-	mux.HandleFunc("/termws/", terminalWsHandler)
+	mux.Handle("/termws/", websocket.Handler(terminalWsHandler))
 
 	if web.Server == nil {
 		web.Server = &http.Server{

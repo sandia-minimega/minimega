@@ -56,7 +56,7 @@ function screenshotURL (vm, size) {
 // Generate the appropriate URL for requesting a VNC connection
 function vncURL (vm) {
 	if (vm.type == "container") {
-        return "./terminal#" + vm.host + ":" + (vm.console_port) + ":" + vm.name
+        return "./terminal#" + vm.name
 	}
     return "./vnc#" + vm.name
 }

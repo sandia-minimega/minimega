@@ -11,8 +11,7 @@
 		term.open(terminalContainer);
 		term.resize(80, 24);
 
-		var locationArray = window.location.hash.split(":");
-		path = "/termws/" + locationArray[0].substring(1) + "/" + locationArray[1];
+		path = "/termws/" + window.location.hash.substring(1);
 		socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
 		socket = new WebSocket(socketURL);
 		socket.onopen = runterminal;

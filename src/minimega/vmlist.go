@@ -209,6 +209,28 @@ func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	return nil
 }
 
+// FindContainerVM finds a VM in the active namespace based on its ID, name, or UUID.
+func (vms VMs) FindContainerVM(s string) (*ContainerVM, error) {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.findContainerVM(s)
+}
+
+// findContainerVM is FindContainerVM without locking vmLock.
+func (vms VMs) findContainerVM(s string) (*ContainerVM, error) {
+	vm := vms.findVM(s, true)
+	if vm == nil {
+		return nil, vmNotFound(s)
+	}
+
+	if vm, ok := vm.(*ContainerVM); ok {
+		return vm, nil
+	}
+
+	return nil, vmNotContainer(s)
+}
+
 // FindKvmVM finds a VM in the active namespace based on its ID, name, or UUID.
 func (vms VMs) FindKvmVM(s string) (*KvmVM, error) {
 	vmLock.Lock()
