@@ -58,6 +58,19 @@ out all logging messages containing the word "foo":
 		},
 		Call: wrapSimpleCLI(cliLogFilter),
 	},
+	{ // log syslog
+		HelpShort: "log to syslog",
+		HelpLong: `
+Log to a syslog daemon on the provided network and address. For example, to log
+over UDP to a syslog server foo on port 514:
+
+	log syslog udp foo:514`,
+		Patterns: []string{
+			"log syslog remote <tcp,udp> <address>",
+			"log syslog <local,>",
+		},
+		Call: wrapSimpleCLI(cliLogSyslog),
+	},
 	{ // clear log
 		HelpShort: "reset state for logging",
 		HelpLong: `
@@ -68,6 +81,7 @@ Resets state for logging. See "help log ..." for more information.`,
 			"clear log <level,>",
 			"clear log <stderr,>",
 			"clear log <filter,>",
+			"clear log <syslog,>",
 		},
 		Call: wrapSimpleCLI(cliLogClear),
 	},
@@ -92,6 +106,7 @@ func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 		// their level, so we're fine.
 		log.SetLevel("stdio", level)
 		log.SetLevel("file", level)
+		log.SetLevel("syslog", level)
 	}
 
 	return nil
@@ -155,6 +170,26 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
+	var network string
+	var address string
+
+	if c.BoolArgs["local"] {
+		network = "local"
+	} else {
+		address = c.StringArgs["address"]
+		if c.BoolArgs["tcp"] {
+			network = "tcp"
+		} else {
+			network = "udp"
+		}
+	}
+
+	level, _ := log.LevelInt(*f_loglevel)
+
+	return log.AddSyslog(network, address, "minimega", level)
+}
+
 func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		var filters []string
@@ -200,6 +235,11 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 		if err := stopFileLogger(); err != nil {
 			return err
 		}
+	}
+
+	// Reset syslog if explicitly cleared or we're clearing everything
+	if c.BoolArgs["syslog"] || len(c.BoolArgs) == 0 {
+		log.DelLogger("syslog")
 	}
 
 	// Reset level if explicitly cleared or we're clearing everything
