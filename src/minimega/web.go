@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -107,7 +109,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/vms", webVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
-	mux.HandleFunc("/ws/", vncWsHandler)
+	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
 
 	if web.Server == nil {
 		web.Server = &http.Server{

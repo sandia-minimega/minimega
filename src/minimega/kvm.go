@@ -25,6 +25,7 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
+	"vnc"
 )
 
 const (
@@ -428,6 +429,7 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
+	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	go func() {
 		defer l.Close()
@@ -453,8 +455,24 @@ func (vm *KvmVM) connectVNC() error {
 				}
 				defer local.Close()
 
-				go io.Copy(local, remote)
-				io.Copy(remote, local)
+				// copy local -> remote
+				go io.Copy(remote, local)
+
+				// Reads will implicitly copy from remote -> local
+				tee := io.TeeReader(remote, local)
+				for {
+					// Read
+					msg, err := vnc.ReadClientMessage(tee)
+					if err != nil {
+						if err == io.EOF || strings.Contains(err.Error(), "closed network") {
+							break
+						}
+						log.Errorln(err)
+					}
+					if r, ok := vncKBRecording[ns]; ok {
+						r.RecordMessage(msg)
+					}
+				}
 			}()
 		}
 	}()
