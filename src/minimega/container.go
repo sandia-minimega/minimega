@@ -226,8 +226,8 @@ type ContainerVM struct {
 
 	pid             int
 	effectivePath   string
-	listener        net.Listener
-	nettermListener net.Listener
+	ptyUnixListener net.Listener
+	ptyTCPListener  net.Listener
 	netns           string
 
 	ConsolePort int
@@ -994,8 +994,12 @@ func (vm *ContainerVM) launch() error {
 			log.Errorln(err)
 		}
 
-		vm.listener.Close()
-		vm.nettermListener.Close()
+		if vm.ptyUnixListener != nil {
+			vm.ptyUnixListener.Close()
+		}
+		if vm.ptyTCPListener != nil {
+			vm.ptyTCPListener.Close()
+		}
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
@@ -1133,55 +1137,44 @@ func (vm *ContainerVM) overlayUnmount() error {
 }
 
 func (vm *ContainerVM) console(pseudotty *os.File) {
-	socketPath := vm.path("console")
-	l, err := net.Listen("unix", socketPath)
-	if err != nil {
-		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
-		return
-	}
-	vm.listener = l
-
-	tcpL, err := net.Listen("tcp", ":0")
-	if err != nil {
-		log.Error("failed to open tcp socket for container console")
-		return
-	}
-	defer tcpL.Close()
-	vm.nettermListener = tcpL
-	log.Info("container console listening on %v", tcpL.Addr().String())
-	vm.ConsolePort = tcpL.Addr().(*net.TCPAddr).Port
-	go func() {
+	serve := func(l net.Listener) {
 		for {
-			conn, err := tcpL.Accept()
+			conn, err := l.Accept()
 			if err != nil {
 				if strings.Contains(err.Error(), "use of closed network connection") {
 					return
 				}
-				log.Error("tcp socket on vm %v: %v", vm.ID, err)
+				log.Error("console %v for %v: %v", l.Addr(), vm.ID, err)
 				continue
 			}
-			log.Info("got new tcp connection")
+
+			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
 			go io.Copy(conn, pseudotty)
 			io.Copy(pseudotty, conn)
-			log.Info("tcp disconnected")
+			log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
 		}
-	}()
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			if strings.Contains(err.Error(), "use of closed network connection") {
-				return
-			}
-			log.Error("console socket on vm %v: %v", vm.ID, err)
-			continue
-		}
-		log.Debug("new connection!")
-
-		go io.Copy(conn, pseudotty)
-		io.Copy(pseudotty, conn)
-		log.Debug("disconnected!")
 	}
+
+	l, err := net.Listen("unix", vm.path("console"))
+	if err != nil {
+		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
+		return
+	}
+	vm.ptyUnixListener = l
+
+	go serve(l)
+
+	l, err = net.Listen("tcp", ":0")
+	if err != nil {
+		log.Error("failed to open tcp socket for container console")
+		return
+	}
+	vm.ptyTCPListener = l
+
+	log.Info("container console listening on %v", l.Addr().String())
+	vm.ConsolePort = l.Addr().(*net.TCPAddr).Port
+
+	go serve(l)
 }
 
 func (vm *ContainerVM) freeze() error {
