@@ -281,7 +281,7 @@ func vncRecordKB(vm *KvmVM, filename string) error {
 
 	// is this namespace:vm already being recorded?
 	if _, ok := vncKBRecording[c.ID]; ok {
-		return fmt.Errorf("kb recording for %v already running", vm)
+		return fmt.Errorf("kb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -307,7 +307,7 @@ func vncRecordFB(vm *KvmVM, filename string) error {
 
 	// is this namespace:vm already being recorded?
 	if _, ok := vncFBRecording[c.ID]; ok {
-		return fmt.Errorf("fb recording for %v already running", vm)
+		return fmt.Errorf("fb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -336,7 +336,7 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 
 	// is this rhost already being recorded?
 	if _, ok := vncKBPlaying[c.ID]; ok {
-		return fmt.Errorf("kb playback for %v already running", vm)
+		return fmt.Errorf("kb playback for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Open(filename)
