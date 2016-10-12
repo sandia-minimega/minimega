@@ -87,9 +87,10 @@ func terminalWsHandler(ws *websocket.Conn) {
 		return
 	}
 	defer remote.Close()
+	log.Info("ws client connected to %v", rhost)
 
-	go io.Copy(remote, ws)
-	io.Copy(ws, remote)
+	go io.Copy(ws, remote)
+	io.Copy(remote, ws)
 
 	log.Info("ws client disconnected from %v", rhost)
 }
