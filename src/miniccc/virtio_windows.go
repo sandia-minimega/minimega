@@ -10,6 +10,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	log "minilog"
 	"os"
 	"sync"

@@ -7,8 +7,6 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
 	log "minilog"
 	"os/exec"
 	"regexp"
@@ -16,7 +14,7 @@ import (
 )
 
 func getUUID() string {
-	out, err := exec.Command("wmic", "path", "win32_computersystemproduct", "get", "uuid")
+	out, err := exec.Command("wmic", "path", "win32_computersystemproduct", "get", "uuid").CombinedOutput()
 	if err != nil {
 		log.Fatal("wmic run: %v", err)
 	}
