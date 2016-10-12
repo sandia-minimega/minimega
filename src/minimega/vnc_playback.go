@@ -14,12 +14,16 @@ import (
 	"vnc"
 )
 
-var vncKBPlaying map[string]*vncKBPlayback
+var (
+	vncKBPlaying     map[string]*vncKBPlayback
+	vncKBPlayingLock sync.RWMutex
+)
 
 type Event interface {
 	Write(w io.Writer) error
 }
 
+// Playback control
 type Control int
 
 const (
@@ -29,10 +33,12 @@ const (
 )
 
 type Chan struct {
-	in, out chan Event
-	control chan Control
+	in      chan Event   // Receives parsed events from playFile()
+	out     chan Event   // Sends events to the vnc connection in playEvents()
+	control chan Control // Used to play, pause, and stop playbacks
 }
 
+// Encapsulates the active playback file
 type PlaybackReader struct {
 	scanner *bufio.Scanner
 	file    *os.File
@@ -49,7 +55,7 @@ type vncKBPlayback struct {
 	sync.Mutex
 
 	paused   time.Time
-	duration time.Duration
+	duration time.Duration // Total playback duration
 
 	prs []*PlaybackReader
 	err error
@@ -62,6 +68,11 @@ type vncKBPlayback struct {
 	state Control
 }
 
+// Playback's control loop. Listens for sends on both the control
+// channel and the event channel. A pause on the control channel will cause the
+// goroutine to block until it receives a resume. A close will teardown the
+// running playback. Otherwise, events received on in are sent to the out
+// channel.
 func NewChan(in chan Event) *Chan {
 	c := &Chan{
 		in:      in,
@@ -79,12 +90,12 @@ func NewChan(in chan Event) *Chan {
 				if v == Close {
 					return
 				}
-				// Block until resumed or closed
+				// Pause, block until resumed or closed
 				v = <-c.control
 				if v == Close {
 					return
 				}
-			// Receive events on e
+			// Receive events and send to out
 			case e := <-c.in:
 				c.out <- e
 			}
@@ -94,6 +105,9 @@ func NewChan(in chan Event) *Chan {
 	return c
 }
 
+// playEvents runs in a goroutine and writes events read from the out channel
+// to the vnc connection. The control channel will close the out channel when
+// the playback stops.
 func (v *vncKBPlayback) playEvents() {
 	for {
 		e, more := <-v.out
@@ -117,7 +131,18 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 	return kbp
 }
 
+// Creates a new VNC connection, the initial playback reader, and starts the
+// vnc playback
 func vncPlaybackKB(vm *KvmVM, filename string) error {
+	vncKBPlayingLock.Lock()
+	defer vncKBPlayingLock.Unlock()
+
+	// Is this playback already running?
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+	if _, ok := vncKBPlaying[id]; ok {
+		return fmt.Errorf("kb playback %v already playing", vm.Name)
+	}
+
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
@@ -127,7 +152,7 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 	if err != nil {
 		return err
 	}
-
+	log.Warn("dialing %v", c.Rhost)
 	c.Conn, err = vnc.Dial(c.Rhost)
 	if err != nil {
 		return err
@@ -139,12 +164,19 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 	}
 
 	p := NewVncKbPlayback(c, pr)
+
 	vncKBPlaying[c.ID] = p
 
+	log.Warn("added %v to playbacks", c.ID)
 	go p.Play()
 	return nil
 }
 
+// Reads the vnc playback file and sends parsed events on the playback's in
+// channel. Because we support embedding LoadFile events there can be multiple
+// playbackReaders in the maps prs. When a LoadFile is encountered during the
+// playback, the loadFile function is called and the playback continues at the
+// outerLoop label.
 func (v *vncKBPlayback) playFile() {
 	v.start = time.Now()
 	defer close(v.in)
@@ -348,7 +380,13 @@ func (v *vncKBPlayback) Stop() error {
 
 	v.vncClient.Stop()
 
+	log.Warn("deleting kbpb %v", v.ID)
 	delete(vncKBPlaying, v.ID)
+
+	// Cleanup any open playback readers
+	for _, pr := range v.prs {
+		pr.file.Close()
+	}
 	return nil
 }
 

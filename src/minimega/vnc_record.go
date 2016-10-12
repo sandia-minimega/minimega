@@ -14,13 +14,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"vnc"
 )
 
 var (
-	vncKBRecording map[string]*vncKBRecord
-	vncFBRecording map[string]*vncFBRecord
+	vncKBRecording     map[string]*vncKBRecord
+	vncFBRecording     map[string]*vncFBRecord
+	vncKBRecordingLock sync.RWMutex
+	vncFBRecordingLock sync.RWMutex
 )
 
 func init() {
@@ -140,14 +143,18 @@ func (v *vncFBRecord) Record() {
 }
 
 func vncRecordKB(vm *KvmVM, filename string) error {
+	vncKBRecordingLock.Lock()
+	defer vncKBRecordingLock.Unlock()
+
+	// is this namespace:vm already being recorded?
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+	if _, ok := vncKBRecording[id]; ok {
+		return fmt.Errorf("kb recording for %v already running", vm.Name)
+	}
+
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
-	}
-
-	// is this namespace:vm already being recorded?
-	if _, ok := vncKBRecording[c.ID]; ok {
-		return fmt.Errorf("kb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -164,14 +171,18 @@ func vncRecordKB(vm *KvmVM, filename string) error {
 }
 
 func vncRecordFB(vm *KvmVM, filename string) error {
+	vncFBRecordingLock.Lock()
+	defer vncFBRecordingLock.Unlock()
+
+	// is this namespace:vm already being recorded?
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+	if _, ok := vncFBRecording[id]; ok {
+		return fmt.Errorf("fb recording for %v already running", vm.Name)
+	}
+
 	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
-	}
-
-	// is this namespace:vm already being recorded?
-	if _, ok := vncFBRecording[c.ID]; ok {
-		return fmt.Errorf("fb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
