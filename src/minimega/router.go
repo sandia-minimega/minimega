@@ -274,7 +274,7 @@ func (r *Router) Commit() error {
 	}
 
 	// filter on the minirouter tag
-	filter := &ron.Client{
+	filter := &ron.Filter{
 		Tags: make(map[string]string),
 	}
 	filter.Tags["minirouter"] = fmt.Sprintf("%v", r.vmID)

@@ -13,11 +13,15 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"ron"
 	"runtime"
 	"syscall"
+	"time"
 	"version"
 )
+
+// Retry to connect for 120 minutes, fail after that
+const Retries = 480
+const RetryInterval = 15 * time.Second
 
 var (
 	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
@@ -30,11 +34,10 @@ var (
 	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
 	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	f_tag      = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
-	c          *ron.Client
 )
 
-var banner string = `miniccc, Copyright (2014) Sandia Corporation. 
-Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation, 
+const banner = `miniccc, Copyright (2014) Sandia Corporation.
+Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 `
 
@@ -61,38 +64,75 @@ func main() {
 			log.Fatalln("tag updates are not available on windows miniccc clients")
 		}
 
-		err := updateTag()
-		if err != nil {
+		if err := updateTag(); err != nil {
 			log.Errorln(err)
 		}
 		return
 	}
 
-	// signal handling
-	sig := make(chan os.Signal, 1024)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-
 	// attempt to set up the base path
-	err := os.MkdirAll(*f_path, os.FileMode(0777))
-	if err != nil {
+	if err := os.MkdirAll(*f_path, os.FileMode(0777)); err != nil {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	// start a ron client
-	c, err = ron.NewClient(*f_family, *f_port, *f_parent, *f_serial, *f_path)
-	if err != nil {
-		log.Fatal("creating ron node: %v", err)
+	log.Debug("starting ron client with UUID: %v", Client.UUID)
+
+	if err := dial(); err != nil {
+		log.Fatal("unable to connect: %v", err)
 	}
 
-	log.Debug("starting ron client with UUID: %v", c.UUID)
+	go mux()
+	go periodic()
+	go commandHandler()
+	heartbeat() // handshake is first heartbeat
 
 	// create a listening domain socket for tag updates
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != "windows" && false {
 		go commandSocketStart()
 	}
 
+	// wait for SIGTERM
+	sig := make(chan os.Signal, 1024)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
 	<-sig
-	// terminate
+}
+
+func dial() error {
+	Client.Lock()
+	defer Client.Unlock()
+
+	var err error
+
+	for i := Retries; i > 0; i-- {
+		if *f_serial == "" {
+			log.Debug("dial: %v:%v:%v", *f_family, *f_parent, *f_port)
+
+			var addr string
+			switch *f_family {
+			case "tcp":
+				addr = fmt.Sprintf("%v:%v", *f_parent, *f_port)
+			case "unix":
+				addr = *f_parent
+			default:
+				log.Fatal("invalid ron dial network family: %v", *f_family)
+			}
+
+			Client.conn, err = net.Dial(*f_family, addr)
+		} else {
+			Client.conn, err = dialSerial(*f_serial)
+		}
+
+		if err == nil {
+			Client.enc = gob.NewEncoder(Client.conn)
+			Client.dec = gob.NewDecoder(Client.conn)
+			return nil
+		}
+
+		log.Error("%v, retries = %v", err, i)
+		time.Sleep(15 * time.Second)
+	}
+
+	return err
 }
 
 func commandSocketStart() {
@@ -132,7 +172,7 @@ func commandSocketHandle(conn net.Conn) {
 	}
 
 	log.Debug("adding key/value: %v : %v", k, v)
-	c.Tag(k, v)
+	addTag(k, v)
 }
 
 func updateTag() error {
@@ -140,7 +180,7 @@ func updateTag() error {
 
 	args := flag.Args()
 	if len(args) != 2 {
-		return fmt.Errorf("inavlid arguments: %v", args)
+		return fmt.Errorf("invalid arguments: %v", args)
 	}
 
 	k := args[0]

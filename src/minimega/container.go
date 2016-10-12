@@ -990,16 +990,13 @@ func (vm *ContainerVM) launch() error {
 			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
-		if err := ccNode.CloseUDS(ccPath); err != nil {
-			log.Errorln(err)
-		}
-
 		if vm.ptyUnixListener != nil {
 			vm.ptyUnixListener.Close()
 		}
 		if vm.ptyTCPListener != nil {
 			vm.ptyTCPListener.Close()
 		}
+
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {

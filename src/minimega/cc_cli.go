@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	ccFilter    *ron.Client
+	ccFilter    *ron.Filter
 	ccPrefix    string
 	ccPrefixMap map[int]string
 )
@@ -257,7 +257,7 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 // filter
 func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.ListArgs["filter"]) > 0 {
-		filter := &ron.Client{}
+		filter := &ron.Filter{}
 
 		// Process the id=value pairs
 		for _, v := range c.ListArgs["filter"] {
@@ -276,9 +276,9 @@ func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
 			case "os":
 				filter.OS = parts[1]
 			case "ip":
-				filter.IP = append(filter.IP, parts[1])
+				filter.IP = parts[1]
 			case "mac":
-				filter.MAC = append(filter.MAC, parts[1])
+				filter.MAC = parts[1]
 			case "tag":
 				// Explicit filter on tag
 				parts = parts[1:]
@@ -562,8 +562,8 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 			v.Hostname,
 			v.Arch,
 			v.OS,
-			fmt.Sprintf("%v", v.IP),
-			fmt.Sprintf("%v", v.MAC),
+			fmt.Sprintf("%v", v.IPs),
+			fmt.Sprintf("%v", v.MACs),
 		}
 
 		resp.Tabular = append(resp.Tabular, row)

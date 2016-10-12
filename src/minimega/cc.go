@@ -113,8 +113,8 @@ func ccClients() map[string]bool {
 
 // ccGetFilter returns a filter for cc clients, adding the implicit namespace
 // filter, if a namespace is active.
-func ccGetFilter() *ron.Client {
-	filter := ron.Client{}
+func ccGetFilter() *ron.Filter {
+	filter := ron.Filter{}
 	if ccFilter != nil {
 		filter = *ccFilter
 	}
@@ -131,7 +131,7 @@ func ccMatchNamespace(c *ron.Command) bool {
 	return namespace == "" || c.Filter == nil || c.Filter.Namespace == namespace
 }
 
-func filterString(f *ron.Client) string {
+func filterString(f *ron.Filter) string {
 	if f == nil {
 		return ""
 	}
@@ -151,15 +151,11 @@ func filterString(f *ron.Client) string {
 	if f.OS != "" {
 		j = append(j, "os="+f.OS)
 	}
-	if len(f.IP) != 0 {
-		for _, y := range f.IP {
-			j = append(j, "ip="+y)
-		}
+	if f.IP != "" {
+		j = append(j, "ip="+f.IP)
 	}
-	if len(f.MAC) != 0 {
-		for _, y := range f.MAC {
-			j = append(j, "mac="+y)
-		}
+	if f.MAC != "" {
+		j = append(j, "mac="+f.MAC)
 	}
 	ret += strings.Join(j, " && ")
 

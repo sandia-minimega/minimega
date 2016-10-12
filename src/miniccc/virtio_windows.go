@@ -6,7 +6,7 @@
 
 // adapted from https://github.com/tarm/goserial/blob/master/serial_windows.go
 
-package ron
+package main
 
 import (
 	"fmt"
@@ -26,8 +26,8 @@ type virtioPort struct {
 	wo *syscall.Overlapped
 }
 
-func (c *Client) dialSerial(path string) error {
-	log.Debug("ron dialSerial; %v", path)
+func dialSerial(path string) (io.ReadWriteCloser, error) {
+	log.Debug("ron dialSerial: %v", path)
 
 	h, err := syscall.CreateFile(syscall.StringToUTF16Ptr(path),
 		syscall.GENERIC_READ|syscall.GENERIC_WRITE,
@@ -37,18 +37,18 @@ func (c *Client) dialSerial(path string) error {
 		syscall.FILE_ATTRIBUTE_NORMAL|syscall.FILE_FLAG_OVERLAPPED,
 		0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	f := os.NewFile(uintptr(h), path)
 
 	ro, err := newOverlapped()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	wo, err := newOverlapped()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	conn := new(virtioPort)
@@ -57,15 +57,7 @@ func (c *Client) dialSerial(path string) error {
 	conn.ro = ro
 	conn.wo = wo
 
-	c.conn = conn
-
-	go c.handler()
-	go c.mux()
-	go c.periodic()
-	go c.commandHandler()
-	c.heartbeat()
-
-	return nil
+	return conn, nil
 }
 
 func (p *virtioPort) Close() error {

@@ -113,16 +113,19 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		Type: HANDSHAKE,
 	}
 
+	log.Debug("write: %v", handshake)
 	err := t.enc.Encode(handshake)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("reading response")
 	err = t.dec.Decode(handshake)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug("got response: %v", handshake)
 	if !handshake.Ack {
 		return nil, fmt.Errorf("did not receive handshake ack: %v", handshake)
 	}
