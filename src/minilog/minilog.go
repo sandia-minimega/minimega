@@ -17,7 +17,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/syslog"
 	"os"
 	"runtime"
 	"strconv"
@@ -65,29 +64,6 @@ func AddLogger(name string, output io.Writer, level int, color bool) {
 // Remove a named logger that was added using AddLogger
 func DelLogger(name string) {
 	delete(loggers, name)
-}
-
-// Helper function to add syslog output by connecting to address raddr on the
-// specified network. Events are logged with a specified tag. Calling more than
-// once overwrites existing syslog writers. If network == "local", log to the
-// local syslog daemon.
-func AddSyslog(network, raddr, tag string, level int) error {
-	var w *syslog.Writer
-	var err error
-
-	priority := syslog.LOG_INFO | syslog.LOG_DAEMON
-
-	if network == "local" {
-		w, err = syslog.New(priority, tag)
-	} else {
-		w, err = syslog.Dial(network, raddr, priority, tag)
-	}
-	if err != nil {
-		return err
-	}
-
-	AddLogger("syslog", w, level, false)
-	return nil
 }
 
 func Loggers() []string {
