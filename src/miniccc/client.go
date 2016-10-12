@@ -47,7 +47,7 @@ type Process struct {
 
 // init client fields
 func init() {
-	Client.UUID = "03000200-0400-0500-0006-000700080009" // getUUID()
+	Client.UUID = getUUID()
 	Client.Arch = runtime.GOARCH
 	Client.OS = runtime.GOOS
 	Client.Version = version.Revision
