@@ -21,6 +21,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/kr/pty"
 	"io"
 	"io/ioutil"
 	"ipmac"
@@ -223,10 +224,13 @@ type ContainerVM struct {
 	BaseVM          // embed
 	ContainerConfig // embed
 
-	pid           int
-	effectivePath string
-	listener      net.Listener
-	netns         string
+	pid             int
+	effectivePath   string
+	ptyUnixListener net.Listener
+	ptyTCPListener  net.Listener
+	netns           string
+
+	ConsolePort int
 }
 
 // Ensure that ContainerVM implements the VM interface
@@ -354,20 +358,6 @@ func containerShim() {
 	log.AddLogger("file", logFile, log.DEBUG, false)
 
 	log.Debug("containerShim: %v", args)
-
-	// dup2 stdio
-	err := syscall.Dup2(6, syscall.Stdin)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	err = syscall.Dup2(7, syscall.Stdout)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	err = syscall.Dup2(8, syscall.Stderr)
-	if err != nil {
-		log.Fatalln(err)
-	}
 
 	// get args
 	vmInstancePath := args[1]
@@ -691,6 +681,11 @@ func (vm *ContainerVM) Info(mask string) (string, error) {
 		return fns.Print(&vm.ContainerConfig), nil
 	}
 
+	switch mask {
+	case "console_port":
+		return strconv.Itoa(vm.ConsolePort), nil
+	}
+
 	return "", fmt.Errorf("invalid mask: %s", mask)
 }
 
@@ -791,24 +786,6 @@ func (vm *ContainerVM) launch() error {
 		vm.setError(err)
 		return err
 	}
-	childStdin, parentStdin, err := os.Pipe()
-	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
-	}
-	parentStdout, childStdout, err := os.Pipe()
-	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
-	}
-	parentStderr, childStderr, err := os.Pipe()
-	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
-	}
 	parentSync1, childSync1, err := os.Pipe()
 	if err != nil {
 		log.Error("pipe: %v", err)
@@ -880,16 +857,15 @@ func (vm *ContainerVM) launch() error {
 			childLog,
 			childSync1,
 			childSync2,
-			childStdin,
-			childStdout,
-			childStderr,
 		},
 		SysProcAttr: &syscall.SysProcAttr{
 			Cloneflags: uintptr(CONTAINER_FLAGS),
 		},
 	}
 
-	if err = cmd.Start(); err != nil {
+	// Start the child and give it a pty
+	pseudotty, err := pty.Start(cmd)
+	if err != nil {
 		vm.overlayUnmount()
 		log.Error("start container: %v", err)
 		vm.setError(err)
@@ -903,7 +879,7 @@ func (vm *ContainerVM) launch() error {
 	childLog.Close()
 	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
-	go vm.console(parentStdin, parentStdout, parentStderr)
+	go vm.console(pseudotty)
 
 	// TODO: add affinity funcs for containers
 	// vm.CheckAffinity()
@@ -1018,7 +994,12 @@ func (vm *ContainerVM) launch() error {
 			log.Errorln(err)
 		}
 
-		vm.listener.Close()
+		if vm.ptyUnixListener != nil {
+			vm.ptyUnixListener.Close()
+		}
+		if vm.ptyTCPListener != nil {
+			vm.ptyTCPListener.Close()
+		}
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
@@ -1155,31 +1136,45 @@ func (vm *ContainerVM) overlayUnmount() error {
 	return nil
 }
 
-func (vm *ContainerVM) console(stdin, stdout, stderr *os.File) {
-	socketPath := vm.path("console")
-	l, err := net.Listen("unix", socketPath)
+func (vm *ContainerVM) console(pseudotty *os.File) {
+	serve := func(l net.Listener) {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				if strings.Contains(err.Error(), "use of closed network connection") {
+					return
+				}
+				log.Error("console %v for %v: %v", l.Addr(), vm.ID, err)
+				continue
+			}
+
+			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+			go io.Copy(conn, pseudotty)
+			io.Copy(pseudotty, conn)
+			log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+		}
+	}
+
+	l, err := net.Listen("unix", vm.path("console"))
 	if err != nil {
 		log.Error("could not start unix domain socket console on vm %v: %v", vm.ID, err)
 		return
 	}
-	vm.listener = l
+	vm.ptyUnixListener = l
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			if strings.Contains(err.Error(), "use of closed network connection") {
-				return
-			}
-			log.Error("console socket on vm %v: %v", vm.ID, err)
-			continue
-		}
-		log.Debug("new connection!")
+	go serve(l)
 
-		go io.Copy(conn, stdout)
-		go io.Copy(conn, stderr)
-		io.Copy(stdin, conn)
-		log.Debug("disconnected!")
+	l, err = net.Listen("tcp", ":0")
+	if err != nil {
+		log.Error("failed to open tcp socket for container console")
+		return
 	}
+	vm.ptyTCPListener = l
+
+	log.Info("container console listening on %v", l.Addr().String())
+	vm.ConsolePort = l.Addr().(*net.TCPAddr).Port
+
+	go serve(l)
 }
 
 func (vm *ContainerVM) freeze() error {

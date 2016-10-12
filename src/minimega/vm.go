@@ -156,7 +156,7 @@ var vmInfo = []string{
 	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
 	"migrate", "append", "serial", "virtio-serial", "vnc_port",
 	// container fields
-	"filesystem", "hostname", "init", "preinit", "fifo",
+	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
 	"tags",
 }
@@ -819,6 +819,10 @@ func vmNotRunning(idOrName string) error {
 
 func vmNotKVM(idOrName string) error {
 	return fmt.Errorf("vm not KVM: %v", idOrName)
+}
+
+func vmNotContainer(idOrName string) error {
+	return fmt.Errorf("vm not container: %v", idOrName)
 }
 
 func isVmNotFound(err string) bool {
