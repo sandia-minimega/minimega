@@ -51,8 +51,8 @@ func vncWsHandler(ws *websocket.Conn) {
 	}
 	defer remote.Close()
 
-	go io.Copy(remote, ws)
-	io.Copy(ws, remote)
+	go io.Copy(ws, remote)
+	io.Copy(remote, ws)
 
 	log.Info("ws client disconnected from %v", rhost)
 }
