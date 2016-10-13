@@ -53,7 +53,7 @@ type KVMConfig struct {
 }
 
 type KvmVM struct {
-	BaseVM    // embed
+	*BaseVM   // embed
 	KVMConfig // embed
 
 	// Internal variables
@@ -111,7 +111,7 @@ func (old KVMConfig) Copy() KVMConfig {
 func NewKVM(name string, config VMConfig) (*KvmVM, error) {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewBaseVM(name, config)
+	vm.BaseVM = NewBaseVM(name, config)
 	vm.Type = KVM
 
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
@@ -130,11 +130,8 @@ func (vm *KvmVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
-	// We copied a locked VM so we have to unlock it too...
-	defer vm2.lock.Unlock()
-
 	// Make deep copies
-	vm2.BaseConfig = vm.BaseConfig.Copy()
+	vm2.BaseVM = vm.BaseVM.copy()
 	vm2.KVMConfig = vm.KVMConfig.Copy()
 
 	return vm2

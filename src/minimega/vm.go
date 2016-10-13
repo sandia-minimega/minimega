@@ -240,6 +240,21 @@ func NewBaseVM(name string, config VMConfig) *BaseVM {
 	return vm
 }
 
+// copy a BaseVM... assume that lock is held.
+func (vm *BaseVM) copy() *BaseVM {
+	vm2 := new(BaseVM)
+
+	// Make copies of all fields except lock/kill
+	vm2.BaseConfig = vm.BaseConfig.Copy()
+	vm2.ID = vm.ID
+	vm2.Name = vm.Name
+	vm2.State = vm.State
+	vm2.Type = vm.Type
+	vm2.instancePath = vm.instancePath
+
+	return vm2
+}
+
 func (s VMType) String() string {
 	switch s {
 	case KVM:
@@ -768,7 +783,7 @@ func (vm *BaseVM) writeTaps() error {
 	return nil
 }
 
-func (vm *BaseVM) conflicts(vm2 BaseVM) error {
+func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 	// Return error if two VMs have same name or UUID
 	if vm.Namespace == vm2.Namespace {
 		if vm.Name == vm2.Name {

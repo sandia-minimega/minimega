@@ -216,7 +216,7 @@ type ContainerConfig struct {
 }
 
 type ContainerVM struct {
-	BaseVM          // embed
+	*BaseVM         // embed
 	ContainerConfig // embed
 
 	pid             int
@@ -558,7 +558,7 @@ func (vm *ContainerVM) Config() *BaseConfig {
 func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewBaseVM(name, config)
+	vm.BaseVM = NewBaseVM(name, config)
 	vm.Type = CONTAINER
 
 	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
@@ -579,11 +579,8 @@ func (vm *ContainerVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
-	// We copied a locked VM so we have to unlock it too...
-	defer vm2.lock.Unlock()
-
 	// Make deep copies
-	vm2.BaseConfig = vm.BaseConfig.Copy()
+	vm2.BaseVM = vm.BaseVM.copy()
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
 	return vm2
