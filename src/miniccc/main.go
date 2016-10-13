@@ -87,7 +87,7 @@ func main() {
 	heartbeat() // handshake is first heartbeat
 
 	// create a listening domain socket for tag updates
-	if runtime.GOOS != "windows" && false {
+	if runtime.GOOS != "windows" {
 		go commandSocketStart()
 	}
 
