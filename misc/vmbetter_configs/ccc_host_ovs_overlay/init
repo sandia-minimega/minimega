@@ -10,7 +10,13 @@ mkdir /dev/pts
 mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
 rm /dev/ptmx
 ln -s /dev/pts/ptmx /dev/ptmx
-mount -t cgroup cgroup /sys/fs/cgroup
+mount -t tmpfs cgroup /sys/fs/cgroup
+mkdir /sys/fs/cgroup/memory
+mkdir /sys/fs/cgroup/freezer
+mkdir /sys/fs/cgroup/devices
+mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
+mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
+mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
 
 # / needs permissions!?
 chmod a+rx /
