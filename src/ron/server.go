@@ -391,12 +391,13 @@ func (s *Server) readFile(f string) *Message {
 
 	filename := filepath.Join(s.path, f)
 	m := &Message{
-		Type: MESSAGE_FILE,
+		Type:     MESSAGE_FILE,
+		Filename: f,
 	}
 
-	info, err := os.Stat(f)
+	info, err := os.Stat(filename)
 	if err != nil {
-		m.Error = fmt.Sprintf("file %v does not exist: %v", f, err)
+		m.Error = fmt.Sprintf("file %v does not exist: %v", filename, err)
 	} else if info.IsDir() {
 		m.Error = fmt.Sprintf("file %v is a directory", filename)
 	} else {
