@@ -161,6 +161,10 @@ func filterString(f *ron.Client) string {
 			j = append(j, "mac="+y)
 		}
 	}
+	for k, v := range f.Tags {
+		j = append(j, fmt.Sprintf("%v=%v", k, v))
+	}
+
 	ret += strings.Join(j, " && ")
 
 	return ret
