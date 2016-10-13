@@ -259,40 +259,20 @@ func containerInit() error {
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
 
-	err := os.Mkdir(cgroupFreezer, 0755)
-	if err != nil {
-		return fmt.Errorf("cgroup mkdir: %v", err)
+	for _, cgroup := range cgroups {
+		if err := os.Mkdir(cgroup, 0755); err != nil {
+			return fmt.Errorf("cgroup mkdir: %v", err)
+		}
+
+		// inherit cpusets
+		if err := ioutil.WriteFile(filepath.Join(cgroup, "cgroup.clone_children"), []byte("1"), 0664); err != nil {
+			return fmt.Errorf("setting cgroup: %v", err)
+		}
 	}
 
-	err = os.Mkdir(cgroupMemory, 0755)
-	if err != nil {
-		return fmt.Errorf("cgroup mkdir: %v", err)
-	}
-
-	err = os.Mkdir(cgroupDevices, 0755)
-	if err != nil {
-		return fmt.Errorf("cgroup mkdir: %v", err)
-	}
-
-	// inherit cpusets
-	err = ioutil.WriteFile(filepath.Join(cgroupFreezer, "cgroup.clone_children"), []byte("1"), 0664)
-	if err != nil {
-		return fmt.Errorf("setting cgroup: %v", err)
-	}
-
-	err = ioutil.WriteFile(filepath.Join(cgroupMemory, "cgroup.clone_children"), []byte("1"), 0664)
-	if err != nil {
-		return fmt.Errorf("setting cgroup: %v", err)
-	}
-
-	err = ioutil.WriteFile(filepath.Join(cgroupDevices, "cgroup.clone_children"), []byte("1"), 0664)
-	if err != nil {
-		return fmt.Errorf("setting cgroup: %v", err)
-	}
-
-	err = ioutil.WriteFile(filepath.Join(cgroupMemory, "memory.use_hierarchy"), []byte("1"), 0664)
-	if err != nil {
+	if err := ioutil.WriteFile(filepath.Join(cgroupMemory, "memory.use_hierarchy"), []byte("1"), 0664); err != nil {
 		return fmt.Errorf("setting use_hierarchy: %v", err)
 	}
 
@@ -307,23 +287,13 @@ func containerTeardown() {
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
 
-	err := os.Remove(cgroupFreezer)
-	if err != nil {
-		if containerInitSuccess {
-			log.Errorln(err)
-		}
-	}
-	err = os.Remove(cgroupMemory)
-	if err != nil {
-		if containerInitSuccess {
-			log.Errorln(err)
-		}
-	}
-	err = os.Remove(cgroupDevices)
-	if err != nil {
-		if containerInitSuccess {
-			log.Errorln(err)
+	for _, cgroup := range cgroups {
+		if err := os.Remove(cgroup); err != nil {
+			if containerInitSuccess {
+				log.Errorln(err)
+			}
 		}
 	}
 }
@@ -1309,56 +1279,38 @@ func containerPopulateCgroups(vmID, vmMemory int) error {
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vmID))
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vmID))
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vmID))
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
 
-	err := os.MkdirAll(cgroupFreezer, 0755)
-	if err != nil {
-		return err
-	}
-	err = os.MkdirAll(cgroupMemory, 0755)
-	if err != nil {
-		return err
-	}
-	err = os.MkdirAll(cgroupDevices, 0755)
-	if err != nil {
-		return err
+	for _, cgroup := range cgroups {
+		if err := os.MkdirAll(cgroup, 0755); err != nil {
+			return err
+		}
 	}
 
 	// devices
 	deny := filepath.Join(cgroupDevices, "devices.deny")
 	allow := filepath.Join(cgroupDevices, "devices.allow")
-	err = ioutil.WriteFile(deny, []byte("a"), 0200)
-	if err != nil {
+	if err := ioutil.WriteFile(deny, []byte("a"), 0200); err != nil {
 		return err
 	}
 	for _, a := range containerDevices {
-		err = ioutil.WriteFile(allow, []byte(a), 0200)
-		if err != nil {
+		if err := ioutil.WriteFile(allow, []byte(a), 0200); err != nil {
 			return err
 		}
 	}
 
 	// memory
 	memory := filepath.Join(cgroupMemory, "memory.limit_in_bytes")
-	err = ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vmMemory)), 0644)
-	if err != nil {
+	if err := ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vmMemory)), 0644); err != nil {
 		return err
 	}
 
 	// associate the pid with these permissions
-	fTasks := filepath.Join(cgroupFreezer, "tasks")
-	mTasks := filepath.Join(cgroupMemory, "tasks")
-	dTasks := filepath.Join(cgroupDevices, "tasks")
-	err = ioutil.WriteFile(fTasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(mTasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(dTasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
-	if err != nil {
-		return err
+	for _, cgroup := range cgroups {
+		tasks := filepath.Join(cgroup, "tasks")
+		if err := ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1512,22 +1464,14 @@ func containerNuke() {
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	if _, err := os.Stat(cgroupFreezer); err == nil {
-		err := filepath.Walk(cgroupFreezer, containerNukeWalker)
-		if err != nil {
-			log.Errorln(err)
-		}
-	}
-	if _, err := os.Stat(cgroupMemory); err == nil {
-		err := filepath.Walk(cgroupFreezer, containerNukeWalker)
-		if err != nil {
-			log.Errorln(err)
-		}
-	}
-	if _, err := os.Stat(cgroupDevices); err == nil {
-		err := filepath.Walk(cgroupFreezer, containerNukeWalker)
-		if err != nil {
-			log.Errorln(err)
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
+
+	for _, cgroup := range cgroups {
+		if _, err := os.Stat(cgroup); err == nil {
+			err := filepath.Walk(cgroup, containerNukeWalker)
+			if err != nil {
+				log.Errorln(err)
+			}
 		}
 	}
 
