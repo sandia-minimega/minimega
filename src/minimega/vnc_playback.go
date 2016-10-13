@@ -15,8 +15,8 @@ import (
 )
 
 var (
-	vncKBPlaying     map[string]*vncKBPlayback
-	vncKBPlayingLock sync.RWMutex
+	vncPlaying     = make(map[string]*vncKBPlayback)
+	vncPlayingLock sync.RWMutex
 )
 
 type Event interface {
@@ -42,10 +42,6 @@ type Chan struct {
 type PlaybackReader struct {
 	scanner *bufio.Scanner
 	file    *os.File
-}
-
-func init() {
-	vncKBPlaying = make(map[string]*vncKBPlayback)
 }
 
 type vncKBPlayback struct {
@@ -134,12 +130,12 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 // Creates a new VNC connection, the initial playback reader, and starts the
 // vnc playback
 func vncPlaybackKB(vm *KvmVM, filename string) error {
-	vncKBPlayingLock.Lock()
-	defer vncKBPlayingLock.Unlock()
+	vncPlayingLock.Lock()
+	defer vncPlayingLock.Unlock()
 
 	// Is this playback already running?
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
-	if _, ok := vncKBPlaying[id]; ok {
+	if _, ok := vncPlaying[id]; ok {
 		return fmt.Errorf("kb playback %v already playing", vm.Name)
 	}
 
@@ -152,7 +148,7 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 	if err != nil {
 		return err
 	}
-	log.Warn("dialing %v", c.Rhost)
+
 	c.Conn, err = vnc.Dial(c.Rhost)
 	if err != nil {
 		return err
@@ -165,9 +161,8 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 
 	p := NewVncKbPlayback(c, pr)
 
-	vncKBPlaying[c.ID] = p
+	vncPlaying[c.ID] = p
 
-	log.Warn("added %v to playbacks", c.ID)
 	go p.Play()
 	return nil
 }
@@ -218,7 +213,8 @@ outerLoop:
 					return
 				case <-wait:
 				case <-v.step:
-					// TODO fix time
+					// Update timekeeping
+					v.duration -= duration
 				}
 
 				switch event := res.(type) {
@@ -380,8 +376,7 @@ func (v *vncKBPlayback) Stop() error {
 
 	v.vncClient.Stop()
 
-	log.Warn("deleting kbpb %v", v.ID)
-	delete(vncKBPlaying, v.ID)
+	delete(vncPlaying, v.ID)
 
 	// Cleanup any open playback readers
 	for _, pr := range v.prs {

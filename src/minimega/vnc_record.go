@@ -20,16 +20,10 @@ import (
 )
 
 var (
-	vncKBRecording     map[string]*vncKBRecord
-	vncFBRecording     map[string]*vncFBRecord
-	vncKBRecordingLock sync.RWMutex
-	vncFBRecordingLock sync.RWMutex
+	vncKBRecording   = make(map[string]*vncKBRecord)
+	vncFBRecording   = make(map[string]*vncFBRecord)
+	vncRecordingLock sync.RWMutex
 )
-
-func init() {
-	vncKBRecording = make(map[string]*vncKBRecord)
-	vncFBRecording = make(map[string]*vncFBRecord)
-}
 
 type vncKBRecord struct {
 	*vncClient
@@ -143,8 +137,8 @@ func (v *vncFBRecord) Record() {
 }
 
 func vncRecordKB(vm *KvmVM, filename string) error {
-	vncKBRecordingLock.Lock()
-	defer vncKBRecordingLock.Unlock()
+	vncRecordingLock.Lock()
+	defer vncRecordingLock.Unlock()
 
 	// is this namespace:vm already being recorded?
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
@@ -171,8 +165,8 @@ func vncRecordKB(vm *KvmVM, filename string) error {
 }
 
 func vncRecordFB(vm *KvmVM, filename string) error {
-	vncFBRecordingLock.Lock()
-	defer vncFBRecordingLock.Unlock()
+	vncRecordingLock.Lock()
+	defer vncRecordingLock.Unlock()
 
 	// is this namespace:vm already being recorded?
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)

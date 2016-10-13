@@ -85,14 +85,14 @@ func vncClear() {
 		}
 	}
 
-	for k, v := range vncKBPlaying {
+	for k, v := range vncPlaying {
 		if inNamespace(v.VM) {
 			log.Debug("stopping kb playing for %v", k)
 			if err := v.Stop(); err != nil {
 				log.Error("%v", err)
 			}
 
-			delete(vncKBPlaying, k)
+			delete(vncPlaying, k)
 		}
 	}
 }
