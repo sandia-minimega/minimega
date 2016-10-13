@@ -139,7 +139,7 @@ enabled by default in linux 3.18+.
 When launching `container` type VMs, the following occurs, in order:
 
 - A new VM handler is created within minimega, which is populated with a copy of the VM configuration
-- If this is the first container to be launched, a new cgroup mount will be created within the minimega working directory (by default /tmp/minimega/cgroup)
+- If this is the first container to be launched, minimega cgroup subtrees will be created for the freezer, memory, and devices cgroup subsystems.
 - If this is a new container, checks are performed to ensure there are no networking or disk conflicts
 - An instance directory and container configuration are written to disk (by default /tmp/minimega/N, where N is the VM ID)
 - If the VM is in snapshot mode, an `overlayfs` mountpoint is created within the instance directory
@@ -177,3 +177,13 @@ cgroup. To enable this in GRUB on Debian, open /etc/default/grub and edit the
 `GRUB_CMDLINE_LINUX_DEFAULT` line to include the cgroup parameter. Then run
 `update-grub` to update the GRUB config. When you reboot, the cgroup will be
 enabled.
+
+To better work with systemd-based systems, minimega requires the cgroup hierarchy be mounted as individual mounts (as opposed to one large cgroup mount with all enabled subsystems). If you don't already have a cgroup hierarchy mounted, the following will create a minimal one for minimega:
+
+	mount -t tmpfs cgroup /sys/fs/cgroup
+	mkdir /sys/fs/cgroup/memory
+	mkdir /sys/fs/cgroup/freezer
+	mkdir /sys/fs/cgroup/devices
+	mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
+	mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
+	mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices

@@ -97,11 +97,6 @@ const (
 	DEFAULT_CAPS = CAP_CHOWN | CAP_DAC_OVERRIDE | CAP_FSETID | CAP_FOWNER | CAP_MKNOD | CAP_NET_RAW | CAP_SETGID | CAP_SETUID | CAP_SETFCAP | CAP_SETPCAP | CAP_NET_BIND_SERVICE | CAP_SYS_CHROOT | CAP_KILL | CAP_AUDIT_WRITE | CAP_NET_ADMIN | CAP_DAC_READ_SEARCH | CAP_AUDIT_CONTROL
 )
 
-var (
-	CGROUP_PATH string
-	CGROUP_ROOT string
-)
-
 type capHeader struct {
 	version uint32
 	pid     int
@@ -258,57 +253,47 @@ func containerInit() error {
 	}
 	containerInitOnce = true
 
-	// mount our own cgroup namespace to avoid having to ever ever ever
-	// deal with systemd
-	log.Debug("cgroup mkdir: %v", CGROUP_ROOT)
+	// create minimega freezer and memory cgroups
+	log.Debug("cgroup init: %v", *f_cgroup)
 
-	err := os.MkdirAll(CGROUP_ROOT, 0755)
-	if err != nil {
-		return fmt.Errorf("cgroup mkdir: %v", err)
+	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
+	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
+	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
+
+	for _, cgroup := range cgroups {
+		if err := os.Mkdir(cgroup, 0755); err != nil {
+			return fmt.Errorf("cgroup mkdir: %v", err)
+		}
+
+		// inherit cpusets
+		if err := ioutil.WriteFile(filepath.Join(cgroup, "cgroup.clone_children"), []byte("1"), 0664); err != nil {
+			return fmt.Errorf("setting cgroup: %v", err)
+		}
 	}
 
-	err = syscall.Mount("minicgroup", CGROUP_ROOT, "cgroup", 0, "")
-	if err != nil {
-		return fmt.Errorf("cgroup mount: %v", err)
-	}
-
-	// inherit cpusets
-	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "cgroup.clone_children"), []byte("1"), 0664)
-	if err != nil {
-		return fmt.Errorf("setting cgroup: %v", err)
-	}
-	err = ioutil.WriteFile(filepath.Join(CGROUP_ROOT, "memory.use_hierarchy"), []byte("1"), 0664)
-	if err != nil {
+	if err := ioutil.WriteFile(filepath.Join(cgroupMemory, "memory.use_hierarchy"), []byte("1"), 0664); err != nil {
 		return fmt.Errorf("setting use_hierarchy: %v", err)
 	}
 
 	// clean potentially old cgroup noise
-	err = containerCleanCgroupDirs()
-	if err != nil {
-		return err
-	}
-
-	// create a minimega cgroup
-	err = os.MkdirAll(CGROUP_PATH, 0755)
-	if err != nil {
-		return fmt.Errorf("creating minimega cgroup: %v", err)
-	}
+	containerCleanCgroupDirs()
 
 	containerInitSuccess = true
 	return nil
 }
 
 func containerTeardown() {
-	err := os.Remove(CGROUP_PATH)
-	if err != nil {
-		if containerInitSuccess {
-			log.Errorln(err)
-		}
-	}
-	err = syscall.Unmount(CGROUP_ROOT, 0)
-	if err != nil {
-		if containerInitSuccess {
-			log.Errorln(err)
+	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
+	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
+	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
+
+	for _, cgroup := range cgroups {
+		if err := os.Remove(cgroup); err != nil {
+			if containerInitSuccess {
+				log.Errorln(err)
+			}
 		}
 	}
 }
@@ -937,7 +922,9 @@ func (vm *ContainerVM) launch() error {
 	}()
 
 	go func() {
-		cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID))
+		cgroupFreezerPath := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID))
+		cgroupMemoryPath := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vm.ID))
+		cgroupDevicesPath := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vm.ID))
 		sendKillAck := false
 
 		select {
@@ -970,7 +957,7 @@ func (vm *ContainerVM) launch() error {
 			// wait for the taskset to actually exit (from uninterruptible
 			// sleep state).
 			for {
-				t, err := ioutil.ReadFile(filepath.Join(cgroupPath, "tasks"))
+				t, err := ioutil.ReadFile(filepath.Join(cgroupFreezerPath, "tasks"))
 				if err != nil {
 					log.Errorln(err)
 					vm.setError(err)
@@ -1013,7 +1000,13 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// clean up the cgroup directory
-		if err := os.Remove(cgroupPath); err != nil {
+		if err := os.Remove(cgroupFreezerPath); err != nil {
+			log.Errorln(err)
+		}
+		if err := os.Remove(cgroupMemoryPath); err != nil {
+			log.Errorln(err)
+		}
+		if err := os.Remove(cgroupDevicesPath); err != nil {
 			log.Errorln(err)
 		}
 
@@ -1092,7 +1085,7 @@ func (vm *ContainerVM) unlinkNetns() error {
 	return os.Remove(dst)
 }
 
-// create an overlay mount (linux 3.18 or greater) is snapshot mode is
+// create an overlay mount (linux 3.18 or greater) if snapshot mode is
 // being used.
 func (vm *ContainerVM) overlayMount() error {
 	vm.effectivePath = vm.path("fs")
@@ -1178,7 +1171,7 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 }
 
 func (vm *ContainerVM) freeze() error {
-	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "freezer.state")
 	if err := ioutil.WriteFile(freezer, []byte("FROZEN"), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
@@ -1187,7 +1180,7 @@ func (vm *ContainerVM) freeze() error {
 }
 
 func (vm *ContainerVM) thaw() error {
-	freezer := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vm.ID), "freezer.state")
+	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "freezer.state")
 	if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
@@ -1283,41 +1276,41 @@ func containerChroot(fsPath string) error {
 }
 
 func containerPopulateCgroups(vmID, vmMemory int) error {
-	cgroupPath := filepath.Join(CGROUP_PATH, fmt.Sprintf("%v", vmID))
-	log.Debug("using cgroupPath: %v", cgroupPath)
+	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vmID))
+	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vmID))
+	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vmID))
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
 
-	err := os.MkdirAll(cgroupPath, 0755)
-	if err != nil {
-		return err
+	for _, cgroup := range cgroups {
+		if err := os.MkdirAll(cgroup, 0755); err != nil {
+			return err
+		}
 	}
 
-	deny := filepath.Join(cgroupPath, "devices.deny")
-	allow := filepath.Join(cgroupPath, "devices.allow")
-	tasks := filepath.Join(cgroupPath, "tasks")
-	memory := filepath.Join(cgroupPath, "memory.limit_in_bytes")
-
 	// devices
-	err = ioutil.WriteFile(deny, []byte("a"), 0200)
-	if err != nil {
+	deny := filepath.Join(cgroupDevices, "devices.deny")
+	allow := filepath.Join(cgroupDevices, "devices.allow")
+	if err := ioutil.WriteFile(deny, []byte("a"), 0200); err != nil {
 		return err
 	}
 	for _, a := range containerDevices {
-		err = ioutil.WriteFile(allow, []byte(a), 0200)
-		if err != nil {
+		if err := ioutil.WriteFile(allow, []byte(a), 0200); err != nil {
 			return err
 		}
 	}
 
 	// memory
-	err = ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vmMemory)), 0644)
-	if err != nil {
+	memory := filepath.Join(cgroupMemory, "memory.limit_in_bytes")
+	if err := ioutil.WriteFile(memory, []byte(fmt.Sprintf("%vM", vmMemory)), 0644); err != nil {
 		return err
 	}
 
 	// associate the pid with these permissions
-	err = ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644)
-	if err != nil {
-		return err
+	for _, cgroup := range cgroups {
+		tasks := filepath.Join(cgroup, "tasks")
+		if err := ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1467,11 +1460,18 @@ func containerMountDefaults(fsPath string) error {
 
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
-	// walk CGROUP_PATH for tasks, killing each one
-	if _, err := os.Stat(CGROUP_PATH); err == nil {
-		err := filepath.Walk(CGROUP_PATH, containerNukeWalker)
-		if err != nil {
-			log.Errorln(err)
+	// walk minimega cgroups for tasks, killing each one
+	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
+	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
+	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
+
+	for _, cgroup := range cgroups {
+		if _, err := os.Stat(cgroup); err == nil {
+			err := filepath.Walk(cgroup, containerNukeWalker)
+			if err != nil {
+				log.Errorln(err)
+			}
 		}
 	}
 
@@ -1494,18 +1494,7 @@ func containerNuke() {
 		}
 	}
 
-	err = containerCleanCgroupDirs()
-	if err != nil {
-		log.Errorln(err)
-	}
-
-	// umount cgroup_root, if it exists
-	if _, err := os.Stat(CGROUP_ROOT); err == nil {
-		err = syscall.Unmount(CGROUP_ROOT, 0)
-		if err != nil {
-			log.Error("cgroup_root unmount: %v", err)
-		}
-	}
+	containerCleanCgroupDirs()
 
 	// remove meganet_* from /var/run/netns
 	if _, err := os.Stat("/var/run/netns"); err == nil {
@@ -1552,36 +1541,46 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 }
 
 // remove state across cgroup mounts
-func containerCleanCgroupDirs() error {
-	_, err := os.Stat(CGROUP_PATH)
-	if err != nil {
-		return nil
+func containerCleanCgroupDirs() {
+	paths := []string{
+		filepath.Join(*f_cgroup, "freezer", "minimega"),
+		filepath.Join(*f_cgroup, "memory", "minimega"),
+		filepath.Join(*f_cgroup, "devices", "minimega"),
 	}
-
-	err = filepath.Walk(CGROUP_PATH, func(path string, info os.FileInfo, err error) error {
+	for _, d := range paths {
+		_, err := os.Stat(d)
 		if err != nil {
-			return nil
+			continue
 		}
 
-		if path == CGROUP_PATH {
-			return nil
-		}
-
-		log.Debug("walking file: %v", path)
-
-		if info.IsDir() {
-			err = os.Remove(path)
+		err = filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				log.Errorln(err)
-				return err
+				return nil
 			}
+
+			if path == d {
+				return nil
+			}
+
+			log.Debug("walking file: %v", path)
+
+			if info.IsDir() {
+				err = os.Remove(path)
+				if err != nil {
+					log.Errorln(err)
+					return err
+				}
+			}
+
+			return nil
+		})
+		if err != nil {
+			continue
 		}
 
-		return nil
-	})
-	if err != nil {
-		return err
+		err = os.Remove(d)
+		if err != nil {
+			log.Errorln(err)
+		}
 	}
-
-	return os.Remove(CGROUP_PATH)
 }
