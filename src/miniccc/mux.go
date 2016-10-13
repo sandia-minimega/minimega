@@ -48,6 +48,7 @@ func mux() {
 
 		switch m.Type {
 		case ron.MESSAGE_COMMAND:
+			updateClient(&m)
 			Client.commandChan <- m.Commands
 		case ron.MESSAGE_FILE:
 			Client.fileChan <- &m
@@ -59,6 +60,18 @@ func mux() {
 	}
 
 	log.Info("mux exit: %v", err)
+}
+
+// updateClient pulls the namespace and tags from the message
+func updateClient(cmd *ron.Message) {
+	Client.Lock()
+	defer Client.Unlock()
+
+	Client.Namespace = cmd.Namespace
+	Client.Tags = make(map[string]string)
+	for k, v := range cmd.Tags {
+		Client.Tags[k] = v
+	}
 }
 
 func commandHandler() {

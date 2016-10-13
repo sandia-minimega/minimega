@@ -71,20 +71,27 @@ func (c *Client) Matches(f *Filter) bool {
 	}
 
 	if f.UUID != "" && f.UUID != c.UUID {
-		log.Debug("failed match on UUID %v %v", f.UUID, c.UUID)
+		log.Debug("failed match on UUID: %v != %v", f.UUID, c.UUID)
 		return false
 	}
 	if f.Hostname != "" && f.Hostname != c.Hostname {
-		log.Debug("failed match on hostname %v %v", f.Hostname, c.Hostname)
+		log.Debug("failed match on hostname: %v != %v", f.Hostname, c.Hostname)
 		return false
 	}
 	if f.Arch != "" && f.Arch != c.Arch {
-		log.Debug("failed match on arch %v %v", f.Arch, c.Arch)
+		log.Debug("failed match on arch: %v != %v", f.Arch, c.Arch)
 		return false
 	}
 	if f.OS != "" && f.OS != c.OS {
-		log.Debug("failed match on os %v %v", f.OS, c.OS)
+		log.Debug("failed match on os: %v != %v", f.OS, c.OS)
 		return false
+	}
+
+	for k, v := range f.Tags {
+		if c.Tags[k] != v {
+			log.Debug("failed match on tag %v, %v != %v", k, v, c.Tags[k])
+			return false
+		}
 	}
 
 	return c.matchesIP(f) && c.matchesMAC(f)
