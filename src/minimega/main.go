@@ -50,6 +50,7 @@ var (
 	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
+	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 
 	vms = VMs{}
 
@@ -80,11 +81,6 @@ func main() {
 
 	flag.Usage = usage
 	flag.Parse()
-
-	// Set the container globals based on the parsed args before we invoke the
-	// containerShim, if applicable.
-	CGROUP_ROOT = filepath.Join(*f_base, "cgroup")
-	CGROUP_PATH = filepath.Join(CGROUP_ROOT, "minimega")
 
 	logSetup()
 
