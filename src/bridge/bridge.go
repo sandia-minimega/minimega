@@ -7,11 +7,12 @@ package bridge
 import (
 	"fmt"
 	"gonetflow"
-	"gopacket/pcap"
 	log "minilog"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/gopacket/pcap"
 )
 
 // Global lock for all bridge operations

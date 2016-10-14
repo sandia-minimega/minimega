@@ -9,11 +9,12 @@
 package bridge
 
 import (
-	"gopacket"
-	"gopacket/layers"
 	"io"
 	log "minilog"
 	"net"
+
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 )
 
 func (b *Bridge) Close() {

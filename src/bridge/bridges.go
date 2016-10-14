@@ -7,12 +7,13 @@ package bridge
 import (
 	"errors"
 	"fmt"
-	"gopacket/pcap"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/google/gopacket/pcap"
 )
 
 // Bridges manages a collection of `Bridge` structs.
