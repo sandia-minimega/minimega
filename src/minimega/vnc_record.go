@@ -205,6 +205,10 @@ func getDuration(filename string) time.Duration {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		s := strings.SplitN(scanner.Text(), ":", 2)
+		// Ignore comments in the vnc file
+		if s[0] == "#" {
+			continue
+		}
 		i, err := strconv.Atoi(s[0])
 		if err != nil {
 			log.Errorln(err)

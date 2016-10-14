@@ -185,15 +185,16 @@ outerLoop:
 			for pr.scanner.Scan() && v.err == nil {
 				// Parse the event
 				s := strings.SplitN(pr.scanner.Text(), ":", 2)
-				res, err := v.parseEvent(s[1])
-				if err != nil {
-					log.Error("invalid vnc message: `%s`", s[1])
-					continue
-				}
 
 				// Ignore comments
 				if s[0] == "#" {
 					log.Info("vncplayback: %s", s)
+					continue
+				}
+
+				res, err := v.parseEvent(s[1])
+				if err != nil {
+					log.Error("invalid vnc message: `%s`", s[1])
 					continue
 				}
 
@@ -208,13 +209,14 @@ outerLoop:
 
 				// Wait for the computed duration
 				wait := time.After(duration)
+				t := time.Now()
 				select {
 				case <-v.done:
 					return
 				case <-wait:
 				case <-v.step:
 					// Update timekeeping
-					v.duration -= duration
+					v.duration -= duration - time.Since(t)
 				}
 
 				switch event := res.(type) {
