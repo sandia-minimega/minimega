@@ -156,7 +156,7 @@ var vmInfo = []string{
 	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
 	"migrate", "append", "serial", "virtio-serial", "vnc_port",
 	// container fields
-	"filesystem", "hostname", "init", "preinit", "fifo",
+	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
 	"tags",
 }
@@ -187,23 +187,23 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func NewVM(name string, vmType VMType) (VM, error) {
+func NewVM(name string, vmType VMType, config VMConfig) (VM, error) {
 	switch vmType {
 	case KVM:
-		return NewKVM(name)
+		return NewKVM(name, config)
 	case CONTAINER:
-		return NewContainer(name)
+		return NewContainer(name, config)
 	}
 
 	return nil, errors.New("unknown VM type")
 }
 
-// NewBaseVM creates a new VM, copying the currently set configs. After a VM is
+// NewBaseVM creates a new VM, copying the specified configs. After a VM is
 // created, it can be Launched.
-func NewBaseVM(name string) *BaseVM {
+func NewBaseVM(name string, config VMConfig) *BaseVM {
 	vm := new(BaseVM)
 
-	vm.BaseConfig = vmConfig.BaseConfig.Copy() // deep-copy configured fields
+	vm.BaseConfig = config.BaseConfig.Copy() // deep-copy configured fields
 	vm.ID = vmID.Next()
 	if name == "" {
 		vm.Name = fmt.Sprintf("vm-%d", vm.ID)
@@ -211,7 +211,6 @@ func NewBaseVM(name string) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Namespace = GetNamespaceName()
 	vm.Host = hostname
 
 	// generate a UUID if we don't have one
@@ -434,8 +433,6 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	ccNode.UnregisterVM(vm.UUID)
-
 	return os.RemoveAll(vm.instancePath)
 }
 
@@ -812,6 +809,10 @@ func vmNotRunning(idOrName string) error {
 
 func vmNotKVM(idOrName string) error {
 	return fmt.Errorf("vm not KVM: %v", idOrName)
+}
+
+func vmNotContainer(idOrName string) error {
+	return fmt.Errorf("vm not container: %v", idOrName)
 }
 
 func isVmNotFound(err string) bool {

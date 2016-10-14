@@ -24,6 +24,7 @@ import (
 	"sync"
 	"text/tabwriter"
 	"time"
+	"vnc"
 )
 
 const (
@@ -106,13 +107,13 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func NewKVM(name string) (*KvmVM, error) {
+func NewKVM(name string, config VMConfig) (*KvmVM, error) {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewBaseVM(name)
+	vm.BaseVM = *NewBaseVM(name, config)
 	vm.Type = KVM
 
-	vm.KVMConfig = vmConfig.KVMConfig.Copy() // deep-copy configured fields
+	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]string)
 
@@ -425,6 +426,7 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
+	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	go func() {
 		defer l.Close()
@@ -450,8 +452,24 @@ func (vm *KvmVM) connectVNC() error {
 				}
 				defer local.Close()
 
-				go io.Copy(local, remote)
-				io.Copy(remote, local)
+				// copy local -> remote
+				go io.Copy(remote, local)
+
+				// Reads will implicitly copy from remote -> local
+				tee := io.TeeReader(remote, local)
+				for {
+					// Read
+					msg, err := vnc.ReadClientMessage(tee)
+					if err != nil {
+						if err == io.EOF || strings.Contains(err.Error(), "closed network") {
+							break
+						}
+						log.Errorln(err)
+					}
+					if r, ok := vncKBRecording[ns]; ok {
+						r.RecordMessage(msg)
+					}
+				}
 			}()
 		}
 	}()

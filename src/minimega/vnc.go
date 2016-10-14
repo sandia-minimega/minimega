@@ -13,7 +13,6 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 	"vnc"
@@ -26,9 +25,8 @@ var (
 )
 
 type vncClient struct {
-	Host  string
-	Name  string
-	ID    int
+	VM    *KvmVM
+	ID    string
 	Rhost string
 
 	done chan bool
@@ -61,39 +59,16 @@ func init() {
 
 // NewVNCClient creates a new VNC client. NewVNCClient is only called via the
 // cli so we can assume that cmdLock is held.
-func NewVNCClient(host, idOrName string) (*vncClient, error) {
-	// Resolve localhost to the actual hostname
-	if host == Localhost {
-		host = hostname
-	}
-
-	var vm *KvmVM
-	if host == hostname {
-		vm, _ = vms.FindKvmVM(idOrName)
-	} else {
-		// LOCK: This is only invoked via the CLI so we already hold cmdLock
-		// (can call hostVMs instead of HostVMs). Since we're using not using
-		// the vms global, we don't need to acquire the vmLock (can call findVM
-		// instead of FindVM).
-
-		// TODO(fritz): should this be namespace aware? If someone sets
-		// a namespace on the cli and then someone on the web interface
-		// attempts to connect and this is checking namespaces then it
-		// will fail right?
-		vm, _ = hostVMs(host).findKvmVM(idOrName)
-	}
-
-	if vm == nil {
-		return nil, vmNotFound(host + ":" + idOrName)
-	}
-
-	rhost := fmt.Sprintf("%v:%v", host, vm.VNCPort)
+// This is sent via wrapVMTargetCLI so we assume the command will always be
+// delivered to the correct host
+func NewVNCClient(vm *KvmVM) (*vncClient, error) {
+	rhost := fmt.Sprintf("%v:%v", hostname, vm.VNCPort)
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	c := &vncClient{
+		ID:    id, // ID is namespace:name
 		Rhost: rhost,
-		Host:  host,
-		Name:  vm.GetName(),
-		ID:    vm.GetID(),
+		VM:    vm,
 		done:  make(chan bool),
 	}
 
@@ -101,7 +76,7 @@ func NewVNCClient(host, idOrName string) (*vncClient, error) {
 }
 
 func (v *vncClient) Matches(host, vm string) bool {
-	return v.Host == host && (v.Name == vm || strconv.Itoa(v.ID) == vm)
+	return v.VM.Host == host && v.VM.Name == vm
 }
 
 func (v *vncClient) Stop() error {
@@ -295,18 +270,18 @@ func (v *vncKBPlayback) Run() {
 
 	// Block until we receive the done flag if we finished the playback
 	<-v.done
-	delete(vncKBPlaying, v.Rhost)
+	delete(vncKBPlaying, v.ID)
 }
 
-func vncRecordKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordKB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncKBRecording[c.Rhost]; ok {
-		return fmt.Errorf("kb recording for %v %v already running", host, vm)
+	// is this namespace:vm already being recorded?
+	if _, ok := vncKBRecording[c.ID]; ok {
+		return fmt.Errorf("kb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -315,22 +290,24 @@ func vncRecordKB(host, vm, filename string) error {
 	}
 
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
-	vncKBRecording[c.Rhost] = r
+
+	// Recordings are stored in the format namespace:vm
+	vncKBRecording[c.ID] = r
 
 	go r.Run()
 
 	return nil
 }
 
-func vncRecordFB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncRecordFB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
-	// is this rhost already being recorded?
-	if _, ok := vncFBRecording[c.Rhost]; ok {
-		return fmt.Errorf("fb recording for %v %v already running", host, vm)
+	// is this namespace:vm already being recorded?
+	if _, ok := vncFBRecording[c.ID]; ok {
+		return fmt.Errorf("fb recording for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Create(filename)
@@ -344,22 +321,22 @@ func vncRecordFB(host, vm, filename string) error {
 	}
 
 	r := &vncFBRecord{c}
-	vncFBRecording[c.Rhost] = r
+	vncFBRecording[c.ID] = r
 
 	go r.Run()
 
 	return nil
 }
 
-func vncPlaybackKB(host, vm, filename string) error {
-	c, err := NewVNCClient(host, vm)
+func vncPlaybackKB(vm *KvmVM, filename string) error {
+	c, err := NewVNCClient(vm)
 	if err != nil {
 		return err
 	}
 
 	// is this rhost already being recorded?
-	if _, ok := vncKBPlaying[c.Rhost]; ok {
-		return fmt.Errorf("kb playback for %v %v already running", host, vm)
+	if _, ok := vncKBPlaying[c.ID]; ok {
+		return fmt.Errorf("kb playback for %v already running", vm.Name)
 	}
 
 	c.file, err = os.Open(filename)
@@ -373,40 +350,44 @@ func vncPlaybackKB(host, vm, filename string) error {
 	}
 
 	r := &vncKBPlayback{c}
-	vncKBPlaying[c.Rhost] = r
+	vncKBPlaying[c.ID] = r
 
 	go r.Run()
 
 	return nil
 }
 
-func vncClear() error {
+func vncClear() {
 	for k, v := range vncKBRecording {
-		log.Debug("stopping kb recording for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
-		}
+		if inNamespace(v.VM) {
+			log.Debug("stopping kb recording for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
 
-		delete(vncKBRecording, k)
+			delete(vncKBRecording, k)
+		}
 	}
 
 	for k, v := range vncFBRecording {
-		log.Debug("stopping fb recording for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
-		}
+		if inNamespace(v.VM) {
+			log.Debug("stopping fb recording for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
 
-		delete(vncFBRecording, k)
+			delete(vncFBRecording, k)
+		}
 	}
 
 	for k, v := range vncKBPlaying {
-		log.Debug("stopping kb playing for %v", k)
-		if err := v.Stop(); err != nil {
-			log.Error("%v", err)
+		if inNamespace(v.VM) {
+			log.Debug("stopping kb playing for %v", k)
+			if err := v.Stop(); err != nil {
+				log.Error("%v", err)
+			}
+
+			delete(vncKBPlaying, k)
 		}
-
-		delete(vncKBPlaying, k)
 	}
-
-	return nil
 }

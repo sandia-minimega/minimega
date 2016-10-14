@@ -1,0 +1,25 @@
+<html>
+	<head>
+		<link rel="stylesheet" href="/xterm.js/src/xterm.css"/>
+		<script src="/xterm.js/dist/xterm.js"></script>
+		<script src="/xterm.js/addons/attach/attach.js"></script>
+	<body>
+		<div id="terminal"></div>
+		<script>
+		var terminalContainer = document.getElementById('#terminal');
+		var term = new Terminal();
+		term.open(terminalContainer);
+		term.resize(80, 24);
+
+		path = "/termws/" + window.location.hash.substring(1);
+		socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
+		socket = new WebSocket(socketURL);
+		socket.onopen = runterminal;
+
+		function runterminal() {
+			term.attach(socket);
+			term._initialized = true;
+		};
+		</script>
+	</body>
+</html>

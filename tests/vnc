@@ -1,0 +1,43 @@
+.annotate false
+
+# Create a vm in ns0
+namespace ns0
+nsmod add-host localhost
+vm launch kvm vm0
+vm launch
+
+# Start a kb recording
+vnc kb record vm0 /tmp/vm0.kbr
+# This should error as the recording is already running
+vnc kb record vm0 /tmp/vm0.kbr
+
+# Check the kb recording is running
+.columns name,type,filename vnc
+
+# Create a vm in ns1
+namespace ns1
+nsmod add-host localhost
+vm launch kvm vm1
+vm launch
+
+# This should be blank
+vnc
+
+# Start and check a kbrecording in the new ns
+vnc kb record vm1 /tmp/vm1.kbr
+.columns name,type,filename vnc
+
+# Stop the kb recording, vnc should be blank
+vnc kb norecord vm1
+vnc
+
+# Switch to the first namespace, check the kb recording is still running,
+# and then stop it.
+namespace ns0
+.columns name,type,filename vnc
+vnc kb norecord vm0
+vnc
+
+# Clean up
+shell rm /tmp/vm0.kbr
+shell rm /tmp/vm1.kbr

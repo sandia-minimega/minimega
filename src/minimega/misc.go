@@ -8,8 +8,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"gopacket/macs"
-	_ "gopnm"
 	"image"
 	"image/png"
 	"io"
@@ -22,7 +20,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"resize"
 	"runtime"
 	"strconv"
 	"strings"
@@ -30,6 +27,10 @@ import (
 	"time"
 	"unicode"
 	"vlans"
+
+	"github.com/google/gopacket/macs"
+	_ "github.com/jbuchbinder/gopnm"
+	"github.com/nfnt/resize"
 )
 
 type errSlice []error

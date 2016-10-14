@@ -16,6 +16,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -95,7 +97,7 @@ func webStart(port int, root string) {
 	web.Root = root
 
 	mux := http.NewServeMux()
-	for _, v := range []string{"css", "fonts", "js", "libs", "novnc", "images"} {
+	for _, v := range []string{"css", "fonts", "js", "libs", "novnc", "images", "xterm.js"} {
 		path := fmt.Sprintf("/%s/", v)
 		dir := http.Dir(filepath.Join(root, v))
 		mux.Handle(path, http.StripPrefix(path, http.FileServer(dir)))
@@ -103,11 +105,13 @@ func webStart(port int, root string) {
 
 	mux.HandleFunc("/", webIndex)
 	mux.HandleFunc("/tilevnc", webTileVNC)
+	mux.HandleFunc("/terminal", webTerminal)
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/vms", webVMs)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
-	mux.HandleFunc("/ws/", vncWsHandler)
+	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
+	mux.Handle("/termws/", websocket.Handler(terminalWsHandler))
 
 	if web.Server == nil {
 		web.Server = &http.Server{
@@ -163,7 +167,9 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
 					continue
-				} else if strings.HasPrefix(resp.Error, "vm not KVM:") {
+				} else if resp.Error == "cannot take screenshot of container" {
+					continue
+				} else if strings.HasPrefix(resp.Error, "cannot take screenshot of container") {
 					continue
 				}
 
@@ -207,6 +213,10 @@ func webIndex(w http.ResponseWriter, r *http.Request) {
 
 func webTileVNC(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(web.Root, "tilevnc.html"))
+}
+
+func webTerminal(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(web.Root, "terminal.html"))
 }
 
 func webVNC(w http.ResponseWriter, r *http.Request) {
@@ -274,6 +284,10 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 		if vm, ok := vm.(*KvmVM); ok {
 			vmMap["vnc_port"] = vm.VNCPort
+		}
+
+		if vm, ok := vm.(*ContainerVM); ok {
+			vmMap["console_port"] = vm.ConsolePort
 		}
 
 		if config.Networks == nil {

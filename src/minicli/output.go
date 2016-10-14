@@ -13,6 +13,7 @@ import (
 	"io"
 	"ranges"
 	"sort"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 )
@@ -30,6 +31,13 @@ func (t table) Swap(i, j int) {
 func (t table) Less(i, j int) bool {
 	for k := 0; k < len(t[i]) && k < len(t[j]); k++ {
 		if t[i][k] != t[j][k] {
+			// If both convert to ints, compare using int comparison
+			v, err := strconv.Atoi(t[i][k])
+			v2, err2 := strconv.Atoi(t[j][k])
+			if err == nil && err2 == nil {
+				return v < v2
+			}
+
 			return t[i][k] < t[j][k]
 		}
 	}
