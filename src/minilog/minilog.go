@@ -16,11 +16,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
+	golog "log"
 	"os"
-	"runtime"
-	"strconv"
 	"strings"
+	"sync"
 )
 
 // Log levels supported:
@@ -34,7 +33,11 @@ const (
 )
 
 var (
-	loggers    map[string]*minilogger
+	loggers = make(map[string]*minilogger)
+	logLock sync.RWMutex
+)
+
+var (
 	colorLine  = FgYellow
 	colorDebug = FgBlue
 	colorInfo  = FgGreen
@@ -43,30 +46,28 @@ var (
 	colorFatal = FgRed
 )
 
-type minilogger struct {
-	*log.Logger
-	Level   int
-	Color   bool // print in color
-	filters []string
-}
-
-func init() {
-	loggers = make(map[string]*minilogger)
-}
-
 // Adds a logger set to log only events at level specified or higher.
 // output: io.Writer instance to which to log (can be os.Stderr or os.Stdout)
 // level:  one of the minilogging levels defined as a constant
 func AddLogger(name string, output io.Writer, level int, color bool) {
-	loggers[name] = &minilogger{log.New(output, "", log.LstdFlags), level, color, nil}
+	logLock.Lock()
+	defer logLock.Unlock()
+
+	loggers[name] = &minilogger{golog.New(output, "", golog.LstdFlags), level, color, nil}
 }
 
 // Remove a named logger that was added using AddLogger
 func DelLogger(name string) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	delete(loggers, name)
 }
 
 func Loggers() []string {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	var ret []string
 	for k, _ := range loggers {
 		ret = append(ret, k)
@@ -77,6 +78,9 @@ func Loggers() []string {
 // WillLog returns true if logging to a specific log level will result in
 // actual logging. Useful if the logging text itself is expensive to produce.
 func WillLog(level int) bool {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	for _, v := range loggers {
 		if v.Level <= level {
 			return true
@@ -87,6 +91,9 @@ func WillLog(level int) bool {
 
 // Change a log level for a named logger.
 func SetLevel(name string, level int) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if loggers[name] == nil {
 		return errors.New("logger does not exist")
 	}
@@ -96,27 +103,24 @@ func SetLevel(name string, level int) error {
 
 // Return the log level for a named logger.
 func GetLevel(name string) (int, error) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if loggers[name] == nil {
 		return -1, errors.New("logger does not exist")
 	}
 	return loggers[name].Level, nil
 }
 
-// Log all input from an io.Reader, splitting on lines, until EOF. LogAll starts a goroutine and
-// returns immediately.
+// Log all input from an io.Reader, splitting on lines, until EOF. LogAll
+// starts a goroutine and returns immediately.
 func LogAll(i io.Reader, level int, name string) {
 	go func(i io.Reader, level int, name string) {
 		r := bufio.NewReader(i)
 		for {
 			d, err := r.ReadString('\n')
-			d = strings.TrimSpace(d)
-			if d != "" {
-				for _, logger := range loggers {
-					if logger.Level <= level {
-						msg := logger.prologue(level, name) + d + logger.epilogue()
-						logger.Println(msg)
-					}
-				}
+			if d := strings.TrimSpace(d); d != "" {
+				log(level, name, d)
 			}
 			if level == FATAL {
 				os.Exit(1)
@@ -146,6 +150,9 @@ func LevelInt(l string) (int, error) {
 }
 
 func Filters(name string) ([]string, error) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		var ret = make([]string, len(l.filters))
 		copy(ret, l.filters)
@@ -156,6 +163,9 @@ func Filters(name string) ([]string, error) {
 }
 
 func AddFilter(name string, filter string) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		for _, f := range l.filters {
 			if f == filter {
@@ -170,6 +180,9 @@ func AddFilter(name string, filter string) error {
 }
 
 func DelFilter(name string, filter string) error {
+	logLock.Lock()
+	defer logLock.Unlock()
+
 	if l, ok := loggers[name]; ok {
 		for i, f := range l.filters {
 			if f == filter {
@@ -183,157 +196,68 @@ func DelFilter(name string, filter string) error {
 	}
 }
 
-func (l *minilogger) prologue(level int, name string) (msg string) {
-	switch level {
-	case DEBUG:
-		msg += "DEBUG "
-	case INFO:
-		msg += "INFO "
-	case WARN:
-		msg += "WARN "
-	case ERROR:
-		msg += "ERROR "
-	default:
-		msg += "FATAL "
-	}
+func log(level int, name, format string, arg ...interface{}) {
+	logLock.RLock()
+	defer logLock.RUnlock()
 
-	if name == "" {
-		_, file, line, _ := runtime.Caller(3)
-		short := file
-		for i := len(file) - 1; i > 0; i-- {
-			if file[i] == '/' {
-				short = file[i+1:]
-				break
-			}
-		}
-		msg += short + ":" + strconv.Itoa(line) + ": "
-	} else {
-		msg += name + ": "
-	}
-
-	if l.Color {
-		msg = colorLine + msg
-		switch level {
-		case DEBUG:
-			msg += colorDebug
-		case INFO:
-			msg += colorInfo
-		case WARN:
-			msg += colorWarn
-		case ERROR:
-			msg += colorError
-		default:
-			msg += colorFatal
+	for _, logger := range loggers {
+		if logger.Level <= level {
+			logger.log(level, name, format, arg...)
 		}
 	}
-	return
 }
 
-func (l *minilogger) epilogue() string {
-	if l.Color {
-		return Reset
-	}
-	return ""
-}
+func logln(level int, name string, arg ...interface{}) {
+	logLock.Lock()
+	defer logLock.Unlock()
 
-func (l *minilogger) log(level int, format string, arg ...interface{}) {
-	msg := l.prologue(level, "") + fmt.Sprintf(format, arg...) + l.epilogue()
-	for _, f := range l.filters {
-		if strings.Contains(msg, f) {
-			return
+	for _, logger := range loggers {
+		if logger.Level <= level {
+			logger.logln(level, name, arg...)
 		}
 	}
-	l.Print(msg)
-}
-
-func (l *minilogger) logln(level int, arg ...interface{}) {
-	msg := l.prologue(level, "") + fmt.Sprint(arg...) + l.epilogue()
-	for _, f := range l.filters {
-		if strings.Contains(msg, f) {
-			return
-		}
-	}
-	l.Println(msg)
 }
 
 func Debug(format string, arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= DEBUG {
-			logger.log(DEBUG, format, arg...)
-		}
-	}
+	log(DEBUG, "", format, arg...)
 }
 
 func Info(format string, arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= INFO {
-			logger.log(INFO, format, arg...)
-		}
-	}
+	log(INFO, "", format, arg...)
 }
 
 func Warn(format string, arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= WARN {
-			logger.log(WARN, format, arg...)
-		}
-	}
+	log(WARN, "", format, arg...)
 }
 
 func Error(format string, arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= ERROR {
-			logger.log(ERROR, format, arg...)
-		}
-	}
+	log(ERROR, "", format, arg...)
 }
 
 func Fatal(format string, arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= FATAL {
-			logger.log(FATAL, format, arg...)
-		}
-	}
+	log(FATAL, "", format, arg)
+
 	os.Exit(1)
 }
 
 func Debugln(arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= DEBUG {
-			logger.logln(DEBUG, arg...)
-		}
-	}
+	logln(DEBUG, "", arg...)
 }
 
 func Infoln(arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= INFO {
-			logger.logln(INFO, arg...)
-		}
-	}
+	logln(INFO, "", arg...)
 }
 
 func Warnln(arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= WARN {
-			logger.logln(WARN, arg...)
-		}
-	}
+	logln(WARN, "", arg...)
 }
 
 func Errorln(arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= ERROR {
-			logger.logln(ERROR, arg...)
-		}
-	}
+	logln(ERROR, "", arg...)
 }
 
 func Fatalln(arg ...interface{}) {
-	for _, logger := range loggers {
-		if logger.Level <= FATAL {
-			logger.logln(FATAL, arg...)
-		}
-	}
+	logln(FATAL, "", arg...)
+
 	os.Exit(1)
 }
