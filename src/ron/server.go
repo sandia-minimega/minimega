@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"version"
 )
@@ -440,7 +441,9 @@ func (s *Server) route(m *Message) {
 		m2.Tags = vm.GetTags()
 		m2.Namespace = vm.GetNamespace()
 
-		if err := c.sendMessage(&m2); err != nil {
+		if err := c.sendMessage(&m2); err == syscall.EPIPE {
+			log.Debug("client disconnected: %v", uuid)
+		} else if err != nil {
 			log.Error("unable to send message to %v: %v", uuid, err)
 		}
 	}
