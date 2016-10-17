@@ -45,9 +45,11 @@ func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	var matchLen int
 	var exact bool
 
-	for _, pattern := range h.PatternItems {
+	for i, pattern := range h.PatternItems {
 		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
 		if cmd != nil {
+			// patch up patterns from original pattern strings
+			cmd.Pattern = h.Patterns[i]
 			return cmd, matchLen, exact
 		}
 
