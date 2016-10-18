@@ -78,8 +78,6 @@ func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	// TODO: Remove? This goes against the unix philosophy
-	resp.Response = "all external dependencies met"
 	return nil
 }
 
