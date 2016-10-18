@@ -18,7 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"version"
 )
@@ -131,7 +130,11 @@ func (s *Server) Listen(port int) error {
 
 			log.Debug("new connection from: %v", conn.RemoteAddr())
 
-			go s.clientHandler(conn)
+			go func() {
+				addr := conn.RemoteAddr()
+				s.clientHandler(conn)
+				log.Debug("disconnected from: %v", addr)
+			}()
 		}
 	}()
 
@@ -160,15 +163,6 @@ func (s *Server) ListenUnix(path string) error {
 	s.udsConns[path] = l
 
 	go func() {
-		defer func() {
-			s.udsLock.Lock()
-			defer s.udsLock.Unlock()
-
-			if l, ok := s.udsConns[path]; ok {
-				l.Close()
-			}
-		}()
-
 		for {
 			l.SetDeadline(time.Now().Add(time.Second))
 			conn, err := l.Accept()
@@ -187,12 +181,25 @@ func (s *Server) ListenUnix(path string) error {
 					return
 				}
 			}
+
 			log.Info("client connected on %v", path)
 			s.clientHandler(conn)
 			log.Info("client disconnected on %v", path)
 		}
 	}()
+
 	return nil
+}
+
+// CloseUnix closes a unix domain socket created via ListenUnix.
+func (s *Server) CloseUnix(path string) {
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	if l, ok := s.udsConns[path]; ok {
+		log.Debug("closing domain socket: %v", l.Addr())
+		l.Close()
+	}
 }
 
 // Dial a client serial port. The server will maintain this connection until a
@@ -271,8 +278,6 @@ func (s *Server) broadcastCommands() {
 
 // client and transport handler for connections.
 func (s *Server) clientHandler(conn net.Conn) {
-	log.Debug("clientHandler to %v", conn.RemoteAddr())
-
 	defer conn.Close()
 
 	c := &client{
@@ -284,9 +289,10 @@ func (s *Server) clientHandler(conn net.Conn) {
 	// get the first client struct as a handshake
 	var handshake Message
 	if err := c.dec.Decode(&handshake); err != nil {
-		//if err != io.EOF {
-		log.Errorln(err)
-		//}
+		// client disconnected before it sent the full handshake
+		if err != io.EOF {
+			log.Errorln(err)
+		}
 		return
 	}
 	c.Client = handshake.Client
@@ -314,7 +320,7 @@ func (s *Server) clientHandler(conn net.Conn) {
 		s.clientLock.Lock()
 		defer s.clientLock.Unlock()
 
-		log.Info("minitunnel created for %v", c.UUID)
+		log.Debug("minitunnel created for %v", c.UUID)
 		c.tunnel = tunnel
 	}()
 
@@ -353,8 +359,6 @@ func (s *Server) clientHandler(conn net.Conn) {
 	if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
 		log.Errorln(err)
 	}
-
-	log.Info("clientHandler exit: %v", conn.RemoteAddr())
 }
 
 // addClient adds a client to the list of active clients
@@ -441,10 +445,12 @@ func (s *Server) route(m *Message) {
 		m2.Tags = vm.GetTags()
 		m2.Namespace = vm.GetNamespace()
 
-		if err := c.sendMessage(&m2); err == syscall.EPIPE {
-			log.Debug("client disconnected: %v", uuid)
-		} else if err != nil {
-			log.Error("unable to send message to %v: %v", uuid, err)
+		if err := c.sendMessage(&m2); err != nil {
+			if strings.Contains(err.Error(), "broken pipe") {
+				log.Debug("client disconnected: %v", uuid)
+			} else {
+				log.Info("unable to send message to %v: %v", uuid, err)
+			}
 		}
 	}
 
@@ -544,7 +550,9 @@ func (s *Server) updateClient(cin *Client) {
 
 	c, ok := s.clients[cin.UUID]
 	if !ok {
-		log.Error("unknown client %v", cin.UUID)
+		// the client probably disconnected between sending the heartbeat and
+		// us processing it. We'll still process any command responses.
+		log.Info("unknown client %v", cin.UUID)
 		return
 	}
 
@@ -553,7 +561,8 @@ func (s *Server) updateClient(cin *Client) {
 
 	vm, ok := s.vms[cin.UUID]
 	if !ok {
-		log.Error("unregistered client %v", cin.UUID)
+		// see above
+		log.Info("unregistered client %v", cin.UUID)
 		return
 	}
 

@@ -172,7 +172,7 @@ func (vm *KvmVM) Flush() error {
 		br.DelMac(net.MAC)
 
 		if err := br.DestroyTap(net.Tap); err != nil {
-			log.Errorln(err)
+			log.Error("leaked tap %v: %v", net.Tap, err)
 		}
 	}
 

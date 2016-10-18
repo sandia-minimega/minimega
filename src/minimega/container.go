@@ -966,6 +966,9 @@ func (vm *ContainerVM) launch() error {
 				if len(t) == 0 {
 					break
 				}
+
+				count := strings.Count(string(t), "\n")
+				log.Info("waiting on %d tasks for VM %v", count, vm.ID)
 				time.Sleep(100 * time.Millisecond)
 			}
 
@@ -983,6 +986,9 @@ func (vm *ContainerVM) launch() error {
 		if vm.ptyTCPListener != nil {
 			vm.ptyTCPListener.Close()
 		}
+
+		// cleanup cc domain socket
+		ccNode.CloseUnix(ccPath)
 
 		vm.unlinkNetns()
 
@@ -1058,11 +1064,11 @@ func (vm *ContainerVM) launchNetwork() error {
 func (vm *ContainerVM) Flush() error {
 	// umount the overlay, if any
 	if vm.Snapshot {
-		err := vm.overlayUnmount()
-		if err != nil {
-			log.Errorln(err)
+		if err := vm.overlayUnmount(); err != nil {
+			return err
 		}
 	}
+
 	return vm.BaseVM.Flush()
 }
 
@@ -1119,8 +1125,7 @@ func (vm *ContainerVM) overlayMount() error {
 func (vm *ContainerVM) overlayUnmount() error {
 	err := syscall.Unmount(vm.effectivePath, 0)
 	if err != nil {
-		log.Error("overlay unmount: %v", err)
-		return err
+		return fmt.Errorf("overlay unmount: %v", err)
 	}
 
 	return nil

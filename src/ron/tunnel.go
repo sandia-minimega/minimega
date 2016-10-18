@@ -66,7 +66,7 @@ func Trunk(remote net.Conn, uuid string, fn func(*Message) error) {
 	for err == nil {
 		buf := make([]byte, 32*1024)
 		n, err = remote.Read(buf)
-		log.Debug("trunking %v minitunnel bytes", n)
+		log.Debug("trunking %v bytes for %v", n, uuid)
 		if err == nil {
 			m := &Message{
 				Type:   MESSAGE_TUNNEL,
@@ -83,8 +83,8 @@ func Trunk(remote net.Conn, uuid string, fn func(*Message) error) {
 	}
 
 	if err != io.ErrClosedPipe {
-		log.Error("Trunk failed: %v", err)
+		log.Error("trunk failed for %v: %v", err)
 	}
 
-	log.Info("Trunk exit")
+	log.Debug("trunk exit for %v", uuid)
 }
