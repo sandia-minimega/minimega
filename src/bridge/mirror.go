@@ -48,14 +48,14 @@ func (b *Bridge) CreateMirror() (string, error) {
 		"mirrors=@m",
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
+	if _, err := ovsCmdWrapper(args); err != nil {
 		// Clean up the tap we just created
 		if err := b.destroyTap(tap); err != nil {
 			// Welp, we're boned
 			log.Error("zombie tap -- %v %v", tap, err)
 		}
 
-		return "", fmt.Errorf("add mirror failed: %v: %v", err, sErr)
+		return "", fmt.Errorf("add mirror failed: %v", err)
 	}
 
 	b.mirror = tap
@@ -87,8 +87,8 @@ func (b *Bridge) destroyMirror() error {
 		"mirrors",
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("remove mirror failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("remove mirror failed: %v", err)
 	}
 
 	// delete the associated host tap

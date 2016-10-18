@@ -167,9 +167,8 @@ func (b *Bridge) reapTaps() error {
 
 	log.Debug("reapTaps args: %v", strings.Join(args, " "))
 
-	_, sErr, err := ovsCmdWrapper(args)
-	if err != nil {
-		return fmt.Errorf("reap taps failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("reap taps failed: %v", err)
 	}
 
 	// clean up state

@@ -5,22 +5,17 @@
 package bridge
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	log "minilog"
 	"os/exec"
 	"strings"
-	"time"
 )
 
 var (
 	errAlreadyExists = errors.New("already exists")
 	errNoSuchPort    = errors.New("no such port")
 )
-
-// timeout for openvswitch commands.
-const ovsTimeout = time.Duration(5 * time.Second)
 
 // ovsAddBridge creates a new openvswitch bridge. Returns whether the bridge
 // was created or not, or any error that occurred.
@@ -38,11 +33,10 @@ func ovsAddBridge(name string) (bool, error) {
 		log.Warn("bridge name is longer than 15 characters.. dragons ahead")
 	}
 
-	_, sErr, err := ovsCmdWrapper(args)
-	if err == errAlreadyExists {
+	if _, err := ovsCmdWrapper(args); err == errAlreadyExists {
 		return false, nil
 	} else if err != nil {
-		return false, fmt.Errorf("add bridge failed: %v: %v", err, sErr)
+		return false, fmt.Errorf("add bridge failed: %v", err)
 	}
 
 	return true, nil
@@ -55,8 +49,8 @@ func ovsDelBridge(name string) error {
 		name,
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("delete bridge failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("delete bridge failed: %v", err)
 	}
 
 	return nil
@@ -88,10 +82,10 @@ func ovsAddPort(bridge, tap string, vlan int, host bool) error {
 		args = append(args, "type=internal")
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err == errAlreadyExists {
+	if _, err := ovsCmdWrapper(args); err == errAlreadyExists {
 		return err
 	} else if err != nil {
-		return fmt.Errorf("add port failed: %v: %v", err, sErr)
+		return fmt.Errorf("add port failed: %v", err)
 	}
 
 	return nil
@@ -105,37 +99,29 @@ func ovsDelPort(bridge, tap string) error {
 		tap,
 	}
 
-	_, sErr, err := ovsCmdWrapper(args)
-	if err != nil {
-		return fmt.Errorf("remove port failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("remove port failed: %v", err)
 	}
 
 	return nil
 }
 
 // ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
-// error produced running the command. Commands are run with a timeout of
-// ovsTimeout.
-func ovsCmdWrapper(args []string) (string, string, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
+// error produced running the command.
+func ovsCmdWrapper(args []string) (string, error) {
 	cmd := exec.Command("ovs-vsctl", args...)
-	cmd.Stdout = &sOut
-	cmd.Stderr = &sErr
 	log.Debug("running ovs cmd: %v", cmd)
 
-	if err := cmdTimeout(cmd, ovsTimeout); err != nil {
-		if strings.Contains(sErr.String(), "already exists") {
-			err = errAlreadyExists
-		} else if strings.Contains(sErr.String(), "no port named") {
-			err = errNoSuchPort
-		} else {
-			log.Error("openvswitch cmd failed: %v %v", cmd, sErr.String())
-		}
-
-		return sOut.String(), sErr.String(), err
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return string(out), nil
 	}
 
-	return sOut.String(), sErr.String(), nil
+	if strings.Contains(string(out), "already exists") {
+		return "", errAlreadyExists
+	} else if strings.Contains(string(out), "no port named") {
+		return "", errNoSuchPort
+	}
+
+	return "", fmt.Errorf("ovs cmd failed: %v %v", args, string(out))
 }
