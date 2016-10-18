@@ -19,8 +19,11 @@ import (
 
 const (
 	MIN_QEMU    = 1.6
-	MIN_OVS     = 1.4
 	MIN_DNSMASQ = 2.73
+)
+
+var (
+	MIN_OVS = []int{1, 11}
 )
 
 // externalProcessesLock mediates access to customExternalProcesses.
@@ -103,14 +106,14 @@ func checkExternal() error {
 		return fmt.Errorf("kvm version %v does not meet minimum version %v", version, MIN_QEMU)
 	}
 
-	version, err = ovsVersion()
+	ovs, err := ovsVersion()
 	if err != nil {
 		return err
 	}
 
-	log.Debug("got ovs version %v", version)
-	if version < MIN_OVS {
-		return fmt.Errorf("ovs version %v does not meet minimum version %v", version, MIN_OVS)
+	log.Debug("got ovs version %v", ovs)
+	if err := checkVersion(ovs, MIN_OVS); err != nil {
+		return fmt.Errorf("ovs: %v", err)
 	}
 
 	version, err = dnsmasqVersion()
@@ -275,42 +278,58 @@ func qemuVersion() (float64, error) {
 	return qemuVersion, nil
 }
 
-func ovsVersion() (float64, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-V",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("checking ovs version with cmd: %v", cmd)
-	if err := cmd.Run(); err != nil {
-		return 0.0, fmt.Errorf("checking ovs version: %v %v", err, sErr.String())
-	}
-
-	f := strings.Fields(sOut.String())
-	if len(f) < 4 {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
-	}
-
-	ovsVersionFields := strings.Split(f[3], ".")
-	if len(ovsVersionFields) < 2 {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
-	}
-
-	log.Debugln(ovsVersionFields)
-	ovsVersion, err := strconv.ParseFloat(strings.Join(ovsVersionFields[:2], "."), 64)
+func ovsVersion() ([]int, error) {
+	out, err := processWrapper("ovs", "-V")
 	if err != nil {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v %v", sOut.String(), err)
+		return nil, fmt.Errorf("check ovs version failed: %v %v", err)
 	}
 
-	return ovsVersion, nil
+	f := strings.Fields(out)
+	if len(f) < 4 {
+		return nil, fmt.Errorf("cannot parse ovs version: %v", out)
+	}
+
+	f = strings.Split(f[3], ".")
+	if len(f) < 2 {
+		return nil, fmt.Errorf("cannot parse ovs version: %v", out)
+	}
+
+	res := []int{}
+	for _, v := range f {
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse ovs version: %v", out)
+		}
+
+		res = append(res, i)
+	}
+
+	return res, nil
+}
+
+func checkVersion(version, min []int) error {
+	for i := range min {
+		if i >= len(version) || version[i] < min[i] {
+			// minimum version was more specific (e.g. 1.1.1 against 1.1) or
+			// minimum version is greater in the current index => fail
+			got := printVersion(version)
+			want := printVersion(min)
+			return fmt.Errorf("version does not meet minimum: %v < %v", got, want)
+		} else if version[i] > min[i] {
+			// version exceeds minimum
+			break
+		}
+	}
+
+	// must match or exceed
+	return nil
+}
+
+func printVersion(version []int) string {
+	var res []string
+	for _, v := range version {
+		res = append(res, strconv.Itoa(v))
+	}
+
+	return strings.Join(res, ".")
 }
