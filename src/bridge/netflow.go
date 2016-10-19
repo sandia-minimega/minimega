@@ -41,8 +41,8 @@ func (b *Bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
 		fmt.Sprintf("active-timeout=%v", timeout),
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return nil, fmt.Errorf("enable netflow failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return nil, fmt.Errorf("enable netflow failed: %v", err)
 	}
 
 	b.nf = nf
@@ -87,8 +87,8 @@ func (b *Bridge) destroyNetflow() error {
 		"netflow",
 	}
 
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("destroy netflow failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("destroy netflow failed: %v", err)
 	}
 
 	b.nf = nil
@@ -111,8 +111,8 @@ func (b *Bridge) SetNetflowTimeout(timeout int) error {
 		b.Name,
 		fmt.Sprintf("active_timeout=%v", timeout),
 	}
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("set netflow timeout failed: %v %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("set netflow timeout failed: %v", err)
 	}
 
 	return nil
