@@ -128,6 +128,8 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 
 // Forward a local port to a remote host and destination port
 func (t *Tunnel) Forward(source int, host string, dest int) error {
+	log.Info("forward %v -> %v:%v", source, host, dest)
+
 	// start a goroutine that listens on the source port, and on every
 	// accept, opens a new tunnel over the transport.
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%v", source))
@@ -190,6 +192,8 @@ func (t *Tunnel) createTunnel(conn net.Conn, host string, dest int) {
 	TID := rand.Int()
 	in := t.chans.add(TID)
 
+	log.Debug("create tunnel for %v:%v: %v", host, dest, TID)
+
 	m := &tunnelMessage{
 		Type: CONNECT,
 		Host: host,
@@ -203,6 +207,8 @@ func (t *Tunnel) createTunnel(conn net.Conn, host string, dest int) {
 	}
 
 	t.transfer(in, conn, TID)
+
+	log.Debug("tunnel quit for %v:%v: %v", host, dest, TID)
 }
 
 func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {

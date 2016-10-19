@@ -73,11 +73,15 @@ func (c *chans) dropAll() []chan *tunnelMessage {
 func (t *Tunnel) mux() {
 	var err error
 
+	log.Info("starting minitunnel mux")
+
 	for {
 		var m tunnelMessage
 		if err = t.dec.Decode(&m); err != nil {
 			break
 		}
+
+		log.Debug("new message: %v", m.Type)
 
 		// create new session if necessary
 		if m.Type == CONNECT {
@@ -99,7 +103,7 @@ func (t *Tunnel) mux() {
 		close(ch)
 	}
 
-	log.Debug("mux exit: %v", err)
+	log.Info("mux exit: %v", err)
 }
 
 func (t *Tunnel) handleRemote(m *tunnelMessage) {
