@@ -1,6 +1,9 @@
 "use strict";
 
-var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
+// Config
+var IMAGE_REFRESH_TIMEOUT = 10000;   // How often the currently-displayed screenshots are updated (in millis)
+var HOST_REFRESH_TIMEOUT = 1000;    // How often the currently-displayed hosts are updated (in millis)
+var VM_REFRESH_TIMEOUT = 1000;      // How often the currently-displayed vms are updated (in millis)
 var NETWORK_COLUMN_INDEX = 5;       // Index of the column with network info (needs to have values strignified)
 var IP4_COLUMN_INDEX = 6;           // Index of the column with IP4 info (needs to have values strignified)
 var IP6_COLUMN_INDEX = 7;           // Index of the column with IP6 info (needs to have values strignified)
@@ -14,10 +17,13 @@ var COLOR_CLASSES = {
     ERROR:    "red"
 }
 
-var hostData = [];      // Data structure containing host info
-var hostString = "";    // TODO: Used for checking if host data has actually been modified
-
+// Data
 var lastImages = {};    // Cache of screenshots
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 // Change which view (VMs, Hosts, Config) is currently shown
 function setView () {
@@ -31,16 +37,26 @@ function setView () {
 }
 
 // Callback for updating the host's information
+function updateVMs () {
+    $.getJSON('/vms')
+        .done(function(vmsData) {
+            updateVMsTables(vmsData);
+        })
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
+    });
+}
+
+// Callback for updating the host's information
 function updateHosts () {
-    d3.text("./hosts", function (error, info) {
-        if (info != hostData) {
-            if (error) return console.warn(error);
-
-            hostString = info;
-            hostData = JSON.parse(info);
-
-            updateHostsTable();
-        }
+    $.getJSON('/hosts')
+        .done(function(hostsData) {
+            updateHostsTable(hostsData);
+        })
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
     });
 }
 
@@ -73,16 +89,19 @@ function loadOrRestoreImage (row, data, displayIndex) {
 
     var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
 
-    d3.text(requestUrl, (function () {
-        return function (error, response) {
+    $.get(requestUrl)
+        .done(function(response) {
             lastImages[url] = {
                 data: response,
                 used: true
             };
 
             img.attr("src", response);
-        }
-    })());
+        })
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
+    });
 }
 
 // Stringify columns with object info
@@ -123,7 +142,7 @@ function flattenObjectValues (row, data, displayIndex) {
 }
 
 // Update the VMs dataTables with the new data.
-function updateTables () {
+function updateVMsTables(vmsData) {
 
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
@@ -134,16 +153,17 @@ function updateTables () {
         }
     }
 
-////// Update the main datatable
-
+    // Update the main datatable
     if ($.fn.dataTable.isDataTable('#vms-dataTable')) {
         var table = $('#vms-dataTable').dataTable();
         table.fnClearTable(false);
-        if (grapher.jsonData.length > 0) table.fnAddData(grapher.jsonData, false);
+        if (vmsData.length > 0) {
+            table.fnAddData(vmsData, false);
+        }
         table.fnDraw(false);
     } else {
         var table = $('#vms-dataTable').DataTable({
-            "aaData": grapher.jsonData,
+            "aaData": vmsData,
             "aoColumns": [
                 { "sTitle": "Host", "mDataProp": "host" },
                 { "sTitle": "ID", "mDataProp": "id" },
@@ -167,7 +187,8 @@ function updateTables () {
         table.draw();
     }
 
-////// Update the VMs list
+    
+    // Update the VMs list
 
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
@@ -185,9 +206,9 @@ function updateTables () {
     ');
 
     var screenshotList = [];
-    for (var i = 0; i < grapher.jsonData.length; i++) {
+    for (var i = 0; i < vmsData.length; i++) {
         var toAppend = model.clone();
-        var vm = grapher.jsonData[i];
+        var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
         toAppend.find("a.connect-vm-button").attr("href", vncURL(vm));
@@ -226,15 +247,15 @@ function updateTables () {
 }
 
 // Update the hosts dataTable with new data
-function updateHostsTable () {
+function updateHostsTable (hostsData) {
     if ($.fn.dataTable.isDataTable('#hosts-dataTable')) {
         var table = $('#hosts-dataTable').dataTable();
         table.fnClearTable(false);
-        if (hostData.length > 0) table.fnAddData(hostData, false);
+        if (hostsData.length > 0) table.fnAddData(hostsData, false);
         table.fnDraw(false);
     } else {
         var table = $('#hosts-dataTable').DataTable({
-            "aaData": hostData,
+            "aaData": hostsData,
             "aoColumns": [
                 { "sTitle": "Name" },
                 { "sTitle": "CPUs" },
@@ -252,21 +273,109 @@ function updateHostsTable () {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Set the current view according to the hash on page load
-// Begin updating the hosts dataTable
-$(document).ready(function () {
-    $("nav a").on("click", function (e) {
-        $("a.current-view").removeClass("current-view");
-        $(this).addClass("current-view");
-        setView();
-    });
 
-    setView();
-    setInterval(updateHosts, 750);
-});
+
+// Put an italic "null" in the table where there are fields that aren't set
+function handleEmptyString (value) {
+    if (
+        (value === "") ||
+        (value === null) ||
+        (value === undefined) ||
+        ((typeof(value) === "object") && (Object.keys(value).length === 0))
+    ) return '<span class="empty-string">null</span>';
+    return value;
+}
+
+
+// Turn a field into a string properly formatted for the table
+function tableString (field, toplevel) {
+    if (typeof(field) === "object") {
+        if (Array.isArray(field)) {
+            if (typeof(field[0]) === "object") {
+                var accumulator = "";
+                for (var i = 0; i < field.length; i++) {
+                    accumulator += "<table style=\"float:right\">" + tableString(field[i], false) + "</table><br>";      // Sorry about this one.
+                }
+                return accumulator;
+            } else if (field.length == 0) {
+                return handleEmptyString();
+            } else {
+                var underscoredField = field.map(function (d) { return handleEmptyString(d); });
+                return underscoredField.join(", ");
+            }
+        } else if ((field === null) || (Object.keys(field).length == 0)) {
+            return handleEmptyString();
+        } else if ((typeof(field) === "object") && (toplevel !== false)) {
+            return "<table style=\"float:right\">" + tableString(field, false) + "</table>";
+        } else {
+            var toReturn = "";
+            for (var key in field) {
+                toReturn += "<tr><td>" + key + "</td><td>" + ((typeof(field[key]) === "object") ? tableString(field[key]) : handleEmptyString(field[key])) + "</td></tr>";
+            }
+            return toReturn;
+        }
+    } else {
+        return String(handleEmptyString(field));
+    }
+}
+
+function makeVNClink(vm) {
+    return "<a target=\"_blank\" href=\"" + vncURL(vm) + "\">" + vm.host + ":" + (5900 + vm.id) + "</a>"
+}
+
+function addVNClink(parent, vm) {
+    var newHtml = "";
+    var oldHtml = parent.html();
+    var row = $("<tr></tr>");
+    $("<td></td>").appendTo(row).text("VNC");
+    $("<td></td>").appendTo(row).html(makeVNClink(vm));
+    newHtml += row.get(0).outerHTML;
+    parent.html(newHtml + oldHtml);
+}
+
+// Build the DOM for the table
+function makeTable (parent, data) {
+    var newHtml = "";
+    for (var key in data) {
+        if ($.inArray(key, ["color", "uuid"]) === -1) {
+            var row = $("<tr></tr>");
+            $("<td></td>").appendTo(row).text(key);
+            $("<td></td>").appendTo(row).html(tableString(data[key]));
+            newHtml += row.get(0).outerHTML;
+        }
+    }
+
+    parent.html(newHtml);
+}
+
+
+
+
 
 // Set the current view according to the hash on hash change
 $(window).on('hashchange', function () {
     setView();
 });
 
+// Set the current view according to the hash on page load
+// Begin updating the hosts dataTable
+$(document).ready(function () {
+
+    // Navigation init
+    $("nav a").on("click", function (e) {
+        $("a.current-view").removeClass("current-view");
+        $(this).addClass("current-view");
+        setView();
+    });
+    setView();
+
+    updateVMs();
+    if (VM_REFRESH_TIMEOUT > 0) {
+        setInterval(updateVMs, VM_REFRESH_TIMEOUT);
+    }
+
+    updateHosts();
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(updateHosts, HOST_REFRESH_TIMEOUT);
+    }
+});
