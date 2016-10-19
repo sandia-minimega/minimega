@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"ipmac"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -53,7 +52,7 @@ type KVMConfig struct {
 }
 
 type KvmVM struct {
-	BaseVM    // embed
+	*BaseVM   // embed
 	KVMConfig // embed
 
 	// Internal variables
@@ -111,7 +110,7 @@ func (old KVMConfig) Copy() KVMConfig {
 func NewKVM(name string, config VMConfig) (*KvmVM, error) {
 	vm := new(KvmVM)
 
-	vm.BaseVM = *NewBaseVM(name, config)
+	vm.BaseVM = NewBaseVM(name, config)
 	vm.Type = KVM
 
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
@@ -130,11 +129,8 @@ func (vm *KvmVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
-	// We copied a locked VM so we have to unlock it too...
-	defer vm2.lock.Unlock()
-
 	// Make deep copies
-	vm2.BaseConfig = vm.BaseConfig.Copy()
+	vm2.BaseVM = vm.BaseVM.copy()
 	vm2.KVMConfig = vm.KVMConfig.Copy()
 
 	return vm2
@@ -168,8 +164,6 @@ func (vm *KvmVM) Flush() error {
 		if err != nil {
 			return err
 		}
-
-		br.DelMac(net.MAC)
 
 		if err := br.DestroyTap(net.Tap); err != nil {
 			log.Error("leaked tap %v: %v", net.Tap, err)
@@ -500,27 +494,22 @@ func (vm *KvmVM) launch() error {
 
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		log.Info("%#v", net)
+		nic := &vm.Networks[i]
+		log.Info("%#v", nic)
 
-		br, err := getBridge(net.Bridge)
+		br, err := getBridge(nic.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.setError(err)
 			return err
 		}
 
-		net.Tap, err = br.CreateTap(net.Tap, net.VLAN)
+		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
 			return err
 		}
-
-		updates := make(chan ipmac.IP)
-		go vm.macSnooper(net, updates)
-
-		br.AddMac(net.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {

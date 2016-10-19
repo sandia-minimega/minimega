@@ -157,6 +157,10 @@ func filterString(f *ron.Filter) string {
 	if f.MAC != "" {
 		j = append(j, "mac="+f.MAC)
 	}
+	for k, v := range f.Tags {
+		j = append(j, fmt.Sprintf("%v=%v", k, v))
+	}
+
 	ret += strings.Join(j, " && ")
 
 	return ret

@@ -6,21 +6,20 @@ package bridge
 
 import (
 	"fmt"
-	"ipmac"
 	log "minilog"
 )
 
 // CreateTap creates and adds a tap to a bridge. If a name is not provided, one
 // will be automatically generated.
-func (b *Bridge) CreateTap(tap string, lan int) (string, error) {
+func (b *Bridge) CreateTap(tap, mac string, lan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.createTap(tap, lan)
+	return b.createTap(tap, mac, lan)
 }
 
-func (b *Bridge) createTap(t string, lan int) (string, error) {
-	log.Info("creating tap on bridge: %v %v", b.Name, t)
+func (b *Bridge) createTap(t, mac string, lan int) (string, error) {
+	log.Info("creating tap on bridge: %v %v %v %v", b.Name, t, mac, lan)
 
 	// reap taps before creating to avoid someone killing/restarting a vm
 	// faster than the periodic tap reaper
@@ -46,7 +45,7 @@ func (b *Bridge) createTap(t string, lan int) (string, error) {
 
 	err := upInterface(tap, false)
 	if err == nil {
-		err = b.addTap(tap, lan, false)
+		err = b.addTap(tap, mac, lan, false)
 	}
 
 	// Clean up the tap we just created, if it didn't already exist.
@@ -87,7 +86,7 @@ func (b *Bridge) createHostTap(t string, lan int) (string, error) {
 		tap = <-b.nameChan
 	}
 
-	if err := b.addTap(tap, lan, true); err != nil {
+	if err := b.addTap(tap, "", lan, true); err != nil {
 		return "", err
 	}
 
@@ -106,15 +105,15 @@ func (b *Bridge) createHostTap(t string, lan int) (string, error) {
 
 // AddTap adds an existing tap to the bridge. Can be used in conjunction with
 // `Bridge.RemoveTap` to relocate tap to a different bridge or VLAN.
-func (b *Bridge) AddTap(tap string, lan int, host bool) error {
+func (b *Bridge) AddTap(tap, mac string, lan int, host bool) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.addTap(tap, lan, host)
+	return b.addTap(tap, mac, lan, host)
 }
 
-func (b *Bridge) addTap(tap string, lan int, host bool) error {
-	log.Info("adding tap on bridge: %v %v", b.Name, tap)
+func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
+	log.Info("adding tap on bridge: %v %v %v %v %v", b.Name, tap, mac, lan, host)
 
 	// reap taps before adding to avoid someone killing/restarting a vm faster
 	// than the periodic tap reaper
@@ -142,6 +141,7 @@ func (b *Bridge) addTap(tap string, lan int, host bool) error {
 		Name:   tap,
 		Bridge: b.Name,
 		VLAN:   lan,
+		MAC:    mac,
 		Host:   host,
 	}
 
@@ -195,29 +195,6 @@ func (b *Bridge) RemoveTap(tap string) error {
 	}
 
 	delete(b.taps, tap)
-	return nil
-}
-
-// startIML starts the MAC listener for this bridge.
-func (b *Bridge) startIML() error {
-	// use openflow to redirect arp and icmp6 traffic to the local tap
-	filters := []string{
-		"dl_type=0x0806,actions=local,normal",
-		"dl_type=0x86dd,nw_proto=58,icmp_type=135,actions=local,normal",
-	}
-
-	for _, filter := range filters {
-		if err := b.addOpenflow(filter); err != nil {
-			return fmt.Errorf("start ip learner failed: %v", err)
-		}
-	}
-
-	iml, err := ipmac.NewLearner(b.Name)
-	if err != nil {
-		return fmt.Errorf("start ip learner failed: %v", err)
-	}
-
-	b.IPMacLearner = iml
 	return nil
 }
 

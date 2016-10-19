@@ -48,8 +48,8 @@ func (b *Bridge) AddTunnel(typ TunnelType, remoteIP string) error {
 		fmt.Sprintf("type=%v", typ),
 		fmt.Sprintf("options:remote_ip=%v", remoteIP),
 	}
-	if _, sErr, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("add tunnel failed: %v: %v", err, sErr)
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("add tunnel failed: %v", err)
 	}
 
 	b.tunnels[tap] = true

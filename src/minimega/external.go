@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"minicli"
@@ -17,10 +16,10 @@ import (
 	"time"
 )
 
-const (
-	MIN_QEMU    = 1.6
-	MIN_OVS     = 1.4
-	MIN_DNSMASQ = 2.73
+var (
+	MIN_QEMU    = []int{1, 6}
+	MIN_DNSMASQ = []int{2, 73}
+	MIN_OVS     = []int{1, 11}
 )
 
 // externalProcessesLock mediates access to customExternalProcesses.
@@ -79,8 +78,6 @@ func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	// TODO: Remove? This goes against the unix philosophy
-	resp.Response = "all external dependencies met"
 	return nil
 }
 
@@ -93,34 +90,14 @@ func checkExternal() error {
 	}
 
 	// everything we want exists, but we have a few minimum versions to check
-	version, err := qemuVersion()
-	if err != nil {
+	if err := checkVersion("dnsmasq", MIN_DNSMASQ, dnsmasqVersion); err != nil {
 		return err
 	}
-
-	log.Debug("got kvm version %v", version)
-	if version < MIN_QEMU {
-		return fmt.Errorf("kvm version %v does not meet minimum version %v", version, MIN_QEMU)
-	}
-
-	version, err = ovsVersion()
-	if err != nil {
+	if err := checkVersion("ovs", MIN_OVS, ovsVersion); err != nil {
 		return err
 	}
-
-	log.Debug("got ovs version %v", version)
-	if version < MIN_OVS {
-		return fmt.Errorf("ovs version %v does not meet minimum version %v", version, MIN_OVS)
-	}
-
-	version, err = dnsmasqVersion()
-	if err != nil {
+	if err := checkVersion("qemu", MIN_QEMU, qemuVersion); err != nil {
 		return err
-	}
-
-	log.Debug("got dnsmasq version %v", version)
-	if version < MIN_DNSMASQ {
-		return fmt.Errorf("dnsmasq version %v does not meet minimum version %v", version, MIN_DNSMASQ)
 	}
 
 	return nil
@@ -149,6 +126,101 @@ func checkProcesses() error {
 		return errors.New(strings.Join(errs, "\n"))
 	}
 
+	return nil
+}
+
+func dnsmasqVersion() ([]int, error) {
+	out, err := processWrapper("dnsmasq", "-v")
+	if err != nil {
+		return nil, fmt.Errorf("check dnsmasq version failed: %v", err)
+	}
+
+	f := strings.Fields(out)
+	if len(f) < 3 {
+		return nil, fmt.Errorf("cannot parse dnsmasq version: %v", out)
+	}
+
+	return parseVersion("dnsmasq", f[2])
+}
+
+func ovsVersion() ([]int, error) {
+	out, err := processWrapper("ovs", "-V")
+	if err != nil {
+		return nil, fmt.Errorf("check ovs version failed: %v", err)
+	}
+
+	f := strings.Fields(out)
+	if len(f) < 4 {
+		return nil, fmt.Errorf("cannot parse ovs version: %v", out)
+	}
+
+	return parseVersion("ovs", f[3])
+}
+
+func qemuVersion() ([]int, error) {
+	out, err := processWrapper("qemu", "-version")
+	if err != nil {
+		return nil, fmt.Errorf("check qemu version failed: %v", err)
+	}
+
+	f := strings.Fields(out)
+	if len(f) < 4 {
+		return nil, fmt.Errorf("cannot parse qemu version: %v", out)
+	}
+
+	return parseVersion("qemu", f[3])
+}
+
+// parseVersion parses a version string like 1.2.3, returning a slice of ints
+func parseVersion(name, version string) ([]int, error) {
+	var res []int
+
+	for _, v := range strings.Split(version, ".") {
+		i, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("cannot parse %v version: %v", name, version)
+		}
+
+		res = append(res, i)
+	}
+
+	return res, nil
+}
+
+// printVersion joins a slice of ints with dots to produce a version string
+func printVersion(version []int) string {
+	var res []string
+	for _, v := range version {
+		res = append(res, strconv.Itoa(v))
+	}
+
+	return strings.Join(res, ".")
+}
+
+// checkVersion compares the return value of versionFn against min, returning
+// an error if the version is less than min or versionFn failed.
+func checkVersion(name string, min []int, versionFn func() ([]int, error)) error {
+	version, err := versionFn()
+	if err != nil {
+		return err
+	}
+
+	log.Debug("%v version: %v", name, printVersion(version))
+
+	for i := range min {
+		if i >= len(version) || version[i] < min[i] {
+			// minimum version was more specific (e.g. 1.1.1 against 1.1) or
+			// minimum version is greater in the current index => fail
+			got := printVersion(version)
+			want := printVersion(min)
+			return fmt.Errorf("%v version does not meet minimum: %v < %v", name, got, want)
+		} else if version[i] > min[i] {
+			// version exceeds minimum
+			break
+		}
+	}
+
+	// must match or exceed
 	return nil
 }
 
@@ -193,124 +265,4 @@ func process(p string) string {
 		return ""
 	}
 	return path
-}
-
-func dnsmasqVersion() (float64, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("dnsmasq")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-v",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("checking dnsmasq version with cmd: %v", cmd)
-	if err := cmd.Run(); err != nil {
-		return 0.0, fmt.Errorf("error checking dnsmasq version: %v %v", err, sErr.String())
-	}
-
-	f := strings.Fields(sOut.String())
-	if len(f) < 3 {
-		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v", sOut.String())
-	}
-
-	dnsmasqVersionFields := strings.Split(f[2], ".")
-	if len(dnsmasqVersionFields) < 2 {
-		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v", sOut.String())
-	}
-
-	log.Debugln(dnsmasqVersionFields)
-	dnsmasqVersion, err := strconv.ParseFloat(strings.Join(dnsmasqVersionFields[:2], "."), 64)
-	if err != nil {
-		return 0.0, fmt.Errorf("cannot parse dnsmasq version: %v %v", sOut.String(), err)
-	}
-
-	return dnsmasqVersion, nil
-}
-
-func qemuVersion() (float64, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("qemu")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-version",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("checking qemu version with cmd: %v", cmd)
-	if err := cmd.Run(); err != nil {
-		return 0.0, fmt.Errorf("error checking kvm version: %v %v", err, sErr.String())
-	}
-
-	f := strings.Fields(sOut.String())
-	if len(f) < 4 {
-		return 0.0, fmt.Errorf("cannot parse kvm version: %v", sOut.String())
-	}
-
-	qemuVersionFields := strings.Split(f[3], ".")
-	if len(qemuVersionFields) < 2 {
-		return 0.0, fmt.Errorf("cannot parse kvm version: %v", sOut.String())
-	}
-
-	log.Debugln(qemuVersionFields)
-	qemuVersion, err := strconv.ParseFloat(strings.Join(qemuVersionFields[:2], "."), 64)
-	if err != nil {
-		return 0.0, fmt.Errorf("cannot parse kvm version: %v %v", sOut.String(), err)
-	}
-
-	return qemuVersion, nil
-}
-
-func ovsVersion() (float64, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-	p := process("ovs")
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"-V",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	log.Debug("checking ovs version with cmd: %v", cmd)
-	if err := cmd.Run(); err != nil {
-		return 0.0, fmt.Errorf("checking ovs version: %v %v", err, sErr.String())
-	}
-
-	f := strings.Fields(sOut.String())
-	if len(f) < 4 {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
-	}
-
-	ovsVersionFields := strings.Split(f[3], ".")
-	if len(ovsVersionFields) < 2 {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v", sOut.String())
-	}
-
-	log.Debugln(ovsVersionFields)
-	ovsVersion, err := strconv.ParseFloat(strings.Join(ovsVersionFields[:2], "."), 64)
-	if err != nil {
-		return 0.0, fmt.Errorf("cannot parse ovs version: %v %v", sOut.String(), err)
-	}
-
-	return ovsVersion, nil
 }

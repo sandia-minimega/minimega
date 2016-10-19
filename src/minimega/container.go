@@ -24,7 +24,6 @@ import (
 	"github.com/kr/pty"
 	"io"
 	"io/ioutil"
-	"ipmac"
 	log "minilog"
 	"net"
 	"os"
@@ -216,7 +215,7 @@ type ContainerConfig struct {
 }
 
 type ContainerVM struct {
-	BaseVM          // embed
+	*BaseVM         // embed
 	ContainerConfig // embed
 
 	pid             int
@@ -558,7 +557,7 @@ func (vm *ContainerVM) Config() *BaseConfig {
 func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = *NewBaseVM(name, config)
+	vm.BaseVM = NewBaseVM(name, config)
 	vm.Type = CONTAINER
 
 	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
@@ -579,11 +578,8 @@ func (vm *ContainerVM) Copy() VM {
 	// Make shallow copies of all fields
 	*vm2 = *vm
 
-	// We copied a locked VM so we have to unlock it too...
-	defer vm2.lock.Unlock()
-
 	// Make deep copies
-	vm2.BaseConfig = vm.BaseConfig.Copy()
+	vm2.BaseVM = vm.BaseVM.copy()
 	vm2.ContainerConfig = vm.ContainerConfig.Copy()
 
 	return vm2
@@ -997,7 +993,6 @@ func (vm *ContainerVM) launch() error {
 			if err != nil {
 				log.Error("get bridge: %v", err)
 			} else {
-				br.DelMac(net.MAC)
 				br.DestroyTap(net.Tap)
 			}
 		}
@@ -1045,11 +1040,6 @@ func (vm *ContainerVM) launchNetwork() error {
 		if err != nil {
 			return fmt.Errorf("create tap: %v", err)
 		}
-
-		updates := make(chan ipmac.IP)
-		go vm.macSnooper(nic, updates)
-
-		br.AddMac(nic.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {

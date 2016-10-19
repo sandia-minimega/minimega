@@ -7,7 +7,9 @@ package minilog
 import (
 	"bytes"
 	"io"
+	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -166,4 +168,32 @@ func TestLogAll(t *testing.T) {
 	if err != io.EOF {
 		t.Fatal(err, oops)
 	}
+}
+
+func BenchmarkLogging(b *testing.B) {
+	null, err := os.Create(os.DevNull)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	AddLogger("null", null, DEBUG, false)
+	defer DelLogger("null")
+
+	// waitgroup for logging completed
+	var wg sync.WaitGroup
+
+	// Create a bunch of goroutines, firing off b.N messages each
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+
+		go func(i int) {
+			defer wg.Done()
+
+			for j := 0; j < b.N; j++ {
+				log(DEBUG, "", "message from %v: %v/%v", i, j, b.N)
+			}
+		}(i)
+	}
+
+	wg.Wait()
 }

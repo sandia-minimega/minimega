@@ -23,7 +23,7 @@ var (
 )
 
 type Router struct {
-	vmID         int        // local (and effectively unique regardless of namespace) vm id
+	vm           VM
 	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
 	logLevel     string
 	updateIPs    bool // only update IPs if we've made changes
@@ -126,13 +126,7 @@ func (r *Router) String() string {
 		}
 	}
 
-	vm := vms.FindVM(fmt.Sprintf("%v", r.vmID))
-	if vm == nil { // this really shouldn't ever happen
-		log.Error("could not find vm: %v", r.vmID)
-		return ""
-	}
-
-	lines := strings.Split(vm.Tag("minirouter_log"), "\n")
+	lines := strings.Split(r.vm.Tag("minirouter_log"), "\n")
 
 	fmt.Fprintln(&o, "Log:")
 	for _, v := range lines {
@@ -199,7 +193,7 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vmID))
+	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetID()))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
@@ -213,7 +207,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		return r
 	}
 	r := &Router{
-		vmID:         id,
+		vm:           vm,
 		IPs:          [][]string{},
 		logLevel:     "error",
 		dhcp:         make(map[string]*dhcp),
@@ -251,7 +245,7 @@ func (r *Router) Commit() error {
 	r.updateIPs = false // IPs are no longer stale
 
 	// remove any previous commands
-	prefix := fmt.Sprintf("minirouter-%v", r.vmID)
+	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetID())
 	ids := ccPrefixIDs(prefix)
 	if len(ids) != 0 {
 		for _, v := range ids {
@@ -273,11 +267,10 @@ func (r *Router) Commit() error {
 		}
 	}
 
-	// filter on the minirouter tag
 	filter := &ron.Filter{
-		Tags: make(map[string]string),
+		Namespace: r.vm.GetNamespace(),
+		UUID:      r.vm.GetUUID(),
 	}
-	filter.Tags["minirouter"] = fmt.Sprintf("%v", r.vmID)
 
 	// issue cc commands for this router
 	cmd := &ron.Command{
