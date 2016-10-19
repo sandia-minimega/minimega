@@ -36,7 +36,6 @@ type Command struct {
 func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
 	exact := true
 	cmd := Command{
-		Pattern:    pattern.String(),
 		Original:   input.Original,
 		StringArgs: make(map[string]string),
 		BoolArgs:   make(map[string]bool),
