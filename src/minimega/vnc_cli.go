@@ -7,32 +7,58 @@ package main
 import (
 	"fmt"
 	"minicli"
-	"strconv"
+	"time"
 )
 
 var vncCLIHandlers = []minicli.Handler{
 	{ // vnc
-		HelpShort: "record or playback VNC kb or fb",
+		HelpShort: "record VNC kb or fb",
 		HelpLong: `
-Record or playback keyboard and mouse events sent via the web interface to the
+Record keyboard and mouse events sent via the web interface to the
 selected VM. Can also record the framebuffer for the specified VM so that a
-users can watch a video of interactions with the VM.
+user can watch a video of interactions with the VM.
 
-With no arguments, vnc will list currently recording or playing VNC sessions.
-
-If record is selected, a file will be created containing a record of mouse and
-keyboard actions by the user or of the framebuffer for the VM.
-
-If playback is selected, the specified file (created using vnc record) will be
-read and processed as a sequence of time-stamped mouse/keyboard events to send
-to the specified VM.`,
+If record is selected, a file will be created containing a record of mouse
+and keyboard actions by the user or of the framebuffer for the VM.`,
 		Patterns: []string{
-			"vnc <kb,fb> <record,> <vm name> <filename>",
-			"vnc <kb,fb> <norecord,> <vm name>",
-			"vnc <playback,> <vm name> <filename>",
-			"vnc <noplayback,> <vm name>",
+			"vnc <record,> <kb,fb> <vm name> <filename>",
+			"vnc <stop,> <kb,fb> <vm name>",
 		},
-		Call: wrapVMTargetCLI(cliVNC),
+		Call: wrapSimpleCLI(cliVNCRecord),
+	},
+	{
+		HelpShort: "play VNC kb",
+		HelpLong: `
+Playback and interact with a previously recorded vnc kb session file.
+
+If play is selected, the specified file (created using vnc record) will be
+read and processed as a sequence of time-stamped mouse/keyboard events to send
+to the specified VM.
+
+Playbacks can be paused with the pause command, and resumed using continue.
+The step command will immediately move to the next event contained in the playback
+file. Use the getstep command to view the current vnc event. Calling stop will end
+a playback.
+
+Vnc playback also supports injecting mouse/keyboard events in the format found in
+the playback file. Injected commands must omit the time delta as they are sent
+immediately.
+
+vnc host vm_id inject PointerEvent,0,465,245
+
+Comments in the playback file are logged at the info level. An example is given below.
+
+#: This is an example of a vnc playback comment`,
+		Patterns: []string{
+			"vnc <play,> <vm name> <filename>",
+			"vnc <stop,> <vm name>",
+			"vnc <pause,> <vm name>",
+			"vnc <continue,> <vm name>",
+			"vnc <step,> <vm name>",
+			"vnc <getstep,> <vm name>",
+			"vnc <inject,> <vm name> <cmd>",
+		},
+		Call: wrapBroadcastCLI(cliVNCPlay),
 	},
 	{
 		HelpShort: "reset VNC state",
@@ -57,45 +83,60 @@ List all running vnc playback/recording instances. See "help vnc" for more infor
 	},
 }
 
-// List all active recordings and playbacks
-func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
-	resp.Header = []string{"host", "name", "id", "type", "filename"}
-	resp.Tabular = [][]string{}
+func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
+	var err error
+	var p *vncKBPlayback
 
-	for _, v := range vncKBRecording {
-		if inNamespace(v.VM) {
-			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
-				"record kb",
-				v.file.Name(),
-			})
-		}
+	fname := c.StringArgs["filename"]
+
+	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
 	}
 
-	for _, v := range vncFBRecording {
-		if inNamespace(v.VM) {
-			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
-				"record fb",
-				v.file.Name(),
-			})
+	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
+
+	if c.BoolArgs["play"] {
+		err = vncPlaybackKB(vm, fname)
+	} else if c.BoolArgs["stop"] {
+		vncPlayingLock.Lock()
+		defer vncPlayingLock.Unlock()
+
+		p, _ = vncPlaying[id]
+		if p == nil {
+			return fmt.Errorf("kb playback %v not found", vm.Name)
+		}
+
+		err = p.Stop()
+	} else {
+		vncPlayingLock.RLock()
+		defer vncPlayingLock.RUnlock()
+
+		// Need a valid playback for all other operations
+		p, _ = vncPlaying[id]
+		if p == nil {
+			return fmt.Errorf("kb playback %v vnot found", vm.Name)
+		}
+
+		// Running playback commands
+		if c.BoolArgs["pause"] {
+			err = p.Pause()
+		} else if c.BoolArgs["continue"] {
+			err = p.Continue()
+		} else if c.BoolArgs["step"] {
+			err = p.Step()
+		} else if c.BoolArgs["getstep"] {
+			resp.Response, err = p.GetStep()
+		} else {
+			err = p.Inject(c.StringArgs["cmd"])
 		}
 	}
-
-	for _, v := range vncKBPlaying {
-		if inNamespace(v.VM) {
-			resp.Tabular = append(resp.Tabular, []string{
-				hostname, v.VM.Name, strconv.Itoa(v.VM.ID),
-				"playback kb",
-				v.file.Name(),
-			})
-		}
-	}
-
-	return nil
+	return err
 }
 
-func cliVNC(c *minicli.Command, resp *minicli.Response) error {
+func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
+	var err error
+
 	fname := c.StringArgs["filename"]
 
 	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
@@ -103,44 +144,84 @@ func cliVNC(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("vm %s not found", c.StringArgs["vm"])
 	}
 
-	if c.BoolArgs["record"] && c.BoolArgs["kb"] {
-		// Starting keyboard recording
-		return vncRecordKB(vm, fname)
-	} else if c.BoolArgs["record"] && c.BoolArgs["fb"] {
-		// Starting framebuffer recording
-		return vncRecordFB(vm, fname)
-	} else if c.BoolArgs["norecord"] || c.BoolArgs["noplayback"] {
+	if c.BoolArgs["record"] {
+		if c.BoolArgs["kb"] {
+			err = vncRecordKB(vm, fname)
+		} else {
+			err = vncRecordFB(vm, fname)
+		}
+	}
+	if c.BoolArgs["stop"] {
 		var client *vncClient
 		id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
-		if c.BoolArgs["norecord"] && c.BoolArgs["kb"] {
-			err = fmt.Errorf("kb recording %v not found", vm.Name)
+		if c.BoolArgs["kb"] {
+			vncRecordingLock.Lock()
+			defer vncRecordingLock.Unlock()
 			if v, ok := vncKBRecording[id]; ok {
 				client = v.vncClient
 				delete(vncKBRecording, id)
+			} else {
+				err = fmt.Errorf("kb recording %v not found", vm.Name)
 			}
-		} else if c.BoolArgs["norecord"] && c.BoolArgs["fb"] {
-			err = fmt.Errorf("fb recording %v not found", vm.Name)
+		} else {
+			vncRecordingLock.Lock()
+			defer vncRecordingLock.Unlock()
 			if v, ok := vncFBRecording[id]; ok {
 				client = v.vncClient
 				delete(vncFBRecording, id)
-			}
-		} else if c.BoolArgs["noplayback"] {
-			err = fmt.Errorf("kb playback %v not found", vm.Name)
-			if v, ok := vncKBRecording[id]; ok {
-				client = v.vncClient
-				delete(vncKBPlaying, id)
+			} else {
+				err = fmt.Errorf("fb recording %v not found", vm.Name)
 			}
 		}
 
 		if client != nil {
 			return client.Stop()
 		}
-
-		return err
-	} else if c.BoolArgs["playback"] {
-		// Start keyboard playback
-		return vncPlaybackKB(vm, fname)
 	}
+	return err
+}
+
+// List all active recordings and playbacks
+func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
+	resp.Header = []string{"name", "type", "time", "filename"}
+	resp.Tabular = [][]string{}
+
+	vncRecordingLock.RLock()
+	for _, v := range vncKBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			v.VM.Name, "record kb",
+			time.Since(v.start).String(),
+			v.file.Name(),
+		})
+	}
+	vncRecordingLock.RUnlock()
+
+	vncRecordingLock.RLock()
+	for _, v := range vncFBRecording {
+		resp.Tabular = append(resp.Tabular, []string{
+			v.VM.Name, "record fb",
+			time.Since(v.start).String(),
+			v.file.Name(),
+		})
+	}
+	vncRecordingLock.RUnlock()
+
+	vncPlayingLock.RLock()
+	for _, v := range vncPlaying {
+		var r string
+		if v.state == Pause {
+			r = "PAUSED"
+		} else {
+			r = v.timeRemaining() + " remaining"
+		}
+
+		resp.Tabular = append(resp.Tabular, []string{
+			v.VM.Name, "playback kb",
+			r,
+			v.file.Name(),
+		})
+	}
+	vncPlayingLock.RUnlock()
 	return nil
 }
