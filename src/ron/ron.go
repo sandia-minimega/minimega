@@ -5,18 +5,19 @@
 package ron
 
 import (
-	"io"
 	log "minilog"
-	"minitunnel"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
+type Type int
+
 // Ron message types to inform the mux on either end how to route the message
 const (
-	MESSAGE_COMMAND = iota
+	MESSAGE_COMMAND Type = iota
 	MESSAGE_CLIENT
 	MESSAGE_TUNNEL
 	MESSAGE_FILE
@@ -30,65 +31,31 @@ const (
 )
 
 type Server struct {
-	serialConns        map[string]net.Conn // map of connected, but not necessarily active serial connections
-	serialLock         sync.Mutex
-	udsConns           map[string]net.Listener
-	udsLock            sync.Mutex
-	commands           map[int]*Command // map of active commands
-	commandLock        sync.Mutex
+	serialConns map[string]net.Conn // map of connected, but not necessarily active serial connections
+	serialLock  sync.Mutex
+
+	udsConns map[string]net.Listener
+	udsLock  sync.Mutex
+
+	commands    map[int]*Command // map of active commands
+	commandLock sync.Mutex
+
 	commandCounter     int
 	commandCounterLock sync.Mutex
-	clients            map[string]*Client // map of active clients, each of which have a running handler
-	clientLock         sync.Mutex
-	vms                map[string]VM // map of uuid -> VM
-	in                 chan *Message // incoming message queue, consumed by the mux
-	path               string        // path for serving files
-	lastBroadcast      time.Time     // watchdog time of last command list broadcast
-	responses          chan *Client  // queue of incoming responses, consumed by the response processor
-}
 
-type Client struct {
-	// server client data
-	out            chan *Message // outgoing message queue
-	in             chan *Message // incoming message queue, consumed by the mux
-	path           string        // path for storing files, pid, etc.
-	CommandCounter int
-	conn           io.ReadWriteCloser
-	Checkin        time.Time   // last client checkin time, used by the server
-	tunnelData     chan []byte // tunnel data queue, consumed by the tunnel handler
-	tunnel         *minitunnel.Tunnel
+	clients    map[string]*client // map of active clients, each of which have a running handler
+	clientLock sync.Mutex
+	vms        map[string]VM // map of uuid -> VM
 
-	// client parameters
-	UUID     string
-	Hostname string
-	Arch     string
-	OS       string
-	IP       []string
-	MAC      []string
+	path          string    // path for serving files
+	lastBroadcast time.Time // watchdog time of last command list broadcast
 
-	Namespace string
-
-	Tags map[string]string
-
-	Processes   map[int]*Process // list of processes backgrounded (cc background in minimega)
-	processLock sync.Mutex
-
-	Version string
-
-	Responses []*Response // response queue, consumed and cleared by the heartbeat
-
-	lock sync.Mutex // lock for ephemeral data to send up (responses, new tags)
-
-	commands      chan map[int]*Command // unordered, unfiltered list of incoming commands from the server
-	lastHeartbeat time.Time             // last heartbeat watchdog time
-	files         chan *Message         // incoming files sent by the server and requested by GetFile()
-	hold          sync.Mutex            // held while attempting to redial to prevent heartbeats, otherwise they get stacked
+	responses chan *Client // queue of incoming responses, consumed by the response processor
 }
 
 type Process struct {
 	PID     int
 	Command []string
-	process *os.Process
 }
 
 type VM interface {
@@ -99,7 +66,7 @@ type VM interface {
 }
 
 type Message struct {
-	Type     int
+	Type     Type
 	UUID     string
 	Commands map[int]*Command
 	Client   *Client
@@ -107,6 +74,9 @@ type Message struct {
 	Filename string
 	Error    string
 	Tunnel   []byte
+
+	Tags      map[string]string // sent server -> client in MESSAGE_COMMAND
+	Namespace string            // sent server -> client in MESSAGE_COMMAND
 }
 
 // NewServer creates a ron server listening on on tcp.
@@ -115,53 +85,41 @@ func NewServer(port int, path string) (*Server, error) {
 		serialConns:   make(map[string]net.Conn),
 		udsConns:      make(map[string]net.Listener),
 		commands:      make(map[int]*Command),
-		clients:       make(map[string]*Client),
+		clients:       make(map[string]*client),
 		vms:           make(map[string]VM),
 		path:          path,
-		in:            make(chan *Message, 1024),
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
 	}
-	err := s.Start(port)
-	if err != nil {
+
+	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {
 		return nil, err
 	}
+
+	if err := s.Listen(port); err != nil {
+		return nil, err
+	}
+
+	go s.responseHandler()
+	go s.periodic()
+	go s.clientReaper()
 
 	log.Debug("registered new ron server: %v", port)
 
 	return s, nil
 }
 
-// NewClient attempts to connect to a ron server over tcp, or serial if the
-// serial argument is supplied.
-func NewClient(family string, port int, parent, serial, path string) (*Client, error) {
-	uuid, err := getUUID()
-	if err != nil {
-		return nil, err
+func (t Type) String() string {
+	switch t {
+	case MESSAGE_COMMAND:
+		return "COMMAND"
+	case MESSAGE_CLIENT:
+		return "CLIENT"
+	case MESSAGE_TUNNEL:
+		return "TUNNEL"
+	case MESSAGE_FILE:
+		return "FILE"
 	}
 
-	c := &Client{
-		UUID:          uuid,
-		path:          path,
-		in:            make(chan *Message, 1024),
-		out:           make(chan *Message, 1024),
-		commands:      make(chan map[int]*Command, 1024),
-		lastHeartbeat: time.Now(),
-		files:         make(chan *Message, 1024),
-		Processes:     make(map[int]*Process),
-		Tags:          make(map[string]string),
-	}
-
-	if serial != "" {
-		err = c.dialSerial(serial)
-	} else {
-		c.dial(family, parent, port)
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	log.Debug("registered new ron client: %v, %v, %v, %v", port, parent, serial, path)
-
-	return c, nil
+	return "UNKNOWN"
 }

@@ -6,6 +6,17 @@ package ron
 
 import "os"
 
+type Filter struct {
+	UUID      string
+	Hostname  string
+	Arch      string
+	OS        string
+	MAC       string
+	IP        string
+	Namespace string
+	Tags      map[string]string
+}
+
 type Command struct {
 	ID int
 
@@ -32,7 +43,7 @@ type Command struct {
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
 	// to be processed.
-	Filter *Client
+	Filter *Filter
 
 	// clients that have responded to this command
 	CheckedIn []string
@@ -71,5 +82,6 @@ func (c *Command) Copy() *Command {
 		CheckedIn:  c.CheckedIn,
 		Filter:     c.Filter,
 		PID:        c.PID,
+		KillAll:    c.KillAll,
 	}
 }

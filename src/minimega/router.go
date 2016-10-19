@@ -267,8 +267,7 @@ func (r *Router) Commit() error {
 		}
 	}
 
-	// filter on the minirouter tag
-	filter := &ron.Client{
+	filter := &ron.Filter{
 		Namespace: r.vm.GetNamespace(),
 		UUID:      r.vm.GetUUID(),
 	}
