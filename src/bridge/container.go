@@ -48,5 +48,5 @@ func (b *Bridge) CreateContainerTap(t string, ns, mac string, vlan, index int) (
 	}
 
 	// Add the interface
-	return tap, b.addTap(tap, vlan, false)
+	return tap, b.addTap(tap, mac, vlan, false)
 }

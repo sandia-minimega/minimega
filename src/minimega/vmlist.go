@@ -77,7 +77,7 @@ func (vms VMs) Info(masks []string, resp *minicli.Response) {
 		}
 
 		// Update dynamic fields before querying info
-		vm.UpdateBW()
+		vm.UpdateNetworks()
 
 		// Copy the VM and use the copy from here on. This ensures that the
 		// Tabular info matches the Data field.

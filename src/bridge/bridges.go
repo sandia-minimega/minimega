@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/google/gopacket/pcap"
 )
 
 // Bridges manages a collection of `Bridge` structs.
@@ -21,6 +23,15 @@ type Bridges struct {
 	nameChan chan string
 	bridges  map[string]*Bridge
 }
+
+// openflow filters to redirect arp and icmp6 traffic to the local tap
+var snoopFilters = []string{
+	"dl_type=0x0806,actions=local,normal",
+	"dl_type=0x86dd,nw_proto=58,icmp_type=135,actions=local,normal",
+}
+
+// snoopBPF filters for ARP and Neighbor Solicitation (NDP)
+const snoopBPF = "(arp or (icmp6 and ip6[40] == 135))"
 
 // NewBridges creates a new Bridges using d as the default bridge name and f as
 // the format string for the tap names (e.g. "mega_tap%v").
@@ -84,15 +95,37 @@ func (b Bridges) newBridge(name string) error {
 	br.preExist = !created
 
 	// Bring the interface up, start MAC <-> IP learner
-	err = upInterface(br.Name, false)
-	if err == nil {
-		err = br.startIML()
+	if err = upInterface(br.Name, false); err != nil {
+		goto cleanup
 	}
 
+	for _, filter := range snoopFilters {
+		if err = br.addOpenflow(filter); err != nil {
+			goto cleanup
+		}
+	}
+
+	if br.handle, err = pcap.OpenLive(br.Name, 1600, true, pcap.BlockForever); err != nil {
+		goto cleanup
+	}
+
+	if err = br.handle.SetBPFFilter(snoopBPF); err != nil {
+		goto cleanup
+	}
+
+	go br.snooper()
+
 	// No errors... bridge ready for use
-	if err == nil {
-		b.bridges[br.Name] = br
-		return nil
+	b.bridges[br.Name] = br
+	return nil
+
+cleanup:
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	if br.handle != nil {
+		br.handle.Close()
 	}
 
 	// Try to delete the bridge, if we created it

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"ipmac"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -165,8 +164,6 @@ func (vm *KvmVM) Flush() error {
 		if err != nil {
 			return err
 		}
-
-		br.DelMac(net.MAC)
 
 		if err := br.DestroyTap(net.Tap); err != nil {
 			log.Errorln(err)
@@ -497,27 +494,22 @@ func (vm *KvmVM) launch() error {
 
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
-		net := &vm.Networks[i]
-		log.Info("%#v", net)
+		nic := &vm.Networks[i]
+		log.Info("%#v", nic)
 
-		br, err := getBridge(net.Bridge)
+		br, err := getBridge(nic.Bridge)
 		if err != nil {
 			log.Error("get bridge: %v", err)
 			vm.setError(err)
 			return err
 		}
 
-		net.Tap, err = br.CreateTap(net.Tap, net.VLAN)
+		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
 			return err
 		}
-
-		updates := make(chan ipmac.IP)
-		go vm.macSnooper(net, updates)
-
-		br.AddMac(net.MAC, updates)
 	}
 
 	if len(vm.Networks) > 0 {

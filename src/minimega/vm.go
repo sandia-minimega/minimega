@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"ipmac"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -75,7 +74,7 @@ type VM interface {
 	Conflicts(VM) error
 
 	SetCCActive(bool)
-	UpdateBW()
+	UpdateNetworks()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
 	// connected to the specified bridge and VLAN.
@@ -114,7 +113,8 @@ type BaseConfig struct {
 
 // NetConfig contains all the network-related config for an interface. The IP
 // addresses are automagically populated by snooping ARP traffic. The bandwidth
-// stats are updated on-demand by calling the UpdateBW function of BaseConfig.
+// stats and IP addresses are updated on-demand by calling the UpdateNetworks
+// function of BaseConfig.
 type NetConfig struct {
 	VLAN   int
 	Bridge string
@@ -488,7 +488,7 @@ func (vm *BaseVM) ClearTag(t string) {
 	}
 }
 
-func (vm *BaseVM) UpdateBW() {
+func (vm *BaseVM) UpdateNetworks() {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -502,6 +502,9 @@ func (vm *BaseVM) UpdateBW() {
 		}
 
 		n.RxRate, n.TxRate = tap.BandwidthStats()
+
+		n.IP4 = tap.IP4
+		n.IP6 = tap.IP6
 	}
 }
 
@@ -620,7 +623,7 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	}
 
 	// Connect to the new bridge
-	if err := dst.AddTap(net.Tap, vlan, false); err != nil {
+	if err := dst.AddTap(net.Tap, net.MAC, vlan, false); err != nil {
 		return err
 	}
 
@@ -753,19 +756,6 @@ func (vm *BaseVM) setState(s VMState) {
 func (vm *BaseVM) setError(err error) {
 	vm.Tags["error"] = err.Error()
 	vm.setState(VM_ERROR)
-}
-
-// macSnooper listens for updates from the ipmac learner and updates the
-// specified network config.
-func (vm *BaseVM) macSnooper(net *NetConfig, updates <-chan ipmac.IP) {
-	for update := range updates {
-		// TODO: need to acquire VM lock?
-		if update.IP4 != "" {
-			net.IP4 = update.IP4
-		} else if update.IP6 != "" && !strings.HasPrefix(update.IP6, "fe80") {
-			net.IP6 = update.IP6
-		}
-	}
 }
 
 // writeTaps writes the vm's taps to disk in the vm's instance path.
