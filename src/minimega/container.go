@@ -562,6 +562,13 @@ func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 
 	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
 
+	// set hostname to VM's name if it's unspecified. note that the name arg
+	// may be the empty string but NewBaseVM populates vm.Name with a default
+	// value if that's the case.
+	if vm.Hostname == "" {
+		vm.Hostname = vm.Name
+	}
+
 	if vm.FSPath == "" {
 		return nil, errors.New("unable to create container without a configured filesystem")
 	}
