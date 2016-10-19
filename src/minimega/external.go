@@ -140,7 +140,7 @@ func dnsmasqVersion() ([]int, error) {
 		return nil, fmt.Errorf("cannot parse dnsmasq version: %v", out)
 	}
 
-	return parseVersion(f[2])
+	return parseVersion("dnsmasq", f[2])
 }
 
 func ovsVersion() ([]int, error) {
@@ -154,7 +154,7 @@ func ovsVersion() ([]int, error) {
 		return nil, fmt.Errorf("cannot parse ovs version: %v", out)
 	}
 
-	return parseVersion(f[3])
+	return parseVersion("ovs", f[3])
 }
 
 func qemuVersion() ([]int, error) {
@@ -168,17 +168,17 @@ func qemuVersion() ([]int, error) {
 		return nil, fmt.Errorf("cannot parse qemu version: %v", out)
 	}
 
-	return parseVersion(f[3])
+	return parseVersion("qemu", f[3])
 }
 
 // parseVersion parses a version string like 1.2.3, returning a slice of ints
-func parseVersion(version string) ([]int, error) {
+func parseVersion(name, version string) ([]int, error) {
 	var res []int
 
 	for _, v := range strings.Split(version, ".") {
 		i, err := strconv.Atoi(v)
 		if err != nil {
-			return nil, fmt.Errorf("cannot parse version: %v", version)
+			return nil, fmt.Errorf("cannot parse %v version: %v", name, version)
 		}
 
 		res = append(res, i)
