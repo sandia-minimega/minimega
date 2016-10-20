@@ -153,7 +153,7 @@ function updateVMsTables(vmsData) {
         }
     }
 
-    // Update the main datatable
+    // Update the list of VMs datatable
     if ($.fn.dataTable.isDataTable('#vms-dataTable')) {
         var table = $('#vms-dataTable').dataTable();
         table.fnClearTable(false);
@@ -166,7 +166,7 @@ function updateVMsTables(vmsData) {
             "aaData": vmsData,
             "aoColumns": [
                 { "sTitle": "Host", "mDataProp": "host" },
-                { "sTitle": "ID", "mDataProp": "id" },
+                //{ "sTitle": "ID", "mDataProp": "id" },
                 { "sTitle": "Memory", "mDataProp": "memory" },
                 { "sTitle": "Name", "mDataProp": "name" },
                 { "sTitle": "Network", "mDataProp": "network" },
@@ -188,7 +188,7 @@ function updateVMsTables(vmsData) {
     }
 
     
-    // Update the VMs list
+    // Update the screenshots list
 
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
@@ -238,11 +238,15 @@ function updateVMsTables(vmsData) {
             "lengthMenu": [[6, 12, 30, -1], [6, 12, 30, "All"]],
             "fnRowCallback": loadOrRestoreImage
         });
-        setInterval((function (closureTable) {
-            return function () {
-                closureTable.fnDraw(false);
-            }
-        })(table), IMAGE_REFRESH_TIMEOUT)
+
+        if (IMAGE_REFRESH_TIMEOUT > 0) {
+            setInterval((function (closureTable) {
+                return function () {
+                    closureTable.fnDraw(false);
+                }
+            })(table), IMAGE_REFRESH_TIMEOUT)
+        }
+
     }
 }
 
@@ -262,7 +266,9 @@ function updateHostsTable (hostsData) {
                 { "sTitle": "Load" },
                 { "sTitle": "Memused" },
                 { "sTitle": "Memtotal" },
-                { "sTitle": "Bandwidth" }
+                { "sTitle": "Bandwidth" },
+                { "sTitle": "vms" },
+                { "sTitle": "vmsall" }
             ]
         });
         table.draw();
