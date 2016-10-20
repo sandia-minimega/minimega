@@ -9,7 +9,8 @@ fi
 cp -r $1/src/minidoc/* .
 cp -r $1/src/present .
 cp -r $1/src/minilog .
-cp -r $1/src/websocket .
+mkdir -p golang.org/x/net
+cp -r $1/src/vendor/golang.org/x/net/websocket golang.org/x/net/.
 cp -r $1/src/minicli .
 cp -r $1/src/ranges .
 cp -r $1/doc .
