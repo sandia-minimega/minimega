@@ -27,7 +27,7 @@ func mux() {
 		}
 	}()
 
-	go ron.Trunk(remote, Client.UUID, sendMessage)
+	go ron.Trunk(remote, client.UUID, sendMessage)
 
 	// Read messages from gob, mux message to the correct place
 	var err error
@@ -36,7 +36,7 @@ func mux() {
 
 	for err == nil {
 		var m ron.Message
-		if err = Client.dec.Decode(&m); err == io.EOF {
+		if err = client.dec.Decode(&m); err == io.EOF {
 			// server disconnected... try to reconnect
 			err = dial()
 			continue
@@ -47,11 +47,16 @@ func mux() {
 		log.Debug("new message: %v", m.Type)
 
 		switch m.Type {
+		case ron.MESSAGE_CLIENT:
+			// ACK of the handshake
+			setNamespace(m.Client.Namespace)
+			log.Info("handshake complete, got namespace %v", m.Client.Namespace)
+			go periodic()
+			go commandHandler()
 		case ron.MESSAGE_COMMAND:
-			updateClient(&m)
-			Client.commandChan <- m.Commands
+			client.commandChan <- m.Commands
 		case ron.MESSAGE_FILE:
-			Client.fileChan <- &m
+			client.fileChan <- &m
 		case ron.MESSAGE_TUNNEL:
 			_, err = remote.Write(m.Tunnel)
 		default:
@@ -62,20 +67,16 @@ func mux() {
 	log.Info("mux exit: %v", err)
 }
 
-// updateClient pulls the namespace and tags from the message
-func updateClient(cmd *ron.Message) {
-	Client.Lock()
-	defer Client.Unlock()
+// setNamespace sets the global namespace from the message
+func setNamespace(namespace string) {
+	client.Lock()
+	defer client.Unlock()
 
-	Client.Namespace = cmd.Namespace
-	Client.Tags = make(map[string]string)
-	for k, v := range cmd.Tags {
-		Client.Tags[k] = v
-	}
+	client.Namespace = namespace
 }
 
 func commandHandler() {
-	for commands := range Client.commandChan {
+	for commands := range client.commandChan {
 		var ids []int
 		for k, _ := range commands {
 			ids = append(ids, k)
@@ -83,16 +84,6 @@ func commandHandler() {
 		sort.Ints(ids)
 
 		for _, id := range ids {
-			log.Debug("ron commandHandler: %v", id)
-			if id <= Client.CommandCounter {
-				continue
-			}
-
-			if !Client.Matches(commands[id].Filter) {
-				continue
-			}
-			log.Debug("ron commandHandler match: %v", id)
-
 			processCommand(commands[id])
 		}
 	}

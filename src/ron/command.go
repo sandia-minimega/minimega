@@ -4,7 +4,11 @@
 
 package ron
 
-import "os"
+import (
+	"fmt"
+	"os"
+	"strings"
+)
 
 type Filter struct {
 	UUID      string
@@ -69,6 +73,40 @@ type Response struct {
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+}
+
+func (f *Filter) String() string {
+	if f == nil {
+		return ""
+	}
+
+	var res []string
+	if f.Namespace != "" {
+		res = append(res, "namespace="+f.Namespace)
+	}
+	if f.UUID != "" {
+		res = append(res, "uuid="+f.UUID)
+	}
+	if f.Hostname != "" {
+		res = append(res, "hostname="+f.Hostname)
+	}
+	if f.Arch != "" {
+		res = append(res, "arch="+f.Arch)
+	}
+	if f.OS != "" {
+		res = append(res, "os="+f.OS)
+	}
+	if f.IP != "" {
+		res = append(res, "ip="+f.IP)
+	}
+	if f.MAC != "" {
+		res = append(res, "mac="+f.MAC)
+	}
+	for k, v := range f.Tags {
+		res = append(res, fmt.Sprintf("%v=%v", k, v))
+	}
+
+	return strings.Join(res, " && ")
 }
 
 // Creates a copy of c

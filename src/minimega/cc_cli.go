@@ -188,6 +188,9 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 	raw := c.BoolArgs["raw"]
 	id := c.StringArgs["id"]
 
+	namespace := GetNamespaceName()
+	base := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
+
 	walker := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -212,7 +215,7 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 			}
 
 			if !raw {
-				relPath, err := filepath.Rel(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), path)
+				relPath, err := filepath.Rel(base, path)
 				if err != nil {
 					return err
 				}
@@ -224,10 +227,16 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	if id == Wildcard {
-		// all responses
-		return filepath.Walk(filepath.Join(*f_iomBase, ron.RESPONSE_PATH), walker)
+		// get all responses
+		err := filepath.Walk(base, walker)
+		if os.IsNotExist(err) {
+			// if the responses directory doesn't exist, don't report an error,
+			// just return an empty result
+			return nil
+		}
+		return err
 	} else if _, err := strconv.Atoi(id); err == nil {
-		p := filepath.Join(*f_iomBase, ron.RESPONSE_PATH, id)
+		p := filepath.Join(base, id)
 		if _, err := os.Stat(p); err != nil {
 			return fmt.Errorf("no such response dir %v", p)
 		}
@@ -541,29 +550,33 @@ func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
 
 // clients
 func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
+	namespace := GetNamespaceName()
+
 	resp.Header = []string{
 		"UUID", "hostname", "arch", "OS",
 		"IP", "MAC",
 	}
-	resp.Tabular = [][]string{}
 
-	clients := ccNode.GetActiveClients()
-
-	var uuids []string
-	for k, _ := range clients {
-		uuids = append(uuids, k)
+	if namespace == "" {
+		resp.Header = append(resp.Header, "namespace")
 	}
-	sort.Strings(uuids)
 
-	for _, i := range uuids {
-		v := clients[i]
+	for _, c := range ccNode.GetActiveClients() {
+		if namespace != "" && namespace != c.Namespace {
+			continue
+		}
+
 		row := []string{
-			v.UUID,
-			v.Hostname,
-			v.Arch,
-			v.OS,
-			fmt.Sprintf("%v", v.IPs),
-			fmt.Sprintf("%v", v.MACs),
+			c.UUID,
+			c.Hostname,
+			c.Arch,
+			c.OS,
+			fmt.Sprintf("%v", c.IPs),
+			fmt.Sprintf("%v", c.MACs),
+		}
+
+		if namespace == "" {
+			row = append(row, c.Namespace)
 		}
 
 		resp.Tabular = append(resp.Tabular, row)
@@ -602,7 +615,7 @@ func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 			strconv.FormatBool(v.Background),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
-			filterString(v.Filter),
+			fmt.Sprintf("%v", v.Filter),
 		}
 
 		resp.Tabular = append(resp.Tabular, row)

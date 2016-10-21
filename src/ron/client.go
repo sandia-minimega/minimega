@@ -16,36 +16,37 @@ import (
 )
 
 type Client struct {
-	UUID     string
-	Arch     string
-	OS       string
-	Version  string
-	Hostname string
-	IPs      []string
-	MACs     []string
+	UUID      string
+	Arch      string
+	OS        string
+	Version   string
+	Hostname  string
+	Namespace string
+	IPs       []string
+	MACs      []string
 
 	// Processes that are running in the background
 	Processes map[int]*Process
 
-	// Tags set via the command socket since the last heartbeat
+	// Tags set via the command socket since the last heartbeat. Also used by
+	// the server to determine whether the client matches a given filter.
 	Tags map[string]string
-
-	// CommandCounter shows the highest command ID that the client has
-	// processed so far
-	CommandCounter int
 
 	// Responses for commands processed since the last heartbeat
 	Responses []*Response
 
 	// Files requested by the server since the last heartbeat
 	Files []*File
+
+	// LastCommandID is the last command ID that the client processed.
+	LastCommandID int
 }
 
 type client struct {
 	*Client    // embed
 	sync.Mutex // embed
 
-	Checkin time.Time // when the client last checked in
+	checkin time.Time // when the client last checked in
 
 	tunnel *minitunnel.Tunnel
 
@@ -55,6 +56,10 @@ type client struct {
 	conn io.ReadWriteCloser
 	enc  *gob.Encoder
 	dec  *gob.Decoder
+
+	// maxCommandID is the highest command ID that we have processed for this
+	// client. Should be reset if the command counter is reset.
+	maxCommandID int
 }
 
 func (c *client) sendMessage(m *Message) error {
@@ -84,6 +89,10 @@ func (c *Client) Matches(f *Filter) bool {
 	}
 	if f.OS != "" && f.OS != c.OS {
 		log.Debug("failed match on os: %v != %v", f.OS, c.OS)
+		return false
+	}
+	if f.Namespace != "" && f.Namespace != c.Namespace {
+		log.Debug("failed match on namespace: %v != %v", f.Namespace, c.Namespace)
 		return false
 	}
 

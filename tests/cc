@@ -1,0 +1,65 @@
+vm config filesystem /data/minimega/containerfs
+
+namespace foo
+nsmod add-host localhost
+vm config hostname foo
+vm config uuid a5e980ca-3958-48cc-92e9-93d50c0157ad
+vm launch container foo
+vm launch
+
+namespace bar
+nsmod add-host localhost
+vm config hostname bar
+vm config uuid d67f9fed-adea-415a-a66b-301d275a2383
+vm launch container bar
+vm launch
+
+clear namespace
+vm start all
+
+# wait for clients to start
+shell sleep 10
+.columns UUID,hostname,namespace cc clients
+.columns UUID,hostname namespace foo cc clients
+.columns UUID,hostname namespace bar cc clients
+
+# run command, wait for clients to check in
+cc exec hostname
+shell sleep 20
+
+# get responses and then clear all
+cc responses all
+clear cc responses
+cc responses all
+
+# run command, wait for clients to check in
+cc exec hostname
+shell sleep 20
+
+# get responses just in one namespace and then clear one namespace
+namespace foo cc responses all
+namespace foo clear cc responses
+namespace foo cc responses all
+cc responses all
+
+# reset
+clear cc responses
+
+# run command in one namespace
+namespace foo cc exec hostname
+shell sleep 10
+
+# check response
+cc responses all
+
+# make sure that commands ended up being attributed correctly
+.columns ID,responses,filter cc commands
+.columns ID,responses,filter namespace foo cc commands
+.columns ID,responses,filter namespace bar cc commands
+
+# clear commands in one namespace
+namespace foo clear cc commands
+.columns ID,responses,filter cc commands
+# should have no affect
+namespace bar clear cc commands
+.columns ID,responses,filter cc commands

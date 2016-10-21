@@ -37,15 +37,13 @@ type Server struct {
 	udsConns map[string]net.Listener
 	udsLock  sync.Mutex
 
-	commands    map[int]*Command // map of active commands
-	commandLock sync.Mutex
-
-	commandCounter     int
-	commandCounterLock sync.Mutex
+	commands       map[int]*Command // map of active commands
+	commandCounter int
+	commandLock    sync.Mutex // lock for commands and commandCounter
 
 	clients    map[string]*client // map of active clients, each of which have a running handler
-	clientLock sync.Mutex
-	vms        map[string]VM // map of uuid -> VM
+	vms        map[string]VM      // map of uuid -> VM
+	clientLock sync.Mutex         // lock for clients and vms
 
 	path          string    // path for serving files
 	lastBroadcast time.Time // watchdog time of last command list broadcast
@@ -74,9 +72,6 @@ type Message struct {
 	Filename string
 	Error    string
 	Tunnel   []byte
-
-	Tags      map[string]string // sent server -> client in MESSAGE_COMMAND
-	Namespace string            // sent server -> client in MESSAGE_COMMAND
 }
 
 // NewServer creates a ron server listening on on tcp.
@@ -101,7 +96,6 @@ func NewServer(port int, path string) (*Server, error) {
 	}
 
 	go s.responseHandler()
-	go s.periodic()
 	go s.clientReaper()
 
 	log.Debug("registered new ron server: %v", port)

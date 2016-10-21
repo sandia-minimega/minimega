@@ -5,13 +5,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"ron"
-	"strings"
 )
 
 const (
@@ -60,11 +58,18 @@ func ccStart() {
 func ccClear(what string) (err error) {
 	log.Debug("cc clear %v", what)
 
+	namespace := GetNamespaceName()
+
 	switch what {
 	case "filter":
 		ccFilter = nil
 	case "commands":
-		errs := []string{}
+		if namespace == "" {
+			ccNode.ResetCommands()
+			return
+		}
+
+		errs := errSlice{}
 		for _, v := range ccNode.GetCommands() {
 			// only delete commands for the active namespace
 			if !ccMatchNamespace(v) {
@@ -73,21 +78,37 @@ func ccClear(what string) (err error) {
 
 			err := ccNode.DeleteCommand(v.ID)
 			if err != nil {
-				errMsg := fmt.Sprintf("cc delete command %v : %v", v.ID, err)
-				errs = append(errs, errMsg)
+				err := fmt.Errorf("cc delete command %v : %v", v.ID, err)
+				errs = append(errs, err)
 			}
 			ccUnmapPrefix(v.ID)
 		}
-		if len(errs) != 0 {
-			err = errors.New(strings.Join(errs, "\n"))
-		}
+		return errs
 	case "responses": // delete everything in miniccc_responses
-		// TODO: limit to the active namespace
-		path := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
-		err := os.RemoveAll(path)
-		if err != nil {
-			return err
+		base := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
+
+		// no active namespace => delete everything
+		if namespace == "" {
+			return os.RemoveAll(base)
 		}
+
+		walker := func(path string, info os.FileInfo, err error) error {
+			// don't do anything if there was an error or it's a directory that
+			// doesn't look like a UUID.
+			if err != nil || !info.IsDir() || !isUUID(info.Name()) {
+				return err
+			}
+
+			if vm := vms.FindVM(info.Name()); vm == nil {
+				log.Debug("skipping VM: %v", info.Name())
+			} else if err := os.RemoveAll(path); err != nil {
+				return err
+			}
+
+			return filepath.SkipDir
+		}
+
+		return filepath.Walk(base, walker)
 	case "prefix":
 		ccPrefix = ""
 	}
@@ -97,18 +118,6 @@ func ccClear(what string) (err error) {
 
 func ccHasClient(c string) bool {
 	return ccNode != nil && ccNode.HasClient(c)
-}
-
-func ccClients() map[string]bool {
-	clients := make(map[string]bool)
-	if ccNode != nil {
-		c := ccNode.GetActiveClients()
-		for k, _ := range c {
-			clients[k] = true
-		}
-		return clients
-	}
-	return nil
 }
 
 // ccGetFilter returns a filter for cc clients, adding the implicit namespace
@@ -129,39 +138,4 @@ func ccMatchNamespace(c *ron.Command) bool {
 	namespace := GetNamespaceName()
 
 	return namespace == "" || c.Filter == nil || c.Filter.Namespace == namespace
-}
-
-func filterString(f *ron.Filter) string {
-	if f == nil {
-		return ""
-	}
-
-	var ret string
-
-	var j []string
-	if f.UUID != "" {
-		j = append(j, "uuid="+f.UUID)
-	}
-	if f.Hostname != "" {
-		j = append(j, "hostname="+f.Hostname)
-	}
-	if f.Arch != "" {
-		j = append(j, "arch="+f.Arch)
-	}
-	if f.OS != "" {
-		j = append(j, "os="+f.OS)
-	}
-	if f.IP != "" {
-		j = append(j, "ip="+f.IP)
-	}
-	if f.MAC != "" {
-		j = append(j, "mac="+f.MAC)
-	}
-	for k, v := range f.Tags {
-		j = append(j, fmt.Sprintf("%v=%v", k, v))
-	}
-
-	ret += strings.Join(j, " && ")
-
-	return ret
 }

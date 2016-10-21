@@ -73,7 +73,7 @@ func recvFiles(files []*ron.File) {
 
 		m := &ron.Message{
 			Type:     ron.MESSAGE_FILE,
-			UUID:     Client.UUID,
+			UUID:     client.UUID,
 			Filename: v.Name,
 		}
 
@@ -82,7 +82,7 @@ func recvFiles(files []*ron.File) {
 			return
 		}
 
-		resp := <-Client.fileChan
+		resp := <-client.fileChan
 		if resp.Filename != v.Name {
 			log.Error("filename mismatch: %v != %v", resp.Filename, v.Name)
 			continue
