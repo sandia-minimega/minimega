@@ -29,7 +29,8 @@ Report information about the host:
 - memused : memory used, in MB
 - name : hostname
 - vms : number of VMs (in active namespace)
-- vmsall: number of VMs (regardless of namespace)
+- updateVMsTables: number of VMs (regardless of namespace)
+- uptime: uptime
 		`,
 		Patterns: []string{
 			"host",
@@ -41,6 +42,7 @@ Report information about the host:
 			"host <name,>",
 			"host <vms,>",
 			"host <vmsall,>",
+			"host <uptime,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -71,12 +73,16 @@ var hostInfoFns = map[string]func() (string, error){
 	"vmsall": func() (string, error) {
 		return strconv.Itoa(vms.CountAll()), nil
 	},
+	"uptime": func() (string, error) {
+		uptime, err := hostStatsUptime()
+		return fmt.Sprintf("%v s", uptime), err
+	},
 }
 
 // Preferred ordering of host info fields in tabular
 var hostInfoKeys = []string{
 	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
-	"vms", "vmsall",
+	"vms", "vmsall", "uptime",
 }
 
 func cliHost(c *minicli.Command, resp *minicli.Response) error {
@@ -106,6 +112,24 @@ func cliHost(c *minicli.Command, resp *minicli.Response) error {
 	resp.Tabular = [][]string{row}
 
 	return nil
+}
+
+func hostStatsUptime() (string, error) {
+	uptime, err := ioutil.ReadFile("/proc/uptime")
+	if err != nil {
+		return "", err
+	}
+
+	// uptime should look something like
+	//  2641.71 9287.55
+	f := strings.Fields(string(uptime))
+	if len(f) != 2 {
+		return "", fmt.Errorf("could not read uptime")
+	}
+	outputUptime := f[0]
+	// TODO convert from seconds to HH:MM:ss?
+
+	return outputUptime, nil
 }
 
 func hostStatsLoad() (string, error) {
