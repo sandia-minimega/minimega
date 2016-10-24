@@ -4,11 +4,11 @@
 var IMAGE_REFRESH_TIMEOUT = 10000;   // How often the currently-displayed screenshots are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 1000;    // How often the currently-displayed hosts are updated (in millis)
 var VM_REFRESH_TIMEOUT = 1000;      // How often the currently-displayed vms are updated (in millis)
-var NETWORK_COLUMN_INDEX = 5;       // Index of the column with network info (needs to have values strignified)
-var IP4_COLUMN_INDEX = 6;           // Index of the column with IP4 info (needs to have values strignified)
-var IP6_COLUMN_INDEX = 7;           // Index of the column with IP6 info (needs to have values strignified)
-var TAP_COLUMN_INDEX = 8;           // Index of the column with tap info (needs to have values strignified)
-var TAGS_COLUMN_INDEX = 10;         // Index of the column with tag info (needs to have values strignified)
+var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
+var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
+var IP6_COLUMN_INDEX = 6;           // Index of the column with IP6 info (needs to have values strignified)
+var TAP_COLUMN_INDEX = 7;           // Index of the column with tap info (needs to have values strignified)
+var TAGS_COLUMN_INDEX = 9;         // Index of the column with tag info (needs to have values strignified)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -170,9 +170,9 @@ function updateVMsTables(vmsData) {
                 { "sTitle": "Memory", "mDataProp": "memory" },
                 { "sTitle": "Name", "mDataProp": "name" },
                 { "sTitle": "Network", "mDataProp": "network" },
-		{ "sTitle": "IPv4", "mDataProp": "network" },
-		{ "sTitle": "IPv6", "mDataProp": "network" },
-		{ "sTitle": "Taps", "mDataProp": "network" },
+                { "sTitle": "IPv4", "mDataProp": "network" },
+                { "sTitle": "IPv6", "mDataProp": "network" },
+                { "sTitle": "Taps", "mDataProp": "network" },
                 { "sTitle": "State", "mDataProp": "state" },
                 { "sTitle": "Tags", "mDataProp": "tags" },
                 { "sTitle": "Type", "mDataProp": "type" },
