@@ -4,7 +4,7 @@ minimega 2.3 release notes
 
 The minimega development team is pleased to announce the release of minimega
 2.3. This release includes several key new features designed to make experiments
-more portable and numerous bug fixes. This release contains may changes to the
+more portable and numerous bug fixes. This release contains many changes to the
 existing API which will improve user experience and programmability.
 
 * What's new
@@ -13,7 +13,7 @@ existing API which will improve user experience and programmability.
 
 *** namespaces
 
-The largest change in this release is namespaces which is described in a
+The largest change is the addition of namespaces which is described in a
 separate [[/articles/namespaces.article][article]]. In short, namespaces allows
 experimenters to build more portable environments that are automatically
 scheduled across a cluster by minimega.
@@ -79,7 +79,7 @@ minimega's typical usage makes this API unnecessary so we have removed it.
 
 Since the addition of containers, many new columns have been added to `vm`info`
 which can make it hard to read without nesting it in a `.columns` command. We
-have added a new API, `vm`summary`, that includes a minimal subset of the
+have added a new API, `vm`summary`, that includes a useful subset of the
 `vm`info` columns.
 
 *** host API
@@ -185,11 +185,6 @@ supports different suffixes including B, KB, and MB; and on a POST request, the
 server now responds with a 202 Accepted response. Finally, there is a new flag,
 `-tlsversion`, which allows you to control what version of TLS you want to use.
 
-*** bandwidth on taps
-
-A bug was fixed that was causing minimega to report the wrong bandwidth for
-taps. The reported bandwidth should be much more accurate now.
-
 *** New CLI prefixes
 
 Last release, we added the `file:` prefix to reference files stored in
@@ -226,6 +221,13 @@ at a time.
 Additionally, to make it more seamless to interact with containers and VMs
 through the web interface, we have consolidated access to a single URL with a
 single parameter -- the name of the container or VM.
+
+* Bug fixes
+
+** bandwidth on taps
+
+A bug was fixed that was causing minimega to report the wrong bandwidth for
+taps. The reported bandwidth should be much more accurate now.
 
 * Deprecation
 
