@@ -268,7 +268,8 @@ function updateHostsTable (hostsData) {
                 { "sTitle": "Memtotal" },
                 { "sTitle": "Bandwidth" },
                 { "sTitle": "vms" },
-                { "sTitle": "vmsall" }
+                { "sTitle": "vmsall" },
+                { "sTitle": "uptime" }
             ]
         });
         table.draw();
