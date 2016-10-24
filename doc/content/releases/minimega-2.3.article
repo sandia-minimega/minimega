@@ -1,0 +1,272 @@
+minimega 2.3 release notes
+
+* Introduction
+
+The minimega development team is pleased to announce the release of minimega
+2.3. This release includes several key new features designed to make experiments
+more portable and numerous bug fixes. This release contains may changes to the
+existing API which will improve user experience and programmability.
+
+* What's new
+
+** Major changes and milestones
+
+*** namespaces
+
+The largest change in this release is namespaces which is described in a
+separate [[/articles/namespaces.article][article]]. In short, namespaces allows
+experimenters to build more portable environments that are automatically
+scheduled across a cluster by minimega.
+
+*** minirouter
+
+The second largest change is the addition of minirouter. minirouter also has a
+separate [[/articles/router.article][article]] describing its use and features.
+In short, minirouter allows for the configuration of router functionalities such
+as DHCP, DNS, IPv4/IPv6 assignments and, of course, routing, from the minimega
+command line.
+
+*** VLAN aliases
+
+In order to better support experiment portability, minimega now supports VLAN
+aliases. Instead of manually specifying VLAN numbers, users may now supply an
+alias which minimega will map to a VLAN. This mapping is per-namespace so the
+same alias can exist in multiple namespaces. For more information, see the
+[[/articles/vlans.article][VLAN article]].
+
+*** qos API
+
+We have added a new API, `qos`, that allows users to add quality-of-service
+constraints on network interfaces. Currently, we support limiting traffic rates,
+delaying packets, and dropping packets at different rates. See `help`qos` for
+more information.
+
+*** vnc API
+
+The `vnc` API has been majorly rewritten to add new capabilities and ensure
+compatibility with experiments built using namespaces. See the updated
+[[/articles/vnc.article][VNC article]] for details.
+
+** Additional new features
+
+*** .filter API
+
+There are now four patterns for filters:
+
+    minimega$ .filter host=ccc1 vm info
+    minimega$ .filter host!=ccc1 vm info
+    minimega$ .filter host~ccc vm info
+    minimega$ .filter host!~ccc vm info
+
+The latter two being substring matching.
+
+*** .alias/.unalias APIs
+
+There are two new APIs to create and delete `aliases`. Aliases allow you to
+create shorthands for frequently typed commands. For example:
+
+    minimega$ .alias vmr=.column name .filter state=running vm info
+    minimega$ vmr
+
+Note that aliases are not broadcast out to mesh peers -- you must create the
+alias everywhere you wish to use it.
+
+*** vm save API
+
+minimega's typical usage makes this API unnecessary so we have removed it.
+
+*** vm summary API
+
+Since the addition of containers, many new columns have been added to `vm`info`
+which can make it hard to read without nesting it in a `.columns` command. We
+have added a new API, `vm`summary`, that includes a minimal subset of the
+`vm`info` columns.
+
+*** host API
+
+Added `vms` and `vmsall` columns for the number of running VMs on the host in
+the current namespace and across namespaces, respectively.
+
+*** read API
+
+There is a new flag on the `read` API to check whether all the commands in the
+file are syntactically valid.
+
+*** disk API
+
+Added a new subcommand, `disk`info`, to inspect a disk image.
+
+*** debug API
+
+Added memory and CPU profiling to the `debug` API. This is mostly useful for
+minimega developers trying to understand and improve the underlying performance
+of minimega.
+
+*** log syslog API
+
+minimega can now write logs to the syslog daemon running locally or remotely.
+
+*** cc process API
+
+In 2.2, we added the `cc`process` API to inspect and kill processes started with
+`cc`background`. We have extended the `cc`process`kill` API to add wildcard
+support to kill all processes. We also added a `cc`process`killall`<name>` API
+to kill processes matching `<name>` rather than providing a PID.
+
+*** cc filter tag=... API
+
+`cc` commands can now additionally filter on VM tags. For example:
+
+    minimega$ cc filter tag=foo:bar
+    minimega$ .header false .columns Tags cc filter
+    {"foo":"bar"}
+
+If users wish, they may drop the `tag=` prefix and key=value pairs will be
+treated as tags:
+
+    minimega$ cc filter x=y
+    minimega$ .header false .columns Tags cc filter
+    {"x":"y"}
+
+
+*** minicli improvements
+
+minicli now truncates history to 10,000 entries to avoid an out-of-memory crash.
+There is currently no API to change this limit.
+
+minicli is smarter about sorting integer columns -- it now compares them as
+integers rather than strings so the values will be in numerical order.
+
+minicli now handles escaped quotes embedded within quoted strings:
+
+    minimega$ vm config tag foo "foo bar"
+    minimega$ vm config tag
+    {"foo":"foo bar"}
+    minimega$ vm config tag foo "foo \"bar\""
+    minimega$ vm config tag
+    {"foo":"foo \"bar\""}
+
+It also now supports empty strings as arguments:
+
+    minimega$ vm config tag foo ""
+    minimega$ vm config tag
+    {"foo":""}
+
+And a few new escape sequences:
+
+    minimega$ vm config tag foo "test\ntest"
+    minimega$ vm config tag
+    {"foo":"test\ntest"}
+    minimega$ vm config tag foo "test\r\ntest"
+    minimega$ vm config tag
+    {"foo":"test\r\ntest"}
+    minimega$ vm config tag foo \#
+    minimega$ vm config tag
+    {"foo":"#"}
+
+*** nfcat
+
+minimega has been able to record raw netflow from the capture API since the
+1.0 release but there was no tool to actually read the raw data and produce an
+ASCII output. nfcat does just that -- it can read one or more raw netflow files
+and produce an ASCII output.
+
+*** minifuzzer
+
+We have added a new tool to test minimega via fuzzing. minifuzzer generates
+minimega commands with random arguments and executes them until minimega exits.
+
+*** protonuke improvements
+
+The largest protonuke improvement is client and server support for a new
+protocol: DNS. Support for http/https has been improved in several ways: there
+is a new flag, `-httpgzip`, to enable gzip'd responses; `-httpimagesize` now
+supports different suffixes including B, KB, and MB; and on a POST request, the
+server now responds with a 202 Accepted response. Finally, there is a new flag,
+`-tlsversion`, which allows you to control what version of TLS you want to use.
+
+*** bandwidth on taps
+
+A bug was fixed that was causing minimega to report the wrong bandwidth for
+taps. The reported bandwidth should be much more accurate now.
+
+*** New CLI prefixes
+
+Last release, we added the `file:` prefix to reference files stored in
+iomeshage. In this release, we add three new prefix. The `http://` and
+`https://` prefixes can be used to reference remote resources hosted on an HTTP
+or HTTPs server. These resources will be fetched and stored in iomeshage. We
+have also added an env prefix (`$`) that replaces strings with the value of the
+corresponding environment variable. If the environment variable is not set, an
+error is returned.
+
+*** -context flag
+
+We renamed the `-namespace` flag to `-context` to avoid confusion with the
+concept of namespaces. The functionality is still the same.
+
+*** miniccc tag upstreaming
+
+VMs can now control their own destiny -- by pushing tags up to minimega.
+Specifically, VMs can now invoke `miniccc`-tag`<key>`<value>` to push a tag to
+the command and control server which will then be recorded in the VM's tags.
+
+*** Ctrl-C like bash
+
+We now mostly replicate bash's Ctrl-C behavior in minimega. The only thing that
+is different is that the reverse history line gets cleared when searching is
+aborted by Ctrl-C.
+
+*** Web console for containers and VNC changes
+
+To make it easier to interact with containers, we have added a javascript-based
+console. In the current implementation, only one user can connect to the console
+at a time.
+
+Additionally, to make it more seamless to interact with containers and VMs
+through the web interface, we have consolidated access to a single URL with a
+single parameter -- the name of the container or VM.
+
+* Deprecation
+
+The following functionality is deprecated in this release and will be removed in
+a future release:
+
+** vyatta API
+
+This API has been superseded by minirouter.
+
+** Addressing VMs by ID
+
+In a namespace environment, it is dangerous to reference VMs by ID. IDs are only
+unique per-host and, therefore, there may be more than one VM with the same ID
+in a namespace. VM names are unique across a namespace and are now the preferred
+way of listing VMs to start, kill, etc.
+
+* Availability
+
+minimega is available in several ways, both as pre-built distributions and
+source. See the [[/articles/installing.article][installing]] guide for more
+information.
+
+** Debian package
+
+minimega is available as an x86-64 debian package, available
+[[https://storage.googleapis.com/minimega-files/minimega-2.3.deb][here]]. It is
+known to work in debian 7 (wheezy) and 8 (testing/jessie) and ubuntu 16.04.
+
+** tarball
+
+A pre-built, x86-64 distribution is available in a single distributable tarball
+[[https://storage.googleapis.com/minimega-files/minimega-2.3.tar.bz2][here]].
+It should be sufficient to simply unpack the tarball and run tools from the
+`bin/` directory directly. Most default paths in minimega, vmbetter, and other
+tools are built to be used in this way (i.e. `bin/minimega`, which will then
+look for the web directory in `misc/web`).
+
+** Building from source
+
+Source of the entire distribution is available on
+[[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
+for cloning or forking minimega on github.com. In order to build minimega, you
+will need a Go 1.6+ compiler, libreadline, and libpcap headers.
