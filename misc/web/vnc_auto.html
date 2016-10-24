@@ -209,7 +209,7 @@
             password = WebUtil.getConfigVar('password', '');
 
             // minimega: grab VM name from URL
-            path = "ws/" + window.location.hash.substring(1);
+            path = "tunnel/" + window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1)
 
             // If a token variable is passed in, set the parameter in a cookie.
             // This is used by nova-novncproxy.

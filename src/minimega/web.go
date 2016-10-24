@@ -105,13 +105,11 @@ func webStart(port int, root string) {
 
 	mux.HandleFunc("/", webIndex)
 	mux.HandleFunc("/tilevnc", webTileVNC)
-	mux.HandleFunc("/terminal", webTerminal)
 	mux.HandleFunc("/hosts", webHosts)
 	mux.HandleFunc("/vms", webVMs)
-	mux.HandleFunc("/vnc/", webVNC)
+	mux.HandleFunc("/connect/", webConnect)
 	mux.HandleFunc("/screenshot/", webScreenshot)
-	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
-	mux.Handle("/termws/", websocket.Handler(terminalWsHandler))
+	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
 
 	if web.Server == nil {
 		web.Server = &http.Server{
@@ -215,12 +213,29 @@ func webTileVNC(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(web.Root, "tilevnc.html"))
 }
 
-func webTerminal(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "terminal.html"))
-}
+func webConnect(w http.ResponseWriter, r *http.Request) {
+	// URL should be of the form `/connect/<name>`
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(fields) != 2 {
+		return
+	}
+	name := fields[1]
 
-func webVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
+	vms := GlobalVMs()
+	vm := vms.findVM(name, true)
+	if vm == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch vm.GetType() {
+	case KVM:
+		http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
+	case CONTAINER:
+		http.ServeFile(w, r, filepath.Join(web.Root, "terminal.html"))
+	default:
+		http.NotFound(w, r)
+	}
 }
 
 func webHosts(w http.ResponseWriter, r *http.Request) {

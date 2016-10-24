@@ -21,29 +21,44 @@ import (
 	"golang.org/x/net/websocket"
 )
 
-func vncWsHandler(ws *websocket.Conn) {
-	// URL should be of the form `/ws/<vm_name>`
+func tunnelHandler(ws *websocket.Conn) {
+	// URL should be of the form `/tunnel/<name>`
 	path := strings.Trim(ws.Config().Location.Path, "/")
 
 	fields := strings.Split(path, "/")
 	if len(fields) != 2 {
 		return
 	}
-	vmName := fields[1]
+	name := fields[1]
 
 	vms := GlobalVMs()
-	vm, err := vms.findKvmVM(vmName)
-	if err != nil {
-		log.Errorln(err)
+	vm := vms.findVM(name, true)
+	if vm == nil {
+		log.Errorln(vmNotFound(name))
 		return
 	}
 
-	// Undocumented "feature" of websocket -- need to set to PayloadType in
-	// order for a direct io.Copy to work.
-	ws.PayloadType = websocket.BinaryFrame
+	var port int
+
+	switch vm.GetType() {
+	case KVM:
+		// Undocumented "feature" of websocket -- need to set to PayloadType in
+		// order for a direct io.Copy to work.
+		ws.PayloadType = websocket.BinaryFrame
+
+		port = vm.(*KvmVM).VNCPort
+	case CONTAINER:
+		// See above. The javascript terminal needs it to be a TextFrame.
+		ws.PayloadType = websocket.TextFrame
+
+		port = vm.(*ContainerVM).ConsolePort
+	default:
+		log.Error("unknown VM type: %v", vm.GetType())
+		return
+	}
 
 	// connect to the remote host
-	rhost := fmt.Sprintf("%v:%v", vm.Host, vm.VNCPort)
+	rhost := fmt.Sprintf("%v:%v", vm.GetHost(), port)
 	remote, err := net.Dial("tcp", rhost)
 	if err != nil {
 		log.Errorln(err)
@@ -51,42 +66,6 @@ func vncWsHandler(ws *websocket.Conn) {
 	}
 	defer remote.Close()
 
-	go io.Copy(ws, remote)
-	io.Copy(remote, ws)
-
-	log.Info("ws client disconnected from %v", rhost)
-}
-
-func terminalWsHandler(ws *websocket.Conn) {
-	// URL should be of the form `/termws/<vm_name>`
-	path := strings.Trim(ws.Config().Location.Path, "/")
-
-	fields := strings.Split(path, "/")
-	if len(fields) != 2 {
-		return
-	}
-	vmName := fields[1]
-
-	vms := GlobalVMs()
-	vm, err := vms.findContainerVM(vmName)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	// Undocumented "feature" of websocket -- need to set to PayloadType in
-	// order for a direct io.Copy to work. The javascript terminal needs it
-	// to be a TextFrame.
-	ws.PayloadType = websocket.TextFrame
-
-	// connect to the remote host
-	rhost := fmt.Sprintf("%v:%v", vm.Host, vm.ConsolePort)
-	remote, err := net.Dial("tcp", rhost)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-	defer remote.Close()
 	log.Info("ws client connected to %v", rhost)
 
 	go io.Copy(ws, remote)
