@@ -62,6 +62,22 @@ func (v *vncClient) Stop() error {
 	return v.err
 }
 
+func vncInject(vm *KvmVM, e Event) error {
+	c, err := NewVNCClient(vm)
+	if err != nil {
+		return err
+	}
+
+	c.Conn, err = vnc.Dial(c.Rhost)
+	if err != nil {
+		return err
+	}
+
+	err = e.Write(c.Conn)
+	c.Stop()
+	return err
+}
+
 func vncClear() {
 	for k, v := range vncKBRecording {
 		if inNamespace(v.VM) {
@@ -92,7 +108,7 @@ func vncClear() {
 				log.Error("%v", err)
 			}
 
-			delete(vncPlaying, k)
+			// Playbacks are deleted with the call to Stop()
 		}
 	}
 }

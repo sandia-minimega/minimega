@@ -36,6 +36,7 @@ type Chan struct {
 	in      chan Event   // Receives parsed events from playFile()
 	out     chan Event   // Sends events to the vnc connection in playEvents()
 	control chan Control // Used to play, pause, and stop playbacks
+	loadf   chan string  // Used for injecting loadfile events
 }
 
 // Encapsulates the active playback file
@@ -74,6 +75,7 @@ func NewChan(in chan Event) *Chan {
 		in:      in,
 		out:     make(chan Event),
 		control: make(chan Control),
+		loadf:   make(chan string),
 	}
 
 	go func() {
@@ -130,9 +132,6 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 // Creates a new VNC connection, the initial playback reader, and starts the
 // vnc playback
 func vncPlaybackKB(vm *KvmVM, filename string) error {
-	vncPlayingLock.Lock()
-	defer vncPlayingLock.Unlock()
-
 	// Is this playback already running?
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 	if _, ok := vncPlaying[id]; ok {
@@ -175,8 +174,9 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 func (v *vncKBPlayback) playFile() {
 	v.start = time.Now()
 	defer close(v.in)
+	defer close(v.loadf)
 
-outerLoop:
+fileLoop:
 	for {
 		for _, pr := range v.prs {
 			// Update the file we are playing
@@ -192,7 +192,7 @@ outerLoop:
 					continue
 				}
 
-				res, err := v.parseEvent(s[1])
+				res, err := parseEvent(s[1])
 				if err != nil {
 					log.Error("invalid vnc message: `%s`", s[1])
 					continue
@@ -207,15 +207,25 @@ outerLoop:
 					continue
 				}
 
-				// Wait for the computed duration
 				wait := time.After(duration)
 				t := time.Now()
+
 				select {
+				// Ends the playback
 				case <-v.done:
 					return
+				// Injected LoadFile event
+				case file := <-v.loadf:
+					err = v.loadFile(file)
+					if err != nil {
+						log.Error(err.Error())
+					} else {
+						continue fileLoop
+					}
+				// Wait for the duration
 				case <-wait:
+				// Step to the next event
 				case <-v.step:
-					// Update timekeeping
 					v.duration -= duration - time.Since(t)
 				}
 
@@ -228,12 +238,12 @@ outerLoop:
 					case v.in <- event:
 					}
 				case string:
-					// LoadFileEvent
+					// Embedded LoadFile event
 					err = v.loadFile(res.(string))
 					if err != nil {
 						log.Error(err.Error())
 					} else {
-						continue outerLoop
+						continue fileLoop
 					}
 				}
 			}
@@ -274,7 +284,7 @@ func (v *vncKBPlayback) loadFile(f string) error {
 	return nil
 }
 
-func (v *vncKBPlayback) parseEvent(cmd string) (interface{}, error) {
+func parseEvent(cmd string) (interface{}, error) {
 	var e Event
 	var res string
 	var err error
@@ -395,7 +405,7 @@ func (v *vncKBPlayback) Inject(cmd string) error {
 		return errors.New("kbplayback already stopped")
 	}
 
-	e, err := v.parseEvent(cmd)
+	e, err := parseEvent(cmd)
 	if err != nil {
 		return err
 	}
@@ -403,7 +413,8 @@ func (v *vncKBPlayback) Inject(cmd string) error {
 	if event, ok := e.(Event); ok {
 		v.out <- event
 	} else {
-		return errors.New("playback only supports injecting keyboard and mouse commands")
+		// LoadFile event
+		v.loadf <- e.(string)
 	}
 
 	return nil

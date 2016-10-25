@@ -97,6 +97,9 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	if c.BoolArgs["play"] {
+		vncPlayingLock.Lock()
+		defer vncPlayingLock.Unlock()
+
 		err = vncPlaybackKB(vm, fname)
 	} else if c.BoolArgs["stop"] {
 		vncPlayingLock.Lock()
@@ -108,6 +111,32 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		err = p.Stop()
+	} else if c.BoolArgs["inject"] {
+		vncPlayingLock.RLock()
+		defer vncPlayingLock.RUnlock()
+
+		cmd := c.StringArgs["cmd"]
+		p, _ = vncPlaying[id]
+		if p != nil {
+			err = p.Inject(cmd)
+		} else {
+			e, err := parseEvent(cmd)
+			if err != nil {
+				return err
+			}
+
+			if event, ok := e.(Event); ok {
+				// Vnc event
+				err = vncInject(vm, event)
+			} else {
+				// This is an injected LoadFile event without a running
+				// playback. This is equivalent to starting a new vnc playback.
+				vncPlayingLock.RUnlock()
+				vncPlayingLock.Lock()
+				err = vncPlaybackKB(vm, e.(string))
+				vncPlayingLock.Unlock()
+			}
+		}
 	} else {
 		vncPlayingLock.RLock()
 		defer vncPlayingLock.RUnlock()
@@ -115,7 +144,7 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 		// Need a valid playback for all other operations
 		p, _ = vncPlaying[id]
 		if p == nil {
-			return fmt.Errorf("kb playback %v vnot found", vm.Name)
+			return fmt.Errorf("kb playback %v not found", vm.Name)
 		}
 
 		// Running playback commands
@@ -127,8 +156,6 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 			err = p.Step()
 		} else if c.BoolArgs["getstep"] {
 			resp.Response, err = p.GetStep()
-		} else {
-			err = p.Inject(c.StringArgs["cmd"])
 		}
 	}
 	return err
