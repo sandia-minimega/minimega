@@ -15,11 +15,8 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
 )
-
-func (b *Bridge) Close() {
-	b.handle.Close()
-}
 
 func (b *Bridge) snooper() {
 	var (
@@ -42,10 +39,12 @@ func (b *Bridge) snooper() {
 
 	for {
 		data, _, err := b.handle.ReadPacketData()
-		if err != nil {
-			if err != io.EOF {
-				log.Error("error reading packet data: ", err)
-			}
+		if err == pcap.NextErrorTimeoutExpired {
+			continue
+		} else if err == io.EOF {
+			break
+		} else if err != nil {
+			log.Error("error reading packet data: ", err)
 			break
 		}
 

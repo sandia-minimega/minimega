@@ -105,7 +105,7 @@ func (b Bridges) newBridge(name string) error {
 		}
 	}
 
-	if br.handle, err = pcap.OpenLive(br.Name, 1600, true, pcap.BlockForever); err != nil {
+	if br.handle, err = pcap.OpenLive(br.Name, 1600, true, time.Second); err != nil {
 		goto cleanup
 	}
 
@@ -278,7 +278,7 @@ func (b Bridges) FindTap(t string) (Tap, error) {
 	for _, br := range b.bridges {
 		for _, tap := range br.taps {
 			if tap.Name == t && !tap.Defunct {
-				log.Info("found tap %v on bridge %v", t, br.Name)
+				log.Debug("found tap %v on bridge %v", t, br.Name)
 				return *tap, nil
 			}
 		}
