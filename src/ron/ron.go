@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -116,4 +118,32 @@ func (t Type) String() string {
 	}
 
 	return "UNKNOWN"
+}
+
+func unmangle(uuid string) string {
+	// string must be in the form:
+	//	XXXXXXXX-XXXX-XXXX-YYYY-YYYYYYYYYYYY
+	// the X characters are reversed at 2 byte intervals (big/little endian for a uuid?)
+	var ret string
+	re := regexp.MustCompile("[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}")
+
+	u := re.FindString(strings.ToLower(uuid))
+	if uuid == "" {
+		log.Fatal("uuid failed to match uuid format: %v", uuid)
+	}
+
+	ret += u[6:8]
+	ret += u[4:6]
+	ret += u[2:4]
+	ret += u[:2]
+	ret += "-"
+	ret += u[11:13]
+	ret += u[9:11]
+	ret += "-"
+	ret += u[16:18]
+	ret += u[14:16]
+	ret += u[18:]
+
+	log.Debug("mangled/unmangled uuid: %v %v", u, ret)
+	return ret
 }
