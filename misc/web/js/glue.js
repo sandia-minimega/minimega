@@ -1,9 +1,9 @@
 "use strict";
 
 // Config
-var IMAGE_REFRESH_TIMEOUT = 10000;   // How often the currently-displayed screenshots are updated (in millis)
-var HOST_REFRESH_TIMEOUT = 1000;    // How often the currently-displayed hosts are updated (in millis)
-var VM_REFRESH_TIMEOUT = 1000;      // How often the currently-displayed vms are updated (in millis)
+var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
+var HOST_REFRESH_TIMEOUT = 0;    // How often the currently-displayed hosts are updated (in millis)
+var VM_REFRESH_TIMEOUT = 0;      // How often the currently-displayed vms are updated (in millis)
 var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
 var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
 var IP6_COLUMN_INDEX = 6;           // Index of the column with IP6 info (needs to have values strignified)
@@ -21,128 +21,38 @@ var COLOR_CLASSES = {
 var lastImages = {};    // Cache of screenshots
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Request latest info from server
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Change which view (VMs, Hosts, Config) is currently shown
-function setView () {
-    var view = "#vms";
-    if (window.location.hash) view = window.location.hash;
-    $("a.current-view").removeClass("current-view");
-    $('a[href$="' + view + '"]').addClass("current-view");
-
-    $("div.current-view").removeClass("current-view");
-    $(view).addClass("current-view");
-}
-
-// Callback for updating the host's information
-function updateVMs () {
-    $.getJSON('/vms')
-        .done(function(vmsData) {
-            updateVMsTables(vmsData);
-        })
+// Get latest VM information and pass it to a callback
+function updateVMs (callback) {
+    $.getJSON('/vms.json')
+        .done(callback)
         .fail(function( jqxhr, textStatus, error) {
             var err = textStatus + ", " + error;
             console.warn( "Request Failed: " + err );
     });
 }
 
-// Callback for updating the host's information
-function updateHosts () {
-    $.getJSON('/hosts')
-        .done(function(hostsData) {
-            updateHostsTable(hostsData);
-        })
+// Get latest Host information and pass it to a callback
+function updateHosts (callback) {
+    $.getJSON('/hosts.json')
+        .done(callback)
         .fail(function( jqxhr, textStatus, error) {
             var err = textStatus + ", " + error;
             console.warn( "Request Failed: " + err );
     });
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Update tables
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Generate the appropriate URL for requesting a screenshot
-function screenshotURL (vm, size) {
-    return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
-}
 
-// Generate the appropriate URL for requesting a VNC connection
-function vncURL (vm) {
-	if (vm.type == "container") {
-        return "./terminal#" + vm.name
-	}
-    return "./vnc#" + vm.name
-}
-
-// Get the screenshot for the requested row, or restore it from the cache of screenshots if available
-function loadOrRestoreImage (row, data, displayIndex) {
-    var img = $('img', row);
-    var url = img.attr("data-url");
-
-    if (Object.keys(lastImages).indexOf(url) > -1) {
-        img.attr("src", lastImages[url].data);
-        lastImages[url].used = true;
-    }
-
-    var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
-
-    $.get(requestUrl)
-        .done(function(response) {
-            lastImages[url] = {
-                data: response,
-                used: true
-            };
-
-            img.attr("src", response);
-        })
-        .fail(function( jqxhr, textStatus, error) {
-            var err = textStatus + ", " + error;
-            console.warn( "Request Failed: " + err );
-    });
-}
-
-// Stringify columns with object info
-function flattenObjectValues (row, data, displayIndex) {
-    var networkColumn = $("td:nth-child(" + NETWORK_COLUMN_INDEX + ")", row);
-    var tapColumn = $("td:nth-child(" + TAP_COLUMN_INDEX + ")", row);
-    var ip4Column = $("td:nth-child(" + IP4_COLUMN_INDEX + ")", row);
-    var ip6Column = $("td:nth-child(" + IP6_COLUMN_INDEX + ")", row);
-    var tagsColumn = $("td:nth-child(" + TAGS_COLUMN_INDEX + ")", row);
-
-    ip4Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP4]); },
-        []
-    ).join(", ")));
-
-    ip6Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP6]); },
-        []
-    ).join(", ")));
-
-    tapColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.Tap]); },
-        []
-    ).join(", ")));
-
-    networkColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.VLAN]); },
-        []
-    ).join(", ")));
-
-    var tagsHTML = [];
-    var tagsKeys = Object.keys(data.tags);
-    for (var i = 0; i < tagsKeys.length; i++) {
-        tagsHTML.push("<em>" + tagsKeys[i] + ":</em> " + data.tags[tagsKeys[i]]);
-    }
-
-    tagsColumn.html(handleEmptyString(tagsHTML.join(", ")));
-}
-
-// Update the VMs dataTables with the new data.
-function updateVMsTables(vmsData) {
+// Update the VM table with new data
+function updateVMTable(vmsData) {
 
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
@@ -163,6 +73,15 @@ function updateVMsTables(vmsData) {
         table.fnDraw(false);
     } else {
         var table = $('#vms-dataTable').DataTable({
+            "paging": true,
+            aLengthMenu: [
+                [25, 50, 100, 200, -1],
+                [25, 50, 100, 200, "All"]
+            ],
+            iDisplayLength: -1,
+            buttons: [
+                'colvis'
+            ],
             "aaData": vmsData,
             "aoColumns": [
                 { "sTitle": "Host", "mDataProp": "host" },
@@ -185,10 +104,12 @@ function updateVMsTables(vmsData) {
             [ 1, 'asc' ]
         ]);
         table.draw();
-    }
+    } 
+}
 
-    
-    // Update the screenshots list
+
+// Update the Screenshot table with new data
+function updateScreenshotTable(vmsData) {
 
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
@@ -230,6 +151,12 @@ function updateVMsTables(vmsData) {
         table.fnDraw(false);
     } else {
         var table = $("#screenshots-list").dataTable({
+            "paging": true,
+            aLengthMenu: [
+                [25, 50, 100, 200, -1],
+                [25, 50, 100, 200, "All"]
+            ],
+            iDisplayLength: -1,
             "aaData": screenshotList,
             "aoColumns": [
                 { "sTitle": "Name", "mDataProp": "name", "visible": false },
@@ -250,8 +177,9 @@ function updateVMsTables(vmsData) {
     }
 }
 
-// Update the hosts dataTable with new data
-function updateHostsTable (hostsData) {
+
+// Update the Host table with new data
+function updateHostTable (hostsData) {
     if ($.fn.dataTable.isDataTable('#hosts-dataTable')) {
         var table = $('#hosts-dataTable').dataTable();
         table.fnClearTable(false);
@@ -259,6 +187,12 @@ function updateHostsTable (hostsData) {
         table.fnDraw(false);
     } else {
         var table = $('#hosts-dataTable').DataTable({
+            "paging": true,
+            aLengthMenu: [
+                [25, 50, 100, 200, -1],
+                [25, 50, 100, 200, "All"]
+            ],
+            iDisplayLength: -1,
             "aaData": hostsData,
             "aoColumns": [
                 { "sTitle": "Name" },
@@ -276,10 +210,91 @@ function updateHostsTable (hostsData) {
     }
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Utility functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+
+// Generate the appropriate URL for requesting a screenshot
+function screenshotURL (vm, size) {
+    return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
+}
+
+
+// Generate the appropriate URL for requesting a VNC connection
+function vncURL (vm) {
+    if (vm.type == "container") {
+        return "./terminal#" + vm.name
+    }
+    return "./vnc#" + vm.name
+}
+
+
+// Get the screenshot for the requested row, or restore it from the cache of screenshots if available
+function loadOrRestoreImage (row, data, displayIndex) {
+    var img = $('img', row);
+    var url = img.attr("data-url");
+
+    if (Object.keys(lastImages).indexOf(url) > -1) {
+        img.attr("src", lastImages[url].data);
+        lastImages[url].used = true;
+    }
+
+    var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
+
+    $.get(requestUrl)
+        .done(function(response) {
+            lastImages[url] = {
+                data: response,
+                used: true
+            };
+
+            img.attr("src", response);
+        })
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
+    });
+}
+
+
+// Stringify columns with object info
+function flattenObjectValues (row, data, displayIndex) {
+    var networkColumn = $("td:nth-child(" + NETWORK_COLUMN_INDEX + ")", row);
+    var tapColumn = $("td:nth-child(" + TAP_COLUMN_INDEX + ")", row);
+    var ip4Column = $("td:nth-child(" + IP4_COLUMN_INDEX + ")", row);
+    var ip6Column = $("td:nth-child(" + IP6_COLUMN_INDEX + ")", row);
+    var tagsColumn = $("td:nth-child(" + TAGS_COLUMN_INDEX + ")", row);
+
+    ip4Column.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.IP4]); },
+        []
+    ).join(", ")));
+
+    ip6Column.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.IP6]); },
+        []
+    ).join(", ")));
+
+    tapColumn.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.Tap]); },
+        []
+    ).join(", ")));
+
+    networkColumn.html(handleEmptyString(data.network.reduce(
+        function (previous, current) { return previous.concat([current.VLAN]); },
+        []
+    ).join(", ")));
+
+    var tagsHTML = [];
+    var tagsKeys = Object.keys(data.tags);
+    for (var i = 0; i < tagsKeys.length; i++) {
+        tagsHTML.push("<em>" + tagsKeys[i] + ":</em> " + data.tags[tagsKeys[i]]);
+    }
+
+    tagsColumn.html(handleEmptyString(tagsHTML.join(", ")));
+}
 
 
 // Put an italic "null" in the table where there are fields that aren't set
@@ -326,9 +341,11 @@ function tableString (field, toplevel) {
     }
 }
 
+
 function makeVNClink(vm) {
     return "<a target=\"_blank\" href=\"" + vncURL(vm) + "\">" + vm.host + ":" + (5900 + vm.id) + "</a>"
 }
+
 
 function addVNClink(parent, vm) {
     var newHtml = "";
@@ -339,6 +356,7 @@ function addVNClink(parent, vm) {
     newHtml += row.get(0).outerHTML;
     parent.html(newHtml + oldHtml);
 }
+
 
 // Build the DOM for the table
 function makeTable (parent, data) {
@@ -354,35 +372,3 @@ function makeTable (parent, data) {
 
     parent.html(newHtml);
 }
-
-
-
-
-
-// Set the current view according to the hash on hash change
-$(window).on('hashchange', function () {
-    setView();
-});
-
-// Set the current view according to the hash on page load
-// Begin updating the hosts dataTable
-$(document).ready(function () {
-
-    // Navigation init
-    $("nav a").on("click", function (e) {
-        $("a.current-view").removeClass("current-view");
-        $(this).addClass("current-view");
-        setView();
-    });
-    setView();
-
-    updateVMs();
-    if (VM_REFRESH_TIMEOUT > 0) {
-        setInterval(updateVMs, VM_REFRESH_TIMEOUT);
-    }
-
-    updateHosts();
-    if (HOST_REFRESH_TIMEOUT > 0) {
-        setInterval(updateHosts, HOST_REFRESH_TIMEOUT);
-    }
-});
