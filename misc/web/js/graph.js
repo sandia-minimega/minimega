@@ -356,7 +356,7 @@ function setSidebarNode (id) {
         d3.select(config.selectors.sidebarTable).html("");
     } else {
         container.attr("class", "");
- 
+
         if (grapher.graph.nodes[id].group == config.types.normal) {
             var vlan = grapher.graph.nodes[id].vlans[0];
             header.text("VLAN " + vlan);
@@ -382,7 +382,7 @@ function setSidebarNode (id) {
             var node = grapher.graph.nodes[id].machines[0];
             header.text(node.name);
             subheader.text("Router");
-            
+
             toReturn = listMachines(ul, id, [node.uuid]);
             makeTable(d3.select(config.selectors.sidebarTable), {});
             vmAlwaysHighlighted(d3.select(".member-node").node(), false, true);
@@ -394,18 +394,18 @@ function setSidebarNode (id) {
 
             toReturn = listMachines(ul, id);
             makeTable(d3.select(config.selectors.sidebarTable), {});
-                
+
         } else if (grapher.graph.nodes[id].group == config.types.unconnected) {
             var node = grapher.graph.nodes[id].machines[0];
             header.text(node.name);
             subheader.text("Unconnected");
-            
+
             toReturn = listMachines(ul, id, [node.uuid]);
             makeTable(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
             addVNClink(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
             vmAlwaysHighlighted(d3.select(".member-node").node(), true, false);
         }
-        
+
         subheader.style("color", nodeColor(grapher.graph.nodes[id], true));
     }
 
@@ -526,7 +526,7 @@ function setPopupMachine (vm, node) {
 }
 
 function makeVNClink(vm) {
-    return "<a target=\"_blank\" href=\"" + vncURL(vm) + "\">" + vm.host + ":" + (5900 + vm.id) + "</a>"
+    return "<a target=\"_blank\" href=\"" + connectURL(vm) + "\">" + vm.name + "</a>"
 }
 
 function addVNClink(parent, vm) {
@@ -703,7 +703,7 @@ function makeGraph (response, ethers) {
             vm["node_type"] = "unconnected";
             unconnected.push(vm);
             network.machines.unconnected.push(vm);
-        
+
         // Router (multiple VLANs)
         } else if (vm.network.length > 1) {
             vm["node_type"] = "router";
@@ -926,14 +926,14 @@ $(document).ready(function () {
 
         if (cursor.movedTo == null) {   // If the cursor hasn't moved...
             var nodeId = eventNode(e);
-            
+
             if (nodeId > -1) {          // And we clicked on a node...
 
                 // If the selected node isn't null and the selected node isn't the newly clicked node...
                 if ((grapher.selectedNode != null) && (grapher.selectedNode != nodeId)) {
                     setColor(grapher.selectedNode);
                 }
-                
+
                 // If we didn't go from hovering over a node to immediately leaving the graph
                 if (!((e.type == "mouseleave") && (cursor.hoveringOver != null))) {
                     outlineNode(nodeId);

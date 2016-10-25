@@ -53,12 +53,9 @@ function screenshotURL (vm, size) {
     return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
 }
 
-// Generate the appropriate URL for requesting a VNC connection
-function vncURL (vm) {
-	if (vm.type == "container") {
-        return "./terminal#" + vm.name
-	}
-    return "./vnc#" + vm.name
+// Generate the appropriate URL for a connection
+function connectURL (vm) {
+    return "./connect/" + vm.name
 }
 
 // Get the screenshot for the requested row, or restore it from the cache of screenshots if available
@@ -190,7 +187,7 @@ function updateTables () {
         var vm = grapher.jsonData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", vncURL(vm));
+        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
 
