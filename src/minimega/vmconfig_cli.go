@@ -91,10 +91,14 @@ help' for a list of architectures available for your version of kvm.`,
 Specify the network(s) that the VM is a member of by VLAN. A corresponding VLAN
 will be created for each network. Optionally, you may specify the bridge the
 interface will be connected on. If the bridge name is omitted, minimega will
-use the default 'mega_bridge'. You can also optionally specify the mac address
-of the interface to connect to that network. If not specifed, the mac address
-will be randomly generated. Additionally, you can optionally specify a driver
-for qemu to use (ignored by containers). By default, e1000 is used.
+use the default 'mega_bridge'.
+
+You can also optionally specify the mac address of the interface to connect to
+that network. If not specifed, the mac address will be randomly generated.
+
+You can also optionally specify a network device for qemu to use (which is
+ignored by containers). By default, e1000 is used. To see a list of valid
+network devices, from run "qemu-kvm -device help".
 
 Examples:
 
