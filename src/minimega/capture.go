@@ -18,7 +18,7 @@ type capture struct {
 	ID        int
 	Type      string
 	Bridge    string
-	VM        int
+	VM        VM
 	Interface int
 	Path      string
 	Mode      string
@@ -32,6 +32,24 @@ var (
 	captureID        = NewCounter()
 	captureNFTimeout = 10
 )
+
+func (c *capture) InNamespace(namespace string) bool {
+	if namespace == "" || c.VM == nil {
+		return true
+	}
+
+	return c.VM.GetNamespace() == namespace
+}
+
+func (c *capture) Stop() error {
+	if c.Type == "pcap" {
+		return stopPcapCapture(c)
+	} else if c.Type == "netflow" {
+		return stopNetflowCapture(c)
+	}
+
+	return errors.New("unknown capture type")
+}
 
 func clearAllCaptures() (err error) {
 	err = clearCapture("netflow", Wildcard)
@@ -50,12 +68,16 @@ func clearCapture(captureType, id string) (err error) {
 		}
 	}()
 
+	namespace := GetNamespaceName()
+
 	if id == Wildcard {
 		for _, v := range captureEntries {
-			if v.Type == "pcap" && captureType == "pcap" {
-				return stopPcapCapture(v)
-			} else if v.Type == "netflow" && captureType == "netflow" {
-				return stopNetflowCapture(v)
+			if !v.InNamespace(namespace) {
+				continue
+			}
+
+			if err := v.Stop(); err != nil {
+				return err
 			}
 		}
 	} else {
@@ -69,13 +91,15 @@ func clearCapture(captureType, id string) (err error) {
 			return fmt.Errorf("entry %v does not exist", val)
 		}
 
+		if !entry.InNamespace(namespace) {
+			return fmt.Errorf("entry %v is not in active namespace", val)
+		}
+
 		if entry.Type != captureType {
 			return fmt.Errorf("invalid id/capture type, `%s` != `%s`", entry.Type, captureType)
-		} else if entry.Type == "pcap" {
-			return stopPcapCapture(captureEntries[val])
-		} else if entry.Type == "netflow" {
-			return stopNetflowCapture(captureEntries[val])
 		}
+
+		return entry.Stop()
 	}
 
 	return nil
@@ -83,20 +107,20 @@ func clearCapture(captureType, id string) (err error) {
 
 // startCapturePcap starts a new capture for a specified interface on a VM,
 // writing the packets to the specified filename in PCAP format.
-func startCapturePcap(vm string, iface int, filename string) error {
-	// TODO: filter by namespace?
+func startCapturePcap(v string, iface int, filename string) error {
 	// get the vm
-	v := vms.FindVM(vm)
-	if v == nil {
-		return vmNotFound(vm)
+	vm := vms.FindVM(v)
+	if vm == nil {
+		return vmNotFound(v)
 	}
 
-	config := getConfig(v)
+	config := getConfig(vm)
 
 	if len(config.Networks) <= iface {
 		return fmt.Errorf("no such interface %v", iface)
 	}
 
+	bridge := config.Networks[iface].Bridge
 	tap := config.Networks[iface].Tap
 
 	// attempt to start pcap on the bridge
@@ -109,9 +133,11 @@ func startCapturePcap(vm string, iface int, filename string) error {
 	ce := &capture{
 		ID:        captureID.Next(),
 		Type:      "pcap",
-		VM:        v.GetID(),
+		Bridge:    bridge,
+		VM:        vm,
 		Interface: iface,
 		Path:      filename,
+		Mode:      "N/A",
 		pcap:      p,
 	}
 
@@ -143,14 +169,13 @@ func startBridgeCapturePcap(b, filename string) error {
 
 	// success! add it to the list
 	ce := &capture{
-		ID:        captureID.Next(),
-		Type:      "pcap",
-		Bridge:    br.Name,
-		VM:        -1,
-		Interface: -1,
-		Path:      filename,
-		pcap:      p,
-		tap:       tap,
+		ID:     captureID.Next(),
+		Type:   "pcap",
+		Bridge: br.Name,
+		Path:   filename,
+		Mode:   "N/A",
+		pcap:   p,
+		tap:    tap,
 	}
 
 	captureEntries[ce.ID] = ce

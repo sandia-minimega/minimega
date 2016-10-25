@@ -5,15 +5,35 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"minicli"
 	"strconv"
 )
 
 var captureCLIHandlers = []minicli.Handler{
+	{ // capture listing
+		HelpShort: "show active captures",
+		Patterns: []string{
+			"capture",
+			"capture <netflow,>",
+			"capture <pcap,>",
+		},
+		Call: wrapBroadcastCLI(cliCaptureList),
+	},
+	{ // capture for VM
+		HelpShort: "capture experiment data for a VM",
+		Patterns: []string{
+			"capture <pcap,> vm <vm id or name> <interface index> <filename>",
+		},
+		Call: wrapVMTargetCLI(cliCaptureVM),
+	},
 	{ // capture
 		HelpShort: "capture experiment data",
 		HelpLong: `
+Note: the capture API is not fully namespace-aware and should be used with
+caution. See note below.
+
 Capture experiment data including netflow and PCAP. Netflow capture obtains
 netflow data from any local openvswitch switch, and can write to file, another
 socket, or both. Netflow data can be written out in raw or ascii format, and
@@ -52,11 +72,15 @@ capture, use the delete commands:
 To stop all captures of a particular kind, replace id with "all". To stop all
 capture of all types, use "clear capture".
 
-Note: capture is not a namespace-aware command.`,
+Notes with namespaces:
+ * "capture [netflow,pcap]" lists captures across the namespace
+ * "capture pcap vm ..." captures traffic for a VM in the current namespace
+ * "capture netflow ..." and "capture pcap ..." only run on the local node --
+   you must manually "mesh send all ..." if you wish to use them.
+ * if you capture traffic from a bridge, you will see traffic from other
+   experiments.
+ * "clear capture" clears captures across the namespace.`,
 		Patterns: []string{
-			"capture",
-
-			"capture <netflow,>",
 			"capture <netflow,> <timeout,> [timeout]",
 			"capture <netflow,> <bridge,> <bridge>",
 			"capture <netflow,> <bridge,> <bridge> <file,> <filename>",
@@ -64,9 +88,7 @@ Note: capture is not a namespace-aware command.`,
 			"capture <netflow,> <bridge,> <bridge> <socket,> <tcp,udp> <hostname:port> <raw,ascii>",
 			"capture <netflow,> <delete,> <id or all>",
 
-			"capture <pcap,>",
 			"capture <pcap,> bridge <bridge> <filename>",
-			"capture <pcap,> vm <vm id or name> <interface index> <filename>",
 			"capture <pcap,> <delete,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliCapture),
@@ -74,11 +96,12 @@ Note: capture is not a namespace-aware command.`,
 	{ // clear capture
 		HelpShort: "reset capture state",
 		HelpLong: `
-Resets state for captures. See "help capture" for more information.`,
+Resets state for captures across the namespace. See "help capture" for more
+information.`,
 		Patterns: []string{
 			"clear capture [netflow,pcap]",
 		},
-		Call: wrapSimpleCLI(cliCaptureClear),
+		Call: wrapBroadcastCLI(cliCaptureClear),
 	},
 }
 
@@ -91,28 +114,68 @@ func cliCapture(c *minicli.Command, resp *minicli.Response) error {
 		return cliCapturePcap(c, resp)
 	}
 
-	// Print capture info
-	resp.Header = []string{
-		"ID",
-		"Type",
-		"Bridge",
-		"VM/interface",
-		"Path",
-		"Mode",
-		"Compress",
+	return errors.New("unreachable")
+}
+
+func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
+	namespace := GetNamespaceName()
+
+	resp.Header = []string{"ID", "Bridge"}
+
+	if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
+		resp.Header = append(resp.Header, "Type")
+	}
+
+	if !c.BoolArgs["netflow"] {
+		resp.Header = append(resp.Header, "VM/interface")
+	}
+	if !c.BoolArgs["pcap"] {
+		resp.Header = append(resp.Header, "Mode", "Compress")
+	}
+
+	resp.Header = append(resp.Header, "Path")
+
+	if namespace == "" {
+		resp.Header = append(resp.Header, "Namespace")
 	}
 
 	resp.Tabular = [][]string{}
 	for _, v := range captureEntries {
+		if !v.InNamespace(namespace) {
+			continue
+		}
+
 		row := []string{
 			strconv.Itoa(v.ID),
-			v.Type,
 			v.Bridge,
-			fmt.Sprintf("%v/%v", v.VM, v.Interface),
-			v.Path,
-			v.Mode,
-			strconv.FormatBool(v.Compress),
 		}
+
+		if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
+			row = append(row, v.Type)
+		}
+
+		if !c.BoolArgs["netflow"] || (c.BoolArgs["pcap"] && v.Type == "pcap") {
+			if v.VM != nil {
+				row = append(row, fmt.Sprintf("%v:%v", v.VM.GetName(), v.Interface))
+			} else {
+				row = append(row, "N/A")
+			}
+		}
+
+		if !c.BoolArgs["pcap"] || (c.BoolArgs["netflow"] && v.Type == "netflow") {
+			row = append(row, v.Mode, strconv.FormatBool(v.Compress))
+		}
+
+		row = append(row, v.Path)
+
+		if namespace == "" {
+			if v.VM != nil {
+				row = append(row, v.VM.GetNamespace())
+			} else {
+				row = append(row, "N/A")
+			}
+		}
+
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
@@ -141,6 +204,20 @@ func cliCapture(c *minicli.Command, resp *minicli.Response) error {
 	//out := o.String() + "\n" + nfstats
 }
 
+func cliCaptureVM(c *minicli.Command, resp *minicli.Response) error {
+	vm := c.StringArgs["vm"]
+	fname := c.StringArgs["filename"]
+	iface := c.StringArgs["interface"]
+
+	// Capture VM:interface -> pcap
+	num, err := strconv.Atoi(iface)
+	if err != nil {
+		return fmt.Errorf("invalid interface: `%v`", iface)
+	}
+
+	return startCapturePcap(vm, num, fname)
+}
+
 func cliCaptureClear(c *minicli.Command, resp *minicli.Response) error {
 	return clearAllCaptures()
 }
@@ -153,34 +230,9 @@ func cliCapturePcap(c *minicli.Command, resp *minicli.Response) error {
 	} else if c.StringArgs["bridge"] != "" {
 		// Capture bridge -> pcap
 		return startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
-	} else if c.StringArgs["vm"] != "" {
-		// Capture VM:interface -> pcap
-		iface, err := strconv.Atoi(c.StringArgs["interface"])
-		if err != nil {
-			return fmt.Errorf("invalid interface: `%v`", c.StringArgs["interface"])
-		}
-
-		return startCapturePcap(c.StringArgs["vm"], iface, c.StringArgs["filename"])
 	}
 
-	// List captures
-	resp.Header = []string{"ID", "Bridge", "VM/interface", "Path"}
-
-	resp.Tabular = [][]string{}
-	for _, v := range captureEntries {
-		if v.Type == "pcap" {
-			iface := fmt.Sprintf("%v/%v", v.VM, v.Interface)
-			row := []string{
-				strconv.Itoa(v.ID),
-				v.Bridge,
-				iface,
-				v.Path,
-			}
-			resp.Tabular = append(resp.Tabular, row)
-		}
-	}
-
-	return nil
+	return errors.New("unreachable")
 }
 
 // cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.
@@ -225,23 +277,5 @@ func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 		)
 	}
 
-	// List captures
-	resp.Header = []string{"ID", "Bridge", "Path", "Mode", "Compress"}
-
-	for _, v := range captureEntries {
-		if v.Type == "netflow" {
-			row := []string{
-				strconv.Itoa(v.ID),
-				v.Bridge,
-				v.Path,
-				v.Mode,
-				strconv.FormatBool(v.Compress),
-			}
-			resp.Tabular = append(resp.Tabular, row)
-		}
-	}
-
-	return nil
-
-	// TODO: netflow stats?
+	return errors.New("unreachable")
 }
