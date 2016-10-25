@@ -1,0 +1,188 @@
+Running minimega on a cluster
+
+The minimega authors
+24 Oct 2016
+
+* Intro & Pre-requisites
+
+This guide covers the basics of setting up a cluster to run minimega
+and the process of launching minimega across a cluster.
+
+You'll need minimega, either compiled from source or downloaded as a
+tarball. See the [[installing.article][article on installing minimega]] for
+information on how to fetch and compile minimega. Although you only need
+the minimega tree on *one* node, you do need the external dependencies
+installed on every individual node, so make sure to install those.
+
+Although minimega is decentralized, we like to pick one node as a
+head node. This node is then the one that will store the minimega
+tree, plus any disk images or results files we may generate. We
+like to put the minimega tree under `/opt`, as mentioned in the
+[[installing.article][installation article]]
+
+** On node names
+
+minimega works best if all nodes have the same prefix followed
+by a number; this also makes it easier to write shell scripts for
+administering the cluster. For example, one of our minimega production
+clusters is called "The Country Club Cluster", so the nodes are named
+`ccc1`, `ccc2`, `ccc3`, and so on. We recommend against "themed"
+naming schemes, such as `dopey`, `sleepy`, `grumpy`.
+
+For the purposes of this document, we will assume you have 10 nodes,
+named `node1` through `node10`.
+
+* Setting up the network
+
+In order to have VMs on different host nodes talk to each other, we need
+to make a change to the networking. In short, we will use Open vSwitch to
+set up a bridge and add our physical ethernet device to that bridge. The
+bridge will then be able to act as the physical interface (get an IP,
+serve ssh, etc.) but will *also* move VLAN-tagged traffic from the VMs
+to the physical network.
+
+If you are in a hurry, you can skip the Background section and go straight
+to Configuring Open vSwitch.
+
+** Background: Open vSwitch
+
+minimega uses Open vSwitch to manage networking. Open vSwitch is a
+software package that can manipulate virtual and real network interfaces
+for advanced functionality beyond standard Linux tools. It can set
+up vlan-tagged virtual interfaces for virtual machines, then trunk
+vlan-tagged traffic up to the physical switch connected to the node
+running minimega.
+
+If your switch supports IEEE 802.1q vlan tagging (and most should), then
+vlan tagged interfaces with the same tag number should be able to see
+other interfaces with that tag number, even on other physical nodes. So
+if you have lots of VMs running across a cluster, as long as they were
+all configured with the same virtual network via `vm`config`net`, they
+will all be able to communicate.  If configured correctly, Open vSwitch
+and your switch hardware will interpret the vlan tag and switch traffic
+for that vlan as if on an isolated network.
+
+It is also possible to have multiple, isolated vlans running on several nodes
+in a cluster. That is, you can have nodes A and B both running VMs with vlans
+100 and 200, and Open vSwitch and your switch hardware will isolate the two
+networks, even though the traffic is going to both physical nodes. 
+
+If software defined networking and setting up Open vSwitch is new to you, check
+out the [[http://openvswitch.org][Open vSwitch website]] for more information. 
+
+** Configuring Open vSwitch for cluster operation
+
+minimega by default does *not* bridge any physical interfaces to the
+virtual switch. In order to allow multiple nodes to have VMs on the same
+vlan, you must attach a physical interface from each node to the virtual
+bridge in trunking mode. Doing so will disallow the physical interface
+from having an IP, you will need to assign an IP (or request one via DHCP)
+for the new virtual bridge we create.
+
+By default, minimega uses a bridge called `mega_bridge`. If such a bridge
+already exists, minimega will use it. We will therefore set up a bridge
+that includes the physical ethernet device.
+
+Let us assume each cluster node has a single physical interface called
+eth0 and gets its IP via DHCP. We will demonstrate two different
+ways of setting up the bridge, with the same results: a bridge called
+`mega_bridge` with `eth0` attached to it.
+
+*NOTE*: NetworkManager may interfere with both methods. We strongly
+recommend against using NetworkManager, it is unecessary in a cluster
+environment (and usually in a desktop environment, too)
+
+*** Shell commands
+
+You can create the bridge manually using the following commands, although
+*adding*eth0*will*cause*the*device*to*stop*responding*to*the*network*until*you*assign*an*IP*to*the*bridge*,
+so *do*not*run*these*commands*over*ssh*:
+
+	$ ovs-vsctl add-br mega_bridge
+	
+	# This will drop you from the network
+	$ ovs-vsctl add-port mega_bridge eth0
+	
+	# Now we can get an IP for the bridge instead
+	$ dhclient mega_bridge
+
+You can add those commands to e.g. `/etc/rc.local` so they will run on bootup.
+
+*** /etc/network/interfaces
+
+An alternative supported by some distributions is to configure the bridge
+via `/etc/network/interfaces`. You can add an entry to the file like this:
+
+	allow-ovs mega_bridge
+	iface mega_bridge inet dhcp
+	    ovs_type OVSBridge
+	    ovs_ports eth0
+
+After editing the file, running `service`networking`restart` should leave
+you with a `mega_bridge` device that has a DHCP address assigned. It
+should also come up correctly at boot.
+
+* Deploying minimega
+
+As mentioned above, you only need the minimega tree on one node of
+the cluster--we'll call this the head node. Using the `deploy` api,
+minimega can copy itself to other nodes in the cluster, launch itself,
+and discover the other cluster members to form a mesh.
+
+** Start minimega on the head node
+
+On the head node, we launch minimega by hand. Command line flags passed
+to this instance will be used on all the other instances we deploy across
+the cluster. The flags we're concerned with are:
+
+	-degree: specifies the number of other nodes minimega should try to connect to. This is the most important flag! 3 or 4 is a good value.
+	-context: a string that will distinguish your minimega instances from any others on the network. Your username is usually a good choice
+	-nostdin: specifies that this particular minimega should not accept input from the terminal; we will send it commands over a socket instead.
+
+Given those flags, you might start minimega like this (as root):
+
+	$ /opt/minimega/bin/minimega -degree 3 -context john -nostdin &
+
+** Start minimega on the other nodes
+
+Now that minimega is running on the head node, we can connect to it over
+the Unix socket:
+
+	$ /opt/minimega/bin/minimega -attach
+
+This will give you a minimega prompt where we'll enter the command to
+launch on the other nodes:
+
+	minimega$ deploy launch node[2-10]
+
+The `deploy` command copies the current minimega binary to the nodes
+you specify using `scp`, then launches them with `ssh` using the same
+set of command line flags as the minimega instance that ran `deploy`.
+
+After a minute or so, the other instances of minimega should have located
+each other and created a communications mesh. You can check the status
+like this:
+
+	minimega$ mesh status
+	host  | mesh size | degree | peers | context | port
+	node1 | 10        | 3      | 6     | john    | 9000
+
+	minimega$ mesh list
+	node1: node10
+	 |--node1
+	 |--node3
+	 |--node7
+	node3
+	 |--node7
+	 |--node2
+	 |--node1
+		(...)
+
+`mesh`status` shows general information about the communications mesh,
+including "mesh size", the number of nodes in the mesh. Because it shows
+a mesh size of 10, we know our entire 10-node cluster is in the mesh.
+
+`mesh`list` lists each mesh node and the nodes to which it is
+connected. Note that because we specified `-degree`3`, each node is
+connected to 3 others. Some nodes may be connected to more than 3 nodes,
+but each should have at least 3 connections.
