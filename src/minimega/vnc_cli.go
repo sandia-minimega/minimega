@@ -113,21 +113,23 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 		err = p.Stop()
 	} else if c.BoolArgs["inject"] {
 		vncPlayingLock.RLock()
-		defer vncPlayingLock.RUnlock()
 
 		cmd := c.StringArgs["cmd"]
 		p, _ = vncPlaying[id]
 		if p != nil {
 			err = p.Inject(cmd)
+			vncPlayingLock.RUnlock()
 		} else {
 			e, err := parseEvent(cmd)
 			if err != nil {
+				vncPlayingLock.RUnlock()
 				return err
 			}
 
 			if event, ok := e.(Event); ok {
 				// Vnc event
 				err = vncInject(vm, event)
+				vncPlayingLock.RUnlock()
 			} else {
 				// This is an injected LoadFile event without a running
 				// playback. This is equivalent to starting a new vnc playback.

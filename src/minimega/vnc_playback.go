@@ -23,20 +23,26 @@ type Event interface {
 	Write(w io.Writer) error
 }
 
-// Playback control
+// VNC playback control
 type Control int
 
 const (
 	Close Control = iota
 	Pause
 	Play
+	Loadf
+	Step
 )
 
-type Chan struct {
+type vncSignal struct {
+	kind Control
+	data string
+}
+
+type vncControl struct {
 	in      chan Event   // Receives parsed events from playFile()
 	out     chan Event   // Sends events to the vnc connection in playEvents()
 	control chan Control // Used to play, pause, and stop playbacks
-	loadf   chan string  // Used for injecting loadfile events
 }
 
 // Encapsulates the active playback file
@@ -48,7 +54,7 @@ type PlaybackReader struct {
 type vncKBPlayback struct {
 	// Embedded
 	*vncClient
-	*Chan
+	*vncControl
 	sync.Mutex
 
 	paused   time.Time
@@ -57,7 +63,7 @@ type vncKBPlayback struct {
 	prs []*PlaybackReader
 	err error
 
-	step chan bool
+	signal chan vncSignal
 
 	// Current event
 	e string
@@ -70,12 +76,11 @@ type vncKBPlayback struct {
 // goroutine to block until it receives a resume. A close will teardown the
 // running playback. Otherwise, events received on in are sent to the out
 // channel.
-func NewChan(in chan Event) *Chan {
-	c := &Chan{
+func NewVncControl(in chan Event) *vncControl {
+	c := &vncControl{
 		in:      in,
 		out:     make(chan Event),
 		control: make(chan Control),
-		loadf:   make(chan string),
 	}
 
 	go func() {
@@ -95,11 +100,12 @@ func NewChan(in chan Event) *Chan {
 				}
 			// Receive events and send to out
 			case e := <-c.in:
-				c.out <- e
+				if e != nil {
+					c.out <- e
+				}
 			}
 		}
 	}()
-
 	return c
 }
 
@@ -119,12 +125,12 @@ func (v *vncKBPlayback) playEvents() {
 
 func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 	kbp := &vncKBPlayback{
-		vncClient: c,
-		duration:  getDuration(pr.file.Name()),
-		Chan:      NewChan(make(chan (Event))),
-		prs:       []*PlaybackReader{pr},
-		step:      make(chan bool),
-		state:     Play,
+		vncClient:  c,
+		duration:   getDuration(pr.file.Name()),
+		vncControl: NewVncControl(make(chan (Event))),
+		prs:        []*PlaybackReader{pr},
+		signal:     make(chan vncSignal),
+		state:      Play,
 	}
 	return kbp
 }
@@ -174,7 +180,7 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 func (v *vncKBPlayback) playFile() {
 	v.start = time.Now()
 	defer close(v.in)
-	defer close(v.loadf)
+	defer close(v.signal)
 
 fileLoop:
 	for {
@@ -211,22 +217,24 @@ fileLoop:
 				t := time.Now()
 
 				select {
-				// Ends the playback
 				case <-v.done:
 					return
-				// Injected LoadFile event
-				case file := <-v.loadf:
-					err = v.loadFile(file)
-					if err != nil {
-						log.Error(err.Error())
-					} else {
-						continue fileLoop
+				case sig := <-v.signal:
+					// Injected LoadFile event
+					if sig.kind == Loadf {
+						err = v.loadFile(sig.data)
+						if err != nil {
+							log.Error(err.Error())
+						} else {
+							continue fileLoop
+						}
+					}
+					// Step to the next event
+					if sig.kind == Step {
+						v.duration -= duration - time.Since(t)
 					}
 				// Wait for the duration
 				case <-wait:
-				// Step to the next event
-				case <-v.step:
-					v.duration -= duration - time.Since(t)
 				}
 
 				switch event := res.(type) {
@@ -339,7 +347,7 @@ func (v *vncKBPlayback) Step() error {
 	}
 
 	select {
-	case v.step <- true:
+	case v.signal <- vncSignal{kind: Step, data: ""}:
 	default:
 	}
 	return nil
@@ -386,8 +394,10 @@ func (v *vncKBPlayback) Stop() error {
 	v.state = Close
 	v.control <- Close
 
-	v.vncClient.Stop()
+	v.done <- true
+	close(v.done)
 
+	v.vncClient.Stop()
 	delete(vncPlaying, v.ID)
 
 	// Cleanup any open playback readers
@@ -413,8 +423,7 @@ func (v *vncKBPlayback) Inject(cmd string) error {
 	if event, ok := e.(Event); ok {
 		v.out <- event
 	} else {
-		// LoadFile event
-		v.loadf <- e.(string)
+		v.signal <- vncSignal{kind: Loadf, data: e.(string)}
 	}
 
 	return nil
