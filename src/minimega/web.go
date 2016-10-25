@@ -104,10 +104,12 @@ func webStart(port int, root string) {
 	}
 
 	mux.HandleFunc("/", webIndex)
+	mux.HandleFunc("/hosts", webHosts)
+	mux.HandleFunc("/graph", webGraph)
 	mux.HandleFunc("/tilevnc", webTileVNC)
 	mux.HandleFunc("/terminal", webTerminal)
-	mux.HandleFunc("/hosts", webHosts)
-	mux.HandleFunc("/vms", webVMs)
+	mux.HandleFunc("/hosts.json", webHostsJSON)
+	mux.HandleFunc("/vms.json", webVMsJSON)
 	mux.HandleFunc("/vnc/", webVNC)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.Handle("/ws/", websocket.Handler(vncWsHandler))
@@ -203,12 +205,22 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HTML responses below
+
 func webIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 	} else {
 		http.ServeFile(w, r, filepath.Join(web.Root, "index.html"))
 	}
+}
+
+func webHosts(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(web.Root, "hosts.html"))
+}
+
+func webGraph(w http.ResponseWriter, r *http.Request) {
+	http.ServeFile(w, r, filepath.Join(web.Root, "graph.html"))
 }
 
 func webTileVNC(w http.ResponseWriter, r *http.Request) {
@@ -223,7 +235,9 @@ func webVNC(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
 }
 
-func webHosts(w http.ResponseWriter, r *http.Request) {
+// JSON responses below
+
+func webHostsJSON(w http.ResponseWriter, r *http.Request) {
 	hosts := [][]interface{}{}
 
 	cmd := minicli.MustCompile("host")
@@ -257,7 +271,7 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-func webVMs(w http.ResponseWriter, r *http.Request) {
+func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
@@ -273,6 +287,7 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 		config := getConfig(vm)
 
 		vmMap := map[string]interface{}{
+			"namespace": config.Namespace,
 			"host":   vm.GetHost(),
 			"id":     vm.GetID(),
 			"name":   vm.GetName(),
@@ -280,6 +295,9 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 			"type":   vm.GetType().String(),
 			"vcpus":  config.Vcpus,
 			"memory": config.Memory,
+			"snapshot": config.Snapshot,
+			"uiud":   config.UUID,
+			"activecc": config.ActiveCC,
 		}
 
 		if vm, ok := vm.(*KvmVM); ok {

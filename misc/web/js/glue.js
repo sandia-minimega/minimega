@@ -1,9 +1,9 @@
 "use strict";
 
 // Config
-var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
+var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 0;    // How often the currently-displayed hosts are updated (in millis)
-var VM_REFRESH_TIMEOUT = 0;      // How often the currently-displayed vms are updated (in millis)
+var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
 var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
 var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
 var IP6_COLUMN_INDEX = 6;           // Index of the column with IP6 info (needs to have values strignified)
@@ -73,15 +73,17 @@ function updateVMTable(vmsData) {
         table.fnDraw(false);
     } else {
         var table = $('#vms-dataTable').DataTable({
+            dom: 'Bfrtip',
+            buttons: [
+                'colvis'
+            ],
+            "autoWidth": false,
             "paging": true,
             aLengthMenu: [
                 [25, 50, 100, 200, -1],
                 [25, 50, 100, 200, "All"]
             ],
             iDisplayLength: -1,
-            buttons: [
-                'colvis'
-            ],
             "aaData": vmsData,
             "aoColumns": [
                 { "sTitle": "Host", "mDataProp": "host" },
@@ -150,13 +152,14 @@ function updateScreenshotTable(vmsData) {
         if (screenshotList.length > 0) table.fnAddData(screenshotList, false);
         table.fnDraw(false);
     } else {
-        var table = $("#screenshots-list").dataTable({
+        var table = $("#screenshots-list").DataTable({
+            "autoWidth": false,
             "paging": true,
             aLengthMenu: [
                 [25, 50, 100, 200, -1],
                 [25, 50, 100, 200, "All"]
             ],
-            iDisplayLength: -1,
+            iDisplayLength: 200,
             "aaData": screenshotList,
             "aoColumns": [
                 { "sTitle": "Name", "mDataProp": "name", "visible": false },
@@ -187,6 +190,11 @@ function updateHostTable (hostsData) {
         table.fnDraw(false);
     } else {
         var table = $('#hosts-dataTable').DataTable({
+            dom: 'Bfrtip',
+            buttons: [
+                'colvis'
+            ],
+            "autoWidth": false,
             "paging": true,
             aLengthMenu: [
                 [25, 50, 100, 200, -1],
