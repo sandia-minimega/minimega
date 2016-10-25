@@ -3,4 +3,5 @@ clear vlans
 clear vm config
 vm kill all
 vm flush
+clear cc
 clear history

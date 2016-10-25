@@ -75,15 +75,13 @@ func main() {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	log.Debug("starting ron client with UUID: %v", Client.UUID)
+	log.Debug("starting ron client with UUID: %v", client.UUID)
 
 	if err := dial(); err != nil {
 		log.Fatal("unable to connect: %v", err)
 	}
 
 	go mux()
-	go periodic()
-	go commandHandler()
 	heartbeat() // handshake is first heartbeat
 
 	// create a listening domain socket for tag updates
@@ -98,8 +96,8 @@ func main() {
 }
 
 func dial() error {
-	Client.Lock()
-	defer Client.Unlock()
+	client.Lock()
+	defer client.Unlock()
 
 	var err error
 
@@ -117,14 +115,14 @@ func dial() error {
 				log.Fatal("invalid ron dial network family: %v", *f_family)
 			}
 
-			Client.conn, err = net.Dial(*f_family, addr)
+			client.conn, err = net.Dial(*f_family, addr)
 		} else {
-			Client.conn, err = dialSerial(*f_serial)
+			client.conn, err = dialSerial(*f_serial)
 		}
 
 		if err == nil {
-			Client.enc = gob.NewEncoder(Client.conn)
-			Client.dec = gob.NewDecoder(Client.conn)
+			client.enc = gob.NewEncoder(client.conn)
+			client.dec = gob.NewDecoder(client.conn)
 			return nil
 		}
 

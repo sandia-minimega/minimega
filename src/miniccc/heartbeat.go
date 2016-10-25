@@ -19,48 +19,49 @@ func periodic() {
 		log.Debug("periodic")
 
 		now := time.Now()
-		if now.Sub(Client.lastHeartbeat) > HeartbeatRate {
+		if now.Sub(client.lastHeartbeat) > HeartbeatRate {
 			// issue a heartbeat
 			heartbeat()
 		}
 
-		sleep := HeartbeatRate - now.Sub(Client.lastHeartbeat)
+		sleep := HeartbeatRate - now.Sub(client.lastHeartbeat)
 		time.Sleep(sleep)
 	}
 }
 
 // heartbeat sends the latest client info to the ron server.
 func heartbeat() {
-	Client.Lock()
-	defer Client.Unlock()
+	client.Lock()
+	defer client.Unlock()
 
 	updateNetworkInfo()
 
 	log.Debug("sending heartbeat")
 
 	c := &ron.Client{
-		UUID:           Client.UUID,
-		Arch:           Client.Arch,
-		OS:             Client.OS,
-		Hostname:       Client.Hostname,
-		IPs:            Client.IPs,
-		MACs:           Client.MACs,
-		CommandCounter: Client.CommandCounter,
-		Version:        version.Revision,
-		Processes:      make(map[int]*ron.Process),
+		UUID:          client.UUID,
+		Arch:          client.Arch,
+		OS:            client.OS,
+		Hostname:      client.Hostname,
+		IPs:           client.IPs,
+		MACs:          client.MACs,
+		Namespace:     client.Namespace,
+		LastCommandID: client.LastCommandID,
+		Version:       version.Revision,
+		Processes:     make(map[int]*ron.Process),
 	}
 
-	for k, v := range Client.Processes {
+	for k, v := range client.Processes {
 		c.Processes[k] = &ron.Process{
 			PID:     v.PID,
 			Command: v.Command,
 		}
 	}
 
-	c.Responses = Client.Responses
-	Client.Responses = []*ron.Response{}
-	c.Tags = Client.Tags
-	Client.Tags = make(map[string]string)
+	c.Responses = client.Responses
+	client.Responses = []*ron.Response{}
+	c.Tags = client.Tags
+	client.Tags = make(map[string]string)
 
 	m := &ron.Message{
 		Type:   ron.MESSAGE_CLIENT,
@@ -73,5 +74,5 @@ func heartbeat() {
 		return
 	}
 
-	Client.lastHeartbeat = time.Now()
+	client.lastHeartbeat = time.Now()
 }

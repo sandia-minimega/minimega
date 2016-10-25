@@ -82,13 +82,14 @@ func (s *Server) GetActiveClients() map[string]*Client {
 	// deep copy
 	for u, c := range s.clients {
 		res[u] = &Client{
-			UUID:           c.UUID,
-			Arch:           c.Arch,
-			OS:             c.OS,
-			Version:        c.Version,
-			Hostname:       c.Hostname,
-			CommandCounter: c.CommandCounter,
-			Processes:      make(map[int]*Process),
+			UUID:          c.UUID,
+			Arch:          c.Arch,
+			OS:            c.OS,
+			Version:       c.Version,
+			Hostname:      c.Hostname,
+			Namespace:     c.Namespace,
+			LastCommandID: c.LastCommandID,
+			Processes:     make(map[int]*Process),
 		}
 		for _, ip := range c.IPs {
 			res[u].IPs = append(res[u].IPs, ip)
@@ -250,30 +251,22 @@ func (s *Server) UnregisterVM(uuid string) {
 	delete(s.vms, uuid)
 }
 
-// send the command list to all clients periodically, unless the list has been
-// sent recently.
-func (s *Server) periodic() {
-	rate := time.Duration(HEARTBEAT_RATE * time.Second)
-	for {
-		now := time.Now()
-		if now.Sub(s.lastBroadcast) > rate {
-			// issue a broadcast
-			s.broadcastCommands()
-		}
-		sleep := rate - now.Sub(s.lastBroadcast)
-		time.Sleep(sleep)
-	}
-}
+// sendCommands send a commands message to the specified UUID. If UUID is not
+// specified, the message is sent to all active clients.
+func (s *Server) sendCommands(uuid string) {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
 
-// send the command list to all active clients
-func (s *Server) broadcastCommands() {
-	commands := s.GetCommands()
 	m := &Message{
 		Type:     MESSAGE_COMMAND,
-		Commands: commands,
+		Commands: make(map[int]*Command),
+		UUID:     uuid,
 	}
+	for k, v := range s.commands {
+		m.Commands[k] = v.Copy()
+	}
+
 	s.route(m)
-	s.lastBroadcast = time.Now()
 }
 
 // client and transport handler for connections.
@@ -295,12 +288,28 @@ func (s *Server) clientHandler(conn net.Conn) {
 		}
 		return
 	}
+
+	vm, ok := s.vms[handshake.Client.UUID]
+	if !ok {
+		log.Error("unregistered client %v", handshake.Client.UUID)
+		return
+	}
+
+	if handshake.Client.Version != version.Revision {
+		log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
+	}
+
+	handshake.Client.Namespace = vm.GetNamespace()
+	if err := c.enc.Encode(&handshake); err != nil {
+		// client disconnected before it read the full handshake
+		if err != io.EOF {
+			log.Errorln(err)
+		}
+		return
+	}
+
 	c.Client = handshake.Client
 	log.Debug("new client: %v", handshake.Client)
-
-	if c.Version != version.Revision {
-		log.Warn("mismatched miniccc version: %v", c.Version)
-	}
 
 	// Set up minitunnel, dialing the server that should be running on the
 	// client's side. Data is Trunk'd via Messages.
@@ -324,13 +333,16 @@ func (s *Server) clientHandler(conn net.Conn) {
 		c.tunnel = tunnel
 	}()
 
-	c.Checkin = time.Now()
+	c.checkin = time.Now()
 
 	if err := s.addClient(c); err != nil {
 		log.Errorln(err)
 		return
 	}
 	defer s.removeClient(c.UUID)
+
+	// send the commands to our new client
+	go s.sendCommands(c.UUID)
 
 	var err error
 
@@ -422,30 +434,61 @@ func (s *Server) readFile(f string) *Message {
 
 // route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
+	var maxCommandID int
+	for i := range m.Commands {
+		if i > maxCommandID {
+			maxCommandID = i
+		}
+	}
+
 	handleUUID := func(uuid string) {
+		// create locally scoped pointer to message
+		m := m
+
 		c, ok := s.clients[uuid]
 		if !ok {
 			log.Error("no such client %v", uuid)
 			return
 		}
 
+		if c.maxCommandID == maxCommandID {
+			log.Info("no commands for %v", uuid)
+			return
+		}
+
 		vm, ok := s.vms[uuid]
 		if !ok {
-			// The client is connected but not registered:
-			//  * client connected before it was registered
-			//  * client was unregistered before it disconnected
-			// Either way, we have to skip it since we don't know what
-			// namespace it belongs to.
+			// odd, someone must have unregistered the client...
 			log.Error("unregistered client %v", uuid)
 			return
 		}
 
-		// Create a copy of the Message
-		m2 := *m
-		m2.Tags = vm.GetTags()
-		m2.Namespace = vm.GetNamespace()
+		if m.Type == MESSAGE_COMMAND {
+			// update client's tags in case we're matching based on them
+			c.Tags = vm.GetTags()
 
-		if err := c.sendMessage(&m2); err != nil {
+			// create a copy of the Message
+			m2 := *m
+			m2.Commands = map[int]*Command{}
+
+			// filter the commands to relevant ones
+			for i, cmd := range m.Commands {
+				if c.Matches(cmd.Filter) && i > c.maxCommandID {
+					m2.Commands[i] = cmd
+				}
+			}
+
+			c.maxCommandID = maxCommandID
+
+			if len(m2.Commands) == 0 {
+				log.Info("no commands for %v", uuid)
+				return
+			}
+
+			m = &m2
+		}
+
+		if err := c.sendMessage(m); err != nil {
 			if strings.Contains(err.Error(), "broken pipe") {
 				log.Debug("client disconnected: %v", uuid)
 			} else {
@@ -454,6 +497,7 @@ func (s *Server) route(m *Message) {
 		}
 	}
 
+	// handleUUID doesn't modify the clients map so we can allow parallel reads
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
@@ -484,13 +528,6 @@ func (s *Server) responseHandler() {
 		cin := <-s.responses
 
 		log.Debug("responseHandler: %v", cin.UUID)
-
-		// update maximum command id if there's a higher one in the wild
-		if cin.CommandCounter > s.commandCounter {
-			s.commandCounterLock.Lock()
-			s.commandCounter = cin.CommandCounter
-			s.commandCounterLock.Unlock()
-		}
 
 		// update all the client fields
 		s.updateClient(cin)
@@ -551,17 +588,18 @@ func (s *Server) updateClient(cin *Client) {
 	c, ok := s.clients[cin.UUID]
 	if !ok {
 		// the client probably disconnected between sending the heartbeat and
-		// us processing it. We'll still process any command responses.
+		// us processing it. We'll still process any command responses but
+		// shouldn't try to update the client itself.
 		log.Info("unknown client %v", cin.UUID)
 		return
 	}
 
 	c.Client = cin
-	c.Checkin = time.Now()
+	c.checkin = time.Now()
 
 	vm, ok := s.vms[cin.UUID]
 	if !ok {
-		// see above
+		// see above but for the VM.
 		log.Info("unregistered client %v", cin.UUID)
 		return
 	}
@@ -601,19 +639,38 @@ func (s *Server) DeleteCommand(id int) error {
 	}
 }
 
+// ResetCommands deletes all commands and sets the command ID counter back to
+// zero. As with DeleteCommand, any in-flight responses may still be returned.
+func (s *Server) ResetCommands() {
+	log.Debug("reset commands")
+
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	s.commandCounter = 0
+	s.commands = make(map[int]*Command)
+
+	for _, c := range s.clients {
+		c.maxCommandID = 0
+	}
+}
+
 // Post a new command to the active command list. The command ID is returned.
 func (s *Server) NewCommand(c *Command) int {
 	log.Debug("NewCommand: %v", c)
 
-	s.commandCounterLock.Lock()
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
 	s.commandCounter++
 	c.ID = s.commandCounter
-	s.commandCounterLock.Unlock()
 
-	s.commandLock.Lock()
 	s.commands[c.ID] = c
-	s.commandLock.Unlock()
-	go s.broadcastCommands()
+
+	go s.sendCommands("")
 	return c.ID
 }
 
@@ -625,7 +682,7 @@ func (s *Server) clientReaper() {
 		s.clientLock.Lock()
 		for k, v := range s.clients {
 			// checked in more recently than expiration time
-			active := time.Now().Sub(v.Checkin) < CLIENT_EXPIRED*time.Second
+			active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
 
 			if !active {
 				log.Debug("client %v expired", k)

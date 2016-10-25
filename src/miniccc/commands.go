@@ -70,9 +70,9 @@ func runCommand(command []string, background bool) (string, string) {
 
 		pid := cmd.Process.Pid
 
-		Client.Lock()
-		defer Client.Unlock()
-		Client.Processes[pid] = &Process{
+		client.Lock()
+		defer client.Unlock()
+		client.Processes[pid] = &Process{
 			PID:     pid,
 			Command: command,
 			process: cmd.Process,
@@ -88,9 +88,9 @@ func runCommand(command []string, background bool) (string, string) {
 				log.Info(stderr.String())
 			}
 
-			Client.Lock()
-			defer Client.Unlock()
-			delete(Client.Processes, pid)
+			client.Lock()
+			defer client.Unlock()
+			delete(client.Processes, pid)
 		}()
 
 		return "", ""
@@ -103,13 +103,13 @@ func runCommand(command []string, background bool) (string, string) {
 }
 
 func kill(pid int) {
-	Client.Lock()
-	defer Client.Unlock()
+	client.Lock()
+	defer client.Unlock()
 
 	if pid == -1 {
 		// Wildcard
 		log.Info("killing all processes")
-		for _, p := range Client.Processes {
+		for _, p := range client.Processes {
 			if err := p.process.Kill(); err != nil {
 				log.Errorln(err)
 			}
@@ -119,7 +119,7 @@ func kill(pid int) {
 	}
 
 	log.Info("killing PID %v", pid)
-	if p, ok := Client.Processes[pid]; ok {
+	if p, ok := client.Processes[pid]; ok {
 		if err := p.process.Kill(); err != nil {
 			log.Errorln(err)
 		}
@@ -131,12 +131,12 @@ func kill(pid int) {
 }
 
 func killAll(needle string) {
-	Client.Lock()
-	defer Client.Unlock()
+	client.Lock()
+	defer client.Unlock()
 
 	log.Info("killing all processes matching `%v`", needle)
 
-	for _, p := range Client.Processes {
+	for _, p := range client.Processes {
 		if strings.Contains(strings.Join(p.Command, " "), needle) {
 			log.Info("killing matched process: %v", p.Command)
 			if err := p.process.Kill(); err != nil {
