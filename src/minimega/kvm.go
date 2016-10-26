@@ -836,6 +836,7 @@ func qemuOverrideString() string {
 	w.Flush()
 
 	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- just testing
+	args = args[1:]                  // strip off the executable
 	preArgs := unescapeString(args)
 	postArgs := strings.Join(ParseQemuOverrides(args), " ")
 
