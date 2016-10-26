@@ -1,4 +1,4 @@
-vm config filesystem /data/minimega/containerfs
+vm config filesystem $containerfs
 
 namespace foo
 nsmod add-host localhost

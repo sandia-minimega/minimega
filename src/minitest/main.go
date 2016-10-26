@@ -85,8 +85,8 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 	s := bufio.NewScanner(f)
 
 	for s.Scan() {
-		// Can't use Compile since we didn't minimega, not minitest, registers
-		// handlers with minicli
+		// Can't use Compile since minimega, not minitest, registers handlers
+		// with minicli
 		cmd := &minicli.Command{Original: s.Text()}
 
 		if len(cmd.Original) > 0 {
