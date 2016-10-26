@@ -1,7 +1,7 @@
 "use strict";
 
 // Config
-var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
+var VM_REFRESH_TIMEOUT = 0;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 0;    // How often the currently-displayed hosts are updated (in millis)
 var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
 var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
@@ -314,69 +314,4 @@ function handleEmptyString (value) {
         ((typeof(value) === "object") && (Object.keys(value).length === 0))
     ) return '<span class="empty-string">null</span>';
     return value;
-}
-
-
-// Turn a field into a string properly formatted for the table
-function tableString (field, toplevel) {
-    if (typeof(field) === "object") {
-        if (Array.isArray(field)) {
-            if (typeof(field[0]) === "object") {
-                var accumulator = "";
-                for (var i = 0; i < field.length; i++) {
-                    accumulator += "<table style=\"float:right\">" + tableString(field[i], false) + "</table><br>";      // Sorry about this one.
-                }
-                return accumulator;
-            } else if (field.length == 0) {
-                return handleEmptyString();
-            } else {
-                var underscoredField = field.map(function (d) { return handleEmptyString(d); });
-                return underscoredField.join(", ");
-            }
-        } else if ((field === null) || (Object.keys(field).length == 0)) {
-            return handleEmptyString();
-        } else if ((typeof(field) === "object") && (toplevel !== false)) {
-            return "<table style=\"float:right\">" + tableString(field, false) + "</table>";
-        } else {
-            var toReturn = "";
-            for (var key in field) {
-                toReturn += "<tr><td>" + key + "</td><td>" + ((typeof(field[key]) === "object") ? tableString(field[key]) : handleEmptyString(field[key])) + "</td></tr>";
-            }
-            return toReturn;
-        }
-    } else {
-        return String(handleEmptyString(field));
-    }
-}
-
-
-function makeVNClink(vm) {
-    return "<a target=\"_blank\" href=\"" + vncURL(vm) + "\">" + vm.host + ":" + (5900 + vm.id) + "</a>"
-}
-
-
-function addVNClink(parent, vm) {
-    var newHtml = "";
-    var oldHtml = parent.html();
-    var row = $("<tr></tr>");
-    $("<td></td>").appendTo(row).text("VNC");
-    $("<td></td>").appendTo(row).html(makeVNClink(vm));
-    newHtml += row.get(0).outerHTML;
-    parent.html(newHtml + oldHtml);
-}
-
-
-// Build the DOM for the table
-function makeTable (parent, data) {
-    var newHtml = "";
-    for (var key in data) {
-        if ($.inArray(key, ["color", "uuid"]) === -1) {
-            var row = $("<tr></tr>");
-            $("<td></td>").appendTo(row).text(key);
-            $("<td></td>").appendTo(row).html(tableString(data[key]));
-            newHtml += row.get(0).outerHTML;
-        }
-    }
-
-    parent.html(newHtml);
 }
