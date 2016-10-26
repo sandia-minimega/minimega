@@ -180,7 +180,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 func MustCompile(input string) *Command {
 	c, err := Compile(input)
 	if err != nil {
-		log.Fatal("unable to compile `%s` -- %v", input, err)
+		log.Fatalln(err)
 	}
 
 	return c
