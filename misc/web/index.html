@@ -130,28 +130,16 @@
 		<script type="text/javascript" src="js/glue.js"></script>
 		<script type="text/javascript">
 			$(document).ready(function() {
-				updateVMs(updateVMTable);
-			    if (VM_REFRESH_TIMEOUT > 0) {
-			        setInterval(function() {
-			        	//console.log("refreshing VMs");
-			        	updateVMs(updateVMTable);
-			        }, VM_REFRESH_TIMEOUT);
-			    }
+				initVMDataTable();
 
+			    initHostDataTable();
+			    
 			    updateVMs(updateScreenshotTable);
 			    if (IMAGE_REFRESH_TIMEOUT > 0) {
 			        setInterval(function() {
 			        	//console.log("refreshing Screenshots");
 			        	updateVMs(updateScreenshotTable);
 			        }, IMAGE_REFRESH_TIMEOUT);
-			    }
-
-			    updateHosts(updateHostTable);
-			    if (HOST_REFRESH_TIMEOUT > 0) {
-			        setInterval(function() {
-			        	//console.log("refreshing Hosts");
-			        	updateHosts(updateHostTable);
-			        }, HOST_REFRESH_TIMEOUT);
 			    }
 			});
 		</script>

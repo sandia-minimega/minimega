@@ -1,8 +1,8 @@
 "use strict";
 
 // Config
-var VM_REFRESH_TIMEOUT = 0;      // How often the currently-displayed vms are updated (in millis)
-var HOST_REFRESH_TIMEOUT = 0;    // How often the currently-displayed hosts are updated (in millis)
+var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
+var HOST_REFRESH_TIMEOUT = 2000;    // How often the currently-displayed hosts are updated (in millis)
 var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
 var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
 var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
@@ -19,6 +19,11 @@ var COLOR_CLASSES = {
 
 // Data
 var lastImages = {};    // Cache of screenshots
+
+// DataTables
+var vmDataTable;
+var hostDataTable;
+var ssDataTable;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Request latest info from server
@@ -51,8 +56,101 @@ function updateHosts (callback) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Update the VM table with new data
-function updateVMTable(vmsData) {
+// Initialize the VM DataTable and set up an automatic reload
+function initVMDataTable() {
+    var vmDataTable = $('#vms-dataTable').DataTable({
+        "ajax": {
+            "url": "vms.json",
+            "dataSrc": ""
+        },
+        dom: 'Bfrtip',
+        buttons: [
+            'colvis'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        aLengthMenu: [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        iDisplayLength: -1,
+        "aoColumns": [
+            { "sTitle": "Host", "mDataProp": "host" },
+            //{ "sTitle": "ID", "mDataProp": "id" },
+            { "sTitle": "Memory", "mDataProp": "memory" },
+            { "sTitle": "Name", "mDataProp": "name" },
+            { "sTitle": "Network", "mDataProp": "network" },
+            { "sTitle": "IPv4", "mDataProp": "network" },
+            { "sTitle": "IPv6", "mDataProp": "network" },
+            { "sTitle": "Taps", "mDataProp": "network" },
+            { "sTitle": "State", "mDataProp": "state" },
+            { "sTitle": "Tags", "mDataProp": "tags" },
+            { "sTitle": "Type", "mDataProp": "type" },
+            { "sTitle": "VCPUs", "mDataProp": "vcpus" }
+        ],
+        "fnRowCallback": flattenObjectValues
+    });
+    vmDataTable.order([
+        [ 0, 'asc' ],
+        [ 1, 'asc' ]
+    ]);
+    vmDataTable.draw();
+
+    if (VM_REFRESH_TIMEOUT > 0) {
+        setInterval(vmDataTable.ajax.reload, VM_REFRESH_TIMEOUT);
+    }
+}
+
+
+// Initialize the Host DataTable and set up an automatic reload
+function initHostDataTable() {
+    var hostDataTable = $('#hosts-dataTable').DataTable({
+        "ajax": {
+            "url": "hosts.json",
+            "dataSrc": ""
+        },
+        dom: 'Bfrtip',
+        buttons: [
+            'colvis'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        aLengthMenu: [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        iDisplayLength: -1,
+        "aoColumns": [
+            { "sTitle": "Name" },
+            { "sTitle": "CPUs" },
+            { "sTitle": "Load" },
+            { "sTitle": "Memused" },
+            { "sTitle": "Memtotal" },
+            { "sTitle": "Bandwidth" },
+            { "sTitle": "vms" },
+            { "sTitle": "vmsall" },
+            { "sTitle": "uptime" }
+        ]
+    });
+    hostDataTable.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(hostDataTable.ajax.reload, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+
+// Update the Screenshot table with new data
+function updateScreenshotTable(vmsData) {
+
+    // Add "Connect" URLs into the data
+    for (var i = 0; i < vmsData.length; i++) {
+        var vm = vmsData[i];
+        vm.vncURL = vncURL(vm);
+        vm.screenshotURL = screenshotURL(vm, 300);
+        //console.log(vm);
+    }
+
 
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
@@ -63,56 +161,7 @@ function updateVMTable(vmsData) {
         }
     }
 
-    // Update the list of VMs datatable
-    if ($.fn.dataTable.isDataTable('#vms-dataTable')) {
-        var table = $('#vms-dataTable').dataTable();
-        table.fnClearTable(false);
-        if (vmsData.length > 0) {
-            table.fnAddData(vmsData, false);
-        }
-        table.fnDraw(false);
-    } else {
-        var table = $('#vms-dataTable').DataTable({
-            dom: 'Bfrtip',
-            buttons: [
-                'colvis'
-            ],
-            "autoWidth": false,
-            "paging": true,
-            aLengthMenu: [
-                [25, 50, 100, 200, -1],
-                [25, 50, 100, 200, "All"]
-            ],
-            iDisplayLength: -1,
-            "aaData": vmsData,
-            "aoColumns": [
-                { "sTitle": "Host", "mDataProp": "host" },
-                //{ "sTitle": "ID", "mDataProp": "id" },
-                { "sTitle": "Memory", "mDataProp": "memory" },
-                { "sTitle": "Name", "mDataProp": "name" },
-                { "sTitle": "Network", "mDataProp": "network" },
-                { "sTitle": "IPv4", "mDataProp": "network" },
-                { "sTitle": "IPv6", "mDataProp": "network" },
-                { "sTitle": "Taps", "mDataProp": "network" },
-                { "sTitle": "State", "mDataProp": "state" },
-                { "sTitle": "Tags", "mDataProp": "tags" },
-                { "sTitle": "Type", "mDataProp": "type" },
-                { "sTitle": "VCPUs", "mDataProp": "vcpus" }
-            ],
-            "fnRowCallback": flattenObjectValues
-        });
-        table.order([
-            [ 0, 'asc' ],
-            [ 1, 'asc' ]
-        ]);
-        table.draw();
-    } 
-}
-
-
-// Update the Screenshot table with new data
-function updateScreenshotTable(vmsData) {
-
+    // Create the HTML element for each screenshot block
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
         <td><div class="thumbnail">                                          \
@@ -128,6 +177,7 @@ function updateScreenshotTable(vmsData) {
         </div></td>                                                          \
     ');
 
+    // Fill out the above model for each individual VM info and push into a list
     var screenshotList = [];
     for (var i = 0; i < vmsData.length; i++) {
         var toAppend = model.clone();
@@ -146,10 +196,13 @@ function updateScreenshotTable(vmsData) {
         });
     }
 
+    // Push the list to DataTable
     if ($.fn.dataTable.isDataTable("#screenshots-list")) {
         var table = $("#screenshots-list").dataTable();
         table.fnClearTable(false);
-        if (screenshotList.length > 0) table.fnAddData(screenshotList, false);
+        if (screenshotList.length > 0) {
+            table.fnAddData(screenshotList, false);
+        }
         table.fnDraw(false);
     } else {
         var table = $("#screenshots-list").DataTable({
@@ -172,49 +225,12 @@ function updateScreenshotTable(vmsData) {
         if (IMAGE_REFRESH_TIMEOUT > 0) {
             setInterval((function (closureTable) {
                 return function () {
+                    // Causes all the screenshot images to be re-requested and rendered
                     closureTable.fnDraw(false);
                 }
             })(table), IMAGE_REFRESH_TIMEOUT)
         }
 
-    }
-}
-
-
-// Update the Host table with new data
-function updateHostTable (hostsData) {
-    if ($.fn.dataTable.isDataTable('#hosts-dataTable')) {
-        var table = $('#hosts-dataTable').dataTable();
-        table.fnClearTable(false);
-        if (hostsData.length > 0) table.fnAddData(hostsData, false);
-        table.fnDraw(false);
-    } else {
-        var table = $('#hosts-dataTable').DataTable({
-            dom: 'Bfrtip',
-            buttons: [
-                'colvis'
-            ],
-            "autoWidth": false,
-            "paging": true,
-            aLengthMenu: [
-                [25, 50, 100, 200, -1],
-                [25, 50, 100, 200, "All"]
-            ],
-            iDisplayLength: -1,
-            "aaData": hostsData,
-            "aoColumns": [
-                { "sTitle": "Name" },
-                { "sTitle": "CPUs" },
-                { "sTitle": "Load" },
-                { "sTitle": "Memused" },
-                { "sTitle": "Memtotal" },
-                { "sTitle": "Bandwidth" },
-                { "sTitle": "vms" },
-                { "sTitle": "vmsall" },
-                { "sTitle": "uptime" }
-            ]
-        });
-        table.draw();
     }
 }
 
