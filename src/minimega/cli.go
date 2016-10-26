@@ -408,8 +408,12 @@ func cliLocal() {
 // string or an error.
 func cliPreprocess(v string) (string, error) {
 	if strings.HasPrefix(v, "$") {
-		if v2 := os.Getenv(v[1:]); v2 != "" {
-			return v2, nil
+		end := strings.IndexAny(v, "/ ")
+		if end == -1 {
+			end = len(v)
+		}
+		if v2 := os.Getenv(v[1:end]); v2 != "" {
+			return v2 + v[end:], nil
 		}
 
 		return "", fmt.Errorf("undefined: %v", v)
