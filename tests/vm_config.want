@@ -37,7 +37,7 @@ foo
 ## vm config migrate
 ## vm config migrate foo
 ## vm config migrate
-foo
+/tmp/minimega/files/foo
 ## clear vm config migrate
 ## vm config migrate
 ## vm config uuid

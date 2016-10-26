@@ -1,5 +1,4 @@
-.annotate false
-vm config filesystem containerfs
+vm config filesystem $containerfs
 vm config hostname foo
 vm launch container foo[0-2]
 .columns name,state vm info
