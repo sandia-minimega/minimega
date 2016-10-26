@@ -63,18 +63,24 @@ function initVMDataTable() {
             "url": "vms.json",
             "dataSrc": ""
         },
-        dom: 'Bfrtip',
-        buttons: [
-            'colvis'
+        // custom DOM with Boostrap integration
+        // http://stackoverflow.com/a/32253335
+        "dom": 
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+            "<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility',
         ],
         "autoWidth": false,
         "paging": true,
-        aLengthMenu: [
+        "lengthChange": true,
+        "lengthMenu": [
             [25, 50, 100, 200, -1],
             [25, 50, 100, 200, "All"]
         ],
-        iDisplayLength: -1,
-        "aoColumns": [
+        "pageLength": -1,
+        "columns": [
             { "sTitle": "Host", "mDataProp": "host" },
             //{ "sTitle": "ID", "mDataProp": "id" },
             { "sTitle": "Memory", "mDataProp": "memory" },
@@ -88,13 +94,38 @@ function initVMDataTable() {
             { "sTitle": "Type", "mDataProp": "type" },
             { "sTitle": "VCPUs", "mDataProp": "vcpus" }
         ],
-        "fnRowCallback": flattenObjectValues
+        "createdRow": flattenObjectValues,
+        /*initComplete: function(){
+            var api = this.api();
+            api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
+        }*/
     });
+
     vmDataTable.order([
         [ 0, 'asc' ],
         [ 1, 'asc' ]
     ]);
-    vmDataTable.draw();
+
+    //vmDataTable.draw();
+
+    
+    // Create second button group for other functionality
+    /*
+    new $.fn.dataTable.Buttons( vmDataTable, {
+        buttons: [
+            {
+                extend: 'copyHtml5',
+                text: 'Copy to clipboard'
+            },
+            {
+                extend: 'csvHtml5',
+                text: 'Download CSV'
+            },
+        ]
+    } );
+    vmDataTable.buttons( 1, null ).container()
+        .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
+    */
 
     if (VM_REFRESH_TIMEOUT > 0) {
         setInterval(vmDataTable.ajax.reload, VM_REFRESH_TIMEOUT);
@@ -109,18 +140,22 @@ function initHostDataTable() {
             "url": "hosts.json",
             "dataSrc": ""
         },
-        dom: 'Bfrtip',
-        buttons: [
-            'colvis'
+        "dom": 
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+            "<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnVisibility'
         ],
         "autoWidth": false,
         "paging": true,
-        aLengthMenu: [
+        "lengthChange": true,
+        "lengthMenu": [
             [25, 50, 100, 200, -1],
             [25, 50, 100, 200, "All"]
         ],
-        iDisplayLength: -1,
-        "aoColumns": [
+        "pageLength": -1,
+        "columns": [
             { "sTitle": "Name" },
             { "sTitle": "CPUs" },
             { "sTitle": "Load" },
@@ -208,18 +243,18 @@ function updateScreenshotTable(vmsData) {
         var table = $("#screenshots-list").DataTable({
             "autoWidth": false,
             "paging": true,
-            aLengthMenu: [
+            "lengthChange": true,
+            "lengthMenu": [
                 [25, 50, 100, 200, -1],
                 [25, 50, 100, 200, "All"]
             ],
-            iDisplayLength: 200,
-            "aaData": screenshotList,
-            "aoColumns": [
+            "pageLength": -1,
+            "data": screenshotList,
+            "columns": [
                 { "sTitle": "Name", "mDataProp": "name", "visible": false },
                 { "sTitle": "Model", "mDataProp": "model", "searchable": false },
             ],
-            "lengthMenu": [[6, 12, 30, -1], [6, 12, 30, "All"]],
-            "fnRowCallback": loadOrRestoreImage
+            "createdRow": loadOrRestoreImage
         });
 
         if (IMAGE_REFRESH_TIMEOUT > 0) {
