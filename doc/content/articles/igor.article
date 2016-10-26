@@ -28,25 +28,11 @@ addresses to the compute nodes.
 Igor is included as part of the minimega distribution. All the compilation and
 installation tasks should be done on your head node.
 
-** Compilation
+** Get igor
 
-First, make sure you have a [[http://golang.org][Go compiler]] installed, then
-install the other packages minimega needs to build:
-
-	apt-get install libpcap-dev libreadline-dev
-
-Now, you can fetch and buld the minimega source:
-
-        git clone git@github.com:sandia-minimega/minimega.git
-	cd minimega
-	./all.bash
-
-This will build and test each of the libraries and tools in the minimega
-distribution and create a bin/ sudirectory containing each of the minimega
-tools. If you have a windows cross compiler for Go setup, it will also build
-windows binaries of several tools.
-
-The igor binary will be in the bin/ subdirectory.
+Follow the instructions in the [[installing.article][installation
+article]] to get minimega downloaded or built from source. The igor
+binary will be in the bin/ subdirectory.
 
 ** Installation
 
@@ -62,8 +48,8 @@ We have provided a shell script to ease the installation of igor. It will show
 you the commands it intends to run before running them, in case you wish to
 change anything. (Remember to run this on the head node, not any other node)
 
-        cd minimega/src/igor
-	./setup.sh
+        $ cd minimega/src/igor
+	$ ./setup.sh
 	
 To configure igor, edit /etc/igor.conf, a JSON config file created by
 setup.sh. Here's what one of ours looks like:
@@ -87,8 +73,8 @@ naming scheme. Our cluster nodes are named kn1 through kn520, so our
 numbers are *not* in quotes.
 
 "Rackheight" and "rackwidth" define the physical dimensions of your
-cluster hardware, for use with "igor show". We have a cluster composed of
-13 shelves, each containing 5 shelves of 8 PCs each. When "igor show"
+cluster hardware, for use with `igor`show`. We have a cluster composed of
+13 shelves, each containing 5 shelves of 8 PCs each. When `igor`show`
 runs, part of the information it gives is a diagram of "racks"; one
 "rack" from our cluster is shown below:
 
@@ -130,7 +116,7 @@ igor includes built-in help; you can run "igor help" to get started.
 
 To see what reservations already exist:
 
-        igor show
+        $ igor show
 
 This will show a diagram of the nodes in your cluster; nodes that are already
 reserved will be highlighted in a specific color. A key at the bottom matches
@@ -153,7 +139,7 @@ path to a kernel, a path to an initrd, and the list of nodes you wish to
 reserve. For example, if nodes back_ccc10 through back_ccc14 are not reserved,
 I can make a reservation called "testing" like this:
 
-        igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w back_ccc[10-14]
+        $ igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w back_ccc[10-14]
 
 This reservation will default to 12 hours duration; if I wanted to reserve it
 for longer, I'd use the -t flag.
@@ -164,7 +150,7 @@ Although reservations will be automatically deleted when they run out of time,
 it is polite to delete your reservation immediately when you're finished with
 it. To get rid of our "testing" reservation from above, simply run:
 
-        igor del testing
+        $ igor del testing
 
 ** Extending a reservation
 
@@ -172,5 +158,5 @@ If you find that you didn't make your reservation long enough, you can extend
 the time left on it with the "addtime" command. To add an additional 2 hours to
 the "testing" reservation, we could do this:
 
-        igor addtime -r testing -t 2
+        $ igor addtime -r testing -t 2
 	
