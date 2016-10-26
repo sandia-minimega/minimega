@@ -42,7 +42,7 @@ Having installed the dependencies, grab the minimega source:
 Next, check out the 2.3 release. If you wish to run the development
 version ("tip") of minimega, skip this command.
 
-	$ git checkout tags/2.3
+	$ git checkout 2.3
 
 Finally, compile minimega:
 
@@ -85,7 +85,7 @@ If you plan to launch and maintain VMs, you'll need the following programs at a 
 
 - kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
 - ip - ip tool for manipulating devices
-- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.4)
+- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.11)
 - ovs-ofctl - Open vSwitch openflow control with daemon running and kernel module loaded
 
 We also recommend installing the following; they are not strictly
@@ -93,7 +93,7 @@ necessary for basic VM use but are required for some more advanced
 operations:
 
 - dhclient - dhcp client
-- dnsmasq - DNS and DHCP server
+- dnsmasq - DNS and DHCP server (minimum version 2.73)
 - qemu-nbd/qemu-img - tool for interacting with qemu disk images (in the Debian package "qemu-tools")
 - mkdosfs - used when creating router images
 - taskset - set CPU affinity for VMs

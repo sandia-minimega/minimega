@@ -20,6 +20,25 @@ tree, plus any disk images or results files we may generate. We
 like to put the minimega tree under `/opt`, as mentioned in the
 [[installing.article][installation article]]
 
+** Passwordless login
+
+Cluster administration is much easier if you have it set up so you don't
+have to type a password to log in. The more secure way to do this is by
+setting up SSH keys for root on every node.
+
+Another option, if your cluster is not accessible to the public, is to
+simply turn on password-less root login. The following script should set
+it up:
+
+	#!/bin/bash
+        sed -i 's/nullok_secure/nullok/' /etc/pam.d/common-auth
+        sed -i 's/PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sed -i 's/PermitEmptyPasswords no/PermitEmptyPasswords yes/' /etc/ssh/sshd_config
+        passwd -d root
+
+Again, this is only a good idea if your cluster is secured behind a
+front-end node.
+
 ** On node names
 
 minimega works best if all nodes have the same prefix followed
@@ -127,7 +146,9 @@ should also come up correctly at boot.
 As mentioned above, you only need the minimega tree on one node of
 the cluster--we'll call this the head node. Using the `deploy` api,
 minimega can copy itself to other nodes in the cluster, launch itself,
-and discover the other cluster members to form a mesh.
+and discover the other cluster members to form a mesh. The `deploy`
+api requires password-less root SSH logins for each node, see the Intro
+section for more information.
 
 ** Start minimega on the head node
 
