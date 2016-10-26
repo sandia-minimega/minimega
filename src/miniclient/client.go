@@ -87,7 +87,7 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 			err = mm.dec.Decode(&r)
 			if err != nil {
 				if err == io.EOF {
-					log.Fatal("server disconnected")
+					log.Fatalln("server disconnected")
 				}
 
 				log.Fatal("local command gob decode: %v", err)
