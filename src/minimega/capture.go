@@ -10,6 +10,7 @@ import (
 	"gonetflow"
 	"gopcap"
 	log "minilog"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -123,6 +124,11 @@ func startCapturePcap(v string, iface int, filename string) error {
 	bridge := config.Networks[iface].Bridge
 	tap := config.Networks[iface].Tap
 
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
 	// attempt to start pcap on the bridge
 	p, err := gopcap.NewPCAP(tap, filename)
 	if err != nil {
@@ -159,6 +165,11 @@ func startBridgeCapturePcap(b, filename string) error {
 	tap, err := br.CreateMirror()
 	if err != nil {
 		return err
+	}
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
 	}
 
 	// attempt to start pcap on the mirrored tap
@@ -198,6 +209,11 @@ func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) erro
 	if ascii {
 		mode = gonetflow.ASCII
 		modeStr = "ascii"
+	}
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
 	}
 
 	err = nf.NewFileWriter(filename, mode, compress)
