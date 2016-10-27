@@ -696,48 +696,6 @@ func meshageVMLauncher() {
 	}
 }
 
-// HostVMs gets all the VMs running on the specified remote host, filtered to
-// the current namespace, if applicable.
-func HostVMs(host string) VMs {
-	cmdLock.Lock()
-	defer cmdLock.Unlock()
-
-	return hostVMs(host)
-}
-
-// hostVMs is HostVMs without locking cmdLock.
-func hostVMs(host string) VMs {
-	// Compile info command and set it not to record
-	cmd := minicli.MustCompile("vm info")
-	cmd.SetRecord(false)
-	cmd.SetSource(GetNamespaceName())
-
-	cmds := makeCommandHosts([]string{host}, cmd)
-
-	var vms VMs
-
-	// LOCK: see func description.
-	for resps := range runCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if vms2, ok := resp.Data.(VMs); ok {
-				if vms != nil {
-					// odd... should only be one vms per host and we're
-					// querying a single host
-					log.Warn("so many vms")
-				}
-				vms = vms2
-			}
-		}
-	}
-
-	return vms
-}
-
 // GlobalVMs gets the VMs from all hosts in the mesh, filtered to the current
 // namespace, if applicable. The keys of the returned map do not match the VM's
 // ID.
