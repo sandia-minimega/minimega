@@ -17,6 +17,13 @@ var (
 	errNoSuchPort    = errors.New("no such port")
 )
 
+// CheckOVS runs a simple openvswitch command to test whether openvswitch is
+// running or not.
+func CheckOVS() error {
+	_, err := ovsCmdWrapper([]string{"show"})
+	return err
+}
+
 // ovsAddBridge creates a new openvswitch bridge. Returns whether the bridge
 // was created or not, or any error that occurred.
 func ovsAddBridge(name string) (bool, error) {

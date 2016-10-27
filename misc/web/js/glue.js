@@ -81,18 +81,18 @@ function initVMDataTable() {
         ],
         "pageLength": -1,
         "columns": [
-            { "sTitle": "Host", "mDataProp": "host" },
-            //{ "sTitle": "ID", "mDataProp": "id" },
-            { "sTitle": "Memory", "mDataProp": "memory" },
-            { "sTitle": "Name", "mDataProp": "name" },
-            { "sTitle": "Network", "mDataProp": "network" },
-            { "sTitle": "IPv4", "mDataProp": "network" },
-            { "sTitle": "IPv6", "mDataProp": "network" },
-            { "sTitle": "Taps", "mDataProp": "network" },
-            { "sTitle": "State", "mDataProp": "state" },
-            { "sTitle": "Tags", "mDataProp": "tags" },
-            { "sTitle": "Type", "mDataProp": "type" },
-            { "sTitle": "VCPUs", "mDataProp": "vcpus" }
+            { "title": "Host", "mDataProp": "host" },
+            //{ "title": "ID", "mDataProp": "id" },
+            { "title": "Memory", "mDataProp": "memory" },
+            { "title": "Name", "mDataProp": "name" },
+            { "title": "Network", "mDataProp": "network" },
+            { "title": "IPv4", "mDataProp": "network" },
+            { "title": "IPv6", "mDataProp": "network" },
+            { "title": "Taps", "mDataProp": "network" },
+            { "title": "State", "mDataProp": "state" },
+            { "title": "Tags", "mDataProp": "tags" },
+            { "title": "Type", "mDataProp": "type" },
+            { "title": "VCPUs", "mDataProp": "vcpus" }
         ],
         "createdRow": flattenObjectValues,
         /*initComplete: function(){
@@ -145,7 +145,7 @@ function initHostDataTable() {
             "<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
             "<'row'<'col-sm-12'tr>>",
         "buttons": [
-            'columnVisibility'
+            'columnsVisibility'
         ],
         "autoWidth": false,
         "paging": true,
@@ -156,15 +156,15 @@ function initHostDataTable() {
         ],
         "pageLength": -1,
         "columns": [
-            { "sTitle": "Name" },
-            { "sTitle": "CPUs" },
-            { "sTitle": "Load" },
-            { "sTitle": "Memused" },
-            { "sTitle": "Memtotal" },
-            { "sTitle": "Bandwidth" },
-            { "sTitle": "vms" },
-            { "sTitle": "vmsall" },
-            { "sTitle": "uptime" }
+            { "title": "Name" },
+            { "title": "CPUs" },
+            { "title": "Load" },
+            { "title": "Memused" },
+            { "title": "Memtotal" },
+            { "title": "Bandwidth" },
+            { "title": "vms" },
+            { "title": "vmsall" },
+            { "title": "uptime" }
         ]
     });
     hostDataTable.draw();
@@ -181,7 +181,7 @@ function updateScreenshotTable(vmsData) {
     // Add "Connect" URLs into the data
     for (var i = 0; i < vmsData.length; i++) {
         var vm = vmsData[i];
-        vm.vncURL = vncURL(vm);
+        vm.connectURL = connectURL(vm);
         vm.screenshotURL = screenshotURL(vm, 300);
         //console.log(vm);
     }
@@ -219,7 +219,7 @@ function updateScreenshotTable(vmsData) {
         var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", vncURL(vm));
+        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
 
@@ -251,8 +251,8 @@ function updateScreenshotTable(vmsData) {
             "pageLength": -1,
             "data": screenshotList,
             "columns": [
-                { "sTitle": "Name", "mDataProp": "name", "visible": false },
-                { "sTitle": "Model", "mDataProp": "model", "searchable": false },
+                { "title": "Name", "mDataProp": "name", "visible": false },
+                { "title": "Model", "mDataProp": "model", "searchable": false },
             ],
             "createdRow": loadOrRestoreImage
         });
@@ -281,12 +281,9 @@ function screenshotURL (vm, size) {
 }
 
 
-// Generate the appropriate URL for requesting a VNC connection
-function vncURL (vm) {
-    if (vm.type == "container") {
-        return "./terminal#" + vm.name
-    }
-    return "./vnc#" + vm.name
+// Generate the appropriate URL for a connection
+function connectURL (vm) {
+    return "./connect/" + vm.name
 }
 
 

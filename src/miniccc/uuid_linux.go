@@ -4,7 +4,7 @@
 
 // +build linux
 
-package ron
+package main
 
 import (
 	"io/ioutil"
@@ -12,13 +12,14 @@ import (
 	"strings"
 )
 
-func getUUID() (string, error) {
+func getUUID() string {
 	d, err := ioutil.ReadFile("/sys/devices/virtual/dmi/id/product_uuid")
 	if err != nil {
-		return "", err
+		log.Fatal("unable to get UUID: %v", err)
 	}
-	uuid := string(d[:len(d)-1])
-	uuid = strings.ToLower(uuid)
+
+	uuid := strings.ToLower(strings.TrimSpace(string(d)))
 	log.Debug("got UUID: %v", uuid)
-	return uuid, nil
+
+	return uuid
 }

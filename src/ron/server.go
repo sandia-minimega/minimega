@@ -10,12 +10,14 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"minitunnel"
 	"net"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"version"
 )
@@ -25,8 +27,6 @@ func (s *Server) GetCommand(id int) *Command {
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
 
-	log.Debug("ron GetCommand: %v", id)
-
 	if v, ok := s.commands[id]; ok {
 		return v.Copy()
 	}
@@ -34,73 +34,75 @@ func (s *Server) GetCommand(id int) *Command {
 	return nil
 }
 
-// GetCommands returns a copy of the current command list
+// GetCommands returns a deep copy of the current command list
 func (s *Server) GetCommands() map[int]*Command {
-	// return a deep copy of the command list
-	ret := make(map[int]*Command)
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
 
+	res := make(map[int]*Command)
+
 	for k, v := range s.commands {
-		ret[k] = v.Copy()
+		res[k] = v.Copy()
 	}
 
-	log.Debug("ron GetCommands: %v", ret)
-
-	return ret
+	return res
 }
 
 func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
-	var p []*Process
-
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	for _, c := range s.clients {
-		if c.UUID == uuid {
-			// ordered list of pids
+	var res []*Process
 
-			var pids []int
-			for k, _ := range c.Processes {
-				pids = append(pids, k)
-			}
-			sort.Ints(pids)
-
-			for _, v := range pids {
-				p = append(p, c.Processes[v])
-			}
-			return p, nil
-		}
+	c, ok := s.clients[uuid]
+	if !ok {
+		return nil, fmt.Errorf("no client with uuid: %v", uuid)
 	}
-	return nil, fmt.Errorf("no client with uuid: %v", uuid)
+
+	// ordered list of pids
+	var pids []int
+	for k, _ := range c.Processes {
+		pids = append(pids, k)
+	}
+	sort.Ints(pids)
+
+	for _, v := range pids {
+		res = append(res, c.Processes[v])
+	}
+	return res, nil
 }
 
 // GetActiveClients returns a list of every active client
 func (s *Server) GetActiveClients() map[string]*Client {
-	var clients = make(map[string]*Client)
-
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
+	res := make(map[string]*Client)
+
 	// deep copy
 	for u, c := range s.clients {
-		clients[u] = &Client{
-			UUID:     c.UUID,
-			Hostname: c.Hostname,
-			Arch:     c.Arch,
-			OS:       c.OS,
+		res[u] = &Client{
+			UUID:          c.UUID,
+			Arch:          c.Arch,
+			OS:            c.OS,
+			Version:       c.Version,
+			Hostname:      c.Hostname,
+			Namespace:     c.Namespace,
+			LastCommandID: c.LastCommandID,
+			Processes:     make(map[int]*Process),
 		}
-		for _, ip := range c.IP {
-			clients[u].IP = append(clients[u].IP, ip)
+		for _, ip := range c.IPs {
+			res[u].IPs = append(res[u].IPs, ip)
 		}
-		for _, mac := range c.MAC {
-			clients[u].MAC = append(clients[u].MAC, mac)
+		for _, mac := range c.MACs {
+			res[u].MACs = append(res[u].MACs, mac)
+		}
+		for k, v := range c.Processes {
+			res[u].Processes[k] = v
 		}
 	}
 
-	log.Debug("ron GetActiveClients: %v", clients)
-
-	return clients
+	return res
 }
 
 // HasClient checks whether a client exists with the given identifier.
@@ -113,144 +115,267 @@ func (s *Server) HasClient(c string) bool {
 }
 
 // Starts a Ron server on the specified port
-func (s *Server) Start(port int) error {
+func (s *Server) Listen(port int) error {
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%v", port))
 	if err != nil {
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775)
-	if err != nil {
-		return err
-	}
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
 
-	go s.mux()
-	go s.handler(ln)
-	go s.responseHandler()
-	go s.periodic()
-	go s.clientReaper()
+			log.Debug("new connection from: %v", conn.RemoteAddr())
+
+			go func() {
+				addr := conn.RemoteAddr()
+				s.clientHandler(conn)
+				log.Debug("disconnected from: %v", addr)
+			}()
+		}
+	}()
 
 	return nil
 }
 
-// send the command list to all clients periodically, unless the list has been
-// sent recently.
-func (s *Server) periodic() {
-	rate := time.Duration(HEARTBEAT_RATE * time.Second)
-	for {
-		log.Debugln("ron periodic")
-		now := time.Now()
-		if now.Sub(s.lastBroadcast) > rate {
-			// issue a broadcast
-			s.broadcastCommands()
-		}
-		sleep := rate - now.Sub(s.lastBroadcast)
-		time.Sleep(sleep)
-	}
-}
+// ListenUnix creates a unix domain socket at the given path and listens for
+// incoming connections. ListenUnix returns on the successful creation of the
+// socket, and accepts connections in a goroutine. If the domain socket file is
+// deleted, the goroutine for ListenUnix exits silently.
+func (s *Server) ListenUnix(path string) error {
+	log.Debug("ListenUnix: %v", path)
 
-// send the command list to all active clients
-func (s *Server) broadcastCommands() {
-	log.Debugln("ron broadcastCommands")
-	commands := s.GetCommands()
-	m := &Message{
-		Type:     MESSAGE_COMMAND,
-		Commands: commands,
-	}
-	s.in <- m
-	s.lastBroadcast = time.Now()
-}
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
 
-// accept new tcp connections and start a client handler for each one
-func (s *Server) handler(ln net.Listener) {
-	log.Debugln("ron handler")
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-
-		log.Debug("ron connection from: %v", conn.RemoteAddr())
-
-		go s.clientHandler(conn)
-	}
-}
-
-// client and transport handler for connections.
-func (s *Server) clientHandler(conn io.ReadWriteCloser) {
-	log.Debugln("ron clientHandler")
-
-	enc := gob.NewEncoder(conn)
-	dec := gob.NewDecoder(conn)
-
-	// get the first client struct as a handshake
-	var handshake Message
-	err := dec.Decode(&handshake)
+	u, err := net.ResolveUnixAddr("unix", path)
 	if err != nil {
-		if err != io.EOF {
-			log.Errorln(err)
-		}
-		conn.Close()
-		return
-	}
-	c := handshake.Client
-
-	if c.Version != version.Revision {
-		log.Warn("mismatched miniccc version: %v", c.Version)
+		return err
 	}
 
-	c.conn = conn
-	c.Checkin = time.Now()
-
-	err = s.addClient(c)
+	l, err := net.ListenUnix("unix", u)
 	if err != nil {
-		log.Errorln(err)
-		conn.Close()
-		return
+		return err
 	}
+	s.udsConns[path] = l
 
-	tunnelQuit := make(chan bool)
-	defer func() { tunnelQuit <- true }()
-
-	// create a tunnel connection
-	go c.handleTunnel(true, tunnelQuit)
-
-	// handle client i/o
 	go func() {
 		for {
-			m := <-c.out
-			if m == nil {
-				return
-			}
-			err := enc.Encode(m)
+			l.SetDeadline(time.Now().Add(time.Second))
+			conn, err := l.Accept()
 			if err != nil {
-				if err != io.EOF && !strings.Contains(err.Error(), "use of closed network connection") {
-					log.Errorln(err)
+				if strings.Contains(err.Error(), "timeout") {
+					_, err := os.Stat(path)
+					if err != nil {
+						return
+					} else {
+						continue
+					}
+				} else {
+					if !strings.Contains(err.Error(), "use of closed network connection") {
+						log.Error("ListenUnix: accept: %v", err)
+					}
+					return
 				}
-				s.removeClient(c.UUID)
-				return
 			}
+
+			log.Info("client connected on %v", path)
+			s.clientHandler(conn)
+			log.Info("client disconnected on %v", path)
 		}
 	}()
 
-	for {
-		var m Message
-		err := dec.Decode(&m)
-		if err != nil {
-			if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
-				log.Errorln(err)
-			}
-			s.removeClient(c.UUID)
-			return
-		}
-		s.in <- &m
+	return nil
+}
+
+// CloseUnix closes a unix domain socket created via ListenUnix.
+func (s *Server) CloseUnix(path string) {
+	s.udsLock.Lock()
+	defer s.udsLock.Unlock()
+
+	if l, ok := s.udsConns[path]; ok {
+		log.Debug("closing domain socket: %v", l.Addr())
+		l.Close()
 	}
 }
 
-// add a client to the list of active clients
-func (s *Server) addClient(c *Client) error {
-	log.Debug("ron addClient: %v", c.UUID)
+// Dial a client serial port. The server will maintain this connection until a
+// client connects and then disconnects.
+func (s *Server) DialSerial(path string) error {
+	log.Debug("DialSerial: %v", path)
+
+	s.serialLock.Lock()
+	defer s.serialLock.Unlock()
+
+	// are we already connected to this client?
+	if _, ok := s.serialConns[path]; ok {
+		return fmt.Errorf("already connected to serial client %v", path)
+	}
+
+	// connect!
+	serial, err := net.Dial("unix", path)
+	if err != nil {
+		return err
+	}
+
+	s.serialConns[path] = serial
+	go func() {
+		s.clientHandler(serial)
+
+		// client disconnected
+		s.serialLock.Lock()
+		defer s.serialLock.Unlock()
+
+		delete(s.serialConns, path)
+		log.Debug("disconnected from serial client: %v", path)
+	}()
+
+	return nil
+}
+
+func (s *Server) RegisterVM(uuid string, f VM) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	s.vms[uuid] = f
+}
+
+func (s *Server) UnregisterVM(uuid string) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	delete(s.vms, uuid)
+}
+
+// sendCommands send a commands message to the specified UUID. If UUID is not
+// specified, the message is sent to all active clients.
+func (s *Server) sendCommands(uuid string) {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	m := &Message{
+		Type:     MESSAGE_COMMAND,
+		Commands: make(map[int]*Command),
+		UUID:     uuid,
+	}
+	for k, v := range s.commands {
+		m.Commands[k] = v.Copy()
+	}
+
+	s.route(m)
+}
+
+// client and transport handler for connections.
+func (s *Server) clientHandler(conn net.Conn) {
+	defer conn.Close()
+
+	c := &client{
+		conn: conn,
+		enc:  gob.NewEncoder(conn),
+		dec:  gob.NewDecoder(conn),
+	}
+
+	// get the first client struct as a handshake
+	var handshake Message
+	if err := c.dec.Decode(&handshake); err != nil {
+		// client disconnected before it sent the full handshake
+		if err != io.EOF {
+			log.Errorln(err)
+		}
+		return
+	}
+
+	vm, ok := s.vms[handshake.Client.UUID]
+	if !ok {
+		log.Error("unregistered client %v", handshake.Client.UUID)
+		return
+	}
+
+	if handshake.Client.Version != version.Revision {
+		log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
+	}
+
+	handshake.Client.Namespace = vm.GetNamespace()
+	if err := c.enc.Encode(&handshake); err != nil {
+		// client disconnected before it read the full handshake
+		if err != io.EOF {
+			log.Errorln(err)
+		}
+		return
+	}
+
+	c.Client = handshake.Client
+	log.Debug("new client: %v", handshake.Client)
+
+	// Set up minitunnel, dialing the server that should be running on the
+	// client's side. Data is Trunk'd via Messages.
+	local, remote := net.Pipe()
+	defer local.Close()
+	defer remote.Close()
+
+	go func() {
+		go Trunk(remote, c.UUID, c.sendMessage)
+
+		tunnel, err := minitunnel.Dial(local)
+		if err != nil {
+			log.Error("dial: %v", err)
+			return
+		}
+
+		s.clientLock.Lock()
+		defer s.clientLock.Unlock()
+
+		log.Debug("minitunnel created for %v", c.UUID)
+		c.tunnel = tunnel
+	}()
+
+	c.checkin = time.Now()
+
+	if err := s.addClient(c); err != nil {
+		log.Errorln(err)
+		return
+	}
+	defer s.removeClient(c.UUID)
+
+	// send the commands to our new client
+	go s.sendCommands(c.UUID)
+
+	var err error
+
+	for err == nil {
+		var m Message
+		if err = c.dec.Decode(&m); err == nil {
+			log.Debug("new message: %v", m.Type)
+
+			switch m.Type {
+			case MESSAGE_TUNNEL:
+				_, err = remote.Write(m.Tunnel)
+			case MESSAGE_FILE:
+				m2 := s.readFile(m.Filename)
+				m2.UUID = m.UUID
+				err = c.sendMessage(m2)
+			case MESSAGE_CLIENT:
+				s.responses <- m.Client
+			case MESSAGE_COMMAND:
+				// this shouldn't be sent via the client...
+			default:
+				err = fmt.Errorf("unknown message type: %v", m.Type)
+			}
+		}
+	}
+
+	if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
+		log.Errorln(err)
+	}
+}
+
+// addClient adds a client to the list of active clients
+func (s *Server) addClient(c *client) error {
+	log.Debug("addClient: %v", c.UUID)
 
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
@@ -258,167 +383,143 @@ func (s *Server) addClient(c *Client) error {
 	if _, ok := s.clients[c.UUID]; ok {
 		return fmt.Errorf("client %v already exists!", c.UUID)
 	}
-	c.out = make(chan *Message, 1024)
 	s.clients[c.UUID] = c
 
 	return nil
 }
 
-// conditionally remove client from the client list, closing connections if
-// possible
+// removeClient conditionally remove client from the client list, closing
+// connections if possible.
 func (s *Server) removeClient(uuid string) {
-	log.Debug("ron removeClient: %v", uuid)
+	log.Debug("removeClient: %v", uuid)
 
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 	if c, ok := s.clients[uuid]; ok {
-		close(c.out)
 		c.conn.Close()
 		delete(s.clients, uuid)
 	}
 }
 
-// incoming message mux. Routes messages to the correct handlers based on
-// message type
-func (s *Server) mux() {
-	for {
-		m := <-s.in
-		switch m.Type {
-		case MESSAGE_CLIENT:
-			// handle a client response
-			log.Debugln("ron MESSAGE_CLIENT")
-			s.responses <- m.Client
-		case MESSAGE_TUNNEL:
-			// handle a tunnel message
-			log.Debugln("ron MESSAGE_TUNNEL")
-			s.routeTunnel(m)
-		case MESSAGE_COMMAND:
-			// route a command to one or all clients
-			log.Debugln("ron MESSAGE_COMMAND")
-			s.route(m)
-		case MESSAGE_FILE:
-			// send a file if it exists
-			s.sendFile(m)
-		default:
-			log.Error("unknown message type: %v", m.Type)
-			return
-		}
+// readFile reads the file by name and returns a message that can be sent back
+// to the client.
+func (s *Server) readFile(f string) *Message {
+	log.Debug("readFile: %v", f)
+
+	filename := filepath.Join(s.path, f)
+	m := &Message{
+		Type:     MESSAGE_FILE,
+		Filename: f,
 	}
-}
 
-// unwrap ron messages and forward tunnel data to the tunnel handler
-func (s *Server) routeTunnel(m *Message) {
-	log.Debug("routeTunnel: %v", m.UUID)
-
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
-	for _, c := range s.clients {
-		if c.UUID == m.UUID {
-			c.tunnelData <- m.Tunnel
-			return
-		}
-	}
-	log.Error("routeTunnel invalid UUID: %v", m.UUID)
-}
-
-// return a file to a client requesting it via the clients GetFile() call
-func (s *Server) sendFile(m *Message) {
-	log.Debug("ron sendFile: %v", m.Filename)
-
-	filename := filepath.Join(s.path, m.Filename)
 	info, err := os.Stat(filename)
 	if err != nil {
-		e := fmt.Errorf("file %v does not exist: %v", filename, err)
-		m.Error = e.Error()
-		log.Errorln(e)
+		m.Error = fmt.Sprintf("file %v does not exist: %v", filename, err)
 	} else if info.IsDir() {
-		e := fmt.Errorf("file %v is a directory", filename)
-		m.Error = e.Error()
-		log.Errorln(e)
+		m.Error = fmt.Sprintf("file %v is a directory", filename)
 	} else {
 		// read the file
 		m.File, err = ioutil.ReadFile(filename)
 		if err != nil {
-			e := fmt.Errorf("file %v: %v", filename, err)
-			m.Error = e.Error()
-			log.Errorln(e)
+			m.Error = fmt.Sprintf("file %v: %v", filename, err)
 		}
 	}
 
-	// route this message ourselves instead of using the mux, because we
-	// want the type to still be FILE
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-	if c, ok := s.clients[m.UUID]; ok {
-		c.out <- m
-	} else {
-		log.Error("no such client %v", m.UUID)
+	if m.Error != "" {
+		log.Errorln(m.Error)
 	}
+
+	return m
 }
 
 // route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
-	log.Debug("ron route: %v", m.UUID)
+	var maxCommandID int
+	for i := range m.Commands {
+		if i > maxCommandID {
+			maxCommandID = i
+		}
+	}
 
+	handleUUID := func(uuid string) {
+		// create locally scoped pointer to message
+		m := m
+
+		c, ok := s.clients[uuid]
+		if !ok {
+			log.Error("no such client %v", uuid)
+			return
+		}
+
+		if c.maxCommandID == maxCommandID {
+			log.Info("no commands for %v", uuid)
+			return
+		}
+
+		vm, ok := s.vms[uuid]
+		if !ok {
+			// odd, someone must have unregistered the client...
+			log.Error("unregistered client %v", uuid)
+			return
+		}
+
+		if m.Type == MESSAGE_COMMAND {
+			// update client's tags in case we're matching based on them
+			c.Tags = vm.GetTags()
+
+			// create a copy of the Message
+			m2 := *m
+			m2.Commands = map[int]*Command{}
+
+			// filter the commands to relevant ones
+			for i, cmd := range m.Commands {
+				if c.Matches(cmd.Filter) && i > c.maxCommandID {
+					m2.Commands[i] = cmd
+				}
+			}
+
+			c.maxCommandID = maxCommandID
+
+			if len(m2.Commands) == 0 {
+				log.Info("no commands for %v", uuid)
+				return
+			}
+
+			m = &m2
+		}
+
+		if err := c.sendMessage(m); err != nil {
+			if strings.Contains(err.Error(), "broken pipe") {
+				log.Debug("client disconnected: %v", uuid)
+			} else {
+				log.Info("unable to send message to %v: %v", uuid, err)
+			}
+		}
+	}
+
+	// handleUUID doesn't modify the clients map so we can allow parallel reads
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	if m.UUID == "" {
-		// send commands to all clients
-		for _, c := range s.clients {
-			vm, ok := s.vms[c.UUID]
-			if !ok {
-				// The client is connected but not registered:
-				//  * client connected before it was registered
-				//  * client was unregistered before it disconnected
-				// Either way, we have to skip it since we doin't know what
-				// namespace it belongs to.
-
-				log.Error("unregistered client %v", m.UUID)
-				continue
-			}
-			cmds := map[int]*Command{}
-
-		cmdLoop:
-			for k, cmd := range m.Commands {
-				want := cmd.Filter.Namespace
-				got := vm.GetNamespace()
-
-				// filter commands by namespace
-				if want != "" && want != got {
-					continue
-				}
-
-				tags := vm.GetTags()
-
-				// filter commands by tags
-				for k, v := range cmd.Filter.Tags {
-					v2, ok := tags[k]
-
-					// if v is empty, tag must be set on VM
-					// otherwise, must match tag value on VM
-					if (v == "" && !ok) || v != v2 {
-						continue cmdLoop
-					}
-				}
-
-				cmds[k] = cmd
-			}
-
-			// clone message
-			m2 := *m
-			m2.Commands = cmds
-
-			c.out <- &m2
-		}
-	} else {
-		if c, ok := s.clients[m.UUID]; ok {
-			c.out <- m
-		} else {
-			log.Error("no such client %v", m.UUID)
-		}
+	if m.UUID != "" {
+		handleUUID(m.UUID)
+		return
 	}
+
+	var wg sync.WaitGroup
+
+	// send commands to all clients, in parallel
+	for uuid := range s.clients {
+		wg.Add(1)
+
+		go func(uuid string) {
+			defer wg.Done()
+
+			handleUUID(uuid)
+		}(uuid)
+	}
+
+	wg.Wait()
 }
 
 // process responses, writing files when necessary
@@ -426,38 +527,10 @@ func (s *Server) responseHandler() {
 	for {
 		cin := <-s.responses
 
-		log.Debug("ron responseHandler: %v", cin.UUID)
+		log.Debug("responseHandler: %v", cin.UUID)
 
-		// update maximum command id if there's a higher one in the wild
-		if cin.CommandCounter > s.commandCounter {
-			s.commandCounterLock.Lock()
-			s.commandCounter = cin.CommandCounter
-			s.commandCounterLock.Unlock()
-		}
-
-		// update client fields
-		s.clientLock.Lock()
-		if c, ok := s.clients[cin.UUID]; ok {
-			c.Hostname = cin.Hostname
-			c.Arch = cin.Arch
-			c.OS = cin.OS
-			c.IP = cin.IP
-			c.MAC = cin.MAC
-			c.Checkin = time.Now()
-			c.Processes = cin.Processes
-			if vm, ok := s.vms[cin.UUID]; ok {
-				for k, v := range cin.Tags {
-					vm.SetTag(k, v)
-				}
-			} else {
-				log.Error("no registered vm %v", cin.UUID)
-			}
-		} else {
-			log.Error("unknown client %v", cin.UUID)
-			s.clientLock.Unlock()
-			continue
-		}
-		s.clientLock.Unlock()
+		// update all the client fields
+		s.updateClient(cin)
 
 		// ingest responses from this client
 		for _, v := range cin.Responses {
@@ -507,6 +580,35 @@ func (s *Server) responseHandler() {
 	}
 }
 
+// updateClient updates the client fields and pushes the VM tags state
+func (s *Server) updateClient(cin *Client) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	c, ok := s.clients[cin.UUID]
+	if !ok {
+		// the client probably disconnected between sending the heartbeat and
+		// us processing it. We'll still process any command responses but
+		// shouldn't try to update the client itself.
+		log.Info("unknown client %v", cin.UUID)
+		return
+	}
+
+	c.Client = cin
+	c.checkin = time.Now()
+
+	vm, ok := s.vms[cin.UUID]
+	if !ok {
+		// see above but for the VM.
+		log.Info("unregistered client %v", cin.UUID)
+		return
+	}
+
+	for k, v := range cin.Tags {
+		vm.SetTag(k, v)
+	}
+}
+
 // mark which commands have been responsed to by which client
 func (s *Server) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
@@ -517,7 +619,7 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 	if c, ok := s.commands[id]; ok {
 		c.CheckedIn = append(c.CheckedIn, uuid)
 	} else {
-		log.Error("ron command checkin: command %v does not exist", id)
+		log.Error("command checkin: command %v does not exist", id)
 	}
 }
 
@@ -525,7 +627,7 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 // messages held by any clients may still return a response to the deleted
 // command.
 func (s *Server) DeleteCommand(id int) error {
-	log.Debug("ron DeleteCommand: %v", id)
+	log.Debug("delete command: %v", id)
 
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
@@ -537,19 +639,38 @@ func (s *Server) DeleteCommand(id int) error {
 	}
 }
 
-// Post a new command to the active command list. The command ID is returned.
-func (s *Server) NewCommand(c *Command) int {
-	log.Debug("ron NewCommand: %v", c)
-
-	s.commandCounterLock.Lock()
-	s.commandCounter++
-	c.ID = s.commandCounter
-	s.commandCounterLock.Unlock()
+// ResetCommands deletes all commands and sets the command ID counter back to
+// zero. As with DeleteCommand, any in-flight responses may still be returned.
+func (s *Server) ResetCommands() {
+	log.Debug("reset commands")
 
 	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	s.commandCounter = 0
+	s.commands = make(map[int]*Command)
+
+	for _, c := range s.clients {
+		c.maxCommandID = 0
+	}
+}
+
+// Post a new command to the active command list. The command ID is returned.
+func (s *Server) NewCommand(c *Command) int {
+	log.Debug("NewCommand: %v", c)
+
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	s.commandCounter++
+	c.ID = s.commandCounter
+
 	s.commands[c.ID] = c
-	s.commandLock.Unlock()
-	go s.broadcastCommands()
+
+	go s.sendCommands("")
 	return c.ID
 }
 
@@ -557,12 +678,11 @@ func (s *Server) NewCommand(c *Command) int {
 func (s *Server) clientReaper() {
 	for {
 		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
-		log.Debugln("clientReaper")
 
 		s.clientLock.Lock()
 		for k, v := range s.clients {
 			// checked in more recently than expiration time
-			active := time.Now().Sub(v.Checkin) < CLIENT_EXPIRED*time.Second
+			active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
 
 			if !active {
 				log.Debug("client %v expired", k)
@@ -575,109 +695,4 @@ func (s *Server) clientReaper() {
 		}
 		s.clientLock.Unlock()
 	}
-}
-
-func (s *Server) CloseUDS(path string) error {
-	s.udsLock.Lock()
-	defer s.udsLock.Unlock()
-
-	if l, ok := s.udsConns[path]; ok {
-		return l.Close()
-	} else {
-		return fmt.Errorf("no such path: %v", path)
-	}
-}
-
-// ListenUnix creates a unix domain socket at the given path and listens for
-// incoming connections. ListenUnix returns on the successful creation of the
-// socket, and accepts connections in a goroutine. If the domain socket file is
-// deleted, the goroutine for ListenUnix exists silently.
-func (s *Server) ListenUnix(path string) error {
-	log.Debug("ListenUnix: %v", path)
-
-	s.udsLock.Lock()
-	defer s.udsLock.Unlock()
-
-	u, err := net.ResolveUnixAddr("unix", path)
-	if err != nil {
-		return err
-	}
-
-	l, err := net.ListenUnix("unix", u)
-	if err != nil {
-		return err
-	}
-	s.udsConns[path] = l
-
-	go func() {
-		defer s.CloseUDS(path)
-		for {
-			l.SetDeadline(time.Now().Add(time.Second))
-			conn, err := l.Accept()
-			if err != nil {
-				if strings.Contains(err.Error(), "timeout") {
-					_, err := os.Stat(path)
-					if err != nil {
-						return
-					} else {
-						continue
-					}
-				} else {
-					if !strings.Contains(err.Error(), "use of closed network connection") {
-						log.Error("ListenUnix: accept: %v", err)
-					}
-					return
-				}
-			}
-			log.Info("client connected on %v", path)
-			s.clientHandler(conn)
-			log.Info("client disconnected on %v", path)
-		}
-	}()
-	return nil
-}
-
-// Dial a client serial port. The server will maintain this connection until a
-// client connects and then disconnects.
-func (s *Server) DialSerial(path string) error {
-	log.Debug("DialSerial: %v", path)
-
-	s.serialLock.Lock()
-	defer s.serialLock.Unlock()
-
-	// are we already connected to this client?
-	if _, ok := s.serialConns[path]; ok {
-		return fmt.Errorf("already connected to serial client %v", path)
-	}
-
-	// connect!
-	serial, err := net.Dial("unix", path)
-	if err != nil {
-		return err
-	}
-
-	s.serialConns[path] = serial
-	go func() {
-		s.clientHandler(serial)
-		s.serialLock.Lock()
-		delete(s.serialConns, path)
-		s.serialLock.Unlock()
-		log.Debug("disconnected from serial client: %v", path)
-	}()
-
-	return nil
-}
-
-func (s *Server) RegisterVM(uuid string, f VM) {
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
-	s.vms[uuid] = f
-}
-
-func (s *Server) UnregisterVM(uuid string) {
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
-	delete(s.vms, uuid)
 }

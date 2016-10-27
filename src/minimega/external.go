@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"errors"
 	"fmt"
 	"minicli"
@@ -98,6 +99,11 @@ func checkExternal() error {
 	}
 	if err := checkVersion("qemu", MIN_QEMU, qemuVersion); err != nil {
 		return err
+	}
+
+	// now check that ovs is actually running...
+	if err := bridge.CheckOVS(); err != nil {
+		return errors.New("openvswitch does not appear to be running")
 	}
 
 	return nil

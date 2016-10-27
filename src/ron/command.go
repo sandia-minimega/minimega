@@ -4,7 +4,22 @@
 
 package ron
 
-import "os"
+import (
+	"fmt"
+	"os"
+	"strings"
+)
+
+type Filter struct {
+	UUID      string
+	Hostname  string
+	Arch      string
+	OS        string
+	MAC       string
+	IP        string
+	Namespace string
+	Tags      map[string]string
+}
 
 type Command struct {
 	ID int
@@ -32,7 +47,7 @@ type Command struct {
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
 	// to be processed.
-	Filter *Client
+	Filter *Filter
 
 	// clients that have responded to this command
 	CheckedIn []string
@@ -60,6 +75,40 @@ type Response struct {
 	Stderr string
 }
 
+func (f *Filter) String() string {
+	if f == nil {
+		return ""
+	}
+
+	var res []string
+	if f.Namespace != "" {
+		res = append(res, "namespace="+f.Namespace)
+	}
+	if f.UUID != "" {
+		res = append(res, "uuid="+f.UUID)
+	}
+	if f.Hostname != "" {
+		res = append(res, "hostname="+f.Hostname)
+	}
+	if f.Arch != "" {
+		res = append(res, "arch="+f.Arch)
+	}
+	if f.OS != "" {
+		res = append(res, "os="+f.OS)
+	}
+	if f.IP != "" {
+		res = append(res, "ip="+f.IP)
+	}
+	if f.MAC != "" {
+		res = append(res, "mac="+f.MAC)
+	}
+	for k, v := range f.Tags {
+		res = append(res, fmt.Sprintf("%v=%v", k, v))
+	}
+
+	return strings.Join(res, " && ")
+}
+
 // Creates a copy of c
 func (c *Command) Copy() *Command {
 	return &Command{
@@ -71,5 +120,6 @@ func (c *Command) Copy() *Command {
 		CheckedIn:  c.CheckedIn,
 		Filter:     c.Filter,
 		PID:        c.PID,
+		KillAll:    c.KillAll,
 	}
 }

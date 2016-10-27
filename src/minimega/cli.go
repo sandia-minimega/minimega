@@ -230,8 +230,6 @@ func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	// already started to run some of the commands.
 	for i := range cmd {
 		if err := cliPreprocessor(cmd[i]); err != nil {
-			log.Errorln(err)
-
 			// Send the error from a separate goroutine because nothing will
 			// receive from this channel until we return. Otherwise, we will
 			// cause a deadlock.
@@ -409,6 +407,14 @@ func cliLocal() {
 // cliPreprocess performs expansion on a single string and returns the update
 // string or an error.
 func cliPreprocess(v string) (string, error) {
+	if strings.HasPrefix(v, "$") {
+		if v2 := os.Getenv(v[1:]); v2 != "" {
+			return v2, nil
+		}
+
+		return "", fmt.Errorf("undefined: %v", v)
+	}
+
 	if u, err := url.Parse(v); err == nil {
 		switch u.Scheme {
 		case "file":

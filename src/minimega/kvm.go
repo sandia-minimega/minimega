@@ -166,7 +166,7 @@ func (vm *KvmVM) Flush() error {
 		}
 
 		if err := br.DestroyTap(net.Tap); err != nil {
-			log.Errorln(err)
+			log.Error("leaked tap %v: %v", net.Tap, err)
 		}
 	}
 
@@ -836,6 +836,7 @@ func qemuOverrideString() string {
 	w.Flush()
 
 	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- just testing
+	args = args[1:]                  // strip off the executable
 	preArgs := unescapeString(args)
 	postArgs := strings.Join(ParseQemuOverrides(args), " ")
 

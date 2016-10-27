@@ -4,53 +4,25 @@
 
 // +build windows
 
-package ron
+package main
 
 import (
-	"bytes"
-	"fmt"
 	log "minilog"
 	"os/exec"
 	"regexp"
 	"strings"
 )
 
-func getUUID() (string, error) {
-	var sOut bytes.Buffer
-	var sErr bytes.Buffer
-
-	p, err := exec.LookPath("wmic")
+func getUUID() string {
+	out, err := exec.Command("wmic", "path", "win32_computersystemproduct", "get", "uuid").CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("wmic path: %v", err)
+		log.Fatal("wmic run: %v", err)
 	}
 
-	cmd := &exec.Cmd{
-		Path: p,
-		Args: []string{
-			p,
-			"path",
-			"win32_computersystemproduct",
-			"get",
-			"uuid",
-		},
-		Env:    nil,
-		Dir:    "",
-		Stdout: &sOut,
-		Stderr: &sErr,
-	}
-
-	err = cmd.Run()
-	if err != nil {
-		return "", fmt.Errorf("wmic run: %v", err)
-	}
-
-	uuid := unmangleUUID(strings.TrimSpace(sOut.String()))
-	if sErr.String() != "" {
-		return "", fmt.Errorf("wmic failed: %v %v", sOut.String(), sErr.String())
-	}
-
+	uuid := unmangleUUID(strings.TrimSpace(string(out)))
 	log.Debug("got UUID: %v", uuid)
-	return uuid, nil
+
+	return uuid
 }
 
 func unmangleUUID(uuid string) string {

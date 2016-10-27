@@ -277,6 +277,14 @@ func GetOrCreateNamespace(name string) *Namespace {
 			ns.Hosts[host] = true
 		}
 
+		// If there aren't any other nodes in the mesh, assume that minimega is
+		// running in a single host environment and that we want to launch VMs
+		// on localhost.
+		if len(ns.Hosts) == 0 {
+			log.Info("no meshage peers, adding localhost to the namespace")
+			ns.Hosts[hostname] = true
+		}
+
 		namespaces[name] = ns
 	}
 
