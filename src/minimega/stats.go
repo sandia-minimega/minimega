@@ -22,25 +22,29 @@ var hostCLIHandlers = []minicli.Handler{
 		HelpLong: `
 Report information about the host:
 
-- bandwidth : RX/TX bandwidth stats
-- cpus : number of cpus
-- load : system load average
-- memtotal : total memory, in MB
-- memused : memory used, in MB
-- name : hostname
-- vms : number of VMs (in active namespace)
-- vmsall: number of VMs (regardless of namespace)
-		`,
+- bandwidth  : RX/TX bandwidth stats
+- cpucommit  : total cpu commit
+- cpus       : number of cpus
+- load       : system load average
+- memcommit  : total memory commit in MB
+- memtotal   : total memory in MB
+- memused    : memory used in MB
+- netcommit  : total network interface commit
+- vms        : number of VMs
+
+All stats about VMs are based on the active namespace. To see information
+across namespaces, run "mesh send all host".`,
 		Patterns: []string{
 			"host",
 			"host <bandwidth,>",
 			"host <cpus,>",
+			"host <cpucommit,>",
 			"host <load,>",
+			"host <memcommit,>",
 			"host <memtotal,>",
 			"host <memused,>",
-			"host <name,>",
+			"host <netcommit,>",
 			"host <vms,>",
-			"host <vmsall,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -58,25 +62,30 @@ var hostInfoFns = map[string]func() (string, error){
 	"load": hostStatsLoad,
 	"memtotal": func() (string, error) {
 		total, _, err := hostStatsMemory()
-		return fmt.Sprintf("%v MB", total), err
+		return strconv.Itoa(total), err
 	},
 	"memused": func() (string, error) {
 		_, used, err := hostStatsMemory()
-		return fmt.Sprintf("%v MB", used), err
+		return strconv.Itoa(used), err
 	},
-	"name": func() (string, error) { return hostname, nil },
 	"vms": func() (string, error) {
 		return strconv.Itoa(vms.Count()), nil
 	},
-	"vmsall": func() (string, error) {
-		return strconv.Itoa(vms.CountAll()), nil
+	"cpucommit": func() (string, error) {
+		return strconv.Itoa(vms.CPUCommit()), nil
+	},
+	"memcommit": func() (string, error) {
+		return strconv.Itoa(vms.MemCommit()), nil
+	},
+	"netcommit": func() (string, error) {
+		return strconv.Itoa(vms.NetworkCommit()), nil
 	},
 }
 
 // Preferred ordering of host info fields in tabular
 var hostInfoKeys = []string{
 	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
-	"vms", "vmsall",
+	"vms", "cpucommit", "memcommit", "netcommit",
 }
 
 func cliHost(c *minicli.Command, resp *minicli.Response) error {

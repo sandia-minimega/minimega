@@ -51,6 +51,8 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
+	GetCPUs() int
+	GetMem() int
 
 	// Life cycle functions
 	Launch() error
@@ -429,6 +431,16 @@ func (vm *BaseVM) GetType() VMType {
 
 func (vm *BaseVM) GetInstancePath() string {
 	return vm.instancePath
+}
+
+func (vm *BaseVM) GetCPUs() int {
+	v, _ := strconv.Atoi(vm.Vcpus)
+	return v
+}
+
+func (vm *BaseVM) GetMem() int {
+	v, _ := strconv.Atoi(vm.Memory)
+	return v
 }
 
 func (vm *BaseVM) Kill() error {

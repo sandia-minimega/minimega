@@ -45,7 +45,6 @@ func (vms VMs) Count() int {
 	defer vmLock.Unlock()
 
 	i := 0
-
 	for _, vm := range vms {
 		if inNamespace(vm) {
 			i += 1
@@ -55,12 +54,51 @@ func (vms VMs) Count() int {
 	return i
 }
 
-// CountAll is Count, regardless of namespace.
-func (vms VMs) CountAll() int {
+// Total memory committed across all VMs in current namespace.
+func (vms VMs) MemCommit() int {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	return len(vms)
+	total := 0
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += vm.GetMem()
+		}
+	}
+
+	return total
+}
+
+// Total cpus committed across all VMs in current namespace.
+func (vms VMs) CPUCommit() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	total := 0
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += vm.GetCPUs()
+		}
+	}
+
+	return total
+}
+
+// Total networks committed across all VMs in current namespace.
+func (vms VMs) NetworkCommit() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	total := 0
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += len(vm.GetNetworks())
+		}
+	}
+
+	return total
 }
 
 // Info populates resp with info about the VMs running in the active namespace.
