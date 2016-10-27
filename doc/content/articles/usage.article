@@ -80,10 +80,10 @@ For example, if we have the minimega binary on host `ccc1` and want to run it
 on the whole cluster, `ccc1` through `ccc14`, we can use deploy to push it out
 and launch it:
 
-    # Launch minimga on ccc1
-    ccc1$ sudo bin/minimega -degree 2 -context foo
-    # Now, tell deploy to launch it on the other nodes
-    minimega$ deploy launch ccc[2-14]
+	# Launch minimga on ccc1
+	ccc1$ sudo bin/minimega -degree 2 -context foo
+	# Now, tell deploy to launch it on the other nodes
+	minimega$ deploy launch ccc[2-14]
 
 This will use `scp` to copy the minimega binary to nodes `ccc2`-`ccc14`, then
 use `ssh` to launch it. If any node needs a password, it will prompt; you may
@@ -619,14 +619,14 @@ commands for later use:
 
 This will write out a file called `launch-foo.mm`, which looks like this:
 
-     vm config disk foo.img
-     vm config net 100
-     vm launch kvm foo-vm
-     vm start foo-vm
+	 vm config disk foo.img
+	 vm config net 100
+	 vm launch kvm foo-vm
+	 vm start foo-vm
 
 This script can then be executed by minimega using the `read` command:
 
-        minimega$ read launch-foo.mm
+	    minimega$ read launch-foo.mm
 
 ** Shell scripts
 

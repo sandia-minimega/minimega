@@ -31,7 +31,7 @@ To use protonuke as a client, you must, at minimum, enable one or more services
 and provide at least one server to connect to. For example, to set protonuke to
 issue HTTP and HTTPS requests to google.com:
 
-	protonuke -http -https google.com
+	$ protonuke -http -https google.com
 
 Using default arguments otherwise, protonuke will connect over HTTP and HTTPS
 to google.com, issue transactions at a random rate, and periodically report on
@@ -44,7 +44,7 @@ line is the hosts protonuke should connect to. You can specify host names, IP
 addresses, or CIDR-notation subnets. You can stack any of these by listing
 hosts, seperated by commas. For example:
 
-	protonuke -http google.com,10.0.0.0/24,facebook.com
+	$ protonuke -http google.com,10.0.0.0/24,facebook.com
 
 At runtime, protonuke will pick a random host within the list of provided hosts
 to issue a transaction on.
@@ -54,7 +54,7 @@ to issue a transaction on.
 Client protocols can be stacked to enable multiple protocols on a single
 protonuke instance. For example, to use SSH and SMTP:
 
-	protonuke -ssh -smtp google.com
+	$ protonuke -ssh -smtp google.com
 
 *** HTTP and HTTPS
 
@@ -145,27 +145,30 @@ protonuke generate a cert at launch time, by using the `-httptlscert` and
 
 ** SSH and SMTP
 
-Both SSH and SMTP servers simply receive traffic from clients, and do not serve
-any specific content. SMTP servers will not relay mail.
+Both SSH and SMTP servers simply receive traffic from clients, and do not
+serve any specific content. SMTP servers will not relay mail. The SMTP
+server's status codes are RFC-compliant, but the accompanying descriptive
+text is unique to protonuke; this makes it easier to determine if you
+are connected to a protonuke SMTP server or some other server software.
 
 * Examples
 
 Serve all protocols with default arguments and debug logging:
 
-	protonuke -http -https -ssh -smtp -serve -level debug
+	$ protonuke -http -https -ssh -smtp -serve -level debug
 
 Serve HTTP and HTTPS with custom content - a large file in a simple index.html:
 
-	mkdir www
-	dd if=/dev/random of=www/bigfile.png count=1024 bs=1M
-	echo "<img src=bigfile.png>" > www/index.html
-	protonuke -httproot www -http -https -serve
+	$ mkdir www
+	$ dd if=/dev/random of=www/bigfile.png count=1024 bs=1M
+	$ echo "<img src=bigfile.png>" > www/index.html
+	$ protonuke -httproot www -http -https -serve
 
 Start a client on all protocols, connecting to google.com:
 
-	protonuke -http -https -smtp -ssh google.com
+	$ protonuke -http -https -smtp -ssh google.com
 
 Start a client on HTTP, connecting to hosts in a subnet, as well as google.com,
 and go as fast as possible by setting parameters on the normal distribution:
 
-	protonuke -u 0 -http 10.0.0.0/24,google.com
+	$ protonuke -u 0 -http 10.0.0.0/24,google.com
