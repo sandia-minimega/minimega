@@ -154,70 +154,70 @@ domain socket in the base directory at `<base>/minimega`. The command port uses
 JSON encoded commands and responses using the following schema:
 
 	{
-	    "name": "Command",
-	    "properties": {
+		"name": "Command",
+		"properties": {
 		"Original": {
-		    "type": "string",
-		    "description": "string form of command, with arguments separated by whitespace",
-		    "required": true
+			"type": "string",
+			"description": "string form of command, with arguments separated by whitespace",
+			"required": true
 		},
-	    }
+		}
 	}
 
 	{
-	    "name": "localResponse",
-	    "properties": {
+		"name": "localResponse",
+		"properties": {
 		"Resp": {
-		    "type": "array",
-		    "items": {
-			"type": "Response"
-		    }
-		    "description": "array if responses to a single command"
-		},
-		"Rendered": {
-		    "type": "string",
-		    "description": "pre-rendered output of the Resp object according to output rendering rules"
-		},
-		"More": {
-		    "type": "bool",
-		    "description": "true if additional responses to the command are incoming"
-		},
-	    }
-	}
-
-	{
-	    "name": "Response",
-	    "properties": {
-		"Host": {
-		    "type": "string",
-		    "description": "host this response was created on"
-		},
-		"Response": {
-		    "type": "string",
-		    "description": "simple string response (exclusive to Header/Tabular)
-		},
-		"Header": {
-		    "type": "array",
-		    "items": {
-			"type": "string"
-		    },
-		    "description": "column headers for tabular data"
-		},
-		"Tabular": {
-		    "type": "array",
-		    "items": {
 			"type": "array",
 			"items": {
-			    "type": "string"
+			"type": "Response"
 			}
-		    },
-		    "description": "tabular data, each column is an array of strings"
+			"description": "array if responses to a single command"
+		},
+		"Rendered": {
+			"type": "string",
+			"description": "pre-rendered output of the Resp object according to output rendering rules"
+		},
+		"More": {
+			"type": "bool",
+			"description": "true if additional responses to the command are incoming"
+		},
+		}
+	}
+
+	{
+		"name": "Response",
+		"properties": {
+		"Host": {
+			"type": "string",
+			"description": "host this response was created on"
+		},
+		"Response": {
+			"type": "string",
+			"description": "simple string response (exclusive to Header/Tabular)
+		},
+		"Header": {
+			"type": "array",
+			"items": {
+			"type": "string"
+			},
+			"description": "column headers for tabular data"
+		},
+		"Tabular": {
+			"type": "array",
+			"items": {
+			"type": "array",
+			"items": {
+				"type": "string"
+			}
+			},
+			"description": "tabular data, each column is an array of strings"
 		},
 		"Error": {
-		    "type": "string",
-		    "description": "Error, if any"
+			"type": "string",
+			"description": "Error, if any"
 		}
-	    }
+		}
 	}
 
 
@@ -263,8 +263,8 @@ output tabular data in csv instead of pretty-printing, set csv mode with `.csv
 true`:
 
 	minimega$ host
-	host  | name | cpus | load           | memused | memtotal | bandwidth
-	foo   | foo  | 4    | 0.25 0.11 0.07 | 606 MB  | 7706 MB  | 0.0 (MB/s)
+	host  | name | cpus | load		   | memused | memtotal | bandwidth
+	foo   | foo  | 4	| 0.25 0.11 0.07 | 606 MB  | 7706 MB  | 0.0 (MB/s)
 	minimega$ .csv true
 	minimega$ host
 	host,name,cpus,load,memused,memtotal,bandwidth
@@ -322,17 +322,17 @@ the current VM description:
 
 	minimega$ vm config
 	Current VM configuration:
-	Memory:        2048
-	VCPUS:         2
-	Disk Path:     /tmp/bar.qcow2
+	Memory:		2048
+	VCPUS:		 2
+	Disk Path:	 /tmp/bar.qcow2
 	CDROM Path:
 	Kernel Path:
 	Initrd Path:
 	Kernel Append:
-	QEMU Path:     /usr/bin/kvm
+	QEMU Path:	 /usr/bin/kvm
 	QEMU Append:   []
-	Snapshot:      true
-	Networks:      [100]
+	Snapshot:	  true
+	Networks:	  [100]
 	UUID:
 
 This looks fine, empty fields are either just not included in the next VM to
@@ -346,17 +346,17 @@ And look at our configuration again:
 
 	minimega$ vm_config
 	Current VM configuration:
-	Memory:        2048
-	VCPUS:         2
-	Disk Path:     /tmp/bar.qcow2
+	Memory:		2048
+	VCPUS:		 2
+	Disk Path:	 /tmp/bar.qcow2
 	CDROM Path:
 	Kernel Path:   /tmp/foo.kernel
 	Initrd Path:   /tmp/foo.initrd
 	Kernel Append:
-	QEMU Path:     /usr/bin/kvm
+	QEMU Path:	 /usr/bin/kvm
 	QEMU Append:   []
-	Snapshot:      true
-	Networks:      [100]
+	Snapshot:	  true
+	Networks:	  [100]
 	UUID:
 
 Something isn't right here, we see that while the initrd and kernel fields are
@@ -369,17 +369,17 @@ And look at the config one last time:
 
 	minimega$ vm_config
 	Current VM configuration:
-	Memory:        2048
-	VCPUS:         2
+	Memory:		2048
+	VCPUS:		 2
 	Disk Path:
 	CDROM Path:
 	Kernel Path:   /tmp/foo.kernel
 	Initrd Path:   /tmp/foo.initrd
 	Kernel Append:
-	QEMU Path:     /usr/bin/kvm
+	QEMU Path:	 /usr/bin/kvm
 	QEMU Append:   []
-	Snapshot:      true
-	Networks:      [100]
+	Snapshot:	  true
+	Networks:	  [100]
 	UUID:
 
 ** Launching Virtual Machines
@@ -403,8 +403,8 @@ To check on our VM, we can use the `vm`info` command, which, with no arguments,
 will tell us about all VMs minimega has on this node:
 
 	minimega$ vm info
-	host | id | host | name  | state    | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
-	foo  | 0  | foo  | foo_1 | BUILDING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+	host | id | host | name  | state	| memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	foo  | 0  | foo  | foo_1 | BUILDING | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 You'll notice that the state of the VM from the above `vm`info` command is
 `BUILDING`. That's because VMs launch in a paused state. We can start a VM by
@@ -412,8 +412,8 @@ name or ID with the `vm`start` command:
 
 	minimega$ vm start foo_1
 	minimega$ vm info
-	host | id | host | name  | state   | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
-	foo  | 0  | foo  | foo_1 | RUNNING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+	host | id | host | name  | state   | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	foo  | 0  | foo  | foo_1 | RUNNING | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 Now we see that the VM is in the running state. You can also just call
 `vm`start`all` if you wish to start all VMs that are in the `PAUSED` or
@@ -424,8 +424,8 @@ command to kill foo_1:
 
 	minimega$ vm kill foo_1
 	minimega$ vm info
-	host | id | host | name  | state | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid                                 | cc_active
-	foo  | 0  | foo  | foo_1 | QUIT  | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+	host | id | host | name  | state | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	foo  | 0  | foo  | foo_1 | QUIT  | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 foo_1 is now in the `QUIT` state. Now let's use `vm`launch` to launch 5 VMs at
 the same time, all using the configuration we described earlier. To do that, we
@@ -439,13 +439,13 @@ the `.columns` command as a prefix to `vm`info`.
 If we check `vm`info` again, we'll notice two things:
 
 	minimega$ .columns id,name,state,uuid vm info
-	id   | name  | state    | uuid
-	0    | foo_1 | QUIT     | 64b94cc6-925b-403a-a975-a7723079e74d
-	1    | vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
-	2    | vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
-	3    | vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
-	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
-	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
+	id   | name  | state	| uuid
+	0	| foo_1 | QUIT	 | 64b94cc6-925b-403a-a975-a7723079e74d
+	1	| vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2	| vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3	| vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4	| vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5	| vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
 First, the VM foo_1 that we killed earlier is still hanging around in our info
 table, even though it was killed a while back. We can clear that with a
@@ -454,12 +454,12 @@ state.
 
 	minimega$ vm flush
 	minimega$ .columns id,name,state,uuid vm info
-	id   | name  | state    | uuid
-	1    | vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
-	2    | vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
-	3    | vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
-	4    | vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
-	5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
+	id   | name  | state	| uuid
+	1	| vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2	| vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3	| vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4	| vm-4  | BUILDING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5	| vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
 The second thing we notice is that we have 5 VMs of the same type, and each of
 them have a generated name. That's because we used `vm`launch` with a number
@@ -470,11 +470,11 @@ We can start all of the VMs using `vm`start`all`:
 	minimega$ vm start all
 	minimega$ .columns id,name,state,uuid vm info
 	id   | name  | state   | uuid
-	1    | vm-1  | RUNNING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
-	2    | vm-2  | RUNNING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
-	3    | vm-3  | RUNNING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
-	4    | vm-4  | RUNNING | 7d534443-eabd-4a56-a96b-57d944c57929
-	5    | vm-5  | RUNNING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
+	1	| vm-1  | RUNNING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
+	2	| vm-2  | RUNNING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
+	3	| vm-3  | RUNNING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
+	4	| vm-4  | RUNNING | 7d534443-eabd-4a56-a96b-57d944c57929
+	5	| vm-5  | RUNNING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 
 And off we go!
 
@@ -502,8 +502,8 @@ randomly:
 
 	minimega$ .columns id,mac vm info
 	id   | mac
-	0    | [00:81:ac:7a:54:e1]
-	1    | [00:a2:12:3f:4f:55]
+	0	| [00:81:ac:7a:54:e1]
+	1	| [00:a2:12:3f:4f:55]
 
 If you want a VM to have more than one interface, simply supply additional vlan
 tags with the `vm`config`net` command, separated by spaces:
@@ -511,7 +511,7 @@ tags with the `vm`config`net` command, separated by spaces:
 	minimega$ vm config net 100 200 300
 	minimega$ vm launch kvm many_interfaces
 	minimega$ .columns name,mac,vlan .filter name=many_interface vm info
-	name            | mac                                                     | vlan
+	name			| mac													 | vlan
 	many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [100 200 300]
 
 ** Host Taps
@@ -524,7 +524,7 @@ you wish to be able to connect to it. Use the `tap` command to create a new
 interface on vlan 100, and assign it a static IP that can reach that VM:
 
 	minimega$ .columns name,ip,vlan vm info
-	name | ip           | vlan
+	name | ip		   | vlan
 	foo  | [10.0.0.234] | [100]
 	minimega$ tap create 100 ip 10.0.0.1/24
 	mega_tap2
@@ -543,7 +543,7 @@ able to ping the VM:
 You can obtain information about host taps by invoking `tap` with no arguments:
 
 	minimega$ tap
-	bridge      | tap       | vlan | option
+	bridge	  | tap	   | vlan | option
 	mega_bridge | mega_tap2 | 100  | 10.0.0.1/24
 
 Additionally, you can start a host tap using DHCP, assuming a DHCP server
@@ -580,8 +580,8 @@ You can obtain information about running dnsmasq instances by invoking
 `dnsmasq` with no arguments:
 
 	minimega$ dnsmasq
-	ID   | Listening Address | Min      | Max        | Path                            | PID
-	0    | 10.0.0.1          | 10.0.0.2 | 10.0.0.254 | /tmp/minimega/dnsmasq_460796406 | 47997
+	ID   | Listening Address | Min	  | Max		| Path							| PID
+	0	| 10.0.0.1		  | 10.0.0.2 | 10.0.0.254 | /tmp/minimega/dnsmasq_460796406 | 47997
 
 Finally, we can boot a VM:
 
@@ -626,7 +626,7 @@ This will write out a file called `launch-foo.mm`, which looks like this:
 
 This script can then be executed by minimega using the `read` command:
 
-	    minimega$ read launch-foo.mm
+	minimega$ read launch-foo.mm
 
 ** Shell scripts
 
@@ -661,8 +661,8 @@ script:
 
 	for i in `ls $IMAGES`
 	do
-	    $MM vm config disk $IMAGES/$i
-	    $MM vm launch kvm vm-$i
+		$MM vm config disk $IMAGES/$i
+		$MM vm launch kvm vm-$i
 	done
 
 	$MM vm start all
