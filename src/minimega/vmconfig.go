@@ -69,6 +69,12 @@ func mustContainerConfig(val interface{}) *ContainerConfig {
 
 // Functions for configuring VMs.
 var baseConfigFns = map[string]VMConfigFns{
+	"schedule": vmConfigString(func(vm interface{}) *string {
+		return &mustBaseConfig(vm).ScheduleHost
+	}, ""),
+	"coschedule": vmConfigString(func(vm interface{}) *string {
+		return &mustBaseConfig(vm).SchedulePeers
+	}, ""),
 	"memory": vmConfigString(func(vm interface{}) *string {
 		return &mustBaseConfig(vm).Memory
 	}, VM_MEMORY_DEFAULT),

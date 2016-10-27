@@ -49,6 +49,31 @@ remove saved configurations.`,
 		},
 		Call: wrapSimpleCLI(cliVmConfig),
 	},
+	{ // vm config schedule
+		HelpShort: "schedule VM on particular host",
+		HelpLong: `
+Set a host where the VM should be scheduled. This is only used when launching
+VMs in a namespace.`,
+		Patterns: []string{
+			"vm config schedule [host]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "schedule")
+		}),
+	},
+	{ // vm config coschedule
+		HelpShort: "set max peers for VM",
+		HelpLong: `
+Set a limit on the number of VMs that should be scheduled on the same host as
+the VM. A limit of zero means that the VM should be schedule by itself. This is
+only used when launching VMs in a namespace.`,
+		Patterns: []string{
+			"vm config coschedule [limit]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			return cliVmConfigField(c, resp, "coschedule")
+		}),
+	},
 	{ // vm config memory
 		HelpShort: "set the amount of physical memory for a VM",
 		HelpLong: `
@@ -461,11 +486,13 @@ to the default value.`,
 		// magic of single-choice fields to set the field name in BoolArgs.
 		Patterns: []string{
 			"clear vm config",
-			// VMConfig
+			// BaseConfig
 			"clear vm config <cpu,>",
 			"clear vm config <memory,>",
 			"clear vm config <net,>",
 			"clear vm config <vcpus,>",
+			"clear vm config <schedule,>",
+			"clear vm config <coschedule,>",
 			// KVMConfig
 			"clear vm config <append,>",
 			"clear vm config <cdrom,>",

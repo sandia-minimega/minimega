@@ -108,9 +108,11 @@ type BaseConfig struct {
 
 	Snapshot bool
 	UUID     string
-	ActiveCC bool // set when CC is active
 
 	Tags map[string]string
+
+	ScheduleHost  string // force scheduler to this host
+	SchedulePeers string // max coscheduled VMs
 }
 
 // NetConfig contains all the network-related config for an interface. The IP
@@ -140,10 +142,11 @@ type BaseVM struct {
 
 	kill chan bool // channel to signal the vm to shut down
 
-	ID    int
-	Name  string
-	State VMState
-	Type  VMType
+	ID       int
+	Name     string
+	State    VMState
+	Type     VMType
+	ActiveCC bool // set when CC is active
 
 	instancePath string
 }
@@ -335,6 +338,8 @@ func (vm *BaseConfig) String() string {
 	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
+	fmt.Fprintf(w, "Scheduled host:\t%v\n", vm.ScheduleHost)
+	fmt.Fprintf(w, "Coschedule limit:\t%v\n", vm.SchedulePeers)
 	fmt.Fprintf(w, "Tags:\t%v\n", vm.TagsString())
 	w.Flush()
 	fmt.Fprintln(&o)
