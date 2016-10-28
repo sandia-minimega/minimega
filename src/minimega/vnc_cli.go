@@ -218,38 +218,42 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 
 	vncRecordingLock.RLock()
 	for _, v := range vncKBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record kb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
+		if inNamespace(v.VM) {
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "record kb",
+				time.Since(v.start).String(),
+				v.file.Name(),
+			})
+		}
 	}
-	vncRecordingLock.RUnlock()
 
-	vncRecordingLock.RLock()
 	for _, v := range vncFBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record fb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
+		if inNamespace(v.VM) {
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "record fb",
+				time.Since(v.start).String(),
+				v.file.Name(),
+			})
+		}
 	}
 	vncRecordingLock.RUnlock()
 
 	vncPlayingLock.RLock()
 	for _, v := range vncPlaying {
-		var r string
-		if v.state == Pause {
-			r = "PAUSED"
-		} else {
-			r = v.timeRemaining() + " remaining"
-		}
+		if inNamespace(v.VM) {
+			var r string
+			if v.state == Pause {
+				r = "PAUSED"
+			} else {
+				r = v.timeRemaining() + " remaining"
+			}
 
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "playback kb",
-			r,
-			v.file.Name(),
-		})
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "playback kb",
+				r,
+				v.file.Name(),
+			})
+		}
 	}
 	vncPlayingLock.RUnlock()
 	return nil
