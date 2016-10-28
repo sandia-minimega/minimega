@@ -7,7 +7,7 @@ The minimega authors 28 October 2016
 minimega supports recording and playback of both the framebuffer and keyboard
 and mouse interactions with VMs. Framebuffer recordings contain VNC/RFB data at
 10 frames per second and can be played back in a browser or transcoded to
-video, such as mp4, using the `rfbplay` tool. 
+video, such as mp4, using the `rfbplay` tool.
 
 Keyboard/mouse recordings are stored in a plaintext file format and can be
 played back to any running VM. All VNC operations are namespace aware, and
@@ -63,8 +63,8 @@ To stop recording:
 
 The recorded file format uses the following schema:
 
-    <time delta>:PointerEvent,<mask>,<x>,<y>
-    <time delta>:KeyEvent,<press>,<key>
+	<time delta>:PointerEvent,<mask>,<x>,<y>
+	<time delta>:KeyEvent,<press>,<key>
 
 The time delta is the time, in nanoseconds, between the previous record and
 this one.
@@ -81,13 +81,13 @@ file]].
 For example, the following shows several mouse movements, and someone typing
 `foo`:
 
-    178759303:PointerEvent,0,606,44 130044895:PointerEvent,1,606,44
-    97711488:PointerEvent,0,606,44 578412037:KeyEvent,true,f
-    8141459:KeyEvent,false,f 111708110:KeyEvent,true,o
-    10379962:KeyEvent,false,o 69607950:KeyEvent,true,o
-    102641640:KeyEvent,false,o 436817511:PointerEvent,0,606,43
-    54109:PointerEvent,0,606,41 4740247:PointerEvent,0,607,38
-    39063:PointerEvent,0,607,17 
+	178759303:PointerEvent,0,606,44 130044895:PointerEvent,1,606,44
+	97711488:PointerEvent,0,606,44 578412037:KeyEvent,true,f
+	8141459:KeyEvent,false,f 111708110:KeyEvent,true,o
+	10379962:KeyEvent,false,o 69607950:KeyEvent,true,o
+	102641640:KeyEvent,false,o 436817511:PointerEvent,0,606,43
+	54109:PointerEvent,0,606,41 4740247:PointerEvent,0,607,38
+	39063:PointerEvent,0,607,17
 
 * Playback
 
@@ -96,7 +96,7 @@ For example, the following shows several mouse movements, and someone typing
 Playback of framebuffer data uses a seperate tool, available in the minimega
 distribution, `rfbplay`. `rfbplay` can serve a directory of framebuffer files,
 and can playback in a MJPEG supported web browser (Firefox currently supports
-MJPEG, Chrome no longer does). 
+MJPEG, Chrome no longer does).
 
 Additionally, `rfbplay` can transcode framebuffer data, using `ffmpeg`, to any
 format supported by `ffmpeg`, such as mp4.
@@ -106,10 +106,10 @@ format supported by `ffmpeg`, such as mp4.
 To playback a framebuffer recording in a web browser that supports MJPEG (not
 Chrome), start `rfbplay` and supply a directory to serve:
 
-    rfbplay <directory>
+	rfbplay <directory>
 
 Then simply browse to the rfbplay service, port 9004 by default, and select the
-framebuffer recording you want to play. 
+framebuffer recording you want to play.
 
 *** Transcoding to video
 
@@ -119,7 +119,7 @@ Simply invoke `rfbplay` with a source framebuffer file and output video.
 example, to transcode a file `foo.fb` to an mp4 file named `bar.mp4`, make sure
 you suffix the output filename with `.mp4`:
 
-    rfbplay foo.fb bar.mp4
+	rfbplay foo.fb bar.mp4
 
 Files are transcoded in *real*time*, so a one hour framebuffer recording will
 take at least one hour to transcode. You can see `ffmpeg` transcoding details
