@@ -320,7 +320,7 @@ function renderArrayOfObjectsUsingKey(key) {
     return function(data, type, full, meta) {
         return handleEmptyString(data.reduce(
             function (previous, current) {
-                return previous.concat([current[key]]);
+                return previous.concat([handleEmptyString(current[key])]);
             }, []).join(", ")
         );
     };    
