@@ -67,7 +67,9 @@ function initVMDataTable() {
         // http://stackoverflow.com/a/32253335
         "dom": 
             "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
-            "<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
             "<'row'<'col-sm-12'tr>>",
         "buttons": [
             'columnsVisibility',
@@ -143,7 +145,9 @@ function initHostDataTable() {
         },
         "dom": 
             "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
-            "<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
             "<'row'<'col-sm-12'tr>>",
         "buttons": [
             'columnsVisibility'
