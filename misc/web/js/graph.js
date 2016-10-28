@@ -526,7 +526,7 @@ function setPopupMachine (vm, node) {
 }
 
 function makeConnectLink(vm) {
-    return "<a target=\"_blank\" href=\"" + connectURL(vm) + "\">" + vm.name + "</a>"
+    return "<a target=\"_blank\" href=\"connect/" + vm.name + "\">" + vm.name + "</a>"
 }
 
 function addConnectLink(parent, vm) {
@@ -560,7 +560,7 @@ function makeTable (parent, data) {
 
 // Used to get the new graph info via AJAX.
 function getVMInfo () {
-    d3.text("./vms", function (error, info) {
+    d3.text("vms.json", function (error, info) {
         if ((info != grapher.jsonString) && (cursor.node == null)) {
             if (error) return console.warn(error);
 
@@ -642,8 +642,6 @@ function getVMInfo () {
                 graphTick();
                 grapher.d3force.alpha(oldAlpha);
             }
-
-            updateTables();
         }
     });
 }
@@ -850,17 +848,7 @@ function makeGraph (response, ethers) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-$(document).ready(function () {
-    d3.select(config.selectors.popupContainer).on("click", function () {
-        d3.event.stopPropagation();
-    });
-
-    d3.select(config.selectors.centerButton).on("click", function () {
-        grapher.instance.center();
-        grapher.instance.zoom(0.85)
-        if (d3.event) d3.event.stopPropagation();
-    });
-
+function initializeGraph() {
     d3.select(config.selectors.reflowButton).on("click", function () {
         grapher.d3force.alpha(4);
         if (d3.event) d3.event.stopPropagation();
@@ -889,6 +877,16 @@ $(document).ready(function () {
                 cursor.startPoint = getOffset(e, grapher.instance.canvas);
             }
         }
+    });
+
+    d3.select(config.selectors.popupContainer).on("click", function () {
+        d3.event.stopPropagation();
+    });
+
+    d3.select(config.selectors.centerButton).on("click", function () {
+        grapher.instance.center();
+        grapher.instance.zoom(0.85)
+        if (d3.event) d3.event.stopPropagation();
     });
 
     // Set up event handler for mousemove. It's applied to the document and not the graph because
@@ -1011,10 +1009,10 @@ $(document).ready(function () {
     setTimeout(function () {
         d3.select(config.selectors.centerButton).on("click")();
         d3.select(grapher.instance.canvas).style("opacity", "1");
-    }, 750);
+    }, 1000);
 
     setInterval(getVMInfo, 1500);
-});
+}
 
 
 // Resize the graph when the window is resized

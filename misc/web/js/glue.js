@@ -184,15 +184,6 @@ function initHostDataTable() {
 // Update the Screenshot table with new data
 function updateScreenshotTable(vmsData) {
 
-    // Add "Connect" URLs into the data
-    for (var i = 0; i < vmsData.length; i++) {
-        var vm = vmsData[i];
-        vm.connectURL = connectURL(vm);
-        vm.screenshotURL = screenshotURL(vm, 300);
-        //console.log(vm);
-    }
-
-
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
         if (lastImages[imageUrls[i]].used === false) {
@@ -225,7 +216,7 @@ function updateScreenshotTable(vmsData) {
         var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", vm.connectURL);
+        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
 
@@ -251,8 +242,8 @@ function updateScreenshotTable(vmsData) {
             "paging": true,
             "lengthChange": true,
             "lengthMenu": [
-                [25, 50, 100, 200, -1],
-                [25, 50, 100, 200, "All"]
+                [12, 24, 48, 96, -1],
+                [12, 24, 48, 96, "All"]
             ],
             "pageLength": -1,
             "data": screenshotList,
