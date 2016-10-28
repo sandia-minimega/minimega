@@ -274,6 +274,18 @@ function connectURL (vm) {
 }
 
 
+// Add more cowbell
+function initCowbell () {
+    var audioElement = document.createElement('audio');
+    audioElement.setAttribute('src', 'images/cow_and_bell_1243222141.mp3');
+    $('#nav-container').dblclick(function() {
+        audioElement.currentTime = 0;
+        audioElement.play();
+    });
+    console.log("Added more cowbell.");
+}
+
+
 // Get the screenshot for the requested row, or restore it from the cache of screenshots if available
 function loadOrRestoreImage (row, data, displayIndex) {
     var img = $('img', row);
