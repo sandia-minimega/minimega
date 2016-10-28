@@ -81,32 +81,33 @@ function initVMDataTable() {
         ],
         "pageLength": -1,
         "columns": [
-            { "title": "Host", "mDataProp": "host" },
-            //{ "title": "ID", "mDataProp": "id" },
-            { "title": "Memory", "mDataProp": "memory" },
-            { "title": "Name", "mDataProp": "name" },
-            { "title": "Network", "mDataProp": "network" },
-            { "title": "IPv4", "mDataProp": "network" },
-            { "title": "IPv6", "mDataProp": "network" },
-            { "title": "Taps", "mDataProp": "network" },
-            { "title": "State", "mDataProp": "state" },
-            { "title": "Tags", "mDataProp": "tags" },
-            { "title": "Type", "mDataProp": "type" },
-            { "title": "VCPUs", "mDataProp": "vcpus" }
+            {
+                "title": "VNC",
+                "data": "name",
+                render:  function ( data, type, full, meta ) {
+                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
+                }
+            },
+
+            { "title": "Name", "data": "name" },
+            { "title": "State", "data": "state" },
+            { "title": "Host", "data": "host" },
+            //{ "title": "ID", "data": "id" },
+            { "title": "Memory", "data": "memory" },
+            { "title": "Network", "data": "network", render: renderArrayOfObjectsUsingKey("VLAN") },
+            { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
+            { "title": "IPv6", "data": "network", render: renderArrayOfObjectsUsingKey("IP6") },
+            { "title": "Taps", "data": "network", render: renderArrayOfObjectsUsingKey("Tap") },
+            { "title": "Tags", "data": "tags", render: renderArrayOfObjects },
+            { "title": "Type", "data": "type" },
+            { "title": "VCPUs", "data": "vcpus" }
         ],
-        "createdRow": flattenObjectValues,
+        "order": [[ 2, 'asc' ], [ 1, 'asc' ]],
         /*initComplete: function(){
             var api = this.api();
             api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
         }*/
     });
-
-    vmDataTable.order([
-        [ 0, 'asc' ],
-        [ 1, 'asc' ]
-    ]);
-
-    //vmDataTable.draw();
 
     
     // Create second button group for other functionality
@@ -165,7 +166,8 @@ function initHostDataTable() {
             { "title": "vms" },
             { "title": "vmsall" },
             { "title": "uptime" }
-        ]
+        ],
+        "order": [[ 0, 'asc' ]]
     });
     hostDataTable.draw();
 
@@ -219,7 +221,7 @@ function updateScreenshotTable(vmsData) {
         var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
+        toAppend.find("a.connect-vm-button").attr("href", vm.connectURL);
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
 
@@ -251,8 +253,8 @@ function updateScreenshotTable(vmsData) {
             "pageLength": -1,
             "data": screenshotList,
             "columns": [
-                { "title": "Name", "mDataProp": "name", "visible": false },
-                { "title": "Model", "mDataProp": "model", "searchable": false },
+                { "title": "Name", "data": "name", "visible": false },
+                { "title": "Model", "data": "model", "searchable": false },
             ],
             "createdRow": loadOrRestoreImage
         });
@@ -277,13 +279,13 @@ function updateScreenshotTable(vmsData) {
 
 // Generate the appropriate URL for requesting a screenshot
 function screenshotURL (vm, size) {
-    return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
+    return "screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
 }
 
 
 // Generate the appropriate URL for a connection
 function connectURL (vm) {
-    return "./connect/" + vm.name
+    return "connect/" + vm.name
 }
 
 
@@ -314,44 +316,24 @@ function loadOrRestoreImage (row, data, displayIndex) {
     });
 }
 
-
-// Stringify columns with object info
-function flattenObjectValues (row, data, displayIndex) {
-    var networkColumn = $("td:nth-child(" + NETWORK_COLUMN_INDEX + ")", row);
-    var tapColumn = $("td:nth-child(" + TAP_COLUMN_INDEX + ")", row);
-    var ip4Column = $("td:nth-child(" + IP4_COLUMN_INDEX + ")", row);
-    var ip6Column = $("td:nth-child(" + IP6_COLUMN_INDEX + ")", row);
-    var tagsColumn = $("td:nth-child(" + TAGS_COLUMN_INDEX + ")", row);
-
-    ip4Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP4]); },
-        []
-    ).join(", ")));
-
-    ip6Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP6]); },
-        []
-    ).join(", ")));
-
-    tapColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.Tap]); },
-        []
-    ).join(", ")));
-
-    networkColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.VLAN]); },
-        []
-    ).join(", ")));
-
-    var tagsHTML = [];
-    var tagsKeys = Object.keys(data.tags);
-    for (var i = 0; i < tagsKeys.length; i++) {
-        tagsHTML.push("<em>" + tagsKeys[i] + ":</em> " + data.tags[tagsKeys[i]]);
-    }
-
-    tagsColumn.html(handleEmptyString(tagsHTML.join(", ")));
+function renderArrayOfObjectsUsingKey(key) {
+    return function(data, type, full, meta) {
+        return handleEmptyString(data.reduce(
+            function (previous, current) {
+                return previous.concat([current[key]]);
+            }, []).join(", ")
+        );
+    };    
 }
 
+function renderArrayOfObjects(data, type, full, meta) {
+    var html = [];
+    var keys = Object.keys(data);
+    for (var i = 0; i < keys.length; i++) {
+        html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
+    }
+    return handleEmptyString(html.join(", "));
+}
 
 // Put an italic "null" in the table where there are fields that aren't set
 function handleEmptyString (value) {
