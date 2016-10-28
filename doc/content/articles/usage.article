@@ -1,5 +1,8 @@
 Using minimega
 
+The minimega authors
+28 Oct 2016
+
 * Launching, Contexts, and the Base Directory
 
 minimega is designed to be simple to deploy, and is configured at runtime by
@@ -307,14 +310,15 @@ MB of RAM, and 2 CPUs:
 (Note that this only describes the VM to be launched, it doesn't launch it. The
 next section describes launching VMs.)
 
-After launching that VM, say you want to launch another with a different disk
-image, `bar.qcow2` and a network interface on VLAN 100, but otherwise with the
-same parameters (2048 MB of RAM and 2 CPUs). All you need to change is
-`vm`config`disk`, and add a network with `vm`config`net`. Previously defined
-parameters will stay the same until changed or cleared:
+After launching that VM, say you want to launch another with a different
+disk image, `bar.qcow2` and a network interface on a virtual network
+called `experiment`, but otherwise with the same parameters (2048 MB of
+RAM and 2 CPUs). All you need to change is `vm`config`disk`, and add a
+network with `vm`config`net`. Previously defined parameters will stay
+the same until changed or cleared:
 
 	minimega$ vm config disk /tmp/bar.qcow2
-	minimega$ vm config net 100
+	minimega$ vm config net experiment
 
 At this point, say we want to launch a third virtual machine, this time with no
 disk image, but instead a linux kernel and initrd. First, let's take a look at
@@ -322,42 +326,70 @@ the current VM description:
 
 	minimega$ vm config
 	Current VM configuration:
-	Memory:		2048
-	VCPUS:		 2
-	Disk Path:	 /tmp/bar.qcow2
-	CDROM Path:
-	Kernel Path:
-	Initrd Path:
-	Kernel Append:
-	QEMU Path:	 /usr/bin/kvm
-	QEMU Append:   []
-	Snapshot:	  true
-	Networks:	  [100]
-	UUID:
+	Memory:   2048
+	VCPUS:    2
+	Networks: [mega_bridge,experiment (101)]
+	Snapshot: true
+	UUID:     
+	Tags:     {}
+	
+	Current KVM configuration:
+	Migrate Path:       
+	Disk Paths:         [/tmp/bar.qcow2]
+	CDROM Path:         
+	Kernel Path:        
+	Initrd Path:        
+	Kernel Append:      
+	QEMU Path:          /usr/bin/kvm
+	QEMU Append:        []
+	SerialPorts:        0
+	Virtio-SerialPorts: 0
+	
+	Current container configuration:
+	Filesystem Path: 
+	Hostname:        
+	Init:            [/init]
+	Pre-init:        
+	FIFOs:           0
 
 This looks fine, empty fields are either just not included in the next VM to
-launch, or will be randomly generated (such as UUID), so let's tell minimega to
-use an initrd and kernel:
+launch or will be randomly generated (such as UUID). Note that minimega has
+automatically selected a VLAN number, 101, for the `experiment` network.
+
+Next, tell minimega to use an initrd and kernel:
 
 	minimega$ vm config initrd /tmp/foo.initrd
 	minimega$ vm config kernel /tmp/foo.kernel
 
 And look at our configuration again:
 
-	minimega$ vm_config
+	minimega$ vm config
 	Current VM configuration:
-	Memory:		2048
-	VCPUS:		 2
-	Disk Path:	 /tmp/bar.qcow2
-	CDROM Path:
-	Kernel Path:   /tmp/foo.kernel
-	Initrd Path:   /tmp/foo.initrd
-	Kernel Append:
-	QEMU Path:	 /usr/bin/kvm
-	QEMU Append:   []
-	Snapshot:	  true
-	Networks:	  [100]
-	UUID:
+	Memory:   2048
+	VCPUS:    2
+	Networks: [mega_bridge,experiment (101)]
+	Snapshot: true
+	UUID:     
+	Tags:     {}
+	
+	Current KVM configuration:
+	Migrate Path:       
+	Disk Paths:         [/tmp/bar.qcow2]
+	CDROM Path:         
+	Kernel Path:        /tmp/foo.kernel
+	Initrd Path:        /tmp/foo.initrd
+	Kernel Append:      
+	QEMU Path:          /usr/bin/kvm
+	QEMU Append:        []
+	SerialPorts:        0
+	Virtio-SerialPorts: 0
+	
+	Current container configuration:
+	Filesystem Path: 
+	Hostname:        
+	Init:            [/init]
+	Pre-init:        
+	FIFOs:           0
 
 Something isn't right here, we see that while the initrd and kernel fields are
 set correctly, the disk image field is still set. We'd like to get rid of that,
@@ -367,20 +399,33 @@ so let's use the `clear` command:
 
 And look at the config one last time:
 
-	minimega$ vm_config
+	minimega$ vm config
 	Current VM configuration:
-	Memory:		2048
-	VCPUS:		 2
-	Disk Path:
-	CDROM Path:
-	Kernel Path:   /tmp/foo.kernel
-	Initrd Path:   /tmp/foo.initrd
-	Kernel Append:
-	QEMU Path:	 /usr/bin/kvm
-	QEMU Append:   []
-	Snapshot:	  true
-	Networks:	  [100]
-	UUID:
+	Memory:   2048
+	VCPUS:    2
+	Networks: [mega_bridge,experiment (101)]
+	Snapshot: true
+	UUID:     
+	Tags:     {}
+	
+	Current KVM configuration:
+	Migrate Path:       
+	Disk Paths:         []
+	CDROM Path:         
+	Kernel Path:        /tmp/foo.kernel
+	Initrd Path:        /tmp/foo.initrd
+	Kernel Append:      
+	QEMU Path:          /usr/bin/kvm
+	QEMU Append:        []
+	SerialPorts:        0
+	Virtio-SerialPorts: 0
+	
+	Current container configuration:
+	Filesystem Path: 
+	Hostname:        
+	Init:            [/init]
+	Pre-init:        
+	FIFOs:           0
 
 ** Launching Virtual Machines
 
@@ -403,7 +448,7 @@ To check on our VM, we can use the `vm`info` command, which, with no arguments,
 will tell us about all VMs minimega has on this node:
 
 	minimega$ vm info
-	host | id | host | name  | state	| memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	host | id | host | name  | state	| memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid								 | cc_active
 	foo  | 0  | foo  | foo_1 | BUILDING | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 You'll notice that the state of the VM from the above `vm`info` command is
@@ -412,7 +457,7 @@ name or ID with the `vm`start` command:
 
 	minimega$ vm start foo_1
 	minimega$ vm info
-	host | id | host | name  | state   | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	host | id | host | name  | state   | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid								 | cc_active
 	foo  | 0  | foo  | foo_1 | RUNNING | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 Now we see that the VM is in the running state. You can also just call
@@ -424,7 +469,7 @@ command to kill foo_1:
 
 	minimega$ vm kill foo_1
 	minimega$ vm info
-	host | id | host | name  | state | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | vlan | uuid								 | cc_active
+	host | id | host | name  | state | memory | vcpus | disk					  | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid								 | cc_active
 	foo  | 0  | foo  | foo_1 | QUIT  | 2048   | 1	 | [/tmp/foo.qc2] [snapshot] |		|		|	   |		| []	 | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 
 foo_1 is now in the `QUIT` state. Now let's use `vm`launch` to launch 5 VMs at
@@ -480,53 +525,71 @@ And off we go!
 
 * Virtual Machine Networking
 
-minimega uses 802.1q vlan tagging with openvswitch to support arbitrary
+minimega uses 802.1q VLAN tagging with openvswitch to support arbitrary
 topologies of networks across all nodes. This is accomplished in minimega by
-assigning one or more vlan tags to the virtual machine description.
+assigning one or more VLAN tags to the virtual machine description.
 
 ** Simple Networking Between VMs
 
-Say we want to network two virtual machines together on a private lan. We do
-this by choosing a vlan tag between 1-4096 and assigning it with the
-`vm`config`net` command to the VM description:
+Say we want to network two virtual machines together on a private lan. We
+can do this by simply specifying a network name; minimega will select
+an un-used VLAN (for example, VLAN 101) and use that for any VMs on
+the network.
 
 	minimega$ vm config memory 2048
 	minimega$ vm config disk /tmp/foo.qcow2
-	minimega$ vm config net 100
+	minimega$ vm config net experiment
 	minimega$ vm launch kvm 2
 
-This will launch two VMs with a single ethernet device on vlan 100. If, for
-example, one of the VMs is running a DHCP server, the others will be able to
-obtain a lease from that VM. When VMs are created, MAC addresses are assigned
-randomly:
+This will launch two VMs with a single ethernet device on a virtual
+network called `experiment`. If, for example, one of the VMs is running a
+DHCP server, the others will be able to obtain a lease from that VM. When
+VMs are created, MAC addresses are assigned randomly:
 
 	minimega$ .columns id,mac vm info
 	id   | mac
 	0	| [00:81:ac:7a:54:e1]
 	1	| [00:a2:12:3f:4f:55]
 
-If you want a VM to have more than one interface, simply supply additional vlan
+If you want a VM to have more than one interface, simply supply additional VLAN
 tags with the `vm`config`net` command, separated by spaces:
 
-	minimega$ vm config net 100 200 300
+	minimega$ vm config net net1 net2 net3
 	minimega$ vm launch kvm many_interfaces
-	minimega$ .columns name,mac,vlan .filter name=many_interface vm info
-	name			| mac													 | vlan
-	many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [100 200 300]
+	minimega$ .columns name,mac,VLAN .filter name=many_interface vm info
+	name			| mac													 | VLAN
+	many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [net1 (102), net2 (103), net3 (104)]
+
+Note that minimega has selected VLANs 102, 103, and 104 for the new
+networks, since 101 was already taken by the `experiment` network.
+
+*** Explicitly specifying a VLAN
+
+In some situations, you may want a VM to be connected to a specific VLAN
+rather than one minimega selects. For instance, this can be very useful
+when testing "hardware in the loop": by configuring a piece of real,
+physical hardware to communicate on e.g. VLAN 500, any VMs configured
+on VLAN 500 will be able to communicate with the device.
+
+To specify a VLAN explicitly, simply give a number between 1 and 4096
+instead of a network name:
+
+	minimega$ vm config net 500
 
 ** Host Taps
 
-minimega's `tap` command allows creating local interfaces on particular vlans
+minimega's `tap` command allows creating local interfaces on particular VLANs
 to allow 'tapping' into a guest network.
 
-For example, say you have a VM running on vlan 100, it has an IP already, and
-you wish to be able to connect to it. Use the `tap` command to create a new
-interface on vlan 100, and assign it a static IP that can reach that VM:
+For example, say you have a VM running on a network called `experiment`,
+it has an IP already, and you wish to be able to connect to it. Use the
+`tap` command to create a new interface on the same virtual network,
+and assign it a static IP that can reach that VM:
 
-	minimega$ .columns name,ip,vlan vm info
-	name | ip		   | vlan
-	foo  | [10.0.0.234] | [100]
-	minimega$ tap create 100 ip 10.0.0.1/24
+	minimega$ .columns name,ip,VLAN vm info
+	name | ip		   | VLAN
+	foo  | [10.0.0.234] | [experiment (101)]
+	minimega$ tap create experiment ip 10.0.0.1/24
 	mega_tap2
 
 `tap` returns the name of the interface it created. At this point, we should be
@@ -543,13 +606,13 @@ able to ping the VM:
 You can obtain information about host taps by invoking `tap` with no arguments:
 
 	minimega$ tap
-	bridge	  | tap	   | vlan | option
-	mega_bridge | mega_tap2 | 100  | 10.0.0.1/24
+	bridge	  | tap	   | VLAN              | option
+	mega_bridge | mega_tap2 | experiment (101)  | 10.0.0.1/24
 
 Additionally, you can start a host tap using DHCP, assuming a DHCP server
 exists on that VLAN already:
 
-	minimega$ tap create 100 dhcp
+	minimega$ tap create experiment dhcp
 	mega_tap3
 
 Finally, you can delete host taps using the `delete` keyword with the tap name:
@@ -559,16 +622,16 @@ Finally, you can delete host taps using the `delete` keyword with the tap name:
 ** DNS and DHCP
 
 minimega supports running `dnsmasq`, a tool to serve DHCP and DNS on a host tap
-connected to a vlan. This allows you to use the host node to run DHCP and DNS
+connected to a VLAN. This allows you to use the host node to run DHCP and DNS
 to VMs.
 
 For example, to launch a VM that is configured to obtain an IP using DHCP,
-assign the VM a network interface on a vlan, and a host tap on the same vlan:
+assign the VM a network interface on a VLAN, and a host tap on the same VLAN:
 
 	minimega$ vm config memory 2048
 	minimega$ vm config disk /tmp/foo.qcow2
-	minimega$ vm config net 100
-	minimega$ tap create 100 ip 10.0.0.1/24
+	minimega$ vm config net experiment
+	minimega$ tap create experiment ip 10.0.0.1/24
 	mega_tap0
 
 Before launching the VM, start a dnsmasq instance attached to the IP of the
@@ -601,6 +664,13 @@ of the dnsmasq instance (or `all` for all instances)
 
 	minimega$ dnsmasq kill 0
 
+** Routing & advanced networks
+
+[[router.article][minirouter]] provides more advanced routing, DHCP,
+and DNS functionality by booting a virtual machine which can then act
+as a router. It is controlled entirely by commands within minimega and
+is the preferred way to build non-trivial network environments.
+
 * Scripting
 
 ** Command files
@@ -612,7 +682,7 @@ one could set up a VM, launch it, and start it, then save the sequence of
 commands for later use:
 
 	minimega$ vm config disk foo.img
-	minimega$ vm config net 100
+	minimega$ vm config net foo-net
 	minimega$ vm launch kvm foo-vm
 	minimega$ vm start foo-vm
 	minimega$ write launch-foo.mm
@@ -620,7 +690,7 @@ commands for later use:
 This will write out a file called `launch-foo.mm`, which looks like this:
 
 	 vm config disk foo.img
-	 vm config net 100
+	 vm config net foo-net
 	 vm launch kvm foo-vm
 	 vm start foo-vm
 
