@@ -3,7 +3,7 @@
 // Config
 var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 2000;    // How often the currently-displayed hosts are updated (in millis)
-var IMAGE_REFRESH_TIMEOUT = 0;   // How often the currently-displayed screenshots are updated (in millis)
+var IMAGE_REFRESH_TIMEOUT = 2000;   // How often the currently-displayed screenshots are updated (in millis)
 var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
 var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
 var IP6_COLUMN_INDEX = 6;           // Index of the column with IP6 info (needs to have values strignified)
@@ -253,16 +253,6 @@ function updateScreenshotTable(vmsData) {
             ],
             "createdRow": loadOrRestoreImage
         });
-
-        if (IMAGE_REFRESH_TIMEOUT > 0) {
-            setInterval((function (closureTable) {
-                return function () {
-                    // Causes all the screenshot images to be re-requested and rendered
-                    closureTable.fnDraw(false);
-                }
-            })(table), IMAGE_REFRESH_TIMEOUT)
-        }
-
     }
 }
 
