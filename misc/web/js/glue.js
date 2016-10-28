@@ -4,11 +4,6 @@
 var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 2000;    // How often the currently-displayed hosts are updated (in millis)
 var IMAGE_REFRESH_TIMEOUT = 2000;   // How often the currently-displayed screenshots are updated (in millis)
-var NETWORK_COLUMN_INDEX = 4;       // Index of the column with network info (needs to have values strignified)
-var IP4_COLUMN_INDEX = 5;           // Index of the column with IP4 info (needs to have values strignified)
-var IP6_COLUMN_INDEX = 6;           // Index of the column with IP6 info (needs to have values strignified)
-var TAP_COLUMN_INDEX = 7;           // Index of the column with tap info (needs to have values strignified)
-var TAGS_COLUMN_INDEX = 9;         // Index of the column with tag info (needs to have values strignified)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -78,19 +73,12 @@ function initVMDataTable() {
         "paging": true,
         "lengthChange": true,
         "lengthMenu": [
-            [25, 50, 100, 200, -1],
-            [25, 50, 100, 200, "All"]
+            [10, 25, 50, 100, 200, -1],
+            [10, 25, 50, 100, 200, "All"]
         ],
         "pageLength": -1,
         "columns": [
-            {
-                "title": "VNC",
-                "data": "name",
-                render:  function ( data, type, full, meta ) {
-                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
-                }
-            },
-
+            { "title": "Namespace", "data": "namespace", render: handleEmptyString },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" },
             { "title": "Host", "data": "host" },
@@ -100,11 +88,18 @@ function initVMDataTable() {
             { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
             { "title": "IPv6", "data": "network", render: renderArrayOfObjectsUsingKey("IP6") },
             { "title": "Taps", "data": "network", render: renderArrayOfObjectsUsingKey("Tap") },
-            { "title": "Tags", "data": "tags", render: renderArrayOfObjects },
+            { "title": "Tags", "data": "tags", render: renderObject },
             { "title": "Type", "data": "type" },
-            { "title": "VCPUs", "data": "vcpus" }
+            { "title": "VCPUs", "data": "vcpus" },
+            {
+                "title": "VNC",
+                "data": "name",
+                render:  function ( data, type, full, meta ) {
+                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
+                }
+            },
         ],
-        "order": [[ 2, 'asc' ], [ 1, 'asc' ]],
+        "order": [[ 0, 'asc' ], [ 1, 'asc' ]],
         /*initComplete: function(){
             var api = this.api();
             api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
@@ -131,7 +126,9 @@ function initVMDataTable() {
     */
 
     if (VM_REFRESH_TIMEOUT > 0) {
-        setInterval(vmDataTable.ajax.reload, VM_REFRESH_TIMEOUT);
+        setInterval(function() {
+            vmDataTable.ajax.reload(null, false);
+        }, VM_REFRESH_TIMEOUT);
     }
 }
 
@@ -176,7 +173,9 @@ function initHostDataTable() {
     hostDataTable.draw();
 
     if (HOST_REFRESH_TIMEOUT > 0) {
-        setInterval(hostDataTable.ajax.reload, HOST_REFRESH_TIMEOUT);
+        setInterval(function() {
+            hostDataTable.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
     }
 }
 
@@ -323,7 +322,7 @@ function renderArrayOfObjectsUsingKey(key) {
     };    
 }
 
-function renderArrayOfObjects(data, type, full, meta) {
+function renderObject(data, type, full, meta) {
     var html = [];
     var keys = Object.keys(data);
     for (var i = 0; i < keys.length; i++) {
@@ -333,12 +332,21 @@ function renderArrayOfObjects(data, type, full, meta) {
 }
 
 // Put an italic "null" in the table where there are fields that aren't set
-function handleEmptyString (value) {
+function handleEmptyString (value, type) {
     if (
         (value === "") ||
         (value === null) ||
         (value === undefined) ||
         ((typeof(value) === "object") && (Object.keys(value).length === 0))
-    ) return '<span class="empty-string">null</span>';
+    ) {
+        // don't print null if data is being used for a filter or sort operation
+        // TODO not working as expected
+        if (type === "filter" || type === "sort" || type === "type") {
+            //console.log("bypassing handleEmptyString because: " + type);
+            return "";
+        } else {
+            return '<span class="empty-string">null</span>';
+        }
+    }
     return value;
 }
