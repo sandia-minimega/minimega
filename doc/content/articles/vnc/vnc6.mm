@@ -1,2 +1,2 @@
-# stop playback 
-vnc noplayback foo bar
+# stop kb/mouse event playback 
+vnc stop bar

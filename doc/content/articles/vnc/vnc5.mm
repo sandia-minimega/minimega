@@ -1,2 +1,2 @@
-# playback the keyboard/mouse data of VM bar on node foo
-vnc playback foo bar recording.fb
+# playback the keyboard/mouse data to VM bar
+vnc play bar recording.fb

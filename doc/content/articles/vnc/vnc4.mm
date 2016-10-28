@@ -1,2 +1,2 @@
-# stop recording
-vnc kb norecord foo bar
+# stop recording on vm bar
+vnc stop kb bar
