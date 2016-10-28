@@ -13,9 +13,11 @@ image.
 
 `minirouter` currently supports several protocols and capabilities including
 DHCP, DNS, router advertisements, OSPF, and static routes. It can route in
-excess of 40 gigabit when running as a container.
+excess of 40 gigabits per second when running as a container.
 
 * Obtaining a minirouter image
+
+`minirouter` can run on bare metal, as a container, or a KVM image.
 
 ** Prebuilt container image
 
@@ -25,17 +27,34 @@ This image can be built using the build script in `misc/minirouter` in the
 minimega repo. The minirouter image is configured to start miniccc and
 minirouter at startup.
 
-** Building a `minirouter` image
+** Building a KVM image
 
-`minirouter` can run on bare metal, as a container, or a KVM image. To use
-minirouter, you must have the miniccc agent running, and minirouter must be
-able to access the miniccc tool and files directory (see `minirouter`-h` for
-default paths). 
+You can also build a disk image for booting in KVM. First, copy the
+minirouter binary into the overlay directory:
+
+	$ cp bin/minirouter misc/vmbetter_configs/minirouter_overlay
+
+Then build the image with vmbetter (see [[tutorials/vmbetter.article][the vmbetter tutorial for more information]])
+
+	$ ./bin/vmbetter -branch stable -qcow -level debug misc/vmbetter_configs/minirouter.conf
+
+Depending on your system, you may need to set the `-mbr` flag.
+
+** Running minirouter without an image
+
+minirouter is simply a Linux binary that can run on any Linux system. You
+do not specifically need to build an image to run it, although it is
+more convenient.
+
+To use minirouter, you must have the miniccc agent running, and
+minirouter must be able to access the miniccc tool and files directory
+(see `minirouter`-h` for default paths).
 
 `minirouter` uses `iptool`, `dnsmasq`, `dhclient`, and `bird`, all of which
 must be installed but not already running. `minirouter` must run as root. 
 
-Beyond these few requirements, `minirouter` should run on most linux systems. 
+Beyond these few requirements, `minirouter` should run on most linux
+systems.
 
 * Starting minirouter
 
@@ -50,8 +69,8 @@ and configurations can be updated at runtime.
 The `router` API requires a VM name or ID when configuring a router. For
 example, to set a static IP on a running `minirouter` VM named 'foo':
 
-	router foo interface 0 10.0.0.1/24
-	router foo commit
+	minimega$ router foo interface 0 10.0.0.1/24
+	minimega$ router foo commit
 
 While the first command above sets the configuration for the router image, the
 second line actually commits the configuration by sending commands to
@@ -66,15 +85,15 @@ supports both IPv4 and IPv6 address specification using the `interface` API.
 For example, to add the IP 10.0.0.1/24 to the second interface on a
 `minirouter` VM:
 
-	vm config net a b
+	minimega$ vm config net a b
 	
 	# add an ip to interface b (index 1)
-	router foo interface 1 10.0.0.1/24
+	minimega$ router foo interface 1 10.0.0.1/24
 
 Multiple addresses can be added to the same interface as well:
 
-	router foo interface 0 10.0.0.1/24
-	router foo interface 0 2001:1::1/64
+	minimega$ router foo interface 0 10.0.0.1/24
+	minimega$ router foo interface 0 2001:1::1/64
 
 * DHCP and DNS
 
@@ -92,16 +111,16 @@ options such as setting the default gateway and nameserver.
 For example, to serve the IP range 10.0.0.2 - 10.0.0.254 on a 10.0.0.0/24
 network, specify the network prefix and DHCP range:
 
-	router foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
+	minimega$ router foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
 
 You can also specify static IP assignments with a MAC/IP address pair:
 
-	router foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.100
+	minimega$ router foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.100
 
 Additionally, you can specify the default gateway and nameserver:
 
-	router foo dhcp 10.0.0.0 router 10.0.0.254
-	router foo dhcp 10.0.0.0 dns 8.8.8.8
+	minimega$ router foo dhcp 10.0.0.0 router 10.0.0.254
+	minimega$ router foo dhcp 10.0.0.0 dns 8.8.8.8
 
 All of these DHCP options can be used together in a single DHCP specification,
 and multiple DHCP servers can be specified on a single `minirouter` instance
@@ -115,7 +134,7 @@ Protocol to enable
 addressing. To enable route advertisements simply provide the subnet. Only the
 subnet prefix is required as SLAAC addressing requires a /64 and is implied.
 
-	router foo ra 2001:1:2:3::
+	minimega$ router foo ra 2001:1:2:3::
 
 ** DNS
 
@@ -123,7 +142,7 @@ subnet prefix is required as SLAAC addressing requires a /64 and is implied.
 any host/IP (including IPv6) pair. Simply specify the host and IP address of
 the record:
 
-	router foo dns 1.2.3.4 foo.com
+	minimega$ router foo dns 1.2.3.4 foo.com
 
 * Routing
 
@@ -140,11 +159,15 @@ able to scale minirouter with bird to at least 40 gigabit.
 specifying the destination network and net-hop IP. For example, to add a static
 IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
 
-	router foo route static 1.2.3.0/24 1.2.3.254
+	minimega$ router foo route static 1.2.3.0/24 1.2.3.254
+
+Or to specify a default route:
+
+	minimega$ router foo route static 0.0.0.0/0 1.2.3.254
 
 IPv6 routes are added in the same way:
 
-	router foo route static 2001:1:2:3::/64 2001:1:2:3::1
+	minimega$ router foo route static 2001:1:2:3::/64 2001:1:2:3::1
 
 ** OSPF
 
@@ -158,11 +181,11 @@ Interfaces are identified by the index in which they were added by the
 `vm`config`net` API. For example, to add the first and third network of the
 router VM to area 0 in an OSPF route:
 	
-	vm config net a b c
+	minimega$ vm config net a b c
 	
 	# add interface 'a', index 0
-	router foo route ospf 0 0
+	minimega$ router foo route ospf 0 0
 	
 	# add interface 'c', index 2
-	router foo route ospf 0 2
+	minimega$ router foo route ospf 0 2
 

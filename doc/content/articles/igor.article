@@ -20,50 +20,93 @@ color; see the "Using Igor" section for more information.
 
 Igor assumes you have a cluster with uniformly-named compute nodes
 (e.g. "kn1", "kn2", and so on) and a head node. We assume that the
-cluster is already configured such that the head node assigns DHCP
-addresses to the compute nodes.
+cluster is already configured for netbooting, with the head node handing
+out DHCP addresses and serving pxelinux over tftp.
 
 * Building/Installing
 
 Igor is included as part of the minimega distribution. All the compilation and
 installation tasks should be done on your head node.
 
-** Compilation
+** Pre-requisites & dependencies
 
-First, make sure you have a [[http://golang.org][Go compiler]] installed, then
-install the other packages minimega needs to build:
+You will need a DHCP server, a TFTP server, and PXELINUX. On Debian,
+we use the `dnsmasq` (which can serve both DHCP and TFTP) and `pxelinux`
+packages. You can use other servers for DHCP and TFTP, but this document
+provides information on setting up dnsmasq.
 
-	apt-get install libpcap-dev libreadline-dev
+*** Populate /etc/hosts
 
-Now, you can fetch and buld the minimega source:
+You will want a mapping of desired IP to hostname for your nodes. For example:
 
-        git clone git@github.com:sandia-minimega/minimega.git
-	cd minimega
-	./all.bash
+	172.16.0.254	head
+	172.16.0.1	kn1
+	172.16.0.2	kn2
+	172.16.0.3	kn3
 
-This will build and test each of the libraries and tools in the minimega
-distribution and create a bin/ sudirectory containing each of the minimega
-tools. If you have a windows cross compiler for Go setup, it will also build
-windows binaries of several tools.
+*** Configure dnsmasq
 
-The igor binary will be in the bin/ subdirectory.
+The dnsmasq configuration files have a dizzying array of options,
+but there are only a few you'll need to enable for igor. First, open
+`/etc/dnsmasq.conf` and add something like this to the end of the file:
+
+	dhcp-range=172.16.0.0,static
+	dhcp-boot=pxelinux.0
+	enable-tftp
+	tftp-root=/tftpboot
+	log-dhcp
+
+This specifies that we will be handing out addresses in the 172.16.0.0/16
+subnet, and that devices trying to netboot should be handed the file
+`pxelinux.0` from the `/tftpboot` directory.
+
+Next, create a file called `/etc/dnsmasq.d/cluster.conf` and fill it with
+entries for the nodes of your cluster, giving each node's MAC address,
+IP, and hostname.
+
+	dhcp-host=90:e2:ba:3a:e3:62,172.16.0.1,kn1
+	dhcp-host=90:e2:ba:3a:e5:aa,172.16.0.2,kn2
+	dhcp-host=90:e2:ba:38:ad:d8,172.16.0.3,kn3
+	dhcp-host=90:e2:ba:3a:e3:d6,172.16.0.4,kn4
+	dhcp-host=90:e2:ba:38:ad:8c,172.16.0.5,kn5
+
+*NOTE*: If your cluster is large, it may be a very slow process to
+gather each individual node's MAC address. One way to speed it up is
+to use dnsmasq's logging feature. Before creating `cluster.conf`, start
+dnsmasq with the configuration shown above. Turn on the first node and
+watch `/var/log/daemon.log` on the head node--you should eventually
+see a log entry showing a DHCP request from a certain MAC. You
+can then turn off the first node and move on to the second. Using
+[[powerbot.article][powerbot]], we wrote a shell script that would
+automatically turn on every node in order to gather the MAC addresses
+for our very 520-node cluster.
+
+*** Prepare /tftpboot
+
+Create the directory `/tftpboot` and populate it with the PXELINUX files:
+
+	$ mkdir /tftpboot
+	$ cp /usr/lib/PXELINUX/pxelinux.0 /tftpboot
+	$ mkdir /tftpboot/pxelinux.cfg
+
+`pxelinux.0` may be in a different location depending on your Linux distribution.
+
+** Get igor
+
+Follow the instructions in the [[installing.article][installation article]]
+to get minimega downloaded or built from source. The igor
+binary will be in the bin/ subdirectory.
 
 ** Installation
 
-As stated above, we assume you have already configured DHCP for your
-cluster; we use dnsmasq. You will also need to have syslinux,
-specifically pxelinux, installed. Figure out where your TFTP root will
-be--whichever directory contains pxelinux.cfg, ours is /tftpboot--and
-set up the default PXE configuration in
-/tftpboot/pxelinux.cfg/default. This setup is simple but is outside
-the scope of this document.
+Having set up DHCP and TFTP as above, we can configure igor.
 
 We have provided a shell script to ease the installation of igor. It will show
 you the commands it intends to run before running them, in case you wish to
 change anything. (Remember to run this on the head node, not any other node)
 
-        cd minimega/src/igor
-	./setup.sh
+        $ cd minimega/src/igor
+	$ ./setup.sh
 	
 To configure igor, edit /etc/igor.conf, a JSON config file created by
 setup.sh. Here's what one of ours looks like:
@@ -87,8 +130,8 @@ naming scheme. Our cluster nodes are named kn1 through kn520, so our
 numbers are *not* in quotes.
 
 "Rackheight" and "rackwidth" define the physical dimensions of your
-cluster hardware, for use with "igor show". We have a cluster composed of
-13 shelves, each containing 5 shelves of 8 PCs each. When "igor show"
+cluster hardware, for use with `igor`show`. We have a cluster composed of
+13 shelves, each containing 5 shelves of 8 PCs each. When `igor`show`
 runs, part of the information it gives is a diagram of "racks"; one
 "rack" from our cluster is shown below:
 
@@ -130,7 +173,7 @@ igor includes built-in help; you can run "igor help" to get started.
 
 To see what reservations already exist:
 
-        igor show
+        $ igor show
 
 This will show a diagram of the nodes in your cluster; nodes that are already
 reserved will be highlighted in a specific color. A key at the bottom matches
@@ -150,10 +193,10 @@ reserved would be un-highlighted.
 To make a reservation, use the "igor sub" command. "Sub" comes from "submit",
 as used in HPC batch schedulers. You'll need to specify the reservation name, a
 path to a kernel, a path to an initrd, and the list of nodes you wish to
-reserve. For example, if nodes back_ccc10 through back_ccc14 are not reserved,
+reserve. For example, if nodes kn10 through kn14 are not reserved,
 I can make a reservation called "testing" like this:
 
-        igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w back_ccc[10-14]
+        $ igor sub -r testing -k /path/to/kernel -i /path/to/initrd -w kn[10-14]
 
 This reservation will default to 12 hours duration; if I wanted to reserve it
 for longer, I'd use the -t flag.
@@ -164,7 +207,7 @@ Although reservations will be automatically deleted when they run out of time,
 it is polite to delete your reservation immediately when you're finished with
 it. To get rid of our "testing" reservation from above, simply run:
 
-        igor del testing
+        $ igor del testing
 
 ** Extending a reservation
 
@@ -172,5 +215,5 @@ If you find that you didn't make your reservation long enough, you can extend
 the time left on it with the "addtime" command. To add an additional 2 hours to
 the "testing" reservation, we could do this:
 
-        igor addtime -r testing -t 2
+        $ igor addtime -r testing -t 2
 	
