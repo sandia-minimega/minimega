@@ -5,24 +5,24 @@ The minimega authors
 
 * Introduction
 
-One of the early feature requests for minimega was a scheduler that would launch
-VMs across a cluster of machines as easily as VMs are launched on a single
-machine. In minimega 2.4, we added `namespaces` that attempts to provide this
-functionality.
+One of the early feature requests for minimega was a scheduler that would
+launch VMs across a cluster of machines as easily as VMs are launched
+on a single machine. In minimega 2.3, we introduced the concept of
+`namespaces`, which attempts to provide this functionality.
 
 * Overview
 
 namespaces are a way to automatically pool resources across a cluster.
-Specifically, namespaces allows you to configure and launch VMs without worrying
-too much about which host that they actually run on. namespaces also provides a
+Specifically, namespaces allow you to configure and launch VMs without worrying
+too much about which host that they actually run on. namespaces also provide a
 logical separation between experiments, allowing for multitenancy among
 cooperating users.
 
-One of the design goals of namespaces was to minimize changes to the existing
+One of the design goals for namespaces was to minimize changes to the existing
 API. Specifically, we wanted to allow users to create the same scripts to run
 experiments on a single host and on a cluster of hundreds of hosts. To support
 this, there are minimal changes to the existing APIs (except behind the scenes,
-of course) and a few, new, namespace-specific APIs.
+of course) and a few new namespace-specific APIs.
 
 ** `namespace` API
 
@@ -32,15 +32,19 @@ namespace called `foo` and set it as the active namespace:
     minimega$ namespace foo
     minimega[foo]$
 
-Now that the namespace `foo` is active, commands will apply only to resources,
-such as VMs, that belong to the namespace. To deactivate a namespace, use:
+Now that the namespace `foo` is active, commands will apply only to
+resources, such as VMs, that belong to the namespace. By default,
+a newly-created namespace includes all nodes in the mesh *except* the
+local node.
+
+To deactivate a namespace, use:
 
     minimega[foo]$ clear namespace
     minimega$
 
-When run without arguments, `namespace` displays the available namespaces. If a
-namespace is active, `namespace` displays information about the active namespace
-instead:
+When run without arguments, `namespace` displays the available
+namespaces. If a namespace is active, `namespace` displays information
+about the active namespace instead:
 
     minimega$ namespace
     Namespaces: [foo]
@@ -86,6 +90,10 @@ Finally, to delete a namespace, again use the `clear`namespace` API:
 The `nsmod` API allows users to configure parameters of the active namespace.
 Currently, this is limited to the hosts that are part of the namespace but in
 the future it will be expanded to include configuration for the scheduler.
+
+By default, a newly-created namespace will contain all the hosts in the
+mesh *except* the current host. The current host can be added to the
+namespace if e.g. there are not other nodes available.
 
 To add hosts to the namespace, use `nsmod`add-host`:
 
@@ -133,6 +141,10 @@ the scheduler:
     start                                   end                                     state     launched failures total hosts
     2016-03-22 18:04:50.217220992 -0700 PDT 2016-03-22 18:04:50.236229396 -0700 PDT completed 2        0        2     1
 
+The scheduler, described below, distributes the queued VMs to nodes in
+the namespace and starts them. Once the queue is flushed, the VMs become
+visible in `vm`info`.
+
 ** Scheduler
 
 The scheduler for namespaces is very naive -- if it has to launch N VMs and
@@ -176,8 +188,9 @@ whether those VMs belong to the namespace or not.
 
 ** `mesh` API Changes
 
-The `mesh` API has a minor tweak -- `mesh`send`all` now resolves `all` to hosts
-in the namespace rather than all hosts in the cluster.
+The `mesh` API has a minor tweak -- when a namespace is active,
+`mesh`send`all` now resolves `all` to hosts in the namespace rather than
+all hosts in the cluster.
 
 ** `cc` API Changes
 
