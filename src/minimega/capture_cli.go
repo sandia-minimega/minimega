@@ -24,7 +24,8 @@ var captureCLIHandlers = []minicli.Handler{
 	{ // capture for VM
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
-			"capture <pcap,> vm <vm id or name> <interface index> <filename>",
+			"capture <pcap,> vm <name> <interface index> <filename>",
+			"capture <pcap,> <delete,> vm <name>",	
 		},
 		Call: wrapVMTargetCLI(cliCaptureVM),
 	},
@@ -86,10 +87,10 @@ Notes with namespaces:
 			"capture <netflow,> <bridge,> <bridge> <file,> <filename>",
 			"capture <netflow,> <bridge,> <bridge> <file,> <filename> <raw,ascii> [gzip]",
 			"capture <netflow,> <bridge,> <bridge> <socket,> <tcp,udp> <hostname:port> <raw,ascii>",
-			"capture <netflow,> <delete,> <id or all>",
+			"capture <netflow,> <delete,> bridge <name>",
 
 			"capture <pcap,> bridge <bridge> <filename>",
-			"capture <pcap,> <delete,> <id or all>",
+			"capture <pcap,> <delete,> bridge <name>",
 		},
 		Call: wrapSimpleCLI(cliCapture),
 	},
@@ -120,7 +121,7 @@ func cliCapture(c *minicli.Command, resp *minicli.Response) error {
 func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
 	namespace := GetNamespaceName()
 
-	resp.Header = []string{"ID", "Bridge"}
+	resp.Header = []string{"Bridge"}
 
 	if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
 		resp.Header = append(resp.Header, "Type")
@@ -146,7 +147,6 @@ func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		row := []string{
-			strconv.Itoa(v.ID),
 			v.Bridge,
 		}
 
@@ -205,7 +205,12 @@ func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliCaptureVM(c *minicli.Command, resp *minicli.Response) error {
-	vm := c.StringArgs["vm"]
+	name := c.StringArgs["name"]
+	if c.BoolArgs["delete"] {
+		// stop a capture
+		return clearCapture("pcap", "vm", name)
+	}
+
 	fname := c.StringArgs["filename"]
 	iface := c.StringArgs["interface"]
 
@@ -215,7 +220,7 @@ func cliCaptureVM(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("invalid interface: `%v`", iface)
 	}
 
-	return startCapturePcap(vm, num, fname)
+	return startCapturePcap(name, num, fname)
 }
 
 func cliCaptureClear(c *minicli.Command, resp *minicli.Response) error {
@@ -226,7 +231,7 @@ func cliCaptureClear(c *minicli.Command, resp *minicli.Response) error {
 func cliCapturePcap(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["delete"] {
 		// Stop a capture
-		return clearCapture("pcap", c.StringArgs["id"])
+		return clearCapture("pcap", "bridge", c.StringArgs["name"])
 	} else if c.StringArgs["bridge"] != "" {
 		// Capture bridge -> pcap
 		return startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
@@ -239,7 +244,7 @@ func cliCapturePcap(c *minicli.Command, resp *minicli.Response) error {
 func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["delete"] {
 		// Stop a capture
-		return clearCapture("netflow", c.StringArgs["id"])
+		return clearCapture("netflow", "bridge", c.StringArgs["name"])
 	} else if c.BoolArgs["timeout"] {
 		// Set or get the netflow timeout
 		timeout := c.StringArgs["timeout"]

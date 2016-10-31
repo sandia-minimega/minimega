@@ -11,7 +11,6 @@ import (
 	"gopcap"
 	log "minilog"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -53,15 +52,19 @@ func (c *capture) Stop() error {
 }
 
 func clearAllCaptures() (err error) {
-	err = clearCapture("netflow", Wildcard)
+	err = clearCapture("netflow", "bridge", Wildcard)
 	if err == nil {
-		err = clearCapture("pcap", Wildcard)
+		err = clearCapture("pcap",  "bridge", Wildcard)
 	}
 
+	err = clearCapture("netflow", "vm", Wildcard)
+	if err == nil {
+		err = clearCapture("pcap", "vm", Wildcard)
+	}
 	return
 }
 
-func clearCapture(captureType, id string) (err error) {
+func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 	defer func() {
 		// check if we need to remove the nf object
 		if err != nil && captureType == "netflow" {
@@ -71,9 +74,18 @@ func clearCapture(captureType, id string) (err error) {
 
 	namespace := GetNamespaceName()
 
-	if id == Wildcard {
+	if name == Wildcard {
 		for _, v := range captureEntries {
 			if !v.InNamespace(namespace) {
+				continue
+			}
+
+			// make sure we're clearing the right types
+			if v.VM == nil && bridgeOrVM == "vm" {
+				// v is a bridge capture but they specified vms
+				continue
+			} else if v.VM != nil && bridgeOrVM == "bridge" {
+				// v is a vm capture but they specified bridges
 				continue
 			}
 
@@ -82,18 +94,31 @@ func clearCapture(captureType, id string) (err error) {
 			}
 		}
 	} else {
-		val, err := strconv.Atoi(id)
-		if err != nil {
-			return err
+		var entry *capture
+		for _, val := range captureEntries {
+			if bridgeOrVM == "bridge" {
+				if val.Bridge == name {
+					entry = val
+					break
+				} else {
+					continue
+				}
+			} else if bridgeOrVM == "vm" {
+				if val.VM.GetName() == name {
+					entry = val
+					break
+				} else {
+					continue
+				}
+			}
 		}
 
-		entry, ok := captureEntries[val]
-		if !ok {
-			return fmt.Errorf("entry %v does not exist", val)
+		if entry == nil {
+			return fmt.Errorf("a capture for %v %v does not exist", bridgeOrVM, name)
 		}
 
 		if !entry.InNamespace(namespace) {
-			return fmt.Errorf("entry %v is not in active namespace", val)
+			return fmt.Errorf("%v %v is not in active namespace", bridgeOrVM, name)
 		}
 
 		if entry.Type != captureType {
