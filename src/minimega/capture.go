@@ -104,7 +104,7 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 					continue
 				}
 			} else if bridgeOrVM == "vm" {
-				if val.VM.GetName() == name {
+				if val.VM.GetName() == name && val.VM.GetNamespace() == namespace {
 					entry = val
 					break
 				} else {
@@ -115,10 +115,6 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 
 		if entry == nil {
 			return fmt.Errorf("a capture for %v %v does not exist", bridgeOrVM, name)
-		}
-
-		if !entry.InNamespace(namespace) {
-			return fmt.Errorf("%v %v is not in active namespace", bridgeOrVM, name)
 		}
 
 		if entry.Type != captureType {
