@@ -42,3 +42,13 @@ mega_bridge | pcap | bar:0        | N/A  | false    | /dev/null
 Bridge      | Type | VM/interface | Mode | Compress | Path      | Namespace
 mega_bridge | pcap | car:0        | N/A  | false    | /dev/null | bar
 mega_bridge | pcap | car:0        | N/A  | false    | /dev/null | foo
+
+## # Delete a capture in one namespace but not the other
+## namespace foo capture pcap delete vm car
+## capture
+Bridge      | Type | VM/interface | Mode | Compress | Path      | Namespace
+mega_bridge | pcap | car:0        | N/A  | false    | /dev/null | bar
+
+## # Delete all captures in the other namespace
+## namespace bar capture pcap delete vm all
+## capture

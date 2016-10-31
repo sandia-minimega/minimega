@@ -28,3 +28,11 @@ capture
 namespace foo capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
 capture
+
+# Delete a capture in one namespace but not the other
+namespace foo capture pcap delete vm car
+capture
+
+# Delete all captures in the other namespace
+namespace bar capture pcap delete vm all
+capture
