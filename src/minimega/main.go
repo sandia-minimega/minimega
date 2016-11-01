@@ -255,13 +255,14 @@ func teardown() {
 	// Clear namespace so that we hit all the VMs
 	SetNamespace("")
 
-	vncClear()
 	clearAllCaptures()
-	vms.Kill(Wildcard)
+	vncClear()
 	dnsmasqKillAll()
-	ksmDisable()
+
+	vms.Kill(Wildcard)
 	vms.Flush()
-	vms.CleanDirs()
+
+	ksmDisable()
 	containerTeardown()
 
 	if err := bridgesDestroy(); err != nil {

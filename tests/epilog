@@ -1,7 +1,8 @@
 clear namespace
-clear vlans
-clear vm config
+clear capture
+clear cc
 vm kill all
 vm flush
-clear cc
+clear vlans
+clear vm config
 clear history

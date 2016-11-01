@@ -495,7 +495,6 @@ func (vm *KvmVM) launch() error {
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		nic := &vm.Networks[i]
-		log.Info("%#v", nic)
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {

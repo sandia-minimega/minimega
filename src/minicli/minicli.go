@@ -98,15 +98,8 @@ func MustRegister(h *Handler) {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.PatternItems = make([][]PatternItem, len(h.Patterns))
-
-	for i, pattern := range h.Patterns {
-		items, err := lexPattern(pattern)
-		if err != nil {
-			return err
-		}
-
-		h.PatternItems[i] = items
+	if err := h.parsePatterns(); err != nil {
+		return err
 	}
 
 	h.HelpShort = strings.TrimSpace(h.HelpShort)
@@ -295,6 +288,25 @@ func Help(input string) string {
 		// Only one handler with a given pattern prefix, give the long help message
 		if len(group) == 1 {
 			return group[0].helpLong()
+		}
+
+		count := 0
+		for _, v := range group {
+			if len(v.HelpLong) > 0 {
+				count += 1
+			}
+		}
+		// If only one entry has long help, do magic!
+		if count == 1 {
+			handler := &Handler{}
+			for _, v := range group {
+				handler.Patterns = append(handler.Patterns, v.Patterns...)
+				if len(v.HelpLong) > 0 {
+					handler.HelpLong = v.HelpLong
+				}
+			}
+			handler.parsePatterns()
+			return handler.helpLong()
 		}
 
 		// Weird case, multiple handlers share the same prefix. Print the short

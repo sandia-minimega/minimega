@@ -22,12 +22,15 @@ import (
 type Pcap struct {
 	handle       unsafe.Pointer
 	dumperHandle unsafe.Pointer
+	done         chan bool
 	lock         sync.Mutex
 }
 
 // NewLearner returns an IPMacLearner object bound to a particular interface.
 func NewPCAP(dev string, file string) (*Pcap, error) {
-	ret := &Pcap{}
+	ret := &Pcap{
+		done: make(chan bool),
+	}
 
 	devC := C.CString(dev)
 	fileC := C.CString(file)
@@ -48,7 +51,10 @@ func NewPCAP(dev string, file string) (*Pcap, error) {
 	}
 	ret.dumperHandle = unsafe.Pointer(dumperHandle)
 
-	go C.gopcapCapture(handle, dumperHandle)
+	go func() {
+		C.gopcapCapture(handle, dumperHandle)
+		close(ret.done)
+	}()
 
 	return ret, nil
 }
@@ -59,6 +65,7 @@ func (p *Pcap) Close() {
 	defer p.lock.Unlock()
 
 	C.gopcapClose(p.handle, p.dumperHandle)
+	<-p.done
 
 	p.handle = nil
 	p.dumperHandle = nil
