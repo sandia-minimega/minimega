@@ -461,7 +461,7 @@ func (vm *KvmVM) connectVNC() error {
 						if err == io.EOF || strings.Contains(err.Error(), "closed network") {
 							break
 						}
-						log.Errorln(err)
+						log.Warnln(err)
 					}
 					if r, ok := vncKBRecording[ns]; ok {
 						r.RecordMessage(msg)
