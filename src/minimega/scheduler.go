@@ -18,7 +18,7 @@ type hostSorter struct {
 type ByPriority []*QueuedVMs
 
 func (s *HostStats) IsFull() bool {
-	return s.Limit != -1 && s.VMs >= s.Limit
+	return s.Limit != 0 && s.VMs >= s.Limit
 }
 
 func (by hostSortBy) Sort(hosts []*HostStats) {
@@ -220,11 +220,11 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, 
 				return nil, fmt.Errorf("invalid coschedule value: `%v`", q.SchedulePeers)
 			}
 
-			if limit == 0 {
-				// update to "unlimited"
-				q.SchedulePeers = "-1"
-			}
+			continue
 		}
+
+		// update to "unlimited"
+		q.SchedulePeers = "-1"
 	}
 
 	// perform initial sort of queued VMs and hosts
@@ -248,28 +248,34 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, 
 
 			host := stats.Name
 
-			if stats.Limit == -1 {
-				stats.Limit = limit
-			} else if limit != -1 && limit < stats.Limit {
-				// lower the limit for the host
-				stats.Limit = limit
+			if limit != -1 {
+				// number of peers is one less than the number of VMs that we
+				// should launch on the node
+				limit := limit + 1
+				if stats.Limit == 0 {
+					// set initial limit
+					stats.Limit = limit
+				} else if limit < stats.Limit {
+					// lower the limit for the host
+					stats.Limit = limit
+				}
 			}
 
 			// schedule the VMs on the host, update commit accordingly
 			incHostStats(stats, q.VMConfig)
 
-			if stats.Limit != -1 && stats.VMs > stats.Limit+1 {
+			if stats.Limit != 0 && stats.VMs > stats.Limit {
 				dumpSchedule()
-				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, limit+1)
+				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, stats.Limit+1)
 			}
 
 			hostSortBy(cpuCommit).Update(hosts, host)
 
-			q2 := q
+			q2 := *q
 			q2.Names = []string{name}
 
 			log.Debug("scheduling VMs on %v: %v", host, q2.Names)
-			res[host] = append(res[host], q2)
+			res[host] = append(res[host], &q2)
 		}
 	}
 
