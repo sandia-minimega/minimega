@@ -114,7 +114,7 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 		}
 
 		if entry == nil {
-			return fmt.Errorf("a capture for %v %v does not exist", bridgeOrVM, name)
+			return vmNotFound(name)
 		}
 
 		if entry.Type != captureType {
