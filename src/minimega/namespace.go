@@ -41,6 +41,9 @@ type Namespace struct {
 
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
+
+	// How to determine which host is least loaded
+	HostSortBy string
 }
 
 var (
@@ -185,8 +188,15 @@ func (n *Namespace) Launch() error {
 		}
 	}
 
+	hostSorter := cpuCommit
+	for k, fn := range hostSortByFns {
+		if n.HostSortBy == k {
+			hostSorter = fn
+		}
+	}
+
 	// Create the host -> VMs assignment
-	assignment, err := schedule(n.queue, hostStats)
+	assignment, err := schedule(n.queue, hostStats, hostSorter)
 	if err != nil {
 		return err
 	}

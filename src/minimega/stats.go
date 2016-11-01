@@ -74,6 +74,10 @@ func init() {
 	gob.Register(&HostStats{})
 }
 
+func (s *HostStats) IsFull() bool {
+	return s.Limit != 0 && s.VMs >= s.Limit
+}
+
 func (h *HostStats) Populate(v string) error {
 	switch v {
 	case "bandwidth":

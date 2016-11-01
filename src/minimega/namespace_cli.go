@@ -29,12 +29,19 @@ Control and run commands in namespace environments.`,
 		HelpLong: `
 Modify settings of the currently active namespace.
 
-add-host - add comma-separated list of hosts to the namespace.
-del-host - delete comma-separated list of hosts from the namespace.
+add-host : add comma-separated list of hosts to the namespace
+del-host : delete comma-separated list of hosts from the namespace
+load     : change host load is computed for scheduler
+	cpucommit : sum of the number of VCPUs across all VMs (default)
+	netcommit : sum of the number of network interfaces across all VMs
+	memload   : sum of memory commit across all VMs minus total memory
 `,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
+			"nsmod <load,> [cpucommit,]",
+			"nsmod <load,> [netcommit,]",
+			"nsmod <load,> [memload,]",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
@@ -186,6 +193,17 @@ func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 			delete(ns.Hosts, host)
 		}
 
+		return nil
+	} else if c.BoolArgs["load"] {
+		// check if we're updating the sort by func
+		for k := range hostSortByFns {
+			if c.BoolArgs[k] {
+				ns.HostSortBy = k
+				return nil
+			}
+		}
+
+		resp.Response = ns.HostSortBy
 		return nil
 	}
 

@@ -17,8 +17,10 @@ type hostSorter struct {
 
 type ByPriority []*QueuedVMs
 
-func (s *HostStats) IsFull() bool {
-	return s.Limit != 0 && s.VMs >= s.Limit
+var hostSortByFns = map[string]hostSortBy{
+	"cpucommit": cpuCommit,
+	"netcommit": networkCommit,
+	"memload":   memoryLoad,
 }
 
 func (by hostSortBy) Sort(hosts []*HostStats) {
@@ -86,34 +88,6 @@ func (h *hostSorter) Swap(i, j int) {
 func (h *hostSorter) Less(i, j int) bool {
 	return h.by(h.hosts[i], h.hosts[j])
 }
-
-func cpuCommit(h1, h2 *HostStats) bool {
-	// fully loaded host is always greater
-	if full := h1.IsFull(); full != h2.IsFull() {
-		return !full
-	}
-
-	return h1.CPUCommit < h2.CPUCommit
-}
-
-func memoryLoad(h1, h2 *HostStats) bool {
-	// fully loaded host is always greater
-	if full := h1.IsFull(); full != h2.IsFull() {
-		return !full
-	}
-
-	return (h1.MemTotal - h1.MemCommit) < (h2.MemTotal - h2.MemCommit)
-}
-
-func networkCommit(h1, h2 *HostStats) bool {
-	// fully loaded host is always greater
-	if full := h1.IsFull(); full != h2.IsFull() {
-		return !full
-	}
-
-	return h1.NetworkCommit < h2.NetworkCommit
-}
-
 func (q ByPriority) Less(i, j int) bool {
 	return q[i].Less(q[j])
 }
@@ -124,16 +98,6 @@ func (q ByPriority) Len() int {
 
 func (q ByPriority) Swap(i, j int) {
 	q[i], q[j] = q[j], q[i]
-}
-
-func incHostStats(stats *HostStats, config VMConfig) {
-	vcpus, _ := strconv.Atoi(config.Vcpus)
-	memory, _ := strconv.Atoi(config.Memory)
-
-	stats.VMs += 1
-	stats.CPUCommit += vcpus
-	stats.MemCommit += memory
-	stats.NetworkCommit += len(config.Networks)
 }
 
 // Less function for sorting QueuedVMs such that:
@@ -172,7 +136,44 @@ func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	return len(q.Names) > len(q2.Names)
 }
 
-func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, error) {
+func cpuCommit(h1, h2 *HostStats) bool {
+	// fully loaded host is always greater
+	if full := h1.IsFull(); full != h2.IsFull() {
+		return !full
+	}
+
+	return h1.CPUCommit < h2.CPUCommit
+}
+
+func memoryLoad(h1, h2 *HostStats) bool {
+	// fully loaded host is always greater
+	if full := h1.IsFull(); full != h2.IsFull() {
+		return !full
+	}
+
+	return (h1.MemTotal - h1.MemCommit) < (h2.MemTotal - h2.MemCommit)
+}
+
+func networkCommit(h1, h2 *HostStats) bool {
+	// fully loaded host is always greater
+	if full := h1.IsFull(); full != h2.IsFull() {
+		return !full
+	}
+
+	return h1.NetworkCommit < h2.NetworkCommit
+}
+
+func incHostStats(stats *HostStats, config VMConfig) {
+	vcpus, _ := strconv.Atoi(config.Vcpus)
+	memory, _ := strconv.Atoi(config.Memory)
+
+	stats.VMs += 1
+	stats.CPUCommit += vcpus
+	stats.MemCommit += memory
+	stats.NetworkCommit += len(config.Networks)
+}
+
+func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (map[string][]*QueuedVMs, error) {
 	res := map[string][]*QueuedVMs{}
 
 	if len(hosts) == 1 {
@@ -229,7 +230,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, 
 
 	// perform initial sort of queued VMs and hosts
 	sort.Sort(ByPriority(queue))
-	hostSortBy(cpuCommit).Sort(hosts)
+	hostSorter.Sort(hosts)
 
 	for _, q := range queue {
 		// no error checking required, see above
@@ -269,7 +270,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, 
 				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, stats.Limit)
 			}
 
-			hostSortBy(cpuCommit).Update(hosts, host)
+			hostSorter.Update(hosts, host)
 
 			q2 := *q
 			q2.Names = []string{name}
