@@ -650,7 +650,7 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	errChan := vms.Launch(QueuedVMs{names, vmType, vmConfig})
+	errChan := vms.Launch(&QueuedVMs{names, vmType, vmConfig})
 
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() error {

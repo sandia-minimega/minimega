@@ -15,7 +15,7 @@ type hostSorter struct {
 	by    hostSortBy
 }
 
-type ByPriority []QueuedVMs
+type ByPriority []*QueuedVMs
 
 func (s *HostStats) IsFull() bool {
 	return s.Limit != -1 && s.VMs >= s.Limit
@@ -141,7 +141,7 @@ func incHostStats(stats *HostStats, config VMConfig) {
 //  * then those that specify a host
 //  * then those that specify a coschedule limit
 //  * then those that specify neither
-func (q QueuedVMs) Less(q2 QueuedVMs) bool {
+func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	host, host2 := q.ScheduleHost, q2.ScheduleHost
 
 	// VMs with specified hosts should be less than those that are unspecified.
@@ -172,8 +172,8 @@ func (q QueuedVMs) Less(q2 QueuedVMs) bool {
 	return len(q.Names) > len(q2.Names)
 }
 
-func schedule(queue []QueuedVMs, hosts []*HostStats) (map[string][]QueuedVMs, error) {
-	res := map[string][]QueuedVMs{}
+func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, error) {
+	res := map[string][]*QueuedVMs{}
 
 	if len(hosts) == 1 {
 		log.Warn("only one host in namespace, scheduling all VMs on it")
@@ -200,7 +200,7 @@ func schedule(queue []QueuedVMs, hosts []*HostStats) (map[string][]QueuedVMs, er
 				names = append(names, q.Names...)
 			}
 
-			log.Info("VMs scheduled on %v:", host, names)
+			log.Info("VMs scheduled on %v: %v", host, names)
 		}
 	}
 

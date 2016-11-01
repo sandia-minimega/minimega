@@ -32,8 +32,8 @@ type meshageResponse struct {
 
 // meshageVMLaunch is sent by the scheduler to launch VMs on a remote host
 type meshageVMLaunch struct {
-	QueuedVMs       // embed
-	TID       int32 // unique ID for command/response pair
+	*QueuedVMs       // embed
+	TID        int32 // unique ID for command/response pair
 }
 
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
@@ -229,7 +229,7 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 // meshageLaunch sends a command to a launch VMs on the specified hosts,
 // returning a channel for the responses. This is non-blocking -- the channel
 // is created and then returned after a couple of sanity checks.
-func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
+func meshageLaunch(host string, queued *QueuedVMs) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
 
 	to := []string{host}

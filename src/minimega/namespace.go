@@ -34,7 +34,7 @@ type Namespace struct {
 	vmID *Counter
 
 	// Queued VMs to launch
-	queue []QueuedVMs
+	queue []*QueuedVMs
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
@@ -138,7 +138,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		}
 	}
 
-	n.queue = append(n.queue, QueuedVMs{
+	n.queue = append(n.queue, &QueuedVMs{
 		VMConfig: vmConfig,
 		VMType:   vmType,
 		Names:    names,
@@ -216,7 +216,7 @@ func (n *Namespace) Launch() error {
 	for host, queue := range assignment {
 		wg.Add(1)
 
-		go func(host string, queue []QueuedVMs) {
+		go func(host string, queue []*QueuedVMs) {
 			defer wg.Done()
 
 			for _, q := range queue {
@@ -252,7 +252,7 @@ func (n *Namespace) Launch() error {
 }
 
 // hostLaunch launches a queuedVM on the specified host and namespace.
-func (n *Namespace) hostLaunch(host string, queued QueuedVMs, respChan chan<- minicli.Responses) {
+func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- minicli.Responses) {
 	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
 
 	// Launching the VMs locally

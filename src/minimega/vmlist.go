@@ -311,7 +311,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(q QueuedVMs) <-chan error {
+func (vms VMs) Launch(q *QueuedVMs) <-chan error {
 	vmLock.Lock()
 
 	out := make(chan error)
