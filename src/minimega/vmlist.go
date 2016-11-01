@@ -717,14 +717,15 @@ func globalVMs() VMs {
 	//  * Hosts in the active namespace
 	//  * Hosts connected via meshage plus ourselves
 	var hosts []string
-	if ns := GetNamespace(); ns != nil {
+	ns := GetNamespace()
+	if ns != nil {
 		hosts = ns.hostSlice()
 	} else {
 		hosts = meshageNode.BroadcastRecipients()
 		hosts = append(hosts, hostname)
 	}
 
-	cmds := makeCommandHosts(hosts, cmd)
+	cmds := makeCommandHosts(hosts, cmd, ns)
 
 	// Collected VMs
 	vms := VMs{}
@@ -742,7 +743,7 @@ func globalVMs() VMs {
 					vms[len(vms)] = vm
 				}
 			} else {
-				log.Error("unknown data field in vm info from %v", resp.Host)
+				log.Error("unknown data field in `vm info` from %v", resp.Host)
 			}
 		}
 	}

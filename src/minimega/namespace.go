@@ -149,6 +149,8 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 
 // Launch runs the scheduler and launches VMs across the namespace. Blocks
 // until all the `vm launch ... noblock` commands are in-flight.
+//
+// LOCK: Assumes cmdLock is held.
 func (n *Namespace) Launch() error {
 	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
@@ -158,16 +160,51 @@ func (n *Namespace) Launch() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
+	// Query for the host stats on all machines. We want the global load of
+	// hosts so we pass nil as the namespace to run host sans-namespace.
+	cmd := minicli.MustCompile("host")
+	cmd.SetRecord(false)
+	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
+
+	// key is hostname, value is map with keys from hostInfoKeys
+	hostStats := []*HostStats{}
+
+	// LOCK: this is only called via `vm launch` so cmdLock is already held
+	for resps := range runCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if v, ok := resp.Data.(*HostStats); ok {
+				hostStats = append(hostStats, v)
+			} else {
+				log.Error("unknown data field in `host` from %v", resp.Host)
+			}
+		}
+	}
+
 	// Create the host -> VMs assignment
-	// TODO: This is a static assignment... should it be updated periodically
-	// during the launching process?
-	stats, assignment := schedule(n.queue, n.hostSlice())
+	assignment, err := schedule(n.queue, hostStats)
+	if err != nil {
+		return err
+	}
+
+	total := 0
+	for _, q := range n.queue {
+		total += len(q.Names)
+	}
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
 	n.queue = nil
 
-	stats.start = time.Now()
-	stats.state = SchedulerRunning
+	stats := &scheduleStat{
+		total: total,
+		hosts: len(hostStats),
+		start: time.Now(),
+		state: SchedulerRunning,
+	}
 
 	n.scheduleStats = append(n.scheduleStats, stats)
 
