@@ -289,10 +289,17 @@ func (s *Server) clientHandler(conn net.Conn) {
 		return
 	}
 
+	var mangled bool
 	vm, ok := s.vms[handshake.Client.UUID]
 	if !ok {
-		log.Error("unregistered client %v", handshake.Client.UUID)
-		return
+		// try again after unmangling the uuid, which qemu does in
+		// certain versions
+		vm, ok = s.vms[unmangle(handshake.Client.UUID)]
+		if !ok {
+			log.Error("unregistered client %v", handshake.Client.UUID)
+			return
+		}
+		mangled = true
 	}
 
 	if handshake.Client.Version != version.Revision {
@@ -309,6 +316,9 @@ func (s *Server) clientHandler(conn net.Conn) {
 	}
 
 	c.Client = handshake.Client
+	if mangled {
+		c.UUID = unmangle(handshake.Client.UUID)
+	}
 	log.Debug("new client: %v", handshake.Client)
 
 	// Set up minitunnel, dialing the server that should be running on the
@@ -351,6 +361,11 @@ func (s *Server) clientHandler(conn net.Conn) {
 		if err = c.dec.Decode(&m); err == nil {
 			log.Debug("new message: %v", m.Type)
 
+			// unmangle the client uuid if necessary
+			if mangled {
+				m.UUID = unmangle(m.UUID)
+			}
+
 			switch m.Type {
 			case MESSAGE_TUNNEL:
 				_, err = remote.Write(m.Tunnel)
@@ -359,6 +374,9 @@ func (s *Server) clientHandler(conn net.Conn) {
 				m2.UUID = m.UUID
 				err = c.sendMessage(m2)
 			case MESSAGE_CLIENT:
+				if mangled {
+					m.Client.UUID = unmangle(m.Client.UUID)
+				}
 				s.responses <- m.Client
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
