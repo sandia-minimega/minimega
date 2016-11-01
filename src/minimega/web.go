@@ -9,9 +9,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"minicli"
 	log "minilog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -104,9 +106,10 @@ func webStart(port int, root string) {
 	}
 
 	mux.HandleFunc("/", webIndex)
-	mux.HandleFunc("/hosts", webHosts)
-	mux.HandleFunc("/graph", webGraph)
-	mux.HandleFunc("/tilevnc", webTileVNC)
+	mux.HandleFunc("/vms", webTemplated)
+	mux.HandleFunc("/hosts", webTemplated)
+	mux.HandleFunc("/graph", webTemplated)
+	mux.HandleFunc("/tilevnc", webTemplated)
 	mux.HandleFunc("/hosts.json", webHostsJSON)
 	mux.HandleFunc("/vms.json", webVMsJSON)
 	mux.HandleFunc("/connect/", webConnect)
@@ -203,26 +206,48 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// HTML responses below
-
+// Redirect / to /vms
 func webIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-	} else {
-		http.ServeFile(w, r, filepath.Join(web.Root, "index.html"))
+		return
 	}
+
+	http.Redirect(w, r, "/vms", 302)
 }
 
-func webHosts(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "hosts.html"))
-}
+// Templated HTML responses
+func webTemplated(w http.ResponseWriter, r *http.Request) {
+	lp := filepath.Join(web.Root, "templates", "_layout.tmpl")
+	fp := filepath.Join(web.Root, "templates", r.URL.Path+".tmpl")
 
-func webGraph(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "graph.html"))
-}
+	info, err := os.Stat(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// 404 if template doesn't exist
+			//log.Error(err.Error())
+			http.NotFound(w, r)
+			return
+		}
+	}
 
-func webTileVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "tilevnc.html"))
+	if info.IsDir() {
+		// 404 if directory
+		http.NotFound(w, r)
+		return
+	}
+
+	tmpl, err := template.ParseFiles(lp, fp)
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, http.StatusText(500), 500)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "layout", nil); err != nil {
+		log.Error(err.Error())
+		http.Error(w, http.StatusText(500), 500)
+	}
 }
 
 func webConnect(w http.ResponseWriter, r *http.Request) {
@@ -303,16 +328,16 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 
 		vmMap := map[string]interface{}{
 			"namespace": config.Namespace,
-			"host":   vm.GetHost(),
-			"id":     vm.GetID(),
-			"name":   vm.GetName(),
-			"state":  vm.GetState().String(),
-			"type":   vm.GetType().String(),
-			"vcpus":  config.Vcpus,
-			"memory": config.Memory,
-			"snapshot": config.Snapshot,
-			"uiud":   config.UUID,
-			"activecc": config.ActiveCC,
+			"host":      vm.GetHost(),
+			"id":        vm.GetID(),
+			"name":      vm.GetName(),
+			"state":     vm.GetState().String(),
+			"type":      vm.GetType().String(),
+			"vcpus":     config.Vcpus,
+			"memory":    config.Memory,
+			"snapshot":  config.Snapshot,
+			"uiud":      config.UUID,
+			"activecc":  config.ActiveCC,
 		}
 
 		if vm, ok := vm.(*KvmVM); ok {
