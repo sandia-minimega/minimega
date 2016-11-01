@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"minicli"
@@ -15,6 +16,22 @@ import (
 	"strconv"
 	"strings"
 )
+
+type HostStats struct {
+	Name          string
+	RxBps         float64
+	TxBps         float64
+	CPUs          int
+	MemTotal      int
+	MemUsed       int
+	VMs           int
+	CPUCommit     int
+	MemCommit     int
+	NetworkCommit int
+	Load          string
+
+	Limit int // for scheduler, not used by the host API
+}
 
 var hostCLIHandlers = []minicli.Handler{
 	{ // host
@@ -29,6 +46,7 @@ Report information about the host:
 - memcommit  : total memory commit in MB
 - memtotal   : total memory in MB
 - memused    : memory used in MB
+- name       : name of the machine
 - netcommit  : total network interface commit
 - vms        : number of VMs
 
@@ -43,6 +61,7 @@ across namespaces, run "mesh send all host".`,
 			"host <memcommit,>",
 			"host <memtotal,>",
 			"host <memused,>",
+			"host <name,>",
 			"host <netcommit,>",
 			"host <vms,>",
 		},
@@ -50,53 +69,97 @@ across namespaces, run "mesh send all host".`,
 	},
 }
 
-var hostInfoFns = map[string]func() (string, error){
-	"bandwidth": func() (string, error) {
-		rx, tx := bridges.BandwidthStats()
-
-		return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", rx, tx), nil
-	},
-	"cpus": func() (string, error) {
-		return strconv.Itoa(runtime.NumCPU()), nil
-	},
-	"load": hostStatsLoad,
-	"memtotal": func() (string, error) {
-		total, _, err := hostStatsMemory()
-		return strconv.Itoa(total), err
-	},
-	"memused": func() (string, error) {
-		_, used, err := hostStatsMemory()
-		return strconv.Itoa(used), err
-	},
-	"vms": func() (string, error) {
-		return strconv.Itoa(vms.Count()), nil
-	},
-	"cpucommit": func() (string, error) {
-		return strconv.Itoa(vms.CPUCommit()), nil
-	},
-	"memcommit": func() (string, error) {
-		return strconv.Itoa(vms.MemCommit()), nil
-	},
-	"netcommit": func() (string, error) {
-		return strconv.Itoa(vms.NetworkCommit()), nil
-	},
-}
-
-// Preferred ordering of host info fields in tabular
-var hostInfoKeys = []string{
-	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
-	"vms", "cpucommit", "memcommit", "netcommit",
-}
-
-func cliHost(c *minicli.Command, resp *minicli.Response) error {
-	// If they selected one of the fields to display
-	for k := range c.BoolArgs {
-		val, err := hostInfoFns[k]()
+func (h *HostStats) Populate(v string) error {
+	switch v {
+	case "bandwidth":
+		h.RxBps, h.TxBps = bridges.BandwidthStats()
+	case "cpus":
+		h.CPUs = runtime.NumCPU()
+	case "cpucommit":
+		h.CPUCommit = vms.CPUCommit()
+	case "load":
+		load, err := ioutil.ReadFile("/proc/loadavg")
 		if err != nil {
 			return err
 		}
 
-		resp.Response = val
+		// loadavg should look something like
+		// 	0.31 0.28 0.24 1/309 21658
+		f := strings.Fields(string(load))
+		if len(f) != 5 {
+			return fmt.Errorf("could not read loadavg")
+		}
+
+		h.Load = strings.Join(f[0:3], " ")
+		return nil
+	case "memcommit":
+		h.MemCommit = vms.MemCommit()
+	case "memtotal", "memused":
+		total, used, err := hostStatsMemory()
+		h.MemTotal = total
+		h.MemUsed = used
+		return err
+	case "name":
+		h.Name = hostname
+	case "netcommit":
+		h.NetworkCommit = vms.NetworkCommit()
+	case "vms":
+		h.VMs = vms.Count()
+	default:
+		return errors.New("unreachable")
+	}
+
+	return nil
+}
+
+func (h *HostStats) Print(v string) string {
+	switch v {
+	case "bandwidth":
+		return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", h.RxBps, h.TxBps)
+	case "cpus":
+		return strconv.Itoa(h.CPUs)
+	case "cpucommit":
+		return strconv.Itoa(h.CPUCommit)
+	case "load":
+		return h.Load
+	case "memcommit":
+		return strconv.Itoa(h.MemCommit)
+	case "memtotal":
+		return strconv.Itoa(h.MemTotal)
+	case "memused":
+		return strconv.Itoa(h.MemUsed)
+	case "name":
+		return h.Name
+	case "netcommit":
+		return strconv.Itoa(h.NetworkCommit)
+	case "vms":
+		return strconv.Itoa(h.VMs)
+	}
+
+	return "???"
+
+}
+
+// Preferred ordering of host info fields in tabular. Don't include name --
+// it's usually redundant in the tabular data unless .annotate is false.
+var hostInfoKeys = []string{
+	"cpus", "load", "memused", "memtotal", "bandwidth", "vms", "cpucommit",
+	"memcommit", "netcommit",
+}
+
+func cliHost(c *minicli.Command, resp *minicli.Response) error {
+	stats := HostStats{
+		Name: hostname,
+	}
+	resp.Data = &stats
+
+	// If they selected one of the fields to display
+	for k := range c.BoolArgs {
+		if err := stats.Populate(k); err != nil {
+			return err
+		}
+
+		resp.Response = stats.Print(k)
 		return nil
 	}
 
@@ -105,33 +168,15 @@ func cliHost(c *minicli.Command, resp *minicli.Response) error {
 
 	row := []string{}
 	for _, k := range resp.Header {
-		val, err := hostInfoFns[k]()
-		if err != nil {
+		if err := stats.Populate(k); err != nil {
 			return err
 		}
 
-		row = append(row, val)
+		row = append(row, stats.Print(k))
 	}
 	resp.Tabular = [][]string{row}
 
 	return nil
-}
-
-func hostStatsLoad() (string, error) {
-	load, err := ioutil.ReadFile("/proc/loadavg")
-	if err != nil {
-		return "", err
-	}
-
-	// loadavg should look something like
-	// 	0.31 0.28 0.24 1/309 21658
-	f := strings.Fields(string(load))
-	if len(f) != 5 {
-		return "", fmt.Errorf("could not read loadavg")
-	}
-	outputLoad := strings.Join(f[0:3], " ")
-
-	return outputLoad, nil
 }
 
 func hostStatsMemory() (int, int, error) {
