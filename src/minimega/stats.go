@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -67,6 +68,10 @@ across namespaces, run "mesh send all host".`,
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
+}
+
+func init() {
+	gob.Register(&HostStats{})
 }
 
 func (h *HostStats) Populate(v string) error {
