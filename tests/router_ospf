@@ -1,7 +1,7 @@
 # ospf routes
 clear cc responses
-vm config filesystem minirouterfs
-vm config preinit minirouterfs/preinit
+vm config filesystem $minirouterfs
+vm config preinit $minirouterfs/preinit
 vm config tag vm routerA
 vm config net a b
 vm launch container routerA
@@ -30,7 +30,7 @@ clear router routerA route ospf
 router routerA route ospf 0 0
 router routerA route ospf 0 1
 router routerA commit
-.annotate false shell cat /tmp/minimega/files/minirouter-0
+.annotate false shell sort /tmp/minimega/files/minirouter-routerA
 router routerB interface 0 2.0.0.2/24
 router routerB interface 1 3.0.0.2/24
 router routerB dhcp 3.0.0.0 static 00:1f:53:02:0b:52 3.0.0.3

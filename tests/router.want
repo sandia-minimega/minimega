@@ -1,6 +1,6 @@
 ## # router interfaces
 ## vm config net 100 200
-## vm config filesystem minirouterfs
+## vm config filesystem $minirouterfs
 ## vm launch container vm0
 ## vm start all
 ## router vm0 interface 0 1.2.3.4/24
@@ -67,15 +67,15 @@ Log:
 ## router vm0 interface 0 1.2.3.4/24
 ## router vm0 interface 1 5.6.7.8/24
 ## router vm0 commit
-## .annotate false shell cat /tmp/minimega/files/minirouter-0
-log level error
-ip flush
+## .annotate false shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+dnsmasq commit
+dnsmasq flush
 ip add 0 1.2.3.4/24
 ip add 1 5.6.7.8/24
-dnsmasq flush
-dnsmasq commit
-bird flush
-bird commit
+ip flush
+log level error
 
 ## # check on interface ips
 ## shell sleep 15
@@ -278,24 +278,24 @@ Log:
 ## clear router vm0
 ## router vm0 interface 0 1.2.3.4/24
 ## router vm0 interface 0 5.6.7.8/24
-## router 0 dhcp 1.2.3.4 router 1.2.3.254
-## router 0 dhcp 1.2.3.4 dns 1.2.3.4
-## router 0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
-## router 0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
+## router vm0 dhcp 1.2.3.4 router 1.2.3.254
+## router vm0 dhcp 1.2.3.4 dns 1.2.3.4
+## router vm0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+## router vm0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
 ## router vm0 commit
-## .annotate false shell cat /tmp/minimega/files/minirouter-0
-log level error
-ip flush
+## .annotate false shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+dnsmasq commit
+dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq flush
 ip add 0 1.2.3.4/24
 ip add 0 5.6.7.8/24
-dnsmasq flush
-dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
-dnsmasq dhcp option router 1.2.3.4 1.2.3.254
-dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
-dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
-dnsmasq commit
-bird flush
-bird commit
+ip flush
+log level error
 
 ## cc filter tag=vm1=vm1
 ## cc exec dhclient -v veth0
@@ -365,18 +365,18 @@ Log:
 ## router vm0 dns 1.1.1.1 foo.com
 ## router vm0 dns 2.2.2.2 bar.com
 ## router vm0 commit
-## .annotate false shell cat /tmp/minimega/files/minirouter-0
-log level error
-dnsmasq flush
-dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
-dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+## .annotate false shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+dnsmasq commit
 dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
 dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
 dnsmasq dns 1.1.1.1 foo.com
 dnsmasq dns 2.2.2.2 bar.com
-dnsmasq commit
-bird flush
-bird commit
+dnsmasq flush
+log level error
 ## shell sleep 15
 ## clear cc responses
 ## cc filter tag=vm1=vm1
@@ -465,21 +465,21 @@ DNS:
 Log:
 ## router vm0 ra 2001:1::
 ## router vm0 commit
-## .annotate false shell cat /tmp/minimega/files/minirouter-0
-log level error
-ip flush
-ip add 0 1.2.3.4/24
-ip add 0 5.6.7.8/24
-ip add 0 2001:1::1/64
-dnsmasq flush
-dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
-dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+## .annotate false shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+dnsmasq commit
 dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
 dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
 dnsmasq dns 1.1.1.1 foo.com
 dnsmasq dns 2.2.2.2 bar.com
+dnsmasq flush
 dnsmasq ra 2001:1::
-dnsmasq commit
-bird flush
-bird commit
+ip add 0 1.2.3.4/24
+ip add 0 2001:1::1/64
+ip add 0 5.6.7.8/24
+ip flush
+log level error
 ## # we don't have a reliable way to test SLAAC addressing so we don't do it
