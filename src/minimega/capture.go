@@ -51,17 +51,14 @@ func (c *capture) Stop() error {
 	return errors.New("unknown capture type")
 }
 
-func clearAllCaptures() (err error) {
-	err = clearCapture("netflow", "bridge", Wildcard)
-	if err == nil {
-		err = clearCapture("pcap",  "bridge", Wildcard)
-	}
-
-	err = clearCapture("netflow", "vm", Wildcard)
-	if err == nil {
-		err = clearCapture("pcap", "vm", Wildcard)
-	}
-	return
+func clearAllCaptures() error {
+	// run all the clears, even if there are errors on some
+	return makeErrSlice([]error{
+		clearCapture("netflow", "bridge", Wildcard),
+		clearCapture("pcap", "bridge", Wildcard),
+		clearCapture("netflow", "vm", Wildcard),
+		clearCapture("pcap", "vm", Wildcard),
+	})
 }
 
 func clearCapture(captureType, bridgeOrVM, name string) (err error) {
@@ -74,54 +71,54 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 
 	namespace := GetNamespaceName()
 
-	if name == Wildcard {
-		for _, v := range captureEntries {
-			if !v.InNamespace(namespace) {
+	var foundOne bool
+
+	for _, v := range captureEntries {
+		// should match current namespace
+		if !v.InNamespace(namespace) {
+			continue
+		}
+
+		// should match the capture type we're clearing
+		if v.Type != captureType {
+			continue
+		}
+
+		// make sure we're clearing the right types
+		if v.VM == nil && bridgeOrVM == "vm" {
+			// v is a bridge capture but they specified vms
+			continue
+		} else if v.VM != nil && bridgeOrVM == "bridge" {
+			// v is a vm capture but they specified bridges
+			continue
+		}
+
+		if name != Wildcard {
+			// make sure the name matches
+			if v.VM != nil && v.VM.GetName() != name {
+				continue
+			} else if v.VM == nil && v.Bridge != name {
 				continue
 			}
-
-			// make sure we're clearing the right types
-			if v.VM == nil && bridgeOrVM == "vm" {
-				// v is a bridge capture but they specified vms
-				continue
-			} else if v.VM != nil && bridgeOrVM == "bridge" {
-				// v is a vm capture but they specified bridges
-				continue
-			}
-
-			if err := v.Stop(); err != nil {
-				return err
-			}
-		}
-	} else {
-		var entry *capture
-		for _, val := range captureEntries {
-			if bridgeOrVM == "bridge" {
-				if val.Bridge == name {
-					entry = val
-					break
-				} else {
-					continue
-				}
-			} else if bridgeOrVM == "vm" {
-				if val.VM.GetName() == name && val.VM.GetNamespace() == namespace {
-					entry = val
-					break
-				} else {
-					continue
-				}
-			}
 		}
 
-		if entry == nil {
-			return vmNotFound(name)
-		}
+		foundOne = true
 
-		if entry.Type != captureType {
-			return fmt.Errorf("invalid id/capture type, `%s` != `%s`", entry.Type, captureType)
+		if err := v.Stop(); err != nil {
+			return err
 		}
+	}
 
-		return entry.Stop()
+	// we made it through the loop and didn't find what we were trying to clear
+	if name == Wildcard || foundOne {
+		return
+	}
+
+	switch bridgeOrVM {
+	case "vm":
+		return vmNotFound(name)
+	case "bridge":
+		return fmt.Errorf("no capture of type %v on bridge %v", captureType, name)
 	}
 
 	return nil

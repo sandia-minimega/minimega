@@ -25,7 +25,7 @@ var captureCLIHandlers = []minicli.Handler{
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
 			"capture <pcap,> vm <name> <interface index> <filename>",
-			"capture <pcap,> <delete,> vm <name>",	
+			"capture <pcap,> <delete,> vm <name>",
 		},
 		Call: wrapVMTargetCLI(cliCaptureVM),
 	},
@@ -67,11 +67,14 @@ VM:
 When run without arguments, capture prints all running captures. To stop a
 capture, use the delete commands:
 
-	capture netflow delete <id>
-	capture pcap delete <id>
+	capture netflow delete bridge <bridge>
+	capture pcap delete bridge <bridge>
+	capture pcap delete vm <name>
 
 To stop all captures of a particular kind, replace id with "all". To stop all
-capture of all types, use "clear capture".
+capture of all types, use "clear capture". If a VM has multiple interfaces and
+there are multiple captures running, calling "capture pcap delete vm <name>"
+stops all the captures for that VM.
 
 Notes with namespaces:
  * "capture [netflow,pcap]" lists captures across the namespace

@@ -830,7 +830,7 @@ func vmNotContainer(idOrName string) error {
 	return fmt.Errorf("vm not container: %v", idOrName)
 }
 
-func isVmNotFound(err string) bool {
+func isVMNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
 }
 

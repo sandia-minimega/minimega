@@ -26,6 +26,8 @@ capture
 
 # Capture VMs with same names in different namespaces
 namespace foo capture pcap vm car 0 /dev/null
+namespace foo capture pcap vm car 0 /dev/null
+namespace bar capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
 capture
 
@@ -36,3 +38,8 @@ capture
 # Delete all captures in the other namespace
 namespace bar capture pcap delete vm all
 capture
+
+# Try some things that shouldn't work
+namespace foo capture pcap vm car 1 /dev/null
+namespace foo capture pcap vm bar 0 /dev/null
+namespace foo capture pcap delete vm bar
