@@ -266,7 +266,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats) (map[string][]*QueuedVMs, 
 
 			if stats.Limit != 0 && stats.VMs > stats.Limit {
 				dumpSchedule()
-				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, stats.Limit+1)
+				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, stats.Limit)
 			}
 
 			hostSortBy(cpuCommit).Update(hosts, host)
