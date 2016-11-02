@@ -2,25 +2,21 @@
 ## clear cc responses
 ## vm config filesystem $minirouterfs
 ## vm config preinit $minirouterfs/preinit
-## vm config tag vm routerA
 ## vm config net a b
 ## vm launch container routerA
-## vm config tag vm routerB
 ## vm config net b c
 ## vm launch container routerB
-## clear vm config tag
 ## vm config net a,00:1f:53:02:0b:51
 ## vm launch container vmA
 ## vm config net c,00:1f:53:02:0b:52
 ## vm launch container vmB
-## clear vm config tag
 ## router routerA interface 0 1.0.0.1/24
 ## router routerA interface 1 2.0.0.1/24
 ## router routerA dhcp 1.0.0.0 static 00:1f:53:02:0b:51 1.0.0.3
 ## router routerA route ospf 0.0.0.0 0
 ## router routerA route ospf 0.0.0.0 1
 ## router routerA route ospf foo bar
-## .annotate false router routerA
+## router routerA
 IPs:
 Network: 0: [1.0.0.1/24]
 Network: 1: [2.0.0.1/24]
@@ -44,7 +40,7 @@ Interfaces:
 
 Log:
 ## clear router routerA route ospf 0.0.0.0 1
-## .annotate false router routerA
+## router routerA
 IPs:
 Network: 0: [1.0.0.1/24]
 Network: 1: [2.0.0.1/24]
@@ -67,7 +63,7 @@ Interfaces:
 
 Log:
 ## clear router routerA route ospf foo
-## .annotate false router routerA
+## router routerA
 IPs:
 Network: 0: [1.0.0.1/24]
 Network: 1: [2.0.0.1/24]
@@ -89,7 +85,7 @@ Interfaces:
 
 Log:
 ## clear router routerA route ospf
-## .annotate false router routerA
+## router routerA
 IPs:
 Network: 0: [1.0.0.1/24]
 Network: 1: [2.0.0.1/24]
@@ -106,7 +102,7 @@ Log:
 ## router routerA route ospf 0 0
 ## router routerA route ospf 0 1
 ## router routerA commit
-## .annotate false shell sort /tmp/minimega/files/minirouter-routerA
+## shell sort /tmp/minimega/files/minirouter-routerA
 bird commit
 bird flush
 bird ospf 0 0
@@ -132,20 +128,20 @@ log level error
 ## shell sleep 5
 ## vm start vmA,vmB
 ## shell sleep 60
-## cc filter tag=vm=routerA
+## cc filter hostname=routerA
 ## cc exec route -n
 ## clear cc filter
-## cc filter tag=vm=routerB
+## cc filter hostname=routerB
 ## cc exec route -n
 ## clear cc filter
 ## shell sleep 10
-## .annotate false cc responses 13 raw
+## cc responses 13 raw
 Kernel IP routing table
 Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 1.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth0
 2.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth1
 3.0.0.0         2.0.0.2         255.255.255.0   UG    0      0        0 veth1
-## .annotate false cc responses 14 raw
+## cc responses 14 raw
 Kernel IP routing table
 Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 1.0.0.0         2.0.0.1         255.255.255.0   UG    0      0        0 veth0
