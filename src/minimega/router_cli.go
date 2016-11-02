@@ -84,6 +84,7 @@ router takes a number of subcommands:
 		HelpShort: "",
 		HelpLong:  ``,
 		Patterns: []string{
+			"clear router",
 			"clear router <vm>",
 			"clear router <vm> <interface,>",
 			"clear router <vm> <interface,> <network>",
@@ -203,6 +204,14 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 
 func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
 	vmName := c.StringArgs["vm"]
+
+	// clear all routers
+	if vmName == "" {
+		// this is safe to do because the only reference to the router
+		// map is in CLI calls
+		routers = make(map[int]*Router)
+		return nil
+	}
 
 	vm := vms.FindVM(vmName)
 	if vm == nil {
