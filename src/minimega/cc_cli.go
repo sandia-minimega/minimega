@@ -54,6 +54,16 @@ example, to filter on VMs that are running windows and have a specific IP.
 
 	cc filter os=windows ip=10.0.0.1
 
+Users can also filter by VM tags. For example, to filter on VMs t$
+tag with key foo and value bar set:
+
+    cc filter tag=foo:bar
+
+If users wish, they may drop the tag= prefix and key=value pairs $
+treated as tags:
+
+    cc filter foo=bar
+
 When a namespace is active, there is an implicit filter for vms with the
 provided namespace.
 
