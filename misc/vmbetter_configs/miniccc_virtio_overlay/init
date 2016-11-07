@@ -13,6 +13,9 @@ udevadm settle
 chmod a+rx /
 modprobe loop
 
+modprobe virtio_console
+modprobe virtio_pci
+
 ulimit -n 999999
 
 ifconfig lo up
@@ -22,6 +25,6 @@ dhclient -v eth0
 mkdir /var/run/sshd
 /usr/sbin/sshd
 
-/miniccc -serial /dev/virtio-ports/cc -logfile /miniccc.log &
+/miniccc -serial /dev/vport1p1 -logfile /miniccc.log &
 
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
