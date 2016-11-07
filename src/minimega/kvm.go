@@ -438,6 +438,8 @@ func (vm *KvmVM) connectVNC() error {
 				return
 			}
 
+			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), ns)
+
 			go func() {
 				defer remote.Close()
 
@@ -455,17 +457,25 @@ func (vm *KvmVM) connectVNC() error {
 				// Reads will implicitly copy from remote -> local
 				tee := io.TeeReader(remote, local)
 				for {
-					// Read
 					msg, err := vnc.ReadClientMessage(tee)
-					if err != nil {
-						if err == io.EOF || strings.Contains(err.Error(), "closed network") {
-							break
-						}
-						log.Warnln(err)
+					if err == nil {
+						vncRoute(ns, msg)
+						continue
 					}
-					if r, ok := vncKBRecording[ns]; ok {
-						r.RecordMessage(msg)
+
+					// shim is no longer connected
+					if err == io.EOF || strings.Contains(err.Error(), "broken pipe") {
+						log.Info("vnc shim quit: %v", ns)
+						break
 					}
+
+					// ignore these
+					if strings.Contains(err.Error(), "unknown client-to-server message") {
+						continue
+					}
+
+					// unknown error
+					log.Warnln(err)
 				}
 			}()
 		}

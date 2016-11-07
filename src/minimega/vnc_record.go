@@ -197,6 +197,16 @@ func vncRecordFB(vm *KvmVM, filename string) error {
 	return nil
 }
 
+// vncRoute records a message for the correct recording based on ID
+func vncRoute(ID string, msg interface{}) {
+	vncRecordingLock.RLock()
+	defer vncRecordingLock.RUnlock()
+
+	if r, ok := vncKBRecording[ID]; ok {
+		r.RecordMessage(msg)
+	}
+}
+
 // Returns the duration of a given kbrecording file
 func getDuration(filename string) time.Duration {
 	d := 0
