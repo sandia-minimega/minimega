@@ -195,17 +195,16 @@ function updateScreenshotTable(vmsData) {
     // Create the HTML element for each screenshot block
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
-        <td><div class="thumbnail">                                          \
+        <td>                                                                 \
+            <a class="connect-vm-wrapper" target="_blank">                   \                                                                 \
+            <div class="thumbnail">                                          \
             <img src="//:0" style="width: 300px; height: 225px;">            \
-            <div class="caption">                                            \
-                <h3></h3>                                                    \
-                <p>                                                          \
-                    <a class="btn btn-primary connect-vm-button" target="_blank">Connect</a> \
-                    ' + /*<a href="#TODO" class="btn manage-vm-button">Manage</a>*/  '\
-                </p>                                                         \
-            </div>                                                           \
             <div class="screenshot-state"></div>                             \
-        </div></td>                                                          \
+            <div class="screenshot-label grey"></div>                        \
+            <div class="screenshot-connect grey">Click to connect</div>      \
+            </div>                                                           \
+            </a>                                                             \
+        </td>                                                                \
     ');
 
     // Fill out the above model for each individual VM info and push into a list
@@ -215,10 +214,11 @@ function updateScreenshotTable(vmsData) {
         var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
+        //toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
+        toAppend.find("a.connect-vm-wrapper").attr("href", connectURL(vm));
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
-
+        toAppend.find(".screenshot-label").html(vm.name);
         //if (vm.type != "kvm") toAppend.find(".connect-vm-button").css("visibility", "hidden");
 
         screenshotList.push({

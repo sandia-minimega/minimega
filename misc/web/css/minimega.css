@@ -58,6 +58,11 @@ nav a.current-view {
 	font-weight: bold;
 }
 
+.grey {
+	background: #888888;
+}
+
+
 .blue {
 	background: #1E8BC3;
 }
@@ -175,6 +180,24 @@ div.box-content {
 	color: white;
 	padding: 1px 13px;
 	border-radius: 0 0 0 6px;
+}
+
+.screenshot-label {
+	position: absolute;
+	bottom: -1px;
+	left: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 0 6px 0 0;
+}
+
+.screenshot-connect {
+	position: absolute;
+	bottom: -1px;
+	right: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 6px 0 0 0;
 }
 
 .dataTable em {
