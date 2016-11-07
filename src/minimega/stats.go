@@ -29,7 +29,7 @@ Report information about the host:
 - memused : memory used, in MB
 - name : hostname
 - vms : number of VMs (in active namespace)
-- updateVMsTables: number of VMs (regardless of namespace)
+- vmsall: number of VMs (regardless of namespace)
 - uptime: uptime
 		`,
 		Patterns: []string{
