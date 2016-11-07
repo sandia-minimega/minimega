@@ -66,6 +66,7 @@ func ccClear(what string) (err error) {
 	case "commands":
 		if namespace == "" {
 			ccNode.ResetCommands()
+			ccPrefixMap = make(map[int]string)
 			return
 		}
 

@@ -1,0 +1,45 @@
+# Start VMs in different namespaces
+vm config net A
+namespace foo vm launch kvm foo
+namespace foo vm launch kvm car
+namespace foo vm launch
+namespace bar vm launch kvm bar
+namespace bar vm launch kvm car
+namespace bar vm launch
+
+# Start captures in respective namespaces
+namespace foo capture pcap vm foo 0 /dev/null
+namespace bar capture pcap vm bar 0 /dev/null
+capture
+namespace foo capture
+namespace bar capture
+
+# Make sure we only clear the capture in foo namespace
+namespace foo clear capture
+capture
+namespace foo capture
+namespace bar capture
+
+# Clear out all captures
+clear capture
+capture
+
+# Capture VMs with same names in different namespaces
+namespace foo capture pcap vm car 0 /dev/null
+namespace foo capture pcap vm car 0 /dev/null
+namespace bar capture pcap vm car 0 /dev/null
+namespace bar capture pcap vm car 0 /dev/null
+capture
+
+# Delete a capture in one namespace but not the other
+namespace foo capture pcap delete vm car
+capture
+
+# Delete all captures in the other namespace
+namespace bar capture pcap delete vm all
+capture
+
+# Try some things that shouldn't work
+namespace foo capture pcap vm car 1 /dev/null
+namespace foo capture pcap vm bar 0 /dev/null
+namespace foo capture pcap delete vm bar

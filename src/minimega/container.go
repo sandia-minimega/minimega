@@ -1463,6 +1463,7 @@ func containerNuke() {
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
+
 	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
 
 	for _, cgroup := range cgroups {
@@ -1531,7 +1532,18 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 		for _, pid := range pids {
 			log.Debug("found pid: %v", pid)
 
-			fmt.Println("killing process:", pid)
+			// attempt to unfreeze the cgroup first, ignoring any
+			// errors
+			// the vm id is the second to last field in the path
+			pathFields := strings.Split(path, string(os.PathSeparator))
+			vmID := pathFields[len(pathFields)-2]
+
+			freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vmID), "freezer.state")
+			if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
+				log.Debugln(err)
+			}
+
+			log.Infoln("killing process:", pid)
 			processWrapper("kill", "-9", pid)
 		}
 	}

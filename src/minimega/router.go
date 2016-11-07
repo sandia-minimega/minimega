@@ -193,7 +193,7 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetID()))
+	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetName()))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
@@ -245,7 +245,7 @@ func (r *Router) Commit() error {
 	r.updateIPs = false // IPs are no longer stale
 
 	// remove any previous commands
-	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetID())
+	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetName())
 	ids := ccPrefixIDs(prefix)
 	if len(ids) != 0 {
 		for _, v := range ids {

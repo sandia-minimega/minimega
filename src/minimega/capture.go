@@ -10,7 +10,7 @@ import (
 	"gonetflow"
 	"gopcap"
 	log "minilog"
-	"strconv"
+	"path/filepath"
 	"strings"
 )
 
@@ -18,7 +18,7 @@ type capture struct {
 	ID        int
 	Type      string
 	Bridge    string
-	VM        int
+	VM        VM
 	Interface int
 	Path      string
 	Mode      string
@@ -33,16 +33,35 @@ var (
 	captureNFTimeout = 10
 )
 
-func clearAllCaptures() (err error) {
-	err = clearCapture("netflow", Wildcard)
-	if err == nil {
-		err = clearCapture("pcap", Wildcard)
+func (c *capture) InNamespace(namespace string) bool {
+	if namespace == "" || c.VM == nil {
+		return true
 	}
 
-	return
+	return c.VM.GetNamespace() == namespace
 }
 
-func clearCapture(captureType, id string) (err error) {
+func (c *capture) Stop() error {
+	if c.Type == "pcap" {
+		return stopPcapCapture(c)
+	} else if c.Type == "netflow" {
+		return stopNetflowCapture(c)
+	}
+
+	return errors.New("unknown capture type")
+}
+
+func clearAllCaptures() error {
+	// run all the clears, even if there are errors on some
+	return makeErrSlice([]error{
+		clearCapture("netflow", "bridge", Wildcard),
+		clearCapture("pcap", "bridge", Wildcard),
+		clearCapture("netflow", "vm", Wildcard),
+		clearCapture("pcap", "vm", Wildcard),
+	})
+}
+
+func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 	defer func() {
 		// check if we need to remove the nf object
 		if err != nil && captureType == "netflow" {
@@ -50,32 +69,56 @@ func clearCapture(captureType, id string) (err error) {
 		}
 	}()
 
-	if id == Wildcard {
-		for _, v := range captureEntries {
-			if v.Type == "pcap" && captureType == "pcap" {
-				return stopPcapCapture(v)
-			} else if v.Type == "netflow" && captureType == "netflow" {
-				return stopNetflowCapture(v)
+	namespace := GetNamespaceName()
+
+	var foundOne bool
+
+	for _, v := range captureEntries {
+		// should match current namespace
+		if !v.InNamespace(namespace) {
+			continue
+		}
+
+		// should match the capture type we're clearing
+		if v.Type != captureType {
+			continue
+		}
+
+		// make sure we're clearing the right types
+		if v.VM == nil && bridgeOrVM == "vm" {
+			// v is a bridge capture but they specified vms
+			continue
+		} else if v.VM != nil && bridgeOrVM == "bridge" {
+			// v is a vm capture but they specified bridges
+			continue
+		}
+
+		if name != Wildcard {
+			// make sure the name matches
+			if v.VM != nil && v.VM.GetName() != name {
+				continue
+			} else if v.VM == nil && v.Bridge != name {
+				continue
 			}
 		}
-	} else {
-		val, err := strconv.Atoi(id)
-		if err != nil {
+
+		foundOne = true
+
+		if err := v.Stop(); err != nil {
 			return err
 		}
+	}
 
-		entry, ok := captureEntries[val]
-		if !ok {
-			return fmt.Errorf("entry %v does not exist", val)
-		}
+	// we made it through the loop and didn't find what we were trying to clear
+	if name == Wildcard || foundOne {
+		return
+	}
 
-		if entry.Type != captureType {
-			return fmt.Errorf("invalid id/capture type, `%s` != `%s`", entry.Type, captureType)
-		} else if entry.Type == "pcap" {
-			return stopPcapCapture(captureEntries[val])
-		} else if entry.Type == "netflow" {
-			return stopNetflowCapture(captureEntries[val])
-		}
+	switch bridgeOrVM {
+	case "vm":
+		return vmNotFound(name)
+	case "bridge":
+		return fmt.Errorf("no capture of type %v on bridge %v", captureType, name)
 	}
 
 	return nil
@@ -83,21 +126,26 @@ func clearCapture(captureType, id string) (err error) {
 
 // startCapturePcap starts a new capture for a specified interface on a VM,
 // writing the packets to the specified filename in PCAP format.
-func startCapturePcap(vm string, iface int, filename string) error {
-	// TODO: filter by namespace?
+func startCapturePcap(v string, iface int, filename string) error {
 	// get the vm
-	v := vms.FindVM(vm)
-	if v == nil {
-		return vmNotFound(vm)
+	vm := vms.FindVM(v)
+	if vm == nil {
+		return vmNotFound(v)
 	}
 
-	config := getConfig(v)
+	config := getConfig(vm)
 
 	if len(config.Networks) <= iface {
 		return fmt.Errorf("no such interface %v", iface)
 	}
 
+	bridge := config.Networks[iface].Bridge
 	tap := config.Networks[iface].Tap
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
 
 	// attempt to start pcap on the bridge
 	p, err := gopcap.NewPCAP(tap, filename)
@@ -109,9 +157,11 @@ func startCapturePcap(vm string, iface int, filename string) error {
 	ce := &capture{
 		ID:        captureID.Next(),
 		Type:      "pcap",
-		VM:        v.GetID(),
+		Bridge:    bridge,
+		VM:        vm,
 		Interface: iface,
 		Path:      filename,
+		Mode:      "N/A",
 		pcap:      p,
 	}
 
@@ -135,6 +185,11 @@ func startBridgeCapturePcap(b, filename string) error {
 		return err
 	}
 
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
 	// attempt to start pcap on the mirrored tap
 	p, err := gopcap.NewPCAP(tap, filename)
 	if err != nil {
@@ -143,14 +198,13 @@ func startBridgeCapturePcap(b, filename string) error {
 
 	// success! add it to the list
 	ce := &capture{
-		ID:        captureID.Next(),
-		Type:      "pcap",
-		Bridge:    br.Name,
-		VM:        -1,
-		Interface: -1,
-		Path:      filename,
-		pcap:      p,
-		tap:       tap,
+		ID:     captureID.Next(),
+		Type:   "pcap",
+		Bridge: br.Name,
+		Path:   filename,
+		Mode:   "N/A",
+		pcap:   p,
+		tap:    tap,
 	}
 
 	captureEntries[ce.ID] = ce
@@ -173,6 +227,11 @@ func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) erro
 	if ascii {
 		mode = gonetflow.ASCII
 		modeStr = "ascii"
+	}
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
 	}
 
 	err = nf.NewFileWriter(filename, mode, compress)

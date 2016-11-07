@@ -188,6 +188,8 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 		res := minicli.Responses{}
 		var ok bool
 
+		var notFound string
+
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
 		//
@@ -196,7 +198,9 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
-				if resp.Error == "" || !isVmNotFound(resp.Error) {
+				if isVMNotFound(resp.Error) {
+					notFound = resp.Error
+				} else {
 					// Record successes and unexpected errors
 					res = append(res, resp)
 				}
@@ -207,7 +211,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 			// Presumably, we weren't able to find the VM
 			res = append(res, &minicli.Response{
 				Host:  hostname,
-				Error: vmNotFound(c.StringArgs["target"]).Error(),
+				Error: notFound,
 			})
 		}
 
@@ -408,8 +412,12 @@ func cliLocal() {
 // string or an error.
 func cliPreprocess(v string) (string, error) {
 	if strings.HasPrefix(v, "$") {
-		if v2 := os.Getenv(v[1:]); v2 != "" {
-			return v2, nil
+		end := strings.IndexAny(v, "/ ")
+		if end == -1 {
+			end = len(v)
+		}
+		if v2 := os.Getenv(v[1:end]); v2 != "" {
+			return v2 + v[end:], nil
 		}
 
 		return "", fmt.Errorf("undefined: %v", v)

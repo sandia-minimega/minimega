@@ -61,6 +61,19 @@ func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	return nil, maxMatchLen, false
 }
 
+func (h *Handler) parsePatterns() error {
+	for _, pattern := range h.Patterns {
+		items, err := lexPattern(pattern)
+		if err != nil {
+			return err
+		}
+
+		h.PatternItems = append(h.PatternItems, items)
+	}
+
+	return nil
+}
+
 func (h *Handler) suggest(input *Input) []string {
 	suggestions := []string{}
 
