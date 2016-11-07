@@ -3,7 +3,7 @@
 // Config
 var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 2000;    // How often the currently-displayed hosts are updated (in millis)
-var IMAGE_REFRESH_TIMEOUT = 2000;   // How often the currently-displayed screenshots are updated (in millis)
+var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -198,7 +198,7 @@ function updateScreenshotTable(vmsData) {
         <td>                                                                 \
             <a class="connect-vm-wrapper" target="_blank">                   \                                                                 \
             <div class="thumbnail">                                          \
-            <img src="//:0" style="width: 300px; height: 225px;">            \
+            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px;">            \
             <div class="screenshot-state"></div>                             \
             <div class="screenshot-label grey"></div>                        \
             <div class="screenshot-connect grey">Click to connect</div>      \
@@ -223,7 +223,8 @@ function updateScreenshotTable(vmsData) {
 
         screenshotList.push({
             "name": vm.name,
-            "model": toAppend.get(0).outerHTML
+            "model": toAppend.get(0).outerHTML,
+            "vm": vm,
         });
     }
 
@@ -244,11 +245,12 @@ function updateScreenshotTable(vmsData) {
                 [12, 24, 48, 96, -1],
                 [12, 24, 48, 96, "All"]
             ],
-            "pageLength": -1,
+            "pageLength": 12,
             "data": screenshotList,
             "columns": [
                 { "title": "Name", "data": "name", "visible": false },
                 { "title": "Model", "data": "model", "searchable": false },
+                { "title": "VM", "data": "vm", "visible": false },
             ],
             "createdRow": loadOrRestoreImage
         });
@@ -285,8 +287,14 @@ function initCowbell () {
 }
 
 
-// Get the screenshot for the requested row, or restore it from the cache of screenshots if available
+// Get the screenshot for the requested row,
+// or restore it from the cache of screenshots if available
 function loadOrRestoreImage (row, data, displayIndex) {
+    // Skip if it is a container-type VM
+    if (data.vm.type === "container") {
+        return;
+    }
+
     var img = $('img', row);
     var url = img.attr("data-url");
 
