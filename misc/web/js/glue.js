@@ -160,13 +160,30 @@ function initHostDataTable() {
         "columns": [
             { "title": "Name" },
             { "title": "CPUs" },
-            { "title": "Load" },
-            { "title": "Memused" },
-            { "title": "Memtotal" },
+            { "title": "Load", render: function(data, type, full, meta) {
+                var loads = data.split(" ");
+                var cpus = parseInt(full[1]);
+                var loadsOverCPUsHtml = loads.map(function(load) {
+                    return colorSpanWithThresholds(load, load, 1.5*cpus, 1.0*cpus);
+                });
+                return loadsOverCPUsHtml.join(" ");
+            } },
+            { "title": "Memory", render: function(data, type, full, meta) {
+                var memUsed = parseInt(full[3]);
+                var memTotal = parseInt(full[4]);
+                var memUnits = full[4].replace(/[0-9]/g, '');
+                var text = memUsed + "/" + memTotal + memUnits;
+                var memRatio = memUsed / memTotal;
+                return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
+            } },
+            { "title": "Memtotal", visible: false },
             { "title": "Bandwidth" },
-            { "title": "vms" },
-            { "title": "vmsall" },
-            { "title": "uptime" }
+            { "title": "VMs" },
+            { "title": "VMs (all)" },
+            { "title": "uptime" , render: function(data, type, full ,meta) {
+                // TODO fix for more than 24 hours
+                return new Date(parseInt(data) * 1000).toISOString().substr(11, 8);
+            } },
         ],
         "order": [[ 0, 'asc' ]]
     });
@@ -261,6 +278,18 @@ function updateScreenshotTable(vmsData) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Utility functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
+    var spanClass = "";
+    if (value > thresholdRed) {
+        spanClass = "red";
+    } else if (value > thresholdYellow) {
+        spanClass = "yellow";
+    }
+
+    return "<span class='" + spanClass + "'>" + text + "</span>";
+}
 
 
 // Generate the appropriate URL for requesting a screenshot
