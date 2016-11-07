@@ -181,8 +181,11 @@ function initHostDataTable() {
             { "title": "VMs" },
             { "title": "VMs (all)" },
             { "title": "uptime" , render: function(data, type, full ,meta) {
-                // TODO fix for more than 24 hours
-                return new Date(parseInt(data) * 1000).toISOString().substr(11, 8);
+                // calculate days separately
+                var seconds = parseInt(data);
+                var days = Math.floor(seconds / 86400);
+                seconds -= days * 86400;
+                return days + " days " + new Date(seconds * 1000).toISOString().substr(11, 8);
             } },
         ],
         "order": [[ 0, 'asc' ]]
