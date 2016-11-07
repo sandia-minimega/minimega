@@ -170,7 +170,7 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 
 	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
-		return fmt.Errorf("vm %s not found", c.StringArgs["vm"])
+		return err
 	}
 
 	if c.BoolArgs["record"] {
@@ -214,9 +214,12 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 // List all active recordings and playbacks
 func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"name", "type", "time", "filename"}
-	resp.Tabular = [][]string{}
 
 	vncRecordingLock.RLock()
+	defer vncRecordingLock.RUnlock()
+	vncPlayingLock.RLock()
+	defer vncPlayingLock.RUnlock()
+
 	for _, v := range vncKBRecording {
 		if inNamespace(v.VM) {
 			resp.Tabular = append(resp.Tabular, []string{
@@ -236,9 +239,7 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 			})
 		}
 	}
-	vncRecordingLock.RUnlock()
 
-	vncPlayingLock.RLock()
 	for _, v := range vncPlaying {
 		if inNamespace(v.VM) {
 			var r string
@@ -255,6 +256,6 @@ func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 			})
 		}
 	}
-	vncPlayingLock.RUnlock()
+
 	return nil
 }

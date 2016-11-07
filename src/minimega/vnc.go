@@ -79,6 +79,11 @@ func vncInject(vm *KvmVM, e Event) error {
 }
 
 func vncClear() {
+	vncRecordingLock.Lock()
+	defer vncRecordingLock.Unlock()
+	vncPlayingLock.Lock()
+	defer vncPlayingLock.Unlock()
+
 	for k, v := range vncKBRecording {
 		if inNamespace(v.VM) {
 			log.Debug("stopping kb recording for %v", k)
