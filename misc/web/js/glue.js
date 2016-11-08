@@ -84,11 +84,14 @@ function initVMDataTable() {
             { "title": "State", "data": "state" },
             //{ "title": "ID", "data": "id" },
             { "title": "Memory", "data": "memory" },
+            { "title": "Disk(s)", "data": null, render: renderDisksColumn },
             { "title": "Network", "data": "network", render: renderArrayOfObjectsUsingKey("VLAN") },
             { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
             { "title": "IPv6", "data": "network", render: renderArrayOfObjectsUsingKey("IP6") },
             { "title": "Taps", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("Tap") },
-            { "title": "Tags", "data": "tags", "visible": false, render: renderObject },
+            { "title": "Tags", "data": "tags", "visible": false, render: renderFilteredObject(function(key) {
+                return key != 'minirouter_log';
+            }) },
             { "title": "Type", "data": "type" },
             { "title": "VCPUs", "data": "vcpus" },
             { "title": "Active CC", "data": "activecc", "visible": false },
@@ -353,6 +356,22 @@ function loadOrRestoreImage (row, data, displayIndex) {
     });
 }
 
+function renderDisksColumn(data, type, full, meta) {
+    var html = [];
+    var keys = [];
+    if (data.type === "container") {
+        var keys = ['container_fspath', 'container_preinit', 'container_init'];
+    } else if (data.type === "kvm") {
+        var keys = ['kvm_initrdpath', 'kvm_kernelpath', 'kvm_diskpaths'];
+    }
+
+    for (var i = 0; i < keys.length; i++) {
+        html.push("<em>" + keys[i] + ":</em> " + handleEmptyString(data[keys[i]]));
+    }
+
+    return html.join("<br />");
+}
+
 function renderArrayOfObjectsUsingKey(key) {
     return function(data, type, full, meta) {
         return handleEmptyString(data.reduce(
@@ -361,6 +380,17 @@ function renderArrayOfObjectsUsingKey(key) {
             }, []).join(", ")
         );
     };    
+}
+
+function renderFilteredObject(filterFn) {
+    return function(data, type, full, meta) {
+        var html = [];
+        var keys = Object.keys(data).filter(filterFn);
+        for (var i = 0; i < keys.length; i++) {
+            html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
+        }
+        return handleEmptyString(html.join(", "));
+    }
 }
 
 function renderObject(data, type, full, meta) {

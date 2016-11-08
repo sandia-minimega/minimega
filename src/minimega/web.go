@@ -342,10 +342,24 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 
 		if vm, ok := vm.(*KvmVM); ok {
 			vmMap["vnc_port"] = vm.VNCPort
+			vmMap["kvm_initrdpath"] = vm.KVMConfig.InitrdPath
+			vmMap["kvm_kernelpath"] = vm.KVMConfig.KernelPath
+			if vm.KVMConfig.DiskPaths == nil {
+				vmMap["kvm_diskpaths"] = make([]int, 0)
+			} else {
+				vmMap["kvm_diskpaths"] = vm.KVMConfig.DiskPaths
+			}
 		}
 
 		if vm, ok := vm.(*ContainerVM); ok {
 			vmMap["console_port"] = vm.ConsolePort
+			vmMap["container_fspath"] = vm.ContainerConfig.FSPath
+			vmMap["container_preinit"] = vm.ContainerConfig.Preinit
+			if vm.ContainerConfig.Init == nil {
+				vmMap["container_init"] = make([]int, 0)
+			} else {
+				vmMap["container_init"] = vm.ContainerConfig.Init
+			}
 		}
 
 		if config.Networks == nil {
