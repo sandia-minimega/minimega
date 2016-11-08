@@ -2,21 +2,32 @@
 
 export PATH
 
+# mount volatile filesystems
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
 mkdir /dev/pts
-mount -n -t devpts -o gid=5,mode=620 none /dev/pts
-udevd --daemon
-udevadm trigger
-udevadm settle
-chmod a+rx /
-modprobe loop
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
+mount -t cgroup cgroup /sys/fs/cgroup
 
+# / needs permissions!?
+chmod a+rx /
+
+# minimega needs
+modprobe loop
 modprobe virtio_console
 modprobe virtio_pci
 
-ulimit -n 999999
+# swath of network drivers that might be used
+modprobe e1000
+modprobe e1000e
+modprobe virtio_net
+modprobe vmxnet3
+
+# settle :(
+sleep 10
 
 ifconfig lo up
 ifconfig eth0 up
