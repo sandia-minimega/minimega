@@ -20,31 +20,6 @@ var vmDataTable;
 var hostDataTable;
 var ssDataTable;
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Request latest info from server
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-
-// Get latest VM information and pass it to a callback
-function updateVMs (callback) {
-    $.getJSON('/vms.json')
-        .done(callback)
-        .fail(function( jqxhr, textStatus, error) {
-            var err = textStatus + ", " + error;
-            console.warn( "Request Failed: " + err );
-    });
-}
-
-// Get latest Host information and pass it to a callback
-function updateHosts (callback) {
-    $.getJSON('/hosts.json')
-        .done(callback)
-        .fail(function( jqxhr, textStatus, error) {
-            var err = textStatus + ", " + error;
-            console.warn( "Request Failed: " + err );
-    });
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Update tables
@@ -54,9 +29,27 @@ function updateHosts (callback) {
 // Initialize the VM DataTable and set up an automatic reload
 function initVMDataTable() {
     var vmDataTable = $('#vms-dataTable').DataTable({
-        "ajax": {
-            "url": "vms.json",
-            "dataSrc": ""
+        "ajax": function( data, callback, settings) {
+            updateJSON('/vms.json', function(vmsData) {
+                updateJSON('/vlans.json', function(vlansData) {
+                    // create mapping of vlans to aliases for easier lookup
+                    var aliases = {};
+                    vlansData.forEach(function(vlan) {
+                        aliases[vlan[2]] = vlan[1];
+                    });
+                    //console.log(aliases);
+
+                    // insert VLAN aliases into VMs network data
+                    vmsData.forEach(function(vm) {
+                        vm["network"].forEach(function(network) {
+                            network["Alias"] = aliases[network["VLAN"]];
+                        });
+                    });
+
+                    var dataTablesData = {"data": vmsData};
+                    callback(dataTablesData);
+                });
+            });
         },
         // custom DOM with Boostrap integration
         // http://stackoverflow.com/a/32253335
@@ -85,7 +78,13 @@ function initVMDataTable() {
             //{ "title": "ID", "data": "id" },
             { "title": "Memory", "data": "memory" },
             { "title": "Disk(s)", "data": null, render: renderDisksColumn },
-            { "title": "Network", "data": "network", render: renderArrayOfObjectsUsingKey("VLAN") },
+            { "title": "Network", "data": "network", render: function(data, type, full, meta) {
+                // create array with VLAN ID and alias zipped together
+                var vlansWithAliases = data.map(function(e, i) {
+                    return e["VLAN"] + " (" + e["Alias"] + ")";
+                });
+                return renderArray(vlansWithAliases, type, full, meta);
+            } },
             { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
             { "title": "IPv6", "data": "network", render: renderArrayOfObjectsUsingKey("IP6") },
             { "title": "Taps", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("Tap") },
@@ -287,6 +286,17 @@ function updateScreenshotTable(vmsData) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
+// Get latest JSON from URL and pass it to a callback
+function updateJSON (url, callback) {
+    $.getJSON(url)
+        .done(callback)
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
+    });
+}
+
+
 function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
     var spanClass = "";
     if (value > thresholdRed) {
@@ -370,6 +380,14 @@ function renderDisksColumn(data, type, full, meta) {
     }
 
     return html.join("<br />");
+}
+
+function renderArray(data, type, full, meta) {
+    var html = [];
+    for (var i = 0; i < data.length; i++) {
+        html.push(data[i]);
+    }
+    return handleEmptyString(html.join(", "));
 }
 
 function renderArrayOfObjectsUsingKey(key) {

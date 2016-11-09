@@ -33,14 +33,14 @@
     <script type="text/javascript">
       $(document).ready(function() {
         $('nav a[href$="' + "tilevnc" + '"]').addClass("current-view");
+        
+        updateJSON('/vms.json', updateScreenshotTable);
 
-          updateVMs(updateScreenshotTable);
-          if (IMAGE_REFRESH_TIMEOUT > 0) {
-              setInterval(function() {
-                //console.log("refreshing Screenshots");
-                updateVMs(updateScreenshotTable);
-              }, IMAGE_REFRESH_TIMEOUT);
-          }
+        if (IMAGE_REFRESH_TIMEOUT > 0) {
+          setInterval(function() {
+            updateJSON('/vms.json', updateScreenshotTable);
+          }, IMAGE_REFRESH_TIMEOUT);
+        }
       });
     </script>
     {{end}}

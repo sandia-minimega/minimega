@@ -112,6 +112,7 @@ func webStart(port int, root string) {
 	mux.HandleFunc("/tilevnc", webTemplated)
 	mux.HandleFunc("/hosts.json", webHostsJSON)
 	mux.HandleFunc("/vms.json", webVMsJSON)
+	mux.HandleFunc("/vlans.json", webVLANsJSON)
 	mux.HandleFunc("/connect/", webConnect)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
@@ -395,6 +396,40 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 
 	// Now the order of items in the JSON doesn't randomly change between calls (since the values are sorted)
 	js, err := json.Marshal(infoslice)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func webVLANsJSON(w http.ResponseWriter, r *http.Request) {
+	vlans := [][]interface{}{}
+
+	cmd := minicli.MustCompile("vlans")
+	cmd.SetRecord(false)
+
+	for resps := range runCommandGlobally(cmd) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			for _, row := range resp.Tabular {
+				res := []interface{}{}
+				for _, v := range row {
+					res = append(res, v)
+				}
+				vlans = append(vlans, res)
+			}
+		}
+	}
+
+	js, err := json.Marshal(vlans)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
