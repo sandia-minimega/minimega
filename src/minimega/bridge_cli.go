@@ -69,7 +69,7 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 		Call: wrapSimpleCLI(cliHostTap),
 		Suggest: func(val, prefix string) []string {
 			if val == "vlan" {
-				return suggestVLAN(prefix)
+				return cliVLANSuggest(prefix)
 			} else {
 				return nil
 			}

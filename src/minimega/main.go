@@ -57,6 +57,8 @@ var (
 	hostname string
 	reserved = []string{Wildcard}
 
+	attached bool
+
 	started = time.Now()
 )
 
@@ -144,6 +146,7 @@ func main() {
 
 			mm.RunAndPrint(cmd, false)
 		} else {
+			attached = true
 			mm.Attach()
 		}
 

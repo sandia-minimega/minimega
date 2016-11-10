@@ -176,10 +176,16 @@ func cliClearVLANs(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-// suggestVLAN returns a list of VLAN suggestions for tab completion. Performs
-// a bit of extra work to make sure that the suggestions are in the current
-// namespace (completes across namespaces if prefix includes vlans.AliasSep).
-func suggestVLAN(prefix string) []string {
+// cliVLANSuggest returns a list of VLAN suggestions for tab completion.
+// Performs a bit of extra work to make sure that the suggestions are in the
+// current namespace (completes across namespaces if prefix includes
+// vlans.AliasSep).
+func cliVLANSuggest(prefix string) []string {
+	if attached {
+		log.Warnln("cannot complete via -attach")
+		return nil
+	}
+
 	namespace := GetNamespaceName()
 
 	if !strings.Contains(prefix, vlans.AliasSep) && namespace != "" {
