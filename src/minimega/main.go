@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 	"version"
 )
 
@@ -58,8 +57,6 @@ var (
 	reserved = []string{Wildcard}
 
 	attached bool
-
-	started = time.Now()
 )
 
 const (
