@@ -1,10 +1,12 @@
 "use strict";
 
 // Config
-var VM_REFRESH_THESHOLD = 500;      // Above this threshold, disable auto-refresh
-var VM_REFRESH_ENABLE = true;       // Auto-refresh enabled?
+var VM_REFRESH_THESHOLD = 500;      // Above this threshold, disable auto-refresh of VMs data
+var VM_REFRESH_ENABLE = true;       // Auto-refresh of VMs data enabled?
 var VM_REFRESH_TIMEOUT = 5000;      // How often the currently-displayed vms are updated (in millis)
 var HOST_REFRESH_TIMEOUT = 5000;    // How often the currently-displayed hosts are updated (in millis)
+var IMAGE_REFRESH_THRESHOLD = 100;  // Above this threshold, disable auto-refresh of screenshots
+var IMAGE_REFRESH_ENABLE = true;    // Auto-refresh of screenshots enabled?
 var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
@@ -39,7 +41,6 @@ function initVMDataTable() {
                     vlansData.forEach(function(vlan) {
                         aliases[vlan[2]] = vlan[1];
                     });
-                    //console.log(aliases);
 
                     // insert VLAN aliases into VMs network data
                     vmsData.forEach(function(vm) {
@@ -48,12 +49,15 @@ function initVMDataTable() {
                         });
                     });
 
-                    // disable auto-refresh is there is more than 500 VMs
-                    if (Object.keys(vmsData).length > VM_REFRESH_THESHOLD) {
-                        VM_REFRESH_ENABLE = false;
-                    }
+                    // disable auto-refresh there are too many VMs
+                    VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
+                    // disable auto-refresh there are too many VMs
+                    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THESHOLD;
+
+                    // put into a structure that DataTables expects
                     var dataTablesData = {"data": vmsData};
+
                     callback(dataTablesData);
                 });
             });

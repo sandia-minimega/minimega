@@ -36,7 +36,7 @@
         
         updateJSON('/vms.json', updateScreenshotTable);
 
-        if (IMAGE_REFRESH_TIMEOUT > 0) {
+        if (IMAGE_REFRESH_ENABLE && IMAGE_REFRESH_TIMEOUT > 0) {
           setInterval(function() {
             updateJSON('/vms.json', updateScreenshotTable);
           }, IMAGE_REFRESH_TIMEOUT);
