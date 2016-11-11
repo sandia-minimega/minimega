@@ -272,7 +272,7 @@ To move a connection, specify the new VLAN tag and bridge:
 			if val == "vm" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
 			} else if val == "vlan" {
-				return suggestVLAN(prefix)
+				return cliVLANSuggest(prefix)
 			} else {
 				return nil
 			}
@@ -857,6 +857,11 @@ func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
 func cliVMSuggest(prefix string, mask VMState) []string {
+	if attached {
+		log.Warnln("cannot complete via -attach")
+		return nil
+	}
+
 	var isID bool
 	res := []string{}
 
