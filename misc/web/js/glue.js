@@ -1,8 +1,10 @@
 "use strict";
 
 // Config
-var VM_REFRESH_TIMEOUT = 2000;      // How often the currently-displayed vms are updated (in millis)
-var HOST_REFRESH_TIMEOUT = 2000;    // How often the currently-displayed hosts are updated (in millis)
+var VM_REFRESH_THESHOLD = 500;      // Above this threshold, disable auto-refresh
+var VM_REFRESH_ENABLE = true;       // Auto-refresh enabled?
+var VM_REFRESH_TIMEOUT = 5000;      // How often the currently-displayed vms are updated (in millis)
+var HOST_REFRESH_TIMEOUT = 5000;    // How often the currently-displayed hosts are updated (in millis)
 var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
@@ -46,6 +48,11 @@ function initVMDataTable() {
                         });
                     });
 
+                    // disable auto-refresh is there is more than 500 VMs
+                    if (Object.keys(vmsData).length > VM_REFRESH_THESHOLD) {
+                        VM_REFRESH_ENABLE = false;
+                    }
+
                     var dataTablesData = {"data": vmsData};
                     callback(dataTablesData);
                 });
@@ -66,19 +73,21 @@ function initVMDataTable() {
         "paging": true,
         "lengthChange": true,
         "lengthMenu": [
-            [10, 25, 50, 100, 200, -1],
-            [10, 25, 50, 100, 200, "All"]
+            [10, 25, 50, 100, 250, 500, -1],
+            [10, 25, 50, 100, 250, 500, "All"]
         ],
-        "pageLength": -1,
+        "pageLength": 500,
         "columns": [
             { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
             { "title": "Host", "data": "host", "visible": false },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" },
+            { "title": "Type", "data": "type" },
             //{ "title": "ID", "data": "id" },
+            { "title": "VCPUs", "data": "vcpus" },
             { "title": "Memory", "data": "memory" },
-            { "title": "Disk(s)", "data": null, render: renderDisksColumn },
-            { "title": "Network", "data": "network", render: function(data, type, full, meta) {
+            { "title": "Disk", "data": null, "visible": false, render: renderDisksColumn },
+            { "title": "VLAN", "data": "network", render: function(data, type, full, meta) {
                 // create array with VLAN ID and alias zipped together
                 var vlansWithAliases = data.map(function(e, i) {
                     return e["VLAN"] + " (" + e["Alias"] + ")";
@@ -86,13 +95,11 @@ function initVMDataTable() {
                 return renderArray(vlansWithAliases, type, full, meta);
             } },
             { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
-            { "title": "IPv6", "data": "network", render: renderArrayOfObjectsUsingKey("IP6") },
+            { "title": "IPv6", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("IP6") },
             { "title": "Taps", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("Tap") },
             { "title": "Tags", "data": "tags", "visible": false, render: renderFilteredObject(function(key) {
                 return key != 'minirouter_log';
             }) },
-            { "title": "Type", "data": "type" },
-            { "title": "VCPUs", "data": "vcpus" },
             { "title": "Active CC", "data": "activecc", "visible": false },
             {
                 "title": "VNC",
@@ -128,7 +135,7 @@ function initVMDataTable() {
         .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
     */
 
-    if (VM_REFRESH_TIMEOUT > 0) {
+    if (VM_REFRESH_ENABLE && VM_REFRESH_TIMEOUT > 0) {
         setInterval(function() {
             vmDataTable.ajax.reload(null, false);
         }, VM_REFRESH_TIMEOUT);
@@ -171,7 +178,7 @@ function initHostDataTable() {
                 });
                 return loadsOverCPUsHtml.join(" ");
             } },
-            { "title": "Memory", render: function(data, type, full, meta) {
+            { "title": "Memory Used", render: function(data, type, full, meta) {
                 var memUsed = parseInt(full[3]);
                 var memTotal = parseInt(full[4]);
                 var memUnits = full[4].replace(/[0-9]/g, '');
@@ -179,11 +186,11 @@ function initHostDataTable() {
                 var memRatio = memUsed / memTotal;
                 return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
             } },
-            { "title": "Memtotal", visible: false },
+            { "title": "Memory Total", visible: false },
             { "title": "Bandwidth" },
             { "title": "VMs" },
             { "title": "VMs (all)" },
-            { "title": "uptime" , render: function(data, type, full ,meta) {
+            { "title": "Uptime" , render: function(data, type, full, meta) {
                 // calculate days separately
                 var seconds = parseInt(data);
                 var days = Math.floor(seconds / 86400);
@@ -219,10 +226,11 @@ function updateScreenshotTable(vmsData) {
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
         <td>                                                                 \
-            <a class="connect-vm-wrapper" target="_blank">                   \                                                                 \
+            <a class="connect-vm-wrapper" target="_blank">                   \
             <div class="thumbnail">                                          \
-            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px;">            \
+            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px;"> \
             <div class="screenshot-state"></div>                             \
+            <div class="screenshot-label-host grey"></div>                   \
             <div class="screenshot-label grey"></div>                        \
             <div class="screenshot-connect grey">Click to connect</div>      \
             </div>                                                           \
@@ -242,10 +250,13 @@ function updateScreenshotTable(vmsData) {
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
         toAppend.find(".screenshot-label").html(vm.name);
+        toAppend.find(".screenshot-label-host").html("Host: " + vm.host);
         //if (vm.type != "kvm") toAppend.find(".connect-vm-button").css("visibility", "hidden");
 
         screenshotList.push({
             "name": vm.name,
+            "host": vm.host,
+            "state": vm.state,
             "model": toAppend.get(0).outerHTML,
             "vm": vm,
         });
@@ -272,8 +283,10 @@ function updateScreenshotTable(vmsData) {
             "data": screenshotList,
             "columns": [
                 { "title": "Name", "data": "name", "visible": false },
+                { "title": "State", "data": "state", "visible": false },
+                { "title": "Host", "data": "host", "visible": false },
                 { "title": "Model", "data": "model", "searchable": false },
-                { "title": "VM", "data": "vm", "visible": false },
+                { "title": "VM", "data": "vm", "visible": false, "searchable": false },
             ],
             "createdRow": loadOrRestoreImage
         });

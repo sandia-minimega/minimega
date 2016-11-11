@@ -188,6 +188,15 @@ div.box-content {
 
 .screenshot-label {
 	position: absolute;
+	top: -1px;
+	left: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 0 6px 0 0;
+}
+
+.screenshot-label-host {
+	position: absolute;
 	bottom: -1px;
 	left: -1px;
 	color: white;
