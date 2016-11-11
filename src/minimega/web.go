@@ -224,12 +224,9 @@ func webTemplated(w http.ResponseWriter, r *http.Request) {
 
 	info, err := os.Stat(fp)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// 404 if template doesn't exist
-			//log.Error(err.Error())
-			http.NotFound(w, r)
-			return
-		}
+		// 404 if template doesn't exist
+		http.NotFound(w, r)
+		return
 	}
 
 	if info.IsDir() {
