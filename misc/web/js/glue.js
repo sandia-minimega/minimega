@@ -83,10 +83,10 @@ function initVMDataTable() {
         "pageLength": 500,
         "columns": [
             { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
-            { "title": "Host", "data": "host", "visible": false },
+            { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" },
-            { "title": "Type", "data": "type" },
+            { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
             { "title": "VCPUs", "data": "vcpus" },
             { "title": "Memory", "data": "memory" },
