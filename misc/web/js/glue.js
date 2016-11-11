@@ -53,7 +53,7 @@ function initVMDataTable() {
                     VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
                     // disable auto-refresh there are too many VMs
-                    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THESHOLD;
+                    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THRESHOLD;
 
                     // put into a structure that DataTables expects
                     var dataTablesData = {"data": vmsData};
