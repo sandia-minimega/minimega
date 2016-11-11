@@ -34,13 +34,7 @@
       $(document).ready(function() {
         $('nav a[href$="' + "tilevnc" + '"]').addClass("current-view");
         
-        updateJSON('/vms.json', updateScreenshotTable);
-
-        if (IMAGE_REFRESH_ENABLE && IMAGE_REFRESH_TIMEOUT > 0) {
-          setInterval(function() {
-            updateJSON('/vms.json', updateScreenshotTable);
-          }, IMAGE_REFRESH_TIMEOUT);
-        }
+        initScreenshotDataTable();
       });
     </script>
     {{end}}

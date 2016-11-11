@@ -21,10 +21,11 @@
     
     <script type="text/javascript" src="js/glue.js"></script>
     <script type="text/javascript">
-      $('nav a[href$="' + "./" + '"]').addClass("current-view");
-
       $(document).ready(function() {
+        $('nav a[href$="' + "vms" + '"]').addClass("current-view");
+
         initVMDataTable();
+        
         initCowbell();
       });
     </script>

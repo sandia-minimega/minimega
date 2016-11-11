@@ -1,5 +1,7 @@
 "use strict";
 
+var GRAPH_REFRESH_TIMEOUT = 5000;
+
 // Configurable bits for the graph
 var config = {
     types: {                // Types of nodes.
@@ -1011,7 +1013,7 @@ function initializeGraph() {
         d3.select(grapher.instance.canvas).style("opacity", "1");
     }, 1000);
 
-    setInterval(getVMInfo, 1500);
+    setInterval(getVMInfo, GRAPH_REFRESH_TIMEOUT);
 }
 
 

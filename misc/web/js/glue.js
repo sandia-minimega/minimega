@@ -52,9 +52,6 @@ function initVMDataTable() {
                     // disable auto-refresh there are too many VMs
                     VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
-                    // disable auto-refresh there are too many VMs
-                    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THRESHOLD;
-
                     // put into a structure that DataTables expects
                     var dataTablesData = {"data": vmsData};
 
@@ -139,9 +136,11 @@ function initVMDataTable() {
         .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
     */
 
-    if (VM_REFRESH_ENABLE && VM_REFRESH_TIMEOUT > 0) {
+    if (VM_REFRESH_TIMEOUT >= 1000) {
         setInterval(function() {
-            vmDataTable.ajax.reload(null, false);
+            if (VM_REFRESH_ENABLE) {
+                vmDataTable.ajax.reload(null, false);
+            }
         }, VM_REFRESH_TIMEOUT);
     }
 }
@@ -214,8 +213,25 @@ function initHostDataTable() {
 }
 
 
+// Initialize the Screenshot DataTable and set up an automatic reload
+function initScreenshotDataTable() {
+    updateJSON('/vms.json', updateScreenshotTable);
+
+    if (IMAGE_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            if (IMAGE_REFRESH_ENABLE) {
+                updateJSON('/vms.json', updateScreenshotTable);
+            }
+        }, IMAGE_REFRESH_TIMEOUT);
+    }
+}
+
+
 // Update the Screenshot table with new data
 function updateScreenshotTable(vmsData) {
+
+    // disable auto-refresh there are too many VMs
+    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THRESHOLD;
 
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {

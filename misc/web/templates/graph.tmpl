@@ -57,9 +57,10 @@
     
     <script type="text/javascript" src="js/graph.js"></script>
     <script type="text/javascript">
-      $('nav a[href$="' + "graph" + '"]').addClass("current-view");
       $(document).ready(function() {
-          initializeGraph();
+        $('nav a[href$="' + "graph" + '"]').addClass("current-view");
+
+        initializeGraph();
       });
     </script>
     {{end}}
