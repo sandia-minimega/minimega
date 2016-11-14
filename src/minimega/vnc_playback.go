@@ -192,6 +192,11 @@ fileLoop:
 				// Parse the event
 				s := strings.SplitN(pr.scanner.Text(), ":", 2)
 
+				// Skip blank lines
+				if len(s) == 0 {
+					continue
+				}
+
 				// Ignore comments
 				if s[0] == "#" {
 					log.Info("vncplayback: %s", s)
