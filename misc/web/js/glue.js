@@ -1,11 +1,13 @@
 "use strict";
 
+// Config
+var VM_REFRESH_THESHOLD = 500;      // Above this threshold, disable auto-refresh of VMs data
+var VM_REFRESH_ENABLE = true;       // Auto-refresh of VMs data enabled?
+var VM_REFRESH_TIMEOUT = 5000;      // How often the currently-displayed vms are updated (in millis)
+var HOST_REFRESH_TIMEOUT = 5000;    // How often the currently-displayed hosts are updated (in millis)
+var IMAGE_REFRESH_THRESHOLD = 100;  // Above this threshold, disable auto-refresh of screenshots
+var IMAGE_REFRESH_ENABLE = true;    // Auto-refresh of screenshots enabled?
 var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
-var NETWORK_COLUMN_INDEX = 5;       // Index of the column with network info (needs to have values strignified)
-var IP4_COLUMN_INDEX = 6;           // Index of the column with IP4 info (needs to have values strignified)
-var IP6_COLUMN_INDEX = 7;           // Index of the column with IP6 info (needs to have values strignified)
-var TAP_COLUMN_INDEX = 8;           // Index of the column with tap info (needs to have values strignified)
-var TAGS_COLUMN_INDEX = 10;         // Index of the column with tag info (needs to have values strignified)
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -14,113 +16,222 @@ var COLOR_CLASSES = {
     ERROR:    "red"
 }
 
-var hostData = [];      // Data structure containing host info
-var hostString = "";    // TODO: Used for checking if host data has actually been modified
-
+// Data
 var lastImages = {};    // Cache of screenshots
 
-// Change which view (VMs, Hosts, Config) is currently shown
-function setView () {
-    var view = "#vms";
-    if (window.location.hash) view = window.location.hash;
-    $("a.current-view").removeClass("current-view");
-    $('a[href$="' + view + '"]').addClass("current-view");
+// DataTables
+var vmDataTable;
+var hostDataTable;
+var ssDataTable;
 
-    $("div.current-view").removeClass("current-view");
-    $(view).addClass("current-view");
-}
 
-// Callback for updating the host's information
-function updateHosts () {
-    d3.text("./hosts", function (error, info) {
-        if (info != hostData) {
-            if (error) return console.warn(error);
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Update tables
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-            hostString = info;
-            hostData = JSON.parse(info);
 
-            updateHostsTable();
-        }
+// Initialize the VM DataTable and set up an automatic reload
+function initVMDataTable() {
+    var vmDataTable = $('#vms-dataTable').DataTable({
+        "ajax": function( data, callback, settings) {
+            updateJSON('/vms.json', function(vmsData) {
+                updateJSON('/vlans.json', function(vlansData) {
+                    // create mapping of vlans to aliases for easier lookup
+                    var aliases = {};
+                    vlansData.forEach(function(vlan) {
+                        aliases[vlan[2]] = vlan[1];
+                    });
+
+                    // insert VLAN aliases into VMs network data
+                    vmsData.forEach(function(vm) {
+                        vm["network"].forEach(function(network) {
+                            network["Alias"] = aliases[network["VLAN"]];
+                        });
+                    });
+
+                    // disable auto-refresh there are too many VMs
+                    VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
+
+                    // put into a structure that DataTables expects
+                    var dataTablesData = {"data": vmsData};
+
+                    callback(dataTablesData);
+                });
+            });
+        },
+        // custom DOM with Boostrap integration
+        // http://stackoverflow.com/a/32253335
+        "dom": 
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility',
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [10, 25, 50, 100, 250, 500, -1],
+            [10, 25, 50, 100, 250, 500, "All"]
+        ],
+        "pageLength": 500,
+        "columns": [
+            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
+            { "title": "Host", "data": "host" },
+            { "title": "Name", "data": "name" },
+            { "title": "State", "data": "state" },
+            { "title": "Type", "data": "type", "visible": false },
+            //{ "title": "ID", "data": "id" },
+            { "title": "VCPUs", "data": "vcpus" },
+            { "title": "Memory", "data": "memory" },
+            { "title": "Disk", "data": null, "visible": false, render: renderDisksColumn },
+            { "title": "VLAN", "data": "network", render: function(data, type, full, meta) {
+                // create array with VLAN ID and alias zipped together
+                var vlansWithAliases = data.map(function(e, i) {
+                    return e["VLAN"] + " (" + e["Alias"] + ")";
+                });
+                return renderArray(vlansWithAliases, type, full, meta);
+            } },
+            { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
+            { "title": "IPv6", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("IP6") },
+            { "title": "Taps", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("Tap") },
+            { "title": "Tags", "data": "tags", "visible": false, render: renderFilteredObject(function(key) {
+                return key != 'minirouter_log';
+            }) },
+            { "title": "Active CC", "data": "activecc", "visible": false },
+            {
+                "title": "VNC",
+                "data": "name",
+                render:  function ( data, type, full, meta ) {
+                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
+                }
+            },
+        ],
+        "order": [[ 0, 'asc' ], [ 1, 'asc' ]],
+        /*initComplete: function(){
+            var api = this.api();
+            api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
+        }*/
     });
-}
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    
+    // Create second button group for other functionality
+    /*
+    new $.fn.dataTable.Buttons( vmDataTable, {
+        buttons: [
+            {
+                extend: 'copyHtml5',
+                text: 'Copy to clipboard'
+            },
+            {
+                extend: 'csvHtml5',
+                text: 'Download CSV'
+            },
+        ]
+    } );
+    vmDataTable.buttons( 1, null ).container()
+        .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
+    */
 
-// Generate the appropriate URL for requesting a screenshot
-function screenshotURL (vm, size) {
-    return "./screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
-}
-
-// Generate the appropriate URL for a connection
-function connectURL (vm) {
-    return "./connect/" + vm.name
-}
-
-// Get the screenshot for the requested row, or restore it from the cache of screenshots if available
-function loadOrRestoreImage (row, data, displayIndex) {
-    var img = $('img', row);
-    var url = img.attr("data-url");
-
-    if (Object.keys(lastImages).indexOf(url) > -1) {
-        img.attr("src", lastImages[url].data);
-        lastImages[url].used = true;
+    if (VM_REFRESH_TIMEOUT >= 1000) {
+        setInterval(function() {
+            if (VM_REFRESH_ENABLE) {
+                vmDataTable.ajax.reload(null, false);
+            }
+        }, VM_REFRESH_TIMEOUT);
     }
-
-    var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
-
-    d3.text(requestUrl, (function () {
-        return function (error, response) {
-            lastImages[url] = {
-                data: response,
-                used: true
-            };
-
-            img.attr("src", response);
-        }
-    })());
 }
 
-// Stringify columns with object info
-function flattenObjectValues (row, data, displayIndex) {
-    var networkColumn = $("td:nth-child(" + NETWORK_COLUMN_INDEX + ")", row);
-    var tapColumn = $("td:nth-child(" + TAP_COLUMN_INDEX + ")", row);
-    var ip4Column = $("td:nth-child(" + IP4_COLUMN_INDEX + ")", row);
-    var ip6Column = $("td:nth-child(" + IP6_COLUMN_INDEX + ")", row);
-    var tagsColumn = $("td:nth-child(" + TAGS_COLUMN_INDEX + ")", row);
 
-    ip4Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP4]); },
-        []
-    ).join(", ")));
+// Initialize the Host DataTable and set up an automatic reload
+function initHostDataTable() {
+    var hostDataTable = $('#hosts-dataTable').DataTable({
+        "ajax": {
+            "url": "hosts.json",
+            "dataSrc": ""
+        },
+        "dom": 
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Name" },
+            { "title": "CPUs" },
+            { "title": "Load", render: function(data, type, full, meta) {
+                var loads = data.split(" ");
+                var cpus = parseInt(full[1]);
+                var loadsOverCPUsHtml = loads.map(function(load) {
+                    return colorSpanWithThresholds(load, load, 1.5*cpus, 1.0*cpus);
+                });
+                return loadsOverCPUsHtml.join(" ");
+            } },
+            { "title": "Memory Used", render: function(data, type, full, meta) {
+                var memUsed = parseInt(full[3]);
+                var memTotal = parseInt(full[4]);
+                var memUnits = full[4].replace(/[0-9]/g, '');
+                var text = memUsed + "/" + memTotal + memUnits;
+                var memRatio = memUsed / memTotal;
+                return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
+            } },
+            { "title": "Memory Total", visible: false },
+            { "title": "Bandwidth" },
+            { "title": "VMs" },
+            { "title": "VMs (all)" },
+            { "title": "Uptime" , render: function(data, type, full, meta) {
+                // calculate days separately
+                var seconds = parseInt(data);
+                var days = Math.floor(seconds / 86400);
+                seconds -= days * 86400;
+                return days + " days " + new Date(seconds * 1000).toISOString().substr(11, 8);
+            } },
+        ],
+        "order": [[ 0, 'asc' ]]
+    });
+    hostDataTable.draw();
 
-    ip6Column.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.IP6]); },
-        []
-    ).join(", ")));
-
-    tapColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.Tap]); },
-        []
-    ).join(", ")));
-
-    networkColumn.html(handleEmptyString(data.network.reduce(
-        function (previous, current) { return previous.concat([current.VLAN]); },
-        []
-    ).join(", ")));
-
-    var tagsHTML = [];
-    var tagsKeys = Object.keys(data.tags);
-    for (var i = 0; i < tagsKeys.length; i++) {
-        tagsHTML.push("<em>" + tagsKeys[i] + ":</em> " + data.tags[tagsKeys[i]]);
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            hostDataTable.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
     }
-
-    tagsColumn.html(handleEmptyString(tagsHTML.join(", ")));
 }
 
-// Update the VMs dataTables with the new data.
-function updateTables () {
+
+// Initialize the Screenshot DataTable and set up an automatic reload
+function initScreenshotDataTable() {
+    updateJSON('/vms.json', updateScreenshotTable);
+
+    if (IMAGE_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            if (IMAGE_REFRESH_ENABLE) {
+                updateJSON('/vms.json', updateScreenshotTable);
+            }
+        }, IMAGE_REFRESH_TIMEOUT);
+    }
+}
+
+
+// Update the Screenshot table with new data
+function updateScreenshotTable(vmsData) {
+
+    // disable auto-refresh there are too many VMs
+    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THRESHOLD;
 
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
@@ -131,139 +242,233 @@ function updateTables () {
         }
     }
 
-////// Update the main datatable
-
-    if ($.fn.dataTable.isDataTable('#vms-dataTable')) {
-        var table = $('#vms-dataTable').dataTable();
-        table.fnClearTable(false);
-        if (grapher.jsonData.length > 0) table.fnAddData(grapher.jsonData, false);
-        table.fnDraw(false);
-    } else {
-        var table = $('#vms-dataTable').DataTable({
-            "aaData": grapher.jsonData,
-            "aoColumns": [
-                { "sTitle": "Host", "mDataProp": "host" },
-                { "sTitle": "ID", "mDataProp": "id" },
-                { "sTitle": "Memory", "mDataProp": "memory" },
-                { "sTitle": "Name", "mDataProp": "name" },
-                { "sTitle": "Network", "mDataProp": "network" },
-		{ "sTitle": "IPv4", "mDataProp": "network" },
-		{ "sTitle": "IPv6", "mDataProp": "network" },
-		{ "sTitle": "Taps", "mDataProp": "network" },
-                { "sTitle": "State", "mDataProp": "state" },
-                { "sTitle": "Tags", "mDataProp": "tags" },
-                { "sTitle": "Type", "mDataProp": "type" },
-                { "sTitle": "VCPUs", "mDataProp": "vcpus" }
-            ],
-            "fnRowCallback": flattenObjectValues
-        });
-        table.order([
-            [ 0, 'asc' ],
-            [ 1, 'asc' ]
-        ]);
-        table.draw();
-    }
-
-////// Update the VMs list
-
+    // Create the HTML element for each screenshot block
     // img has default value of null (http://stackoverflow.com/questions/5775469/)
     var model = $('                                                          \
-        <td><div class="thumbnail">                                          \
-            <img src="//:0" style="width: 300px; height: 225px;">            \
-            <div class="caption">                                            \
-                <h3></h3>                                                    \
-                <p>                                                          \
-                    <a class="btn btn-primary connect-vm-button" target="_blank">Connect</a> \
-                    ' + /*<a href="#TODO" class="btn manage-vm-button">Manage</a>*/  '\
-                </p>                                                         \
-            </div>                                                           \
+        <td>                                                                 \
+            <a class="connect-vm-wrapper" target="_blank">                   \
+            <div class="thumbnail">                                          \
+            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px;"> \
             <div class="screenshot-state"></div>                             \
-        </div></td>                                                          \
+            <div class="screenshot-label-host grey"></div>                   \
+            <div class="screenshot-label grey"></div>                        \
+            <div class="screenshot-connect grey">Click to connect</div>      \
+            </div>                                                           \
+            </a>                                                             \
+        </td>                                                                \
     ');
 
+    // Fill out the above model for each individual VM info and push into a list
     var screenshotList = [];
-    for (var i = 0; i < grapher.jsonData.length; i++) {
+    for (var i = 0; i < vmsData.length; i++) {
         var toAppend = model.clone();
-        var vm = grapher.jsonData[i];
+        var vm = vmsData[i];
 
         toAppend.find("h3").text(vm.name);
-        toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
+        //toAppend.find("a.connect-vm-button").attr("href", connectURL(vm));
+        toAppend.find("a.connect-vm-wrapper").attr("href", connectURL(vm));
         toAppend.find("img").attr("data-url", screenshotURL(vm, 300));
         toAppend.find(".screenshot-state").addClass(COLOR_CLASSES[vm.state]).html(vm.state);
-
+        toAppend.find(".screenshot-label").html(vm.name);
+        toAppend.find(".screenshot-label-host").html("Host: " + vm.host);
         //if (vm.type != "kvm") toAppend.find(".connect-vm-button").css("visibility", "hidden");
 
         screenshotList.push({
             "name": vm.name,
-            "model": toAppend.get(0).outerHTML
+            "host": vm.host,
+            "state": vm.state,
+            "model": toAppend.get(0).outerHTML,
+            "vm": vm,
         });
     }
 
+    // Push the list to DataTable
     if ($.fn.dataTable.isDataTable("#screenshots-list")) {
         var table = $("#screenshots-list").dataTable();
         table.fnClearTable(false);
-        if (screenshotList.length > 0) table.fnAddData(screenshotList, false);
+        if (screenshotList.length > 0) {
+            table.fnAddData(screenshotList, false);
+        }
         table.fnDraw(false);
     } else {
-        var table = $("#screenshots-list").dataTable({
-            "aaData": screenshotList,
-            "aoColumns": [
-                { "sTitle": "Name", "mDataProp": "name", "visible": false },
-                { "sTitle": "Model", "mDataProp": "model", "searchable": false },
+        var table = $("#screenshots-list").DataTable({
+            "autoWidth": false,
+            "paging": true,
+            "lengthChange": true,
+            "lengthMenu": [
+                [12, 24, 48, 96, -1],
+                [12, 24, 48, 96, "All"]
             ],
-            "lengthMenu": [[6, 12, 30, -1], [6, 12, 30, "All"]],
-            "fnRowCallback": loadOrRestoreImage
+            "pageLength": 12,
+            "data": screenshotList,
+            "columns": [
+                { "title": "Name", "data": "name", "visible": false },
+                { "title": "State", "data": "state", "visible": false },
+                { "title": "Host", "data": "host", "visible": false },
+                { "title": "Model", "data": "model", "searchable": false },
+                { "title": "VM", "data": "vm", "visible": false, "searchable": false },
+            ],
+            "createdRow": loadOrRestoreImage
         });
-        setInterval((function (closureTable) {
-            return function () {
-                closureTable.fnDraw(false);
-            }
-        })(table), IMAGE_REFRESH_TIMEOUT)
     }
 }
 
-// Update the hosts dataTable with new data
-function updateHostsTable () {
-    if ($.fn.dataTable.isDataTable('#hosts-dataTable')) {
-        var table = $('#hosts-dataTable').dataTable();
-        table.fnClearTable(false);
-        if (hostData.length > 0) table.fnAddData(hostData, false);
-        table.fnDraw(false);
-    } else {
-        var table = $('#hosts-dataTable').DataTable({
-            "aaData": hostData,
-            "aoColumns": [
-                { "sTitle": "Name" },
-                { "sTitle": "CPUs" },
-                { "sTitle": "Load" },
-                { "sTitle": "Memused" },
-                { "sTitle": "Memtotal" },
-                { "sTitle": "Bandwidth" }
-            ]
-        });
-        table.draw();
-    }
-}
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Utility functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Set the current view according to the hash on page load
-// Begin updating the hosts dataTable
-$(document).ready(function () {
-    $("nav a").on("click", function (e) {
-        $("a.current-view").removeClass("current-view");
-        $(this).addClass("current-view");
-        setView();
+
+// Get latest JSON from URL and pass it to a callback
+function updateJSON (url, callback) {
+    $.getJSON(url)
+        .done(callback)
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
     });
+}
 
-    setView();
-    setInterval(updateHosts, 750);
-});
 
-// Set the current view according to the hash on hash change
-$(window).on('hashchange', function () {
-    setView();
-});
+function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
+    var spanClass = "";
+    if (value > thresholdRed) {
+        spanClass = "red";
+    } else if (value > thresholdYellow) {
+        spanClass = "yellow";
+    }
 
+    return "<span class='" + spanClass + "'>" + text + "</span>";
+}
+
+
+// Generate the appropriate URL for requesting a screenshot
+function screenshotURL (vm, size) {
+    return "screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
+}
+
+
+// Generate the appropriate URL for a connection
+function connectURL (vm) {
+    return "connect/" + vm.name
+}
+
+
+// Add more cowbell
+function initCowbell () {
+    var audioElement = document.createElement('audio');
+    audioElement.setAttribute('src', 'images/cow_and_bell_1243222141.mp3');
+    $('#nav-container').dblclick(function() {
+        audioElement.currentTime = 0;
+        audioElement.play();
+    });
+    console.log("Added more cowbell.");
+}
+
+
+// Get the screenshot for the requested row,
+// or restore it from the cache of screenshots if available
+function loadOrRestoreImage (row, data, displayIndex) {
+    // Skip if it is a container-type VM
+    if (data.vm.type === "container") {
+        return;
+    }
+
+    var img = $('img', row);
+    var url = img.attr("data-url");
+
+    if (Object.keys(lastImages).indexOf(url) > -1) {
+        img.attr("src", lastImages[url].data);
+        lastImages[url].used = true;
+    }
+
+    var requestUrl = url + "&base64=true" + "&" + new Date().getTime();
+
+    $.get(requestUrl)
+        .done(function(response) {
+            lastImages[url] = {
+                data: response,
+                used: true
+            };
+
+            img.attr("src", response);
+        })
+        .fail(function( jqxhr, textStatus, error) {
+            var err = textStatus + ", " + error;
+            console.warn( "Request Failed: " + err );
+    });
+}
+
+function renderDisksColumn(data, type, full, meta) {
+    var html = [];
+    var keys = [];
+    if (data.type === "container") {
+        var keys = ['container_fspath', 'container_preinit', 'container_init'];
+    } else if (data.type === "kvm") {
+        var keys = ['kvm_initrdpath', 'kvm_kernelpath', 'kvm_diskpaths'];
+    }
+
+    for (var i = 0; i < keys.length; i++) {
+        html.push("<em>" + keys[i] + ":</em> " + handleEmptyString(data[keys[i]]));
+    }
+
+    return html.join("<br />");
+}
+
+function renderArray(data, type, full, meta) {
+    var html = [];
+    for (var i = 0; i < data.length; i++) {
+        html.push(data[i]);
+    }
+    return handleEmptyString(html.join(", "));
+}
+
+function renderArrayOfObjectsUsingKey(key) {
+    return function(data, type, full, meta) {
+        return handleEmptyString(data.reduce(
+            function (previous, current) {
+                return previous.concat([handleEmptyString(current[key])]);
+            }, []).join(", ")
+        );
+    };    
+}
+
+function renderFilteredObject(filterFn) {
+    return function(data, type, full, meta) {
+        var html = [];
+        var keys = Object.keys(data).filter(filterFn);
+        for (var i = 0; i < keys.length; i++) {
+            html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
+        }
+        return handleEmptyString(html.join(", "));
+    }
+}
+
+function renderObject(data, type, full, meta) {
+    var html = [];
+    var keys = Object.keys(data);
+    for (var i = 0; i < keys.length; i++) {
+        html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
+    }
+    return handleEmptyString(html.join(", "));
+}
+
+// Put an italic "null" in the table where there are fields that aren't set
+function handleEmptyString (value, type) {
+    if (
+        (value === "") ||
+        (value === null) ||
+        (value === undefined) ||
+        ((typeof(value) === "object") && (Object.keys(value).length === 0))
+    ) {
+        // don't print null if data is being used for a filter or sort operation
+        // TODO not working as expected
+        if (type === "filter" || type === "sort" || type === "type") {
+            //console.log("bypassing handleEmptyString because: " + type);
+            return "";
+        } else {
+            return '<span class="empty-string">null</span>';
+        }
+    }
+    return value;
+}
