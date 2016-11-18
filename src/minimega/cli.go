@@ -54,6 +54,8 @@ var (
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
+	minicli.Preprocessor = cliPreprocessor
+
 	registerHandlers("bridge", bridgeCLIHandlers)
 	registerHandlers("capture", captureCLIHandlers)
 	registerHandlers("cc", ccCLIHandlers)
@@ -230,23 +232,7 @@ func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
 
-	// Preprocess all the commands so that if there's an error, we haven't
-	// already started to run some of the commands.
-	for i := range cmd {
-		if err := cliPreprocessor(cmd[i]); err != nil {
-			// Send the error from a separate goroutine because nothing will
-			// receive from this channel until we return. Otherwise, we will
-			// cause a deadlock.
-			go func() {
-				out <- errResp(err)
-				close(out)
-			}()
-			return out
-		}
-	}
-
-	// Completed preprocessing run commands serially and forward all the
-	// responses to out
+	// Run commands serially and forward all the responses to out
 	go func() {
 		defer close(out)
 
