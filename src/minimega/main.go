@@ -198,7 +198,8 @@ func main() {
 
 	err = checkExternal()
 	if err != nil {
-		log.Warnln(err.Error())
+		// Info, because in many cases missing binaries are just fine.
+		log.Infoln(err.Error())
 	}
 
 	// attempt to set up the base path
