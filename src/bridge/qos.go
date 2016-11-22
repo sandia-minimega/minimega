@@ -6,6 +6,11 @@ import (
 	log "minilog"
 )
 
+// Used for queue length in qdisc netem
+const (
+	NETEM_LIMIT string = "1" // packets
+)
+
 // Traffic control actions
 const (
 	tcAdd    string = "add"
@@ -48,7 +53,7 @@ func newQos() *qos {
 func (t *Tap) initializeQos() error {
 	t.Qos = newQos()
 	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
-	ns := []string{"root", "handle", "1:", "netem", "limit", "10"}
+	ns := []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT}
 	return t.qosCmd(append(cmd, ns...))
 }
 
@@ -75,15 +80,15 @@ func (t *Tap) setQos(op QosOption) error {
 	switch op.Type {
 	case Loss:
 		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", "10", "loss", op.Value}
+		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "loss", op.Value}
 		t.Qos.netemParams.loss = op.Value
 	case Delay:
 		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", "10", "delay", op.Value}
+		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "delay", op.Value}
 		t.Qos.netemParams.delay = op.Value
 	case Rate:
 		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", "10", "rate", op.Value}
+		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "rate", op.Value}
 		t.Qos.netemParams.rate = op.Value
 	}
 
