@@ -4,11 +4,14 @@ import (
 	"errors"
 	"fmt"
 	log "minilog"
+	"strconv"
 )
 
 // Used for queue length in qdisc netem
 const (
-	NETEM_LIMIT string = "1" // packets
+	MIN_NETEM_LIMIT     = 1
+	MAX_NETEM_LIMIT     = 1000
+	DEFAULT_NETEM_LIMIT = 1000
 )
 
 // Traffic control actions
@@ -36,6 +39,7 @@ type netemParams struct {
 	loss  string
 	delay string
 	rate  string
+	limit string
 }
 
 // Tap field enumerating qos parameters
@@ -52,8 +56,9 @@ func newQos() *qos {
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
 	t.Qos = newQos()
+	t.Qos.netemParams.limit = fmt.Sprintf("%d", DEFAULT_NETEM_LIMIT)
 	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
-	ns := []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT}
+	ns := []string{"root", "handle", "1:", "netem", "limit", t.Qos.netemParams.limit}
 	return t.qosCmd(append(cmd, ns...))
 }
 
@@ -69,6 +74,7 @@ func (t *Tap) destroyQos() error {
 func (t *Tap) setQos(op QosOption) error {
 	var action string
 	var ns []string
+	var ps []string
 
 	if t.Qos == nil {
 		err := t.initializeQos()
@@ -79,20 +85,36 @@ func (t *Tap) setQos(op QosOption) error {
 
 	switch op.Type {
 	case Loss:
-		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "loss", op.Value}
 		t.Qos.netemParams.loss = op.Value
 	case Delay:
-		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "delay", op.Value}
 		t.Qos.netemParams.delay = op.Value
 	case Rate:
-		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "limit", NETEM_LIMIT, "rate", op.Value}
 		t.Qos.netemParams.rate = op.Value
+		t.Qos.netemParams.limit = getNetemLimit(op.Value)
 	}
 
+	action = tcUpdate
 	cmd := []string{"tc", "qdisc", action, "dev", t.Name}
+	ns = []string{"root", "handle", "1:", "netem"}
+
+	// stack up parameters
+	if t.Qos.netemParams.limit != "" {
+		ps = []string{"limit", t.Qos.netemParams.limit}
+		ns = append(ns, ps...)
+	}
+	if t.Qos.netemParams.rate != "" {
+		ps = []string{"rate", t.Qos.netemParams.rate}
+		ns = append(ns, ps...)
+	}
+	if t.Qos.netemParams.loss != "" {
+		ps = []string{"loss", t.Qos.netemParams.loss}
+		ns = append(ns, ps...)
+	}
+	if t.Qos.netemParams.delay != "" {
+		ps = []string{"delay", t.Qos.netemParams.delay}
+		ns = append(ns, ps...)
+	}
+
 	return t.qosCmd(append(cmd, ns...))
 }
 
@@ -162,4 +184,31 @@ func (b *Bridge) getQos(t *Tap) []QosOption {
 		ops = append(ops, QosOption{Delay, t.Qos.netemParams.delay})
 	}
 	return ops
+}
+
+// Empirically tune netem's limit (queue length) to minimize latency AND avoid unnecessary packet drops
+func getNetemLimit(rate string) string {
+	r := rate[:len(rate)-4]
+	unit := rate[len(rate)-4:]
+	var bps uint64
+
+	switch unit {
+	case "kbit":
+		bps = 1 << 10
+	case "mbit":
+		bps = 1 << 20
+	case "gbit":
+		bps = 1 << 30
+	}
+	limit, _ := strconv.ParseUint(r, 10, 64)
+
+	// Limit is in number of packets
+	limit = (limit * bps) / 10000000
+	if limit < MIN_NETEM_LIMIT {
+		limit = MIN_NETEM_LIMIT
+	}
+	if limit > MAX_NETEM_LIMIT {
+		limit = MAX_NETEM_LIMIT
+	}
+	return fmt.Sprintf("%d", limit)
 }
