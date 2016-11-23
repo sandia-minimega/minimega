@@ -5,11 +5,12 @@ import (
 	"fmt"
 	log "minilog"
 	"strconv"
+	"time"
 )
 
 // Used for queue length in qdisc netem
 const (
-	MIN_NETEM_LIMIT     = 1
+	MIN_NETEM_LIMIT     = 10
 	MAX_NETEM_LIMIT     = 1000
 	DEFAULT_NETEM_LIMIT = 1000
 )
@@ -90,7 +91,13 @@ func (t *Tap) setQos(op QosOption) error {
 		t.Qos.netemParams.delay = op.Value
 	case Rate:
 		t.Qos.netemParams.rate = op.Value
-		t.Qos.netemParams.limit = getNetemLimit(op.Value)
+	}
+
+	// only modify the limit if rate limiting is in effect
+	if t.Qos.netemParams.rate != "" {
+		t.Qos.netemParams.limit = getNetemLimit(t.Qos.netemParams.rate, t.Qos.netemParams.delay)
+	} else {
+		t.Qos.netemParams.limit = fmt.Sprintf("%d", DEFAULT_NETEM_LIMIT)
 	}
 
 	action = tcUpdate
@@ -186,8 +193,11 @@ func (b *Bridge) getQos(t *Tap) []QosOption {
 	return ops
 }
 
-// Empirically tune netem's limit (queue length) to minimize latency AND avoid unnecessary packet drops
-func getNetemLimit(rate string) string {
+// Tune netem's limit (queue length) to minimize latency,
+// avoid unnecessary packet drops, and achieve reasonable TCP throughput
+// We treat netem's limit parameter as a buffer size, even though the
+// netem man page describes it differently (and incorrectly)
+func getNetemLimit(rate string, delay string) string {
 	r := rate[:len(rate)-4]
 	unit := rate[len(rate)-4:]
 	var bps uint64
@@ -200,10 +210,26 @@ func getNetemLimit(rate string) string {
 	case "gbit":
 		bps = 1 << 30
 	}
-	limit, _ := strconv.ParseUint(r, 10, 64)
+	rateUint, _ := strconv.ParseUint(r, 10, 64)
 
-	// Limit is in number of packets
-	limit = (limit * bps) / 10000000
+	d, _ := time.ParseDuration(delay)
+	delayNsUint := uint64(d.Nanoseconds())
+	// floor to 1 ms for purposes of sizing the limit
+	if delayNsUint < 1e6 {
+		delayNsUint = 1e6
+	}
+
+	// Bandwidth-delay product
+	bdp := rateUint * bps * delayNsUint / 1e9
+
+	// Limit is in packets, so divide BDP (in bits)
+	// by typical packet size, roughly 10,000 bits
+	// Empirically, then multiply by 1000, to avoid some observed premature drops
+	// Buffers really should be tuned according to application, but
+	// we can start off with something roughly reasonable...
+	limit := bdp / 1e3
+	log.Debug("rate %s, delay %s => bandwidth-delay product %d bits => auto-calculated limit %d packets", rate, delay, bdp, limit)
+
 	if limit < MIN_NETEM_LIMIT {
 		limit = MIN_NETEM_LIMIT
 	}
