@@ -5,20 +5,19 @@ import (
 	"fmt"
 	log "minilog"
 	"strconv"
+	"time"
 )
 
-// Used to calulate burst rate for the token bucket filter qdisc
+// Used for queue length in qdisc netem
+// Empirically determined; lower values than minNetemLimit resulted in
+// unnecessary packet drops due to queue overfilling before it could be drained,
+// even without congestion (possibly due to limited tick granularity?)
+// maxNetemLimit is just set at the default Netem limit for now, which worked
+// without issue at line rate (20-40 Gbps) in testing
 const (
-	KERNEL_TIMER_FREQ uint64 = 250
-	MIN_BURST_SIZE    uint64 = 2048
-	DEFAULT_LATENCY   string = "100ms"
-)
-
-// Traffic control actions
-const (
-	tcAdd    string = "add"
-	tcDel    string = "del"
-	tcUpdate string = "change"
+	minNetemLimit     = 10
+	maxNetemLimit     = 1000
+	defaultNetemLimit = 1000
 )
 
 // Qos option types
@@ -35,33 +34,23 @@ type QosOption struct {
 	Value string
 }
 
-type tbfParams struct {
-	rate  string
-	burst string
-}
-
-type netemParams struct {
+// Netem parameters
+type qos struct {
 	loss  string
 	delay string
-}
-
-// Tap field enumerating qos parameters
-type qos struct {
-	*tbfParams   // embed
-	*netemParams // embed
-}
-
-func newQos() *qos {
-	return &qos{netemParams: &netemParams{},
-		tbfParams: &tbfParams{}}
+	rate  string
+	limit string
 }
 
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
-	t.Qos = newQos()
-	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
-	ns := []string{"root", "handle", "1:", "netem", "loss", "0"}
-	return t.qosCmd(append(cmd, ns...))
+	t.Qos = &qos{}
+	t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
+	cmd := []string{
+		"tc", "qdisc", "add", "dev", t.Name,
+		"root", "handle", "1:", "netem", "limit", t.Qos.limit,
+	}
+	return t.qosCmd(cmd)
 }
 
 func (t *Tap) destroyQos() error {
@@ -69,14 +58,11 @@ func (t *Tap) destroyQos() error {
 		return nil
 	}
 	t.Qos = nil
-	cmd := []string{"tc", "qdisc", tcDel, "dev", t.Name, "root"}
+	cmd := []string{"tc", "qdisc", "del", "dev", t.Name, "root"}
 	return t.qosCmd(cmd)
 }
 
 func (t *Tap) setQos(op QosOption) error {
-	var action string
-	var ns []string
-
 	if t.Qos == nil {
 		err := t.initializeQos()
 		if err != nil {
@@ -86,33 +72,45 @@ func (t *Tap) setQos(op QosOption) error {
 
 	switch op.Type {
 	case Loss:
-		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "loss", op.Value}
-		t.Qos.netemParams.loss = op.Value
+		t.Qos.loss = op.Value
 	case Delay:
-		action = tcUpdate
-		ns = []string{"root", "handle", "1:", "netem", "delay", op.Value}
-		t.Qos.netemParams.delay = op.Value
+		t.Qos.delay = op.Value
 	case Rate:
-		if t.Qos.tbfParams.rate == "" {
-			action = tcAdd
-		} else {
-			action = tcUpdate
-		}
-		burst := getQosBurst(op.Value)
-		ns = []string{"parent", "1:", "handle", "2:", "tbf", "rate", op.Value,
-			"latency", DEFAULT_LATENCY, "burst", burst}
-		t.Qos.tbfParams.rate = op.Value
-		t.Qos.tbfParams.burst = burst
+		t.Qos.rate = op.Value
 	}
 
-	cmd := []string{"tc", "qdisc", action, "dev", t.Name}
-	return t.qosCmd(append(cmd, ns...))
+	// only modify the limit if rate limiting is in effect
+	if t.Qos.rate != "" {
+		t.Qos.limit = getNetemLimit(t.Qos.rate, t.Qos.delay)
+	} else {
+		t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
+	}
+
+	cmd := []string{
+		"tc", "qdisc", "change", "dev", t.Name,
+		"root", "handle", "1:", "netem",
+	}
+
+	// stack up parameters
+	if t.Qos.limit != "" {
+		cmd = append(cmd, "limit", t.Qos.limit)
+	}
+	if t.Qos.rate != "" {
+		cmd = append(cmd, "rate", t.Qos.rate)
+	}
+	if t.Qos.loss != "" {
+		cmd = append(cmd, "loss", t.Qos.loss)
+	}
+	if t.Qos.delay != "" {
+		cmd = append(cmd, "delay", t.Qos.delay)
+	}
+
+	return t.qosCmd(cmd)
 }
 
 // Execute a qos command string
 func (t *Tap) qosCmd(cmd []string) error {
-	log.Debug("recieved qos command %v", cmd)
+	log.Debug("received qos command %v", cmd)
 	out, err := processWrapper(cmd...)
 	if err != nil {
 		// Clean up
@@ -166,19 +164,23 @@ func (b *Bridge) GetQos(tap string) []QosOption {
 func (b *Bridge) getQos(t *Tap) []QosOption {
 	var ops []QosOption
 
-	if t.Qos.tbfParams.rate != "" {
-		ops = append(ops, QosOption{Rate, t.Qos.tbfParams.rate})
+	if t.Qos.rate != "" {
+		ops = append(ops, QosOption{Rate, t.Qos.rate})
 	}
-	if t.Qos.netemParams.loss != "" {
-		ops = append(ops, QosOption{Loss, t.Qos.netemParams.loss})
+	if t.Qos.loss != "" {
+		ops = append(ops, QosOption{Loss, t.Qos.loss})
 	}
-	if t.Qos.netemParams.delay != "" {
-		ops = append(ops, QosOption{Delay, t.Qos.netemParams.delay})
+	if t.Qos.delay != "" {
+		ops = append(ops, QosOption{Delay, t.Qos.delay})
 	}
 	return ops
 }
 
-func getQosBurst(rate string) string {
+// Tune netem's limit (queue length) to minimize latency,
+// avoid unnecessary packet drops, and achieve reasonable TCP throughput
+// We treat netem's limit parameter as a buffer size, even though the
+// netem man page describes it differently (and incorrectly)
+func getNetemLimit(rate string, delay string) string {
 	r := rate[:len(rate)-4]
 	unit := rate[len(rate)-4:]
 	var bps uint64
@@ -191,12 +193,31 @@ func getQosBurst(rate string) string {
 	case "gbit":
 		bps = 1 << 30
 	}
-	burst, _ := strconv.ParseUint(r, 10, 64)
+	rateUint, _ := strconv.ParseUint(r, 10, 64)
 
-	// Burst size is in bytes
-	burst = ((burst * bps) / KERNEL_TIMER_FREQ) / 8
-	if burst < MIN_BURST_SIZE {
-		burst = MIN_BURST_SIZE
+	d, _ := time.ParseDuration(delay)
+	delayNsUint := uint64(d.Nanoseconds())
+	// floor to 1 ms for purposes of sizing the limit
+	if delayNsUint < 1e6 {
+		delayNsUint = 1e6
 	}
-	return fmt.Sprintf("%db", burst)
+
+	// Bandwidth-delay product
+	bdp := rateUint * bps * delayNsUint / 1e9
+
+	// Limit is in packets, so divide BDP (in bits)
+	// by typical packet size, roughly 10,000 bits
+	// Empirically, then multiply by 1000, to avoid some observed premature drops
+	// Buffers really should be tuned according to application, but
+	// we can start off with something roughly reasonable...
+	limit := bdp / 1e3
+	log.Debug("rate %s, delay %s => bandwidth-delay product %d bits => auto-calculated limit %d packets", rate, delay, bdp, limit)
+
+	if limit < minNetemLimit {
+		limit = minNetemLimit
+	}
+	if limit > maxNetemLimit {
+		limit = maxNetemLimit
+	}
+	return strconv.FormatUint(limit, 10)
 }

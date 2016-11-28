@@ -19,10 +19,11 @@ var qosCLIHandlers = []minicli.Handler{
 		HelpShort: "add qos constraints to an interface",
 		HelpLong: `
 Add quality-of-service (qos) constraints on mega interfaces to
-simulate network impairments. Qos constraints cannot be stacked, and must
-be specified explicitly. Any existing constraints will be overwritten by
-additional calls to <add>. Virtual machines can be specified with the same
-target syntax as the "vm start" api.
+emulate real networks. Currently only applies qos constraints on the
+egress side / transmit direction. Qos constraints can be stacked with multiple
+calls to <add>, and must be specified explicitly. Any existing constraints will
+be overwritten by additional calls to <add>. Virtual machines can be specified
+with the same target syntax as the "vm start" api.
 
 Note that qos is namespace aware, and any qos commands will be matched to
 target vms within the currently active namespace.
