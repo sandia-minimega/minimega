@@ -9,17 +9,15 @@ import (
 )
 
 // Used for queue length in qdisc netem
+// Empirically determined; lower values than minNetemLimit resulted in
+// unnecessary packet drops due to queue overfilling before it could be drained,
+// even without congestion (possibly due to limited tick granularity?)
+// maxNetemLimit is just set at the default Netem limit for now, which worked
+// without issue at line rate (20-40 Gbps) in testing
 const (
-	MIN_NETEM_LIMIT     = 10
-	MAX_NETEM_LIMIT     = 1000
-	DEFAULT_NETEM_LIMIT = 1000
-)
-
-// Traffic control actions
-const (
-	tcAdd    string = "add"
-	tcDel    string = "del"
-	tcUpdate string = "change"
+	minNetemLimit     = 10
+	maxNetemLimit     = 1000
+	defaultNetemLimit = 1000
 )
 
 // Qos option types
@@ -44,17 +42,15 @@ type qos struct {
 	limit string
 }
 
-func newQos() *qos {
-	return &qos{}
-}
-
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
-	t.Qos = newQos()
-	t.Qos.limit = strconv.FormatUint(DEFAULT_NETEM_LIMIT, 10)
-	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
-	ns := []string{"root", "handle", "1:", "netem", "limit", t.Qos.limit}
-	return t.qosCmd(append(cmd, ns...))
+	t.Qos = &qos{}
+	t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
+	cmd := []string{
+		"tc", "qdisc", "add", "dev", t.Name,
+		"root", "handle", "1:", "netem", "limit", t.Qos.limit,
+	}
+	return t.qosCmd(cmd)
 }
 
 func (t *Tap) destroyQos() error {
@@ -62,14 +58,11 @@ func (t *Tap) destroyQos() error {
 		return nil
 	}
 	t.Qos = nil
-	cmd := []string{"tc", "qdisc", tcDel, "dev", t.Name, "root"}
+	cmd := []string{"tc", "qdisc", "del", "dev", t.Name, "root"}
 	return t.qosCmd(cmd)
 }
 
 func (t *Tap) setQos(op QosOption) error {
-	var action string
-	var ns []string
-
 	if t.Qos == nil {
 		err := t.initializeQos()
 		if err != nil {
@@ -90,28 +83,29 @@ func (t *Tap) setQos(op QosOption) error {
 	if t.Qos.rate != "" {
 		t.Qos.limit = getNetemLimit(t.Qos.rate, t.Qos.delay)
 	} else {
-		t.Qos.limit = strconv.FormatUint(DEFAULT_NETEM_LIMIT, 10)
+		t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
 	}
 
-	action = tcUpdate
-	cmd := []string{"tc", "qdisc", action, "dev", t.Name}
-	ns = []string{"root", "handle", "1:", "netem"}
+	cmd := []string{
+		"tc", "qdisc", "change", "dev", t.Name,
+		"root", "handle", "1:", "netem",
+	}
 
 	// stack up parameters
 	if t.Qos.limit != "" {
-		ns = append(ns, "limit", t.Qos.limit)
+		cmd = append(cmd, "limit", t.Qos.limit)
 	}
 	if t.Qos.rate != "" {
-		ns = append(ns, "rate", t.Qos.rate)
+		cmd = append(cmd, "rate", t.Qos.rate)
 	}
 	if t.Qos.loss != "" {
-		ns = append(ns, "loss", t.Qos.loss)
+		cmd = append(cmd, "loss", t.Qos.loss)
 	}
 	if t.Qos.delay != "" {
-		ns = append(ns, "delay", t.Qos.delay)
+		cmd = append(cmd, "delay", t.Qos.delay)
 	}
 
-	return t.qosCmd(append(cmd, ns...))
+	return t.qosCmd(cmd)
 }
 
 // Execute a qos command string
@@ -219,11 +213,11 @@ func getNetemLimit(rate string, delay string) string {
 	limit := bdp / 1e3
 	log.Debug("rate %s, delay %s => bandwidth-delay product %d bits => auto-calculated limit %d packets", rate, delay, bdp, limit)
 
-	if limit < MIN_NETEM_LIMIT {
-		limit = MIN_NETEM_LIMIT
+	if limit < minNetemLimit {
+		limit = minNetemLimit
 	}
-	if limit > MAX_NETEM_LIMIT {
-		limit = MAX_NETEM_LIMIT
+	if limit > maxNetemLimit {
+		limit = maxNetemLimit
 	}
 	return strconv.FormatUint(limit, 10)
 }
