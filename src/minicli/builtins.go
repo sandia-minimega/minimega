@@ -251,17 +251,6 @@ func init() {
 	}
 }
 
-func runSubCommand(c *Command) <-chan Responses {
-	pipe := make(chan Responses)
-
-	go func() {
-		c.Subcommand.Call(c.Subcommand, pipe)
-		close(pipe)
-	}()
-
-	return pipe
-}
-
 // hasPrefixSuffix wraps strings.HasPrefix and strings.HasSuffix.
 func hasPrefixSuffix(s, prefix, suffix string) bool {
 	return strings.HasPrefix(s, prefix) && strings.HasSuffix(s, suffix)
@@ -339,7 +328,7 @@ func cliFilter(c *Command, out chan<- Responses) {
 	}
 
 outer:
-	for resps := range runSubCommand(c) {
+	for resps := range processCommand(c.Subcommand, false) {
 		newResps := Responses{}
 
 		for _, r := range resps {
@@ -364,7 +353,7 @@ func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
 outer:
-	for resps := range runSubCommand(c) {
+	for resps := range processCommand(c.Subcommand, false) {
 		for _, r := range resps {
 			if r.Header == nil {
 				continue
@@ -432,7 +421,7 @@ func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 		return
 	}
 
-	for r := range runSubCommand(c) {
+	for r := range processCommand(c.Subcommand, false) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
@@ -470,7 +459,7 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 		return
 	}
 
-	for r := range runSubCommand(c) {
+	for r := range processCommand(c.Subcommand, false) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
