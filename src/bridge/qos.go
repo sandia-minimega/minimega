@@ -36,30 +36,24 @@ type QosOption struct {
 	Value string
 }
 
-type netemParams struct {
+// Netem parameters
+type qos struct {
 	loss  string
 	delay string
 	rate  string
 	limit string
 }
 
-// Tap field enumerating qos parameters
-type qos struct {
-	*netemParams // embed
-}
-
 func newQos() *qos {
-	return &qos{
-		netemParams: &netemParams{},
-	}
+	return &qos{}
 }
 
 // Set the initial qdisc namespace
 func (t *Tap) initializeQos() error {
 	t.Qos = newQos()
-	t.Qos.netemParams.limit = fmt.Sprintf("%d", DEFAULT_NETEM_LIMIT)
+	t.Qos.limit = strconv.FormatUint(DEFAULT_NETEM_LIMIT, 10)
 	cmd := []string{"tc", "qdisc", tcAdd, "dev", t.Name}
-	ns := []string{"root", "handle", "1:", "netem", "limit", t.Qos.netemParams.limit}
+	ns := []string{"root", "handle", "1:", "netem", "limit", t.Qos.limit}
 	return t.qosCmd(append(cmd, ns...))
 }
 
@@ -75,7 +69,6 @@ func (t *Tap) destroyQos() error {
 func (t *Tap) setQos(op QosOption) error {
 	var action string
 	var ns []string
-	var ps []string
 
 	if t.Qos == nil {
 		err := t.initializeQos()
@@ -86,18 +79,18 @@ func (t *Tap) setQos(op QosOption) error {
 
 	switch op.Type {
 	case Loss:
-		t.Qos.netemParams.loss = op.Value
+		t.Qos.loss = op.Value
 	case Delay:
-		t.Qos.netemParams.delay = op.Value
+		t.Qos.delay = op.Value
 	case Rate:
-		t.Qos.netemParams.rate = op.Value
+		t.Qos.rate = op.Value
 	}
 
 	// only modify the limit if rate limiting is in effect
-	if t.Qos.netemParams.rate != "" {
-		t.Qos.netemParams.limit = getNetemLimit(t.Qos.netemParams.rate, t.Qos.netemParams.delay)
+	if t.Qos.rate != "" {
+		t.Qos.limit = getNetemLimit(t.Qos.rate, t.Qos.delay)
 	} else {
-		t.Qos.netemParams.limit = fmt.Sprintf("%d", DEFAULT_NETEM_LIMIT)
+		t.Qos.limit = strconv.FormatUint(DEFAULT_NETEM_LIMIT, 10)
 	}
 
 	action = tcUpdate
@@ -105,21 +98,17 @@ func (t *Tap) setQos(op QosOption) error {
 	ns = []string{"root", "handle", "1:", "netem"}
 
 	// stack up parameters
-	if t.Qos.netemParams.limit != "" {
-		ps = []string{"limit", t.Qos.netemParams.limit}
-		ns = append(ns, ps...)
+	if t.Qos.limit != "" {
+		ns = append(ns, "limit", t.Qos.limit)
 	}
-	if t.Qos.netemParams.rate != "" {
-		ps = []string{"rate", t.Qos.netemParams.rate}
-		ns = append(ns, ps...)
+	if t.Qos.rate != "" {
+		ns = append(ns, "rate", t.Qos.rate)
 	}
-	if t.Qos.netemParams.loss != "" {
-		ps = []string{"loss", t.Qos.netemParams.loss}
-		ns = append(ns, ps...)
+	if t.Qos.loss != "" {
+		ns = append(ns, "loss", t.Qos.loss)
 	}
-	if t.Qos.netemParams.delay != "" {
-		ps = []string{"delay", t.Qos.netemParams.delay}
-		ns = append(ns, ps...)
+	if t.Qos.delay != "" {
+		ns = append(ns, "delay", t.Qos.delay)
 	}
 
 	return t.qosCmd(append(cmd, ns...))
@@ -181,14 +170,14 @@ func (b *Bridge) GetQos(tap string) []QosOption {
 func (b *Bridge) getQos(t *Tap) []QosOption {
 	var ops []QosOption
 
-	if t.Qos.netemParams.rate != "" {
-		ops = append(ops, QosOption{Rate, t.Qos.netemParams.rate})
+	if t.Qos.rate != "" {
+		ops = append(ops, QosOption{Rate, t.Qos.rate})
 	}
-	if t.Qos.netemParams.loss != "" {
-		ops = append(ops, QosOption{Loss, t.Qos.netemParams.loss})
+	if t.Qos.loss != "" {
+		ops = append(ops, QosOption{Loss, t.Qos.loss})
 	}
-	if t.Qos.netemParams.delay != "" {
-		ops = append(ops, QosOption{Delay, t.Qos.netemParams.delay})
+	if t.Qos.delay != "" {
+		ops = append(ops, QosOption{Delay, t.Qos.delay})
 	}
 	return ops
 }
@@ -236,5 +225,5 @@ func getNetemLimit(rate string, delay string) string {
 	if limit > MAX_NETEM_LIMIT {
 		limit = MAX_NETEM_LIMIT
 	}
-	return fmt.Sprintf("%d", limit)
+	return strconv.FormatUint(limit, 10)
 }
