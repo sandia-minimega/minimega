@@ -457,16 +457,8 @@ func cliPreprocess(v string) (string, error) {
 }
 
 // cliPreprocessor allows modifying commands post-compile but pre-process.
-// Current preprocessors "file:", "http://", and "https://".
-//
-// Note: we don't run preprocessors when we're not running the `local` behavior
-// (see wrapBroadcastCLI) to avoid expanding files before we're running the
-// command on the correct machine.
+// Current preprocessors are: "file:", "http://", and "https://".
 func cliPreprocessor(c *minicli.Command) error {
-	if c.Source != GetNamespaceName() {
-		return nil
-	}
-
 	for k, v := range c.StringArgs {
 		v2, err := cliPreprocess(v)
 		if err != nil {
