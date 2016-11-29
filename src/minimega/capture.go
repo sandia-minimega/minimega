@@ -299,7 +299,12 @@ func stopPcapCapture(entry *capture) error {
 	if entry.pcap == nil {
 		return fmt.Errorf("capture %v has no valid pcap interface", entry.ID)
 	}
-	entry.pcap.Close()
+
+	// Do this from a separate goroutine to avoid a deadlock (issue #765). The
+	// capture should end when we destroy the mirror.
+	//
+	// TODO: fix this properly.
+	go entry.pcap.Close()
 
 	if entry.tap != "" && entry.Bridge != "" {
 		br, err := getBridge(entry.Bridge)
