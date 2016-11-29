@@ -263,6 +263,11 @@ func webConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set no-cache headers
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
+	w.Header().Set("Expires", "0")                                         // Proxies.
+
 	switch vm.GetType() {
 	case KVM:
 		http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
