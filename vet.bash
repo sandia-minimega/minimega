@@ -1,5 +1,8 @@
 #!/bin/bash
 
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+cd $SCRIPT_DIR
 echo "CHECKING SOURCE CODE (go vet)"
 # note: we redirect go vet's output on STDERR to STDOUT
 OUTPUT="$(find . ! \( -path './src/vendor' -prune \) -type f -name '*.go' -exec go vet {} 2>&1 \;)"
