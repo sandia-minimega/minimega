@@ -192,8 +192,9 @@ fileLoop:
 				// Parse the event
 				s := strings.SplitN(pr.scanner.Text(), ":", 2)
 
-				// Skip blank lines
-				if len(s) == 0 {
+				// Skip malformed commands and blank lines
+				if len(s) != 2 {
+					log.Debug("malformed vnc command: %s", pr.scanner.Text())
 					continue
 				}
 
