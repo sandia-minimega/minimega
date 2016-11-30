@@ -23,5 +23,4 @@ script:
   - ./vet.bash
   - ./build.bash
   - ./test.bash
-  - ./minitest.bash
   - ./doc.bash
