@@ -20,6 +20,7 @@ before_install:
 install: true
 script:
   - ./checkformat.bash
+  - ./vet.bash
   - ./build.bash
   - ./test.bash
   - ./doc.bash
