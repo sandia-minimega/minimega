@@ -24,6 +24,7 @@ var (
 	f_https       = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot    = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip    = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
+	f_irc         = flag.Bool("irc", false, "enable irc service")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp        = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser    = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
@@ -80,7 +81,7 @@ func main() {
 	}
 
 	// make sure at least one service is enabled
-	if !dns && !*f_http && !*f_https && !*f_ssh && !*f_smtp {
+	if !dns && !*f_http && !*f_https && !*f_irc && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -146,6 +147,13 @@ func main() {
 			go httpTLSServer(protocol)
 		} else {
 			go httpTLSClient(protocol)
+		}
+	}
+	if *f_irc {
+		if *f_serve {
+			//go ircServer(protocol)
+		} else {
+			go ircClient(protocol)
 		}
 	}
 	if *f_ssh {
