@@ -152,9 +152,11 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "bandwidth", "qos",
+	// more generic fields but want next to vcpus
+	"memory",
 	// kvm fields
-	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
-	"migrate", "append", "serial", "virtio-serial", "vnc_port",
+	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
+	"append", "serial", "virtio-serial", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
@@ -167,8 +169,6 @@ var vmInfoLite = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan",
-	// kvm fields
-	"vnc_port",
 }
 
 func init() {

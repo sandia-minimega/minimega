@@ -50,8 +50,8 @@ func init() {
 
 	client.Processes = make(map[int]*Process)
 
-	client.commandChan = make(chan map[int]*ron.Command)
-	client.fileChan = make(chan *ron.Message)
+	client.commandChan = make(chan map[int]*ron.Command, 1024)
+	client.fileChan = make(chan *ron.Message, 1024)
 }
 
 func sendMessage(m *ron.Message) error {

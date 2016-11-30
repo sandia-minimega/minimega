@@ -26,14 +26,16 @@ can be used to subselect a set of rows and/or columns. See the help pages for
 .filter and .columns, respectively, for their usage. Columns returned by VM
 info include:
 
-- host       : the host that the VM is running on
-- id         : the VM ID, as an integer
-- name       : the VM name, if it exists
-- state      : one of (building, running, paused, quit, error)
-- type       : one of (kvm)
+- id*        : the VM ID, as an integer
+- name*      : the VM name, if it exists
+- state*     : one of (building, running, paused, quit, error)
+- namespace* : namespace the VM belongs to
+- type*      : one of (kvm, container)
+- uuid*      : QEMU system uuid
+- cc_active* : indicates whether cc is connected
 - vcpus      : the number of allocated CPUs
 - memory     : allocated memory, in megabytes
-- vlan       : vlan, as an integer
+- vlan*      : vlan, as an integer
 - bridge     : bridge name
 - tap        : tap name
 - mac        : mac address
@@ -42,23 +44,29 @@ info include:
 - bandwidth  : stats regarding bandwidth usage
 - qos        : quality-of-service contraints on network interfaces
 - tags       : any additional information attached to the VM
-- uuid       : QEMU system uuid
-- cc_active  : whether cc is active
 
 Additional fields are available for KVM-based VMs:
 
-- append     : kernel command line string
-- cdrom      : cdrom image
-- disk       : disk image
-- kernel     : kernel image
-- initrd     : initrd image
-- migrate    : qemu migration image
+- append        : kernel command line string
+- cdrom         : cdrom image
+- disk          : disk image
+- kernel        : kernel image
+- initrd        : initrd image
+- migrate       : qemu migration image
+- serial        : number of serial ports
+- virtio-serial : number of virtio ports
+- vnc_port      : port for VNC shim
 
 Additional fields are available for container-based VMs:
 
-- init	     : process to invoke as init
-- preinit    : process to invoke at container launch before isolation
-- filesystem : root filesystem for the container
+- filesystem   : root filesystem for the container
+- hostname     : hostname of the container
+- init	       : process to invoke as init
+- preinit      : process to invoke at container launch before isolation
+- fifo         : number of fifo devices
+- console_port : port for console shim
+
+The optional summary flag limits the columns to those denoted with a '*'.
 
 Examples:
 
@@ -68,18 +76,9 @@ Display a list of all IPs for all VMs:
 Display information about all VMs:
 	vm info`,
 		Patterns: []string{
-			"vm info",
+			"vm info [summary,]",
 		},
 		Call: wrapBroadcastCLI(cliVmInfo),
-	},
-	{ // vm summary
-		HelpShort: "print summary information about VMs",
-		HelpLong: `
-Simpler version of "vm info" -- same meanings but fewer columns. `,
-		Patterns: []string{
-			"vm summary",
-		},
-		Call: wrapBroadcastCLI(cliVmSummary),
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
@@ -471,14 +470,12 @@ func cliVmKill(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliVmInfo(c *minicli.Command, resp *minicli.Response) error {
-	vms.Info(vmInfo, resp)
+	fields := vmInfo
+	if c.BoolArgs["summary"] {
+		fields = vmInfoLite
+	}
 
-	return nil
-}
-
-func cliVmSummary(c *minicli.Command, resp *minicli.Response) error {
-	vms.Info(vmInfoLite, resp)
-
+	vms.Info(fields, resp)
 	return nil
 }
 
