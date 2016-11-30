@@ -111,13 +111,18 @@ func NewVncControl(in chan Event) *vncControl {
 
 // playEvents runs in a goroutine and writes events read from the out channel
 // to the vnc connection. The control channel will close the out channel when
-// the playback stops.
+// the playback stops. This goroutine is also responsible for closing the vnc
+// connection once the playback is terminated.
 func (v *vncKBPlayback) playEvents() {
 	for {
 		e, more := <-v.out
 		if more {
 			v.err = e.Write(v.Conn)
+			if v.err != nil {
+				log.Warn(v.err.Error())
+			}
 		} else {
+			v.vncClient.Stop()
 			return
 		}
 	}
@@ -403,7 +408,6 @@ func (v *vncKBPlayback) Stop() error {
 	v.done <- true
 	close(v.done)
 
-	v.vncClient.Stop()
 	delete(vncPlaying, v.ID)
 
 	// Cleanup any open playback readers
