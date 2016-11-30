@@ -180,22 +180,6 @@ func (irc *Connection) setupCallbacks() {
 		irc.SendRawf("NICK %s", irc.nickcurrent)
 	})
 
-	// 433: ERR_NICKNAMEINUSE "<nick> :Nickname is already in use"
-	// Add a _ to current nick.
-	irc.AddCallback("433", func(e *Event) {
-		// If irc.nickcurrent hasn't been set yet, set to irc.nick
-		if irc.nickcurrent == "" {
-			irc.nickcurrent = irc.nick
-		}
-
-		if len(irc.nickcurrent) > 8 {
-			irc.nickcurrent = "_" + irc.nickcurrent
-		} else {
-			irc.nickcurrent = irc.nickcurrent + "_"
-		}
-		irc.SendRawf("NICK %s", irc.nickcurrent)
-	})
-
 	irc.AddCallback("PONG", func(e *Event) {
 		ns, _ := strconv.ParseInt(e.Message(), 10, 64)
 		delta := time.Duration(time.Now().UnixNano() - ns)
