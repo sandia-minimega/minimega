@@ -11,7 +11,7 @@ echo "package version
 
 var (
 	Revision = \"$VERSION\"
-	Date = \"$DATE\"
+	Date     = \"$DATE\"
 )
 " > $SCRIPT_DIR/src/version/version.go
 
@@ -37,6 +37,9 @@ for i in `ls $SCRIPT_DIR/src | grep -v vendor`
 do
 	echo $i
 	go install $i
+	if [[ $? != 0 ]]; then
+	    LINUX_PACKAGES_ERRORS=true
+	fi
 done
 echo
 
@@ -44,7 +47,29 @@ echo
 echo "BUILD PACKAGES (windows)"
 echo "protonuke"
 GOOS=windows go install protonuke
+if [[ $? != 0 ]]; then
+    WINDOWS_PACKAGES_ERRORS=true
+fi
 echo "miniccc"
 GOOS=windows go install miniccc
+if [[ $? != 0 ]]; then
+    WINDOWS_PACKAGES_ERRORS=true
+fi
 echo
 unset GOOS
+
+# build python bindings
+echo "BUILD PYTHON BINDINGS"
+$SCRIPT_DIR/misc/python/genapi.py $SCRIPT_DIR/bin/minimega > \
+    $SCRIPT_DIR/misc/python/minimega.py 2> /dev/null
+if [[ $? != 0 ]]; then
+    echo "minimega.py - FAILED"
+	PYTHON_BINDINGS_ERRORS=true
+else
+    echo "minimega.py - OK"
+fi
+echo
+
+if [ "$LINUX_PACKAGES_ERRORS" = "true" ] || [ "$PYTHON_BINDINGS_ERRORS" = "true" ] || [ "$WINDOWS_PACKAGES_ERRORS" = "true" ]; then
+    exit 1
+fi
