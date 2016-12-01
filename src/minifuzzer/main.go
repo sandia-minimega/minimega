@@ -182,8 +182,6 @@ outerLoop:
 			run(mm, cmd)
 		}
 	}
-
-	return nil
 }
 
 // cleanup attempts to clean up minimega after a crash using the `-force` flag
