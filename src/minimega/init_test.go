@@ -4,10 +4,14 @@
 
 package main
 
+import (
+	log "minilog"
+)
+
 func init() {
 	// Setup up default logger to log to stdout at the debug level
-	*f_log, *f_logfile, *f_loglevel = true, "", "debug"
+	*log.FLog, *log.FLogFile, *log.FLogLevel = true, "", "debug"
 
-	logSetup()
+	log.Init()
 	cliSetup()
 }

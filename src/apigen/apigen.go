@@ -23,9 +23,6 @@ import (
 var (
 	f_template = flag.String("template", "doc/content_templates/api.template", "api generation template")
 	f_minimega = flag.String("minimega", "bin/minimega", "minimega binary to extract json api doc from")
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
 )
 
 type apigen struct {
@@ -39,7 +36,7 @@ type apigen struct {
 func main() {
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	log.Debug("using minimega: %v", *f_minimega)
 	log.Debug("using doc template: %v", *f_template)
