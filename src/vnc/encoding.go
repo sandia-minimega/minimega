@@ -7,10 +7,10 @@ package vnc
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"io"
-	"log"
 )
 
 const (
@@ -55,8 +55,7 @@ func (s *Server) decodeRawEncoding(r io.Reader, rect *image.RGBA64) error {
 		for x := rect.Rect.Min.X; x < rect.Rect.Max.X; x++ {
 			pixel, err := s.readPixel(r)
 			if err != nil {
-				log.Println("error reading pixel %d, %d", x, y)
-				return err
+				return fmt.Errorf("error reading pixel %d, %d", x, y)
 			}
 			rect.Set(x, y, pixel)
 		}
