@@ -32,9 +32,6 @@ const (
 )
 
 var (
-	f_loglevel   = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log        = flag.Bool("v", true, "log on stderr")
-	f_logfile    = flag.String("logfile", "", "also log to file")
 	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
 	f_e          = flag.Bool("e", false, "execute command on running minimega")
 	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
@@ -81,7 +78,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
