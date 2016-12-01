@@ -1,4 +1,4 @@
-// Copyright (2015) Sandia Corporation.
+// Copyright (2016) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
@@ -36,7 +36,7 @@ func ircClient(protocol string) {
     for i := 0; i < n; i++ {
         channel := randomChannel()
         for _, item := range userChannels {
-            if item == channel {
+            if strings.Compare(item, channel) == 0 {
                 continue
             }
         }
@@ -77,6 +77,7 @@ func ircClient(protocol string) {
 
     // JOIN occurs after you successfully join a channel
     client.AddCallback("JOIN", func(event *irc.Event) {
+        // TODO: check if user is GetNick
         client.Privmsg(event.Arguments[0], greeting)
     });
 
@@ -115,62 +116,8 @@ func randomChannel() string {
     return channels[rand.Intn(len(channels))]
 }
 
-func random() string {
-    return channels[rand.Intn(len(channels))]
-}
-
 func randomMessage(channels []string) (channel string, message string) {
     channel = channels[rand.Intn(len(channels))]
     message = "mine"
     return
 }
-
-
-var nicks = []string{"theron",
-    "thaddeus",
-    "seth",
-    "perry",
-    "brendan",
-    "porfirio",
-    "jerald",
-    "shayne",
-    "gino",
-    "rickey",
-    "elmer",
-    "cameron",
-    "drew",
-    "lucio",
-    "francis",
-    "christian",
-    "jerrell",
-    "dirk",
-    "jere",
-    "kelley",
-    "jaimie",
-    "holli",
-    "larissa",
-    "sarah",
-    "sophia",
-    "terrilyn",
-    "stacia",
-    "sindy",
-    "josphine",
-    "janae",
-    "violette",
-    "gabriella",
-    "mellie",
-    "asha",
-    "vickie",
-    "evelynn",
-    "clora",
-    "linsey",
-    "gianna",
-    "emelda"}
-
-var channels = []string{
-    "#general",
-    "#random",
-    "#help",
-    "#minimega",
-    "#development",
-    "#irc"}
