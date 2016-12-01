@@ -191,7 +191,7 @@ func (vms VMs) ClearTags(target, key string) {
 	vms.apply(target, true, applyFunc)
 }
 
-// FindVM finds a VM in the active namespace based on its ID, name, or UUID.
+// FindVM finds a VM in the active namespace based on its name or UUID.
 func (vms VMs) FindVM(s string) VM {
 	vmLock.Lock()
 	defer vmLock.Unlock()
@@ -200,7 +200,7 @@ func (vms VMs) FindVM(s string) VM {
 }
 
 // FindVMNoNamespace finds a VM, ignoring the current namespace, based on its
-// ID, name, or UUID.
+// name or UUID.
 func (vms VMs) FindVMNoNamespace(s string) VM {
 	vmLock.Lock()
 	defer vmLock.Unlock()
@@ -211,12 +211,7 @@ func (vms VMs) FindVMNoNamespace(s string) VM {
 // findVM assumes vmLock is held.
 func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	if id, err := strconv.Atoi(s); err == nil {
-		if vm, ok := vms[id]; ok {
-			if inNamespace(vm) || !checkNamespace {
-				return vm
-			}
-		}
-
+		log.Warn("Targeting VMs by ID has been deprecated! (VM %d)", id)
 		return nil
 	}
 
@@ -234,7 +229,7 @@ func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	return nil
 }
 
-// FindContainerVM finds a VM in the active namespace based on its ID, name, or UUID.
+// FindContainerVM finds a VM in the active namespace based on its name or UUID.
 func (vms VMs) FindContainerVM(s string) (*ContainerVM, error) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
@@ -532,7 +527,7 @@ func (vms VMs) ClearQoS(target string, tap uint) []error {
 // apply is the fan out/in method to apply a function to a set of VMs specified
 // by target. Specifically, it:
 //
-// 	1. Expands target to a list of VM names and IDs (or wild)
+// 	1. Expands target to a list of VM names (or wild)
 // 	2. Invokes fn on all the matching VMs
 // 	3. Collects all the errors from the invoked fns
 // 	4. Records in the log a list of VMs that were not found
@@ -554,7 +549,6 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	names := map[string]bool{} // Names of VMs for which to apply fn
-	ids := map[int]bool{}      // IDs of VMs for which to apply fn
 
 	vals, err := ranges.SplitList(target)
 	if err != nil {
@@ -563,10 +557,12 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	for _, v := range vals {
 		id, err := strconv.Atoi(v)
 		if err == nil {
-			ids[id] = true
-		} else {
-			names[v] = true
+			log.Warn("Targeting VMs by ID has been deprecated! (VM %d)", id)
 		}
+
+		// integer as a VM name is not valid, but add it into names[] anyway
+		// so that it will trigger a "name not found" error later
+		names[v] = true
 	}
 	wild := hasWildcard(names)
 	delete(names, Wildcard)
@@ -598,9 +594,8 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 			continue
 		}
 
-		if wild || names[vm.GetName()] || ids[vm.GetID()] {
+		if wild || names[vm.GetName()] {
 			delete(names, vm.GetName())
-			delete(ids, vm.GetID())
 			wg.Add(1)
 
 			// Use concurrency only if requested
@@ -627,21 +622,18 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	//   1. it wasn't found
 	//   2. it wasn't a valid target (e.g. start already running VM)
 	if len(vals) == 1 && !wild {
-		if (len(names) + len(ids)) == 1 {
+		if (len(names)) == 1 {
 			errs = append(errs, vmNotFound(vals[0]))
 		} else if !results[vals[0]] {
 			errs = append(errs, fmt.Errorf("VM state error: %v", vals[0]))
 		}
 	}
 
-	// Log the names/ids of the vms that weren't found
-	if (len(names) + len(ids)) > 0 {
+	// Log the names of the vms that weren't found
+	if (len(names)) > 0 {
 		vals := []string{}
 		for v := range names {
 			vals = append(vals, v)
-		}
-		for v := range ids {
-			vals = append(vals, strconv.Itoa(v))
 		}
 		log.Info("VMs not found: %v", vals)
 	}

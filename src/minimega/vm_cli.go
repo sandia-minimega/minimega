@@ -137,7 +137,7 @@ description of allowable targets.`,
 	{ // vm start
 		HelpShort: "start paused virtual machines",
 		HelpLong: fmt.Sprintf(`
-Start one or more paused virtual machines. VMs may be selected by name, ID, range, or
+Start one or more paused virtual machines. VMs may be selected by name, range, or
 wildcard. For example,
 
 To start vm foo:
@@ -151,14 +151,6 @@ To start vms foo and bar:
 To start vms foo0, foo1, foo2, and foo5:
 
 		vm start foo[0-2,5]
-
-VMs can also be specified by ID, such as:
-
-		vm start 0
-
-Or, a range of IDs:
-
-		vm start [2-4,6]
 
 There is also a wildcard (%[1]s) which allows the user to specify all VMs:
 
@@ -218,22 +210,22 @@ of VMs that have been flushed may be reused.`,
 Add and remove USB drives to a launched VM.
 
 To view currently attached media, call vm hotplug with the 'show' argument and
-a VM ID or name. To add a device, use the 'add' argument followed by the VM ID
-or name, and the name of the file to add. For example, to add foo.img to VM 5:
+a VM name. To add a device, use the 'add' argument followed by the VM
+name, and the name of the file to add. For example, to add foo.img to VM foo:
 
-	vm hotplug add 5 foo.img
+	vm hotplug add foo foo.img
 
 The add command will assign a disk ID, shown in vm hotplug show. To remove
-media, use the 'remove' argument with the VM ID and the disk ID. For example,
+media, use the 'remove' argument with the VM name and the disk ID. For example,
 to remove the drive added above, named 0:
 
-	vm hotplug remove 5 0
+	vm hotplug remove foo 0
 
 To remove all hotplug devices, use ID "all" for the disk ID.`,
 		Patterns: []string{
-			"vm hotplug <show,> <vm id or name>",
-			"vm hotplug <add,> <vm id or name> <filename>",
-			"vm hotplug <remove,> <vm id or name> <disk id or all>",
+			"vm hotplug <show,> <vm name>",
+			"vm hotplug <add,> <vm name> <filename>",
+			"vm hotplug <remove,> <vm name> <disk id or all>",
 		},
 		Call: wrapVMTargetCLI(cliVmHotplug),
 		Suggest: func(val, prefix string) []string {
@@ -261,10 +253,10 @@ To disconnect the second connection:
 
 To move a connection, specify the new VLAN tag and bridge:
 
-	vm net <vm name or id> 0 bridgeX 100`,
+	vm net <vm name> 0 bridgeX 100`,
 		Patterns: []string{
-			"vm net <connect,> <vm id or name> <tap position> <bridge> <vlan>",
-			"vm net <disconnect,> <vm id or name> <tap position>",
+			"vm net <connect,> <vm name> <tap position> <bridge> <vlan>",
+			"vm net <disconnect,> <vm name> <tap position>",
 		},
 		Call: wrapSimpleCLI(cliVmNetMod),
 		Suggest: func(val, prefix string) []string {
@@ -281,13 +273,13 @@ To move a connection, specify the new VLAN tag and bridge:
 		HelpShort: "issue a JSON-encoded QMP command",
 		HelpLong: `
 Issue a JSON-encoded QMP command. This is a convenience function for accessing
-the QMP socket of a VM via minimega. vm qmp takes two arguments, a VM ID or
-name, and a JSON string, and returns the JSON encoded response. For example:
+the QMP socket of a VM via minimega. vm qmp takes two arguments, a VM name,
+and a JSON string, and returns the JSON encoded response. For example:
 
 	vm qmp 0 '{ "execute": "query-status" }'
 	{"return":{"running":false,"singlestep":false,"status":"prelaunch"}}`,
 		Patterns: []string{
-			"vm qmp <vm id or name> <qmp command>",
+			"vm qmp <vm name> <qmp command>",
 		},
 		Call: wrapVMTargetCLI(cliVmQmp),
 		Suggest: func(val, prefix string) []string {
@@ -303,7 +295,7 @@ name, and a JSON string, and returns the JSON encoded response. For example:
 		HelpLong: `
 Take a screenshot of the framebuffer of a running VM. The screenshot is saved
 in PNG format as "screenshot.png" in the VM's runtime directory (by default
-/tmp/minimega/<vm id>/screenshot.png).
+/tmp/minimega/<vm name>/screenshot.png).
 
 An optional argument sets the maximum dimensions in pixels, while keeping the
 aspect ratio. For example, to set either maximum dimension of the output image
@@ -319,8 +311,8 @@ You can also specify the maximum dimension:
 
         vm screenshot foo file /tmp/foo.png 100`,
 		Patterns: []string{
-			"vm screenshot <vm id or name> [maximum dimension]",
-			"vm screenshot <vm id or name> file <filename> [maximum dimension]",
+			"vm screenshot <vm name> [maximum dimension]",
+			"vm screenshot <vm name> file <filename> [maximum dimension]",
 		},
 		Call: wrapVMTargetCLI(cliVmScreenshot),
 		Suggest: func(val, prefix string) []string {
@@ -342,7 +334,7 @@ On success, a call to migrate a VM will return immediately. You can check the
 status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Patterns: []string{
 			"vm migrate",
-			"vm migrate <vm id or name> <filename>",
+			"vm migrate <vm name> <filename>",
 		},
 		Call: wrapVMTargetCLI(cliVmMigrate),
 		Suggest: func(val, prefix string) []string {
@@ -372,8 +364,8 @@ Change a VM to use a new ISO:
 
 "vm cdrom change" implies that the current ISO will be ejected.`,
 		Patterns: []string{
-			"vm cdrom <eject,> <vm id or name>",
-			"vm cdrom <change,> <vm id or name> <path>",
+			"vm cdrom <eject,> <vm name>",
+			"vm cdrom <change,> <vm name> <path>",
 		},
 		Call: wrapVMTargetCLI(cliVmCdrom),
 		Suggest: func(val, prefix string) []string {
@@ -734,7 +726,7 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 
 func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"id", "name", "status", "%% complete"}
+		resp.Header = []string{"name", "status", "%% complete"}
 
 		for _, vm := range vms.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
@@ -746,7 +738,6 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 			}
 
 			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", vm.GetID()),
 				vm.GetName(),
 				status,
 				fmt.Sprintf("%.2f", complete)})
@@ -849,8 +840,8 @@ func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
 	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 }
 
-// cliVMSuggest takes a prefix that could be the start of a VM name or a VM ID
-// and makes suggestions for VM names (or IDs) that have a common prefix. mask
+// cliVMSuggest takes a prefix that could be the start of a VM name
+// and makes suggestions for VM names that have a common prefix. mask
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
 func cliVMSuggest(prefix string, mask VMState) []string {
@@ -859,25 +850,14 @@ func cliVMSuggest(prefix string, mask VMState) []string {
 		return nil
 	}
 
-	var isID bool
 	res := []string{}
-
-	if _, err := strconv.Atoi(prefix); err == nil {
-		isID = true
-	}
 
 	for _, vm := range GlobalVMs() {
 		if vm.GetState()&mask == 0 {
 			continue
 		}
 
-		if isID {
-			id := strconv.Itoa(vm.GetID())
-
-			if strings.HasPrefix(id, prefix) {
-				res = append(res, id)
-			}
-		} else if strings.HasPrefix(vm.GetName(), prefix) {
+		if strings.HasPrefix(vm.GetName(), prefix) {
 			res = append(res, vm.GetName())
 		}
 	}
