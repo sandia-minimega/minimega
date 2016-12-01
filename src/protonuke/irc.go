@@ -30,17 +30,38 @@ func ircClient(protocol string) {
     nick := randomNick()
     client := irc.IRC(nick, nick)
 
+    // generate list of channels to join
+    n := rand.Intn(len(channels) - 1) + 1
+    userChannels := []string{}
+    for i := 0; i < n; i++ {
+        channel := randomChannel()
+        for _, item := range userChannels {
+            if item == channel {
+                continue
+            }
+        }
+        userChannels = append(userChannels, channel)
+    }
+
 
     // create callbacks
 
     // 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
     client.AddCallback("001", func(event *irc.Event) {
-        // join channels
-        for nChannels := rand.Intn(len(channels)) + 1; nChannels > 0; nChannels-- {
-            channel := randomChannel()
-            log.Debug("[nick %v] joining channel %v on host %v", client.GetNick(), channel, host)
-            client.Join(channel)
-        }
+        go func(event *irc.Event) {
+            // join channels
+            for i := 0; i < len(userChannels); i++ {
+                log.Debug("[nick %v] joining channel %v on host %v", client.GetNick(), userChannels[i], host)
+                client.Join(userChannels[i])
+            }
+
+            for {
+                t.Tick()
+                to, message := randomMessage(userChannels)
+                log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
+                client.Privmsg(to, message)
+            }
+        }(event)
     })
 
     // 433: ERR_NICKNAMEINUSE "<nick> :Nickname is already in use"
@@ -67,7 +88,7 @@ func ircClient(protocol string) {
 
             // reply on highlight
             if (strings.Contains(event.Message(), client.GetNick())) {
-                client.Privmsg(event.Arguments[0], greeting))
+                client.Privmsg(event.Arguments[0], greeting)
             }
         } else {
             // private message
@@ -83,10 +104,7 @@ func ircClient(protocol string) {
     // connect
     log.Debug("[nick %v] connecting to irc host %v from %v", client.GetNick(), host, original)
     client.Connect(host + port)
-
-    for {
-        t.Tick()
-    }
+    client.Loop()
 }
 
 func randomNick() string {
@@ -95,6 +113,16 @@ func randomNick() string {
 
 func randomChannel() string {
     return channels[rand.Intn(len(channels))]
+}
+
+func random() string {
+    return channels[rand.Intn(len(channels))]
+}
+
+func randomMessage(channels []string) (channel string, message string) {
+    channel = channels[rand.Intn(len(channels))]
+    message = "mine"
+    return
 }
 
 
