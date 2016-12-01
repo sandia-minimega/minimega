@@ -15,17 +15,8 @@ do
 	    PACKAGES_TEST_ERRORS=true
 	fi
 done
-
-# test python bindings
-$SCRIPT_DIR/misc/python/test_minimega.py &> /dev/null
-if [[ $? != 0 ]]; then
-    echo -e "FAIL\tminimega.py"
-    PYTHON_BINDINGS_TEST_ERRORS=true
-else
-    echo -e "ok\tminimega.py"
-fi
 echo
 
-if [ "$PACKAGES_TEST_ERRORS" = "true" ] || [ "$PYTHON_BINDINGS_TEST_ERRORS" = "true" ]; then
+if [ "$PACKAGES_TEST_ERRORS" = "true" ]; then
     exit 1
 fi
