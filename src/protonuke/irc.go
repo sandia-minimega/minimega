@@ -10,6 +10,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/thoj/go-ircevent"
@@ -31,7 +32,6 @@ func ircClient(protocol string) {
 	}
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
-
 	log.Debugln("ircClient")
 	rand.Seed(time.Now().UnixNano())
 
@@ -60,6 +60,7 @@ func ircClient(protocol string) {
 		}
 	}
 	joinedChannels := []string{}
+	joinedLock := sync.Mutex
 
 	// create callbacks
 	// 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
@@ -99,6 +100,9 @@ func ircClient(protocol string) {
 	// JOIN occurs after you successfully join a channel
 	client.AddCallback("JOIN", func(event *irc.Event) {
 		if event.Nick == client.GetNick() {
+			joinedLock.Lock()
+			defer joinedLock.Unlock()
+
 			// add channel to joined channel slice
 			joinedChannels = append(joinedChannels, event.Arguments[0])
 
