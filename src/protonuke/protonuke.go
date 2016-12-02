@@ -27,6 +27,7 @@ var (
 	f_irc         = flag.Bool("irc", false, "enable irc service")
 	f_ircchans    = flag.String("ircchans", "", "overwrite default IRC channels to join, seperated by commas")
 	f_ircport     = flag.String("ircport", "6667", "port to use for IRC client or server")
+	f_ircmsg      = flag.String("ircmsg", "", "path to file containing IRC client messages to use")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp        = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser    = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")

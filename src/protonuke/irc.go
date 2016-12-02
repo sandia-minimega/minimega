@@ -30,6 +30,13 @@ func ircClient(protocol string) {
 	if *f_ircchans != "" {
 		channels = strings.Split(*f_ircchans, ",")
 	}
+	if *f_ircmsg != "" {
+		data, err := ioutil.ReadFile(*f_ircmsg)
+		if err != nil {
+			log.Fatal("Unable to read file %v", *f_ircmsg)
+		}
+		messages = strings.Split(string(data), "\n")
+	}
 
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 	log.Debugln("ircClient")
