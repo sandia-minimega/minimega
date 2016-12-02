@@ -1,6 +1,21 @@
 package main
 
-var nicks = []string{"theron",
+var defaultChannels = []string{
+    "#general",
+    "#random",
+    "#help",
+    "#minimega",
+    "#development",
+    "#irc",
+}
+
+var defaultMessages = []string{
+    "mine",
+    "mine!!!",
+}
+
+var defaultNicks = []string{
+    "theron",
     "thaddeus",
     "seth",
     "perry",
@@ -39,12 +54,5 @@ var nicks = []string{"theron",
     "clora",
     "linsey",
     "gianna",
-    "emelda"}
-
-var channels = []string{
-    "#general",
-    "#random",
-    "#help",
-    "#minimega",
-    "#development",
-    "#irc"}
+    "emelda",
+}

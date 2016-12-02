@@ -25,6 +25,8 @@ var (
 	f_httproot    = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip    = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_irc         = flag.Bool("irc", false, "enable irc service")
+	f_ircchans    = flag.String("ircchans", "", "overwrite default IRC channels to join, seperated by commas")
+	f_ircport     = flag.String("ircport", "6667", "port to use for IRC client or server")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp        = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser    = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
@@ -151,7 +153,7 @@ func main() {
 	}
 	if *f_irc {
 		if *f_serve {
-			//go ircServer(protocol)
+			go ircServer(protocol)
 		} else {
 			go ircClient(protocol)
 		}
