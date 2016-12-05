@@ -10,8 +10,10 @@ VET_EXIT=0
 if [ -n "$OUTPUT" ]; then
     echo "$OUTPUT"
     echo "go vet - FAILED"
-    echo
-    exit 1
+    VET_EXIT=1
+else
+	echo "go vet - OK"
 fi
-echo "go vet - OK"
+
 echo
+exit $VET_EXIT
