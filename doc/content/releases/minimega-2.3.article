@@ -47,6 +47,12 @@ The `vnc` API has been majorly rewritten to add new capabilities and ensure
 compatibility with experiments built using namespaces. See the updated
 [[/articles/vnc.article][VNC article]] for details.
 
+*** miniccc refactoring
+
+We have made improvements to `miniccc` that include changes to the wire format
+between miniccc and minimega. As a result, VM images that include previous
+versions of miniccc will need to be updated.
+
 ** Additional new features
 
 *** .filter API
@@ -75,17 +81,18 @@ alias everywhere you wish to use it.
 
 minimega's typical usage makes this API unnecessary so we have removed it.
 
-*** vm summary API
+*** vm info API
 
 Since the addition of containers, many new columns have been added to `vm`info`
 which can make it hard to read without nesting it in a `.columns` command. We
-have added a new API, `vm`summary`, that includes a useful subset of the
+have added a new flag, `vm`info`summary`, that includes a useful subset of the
 `vm`info` columns.
 
 *** host API
 
 Added `vms` and `vmsall` columns for the number of running VMs on the host in
-the current namespace and across namespaces, respectively.
+the current namespace and across namespaces, respectively. Added `uptime`
+column for uptime of the host.
 
 *** read API
 
