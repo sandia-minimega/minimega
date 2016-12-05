@@ -188,7 +188,7 @@ func (n *Namespace) Launch() error {
 		}
 	}
 
-	hostSorter := cpuCommit
+	var hostSorter hostSortBy
 	for k, fn := range hostSortByFns {
 		if n.HostSortBy == k {
 			hostSorter = fn
@@ -312,10 +312,11 @@ func GetOrCreateNamespace(name string) *Namespace {
 		log.Info("creating new namespace -- `%v`", name)
 
 		ns := &Namespace{
-			Name:  name,
-			Hosts: map[string]bool{},
-			Taps:  map[string]bool{},
-			vmID:  NewCounter(),
+			Name:       name,
+			Hosts:      map[string]bool{},
+			Taps:       map[string]bool{},
+			vmID:       NewCounter(),
+			HostSortBy: "cpucommit",
 		}
 
 		// By default, every mesh-reachable node is part of the namespace
