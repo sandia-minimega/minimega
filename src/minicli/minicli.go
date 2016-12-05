@@ -139,10 +139,6 @@ func ProcessString(input string, record bool) (<-chan Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) <-chan Responses {
-	return processCommand(c, c.Record)
-}
-
-func processCommand(c *Command, record bool) <-chan Responses {
 	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
@@ -166,7 +162,7 @@ func processCommand(c *Command, record bool) <-chan Responses {
 		}
 
 		// Append the command to the history
-		if record {
+		if c.Record {
 			history = append(history, c.Original)
 
 			if len(history) > HistoryLen && HistoryLen > 0 {

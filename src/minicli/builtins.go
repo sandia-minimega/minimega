@@ -327,8 +327,10 @@ func cliFilter(c *Command, out chan<- Responses) {
 		return
 	}
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		newResps := Responses{}
 
 		for _, r := range resps {
@@ -352,8 +354,10 @@ outer:
 func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		for _, r := range resps {
 			if r.Header == nil {
 				continue
@@ -421,7 +425,9 @@ func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
@@ -459,7 +465,9 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
