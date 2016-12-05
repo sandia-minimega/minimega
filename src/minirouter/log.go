@@ -17,7 +17,7 @@ const (
 )
 
 func logSetupPushUp() {
-	level, err := log.LevelInt(*log.FLogLevel)
+	level, err := log.LevelInt(*log.Level)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
