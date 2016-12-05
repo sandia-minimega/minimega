@@ -295,7 +295,7 @@ and a JSON string, and returns the JSON encoded response. For example:
 		HelpLong: `
 Take a screenshot of the framebuffer of a running VM. The screenshot is saved
 in PNG format as "screenshot.png" in the VM's runtime directory (by default
-/tmp/minimega/<vm name>/screenshot.png).
+/tmp/minimega/<vm id>/screenshot.png).
 
 An optional argument sets the maximum dimensions in pixels, while keeping the
 aspect ratio. For example, to set either maximum dimension of the output image
