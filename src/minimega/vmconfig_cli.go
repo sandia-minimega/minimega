@@ -176,7 +176,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
 		HelpLong: `
-Set the QEMU process to invoke. Relative paths are ok.
+Set the QEMU process to invoke. Relative paths are ok. When unspecified,
+minimega uses "kvm" in the default path.
+
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{

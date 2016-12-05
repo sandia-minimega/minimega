@@ -14,7 +14,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /usr/bin/kvm
+QEMU Path:          
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -48,7 +48,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /usr/bin/kvm
+QEMU Path:          
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -79,7 +79,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /usr/bin/kvm
+QEMU Path:          
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
@@ -107,7 +107,7 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      
-QEMU Path:          /usr/bin/kvm
+QEMU Path:          
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
