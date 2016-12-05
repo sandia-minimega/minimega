@@ -219,6 +219,19 @@ We now mostly replicate bash's Ctrl-C behavior in minimega. The only thing that
 is different is that the reverse history line gets cleared when searching is
 aborted by Ctrl-C.
 
+*** Web interface improvements
+
+We have updated the web interface to include some new features and visual
+changes. The sections of the web interface have been broken into separate pages,
+so that users can open different and/or multiple views in different browser tabs
+or windows. The columns displayed in the VMs list have been expanded with
+additional information, and can be individually toggled for display. The search
+functionality has been fixed and will now search the full text of all the
+columns in a table as expcted. There are additional visual indication
+improvements for VMs without screenshots, high host resource utilization, etc.
+Note that the auto-refresh behavior of the tables will automatically disable
+when there are more than 500 VMs, to prevent browser performance degradation.
+
 *** Web console for containers and VNC changes
 
 To make it easier to interact with containers, we have added a javascript-based
