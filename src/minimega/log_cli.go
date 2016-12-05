@@ -90,7 +90,7 @@ Resets state for logging. See "help log ..." for more information.`,
 func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.BoolArgs) == 0 {
 		// Print the level
-		resp.Response = *log.FLogLevel
+		resp.Response = *log.Level
 		return nil
 	}
 
@@ -101,7 +101,7 @@ func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 			return errors.New("unreachable")
 		}
 
-		*log.FLogLevel = k
+		*log.Level = k
 		// forget the error, if they don't exist we shouldn't be setting
 		// their level, so we're fine.
 		log.SetLevel("stdio", level)
@@ -122,7 +122,7 @@ func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
 		resp.Response = strconv.FormatBool(err == nil)
 	} else if c.BoolArgs["true"] {
 		// Enable stderr logging or adjust the level if already enabled
-		level, _ := log.LevelInt(*log.FLogLevel)
+		level, _ := log.LevelInt(*log.Level)
 		_, err := log.GetLevel("stdio")
 		if err != nil {
 			log.AddLogger("stdio", os.Stderr, level, true)
@@ -147,7 +147,7 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Enable logging to file if it's not already enabled
-	level, _ := log.LevelInt(*log.FLogLevel)
+	level, _ := log.LevelInt(*log.Level)
 
 	if logFile != nil {
 		if err := stopFileLogger(); err != nil {
@@ -185,7 +185,7 @@ func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
 		}
 	}
 
-	level, _ := log.LevelInt(*log.FLogLevel)
+	level, _ := log.LevelInt(*log.Level)
 
 	return log.AddSyslog(network, address, "minimega", level)
 }
@@ -245,7 +245,7 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 	// Reset level if explicitly cleared or we're clearing everything
 	if c.BoolArgs["level"] || len(c.BoolArgs) == 0 {
 		// Reset to default level
-		*log.FLogLevel = "error"
+		*log.Level = "error"
 		log.SetLevel("stdio", log.ERROR)
 		log.SetLevel("file", log.ERROR)
 	}
