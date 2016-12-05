@@ -76,6 +76,8 @@ type VM interface {
 	Conflicts(VM) error
 
 	SetCCActive(bool)
+	IsCCActive() bool
+
 	UpdateNetworks()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
@@ -157,9 +159,11 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "bandwidth", "qos",
+	// more generic fields but want next to vcpus
+	"memory",
 	// kvm fields
-	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
-	"migrate", "append", "serial", "virtio-serial", "vnc_port",
+	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
+	"append", "serial", "virtio-serial", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
@@ -172,8 +176,6 @@ var vmInfoLite = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan",
-	// kvm fields
-	"vnc_port",
 }
 
 func init() {
@@ -606,6 +608,13 @@ func (vm *BaseVM) SetCCActive(active bool) {
 	vm.ActiveCC = active
 }
 
+func (vm *BaseVM) IsCCActive() bool {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.ActiveCC
+}
+
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -847,7 +856,7 @@ func vmNotContainer(idOrName string) error {
 	return fmt.Errorf("vm not container: %v", idOrName)
 }
 
-func isVmNotFound(err string) bool {
+func isVMNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
 }
 

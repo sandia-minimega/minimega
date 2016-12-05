@@ -85,7 +85,11 @@ func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 
 	if b.handle != nil {
-		b.handle.Close()
+		// Don't close the handle otherwise we might cause a deadlock:
+		//   https://github.com/google/gopacket/issues/253
+		// We will leak the handle but bridges are usually only destroyed when
+		// the program is terminating so it won't be leaked for long.
+		// b.handle.Close()
 	}
 
 	// first get all of the taps off of this bridge and destroy them

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	log "minilog"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -51,4 +52,14 @@ func findEth(idx int) (string, error) {
 		return ethNames[idx], nil
 	}
 	return "", fmt.Errorf("no such network")
+}
+
+func isIPv4(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && ip.To4() != nil
+}
+
+func isIPv6(s string) bool {
+	ip := net.ParseIP(s)
+	return ip != nil && ip.To4() == nil
 }

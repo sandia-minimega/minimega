@@ -54,6 +54,8 @@ var (
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
+	minicli.Preprocessor = cliPreprocessor
+
 	registerHandlers("bridge", bridgeCLIHandlers)
 	registerHandlers("capture", captureCLIHandlers)
 	registerHandlers("cc", ccCLIHandlers)
@@ -188,6 +190,8 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 		res := minicli.Responses{}
 		var ok bool
 
+		var notFound string
+
 		// Broadcast to all machines, collecting errors and forwarding
 		// successful commands.
 		//
@@ -196,7 +200,9 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
-				if resp.Error == "" || !isVmNotFound(resp.Error) {
+				if isVMNotFound(resp.Error) {
+					notFound = resp.Error
+				} else {
 					// Record successes and unexpected errors
 					res = append(res, resp)
 				}
@@ -207,7 +213,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 			// Presumably, we weren't able to find the VM
 			res = append(res, &minicli.Response{
 				Host:  hostname,
-				Error: vmNotFound(c.StringArgs["target"]).Error(),
+				Error: notFound,
 			})
 		}
 
@@ -226,23 +232,7 @@ func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
 
-	// Preprocess all the commands so that if there's an error, we haven't
-	// already started to run some of the commands.
-	for i := range cmd {
-		if err := cliPreprocessor(cmd[i]); err != nil {
-			// Send the error from a separate goroutine because nothing will
-			// receive from this channel until we return. Otherwise, we will
-			// cause a deadlock.
-			go func() {
-				out <- errResp(err)
-				close(out)
-			}()
-			return out
-		}
-	}
-
-	// Completed preprocessing run commands serially and forward all the
-	// responses to out
+	// Run commands serially and forward all the responses to out
 	go func() {
 		defer close(out)
 
@@ -405,8 +395,12 @@ func cliLocal() {
 // string or an error.
 func cliPreprocess(v string) (string, error) {
 	if strings.HasPrefix(v, "$") {
-		if v2 := os.Getenv(v[1:]); v2 != "" {
-			return v2, nil
+		end := strings.IndexAny(v, "/ ")
+		if end == -1 {
+			end = len(v)
+		}
+		if v2 := os.Getenv(v[1:end]); v2 != "" {
+			return v2 + v[end:], nil
 		}
 
 		return "", fmt.Errorf("undefined: %v", v)
@@ -446,16 +440,8 @@ func cliPreprocess(v string) (string, error) {
 }
 
 // cliPreprocessor allows modifying commands post-compile but pre-process.
-// Current preprocessors "file:", "http://", and "https://".
-//
-// Note: we don't run preprocessors when we're not running the `local` behavior
-// (see wrapBroadcastCLI) to avoid expanding files before we're running the
-// command on the correct machine.
+// Current preprocessors are: "file:", "http://", and "https://".
 func cliPreprocessor(c *minicli.Command) error {
-	if c.Source != GetNamespaceName() {
-		return nil
-	}
-
 	for k, v := range c.StringArgs {
 		v2, err := cliPreprocess(v)
 		if err != nil {

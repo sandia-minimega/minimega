@@ -1,5 +1,7 @@
 "use strict";
 
+var GRAPH_REFRESH_TIMEOUT = 5000;
+
 // Configurable bits for the graph
 var config = {
     types: {                // Types of nodes.
@@ -402,7 +404,7 @@ function setSidebarNode (id) {
 
             toReturn = listMachines(ul, id, [node.uuid]);
             makeTable(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
-            addVNClink(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
+            addConnectLink(d3.select(config.selectors.sidebarTable), grapher.graph.nodes[id].machines[0]);
             vmAlwaysHighlighted(d3.select(".member-node").node(), true, false);
         }
 
@@ -515,7 +517,7 @@ function setPopupMachine (vm, node) {
         var height = node.getBoundingClientRect()["height"];
 
         makeTable(table, vm);
-	addVNClink(table, vm);
+        addConnectLink(table, vm);
 
         container.style("left", (position.left - 10) + "px");
         container.style("top", (position.top - (height / 2)) + "px");
@@ -525,16 +527,16 @@ function setPopupMachine (vm, node) {
     }
 }
 
-function makeVNClink(vm) {
-    return "<a target=\"_blank\" href=\"" + connectURL(vm) + "\">" + vm.name + "</a>"
+function makeConnectLink(vm) {
+    return "<a target=\"_blank\" href=\"connect/" + vm.name + "\">" + vm.name + "</a>"
 }
 
-function addVNClink(parent, vm) {
+function addConnectLink(parent, vm) {
     var newHtml = "";
     var oldHtml = parent.html();
     var row = $("<tr></tr>");
     $("<td></td>").appendTo(row).text("VNC");
-    $("<td></td>").appendTo(row).html(makeVNClink(vm));
+    $("<td></td>").appendTo(row).html(makeConnectLink(vm));
     newHtml += row.get(0).outerHTML;
     parent.html(newHtml + oldHtml);
 }
@@ -560,7 +562,7 @@ function makeTable (parent, data) {
 
 // Used to get the new graph info via AJAX.
 function getVMInfo () {
-    d3.text("./vms", function (error, info) {
+    d3.text("vms.json", function (error, info) {
         if ((info != grapher.jsonString) && (cursor.node == null)) {
             if (error) return console.warn(error);
 
@@ -642,8 +644,6 @@ function getVMInfo () {
                 graphTick();
                 grapher.d3force.alpha(oldAlpha);
             }
-
-            updateTables();
         }
     });
 }
@@ -850,17 +850,7 @@ function makeGraph (response, ethers) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-$(document).ready(function () {
-    d3.select(config.selectors.popupContainer).on("click", function () {
-        d3.event.stopPropagation();
-    });
-
-    d3.select(config.selectors.centerButton).on("click", function () {
-        grapher.instance.center();
-        grapher.instance.zoom(0.85)
-        if (d3.event) d3.event.stopPropagation();
-    });
-
+function initializeGraph() {
     d3.select(config.selectors.reflowButton).on("click", function () {
         grapher.d3force.alpha(4);
         if (d3.event) d3.event.stopPropagation();
@@ -889,6 +879,16 @@ $(document).ready(function () {
                 cursor.startPoint = getOffset(e, grapher.instance.canvas);
             }
         }
+    });
+
+    d3.select(config.selectors.popupContainer).on("click", function () {
+        d3.event.stopPropagation();
+    });
+
+    d3.select(config.selectors.centerButton).on("click", function () {
+        grapher.instance.center();
+        grapher.instance.zoom(0.85)
+        if (d3.event) d3.event.stopPropagation();
     });
 
     // Set up event handler for mousemove. It's applied to the document and not the graph because
@@ -1011,10 +1011,10 @@ $(document).ready(function () {
     setTimeout(function () {
         d3.select(config.selectors.centerButton).on("click")();
         d3.select(grapher.instance.canvas).style("opacity", "1");
-    }, 750);
+    }, 1000);
 
-    setInterval(getVMInfo, 1500);
-});
+    setInterval(getVMInfo, GRAPH_REFRESH_TIMEOUT);
+}
 
 
 // Resize the graph when the window is resized

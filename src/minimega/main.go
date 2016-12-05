@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 	"version"
 )
 
@@ -57,7 +56,7 @@ var (
 	hostname string
 	reserved = []string{Wildcard}
 
-	started = time.Now()
+	attached bool
 )
 
 const (
@@ -144,6 +143,7 @@ func main() {
 
 			mm.RunAndPrint(cmd, false)
 		} else {
+			attached = true
 			mm.Attach()
 		}
 
@@ -255,13 +255,14 @@ func teardown() {
 	// Clear namespace so that we hit all the VMs
 	SetNamespace("")
 
-	vncClear()
 	clearAllCaptures()
-	vms.Kill(Wildcard)
+	vncClear()
 	dnsmasqKillAll()
-	ksmDisable()
+
+	vms.Kill(Wildcard)
 	vms.Flush()
-	vms.CleanDirs()
+
+	ksmDisable()
 	containerTeardown()
 
 	if err := bridgesDestroy(); err != nil {

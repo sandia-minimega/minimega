@@ -147,7 +147,7 @@ func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
 	return nil
 }
 
-// GetVLAN returns the alias for a given VLAN or ErrUnallocated.
+// GetVLAN returns the VLAN for a given alias or ErrUnallocated.
 func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
 	v.Lock()
 	defer v.Unlock()

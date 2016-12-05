@@ -9,9 +9,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"minicli"
 	log "minilog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -104,9 +106,13 @@ func webStart(port int, root string) {
 	}
 
 	mux.HandleFunc("/", webIndex)
-	mux.HandleFunc("/tilevnc", webTileVNC)
-	mux.HandleFunc("/hosts", webHosts)
-	mux.HandleFunc("/vms", webVMs)
+	mux.HandleFunc("/vms", webTemplated)
+	mux.HandleFunc("/hosts", webTemplated)
+	mux.HandleFunc("/graph", webTemplated)
+	mux.HandleFunc("/tilevnc", webTemplated)
+	mux.HandleFunc("/hosts.json", webHostsJSON)
+	mux.HandleFunc("/vms.json", webVMsJSON)
+	mux.HandleFunc("/vlans.json", webVLANsJSON)
 	mux.HandleFunc("/connect/", webConnect)
 	mux.HandleFunc("/screenshot/", webScreenshot)
 	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
@@ -201,16 +207,45 @@ func webScreenshot(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Redirect / to /vms
 func webIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
-	} else {
-		http.ServeFile(w, r, filepath.Join(web.Root, "index.html"))
+		return
 	}
+
+	http.Redirect(w, r, "/vms", 302)
 }
 
-func webTileVNC(w http.ResponseWriter, r *http.Request) {
-	http.ServeFile(w, r, filepath.Join(web.Root, "tilevnc.html"))
+// Templated HTML responses
+func webTemplated(w http.ResponseWriter, r *http.Request) {
+	lp := filepath.Join(web.Root, "templates", "_layout.tmpl")
+	fp := filepath.Join(web.Root, "templates", r.URL.Path+".tmpl")
+
+	info, err := os.Stat(fp)
+	if err != nil {
+		// 404 if template doesn't exist
+		http.NotFound(w, r)
+		return
+	}
+
+	if info.IsDir() {
+		// 404 if directory
+		http.NotFound(w, r)
+		return
+	}
+
+	tmpl, err := template.ParseFiles(lp, fp)
+	if err != nil {
+		log.Error(err.Error())
+		http.Error(w, http.StatusText(500), 500)
+		return
+	}
+
+	if err := tmpl.ExecuteTemplate(w, "layout", nil); err != nil {
+		log.Error(err.Error())
+		http.Error(w, http.StatusText(500), 500)
+	}
 }
 
 func webConnect(w http.ResponseWriter, r *http.Request) {
@@ -228,6 +263,11 @@ func webConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// set no-cache headers
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
+	w.Header().Set("Expires", "0")                                         // Proxies.
+
 	switch vm.GetType() {
 	case KVM:
 		http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
@@ -238,7 +278,9 @@ func webConnect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func webHosts(w http.ResponseWriter, r *http.Request) {
+// JSON responses below
+
+func webHostsJSON(w http.ResponseWriter, r *http.Request) {
 	hosts := [][]interface{}{}
 
 	cmd := minicli.MustCompile("host")
@@ -272,7 +314,7 @@ func webHosts(w http.ResponseWriter, r *http.Request) {
 	w.Write(js)
 }
 
-func webVMs(w http.ResponseWriter, r *http.Request) {
+func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 	// we want a map of "hostname + id" to vm info so that it can be sorted
 	infovms := make(map[string]map[string]interface{}, 0)
 
@@ -288,21 +330,39 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 		config := getConfig(vm)
 
 		vmMap := map[string]interface{}{
-			"host":   vm.GetHost(),
-			"id":     vm.GetID(),
-			"name":   vm.GetName(),
-			"state":  vm.GetState().String(),
-			"type":   vm.GetType().String(),
-			"vcpus":  config.Vcpus,
-			"memory": config.Memory,
+			"namespace": config.Namespace,
+			"host":      vm.GetHost(),
+			"id":        vm.GetID(),
+			"name":      vm.GetName(),
+			"state":     vm.GetState().String(),
+			"type":      vm.GetType().String(),
+			"activecc":  vm.IsCCActive(),
+			"vcpus":     config.Vcpus,
+			"memory":    config.Memory,
+			"snapshot":  config.Snapshot,
+			"uiud":      config.UUID,
 		}
 
 		if vm, ok := vm.(*KvmVM); ok {
 			vmMap["vnc_port"] = vm.VNCPort
+			vmMap["kvm_initrdpath"] = vm.KVMConfig.InitrdPath
+			vmMap["kvm_kernelpath"] = vm.KVMConfig.KernelPath
+			if vm.KVMConfig.DiskPaths == nil {
+				vmMap["kvm_diskpaths"] = make([]int, 0)
+			} else {
+				vmMap["kvm_diskpaths"] = vm.KVMConfig.DiskPaths
+			}
 		}
 
 		if vm, ok := vm.(*ContainerVM); ok {
 			vmMap["console_port"] = vm.ConsolePort
+			vmMap["container_fspath"] = vm.ContainerConfig.FSPath
+			vmMap["container_preinit"] = vm.ContainerConfig.Preinit
+			if vm.ContainerConfig.Init == nil {
+				vmMap["container_init"] = make([]int, 0)
+			} else {
+				vmMap["container_init"] = vm.ContainerConfig.Init
+			}
 		}
 
 		if config.Networks == nil {
@@ -338,6 +398,40 @@ func webVMs(w http.ResponseWriter, r *http.Request) {
 
 	// Now the order of items in the JSON doesn't randomly change between calls (since the values are sorted)
 	js, err := json.Marshal(infoslice)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
+func webVLANsJSON(w http.ResponseWriter, r *http.Request) {
+	vlans := [][]interface{}{}
+
+	cmd := minicli.MustCompile("vlans")
+	cmd.SetRecord(false)
+
+	for resps := range runCommandGlobally(cmd) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			for _, row := range resp.Tabular {
+				res := []interface{}{}
+				for _, v := range row {
+					res = append(res, v)
+				}
+				vlans = append(vlans, res)
+			}
+		}
+	}
+
+	js, err := json.Marshal(vlans)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

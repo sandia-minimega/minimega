@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type HostStats struct {
@@ -30,6 +31,7 @@ type HostStats struct {
 	MemCommit     int
 	NetworkCommit int
 	Load          string
+	Uptime        time.Duration
 
 	Limit int // for scheduler, not used by the host API
 }
@@ -50,6 +52,7 @@ Report information about the host:
 - name       : name of the machine
 - netcommit  : total network interface commit
 - vms        : number of VMs
+- uptime     : uptime
 
 All stats about VMs are based on the active namespace. To see information
 across namespaces, run "mesh send all host".`,
@@ -65,6 +68,7 @@ across namespaces, run "mesh send all host".`,
 			"host <name,>",
 			"host <netcommit,>",
 			"host <vms,>",
+			"host <uptime,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -114,6 +118,25 @@ func (h *HostStats) Populate(v string) error {
 		h.NetworkCommit = vms.NetworkCommit()
 	case "vms":
 		h.VMs = vms.Count()
+	case "uptime":
+		data, err := ioutil.ReadFile("/proc/uptime")
+		if err != nil {
+			return err
+		}
+
+		// uptime should look something like
+		//  2641.71 9287.55
+		f := strings.Fields(string(data))
+		if len(f) != 2 {
+			return fmt.Errorf("could not read uptime")
+		}
+
+		uptime, err := time.ParseDuration(f[0] + "s")
+		if err != nil {
+			return err
+		}
+
+		h.Uptime = uptime
 	default:
 		return errors.New("unreachable")
 	}
@@ -143,6 +166,8 @@ func (h *HostStats) Print(v string) string {
 		return strconv.Itoa(h.NetworkCommit)
 	case "vms":
 		return strconv.Itoa(h.VMs)
+	case "uptime":
+		return h.Uptime.String()
 	}
 
 	return "???"
@@ -152,8 +177,8 @@ func (h *HostStats) Print(v string) string {
 // Preferred ordering of host info fields in tabular. Don't include name --
 // it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
-	"cpus", "load", "memused", "memtotal", "bandwidth", "vms", "cpucommit",
-	"memcommit", "netcommit",
+	"cpus", "load", "memused", "memtotal", "bandwidth", "vms", "uptime",
+	"cpucommit", "memcommit", "netcommit",
 }
 
 func cliHost(c *minicli.Command, resp *minicli.Response) error {

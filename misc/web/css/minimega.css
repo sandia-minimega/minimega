@@ -58,6 +58,15 @@ nav a.current-view {
 	font-weight: bold;
 }
 
+.grey {
+	background: #888888;
+}
+
+.red {
+	background: #C9302C;
+}
+
+
 .blue {
 	background: #1E8BC3;
 }
@@ -88,7 +97,7 @@ nav a span {
 }
 
 #content > div {
-	display: none;
+	display: block;
 }
 
 #content > div.current-view {
@@ -175,6 +184,33 @@ div.box-content {
 	color: white;
 	padding: 1px 13px;
 	border-radius: 0 0 0 6px;
+}
+
+.screenshot-label {
+	position: absolute;
+	top: -1px;
+	left: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 0 6px 0 0;
+}
+
+.screenshot-label-host {
+	position: absolute;
+	bottom: -1px;
+	left: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 0 6px 0 0;
+}
+
+.screenshot-connect {
+	position: absolute;
+	bottom: -1px;
+	right: -1px;
+	color: white;
+	padding: 1px 13px;
+	border-radius: 6px 0 0 0;
 }
 
 .dataTable em {

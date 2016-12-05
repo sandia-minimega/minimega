@@ -13,11 +13,13 @@ import (
 )
 
 const (
-	BIRD_CONFIG = "/etc/bird.conf"
+	BIRD_CONFIG  = "/etc/bird.conf"
+	BIRD6_CONFIG = "/etc/bird6.conf"
 )
 
 type Bird struct {
 	Static   map[string]string
+	Static6  map[string]string
 	OSPF     map[string]*OSPF
 	RouterID string
 }
@@ -47,6 +49,7 @@ func init() {
 	birdID = getRouterID()
 	birdData = &Bird{
 		Static:   make(map[string]string),
+		Static6:  make(map[string]string),
 		OSPF:     make(map[string]*OSPF),
 		RouterID: birdID,
 	}
@@ -61,6 +64,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
 			Static:   make(map[string]string),
+			Static6:  make(map[string]string),
 			OSPF:     make(map[string]*OSPF),
 			RouterID: birdID,
 		}
@@ -70,7 +74,11 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	} else if c.BoolArgs["static"] {
 		network := c.StringArgs["network"]
 		nh := c.StringArgs["nh"]
-		birdData.Static[network] = nh
+		if isIPv4(nh) {
+			birdData.Static[network] = nh
+		} else if isIPv6(nh) {
+			birdData.Static6[network] = nh
+		}
 	} else if c.BoolArgs["ospf"] {
 		area := c.StringArgs["area"]
 		network := c.StringArgs["network"]
@@ -100,6 +108,7 @@ func birdConfig() {
 		return
 	}
 
+	// First, IPv4
 	f, err := os.Create(BIRD_CONFIG)
 	if err != nil {
 		log.Errorln(err)
@@ -107,6 +116,22 @@ func birdConfig() {
 	}
 
 	err = t.Execute(f, birdData)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	// Now, IPv6
+	f, err = os.Create(BIRD6_CONFIG)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	// Weird hack: copy birdData and move Static6
+	// into Static so we can use the same template
+	bd2 := &Bird{Static: birdData.Static6, OSPF: birdData.OSPF, RouterID: birdData.RouterID}
+	err = t.Execute(f, bd2)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -147,7 +172,7 @@ func birdRestart() {
 		}
 	}
 
-	bird6Cmd = exec.Command("bird6", "-f", "-s", "/bird6.sock", "-P", "/bird6.pid", "-c", BIRD_CONFIG)
+	bird6Cmd = exec.Command("bird6", "-f", "-s", "/bird6.sock", "-P", "/bird6.pid", "-c", BIRD6_CONFIG)
 	err = bird6Cmd.Start()
 	if err != nil {
 		log.Errorln(err)

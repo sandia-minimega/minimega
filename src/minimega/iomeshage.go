@@ -129,9 +129,25 @@ func cliFile(c *minicli.Command, resp *minicli.Response) error {
 // returns the local path of the file or an error if the file doesn't exist or
 // could not transfer. iomHelper blocks until all file transfers are completed.
 func iomHelper(file string) (string, error) {
-	err := iom.Get(file)
-	if err != nil {
-		return "", err
+	// remove any weirdness from the filename like '..'
+	file = filepath.Clean(file)
+
+	// IOMeshage assumes relative paths so trim off the f_iomBase path prefix
+	// if it exists.
+	if strings.HasPrefix(file, *f_iomBase) {
+		rel, err := filepath.Rel(*f_iomBase, file)
+		if err != nil {
+			return "", err
+		}
+
+		file = rel
+	}
+
+	if err := iom.Get(file); err != nil {
+		// suppress in-flight error -- we'll just wait as normal
+		if err.Error() != "file already in flight" {
+			return "", err
+		}
 	}
 
 	iomWait(file)

@@ -197,6 +197,16 @@ func vncRecordFB(vm *KvmVM, filename string) error {
 	return nil
 }
 
+// vncRoute records a message for the correct recording based on ID
+func vncRoute(ID string, msg interface{}) {
+	vncRecordingLock.RLock()
+	defer vncRecordingLock.RUnlock()
+
+	if r, ok := vncKBRecording[ID]; ok {
+		r.RecordMessage(msg)
+	}
+}
+
 // Returns the duration of a given kbrecording file
 func getDuration(filename string) time.Duration {
 	d := 0
@@ -205,10 +215,17 @@ func getDuration(filename string) time.Duration {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		s := strings.SplitN(scanner.Text(), ":", 2)
+		// Ignore blank and malformed lines
+		if len(s) != 2 {
+			log.Debug("malformed vnc statement: %s", scanner.Text())
+			continue
+		}
+
 		// Ignore comments in the vnc file
 		if s[0] == "#" {
 			continue
 		}
+
 		i, err := strconv.Atoi(s[0])
 		if err != nil {
 			log.Errorln(err)

@@ -15,6 +15,7 @@ import (
 	"ranges"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,6 +39,30 @@ type QueuedVMs struct {
 }
 
 var vmLock sync.Mutex // lock for synchronizing access to vms
+
+// GetFiles looks through the VMConfig for files in the IOMESHAGE directory and
+// fetches them if they do not already exist. Currently, we enumerate all the
+// fields that take a file.
+func (q QueuedVMs) GetFiles() error {
+	files := []string{
+		q.ContainerConfig.Preinit,
+		q.KVMConfig.CdromPath,
+		q.KVMConfig.InitrdPath,
+		q.KVMConfig.KernelPath,
+		q.KVMConfig.MigratePath,
+	}
+	files = append(files, q.KVMConfig.DiskPaths...)
+
+	for _, f := range files {
+		if strings.HasPrefix(f, *f_iomBase) {
+			if _, err := iomHelper(f); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
 
 // Count of VMs in current namespace.
 func (vms VMs) Count() int {
@@ -312,9 +337,19 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 }
 
 func (vms VMs) Launch(q *QueuedVMs) <-chan error {
-	vmLock.Lock()
-
 	out := make(chan error)
+
+	if err := q.GetFiles(); err != nil {
+		// send from separate goroutine to avoid deadlock
+		go func() {
+			defer close(out)
+			out <- err
+		}()
+
+		return out
+	}
+
+	vmLock.Lock()
 
 	log.Info("launching %v %v vms", len(q.Names), q.VMType)
 	start := time.Now()
@@ -659,24 +694,6 @@ func meshageVMLauncher() {
 			cmd := m.Body.(meshageVMLaunch)
 
 			errs := []string{}
-
-			// Run our own version of the cliPreprocessor since some of the vm
-			// configs might need expanding. There's probably a better way to
-			// do this...
-			var err error
-
-			kvm := &cmd.QueuedVMs.KVMConfig
-
-			for _, v := range []*string{&kvm.CdromPath, &kvm.InitrdPath, &kvm.KernelPath} {
-				if *v, err = cliPreprocess(*v); err != nil {
-					errs = append(errs, err.Error())
-				}
-			}
-			for i := range kvm.DiskPaths {
-				if kvm.DiskPaths[i], err = cliPreprocess(kvm.DiskPaths[i]); err != nil {
-					errs = append(errs, err.Error())
-				}
-			}
 
 			if len(errs) == 0 {
 				for err := range vms.Launch(cmd.QueuedVMs) {

@@ -1,0 +1,32 @@
+    {{define "content"}}
+    <div id="content">
+
+      <div id="vms-table" class="box">
+        <h1 class="box-header">VM List</h1>
+        <div class="box-content">
+          <table id="vms-dataTable" class="table table-striped table-bordered dataTable no-footer"></table>
+        </div>
+      </div>
+
+    </div>
+
+
+
+    <script type="text/javascript" src="libs/dataTables/jquery.dataTables.js"></script>
+    <script type="text/javascript" src="libs/dataTables/dataTables.bootstrap.js"></script>
+    <script type="text/javascript" src="libs/dataTables/dataTables.buttons.js"></script>
+    <script type="text/javascript" src="libs/dataTables/buttons.colVis.js"></script>
+    <script type="text/javascript" src="libs/dataTables/buttons.html5.js"></script>
+    <script type="text/javascript" src="libs/dataTables/buttons.bootstrap.js"></script>
+    
+    <script type="text/javascript" src="js/glue.js"></script>
+    <script type="text/javascript">
+      $(document).ready(function() {
+        $('nav a[href$="' + "vms" + '"]').addClass("current-view");
+
+        initVMDataTable();
+        
+        initCowbell();
+      });
+    </script>
+    {{end}}

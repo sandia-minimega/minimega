@@ -7,9 +7,9 @@ vm launch kvm vm0
 vm launch
 
 # Start a kb recording
-vnc kb record vm0 /tmp/vm0.kbr
+vnc record kb vm0 /tmp/vm0.kbr
 # This should error as the recording is already running
-vnc kb record vm0 /tmp/vm0.kbr
+vnc record kb vm0 /tmp/vm0.kbr
 
 # Check the kb recording is running
 .columns name,type,filename vnc
@@ -24,18 +24,18 @@ vm launch
 vnc
 
 # Start and check a kbrecording in the new ns
-vnc kb record vm1 /tmp/vm1.kbr
+vnc record kb vm1 /tmp/vm1.kbr
 .columns name,type,filename vnc
 
 # Stop the kb recording, vnc should be blank
-vnc kb norecord vm1
+vnc stop kb vm1
 vnc
 
 # Switch to the first namespace, check the kb recording is still running,
 # and then stop it.
 namespace ns0
 .columns name,type,filename vnc
-vnc kb norecord vm0
+vnc stop kb vm0
 vnc
 
 # Clean up

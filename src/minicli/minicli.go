@@ -80,6 +80,9 @@ type Response struct {
 
 type CLIFunc func(*Command, chan<- Responses)
 
+// Preprocessor may be set to perform actions immediately before commands run.
+var Preprocessor func(*Command) error
+
 // Reset minicli state including all registered handlers.
 func Reset() {
 	handlers = nil
@@ -98,15 +101,8 @@ func MustRegister(h *Handler) {
 // Register a new API based on pattern. See package documentation for details
 // about supported patterns.
 func Register(h *Handler) error {
-	h.PatternItems = make([][]PatternItem, len(h.Patterns))
-
-	for i, pattern := range h.Patterns {
-		items, err := lexPattern(pattern)
-		if err != nil {
-			return err
-		}
-
-		h.PatternItems[i] = items
+	if err := h.parsePatterns(); err != nil {
+		return err
 	}
 
 	h.HelpShort = strings.TrimSpace(h.HelpShort)
@@ -143,6 +139,10 @@ func ProcessString(input string, record bool) (<-chan Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) <-chan Responses {
+	return processCommand(c, c.Record)
+}
+
+func processCommand(c *Command, record bool) <-chan Responses {
 	if !c.noOp && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
@@ -150,12 +150,23 @@ func ProcessCommand(c *Command) <-chan Responses {
 	respChan := make(chan Responses)
 
 	go func() {
+		defer close(respChan)
+
+		// Run the preprocessor first if one is set
+		if Preprocessor != nil {
+			if err := Preprocessor(c); err != nil {
+				resp := &Response{Error: err.Error()}
+				respChan <- Responses{resp}
+				return
+			}
+		}
+
 		if !c.noOp {
 			c.Call(c, respChan)
 		}
 
 		// Append the command to the history
-		if c.Record {
+		if record {
 			history = append(history, c.Original)
 
 			if len(history) > HistoryLen && HistoryLen > 0 {
@@ -167,8 +178,6 @@ func ProcessCommand(c *Command) <-chan Responses {
 				history = history[len(history)-HistoryLen:]
 			}
 		}
-
-		close(respChan)
 	}()
 
 	return respChan
@@ -295,6 +304,25 @@ func Help(input string) string {
 		// Only one handler with a given pattern prefix, give the long help message
 		if len(group) == 1 {
 			return group[0].helpLong()
+		}
+
+		count := 0
+		for _, v := range group {
+			if len(v.HelpLong) > 0 {
+				count += 1
+			}
+		}
+		// If only one entry has long help, do magic!
+		if count == 1 {
+			handler := &Handler{}
+			for _, v := range group {
+				handler.Patterns = append(handler.Patterns, v.Patterns...)
+				if len(v.HelpLong) > 0 {
+					handler.HelpLong = v.HelpLong
+				}
+			}
+			handler.parsePatterns()
+			return handler.helpLong()
 		}
 
 		// Weird case, multiple handlers share the same prefix. Print the short

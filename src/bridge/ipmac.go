@@ -44,7 +44,7 @@ func (b *Bridge) snooper() {
 		} else if err == io.EOF {
 			break
 		} else if err != nil {
-			log.Error("error reading packet data: ", err)
+			log.Error("error reading packet data: %v", err)
 			break
 		}
 

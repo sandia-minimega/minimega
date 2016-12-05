@@ -38,7 +38,7 @@ Should be run with caution.`,
 // currently this will:
 // 	kill all qemu instances
 //	kill all taps
-//  kill all containers
+//  	kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 //  exit()
 func cliNuke(c *minicli.Command, resp *minicli.Response) error {

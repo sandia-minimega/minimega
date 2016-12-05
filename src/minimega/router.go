@@ -28,7 +28,7 @@ type Router struct {
 	logLevel     string
 	updateIPs    bool // only update IPs if we've made changes
 	dhcp         map[string]*dhcp
-	dns          map[string]string
+	dns          map[string][]string
 	upstream     string
 	rad          map[string]bool // using a bool placeholder here for later RAD options
 	staticRoutes map[string]string
@@ -78,8 +78,10 @@ func (r *Router) String() string {
 		}
 		sort.Strings(keys)
 		for _, ip := range keys {
-			host := r.dns[ip]
-			fmt.Fprintf(&o, "%v\t%v\n", ip, host)
+			hosts := r.dns[ip]
+			for _, host := range hosts {
+				fmt.Fprintf(&o, "%v\t%v\n", ip, host)
+			}
 		}
 		fmt.Fprintln(&o)
 	}
@@ -170,8 +172,10 @@ func (r *Router) generateConfig() error {
 			fmt.Fprintf(&out, "dnsmasq dhcp static %v %v %v\n", d.addr, mac, ip)
 		}
 	}
-	for ip, host := range r.dns {
-		fmt.Fprintf(&out, "dnsmasq dns %v %v\n", ip, host)
+	for ip, hosts := range r.dns {
+		for _, host := range hosts {
+			fmt.Fprintf(&out, "dnsmasq dns %v %v\n", ip, host)
+		}
 	}
 	if r.upstream != "" {
 		fmt.Fprintf(&out, "dnsmasq upstream %v\n", r.upstream)
@@ -193,7 +197,7 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetID()))
+	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetName()))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
@@ -211,7 +215,7 @@ func FindOrCreateRouter(vm VM) *Router {
 		IPs:          [][]string{},
 		logLevel:     "error",
 		dhcp:         make(map[string]*dhcp),
-		dns:          make(map[string]string),
+		dns:          make(map[string][]string),
 		rad:          make(map[string]bool),
 		staticRoutes: make(map[string]string),
 		ospfRoutes:   make(map[string]*ospf),
@@ -245,7 +249,7 @@ func (r *Router) Commit() error {
 	r.updateIPs = false // IPs are no longer stale
 
 	// remove any previous commands
-	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetID())
+	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetName())
 	ids := ccPrefixIDs(prefix)
 	if len(ids) != 0 {
 		for _, v := range ids {
@@ -470,12 +474,12 @@ func (d *dhcp) String() string {
 }
 
 func (r *Router) DNSAdd(ip, hostname string) {
-	r.dns[ip] = hostname
+	r.dns[ip] = append(r.dns[ip], hostname)
 }
 
 func (r *Router) DNSDel(ip string) error {
 	if ip == "" {
-		r.dns = make(map[string]string)
+		r.dns = make(map[string][]string)
 	} else if _, ok := r.dns[ip]; ok {
 		delete(r.dns, ip)
 	} else {

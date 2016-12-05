@@ -97,6 +97,9 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	if c.BoolArgs["play"] {
+		vncPlayingLock.Lock()
+		defer vncPlayingLock.Unlock()
+
 		err = vncPlaybackKB(vm, fname)
 	} else if c.BoolArgs["stop"] {
 		vncPlayingLock.Lock()
@@ -108,6 +111,34 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		err = p.Stop()
+	} else if c.BoolArgs["inject"] {
+		vncPlayingLock.RLock()
+
+		cmd := c.StringArgs["cmd"]
+		p, _ = vncPlaying[id]
+		if p != nil {
+			err = p.Inject(cmd)
+			vncPlayingLock.RUnlock()
+		} else {
+			e, err := parseEvent(cmd)
+			if err != nil {
+				vncPlayingLock.RUnlock()
+				return err
+			}
+
+			if event, ok := e.(Event); ok {
+				// Vnc event
+				err = vncInject(vm, event)
+				vncPlayingLock.RUnlock()
+			} else {
+				// This is an injected LoadFile event without a running
+				// playback. This is equivalent to starting a new vnc playback.
+				vncPlayingLock.RUnlock()
+				vncPlayingLock.Lock()
+				err = vncPlaybackKB(vm, e.(string))
+				vncPlayingLock.Unlock()
+			}
+		}
 	} else {
 		vncPlayingLock.RLock()
 		defer vncPlayingLock.RUnlock()
@@ -115,7 +146,7 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 		// Need a valid playback for all other operations
 		p, _ = vncPlaying[id]
 		if p == nil {
-			return fmt.Errorf("kb playback %v vnot found", vm.Name)
+			return fmt.Errorf("kb playback %v not found", vm.Name)
 		}
 
 		// Running playback commands
@@ -127,8 +158,6 @@ func cliVNCPlay(c *minicli.Command, resp *minicli.Response) error {
 			err = p.Step()
 		} else if c.BoolArgs["getstep"] {
 			resp.Response, err = p.GetStep()
-		} else {
-			err = p.Inject(c.StringArgs["cmd"])
 		}
 	}
 	return err
@@ -141,7 +170,7 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 
 	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
-		return fmt.Errorf("vm %s not found", c.StringArgs["vm"])
+		return err
 	}
 
 	if c.BoolArgs["record"] {
@@ -185,43 +214,48 @@ func cliVNCRecord(c *minicli.Command, resp *minicli.Response) error {
 // List all active recordings and playbacks
 func cliVNCList(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"name", "type", "time", "filename"}
-	resp.Tabular = [][]string{}
 
 	vncRecordingLock.RLock()
-	for _, v := range vncKBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record kb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
-	}
-	vncRecordingLock.RUnlock()
-
-	vncRecordingLock.RLock()
-	for _, v := range vncFBRecording {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record fb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
-	}
-	vncRecordingLock.RUnlock()
-
+	defer vncRecordingLock.RUnlock()
 	vncPlayingLock.RLock()
-	for _, v := range vncPlaying {
-		var r string
-		if v.state == Pause {
-			r = "PAUSED"
-		} else {
-			r = v.timeRemaining() + " remaining"
-		}
+	defer vncPlayingLock.RUnlock()
 
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "playback kb",
-			r,
-			v.file.Name(),
-		})
+	for _, v := range vncKBRecording {
+		if inNamespace(v.VM) {
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "record kb",
+				time.Since(v.start).String(),
+				v.file.Name(),
+			})
+		}
 	}
-	vncPlayingLock.RUnlock()
+
+	for _, v := range vncFBRecording {
+		if inNamespace(v.VM) {
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "record fb",
+				time.Since(v.start).String(),
+				v.file.Name(),
+			})
+		}
+	}
+
+	for _, v := range vncPlaying {
+		if inNamespace(v.VM) {
+			var r string
+			if v.state == Pause {
+				r = "PAUSED"
+			} else {
+				r = v.timeRemaining() + " remaining"
+			}
+
+			resp.Tabular = append(resp.Tabular, []string{
+				v.VM.Name, "playback kb",
+				r,
+				v.file.Name(),
+			})
+		}
+	}
+
 	return nil
 }
