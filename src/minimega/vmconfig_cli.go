@@ -65,8 +65,8 @@ VMs in a namespace.`,
 		HelpShort: "set max peers for VM",
 		HelpLong: `
 Set a limit on the number of VMs that should be scheduled on the same host as
-the VM. A limit of zero means that the VM should be schedule by itself. This is
-only used when launching VMs in a namespace.`,
+the VM. A limit of zero means that the VM should be scheduled by itself. This
+is only used when launching VMs in a namespace.`,
 		Patterns: []string{
 			"vm config coschedule [limit]",
 		},
