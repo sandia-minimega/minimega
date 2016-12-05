@@ -18,9 +18,9 @@ type hostSorter struct {
 type ByPriority []*QueuedVMs
 
 var hostSortByFns = map[string]hostSortBy{
-	"cpucommit": cpuCommit,
 	"netcommit": networkCommit,
-	"memload":   memoryLoad,
+	"cpucommit": cpuCommit,
+	"memcommit": memoryCommit,
 }
 
 func (by hostSortBy) Sort(hosts []*HostStats) {
@@ -142,16 +142,22 @@ func cpuCommit(h1, h2 *HostStats) bool {
 		return !full
 	}
 
-	return h1.CPUCommit < h2.CPUCommit
+	r1 := float64(h1.CPUCommit) / float64(h1.CPUs)
+	r2 := float64(h2.CPUCommit) / float64(h2.CPUs)
+
+	return r1 < r2
 }
 
-func memoryLoad(h1, h2 *HostStats) bool {
+func memoryCommit(h1, h2 *HostStats) bool {
 	// fully loaded host is always greater
 	if full := h1.IsFull(); full != h2.IsFull() {
 		return !full
 	}
 
-	return (h1.MemTotal - h1.MemCommit) < (h2.MemTotal - h2.MemCommit)
+	r1 := float64(h1.MemCommit) / float64(h1.MemTotal)
+	r2 := float64(h2.MemCommit) / float64(h2.MemTotal)
+
+	return r1 < r2
 }
 
 func networkCommit(h1, h2 *HostStats) bool {

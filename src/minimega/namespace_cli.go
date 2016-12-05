@@ -31,17 +31,17 @@ Modify settings of the currently active namespace.
 
 add-host : add comma-separated list of hosts to the namespace
 del-host : delete comma-separated list of hosts from the namespace
-load     : change host load is computed for scheduler
-	cpucommit : sum of the number of VCPUs across all VMs (default)
-	netcommit : sum of the number of network interfaces across all VMs
-	memload   : sum of memory commit across all VMs minus total memory
+load     : change host load is computed for scheduler, based on:
+	cpucommit : total CPU commit divided by number of CPUs (default)
+	netcommit : total NIC
+	memcommit : total memory commit divided by total memory
 `,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
 			"nsmod <load,> [cpucommit,]",
 			"nsmod <load,> [netcommit,]",
-			"nsmod <load,> [memload,]",
+			"nsmod <load,> [memcommit,]",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
