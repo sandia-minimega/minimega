@@ -5,6 +5,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -21,29 +22,33 @@ const (
 	greeting = "yo"
 )
 
-var channels = defaultChannels
-var messages = defaultMessages
-var nicks    = defaultNicks
+var (
+	channels = defaultChannels
+	messages = defaultMessages
+	nicks    = defaultNicks
 
-func ircClient(protocol string) {
-	port := *f_ircport
-	if *f_ircchans != "" {
-		channels = strings.Split(*f_ircchans, ",")
-	}
-	if *f_ircmsg != "" {
-		data, err := ioutil.ReadFile(*f_ircmsg)
-		if err != nil {
-			log.Fatal("Unable to read file %v", *f_ircmsg)
-		}
-		messages = strings.Split(string(data), "\n")
-	}
+	channelLock sync.Mutex
+)
 
+func ircClient() {
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 	log.Debugln("ircClient")
 	rand.Seed(time.Now().UnixNano())
 
-	host, original := randomHost()
+	// handle passed flags
+	port := *f_ircport
+	if *f_ircchans != "" {
+		channels = strings.Split(*f_ircchans, ",")
+	}
+	if *f_messages != "" {
+		data, err := ioutil.ReadFile(*f_messages)
+		if err != nil {
+			log.Fatal("Unable to read file %v", *f_messages)
+		}
+		messages = strings.Split(string(data), "\n")
+	}
 
+	host, original := randomHost()
 	nick := randomNick()
 	client := irc.IRC(nick, nick)
 
@@ -67,7 +72,6 @@ func ircClient(protocol string) {
 		}
 	}
 	joinedChannels := []string{}
-	joinedLock := sync.Mutex
 
 	// create callbacks
 	// 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
@@ -80,15 +84,36 @@ func ircClient(protocol string) {
 				client.Join(userChannels[i])
 			}
 
+			// wait until join
 			for {
 				t.Tick()
 				if len(joinedChannels) == 0 {
 					continue
 				}
+				break
+			}
 
-				to, message := randomMessage(joinedChannels)
-				log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
-				client.Privmsg(to, message)
+			// have some nice conversations
+			if *f_markov {
+				// use markov chain
+				chain := NewChain()
+				chain.Build(messages)
+				for {
+					t.Tick()
+					to := randomFromSlice(joinedChannels)
+					message := chain.Generate()
+					log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
+					client.Privmsg(to, message)
+				}
+			} else {
+				// random
+				for {
+					t.Tick()
+					to := randomFromSlice(joinedChannels)
+					message := randomMessage()
+					log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
+					client.Privmsg(to, message)
+				}
 			}
 		}(event)
 	})
@@ -107,8 +132,8 @@ func ircClient(protocol string) {
 	// JOIN occurs after you successfully join a channel
 	client.AddCallback("JOIN", func(event *irc.Event) {
 		if event.Nick == client.GetNick() {
-			joinedLock.Lock()
-			defer joinedLock.Unlock()
+			channelLock.Lock()
+			defer channelLock.Unlock()
 
 			// add channel to joined channel slice
 			joinedChannels = append(joinedChannels, event.Arguments[0])
@@ -142,11 +167,14 @@ func ircClient(protocol string) {
 
 	// connect
 	log.Debug("[nick %v] connecting to irc host %v from %v", client.GetNick(), host, original)
-	client.Connect(host + ":" + port)
+	err := client.Connect(host + ":" + port)
+	if err != nil {
+		log.Fatal("%v", err)
+	}
 	client.Loop()
 }
 
-func ircServer(protocol string) {
+func ircServer() {
 	port := *f_ircport
 	settings := goircd.Settings{"localhost", ":" + port, "", "", "", "", "", "", false}
 	goircd.SetSettings(settings)
@@ -187,19 +215,27 @@ func ircServer(protocol string) {
 	goircd.Processor(events, make(chan struct{}))
 }
 
+func randomFromSlice(slice []string) string {
+	if len(slice) < 1 {
+		return ""
+	}
+	return slice[rand.Intn(len(slice))]
+}
+
 func randomNick() string {
 	return nicks[rand.Intn(len(nicks))]
 }
 
 func randomChannel() string {
+	if len(channels) < 1 {
+		return ""
+	}
 	return channels[rand.Intn(len(channels))]
 }
 
-func randomMessage(channels []string) (channel string, message string) {
-	if len(channels) < 1 {
-		return "",""
+func randomMessage() string {
+	if len(messages) < 1 {
+		return ""
 	}
-	channel = channels[rand.Intn(len(channels))]
-	message = messages[rand.Intn(len(messages))]
-	return
+	return messages[rand.Intn(len(messages))]
 }
