@@ -20,6 +20,7 @@ import (
 
 const (
 	greeting = "yo"
+	pairQuitTime = 60
 )
 
 var (
@@ -29,6 +30,14 @@ var (
 
 	channelLock sync.Mutex
 )
+
+type Pair struct {
+	nick       string
+	channel    string
+	isPaired   bool
+	isWaiting  bool
+	counter    int
+}
 
 func ircClient() {
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
@@ -46,6 +55,10 @@ func ircClient() {
 			log.Fatal("Unable to read file %v", *f_messages)
 		}
 		messages = strings.Split(string(data), "\n")
+	}
+	chain := NewChain()
+	if *f_markov {
+		chain.Build(messages)
 	}
 
 	host, original := randomHost()
@@ -72,10 +85,13 @@ func ircClient() {
 		}
 	}
 	joinedChannels := []string{}
+	channelUsers := make(map[string]string)
+	pair := Pair{"", "", false, false, 0}
 
 	// create callbacks
 	// 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
 	client.AddCallback("001", func(event *irc.Event) {
+		// do irc communication on a separate thread (not main thread)
 		go func(event *irc.Event) {
 			// join channels
 			for i := 0; i < len(userChannels); i++ {
@@ -84,7 +100,7 @@ func ircClient() {
 				client.Join(userChannels[i])
 			}
 
-			// wait until join
+			// wait until joined 1 or more channels
 			for {
 				t.Tick()
 				if len(joinedChannels) == 0 {
@@ -96,14 +112,39 @@ func ircClient() {
 			// have some nice conversations
 			if *f_markov {
 				// use markov chain
-				chain := NewChain()
-				chain.Build(messages)
 				for {
 					t.Tick()
-					to := randomFromSlice(joinedChannels)
-					message := chain.Generate()
-					log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
-					client.Privmsg(to, message)
+					
+					if pair.isWaiting {
+						pair.counter++
+						if pair.counter > pairQuitTime {
+							// nick did not reply, give up
+							pair.nick = ""
+							pair.channel = ""
+							pair.isWaiting = false
+							pair.isPaired = false
+							pair.counter = 0
+						}
+					} else if !pair.isPaired {
+						// idle for a bit before pinging someone
+						wait := rand.Intn(25) + 5
+						for i := 0; i < wait; i++ {
+							t.Tick()
+						}
+
+						// get random channel and user
+						channel := randomFromSlice(joinedChannels)
+						nick := randomFromSlice(strings.Split(channelUsers[channel], " "))
+
+						// set paired flags
+						pair.isWaiting = true
+						pair.nick = nick
+						pair.channel = channel
+
+						// ping user
+						log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, nick)
+						client.Privmsg(channel, nick)
+					}
 				}
 			} else {
 				// random
@@ -117,6 +158,21 @@ func ircClient() {
 			}
 		}(event)
 	})
+
+	// 353: RplNamReply "= <channel> :<names>"
+	client.AddCallback("353", func(event *irc.Event) {
+		nicks := strings.Split(event.Message(), " ")
+		channel := event.Arguments[2]
+
+		nick = client.GetNick()
+		for i,n := range nicks {
+			if n == nick {
+				nicks = append(nicks[:i], nicks[i+1:]...)
+				break
+			}
+		}
+		channelUsers[channel] = strings.Join(nicks, " ")
+	});
 
 	// 433: ERR_NICKNAMEINUSE "<nick> :Nickname is already in use"
 	client.AddCallback("433", func(event *irc.Event) {
@@ -146,13 +202,36 @@ func ircClient() {
 
 	// PRIVMSG handles both private and channel messages
 	client.AddCallback("PRIVMSG", func(event *irc.Event) {
-		if (strings.HasPrefix(event.Arguments[0], "#")) {
+		if strings.HasPrefix(event.Arguments[0], "#") {
 			// channel message
-			log.Debug("[nick %v] Received PRIVMSG in channel %v from %v: %v", client.GetNick(), event.Arguments[0], event.Nick, event.Message())
+			channel := event.Arguments[0]
+			message := event.Message()
+			log.Debug("[nick %v] Received PRIVMSG in channel %v from %v: %v", client.GetNick(), channel, event.Nick, message)
 
-			// reply on highlight
-			if (strings.Contains(event.Message(), client.GetNick())) {
-				client.Privmsg(event.Arguments[0], greeting)
+			if (pair.isWaiting && pair.nick == event.Nick) {
+				pair.isPaired = true
+				pair.isWaiting = false
+				pair.counter = 0
+				t.Tick()
+
+				if *f_markov {
+					message = chain.Generate()
+				} else {
+					message = randomMessage()
+				}
+
+				log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, message)
+				client.Privmsg(channel, message)
+				pair.isWaiting = true
+			} else if (!pair.isWaiting && !pair.isPaired) && strings.HasPrefix(message, client.GetNick()) {
+				pair.isPaired = true
+				pair.isWaiting = false
+				pair.counter = 0
+				t.Tick()
+
+				log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, greeting)
+				client.Privmsg(channel, greeting)
+				pair.isWaiting = true
 			}
 		} else {
 			// private message
