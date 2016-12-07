@@ -31,7 +31,7 @@ var (
 	channelLock sync.Mutex
 )
 
-type Pair struct {
+type Conversation struct {
 	nick       string
 	channel    string
 	isPaired   bool
@@ -86,7 +86,7 @@ func ircClient() {
 	}
 	joinedChannels := []string{}
 	channelUsers := make(map[string]string)
-	pair := Pair{"", "", false, false, 0}
+	pair := Conversation{"", "", false, false, 0}
 
 	// create callbacks
 	// 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
@@ -118,7 +118,7 @@ func ircClient() {
 					if pair.isWaiting {
 						pair.counter++
 						if pair.counter > pairQuitTime {
-							// nick did not reply, give up
+							// nick did not reply, give up and reset conversation flags
 							pair.nick = ""
 							pair.channel = ""
 							pair.isWaiting = false
@@ -126,7 +126,7 @@ func ircClient() {
 							pair.counter = 0
 						}
 					} else if !pair.isPaired {
-						// idle for a bit before pinging someone
+						// idle for a bit before starting a new conversation
 						wait := rand.Intn(25) + 5
 						for i := 0; i < wait; i++ {
 							t.Tick()
@@ -136,7 +136,7 @@ func ircClient() {
 						channel := randomFromSlice(joinedChannels)
 						nick := randomFromSlice(strings.Split(channelUsers[channel], " "))
 
-						// set paired flags
+						// set conversation flags
 						pair.isWaiting = true
 						pair.nick = nick
 						pair.channel = channel
@@ -159,7 +159,7 @@ func ircClient() {
 		}(event)
 	})
 
-	// 353: RplNamReply "= <channel> :<names>"
+	// 353: RPL_NAMREPLY "= <channel> :<names>"
 	client.AddCallback("353", func(event *irc.Event) {
 		nicks := strings.Split(event.Message(), " ")
 		channel := event.Arguments[2]
@@ -176,10 +176,10 @@ func ircClient() {
 
 	// 433: ERR_NICKNAMEINUSE "<nick> :Nickname is already in use"
 	client.AddCallback("433", func(event *irc.Event) {
-		// Note:  removed race condition from go-ircevent where go-ircevent will 
-		//        receive the callback first and append underscores to the name instead
+		// Note:  removed 433 callback from go-ircevent where go-ircevent will receive
+		//        the callback first and append underscores to the name instead
 
-		// nick is taken, attempt to take another nick with a random number
+		// append random number to nick
 		newNick := nick + strconv.Itoa(rand.Intn(1000000))
 		log.Debug("[nick %v] Switching nick to %v", client.GetNick(), newNick)
 		client.Nick(newNick)
@@ -208,22 +208,44 @@ func ircClient() {
 			message := event.Message()
 			log.Debug("[nick %v] Received PRIVMSG in channel %v from %v: %v", client.GetNick(), channel, event.Nick, message)
 
-			if (pair.isWaiting && pair.nick == event.Nick) {
-				pair.isPaired = true
-				pair.isWaiting = false
-				pair.counter = 0
-				t.Tick()
+			if pair.isWaiting && (pair.nick == event.Nick) {
+				if !pair.isPaired {
+					// either paired nick confirmed the conversation with us or ignored it
+					if strings.Contains(message, greeting) {
+						pair.isPaired = true
+						pair.isWaiting = false
+						pair.counter = 0
+						t.Tick()
 
-				if *f_markov {
-					message = chain.Generate()
+						if *f_markov {
+							message = chain.Generate()
+						} else {
+							message = randomMessage()
+						}
+
+						log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, message)
+						client.Privmsg(channel, message)
+						pair.isWaiting = true
+					}
 				} else {
-					message = randomMessage()
-				}
+					// already paired with nick, so respond
+					pair.isPaired = true
+					pair.isWaiting = false
+					pair.counter = 0
+					t.Tick()
 
-				log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, message)
-				client.Privmsg(channel, message)
-				pair.isWaiting = true
-			} else if (!pair.isWaiting && !pair.isPaired) && strings.HasPrefix(message, client.GetNick()) {
+					if *f_markov {
+						message = chain.Generate()
+					} else {
+						message = randomMessage()
+					}
+
+					log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, message)
+					client.Privmsg(channel, message)
+					pair.isWaiting = true
+				}
+			} else if strings.HasPrefix(message, client.GetNick()) && (!pair.isWaiting && !pair.isPaired) {
+				// another nick has requested a conversation, accept
 				pair.isPaired = true
 				pair.isWaiting = false
 				pair.counter = 0
