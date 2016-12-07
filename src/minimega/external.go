@@ -51,6 +51,7 @@ var defaultExternalProcesses = map[string]string{
 	"ssh":      "ssh",
 	"hostname": "hostname",
 	"tc":       "tc",
+	"partx":    "partx",
 }
 
 // customExternalProcesses contains user-specified mappings between command

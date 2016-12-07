@@ -15,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 const (
@@ -152,7 +151,12 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 	defer diskInjectCleanup(mntDir, nbdPath)
 
-	time.Sleep(100 * time.Millisecond) // give time to create partitions
+	// ensure kernel is aware of partitions
+	out, err := processWrapper("partx", "-a", nbdPath)
+	if err != nil {
+		log.Error("failed to refresh partitions")
+		return fmt.Errorf("%v: %v", out, err)
+	}
 
 	// decide on a partition
 	if partition == "" {
