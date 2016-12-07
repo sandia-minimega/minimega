@@ -212,7 +212,9 @@ func (vms VMs) FindVMNoNamespace(s string) VM {
 func (vms VMs) findVM(s string, checkNamespace bool) VM {
 	if !*f_future {
 		if id, err := strconv.Atoi(s); err == nil {
-			log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
+			if !*f_nowarnvmid {
+				log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
+			}
 
 			if vm, ok := vms[id]; ok {
 				if inNamespace(vm) || !checkNamespace {
@@ -570,7 +572,10 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 		// If target is an integer, implying VM ID
 		if err == nil {
 			if !*f_future {
-				log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
+				if !*f_nowarnvmid {
+					log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
+				}
+
 				ids[id] = true
 			} else {
 				// integer as a VM name is not valid, but add it into names[] anyway
