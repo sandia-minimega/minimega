@@ -6,5 +6,5 @@ bash vet.bash
 # bash fix.bash
 bash build.bash
 bash test.bash
-# bash minitest.bash
+# sudo bash minitest.bash
 bash doc.bash
