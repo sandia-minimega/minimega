@@ -210,20 +210,14 @@ func (vms VMs) FindVMNoNamespace(s string) VM {
 
 // findVM assumes vmLock is held.
 func (vms VMs) findVM(s string, checkNamespace bool) VM {
-	if !*f_future {
-		if id, err := strconv.Atoi(s); err == nil {
-			if !*f_nowarnvmid {
-				log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
+	if id, err := strconv.Atoi(s); err == nil {
+		if vm, ok := vms[id]; ok {
+			if inNamespace(vm) || !checkNamespace {
+				return vm
 			}
-
-			if vm, ok := vms[id]; ok {
-				if inNamespace(vm) || !checkNamespace {
-					return vm
-				}
-			}
-
-			return nil
 		}
+
+		return nil
 	}
 
 	// Search for VM by name or UUID
@@ -568,20 +562,8 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 	for _, v := range vals {
 		id, err := strconv.Atoi(v)
-
-		// If target is an integer, implying VM ID
 		if err == nil {
-			if !*f_future {
-				if !*f_nowarnvmid {
-					log.Warn("Targeting VMs by ID is being deprecated, and will be removed in a future release! (VM %d)", id)
-				}
-
-				ids[id] = true
-			} else {
-				// integer as a VM name is not valid, but add it into names[] anyway
-				// so that it will trigger a "name not found" error later
-				names[v] = true
-			}
+			ids[id] = true
 		} else {
 			names[v] = true
 		}

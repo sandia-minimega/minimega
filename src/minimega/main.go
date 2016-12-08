@@ -50,8 +50,6 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
-	f_future     = flag.Bool("test-the-future", false, "disable features that will be removed in future releases, such as targeting VMs by ID")
-	f_nowarnvmid = flag.Bool("i-wont-index-vms-by-id-in-the-future", false, "disable warning message when targeting VMs by ID")
 
 	vms = VMs{}
 

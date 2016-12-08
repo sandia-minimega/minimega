@@ -726,7 +726,7 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 
 func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"name", "status", "%% complete"}
+		resp.Header = []string{"id", "name", "status", "%% complete"}
 
 		for _, vm := range vms.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
@@ -738,6 +738,7 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 			}
 
 			resp.Tabular = append(resp.Tabular, []string{
+				fmt.Sprintf("%v", vm.GetID()),
 				vm.GetName(),
 				status,
 				fmt.Sprintf("%.2f", complete)})
