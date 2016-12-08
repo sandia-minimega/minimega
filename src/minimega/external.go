@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +22,8 @@ var (
 	MIN_QEMU    = []int{1, 6}
 	MIN_DNSMASQ = []int{2, 73}
 	MIN_OVS     = []int{1, 11}
+	// MIN_KERNEL for Overlayfs
+	MIN_KERNEL = []int{3, 18}
 )
 
 // externalProcessesLock mediates access to customExternalProcesses.
@@ -85,7 +88,12 @@ func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
 // checkExternal checks for the presence of each of the external processes we
 // may call, and error if any aren't in our path.
 func checkExternal() error {
-	// make sure we have all binaries first
+	// make sure we're using a new enough kernel
+	if err := checkVersion("kernel", MIN_KERNEL, kernelVersion); err != nil {
+		return err
+	}
+
+	// make sure we have all binaries
 	if err := checkProcesses(); err != nil {
 		return err
 	}
@@ -133,6 +141,21 @@ func checkProcesses() error {
 	}
 
 	return nil
+}
+
+func kernelVersion() ([]int, error) {
+	var utsname syscall.Utsname
+	if err := syscall.Uname(&utsname); err != nil {
+		return nil, fmt.Errorf("check kernel version failed: %v", err)
+	}
+
+	// convert []int8 to string so that we can call parseVersion on it
+	buf := make([]byte, len(utsname.Release))
+	for i, v := range utsname.Release {
+		buf[i] = byte(v)
+	}
+
+	return parseVersion("kernel", string(buf))
 }
 
 func dnsmasqVersion() ([]int, error) {
@@ -184,6 +207,20 @@ func parseVersion(name, version string) ([]int, error) {
 	for _, v := range strings.Split(version, ".") {
 		i, err := strconv.Atoi(v)
 		if err != nil {
+			// if the string contains non-numeric characters, trim those and
+			// then immediately return the result, if we have a valid number
+			for i, r := range v {
+				if r < '0' || r > '9' {
+					v = v[:i]
+					break
+				}
+			}
+
+			if i, err := strconv.Atoi(v); err == nil {
+				res = append(res, i)
+				return res, nil
+			}
+
 			return nil, fmt.Errorf("cannot parse %v version: %v", name, version)
 		}
 
@@ -211,14 +248,15 @@ func checkVersion(name string, min []int, versionFn func() ([]int, error)) error
 		return err
 	}
 
-	log.Debug("%v version: %v", name, printVersion(version))
+	got := printVersion(version)
+	want := printVersion(min)
+
+	log.Info("%v version: %v, minimum: %v", name, got, want)
 
 	for i := range min {
 		if i >= len(version) || version[i] < min[i] {
 			// minimum version was more specific (e.g. 1.1.1 against 1.1) or
 			// minimum version is greater in the current index => fail
-			got := printVersion(version)
-			want := printVersion(min)
 			return fmt.Errorf("%v version does not meet minimum: %v < %v", name, got, want)
 		} else if version[i] > min[i] {
 			// version exceeds minimum
