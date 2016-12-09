@@ -144,23 +144,23 @@ Substring matching can be specified explicity:
 	{ // columns
 		HelpShort: "show certain columns from tabular data",
 		HelpLong: `
-Filter tabular data using particular column names. For example, to only display
-only the vm ID and state:
+Filter tabular data using particular column names. For example, to display
+only the vm name and state:
 
-	.columns id,state vm info
+	.columns name,state vm info
 
 Column names are comma-seperated. .columns can be used in conjunction with
 .filter to slice a subset of the rows and columns from a command, however,
 these commands are not always interchangeable. For example, the following is
 acceptable:
 
-	.columns id,state .filter vcpus=4 vm info
+	.columns name,state .filter vcpus=4 vm info
 
 While the following is not:
 
-	.filter vcpus=4 .columns id,state vm info
+	.filter vcpus=4 .columns name,state vm info
 
-This is because .columns strips all columns except for ID and state from the
+This is because .columns strips all columns except for name and state from the
 tabular data.
 
 Note: the annotate flag controls the presence of the host column.`,
@@ -327,8 +327,10 @@ func cliFilter(c *Command, out chan<- Responses) {
 		return
 	}
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		newResps := Responses{}
 
 		for _, r := range resps {
@@ -352,8 +354,10 @@ outer:
 func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		for _, r := range resps {
 			if r.Header == nil {
 				continue
@@ -421,7 +425,9 @@ func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
@@ -459,7 +465,9 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()

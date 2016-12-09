@@ -211,14 +211,9 @@ var kvmConfigFns = map[string]VMConfigFns{
 		Clear: func(vm interface{}) { mustKVMConfig(vm).Append = "" },
 		Print: func(vm interface{}) string { return mustKVMConfig(vm).Append },
 	},
-	"qemu": {
-		Update: func(_ interface{}, c *minicli.Command) error {
-			customExternalProcesses["qemu"] = c.StringArgs["path"]
-			return nil
-		},
-		Clear: func(_ interface{}) { delete(customExternalProcesses, "qemu") },
-		Print: func(_ interface{}) string { return process("qemu") },
-	},
+	"qemu": vmConfigString(func(vm interface{}) *string {
+		return &mustKVMConfig(vm).QemuPath
+	}, ""),
 	"qemu-override": {
 		Update: func(_ interface{}, c *minicli.Command) error {
 			if c.StringArgs["match"] != "" {

@@ -152,9 +152,11 @@ var vmInfo = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "bandwidth", "qos",
+	// more generic fields but want next to vcpus
+	"memory",
 	// kvm fields
-	"memory", "vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom",
-	"migrate", "append", "serial", "virtio-serial", "vnc_port",
+	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
+	"append", "serial", "virtio-serial", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
@@ -167,8 +169,6 @@ var vmInfoLite = []string{
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan",
-	// kvm fields
-	"vnc_port",
 }
 
 func init() {
@@ -814,20 +814,20 @@ func inNamespace(vm VM) bool {
 	return namespace == "" || vm.GetNamespace() == namespace
 }
 
-func vmNotFound(idOrName string) error {
-	return fmt.Errorf("vm not found: %v", idOrName)
+func vmNotFound(name string) error {
+	return fmt.Errorf("vm not found: %v", name)
 }
 
-func vmNotRunning(idOrName string) error {
-	return fmt.Errorf("vm not running: %v", idOrName)
+func vmNotRunning(name string) error {
+	return fmt.Errorf("vm not running: %v", name)
 }
 
-func vmNotKVM(idOrName string) error {
-	return fmt.Errorf("vm not KVM: %v", idOrName)
+func vmNotKVM(name string) error {
+	return fmt.Errorf("vm not KVM: %v", name)
 }
 
-func vmNotContainer(idOrName string) error {
-	return fmt.Errorf("vm not container: %v", idOrName)
+func vmNotContainer(name string) error {
+	return fmt.Errorf("vm not container: %v", name)
 }
 
 func isVMNotFound(err string) bool {

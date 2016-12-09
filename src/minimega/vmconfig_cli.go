@@ -37,7 +37,7 @@ To restore a configuration:
 
 To clone the configuration of an existing VM:
 
-	vm config clone <vm name or id>
+	vm config clone <vm name>
 
 Calling clear vm config will clear all VM configuration options, but will not
 remove saved configurations.`,
@@ -45,7 +45,7 @@ remove saved configurations.`,
 			"vm config",
 			"vm config <save,> <name>",
 			"vm config <restore,> [name]",
-			"vm config <clone,> <vm id or name>",
+			"vm config <clone,> <vm name>",
 		},
 		Call: wrapSimpleCLI(cliVmConfig),
 	},
@@ -176,7 +176,9 @@ Note: this configuration only applies to KVM-based VMs.`,
 	{ // vm config qemu
 		HelpShort: "set the QEMU process to invoke. Relative paths are ok.",
 		HelpLong: `
-Set the QEMU process to invoke. Relative paths are ok.
+Set the QEMU process to invoke. Relative paths are ok. When unspecified,
+minimega uses "kvm" in the default path.
+
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{

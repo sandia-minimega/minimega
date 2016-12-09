@@ -35,6 +35,8 @@ const (
 )
 
 type KVMConfig struct {
+	QemuPath string // path to qemu binary, uses process("qemu") if empty
+
 	Append     string
 	CdromPath  string
 	InitrdPath string
@@ -297,7 +299,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
 	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
-	fmt.Fprintf(w, "QEMU Path:\t%v\n", process("qemu"))
+	fmt.Fprintf(w, "QEMU Path:\t%v\n", vm.QemuPath)
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
@@ -529,18 +531,22 @@ func (vm *KvmVM) launch() error {
 		}
 	}
 
-	var args []string
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
 	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
-	args = vmConfig.qemuArgs(vm.ID, vm.instancePath)
+	args := vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = ParseQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
+	path := vm.KVMConfig.QemuPath
+	if path == "" {
+		path = process("qemu")
+	}
+
 	cmd := &exec.Cmd{
-		Path:   process("qemu"),
-		Args:   args,
+		Path:   path,
+		Args:   append([]string{path}, args...),
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
@@ -628,8 +634,6 @@ func (vm *KvmVM) launch() error {
 // build the horribly long qemu argument string
 func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	var args []string
-
-	args = append(args, process("qemu"))
 
 	args = append(args, "-enable-kvm")
 
@@ -799,7 +803,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-uuid")
 	args = append(args, vm.UUID)
 
-	log.Info("args for vm %v is: %#v", id, args)
+	log.Debug("args for vm %v are: %#v", id, args)
 	return args
 }
 
@@ -845,7 +849,6 @@ func qemuOverrideString() string {
 	w.Flush()
 
 	args := vmConfig.qemuArgs(0, "") // ID doesn't matter -- just testing
-	args = args[1:]                  // strip off the executable
 	preArgs := unescapeString(args)
 	postArgs := strings.Join(ParseQemuOverrides(args), " ")
 
