@@ -111,6 +111,8 @@ function initVMDataTable() {
             },
         ],
         "order": [[ 0, 'asc' ], [ 1, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
         /*initComplete: function(){
             var api = this.api();
             api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
