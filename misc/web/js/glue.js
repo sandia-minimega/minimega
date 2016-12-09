@@ -203,7 +203,9 @@ function initHostDataTable() {
                 return days + " days " + new Date(seconds * 1000).toISOString().substr(11, 8);
             } },
         ],
-        "order": [[ 0, 'asc' ]]
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
     });
     hostDataTable.draw();
 
@@ -310,7 +312,9 @@ function updateScreenshotTable(vmsData) {
                 { "title": "Model", "data": "model", "searchable": false },
                 { "title": "VM", "data": "vm", "visible": false, "searchable": false },
             ],
-            "createdRow": loadOrRestoreImage
+            "createdRow": loadOrRestoreImage,
+            "stateSave": true,
+            "stateDuration": 0
         });
     }
 }
