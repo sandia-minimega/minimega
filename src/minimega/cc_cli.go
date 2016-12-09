@@ -79,7 +79,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <exec,> <command>...",
 			"cc <background,> <command>...",
 
-			"cc <process,> <list,> <vm id, name, uuid or all>",
+			"cc <process,> <list,> <vm name, uuid or all>",
 			"cc <process,> <kill,> <pid or all>",
 			"cc <process,> <killall,> <name>",
 
