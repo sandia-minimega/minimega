@@ -21,6 +21,12 @@ modprobe tun
 modprobe virtio_console
 modprobe virtio_pci
 
+# swath of network drivers that might be used
+modprobe e1000
+modprobe e1000e
+modprobe virtio_net
+modprobe vmxnet3
+
 # settle :(
 sleep 10
 
