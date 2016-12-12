@@ -338,7 +338,7 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 			return err
 		}
 
-		resp.Header = []string{"image", "format", "virtual size", "disk size", "backing file"}
+		resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile"}
 		resp.Tabular = append(resp.Tabular, []string{
 			image, info.Format, info.VirtualSize, info.DiskSize, info.BackingFile,
 		})

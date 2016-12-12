@@ -121,7 +121,7 @@ func cliOptimize(c *minicli.Command, resp *minicli.Response) error {
 	} else if c.BoolArgs["affinity"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print affinity status
-			resp.Header = []string{"CPU", "VMs"}
+			resp.Header = []string{"cpu", "vms"}
 			resp.Tabular = [][]string{}
 
 			var cpus []string

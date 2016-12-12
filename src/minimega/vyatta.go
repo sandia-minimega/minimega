@@ -140,7 +140,7 @@ func cliVyatta(c *minicli.Command, resp *minicli.Response) error {
 
 		if len(c.StringArgs) == 0 {
 			// List the existing DHCP services
-			resp.Header = []string{"Network", "GW", "Start address", "Stop address", "DNS"}
+			resp.Header = []string{"network", "gateway", "start", "stop", "dns"}
 			resp.Tabular = [][]string{}
 			for k, v := range vyatta.Dhcp {
 				resp.Tabular = append(resp.Tabular, []string{k, v.Gw, v.Start, v.Stop, v.Dns})
@@ -201,7 +201,7 @@ func cliVyatta(c *minicli.Command, resp *minicli.Response) error {
 		}
 	} else if c.BoolArgs["routes"] {
 		if len(c.ListArgs) == 0 {
-			resp.Header = []string{"Network", "Route"}
+			resp.Header = []string{"network", "route"}
 			resp.Tabular = [][]string{}
 
 			for _, v := range vyatta.Routes {
@@ -240,13 +240,13 @@ func cliVyatta(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		resp.Header = []string{
-			"IPv4 addresses",
-			"IPv6 addresses",
-			"RAD",
-			"DHCP servers",
-			"OSPF",
-			"OSPF3",
-			"Routes",
+			"ipv4",
+			"ipv6",
+			"rad",
+			"dhcps",
+			"ospf",
+			"ospf3",
+			"routes",
 		}
 		resp.Tabular = [][]string{[]string{
 			fmt.Sprintf("%v", vyatta.Ipv4),
