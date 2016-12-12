@@ -298,7 +298,7 @@ func (r *Router) Commit() error {
 
 	cmd = &ron.Command{
 		Filter:  filter,
-		Command: []string{"/minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
+		Command: []string{"minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
 	}
 	id = ccNode.NewCommand(cmd)
 	log.Debug("generated command %v : %v", id, cmd)
