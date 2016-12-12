@@ -126,7 +126,7 @@ func init() {
 
 func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
 	// print info about the mapping
-	resp.Header = []string{"ID", "MAC", "IP"}
+	resp.Header = []string{"id", "mac", "ip"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -152,7 +152,7 @@ func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
 
 func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
 	// print info
-	resp.Header = []string{"ID", "IP", "Hostname"}
+	resp.Header = []string{"id", "ip", "hostname"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -177,7 +177,7 @@ func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
 }
 
 func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
-	resp.Header = []string{"ID", "Option"}
+	resp.Header = []string{"id", "option"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -334,16 +334,16 @@ func cliDnsmasq(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Must be "list"
-	resp.Header = []string{"ID", "Listening Address", "Min", "Max", "Path", "PID"}
+	resp.Header = []string{"id", "address", "min", "max", "path", "pid"}
 	resp.Tabular = [][]string{}
-	for id, c := range dnsmasqServers {
+	for id, s := range dnsmasqServers {
 		pid := dnsmasqPID(id)
 		resp.Tabular = append(resp.Tabular, []string{
 			strconv.Itoa(id),
-			c.Addr,
-			c.MinRange,
-			c.MaxRange,
-			c.Path,
+			s.Addr,
+			s.MinRange,
+			s.MaxRange,
+			s.Path,
 			strconv.Itoa(pid)})
 	}
 
