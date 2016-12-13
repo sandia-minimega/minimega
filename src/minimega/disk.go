@@ -15,8 +15,11 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"time"
+	"syscall"
 )
+
+// #include "linux/fs.h"
+import "C"
 
 const (
 	INJECT_COMMAND = iota
@@ -152,7 +155,12 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 	defer diskInjectCleanup(mntDir, nbdPath)
 
-	time.Sleep(100 * time.Millisecond) // give time to create partitions
+	f, err := os.Open(nbdPath)
+	if err != nil {
+		return err
+	}
+
+	syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
 
 	// decide on a partition
 	if partition == "" {

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-export PATH
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
 
 # mount volatile filesystems
 mount -t proc proc /proc
