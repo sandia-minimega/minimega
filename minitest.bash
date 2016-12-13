@@ -10,17 +10,23 @@ if [ "$UID" -ne 0 ]; then
 fi
 
 
+MINITEST_ERROR=0
+
+
 echo "TESTING (minitest)"
 
 
-echo "setting up containerfs and minirouterfs..."
+echo "building miniccc_container.conf..."
+$SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/miniccc_container.conf
+export containerfs=$SCRIPT_DIR/miniccc_container_rootfs
+cp $SCRIPT_DIR/bin/miniccc $containerfs/
 
-export containerfs=/data/minimega/images/containerfs
-export minirouterfs=/data/minimega/images/minirouterfs
 
-cp bin/miniccc $containerfs/
-cp bin/miniccc $minirouterfs/
-cp bin/minirouter $minirouterfs/
+echo "building minirouter_container.conf..."
+$SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/minirouter_container.conf
+export minirouterfs=$SCRIPT_DIR/minirouter_container_rootfs
+cp $SCRIPT_DIR/bin/miniccc $minirouterfs/
+cp $SCRIPT_DIR/bin/minirouter $minirouterfs/
 
 
 BOOT_WAIT=5
@@ -29,7 +35,7 @@ $SCRIPT_DIR/bin/minimega -nostdin $@ &
 echo "waiting $BOOT_WAIT seconds..."
 sleep $BOOT_WAIT
 
-MINITEST_ERROR=0
+
 echo "starting minitest..."
 echo "!!! WARNING: output from both minitest and minimega may be interleaved below !!!"
 # minitest outputs everything on STDERR, and we may want to see messages from
@@ -38,13 +44,13 @@ echo "!!! WARNING: output from both minitest and minimega may be interleaved bel
 # for "got != want" to detect failed tests.
 MINITEST_CMD="$SCRIPT_DIR/bin/minitest -level info"
 MINITEST_OUTPUT="$($MINITEST_CMD 2> >(tee >(grep 'got != want') >&2) )"
-
 if [ -n "$MINITEST_OUTPUT" ]; then
     MINITEST_ERROR=1
     echo "minitest - FAILED"
 else
     echo "minitest - OKAY"
 fi
+
 
 QUIT_WAIT=5
 echo "quitting minimega; waiting $QUIT_WAIT seconds..."
