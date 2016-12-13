@@ -13,9 +13,10 @@ import (
 )
 
 type filter struct {
+	// Note that Col may be an incomplete column name for apropos matching
+	Col, Val string
 	Negate   bool
 	Fuzzy    bool
-	Col, Val string
 }
 
 var builtinCLIHandlers = []Handler{
@@ -294,21 +295,38 @@ func filterResp(f filter, r *Response) (bool, error) {
 		return true, nil
 	}
 
+	foundI := -1
 	for i, header := range r.Header {
-		if strings.ToLower(header) != f.Col {
+		// if it's an exact match, don't check any further for collisions
+		if strings.ToLower(header) == f.Col {
+			foundI = i
+			break
+		}
+
+		if !strings.HasPrefix(strings.ToLower(header), f.Col) {
 			continue
 		}
 
-		// Found right column, filter tabular rows
-		tabular := [][]string{}
+		if foundI >= 0 {
+			// collision
+			return false, fmt.Errorf("ambiguous column `%s`", f.Col)
+		}
 
+		foundI = i
+	}
+
+	if foundI >= 0 {
+		// Found right column, filter tabular rows
+		// Do this outside the loop to avoid a corner case in which
+		// an exact column match is found AFTER a partial match
+		tabular := [][]string{}
 		for _, row := range r.Tabular {
-			if f.Match(row[i]) {
+			if f.Match(row[foundI]) {
 				tabular = append(tabular, row)
 			}
 		}
-
 		r.Tabular = tabular
+
 		return true, nil
 	}
 
