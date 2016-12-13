@@ -26,7 +26,7 @@ var (
 	f_httpGzip    = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_irc         = flag.Bool("irc", false, "enable irc service")
 	f_ircport     = flag.String("ircport", "6667", "port to use for IRC client or server")
-	f_ircchans    = flag.String("ircchans", "", "overwrite default IRC channels to join, seperated by commas")
+	f_channels    = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
 	f_messages    = flag.String("messages", "", "path to file containing IRC client messages to use")
 	f_markov      = flag.Bool("markov", true, "disable using markov chains")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")

@@ -1,13 +1,8 @@
-package main
+// Copyright (2016) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
 
-var defaultChannels = []string{
-    "#general",
-    "#random",
-    "#help",
-    "#minimega",
-    "#development",
-    "#irc",
-}
+package main
 
 var defaultMessages = []string{
     "Lorem ipsum dolor sit amet, eum omnes ornatus volumus id.",
