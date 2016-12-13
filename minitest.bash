@@ -15,15 +15,22 @@ MINITEST_ERROR=0
 
 echo "TESTING (minitest)"
 
-
-echo "building miniccc_container.conf..."
-$SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/miniccc_container.conf
+if [ -d "miniccc_container_rootfs" ]; then
+    echo "using existing miniccc_container_rootfs/"
+else
+    echo "building miniccc_container.conf..."
+    $SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/miniccc_container.conf
+fi
 export containerfs=$SCRIPT_DIR/miniccc_container_rootfs
 cp $SCRIPT_DIR/bin/miniccc $containerfs/
 
 
-echo "building minirouter_container.conf..."
-$SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/minirouter_container.conf
+if [ -d "minirouter_container_rootfs" ]; then
+    echo "using existing minirouter_container_rootfs/"
+else
+    echo "building minirouter_container.conf..."
+    $SCRIPT_DIR/bin/vmbetter -branch stable -rootfs -level info $SCRIPT_DIR/misc/vmbetter_configs/minirouter_container.conf
+fi
 export minirouterfs=$SCRIPT_DIR/minirouter_container_rootfs
 cp $SCRIPT_DIR/bin/miniccc $minirouterfs/
 cp $SCRIPT_DIR/bin/minirouter $minirouterfs/
