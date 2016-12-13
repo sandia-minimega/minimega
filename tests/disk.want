@@ -8,10 +8,9 @@
 E: Information: You may need to update /etc/fstab.
 
 
-## shell mkfs.fat /dev/nbd0p1
-mkfs.fat 4.0 (2016-05-06)
-## shell mkfs.fat /dev/nbd0p2
-mkfs.fat 4.0 (2016-05-06)
+## # suppress mkfs output below because it varies across versions
+## shell bash -c "mkfs.fat /dev/nbd0p1 &> /dev/null || echo -n"
+## shell bash -c "mkfs.fat /dev/nbd0p2 &> /dev/null || echo -n"
 ## shell qemu-nbd -d /dev/nbd0
 /dev/nbd0 disconnected
 
