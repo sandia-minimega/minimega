@@ -163,8 +163,34 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 
 	path := nbdPath
 
+	f, err := os.Open(nbdPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
 	// decide whether to mount partition or raw disk
 	if partition != "none" {
+
+		// keep rereading partitions and waiting for them to show up for a bit
+		timeoutTime := time.Now().Add(5 * time.Second)
+		for i := 1; ; i++ {
+			if time.Now().After(timeoutTime) {
+				return errors.New("no partitions found on image")
+			}
+
+			// tell kernel to reread partitions
+			syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
+
+			_, err = os.Stat(nbdPath + "p1")
+			if err == nil {
+				log.Info("partitions detected after %d attempt(s)", i)
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
+		}
+
 		// default to first partition if there is only one partition
 		if partition == "" {
 			_, err = os.Stat(nbdPath + "p2")
@@ -177,34 +203,12 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 
 		path = nbdPath + "p" + partition
 
-		// keep rereading partitions and waiting for them to show up for a bit
-		timeoutTime := time.Now().Add(1 * time.Second)
-		for {
-			// tell kernel to reread partitions
-			f, err := os.Open(nbdPath)
-			if err != nil {
-				return err
-			}
-			syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
-
-			_, err = os.Stat(nbdPath + "p1")
-			if err == nil {
-				break
-			}
-
-			if time.Now().After(timeoutTime) {
-				return errors.New("no partitions found on image!")
-			}
-
-			time.Sleep(100 * time.Millisecond)
-		}
-
 		// check desired partition exists
 		_, err = os.Stat(path)
 		if err != nil {
-			return errors.New("desired partition not found on image!")
+			return fmt.Errorf("desired partition %s not found", partition)
 		} else {
-			log.Debug("desired partition found on image")
+			log.Info("desired partition %s found", partition)
 		}
 	}
 
