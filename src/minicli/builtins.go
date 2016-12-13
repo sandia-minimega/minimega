@@ -392,6 +392,11 @@ outer:
 
 						columns[i] = header
 						found = true
+
+						// if it's an exact match, don't check for collisions
+						if header == col {
+							break
+						}
 					}
 				}
 
