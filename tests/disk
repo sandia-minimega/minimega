@@ -12,7 +12,10 @@ shell qemu-nbd -d /dev/nbd0
 # Inject a file into base image
 disk inject foo.qcow2 files /tmp/minimega/XXX:/tmp/minimega/XXX
 shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
-shell partx -a /dev/nbd0
+# suppress output and exit code because partx sometimes fails and we don't care
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 shell mount /dev/nbd0p1 /mnt
 shell ls -R /mnt
 shell umount /mnt
@@ -22,7 +25,9 @@ shell qemu-nbd -d /dev/nbd0
 disk snapshot foo.qcow2 bar.qcow2
 disk inject bar.qcow2 files /tmp/minimega/YYY:/tmp/minimega/YYY
 shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
-shell partx -a /dev/nbd0
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 shell mount /dev/nbd0p1 /mnt
 shell ls -R /mnt
 shell umount /mnt
@@ -31,7 +36,9 @@ shell qemu-nbd -d /dev/nbd0
 # Inject a file into second partition of snapshot
 disk inject bar.qcow2:2 files /tmp/minimega/ZZZ:/tmp/minimega/ZZZ
 shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
-shell partx -a /dev/nbd0
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 shell mount /dev/nbd0p2 /mnt
 shell ls -R /mnt
 shell umount /mnt
@@ -39,7 +46,9 @@ shell qemu-nbd -d /dev/nbd0
 
 # Check that the "snapshot" was actually a snapshot
 shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
-shell partx -a /dev/nbd0
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 shell mount /dev/nbd0p1 /mnt
 shell ls -R /mnt
 shell umount /mnt
