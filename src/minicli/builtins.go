@@ -7,7 +7,6 @@ package minicli
 import (
 	"errors"
 	"fmt"
-	log "minilog"
 	"os"
 	"strconv"
 	"strings"
@@ -372,30 +371,32 @@ outer:
 			// Rebuild tabular data with specified columns
 			tabular := make([][]string, len(r.Tabular))
 			for i, col := range columns {
-				foundJ := -1
+				var found bool
 
 				for j, header := range r.Header {
+					// Found right column, copy the tabular data
 					if strings.HasPrefix(header, col) {
-						log.Debug("matched apropos column %v : %v", header, col)
-
-						// collision / multiple columns match?
-						if foundJ >= 0 {
-							foundJ = -1
-							break
+						if found {
+							// collision
+							resp := &Response{
+								Host:  hostname,
+								Error: fmt.Sprintf("ambiguous column `%s`", col),
+							}
+							out <- Responses{resp}
+							continue outer
 						}
 
-						foundJ = j
+						for k, row := range r.Tabular {
+							tabular[k] = append(tabular[k], row[j])
+						}
+
 						columns[i] = header
+						found = true
 					}
 				}
 
-				if foundJ >= 0 {
-					// Found the requested column, so copy the tabular data
-					for k, row := range r.Tabular {
-						tabular[k] = append(tabular[k], row[foundJ])
-					}
-				} else {
-					// Didn't find the requested column in the responses
+				// Didn't find the requested column in the responses
+				if !found {
 					resp := &Response{
 						Host:  hostname,
 						Error: fmt.Sprintf("no such column `%s`", col),
