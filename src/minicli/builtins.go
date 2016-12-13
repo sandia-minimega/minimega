@@ -380,12 +380,8 @@ outer:
 
 						// collision / multiple columns match?
 						if foundJ >= 0 {
-							resp := &Response{
-								Host:  hostname,
-								Error: fmt.Sprintf("no such column `%s`", col),
-							}
-							out <- Responses{resp}
-							continue outer
+							foundJ = -1
+							break
 						}
 
 						foundJ = j
