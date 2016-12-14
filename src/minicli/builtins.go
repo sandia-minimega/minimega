@@ -317,8 +317,8 @@ func filterResp(f filter, r *Response) (bool, error) {
 
 	if foundI >= 0 {
 		// Found right column, filter tabular rows
-		// Do this outside the loop to avoid a corner case in which
-		// an exact column match is found AFTER a partial match
+		// Do this after a complete loop to deal with corner case in
+		// which an exact match is found AFTER a partial match
 		tabular := [][]string{}
 		for _, row := range r.Tabular {
 			if f.Match(row[foundI]) {
@@ -386,40 +386,45 @@ outer:
 				continue
 			}
 
-			// Rebuild tabular data with specified columns
 			tabular := make([][]string, len(r.Tabular))
 			for i, col := range columns {
-				var found bool
+				foundJ := -1
 
 				for j, header := range r.Header {
-					// Found right column, copy the tabular data
-					if strings.HasPrefix(header, col) {
-						if found {
-							// collision
-							resp := &Response{
-								Host:  hostname,
-								Error: fmt.Sprintf("ambiguous column `%s`", col),
-							}
-							out <- Responses{resp}
-							continue outer
-						}
-
-						for k, row := range r.Tabular {
-							tabular[k] = append(tabular[k], row[j])
-						}
-
+					// if it's an exact match, don't check for collisions
+					if header == col {
+						foundJ = j
 						columns[i] = header
-						found = true
-
-						// if it's an exact match, don't check for collisions
-						if header == col {
-							break
-						}
+						break
 					}
+
+					if !strings.HasPrefix(header, col) {
+						continue
+					}
+
+					if foundJ >= 0 {
+						// collision
+						foundJ = -1
+						resp := &Response{
+							Host:  hostname,
+							Error: fmt.Sprintf("ambiguous column `%s`", col),
+						}
+						out <- Responses{resp}
+						continue outer
+					}
+
+					foundJ = j
+					columns[i] = header
 				}
 
-				// Didn't find the requested column in the responses
-				if !found {
+				if foundJ >= 0 {
+					// Rebuild tabular data with specified columns
+					// Do this after a complete loop to deal with corner case in
+					// which an exact match is found AFTER a partial match
+					for k, row := range r.Tabular {
+						tabular[k] = append(tabular[k], row[foundJ])
+					}
+				} else {
 					resp := &Response{
 						Host:  hostname,
 						Error: fmt.Sprintf("no such column `%s`", col),
