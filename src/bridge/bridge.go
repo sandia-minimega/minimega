@@ -40,7 +40,7 @@ type Bridge struct {
 	handle *pcap.Handle
 
 	// set to non-zero value by Bridge.destroy
-	destroyed uint64
+	isdestroyed uint64
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -88,12 +88,12 @@ func (b *Bridge) Destroy() error {
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 
-	if atomic.LoadUint64(&b.destroyed) != 0 {
+	if b.destroyed() {
 		// bridge has already been destroyed
 		return nil
 	}
 
-	atomic.StoreUint64(&b.destroyed, 1)
+	b.setDestroyed()
 
 	if b.handle != nil {
 		// Don't close the handle otherwise we might cause a deadlock:
@@ -203,6 +203,14 @@ func (b *Bridge) reapTaps() error {
 	}
 
 	return nil
+}
+
+func (b *Bridge) setDestroyed() {
+	atomic.StoreUint64(&b.isdestroyed, 1)
+}
+
+func (b *Bridge) destroyed() bool {
+	return atomic.LoadUint64(&b.isdestroyed) > 0
 }
 
 // DestroyBridge deletes an `unmanaged` bridge. This can be used when cleaning
