@@ -11,7 +11,6 @@ package bridge
 import (
 	log "minilog"
 	"net"
-	"sync/atomic"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -37,13 +36,13 @@ func (b *Bridge) snooper() {
 
 	decodedLayers := []gopacket.LayerType{}
 
-	for atomic.LoadUint64(&b.destroyed) == 0 {
+	for !b.destroyed() {
 		data, _, err := b.handle.ReadPacketData()
 		if err == pcap.NextErrorTimeoutExpired {
 			continue
 		} else if err != nil {
 			// only log error if it's not because we've been destroyed
-			if atomic.LoadUint64(&b.destroyed) == 0 {
+			if !b.destroyed() {
 				log.Error("error reading packet data: %v", err)
 			}
 			break
