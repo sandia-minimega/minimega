@@ -53,6 +53,10 @@ We have made improvements to `miniccc` that include changes to the wire format
 between miniccc and minimega. As a result, VM images that include previous
 versions of miniccc will need to be updated.
 
+*** Python bindings
+
+We have removed the python bindings from this release.
+
 ** Additional new features
 
 *** .filter API
