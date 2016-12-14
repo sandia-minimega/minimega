@@ -281,6 +281,34 @@ func parseFilter(s string) (filter, error) {
 	return filter{}, errors.New("invalid filter, see help")
 }
 
+func findColumn(headers []string, column string) (int, error) {
+	foundI := -1
+	for i, header := range headers {
+		// if it's an exact match, don't check any further for collisions
+		if strings.ToLower(header) == column {
+			return i, nil
+		}
+
+		if !strings.HasPrefix(strings.ToLower(header), column) {
+			continue
+		}
+
+		if foundI >= 0 {
+			// collision
+			return 0, fmt.Errorf("ambiguous column `%s`", column)
+		}
+
+		foundI = i
+	}
+
+	if foundI >= 0 {
+		return foundI, nil //TODO
+	}
+
+	// Didn't find the requested column in the headers
+	return 0, fmt.Errorf("no such column `%s`", column)
+}
+
 // filterResp filters Response r based on the filter f. Returns bool for
 // whether to keep the response or not or an error.
 func filterResp(f filter, r *Response) (bool, error) {
@@ -295,43 +323,21 @@ func filterResp(f filter, r *Response) (bool, error) {
 		return true, nil
 	}
 
-	foundI := -1
-	for i, header := range r.Header {
-		// if it's an exact match, don't check any further for collisions
-		if strings.ToLower(header) == f.Col {
-			foundI = i
-			break
-		}
-
-		if !strings.HasPrefix(strings.ToLower(header), f.Col) {
-			continue
-		}
-
-		if foundI >= 0 {
-			// collision
-			return false, fmt.Errorf("ambiguous column `%s`", f.Col)
-		}
-
-		foundI = i
+	columnI, err := findColumn(r.Header, f.Col)
+	if err != nil {
+		return false, err
 	}
 
-	if foundI >= 0 {
-		// Found right column, filter tabular rows
-		// Do this after a complete loop to deal with corner case in
-		// which an exact match is found AFTER a partial match
-		tabular := [][]string{}
-		for _, row := range r.Tabular {
-			if f.Match(row[foundI]) {
-				tabular = append(tabular, row)
-			}
+	// Found right column, filter tabular rows
+	tabular := [][]string{}
+	for _, row := range r.Tabular {
+		if f.Match(row[columnI]) {
+			tabular = append(tabular, row)
 		}
-		r.Tabular = tabular
-
-		return true, nil
 	}
+	r.Tabular = tabular
 
-	// Didn't find the requested column in the responses
-	return false, fmt.Errorf("no such column `%s`", f.Col)
+	return true, nil
 }
 
 func cliFilter(c *Command, out chan<- Responses) {
@@ -388,49 +394,22 @@ outer:
 
 			tabular := make([][]string, len(r.Tabular))
 			for i, col := range columns {
-				foundJ := -1
+				foundJ, err := findColumn(r.Header, col)
 
-				for j, header := range r.Header {
-					// if it's an exact match, don't check for collisions
-					if header == col {
-						foundJ = j
-						columns[i] = header
-						break
-					}
-
-					if !strings.HasPrefix(header, col) {
-						continue
-					}
-
-					if foundJ >= 0 {
-						// collision
-						foundJ = -1
-						resp := &Response{
-							Host:  hostname,
-							Error: fmt.Sprintf("ambiguous column `%s`", col),
-						}
-						out <- Responses{resp}
-						continue outer
-					}
-
-					foundJ = j
-					columns[i] = header
-				}
-
-				if foundJ >= 0 {
-					// Rebuild tabular data with specified columns
-					// Do this after a complete loop to deal with corner case in
-					// which an exact match is found AFTER a partial match
-					for k, row := range r.Tabular {
-						tabular[k] = append(tabular[k], row[foundJ])
-					}
-				} else {
+				if err != nil {
 					resp := &Response{
 						Host:  hostname,
-						Error: fmt.Sprintf("no such column `%s`", col),
+						Error: err.Error(),
 					}
 					out <- Responses{resp}
 					continue outer
+				}
+
+				columns[i] = r.Header[foundJ]
+
+				// Rebuild tabular data with specified columns
+				for k, row := range r.Tabular {
+					tabular[k] = append(tabular[k], row[foundJ])
 				}
 			}
 
