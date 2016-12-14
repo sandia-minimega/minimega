@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/gopacket/pcap"
@@ -37,6 +38,9 @@ type Bridge struct {
 	nameChan chan string
 
 	handle *pcap.Handle
+
+	// set to non-zero value by Bridge.destroy
+	destroyed uint64
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -83,6 +87,13 @@ func (b *Bridge) Destroy() error {
 
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
+
+	if atomic.LoadUint64(&b.destroyed) != 0 {
+		// bridge has already been destroyed
+		return nil
+	}
+
+	atomic.StoreUint64(&b.destroyed, 1)
 
 	if b.handle != nil {
 		// Don't close the handle otherwise we might cause a deadlock:
