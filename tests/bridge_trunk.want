@@ -1,12 +1,12 @@
 ## bridge trunk minitest minitest_tap0
-## .columns "Trunk ports" .filter bridge=minitest bridge
-Trunk ports
+## .columns "trunks" .filter bridge=minitest bridge
+trunks
 [minitest_tap0]
 ## shell ovs-vsctl list-ports minitest
 minitest_tap0
 
 ## bridge notrunk minitest minitest_tap0
-## .columns "Trunk ports" .filter bridge=minitest bridge
-Trunk ports
+## .columns "trunks" .filter bridge=minitest bridge
+trunks
 []
 ## shell ovs-vsctl list-ports minitest
