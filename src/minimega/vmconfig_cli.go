@@ -128,13 +128,14 @@ launched VMs.`,
 		HelpShort: "override parts of the QEMU launch string",
 		HelpLong: `
 Override parts of the QEMU launch string by supplying a string to match, and a
-replacement string.
+replacement string. Overrides are applied in the order that they are defined
+and do not replace earlier overrides -- if more than override share the same
+"match" will later overrides will be applied to the overridden launch string.
 
 Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config qemu-override",
-			"vm config qemu-override add <match> <replacement>",
-			"vm config qemu-override delete <id or all>",
+			"vm config qemu-override <match> <replacement>",
 		},
 		Call: wrapSimpleCLI(cliVMConfigQemuOverride),
 	},
@@ -235,15 +236,14 @@ func cliVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
 
 func cliVMConfigQemuOverride(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
-		resp.Response = qemuOverrideString()
+		resp.Response = vmConfig.qemuOverrideString()
 		return nil
 	}
 
-	if c.StringArgs["match"] != "" {
-		return addVMQemuOverride(c.StringArgs["match"], c.StringArgs["replacement"])
-	} else if c.StringArgs["id"] != "" {
-		return delVMQemuOverride(c.StringArgs["id"])
-	}
+	vmConfig.QemuOverrides = append(vmConfig.QemuOverrides, qemuOverride{
+		Match: c.StringArgs["match"],
+		Repl:  c.StringArgs["replacement"],
+	})
 
-	return errors.New("unreachable")
+	return nil
 }
