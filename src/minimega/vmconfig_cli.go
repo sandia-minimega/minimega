@@ -214,6 +214,11 @@ func cliVMConfigNet(c *minicli.Command, resp *minicli.Response) error {
 func cliVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
 	k := c.StringArgs["key"]
 
+	// if Tags were cleared, reinitialize them
+	if vmConfig.Tags == nil {
+		vmConfig.Tags = map[string]string{}
+	}
+
 	if v, ok := c.StringArgs["value"]; ok {
 		// Setting a new value
 		vmConfig.Tags[k] = v

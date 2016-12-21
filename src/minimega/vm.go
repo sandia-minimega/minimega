@@ -181,6 +181,11 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 		vm.UUID = generateUUID()
 	}
 
+	// Initialize tags, if not already
+	if vm.Tags == nil {
+		vm.Tags = map[string]string{}
+	}
+
 	// generate MAC addresses if any are unassigned. Don't bother checking
 	// for collisions -- based on the birthday paradox, there's only a
 	// 0.016% chance of collisions when running 10K VMs (one interface/VM).
