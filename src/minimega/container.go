@@ -225,6 +225,8 @@ type ContainerConfig struct {
 	// will be PID 1 in the container.
 	//
 	// Note: this configuration only applies to containers.
+	//
+	// Default: "/init"
 	Init []string
 
 	// Containers start in a highly restricted environment. vm config preinit

@@ -182,6 +182,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 			switch typ := field.Type.(type) {
 			case *ast.Ident:
 				var zero string
+				var unhandled bool
+
 				switch typ.Name {
 				case "string":
 					zero = getDefault(doc, `""`)
@@ -191,6 +193,15 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					zero = getDefault(doc, `false`)
 				default:
 					log.Error("unhandled type: %v", typ)
+					unhandled = true
+					zero = "nil"
+				}
+
+				g.fields[strctName] = append(g.fields[strctName], Field{
+					name, configName, typ.Name, zero,
+				})
+
+				if unhandled {
 					continue
 				}
 
@@ -201,26 +212,30 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					name, configName, doc,
 					strings.Contains(name, "Path"),
 				})
-
-				g.fields[strctName] = append(g.fields[strctName], Field{
-					name, configName, typ.Name, zero,
-				})
 			case *ast.ArrayType:
-				// always add field, even if we don't generate the handler
-				g.fields[strctName] = append(g.fields[strctName], Field{
-					name, configName, "", "nil",
-				})
-
 				v, ok := typ.Elt.(*ast.Ident)
-				if !ok {
-					log.Error("skipping %v, not []string", name)
+				if !ok || v.Name != "string" {
+					// always add field, even if we don't generate the handler
+					g.fields[strctName] = append(g.fields[strctName], Field{
+						name, configName, "", "nil",
+					})
+
 					continue
 				}
 
-				if v.Name != "string" {
-					log.Error("skipping %v, not []string", name)
-					continue
+				zero := getDefault(doc, "")
+				if f := strings.Fields(zero); len(f) > 0 {
+					for i := range f {
+						f[i] = strings.TrimSuffix(f[i], ",")
+					}
+					zero = fmt.Sprintf("[]string{%v}", strings.Join(f, ","))
+				} else {
+					zero = "nil"
 				}
+
+				g.fields[strctName] = append(g.fields[strctName], Field{
+					name, configName, "", zero,
+				})
 
 				g.Execute("slice", struct {
 					Field, ConfigName, Doc string
@@ -229,7 +244,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					name, configName, doc,
 					strings.Contains(name, "Path"),
 				})
-			case *ast.MapType:
+			default:
+				log.Error("unhandled type for %v: %v", name, typ)
 				// always add field, even if we don't generate the handler
 				g.fields[strctName] = append(g.fields[strctName], Field{
 					name, configName, "", "nil",
