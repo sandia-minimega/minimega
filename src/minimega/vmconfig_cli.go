@@ -228,7 +228,7 @@ func cliVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
 		resp.Response = vmConfig.Tags[k]
 	} else {
 		// Printing all configured tags
-		resp.Response = vmConfig.TagsString()
+		resp.Response = vmConfig.Tags.String()
 	}
 
 	return nil
@@ -240,7 +240,7 @@ func cliVMConfigQemuOverride(c *minicli.Command, resp *minicli.Response) error {
 		return nil
 	}
 
-	vmConfig.QemuOverrides = append(vmConfig.QemuOverrides, qemuOverride{
+	vmConfig.QemuOverride = append(vmConfig.QemuOverride, qemuOverride{
 		Match: c.StringArgs["match"],
 		Repl:  c.StringArgs["replacement"],
 	})

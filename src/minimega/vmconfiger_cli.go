@@ -73,6 +73,8 @@ Note: this configuration only applies to containers.
 will be PID 1 in the container.
 
 Note: this configuration only applies to containers.
+
+Default: "/init"
 `,
 		Patterns: []string{
 			"vm config init [value]...",
@@ -330,6 +332,8 @@ By default, set to 'host' which matches the host architecture. See 'kvm
 kvm.
 
 Note: this configuration only applies to KVM-based VMs.
+
+Default: "host"
 `,
 		Patterns: []string{
 			"vm config cpu [value]",
@@ -625,6 +629,7 @@ Default: true
 			"clear vm config <networks,>",
 			"clear vm config <preinit,>",
 			"clear vm config <qemu-append,>",
+			"clear vm config <qemu-override,>",
 			"clear vm config <qemu,>",
 			"clear vm config <serial-ports,>",
 			"clear vm config <snapshot,>",
@@ -721,7 +726,7 @@ func (v *ContainerConfig) Clear(mask string) {
 		v.Hostname = ""
 	}
 	if mask == Wildcard || mask == "init" {
-		v.Init = nil
+		v.Init = []string{"/init"}
 	}
 	if mask == Wildcard || mask == "preinit" {
 		v.Preinit = ""
@@ -765,6 +770,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
 	}
+	if field == "qemu-override" {
+		return fmt.Sprintf("%v", v.QemuOverride), nil
+	}
 
 	return "", fmt.Errorf("invalid info field: %v", field)
 }
@@ -786,7 +794,7 @@ func (v *KVMConfig) Clear(mask string) {
 		v.MigratePath = ""
 	}
 	if mask == Wildcard || mask == "cpu" {
-		v.CPU = ""
+		v.CPU = "host"
 	}
 	if mask == Wildcard || mask == "serial-ports" {
 		v.SerialPorts = 0
@@ -802,5 +810,8 @@ func (v *KVMConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
+	}
+	if mask == Wildcard || mask == "qemu-override" {
+		v.QemuOverride = nil
 	}
 }
