@@ -207,11 +207,56 @@ var containerDeviceNames []*Dev = []*Dev{
 }
 
 type ContainerConfig struct {
-	FSPath   string
+	// Configure the filesystem to use for launching a container. This should
+	// be a root filesystem for a linux distribution (containing /dev, /proc,
+	// /sys, etc.)
+	//
+	// Note: this configuration only applies to containers and must be specified.
+	FilesystemPath string
+
+	// Set a hostname for a container before launching the init program. If not
+	// set, the hostname will be the VM name. The hostname can also be set by
+	// the init program or other root process in the container.
+	//
+	// Note: this configuration only applies to containers.
 	Hostname string
-	Init     []string
-	Preinit  string
-	Fifos    int
+
+	// Set the init program and args to exec into upon container launch. This
+	// will be PID 1 in the container.
+	//
+	// Note: this configuration only applies to containers.
+	Init []string
+
+	// Containers start in a highly restricted environment. vm config preinit
+	// allows running processes before isolation mechanisms are enabled. This
+	// occurs when the vm is launched and before the vm is put in the building
+	// state. preinit processes must finish before the vm will be allowed to
+	// start.
+	//
+	// Specifically, the preinit command will be run after entering namespaces,
+	// and mounting dependent filesystems, but before cgroups and root
+	// capabilities are set, and before entering the chroot. This means that
+	// the preinit command is run as root and can control the host.
+	//
+	// For example, to run a script that enables ip forwarding, which is not
+	// allowed during runtime because /proc is mounted read-only, add a preinit
+	// script:
+	//
+	// 	vm config preinit enable_ip_forwarding.sh
+	//
+	// Note: this configuration only applies to containers.
+	Preinit string
+
+	// Set the number of named pipes to include in the container for
+	// container-host communication. Named pipes will appear on the host in the
+	// instance directory for the container as fifoN, and on the container as
+	// /dev/fifos/fifoN.
+	//
+	// Fifos are created using mkfifo() and have all of the same usage
+	// constraints.
+	//
+	// Note: this configuration only applies to containers.
+	Fifos uint64
 }
 
 type ContainerVM struct {
@@ -229,13 +274,6 @@ type ContainerVM struct {
 
 // Ensure that ContainerVM implements the VM interface
 var _ VM = (*ContainerVM)(nil)
-
-func init() {
-	// Reset everything to default
-	for _, fns := range containerConfigFns {
-		fns.Clear(&vmConfig.ContainerConfig)
-	}
-}
 
 var (
 	containerInitLock    sync.Mutex
@@ -554,10 +592,10 @@ func (vm *ContainerVM) Config() *BaseConfig {
 	return &vm.BaseConfig
 }
 
-func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
+func NewContainer(name, namespace string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = NewBaseVM(name, config)
+	vm.BaseVM = NewBaseVM(name, namespace, config)
 	vm.Type = CONTAINER
 
 	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields
@@ -569,7 +607,7 @@ func NewContainer(name string, config VMConfig) (*ContainerVM, error) {
 		vm.Hostname = vm.Name
 	}
 
-	if vm.FSPath == "" {
+	if vm.FilesystemPath == "" {
 		return nil, errors.New("unable to create container without a configured filesystem")
 	}
 
@@ -655,26 +693,21 @@ func (vm *ContainerVM) String() string {
 	return fmt.Sprintf("%s:%d:container", hostname, vm.ID)
 }
 
-func (vm *ContainerVM) Info(mask string) (string, error) {
-	// If it's a field handled by the baseVM, use it.
-	if v, err := vm.BaseVM.info(mask); err == nil {
+func (vm *ContainerVM) Info(field string) (string, error) {
+	// If the field is handled by BaseVM, return it
+	if v, err := vm.BaseVM.info(field); err == nil {
 		return v, nil
 	}
 
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	// If it's a configurable field, use the Print fn.
-	if fns, ok := containerConfigFns[mask]; ok {
-		return fns.Print(&vm.ContainerConfig), nil
-	}
-
-	switch mask {
+	switch field {
 	case "console_port":
 		return strconv.Itoa(vm.ConsolePort), nil
 	}
 
-	return "", fmt.Errorf("invalid mask: %s", mask)
+	return vm.ContainerConfig.Info(field)
 }
 
 func (vm *ContainerVM) Conflicts(vm2 VM) error {
@@ -695,8 +728,8 @@ func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	if vm.FSPath == vm2.FSPath && (!vm.Snapshot || !vm2.Snapshot) {
-		return fmt.Errorf("filesystem conflict with vm %v: %v", vm.Name, vm.FSPath)
+	if vm.FilesystemPath == vm2.FilesystemPath && (!vm.Snapshot || !vm2.Snapshot) {
+		return fmt.Errorf("filesystem conflict with vm %v: %v", vm.Name, vm.FilesystemPath)
 	}
 
 	return vm.BaseVM.conflicts(vm2.BaseVM)
@@ -712,7 +745,7 @@ func (vm *ContainerConfig) String() string {
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "Current container configuration:")
-	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FSPath)
+	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FilesystemPath)
 	fmt.Fprintf(w, "Hostname:\t%v\n", vm.Hostname)
 	fmt.Fprintf(w, "Init:\t%v\n", vm.Init)
 	fmt.Fprintf(w, "Pre-init:\t%v\n", vm.Preinit)
@@ -754,7 +787,7 @@ func (vm *ContainerVM) launch() error {
 				return err
 			}
 		} else {
-			vm.effectivePath = vm.FSPath
+			vm.effectivePath = vm.FilesystemPath
 		}
 	}
 
@@ -793,7 +826,7 @@ func (vm *ContainerVM) launch() error {
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
-	for i := 0; i < vm.Fifos; i++ {
+	for i := uint64(0); i < vm.Fifos; i++ {
 		p := vm.path(fmt.Sprintf("fifo%v", i))
 		if err = syscall.Mkfifo(p, 0660); err != nil {
 			log.Error("fifo: %v", err)
@@ -830,7 +863,7 @@ func (vm *ContainerVM) launch() error {
 		fmt.Sprintf("%v", vm.ID),
 		hn,
 		vm.effectivePath,
-		vm.Memory,
+		strconv.FormatUint(vm.Memory, 10),
 		uuidPath,
 		fmt.Sprintf("%v", vm.Fifos),
 		preinit,
@@ -1107,7 +1140,7 @@ func (vm *ContainerVM) overlayMount() error {
 		"overlay",
 		fmt.Sprintf("megamount_%v", vm.ID),
 		"-o",
-		fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FSPath, vm.effectivePath, workPath),
+		fmt.Sprintf("lowerdir=%v,upperdir=%v,workdir=%v", vm.FilesystemPath, vm.effectivePath, workPath),
 		vm.effectivePath,
 	}
 	log.Debug("mounting overlay: %v", args)
