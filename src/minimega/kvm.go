@@ -311,7 +311,7 @@ func (vm *KvmVM) String() string {
 
 func (vm *KvmVM) Info(field string) (string, error) {
 	// If the field is handled by BaseVM, return it
-	if v, err := vm.BaseVM.info(field); err == nil {
+	if v, err := vm.BaseVM.Info(field); err == nil {
 		return v, nil
 	}
 
@@ -818,7 +818,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 	if len(vm.Append) > 0 {
 		args = append(args, "-append")
-		args = append(args, strings.Join(vm.Append, " "))
+		args = append(args, unescapeString(vm.Append))
 	}
 
 	if vm.CdromPath != "" {
