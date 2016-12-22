@@ -4,6 +4,10 @@
 
 package main
 
+import (
+	log "minilog"
+)
+
 func init() {
-	logSetup()
+	log.Init()
 }
