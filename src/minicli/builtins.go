@@ -302,7 +302,7 @@ func findColumn(headers []string, column string) (int, error) {
 	}
 
 	if foundI >= 0 {
-		return foundI, nil //TODO
+		return foundI, nil
 	}
 
 	// Didn't find the requested column in the headers
