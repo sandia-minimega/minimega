@@ -537,9 +537,9 @@ func cliVmTag(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	if key == Wildcard {
-		resp.Header = []string{"ID", "Tag", "Value"}
+		resp.Header = []string{"id", "tag", "value"}
 	} else {
-		resp.Header = []string{"ID", "Value"}
+		resp.Header = []string{"id", "value"}
 	}
 
 	for _, tag := range vms.GetTags(target, key) {
@@ -726,7 +726,7 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 
 func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"id", "name", "status", "%% complete"}
+		resp.Header = []string{"id", "name", "status", "complete (%%)"}
 
 		for _, vm := range vms.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
@@ -808,7 +808,7 @@ func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// must be "show"
-	resp.Header = []string{"hotplug ID", "File"}
+	resp.Header = []string{"hotplugid", "file"}
 	resp.Tabular = [][]string{}
 
 	for k, v := range vm.hotplug {

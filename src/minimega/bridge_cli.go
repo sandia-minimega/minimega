@@ -199,7 +199,7 @@ func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Must want to list bridges
-	resp.Header = []string{"Bridge", "Existed before minimega", "Active VLANs", "Trunk ports", "Tunnels"}
+	resp.Header = []string{"bridge", "preexisting", "vlans", "trunks", "tunnels"}
 	resp.Tabular = [][]string{}
 
 	for _, info := range bridges.Info() {
