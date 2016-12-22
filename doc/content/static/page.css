@@ -4,6 +4,10 @@ body {
 	margin: 5px;
 }
 
+img {
+	max-width: 80%;
+}
+
 pre,
 code {
 	font-family: Menlo, monospace;

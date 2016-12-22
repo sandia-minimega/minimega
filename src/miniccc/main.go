@@ -24,16 +24,13 @@ const Retries = 480
 const RetryInterval = 15 * time.Second
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_port     = flag.Int("port", 9002, "port to connect to")
-	f_version  = flag.Bool("version", false, "print the version")
-	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
-	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
-	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
-	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
-	f_tag      = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
+	f_port    = flag.Int("port", 9002, "port to connect to")
+	f_version = flag.Bool("version", false, "print the version")
+	f_parent  = flag.String("parent", "", "parent to connect to (if relay or client)")
+	f_path    = flag.String("path", "/tmp/miniccc", "path to store files in")
+	f_serial  = flag.String("serial", "", "use serial device instead of tcp")
+	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
+	f_tag     = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
 )
 
 const banner = `miniccc, Copyright (2014) Sandia Corporation.
@@ -57,7 +54,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	logSetup()
+	log.Init()
 
 	if *f_tag {
 		if runtime.GOOS == "windows" {
