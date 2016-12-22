@@ -51,10 +51,6 @@ With a namespace, clear namespace deletes the specified namespace.`,
 	},
 }
 
-func init() {
-	registerHandlers("namespace", namespaceCLIHandlers)
-}
-
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
