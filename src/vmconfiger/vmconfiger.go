@@ -20,10 +20,7 @@ import (
 )
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_types    = flag.String("type", "", "comma-separated list of type names")
+	f_types = flag.String("type", "", "comma-separated list of type names")
 )
 
 func usage() {
@@ -35,7 +32,7 @@ func main() {
 	flag.Usage = usage
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	if flag.NArg() > 1 {
 		flag.Usage()
