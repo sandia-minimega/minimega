@@ -697,7 +697,7 @@ func (vm *ContainerVM) String() string {
 
 func (vm *ContainerVM) Info(field string) (string, error) {
 	// If the field is handled by BaseVM, return it
-	if v, err := vm.BaseVM.info(field); err == nil {
+	if v, err := vm.BaseVM.Info(field); err == nil {
 		return v, nil
 	}
 

@@ -336,11 +336,11 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 			"name":      vm.GetName(),
 			"state":     vm.GetState().String(),
 			"type":      vm.GetType().String(),
+			"activecc":  vm.HasCC(),
 			"vcpus":     config.VCPUs,
 			"memory":    config.Memory,
 			"snapshot":  config.Snapshot,
 			"uiud":      config.UUID,
-			// TODO: "activecc":  config.ActiveCC,
 		}
 
 		if vm, ok := vm.(*KvmVM); ok {

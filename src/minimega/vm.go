@@ -70,6 +70,8 @@ type VM interface {
 	Conflicts(VM) error
 
 	SetCCActive(bool)
+	HasCC() bool
+
 	UpdateNetworks()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
@@ -123,7 +125,7 @@ var vmInfo = []string{
 	"memory",
 	// kvm fields
 	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
-	"append", "serial", "virtio-serial", "vnc_port",
+	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
 	// more generic fields (tags can be huge so throw it at the end)
@@ -216,8 +218,10 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.BaseConfig = vm.BaseConfig.Copy()
 	vm2.ID = vm.ID
 	vm2.Name = vm.Name
+	vm2.Namespace = vm.Namespace
 	vm2.State = vm.State
 	vm2.Type = vm.Type
+	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
 
 	return vm2
@@ -461,6 +465,13 @@ func (vm *BaseVM) SetCCActive(active bool) {
 	vm.ActiveCC = active
 }
 
+func (vm *BaseVM) HasCC() bool {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.ActiveCC
+}
+
 func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -539,7 +550,7 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 }
 
 // info returns information about the VM for the provided field.
-func (vm *BaseVM) info(field string) (string, error) {
+func (vm *BaseVM) Info(field string) (string, error) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
