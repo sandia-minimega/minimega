@@ -239,7 +239,7 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Otherwise, return information about the runtime environment
-	resp.Header = []string{"Go version", "Goroutines", "CGO calls"}
+	resp.Header = []string{"goversion", "goroutines", "cgocalls"}
 	resp.Tabular = [][]string{
 		[]string{
 			runtime.Version(),

@@ -127,20 +127,20 @@ func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"Bridge"}
 
 	if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
-		resp.Header = append(resp.Header, "Type")
+		resp.Header = append(resp.Header, "type")
 	}
 
 	if !c.BoolArgs["netflow"] {
-		resp.Header = append(resp.Header, "VM/interface")
+		resp.Header = append(resp.Header, "interface")
 	}
 	if !c.BoolArgs["pcap"] {
-		resp.Header = append(resp.Header, "Mode", "Compress")
+		resp.Header = append(resp.Header, "mode", "compress")
 	}
 
-	resp.Header = append(resp.Header, "Path")
+	resp.Header = append(resp.Header, "path")
 
 	if namespace == "" {
-		resp.Header = append(resp.Header, "Namespace")
+		resp.Header = append(resp.Header, "namespace")
 	}
 
 	resp.Tabular = [][]string{}

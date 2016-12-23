@@ -32,25 +32,12 @@ import (
 	"sync"
 )
 
-const (
-	COMMAND_TIMEOUT = 10
-)
-
 var (
 	// Prevents multiple commands from running at the same time
 	cmdLock sync.Mutex
 )
 
 type CLIFunc func(*minicli.Command) *minicli.Response
-
-// Sources of minicli.Commands. If minicli.Command.Source is not set, then we
-// generated the Command programmatically.
-var (
-	SourceMeshage   = "meshage"
-	SourceLocalCLI  = "local"
-	SourceAttachCLI = "attach"
-	SourceRead      = "read"
-)
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
@@ -70,6 +57,7 @@ func cliSetup() {
 	registerHandlers("log", logCLIHandlers)
 	registerHandlers("meshage", meshageCLIHandlers)
 	registerHandlers("misc", miscCLIHandlers)
+	registerHandlers("namespace", namespaceCLIHandlers)
 	registerHandlers("nuke", nukeCLIHandlers)
 	registerHandlers("optimize", optimizeCLIHandlers)
 	registerHandlers("qos", qosCLIHandlers)
@@ -79,8 +67,18 @@ func cliSetup() {
 	registerHandlers("vm", vmCLIHandlers)
 	registerHandlers("vmconfig", vmconfigCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
-	registerHandlers("vyatta", vyattaCLIHandlers)
 	registerHandlers("web", webCLIHandlers)
+}
+
+// registerHandlers registers all the provided handlers with minicli, panicking
+// if any of the handlers fail to register.
+func registerHandlers(name string, handlers []minicli.Handler) {
+	for i := range handlers {
+		err := minicli.Register(&handlers[i])
+		if err != nil {
+			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
+		}
+	}
 }
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly

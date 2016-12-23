@@ -21,7 +21,9 @@ type Command struct {
 
 	Call CLIFunc `json:"-"`
 
-	Record bool // record command in history (or not), default is true
+	// Record command in history (or not). Checked after the command is
+	// executed so the CLIFunc can set Record according to its own logic.
+	Record bool
 
 	// Set when the command is intentionally a NoOp (the original string
 	// contains just a comment). This was added to ensure that lines containing

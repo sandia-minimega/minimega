@@ -10,9 +10,7 @@ import (
 	log "minilog"
 	"os"
 	"path"
-	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 )
 
@@ -32,44 +30,10 @@ var skippedExtensions = []string{
 }
 
 var (
-	f_base     = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_testDir  = flag.String("dir", "tests", "path to directory containing tests")
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_run      = flag.String("run", "", "run only tests matching the regular expression")
+	f_base    = flag.String("base", BASE_PATH, "base path for minimega data")
+	f_testDir = flag.String("dir", "tests", "path to directory containing tests")
+	f_run     = flag.String("run", "", "run only tests matching the regular expression")
 )
-
-func logSetup() {
-	level, err := log.LevelInt(*f_loglevel)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
-	color := true
-	if runtime.GOOS == "windows" {
-		color = false
-	}
-
-	if *f_log {
-		log.AddLogger("stdio", os.Stderr, level, color)
-	}
-
-	if *f_logfile != "" {
-		err := os.MkdirAll(filepath.Dir(*f_logfile), 0755)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		logfile, err := os.OpenFile(*f_logfile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		log.AddLogger("file", logfile, level, false)
-	}
-}
 
 // runCommands reads and runs all the commands from a file. Return the
 // concatenation of all the Responses or an error.
@@ -237,7 +201,7 @@ func main() {
 
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	// TODO: Run minimega, and keep restarting it until all the tests have been
 	// run. This allows us to not worry about cleaning up the state fully

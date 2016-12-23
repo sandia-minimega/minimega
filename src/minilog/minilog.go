@@ -14,10 +14,13 @@ package minilog
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	golog "log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 )
@@ -30,6 +33,12 @@ const (
 	WARN
 	ERROR
 	FATAL
+)
+
+var (
+	Level   = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
+	Verbose = flag.Bool("v", true, "log on stderr")
+	File    = flag.String("logfile", "", "also log to file")
 )
 
 var (
@@ -130,6 +139,39 @@ func LogAll(i io.Reader, level int, name string) {
 			}
 		}
 	}(i, level, name)
+}
+
+// Setup log according to flags and OS.
+// Replaces the logSetup() that each package used to have.
+func Init() {
+	level, err := LevelInt(*Level)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
+	color := true
+	if runtime.GOOS == "windows" {
+		color = false
+	}
+
+	if *Verbose {
+		AddLogger("stdio", os.Stderr, level, color)
+	}
+
+	if *File != "" {
+		err := os.MkdirAll(filepath.Dir(*File), 0755)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		logfile, err := os.OpenFile(*File, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		AddLogger("file", logfile, level, false)
+	}
 }
 
 // Return the log level from a string. Useful for parsing log levels from a flag package.

@@ -48,14 +48,3 @@ echo "miniccc"
 GOOS=windows go install miniccc
 echo
 unset GOOS
-
-# build python bindings
-echo "BUILD PYTHON BINDINGS"
-$SCRIPT_DIR/misc/python/genapi.py $SCRIPT_DIR/bin/minimega > \
-    $SCRIPT_DIR/misc/python/minimega.py 2> /dev/null
-if [[ $? != 0 ]]; then
-    echo "minimega.py - FAILED"
-else
-    echo "minimega.py - OK"
-fi
-echo

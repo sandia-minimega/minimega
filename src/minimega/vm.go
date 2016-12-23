@@ -840,20 +840,20 @@ func inNamespace(vm VM) bool {
 	return namespace == "" || vm.GetNamespace() == namespace
 }
 
-func vmNotFound(idOrName string) error {
-	return fmt.Errorf("vm not found: %v", idOrName)
+func vmNotFound(name string) error {
+	return fmt.Errorf("vm not found: %v", name)
 }
 
-func vmNotRunning(idOrName string) error {
-	return fmt.Errorf("vm not running: %v", idOrName)
+func vmNotRunning(name string) error {
+	return fmt.Errorf("vm not running: %v", name)
 }
 
-func vmNotKVM(idOrName string) error {
-	return fmt.Errorf("vm not KVM: %v", idOrName)
+func vmNotKVM(name string) error {
+	return fmt.Errorf("vm not KVM: %v", name)
 }
 
-func vmNotContainer(idOrName string) error {
-	return fmt.Errorf("vm not container: %v", idOrName)
+func vmNotContainer(name string) error {
+	return fmt.Errorf("vm not container: %v", name)
 }
 
 func isVMNotFound(err string) bool {

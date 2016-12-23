@@ -8,18 +8,19 @@
 E: Information: You may need to update /etc/fstab.
 
 
-## shell mkfs.fat /dev/nbd0p1
-mkfs.fat 3.0.27 (2014-11-12)
-unable to get drive geometry, using default 255/63
-## shell mkfs.fat /dev/nbd0p2
-mkfs.fat 3.0.27 (2014-11-12)
-unable to get drive geometry, using default 255/63
+## # suppress mkfs output below because it varies across versions
+## shell bash -c "mkfs.fat /dev/nbd0p1 &> /dev/null || echo -n"
+## shell bash -c "mkfs.fat /dev/nbd0p2 &> /dev/null || echo -n"
 ## shell qemu-nbd -d /dev/nbd0
 /dev/nbd0 disconnected
 
 ## # Inject a file into base image
 ## disk inject foo.qcow2 files /tmp/minimega/XXX:/tmp/minimega/XXX
 ## shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
+## # suppress output and exit code because partx sometimes fails and we don't care
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 ## shell mount /dev/nbd0p1 /mnt
 ## shell ls -R /mnt
 /mnt:
@@ -38,6 +39,9 @@ XXX
 ## disk snapshot foo.qcow2 bar.qcow2
 ## disk inject bar.qcow2 files /tmp/minimega/YYY:/tmp/minimega/YYY
 ## shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 ## shell mount /dev/nbd0p1 /mnt
 ## shell ls -R /mnt
 /mnt:
@@ -56,6 +60,9 @@ YYY
 ## # Inject a file into second partition of snapshot
 ## disk inject bar.qcow2:2 files /tmp/minimega/ZZZ:/tmp/minimega/ZZZ
 ## shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 ## shell mount /dev/nbd0p2 /mnt
 ## shell ls -R /mnt
 /mnt:
@@ -72,6 +79,9 @@ ZZZ
 
 ## # Check that the "snapshot" was actually a snapshot
 ## shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
+## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 ## shell mount /dev/nbd0p1 /mnt
 ## shell ls -R /mnt
 /mnt:

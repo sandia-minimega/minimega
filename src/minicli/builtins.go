@@ -13,9 +13,10 @@ import (
 )
 
 type filter struct {
+	// Note that Col may be an incomplete column name for apropos matching
+	Col, Val string
 	Negate   bool
 	Fuzzy    bool
-	Col, Val string
 }
 
 var builtinCLIHandlers = []Handler{
@@ -144,23 +145,23 @@ Substring matching can be specified explicity:
 	{ // columns
 		HelpShort: "show certain columns from tabular data",
 		HelpLong: `
-Filter tabular data using particular column names. For example, to only display
-only the vm ID and state:
+Filter tabular data using particular column names. For example, to display
+only the vm name and state:
 
-	.columns id,state vm info
+	.columns name,state vm info
 
 Column names are comma-seperated. .columns can be used in conjunction with
 .filter to slice a subset of the rows and columns from a command, however,
 these commands are not always interchangeable. For example, the following is
 acceptable:
 
-	.columns id,state .filter vcpus=4 vm info
+	.columns name,state .filter vcpus=4 vm info
 
 While the following is not:
 
-	.filter vcpus=4 .columns id,state vm info
+	.filter vcpus=4 .columns name,state vm info
 
-This is because .columns strips all columns except for ID and state from the
+This is because .columns strips all columns except for name and state from the
 tabular data.
 
 Note: the annotate flag controls the presence of the host column.`,
@@ -280,6 +281,34 @@ func parseFilter(s string) (filter, error) {
 	return filter{}, errors.New("invalid filter, see help")
 }
 
+func findColumn(headers []string, column string) (int, error) {
+	foundI := -1
+	for i, header := range headers {
+		// if it's an exact match, don't check any further for collisions
+		if strings.ToLower(header) == column {
+			return i, nil
+		}
+
+		if !strings.HasPrefix(strings.ToLower(header), column) {
+			continue
+		}
+
+		if foundI >= 0 {
+			// collision
+			return 0, fmt.Errorf("ambiguous column `%s`", column)
+		}
+
+		foundI = i
+	}
+
+	if foundI >= 0 {
+		return foundI, nil
+	}
+
+	// Didn't find the requested column in the headers
+	return 0, fmt.Errorf("no such column `%s`", column)
+}
+
 // filterResp filters Response r based on the filter f. Returns bool for
 // whether to keep the response or not or an error.
 func filterResp(f filter, r *Response) (bool, error) {
@@ -294,26 +323,21 @@ func filterResp(f filter, r *Response) (bool, error) {
 		return true, nil
 	}
 
-	for i, header := range r.Header {
-		if strings.ToLower(header) != f.Col {
-			continue
-		}
-
-		// Found right column, filter tabular rows
-		tabular := [][]string{}
-
-		for _, row := range r.Tabular {
-			if f.Match(row[i]) {
-				tabular = append(tabular, row)
-			}
-		}
-
-		r.Tabular = tabular
-		return true, nil
+	columnI, err := findColumn(r.Header, f.Col)
+	if err != nil {
+		return false, err
 	}
 
-	// Didn't find the requested column in the responses
-	return false, fmt.Errorf("no such column `%s`", f.Col)
+	// Found right column, filter tabular rows
+	tabular := [][]string{}
+	for _, row := range r.Tabular {
+		if f.Match(row[columnI]) {
+			tabular = append(tabular, row)
+		}
+	}
+	r.Tabular = tabular
+
+	return true, nil
 }
 
 func cliFilter(c *Command, out chan<- Responses) {
@@ -327,8 +351,10 @@ func cliFilter(c *Command, out chan<- Responses) {
 		return
 	}
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		newResps := Responses{}
 
 		for _, r := range resps {
@@ -352,8 +378,10 @@ outer:
 func cliColumns(c *Command, out chan<- Responses) {
 	columns := strings.Split(c.StringArgs["columns"], ",")
 
+	c.Subcommand.SetRecord(false)
+
 outer:
-	for resps := range processCommand(c.Subcommand, false) {
+	for resps := range ProcessCommand(c.Subcommand) {
 		for _, r := range resps {
 			if r.Header == nil {
 				continue
@@ -364,31 +392,24 @@ outer:
 				continue
 			}
 
-			// Rebuild tabular data with specified columns
 			tabular := make([][]string, len(r.Tabular))
-			for _, col := range columns {
-				var found bool
+			for i, col := range columns {
+				foundJ, err := findColumn(r.Header, col)
 
-				for j, header := range r.Header {
-					// Found right column, copy the tabular data
-					if header == col {
-						for k, row := range r.Tabular {
-							tabular[k] = append(tabular[k], row[j])
-						}
-
-						found = true
-						break
-					}
-				}
-
-				// Didn't find the requested column in the responses
-				if !found {
+				if err != nil {
 					resp := &Response{
 						Host:  hostname,
-						Error: fmt.Sprintf("no such column `%s`", col),
+						Error: err.Error(),
 					}
 					out <- Responses{resp}
 					continue outer
+				}
+
+				columns[i] = r.Header[foundJ]
+
+				// Rebuild tabular data with specified columns
+				for k, row := range r.Tabular {
+					tabular[k] = append(tabular[k], row[foundJ])
 				}
 			}
 
@@ -421,7 +442,9 @@ func cliModeHelper(c *Command, out chan<- Responses, newMode int) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()
@@ -459,7 +482,9 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 		return
 	}
 
-	for r := range processCommand(c.Subcommand, false) {
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
 		if len(r) > 0 {
 			if r[0].Flags == nil {
 				r[0].Flags = copyFlags()

@@ -14,20 +14,18 @@ import (
 )
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_miniccc  = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
-	f_path     = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
-	f_force    = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
-	f_u        = flag.String("u", "", "update minirouter with a given file")
+	f_miniccc = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
+	f_path    = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
+	f_force   = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
+	f_u       = flag.String("u", "", "update minirouter with a given file")
 )
 
 func main() {
 	// flags
 	flag.Parse()
 
-	logSetup()
+	log.Init()
+	logSetupPushUp()
 
 	if *f_u != "" {
 		log.Debug("updating with file: %v", *f_u)

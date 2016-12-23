@@ -79,7 +79,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <exec,> <command>...",
 			"cc <background,> <command>...",
 
-			"cc <process,> <list,> <vm id, name, uuid or all>",
+			"cc <process,> <list,> <vm name, uuid or all>",
 			"cc <process,> <kill,> <pid or all>",
 			"cc <process,> <killall,> <name>",
 
@@ -151,7 +151,7 @@ func cliCC(c *minicli.Command, resp *minicli.Response) error {
 	// Getting status
 	clients := ccNode.GetActiveClients()
 
-	resp.Header = []string{"number of clients"}
+	resp.Header = []string{"clients"}
 	resp.Tabular = [][]string{
 		[]string{
 			fmt.Sprintf("%v", len(clients)),
@@ -330,7 +330,7 @@ func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
 
 	// Summary of current filter
 	if ccFilter != nil {
-		resp.Header = []string{"UUID", "hostname", "arch", "OS", "IP", "MAC", "Tags"}
+		resp.Header = []string{"uuid", "hostname", "arch", "os", "ip", "mac", "tags"}
 		row := []string{
 			ccFilter.UUID,
 			ccFilter.Hostname,
@@ -563,8 +563,8 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 	namespace := GetNamespaceName()
 
 	resp.Header = []string{
-		"UUID", "hostname", "arch", "OS",
-		"IP", "MAC",
+		"uuid", "hostname", "arch", "os",
+		"ip", "mac",
 	}
 
 	if namespace == "" {
@@ -598,7 +598,7 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 // command
 func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"ID", "prefix", "command", "responses", "background",
+		"id", "prefix", "command", "responses", "background",
 		"send files", "receive files", "filter",
 	}
 	resp.Tabular = [][]string{}
