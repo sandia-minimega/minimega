@@ -33,9 +33,6 @@ var (
 	f_stddev      = flag.Duration("s", time.Duration(0), "standard deviation between actions")
 	f_min         = flag.Duration("min", time.Duration(0), "minimum time allowable for events")
 	f_max         = flag.Duration("max", time.Duration(60000*time.Millisecond), "maximum time allowable for events")
-	f_loglevel    = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log         = flag.Bool("log", true, "log on stderr")
-	f_logfile     = flag.String("logfile", "", "also log to file")
 	f_v4          = flag.Bool("ipv4", true, "use IPv4. Can be used together with -ipv6")
 	f_v6          = flag.Bool("ipv6", true, "use IPv6. Can be used together with -ipv4")
 	f_report      = flag.Duration("report", time.Duration(10*time.Second), "time between reports, set to 0 to disable")
@@ -72,7 +69,7 @@ func main() {
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, syscall.SIGINT)
 
-	logSetup()
+	log.Init()
 
 	dns := false
 	if *f_dns || *f_dnsv4 || *f_dnsv6 {
