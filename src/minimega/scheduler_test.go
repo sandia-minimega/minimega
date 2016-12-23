@@ -17,6 +17,7 @@ func fakeHostData(N int) []*HostStats {
 		res = append(res, &HostStats{
 			Name:      strconv.Itoa(i),
 			CPUCommit: i,
+			CPUs:      1,
 		})
 	}
 
@@ -53,13 +54,13 @@ func TestHostSort(t *testing.T) {
 
 func TestQueuedVMsLess(t *testing.T) {
 	// q < q2
-	q := QueuedVMs{
+	q := &QueuedVMs{
 		Names: []string{"a", "b", "c"},
 	}
 	q.ScheduleHost = "foo"
 	q.SchedulePeers = "1"
 
-	q2 := QueuedVMs{
+	q2 := &QueuedVMs{
 		Names: []string{"a", "b"},
 	}
 	q2.ScheduleHost = "foo"
@@ -73,11 +74,11 @@ func TestQueuedVMsLess(t *testing.T) {
 	}
 
 	// q < q2
-	q = QueuedVMs{
+	q = &QueuedVMs{
 		Names: []string{"a", "b", "c"},
 	}
 	q.SchedulePeers = "1"
-	q2 = QueuedVMs{
+	q2 = &QueuedVMs{
 		Names: []string{"a", "b"},
 	}
 
@@ -90,10 +91,10 @@ func TestQueuedVMsLess(t *testing.T) {
 	}
 
 	// q < q2
-	q = QueuedVMs{
+	q = &QueuedVMs{
 		Names: []string{"a", "b", "c"},
 	}
-	q2 = QueuedVMs{
+	q2 = &QueuedVMs{
 		Names: []string{"a", "b"},
 	}
 
