@@ -25,6 +25,8 @@ import (
 	"text/tabwriter"
 	"time"
 	"vnc"
+
+	proc "github.com/c9s/goprocinfo/linux"
 )
 
 const (
@@ -828,6 +830,37 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
+}
+
+func (vm *KvmVM) ProcStats(d time.Duration) (*VMProcStats, error) {
+	p := &VMProcStats{
+		Name:      vm.Name,
+		Namespace: vm.Namespace,
+	}
+
+	p.Begin = time.Now()
+
+	for i := 0; i < 2; i++ {
+		if i > 0 {
+			time.Sleep(d)
+		}
+
+		s, err := proc.ReadProcessStat(fmt.Sprintf("/proc/%v/stat", vm.pid))
+		if err != nil {
+			return nil, fmt.Errorf("unable to read process stat: %v", err)
+		}
+		p.Stat = append(p.Stat, s)
+
+		sm, err := proc.ReadProcessStatm(fmt.Sprintf("/proc/%v/statm", vm.pid))
+		if err != nil {
+			return nil, fmt.Errorf("unable to read process statm: %v", err)
+		}
+		p.Statm = append(p.Statm, sm)
+	}
+
+	p.End = time.Now()
+
+	return p, nil
 }
 
 // log any asynchronous messages, such as vnc connects, to log.Info

@@ -1187,6 +1187,11 @@ func (vm *ContainerVM) thaw() error {
 	return nil
 }
 
+func (vm *ContainerVM) ProcStats(d time.Duration) (*VMProcStats, error) {
+	// not implemented yet
+	return nil, nil
+}
+
 func containerSetCapabilities() error {
 	c := new(cap)
 	c.header.version = CAPV3
