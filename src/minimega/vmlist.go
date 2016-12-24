@@ -529,6 +529,42 @@ func (vms VMs) ClearQoS(target string, tap uint) []error {
 	return vms.apply(target, true, applyFunc)
 }
 
+func (vms VMs) ProcStats(d time.Duration) []*VMProcStats {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	var res []*VMProcStats
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
+	for _, vm := range vms {
+		if !inNamespace(vm) {
+			continue
+		}
+
+		wg.Add(1)
+
+		go func(vm VM) {
+			defer wg.Done()
+
+			p, err := vm.ProcStats(d)
+			if err != nil {
+				log.Error("ProcStats failed for %v: %v", vm.GetID(), err)
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+			res = append(res, p)
+		}(vm)
+	}
+
+	wg.Wait()
+
+	return res
+}
+
 // apply is the fan out/in method to apply a function to a set of VMs specified
 // by target. Specifically, it:
 //

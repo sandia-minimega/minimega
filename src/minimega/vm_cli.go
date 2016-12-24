@@ -15,6 +15,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
+)
+
+// #include <unistd.h>
+import "C"
+
+var (
+	ClkTck   = float64(C.sysconf(C._SC_CLK_TCK))
+	PageSize = uint64(C.getpagesize())
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -429,6 +438,22 @@ Clear all tags from all VMs:
 			return nil
 		}),
 	},
+	{ // vm top
+		HelpShort: "view vm resource utilization",
+		HelpLong: `
+View system resource utilization per VM. This is measured from the host and may
+differ from what is reported by the guest.
+
+The optional duration specifies the length of the sampling window in seconds.
+The command will block for at least this long while it measures usage. The
+default duration is one second.
+
+Only KVM-based VMs are supported at this time.`,
+		Patterns: []string{
+			"vm top [duration]",
+		},
+		Call: wrapBroadcastCLI(cliVMTop),
+	},
 }
 
 func init() {
@@ -828,6 +853,70 @@ func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+}
+
+func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
+	d := time.Second
+	if c.StringArgs["duration"] != "" {
+		v, err := strconv.Atoi(c.StringArgs["duration"])
+		if err != nil {
+			return err
+		}
+
+		d = time.Duration(v) * time.Second
+	}
+
+	ns := GetNamespace()
+
+	resp.Header = []string{"name"}
+	if ns == nil {
+		resp.Header = append(resp.Header, "namespace")
+	}
+	resp.Header = append(resp.Header,
+		"virt (MB)",
+		"res (MB)",
+		"shr (MB)",
+		"cpu (%%)",
+		"vcpu (%%)",
+		"time+",
+	)
+
+	fmtMB := func(i uint64) string {
+		return strconv.FormatUint(i/(uint64(1)<<20), 10)
+	}
+
+	for _, s := range vms.ProcStats(d) {
+		row := []string{s.Name}
+		if ns == nil {
+			row = append(row, s.Namespace)
+		}
+
+		// compute number of tics used in window by process
+		ustime0 := (s.Stat[0].Utime + s.Stat[0].Stime)
+		ustime1 := (s.Stat[1].Utime + s.Stat[1].Stime)
+		tics := float64(ustime1 - ustime0)
+
+		// compute number of tics used by virtual CPU
+		vtics := float64(s.Stat[1].GuestTime - s.Stat[0].GuestTime)
+
+		// compute total time spent
+		t := time.Duration(float64(ustime1)/ClkTck) * time.Second
+
+		d := s.End.Sub(s.Begin)
+
+		row = append(row,
+			fmtMB(PageSize*s.Statm[1].Size),
+			fmtMB(PageSize*s.Statm[1].Resident),
+			fmtMB(PageSize*s.Statm[1].Share),
+			fmt.Sprintf("%.2f", tics/ClkTck/d.Seconds()*100),
+			fmt.Sprintf("%.2f", vtics/ClkTck/d.Seconds()*100),
+			t.String(),
+		)
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
 }
 
 // cliVMSuggest takes a prefix that could be the start of a VM name

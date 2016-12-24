@@ -16,6 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"text/tabwriter"
+	"time"
+
+	proc "github.com/c9s/goprocinfo/linux"
 )
 
 const (
@@ -88,6 +92,8 @@ type VM interface {
 	ClearQos(uint) error
 	ClearAllQos() error
 
+	ProcStats(time.Duration) (*VMProcStats, error)
+
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM
 }
@@ -113,6 +119,20 @@ type BaseVM struct {
 	kill chan bool // channel to signal the vm to shut down
 
 	instancePath string
+}
+
+type VMProcStats struct {
+	Name, Namespace string
+
+	ProcStats // embed
+}
+
+type ProcStats struct {
+	Begin, End time.Time
+	// Stat from Begin and End, should always be length two
+	Stat []*proc.ProcessStat
+	// Statm from Begin and End, should always be length two
+	Statm []*proc.ProcessStatm
 }
 
 // Valid names for output masks for `vm info`, in preferred output order
