@@ -79,7 +79,8 @@ const sliceTemplate = `{
 },
 `
 
-const uint64Template = `{
+// numTemplate handles int64 and uint64
+const numTemplate = `{
 	HelpShort: "configures {{ .ConfigName }}",
 	HelpLong: ` + "`{{ .Doc }}`," + `
 	Patterns: []string{
@@ -87,11 +88,19 @@ const uint64Template = `{
 	},
 	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
+			{{- if .Signed }}
+			r.Response = strconv.FormatInt(vmConfig.{{ .Field }}, 10)
+			{{- else }}
 			r.Response = strconv.FormatUint(vmConfig.{{ .Field }}, 10)
+			{{- end }}
 			return nil
 		}
 
+		{{ if .Signed -}}
+		i, err := strconv.ParseInt(c.StringArgs["value"], 10, 64)
+		{{- else }}
 		i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+		{{- end }}
 		if err != nil {
 			return err
 		}
