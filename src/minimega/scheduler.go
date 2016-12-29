@@ -118,14 +118,18 @@ func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	}
 
 	// VMs with specified peers should be less than those that are unspecified.
-	// Within VMs that have coschedule limits, we want to process higher
+	// Within VMs that have coschedule limits, we want to process the lower
 	// coschedule limits first.
 	limit, err := strconv.Atoi(q.SchedulePeers)
 	limit2, err2 := strconv.Atoi(q2.SchedulePeers)
 
 	if err == nil && err2 == nil {
+		if limit == -1 || limit2 == -1 {
+			return limit != -1
+		}
+
 		if limit != limit2 {
-			return limit > limit2
+			return limit < limit2
 		}
 	} else if err == nil || err2 == nil {
 		return err == nil
@@ -136,6 +140,7 @@ func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	return len(q.Names) > len(q2.Names)
 }
 
+// cpuCommit tests whether h1 < h2.
 func cpuCommit(h1, h2 *HostStats) bool {
 	// fully loaded host is always greater
 	if full := h1.IsFull(); full != h2.IsFull() {
@@ -148,6 +153,7 @@ func cpuCommit(h1, h2 *HostStats) bool {
 	return r1 < r2
 }
 
+// memoryCommit tests whether h1 < h2.
 func memoryCommit(h1, h2 *HostStats) bool {
 	// fully loaded host is always greater
 	if full := h1.IsFull(); full != h2.IsFull() {
@@ -160,6 +166,7 @@ func memoryCommit(h1, h2 *HostStats) bool {
 	return r1 < r2
 }
 
+// networkCommit tests whether h1 < h2.
 func networkCommit(h1, h2 *HostStats) bool {
 	// fully loaded host is always greater
 	if full := h1.IsFull(); full != h2.IsFull() {
@@ -201,6 +208,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 
 	// helper to write schedule to log
 	dumpSchedule := func() {
+		log.Info("partial schedule:")
 		for host := range res {
 			names := []string{}
 			for _, q := range res[host] {
@@ -261,9 +269,11 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 				limit := limit + 1
 				if stats.Limit == 0 {
 					// set initial limit
+					log.Debug("set initial limit on %v to %v", stats.Name, limit)
 					stats.Limit = limit
 				} else if limit < stats.Limit {
 					// lower the limit for the host
+					log.Debug("lower limit on %v from %v to %v", stats.Name, stats.Limit, limit)
 					stats.Limit = limit
 				}
 			}
@@ -281,7 +291,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 			q2 := *q
 			q2.Names = []string{name}
 
-			log.Debug("scheduling VMs on %v: %v", host, q2.Names)
+			log.Debug("scheduling VM on %v: %v", host, name)
 			res[host] = append(res[host], &q2)
 		}
 	}
