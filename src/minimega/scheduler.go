@@ -291,7 +291,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 			q2 := *q
 			q2.Names = []string{name}
 
-			log.Debug("scheduling VM on %v: %v", host, name)
+			//log.Debug("scheduling VM on %v: %v", host, name)
 			res[host] = append(res[host], &q2)
 		}
 	}

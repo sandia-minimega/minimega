@@ -351,3 +351,30 @@ outer:
 		}
 	}
 }
+
+func BenchmarkSchedule(b *testing.B) {
+	var names []string
+	for i := 0; i < 10000; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+
+	queue := []*QueuedVMs{
+		&QueuedVMs{
+			Names: names,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Vcpus:  "1",
+					Memory: "1",
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(100)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		schedule(queue, hosts, cpuCommit)
+	}
+}
