@@ -35,7 +35,7 @@ const (
 )
 
 type KVMConfig struct {
-	QemuPath string // path to qemu binary, uses process("qemu") if empty
+	QemuPath string // path to qemu binary, uses process("kvm") if empty
 
 	Append     string
 	CdromPath  string
@@ -541,7 +541,11 @@ func (vm *KvmVM) launch() error {
 
 	path := vm.KVMConfig.QemuPath
 	if path == "" {
-		path = process("qemu")
+		p, err := process("kvm")
+		if err != nil {
+			return err
+		}
+		path = p
 	}
 
 	cmd := &exec.Cmd{
@@ -897,8 +901,7 @@ func isNetworkDriver(driver string) bool {
 	KVMNetworkDrivers.Do(func() {
 		drivers := []string{}
 
-		cmd := exec.Command(process("qemu"), "-device", "help")
-		out, err := cmd.CombinedOutput()
+		out, err := processWrapper("kvm", "-device", "help")
 		if err != nil {
 			log.Error("unable to determine kvm network drivers -- %v", err)
 			return
@@ -906,7 +909,7 @@ func isNetworkDriver(driver string) bool {
 
 		var foundHeader bool
 
-		scanner := bufio.NewScanner(bytes.NewBuffer(out))
+		scanner := bufio.NewScanner(strings.NewReader(out))
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !foundHeader && strings.Contains(line, "Network devices:") {
