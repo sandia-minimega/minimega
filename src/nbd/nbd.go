@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	log "minilog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -29,8 +28,7 @@ const (
 func Modprobe() error {
 	// Load the kernel module
 	// This will probably fail unless you are root
-	err := exec.Command(process("modprobe"), "nbd", "max_part=10").Run()
-	if err != nil {
+	if _, err := processWrapper("modprobe", "nbd", "max_part=10"); err != nil {
 		return err
 	}
 
@@ -43,13 +41,12 @@ func Modprobe() error {
 // after this function returns no error.
 func Ready() error {
 	// Ensure that the kernel module has been loaded
-	cmd := exec.Command(process("lsmod"))
-	result, err := cmd.CombinedOutput()
+	out, err := processWrapper("lsmod")
 	if err != nil {
 		return err
 	}
 
-	if !strings.Contains(string(result), "nbd ") {
+	if !strings.Contains(out, "nbd ") {
 		return errors.New("add module 'nbd'")
 	}
 
@@ -119,13 +116,12 @@ func ConnectImage(image string) (string, error) {
 		return "", err
 	}
 
-	// connect it to qemu-nbd
-	cmd := exec.Command(process("qemu-nbd"), "-c", nbdPath, image)
-	log.Debug("connecting to nbd with cmd: %v", cmd)
+	log.Debug("connect nbd: %v -> %v", image, nbdPath)
 
-	result, err := cmd.CombinedOutput()
+	// connect it to qemu-nbd
+	out, err := processWrapper("qemu-nbd", "-c", nbdPath, image)
 	if err != nil {
-		return "", fmt.Errorf("unable to connect to nbd: %v", string(result))
+		return "", fmt.Errorf("unable to connect to nbd: %v", out)
 	}
 
 	return nbdPath, nil
@@ -133,13 +129,12 @@ func ConnectImage(image string) (string, error) {
 
 // DisconnectDevice disconnects a given NBD using qemu-nbd.
 func DisconnectDevice(dev string) error {
-	// disconnect nbd
-	cmd := exec.Command(process("qemu-nbd"), "-d", dev)
-	log.Debug("disconnect nbd with cmd: %v", cmd)
+	log.Debug("disconnect nbd: %v", dev)
 
-	result, err := cmd.CombinedOutput()
+	// disconnect nbd
+	out, err := processWrapper("qemu-nbd", "-d", dev)
 	if err != nil {
-		return fmt.Errorf("unable to disconnect nbd: %v", string(result))
+		return fmt.Errorf("unable to disconnect nbd: %v", out)
 	}
 
 	return nil
