@@ -81,6 +81,7 @@ type Response struct {
 }
 
 type CLIFunc func(*Command, chan<- Responses)
+type SuggestFunc func(string, string, string) []string
 
 // Preprocessor may be set to perform actions immediately before commands run.
 var Preprocessor func(*Command) error
@@ -251,10 +252,10 @@ func expandAliases(input string) string {
 	return input
 }
 
-func suggest(input *Input) []string {
+func suggest(raw string, input *Input) []string {
 	vals := map[string]bool{}
 	for _, h := range handlers {
-		for _, v := range h.suggest(input) {
+		for _, v := range h.suggest(raw, input) {
 			vals[v] = true
 		}
 	}
@@ -274,7 +275,7 @@ func Suggest(input string) []string {
 		return nil
 	}
 
-	return suggest(in)
+	return suggest(input, in)
 }
 
 //
