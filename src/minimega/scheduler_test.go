@@ -25,15 +25,20 @@ var ThreeVMs = []*QueuedVMs{
 	},
 }
 
-func fakeHostData(N int) []*HostStats {
+func fakeHostData(N int, uniform bool) []*HostStats {
 	res := []*HostStats{}
 
 	for i := 0; i < N; i++ {
+		c := i
+		if uniform {
+			c = 1
+		}
+
 		res = append(res, &HostStats{
 			Name:          strconv.Itoa(i),
-			CPUCommit:     i,
-			MemCommit:     i,
-			NetworkCommit: i,
+			CPUCommit:     c,
+			MemCommit:     c,
+			NetworkCommit: c,
 			CPUs:          1, // actual number doesn't matter
 			MemTotal:      1, // actual number doesn't matter
 		})
@@ -51,24 +56,24 @@ func fakeHostData(N int) []*HostStats {
 	return res
 }
 
-// testHostSort sorts fakeHostData for n hosts using the provided hostSortBy
+// testHostSort sorts fakeHostData for N hosts using the provided hostSortBy
 // function then updates the root and call Update many times to see if we keep
 // getting the correct minimum.
-func testHostSort(n int, by hostSortBy) error {
-	hosts := fakeHostData(n)
+func testHostSort(N int, by hostSortBy) error {
+	hosts := fakeHostData(N, false)
 
 	by.Sort(hosts)
 
-	for i := 0; i < 10*n; i++ {
+	for i := 0; i < 10*N; i++ {
 		v, _ := strconv.Atoi(hosts[0].Name)
-		if i%n != v {
+		if i%N != v {
 			return fmt.Errorf("incorrect minimum: %v != %v", i, v)
 		}
 
-		// increment all by n so that they move to the bottom of the heap
-		hosts[0].CPUCommit += n
-		hosts[0].MemCommit += n
-		hosts[0].NetworkCommit += n
+		// increment all by N so that they move to the bottom of the heap
+		hosts[0].CPUCommit += N
+		hosts[0].MemCommit += N
+		hosts[0].NetworkCommit += N
 
 		by.Update(hosts, hosts[0].Name)
 	}
@@ -222,7 +227,7 @@ func TestQueuedVMsLess(t *testing.T) {
 func TestScheduleImpossible(t *testing.T) {
 	// three VMs with 0 peers and only two machines
 	queue := ThreeVMs
-	hosts := fakeHostData(2)
+	hosts := fakeHostData(2, false)
 
 	if s, err := schedule(queue, hosts, cpuCommit); err == nil {
 		t.Error("scheduler did the impossible: %v", s)
@@ -232,7 +237,7 @@ func TestScheduleImpossible(t *testing.T) {
 func TestScheduleExact(t *testing.T) {
 	// three VMs with 0 peers and three machines
 	queue := ThreeVMs
-	hosts := fakeHostData(3)
+	hosts := fakeHostData(3, false)
 
 	if _, err := schedule(queue, hosts, cpuCommit); err != nil {
 		t.Error(err)
@@ -242,7 +247,7 @@ func TestScheduleExact(t *testing.T) {
 func TestScheduleEasy(t *testing.T) {
 	// three VMs with 0 peers and four machines
 	queue := ThreeVMs
-	hosts := fakeHostData(4)
+	hosts := fakeHostData(4, false)
 
 	if _, err := schedule(queue, hosts, cpuCommit); err != nil {
 		t.Error(err)
@@ -262,7 +267,7 @@ func TestScheduleHost(t *testing.T) {
 			},
 		},
 	})
-	hosts := fakeHostData(4)
+	hosts := fakeHostData(4, false)
 
 	s, err := schedule(queue, hosts, cpuCommit)
 	if err != nil {
@@ -325,7 +330,7 @@ func TestScheduleBig(t *testing.T) {
 			},
 		},
 	}
-	hosts := fakeHostData(40)
+	hosts := fakeHostData(40, false)
 
 	s, err := schedule(queue, hosts, cpuCommit)
 	if err != nil {
@@ -352,6 +357,87 @@ outer:
 	}
 }
 
+func testScheduleUniformity(N, M int, by hostSortBy) error {
+	var queue []*QueuedVMs
+
+	var want int
+	for i := 0; i < N; i++ {
+		want += i
+
+		var names []string
+		for j := 0; j < M; j++ {
+			names = append(names, strconv.Itoa(i))
+		}
+
+		var nets []NetConfig
+		for j := 0; j < i; j++ {
+			nets = append(nets, NetConfig{})
+		}
+
+		queue = append(queue, &QueuedVMs{
+			Names: names,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Vcpus:    strconv.Itoa(i),
+					Memory:   strconv.Itoa(i),
+					Networks: nets,
+				},
+			},
+		})
+	}
+
+	hosts := fakeHostData(M, true)
+
+	// scheduling should evenly distribute VMs over machines
+	s, err := schedule(queue, hosts, by)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range s {
+		var cpu, mem, nets int
+		for _, q := range v {
+			v, _ := strconv.Atoi(q.Vcpus)
+			cpu += v * len(q.Names)
+
+			v, _ = strconv.Atoi(q.Memory)
+			mem += v * len(q.Names)
+
+			nets += len(q.Networks) * len(q.Names)
+		}
+
+		if cpu != want {
+			return fmt.Errorf("cpu commit uneven for %v: %v != %v", k, cpu, want)
+		}
+		if mem != want {
+			return fmt.Errorf("memory commit uneven for %v: %v != %v", k, mem, want)
+		}
+		if nets != want {
+			return fmt.Errorf("network commit uneven for %v: %v != %v", k, nets, want)
+		}
+	}
+
+	return nil
+}
+
+func TestScheduleUniformityCPU(t *testing.T) {
+	if err := testScheduleUniformity(10, 10, cpuCommit); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestScheduleUniformityMem(t *testing.T) {
+	if err := testScheduleUniformity(10, 10, memoryCommit); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestScheduleUniformityNet(t *testing.T) {
+	if err := testScheduleUniformity(10, 10, networkCommit); err != nil {
+		t.Error(err)
+	}
+}
+
 func BenchmarkSchedule(b *testing.B) {
 	var names []string
 	for i := 0; i < 10000; i++ {
@@ -370,7 +456,7 @@ func BenchmarkSchedule(b *testing.B) {
 		},
 	}
 
-	hosts := fakeHostData(100)
+	hosts := fakeHostData(100, false)
 
 	b.ResetTimer()
 
