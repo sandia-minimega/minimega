@@ -181,11 +181,6 @@ func cliClearVLANs(c *minicli.Command, resp *minicli.Response) error {
 // current namespace (completes across namespaces if prefix includes
 // vlans.AliasSep).
 func cliVLANSuggest(prefix string) []string {
-	if attached {
-		log.Warnln("cannot complete via -attach")
-		return nil
-	}
-
 	namespace := GetNamespaceName()
 
 	if !strings.Contains(prefix, vlans.AliasSep) && namespace != "" {

@@ -122,6 +122,11 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 	}
 }
 
+func (mm *Conn) Suggest(input string) []string {
+	log.Warnln("cannot complete via -attach")
+	return nil
+}
+
 // Attach creates a CLI interface to the dialed minimega instance
 func (mm *Conn) Attach() {
 	// set up signal handling
