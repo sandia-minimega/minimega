@@ -409,7 +409,11 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
-	p := process("dnsmasq")
+	p, err := process("dnsmasq")
+	if err != nil {
+		return err
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	cmd := &exec.Cmd{

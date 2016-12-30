@@ -123,7 +123,7 @@ func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
 			log.Debug("obtaining dhcp on tap %v", tap)
 
 			var out string
-			out, err = processWrapper("dhcp", tap)
+			out, err = processWrapper("dhclient", tap)
 			if err != nil {
 				err = fmt.Errorf("dhcp error %v: `%v`", err, out)
 			}

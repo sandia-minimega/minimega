@@ -35,16 +35,11 @@ const (
 )
 
 type KVMConfig struct {
-	// Set the QEMU process to invoke. Relative paths are ok. When unspecified,
-	// minimega uses "kvm" in the default path.
-	//
-	// Note: this configuration only applies to KVM-based VMs.
-	QemuPath string
+	QemuPath string // path to qemu binary, uses process("kvm") if empty
 
-	// Attach a kernel image to a VM. If set, QEMU will boot from this image
-	// instead of any disk image.
-	//
-	// Note: this configuration only applies to KVM-based VMs.
+	Append     string
+	CdromPath  string
+	InitrdPath string
 	KernelPath string
 
 	// Attach an initrd image to a VM. Passed along with the kernel image at
@@ -609,7 +604,11 @@ func (vm *KvmVM) launch() error {
 
 	path := vm.KVMConfig.QemuPath
 	if path == "" {
-		path = process("qemu")
+		p, err := process("kvm")
+		if err != nil {
+			return err
+		}
+		path = p
 	}
 
 	cmd := &exec.Cmd{
@@ -1005,8 +1004,7 @@ func isNetworkDriver(driver string) bool {
 	KVMNetworkDrivers.Do(func() {
 		drivers := []string{}
 
-		cmd := exec.Command(process("qemu"), "-device", "help")
-		out, err := cmd.CombinedOutput()
+		out, err := processWrapper("kvm", "-device", "help")
 		if err != nil {
 			log.Error("unable to determine kvm network drivers -- %v", err)
 			return
@@ -1014,7 +1012,7 @@ func isNetworkDriver(driver string) bool {
 
 		var foundHeader bool
 
-		scanner := bufio.NewScanner(bytes.NewBuffer(out))
+		scanner := bufio.NewScanner(strings.NewReader(out))
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !foundHeader && strings.Contains(line, "Network devices:") {
