@@ -8,7 +8,6 @@ addons:
     packages:
     - libpcap-dev
     - libreadline-dev
-    - python-jinja2
 install: true
 script:
   - ./check.bash
