@@ -48,10 +48,7 @@ type vncPixelFormat struct {
 }
 
 var (
-	f_port     = flag.Int("port", 9004, "port to start rfbplay webservice")
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "log to file")
+	f_port = flag.Int("port", 9004, "port to start rfbplay webservice")
 )
 
 var pixelFormat = vncPixelFormat{
@@ -173,7 +170,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	logSetup()
+	log.Init()
 
 	addr := ":" + strconv.Itoa(*f_port)
 	log.Info("serving recordings from %s on %s", flag.Arg(0), addr)

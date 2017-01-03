@@ -9,7 +9,6 @@
 package bridge
 
 import (
-	"io"
 	log "minilog"
 	"net"
 
@@ -37,14 +36,15 @@ func (b *Bridge) snooper() {
 
 	decodedLayers := []gopacket.LayerType{}
 
-	for {
+	for !b.destroyed() {
 		data, _, err := b.handle.ReadPacketData()
 		if err == pcap.NextErrorTimeoutExpired {
 			continue
-		} else if err == io.EOF {
-			break
 		} else if err != nil {
-			log.Error("error reading packet data: %v", err)
+			// only log error if it's not because we've been destroyed
+			if !b.destroyed() {
+				log.Error("error reading packet data: %v", err)
+			}
 			break
 		}
 

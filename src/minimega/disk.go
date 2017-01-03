@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // #include "linux/fs.h"
@@ -57,13 +58,18 @@ in the 'files' directory.
 
 To inject files into an image:
 
-	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc"
 
 Each argument after the image should be a source and destination pair,
 separated by a ':'. If the file paths contain spaces, use double quotes.
 Optionally, you may specify a partition (partition 1 will be used by default):
 
-	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc"
+
+You may also specify that there is no partition on the disk, if your filesystem
+was directly written to the disk (this is highly unusual):
+
+	disk inject partitionless_disk.qc2:none files /miniccc:/miniccc
 
 You can optionally specify mount arguments to use with inject. Multiple options
 should be quoted. For example:
@@ -155,34 +161,55 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 	defer diskInjectCleanup(mntDir, nbdPath)
 
+	path := nbdPath
+
 	f, err := os.Open(nbdPath)
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
+	// decide whether to mount partition or raw disk
+	if partition != "none" {
 
-	// decide on a partition
-	if partition == "" {
-		_, err = os.Stat(nbdPath + "p1")
-		if err != nil {
-			return errors.New("no partitions found")
+		// keep rereading partitions and waiting for them to show up for a bit
+		timeoutTime := time.Now().Add(5 * time.Second)
+		for i := 1; ; i++ {
+			if time.Now().After(timeoutTime) {
+				return errors.New("no partitions found on image")
+			}
+
+			// tell kernel to reread partitions
+			syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
+
+			_, err = os.Stat(nbdPath + "p1")
+			if err == nil {
+				log.Info("partitions detected after %d attempt(s)", i)
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
 		}
 
-		_, err = os.Stat(nbdPath + "p2")
-		if err == nil {
-			return errors.New("please specify a partition; multiple found")
+		// default to first partition if there is only one partition
+		if partition == "" {
+			_, err = os.Stat(nbdPath + "p2")
+			if err == nil {
+				return errors.New("please specify a partition; multiple found")
+			}
+
+			partition = "1"
 		}
 
-		partition = "1"
-	}
-
-	// mount new img
-	var path string
-	if partition == "none" {
-		path = nbdPath
-	} else {
 		path = nbdPath + "p" + partition
+
+		// check desired partition exists
+		_, err = os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("desired partition %s not found", partition)
+		} else {
+			log.Info("desired partition %s found", partition)
+		}
 	}
 
 	// we use mount(8), because the mount syscall (mount(2)) requires we
@@ -338,7 +365,7 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 			return err
 		}
 
-		resp.Header = []string{"image", "format", "virtual size", "disk size", "backing file"}
+		resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile"}
 		resp.Tabular = append(resp.Tabular, []string{
 			image, info.Format, info.VirtualSize, info.DiskSize, info.BackingFile,
 		})

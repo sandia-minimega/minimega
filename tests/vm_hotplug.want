@@ -9,17 +9,17 @@
 ## vm hotplug show foo
 ## vm hotplug add foo /tmp/minitest0.img
 ## vm hotplug show foo
-hotplug ID | File
-0          | /tmp/minitest0.img
+hotplugid | file
+0         | /tmp/minitest0.img
 ## vm hotplug add foo /tmp/minitest1.img
 ## vm hotplug show foo
-hotplug ID | File
-0          | /tmp/minitest0.img
-1          | /tmp/minitest1.img
+hotplugid | file
+0         | /tmp/minitest0.img
+1         | /tmp/minitest1.img
 ## vm hotplug remove foo 0
 ## vm hotplug show foo
-hotplug ID | File
-1          | /tmp/minitest1.img
+hotplugid | file
+1         | /tmp/minitest1.img
 ## vm hotplug remove foo 1
 ## vm hotplug show foo
 

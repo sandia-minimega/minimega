@@ -100,18 +100,17 @@ created:
 minimega can do a lot of complex things with the network. For this quickstart,
 we'll do the following:
 
-- Put the VM onto virtual network #100
+- Put the VM onto a virtual network called "testing"
 - Connect the host to that same virtual network
 - Start a DHCP server on the host
 
-First, we'll configure the VM to use virtual network #100:
+First, we'll configure the VM to use virtual network "testing":
 
-      minimega$ vm config net 100
+      minimega$ vm config net testing
 
-Then, we'll create a tap interface on the host, also on virtual network #100,
-and specify an IP for the host:
+Then, we'll create a tap interface on the host, also on the "testing" virtual network, and specify an IP for the host:
 
-      minimega$ tap create 100 ip 10.0.0.1/24
+      minimega$ tap create testing ip 10.0.0.1/24
 
 Now, when the VM is launched, it will be able to communicate with the host via
 the virtual network.
@@ -170,13 +169,6 @@ section "VM Screenshots". You should see something like this:
 .image quickstart/mm-web.png
 
 Click on "Connect" to open a VNC session to the VM.
-
-** Direct VNC
-
-If you'd rather connect directly using your preferred VNC client, just run "vm
-info" and look at the "id" field for your desired VM, then add 5900 to that
-number to get your VNC port. In our case, the "test" VM should be ID #0; 5900+0
-= 5900, so we can connect our VNC client to localhost:5900.
 
 ** SSH
 

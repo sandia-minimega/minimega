@@ -88,7 +88,7 @@ func cliFile(c *minicli.Command, resp *minicli.Response) error {
 		return iom.Delete(c.StringArgs["file"])
 	} else if c.BoolArgs["status"] {
 		transfers := iom.Status()
-		resp.Header = []string{"Filename", "Temporary directory", "Completed parts", "Queued"}
+		resp.Header = []string{"filename", "tempdir", "completed", "queued"}
 		resp.Tabular = [][]string{}
 
 		for _, f := range transfers {

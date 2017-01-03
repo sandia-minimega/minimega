@@ -71,3 +71,60 @@ foo3,BUILDING
 ## #.column name,state vm info
 ## #.json false
 
+## # Test apropos / prefix matching on filters and columns
+## .columns names,name .columns name,names vm info
+namespace | name
+          | bar
+          | foo1
+          | foo2
+          | foo3
+## .columns names,name .columns names,name vm info
+namespace | name
+          | bar
+          | foo1
+          | foo2
+          | foo3
+## .columns name,names .columns name,names vm info
+name | namespace
+bar  | 
+foo1 | 
+foo2 | 
+foo3 |
+## .columns name,names .columns names,name vm info
+name | namespace
+bar  | 
+foo1 | 
+foo2 | 
+foo3 |
+## .filter name~foo .col namesp,name,st vm info
+namespace | name | state
+          | foo1 | BUILDING
+          | foo2 | RUNNING
+          | foo3 | BUILDING
+## .filter name~foo .col name,namesp,st vm info
+name | namespace | state
+foo1 |           | BUILDING
+foo2 |           | RUNNING
+foo3 |           | BUILDING
+
+## # Test apropos / prefix matching that should fail
+## .columns nam vm info
+E: ambiguous column `nam`
+## .columns nam,s vm info
+E: ambiguous column `nam`
+## .columns s vm info
+E: ambiguous column `s`
+## .filter name~foo .col st vm info
+E: no such column `name`
+
+## # Test preprocess
+## echo http://localhost/
+E: open /tmp/minimega/files: is a directory
+## .preprocess false
+## .preprocess
+false
+## echo http://localhost/
+http://localhost/
+## .preprocess true
+## .preprocess false echo http://localhost/
+http://localhost/

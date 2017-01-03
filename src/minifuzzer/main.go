@@ -29,10 +29,6 @@ var (
 	f_exclude  = flag.String("exclude", "quit,read,write,deploy,nuke,shell", "commands to skip")
 	f_chars    = flag.String("chars", chars, "chars to use when generating strings for commands")
 	f_values   = flag.String("values", "foo,bar,test,0,1,2,3,all", "fixed values to use when generating commands")
-
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
 )
 
 var (
@@ -214,7 +210,7 @@ func cleanup() error {
 func main() {
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	log.Debug("using minimega: %v", *f_minimega)
 

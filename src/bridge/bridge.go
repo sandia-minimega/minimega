@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/gopacket/pcap"
@@ -37,6 +38,9 @@ type Bridge struct {
 	nameChan chan string
 
 	handle *pcap.Handle
+
+	// set to non-zero value by Bridge.destroy
+	isdestroyed uint64
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -83,6 +87,13 @@ func (b *Bridge) Destroy() error {
 
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
+
+	if b.destroyed() {
+		// bridge has already been destroyed
+		return nil
+	}
+
+	b.setDestroyed()
 
 	if b.handle != nil {
 		// Don't close the handle otherwise we might cause a deadlock:
@@ -192,6 +203,14 @@ func (b *Bridge) reapTaps() error {
 	}
 
 	return nil
+}
+
+func (b *Bridge) setDestroyed() {
+	atomic.StoreUint64(&b.isdestroyed, 1)
+}
+
+func (b *Bridge) destroyed() bool {
+	return atomic.LoadUint64(&b.isdestroyed) > 0
 }
 
 // DestroyBridge deletes an `unmanaged` bridge. This can be used when cleaning

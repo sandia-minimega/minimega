@@ -18,7 +18,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -161,20 +160,6 @@ func allocatedMac(mac string) bool {
 	return allocated
 }
 
-func hostid(s string) (string, int) {
-	k := strings.Split(s, ":")
-	if len(k) != 2 {
-		log.Error("hostid cannot split host vmid pair: %v", k)
-		return "", -1
-	}
-	val, err := strconv.Atoi(k[1])
-	if err != nil {
-		log.Error("parse hostid: %v", err)
-		return "", -1
-	}
-	return k[0], val
-}
-
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
 // 	Example: a b "c d"
@@ -243,46 +228,6 @@ func unescapeString(input []string) string {
 	}
 	log.Debug("unescapeString generated: %v", ret)
 	return strings.TrimSpace(ret)
-}
-
-// cmdTimeout runs the command c and returns a timeout if it doesn't complete
-// after time t. If a timeout occurs, cmdTimeout will kill the process.
-func cmdTimeout(c *exec.Cmd, t time.Duration) error {
-	log.Debug("cmdTimeout: %v", c)
-
-	start := time.Now()
-	err := c.Start()
-	if err != nil {
-		return fmt.Errorf("cmd start: %v", err)
-	}
-
-	done := make(chan error)
-	go func() {
-		done <- c.Wait()
-	}()
-
-	select {
-	case <-time.After(t):
-		err = c.Process.Kill()
-		if err != nil {
-			return err
-		}
-		return <-done
-	case err = <-done:
-		log.Debug("cmd %v completed in %v", c, time.Now().Sub(start))
-		return err
-	}
-}
-
-// registerHandlers registers all the provided handlers with minicli, panicking
-// if any of the handlers fail to register.
-func registerHandlers(name string, handlers []minicli.Handler) {
-	for i := range handlers {
-		err := minicli.Register(&handlers[i])
-		if err != nil {
-			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
-		}
-	}
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
