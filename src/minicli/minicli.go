@@ -24,12 +24,13 @@ const (
 )
 
 type Flags struct {
-	Annotate bool
-	Compress bool
-	Headers  bool
-	Sort     bool
-	Mode     int
-	Record   bool
+	Annotate   bool
+	Compress   bool
+	Headers    bool
+	Sort       bool
+	Preprocess bool
+	Mode       int
+	Record     bool
 }
 
 var flagsLock sync.Mutex
@@ -41,11 +42,12 @@ var (
 
 var defaultFlags = Flags{
 	// Output flags
-	Annotate: true,
-	Compress: true,
-	Headers:  true,
-	Sort:     true,
-	Mode:     defaultMode,
+	Annotate:   true,
+	Compress:   true,
+	Headers:    true,
+	Sort:       true,
+	Preprocess: true,
+	Mode:       defaultMode,
 
 	// Command flags
 	Record: true,
@@ -149,7 +151,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 		defer close(respChan)
 
 		// Run the preprocessor first if one is set
-		if Preprocessor != nil {
+		if Preprocessor != nil && c.Preprocess {
 			if err := Preprocessor(c); err != nil {
 				resp := &Response{Error: err.Error()}
 				respChan <- Responses{resp}
@@ -222,6 +224,7 @@ func Compile(input string) (*Command, error) {
 		defer flagsLock.Unlock()
 
 		cmd.Record = defaultFlags.Record
+		cmd.Preprocess = defaultFlags.Preprocess
 		return cmd, nil
 	}
 
