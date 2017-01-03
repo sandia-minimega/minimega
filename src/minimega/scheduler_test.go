@@ -17,9 +17,9 @@ var ThreeVMs = []*QueuedVMs{
 		Names: []string{"a", "b", "c"},
 		VMConfig: VMConfig{
 			BaseConfig: BaseConfig{
-				SchedulePeers: "0",
-				Vcpus:         "1",
-				Memory:        "1",
+				Coschedule: 0,
+				VCPUs:      1,
+				Memory:     1,
 			},
 		},
 	},
@@ -29,7 +29,7 @@ func fakeHostData(N int, uniform bool) []*HostStats {
 	res := []*HostStats{}
 
 	for i := 0; i < N; i++ {
-		c := i
+		c := uint64(i)
 		if uniform {
 			c = 1
 		}
@@ -38,7 +38,7 @@ func fakeHostData(N int, uniform bool) []*HostStats {
 			Name:          strconv.Itoa(i),
 			CPUCommit:     c,
 			MemCommit:     c,
-			NetworkCommit: c,
+			NetworkCommit: int(c),
 			CPUs:          1, // actual number doesn't matter
 			MemTotal:      1, // actual number doesn't matter
 		})
@@ -71,8 +71,8 @@ func testHostSort(N int, by hostSortBy) error {
 		}
 
 		// increment all by N so that they move to the bottom of the heap
-		hosts[0].CPUCommit += N
-		hosts[0].MemCommit += N
+		hosts[0].CPUCommit += uint64(N)
+		hosts[0].MemCommit += uint64(N)
 		hosts[0].NetworkCommit += N
 
 		by.Update(hosts, hosts[0].Name)
@@ -172,15 +172,36 @@ func TestNetCommit(t *testing.T) {
 func TestQueuedVMsLess(t *testing.T) {
 	// q < q2
 	q := &QueuedVMs{
-		Names: []string{"a", "b", "c"},
+		Names:    []string{"a", "b", "c"},
+		VMConfig: NewVMConfig(),
 	}
-	q.ScheduleHost = "foo"
-	q.SchedulePeers = "1"
+	q.Schedule = "foo"
+	q.Coschedule = 1
 
 	q2 := &QueuedVMs{
-		Names: []string{"a", "b"},
+		Names:    []string{"a", "b"},
+		VMConfig: NewVMConfig(),
 	}
-	q2.ScheduleHost = "foo"
+	q2.Schedule = "foo"
+
+	if !q.Less(q2) {
+		t.Errorf("%v < %v", &q2.BaseConfig, &q.BaseConfig)
+	}
+
+	if q2.Less(q) {
+		t.Errorf("%v < %v", q2, q)
+	}
+
+	// q < q2
+	q = &QueuedVMs{
+		Names:    []string{"a", "b", "c"},
+		VMConfig: NewVMConfig(),
+	}
+	q.Coschedule = 1
+	q2 = &QueuedVMs{
+		Names:    []string{"a", "b"},
+		VMConfig: NewVMConfig(),
+	}
 
 	if !q.Less(q2) {
 		t.Errorf("%v < %v", q2, q)
@@ -192,27 +213,12 @@ func TestQueuedVMsLess(t *testing.T) {
 
 	// q < q2
 	q = &QueuedVMs{
-		Names: []string{"a", "b", "c"},
-	}
-	q.SchedulePeers = "1"
-	q2 = &QueuedVMs{
-		Names: []string{"a", "b"},
-	}
-
-	if !q.Less(q2) {
-		t.Errorf("%v < %v", q2, q)
-	}
-
-	if q2.Less(q) {
-		t.Errorf("%v < %v", q2, q)
-	}
-
-	// q < q2
-	q = &QueuedVMs{
-		Names: []string{"a", "b", "c"},
+		Names:    []string{"a", "b", "c"},
+		VMConfig: NewVMConfig(),
 	}
 	q2 = &QueuedVMs{
-		Names: []string{"a", "b"},
+		Names:    []string{"a", "b"},
+		VMConfig: NewVMConfig(),
 	}
 
 	if !q.Less(q2) {
@@ -260,10 +266,10 @@ func TestScheduleHost(t *testing.T) {
 		Names: []string{"picky"},
 		VMConfig: VMConfig{
 			BaseConfig: BaseConfig{
-				ScheduleHost:  "0",
-				SchedulePeers: "0",
-				Vcpus:         "1",
-				Memory:        "1",
+				Schedule:   "0",
+				Coschedule: 0,
+				VCPUs:      1,
+				Memory:     1,
 			},
 		},
 	})
@@ -290,8 +296,9 @@ func TestScheduleBig(t *testing.T) {
 			Names: names,
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					Vcpus:  "1",
-					Memory: "1",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
 				},
 			},
 		},
@@ -299,10 +306,10 @@ func TestScheduleBig(t *testing.T) {
 			Names: []string{"picky"},
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					ScheduleHost:  "0",
-					SchedulePeers: "0",
-					Vcpus:         "1",
-					Memory:        "1",
+					Schedule:   "0",
+					Coschedule: 0,
+					VCPUs:      1,
+					Memory:     1,
 				},
 			},
 		},
@@ -310,9 +317,9 @@ func TestScheduleBig(t *testing.T) {
 			Names: []string{"lesspicky"},
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					SchedulePeers: "0",
-					Vcpus:         "1",
-					Memory:        "1",
+					Coschedule: 0,
+					VCPUs:      1,
+					Memory:     1,
 				},
 			},
 		},
@@ -323,9 +330,9 @@ func TestScheduleBig(t *testing.T) {
 			Names: []string{"ice", "fire"},
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					SchedulePeers: "1",
-					Vcpus:         "1",
-					Memory:        "1",
+					Coschedule: 1,
+					VCPUs:      1,
+					Memory:     1,
 				},
 			},
 		},
@@ -360,9 +367,9 @@ outer:
 func testScheduleUniformity(N, M int, by hostSortBy) error {
 	var queue []*QueuedVMs
 
-	var want int
+	var want uint64
 	for i := 0; i < N; i++ {
-		want += i
+		want += uint64(i)
 
 		var names []string
 		for j := 0; j < M; j++ {
@@ -378,9 +385,10 @@ func testScheduleUniformity(N, M int, by hostSortBy) error {
 			Names: names,
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					Vcpus:    strconv.Itoa(i),
-					Memory:   strconv.Itoa(i),
-					Networks: nets,
+					VCPUs:      uint64(i),
+					Memory:     uint64(i),
+					Networks:   nets,
+					Coschedule: -1,
 				},
 			},
 		})
@@ -395,15 +403,12 @@ func testScheduleUniformity(N, M int, by hostSortBy) error {
 	}
 
 	for k, v := range s {
-		var cpu, mem, nets int
+		var cpu, mem, nets uint64
 		for _, q := range v {
-			v, _ := strconv.Atoi(q.Vcpus)
-			cpu += v * len(q.Names)
+			cpu += q.VCPUs * uint64(len(q.Names))
+			mem += q.Memory * uint64(len(q.Names))
 
-			v, _ = strconv.Atoi(q.Memory)
-			mem += v * len(q.Names)
-
-			nets += len(q.Networks) * len(q.Names)
+			nets += uint64(len(q.Networks) * len(q.Names))
 		}
 
 		if cpu != want {
@@ -449,8 +454,9 @@ func BenchmarkSchedule(b *testing.B) {
 			Names: names,
 			VMConfig: VMConfig{
 				BaseConfig: BaseConfig{
-					Vcpus:  "1",
-					Memory: "1",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
 				},
 			},
 		},

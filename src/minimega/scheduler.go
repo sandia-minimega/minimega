@@ -4,7 +4,6 @@ import (
 	"fmt"
 	log "minilog"
 	"sort"
-	"strconv"
 )
 
 // hostSortBy defines the ordering of hosts based on some notion of load
@@ -106,33 +105,28 @@ func (q ByPriority) Swap(i, j int) {
 //  * then those that specify a coschedule limit
 //  * then those that specify neither
 func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
-	host, host2 := q.ScheduleHost, q2.ScheduleHost
+	host, host2 := q.Schedule, q2.Schedule
 
 	// VMs with specified hosts should be less than those that are unspecified.
-	if host != "" && host2 != "" {
-		if host != host2 {
-			return host < host2
+	if host != host2 {
+		// check if only one specified
+		if host != "" || host2 != "" {
+			return host != ""
 		}
-	} else if host != "" || host2 != "" {
-		return host != ""
+
+		return host < host2
 	}
 
 	// VMs with specified peers should be less than those that are unspecified.
 	// Within VMs that have coschedule limits, we want to process the lower
 	// coschedule limits first.
-	limit, err := strconv.Atoi(q.SchedulePeers)
-	limit2, err2 := strconv.Atoi(q2.SchedulePeers)
-
-	if err == nil && err2 == nil {
-		if limit == -1 || limit2 == -1 {
-			return limit != -1
+	if q.Coschedule != q2.Coschedule {
+		// check if only one specified
+		if q.Coschedule == -1 || q2.Coschedule == -1 {
+			return q.Coschedule != -1
 		}
 
-		if limit != limit2 {
-			return limit < limit2
-		}
-	} else if err == nil || err2 == nil {
-		return err == nil
+		return q.Coschedule < q2.Coschedule
 	}
 
 	// We don't really care about the ordering of the rest but we should
@@ -177,12 +171,9 @@ func networkCommit(h1, h2 *HostStats) bool {
 }
 
 func incHostStats(stats *HostStats, config VMConfig) {
-	vcpus, _ := strconv.Atoi(config.Vcpus)
-	memory, _ := strconv.Atoi(config.Memory)
-
 	stats.VMs += 1
-	stats.CPUCommit += vcpus
-	stats.MemCommit += memory
+	stats.CPUCommit += config.VCPUs
+	stats.MemCommit += config.Memory
 	stats.NetworkCommit += len(config.Networks)
 }
 
@@ -221,25 +212,12 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 
 	// perform sanity checks to simplify scheduling loop
 	for _, q := range queue {
-		if host := q.ScheduleHost; host != "" {
+		if host := q.Schedule; host != "" {
 			// host should exist
 			if findHostStats(host) == nil {
 				return nil, fmt.Errorf("VM scheduled on unknown host: `%v`", host)
 			}
 		}
-
-		if peers := q.SchedulePeers; peers != "" {
-			// coschedule should be a non-negative integer
-			limit, err := strconv.Atoi(q.SchedulePeers)
-			if err != nil || limit < 0 {
-				return nil, fmt.Errorf("invalid coschedule value: `%v`", q.SchedulePeers)
-			}
-
-			continue
-		}
-
-		// update to "unlimited"
-		q.SchedulePeers = "-1"
 	}
 
 	// perform initial sort of queued VMs and hosts
@@ -248,12 +226,12 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 
 	for _, q := range queue {
 		// no error checking required, see above
-		limit, _ := strconv.Atoi(q.SchedulePeers)
+		limit := int(q.Coschedule)
 
 		for _, name := range q.Names {
 			var stats *HostStats
 
-			if host := q.ScheduleHost; host != "" {
+			if host := q.Schedule; host != "" {
 				// find the specified host
 				stats = findHostStats(host)
 			} else {

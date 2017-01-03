@@ -27,8 +27,8 @@ type HostStats struct {
 	MemTotal      int
 	MemUsed       int
 	VMs           int
-	CPUCommit     int
-	MemCommit     int
+	CPUCommit     uint64
+	MemCommit     uint64
 	NetworkCommit int
 	Load          string
 	Uptime        time.Duration
@@ -151,11 +151,11 @@ func (h *HostStats) Print(v string) string {
 	case "cpus":
 		return strconv.Itoa(h.CPUs)
 	case "cpucommit":
-		return strconv.Itoa(h.CPUCommit)
+		return strconv.FormatUint(h.CPUCommit, 10)
 	case "load":
 		return h.Load
 	case "memcommit":
-		return strconv.Itoa(h.MemCommit)
+		return strconv.FormatUint(h.MemCommit, 10)
 	case "memtotal":
 		return strconv.Itoa(h.MemTotal)
 	case "memused":

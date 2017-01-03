@@ -268,7 +268,7 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 	// Launching the VMs locally
 	if host == hostname {
 		errs := []error{}
-		for err := range vms.Launch(queued) {
+		for err := range vms.Launch(n.Name, queued) {
 			errs = append(errs, err)
 		}
 
@@ -283,7 +283,7 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 		return
 	}
 
-	forward(meshageLaunch(host, queued), respChan)
+	forward(meshageLaunch(host, n.Name, queued), respChan)
 }
 
 // GetNamespace returns the active namespace. Returns nil if there isn't a

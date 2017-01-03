@@ -330,14 +330,14 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 		config := getConfig(vm)
 
 		vmMap := map[string]interface{}{
-			"namespace": config.Namespace,
+			"namespace": vm.GetNamespace(),
 			"host":      vm.GetHost(),
 			"id":        vm.GetID(),
 			"name":      vm.GetName(),
 			"state":     vm.GetState().String(),
 			"type":      vm.GetType().String(),
-			"activecc":  vm.IsCCActive(),
-			"vcpus":     config.Vcpus,
+			"activecc":  vm.HasCC(),
+			"vcpus":     config.VCPUs,
 			"memory":    config.Memory,
 			"snapshot":  config.Snapshot,
 			"uiud":      config.UUID,
@@ -356,7 +356,7 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 
 		if vm, ok := vm.(*ContainerVM); ok {
 			vmMap["console_port"] = vm.ConsolePort
-			vmMap["container_fspath"] = vm.ContainerConfig.FSPath
+			vmMap["container_fspath"] = vm.ContainerConfig.FilesystemPath
 			vmMap["container_preinit"] = vm.ContainerConfig.Preinit
 			if vm.ContainerConfig.Init == nil {
 				vmMap["container_init"] = make([]int, 0)

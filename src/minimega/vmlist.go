@@ -80,11 +80,12 @@ func (vms VMs) Count() int {
 }
 
 // Total memory committed across all VMs in current namespace.
-func (vms VMs) MemCommit() int {
+func (vms VMs) MemCommit() uint64 {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	total := 0
+	total := uint64(0)
+
 	for _, vm := range vms {
 		if inNamespace(vm) {
 			total += vm.GetMem()
@@ -95,11 +96,11 @@ func (vms VMs) MemCommit() int {
 }
 
 // Total cpus committed across all VMs in current namespace.
-func (vms VMs) CPUCommit() int {
+func (vms VMs) CPUCommit() uint64 {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	total := 0
+	total := uint64(0)
 
 	for _, vm := range vms {
 		if inNamespace(vm) {
@@ -336,7 +337,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(q *QueuedVMs) <-chan error {
+func (vms VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 	out := make(chan error)
 
 	if err := q.GetFiles(); err != nil {
@@ -360,7 +361,7 @@ func (vms VMs) Launch(q *QueuedVMs) <-chan error {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm, err := NewVM(name, q.VMType, q.VMConfig)
+		vm, err := NewVM(name, namespace, q.VMType, q.VMConfig)
 		if err == nil {
 			for _, vm2 := range vms {
 				if err = vm2.Conflicts(vm); err != nil {
@@ -696,7 +697,7 @@ func meshageVMLauncher() {
 			errs := []string{}
 
 			if len(errs) == 0 {
-				for err := range vms.Launch(cmd.QueuedVMs) {
+				for err := range vms.Launch(cmd.Namespace, cmd.QueuedVMs) {
 					if err != nil {
 						errs = append(errs, err.Error())
 					}
