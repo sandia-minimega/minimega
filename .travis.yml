@@ -1,26 +1,17 @@
 dist: trusty
-sudo: required
+sudo: false
 language: go
 go:
   - 1.7.3
-# for container-based testing:
-# addons:
-#   apt:
-#     packages:
-#     - libpcap-dev
-#     - libreadline-dev
-#     - qemu
-#     - qemu-kvm
-#     - dnsmasq
-#     - python-jinja2
-#     - openvswitch-switch # not in travis-ci whitelist yet
-before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get install -y libpcap-dev libreadline-dev qemu qemu-kvm openvswitch-switch dnsmasq python-jinja2
+addons:
+  apt:
+    packages:
+    - libpcap-dev
+    - libreadline-dev
+    - python-jinja2
 install: true
 script:
-  - ./checkformat.bash
-  - ./vet.bash
+  - ./check.bash
   - ./build.bash
   - ./test.bash
   - ./doc.bash
