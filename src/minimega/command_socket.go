@@ -51,21 +51,26 @@ func commandSocketHandle(c net.Conn) {
 	var err error
 
 	for err == nil {
-		var cmd *minicli.Command
+		var r *miniclient.Request
 
-		cmd, err = readLocalCommand(dec)
+		r, err = readLocalRequest(dec)
 		if err != nil {
 			break
 		}
 
-		if cmd == nil {
+		if r.Suggest != "" {
+			err = sendLocalSuggest(enc, minicli.Suggest(r.Suggest))
+			continue
+		}
+
+		if r.Command == nil {
 			err = sendLocalResp(enc, nil, false)
 			continue
 		}
 
 		// HAX: Don't record the read command
-		if hasCommand(cmd, "read") {
-			cmd.SetRecord(false)
+		if hasCommand(r.Command, "read") {
+			r.Command.SetRecord(false)
 		}
 
 		// HAX: Work around so that we can add the more boolean.
@@ -73,7 +78,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// Keep sending until we hit the first error, then just consume the
 		// channel to ensure that we release any locks acquired by cmd.
-		for resp := range RunCommands(cmd) {
+		for resp := range RunCommands(r.Command) {
 			if prev != nil && err == nil {
 				err = sendLocalResp(enc, prev, true)
 			} else if err != nil && len(resp) > 0 {
@@ -98,18 +103,27 @@ func commandSocketHandle(c net.Conn) {
 	}
 }
 
-func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
-	var cmd minicli.Command
+func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
+	var r miniclient.Request
 
-	if err := dec.Decode(&cmd); err != nil {
+	if err := dec.Decode(&r); err != nil {
 		return nil, err
 	}
 
-	log.Debug("got command over socket: %v", cmd)
+	log.Debug("got request over socket: %v", r)
 
-	// HAX: Reprocess the original command since the Call target cannot be
-	// serialized... is there a cleaner way to do this?
-	return minicli.Compile(cmd.Original)
+	if r.Command != nil {
+		// HAX: Reprocess the original command since the Call target cannot be
+		// serialized... is there a cleaner way to do this?
+		cmd, err := minicli.Compile(r.Command.Original)
+		if err != nil {
+			return nil, err
+		}
+
+		r.Command = cmd
+	}
+
+	return &r, nil
 }
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
@@ -119,6 +133,14 @@ func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	if resp != nil {
 		r.Resp = resp
 		r.Rendered = resp.String()
+	}
+
+	return enc.Encode(&r)
+}
+
+func sendLocalSuggest(enc *json.Encoder, suggest []string) error {
+	r := miniclient.Response{
+		Suggest: suggest,
 	}
 
 	return enc.Encode(&r)

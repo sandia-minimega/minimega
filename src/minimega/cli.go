@@ -219,6 +219,16 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 	}
 }
 
+func wrapSuggest(fn func(string, string) []string) minicli.SuggestFunc {
+	return func(raw, val, prefix string) []string {
+		if attached != nil {
+			return attached.Suggest(raw)
+		}
+
+		return fn(val, prefix)
+	}
+}
+
 // forward receives minicli.Responses from in and forwards them to out.
 func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	for v := range in {
