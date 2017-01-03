@@ -7,7 +7,7 @@ vm launch kvm vm[1,2]
 .column tags vm info
 
 # Test clearing tags
-clear vm config tag
+clear vm config tag color
 vm launch kvm vm3
 .column tags vm info
 

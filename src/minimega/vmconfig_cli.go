@@ -139,6 +139,15 @@ Note: this configuration only applies to KVM-based VMs.`,
 		},
 		Call: wrapSimpleCLI(cliVMConfigQemuOverride),
 	},
+	{ // clear vm config tags
+		HelpShort: "remove tags for newly launched VMs",
+		HelpLong: `
+Remove tags in the same manner as "clear vm tag".`,
+		Patterns: []string{
+			"clear vm config tag <key>",
+		},
+		Call: wrapSimpleCLI(cliClearVMConfigTag),
+	},
 }
 
 func cliVMConfig(c *minicli.Command, resp *minicli.Response) error {
@@ -244,6 +253,16 @@ func cliVMConfigQemuOverride(c *minicli.Command, resp *minicli.Response) error {
 		Match: c.StringArgs["match"],
 		Repl:  c.StringArgs["replacement"],
 	})
+
+	return nil
+}
+
+func cliClearVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
+	if k := c.StringArgs["key"]; k == Wildcard {
+		vmConfig.Tags = nil
+	} else {
+		delete(vmConfig.Tags, k)
+	}
 
 	return nil
 }
