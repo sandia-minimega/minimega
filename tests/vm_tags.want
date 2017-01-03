@@ -12,14 +12,14 @@ tags
 {"color":"red"}
 
 ## # Test clearing tags
-## clear vm config tag
+## clear vm config tag color
 ## vm launch kvm vm3
 ## .column tags vm info
 tags
 {"color":"red","shape":"square"}
 {"color":"red","shape":"square"}
 {"color":"red"}
-{}
+{"shape":"square"}
 
 ## # Make sure Tags are truely separate structures
 ## vm tag vm1 color blue
@@ -28,7 +28,7 @@ tags
 {"color":"blue","shape":"square"}
 {"color":"red","shape":"square"}
 {"color":"red"}
-{}
+{"shape":"square"}
 
 ## # Make sure that clear only affects the configured tags
 ## clear vm config tag
@@ -39,4 +39,4 @@ tags
 {"color":"blue","shape":"square"}
 {"color":"red","shape":"square"}
 {"color":"red"}
-{}
+{"shape":"square"}
