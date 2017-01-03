@@ -60,6 +60,7 @@ func commandSocketHandle(c net.Conn) {
 
 		if r.Suggest != "" {
 			err = sendLocalSuggest(enc, minicli.Suggest(r.Suggest))
+			continue
 		}
 
 		if r.Command == nil {
