@@ -903,22 +903,22 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		// compute number of tics used in window by process
-		ustime0 := (s.Stat[0].Utime + s.Stat[0].Stime)
-		ustime1 := (s.Stat[1].Utime + s.Stat[1].Stime)
+		ustime0 := (s.A.Utime + s.A.Stime)
+		ustime1 := (s.B.Utime + s.B.Stime)
 		tics := float64(ustime1 - ustime0)
 
 		// compute number of tics used by virtual CPU
-		vtics := float64(s.Stat[1].GuestTime - s.Stat[0].GuestTime)
+		vtics := float64(s.B.GuestTime - s.A.GuestTime)
 
 		// compute total time spent
 		t := time.Duration(float64(ustime1)/ClkTck) * time.Second
 
-		d := s.End.Sub(s.Begin)
+		d := s.B.End.Sub(s.A.Begin)
 
 		row = append(row,
-			fmtMB(PageSize*s.Statm[1].Size),
-			fmtMB(PageSize*s.Statm[1].Resident),
-			fmtMB(PageSize*s.Statm[1].Share),
+			fmtMB(PageSize*s.B.Size),
+			fmtMB(PageSize*s.B.Resident),
+			fmtMB(PageSize*s.B.Share),
 			fmt.Sprintf("%.2f", tics/ClkTck/d.Seconds()*100),
 			fmt.Sprintf("%.2f", vtics/ClkTck/d.Seconds()*100),
 			t.String(),

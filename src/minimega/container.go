@@ -1187,7 +1187,7 @@ func (vm *ContainerVM) thaw() error {
 	return nil
 }
 
-func (vm *ContainerVM) ProcStats(d time.Duration) (*VMProcStats, error) {
+func (vm *ContainerVM) ProcStats() (*ProcStats, error) {
 	// not implemented yet
 	return nil, nil
 }

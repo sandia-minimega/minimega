@@ -548,9 +548,24 @@ func (vms VMs) ProcStats(d time.Duration) []*VMProcStats {
 		go func(vm VM) {
 			defer wg.Done()
 
-			p, err := vm.ProcStats(d)
+			var err error
+
+			p := &VMProcStats{
+				Name:      vm.GetName(),
+				Namespace: vm.GetNamespace(),
+			}
+
+			p.A, err = vm.ProcStats()
 			if err != nil {
-				log.Error("ProcStats failed for %v: %v", vm.GetID(), err)
+				log.Error("failed to get process stats for %v: %v", vm.GetID(), err)
+				return
+			}
+
+			time.Sleep(d)
+
+			p.B, err = vm.ProcStats()
+			if err != nil {
+				log.Error("failed to get process stats for %v: %v", vm.GetID(), err)
 				return
 			}
 
