@@ -16,16 +16,12 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"io"
 	log "minilog"
-	"net"
-	"net/http"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"golang.org/x/net/websocket"
 )
@@ -52,27 +48,6 @@ func NewSocketHandler() websocket.Server {
 	return websocket.Server{
 		Handler: websocket.Handler(socketHandler),
 	}
-}
-
-// handshake checks the origin of a request during the websocket handshake.
-func handshake(c *websocket.Config, req *http.Request) error {
-	_, err := websocket.Origin(c, req)
-	if err != nil {
-		log.Errorln("bad websocket origin:", err)
-		return websocket.ErrBadWebSocketOrigin
-	}
-	_, _, err = net.SplitHostPort(c.Origin.Host)
-	if err != nil {
-		log.Errorln("bad websocket origin:", err)
-		return websocket.ErrBadWebSocketOrigin
-	}
-	//ok := c.Origin.Scheme == o.Scheme && (c.Origin.Host == o.Host || c.Origin.Host == net.JoinHostPort(o.Host, port))
-	//if !ok {
-	//	log.Println("bad websocket origin:", o)
-	//	return websocket.ErrBadWebSocketOrigin
-	//}
-	log.Errorln("accepting connection from:", req.RemoteAddr)
-	return nil
 }
 
 func socketHandler(c *websocket.Conn) {
@@ -169,39 +144,6 @@ type messageWriter struct {
 	mu   sync.Mutex
 	buf  []byte
 	send *time.Timer
-}
-
-func (w *messageWriter) Write(b []byte) (n int, err error) {
-	// Buffer writes that occur in a short period to send as one Message.
-	w.mu.Lock()
-	w.buf = append(w.buf, b...)
-	if w.send == nil {
-		w.send = time.AfterFunc(msgDelay, w.sendNow)
-	}
-	w.mu.Unlock()
-	return len(b), nil
-}
-
-func (w *messageWriter) sendNow() {
-	w.mu.Lock()
-	body := safeString(w.buf)
-	w.buf, w.send = nil, nil
-	w.mu.Unlock()
-	w.out <- &Message{Id: w.id, Kind: w.kind, Body: body}
-}
-
-// safeString returns b as a valid UTF-8 string.
-func safeString(b []byte) string {
-	if utf8.Valid(b) {
-		return string(b)
-	}
-	var buf bytes.Buffer
-	for len(b) > 0 {
-		r, size := utf8.DecodeRune(b)
-		b = b[size:]
-		buf.WriteRune(r)
-	}
-	return buf.String()
 }
 
 // limiter returns a channel that wraps dest. Messages sent to the channel are

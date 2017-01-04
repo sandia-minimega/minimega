@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -80,22 +79,6 @@ func (errs errSlice) String() string {
 		}
 	}
 	return strings.Join(vals, "\n")
-}
-
-func (m *loggingMutex) Lock() {
-	_, file, line, _ := runtime.Caller(1)
-
-	log.Info("locking: %v:%v", file, line)
-	m.Mutex.Lock()
-	log.Info("locked: %v:%v", file, line)
-}
-
-func (m *loggingMutex) Unlock() {
-	_, file, line, _ := runtime.Caller(1)
-
-	log.Info("unlocking: %v:%v", file, line)
-	m.Mutex.Unlock()
-	log.Info("unlocked: %v:%v", file, line)
 }
 
 func generateUUID() string {
