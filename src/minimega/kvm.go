@@ -929,30 +929,20 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	return nil
 }
 
-func (vm *KvmVM) ProcStats(d time.Duration) (*VMProcStats, error) {
-	p := &VMProcStats{
-		Name:      vm.Name,
-		Namespace: vm.Namespace,
+func (vm *KvmVM) ProcStats() (*ProcStats, error) {
+	var err error
+	p := &ProcStats{
+		Begin: time.Now(),
 	}
 
-	p.Begin = time.Now()
+	p.ProcessStat, err = proc.ReadProcessStat(fmt.Sprintf("/proc/%v/stat", vm.pid))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read process stat: %v", err)
+	}
 
-	for i := 0; i < 2; i++ {
-		if i > 0 {
-			time.Sleep(d)
-		}
-
-		s, err := proc.ReadProcessStat(fmt.Sprintf("/proc/%v/stat", vm.pid))
-		if err != nil {
-			return nil, fmt.Errorf("unable to read process stat: %v", err)
-		}
-		p.Stat = append(p.Stat, s)
-
-		sm, err := proc.ReadProcessStatm(fmt.Sprintf("/proc/%v/statm", vm.pid))
-		if err != nil {
-			return nil, fmt.Errorf("unable to read process statm: %v", err)
-		}
-		p.Statm = append(p.Statm, sm)
+	p.ProcessStatm, err = proc.ReadProcessStatm(fmt.Sprintf("/proc/%v/statm", vm.pid))
+	if err != nil {
+		return nil, fmt.Errorf("unable to read process statm: %v", err)
 	}
 
 	p.End = time.Now()

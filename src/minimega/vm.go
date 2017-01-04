@@ -92,7 +92,7 @@ type VM interface {
 	ClearQos(uint) error
 	ClearAllQos() error
 
-	ProcStats(time.Duration) (*VMProcStats, error)
+	ProcStats() (*ProcStats, error)
 
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM
@@ -124,15 +124,16 @@ type BaseVM struct {
 type VMProcStats struct {
 	Name, Namespace string
 
-	ProcStats // embed
+	// A and B are two snapshots of ProcStats
+	A, B *ProcStats
 }
 
 type ProcStats struct {
+	*proc.ProcessStat  // embed
+	*proc.ProcessStatm // embed
+
+	// time at beginning and end of data collection
 	Begin, End time.Time
-	// Stat from Begin and End, should always be length two
-	Stat []*proc.ProcessStat
-	// Statm from Begin and End, should always be length two
-	Statm []*proc.ProcessStatm
 }
 
 // Valid names for output masks for `vm info`, in preferred output order
