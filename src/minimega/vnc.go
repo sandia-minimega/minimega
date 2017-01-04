@@ -45,10 +45,6 @@ func NewVNCClient(vm *KvmVM) (*vncClient, error) {
 	return c, nil
 }
 
-func (v *vncClient) Matches(host, vm string) bool {
-	return v.VM.Host == host && v.VM.Name == vm
-}
-
 func (v *vncClient) Stop() error {
 
 	if v.file != nil {
