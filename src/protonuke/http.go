@@ -19,6 +19,7 @@ import (
 	log "minilog"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"regexp"
 	"strings"
 	"sync"
@@ -73,6 +74,11 @@ func httpClient(protocol string) {
 		//Timeout:   30 * time.Second,
 	}
 
+	if *f_httpCookies {
+		// TODO: see note about PublicSuffixList in cookiejar.Options
+		client.Jar, _ = cookiejar.New(nil)
+	}
+
 	for {
 		t.Tick()
 		h, o := randomHost()
@@ -118,6 +124,11 @@ func httpTLSClient(protocol string) {
 		Transport: transport,
 		// TODO: max client read timeouts configurable?
 		//Timeout:   30 * time.Second,
+	}
+
+	if *f_httpCookies {
+		// TODO: see note about PublicSuffixList in cookiejar.Options
+		client.Jar, _ = cookiejar.New(nil)
 	}
 
 	for {

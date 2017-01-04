@@ -24,12 +24,13 @@ const (
 )
 
 type Flags struct {
-	Annotate bool
-	Compress bool
-	Headers  bool
-	Sort     bool
-	Mode     int
-	Record   bool
+	Annotate   bool
+	Compress   bool
+	Headers    bool
+	Sort       bool
+	Preprocess bool
+	Mode       int
+	Record     bool
 }
 
 var flagsLock sync.Mutex
@@ -41,11 +42,12 @@ var (
 
 var defaultFlags = Flags{
 	// Output flags
-	Annotate: true,
-	Compress: true,
-	Headers:  true,
-	Sort:     true,
-	Mode:     defaultMode,
+	Annotate:   true,
+	Compress:   true,
+	Headers:    true,
+	Sort:       true,
+	Preprocess: true,
+	Mode:       defaultMode,
 
 	// Command flags
 	Record: true,
@@ -79,6 +81,7 @@ type Response struct {
 }
 
 type CLIFunc func(*Command, chan<- Responses)
+type SuggestFunc func(string, string, string) []string
 
 // Preprocessor may be set to perform actions immediately before commands run.
 var Preprocessor func(*Command) error
@@ -149,7 +152,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 		defer close(respChan)
 
 		// Run the preprocessor first if one is set
-		if Preprocessor != nil {
+		if Preprocessor != nil && c.Preprocess {
 			if err := Preprocessor(c); err != nil {
 				resp := &Response{Error: err.Error()}
 				respChan <- Responses{resp}
@@ -222,6 +225,7 @@ func Compile(input string) (*Command, error) {
 		defer flagsLock.Unlock()
 
 		cmd.Record = defaultFlags.Record
+		cmd.Preprocess = defaultFlags.Preprocess
 		return cmd, nil
 	}
 
@@ -248,10 +252,10 @@ func expandAliases(input string) string {
 	return input
 }
 
-func suggest(input *Input) []string {
+func suggest(raw string, input *Input) []string {
 	vals := map[string]bool{}
 	for _, h := range handlers {
-		for _, v := range h.suggest(input) {
+		for _, v := range h.suggest(raw, input) {
 			vals[v] = true
 		}
 	}
@@ -271,7 +275,7 @@ func Suggest(input string) []string {
 		return nil
 	}
 
-	return suggest(in)
+	return suggest(input, in)
 }
 
 //

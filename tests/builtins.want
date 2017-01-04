@@ -116,3 +116,15 @@ E: ambiguous column `nam`
 E: ambiguous column `s`
 ## .filter name~foo .col st vm info
 E: no such column `name`
+
+## # Test preprocess
+## echo http://localhost/
+E: open /tmp/minimega/files: is a directory
+## .preprocess false
+## .preprocess
+false
+## echo http://localhost/
+http://localhost/
+## .preprocess true
+## .preprocess false echo http://localhost/
+http://localhost/

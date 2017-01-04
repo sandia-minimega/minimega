@@ -53,7 +53,7 @@ var (
 	hostname string
 	reserved = []string{Wildcard}
 
-	attached bool
+	attached *miniclient.Conn
 )
 
 const (
@@ -140,7 +140,7 @@ func main() {
 
 			mm.RunAndPrint(cmd, false)
 		} else {
-			attached = true
+			attached = mm
 			mm.Attach()
 		}
 
