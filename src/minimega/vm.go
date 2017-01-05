@@ -128,14 +128,6 @@ type VMProcStats struct {
 	A, B *ProcStats
 }
 
-type ProcStats struct {
-	*proc.ProcessStat  // embed
-	*proc.ProcessStatm // embed
-
-	// time at beginning and end of data collection
-	Begin, End time.Time
-}
-
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields

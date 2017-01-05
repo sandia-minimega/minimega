@@ -1223,8 +1223,7 @@ func (vm *ContainerVM) thaw() error {
 }
 
 func (vm *ContainerVM) ProcStats() (*ProcStats, error) {
-	// not implemented yet
-	return nil, nil
+	return GetProcStats(vm.pid)
 }
 
 func containerSetCapabilities() error {

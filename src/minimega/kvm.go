@@ -25,8 +25,6 @@ import (
 	"text/tabwriter"
 	"time"
 	"vnc"
-
-	proc "github.com/c9s/goprocinfo/linux"
 )
 
 const (
@@ -722,6 +720,10 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
+}
+
+func (vm *KvmVM) ProcStats() (*ProcStats, error) {
+	return GetProcStats(vm.pid)
 }
 
 // qemuArgs build the horribly long qemu argument string
