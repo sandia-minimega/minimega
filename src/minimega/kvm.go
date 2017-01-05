@@ -25,8 +25,6 @@ import (
 	"text/tabwriter"
 	"time"
 	"vnc"
-
-	proc "github.com/c9s/goprocinfo/linux"
 )
 
 const (
@@ -725,24 +723,7 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 }
 
 func (vm *KvmVM) ProcStats() (*ProcStats, error) {
-	var err error
-	p := &ProcStats{
-		Begin: time.Now(),
-	}
-
-	p.ProcessStat, err = proc.ReadProcessStat(fmt.Sprintf("/proc/%v/stat", vm.pid))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read process stat: %v", err)
-	}
-
-	p.ProcessStatm, err = proc.ReadProcessStatm(fmt.Sprintf("/proc/%v/statm", vm.pid))
-	if err != nil {
-		return nil, fmt.Errorf("unable to read process statm: %v", err)
-	}
-
-	p.End = time.Now()
-
-	return p, nil
+	return GetProcStats(vm.pid)
 }
 
 // qemuArgs build the horribly long qemu argument string

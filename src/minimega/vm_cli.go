@@ -18,14 +18,6 @@ import (
 	"time"
 )
 
-// #include <unistd.h>
-import "C"
-
-var (
-	ClkTck   = float64(C.sysconf(C._SC_CLK_TCK))
-	PageSize = uint64(C.getpagesize())
-)
-
 var vmCLIHandlers = []minicli.Handler{
 	{ // vm info
 		HelpShort: "print information about VMs",
@@ -891,26 +883,16 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 			row = append(row, s.Namespace)
 		}
 
-		// compute number of tics used in window by process
-		ustime0 := (s.A.Utime + s.A.Stime)
-		ustime1 := (s.B.Utime + s.B.Stime)
-		tics := float64(ustime1 - ustime0)
-
-		// compute number of tics used by virtual CPU
-		vtics := float64(s.B.GuestTime - s.A.GuestTime)
-
-		// compute total time spent
-		t := time.Duration(float64(ustime1)/ClkTck) * time.Second
-
-		d := s.B.End.Sub(s.A.Begin)
+		// TODO: include children in CPU computation
+		// TODO: add column for number of processes
 
 		row = append(row,
-			fmtMB(PageSize*s.B.Size),
-			fmtMB(PageSize*s.B.Resident),
-			fmtMB(PageSize*s.B.Share),
-			fmt.Sprintf("%.2f", tics/ClkTck/d.Seconds()*100),
-			fmt.Sprintf("%.2f", vtics/ClkTck/d.Seconds()*100),
-			t.String(),
+			fmtMB(s.B.Size()),
+			fmtMB(s.B.Resident()),
+			fmtMB(s.B.Share()),
+			fmt.Sprintf("%.2f", s.A.CPU(s.B)*100),
+			fmt.Sprintf("%.2f", s.A.GuestCPU(s.B)*100),
+			s.B.Time().String(),
 		)
 
 		resp.Tabular = append(resp.Tabular, row)

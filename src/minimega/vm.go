@@ -16,9 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
-
-	proc "github.com/c9s/goprocinfo/linux"
 )
 
 const (
@@ -125,14 +122,6 @@ type VMProcStats struct {
 
 	// A and B are two snapshots of ProcStats
 	A, B *ProcStats
-}
-
-type ProcStats struct {
-	*proc.ProcessStat  // embed
-	*proc.ProcessStatm // embed
-
-	// time at beginning and end of data collection
-	Begin, End time.Time
 }
 
 // Valid names for output masks for `vm info`, in preferred output order
