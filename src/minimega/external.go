@@ -30,12 +30,10 @@ var (
 // invokes. We check for the existence of these on startup and on `check`.
 var externalDependencies = map[string]bool{
 	"dnsmasq":   true, // used in mulitple
-	"kill":      true, // used in multiple
 	"kvm":       true, // used in multiple
 	"mount":     true, // used in multiple
 	"dhclient":  true, // used in bridge_cli.go
 	"ip":        true, // used in bridge_cli.go
-	"hostname":  true, // used in container.go
 	"scp":       true, // used in deploy.go
 	"ssh":       true, // used in deploy.go
 	"cp":        true, // used in disk.go
@@ -44,7 +42,6 @@ var externalDependencies = map[string]bool{
 	"ntfs-3g":   true, // used in disk.go
 	"ovs-vsctl": true, // used in external.go
 	"taskset":   true, // used in optimize.go
-	"rm":        true, // used in router.go
 }
 
 func init() {
