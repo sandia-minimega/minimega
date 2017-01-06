@@ -871,6 +871,7 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 		"cpu (%%)",
 		"vcpu (%%)",
 		"time+",
+		"procs",
 	)
 
 	fmtMB := func(i uint64) string {
@@ -883,8 +884,6 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 			row = append(row, s.Namespace)
 		}
 
-		// TODO: add column for number of processes
-
 		row = append(row,
 			fmtMB(s.B.Size()),
 			fmtMB(s.B.Resident()),
@@ -892,6 +891,7 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 			fmt.Sprintf("%.2f", s.CPU()*100),
 			fmt.Sprintf("%.2f", s.GuestCPU()*100),
 			s.B.Time().String(),
+			strconv.Itoa(s.B.Count()),
 		)
 
 		resp.Tabular = append(resp.Tabular, row)

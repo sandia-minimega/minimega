@@ -84,6 +84,17 @@ func (p *ProcStats) Share() uint64 {
 	return v
 }
 
+// Count walks the tree and returns the number of processes
+func (p *ProcStats) Count() int {
+	v := 1
+
+	for _, c := range p.Children {
+		v += c.Count()
+	}
+
+	return v
+}
+
 func (p *VMProcStats) cpuHelper(fn func(*ProcStats, *ProcStats) float64) float64 {
 	cpu := fn(p.A, p.B)
 
