@@ -5,12 +5,7 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io/ioutil"
-	log "minilog"
-	"strconv"
-	"strings"
 	"time"
 
 	proc "github.com/c9s/goprocinfo/linux"
@@ -33,101 +28,75 @@ type ProcStats struct {
 
 	// time at beginning and end of data collection
 	Begin, End time.Time
-
-	Children map[int]*ProcStats
 }
 
 type VMProcStats struct {
 	Name, Namespace string
 
 	// A and B are two snapshots of ProcStats
-	A, B *ProcStats
+	A, B map[int]*ProcStats
 }
 
-// Time walks the tree and returns total time
-func (p *ProcStats) Time() time.Duration {
-	v := time.Duration(float64(p.Utime+p.Stime)/ClkTck) * time.Second
+// Time returns total time executed for all processes in MB
+func (p *VMProcStats) Time() time.Duration {
+	var tics uint64
 
-	for _, c := range p.Children {
-		v += c.Time()
+	for _, v := range p.B {
+		tics += v.Utime + v.Stime
 	}
 
-	return v
+	return time.Duration(float64(tics)/ClkTck) * time.Second
 }
 
-// Size walks the tree and returns total memory size
-func (p *ProcStats) Size() uint64 {
-	v := PageSize * p.ProcessStatm.Size
+// Size returns total memory size for all processes in MB
+func (p *VMProcStats) Size() uint64 {
+	var pages uint64
 
-	for _, c := range p.Children {
-		v += c.Size()
+	for _, v := range p.B {
+		pages += v.ProcessStatm.Size
 	}
 
-	return v
+	return pages * PageSize
 }
 
-// Resident walks the tree and returns total resident memory size
-func (p *ProcStats) Resident() uint64 {
-	v := PageSize * p.ProcessStatm.Resident
+// Resident returns total resident memory size for all processes in MB
+func (p *VMProcStats) Resident() uint64 {
+	var pages uint64
 
-	for _, c := range p.Children {
-		v += c.Resident()
+	for _, v := range p.B {
+		pages += v.ProcessStatm.Resident
 	}
 
-	return v
+	return pages * PageSize
 }
 
-// Share walks the tree and returns total shared memory size
-func (p *ProcStats) Share() uint64 {
-	v := PageSize * p.ProcessStatm.Share
+// Share returns total resident memory size for all processes in MB
+func (p *VMProcStats) Share() uint64 {
+	var pages uint64
 
-	for _, c := range p.Children {
-		v += c.Share()
+	for _, v := range p.B {
+		pages += v.ProcessStatm.Share
 	}
 
-	return v
+	return pages * PageSize
 }
 
 // Count walks the tree and returns the number of processes
-func (p *ProcStats) Count() int {
-	v := 1
-
-	for _, c := range p.Children {
-		v += c.Count()
-	}
-
-	return v
+func (p *VMProcStats) Count() int {
+	return len(p.B)
 }
 
 func (p *VMProcStats) cpuHelper(fn func(*ProcStats, *ProcStats) float64) float64 {
-	cpu := fn(p.A, p.B)
+	var res float64
 
-	children, children2 := p.A.Children, p.B.Children
-	for len(children) > 0 && len(children2) > 0 {
-		// grandchildren for next iteration
-		next, next2 := map[int]*ProcStats{}, map[int]*ProcStats{}
-
-		for pid, p := range children {
-			// can only measure if the process exists in both
-			if p2, ok := children2[pid]; ok {
-				cpu += fn(p, p2)
-			}
-
-			for pid, p := range p.Children {
-				next[pid] = p
-			}
+	// find overlapping PIDs in p.A and p.B
+	for pid, v := range p.A {
+		if v2, ok := p.B[pid]; ok {
+			res += fn(v, v2)
 		}
-
-		for _, p2 := range children2 {
-			for pid, p := range p2.Children {
-				next2[pid] = p
-			}
-		}
-
-		children, children2 = next, next2
 	}
 
-	return cpu
+	return res
 }
 
 func (p *VMProcStats) CPU() float64 {
@@ -138,20 +107,12 @@ func (p *VMProcStats) GuestCPU() float64 {
 	return p.cpuHelper(ProcGuestCPU)
 }
 
-// GetProcStats reads the ProcStats for the given PID and its children. To
-// avoid kill ourselves, we stop after reading max procs.
-func GetProcStats(pid int, max *int) (*ProcStats, error) {
-	*max = *max - 1
-	if *max < 0 {
-		// error should be ignored by caller if it's GetProcStats
-		return nil, errors.New("too many processes")
-	}
-
+// GetProcStats reads the ProcStats for the given PID.
+func GetProcStats(pid int) (*ProcStats, error) {
 	var err error
 
 	p := &ProcStats{
-		Begin:    time.Now(),
-		Children: map[int]*ProcStats{},
+		Begin: time.Now(),
 	}
 
 	p.ProcessStat, err = proc.ReadProcessStat(fmt.Sprintf("/proc/%v/stat", pid))
@@ -166,34 +127,7 @@ func GetProcStats(pid int, max *int) (*ProcStats, error) {
 
 	p.End = time.Now()
 
-	for _, c := range ListChildren(pid) {
-		p2, err := GetProcStats(c, max)
-		if err != nil {
-			log.Debug("unable to read proc stats for %v: %v", c, err)
-			continue
-		}
-
-		p.Children[c] = p2
-	}
-
 	return p, nil
-}
-
-func ListChildren(pid int) []int {
-	b, err := ioutil.ReadFile(fmt.Sprintf("/proc/%[1]v/task/%[1]v/children", pid))
-	if err != nil {
-		return nil
-	}
-
-	res := []int{}
-
-	for _, v := range strings.Fields(string(b)) {
-		if i, err := strconv.Atoi(v); err == nil {
-			res = append(res, i)
-		}
-	}
-
-	return res
 }
 
 // ProcCPU computes CPU % between two snapshots of proc

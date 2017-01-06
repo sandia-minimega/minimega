@@ -447,7 +447,7 @@ Returned columns include:
 - res       : resident memory size (MB)
 - shr       : shared memory size (MB)
 - cpu       : host CPU usage (%%)
-- vcpu      : guest CPU usage (%%)
+- vcpu      : guest CPU usage (%%) (KVM only)
 - time      : total CPU time
 - procs     : number of processes inspected (limited to %d)`, ProcLimit),
 		Patterns: []string{
@@ -894,13 +894,13 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		row = append(row,
-			fmtMB(s.B.Size()),
-			fmtMB(s.B.Resident()),
-			fmtMB(s.B.Share()),
+			fmtMB(s.Size()),
+			fmtMB(s.Resident()),
+			fmtMB(s.Share()),
 			fmt.Sprintf("%.2f", s.CPU()*100),
 			fmt.Sprintf("%.2f", s.GuestCPU()*100),
-			s.B.Time().String(),
-			strconv.Itoa(s.B.Count()),
+			s.Time().String(),
+			strconv.Itoa(s.Count()),
 		)
 
 		resp.Tabular = append(resp.Tabular, row)
