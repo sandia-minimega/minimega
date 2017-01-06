@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	log "minilog"
@@ -17,6 +18,9 @@ import (
 
 // #include <unistd.h>
 import "C"
+
+// ProcLimit is the maximum number of proceses to inspect per VM
+const ProcLimit = 100
 
 var (
 	ClkTck   = float64(C.sysconf(C._SC_CLK_TCK))
@@ -134,8 +138,15 @@ func (p *VMProcStats) GuestCPU() float64 {
 	return p.cpuHelper(ProcGuestCPU)
 }
 
-// GetProcStats reads the ProcStats for the given PID and its children.
-func GetProcStats(pid int) (*ProcStats, error) {
+// GetProcStats reads the ProcStats for the given PID and its children. To
+// avoid kill ourselves, we stop after reading max procs.
+func GetProcStats(pid int, max *int) (*ProcStats, error) {
+	*max = *max - 1
+	if *max < 0 {
+		// error should be ignored by caller if it's GetProcStats
+		return nil, errors.New("too many processes")
+	}
+
 	var err error
 
 	p := &ProcStats{
@@ -156,7 +167,7 @@ func GetProcStats(pid int) (*ProcStats, error) {
 	p.End = time.Now()
 
 	for _, c := range ListChildren(pid) {
-		p2, err := GetProcStats(c)
+		p2, err := GetProcStats(c, max)
 		if err != nil {
 			log.Debug("unable to read proc stats for %v: %v", c, err)
 			continue

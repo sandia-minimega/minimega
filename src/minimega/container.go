@@ -1223,7 +1223,8 @@ func (vm *ContainerVM) thaw() error {
 }
 
 func (vm *ContainerVM) ProcStats() (*ProcStats, error) {
-	return GetProcStats(vm.pid)
+	max := ProcLimit
+	return GetProcStats(vm.pid, &max)
 }
 
 func containerSetCapabilities() error {
