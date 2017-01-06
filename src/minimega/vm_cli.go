@@ -440,7 +440,16 @@ The optional duration specifies the length of the sampling window in seconds.
 The command will block for at least this long while it measures usage. The
 default duration is one second.
 
-Only KVM-based VMs are supported at this time.`,
+Returned columns include:
+- name      : name of the VM
+- namespace : namespace of the VM (when not in a namespace)
+- virt      : virtual memory size (MB)
+- res       : resident memory size (MB)
+- shr       : shared memory size (MB)
+- cpu       : host CPU usage (%)
+- vcpu      : guest CPU usage (%)
+- time      : total CPU time
+- procs     : number of process`,
 		Patterns: []string{
 			"vm top [duration]",
 		},
@@ -865,12 +874,12 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 		resp.Header = append(resp.Header, "namespace")
 	}
 	resp.Header = append(resp.Header,
-		"virt (MB)",
-		"res (MB)",
-		"shr (MB)",
-		"cpu (%%)",
-		"vcpu (%%)",
-		"time+",
+		"virt",
+		"res",
+		"shr",
+		"cpu",
+		"vcpu",
+		"time",
 		"procs",
 	)
 
