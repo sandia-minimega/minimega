@@ -449,7 +449,9 @@ Returned columns include:
 - cpu       : host CPU usage (%%)
 - vcpu      : guest CPU usage (%%) (KVM only)
 - time      : total CPU time
-- procs     : number of processes inspected (limited to %d)`, ProcLimit),
+- procs     : number of processes inspected (limited to %d)
+- rx        : total received data rate (MB/s)
+- tx        : total transmitted data rate (MB/s)`, ProcLimit),
 		Patterns: []string{
 			"vm top [duration]",
 		},
@@ -881,6 +883,8 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 		"vcpu",
 		"time",
 		"procs",
+		"rx",
+		"tx",
 	)
 
 	fmtMB := func(i uint64) string {
@@ -901,6 +905,8 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 			fmt.Sprintf("%.2f", s.GuestCPU()*100),
 			s.Time().String(),
 			strconv.Itoa(s.Count()),
+			fmt.Sprintf("%.2f", s.RxRate),
+			fmt.Sprintf("%.2f", s.TxRate),
 		)
 
 		resp.Tabular = append(resp.Tabular, row)

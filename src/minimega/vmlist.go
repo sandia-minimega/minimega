@@ -569,6 +569,13 @@ func (vms VMs) ProcStats(d time.Duration) []*VMProcStats {
 				return
 			}
 
+			// Update dynamic fields before querying info
+			vm.UpdateNetworks()
+			for _, nic := range vm.GetNetworks() {
+				p.RxRate += nic.RxRate
+				p.TxRate += nic.TxRate
+			}
+
 			mu.Lock()
 			defer mu.Unlock()
 			res = append(res, p)
