@@ -219,6 +219,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.ID = vm.ID
 	vm2.Name = vm.Name
 	vm2.Namespace = vm.Namespace
+	vm2.Host = vm.Host
 	vm2.State = vm.State
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
