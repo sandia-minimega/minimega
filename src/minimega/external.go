@@ -37,7 +37,6 @@ var externalDependencies = map[string]bool{
 	"scp":       true, // used in deploy.go
 	"ssh":       true, // used in deploy.go
 	"cp":        true, // used in disk.go
-	"umount":    true, // used in disk.go
 	"qemu-img":  true, // used in disk.go
 	"ntfs-3g":   true, // used in disk.go
 	"ovs-vsctl": true, // used in external.go
