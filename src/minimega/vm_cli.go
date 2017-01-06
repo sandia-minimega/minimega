@@ -883,15 +883,14 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 			row = append(row, s.Namespace)
 		}
 
-		// TODO: include children in CPU computation
 		// TODO: add column for number of processes
 
 		row = append(row,
 			fmtMB(s.B.Size()),
 			fmtMB(s.B.Resident()),
 			fmtMB(s.B.Share()),
-			fmt.Sprintf("%.2f", s.A.CPU(s.B)*100),
-			fmt.Sprintf("%.2f", s.A.GuestCPU(s.B)*100),
+			fmt.Sprintf("%.2f", s.CPU()*100),
+			fmt.Sprintf("%.2f", s.GuestCPU()*100),
 			s.B.Time().String(),
 		)
 

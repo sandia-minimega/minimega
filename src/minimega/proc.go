@@ -33,21 +33,11 @@ type ProcStats struct {
 	Children map[int]*ProcStats
 }
 
-// CPU computes CPU % between two snapshots of proc
-func (p *ProcStats) CPU(p2 *ProcStats) float64 {
-	// compute number of tics used in window by process
-	tics := float64((p2.Utime + p2.Stime) - (p.Utime + p.Stime))
-	d := p2.End.Sub(p.Begin)
+type VMProcStats struct {
+	Name, Namespace string
 
-	return tics / ClkTck / d.Seconds()
-}
-
-// GuestCPU computes guest CPU % between two snapshots of proc
-func (p *ProcStats) GuestCPU(p2 *ProcStats) float64 {
-	vtics := float64(p2.GuestTime - p.GuestTime)
-	d := p2.End.Sub(p.Begin)
-
-	return vtics / ClkTck / d.Seconds()
+	// A and B are two snapshots of ProcStats
+	A, B *ProcStats
 }
 
 // Time walks the tree and returns total time
@@ -92,6 +82,45 @@ func (p *ProcStats) Share() uint64 {
 	}
 
 	return v
+}
+
+func (p *VMProcStats) cpuHelper(fn func(*ProcStats, *ProcStats) float64) float64 {
+	cpu := fn(p.A, p.B)
+
+	children, children2 := p.A.Children, p.B.Children
+	for len(children) > 0 && len(children2) > 0 {
+		// grandchildren for next iteration
+		next, next2 := map[int]*ProcStats{}, map[int]*ProcStats{}
+
+		for pid, p := range children {
+			// can only measure if the process exists in both
+			if p2, ok := children2[pid]; ok {
+				cpu += fn(p, p2)
+			}
+
+			for pid, p := range p.Children {
+				next[pid] = p
+			}
+		}
+
+		for _, p2 := range children2 {
+			for pid, p := range p2.Children {
+				next2[pid] = p
+			}
+		}
+
+		children, children2 = next, next2
+	}
+
+	return cpu
+}
+
+func (p *VMProcStats) CPU() float64 {
+	return p.cpuHelper(ProcCPU)
+}
+
+func (p *VMProcStats) GuestCPU() float64 {
+	return p.cpuHelper(ProcGuestCPU)
 }
 
 // GetProcStats reads the ProcStats for the given PID and its children.
@@ -143,4 +172,21 @@ func ListChildren(pid int) []int {
 	}
 
 	return res
+}
+
+// ProcCPU computes CPU % between two snapshots of proc
+func ProcCPU(p, p2 *ProcStats) float64 {
+	// compute number of tics used in window by process
+	tics := float64((p2.Utime + p2.Stime) - (p.Utime + p.Stime))
+	d := p2.End.Sub(p.Begin)
+
+	return tics / ClkTck / d.Seconds()
+}
+
+// ProcGuestCPU computes guest CPU % between two snapshots of proc
+func ProcGuestCPU(p, p2 *ProcStats) float64 {
+	vtics := float64(p2.GuestTime - p.GuestTime)
+	d := p2.End.Sub(p.Begin)
+
+	return vtics / ClkTck / d.Seconds()
 }
