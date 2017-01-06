@@ -35,6 +35,9 @@ type VMProcStats struct {
 
 	// A and B are two snapshots of ProcStats
 	A, B map[int]*ProcStats
+
+	// queried from bridge
+	RxRate, TxRate float64
 }
 
 // Time returns total time executed for all processes in MB
