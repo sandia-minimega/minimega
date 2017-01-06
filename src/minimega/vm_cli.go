@@ -432,7 +432,7 @@ Clear all tags from all VMs:
 	},
 	{ // vm top
 		HelpShort: "view vm resource utilization",
-		HelpLong: `
+		HelpLong: fmt.Sprintf(`
 View system resource utilization per VM. This is measured from the host and may
 differ from what is reported by the guest.
 
@@ -446,10 +446,10 @@ Returned columns include:
 - virt      : virtual memory size (MB)
 - res       : resident memory size (MB)
 - shr       : shared memory size (MB)
-- cpu       : host CPU usage (%)
-- vcpu      : guest CPU usage (%)
+- cpu       : host CPU usage (%%)
+- vcpu      : guest CPU usage (%%)
 - time      : total CPU time
-- procs     : number of process`,
+- procs     : number of processes inspected (limited to %d)`, ProcLimit),
 		Patterns: []string{
 			"vm top [duration]",
 		},

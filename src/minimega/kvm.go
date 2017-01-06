@@ -723,7 +723,8 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 }
 
 func (vm *KvmVM) ProcStats() (*ProcStats, error) {
-	return GetProcStats(vm.pid)
+	max := ProcLimit
+	return GetProcStats(vm.pid, &max)
 }
 
 // qemuArgs build the horribly long qemu argument string
