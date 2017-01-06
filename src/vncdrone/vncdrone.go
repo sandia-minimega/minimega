@@ -26,9 +26,6 @@ import (
 )
 
 var (
-	f_loglevel   = flag.String("level", "debug", "log level: [debug, info, warn, error, fatal]")
-	f_log        = flag.Bool("v", true, "log on stderr")
-	f_logfile    = flag.String("logfile", "", "log to file")
 	f_recordings = flag.String("recordings", "", "directory containing recordings")
 	f_nodes      = flag.String("nodes", "", "node(s) running VMs")
 	f_base       = flag.String("base", "/tmp/minimega", "minimega base directory")
@@ -36,7 +33,8 @@ var (
 
 func main() {
 	flag.Parse()
-	logSetup()
+	log.Init()
+
 	c, err := miniclient.Dial(*f_base)
 	if err != nil {
 		log.Fatal(err.Error())

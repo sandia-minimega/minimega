@@ -19,10 +19,21 @@ import (
 	"syscall"
 )
 
+// Request sent to minimega -- ethier a command to run or a string to return
+// suggestions for
+type Request struct {
+	*minicli.Command
+	Suggest string
+}
+
 type Response struct {
+	// Resp, Rendered, More are returned in response to a command
 	Resp     minicli.Responses
 	Rendered string
 	More     bool // whether there are more responses coming
+
+	// Suggest is returned in response to Suggest request
+	Suggest []string `json:"omitempty"`
 }
 
 type Conn struct {
@@ -41,14 +52,14 @@ func Dial(base string) (*Conn, error) {
 	var mm = &Conn{
 		url: path.Join(base, "minimega"),
 	}
-	var err error
 
 	// try to connect to the local minimega
-	mm.conn, err = net.Dial("unix", mm.url)
+	conn, err := net.Dial("unix", mm.url)
 	if err != nil {
 		return nil, err
 	}
 
+	mm.conn = conn
 	mm.enc = json.NewEncoder(mm.conn)
 	mm.dec = json.NewDecoder(mm.conn)
 
@@ -71,7 +82,7 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 		return out
 	}
 
-	err := mm.enc.Encode(*cmd)
+	err := mm.enc.Encode(Request{Command: cmd})
 	if err != nil {
 		log.Fatal("local command gob encode: %v", err)
 	}
@@ -84,8 +95,7 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 
 		for {
 			var r Response
-			err = mm.dec.Decode(&r)
-			if err != nil {
+			if err := mm.dec.Decode(&r); err != nil {
 				if err == io.EOF {
 					log.Fatalln("server disconnected")
 				}
@@ -120,6 +130,25 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 			fmt.Fprintln(os.Stderr, errs)
 		}
 	}
+}
+
+func (mm *Conn) Suggest(input string) []string {
+	err := mm.enc.Encode(Request{Suggest: input})
+	if err != nil {
+		log.Fatal("local command gob encode: %v", err)
+	}
+	log.Debugln("encoded suggest:", input)
+
+	var r Response
+	if err := mm.dec.Decode(&r); err != nil {
+		if err == io.EOF {
+			log.Fatalln("server disconnected")
+		}
+
+		log.Fatal("local command gob decode: %v", err)
+	}
+
+	return r.Suggest
 }
 
 // Attach creates a CLI interface to the dialed minimega instance

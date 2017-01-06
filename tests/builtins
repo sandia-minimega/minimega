@@ -50,3 +50,11 @@ vmr
 .columns nam,s vm info
 .columns s vm info
 .filter name~foo .col st vm info
+
+# Test preprocess
+echo http://localhost/
+.preprocess false
+.preprocess
+echo http://localhost/
+.preprocess true
+.preprocess false echo http://localhost/

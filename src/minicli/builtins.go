@@ -188,6 +188,21 @@ Enable or disable the recording of a given command in the command history.`,
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Record })
 		},
 	},
+	{ // preprocess
+		HelpShort: "enable or disable preprocessor",
+		HelpLong: `
+Enable or disable the command preprocessor.`,
+		Patterns: []string{
+			".preprocess [true,false]",
+			".preprocess <true,false> (command)",
+		},
+		Call: func(c *Command, out chan<- Responses) {
+			if c.Subcommand != nil {
+				c.Subcommand.SetPreprocess(c.BoolArgs["true"])
+			}
+			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Preprocess })
+		},
+	},
 	{ // alias
 		HelpShort: "create an alias",
 		HelpLong: `

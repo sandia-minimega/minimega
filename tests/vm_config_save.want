@@ -1,7 +1,7 @@
 ## vm config
 Current VM configuration:
 Memory:   2048
-VCPUS:    1
+VCPUs:    1
 Networks: []
 Snapshot: true
 UUID:     
@@ -13,7 +13,7 @@ Disk Paths:         []
 CDROM Path:         
 Kernel Path:        
 Initrd Path:        
-Kernel Append:      
+Kernel Append:      []
 QEMU Path:          
 QEMU Append:        []
 SerialPorts:        0
@@ -35,7 +35,7 @@ FIFOs:           0
 ## vm config
 Current VM configuration:
 Memory:   1024
-VCPUS:    4
+VCPUs:    4
 Networks: [mega_bridge,10,b4:b6:76:69:68:68]
 Snapshot: true
 UUID:     9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
@@ -47,7 +47,7 @@ Disk Paths:         []
 CDROM Path:         
 Kernel Path:        
 Initrd Path:        
-Kernel Append:      
+Kernel Append:      []
 QEMU Path:          
 QEMU Append:        [-k en-us]
 SerialPorts:        0
@@ -66,7 +66,7 @@ FIFOs:           0
 ## vm config
 Current VM configuration:
 Memory:   2048
-VCPUS:    1
+VCPUs:    1
 Networks: []
 Snapshot: true
 UUID:     
@@ -78,7 +78,7 @@ Disk Paths:         []
 CDROM Path:         
 Kernel Path:        
 Initrd Path:        
-Kernel Append:      
+Kernel Append:      []
 QEMU Path:          
 QEMU Append:        []
 SerialPorts:        0
@@ -94,7 +94,7 @@ FIFOs:           0
 ## vm config
 Current VM configuration:
 Memory:   1024
-VCPUS:    4
+VCPUs:    4
 Networks: [mega_bridge,10,b4:b6:76:69:68:68]
 Snapshot: true
 UUID:     9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
@@ -106,7 +106,7 @@ Disk Paths:         []
 CDROM Path:         
 Kernel Path:        
 Initrd Path:        
-Kernel Append:      
+Kernel Append:      []
 QEMU Path:          
 QEMU Append:        [-k en-us]
 SerialPorts:        0

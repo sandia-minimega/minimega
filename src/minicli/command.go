@@ -25,6 +25,10 @@ type Command struct {
 	// executed so the CLIFunc can set Record according to its own logic.
 	Record bool
 
+	// Preprocess controls whether the Preprocessor is run for this command or
+	// not. Must be set before the Command is executed.
+	Preprocess bool
+
 	// Set when the command is intentionally a NoOp (the original string
 	// contains just a comment). This was added to ensure that lines containing
 	// only a comment are recorded in the history.
@@ -140,5 +144,14 @@ func (c *Command) SetRecord(record bool) {
 
 	if c.Subcommand != nil {
 		c.Subcommand.SetRecord(record)
+	}
+}
+
+// SetPreprocess sets the Preprocess field for a command and all nested subcommands.
+func (c *Command) SetPreprocess(v bool) {
+	c.Preprocess = v
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetPreprocess(v)
 	}
 }

@@ -298,7 +298,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(q QueuedVMs) <-chan error {
+func (vms VMs) Launch(namespace string, q QueuedVMs) <-chan error {
 	out := make(chan error)
 
 	if err := q.GetFiles(); err != nil {
@@ -322,7 +322,7 @@ func (vms VMs) Launch(q QueuedVMs) <-chan error {
 		// This uses the global vmConfigs so we have to create the VMs in the
 		// CLI thread (before the next command gets processed which could
 		// change the vmConfigs).
-		vm, err := NewVM(name, q.VMType, q.VMConfig)
+		vm, err := NewVM(name, namespace, q.VMType, q.VMConfig)
 		if err == nil {
 			for _, vm2 := range vms {
 				if err = vm2.Conflicts(vm); err != nil {
@@ -658,7 +658,7 @@ func meshageVMLauncher() {
 			errs := []string{}
 
 			if len(errs) == 0 {
-				for err := range vms.Launch(cmd.QueuedVMs) {
+				for err := range vms.Launch(cmd.Namespace, cmd.QueuedVMs) {
 					if err != nil {
 						errs = append(errs, err.Error())
 					}
