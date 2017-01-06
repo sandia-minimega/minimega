@@ -117,13 +117,6 @@ type BaseVM struct {
 	instancePath string
 }
 
-type VMProcStats struct {
-	Name, Namespace string
-
-	// A and B are two snapshots of ProcStats
-	A, B *ProcStats
-}
-
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
