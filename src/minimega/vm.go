@@ -88,7 +88,7 @@ type VM interface {
 	ClearQos(uint) error
 	ClearAllQos() error
 
-	ProcStats() (*ProcStats, error)
+	ProcStats() (map[int]*ProcStats, error)
 
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM

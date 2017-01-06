@@ -1222,9 +1222,31 @@ func (vm *ContainerVM) thaw() error {
 	return nil
 }
 
-func (vm *ContainerVM) ProcStats() (*ProcStats, error) {
-	max := ProcLimit
-	return GetProcStats(vm.pid, &max)
+func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
+	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "tasks")
+	b, err := ioutil.ReadFile(freezer)
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[int]*ProcStats{}
+
+	for i, v := range strings.Fields(string(b)) {
+		if i >= ProcLimit {
+			break
+		}
+
+		// should always be an int...
+		if i, err := strconv.Atoi(v); err == nil {
+			// supress errors... processes may have exited between reading
+			// tasks and trying to read stats
+			if p, err := GetProcStats(i); err == nil {
+				res[i] = p
+			}
+		}
+	}
+
+	return res, nil
 }
 
 func containerSetCapabilities() error {
