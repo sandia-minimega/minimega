@@ -200,6 +200,12 @@ func main() {
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 
+	// should be created after meshageStart returns
+	log.Info("change working directory to: %v", *f_iomBase)
+	if err := os.Chdir(*f_iomBase); err != nil {
+		teardown()
+	}
+
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
