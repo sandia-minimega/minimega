@@ -19,19 +19,20 @@ import (
 func commandSocketStart() {
 	l, err := net.Listen("unix", filepath.Join(*f_base, "minimega"))
 	if err != nil {
-		log.Error("commandSocketStart: %v", err)
-		teardown()
+		log.Fatal("commandSocketStart: %v", err)
 	}
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Error("commandSocketStart: accept: %v", err)
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				log.Error("commandSocketStart: accept: %v", err)
+			}
+			log.Infoln("client connected")
+
+			go commandSocketHandle(conn)
 		}
-		log.Infoln("client connected")
-
-		go commandSocketHandle(conn)
-	}
+	}()
 }
 
 func commandSocketRemove() {

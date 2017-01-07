@@ -8,6 +8,7 @@ import (
 	"flag"
 	"fmt"
 	"goreadline"
+	"io/ioutil"
 	"minicli"
 	"miniclient"
 	log "minilog"
@@ -100,17 +101,22 @@ func main() {
 		os.Exit(0)
 	}
 
-	// rebase f_iomBase if f_base changed but iomBase did not
-	if *f_base != BASE_PATH && *f_iomBase == IOM_PATH {
-		*f_iomBase = filepath.Join(*f_base, "files")
-	}
-
 	if *f_version {
 		fmt.Println("minimega", version.Revision, version.Date)
 		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
 
+	// warn if we're not root
+	user, err := user.Current()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if user.Uid != "0" {
+		log.Warnln("not running as root")
+	}
+
+	// set global for hostname
 	hostname, err = os.Hostname()
 	if err != nil {
 		log.Fatalln(err)
@@ -147,31 +153,57 @@ func main() {
 		return
 	}
 
-	// warn if we're not root
-	user, err := user.Current()
-	if err != nil {
-		log.Fatalln(err)
+	fmt.Println(banner)
+
+	// check all the external dependencies
+	if err := checkExternal(); err != nil {
+		log.Warnln(err.Error())
 	}
-	if user.Uid != "0" {
-		log.Warnln("not running as root")
+
+	// rebase f_iomBase if f_base changed but iomBase did not
+	if *f_base != BASE_PATH && *f_iomBase == IOM_PATH {
+		*f_iomBase = filepath.Join(*f_base, "files")
 	}
 
 	// check for a running instance of minimega
-	_, err = os.Stat(filepath.Join(*f_base, "minimega"))
-	if err == nil {
+	if _, err := os.Stat(filepath.Join(*f_base, "minimega")); err == nil {
 		if !*f_force {
 			log.Fatalln("minimega appears to already be running, override with -force")
 		}
 		log.Warn("minimega may already be running, proceed with caution")
-		err = os.Remove(filepath.Join(*f_base, "minimega"))
-		if err != nil {
+
+		if err := os.Remove(filepath.Join(*f_base, "minimega")); err != nil {
 			log.Fatalln(err)
 		}
 	}
 
+	// attempt to set up the base path
+	if err := os.MkdirAll(*f_base, os.FileMode(0770)); err != nil {
+		log.Fatal("mkdir base path: %v", err)
+	}
+
+	dst := filepath.Join(*f_base, "minimega.pid")
+	pid := strconv.Itoa(os.Getpid())
+	if err := ioutil.WriteFile(dst, []byte(pid), 0644); err != nil {
+		log.Fatal("unable to write pid: %v", err)
+	}
+
+	// fan out to the number of cpus on the system if GOMAXPROCS env variable
+	// is not set.
+	if os.Getenv("GOMAXPROCS") == "" {
+		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
+	// start services
+	commandSocketStart()
+	ccStart()
+	tapReaperStart()
+	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
+
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		first := true
 		for s := range sig {
@@ -193,44 +225,6 @@ func main() {
 		}
 	}()
 
-	err = checkExternal()
-	if err != nil {
-		log.Warnln(err.Error())
-	}
-
-	// attempt to set up the base path
-	err = os.MkdirAll(*f_base, os.FileMode(0770))
-	if err != nil {
-		log.Fatal("mkdir base path: %v", err)
-	}
-
-	pid := os.Getpid()
-	writeOrDie(filepath.Join(*f_base, "minimega.pid"), strconv.Itoa(pid))
-
-	go commandSocketStart()
-
-	// create a node for meshage
-	host, err := os.Hostname()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port)
-
-	// start the cc service
-	ccStart()
-
-	// start tap reaper
-	go periodicReapTaps()
-
-	fmt.Println(banner)
-
-	// fan out to the number of cpus on the system if GOMAXPROCS env variable is
-	// not set.
-	if os.Getenv("GOMAXPROCS") == "" {
-		cpus := runtime.NumCPU()
-		runtime.GOMAXPROCS(cpus)
-	}
-
 	if !*f_nostdin {
 		cliLocal()
 	} else {
@@ -239,6 +233,7 @@ func main() {
 			panic("teardown")
 		}
 	}
+
 	teardown()
 }
 

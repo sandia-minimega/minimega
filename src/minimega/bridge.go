@@ -34,15 +34,17 @@ type Tap struct {
 
 var bridges = bridge.NewBridges(DefaultBridge, TapFmt)
 
-// periodicReapTaps should be run as a goroutine to reap defunct taps.
-func periodicReapTaps() {
-	for {
-		time.Sleep(TapReapRate)
-		log.Debugln("periodic reapTaps")
-		if err := bridges.ReapTaps(); err != nil {
-			log.Errorln(err)
+// tapReaperStart periodically calls bridges.ReapTaps
+func tapReaperStart() {
+	go func() {
+		for {
+			time.Sleep(TapReapRate)
+			log.Debugln("periodic reapTaps")
+			if err := bridges.ReapTaps(); err != nil {
+				log.Errorln(err)
+			}
 		}
-	}
+	}()
 }
 
 // destroy all bridges
