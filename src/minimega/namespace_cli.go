@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"minicli"
 	"ranges"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -23,6 +24,12 @@ Control and run commands in namespace environments.`,
 			"namespace <name> (command)",
 		},
 		Call: cliNamespace,
+		Suggest: wrapSuggest(func(val, prefix string) []string {
+			if val == "name" {
+				return cliNamespaceSuggest(prefix, false)
+			}
+			return nil
+		}),
 	},
 	{ // nsmod
 		HelpShort: "modify namespace environments",
@@ -47,9 +54,15 @@ is active, "clear namespace" returns an error and does nothing.
 If you specify a namespace by name, then the specified namespace will be
 deleted. You may use "all" to delete all namespaces.`,
 		Patterns: []string{
-			"clear namespace [name or all]",
+			"clear namespace [name]",
 		},
 		Call: wrapSimpleCLI(cliClearNamespace),
+		Suggest: wrapSuggest(func(val, prefix string) []string {
+			if val == "name" {
+				return cliNamespaceSuggest(prefix, true)
+			}
+			return nil
+		}),
 	},
 }
 
@@ -205,4 +218,22 @@ func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return DestroyNamespace(name)
+}
+
+// cliNamespaceSuggest suggests namespaces that have the given prefix. If wild
+// is true, Wildcard is included in the list of suggestions.
+func cliNamespaceSuggest(prefix string, wild bool) []string {
+	res := []string{}
+
+	if wild && strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
+
+	for _, name := range ListNamespaces() {
+		if strings.HasPrefix(name, prefix) {
+			res = append(res, name)
+		}
+	}
+
+	return res
 }
