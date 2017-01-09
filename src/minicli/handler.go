@@ -151,7 +151,7 @@ outer:
 					suggestions = append(suggestions, choice)
 				}
 			}
-		case stringItem, listItem:
+		case stringItem, listItem, stringItem | optionalItem, listItem | optionalItem:
 			if h.Suggest != nil {
 				var prefix string
 				if i < len(input.items) {
