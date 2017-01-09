@@ -39,13 +39,15 @@ del-host - delete comma-separated list of hosts from the namespace.
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
 	{ // clear namespace
-		HelpShort: "unset namespace",
+		HelpShort: "unset or delete namespace",
 		HelpLong: `
-Without a namespace, clear namespace unsets the current namespace.
+If a namespace is active, "clear namespace" will deactivate it. If no namespace
+is active, "clear namespace" returns an error and does nothing.
 
-With a namespace, clear namespace deletes the specified namespace.`,
+If you specify a namespace by name, then the specified namespace will be
+deleted. You may use "all" to delete all namespaces.`,
 		Patterns: []string{
-			"clear namespace [name]",
+			"clear namespace [name or all]",
 		},
 		Call: wrapSimpleCLI(cliClearNamespace),
 	},
@@ -63,7 +65,11 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		if c.Subcommand != nil {
 			// Setting namespace for a single command, revert back afterwards
 			defer RevertNamespace(ns, ns2)
-			SetNamespace(name)
+			if err := SetNamespace(name); err != nil {
+				resp.Error = err.Error()
+				respChan <- minicli.Responses{resp}
+				return
+			}
 
 			// Run the subcommand and forward the responses.
 			//
@@ -74,7 +80,9 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 
 		// Setting namespace for future commands
-		SetNamespace(name)
+		if err := SetNamespace(name); err != nil {
+			resp.Error = err.Error()
+		}
 		respChan <- minicli.Responses{resp}
 		return
 	}
@@ -193,8 +201,7 @@ func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Clearing the namespace global
-		SetNamespace("")
-		return nil
+		return SetNamespace("")
 	}
 
 	return DestroyNamespace(name)

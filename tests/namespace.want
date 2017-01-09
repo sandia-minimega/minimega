@@ -4,7 +4,6 @@
 name | state
 foo  | BUILDING
 ## namespace ns1
-## nsmod add-host localhost
 ## .columns name,state vm info
 ## vm launch kvm foo
 ## vm launch
@@ -12,7 +11,6 @@ foo  | BUILDING
 name | state
 foo  | BUILDING
 ## namespace ns2
-## nsmod add-host localhost
 ## .columns name,state vm info
 ## vm launch kvm foo
 ## vm launch
@@ -71,3 +69,21 @@ name | namespace | state
 foo  |           | QUIT
 ## vm flush
 ## .columns name,namespace,state vm info
+
+## # Test clear/delete namespace
+## namespace
+Namespaces: [ns1 ns2]
+## namespace ns3
+## namespace ns3
+E: already in namespace: ns3
+## clear namespace
+## clear namespace
+E: namespaces are already disabled
+## namespace
+Namespaces: [ns1 ns2 ns3]
+## clear namespace ns3
+## namespace
+Namespaces: [ns1 ns2]
+## clear namespace all
+## namespace
+Namespaces: []

@@ -1,4 +1,5 @@
 clear namespace
+clear namespace all
 clear capture
 clear cc
 clear router
