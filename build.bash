@@ -37,7 +37,7 @@ do
 	echo $i
 	go install $i
 	if [[ $? != 0 ]]; then
-	    LINUX_PACKAGES_ERRORS=true
+		exit 1
 	fi
 done
 echo
@@ -47,16 +47,12 @@ echo "BUILD PACKAGES (windows)"
 echo "protonuke"
 GOOS=windows go install protonuke
 if [[ $? != 0 ]]; then
-    WINDOWS_PACKAGES_ERRORS=true
+	exit 1
 fi
 echo "miniccc"
 GOOS=windows go install miniccc
 if [[ $? != 0 ]]; then
-    WINDOWS_PACKAGES_ERRORS=true
+	exit 1
 fi
 echo
 unset GOOS
-
-if [ "$LINUX_PACKAGES_ERRORS" = "true" ] || [ "$WINDOWS_PACKAGES_ERRORS" = "true" ]; then
-    exit 1
-fi
