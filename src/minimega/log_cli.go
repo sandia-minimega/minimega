@@ -274,6 +274,11 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 func stopFileLogger() error {
 	log.DelLogger("file")
 
+	// no op
+	if logFile == nil {
+		return nil
+	}
+
 	err := logFile.Close()
 	if err != nil {
 		log.Error("error closing log file: %v", err)
