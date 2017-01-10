@@ -86,6 +86,13 @@ func commandSocketHandle(c net.Conn) {
 			continue
 		}
 
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
+			err = sendLocalResp(enc, nil, false)
+			continue
+		}
+
 		// HAX: Don't record the read command
 		if hasCommand(cmd, "read") {
 			cmd.SetRecord(false)
