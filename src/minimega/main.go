@@ -135,8 +135,8 @@ func main() {
 			log.Debugln("got args:", a)
 
 			// TODO: Need to escape?
-			cmd := minicli.MustCompile(strings.Join(a, " "))
-			log.Infoln("got command:", cmd)
+			cmd := strings.Join(a, " ")
+			log.Infoln("got command: `%v`", cmd)
 
 			mm.RunAndPrint(cmd, false)
 		} else {
