@@ -304,6 +304,12 @@ var Keyboard, Mouse;
             var evt = (e ? e : window.event);
             var pos = Util.getEventPosition(e, this._target, this._scale);
             if (this._onMouseMove) {
+                if (noVNC_status.innerHTML.indexOf('|') == -1){
+                    noVNC_status.innerHTML += " | X:"+pos.x+" Y:"+pos.y;
+                }
+                else{
+                    noVNC_status.innerHTML = noVNC_status.innerHTML.split('|')[0] + "| X:"+pos.x+" Y:"+pos.y;
+                }
                 this._onMouseMove(pos.x, pos.y);
             }
             Util.stopEvent(e);
