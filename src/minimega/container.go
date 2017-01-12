@@ -1223,7 +1223,7 @@ func (vm *ContainerVM) thaw() error {
 }
 
 func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
-	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "tasks")
+	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "cgroup.procs")
 	b, err := ioutil.ReadFile(freezer)
 	if err != nil {
 		return nil, err
