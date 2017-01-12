@@ -1368,7 +1368,7 @@ func containerPopulateCgroups(vmID, vmMemory int) error {
 
 	// associate the pid with these permissions
 	for _, cgroup := range cgroups {
-		tasks := filepath.Join(cgroup, "tasks")
+		tasks := filepath.Join(cgroup, "cgroup.procs")
 		if err := ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644); err != nil {
 			return err
 		}

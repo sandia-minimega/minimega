@@ -117,10 +117,6 @@ func ccClear(what string) (err error) {
 	return
 }
 
-func ccHasClient(c string) bool {
-	return ccNode != nil && ccNode.HasClient(c)
-}
-
 // ccGetFilter returns a filter for cc clients, adding the implicit namespace
 // filter, if a namespace is active.
 func ccGetFilter() *ron.Filter {

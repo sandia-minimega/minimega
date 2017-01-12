@@ -294,16 +294,7 @@ func help(args []string) {
 	os.Exit(2) // failed at 'go help cmd'
 }
 
-var atexitFuncs []func()
-
-func atexit(f func()) {
-	atexitFuncs = append(atexitFuncs, f)
-}
-
 func exit() {
-	for _, f := range atexitFuncs {
-		f()
-	}
 	os.Exit(exitStatus)
 }
 

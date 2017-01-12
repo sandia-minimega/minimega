@@ -767,7 +767,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
 
 	args = append(args, "-vga")
-	args = append(args, "cirrus")
+	args = append(args, "std")
 
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
