@@ -17,6 +17,14 @@ import (
 // RePwdPath is the default expression for matching files in the current working directory
 var RePwdPath = regexp.MustCompile(`\"(.*)\"`)
 
+type StatusError struct {
+	s string
+}
+
+func (e StatusError) Error() string {
+	return e.s
+}
+
 // FTP is a session for File Transfer Protocol
 type FTP struct {
 	conn net.Conn
@@ -25,6 +33,7 @@ type FTP struct {
 
 	debug     bool
 	tlsconfig *tls.Config
+	dataEncryption bool
 
 	reader *bufio.Reader
 	writer *bufio.Writer
@@ -237,9 +246,12 @@ func (ftp *FTP) AuthTLS(config *tls.Config) error {
 	}
 
 	if _, err := ftp.cmd(StatusOK, "PROT P"); err != nil {
+		if _, ok := err.(StatusError); ok {
+			return nil
+		}
 		return err
 	}
-
+	ftp.dataEncryption = true
 	return nil
 }
 
@@ -319,6 +331,40 @@ func (ftp *FTP) receive() (string, error) {
 	return line, err
 }
 
+func (ftp *FTP) receiveNoDiscard() (string, error) {
+	line, err := ftp.receiveLine()
+
+	if err != nil {
+		return line, err
+	}
+
+	if (len(line) >= 4) && (line[3] == '-') {
+		//Multiline response
+		closingCode := line[:3] + " "
+		for {
+			str, err := ftp.receiveLine()
+			line = line + str
+			if err != nil {
+				return line, err
+			}
+			if len(str) < 4 {
+				if ftp.debug {
+					log.Println("Uncorrectly terminated response")
+				}
+				break
+			} else {
+				if str[:4] == closingCode {
+					break
+				}
+			}
+		}
+	}
+	//ftp.ReadAndDiscard()
+	//fmt.Println(line)
+	return line, err
+}
+
+
 func (ftp *FTP) send(command string, arguments ...interface{}) error {
 	if ftp.debug {
 		log.Printf("> %s", fmt.Sprintf(command, arguments...))
@@ -371,7 +417,7 @@ func (ftp *FTP) newConnection(port int) (conn net.Conn, err error) {
 		return
 	}
 
-	if ftp.tlsconfig != nil {
+	if ftp.dataEncryption && ftp.tlsconfig != nil {
 		conn = tls.Client(conn, ftp.tlsconfig)
 	}
 
@@ -511,7 +557,7 @@ func (ftp *FTP) Retr(path string, retrFn RetrFunc) (s string, err error) {
 	defer pconn.Close()
 
 	var line string
-	if line, err = ftp.receive(); err != nil {
+	if line, err = ftp.receiveNoDiscard(); err != nil {
 		return
 	}
 
@@ -536,7 +582,7 @@ func (ftp *FTP) Retr(path string, retrFn RetrFunc) (s string, err error) {
 	return
 }
 
-/*func GetFilesList(path string) (files []string, err error) {
+/*func GetFilesrist(path string) (files []string, err error) {
 
 }*/
 
@@ -559,10 +605,10 @@ func (ftp *FTP) List(path string) (files []string, err error) {
 	if pconn, err = ftp.newConnection(port); err != nil {
 		return
 	}
-	defer pconn.Close()
+	//defer pconn.Close()
 
 	var line string
-	if line, err = ftp.receive(); err != nil {
+	if line, err = ftp.receiveNoDiscard(); err != nil {
 		return
 	}
 
@@ -572,7 +618,7 @@ func (ftp *FTP) List(path string) (files []string, err error) {
 			return
 		}
 
-		if line, err = ftp.receive(); err != nil {
+		if line, err = ftp.receiveNoDiscard(); err != nil {
 			return
 		}
 
@@ -596,6 +642,8 @@ func (ftp *FTP) List(path string) (files []string, err error) {
 
 		files = append(files, string(line))
 	}
+
+	pconn.Close()
 
 	if line, err = ftp.receive(); err != nil {
 		return
@@ -696,7 +744,7 @@ func ConnectDbg(addr string) (*FTP, error) {
 
 	var line string
 
-	object := &FTP{conn: conn, addr: addr, reader: reader, writer: writer, debug: false}
+	object := &FTP{conn: conn, addr: addr, reader: reader, writer: writer, debug: true}
 	line, _ = object.receive()
 
 	log.Print(line)
@@ -711,6 +759,6 @@ func (ftp *FTP) Size(path string) (size int, err error) {
 	if err != nil {
 		return 0, err
 	}
-
-	return strconv.Atoi(line)
+	s := strings.Fields(line[4:])
+	return strconv.Atoi(s[0])
 }
