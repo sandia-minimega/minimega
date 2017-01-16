@@ -114,7 +114,7 @@ func ftpClient() {
 
 		// Random ftp actions
 		if connected && auth {
-			switch 4 { //rand.Intn(6) {
+			switch rand.Intn(6) {
 			case 0:
 				// get current path
 				var curpath string
