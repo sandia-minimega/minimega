@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	"crypto/tls"
-	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -67,9 +66,9 @@ func ftpClient() {
 				log.Errorln(err)
 			} else {
 				connected = true
-				fmt.Println("Connected to host")
-				continue
+				log.Debug("Connected to host")
 			}
+			continue
 		}
 
 		// Authenticate
@@ -78,9 +77,8 @@ func ftpClient() {
 				log.Errorln(err)
 			} else {
 				auth = true
-			}
-
-			fmt.Println("Logged in as", USER)
+				log.Debug("Logged in as", USER)
+		        }
 			continue
 		}
 
@@ -110,42 +108,41 @@ func ftpClient() {
 			} else {
 				tlsAuth = true
 			}
-			fmt.Println("TLS auth ok")
+			log.Debug("TLS auth ok")
 			continue
 		}
 
 		// Random ftp actions
 		if connected && auth {
-			switch rand.Intn(6) {
+			switch 4 { //rand.Intn(6) {
 			case 0:
 				// get current path
 				var curpath string
 				if curpath, err = ftp.Pwd(); err != nil {
 					log.Errorln(err)
 				}
-				fmt.Println("Current path:", curpath)
+				log.Debug("Current path:", curpath)
 			case 1:
 				// get system type of remote host
 				var syst string
 				if syst, err = ftp.Syst(); err != nil {
 					log.Errorln(err)
 				}
-				fmt.Println("System:", syst)
+				log.Debug("System:", syst)
 			case 2:
 				// Get the filesize of the protonuke binary
 				var size int
 				if size, err = ftp.Size("/tmp/ftpimage"); err != nil {
 					log.Errorln("Size error:",err)
 				}
-				fmt.Println("ftpimage file size:", size)
+				log.Debug("ftpimage file size:", size)
 			case 3:
 				// get directory listing
 				var files []string
 				if files, err = ftp.List("/tmp"); err != nil {
 					log.Errorln(err)
-					//ftpQuit(ftp)
 				}
-				fmt.Println("Directory listing:", files)
+				log.Debug("Directory listing:", files)
 			case 4:
 				// request file transfer
 				var s string
@@ -156,13 +153,12 @@ func ftpClient() {
 				}
 				if s, err = ftp.Retr("/tmp/ftpimage", retrfunc); err != nil {
 					log.Errorln("Retr err:", err)
-					//ftpQuit(ftp)
 				}
-				fmt.Println("Retr:", s)
+				log.Debug("Retr:", s)
 			case 5:
 				// quit
 				ftpQuit(ftp)
-				fmt.Println("Logged out")
+				log.Debug("Logged out")
 			}
 		}
 	}
@@ -235,9 +231,6 @@ func ftpServer() {
 		ExplicitFTPS:   useTLS,
 	}
 	ftpServer := server.NewServer(opt)
-	// add tls
-	//tlsConfig := &tls.Config{InsecureSkipVerify: true}
-	//ftpServer.tlsConfig = tlsConfig
 
 	go func() {
 		err := ftpServer.ListenAndServe()
