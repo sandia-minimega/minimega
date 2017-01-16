@@ -99,6 +99,7 @@ func newPassiveSocket(host string, port int, logger *Logger, tlsConfing *tls.Con
 	socket.logger = logger
 	socket.host = host
 	socket.port = port
+	socket.tlsConfig = tlsConfig
 	if err := socket.GoListenAndServe(); err != nil {
 		return nil, err
 	}
