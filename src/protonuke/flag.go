@@ -15,6 +15,8 @@ type FileSize uint
 
 // DefaultFileSize is 3MB
 const DefaultFileSize = FileSize(3 * 1 << 20)
+// DefaultFTPFileSize is 500KB
+const DefaultFTPFileSize = FileSize(500 * 1 << 10)
 
 func (f *FileSize) Set(s string) error {
 	for i, suffix := range []string{"B", "KB", "MB"} {
