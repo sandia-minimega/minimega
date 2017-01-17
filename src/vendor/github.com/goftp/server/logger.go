@@ -1,8 +1,8 @@
 package server
 
 import (
-	//"fmt"
-	//"log"
+	"fmt"
+	log"minilog"
 )
 
 // Use an instance of this to log in a standard format
@@ -17,21 +17,21 @@ func newLogger(id string) *Logger {
 }
 
 func (logger *Logger) Print(message interface{}) {
-	//log.Printf("%s   %s", logger.sessionID, message)
+	log.Debug("%s   %s", logger.sessionID, message)
 }
 
 func (logger *Logger) Printf(format string, v ...interface{}) {
-	//logger.Print(fmt.Sprintf(format, v...))
+	logger.Print(fmt.Sprintf(format, v...))
 }
 
 func (logger *Logger) PrintCommand(command string, params string) {
 	if command == "PASS" {
-		//log.Printf("%s > PASS ****", logger.sessionID)
+		log.Debug("%s > PASS ****", logger.sessionID)
 	} else {
-		//log.Printf("%s > %s %s", logger.sessionID, command, params)
+		log.Debug("%s > %s %s", logger.sessionID, command, params)
 	}
 }
 
 func (logger *Logger) PrintResponse(code int, message string) {
-	//log.Printf("%s < %d %s", logger.sessionID, code, message)
+	log.Debug("%s < %d %s", logger.sessionID, code, message)
 }
