@@ -16,7 +16,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"minicli"
 	"miniclient"
 	log "minilog"
 	"minipager"
@@ -66,7 +65,7 @@ func main() {
 
 		// Get a list of all current VNC playbacks
 		// this will come back as host,id
-		cmd := &minicli.Command{Original: ".csv true .annotate false .headers false .columns host,id vnc"}
+		cmd := ".csv true .annotate false .headers false .columns host,id vnc"
 		vncresponsechan := c.Run(cmd)
 
 		// Now make a map of all the VMs that are busy
@@ -90,7 +89,7 @@ func main() {
 
 		// Get a list of all VMs
 		// this will come back as host,id
-		cmd = &minicli.Command{Original: fmt.Sprintf("mesh send %s .header false .csv true .columns id .filter disk=%s vm info kvm", *f_nodes, diskname)}
+		cmd = fmt.Sprintf("mesh send %s .header false .csv true .columns id .filter disk=%s vm info kvm", *f_nodes, diskname)
 		vmresponsechan := c.Run(cmd)
 
 	outside:
@@ -125,7 +124,7 @@ func main() {
 				// if we got here, the VM is not busy, so start playing the recording!
 				recordingpath := filepath.Join(*f_recordings, filename)
 				log.Debug("Playing", recordingpath, "on", host, id)
-				cmd := &minicli.Command{Original: fmt.Sprintf("vnc playback %s %s %s", host, id, recordingpath)}
+				cmd := fmt.Sprintf("vnc playback %s %s %s", host, id, recordingpath)
 				c.RunAndPrint(cmd, false)
 				break outside
 			}
