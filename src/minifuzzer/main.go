@@ -55,10 +55,8 @@ func dial(retries int) (*miniclient.Conn, error) {
 
 // run a command against a live minimega instance, logging the command and the
 // response for inspection.
-func run(mm *miniclient.Conn, s string) {
-	log.Info("minimega: `%v`", s)
-
-	cmd := &minicli.Command{Original: s}
+func run(mm *miniclient.Conn, cmd string) {
+	log.Info("minimega: `%v`", cmd)
 
 	var res string
 
