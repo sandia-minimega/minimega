@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 type dnsmasqServer struct {
@@ -368,12 +369,7 @@ func dnsmasqKill(id int) error {
 	}
 
 	log.Infoln("killing dnsmasq server:", pid)
-
-	_, err := processWrapper("kill", fmt.Sprintf("%v", pid))
-	if err != nil {
-		return err
-	}
-	return nil
+	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
 func dnsmasqStart(ip, min, max, hosts string) error {
@@ -409,7 +405,11 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
-	p := process("dnsmasq")
+	p, err := process("dnsmasq")
+	if err != nil {
+		return err
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	cmd := &exec.Cmd{
