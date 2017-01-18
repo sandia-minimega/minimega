@@ -64,7 +64,7 @@ func init() {
 	gob.Register(iomeshage.IOMMessage{})
 }
 
-func meshageInit(host string, namespace string, degree, msaTimeout uint, port int) {
+func meshageStart(host string, namespace string, degree, msaTimeout uint, port int) {
 	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper

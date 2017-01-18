@@ -922,6 +922,10 @@ func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
 func cliVMSuggest(prefix string, mask VMState) []string {
 	res := []string{}
 
+	if strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
+
 	for _, vm := range GlobalVMs() {
 		if vm.GetState()&mask == 0 {
 			continue
