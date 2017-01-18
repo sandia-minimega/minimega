@@ -101,7 +101,7 @@ func read(path string, c *Config) error {
 		case "postbuild":
 			c.Postbuilds = append(c.Postbuilds, v)
 		default:
-			err = fmt.Errorf("invalid key %s", k, d)
+			err = fmt.Errorf("invalid key %s", k)
 			return err
 		}
 		tok = s.Scan()
