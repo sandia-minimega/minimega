@@ -37,6 +37,7 @@ var (
 	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
 	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
+	f_interfaces = flag.String("interfaces", "", "comma-separated list of interfaces on which to broadcast meshage. default all.")
 	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
@@ -214,7 +215,11 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port)
+	var interfaces []string
+	if *f_interfaces != "" {
+		interfaces = strings.Split(*f_interfaces, ",")
+	}
+	meshageInit(host, *f_context, *f_degree, *f_msaTimeout, *f_port, interfaces)
 
 	// start the cc service
 	ccStart()
