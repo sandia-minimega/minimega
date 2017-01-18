@@ -2,13 +2,11 @@
 vm launch kvm foo
 .columns name,state vm info
 namespace ns1
-nsmod add-host localhost
 .columns name,state vm info
 vm launch kvm foo
 vm launch
 .columns name,state vm info
 namespace ns2
-nsmod add-host localhost
 .columns name,state vm info
 vm launch kvm foo
 vm launch
@@ -35,3 +33,15 @@ vm kill all
 .columns name,namespace,state vm info
 vm flush
 .columns name,namespace,state vm info
+
+# Test clear/delete namespace
+namespace
+namespace ns3
+namespace ns3
+clear namespace
+clear namespace
+namespace
+clear namespace ns3
+namespace
+clear namespace all
+namespace

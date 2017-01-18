@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"sort"
 	"sync"
 	"time"
 )
@@ -292,13 +293,22 @@ func GetOrCreateNamespace(name string) *Namespace {
 }
 
 // SetNamespace sets the active namespace
-func SetNamespace(name string) {
+func SetNamespace(name string) error {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
 	log.Info("setting active namespace: %v", name)
 
+	if name == namespace {
+		if name == "" {
+			return errors.New("namespaces are already disabled")
+		}
+
+		return fmt.Errorf("already in namespace: %v", name)
+	}
+
 	namespace = name
+	return nil
 }
 
 // RevertNamespace reverts the active namespace (which should match curr) back
@@ -324,24 +334,35 @@ func DestroyNamespace(name string) error {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	log.Info("destroying namespace: %v", name)
+	var found bool
 
-	ns, ok := namespaces[name]
-	if !ok {
+	for n, ns := range namespaces {
+		if n != name && name != Wildcard {
+			continue
+		}
+
+		log.Info("destroying namespace: %v", name)
+
+		found = true
+
+		if err := ns.Destroy(); err != nil {
+			return err
+		}
+
+		// If we're deleting the currently active namespace, we should get out of
+		// that namespace
+		if namespace == name {
+			log.Info("active namespace destroyed, deactivating namespaces")
+			namespace = ""
+		}
+
+		delete(namespaces, n)
+	}
+
+	if !found && name != Wildcard {
 		return fmt.Errorf("unknown namespace: %v", name)
 	}
 
-	if err := ns.Destroy(); err != nil {
-		return err
-	}
-
-	// If we're deleting the currently active namespace, we should get out of
-	// that namespace
-	if namespace == name {
-		namespace = ""
-	}
-
-	delete(namespaces, name)
 	return nil
 }
 
@@ -353,6 +374,9 @@ func ListNamespaces() []string {
 	for n := range namespaces {
 		res = append(res, n)
 	}
+
+	// make sure the order is always the same
+	sort.Strings(res)
 
 	return res
 }
