@@ -93,6 +93,20 @@ VM). Stops on the first invalid command.`,
 		},
 		Call: wrapSimpleCLI(cliEcho),
 	},
+	{ // clear all
+		HelpShort: "reset all resettable ",
+		HelpLong: `
+minimega has many "clear ..." handlers. This attempts to invoke them all to
+reset minimega to as vanilla a state as possible. Restarting minimega is
+preferable.
+
+This command only runs locally and is not broadcast to all members of the
+namespace even if one is active.`,
+		Patterns: []string{
+			"clear all",
+		},
+		Call: cliClearAll,
+	},
 }
 
 func cliQuit(c *minicli.Command, resp *minicli.Response) error {
@@ -259,4 +273,31 @@ func cliVersion(c *minicli.Command, resp *minicli.Response) error {
 func cliEcho(c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = strings.Join(c.ListArgs["args"], " ")
 	return nil
+}
+
+func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
+	all := []string{
+		"clear capture",
+		"clear cc",
+		"clear deploy flags",
+		"clear history",
+		"clear log",
+		"clear namespace all",
+		"clear optimize",
+		//"clear qos",
+		"clear router",
+		"clear tap",
+		"clear vlans",
+		"clear vm config",
+		"clear vm tag",
+		"clear vnc",
+	}
+
+	// LOCK: this is a CLI hander so we already hold cmdLock (can call
+	// runCommands instead of RunCommands).
+	for _, v := range all {
+		cmd := minicli.MustCompile(v)
+
+		forward(runCommands(cmd), respChan)
+	}
 }
