@@ -1347,7 +1347,7 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vmID))
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vmID))
 	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega", fmt.Sprintf("%v", vmID))
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices}
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
 
 	for _, cgroup := range cgroups {
 		if err := os.MkdirAll(cgroup, 0755); err != nil {
