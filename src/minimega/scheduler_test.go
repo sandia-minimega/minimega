@@ -236,7 +236,7 @@ func TestScheduleImpossible(t *testing.T) {
 	hosts := fakeHostData(2, false)
 
 	if s, err := schedule(queue, hosts, cpuCommit); err == nil {
-		t.Error("scheduler did the impossible: %v", s)
+		t.Errorf("scheduler did the impossible: %v", s)
 	}
 }
 
