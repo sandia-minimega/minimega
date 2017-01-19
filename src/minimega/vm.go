@@ -90,6 +90,8 @@ type VM interface {
 	ClearQos(uint) error
 	ClearAllQos() error
 
+	ProcStats() (map[int]*ProcStats, error)
+
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM
 }
@@ -122,7 +124,7 @@ var vmInfo = []string{
 	// generic fields
 	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
 	// network fields
-	"vlan", "bridge", "tap", "mac", "ip", "ip6", "bandwidth", "qos",
+	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
@@ -221,6 +223,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.ID = vm.ID
 	vm2.Name = vm.Name
 	vm2.Namespace = vm.Namespace
+	vm2.Host = vm.Host
 	vm2.State = vm.State
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
@@ -604,11 +607,6 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	case "ip6":
 		for _, v := range vm.Networks {
 			vals = append(vals, v.IP6)
-		}
-	case "bandwidth":
-		for _, v := range vm.Networks {
-			s := fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", v.RxRate, v.TxRate)
-			vals = append(vals, s)
 		}
 	case "qos":
 		for idx, v := range vm.Networks {

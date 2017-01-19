@@ -136,8 +136,6 @@ func readPacketXXX(r *bufio.Reader) (*gonetflow.Packet, error) {
 		// consume byte of padding
 		r.ReadByte()
 	}
-
-	return p, nil
 }
 
 func cat(fname string) error {

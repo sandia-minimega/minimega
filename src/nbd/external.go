@@ -8,33 +8,26 @@ import (
 	"fmt"
 	log "minilog"
 	"os/exec"
+	"time"
 )
 
-var externalProcesses = map[string]string{
-	"qemu-nbd": "qemu-nbd",
-	"lsmod":    "lsmod",
-	"modprobe": "modprobe",
+var ExternalDependencies = []string{
+	"lsmod",
+	"modprobe",
+	"qemu-nbd",
 }
 
-// check for the presence of each of the external processes we may call,
-// and error if any aren't in our path
-func externalCheck() {
-	for _, i := range externalProcesses {
-		path, err := exec.LookPath(i)
-		if err != nil {
-			e := fmt.Sprintf("%v not found", i)
-			log.Errorln(e)
-		} else {
-			log.Info("%v found at: %v", i, path)
-		}
+// processWrapper executes the given arg list and returns a combined
+// stdout/stderr and any errors. processWrapper blocks until the process exits.
+func processWrapper(args ...string) (string, error) {
+	if len(args) == 0 {
+		return "", fmt.Errorf("empty argument list")
 	}
-}
 
-func process(p string) string {
-	path, err := exec.LookPath(externalProcesses[p])
-	if err != nil {
-		log.Errorln(err)
-		return ""
-	}
-	return path
+	start := time.Now()
+	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	stop := time.Now()
+	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
+
+	return string(out), err
 }

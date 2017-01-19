@@ -409,8 +409,7 @@ func containerShim() {
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
 	if vmHostname != "" {
-		_, err := processWrapper("hostname", vmHostname)
-		if err != nil {
+		if err := syscall.Sethostname([]byte(vmHostname)); err != nil {
 			log.Fatal("set hostname: %v", err)
 		}
 	}
@@ -1222,6 +1221,33 @@ func (vm *ContainerVM) thaw() error {
 	return nil
 }
 
+func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
+	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "cgroup.procs")
+	b, err := ioutil.ReadFile(freezer)
+	if err != nil {
+		return nil, err
+	}
+
+	res := map[int]*ProcStats{}
+
+	for i, v := range strings.Fields(string(b)) {
+		if i >= ProcLimit {
+			break
+		}
+
+		// should always be an int...
+		if i, err := strconv.Atoi(v); err == nil {
+			// supress errors... processes may have exited between reading
+			// tasks and trying to read stats
+			if p, err := GetProcStats(i); err == nil {
+				res[i] = p
+			}
+		}
+	}
+
+	return res, nil
+}
+
 func containerSetCapabilities() error {
 	c := new(cap)
 	c.header.version = CAPV3
@@ -1341,7 +1367,7 @@ func containerPopulateCgroups(vmID, vmMemory int) error {
 
 	// associate the pid with these permissions
 	for _, cgroup := range cgroups {
-		tasks := filepath.Join(cgroup, "tasks")
+		tasks := filepath.Join(cgroup, "cgroup.procs")
 		if err := ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644); err != nil {
 			return err
 		}
@@ -1563,8 +1589,7 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 			return nil
 		}
 
-		pids := strings.Fields(string(d))
-		for _, pid := range pids {
+		for _, pid := range strings.Fields(string(d)) {
 			log.Debug("found pid: %v", pid)
 
 			// attempt to unfreeze the cgroup first, ignoring any
@@ -1578,8 +1603,12 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 				log.Debugln(err)
 			}
 
-			log.Infoln("killing process:", pid)
-			processWrapper("kill", "-9", pid)
+			if i, err := strconv.Atoi(pid); err == nil {
+				log.Info("killing process: %v", i)
+				if err := syscall.Kill(i, syscall.SIGKILL); err != nil {
+					log.Error("unable to kill %v: %v", i, err)
+				}
+			}
 		}
 	}
 

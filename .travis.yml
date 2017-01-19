@@ -1,0 +1,16 @@
+dist: trusty
+sudo: false
+language: go
+go:
+  - 1.7.3
+addons:
+  apt:
+    packages:
+    - libpcap-dev
+    - libreadline-dev
+install: true
+script:
+  - ./check.bash
+  - ./build.bash
+  - ./test.bash
+  - ./doc.bash

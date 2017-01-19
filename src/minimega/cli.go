@@ -230,6 +230,37 @@ func wrapSuggest(fn func(string, string) []string) minicli.SuggestFunc {
 	}
 }
 
+func defaultCompleter(line string) []string {
+	// last term on the line is complete so there's nothing to complete
+	if strings.HasSuffix(line, " ") {
+		return nil
+	}
+
+	f := strings.Fields(line)
+	if len(f) == 0 {
+		return nil
+	}
+
+	// handle that begin with a '$' and complete based on the
+	// available env variables
+	if strings.HasPrefix(f[len(f)-1], "$") {
+		prefix := strings.TrimPrefix(f[len(f)-1], "$")
+
+		var res []string
+
+		for _, env := range os.Environ() {
+			k := strings.SplitN(env, "=", 2)[0]
+			if strings.HasPrefix(k, prefix) {
+				res = append(res, k)
+			}
+		}
+
+		return res
+	}
+
+	return iomCompleter(f[len(f)-1])
+}
+
 // forward receives minicli.Responses from in and forwards them to out.
 func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	for v := range in {
@@ -337,7 +368,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*mi
 
 // local command line interface, wrapping readline
 func cliLocal() {
-	goreadline.FilenameCompleter = iomCompleter
+	goreadline.DefaultCompleter = defaultCompleter
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt)

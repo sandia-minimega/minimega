@@ -609,7 +609,11 @@ func (vm *KvmVM) launch() error {
 
 	path := vm.KVMConfig.QemuPath
 	if path == "" {
-		path = process("qemu")
+		p, err := process("kvm")
+		if err != nil {
+			return err
+		}
+		path = p
 	}
 
 	cmd := &exec.Cmd{
@@ -722,6 +726,15 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	return nil
 }
 
+func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
+	p, err := GetProcStats(vm.pid)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[int]*ProcStats{vm.pid: p}, nil
+}
+
 // qemuArgs build the horribly long qemu argument string
 //
 // Note: it would be cleaner if this was a method for KvmVM rather than
@@ -758,7 +771,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
 
 	args = append(args, "-vga")
-	args = append(args, "cirrus")
+	args = append(args, "std")
 
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
@@ -945,8 +958,7 @@ func isNetworkDriver(driver string) bool {
 	KVMNetworkDrivers.Do(func() {
 		drivers := []string{}
 
-		cmd := exec.Command(process("qemu"), "-device", "help")
-		out, err := cmd.CombinedOutput()
+		out, err := processWrapper("kvm", "-device", "help")
 		if err != nil {
 			log.Error("unable to determine kvm network drivers -- %v", err)
 			return
@@ -954,7 +966,7 @@ func isNetworkDriver(driver string) bool {
 
 		var foundHeader bool
 
-		scanner := bufio.NewScanner(bytes.NewBuffer(out))
+		scanner := bufio.NewScanner(strings.NewReader(out))
 		for scanner.Scan() {
 			line := scanner.Text()
 			if !foundHeader && strings.Contains(line, "Network devices:") {

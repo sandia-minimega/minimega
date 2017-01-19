@@ -16,13 +16,14 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"strings"
 	"syscall"
 )
 
 // Request sent to minimega -- ethier a command to run or a string to return
 // suggestions for
 type Request struct {
-	*minicli.Command
+	Command string
 	Suggest string
 }
 
@@ -71,8 +72,8 @@ func (mm *Conn) Close() error {
 }
 
 // Run a command through a JSON pipe, hand back channel for responses.
-func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
-	if cmd == nil {
+func (mm *Conn) Run(cmd string) chan *Response {
+	if cmd == "" {
 		// Language spec: "Receiving from a nil channel blocks forever."
 		// Instead, make and immediately close the channel so that range
 		// doesn't block and receives no values.
@@ -117,7 +118,7 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 }
 
 // Run a command and print the response.
-func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
+func (mm *Conn) RunAndPrint(cmd string, page bool) {
 	for resp := range mm.Run(cmd) {
 		if page && mm.Pager != nil {
 			mm.Pager.Page(resp.Rendered)
@@ -125,9 +126,8 @@ func (mm *Conn) RunAndPrint(cmd *minicli.Command, page bool) {
 			fmt.Println(resp.Rendered)
 		}
 
-		errs := resp.Resp.Error()
-		if errs != "" {
-			fmt.Fprintln(os.Stderr, errs)
+		if err := resp.Resp.Error(); err != "" {
+			fmt.Fprintln(os.Stderr, err)
 		}
 	}
 }
@@ -175,48 +175,34 @@ func (mm *Conn) Attach() {
 	fmt.Println()
 	defer goreadline.Rlcleanup()
 
-	var exitNext bool
+	var quit bool
 	for {
 		prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
 		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
 			return
 		}
-		command := string(line)
-		log.Debug("got from stdin: `%s`", line)
+		cmd := strings.TrimSpace(string(line))
+		log.Debug("got from stdin: `%s`", cmd)
 
-		// HAX: Shortcut some commands without using minicli
-		if command == "disconnect" {
+		// don't bother sending blank lines to minimega
+		if cmd == "" {
+			continue
+		}
+
+		// HAX: Shortcut some commands without sending them to minimega
+		if cmd == "disconnect" {
 			log.Debugln("disconnecting")
 			return
-		} else if command == "quit" {
-			if !exitNext {
-				fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
-				fmt.Println("If you really want to stop the minimega daemon, enter 'quit' again")
-				exitNext = true
-				continue
-			}
-		}
-
-		exitNext = false
-
-		cmd, err := minicli.Compile(command)
-		if err != nil {
-			log.Error("%v", err)
-			//fmt.Println("closest match: TODO")
+		} else if cmd == "quit" && !quit {
+			fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
+			fmt.Println("If you really want to stop the minimega daemon, enter 'quit' again")
+			quit = true
 			continue
 		}
 
-		// No command was returned, must have been a blank line or a comment
-		// line. Either way, don't try to run a nil command.
-		if cmd == nil {
-			continue
-		}
+		quit = false
 
 		mm.RunAndPrint(cmd, true)
-
-		if command == "quit" {
-			return
-		}
 	}
 }

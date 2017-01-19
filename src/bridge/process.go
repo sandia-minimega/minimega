@@ -11,9 +11,15 @@ import (
 	"time"
 )
 
+var ExternalDependencies = []string{
+	"ip",
+	"ovs-vsctl",
+	"ovs-ofctl",
+	"tc",
+}
+
 // processWrapper executes the given arg list and returns a combined
 // stdout/stderr and any errors. processWrapper blocks until the process exits.
-// Users that need runtime control of processes should use os/exec directly.
 func processWrapper(args ...string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("empty argument list")
@@ -23,6 +29,7 @@ func processWrapper(args ...string) (string, error) {
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	stop := time.Now()
 	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
+
 	return string(out), err
 }
 
