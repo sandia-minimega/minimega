@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -44,6 +45,7 @@ type VM interface {
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
+	GetStateStart() time.Time // GetStateStart returns the time when the VM entered the current state
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
@@ -106,9 +108,10 @@ type BaseVM struct {
 	Namespace string // namespace this VM belongs to
 	Host      string // hostname where this VM is running
 
-	State    VMState
-	Type     VMType
-	ActiveCC bool // set when CC is active
+	State      VMState
+	StateStart time.Time
+	Type       VMType
+	ActiveCC   bool // set when CC is active
 
 	lock sync.Mutex // synchronizes changes to this VM
 
@@ -120,7 +123,7 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "statetime", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
@@ -204,6 +207,7 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
+	vm.StateStart = time.Now()
 
 	// New VMs are returned pre-locked. This ensures that the first operation
 	// called on a new VM is Launch.
@@ -223,6 +227,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.Namespace = vm.Namespace
 	vm2.Host = vm.Host
 	vm2.State = vm.State
+	vm2.StateStart = vm.StateStart
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
@@ -300,6 +305,14 @@ func (vm *BaseVM) GetState() VMState {
 	defer vm.lock.Unlock()
 
 	return vm.State
+}
+
+func (vm *BaseVM) GetStateStart() time.Time {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	log.Info("Returning StateStart: ", vm.StateStart.String())
+	return vm.StateStart
 }
 
 func (vm *BaseVM) GetType() VMType {
@@ -568,6 +581,8 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
+	case "statetime":
+		return time.Since(vm.StateStart).String(), nil
 	case "type":
 		return vm.Type.String(), nil
 	case "vlan":
@@ -620,8 +635,10 @@ func (vm *BaseVM) Info(field string) (string, error) {
 // setState updates the vm state, and write the state to file. Assumes that the
 // caller has locked the vm.
 func (vm *BaseVM) setState(s VMState) {
-	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
+	now := time.Now()
+	log.Debug("updating vm %v state: %v -> %v, at time %s", vm.ID, vm.State, s, now)
 	vm.State = s
+	vm.StateStart = now
 
 	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
 	if err != nil {
