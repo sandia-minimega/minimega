@@ -83,6 +83,8 @@ func (b Bridges) newBridge(name string) error {
 		taps:     make(map[string]*Tap),
 		trunks:   make(map[string]bool),
 		tunnels:  make(map[string]bool),
+		mirrors:  make(map[string]bool),
+		captures: make(map[int]capture),
 		nameChan: b.nameChan,
 	}
 
@@ -204,7 +206,6 @@ func (b Bridges) Info() []BridgeInfo {
 		info := BridgeInfo{
 			Name:     br.Name,
 			PreExist: br.preExist,
-			Mirror:   br.mirror,
 		}
 
 		// Populate trunks
@@ -218,6 +219,12 @@ func (b Bridges) Info() []BridgeInfo {
 			info.Tunnels = append(info.Tunnels, k)
 		}
 		sort.Strings(info.Tunnels)
+
+		// Populate mirrors
+		for k := range br.mirrors {
+			info.Mirrors = append(info.Mirrors, k)
+		}
+		sort.Strings(info.Mirrors)
 
 		// Populate VLANs
 		vlans := map[int]bool{}

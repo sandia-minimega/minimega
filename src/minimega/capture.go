@@ -8,14 +8,12 @@ import (
 	"errors"
 	"fmt"
 	"gonetflow"
-	"gopcap"
 	log "minilog"
 	"path/filepath"
 	"strings"
 )
 
 type capture struct {
-	ID        int
 	Type      string
 	Bridge    string
 	VM        VM
@@ -23,8 +21,9 @@ type capture struct {
 	Path      string
 	Mode      string
 	Compress  bool
-	tap       string
-	pcap      *gopcap.Pcap
+	Tap       string
+
+	ID int // ID returned by bridge, not to be confused with captureID
 }
 
 var (
@@ -73,7 +72,7 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 
 	var foundOne bool
 
-	for _, v := range captureEntries {
+	for id, v := range captureEntries {
 		// should match current namespace
 		if !v.InNamespace(namespace) {
 			continue
@@ -107,6 +106,8 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 		if err := v.Stop(); err != nil {
 			return err
 		}
+
+		delete(captureEntries, id)
 	}
 
 	// we made it through the loop and didn't find what we were trying to clear
@@ -126,46 +127,44 @@ func clearCapture(captureType, bridgeOrVM, name string) (err error) {
 
 // startCapturePcap starts a new capture for a specified interface on a VM,
 // writing the packets to the specified filename in PCAP format.
-func startCapturePcap(v string, iface int, filename string) error {
+func startCapturePcap(v string, ifnum int, fname string) error {
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(fname) {
+		fname = filepath.Join(*f_iomBase, fname)
+	}
+
 	// get the vm
 	vm := vms.FindVM(v)
 	if vm == nil {
 		return vmNotFound(v)
 	}
 
-	config := getConfig(vm)
+	nics := vm.GetNetworks()
 
-	if len(config.Networks) <= iface {
-		return fmt.Errorf("no such interface %v", iface)
+	if len(nics) <= ifnum {
+		return fmt.Errorf("no such interface %v", ifnum)
 	}
 
-	bridge := config.Networks[iface].Bridge
-	tap := config.Networks[iface].Tap
-
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	// attempt to start pcap on the bridge
-	p, err := gopcap.NewPCAP(tap, filename)
+	// create the bridge if necessary
+	br, err := getBridge(nics[ifnum].Bridge)
 	if err != nil {
 		return err
 	}
 
-	// success! add it to the list
-	ce := &capture{
-		ID:        captureID.Next(),
-		Type:      "pcap",
-		Bridge:    bridge,
-		VM:        vm,
-		Interface: iface,
-		Path:      filename,
-		Mode:      "N/A",
-		pcap:      p,
+	id, err := br.CaptureTap(nics[ifnum].Tap, fname, "")
+	if err != nil {
+		return err
 	}
 
-	captureEntries[ce.ID] = ce
+	captureEntries[captureID.Next()] = &capture{
+		Type:      "pcap",
+		Bridge:    nics[ifnum].Bridge,
+		VM:        vm,
+		Interface: ifnum,
+		Path:      fname,
+		Mode:      "N/A",
+		ID:        id,
+	}
 
 	return nil
 }
@@ -173,41 +172,30 @@ func startCapturePcap(v string, iface int, filename string) error {
 // startBridgeCapturePcap starts a new capture for all the traffic on the
 // specified bridge, writing all packets to the specified filename in PCAP
 // format.
-func startBridgeCapturePcap(b, filename string) error {
+func startBridgeCapturePcap(b, fname string) error {
 	// create the bridge if necessary
 	br, err := getBridge(b)
 	if err != nil {
 		return err
 	}
 
-	tap, err := br.CreateMirror()
-	if err != nil {
-		return err
-	}
-
 	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
+	if !filepath.IsAbs(fname) {
+		fname = filepath.Join(*f_iomBase, fname)
 	}
 
-	// attempt to start pcap on the mirrored tap
-	p, err := gopcap.NewPCAP(tap, filename)
+	id, err := br.Capture(fname, "")
 	if err != nil {
 		return err
 	}
 
-	// success! add it to the list
-	ce := &capture{
-		ID:     captureID.Next(),
+	captureEntries[captureID.Next()] = &capture{
 		Type:   "pcap",
 		Bridge: br.Name,
-		Path:   filename,
+		Path:   fname,
 		Mode:   "N/A",
-		pcap:   p,
-		tap:    tap,
+		ID:     id,
 	}
-
-	captureEntries[ce.ID] = ce
 
 	return nil
 }
@@ -239,16 +227,13 @@ func startCaptureNetflowFile(bridge, filename string, ascii, compress bool) erro
 		return err
 	}
 
-	ce := &capture{
-		ID:       captureID.Next(),
+	captureEntries[captureID.Next()] = &capture{
 		Type:     "netflow",
 		Bridge:   bridge,
 		Path:     filename,
 		Mode:     modeStr,
 		Compress: compress,
 	}
-
-	captureEntries[ce.ID] = ce
 
 	return nil
 }
@@ -275,15 +260,12 @@ func startCaptureNetflowSocket(bridge, transport, host string, ascii bool) error
 		return err
 	}
 
-	ce := &capture{
-		ID:     captureID.Next(),
+	captureEntries[captureID.Next()] = &capture{
 		Type:   "netflow",
 		Bridge: bridge,
 		Path:   fmt.Sprintf("%v:%v", transport, host),
 		Mode:   modeStr,
 	}
-
-	captureEntries[ce.ID] = ce
 
 	return nil
 }
@@ -294,28 +276,12 @@ func stopPcapCapture(entry *capture) error {
 		return errors.New("called stop pcap capture on capture of wrong type")
 	}
 
-	delete(captureEntries, entry.ID)
-
-	if entry.pcap == nil {
-		return fmt.Errorf("capture %v has no valid pcap interface", entry.ID)
+	br, err := getBridge(entry.Bridge)
+	if err != nil {
+		return err
 	}
 
-	// Do this from a separate goroutine to avoid a deadlock (issue #765). The
-	// capture should end when we destroy the mirror.
-	//
-	// TODO: fix this properly.
-	go entry.pcap.Close()
-
-	if entry.tap != "" && entry.Bridge != "" {
-		br, err := getBridge(entry.Bridge)
-		if err != nil {
-			return err
-		}
-
-		return br.DestroyMirror()
-	}
-
-	return nil
+	return br.StopCapture(entry.ID)
 }
 
 // stopNetflowCapture stops the specified netflow capture.
@@ -323,8 +289,6 @@ func stopNetflowCapture(entry *capture) error {
 	if entry.Type != "netflow" {
 		return errors.New("called stop netflow capture on capture of wrong type")
 	}
-
-	delete(captureEntries, entry.ID)
 
 	// get the netflow object associated with this bridge
 	nf, err := getNetflowFromBridge(entry.Bridge)
