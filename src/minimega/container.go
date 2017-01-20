@@ -376,7 +376,7 @@ func containerTeardown() {
 //	11:  init args
 func containerShim() {
 	args := flag.Args()
-	if flag.NArg() < 11 { // 10 because init args can be nil
+	if flag.NArg() < 11 { // 11 because init args can be nil
 		os.Exit(1)
 	}
 
@@ -1367,7 +1367,14 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 		}
 	}
 
-	// vcpus
+	// Set CPU bandwidth control for the cgroup to emulate the desired number
+	// of CPUs. This limits the tasks to a total run-time (quota) over a given
+	// period. To emulate a given number of VCPUs, we compute the quota by
+	// simply multipling the period by the number of VCPUs.  Both are then
+	// converted to microseconds. Our default period is one second which allows
+	// a high burst capacity. Based on:
+	//
+	// https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt
 	period := time.Second.Nanoseconds() / 1000
 	quota := int64(vcpus) * time.Second.Nanoseconds() / 1000
 	cfsPeriod := filepath.Join(cgroupCPU, "cpu.cfs_period_us")
