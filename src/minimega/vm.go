@@ -635,10 +635,9 @@ func (vm *BaseVM) Info(field string) (string, error) {
 // setState updates the vm state, and write the state to file. Assumes that the
 // caller has locked the vm.
 func (vm *BaseVM) setState(s VMState) {
-	now := time.Now()
-	log.Debug("updating vm %v state: %v -> %v, at time %s", vm.ID, vm.State, s, now)
+	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
-	vm.StateStart = now
+	vm.StateStart = time.Now()
 
 	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
 	if err != nil {
