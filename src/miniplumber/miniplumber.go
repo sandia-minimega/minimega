@@ -33,7 +33,13 @@ type Plumber struct {
 type Pipe struct {
 	Name    string
 	Mode    int
-	readers []chan string
+	readers []*Reader
+}
+
+type Reader struct {
+	C    chan string
+	done chan struct{}
+	once sync.Once
 }
 
 type pipeline struct {
@@ -44,6 +50,12 @@ type pipeline struct {
 }
 
 type Message struct {
+}
+
+func (r *Reader) Close() {
+	r.once.Do(func() {
+		close(r.done)
+	})
 }
 
 // New returns a new Plumber object over meshage node n
@@ -111,7 +123,7 @@ func (p *Plumber) PipeDelete(pipe string) error {
 	if pp, ok := p.pipes[pipe]; ok {
 		// kill all of the readers
 		for _, c := range pp.readers {
-			close(c)
+			c.Close()
 		}
 		delete(p.pipes, pipe)
 
@@ -139,19 +151,22 @@ func (p *Plumber) PipeDeleteAll() error {
 // 	return nil, nil
 // }
 
-func (p *Plumber) NewReader(pipe string) <-chan string {
-	c := make(chan string)
+func (p *Plumber) NewReader(pipe string) *Reader {
+	r := &Reader{
+		C:    make(chan string),
+		done: make(chan struct{}),
+	}
 
 	if pp, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
 			Name:    pipe,
-			readers: []chan string{c},
+			readers: []*Reader{r},
 		}
 	} else {
-		pp.readers = append(pp.readers, c)
+		pp.readers = append(pp.readers, r)
 	}
 
-	return c
+	return r
 }
 
 func (p *Plumber) NewWriter(pipe string) chan<- string {
@@ -193,21 +208,28 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 	}()
 
 	var b <-chan string
-	for _, e := range pl.production {
+	for i, e := range pl.production {
 		log.Debug("starting pipeline production element: %v", e)
 
 		// start a process if it looks like a process, otherwise create
 		// a pipe
 
 		// looks like a named pipe
-		in := p.NewReader(e)
-		out := p.NewWriter(e)
-		b = pl.pipe(e, in, out, b)
+		var in *Reader
+		if i != len(pl.production)-1 {
+			in = p.NewReader(e)
+		}
+
+		var out chan<- string
+		if i != 0 {
+			out = p.NewWriter(e)
+		}
+		b = pl.pipe(in, out, b)
 	}
 }
 
-func (pl *pipeline) pipe(name string, pin <-chan string, pout chan<- string, in <-chan string) <-chan string {
-	out := make(chan string)
+func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-chan string {
+	var out chan string
 
 	if in != nil {
 		go func() {
@@ -220,29 +242,36 @@ func (pl *pipeline) pipe(name string, pin <-chan string, pout chan<- string, in 
 					select {
 					case pout <- v:
 					case <-pl.done:
-						break
+						return
 					}
 				case <-pl.done:
-					break
+					return
 				}
 			}
-			log.Debug("closing input side of production element: %v: %v", pl.name, name)
 		}()
 	}
 
-	go func() {
-		defer close(out)
-		defer pl.cancel()
+	if pin != nil {
+		out = make(chan string)
+		go func() {
+			defer close(out)
+			defer pin.Close()
+			defer pl.cancel()
 
-		for {
-			select {
-			case out <- <-pin:
-			case <-pl.done:
-				break
+			for {
+				select {
+				case v := <-pin.C:
+					select {
+					case out <- v:
+					case <-pl.done:
+						return
+					}
+				case <-pl.done:
+					return
+				}
 			}
-		}
-		log.Debug("closing output side of production element: %v: %v", pl.name, name)
-	}()
+		}()
+	}
 
 	return out
 }
@@ -255,13 +284,12 @@ func (pl *pipeline) cancel() {
 }
 
 func (p *Pipe) write(value string) {
-	defer func() {
-		if recover() != nil {
-			log.Error("pipeline closed during write: %v", value)
+	for i, c := range p.readers {
+		select {
+		case c.C <- value:
+		case <-c.done:
+			// found a dead reader, get rid of it
+			p.readers = append(p.readers[:i], p.readers[i+1:]...)
 		}
-	}()
-
-	for _, c := range p.readers {
-		c <- value
 	}
 }
