@@ -45,7 +45,7 @@ type VM interface {
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
-	GetStateStart() time.Time // GetStateStart returns the time when the VM entered the current state
+	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM entered the current state
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
@@ -109,7 +109,7 @@ type BaseVM struct {
 	Host      string // hostname where this VM is running
 
 	State      VMState
-	StateStart time.Time
+	LaunchTime time.Time
 	Type       VMType
 	ActiveCC   bool // set when CC is active
 
@@ -207,7 +207,7 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
-	vm.StateStart = time.Now()
+	vm.LaunchTime = time.Now()
 
 	// New VMs are returned pre-locked. This ensures that the first operation
 	// called on a new VM is Launch.
@@ -227,7 +227,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.Namespace = vm.Namespace
 	vm2.Host = vm.Host
 	vm2.State = vm.State
-	vm2.StateStart = vm.StateStart
+	vm2.LaunchTime = vm.LaunchTime
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
@@ -307,11 +307,11 @@ func (vm *BaseVM) GetState() VMState {
 	return vm.State
 }
 
-func (vm *BaseVM) GetStateStart() time.Time {
+func (vm *BaseVM) GetLaunchTime() time.Time {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	return vm.StateStart
+	return vm.LaunchTime
 }
 
 func (vm *BaseVM) GetType() VMType {
@@ -581,11 +581,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	case "state":
 		return vm.State.String(), nil
 	case "uptime":
-		if vm.State == VM_RUNNING {
-			return time.Since(vm.StateStart).String(), nil
-		} else {
-			return time.Duration(0).String(), nil
-		}
+		return time.Since(vm.LaunchTime).String(), nil
 	case "type":
 		return vm.Type.String(), nil
 	case "vlan":
@@ -640,7 +636,6 @@ func (vm *BaseVM) Info(field string) (string, error) {
 func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
-	vm.StateStart = time.Now()
 
 	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
 	if err != nil {
