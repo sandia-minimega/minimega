@@ -60,6 +60,44 @@ func commandSocketHandle(c net.Conn) {
 			break
 		}
 
+		// check the plumbing
+		if r.PlumbPipe != "" {
+			if r.PlumbValue != "" { // write
+				resp := miniclient.Response{}
+
+				err = plumber.Write(r.PlumbPipe, r.PlumbValue)
+				if err != nil {
+					resp.Rendered = err.Error()
+				}
+
+				err = enc.Encode(&resp)
+				break
+			} else { // read
+				var p chan string
+				p, err = plumber.NewReader(r.PlumbPipe)
+				if err != nil {
+					break
+				}
+				for v := range p {
+					r := miniclient.Response{
+						More:     true,
+						Rendered: v,
+					}
+					err = enc.Encode(&r)
+					if err != nil {
+						break
+					}
+				}
+				if err == nil {
+					r := miniclient.Response{
+						More: false,
+					}
+					err = enc.Encode(&r)
+				}
+				break
+			}
+		}
+
 		// should have a command or suggestion but not both
 		if (r.Command == "") == (r.Suggest == "") {
 			resp := &minicli.Response{

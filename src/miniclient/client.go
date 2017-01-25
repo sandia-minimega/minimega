@@ -23,8 +23,10 @@ import (
 // Request sent to minimega -- ethier a command to run or a string to return
 // suggestions for
 type Request struct {
-	Command string
-	Suggest string
+	Command    string
+	Suggest    string
+	PlumbPipe  string
+	PlumbValue string
 }
 
 type Response struct {
@@ -71,6 +73,23 @@ func (mm *Conn) Close() error {
 	return mm.conn.Close()
 }
 
+// Read or write to a named pipe.
+func (mm *Conn) Pipe(pipe, value string) chan *Response {
+	err := mm.enc.Encode(Request{
+		PlumbPipe:  pipe,
+		PlumbValue: value,
+	})
+	if err != nil {
+		log.Fatal("local pipe gob encode: %v", err)
+	}
+
+	respChan := make(chan *Response)
+
+	go mm.responseHandler(respChan)
+
+	return respChan
+}
+
 // Run a command through a JSON pipe, hand back channel for responses.
 func (mm *Conn) Run(cmd string) chan *Response {
 	if cmd == "" {
@@ -91,30 +110,32 @@ func (mm *Conn) Run(cmd string) chan *Response {
 
 	respChan := make(chan *Response)
 
-	go func() {
-		defer close(respChan)
-
-		for {
-			var r Response
-			if err := mm.dec.Decode(&r); err != nil {
-				if err == io.EOF {
-					log.Fatalln("server disconnected")
-				}
-
-				log.Fatal("local command gob decode: %v", err)
-			}
-
-			respChan <- &r
-			if !r.More {
-				log.Debugln("got last message")
-				break
-			} else {
-				log.Debugln("expecting more data")
-			}
-		}
-	}()
+	go mm.responseHandler(respChan)
 
 	return respChan
+}
+
+func (mm *Conn) responseHandler(respChan chan *Response) {
+	defer close(respChan)
+
+	for {
+		var r Response
+		if err := mm.dec.Decode(&r); err != nil {
+			if err == io.EOF {
+				log.Fatalln("server disconnected")
+			}
+
+			log.Fatal("local gob decode: %v", err)
+		}
+
+		respChan <- &r
+		if !r.More {
+			log.Debugln("got last message")
+			break
+		} else {
+			log.Debugln("expecting more data")
+		}
+	}
 }
 
 // Run a command and print the response.

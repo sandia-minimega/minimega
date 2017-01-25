@@ -48,6 +48,7 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
+	f_pipe       = flag.Bool("pipe", false, "read/write to or from a named pipe")
 
 	vms = VMs{}
 
@@ -104,6 +105,12 @@ func main() {
 	if *f_version {
 		fmt.Println("minimega", version.Revision, version.Date)
 		fmt.Println(version.Copyright)
+		os.Exit(0)
+	}
+
+	// see pipeMMHandler in plumber.go
+	if *f_pipe {
+		pipeMMHandler()
 		os.Exit(0)
 	}
 
@@ -199,6 +206,7 @@ func main() {
 	ccStart()
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
+	plumberStart(meshageNode)
 
 	// should be created after meshageStart returns
 	log.Info("change working directory to: %v", *f_iomBase)
