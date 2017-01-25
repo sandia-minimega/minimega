@@ -32,10 +32,11 @@ const (
 )
 
 var (
-	useTLS	= false
-	tlsAuth = false
-	connected = false
-	auth = false
+	goftpServer     *server.Server
+	useTLS		= false
+	tlsAuth		= false
+	connected	= false
+	auth		= false
 )
 
 type FTPAuth struct {}
@@ -77,7 +78,7 @@ func ftpClient() {
 				log.Errorln(err)
 			} else {
 				auth = true
-				log.Debug("Logged in as", USER)
+				log.Debug("Logged in as %v", USER)
 		        }
 			continue
 		}
@@ -121,28 +122,28 @@ func ftpClient() {
 				if curpath, err = ftp.Pwd(); err != nil {
 					log.Errorln(err)
 				}
-				log.Debug("Current path:", curpath)
+				log.Debug("Current path: %v", curpath)
 			case 1:
 				// get system type of remote host
 				var syst string
 				if syst, err = ftp.Syst(); err != nil {
 					log.Errorln(err)
 				}
-				log.Debug("System:", syst)
+				log.Debug("System: %v", syst)
 			case 2:
 				// Get the filesize of the protonuke binary
 				var size int
 				if size, err = ftp.Size("/tmp/ftpimage"); err != nil {
-					log.Errorln("Size error:",err)
+					log.Errorln(err)
 				}
-				log.Debug("ftpimage file size:", size)
+				log.Debug("ftpimage file size: %v", size)
 			case 3:
 				// get directory listing
 				var files []string
 				if files, err = ftp.List("/tmp"); err != nil {
 					log.Errorln(err)
 				}
-				log.Debug("Directory listing:", files)
+				log.Debug("Directory listing: %v", files)
 			case 4:
 				// request file transfer
 				var s string
@@ -152,14 +153,20 @@ func ftpClient() {
 					return err
 				}
 				if s, err = ftp.Retr("/tmp/ftpimage", retrfunc); err != nil {
-					log.Errorln("Retr err:", err)
+					log.Errorln(err)
 				}
-				log.Debug("Retr:", s)
+				log.Debug("Retr: %v", s)
 			case 5:
 				// quit
 				ftpQuit(ftp)
 				log.Debug("Logged out")
 			}
+		}
+		// TODO: Make this more accurate
+		if useTLS {
+			ftpTLSReportChan <- 1
+		} else {
+			ftpReportChan <- 1
 		}
 	}
 }
@@ -230,10 +237,16 @@ func ftpServer() {
 		KeyFile:	"/tmp/ftpkey.pem",
 		ExplicitFTPS:   useTLS,
 	}
-	ftpServer := server.NewServer(opt)
+	goftpServer = server.NewServer(opt)
+
+	if useTLS {
+		go hitftpTLSCounter()
+	} else {
+		go hitftpCounter()
+	}
 
 	go func() {
-		err := ftpServer.ListenAndServe()
+		err := goftpServer.ListenAndServe()
 		if err != nil {
 			log.Error("Error starting server: ", err)
 		}
@@ -275,3 +288,16 @@ func ftpMakeTLSPem() {
 	}
 }
 
+func hitftpCounter() {
+	for {
+		c := <-goftpServer.FtpHitChan
+		ftpReportChan <- c
+	}
+}
+
+func hitftpTLSCounter() {
+	for {
+		c := <-goftpServer.FtpTLSHitChan
+		ftpTLSReportChan <- c
+	}
+}

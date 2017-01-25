@@ -14,12 +14,16 @@ import (
 
 var (
 	dnsReportChan     chan uint64
+	ftpReportChan     chan uint64
+	ftpTLSReportChan  chan uint64
 	httpReportChan    chan uint64
 	httpTLSReportChan chan uint64
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
 
 	dnsReportHits     uint64
+	ftpReportHits     uint64
+	ftpTLSReportHits  uint64
 	httpReportHits    uint64
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
@@ -28,6 +32,8 @@ var (
 
 func init() {
 	dnsReportChan = make(chan uint64, 1024)
+	ftpReportChan = make(chan uint64, 1024)
+	ftpTLSReportChan = make(chan uint64, 1024)
 	httpReportChan = make(chan uint64, 1024)
 	httpTLSReportChan = make(chan uint64, 1024)
 	sshReportChan = make(chan uint64, 1024)
@@ -38,6 +44,10 @@ func init() {
 			select {
 			case <-dnsReportChan:
 				dnsReportHits++
+			case <-ftpReportChan:
+				ftpReportHits++
+			case <-ftpTLSReportChan:
+				ftpTLSReportHits++
 			case <-httpReportChan:
 				httpReportHits++
 			case <-httpTLSReportChan:
@@ -55,6 +65,8 @@ func report(reportWait time.Duration) {
 	lastTime := time.Now()
 
 	lastDnsReportHits := dnsReportHits
+	lastftpReportHits := ftpReportHits
+	lastftpTLSReportHits := ftpTLSReportHits
 	lasthttpReportHits := httpReportHits
 	lasthttpTLSReportHits := httpTLSReportHits
 	lastsshReportBytes := sshReportBytes
@@ -66,10 +78,14 @@ func report(reportWait time.Duration) {
 		lastTime = time.Now()
 
 		edns := dnsReportHits - lastDnsReportHits
+		eftp := ftpReportHits - lastftpReportHits
+		eftptls := ftpTLSReportHits - lastftpTLSReportHits
 		ehttp := httpReportHits - lasthttpReportHits
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
 		esmtp := smtpReportMail - lastsmtpReportMail
+		lastftpReportHits = ftpReportHits
+		lastftpTLSReportHits = ftpTLSReportHits
 		lasthttpReportHits = httpReportHits
 		lasthttpTLSReportHits = httpTLSReportHits
 		lastsshReportBytes = sshReportBytes
@@ -83,6 +99,12 @@ func report(reportWait time.Duration) {
 
 		if *f_dns {
 			fmt.Fprintf(w, "dns\t%v\t%.01f hits/min\n", dnsReportHits, float64(edns)/elapsedTime.Minutes())
+		}
+		if *f_ftp {
+			fmt.Fprintf(w, "ftp\t%v\t%.01f hits/min\n", ftpReportHits, float64(eftp)/elapsedTime.Minutes())
+		}
+		if *f_ftps {
+			fmt.Fprintf(w, "ftps\t%v\t%.01f hits/min\n", ftpTLSReportHits, float64(eftptls)/elapsedTime.Minutes())
 		}
 		if *f_http {
 			fmt.Fprintf(w, "http\t%v\t%.01f hits/min\n", httpReportHits, float64(ehttp)/elapsedTime.Minutes())

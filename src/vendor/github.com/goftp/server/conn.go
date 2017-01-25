@@ -147,6 +147,11 @@ func (conn *Conn) upgradeToTLS() error {
 // receiveLine accepts a single line FTP command and co-ordinates an
 // appropriate response.
 func (conn *Conn) receiveLine(line string) {
+	if conn.tls {
+		conn.server.FtpTLSHitChan <- 1
+	} else {
+		conn.server.FtpHitChan <- 1
+	}
 	command, param := conn.parseLine(line)
 	conn.logger.PrintCommand(command, param)
 	cmdObj := commands[strings.ToUpper(command)]
