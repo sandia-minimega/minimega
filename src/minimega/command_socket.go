@@ -74,6 +74,10 @@ func commandSocketHandle(c net.Conn) {
 				break
 			} else { // read
 				p := plumber.NewReader(r.PlumbPipe)
+
+				// BUG(fritz): this will leak the handler
+				// goroutine if the client exits before p
+				// closes
 				for v := range p {
 					r := miniclient.Response{
 						More:     true,
