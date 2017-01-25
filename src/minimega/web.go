@@ -336,13 +336,17 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 			"id":        vm.GetID(),
 			"name":      vm.GetName(),
 			"state":     vm.GetState().String(),
-			"statetime": time.Since(vm.GetStateStart()).String(),
+			"uptime":    time.Duration(0).String(),
 			"type":      vm.GetType().String(),
 			"activecc":  vm.HasCC(),
 			"vcpus":     config.VCPUs,
 			"memory":    config.Memory,
 			"snapshot":  config.Snapshot,
 			"uiud":      config.UUID,
+		}
+
+		if vm.GetState() == VM_RUNNING {
+			vmMap["uptime"] = time.Since(vm.GetStateStart()).String()
 		}
 
 		if vm, ok := vm.(*KvmVM); ok {

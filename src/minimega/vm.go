@@ -123,7 +123,7 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "statetime", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
@@ -581,8 +581,12 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
-	case "statetime":
-		return time.Since(vm.StateStart).String(), nil
+	case "uptime":
+		if vm.State == VM_RUNNING {
+			return time.Since(vm.StateStart).String(), nil
+		} else {
+			return time.Duration(0).String(), nil
+		}
 	case "type":
 		return vm.Type.String(), nil
 	case "vlan":

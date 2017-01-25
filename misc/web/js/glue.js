@@ -83,7 +83,7 @@ function initVMDataTable() {
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" },
-            { "title": "Time in State", "data": "statetime", "visible": false },
+            { "title": "Uptime", "data": "uptime", "visible": false },
             { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
             { "title": "VCPUs", "data": "vcpus" },

@@ -30,7 +30,7 @@ info include:
 - id*        : the VM ID, as an integer
 - name*      : the VM name, if it exists
 - state*     : one of (building, running, paused, quit, error)
-- statetime  : amount of time the VM has spent in the current state
+- uptime     : amount of time the VM has spent in the RUNNING state
 - namespace* : namespace the VM belongs to
 - type*      : one of (kvm, container)
 - uuid*      : QEMU system uuid
