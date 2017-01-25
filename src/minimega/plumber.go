@@ -18,12 +18,12 @@ var (
 	plumber *miniplumber.Plumber
 )
 
-var plumberCLIHandlers = []minicli.Handler{
+var plumbCLIHandlers = []minicli.Handler{
 	{ // plumb
 		HelpShort: "plumb external programs with minimega, VMs, and other external programs",
 		HelpLong:  ``,
 		Patterns: []string{
-			"plumb <src> <dst...>",
+			"plumb <src> <dst>...",
 		},
 		Call: wrapSimpleCLI(cliPlumb),
 	},
@@ -31,7 +31,7 @@ var plumberCLIHandlers = []minicli.Handler{
 		HelpShort: "reset plumber state",
 		HelpLong:  ``,
 		Patterns: []string{
-			"clear plumb [pipe]",
+			"clear plumb [pipeline]...",
 		},
 		Call: wrapBroadcastCLI(cliPlumbClear),
 	},
@@ -50,10 +50,10 @@ func cliPlumb(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
-	if pipe, ok := c.StringArgs["pipe"]; ok {
-		return plumber.Delete(pipe)
+	if pipeline, ok := c.ListArgs["pipeline"]; ok {
+		return plumber.PipelineDelete(pipeline...)
 	} else {
-		return plumber.DeleteAll()
+		return plumber.PipelineDeleteAll()
 	}
 }
 
@@ -69,7 +69,7 @@ func pipeMMHandler() {
 	log.Debug("got pipe: %v", pipe)
 
 	if flag.NArg() == 2 {
-		value = flag.Arg(0)
+		value = flag.Arg(1)
 		log.Debug("got pipe write value: %v", value)
 	}
 

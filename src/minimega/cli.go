@@ -69,6 +69,7 @@ func cliSetup() {
 	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
 	registerHandlers("web", webCLIHandlers)
+	registerHandlers("plumb", plumbCLIHandlers)
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking

@@ -73,11 +73,7 @@ func commandSocketHandle(c net.Conn) {
 				err = enc.Encode(&resp)
 				break
 			} else { // read
-				var p chan string
-				p, err = plumber.NewReader(r.PlumbPipe)
-				if err != nil {
-					break
-				}
+				p := plumber.NewReader(r.PlumbPipe)
 				for v := range p {
 					r := miniclient.Response{
 						More:     true,
