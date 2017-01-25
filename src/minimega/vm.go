@@ -311,7 +311,6 @@ func (vm *BaseVM) GetStateStart() time.Time {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	log.Info("Returning StateStart: ", vm.StateStart.String())
 	return vm.StateStart
 }
 
