@@ -851,7 +851,7 @@ func (cmd commandAuth) RequireAuth() bool {
 }
 
 func (cmd commandAuth) Execute(conn *Conn, param string) {
-	log.Println(param, conn)
+	//log.Println(param, conn)
 	if param == "TLS" && conn.tlsConfig != nil {
 		conn.writeMessage(234, "AUTH command OK")
 		err := conn.upgradeToTLS()
