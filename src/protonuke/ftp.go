@@ -66,6 +66,7 @@ func ftpClient() {
 			if ftp, err = goftp.Connect(host); err != nil {
 				log.Errorln(err)
 			} else {
+				ftp.HitCallback(updateHitCount)
 				connected = true
 				log.Debug("Connected to host")
 			}
@@ -162,12 +163,6 @@ func ftpClient() {
 				log.Debug("Logged out")
 			}
 		}
-		// TODO: Make this more accurate
-		if useTLS {
-			ftpTLSReportChan <- 1
-		} else {
-			ftpReportChan <- 1
-		}
 	}
 }
 
@@ -184,6 +179,14 @@ func ftpQuit(ftp *goftp.FTP) {
 	connected = false
 	auth = false
 	tlsAuth = false
+}
+
+func updateHitCount() {
+	if useTLS {
+		ftpTLSReportChan <- 1
+	} else {
+		ftpReportChan <- 1
+	}
 }
 
 
