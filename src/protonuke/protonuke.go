@@ -25,7 +25,6 @@ var (
 	f_httproot        = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip        = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_httpCookies     = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
-
 	f_ftp             = flag.Bool("ftp", false, "enable ftp service")
 	f_ftps            = flag.Bool("ftps", false, "enable ftp (TLS) service")
 	f_ftpport         = flag.Int("ftpport", 21, "port to use for ftp client and server")
@@ -48,7 +47,7 @@ var (
 
 	// See main for registering with flag
 	f_httpImageSize = DefaultFileSize
-	f_ftpFileSize = DefaultFTPFileSize
+	f_ftpFileSize   = DefaultFTPFileSize
 
 	hosts map[string]string
 	keys  []string
