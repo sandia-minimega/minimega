@@ -23,10 +23,9 @@ import (
 // Request sent to minimega -- ethier a command to run or a string to return
 // suggestions for
 type Request struct {
-	Command    string
-	Suggest    string
-	PlumbPipe  string
-	PlumbValue string
+	Command   string
+	Suggest   string
+	PlumbPipe string
 }
 
 type Response struct {
@@ -74,20 +73,52 @@ func (mm *Conn) Close() error {
 }
 
 // Read or write to a named pipe.
-func (mm *Conn) Pipe(pipe, value string) chan *Response {
+func (mm *Conn) Pipe(pipe string) (io.Reader, io.Writer) {
 	err := mm.enc.Encode(Request{
-		PlumbPipe:  pipe,
-		PlumbValue: value,
+		PlumbPipe: pipe,
 	})
 	if err != nil {
 		log.Fatal("local pipe gob encode: %v", err)
 	}
 
-	respChan := make(chan *Response)
+	var r, w bytes.Buffer
 
-	go mm.responseHandler(respChan)
+	go func() {
+		var buf string
+		for {
+			err := mm.dec.Decode(&buf)
+			if err == io.EOF {
+				log.Fatalln("server disconnected")
+			} else if err != nil {
+				log.Fatal("local command gob decode: %v", err)
+			}
 
-	return respChan
+			_, err := r.WriteString(buf)
+			if err != nil {
+				log.Fatalln("write: %v", err)
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			line, err := w.ReadString('\n')
+			if err == io.EOF {
+				// client closed stdin - exit silently
+				os.Exit()
+			}
+			if err != nil {
+				log.Fatalln("read: %v", err)
+			}
+
+			err = mm.enc.Encode(line)
+			if err != nil {
+				log.Fatalln("local command gob encode: %v", err)
+			}
+		}
+	}()
+
+	return r, w
 }
 
 // Run a command through a JSON pipe, hand back channel for responses.
@@ -110,32 +141,30 @@ func (mm *Conn) Run(cmd string) chan *Response {
 
 	respChan := make(chan *Response)
 
-	go mm.responseHandler(respChan)
+	go func() {
+		defer close(respChan)
 
-	return respChan
-}
+		for {
+			var r Response
+			if err := mm.dec.Decode(&r); err != nil {
+				if err == io.EOF {
+					log.Fatalln("server disconnected")
+				}
 
-func (mm *Conn) responseHandler(respChan chan *Response) {
-	defer close(respChan)
-
-	for {
-		var r Response
-		if err := mm.dec.Decode(&r); err != nil {
-			if err == io.EOF {
-				log.Fatalln("server disconnected")
+				log.Fatal("local command gob decode: %v", err)
 			}
 
-			log.Fatal("local gob decode: %v", err)
+			respChan <- &r
+			if !r.More {
+				log.Debugln("got last message")
+				break
+			} else {
+				log.Debugln("expecting more data")
+			}
 		}
+	}()
 
-		respChan <- &r
-		if !r.More {
-			log.Debugln("got last message")
-			break
-		} else {
-			log.Debugln("expecting more data")
-		}
-	}
+	return respChan
 }
 
 // Run a command and print the response.

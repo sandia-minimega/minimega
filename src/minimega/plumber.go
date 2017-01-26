@@ -7,6 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"meshage"
 	"minicli"
 	"miniclient"
@@ -58,20 +59,9 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func pipeMMHandler() {
-	var pipe string
-	var value string
+	pipe := *f_pipe
 
-	if flag.NArg() != 1 && flag.NArg() != 2 {
-		log.Fatalln("-pipe requires exactly one or two arguments")
-	}
-
-	pipe = flag.Arg(0)
 	log.Debug("got pipe: %v", pipe)
-
-	if flag.NArg() == 2 {
-		value = flag.Arg(1)
-		log.Debug("got pipe write value: %v", value)
-	}
 
 	// connect to the running minimega as a plumber
 	mm, err := miniclient.Dial(*f_base)
@@ -79,11 +69,14 @@ func pipeMMHandler() {
 		log.Fatalln(err)
 	}
 
-	for resp := range mm.Pipe(pipe, value) {
-		if resp.Rendered != "" {
-			fmt.Println(resp.Rendered)
-		}
-	}
+	r, w := mm.Pipe(pipe)
+
+	go func() {
+		io.Copy(os.Stdout, r)
+		os.Exit(0)
+	}()
+
+	io.Copy(w, os.Stdin)
 
 	return
 }

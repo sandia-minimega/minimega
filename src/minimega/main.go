@@ -48,7 +48,7 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
-	f_pipe       = flag.Bool("pipe", false, "read/write to or from a named pipe")
+	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
 
 	vms = VMs{}
 
