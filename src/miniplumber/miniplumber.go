@@ -28,6 +28,7 @@ type Plumber struct {
 	Messages  chan *meshage.Message // incoming messages from meshage
 	pipes     map[string]*Pipe
 	pipelines map[string]*pipeline
+	lock      sync.Mutex
 }
 
 type Pipe struct {
@@ -38,7 +39,7 @@ type Pipe struct {
 
 type Reader struct {
 	C    chan string
-	done chan struct{}
+	Done chan struct{}
 	once sync.Once
 }
 
@@ -54,7 +55,7 @@ type Message struct {
 
 func (r *Reader) Close() {
 	r.once.Do(func() {
-		close(r.done)
+		close(r.Done)
 	})
 }
 
@@ -73,6 +74,9 @@ func New(n *meshage.Node) *Plumber {
 }
 
 func (p *Plumber) Plumb(production ...string) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	// pipelines are unique by their string name, which may be an issue
 	// down the road
 	name := strings.Join(production, " ")
@@ -96,6 +100,9 @@ func (p *Plumber) Plumb(production ...string) error {
 // func (p *Plumber) Mode(pipe string, mode int) {}
 
 func (p *Plumber) PipelineDelete(production ...string) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	name := strings.Join(production, " ")
 	if pp, ok := p.pipelines[name]; !ok {
 		return fmt.Errorf("no such pipeline: %v", production)
@@ -106,10 +113,15 @@ func (p *Plumber) PipelineDelete(production ...string) error {
 }
 
 func (p *Plumber) PipelineDeleteAll() error {
+	p.lock.Lock()
+
 	var keys []string
 	for k, _ := range p.pipelines {
 		keys = append(keys, k)
 	}
+
+	p.lock.Unlock()
+
 	for _, k := range keys {
 		err := p.PipelineDelete(k)
 		if err != nil {
@@ -120,6 +132,9 @@ func (p *Plumber) PipelineDeleteAll() error {
 }
 
 func (p *Plumber) PipeDelete(pipe string) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if pp, ok := p.pipes[pipe]; ok {
 		// kill all of the readers
 		for _, c := range pp.readers {
@@ -134,10 +149,15 @@ func (p *Plumber) PipeDelete(pipe string) error {
 }
 
 func (p *Plumber) PipeDeleteAll() error {
+	p.lock.Lock()
+
 	var keys []string
 	for k, _ := range p.pipes {
 		keys = append(keys, k)
 	}
+
+	p.lock.Unlock()
+
 	for _, k := range keys {
 		err := p.PipeDelete(k)
 		if err != nil {
@@ -152,9 +172,19 @@ func (p *Plumber) PipeDeleteAll() error {
 // }
 
 func (p *Plumber) NewReader(pipe string) *Reader {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.newReader(pipe)
+}
+
+// assume the lock is held
+func (p *Plumber) newReader(pipe string) *Reader {
+	log.Debug("newReader: %v", pipe)
+
 	r := &Reader{
 		C:    make(chan string),
-		done: make(chan struct{}),
+		Done: make(chan struct{}),
 	}
 
 	if pp, ok := p.pipes[pipe]; !ok {
@@ -170,6 +200,16 @@ func (p *Plumber) NewReader(pipe string) *Reader {
 }
 
 func (p *Plumber) NewWriter(pipe string) chan<- string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.newWriter(pipe)
+}
+
+// assume the lock is held
+func (p *Plumber) newWriter(pipe string) chan<- string {
+	log.Debug("newWriter: %v", pipe)
+
 	c := make(chan string)
 
 	if _, ok := p.pipes[pipe]; !ok {
@@ -192,6 +232,9 @@ func (p *Plumber) NewWriter(pipe string) chan<- string {
 }
 
 func (p *Plumber) Write(pipe string, value string) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if pp, ok := p.pipes[pipe]; ok {
 		pp.write(value)
 		return nil
@@ -199,6 +242,7 @@ func (p *Plumber) Write(pipe string, value string) error {
 	return fmt.Errorf("no such pipe: %v", pipe)
 }
 
+// assume the lock is held
 func (p *Plumber) startPipeline(pl *pipeline) {
 	pl.done = make(chan bool)
 
@@ -217,12 +261,12 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 		// looks like a named pipe
 		var in *Reader
 		if i != len(pl.production)-1 {
-			in = p.NewReader(e)
+			in = p.newReader(e)
 		}
 
 		var out chan<- string
 		if i != 0 {
-			out = p.NewWriter(e)
+			out = p.newWriter(e)
 		}
 		b = pl.pipe(in, out, b)
 	}
@@ -283,13 +327,23 @@ func (pl *pipeline) cancel() {
 	})
 }
 
+// assume the lock is held
 func (p *Pipe) write(value string) {
+	var cull []int
 	for i, c := range p.readers {
+		log.Debug("write: %v", value)
 		select {
+		case <-c.Done:
+			close(c.C)
+			cull = append(cull, i)
 		case c.C <- value:
-		case <-c.done:
-			// found a dead reader, get rid of it
-			p.readers = append(p.readers[:i], p.readers[i+1:]...)
 		}
+	}
+
+	// remove dead readers
+	for i := len(cull) - 1; i >= 0; i-- {
+		idx := cull[i]
+		log.Debug("removing dead reader idx: %v", idx)
+		p.readers = append(p.readers[:idx], p.readers[idx+1:]...)
 	}
 }

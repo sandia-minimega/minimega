@@ -109,7 +109,7 @@ func main() {
 	}
 
 	// see pipeMMHandler in plumber.go
-	if *f_pipe {
+	if *f_pipe != "" {
 		pipeMMHandler()
 		os.Exit(0)
 	}

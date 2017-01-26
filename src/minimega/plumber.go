@@ -5,14 +5,13 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"io"
+	"bufio"
 	"meshage"
 	"minicli"
 	"miniclient"
 	log "minilog"
 	"miniplumber"
+	"os"
 )
 
 var (
@@ -72,11 +71,37 @@ func pipeMMHandler() {
 	r, w := mm.Pipe(pipe)
 
 	go func() {
-		io.Copy(os.Stdout, r)
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			_, err := os.Stdout.Write(append(scanner.Bytes(), '\n'))
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Fatalln(err)
+		}
 		os.Exit(0)
 	}()
 
-	io.Copy(w, os.Stdin)
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		log.Debug("writing: %v", scanner.Text())
+		_, err := w.Write(append(scanner.Bytes(), '\n'))
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatalln(err)
+	}
 
-	return
+	// we can't just exit at this point, as there exists a race between
+	// writing to the pipe and the other end reading and sending the data
+	// over the command socket. Instead, we close the writer and wait until
+	// the miniclient pipe handler exits for us.
+	w.Close()
+
+	wait := make(chan struct{})
+	<-wait
 }

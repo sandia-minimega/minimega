@@ -5,6 +5,7 @@
 package miniclient
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"goreadline"
@@ -73,7 +74,7 @@ func (mm *Conn) Close() error {
 }
 
 // Read or write to a named pipe.
-func (mm *Conn) Pipe(pipe string) (io.Reader, io.Writer) {
+func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 	err := mm.enc.Encode(Request{
 		PlumbPipe: pipe,
 	})
@@ -81,7 +82,14 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.Writer) {
 		log.Fatal("local pipe gob encode: %v", err)
 	}
 
-	var r, w bytes.Buffer
+	rr, rw, err := os.Pipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	wr, ww, err := os.Pipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
 
 	go func() {
 		var buf string
@@ -93,32 +101,34 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.Writer) {
 				log.Fatal("local command gob decode: %v", err)
 			}
 
-			_, err := r.WriteString(buf)
+			_, err = rw.WriteString(buf)
 			if err != nil {
-				log.Fatalln("write: %v", err)
+				log.Fatal("write: %v", err)
 			}
 		}
 	}()
 
 	go func() {
 		for {
-			line, err := w.ReadString('\n')
-			if err == io.EOF {
-				// client closed stdin - exit silently
-				os.Exit()
-			}
-			if err != nil {
-				log.Fatalln("read: %v", err)
+			scanner := bufio.NewScanner(wr)
+			for scanner.Scan() {
+				err = mm.enc.Encode(scanner.Text() + "\n")
+				if err != nil {
+					log.Fatal("local command gob encode: %v", err)
+				}
 			}
 
-			err = mm.enc.Encode(line)
-			if err != nil {
-				log.Fatalln("local command gob encode: %v", err)
+			// scanners don't return EOF errors
+			if err := scanner.Err(); err != nil {
+				log.Fatal("read: %v", err)
 			}
+
+			log.Debugln("client closed stdin")
+			os.Exit(0)
 		}
 	}()
 
-	return r, w
+	return rr, ww
 }
 
 // Run a command through a JSON pipe, hand back channel for responses.

@@ -62,41 +62,44 @@ func commandSocketHandle(c net.Conn) {
 
 		// check the plumbing
 		if r.PlumbPipe != "" {
-			if r.PlumbValue != "" { // write
-				resp := miniclient.Response{}
+			reader := plumber.NewReader(r.PlumbPipe)
+			writer := plumber.NewWriter(r.PlumbPipe)
 
-				err = plumber.Write(r.PlumbPipe, r.PlumbValue)
-				if err != nil {
-					resp.Rendered = err.Error()
+			go func() {
+				for {
+					select {
+					case <-reader.Done:
+						return
+					case line := <-reader.C:
+						if err := enc.Encode(line); err != nil {
+							log.Errorln(err)
+							break
+						}
+					}
 				}
 
-				err = enc.Encode(&resp)
-				break
-			} else { // read
-				p := plumber.NewReader(r.PlumbPipe)
-				defer p.Close()
+			}()
 
-				// BUG(fritz): this will leak the handler
-				// goroutine if the client exits before p
-				// closes
-				for v := range p.C {
-					r := miniclient.Response{
-						More:     true,
-						Rendered: v,
-					}
-					err = enc.Encode(&r)
-					if err != nil {
+			for err == nil {
+				var line string
+				err = dec.Decode(&line)
+				if err != nil {
+					if err != io.EOF {
+						log.Errorln(err)
 						break
 					}
 				}
-				if err == nil {
-					r := miniclient.Response{
-						More: false,
-					}
-					err = enc.Encode(&r)
+
+				if line != "" {
+					writer <- line
 				}
-				break
 			}
+
+			// stop the reader
+			reader.Close()
+			close(writer)
+
+			break
 		}
 
 		// should have a command or suggestion but not both
