@@ -45,7 +45,7 @@ type VM interface {
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
-	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM entered the current state
+	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM was launched
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
