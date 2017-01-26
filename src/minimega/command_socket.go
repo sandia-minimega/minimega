@@ -85,7 +85,6 @@ func commandSocketHandle(c net.Conn) {
 				err = dec.Decode(&line)
 				if err != nil {
 					if err != io.EOF {
-						log.Errorln(err)
 						break
 					}
 				}

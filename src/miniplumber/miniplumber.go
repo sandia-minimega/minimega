@@ -32,9 +32,11 @@ type Plumber struct {
 }
 
 type Pipe struct {
-	Name    string
-	Mode    int
-	readers []*Reader
+	Name       string
+	Mode       int
+	readers    []*Reader
+	numWriters int
+	lock       sync.Mutex
 }
 
 type Reader struct {
@@ -136,6 +138,13 @@ func (p *Plumber) PipeDelete(pipe string) error {
 	defer p.lock.Unlock()
 
 	if pp, ok := p.pipes[pipe]; ok {
+		pp.lock.Lock()
+		defer pp.lock.Unlock()
+
+		if pp.numWriters != 0 {
+			return fmt.Errorf("cannot delete named pipe with open writers")
+		}
+
 		// kill all of the readers
 		for _, c := range pp.readers {
 			c.Close()
@@ -217,15 +226,18 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 			Name: pipe,
 		}
 	}
+	pp := p.pipes[pipe]
+	pp.lock.Lock()
+	pp.numWriters++
+	pp.lock.Unlock()
 
 	go func() {
 		for v := range c {
-			err := p.Write(pipe, v)
-			if err != nil {
-				log.Errorln(err)
-				break
-			}
+			pp.write(v)
 		}
+		pp.lock.Lock()
+		pp.numWriters--
+		pp.lock.Unlock()
 	}()
 
 	return c
@@ -242,13 +254,15 @@ func (p *Plumber) Write(pipe string, value string) error {
 	return fmt.Errorf("no such pipe: %v", pipe)
 }
 
-// assume the lock is held
+// started in a goroutine, don't assume the lock is held
 func (p *Plumber) startPipeline(pl *pipeline) {
 	pl.done = make(chan bool)
 
-	defer func() {
+	go func() {
 		<-pl.done
+		p.lock.Lock()
 		delete(p.pipelines, pl.name)
+		p.lock.Unlock()
 	}()
 
 	var b <-chan string
@@ -261,12 +275,12 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 		// looks like a named pipe
 		var in *Reader
 		if i != len(pl.production)-1 {
-			in = p.newReader(e)
+			in = p.NewReader(e)
 		}
 
 		var out chan<- string
 		if i != 0 {
-			out = p.newWriter(e)
+			out = p.NewWriter(e)
 		}
 		b = pl.pipe(in, out, b)
 	}
@@ -327,8 +341,11 @@ func (pl *pipeline) cancel() {
 	})
 }
 
-// assume the lock is held
+// don't assume the plumber lock is held
 func (p *Pipe) write(value string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	var cull []int
 	for i, c := range p.readers {
 		log.Debug("write: %v", value)
