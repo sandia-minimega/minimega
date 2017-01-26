@@ -282,21 +282,18 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 // diskInjectCleanup handles unmounting, disconnecting nbd, and removing mount
 // directory after diskInject.
 func diskInjectCleanup(mntDir, nbdPath string) {
-	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
+	log.Info("cleaning up disk inject: %s %s", mntDir, nbdPath)
 
-	out, err := processWrapper("umount", mntDir)
-	if err != nil {
-		log.Error("injectCleanup: %v, %v", out, err)
+	if err := syscall.Unmount(mntDir, 0); err != nil {
+		log.Error("unmount failed: %v", err)
 	}
 
 	if err := nbd.DisconnectDevice(nbdPath); err != nil {
-		log.Error("qemu nbd disconnect: %v", err)
-		log.Warn("minimega was unable to disconnect %v", nbdPath)
+		log.Error("nbd disconnect failed: %v", err)
 	}
 
-	err = os.Remove(mntDir)
-	if err != nil {
-		log.Error("rm mount dir: %v", err)
+	if err := os.Remove(mntDir); err != nil {
+		log.Error("rm mount dir failed: %v", err)
 	}
 }
 

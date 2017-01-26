@@ -19,19 +19,20 @@ import (
 func commandSocketStart() {
 	l, err := net.Listen("unix", filepath.Join(*f_base, "minimega"))
 	if err != nil {
-		log.Error("commandSocketStart: %v", err)
-		teardown()
+		log.Fatal("commandSocketStart: %v", err)
 	}
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Error("commandSocketStart: accept: %v", err)
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				log.Error("commandSocketStart: accept: %v", err)
+			}
+			log.Infoln("client connected")
+
+			go commandSocketHandle(conn)
 		}
-		log.Infoln("client connected")
-
-		go commandSocketHandle(conn)
-	}
+	}()
 }
 
 func commandSocketRemove() {
@@ -52,25 +53,50 @@ func commandSocketHandle(c net.Conn) {
 
 	for err == nil {
 		var r *miniclient.Request
+		var cmd *minicli.Command
 
 		r, err = readLocalRequest(dec)
 		if err != nil {
 			break
 		}
 
+		// should have a command or suggestion but not both
+		if (r.Command == "") == (r.Suggest == "") {
+			resp := &minicli.Response{
+				Host:  hostname,
+				Error: "must specify either command or suggest",
+			}
+			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			continue
+		}
+
+		// client wants a suggestion
 		if r.Suggest != "" {
 			err = sendLocalSuggest(enc, minicli.Suggest(r.Suggest))
 			continue
 		}
 
-		if r.Command == nil {
+		// client specified a command
+		cmd, err = minicli.Compile(r.Command)
+		if err != nil {
+			resp := &minicli.Response{
+				Host:  hostname,
+				Error: err.Error(),
+			}
+			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			continue
+		}
+
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
+		if cmd == nil {
 			err = sendLocalResp(enc, nil, false)
 			continue
 		}
 
 		// HAX: Don't record the read command
-		if hasCommand(r.Command, "read") {
-			r.Command.SetRecord(false)
+		if hasCommand(cmd, "read") {
+			cmd.SetRecord(false)
 		}
 
 		// HAX: Work around so that we can add the more boolean.
@@ -78,7 +104,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// Keep sending until we hit the first error, then just consume the
 		// channel to ensure that we release any locks acquired by cmd.
-		for resp := range RunCommands(r.Command) {
+		for resp := range RunCommands(cmd) {
 			if prev != nil && err == nil {
 				err = sendLocalResp(enc, prev, true)
 			} else if err != nil && len(resp) > 0 {
@@ -111,17 +137,6 @@ func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
 	}
 
 	log.Debug("got request over socket: %v", r)
-
-	if r.Command != nil {
-		// HAX: Reprocess the original command since the Call target cannot be
-		// serialized... is there a cleaner way to do this?
-		cmd, err := minicli.Compile(r.Command.Original)
-		if err != nil {
-			return nil, err
-		}
-
-		r.Command = cmd
-	}
 
 	return &r, nil
 }

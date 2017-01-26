@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"minicli"
 	"miniclient"
 	log "minilog"
 	"os"
@@ -49,12 +48,10 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 	s := bufio.NewScanner(f)
 
 	for s.Scan() {
-		// Can't use Compile since minimega, not minitest, registers handlers
-		// with minicli
-		cmd := &minicli.Command{Original: s.Text()}
+		cmd := s.Text()
 
-		if len(cmd.Original) > 0 {
-			res += fmt.Sprintf("## %v\n", cmd.Original)
+		if len(cmd) > 0 {
+			res += fmt.Sprintf("## %v\n", cmd)
 		} else {
 			res += "\n"
 		}

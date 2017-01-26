@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -429,6 +430,33 @@ Clear all tags from all VMs:
 			return nil
 		}),
 	},
+	{ // vm top
+		HelpShort: "view vm resource utilization",
+		HelpLong: fmt.Sprintf(`
+View system resource utilization per VM. This is measured from the host and may
+differ from what is reported by the guest.
+
+The optional duration specifies the length of the sampling window in seconds.
+The command will block for at least this long while it measures usage. The
+default duration is one second.
+
+Returned columns include:
+- name      : name of the VM
+- namespace : namespace of the VM (when not in a namespace)
+- virt      : virtual memory size (MB)
+- res       : resident memory size (MB)
+- shr       : shared memory size (MB)
+- cpu       : host CPU usage (%%)
+- vcpu      : guest CPU usage (%%) (KVM only)
+- time      : total CPU time
+- procs     : number of processes inspected (limited to %d)
+- rx        : total received data rate (MB/s)
+- tx        : total transmitted data rate (MB/s)`, ProcLimit),
+		Patterns: []string{
+			"vm top [duration]",
+		},
+		Call: wrapBroadcastCLI(cliVMTop),
+	},
 }
 
 func init() {
@@ -830,12 +858,73 @@ func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
 	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
 }
 
+func cliVMTop(c *minicli.Command, resp *minicli.Response) error {
+	d := time.Second
+	if c.StringArgs["duration"] != "" {
+		v, err := strconv.Atoi(c.StringArgs["duration"])
+		if err != nil {
+			return err
+		}
+
+		d = time.Duration(v) * time.Second
+	}
+
+	ns := GetNamespace()
+
+	resp.Header = []string{"name"}
+	if ns == nil {
+		resp.Header = append(resp.Header, "namespace")
+	}
+	resp.Header = append(resp.Header,
+		"virt",
+		"res",
+		"shr",
+		"cpu",
+		"vcpu",
+		"time",
+		"procs",
+		"rx",
+		"tx",
+	)
+
+	fmtMB := func(i uint64) string {
+		return strconv.FormatUint(i/(uint64(1)<<20), 10)
+	}
+
+	for _, s := range vms.ProcStats(d) {
+		row := []string{s.Name}
+		if ns == nil {
+			row = append(row, s.Namespace)
+		}
+
+		row = append(row,
+			fmtMB(s.Size()),
+			fmtMB(s.Resident()),
+			fmtMB(s.Share()),
+			fmt.Sprintf("%.2f", s.CPU()*100),
+			fmt.Sprintf("%.2f", s.GuestCPU()*100),
+			s.Time().String(),
+			strconv.Itoa(s.Count()),
+			fmt.Sprintf("%.2f", s.RxRate),
+			fmt.Sprintf("%.2f", s.TxRate),
+		)
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
+}
+
 // cliVMSuggest takes a prefix that could be the start of a VM name
 // and makes suggestions for VM names that have a common prefix. mask
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
 func cliVMSuggest(prefix string, mask VMState) []string {
 	res := []string{}
+
+	if strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
 
 	for _, vm := range GlobalVMs() {
 		if vm.GetState()&mask == 0 {

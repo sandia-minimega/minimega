@@ -10,10 +10,10 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"nbd"
 	"os/exec"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 )
@@ -26,40 +26,33 @@ var (
 	MIN_KERNEL = []int{3, 18}
 )
 
-// externalProcessesLock mediates access to customExternalProcesses.
-var externalProcessesLock sync.Mutex
-
-// defaultExternalProcesses is the default mapping between a command and the
-// actual binary name. This should *never* be modified. If the user needs to
-// update customExternalProcesses.
-var defaultExternalProcesses = map[string]string{
-	"qemu":     "kvm",
-	"ip":       "ip",
-	"ovs":      "ovs-vsctl",
-	"dnsmasq":  "dnsmasq",
-	"kill":     "kill",
-	"dhcp":     "dhclient",
-	"openflow": "ovs-ofctl",
-	"mount":    "mount",
-	"umount":   "umount",
-	"mkdosfs":  "mkdosfs",
-	"qemu-nbd": "qemu-nbd",
-	"rm":       "rm",
-	"qemu-img": "qemu-img",
-	"cp":       "cp",
-	"taskset":  "taskset",
-	"lsmod":    "lsmod",
-	"ntfs-3g":  "ntfs-3g",
-	"scp":      "scp",
-	"ssh":      "ssh",
-	"hostname": "hostname",
-	"tc":       "tc",
+// externalDependencies contains all the external programs that minimega
+// invokes. We check for the existence of these on startup and on `check`.
+var externalDependencies = map[string]bool{
+	"dnsmasq":   true, // used in mulitple
+	"kvm":       true, // used in multiple
+	"mount":     true, // used in multiple
+	"dhclient":  true, // used in bridge_cli.go
+	"ip":        true, // used in bridge_cli.go
+	"scp":       true, // used in deploy.go
+	"ssh":       true, // used in deploy.go
+	"cp":        true, // used in disk.go
+	"qemu-img":  true, // used in disk.go
+	"ntfs-3g":   true, // used in disk.go
+	"ovs-vsctl": true, // used in external.go
+	"taskset":   true, // used in optimize.go
 }
 
-// customExternalProcesses contains user-specified mappings between command
-// names. This mapping is checked first before using defaultExternalProcesses
-// to resolve a command.
-var customExternalProcesses = map[string]string{}
+func init() {
+	// Add in dependencies from imported packages
+	for _, v := range bridge.ExternalDependencies {
+		externalDependencies[v] = true
+	}
+
+	for _, v := range nbd.ExternalDependencies {
+		externalDependencies[v] = true
+	}
+}
 
 var externalCLIHandlers = []minicli.Handler{
 	{ // check
@@ -73,16 +66,10 @@ versions not met.`,
 		Patterns: []string{
 			"check",
 		},
-		Call: wrapSimpleCLI(cliCheckExternal),
+		Call: wrapSimpleCLI(func(_ *minicli.Command, _ *minicli.Response) error {
+			return checkExternal()
+		}),
 	},
-}
-
-func cliCheckExternal(c *minicli.Command, resp *minicli.Response) error {
-	if err := checkExternal(); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 // checkExternal checks for the presence of each of the external processes we
@@ -94,7 +81,7 @@ func checkExternal() error {
 	}
 
 	// make sure we have all binaries
-	if err := checkProcesses(); err != nil {
+	if err := checkDependencies(); err != nil {
 		return err
 	}
 
@@ -102,7 +89,7 @@ func checkExternal() error {
 	if err := checkVersion("dnsmasq", MIN_DNSMASQ, dnsmasqVersion); err != nil {
 		return err
 	}
-	if err := checkVersion("ovs", MIN_OVS, ovsVersion); err != nil {
+	if err := checkVersion("ovs-vsctl", MIN_OVS, ovsVersion); err != nil {
 		return err
 	}
 	if err := checkVersion("qemu", MIN_QEMU, qemuVersion); err != nil {
@@ -117,30 +104,21 @@ func checkExternal() error {
 	return nil
 }
 
-// checkProcesses checks each of the processes in defaultExternalProcesses exists
-func checkProcesses() error {
-	externalProcessesLock.Lock()
-	defer externalProcessesLock.Unlock()
+// checkDependencies checks whether each of the processes in
+// externalDependencies exists or not
+func checkDependencies() error {
+	var errs []error
 
-	var errs []string
-	for name, proc := range defaultExternalProcesses {
-		if alt, ok := customExternalProcesses[name]; ok {
-			proc = alt
+	for name := range externalDependencies {
+		path, err := exec.LookPath(name)
+		if err == nil {
+			log.Info("%v found at: %v", name, path)
 		}
 
-		path, err := exec.LookPath(proc)
-		if err != nil {
-			errs = append(errs, err.Error())
-		} else {
-			log.Info("%v found at: %v", proc, path)
-		}
+		errs = append(errs, err)
 	}
 
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "\n"))
-	}
-
-	return nil
+	return makeErrSlice(errs)
 }
 
 func kernelVersion() ([]int, error) {
@@ -173,7 +151,7 @@ func dnsmasqVersion() ([]int, error) {
 }
 
 func ovsVersion() ([]int, error) {
-	out, err := processWrapper("ovs", "-V")
+	out, err := processWrapper("ovs-vsctl", "-V")
 	if err != nil {
 		return nil, fmt.Errorf("check ovs version failed: %v", err)
 	}
@@ -187,7 +165,7 @@ func ovsVersion() ([]int, error) {
 }
 
 func qemuVersion() ([]int, error) {
-	out, err := processWrapper("qemu", "-version")
+	out, err := processWrapper("kvm", "-version")
 	if err != nil {
 		return nil, fmt.Errorf("check qemu version failed: %v", err)
 	}
@@ -270,43 +248,25 @@ func checkVersion(name string, min []int, versionFn func() ([]int, error)) error
 
 // processWrapper executes the given arg list and returns a combined
 // stdout/stderr and any errors. processWrapper blocks until the process exits.
-// Users that need runtime control of processes should use os/exec directly.
 func processWrapper(args ...string) (string, error) {
-	a := append([]string{}, args...)
-	if len(a) == 0 {
+	if len(args) == 0 {
 		return "", fmt.Errorf("empty argument list")
-	}
-	p := process(a[0])
-	if p == "" {
-		return "", fmt.Errorf("cannot find process %v", args[0])
-	}
-
-	a[0] = p
-	var ea []string
-	if len(a) > 1 {
-		ea = a[1:]
 	}
 
 	start := time.Now()
-	out, err := exec.Command(p, ea...).CombinedOutput()
+	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	stop := time.Now()
-	log.Debug("cmd %v completed in %v", p, stop.Sub(start))
+	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
+
 	return string(out), err
 }
 
-func process(p string) string {
-	externalProcessesLock.Lock()
-	defer externalProcessesLock.Unlock()
-
-	name, ok := customExternalProcesses[p]
-	if !ok {
-		name = defaultExternalProcesses[p]
+func process(s string) (string, error) {
+	p, err := exec.LookPath(s)
+	if err == exec.ErrNotFound {
+		// add executable name to error
+		return "", fmt.Errorf("executable not found in $PATH: %v", s)
 	}
 
-	path, err := exec.LookPath(name)
-	if err != nil {
-		log.Error("process: %v", err)
-		return ""
-	}
-	return path
+	return p, err
 }

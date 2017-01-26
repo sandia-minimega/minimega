@@ -28,7 +28,7 @@ import (
 var (
 	completionCandidates []string
 	listIndex            int
-	FilenameCompleter    func(string) []string // optional filename completer to attempt before the readline builtin
+	DefaultCompleter     func(string) []string // completer to attempt before the readline builtin
 )
 
 // disable readline's ability to catch signals, as this will cause a panic
@@ -61,15 +61,13 @@ func minicomplete(text *C.char, start, end C.int) **C.char {
 	suggest = minicli.Suggest(line)
 
 	if len(suggest) == 0 {
-		// No suggestions.. fall back on default behavior (filename completion)
-		if FilenameCompleter == nil {
-			return C.rl_completion_matches(text,
-				(*C.rl_compentry_func_t)(C.rl_filename_completion_function))
+		// No suggestions yet, use default completer
+		if DefaultCompleter != nil {
+			suggest = DefaultCompleter(line)
 		}
 
-		suggest = FilenameCompleter(line)
 		if len(suggest) == 0 {
-			// no dice, use the builtin
+			// Still no luck, use default filename completion
 			return C.rl_completion_matches(text,
 				(*C.rl_compentry_func_t)(C.rl_filename_completion_function))
 		}
