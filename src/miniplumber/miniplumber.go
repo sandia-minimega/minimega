@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"meshage"
 	log "minilog"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -179,6 +180,22 @@ func (p *Plumber) PipeDeleteAll() error {
 // func (p *Plumber) Pipes() ([]*Pipe, error) {
 // 	return nil, nil
 // }
+
+// Pipelines returns a sorted list of pipeline production strings
+func (p *Plumber) Pipelines() []string {
+	p.lock.Lock()
+	p.lock.Unlock()
+
+	var ret []string
+
+	for k, _ := range p.pipelines {
+		ret = append(ret, k)
+	}
+
+	sort.Strings(ret)
+
+	return ret
+}
 
 func (p *Plumber) NewReader(pipe string) *Reader {
 	p.lock.Lock()

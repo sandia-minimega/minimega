@@ -23,6 +23,7 @@ var plumbCLIHandlers = []minicli.Handler{
 		HelpShort: "plumb external programs with minimega, VMs, and other external programs",
 		HelpLong:  ``,
 		Patterns: []string{
+			"plumb",
 			"plumb <src> <dst>...",
 		},
 		Call: wrapSimpleCLI(cliPlumb),
@@ -42,11 +43,22 @@ func plumberStart(node *meshage.Node) {
 }
 
 func cliPlumb(c *minicli.Command, resp *minicli.Response) error {
-	p := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
+	if _, ok := c.StringArgs["src"]; !ok {
+		resp.Header = []string{"pipeline"}
+		resp.Tabular = [][]string{}
 
-	log.Debug("got plumber production: %v", p)
+		for _, v := range plumber.Pipelines() {
+			resp.Tabular = append(resp.Tabular, []string{v})
+		}
 
-	return plumber.Plumb(p...)
+		return nil
+	} else {
+		p := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
+
+		log.Debug("got plumber production: %v", p)
+
+		return plumber.Plumb(p...)
+	}
 }
 
 func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
