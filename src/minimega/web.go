@@ -18,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/net/websocket"
 )
@@ -335,6 +336,7 @@ func webVMsJSON(w http.ResponseWriter, r *http.Request) {
 			"id":        vm.GetID(),
 			"name":      vm.GetName(),
 			"state":     vm.GetState().String(),
+			"uptime":    time.Since(vm.GetLaunchTime()).String(),
 			"type":      vm.GetType().String(),
 			"activecc":  vm.HasCC(),
 			"vcpus":     config.VCPUs,
