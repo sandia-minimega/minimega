@@ -637,10 +637,7 @@ func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
-	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
+	mustWrite(vm.path("state"), s.String())
 }
 
 // setError updates the vm state and records the error in the vm's tags.
