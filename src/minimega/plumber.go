@@ -91,7 +91,7 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 	if pipe, ok := c.StringArgs["pipe"]; ok {
 		data := c.StringArgs["data"]
 
-		return plumber.Write(pipe, data)
+		plumber.Write(pipe, data)
 	} else {
 		// get info on all named pipes
 		resp.Header = []string{"name", "mode", "readers", "writers"}
@@ -100,9 +100,9 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		for _, v := range plumber.Pipes() {
 			resp.Tabular = append(resp.Tabular, []string{v.Name(), v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters())})
 		}
-
-		return nil
 	}
+
+	return nil
 }
 
 func cliPipeClear(c *minicli.Command, resp *minicli.Response) error {

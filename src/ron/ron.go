@@ -23,6 +23,7 @@ const (
 	MESSAGE_CLIENT
 	MESSAGE_TUNNEL
 	MESSAGE_FILE
+	MESSAGE_PIPE
 )
 
 const (
@@ -74,6 +75,9 @@ type Message struct {
 	Filename string
 	Error    string
 	Tunnel   []byte
+	Pipe     string
+	PipeMode int
+	PipeData string
 }
 
 // NewServer creates a ron server listening on on tcp.
@@ -115,6 +119,8 @@ func (t Type) String() string {
 		return "TUNNEL"
 	case MESSAGE_FILE:
 		return "FILE"
+	case MESSAGE_PIPE:
+		return "PIPE"
 	}
 
 	return "UNKNOWN"
