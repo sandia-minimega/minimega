@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"meshage"
 	"minicli"
 	"miniclient"
@@ -35,6 +36,23 @@ var plumbCLIHandlers = []minicli.Handler{
 			"clear plumb [pipeline]...",
 		},
 		Call: wrapBroadcastCLI(cliPlumbClear),
+	},
+	{ // pipe
+		HelpShort: "write to and modify named pipes",
+		HelpLong:  ``,
+		Patterns: []string{
+			"pipe",
+			"pipe <pipe> <data>",
+		},
+		Call: wrapSimpleCLI(cliPipe),
+	},
+	{
+		HelpShort: "reset pipe state",
+		HelpLong:  ``,
+		Patterns: []string{
+			"clear pipe [pipe]",
+		},
+		Call: wrapBroadcastCLI(cliPipeClear),
 	},
 }
 
@@ -66,6 +84,36 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 		return plumber.PipelineDelete(pipeline...)
 	} else {
 		return plumber.PipelineDeleteAll()
+	}
+}
+
+func cliPipe(c *minicli.Command, resp *minicli.Response) error {
+	if pipe, ok := c.StringArgs["pipe"]; ok {
+		data := c.StringArgs["data"]
+
+		w := plumber.NewWriter(pipe)
+		w <- data + "\n"
+		close(w)
+
+		return nil
+	} else {
+		// get info on all named pipes
+		resp.Header = []string{"name", "mode", "readers", "writers"}
+		resp.Tabular = [][]string{}
+
+		for _, v := range plumber.Pipes() {
+			resp.Tabular = append(resp.Tabular, []string{v.Name(), v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters())})
+		}
+
+		return nil
+	}
+}
+
+func cliPipeClear(c *minicli.Command, resp *minicli.Response) error {
+	if pipe, ok := c.StringArgs["pipe"]; ok {
+		return plumber.PipeDelete(pipe)
+	} else {
+		return plumber.PipeDeleteAll()
 	}
 }
 

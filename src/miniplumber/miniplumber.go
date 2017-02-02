@@ -20,11 +20,11 @@ import (
 	"sync"
 )
 
-// const (
-// 	ALL = iota
-// 	RR
-// 	RND
-// )
+const (
+	ALL = iota
+	RR
+	RND
+)
 
 type Plumber struct {
 	node      *meshage.Node         // meshage node to use for distributed environments
@@ -35,8 +35,8 @@ type Plumber struct {
 }
 
 type Pipe struct {
-	Name       string
-	Mode       int
+	name       string
+	mode       int
 	readers    []*Reader
 	numWriters int
 	lock       sync.Mutex
@@ -179,9 +179,24 @@ func (p *Plumber) PipeDeleteAll() error {
 	return nil
 }
 
-// func (p *Plumber) Pipes() ([]*Pipe, error) {
-// 	return nil, nil
-// }
+func (p *Plumber) Pipes() []*Pipe {
+	p.lock.Lock()
+	p.lock.Unlock()
+
+	var keys []string
+	var ret []*Pipe
+
+	for k, _ := range p.pipes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, v := range keys {
+		ret = append(ret, p.pipes[v])
+	}
+
+	return ret
+}
 
 // Pipelines returns a sorted list of pipeline production strings
 func (p *Plumber) Pipelines() []string {
@@ -217,7 +232,7 @@ func (p *Plumber) newReader(pipe string) *Reader {
 
 	if pp, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
-			Name:    pipe,
+			name:    pipe,
 			readers: []*Reader{r},
 		}
 	} else {
@@ -242,7 +257,7 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 
 	if _, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
-			Name: pipe,
+			name: pipe,
 		}
 	}
 	pp := p.pipes[pipe]
@@ -442,6 +457,44 @@ func (pl *pipeline) cancel() {
 		log.Debug("closing pipeline: %v", pl.name)
 		close(pl.done)
 	})
+}
+
+func (p *Pipe) Name() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.name
+}
+
+func (p *Pipe) Mode() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	switch p.mode {
+	case ALL:
+		return "all"
+	case RR:
+		return "round-robin"
+	case RND:
+		return "random"
+	default:
+		log.Fatal("unknown mode: %v", p.mode)
+	}
+	return ""
+}
+
+func (p *Pipe) NumReaders() int {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return len(p.readers)
+}
+
+func (p *Pipe) NumWriters() int {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.numWriters
 }
 
 // don't assume the plumber lock is held
