@@ -10,9 +10,11 @@
 package miniplumber
 
 import (
+	"bufio"
 	"fmt"
 	"meshage"
 	log "minilog"
+	"os/exec"
 	"sort"
 	"strings"
 	"sync"
@@ -288,14 +290,37 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 
 		// start a process if it looks like a process, otherwise create
 		// a pipe
+		f := fieldsQuoteEscape("\"", e)
+		process, err := exec.LookPath(f[0])
+		if err == nil {
+			f[0] = process
+
+			// don't write data on stdout/err if this is the last stage
+			var write bool
+			if i != len(pl.production)-1 {
+				write = true
+			}
+
+			b, err = pl.exec(f, b, write)
+			if err != nil {
+				pl.cancel()
+				log.Errorln(err)
+				break
+			}
+			continue
+		}
 
 		// looks like a named pipe
 		var in *Reader
+
+		// don't produce output if this is the final stage
 		if i != len(pl.production)-1 {
 			in = p.NewReader(e)
 		}
 
 		var out chan<- string
+
+		// don't produce input if this is the first stage
 		if i != 0 {
 			out = p.NewWriter(e)
 		}
@@ -303,8 +328,82 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 	}
 }
 
-func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-chan string {
+func (pl *pipeline) exec(production []string, in <-chan string, write bool) (<-chan string, error) {
+	log.Debug("exec: %v, %v", production, write)
+
 	var out chan string
+
+	cmd := &exec.Cmd{
+		Path: production[0],
+		Args: production,
+	}
+
+	if in != nil {
+		stdin, err := cmd.StdinPipe()
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			defer pl.cancel()
+
+			for {
+				select {
+				case v := <-in:
+					_, err := stdin.Write([]byte(v))
+					if err != nil {
+						log.Errorln(err)
+						return
+					}
+				case <-pl.done:
+					return
+				}
+			}
+		}()
+	}
+
+	if write {
+		out = make(chan string)
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			defer pl.cancel()
+
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				select {
+				case out <- scanner.Text() + "\n":
+				case <-pl.done:
+					return
+				}
+				log.Debug("exec got: %v", scanner.Text())
+			}
+			if err := scanner.Err(); err != nil {
+				log.Errorln(err)
+				return
+			}
+		}()
+	}
+
+	err := cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	// command is running
+
+	go func() {
+		<-pl.done
+		cmd.Process.Kill()
+	}()
+
+	return out, nil
+}
+func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-chan string {
+	log.Debug("pipe")
 
 	if in != nil {
 		go func() {
@@ -319,6 +418,7 @@ func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-ch
 					case <-pl.done:
 						return
 					}
+					log.Debug("pipe got: %v", v)
 				case <-pl.done:
 					return
 				}
@@ -327,28 +427,14 @@ func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-ch
 	}
 
 	if pin != nil {
-		out = make(chan string)
 		go func() {
-			defer close(out)
 			defer pin.Close()
-			defer pl.cancel()
-
-			for {
-				select {
-				case v := <-pin.C:
-					select {
-					case out <- v:
-					case <-pl.done:
-						return
-					}
-				case <-pl.done:
-					return
-				}
-			}
+			<-pl.done
 		}()
+		return pin.C
 	}
 
-	return out
+	return nil
 }
 
 func (pl *pipeline) cancel() {
@@ -380,4 +466,54 @@ func (p *Pipe) write(value string) {
 		log.Debug("removing dead reader idx: %v", idx)
 		p.readers = append(p.readers[:idx], p.readers[idx+1:]...)
 	}
+}
+
+// Return a slice of strings, split on whitespace, not unlike strings.Fields(),
+// except that quoted fields are grouped.
+// 	Example: a b "c d"
+// 	will return: ["a", "b", "c d"]
+func fieldsQuoteEscape(c string, input string) []string {
+	log.Debug("fieldsQuoteEscape splitting on %v: %v", c, input)
+	f := strings.Fields(input)
+	var ret []string
+	trace := false
+	temp := ""
+
+	for _, v := range f {
+		if trace {
+			if strings.Contains(v, c) {
+				trace = false
+				temp += " " + trimQuote(c, v)
+				ret = append(ret, temp)
+			} else {
+				temp += " " + v
+			}
+		} else if strings.Contains(v, c) {
+			temp = trimQuote(c, v)
+			if strings.HasSuffix(v, c) {
+				// special case, single word like 'foo'
+				ret = append(ret, temp)
+			} else {
+				trace = true
+			}
+		} else {
+			ret = append(ret, v)
+		}
+	}
+	log.Debug("generated: %#v", ret)
+	return ret
+}
+
+func trimQuote(c string, input string) string {
+	if c == "" {
+		log.Errorln("cannot trim empty space")
+		return ""
+	}
+	var ret string
+	for _, v := range input {
+		if v != rune(c[0]) {
+			ret += string(v)
+		}
+	}
+	return ret
 }
