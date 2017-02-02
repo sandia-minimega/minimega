@@ -26,6 +26,10 @@ const (
 	RND
 )
 
+const (
+	FORWARD = iota
+)
+
 type Plumber struct {
 	node      *meshage.Node         // meshage node to use for distributed environments
 	Messages  chan *meshage.Message // incoming messages from meshage
@@ -56,6 +60,10 @@ type pipeline struct {
 }
 
 type Message struct {
+	From string
+	Type int
+	Pipe string
+	Data string
 }
 
 func (r *Reader) Close() {
@@ -73,9 +81,40 @@ func New(n *meshage.Node) *Plumber {
 		pipelines: make(map[string]*pipeline),
 	}
 
-	//go p.handleMessages()
+	go p.handleMessages()
 
 	return p
+}
+
+func (p *Plumber) forward(pipe, data string) error {
+	m := &Message{
+		From: p.node.Name(),
+		Type: FORWARD,
+		Pipe: pipe,
+		Data: data,
+	}
+
+	_, err := p.node.Broadcast(m)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (p *Plumber) handleMessages() {
+	for {
+		m := (<-p.Messages).Body.(Message)
+
+		log.Debug("got message type %v from %v", m.Type, m.From)
+
+		switch m.Type {
+		case FORWARD:
+			p.writeNoForward(m.Pipe, m.Data)
+		default:
+			log.Error("unknown plumber message type: %v", m.Type)
+		}
+	}
 }
 
 func (p *Plumber) Plumb(production ...string) error {
@@ -267,6 +306,7 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 
 	go func() {
 		for v := range c {
+			p.forward(pipe, v)
 			pp.write(v)
 		}
 		pp.lock.Lock()
@@ -277,15 +317,25 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 	return c
 }
 
-func (p *Plumber) Write(pipe string, value string) error {
+func (p *Plumber) Write(pipe string, value string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	p.forward(pipe, value)
+
+	if pp, ok := p.pipes[pipe]; ok {
+		pp.write(value)
+	}
+}
+
+// write to a named pipe without forwarding the message over meshage
+func (p *Plumber) writeNoForward(pipe string, value string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if pp, ok := p.pipes[pipe]; ok {
 		pp.write(value)
-		return nil
 	}
-	return fmt.Errorf("no such pipe: %v", pipe)
 }
 
 // started in a goroutine, don't assume the lock is held
@@ -501,6 +551,12 @@ func (p *Pipe) NumWriters() int {
 func (p *Pipe) write(value string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
+
+	// messages must end in a newline, because things like scanners depend
+	// on them. Add a newline if it doesn't already exist.
+	if !strings.HasSuffix(value, "\n") {
+		value += "\n"
+	}
 
 	var cull []int
 	for i, c := range p.readers {

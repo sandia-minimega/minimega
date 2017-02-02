@@ -91,11 +91,7 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 	if pipe, ok := c.StringArgs["pipe"]; ok {
 		data := c.StringArgs["data"]
 
-		w := plumber.NewWriter(pipe)
-		w <- data + "\n"
-		close(w)
-
-		return nil
+		return plumber.Write(pipe, data)
 	} else {
 		// get info on all named pipes
 		resp.Header = []string{"name", "mode", "readers", "writers"}
