@@ -36,12 +36,14 @@ type Plumber struct {
 	pipes     map[string]*Pipe
 	pipelines map[string]*pipeline
 	lock      sync.Mutex
+	idLock    sync.Mutex
+	idCount   int
 }
 
 type Pipe struct {
 	name       string
 	mode       int
-	readers    []*Reader
+	readers    map[int]*Reader
 	numWriters int
 	lock       sync.Mutex
 }
@@ -50,6 +52,7 @@ type Reader struct {
 	C    chan string
 	Done chan struct{}
 	once sync.Once
+	ID   int
 }
 
 type pipeline struct {
@@ -81,12 +84,18 @@ func New(n *meshage.Node) *Plumber {
 		pipelines: make(map[string]*pipeline),
 	}
 
-	go p.handleMessages()
+	if p.node != nil {
+		go p.handleMessages()
+	}
 
 	return p
 }
 
 func (p *Plumber) forward(pipe, data string) error {
+	if p.node == nil {
+		return nil
+	}
+
 	m := &Message{
 		From: p.node.Name(),
 		Type: FORWARD,
@@ -260,6 +269,14 @@ func (p *Plumber) NewReader(pipe string) *Reader {
 	return p.newReader(pipe)
 }
 
+func (p *Plumber) id() int {
+	p.idLock.Lock()
+	defer p.idLock.Unlock()
+
+	p.idCount++
+	return p.idCount
+}
+
 // assume the lock is held
 func (p *Plumber) newReader(pipe string) *Reader {
 	log.Debug("newReader: %v", pipe)
@@ -267,16 +284,25 @@ func (p *Plumber) newReader(pipe string) *Reader {
 	r := &Reader{
 		C:    make(chan string),
 		Done: make(chan struct{}),
+		ID:   p.id(),
 	}
 
-	if pp, ok := p.pipes[pipe]; !ok {
+	if _, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
 			name:    pipe,
-			readers: []*Reader{r},
+			readers: make(map[int]*Reader),
 		}
-	} else {
-		pp.readers = append(pp.readers, r)
 	}
+	pp := p.pipes[pipe]
+	pp.readers[r.ID] = r
+
+	go func() {
+		<-r.Done
+		pp.lock.Lock()
+		defer pp.lock.Unlock()
+		close(r.C)
+		delete(pp.readers, r.ID)
+	}()
 
 	return r
 }
@@ -558,22 +584,13 @@ func (p *Pipe) write(value string) {
 		value += "\n"
 	}
 
-	var cull []int
-	for i, c := range p.readers {
+	for _, c := range p.readers {
 		log.Debug("write: %v", value)
 		select {
 		case <-c.Done:
-			close(c.C)
-			cull = append(cull, i)
+			continue
 		case c.C <- value:
 		}
-	}
-
-	// remove dead readers
-	for i := len(cull) - 1; i >= 0; i-- {
-		idx := cull[i]
-		log.Debug("removing dead reader idx: %v", idx)
-		p.readers = append(p.readers[:idx], p.readers[idx+1:]...)
 	}
 }
 

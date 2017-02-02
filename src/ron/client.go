@@ -207,6 +207,12 @@ func (c *client) pipeHandler(m *Message) {
 							PipeData: v,
 						})
 					case <-p.Done:
+						// signal the close downstream
+						c.sendMessage(&Message{
+							Type:     MESSAGE_PIPE,
+							Pipe:     m.Pipe,
+							PipeMode: PIPE_CLOSE_READER,
+						})
 						return
 					}
 				}

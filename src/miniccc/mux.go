@@ -59,6 +59,8 @@ func mux() {
 			client.fileChan <- &m
 		case ron.MESSAGE_TUNNEL:
 			_, err = remote.Write(m.Tunnel)
+		case ron.MESSAGE_PIPE:
+			pipeMessage(&m)
 		default:
 			err = fmt.Errorf("unknown message type: %v", m.Type)
 		}

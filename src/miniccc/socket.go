@@ -5,6 +5,8 @@
 package main
 
 import (
+	"encoding/gob"
+	"io"
 	log "minilog"
 	"net"
 	"path/filepath"
@@ -33,12 +35,11 @@ func commandSocketStart() {
 
 func commandSocketHandle(conn net.Conn) {
 	var err error
-	var k string
-	var v string
 
 	defer conn.Close()
 
 	dec := gob.NewDecoder(conn)
+	enc := gob.NewEncoder(conn)
 
 	var mode int
 	err = dec.Decode(&mode)
@@ -58,6 +59,9 @@ func commandSocketHandle(conn net.Conn) {
 }
 
 func tagConn(dec *gob.Decoder) {
+	var k string
+	var v string
+
 	err := dec.Decode(&k)
 	if err != nil {
 		log.Errorln(err)
@@ -77,7 +81,7 @@ func pipeConn(enc *gob.Encoder, dec *gob.Decoder) {
 	// finish the handshake by decoding the pipe name, then fall into the
 	// i/o loop
 	var pipe string
-	err := dec.Deocde(&pipe)
+	err := dec.Decode(&pipe)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -85,8 +89,16 @@ func pipeConn(enc *gob.Encoder, dec *gob.Decoder) {
 
 	log.Debug("got pipe: %v", pipe)
 
-	reader := NewPlumberReader(r.PlumbPipe)
-	writer := NewplumberWriter(r.PlumbPipe)
+	reader, err := NewPlumberReader(pipe)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+	writer, err := NewPlumberWriter(pipe)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
 
 	go func() {
 		for {
