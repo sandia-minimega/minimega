@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"os"
@@ -274,9 +275,11 @@ func (s *Server) clientHandler(conn net.Conn) {
 	defer conn.Close()
 
 	c := &client{
-		conn: conn,
-		enc:  gob.NewEncoder(conn),
-		dec:  gob.NewDecoder(conn),
+		conn:        conn,
+		enc:         gob.NewEncoder(conn),
+		dec:         gob.NewDecoder(conn),
+		pipeReaders: make(map[string]*miniplumber.Reader),
+		pipeWriters: make(map[string]chan<- string),
 	}
 
 	// get the first client struct as a handshake
@@ -314,6 +317,9 @@ func (s *Server) clientHandler(conn net.Conn) {
 		}
 		return
 	}
+
+	// get the plumber for this namespace
+	c.plumber = vm.GetPlumber()
 
 	c.Client = handshake.Client
 	if mangled {

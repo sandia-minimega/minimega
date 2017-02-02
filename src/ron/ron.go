@@ -6,6 +6,7 @@ package ron
 
 import (
 	log "minilog"
+	"miniplumber"
 	"net"
 	"os"
 	"path/filepath"
@@ -64,6 +65,7 @@ type VM interface {
 	GetTags() map[string]string
 	SetCCActive(bool)
 	SetTag(string, string)
+	GetPlumber() *miniplumber.Plumber
 }
 
 type Message struct {
