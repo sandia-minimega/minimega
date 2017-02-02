@@ -80,6 +80,7 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+	logLevel = log.LevelFlag
 
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
