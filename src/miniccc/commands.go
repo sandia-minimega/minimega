@@ -32,6 +32,12 @@ func processCommand(cmd *ron.Command) {
 		killAll(cmd.KillAll)
 	}
 
+	// adjust the log level, if a new level is provided
+	if cmd.Level != nil {
+		log.Info("setting level to: %v", *cmd.Level)
+		log.SetLevelAll(*cmd.Level)
+	}
+
 	if len(cmd.Command) != 0 {
 		resp.Stdout, resp.Stderr = runCommand(cmd.Command, cmd.Background)
 	}
