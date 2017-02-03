@@ -111,7 +111,7 @@ func main() {
 	// see pipeMMHandler in plumber.go
 	if *f_pipe != "" {
 		pipeMMHandler()
-		os.Exit(0)
+		return
 	}
 
 	// warn if we're not root

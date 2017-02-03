@@ -72,7 +72,9 @@ func commandSocketHandle(c net.Conn) {
 						return
 					case line := <-reader.C:
 						if err := enc.Encode(line); err != nil {
-							log.Errorln(err)
+							if !strings.Contains(err.Error(), "write: broken pipe") {
+								log.Errorln(err)
+							}
 							break
 						}
 					}

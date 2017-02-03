@@ -138,6 +138,7 @@ func pipeMMHandler() {
 	}
 
 	r, w := mm.Pipe(pipe)
+	wait := make(chan struct{})
 
 	go func() {
 		scanner := bufio.NewScanner(r)
@@ -150,7 +151,7 @@ func pipeMMHandler() {
 		if err := scanner.Err(); err != nil {
 			log.Fatalln(err)
 		}
-		os.Exit(0)
+		close(wait)
 	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
@@ -171,6 +172,5 @@ func pipeMMHandler() {
 	// the miniclient pipe handler exits for us.
 	w.Close()
 
-	wait := make(chan struct{})
 	<-wait
 }

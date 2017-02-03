@@ -91,10 +91,16 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 		log.Fatalln(err)
 	}
 
+	var done bool
+
 	go func() {
 		var buf string
+		defer rr.Close()
 		for {
 			err := mm.dec.Decode(&buf)
+			if done {
+				return
+			}
 			if err == io.EOF {
 				log.Fatalln("server disconnected")
 			} else if err != nil {
@@ -102,6 +108,9 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 			}
 
 			_, err = rw.WriteString(buf)
+			if done {
+				return
+			}
 			if err != nil {
 				log.Fatal("write: %v", err)
 			}
@@ -109,6 +118,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 	}()
 
 	go func() {
+		defer rw.Close()
+		defer mm.Close()
 		for {
 			scanner := bufio.NewScanner(wr)
 			for scanner.Scan() {
@@ -124,7 +135,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 			}
 
 			log.Debugln("client closed stdin")
-			os.Exit(0)
+			done = true
+			return
 		}
 	}()
 
