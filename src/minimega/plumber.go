@@ -95,9 +95,9 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		var mode int
 		if c.BoolArgs["all"] {
 			mode = miniplumber.MODE_ALL
-		} else if c.BoolArgs["rr"] {
+		} else if c.BoolArgs["round-robin"] {
 			mode = miniplumber.MODE_RR
-		} else if c.BoolArgs["rnd"] {
+		} else if c.BoolArgs["random"] {
 			mode = miniplumber.MODE_RND
 		}
 		plumber.Mode(pipe, mode)
