@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	ALL = iota
-	RR
-	RND
+	MODE_ALL = iota
+	MODE_RR
+	MODE_RND
 )
 
 const (
@@ -150,7 +150,23 @@ func (p *Plumber) Plumb(production ...string) error {
 	return nil
 }
 
-// func (p *Plumber) Mode(pipe string, mode int) {}
+func (p *Plumber) Mode(pipe string, mode int) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	if _, ok := p.pipes[pipe]; !ok {
+		p.pipes[pipe] = &Pipe{
+			name:    pipe,
+			readers: make(map[int]*Reader),
+		}
+	}
+	pp := p.pipes[pipe]
+
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+
+	pp.mode = mode
+}
 
 func (p *Plumber) PipelineDelete(production ...string) error {
 	p.lock.Lock()
@@ -547,11 +563,11 @@ func (p *Pipe) Mode() string {
 	defer p.lock.Unlock()
 
 	switch p.mode {
-	case ALL:
+	case MODE_ALL:
 		return "all"
-	case RR:
+	case MODE_RR:
 		return "round-robin"
-	case RND:
+	case MODE_RND:
 		return "random"
 	default:
 		log.Fatal("unknown mode: %v", p.mode)

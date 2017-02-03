@@ -43,6 +43,7 @@ var plumbCLIHandlers = []minicli.Handler{
 		Patterns: []string{
 			"pipe",
 			"pipe <pipe> <data>",
+			"pipe <pipe> <mode,> <all,round-robin,random>",
 		},
 		Call: wrapSimpleCLI(cliPipe),
 	},
@@ -88,9 +89,21 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliPipe(c *minicli.Command, resp *minicli.Response) error {
-	if pipe, ok := c.StringArgs["pipe"]; ok {
-		data := c.StringArgs["data"]
+	pipe := c.StringArgs["pipe"]
 
+	if c.BoolArgs["mode"] {
+		var mode int
+		if c.BoolArgs["all"] {
+			mode = miniplumber.MODE_ALL
+		} else if c.BoolArgs["rr"] {
+			mode = miniplumber.MODE_RR
+		} else if c.BoolArgs["rnd"] {
+			mode = miniplumber.MODE_RND
+		}
+		plumber.Mode(pipe, mode)
+
+		return nil
+	} else if data, ok := c.StringArgs["data"]; ok {
 		plumber.Write(pipe, data)
 	} else {
 		// get info on all named pipes
