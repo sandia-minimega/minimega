@@ -698,25 +698,29 @@ function makeGraph (response, ethers) {
         vm["node_type"] = null;
         vm["uuid"] = vm["host"] + " " + vm["id"];  // Space suffices as a separator
 
+		// TODO: THIS IS WRONG!!!!!!1111one
+
         // Unconnected machine (no VLANs)
-        if (vm.network.length < 1) {
+        if (vm.vlan.length < 1) {
             vm["node_type"] = "unconnected";
             unconnected.push(vm);
             network.machines.unconnected.push(vm);
 
         // Router (multiple VLANs)
-        } else if (vm.network.length > 1) {
+        } else if (vm.vlan.length > 1) {
             vm["node_type"] = "router";
             routers.push(vm);
 
-            for (var j = 0; j < vm.network.length; j++)
-                pushOrCreate(network.machines.vlans, vm.network[j].VLAN, vm);
+            for (var j = 0; j < vm.vlan.length; j++) {
+				console.log(vm.vlan[j]);
+                pushOrCreate(network.machines.vlans, vm.vlan[j], vm);
+			}
 
         // Normal machine (one VLAN)
         } else {
             vm["node_type"] = "normal";
-            pushOrCreate(vlans,                  vm.network[0].VLAN, vm);
-            pushOrCreate(network.machines.vlans, vm.network[0].VLAN, vm);
+            pushOrCreate(vlans,                  vm.vlan[0], vm);
+            pushOrCreate(network.machines.vlans, vm.vlan[0], vm);
         }
     }
 
@@ -767,8 +771,8 @@ function makeGraph (response, ethers) {
             "r":            null
         }) - 1;
 
-        for (var j = 0; j < router.network.length; j++) {      // for vlan in router.vlan
-            var vlan = router.network[j].VLAN;
+        for (var j = 0; j < router.vlan.length; j++) {      // for vlan in router.vlan
+            var vlan = router.vlan[j];
             network.nodes[index].vlans.push(vlan);
 
             var from = index;

@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path"
 	"strings"
+	"sync"
 	"syscall"
 )
 
@@ -41,6 +42,9 @@ type Conn struct {
 	url string
 
 	conn net.Conn
+
+	// lock so we don't try to use enc/dec for concurrent Runs
+	lock sync.Mutex
 
 	enc *json.Encoder
 	dec *json.Decoder
@@ -83,6 +87,8 @@ func (mm *Conn) Run(cmd string) chan *Response {
 		return out
 	}
 
+	mm.lock.Lock()
+
 	err := mm.enc.Encode(Request{Command: cmd})
 	if err != nil {
 		log.Fatal("local command gob encode: %v", err)
@@ -92,6 +98,7 @@ func (mm *Conn) Run(cmd string) chan *Response {
 	respChan := make(chan *Response)
 
 	go func() {
+		defer mm.lock.Unlock()
 		defer close(respChan)
 
 		for {
