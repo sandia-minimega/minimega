@@ -96,12 +96,12 @@ bar  |
 foo1 | 
 foo2 | 
 foo3 |
-## .filter name~foo .col namesp,name,st vm info
+## .filter name~foo .col namesp,name,state vm info
 namespace | name | state
           | foo1 | BUILDING
           | foo2 | RUNNING
           | foo3 | BUILDING
-## .filter name~foo .col name,namesp,st vm info
+## .filter name~foo .col name,namesp,state vm info
 name | namespace | state
 foo1 |           | BUILDING
 foo2 |           | RUNNING
@@ -114,7 +114,7 @@ E: ambiguous column `nam`
 E: ambiguous column `nam`
 ## .columns s vm info
 E: ambiguous column `s`
-## .filter name~foo .col st vm info
+## .filter name~foo .col state vm info
 E: no such column `name`
 
 ## # Test preprocess
