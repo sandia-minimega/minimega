@@ -224,7 +224,7 @@ func (p *Plumber) sendReaders(m *Message) {
 		defer pp.lock.Unlock()
 
 		for k, _ := range pp.readers {
-			m.Readers = append(m.Readers, k)
+			resp.Readers = append(resp.Readers, k)
 		}
 	}
 
