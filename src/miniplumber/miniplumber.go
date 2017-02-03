@@ -12,12 +12,22 @@ package miniplumber
 import (
 	"bufio"
 	"fmt"
+	"math/rand"
 	"meshage"
 	log "minilog"
 	"os/exec"
 	"sort"
 	"strings"
 	"sync"
+	"time"
+)
+
+const (
+	TIMEOUT = time.Duration(10 * time.Second)
+)
+
+const (
+	SCHEDULE_ALL = -1
 )
 
 const (
@@ -27,7 +37,9 @@ const (
 )
 
 const (
-	FORWARD = iota
+	MESSAGE_FORWARD = iota
+	MESSAGE_QUERY
+	MESSAGE_QUERY_RESPONSE
 )
 
 type Plumber struct {
@@ -36,23 +48,31 @@ type Plumber struct {
 	pipes     map[string]*Pipe
 	pipelines map[string]*pipeline
 	lock      sync.Mutex
-	idLock    sync.Mutex
-	idCount   int
+	tidLock   sync.Mutex
+	tids      map[int64]*tid
+}
+
+type tid struct {
+	TID  int64
+	C    chan *Message
+	Done chan struct{}
+	once sync.Once
 }
 
 type Pipe struct {
-	name       string
-	mode       int
-	readers    map[int]*Reader
-	numWriters int
-	lock       sync.Mutex
+	name          string
+	mode          int
+	readers       map[int64]*Reader
+	numWriters    int
+	lock          sync.Mutex
+	lastRecipient int64
 }
 
 type Reader struct {
 	C    chan string
 	Done chan struct{}
 	once sync.Once
-	ID   int
+	ID   int64
 }
 
 type pipeline struct {
@@ -63,10 +83,25 @@ type pipeline struct {
 }
 
 type Message struct {
-	From string
-	Type int
-	Pipe string
-	Data string
+	TID       int64
+	From      string
+	Type      int
+	Pipe      string
+	Data      string
+	Readers   []int64
+	Recipient int64
+}
+
+type int64Sorter []int64
+
+func (a int64Sorter) Len() int           { return len(a) }
+func (a int64Sorter) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a int64Sorter) Less(i, j int) bool { return a[i] < a[j] }
+
+func (t *tid) Close() {
+	t.once.Do(func() {
+		close(t.Done)
+	})
 }
 
 func (r *Reader) Close() {
@@ -82,6 +117,7 @@ func New(n *meshage.Node) *Plumber {
 		Messages:  make(chan *meshage.Message, 1024),
 		pipes:     make(map[string]*Pipe),
 		pipelines: make(map[string]*pipeline),
+		tids:      make(map[int64]*tid),
 	}
 
 	if p.node != nil {
@@ -91,16 +127,17 @@ func New(n *meshage.Node) *Plumber {
 	return p
 }
 
-func (p *Plumber) forward(pipe, data string) error {
+func (p *Plumber) forward(pipe, data string, r int64) error {
 	if p.node == nil {
 		return nil
 	}
 
 	m := &Message{
-		From: p.node.Name(),
-		Type: FORWARD,
-		Pipe: pipe,
-		Data: data,
+		From:      p.node.Name(),
+		Type:      MESSAGE_FORWARD,
+		Pipe:      pipe,
+		Data:      data,
+		Recipient: r,
 	}
 
 	_, err := p.node.Broadcast(m)
@@ -118,11 +155,82 @@ func (p *Plumber) handleMessages() {
 		log.Debug("got message type %v from %v", m.Type, m.From)
 
 		switch m.Type {
-		case FORWARD:
-			p.writeNoForward(m.Pipe, m.Data)
+		case MESSAGE_FORWARD:
+			p.writeNoForward(m.Pipe, m.Data, m.Recipient)
+		case MESSAGE_QUERY:
+			p.sendReaders(&m)
+		case MESSAGE_QUERY_RESPONSE:
+			p.tidLock.Lock()
+			t, ok := p.tids[m.TID]
+			p.tidLock.Unlock()
+
+			if !ok {
+				log.Errorln("dropping message for invalid TID: ", m.TID)
+				return
+			}
+
+			select {
+			case t.C <- &m:
+			case <-t.Done:
+			}
 		default:
 			log.Error("unknown plumber message type: %v", m.Type)
 		}
+	}
+}
+
+func (p *Plumber) newTID() *tid {
+	p.tidLock.Lock()
+	defer p.tidLock.Unlock()
+
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+
+	t := &tid{
+		TID:  r.Int63(),
+		C:    make(chan *Message),
+		Done: make(chan struct{}),
+	}
+
+	p.tids[t.TID] = t
+
+	return t
+}
+
+func (p *Plumber) unregisterTID(t *tid) {
+	t.Close()
+
+	p.tidLock.Lock()
+	p.tidLock.Unlock()
+
+	if _, ok := p.tids[t.TID]; ok {
+		delete(p.tids, t.TID)
+	}
+}
+
+func (p *Plumber) sendReaders(m *Message) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	resp := &Message{
+		TID:  m.TID,
+		From: p.node.Name(),
+		Type: MESSAGE_QUERY_RESPONSE,
+		Pipe: m.Pipe,
+	}
+
+	if pp, ok := p.pipes[m.Pipe]; ok {
+		pp.lock.Lock()
+		defer pp.lock.Unlock()
+
+		for k, _ := range pp.readers {
+			m.Readers = append(m.Readers, k)
+		}
+	}
+
+	_, err := p.node.Set([]string{m.From}, resp)
+	if err != nil {
+		log.Errorln(err)
 	}
 }
 
@@ -157,7 +265,7 @@ func (p *Plumber) Mode(pipe string, mode int) {
 	if _, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
 			name:    pipe,
-			readers: make(map[int]*Reader),
+			readers: make(map[int64]*Reader),
 		}
 	}
 	pp := p.pipes[pipe]
@@ -285,12 +393,10 @@ func (p *Plumber) NewReader(pipe string) *Reader {
 	return p.newReader(pipe)
 }
 
-func (p *Plumber) id() int {
-	p.idLock.Lock()
-	defer p.idLock.Unlock()
-
-	p.idCount++
-	return p.idCount
+func (p *Plumber) id() int64 {
+	s := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(s)
+	return r.Int63()
 }
 
 // assume the lock is held
@@ -306,7 +412,7 @@ func (p *Plumber) newReader(pipe string) *Reader {
 	if _, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
 			name:    pipe,
-			readers: make(map[int]*Reader),
+			readers: make(map[int64]*Reader),
 		}
 	}
 	pp := p.pipes[pipe]
@@ -348,8 +454,9 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 
 	go func() {
 		for v := range c {
-			p.forward(pipe, v)
-			pp.write(v)
+			r := p.schedule(pipe)
+			p.forward(pipe, v, r)
+			pp.write(v, r)
 		}
 		pp.lock.Lock()
 		pp.numWriters--
@@ -360,23 +467,103 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 }
 
 func (p *Plumber) Write(pipe string, value string) {
+	r := p.schedule(pipe)
+
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.forward(pipe, value)
+	p.forward(pipe, value, r)
 
 	if pp, ok := p.pipes[pipe]; ok {
-		pp.write(value)
+		pp.write(value, r)
 	}
 }
 
+// Based on the pipe mode, choose a recipient - system wide. This means
+// querying other plumber's state over meshage.
+func (p *Plumber) schedule(pipe string) int64 {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	var readers []int64
+
+	pp, ok := p.pipes[pipe]
+	if !ok {
+		log.Error("pipe not found - something is wrong: %v", pipe)
+		return SCHEDULE_ALL
+	}
+
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+	if pp.mode == MODE_ALL {
+		return SCHEDULE_ALL
+	}
+
+	for k, _ := range pp.readers {
+		readers = append(readers, k)
+	}
+
+	t := p.newTID()
+	defer p.unregisterTID(t)
+
+	// get readers from other plumbers
+	m := &Message{
+		TID:  t.TID,
+		From: p.node.Name(),
+		Type: MESSAGE_QUERY,
+		Pipe: pipe,
+	}
+
+	nodes, err := p.node.Broadcast(m)
+	if err != nil {
+		log.Errorln(err)
+		return SCHEDULE_ALL
+	}
+
+	// wait for n responses, or a timeout
+	for i := 0; i < len(nodes); i++ {
+		select {
+		case resp := <-t.C:
+			if log.WillLog(log.DEBUG) {
+				log.Debugln("got response: ", resp)
+			}
+			readers = append(readers, resp.Readers...)
+		case <-time.After(TIMEOUT):
+			log.Errorln("timeout")
+			return SCHEDULE_ALL
+		}
+	}
+
+	sort.Sort(int64Sorter(readers))
+
+	if len(readers) == 0 {
+		return SCHEDULE_ALL
+	}
+
+	// pick a winner!
+	switch pp.mode {
+	case MODE_RR:
+		i := sort.Search(len(readers), func(i int) bool { return readers[i] > pp.lastRecipient })
+		if i == len(readers) {
+			i = 0
+		}
+		pp.lastRecipient = readers[i]
+		return readers[i]
+	case MODE_RND:
+		return readers[rand.Intn(len(readers))]
+	}
+
+	// we should never get here
+	return SCHEDULE_ALL
+}
+
 // write to a named pipe without forwarding the message over meshage
-func (p *Plumber) writeNoForward(pipe string, value string) {
+func (p *Plumber) writeNoForward(pipe string, value string, r int64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
 	if pp, ok := p.pipes[pipe]; ok {
-		pp.write(value)
+		pp.write(value, r)
 	}
 }
 
@@ -590,7 +777,7 @@ func (p *Pipe) NumWriters() int {
 }
 
 // don't assume the plumber lock is held
-func (p *Pipe) write(value string) {
+func (p *Pipe) write(value string, r int64) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -600,12 +787,22 @@ func (p *Pipe) write(value string) {
 		value += "\n"
 	}
 
-	for _, c := range p.readers {
-		log.Debug("write: %v", value)
-		select {
-		case <-c.Done:
-			continue
-		case c.C <- value:
+	if r == SCHEDULE_ALL {
+		for _, c := range p.readers {
+			log.Debug("write: %v", value)
+			select {
+			case <-c.Done:
+				continue
+			case c.C <- value:
+			}
+		}
+	} else {
+		if c, ok := p.readers[r]; ok {
+			log.Debug("write: %v", value)
+			select {
+			case <-c.Done:
+			case c.C <- value:
+			}
 		}
 	}
 }
