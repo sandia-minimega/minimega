@@ -488,8 +488,7 @@ func (p *Plumber) schedule(pipe string) int64 {
 	var readers []int64
 
 	pp, ok := p.pipes[pipe]
-	if !ok {
-		log.Error("pipe not found - something is wrong: %v", pipe)
+	if ok {
 		return SCHEDULE_ALL
 	}
 
