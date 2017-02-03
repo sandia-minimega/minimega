@@ -51,6 +51,11 @@ type Command struct {
 
 	// clients that have responded to this command
 	CheckedIn []string
+
+	// plumber connections
+	Stdin  string
+	Stdout string
+	Stderr string
 }
 
 type File struct {
@@ -121,5 +126,8 @@ func (c *Command) Copy() *Command {
 		Filter:     c.Filter,
 		PID:        c.PID,
 		KillAll:    c.KillAll,
+		Stdin:      c.Stdin,
+		Stdout:     c.Stdout,
+		Stderr:     c.Stderr,
 	}
 }
