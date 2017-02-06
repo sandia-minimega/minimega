@@ -22,6 +22,18 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+func respondJSON(w http.ResponseWriter, data interface{}) {
+	js, err := json.Marshal(data)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
 // indexHandler redirect / to /vms
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
@@ -34,8 +46,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 // Templated HTML responses
 func templateHander(w http.ResponseWriter, r *http.Request) {
-	lp := filepath.Join(web.Root, "templates", "_layout.tmpl")
-	fp := filepath.Join(web.Root, "templates", r.URL.Path+".tmpl")
+	lp := filepath.Join(*f_root, "templates", "_layout.tmpl")
+	fp := filepath.Join(*f_root, "templates", r.URL.Path+".tmpl")
 
 	info, err := os.Stat(fp)
 	if err != nil {
@@ -63,8 +75,8 @@ func templateHander(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// screenshotHandler serves routes like /screenshot/<name>.png. Optional
-// size query parameter dictates the size of the screenshot.
+// screenshotHandler serves routes like /screenshot/<name>.png. Optional size
+// query parameter dictates the size of the screenshot.
 func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	// URL should be of the form `/screenshot/<name>.png`
 	path := strings.Trim(r.URL.Path, "/")
@@ -77,9 +89,10 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSuffix(fields[1], ".png")
 
+	// TODO: sanitize?
 	size := r.URL.Query().Get("size")
 
-	// TODO: replace w with base64 encoder
+	// TODO: replace w with base64 encoder?
 	do_encode := r.URL.Query().Get("base64") != ""
 
 	cmd := fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
@@ -97,7 +110,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 
 				// Unknown error
 				log.Errorln(resp.Error)
-				http.Error(w, friendlyError, http.StatusInternalServerError)
+				http.Error(w, "unknown error", http.StatusInternalServerError)
 				return
 			}
 
@@ -115,15 +128,16 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if screenshot != nil {
-		if do_encode {
-			base64string := "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
-			w.Write([]byte(base64string))
-		} else {
-			w.Write(screenshot)
-		}
-	} else {
+	if screenshot == nil {
 		http.NotFound(w, r)
+		return
+	}
+
+	if do_encode {
+		base64string := "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
+		w.Write([]byte(base64string))
+	} else {
+		w.Write(screenshot)
 	}
 }
 
@@ -140,18 +154,18 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
 	w.Header().Set("Expires", "0")                                         // Proxies.
 
-	var typ string
+	var vmType string
 
 	columns := []string{"type"}
 	for _, vm := range vmInfo(name, columns) {
-		typ = vm["type"]
+		vmType = vm["type"]
 	}
 
-	switch typ {
+	switch vmType {
 	case "kvm":
-		http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
+		http.ServeFile(w, r, filepath.Join(*f_root, "vnc_auto.html"))
 	case "container":
-		http.ServeFile(w, r, filepath.Join(web.Root, "terminal.html"))
+		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
 	default:
 		http.NotFound(w, r)
 	}
@@ -176,8 +190,8 @@ func tunnelHandler(ws *websocket.Conn) {
 
 		switch vm["type"] {
 		case "kvm":
-			// Undocumented "feature" of websocket -- need to set to PayloadType in
-			// order for a direct io.Copy to work.
+			// Undocumented "feature" of websocket -- need to set to
+			// PayloadType in order for a direct io.Copy to work.
 			ws.PayloadType = websocket.BinaryFrame
 
 			port, _ = strconv.Atoi(vm["vnc_port"])
@@ -254,15 +268,7 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 		sorted[i] = vms[k]
 	}
 
-	js, err := json.Marshal(sorted)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	respondJSON(w, sorted)
 }
 
 func hostsHandler(w http.ResponseWriter, r *http.Request) {
@@ -287,15 +293,7 @@ func hostsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	js, err := json.Marshal(hosts)
-
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	respondJSON(w, hosts)
 }
 
 func vlansHandler(w http.ResponseWriter, r *http.Request) {
@@ -320,12 +318,5 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	js, err := json.Marshal(vlans)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(js)
+	respondJSON(w, vlans)
 }
