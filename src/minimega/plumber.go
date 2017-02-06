@@ -46,6 +46,7 @@ var plumbCLIHandlers = []minicli.Handler{
 			"pipe <pipe> <data>",
 			"pipe <pipe> <mode,> <all,round-robin,random>",
 			"pipe <pipe> <log,> <true,false>",
+			"pipe <pipe> <via,> <command>...",
 		},
 		Call: wrapSimpleCLI(cliPipe),
 	},
@@ -56,6 +57,7 @@ var plumbCLIHandlers = []minicli.Handler{
 			"clear pipe [pipe]",
 			"clear pipe <pipe> <mode,>",
 			"clear pipe <pipe> <log,>",
+			"clear pipe <pipe> <via,>",
 		},
 		Call: wrapBroadcastCLI(cliPipeClear),
 	},
@@ -113,6 +115,8 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		} else {
 			plumber.Log(pipe, false)
 		}
+	} else if c.BoolArgs["via"] {
+		plumber.Via(pipe, c.ListArgs["command"])
 	} else if data, ok := c.StringArgs["data"]; ok {
 		plumber.Write(pipe, data)
 	} else {
@@ -141,6 +145,11 @@ func cliPipeClear(c *minicli.Command, resp *minicli.Response) error {
 			return fmt.Errorf("no such pipe: %v", pipe)
 		}
 		plumber.Log(pipe, false)
+	} else if c.BoolArgs["via"] {
+		if !ok {
+			return fmt.Errorf("no such pipe: %v", pipe)
+		}
+		plumber.Via(pipe, []string{})
 	} else {
 		if ok {
 			return plumber.PipeDelete(pipe)
