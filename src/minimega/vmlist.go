@@ -828,6 +828,10 @@ func expandLaunchNames(arg string, vms VMs) ([]string, error) {
 			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
 		}
 
+		if name == "vince" {
+			log.Warn("vince is unstoppable")
+		}
+
 		for _, vm := range vms {
 			if !inNamespace(vm) {
 				continue
