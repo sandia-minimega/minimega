@@ -67,6 +67,7 @@ type Pipe struct {
 	lock          sync.Mutex
 	lastRecipient int64
 	last          string
+	log           bool
 }
 
 type Reader struct {
@@ -275,6 +276,24 @@ func (p *Plumber) Mode(pipe string, mode int) {
 	defer pp.lock.Unlock()
 
 	pp.mode = mode
+}
+
+func (p *Plumber) Log(pipe string, mode bool) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	if _, ok := p.pipes[pipe]; !ok {
+		p.pipes[pipe] = &Pipe{
+			name:    pipe,
+			readers: make(map[int64]*Reader),
+		}
+	}
+	pp := p.pipes[pipe]
+
+	pp.lock.Lock()
+	defer pp.lock.Unlock()
+
+	pp.Log(mode)
 }
 
 func (p *Plumber) PipelineDelete(production ...string) error {
@@ -779,6 +798,10 @@ func (p *Pipe) Last() string {
 	return p.last
 }
 
+func (p *Pipe) Log(mode bool) {
+	p.log = mode
+}
+
 // don't assume the plumber lock is held
 func (p *Pipe) write(value string, r int64) {
 	p.lock.Lock()
@@ -791,6 +814,10 @@ func (p *Pipe) write(value string, r int64) {
 	}
 
 	p.last = value
+
+	if p.log {
+		log.Debug(fmt.Sprintf("pipe %v: %v", p.name, strings.TrimSpace(value)))
+	}
 
 	if r == SCHEDULE_ALL {
 		for _, c := range p.readers {
