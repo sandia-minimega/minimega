@@ -628,7 +628,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return vm.BaseConfig.Info(field)
 	}
 
-	return fmt.Sprintf("%v", vals), nil
+	return "[" + strings.Join(vals, ", ") + "]", nil
 }
 
 // setState updates the vm state, and write the state to file. Assumes that the
