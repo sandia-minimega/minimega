@@ -885,6 +885,13 @@ func (p *Pipe) Log(mode bool) {
 	p.log = mode
 }
 
+func (p *Pipe) GetVia() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return strings.Join(p.viaCommand, " ")
+}
+
 // pipe lock is already held
 func (p *Pipe) via(value string) (string, error) {
 	if len(p.viaCommand) == 0 {
