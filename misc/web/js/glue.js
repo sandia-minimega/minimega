@@ -35,28 +35,13 @@ function initVMDataTable() {
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
             updateJSON('/vms.json', function(vmsData) {
-                updateJSON('/vlans.json', function(vlansData) {
-                    // create mapping of vlans to aliases for easier lookup
-                    var aliases = {};
-                    vlansData.forEach(function(vlan) {
-                        aliases[vlan[2]] = vlan[1];
-                    });
+                // disable auto-refresh there are too many VMs
+                VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
-                    // insert VLAN aliases into VMs network data
-                    //vmsData.forEach(function(vm) {
-                        //vm["network"].forEach(function(network) {
-                        //    network["Alias"] = aliases[network["VLAN"]];
-                        //});
-                    //});
+                // put into a structure that DataTables expects
+                var dataTablesData = {"data": vmsData};
 
-                    // disable auto-refresh there are too many VMs
-                    VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
-
-                    // put into a structure that DataTables expects
-                    var dataTablesData = {"data": vmsData};
-
-                    callback(dataTablesData);
-                });
+                callback(dataTablesData);
             });
         },
         // custom DOM with Boostrap integration
@@ -416,27 +401,9 @@ function renderDisksColumn(data, type, full, meta) {
     return html.join("<br />");
 }
 
-function renderArray(data, type, full, meta) {
-    var html = [];
-    for (var i = 0; i < data.length; i++) {
-        html.push(data[i]);
-    }
-    return handleEmptyString(html.join(", "));
-}
-
-function renderArrayOfObjectsUsingKey(key) {
-    return function(data, type, full, meta) {
-        return handleEmptyString(data.reduce(
-            function (previous, current) {
-                return previous.concat([handleEmptyString(current[key])]);
-            }, []).join(", ")
-        );
-    };
-}
-
 function renderFilteredObject(filterFn) {
     return function(data, type, full, meta) {
-		var jsonified = JSON.parse(data);
+        var jsonified = JSON.parse(data);
         var html = [];
         var keys = Object.keys(jsonified).filter(filterFn);
         for (var i = 0; i < keys.length; i++) {
@@ -444,15 +411,6 @@ function renderFilteredObject(filterFn) {
         }
         return handleEmptyString(html.join(", "));
     }
-}
-
-function renderObject(data, type, full, meta) {
-    var html = [];
-    var keys = Object.keys(data);
-    for (var i = 0; i < keys.length; i++) {
-        html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
-    }
-    return handleEmptyString(html.join(", "));
 }
 
 // Put an italic "null" in the table where there are fields that aren't set
