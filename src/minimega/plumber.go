@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"miniplumber"
 	"os"
+	"strings"
 )
 
 var (
@@ -107,11 +108,11 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		plumber.Write(pipe, data)
 	} else {
 		// get info on all named pipes
-		resp.Header = []string{"name", "mode", "readers", "writers"}
+		resp.Header = []string{"name", "mode", "readers", "writers", "last message"}
 		resp.Tabular = [][]string{}
 
 		for _, v := range plumber.Pipes() {
-			resp.Tabular = append(resp.Tabular, []string{v.Name(), v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters())})
+			resp.Tabular = append(resp.Tabular, []string{v.Name(), v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), strings.TrimSpace(v.Last())})
 		}
 	}
 

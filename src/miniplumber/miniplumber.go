@@ -66,6 +66,7 @@ type Pipe struct {
 	numWriters    int
 	lock          sync.Mutex
 	lastRecipient int64
+	last          string
 }
 
 type Reader struct {
@@ -467,16 +468,12 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 }
 
 func (p *Plumber) Write(pipe string, value string) {
-	r := p.schedule(pipe)
-
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	p.forward(pipe, value, r)
-
-	if pp, ok := p.pipes[pipe]; ok {
-		pp.write(value, r)
-	}
+	w := p.newWriter(pipe)
+	w <- value
+	close(w)
 }
 
 // Based on the pipe mode, choose a recipient - system wide. This means
@@ -488,7 +485,7 @@ func (p *Plumber) schedule(pipe string) int64 {
 	var readers []int64
 
 	pp, ok := p.pipes[pipe]
-	if ok {
+	if !ok {
 		return SCHEDULE_ALL
 	}
 
@@ -775,6 +772,13 @@ func (p *Pipe) NumWriters() int {
 	return p.numWriters
 }
 
+func (p *Pipe) Last() string {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.last
+}
+
 // don't assume the plumber lock is held
 func (p *Pipe) write(value string, r int64) {
 	p.lock.Lock()
@@ -785,6 +789,8 @@ func (p *Pipe) write(value string, r int64) {
 	if !strings.HasSuffix(value, "\n") {
 		value += "\n"
 	}
+
+	p.last = value
 
 	if r == SCHEDULE_ALL {
 		for _, c := range p.readers {
