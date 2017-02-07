@@ -1,57 +1,72 @@
 <!DOCTYPE html>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <title>minimega</title>
-  <link type="text/css" rel="stylesheet" href="/static/dir.css">
-  <link rel="icon" href="/static/favicon.png">
-  <script src="/static/dir.js"></script>
-</head>
-<body>
+<html lang="en-US">
+	<head>
+		<title>minimega.org</title>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<link type="text/css" rel="stylesheet" href="/static/page.css">
+		<link rel="icon" href="/static/favicon.png">
+		<!-- handcrafted artisanal HTML !-->
+	</head>
 
-<div id="page">
+	<body>
+		<div id="title">
+			<h1>minimega</h1>
+			<p>a distributed VM management tool</p>
+		</div>
 
-  <h1>Documentation</h1>
+		<ul class="links">
+			<li><a href="/index.html">Home</a>
+			<li><a href="/articles/">Documentation</a>
+			<li><a href="/articles/tutorials/">Tutorials</a>
+			<li><a href="/screenshots/screenshots.html">Screenshots</a>
+			<li><a href="https://github.com/sandia-minimega/minimega">Github repository</a>
+			<li><a href="/articles/contributing.article">Contributing</a>
+			<li><a href="/developer/">Developer Docs</a>
+			<li><a href="/tools.html">More tools</a>
+			<hr />
+			<li><a href="http://tip.minimega.org">Latest docs (unstable)</a>
+		</ul>
 
-  {{with .Path}}<h2>{{.}}</h2>{{end}}
+		<div class="content" id="content">
+			<h1>Documentation</h1>
 
-  {{with .Articles}}
-  <h4>Articles:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Title}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
+			{{with .Path}}<h2>{{.}}</h2>{{end}}
 
-  {{with .Slides}}
-  <h4>Slide decks:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a>: {{.Title}}</dd>
-  {{end}}
-  </dl>
-  {{end}}
+			{{with .Articles}}
+			<h4>Articles:</h4>
+			<dl>
+			{{range .}}
+			<dd><a href="/{{.Path}}">{{.Title}}</a></dd>
+			{{end}}
+			</dl>
+			{{end}}
 
-  {{with .Other}}
-  <h4>Files:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
+			{{with .Slides}}
+			<h4>Slide decks:</h4>
+			<dl>
+			{{range .}}
+			<dd><a href="/{{.Path}}">{{.Name}}</a>: {{.Title}}</dd>
+			{{end}}
+			</dl>
+			{{end}}
 
-  {{with .Dirs}}
-  <h4>Sub-directories:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
+			{{with .Other}}
+			<h4>Files:</h4>
+			<dl>
+			{{range .}}
+			<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+			{{end}}
+			</dl>
+			{{end}}
 
-</div>
-
-</body>
+			{{with .Dirs}}
+			<h4>Sub-directories:</h4>
+			<dl>
+			{{range .}}
+			<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+			{{end}}
+			</dl>
+			{{end}}
+		</div>
+	</body>
 </html>
