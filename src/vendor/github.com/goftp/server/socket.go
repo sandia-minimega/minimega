@@ -166,8 +166,8 @@ func (socket *ftpPassiveSocket) GoListenAndServe() (err error) {
 	}
 
 	go func() {
+		defer socket.wg.Done()
 		conn, err := listener.Accept()
-		socket.wg.Done()
 		if err != nil {
 			socket.err = err
 			return
