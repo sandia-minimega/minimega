@@ -230,7 +230,7 @@ func ftpServer() {
 		Auth:         auth,
 		Name:         SERVER_NAME,
 		PublicIp:     ipv4.String(),
-		PassivePorts: *f_ftppassiveports,
+		PassivePorts: "",
 		Port:         COMMAND_PORT,
 		TLS:          useTLS,
 		CertFile:     cert,
