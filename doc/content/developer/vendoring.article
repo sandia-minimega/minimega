@@ -1,0 +1,56 @@
+# Note: have to use long lines because minidoc assumes that bullets end at the
+# end of the line.
+# vim: linebreak wrap
+Vendoring
+
+The minimega authors
+07 Feb 2017
+
+* Introduction
+
+In the minimega project, we vendor all of our dependencies to ensure that we
+build with specific versions of the dependencies every time on every machine.
+Vendoring dependencies also allows us to tweak dependencies as needed (e.g. bug
+fixes) without waiting for them to be resolved upstream.
+
+We vendor dependencies in `src/vendor` which is supported in Go 1.6+.
+
+* Adding a new dependency
+
+When you need to add a new dependency, there are a few things to consider:
+
+- Do we actually *need* to add a new dependency? If it is not too complicated functionality, we prefer to reimplement.
+- Does the dependency also have dependencies? Does a custom logging framework?
+- Does the dependency have a compatible license?
+
+Ask the team if you are unsure -- it never hurts to get a second (or third)
+opinion.
+
+To actually vendor a dependency:
+
+- Clone the dependency into the appropriate directory in `src/vendor`. Note that the path under `src/vendor` will become the import path. Copy existing conventions where possible (i.e. clone `github.com/...` into `src/vendor/github.com/...`.
+- Check out a specific release of the dependency, if applicable. Some dependencies tag stable releases that should most likely be used instead of `HEAD` which may include untested or unstable code.
+- Run test cases -- we do not run these in a normal build so it is good to know that they passed when we were vendoring the dependency.
+- Record the latest git hash in `src/vendor/versions` so that we have a record of exactly what version of the dependencies you are vendoring.
+- Remove `.git` directory. (We do not use git submodules.)
+- Create a symbolic link in `LICENSES/` that points to the new dependency's LICENSE. We use symbolic links so that we do not have to remember to recopy the LICENSE whenever we update the dependency.
+- Add and commit the new files.
+- Repeat for any nested dependencies.
+
+* Patching a dependency
+
+Sometimes we find issues in our dependencies that are not resolved upstream.
+Rather than wait for upstream to patch, we simply patch the vendored files.
+These patches should be done as separate commits from the above process to add a
+new dependency so that we can reapply the patches if we update the dependency.
+
+* Updating a dependency
+
+The easiest way to update a dependency is to remove the dependency from
+`src/vendor` and then follow the steps to add a new dependency. Git will figure
+out what has been added/changed/removed for you if you do not commit between
+removing the dependency directory and add the updated files. This only works
+with unpatched dependencies.
+
+For patched dependencies, you must port the necessary patches to the new
+dependency code. Good luck.
