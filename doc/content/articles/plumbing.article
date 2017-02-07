@@ -1,0 +1,119 @@
+Plumbing with minimega
+
+David Frit
+24 January 2017
+
+* Introduction
+
+Plumbing is a mechanism in minimega to enable simple communication between VMs,
+processes on guests or hosts, and instances of minimega. In short, it allows
+composing, or plumbing, communication pathways for any element of the minimega
+ecosystem. Plumbing in minimega is similar in concept to unix pipes and the
+myriad other IPC composition mechanisms available in many programming languages
+and operating systems. 
+
+* plumbing semantics
+
+** named and unnamed pipes
+
+- names are unique to their namespace
+
+** multiplexing
+ 
+	- one to all (copy)
+	- one to one (random)
+	- one to one (round robin)
+
+===
+
+i think it's easy to make pipes unique to their namespace, which keeps the namespace requirements intact. The host-side calls will have to specify a namespace somehow.
+
+The last part that isn't well explored yet is how we do distribution and also how we deal with pub/sub or register/unregister.
+
+plumbing should allow any number of arguments, allowing unnamed pipes. This is necessary to do things like route a message out to a program and back into a named variable. If the last argument is something external, then the output is simply lost. This is desired in certain use cases. If the last argument is a terminalthen the output is just buffered?
+
+examples:
+
+	# plumbing with minimega
+
+		# copy all foo to bar
+		plumb foo bar
+
+		# chain 3 named pipes
+		plumb a b c
+
+		# route a message through sed
+		plumb foo "sed 's/moo/neigh/g'" bar
+
+		# plumb multiple receivers
+		plumb src dst_1
+		plumb src dst_2
+
+		# delete named pipe foo, sending an EOF to all readers and
+		# deleting any writers to foo
+		clear plumb foo
+
+		# clear everything, send EOF to all readers
+		clear plumb
+
+		# change the delivery method for writes to foo
+			# round robin readers
+			plumbctl foo mode rr
+
+			# random reader
+			plumbctl foo mode rnd
+
+			# all readers (default)
+			plumbctl foo mode all
+
+		# pass messages via a program, unique to every reader, before
+		# delivery
+		plumbctl foo via "bin/randomize"
+		
+	# plumbing externally with minimega
+
+		# write "bar" to foo
+		./minimega -plumb foo bar
+
+		# read foo (blocking) into tail
+		./minimega -plumb foo | tail -f
+
+	# plumbing with miniccc
+
+		# write "bar" to foo
+		./miniccc -plumb foo bar
+
+		# read foo (blocking) into tail
+		./miniccc -plumb foo | tail -f
+
+	
+	# concrete example: feed a set of temperature sensors that are in a
+	# room with a heater. Sensors are "within the room" based on the fact
+	# that they're reading from the named pipe representing the heater in
+	# that room. Some are on the far side of the room however.
+	
+		# the heater, updating every .5 seconds
+		plumb "bin/heater -n .5" | heater
+
+		# add some variance to the heater value, so that every reader
+		# gets a unique value for every write from the data generator
+		plumbctl heater via "bin/normal 1 5 .5"
+
+		# sensors near the heater, initiated by agents running on
+		# endpoint, calling miniccc. There can be many of these.
+		# Additionaly, all of the readers will get unique values
+		# because the heater via mutates the value for every message
+		# delivery.
+		./miniccc -plumb heater
+		...
+		
+		# plumb some distances that change the heat by a simple sqaure
+		# law
+
+		# 5 feet
+		plumb heater | "bin/distance 5" | heater_5
+		
+		# 10 feet
+		plumb heater | "bin/distance 10" | heater_10
+
+		...

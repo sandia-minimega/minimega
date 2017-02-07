@@ -821,7 +821,11 @@ func (pl *pipeline) pipe(pin *Reader, pout chan<- string, in <-chan string) <-ch
 	if pin != nil {
 		go func() {
 			defer pin.Close()
-			<-pl.done
+			defer pl.cancel()
+			select {
+			case <-pl.done:
+			case <-pin.Done:
+			}
 		}()
 		return pin.C
 	}
