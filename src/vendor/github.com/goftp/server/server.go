@@ -11,11 +11,6 @@ func Version() string {
 	return "0.2.1104"
 }
 
-var (
-	FTPHitChan    chan uint64
-	FTPTLSHitChan chan uint64
-)
-
 // serverOpts contains parameters for server.NewServer()
 type ServerOpts struct {
 	// The factory that will be used to create a new FTPDriver instance for
@@ -54,6 +49,8 @@ type ServerOpts struct {
 	ExplicitFTPS bool
 
 	WelcomeMessage string
+
+	HitFunc func()
 }
 
 // Server is the root of your FTP application. You should instantiate one
@@ -66,8 +63,6 @@ type Server struct {
 	logger    *Logger
 	listener  net.Listener
 	tlsConfig *tls.Config
-	FtpHitChan    chan uint64
-	FtpTLSHitChan chan uint64
 }
 
 // serverOptsWithDefaults copies an ServerOpts struct into a new struct,
@@ -111,6 +106,7 @@ func serverOptsWithDefaults(opts *ServerOpts) *ServerOpts {
 
 	newOpts.PublicIp = opts.PublicIp
 	newOpts.PassivePorts = opts.PassivePorts
+	newOpts.HitFunc = opts.HitFunc
 
 	return &newOpts
 }
@@ -138,8 +134,6 @@ func NewServer(opts *ServerOpts) *Server {
 	s.ServerOpts = opts
 	s.listenTo = net.JoinHostPort(opts.Hostname, strconv.Itoa(opts.Port))
 	s.logger = newLogger("")
-	s.FtpHitChan = make(chan uint64, 1024)
-	s.FtpTLSHitChan = make(chan uint64, 1024)
 	return s
 }
 

@@ -27,7 +27,6 @@ var (
 	f_httpCookies     = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
 	f_ftp             = flag.Bool("ftp", false, "enable ftp service")
 	f_ftps            = flag.Bool("ftps", false, "enable ftp (TLS) service")
-	f_ftpport         = flag.Int("ftpport", 21, "port to use for ftp client and server")
 	f_ftppassiveports = flag.String("ftppassiveports", "1024-65535", "port range for passive ftp connections (x-y)")
 	f_ssh             = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp            = flag.Bool("smtp", false, "enable smtp service")
