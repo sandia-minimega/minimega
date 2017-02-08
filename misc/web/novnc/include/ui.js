@@ -91,10 +91,11 @@ var UI;
             }
 
             /* Populate the controls if defaults are provided in the URL */
+            var thepath = "tunnel/"+window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1);
             UI.initSetting('host', window.location.hostname);
             UI.initSetting('port', port);
             UI.initSetting('password', '');
-            UI.initSetting('encrypt', (window.location.protocol === "https:"));
+            UI.initSetting('encrypt', false);
             UI.initSetting('true_color', true);
             UI.initSetting('cursor', !UI.isTouchDevice);
             UI.initSetting('resize', 'off');
@@ -104,13 +105,8 @@ var UI;
             UI.initSetting('repeaterID', '');
             UI.initSetting('token', '');
 
-            var autoconnect = WebUtil.getConfigVar('autoconnect', false);
-            if (autoconnect === 'true' || autoconnect == '1') {
-                autoconnect = true;
-                UI.connect();
-            } else {
-                autoconnect = false;
-            }
+            var autoconnect = true;
+            UI.connect();
 
             UI.updateVisualState();
 
