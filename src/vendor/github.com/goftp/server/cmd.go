@@ -9,6 +9,7 @@ http://tools.ietf.org/html/rfc2428
 package server
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strconv"
 	"strings"
@@ -594,7 +595,11 @@ func (cmd commandPasv) RequireAuth() bool {
 
 func (cmd commandPasv) Execute(conn *Conn, param string) {
 	listenIP := conn.passiveListenIP()
-	socket, err := newPassiveSocket(listenIP, conn.PassivePort(), conn.logger, conn.tlsConfig)
+	var tls *tls.Config
+	if conn.tls {
+		tls = conn.tlsConfig
+	}
+	socket, err := newPassiveSocket(listenIP, conn.PassivePort(), conn.logger, tls)
 	if err != nil {
 		conn.writeMessage(425, "Data connection failed")
 		return
