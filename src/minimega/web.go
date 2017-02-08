@@ -271,7 +271,7 @@ func webConnect(w http.ResponseWriter, r *http.Request) {
 
 	switch vm.GetType() {
 	case KVM:
-		http.ServeFile(w, r, filepath.Join(web.Root, "vnc_auto.html"))
+		http.ServeFile(w, r, filepath.Join(web.Root, "vnc.html"))
 	case CONTAINER:
 		http.ServeFile(w, r, filepath.Join(web.Root, "terminal.html"))
 	default:
