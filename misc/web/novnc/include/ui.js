@@ -101,7 +101,7 @@ var UI;
             UI.initSetting('resize', 'off');
             UI.initSetting('shared', true);
             UI.initSetting('view_only', false);
-            UI.initSetting('path', 'websockify');
+            UI.initSetting('path', thepath);
             UI.initSetting('repeaterID', '');
             UI.initSetting('token', '');
 
