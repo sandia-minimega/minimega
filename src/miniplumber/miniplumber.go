@@ -519,7 +519,8 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 
 	if _, ok := p.pipes[pipe]; !ok {
 		p.pipes[pipe] = &Pipe{
-			name: pipe,
+			name:    pipe,
+			readers: make(map[int64]*Reader),
 		}
 	}
 	pp := p.pipes[pipe]
