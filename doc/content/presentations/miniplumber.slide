@@ -56,6 +56,10 @@ Enter _miniplumber_
 
 .mega miniplumber_content/external.mm
 
+* Plumbing with CC
+
+.mega miniplumber_content/cc.mm
+
 * minimega distribution
 
 Fully distributed via meshage
@@ -76,6 +80,14 @@ Fully distributed via meshage
 
 .mega miniplumber_content/scheduling.mm
 
+* vias
+
+- Produce unique output for _every_ reader on a pipe
+- Call an external program N times
+- Remote readers also get unique values
+
+.mega miniplumber_content/via.mm
+
 * Use cases
 
 - cyber-physical experiments
@@ -85,5 +97,5 @@ Fully distributed via meshage
 * Summary
 
 - _miniplumber_ - simple, out-of-band communication framework
-- Growing library of communication primitives, support for any external programs
+- Growing library of communication primitives, support for any external program
 - Bring cyber-physical / simulation layers to emulytics

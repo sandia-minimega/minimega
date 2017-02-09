@@ -6,6 +6,8 @@ plumb
 # write something to foo
 pipe foo "the cow says foo"
 
+shell sleep .5
+
 pipe
 
 # works from the command line too
