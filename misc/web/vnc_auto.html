@@ -192,8 +192,8 @@
             host = WebUtil.getConfigVar('host', window.location.hostname);
             port = WebUtil.getConfigVar('port', window.location.port);
 
-            // By default, use the host and port of server that served this file
-            document.title = unescape(WebUtil.getConfigVar('title', host));
+            // Set title to VM name
+            document.title = window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1);
 
             // if port == 80 (or 443) then it won't be present and should be
             // set manually
