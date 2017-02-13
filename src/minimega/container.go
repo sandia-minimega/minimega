@@ -805,8 +805,8 @@ func (vm *ContainerVM) launch() error {
 
 	// write the config for this vm
 	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
-	writeOrDie(vm.path("config"), config)
-	writeOrDie(vm.path("name"), vm.Name)
+	mustWrite(vm.path("config"), config)
+	mustWrite(vm.path("name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
 	// to mimic stdio, and a fourth pipe for logging before the child execs

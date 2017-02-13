@@ -182,11 +182,8 @@ func main() {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	dst := filepath.Join(*f_base, "minimega.pid")
 	pid := strconv.Itoa(os.Getpid())
-	if err := ioutil.WriteFile(dst, []byte(pid), 0644); err != nil {
-		log.Fatal("unable to write pid: %v", err)
-	}
+	mustWrite(filepath.Join(*f_base, "minimega.pid"), pid)
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable
 	// is not set.
