@@ -10,22 +10,7 @@ command API help text. The same help text (minus some examples included here)
 is available in minirouter by using the `help` command. You can get specific
 help on a minirouter command by using `help`<command>`.
 
-* Builtins
-
-Builtins are commands that impact how responses to commands are rendered. Some
-builtins impact how data is displayed, such as `.csv` and `.json`, while other
-impact what data is displayed, such as `.columns`. All builtins are stackable,
-meaning you can issue one-line commands by suffixing a builtin with a command
-or another builtin.
-
-{{range $v := index .Sections "."}}
-** {{$v.SharedPrefix}}
-
-{{range $p := $v.Patterns}} {{$p}}
-{{end}}
-{{$v.HelpLong}}
-
-{{end}}
+{{/* ignore the builtins */}}
 
 * Commands
 

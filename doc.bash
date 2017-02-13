@@ -10,5 +10,6 @@ bin/apigen -bin bin/minimega \
             > doc/content/articles/api.article
 bin/apigen -bin bin/minirouter \
             -template doc/content_templates/minirouter_api.template \
+            -sections . \
             > doc/content/articles/minirouter_api.article
 exit $?
