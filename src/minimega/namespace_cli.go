@@ -36,12 +36,19 @@ Control and run commands in namespace environments.`,
 		HelpLong: `
 Modify settings of the currently active namespace.
 
-add-host - add comma-separated list of hosts to the namespace.
-del-host - delete comma-separated list of hosts from the namespace.
+add-host : add comma-separated list of hosts to the namespace
+del-host : delete comma-separated list of hosts from the namespace
+load     : change host load is computed for scheduler, based on:
+	cpucommit : total CPU commit divided by number of CPUs (default)
+	netcommit : total NIC
+	memcommit : total memory commit divided by total memory
 `,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
+			"nsmod <load,> [cpucommit,]",
+			"nsmod <load,> [netcommit,]",
+			"nsmod <load,> [memcommit,]",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
@@ -111,14 +118,25 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		hosts = append(hosts, h)
 	}
 
+	taps := []string{}
+	for t := range ns.Taps {
+		taps = append(taps, t)
+	}
+
 	// TODO: Make this pretty or divide it up somehow
 	resp.Response = fmt.Sprintf(`Namespace: "%v"
 Hosts: %v
 Taps: %v
-Number of queuedVMs: %v
+Scheduler: %v
+Number of queued VMs: %v
 
 Schedules:
-`, namespace, ranges.UnsplitList(hosts), ns.Taps, len(ns.queue))
+`,
+		namespace,
+		ranges.UnsplitList(hosts),
+		ranges.UnsplitList(taps),
+		ns.HostSortBy,
+		len(ns.queue))
 
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
@@ -203,6 +221,17 @@ func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 			delete(ns.Hosts, host)
 		}
 
+		return nil
+	} else if c.BoolArgs["load"] {
+		// check if we're updating the sort by func
+		for k := range hostSortByFns {
+			if c.BoolArgs[k] {
+				ns.HostSortBy = k
+				return nil
+			}
+		}
+
+		resp.Response = ns.HostSortBy
 		return nil
 	}
 

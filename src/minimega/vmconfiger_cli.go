@@ -611,12 +611,60 @@ Default: true
 		}),
 	},
 	{
+		HelpShort: "configures schedule",
+		HelpLong: `Set a host where the VM should be scheduled. This is only used when
+launching VMs in a namespace.
+`,
+		Patterns: []string{
+			"vm config schedule [value]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = vmConfig.Schedule
+				return nil
+			}
+
+			vmConfig.Schedule = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures coschedule",
+		HelpLong: `Set a limit on the number of VMs that should be scheduled on the same
+host as the VM. A limit of zero means that the VM should be scheduled by
+itself. A limit of -1 means that there is no limit. This is only used
+when launching VMs in a namespace.
+
+Default: -1
+`,
+		Patterns: []string{
+			"vm config coschedule [value]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatInt(vmConfig.Coschedule, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseInt(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			vmConfig.Coschedule = i
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "reset one or more configurations to default value",
 		Patterns: []string{
 			"clear vm config",
 			"clear vm config <append,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
+			"clear vm config <coschedule,>",
 			"clear vm config <disk,>",
 			"clear vm config <fifos,>",
 			"clear vm config <filesystem,>",
@@ -631,6 +679,7 @@ Default: true
 			"clear vm config <qemu-append,>",
 			"clear vm config <qemu-override,>",
 			"clear vm config <qemu,>",
+			"clear vm config <schedule,>",
 			"clear vm config <serial-ports,>",
 			"clear vm config <snapshot,>",
 			"clear vm config <tags,>",
@@ -667,6 +716,12 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "snapshot" {
 		return strconv.FormatBool(v.Snapshot), nil
 	}
+	if field == "schedule" {
+		return v.Schedule, nil
+	}
+	if field == "coschedule" {
+		return fmt.Sprintf("%v", v.Coschedule), nil
+	}
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
 	}
@@ -689,6 +744,12 @@ func (v *BaseConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "snapshot" {
 		v.Snapshot = true
+	}
+	if mask == Wildcard || mask == "schedule" {
+		v.Schedule = ""
+	}
+	if mask == Wildcard || mask == "coschedule" {
+		v.Coschedule = -1
 	}
 	if mask == Wildcard || mask == "networks" {
 		v.Networks = nil
