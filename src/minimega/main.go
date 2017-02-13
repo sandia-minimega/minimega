@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"goreadline"
-	"io/ioutil"
 	"minicli"
 	"miniclient"
 	log "minilog"
