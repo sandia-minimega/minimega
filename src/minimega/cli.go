@@ -65,6 +65,7 @@ func cliSetup() {
 	registerHandlers("shell", shellCLIHandlers)
 	registerHandlers("vlans", vlansCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
+	registerHandlers("vm limit", vmLimiterCLIHanders)
 	registerHandlers("vmconfig", vmconfigCLIHandlers)
 	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
