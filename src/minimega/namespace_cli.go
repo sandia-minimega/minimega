@@ -46,9 +46,10 @@ load     : change host load is computed for scheduler, based on:
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
 			"nsmod <del-host,> <hosts>",
-			"nsmod <load,> [cpucommit,]",
-			"nsmod <load,> [netcommit,]",
-			"nsmod <load,> [memcommit,]",
+			"nsmod <load,>",
+			"nsmod <load,> <cpucommit,>",
+			"nsmod <load,> <netcommit,>",
+			"nsmod <load,> <memcommit,>",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
