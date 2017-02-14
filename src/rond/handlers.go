@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	"os"
+	"path/filepath"
 	"ron"
 	"strconv"
 	"strings"
@@ -15,18 +16,27 @@ import (
 
 var filter *ron.Filter
 
+// wrapCLI wraps handlers that return a single response. This greatly reduces
+// boilerplate code with minicli handlers.
+func wrapCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		resp := &minicli.Response{Host: hostname}
+		if err := fn(c, resp); err != nil {
+			resp.Error = err.Error()
+		}
+		respChan <- minicli.Responses{resp}
+	}
+}
+
 var cliHandlers = []minicli.Handler{
 	{
 		HelpShort: "list clients",
 		Patterns: []string{
 			"clients",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-				Header: []string{
-					"UUID", "arch", "OS", "hostname", "IPs", "MACs",
-				},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			resp.Header = []string{
+				"UUID", "arch", "OS", "hostname", "IPs", "MACs",
 			}
 
 			for _, client := range rond.GetActiveClients() {
@@ -42,8 +52,8 @@ var cliHandlers = []minicli.Handler{
 				resp.Tabular = append(resp.Tabular, row)
 			}
 
-			out <- minicli.Responses{resp}
-		},
+			return nil
+		}),
 	},
 	{
 		HelpShort: "set filter for subsequent commands",
@@ -51,65 +61,47 @@ var cliHandlers = []minicli.Handler{
 			"filter [filter]",
 			"<clear,> filter",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-			}
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			arg := c.StringArgs["filter"]
 
-			arg := cmd.StringArgs["filter"]
-
-			if cmd.BoolArgs["clear"] {
+			if c.BoolArgs["clear"] {
 				filter = nil
-			} else if cmd.StringArgs["filter"] == "" {
+			} else if arg == "" {
 				resp.Response = fmt.Sprintf("%#v", filter)
 			} else if f, err := parseFilter(arg); err != nil {
-				resp.Error = err.Error()
+				return err
 			} else {
 				filter = f
 			}
 
-			out <- minicli.Responses{resp}
-		},
+			return nil
+		}),
 	},
 	{
 		HelpShort: "run a command",
 		Patterns: []string{
 			"<exec,> <command>...",
 			"<bg,> <command>...",
-			"<shell,> <command>...",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-			}
-
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
 			id := rond.NewCommand(&ron.Command{
-				Command:    cmd.ListArgs["command"],
+				Command:    c.ListArgs["command"],
 				Filter:     filter,
-				Background: cmd.BoolArgs["bg"],
+				Background: c.BoolArgs["bg"],
 			})
 
-			if cmd.BoolArgs["bg"] || cmd.BoolArgs["exec"] {
-				resp.Response = strconv.Itoa(id)
-				out <- minicli.Responses{resp}
-			} else {
-				// wait for response
-
-				// TODO
-			}
-		},
+			resp.Response = strconv.Itoa(id)
+			return nil
+		}),
 	},
 	{
 		HelpShort: "list processes",
 		Patterns: []string{
 			"processes",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-				Header: []string{
-					"UUID", "pid", "command",
-				},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			resp.Header = []string{
+				"UUID", "pid", "command",
 			}
 
 			for _, client := range rond.GetActiveClients() {
@@ -124,24 +116,18 @@ var cliHandlers = []minicli.Handler{
 				}
 			}
 
-			out <- minicli.Responses{resp}
-		},
+			return nil
+		}),
 	},
 	{
 		HelpShort: "kill PID",
 		Patterns: []string{
 			"kill <PID>",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-			}
-
-			pid, err := strconv.Atoi(cmd.StringArgs["PID"])
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			pid, err := strconv.Atoi(c.StringArgs["PID"])
 			if err != nil {
-				resp.Error = err.Error()
-				out <- minicli.Responses{resp}
-				return
+				return err
 			}
 
 			rond.NewCommand(&ron.Command{
@@ -149,59 +135,99 @@ var cliHandlers = []minicli.Handler{
 				Filter: filter,
 			})
 
-			out <- minicli.Responses{resp}
-		},
+			return nil
+		}),
 	},
 	{
 		HelpShort: "kill by name",
 		Patterns: []string{
 			"killall <name>",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
-			}
-
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
 			rond.NewCommand(&ron.Command{
-				KillAll: cmd.StringArgs["name"],
+				KillAll: c.StringArgs["name"],
 				Filter:  filter,
 			})
 
-			out <- minicli.Responses{resp}
-		},
+			return nil
+		}),
 	},
 	{
 		HelpShort: "send files",
+		HelpLong: `
+Send one or more files. Supports globs such as:
+
+	send foo*
+`,
 		Patterns: []string{
-			"send <name>",
+			"send <file>",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			cmd := &ron.Command{
+				Filter: filter,
 			}
 
-			out <- minicli.Responses{resp}
-		},
+			arg := c.StringArgs["file"]
+			if !filepath.IsAbs(arg) {
+				arg = filepath.Join(*f_path, arg)
+			}
+			arg = filepath.Clean(arg)
+
+			if !strings.HasPrefix(arg, *f_path) {
+				return fmt.Errorf("can only send files from %v", *f_path)
+			}
+
+			files, err := filepath.Glob(arg)
+			if err != nil || len(files) == 0 {
+				return fmt.Errorf("non-existent files %v", arg)
+			}
+
+			for _, f := range files {
+				file, err := filepath.Rel(*f_path, f)
+				if err != nil {
+					return fmt.Errorf("unable to determine relative path to %v: %v", f, err)
+				}
+
+				fi, err := os.Stat(f)
+				if err != nil {
+					return err
+				}
+
+				perm := fi.Mode() & os.ModePerm
+				cmd.FilesSend = append(cmd.FilesSend, &ron.File{
+					Name: file,
+					Perm: perm,
+				})
+			}
+
+			rond.NewCommand(cmd)
+			return nil
+		}),
 	},
 	{
 		HelpShort: "get files",
 		Patterns: []string{
-			"get <name>",
+			"recv <file>",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
-			resp := &minicli.Response{
-				Host: hostname,
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			cmd := &ron.Command{
+				Filter: filter,
 			}
+			cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
+				Name: c.StringArgs["file"],
+			})
 
-			out <- minicli.Responses{resp}
-		},
+			rond.NewCommand(cmd)
+
+			return nil
+		}),
 	},
 	{
 		HelpShort: "quit",
 		Patterns: []string{
 			"quit",
 		},
-		Call: func(cmd *minicli.Command, out chan<- minicli.Responses) {
+		Call: func(_ *minicli.Command, _ chan<- minicli.Responses) {
 			os.Exit(0)
 		},
 	},
@@ -232,29 +258,8 @@ func parseFilter(s string) (*ron.Filter, error) {
 		filter.IP = parts[1]
 	case "mac":
 		filter.MAC = parts[1]
-	case "tag":
-		// Explicit filter on tag
-		parts = parts[1:]
-		fallthrough
 	default:
-		// Implicit filter on a tag
-		if filter.Tags == nil {
-			filter.Tags = make(map[string]string)
-		}
-
-		// Split on `=` or `:` -- who cares if they did `tag=foo=bar`,
-		// `tag=foo:bar` or `foo=bar`. `=` takes precedence.
-		if strings.Contains(parts[0], "=") {
-			parts = strings.SplitN(parts[0], "=", 2)
-		} else if strings.Contains(parts[0], ":") {
-			parts = strings.SplitN(parts[0], ":", 2)
-		}
-
-		if len(parts) == 1 {
-			filter.Tags[parts[0]] = ""
-		} else if len(parts) == 2 {
-			filter.Tags[parts[0]] = parts[1]
-		}
+		return nil, fmt.Errorf("unknown filter `%v`", parts[0])
 	}
 
 	return filter, nil
