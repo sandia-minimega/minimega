@@ -5,19 +5,23 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"goreadline"
 	"minicli"
 	log "minilog"
 	"minipager"
+	"net"
 	"os"
+	"path/filepath"
 	"ron"
 )
 
 var (
-	f_port = flag.Int("port", 9005, "port to listen on")
-	f_path = flag.String("path", "/tmp/rond", "path for files")
+	f_port    = flag.Int("port", 9005, "port to listen on")
+	f_path    = flag.String("path", "/tmp/rond", "path for files")
+	f_nostdin = flag.Bool("nostdin", false, "disable reading from stdin")
 )
 
 var (
@@ -51,27 +55,29 @@ func main() {
 
 	rond.UseVMs = false
 
+	if *f_nostdin {
+		commandSocket()
+	} else {
+		localREPL()
+	}
+}
+
+func localREPL() {
 	for {
 		line, err := goreadline.Readline("rond$ ", true)
 		if err != nil {
 			return
 		}
-		command := string(line)
-		log.Debug("got from stdin: `%s`", line)
 
-		cmd, err := minicli.Compile(command)
+		log.Debug("got line from stdin: `%s`", line)
+
+		resps, err := minicli.ProcessString(string(line), false)
 		if err != nil {
-			log.Error("%v", err)
+			log.Errorln(err)
 			continue
 		}
 
-		// No command was returned, must have been a blank line or a comment
-		// line. Either way, don't try to run a nil command.
-		if cmd == nil {
-			continue
-		}
-
-		for resp := range minicli.ProcessCommand(cmd) {
+		for resp := range resps {
 			minipager.DefaultPager.Page(resp.String())
 
 			errs := resp.Error()
@@ -79,5 +85,49 @@ func main() {
 				fmt.Fprintln(os.Stderr, errs)
 			}
 		}
+	}
+}
+
+func commandSocket() {
+	l, err := net.Listen("unix", filepath.Join(*f_path, "rond"))
+	if err != nil {
+		log.Fatal("commandSocket: %v", err)
+	}
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Error("commandSocket: accept: %v", err)
+		}
+		log.Infoln("client connected")
+
+		go func(c net.Conn) {
+			defer c.Close()
+
+			// just read comments off the wire
+			scanner := bufio.NewScanner(conn)
+			for scanner.Scan() {
+				line := scanner.Text()
+
+				log.Debug("got line from socket: `%v`", line)
+
+				resps, err := minicli.ProcessString(string(line), false)
+				if err != nil {
+					log.Errorln(err)
+					continue
+				}
+
+				for resp := range resps {
+					_, err := c.Write([]byte(resp.String()))
+					if err != nil {
+						log.Error("unable to write response: %v", err)
+						continue
+					}
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				log.Errorln(err)
+			}
+		}(conn)
 	}
 }
