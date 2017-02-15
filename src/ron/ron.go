@@ -51,6 +51,10 @@ type Server struct {
 	lastBroadcast time.Time // watchdog time of last command list broadcast
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
+
+	// UseVMs controls whether ron uses VM callbacks or not (see VM interface
+	// defined below).
+	UseVMs bool
 }
 
 type Process struct {
@@ -87,6 +91,7 @@ func NewServer(port int, path string) (*Server, error) {
 		path:          path,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		UseVMs:        true,
 	}
 
 	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {

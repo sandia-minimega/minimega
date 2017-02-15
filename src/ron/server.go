@@ -290,23 +290,26 @@ func (s *Server) clientHandler(conn net.Conn) {
 	}
 
 	var mangled bool
-	vm, ok := s.vms[handshake.Client.UUID]
-	if !ok {
-		// try again after unmangling the uuid, which qemu does in
-		// certain versions
-		vm, ok = s.vms[unmangle(handshake.Client.UUID)]
+	if s.UseVMs {
+		vm, ok := s.vms[handshake.Client.UUID]
 		if !ok {
-			log.Error("unregistered client %v", handshake.Client.UUID)
-			return
+			// try again after unmangling the uuid, which qemu does in
+			// certain versions
+			vm, ok = s.vms[unmangle(handshake.Client.UUID)]
+			if !ok {
+				log.Error("unregistered client %v", handshake.Client.UUID)
+				return
+			}
+			mangled = true
 		}
-		mangled = true
+
+		if handshake.Client.Version != version.Revision {
+			log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
+		}
+
+		handshake.Client.Namespace = vm.GetNamespace()
 	}
 
-	if handshake.Client.Version != version.Revision {
-		log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
-	}
-
-	handshake.Client.Namespace = vm.GetNamespace()
 	if err := c.enc.Encode(&handshake); err != nil {
 		// client disconnected before it read the full handshake
 		if err != io.EOF {
@@ -474,16 +477,17 @@ func (s *Server) route(m *Message) {
 			return
 		}
 
-		vm, ok := s.vms[uuid]
-		if !ok {
-			// odd, someone must have unregistered the client...
-			log.Error("unregistered client %v", uuid)
-			return
-		}
-
 		if m.Type == MESSAGE_COMMAND {
-			// update client's tags in case we're matching based on them
-			c.Tags = vm.GetTags()
+			if s.UseVMs {
+				vm, ok := s.vms[uuid]
+				if !ok {
+					// odd, someone must have unregistered the client...
+					log.Error("unregistered client %v", uuid)
+					return
+				}
+				// update client's tags in case we're matching based on them
+				c.Tags = vm.GetTags()
+			}
 
 			// create a copy of the Message
 			m2 := *m
@@ -614,6 +618,10 @@ func (s *Server) updateClient(cin *Client) {
 
 	c.Client = cin
 	c.checkin = time.Now()
+
+	if !s.UseVMs {
+		return
+	}
 
 	vm, ok := s.vms[cin.UUID]
 	if !ok {
