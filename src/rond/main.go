@@ -1,4 +1,4 @@
-// Copyright (2015) Sandia Corporation.
+// Copyright (2017) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
@@ -16,11 +16,8 @@ import (
 )
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_port     = flag.Int("port", 9005, "port to listen on")
-	f_path     = flag.String("path", "/tmp/rond", "path for files")
+	f_port = flag.Int("port", 9005, "port to listen on")
+	f_path = flag.String("path", "/tmp/rond", "path for files")
 )
 
 var (
@@ -31,7 +28,7 @@ var (
 func main() {
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	// register CLI handlers
 	for i := range cliHandlers {
@@ -51,6 +48,8 @@ func main() {
 	if err != nil {
 		log.Fatal("unable to create server: %v", err)
 	}
+
+	rond.UseVMs = false
 
 	for {
 		line, err := goreadline.Readline("rond$ ", true)

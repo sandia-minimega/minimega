@@ -1,4 +1,4 @@
-// Copyright (2015) Sandia Corporation.
+// Copyright (2017) Sandia Corporation.
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
@@ -6,6 +6,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"minicli"
 	"os"
 	"path/filepath"
@@ -84,13 +85,12 @@ var cliHandlers = []minicli.Handler{
 			"<bg,> <command>...",
 		},
 		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
-			id := rond.NewCommand(&ron.Command{
+			rond.NewCommand(&ron.Command{
 				Command:    c.ListArgs["command"],
 				Filter:     filter,
 				Background: c.BoolArgs["bg"],
 			})
 
-			resp.Response = strconv.Itoa(id)
 			return nil
 		}),
 	},
@@ -218,6 +218,114 @@ Send one or more files. Supports globs such as:
 			})
 
 			rond.NewCommand(cmd)
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "list commands",
+		Patterns: []string{
+			"commands",
+		},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			resp.Header = []string{
+				"id", "command", "responses", "background", "sent", "received",
+				"filter",
+			}
+
+			commands := rond.GetCommands()
+
+			var ids []int
+			for id := range commands {
+				ids = append(ids, id)
+			}
+
+			for _, id := range ids {
+				v := commands[id]
+
+				row := []string{
+					strconv.Itoa(v.ID),
+					fmt.Sprintf("%v", v.Command),
+					strconv.Itoa(len(v.CheckedIn)),
+					strconv.FormatBool(v.Background),
+					fmt.Sprintf("%v", v.FilesSend),
+					fmt.Sprintf("%v", v.FilesRecv),
+					fmt.Sprintf("%v", v.Filter),
+				}
+
+				resp.Tabular = append(resp.Tabular, row)
+			}
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "list responses",
+		Patterns: []string{
+			"responses [id]",
+		},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			resp.Header = []string{
+				"id", "uuid", "name", "response",
+			}
+
+			// list of IDs to get responses for. If user specified an ID, we
+			// just use that. Otherwise, we use all the command IDs.
+			var ids []int
+
+			if c.StringArgs["id"] != "" {
+				id, err := strconv.Atoi(c.StringArgs["id"])
+				if err != nil {
+					return err
+				}
+
+				ids = append(ids, id)
+			} else {
+				for id := range rond.GetCommands() {
+					ids = append(ids, id)
+				}
+			}
+
+			// top level directory for responses
+			dir := filepath.Join(*f_path, ron.RESPONSE_PATH)
+
+			for _, id := range ids {
+				// append command ID for next level of nesting
+				dir := filepath.Join(dir, strconv.Itoa(id))
+
+				// should contain directory for each UUID
+				uuids, err := ioutil.ReadDir(dir)
+				if err != nil {
+					return err
+				}
+
+				for _, uuid := range uuids {
+					dir := filepath.Join(dir, uuid.Name())
+
+					// should contain output files
+					files, err := ioutil.ReadDir(dir)
+					if err != nil {
+						return err
+					}
+
+					// read each output file and add a row for it
+					for _, f := range files {
+						data, err := ioutil.ReadFile(filepath.Join(dir, f.Name()))
+						if err != nil {
+							return err
+						}
+
+						row := []string{
+							strconv.Itoa(id),
+							uuid.Name(),
+							f.Name(),
+							string(data),
+						}
+
+						resp.Tabular = append(resp.Tabular, row)
+					}
+				}
+			}
 
 			return nil
 		}),
