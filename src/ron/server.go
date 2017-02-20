@@ -384,7 +384,7 @@ func (s *Server) clientHandler(conn net.Conn) {
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
 			case MESSAGE_PIPE:
-				c.pipeHandler(s.plumber, &m)
+				c.pipeHandler(vm.GetNamespace(), s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
