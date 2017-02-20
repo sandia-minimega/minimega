@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"present"
 )
@@ -23,6 +24,15 @@ func init() {
 
 // dirHandler serves a directory listing for the requested path, rooted at basePath.
 func dirHandler(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/minimega.git") {
+		// modify host to github, keep rest of the URL intact (including query params)
+		url := r.URL
+		url.Host = "github.com"
+		url.Path = "/sandia-minimega" + url.Path
+		http.Redirect(w, r, url.String(), 301)
+		return
+	}
+
 	if r.URL.Path == "/favicon.ico" {
 		http.Error(w, "not found", 404)
 		return

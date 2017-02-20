@@ -70,8 +70,7 @@ func getBridge(b string) (*bridge.Bridge, error) {
 		return nil, err
 	}
 
-	log.Debugln("updating bridge info")
-	writeOrDie(filepath.Join(*f_base, "bridges"), bridgeInfo())
+	mustWrite(filepath.Join(*f_base, "bridges"), bridgeInfo())
 
 	return br, nil
 }

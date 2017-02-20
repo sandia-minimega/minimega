@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -45,10 +46,13 @@ type VM interface {
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
+	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM was launched
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
 	GetPlumber() *miniplumber.Plumber // get the plumber associated with the namespace this vm is in
+	GetCPUs() uint64
+	GetMem() uint64
 
 	// Life cycle functions
 	Launch() error
@@ -108,9 +112,10 @@ type BaseVM struct {
 	Namespace string // namespace this VM belongs to
 	Host      string // hostname where this VM is running
 
-	State    VMState
-	Type     VMType
-	ActiveCC bool // set when CC is active
+	State      VMState
+	LaunchTime time.Time
+	Type       VMType
+	ActiveCC   bool // set when CC is active
 
 	lock sync.Mutex // synchronizes changes to this VM
 
@@ -122,7 +127,7 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "namespace", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
@@ -206,6 +211,7 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 	vm.instancePath = filepath.Join(*f_base, strconv.Itoa(vm.ID))
 
 	vm.State = VM_BUILDING
+	vm.LaunchTime = time.Now()
 
 	// New VMs are returned pre-locked. This ensures that the first operation
 	// called on a new VM is Launch.
@@ -225,6 +231,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.Namespace = vm.Namespace
 	vm2.Host = vm.Host
 	vm2.State = vm.State
+	vm2.LaunchTime = vm.LaunchTime
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
@@ -304,6 +311,13 @@ func (vm *BaseVM) GetState() VMState {
 	return vm.State
 }
 
+func (vm *BaseVM) GetLaunchTime() time.Time {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.LaunchTime
+}
+
 func (vm *BaseVM) GetType() VMType {
 	return vm.Type
 }
@@ -315,6 +329,14 @@ func (vm *BaseVM) GetInstancePath() string {
 // TODO: add namespace support
 func (vm *BaseVM) GetPlumber() *miniplumber.Plumber {
 	return plumber
+}
+
+func (vm *BaseVM) GetCPUs() uint64 {
+	return vm.VCPUs
+}
+
+func (vm *BaseVM) GetMem() uint64 {
+	return vm.Memory
 }
 
 func (vm *BaseVM) Kill() error {
@@ -575,6 +597,8 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
+	case "uptime":
+		return time.Since(vm.LaunchTime).String(), nil
 	case "type":
 		return vm.Type.String(), nil
 	case "vlan":
@@ -630,10 +654,7 @@ func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
-	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
+	mustWrite(vm.path("state"), s.String())
 }
 
 // setError updates the vm state and records the error in the vm's tags.

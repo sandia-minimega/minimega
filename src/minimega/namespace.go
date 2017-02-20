@@ -35,13 +35,16 @@ type Namespace struct {
 	vmID *Counter
 
 	// Queued VMs to launch
-	queue []QueuedVMs
+	queue []*QueuedVMs
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
 
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
+
+	// How to determine which host is least loaded
+	HostSortBy string
 }
 
 var (
@@ -139,7 +142,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		}
 	}
 
-	n.queue = append(n.queue, QueuedVMs{
+	n.queue = append(n.queue, &QueuedVMs{
 		VMConfig: vmConfig,
 		VMType:   vmType,
 		Names:    names,
@@ -150,6 +153,8 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 
 // Launch runs the scheduler and launches VMs across the namespace. Blocks
 // until all the `vm launch ... noblock` commands are in-flight.
+//
+// LOCK: Assumes cmdLock is held.
 func (n *Namespace) Launch() error {
 	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
@@ -159,16 +164,58 @@ func (n *Namespace) Launch() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
+	// Query for the host stats on all machines. We want the global load of
+	// hosts so we pass nil as the namespace to run host sans-namespace.
+	cmd := minicli.MustCompile("host")
+	cmd.SetRecord(false)
+	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
+
+	// key is hostname, value is map with keys from hostInfoKeys
+	hostStats := []*HostStats{}
+
+	// LOCK: this is only called via `vm launch` so cmdLock is already held
+	for resps := range runCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if v, ok := resp.Data.(*HostStats); ok {
+				hostStats = append(hostStats, v)
+			} else {
+				log.Error("unknown data field in `host` from %v", resp.Host)
+			}
+		}
+	}
+
+	var hostSorter hostSortBy
+	for k, fn := range hostSortByFns {
+		if n.HostSortBy == k {
+			hostSorter = fn
+		}
+	}
+
 	// Create the host -> VMs assignment
-	// TODO: This is a static assignment... should it be updated periodically
-	// during the launching process?
-	stats, assignment := schedule(n.queue, n.hostSlice())
+	assignment, err := schedule(n.queue, hostStats, hostSorter)
+	if err != nil {
+		return err
+	}
+
+	total := 0
+	for _, q := range n.queue {
+		total += len(q.Names)
+	}
 
 	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
 	n.queue = nil
 
-	stats.start = time.Now()
-	stats.state = SchedulerRunning
+	stats := &scheduleStat{
+		total: total,
+		hosts: len(hostStats),
+		start: time.Now(),
+		state: SchedulerRunning,
+	}
 
 	n.scheduleStats = append(n.scheduleStats, stats)
 
@@ -180,7 +227,7 @@ func (n *Namespace) Launch() error {
 	for host, queue := range assignment {
 		wg.Add(1)
 
-		go func(host string, queue []QueuedVMs) {
+		go func(host string, queue []*QueuedVMs) {
 			defer wg.Done()
 
 			for _, q := range queue {
@@ -216,7 +263,7 @@ func (n *Namespace) Launch() error {
 }
 
 // hostLaunch launches a queuedVM on the specified host and namespace.
-func (n *Namespace) hostLaunch(host string, queued QueuedVMs, respChan chan<- minicli.Responses) {
+func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- minicli.Responses) {
 	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
 
 	// Launching the VMs locally
@@ -266,10 +313,11 @@ func GetOrCreateNamespace(name string) *Namespace {
 		log.Info("creating new namespace -- `%v`", name)
 
 		ns := &Namespace{
-			Name:  name,
-			Hosts: map[string]bool{},
-			Taps:  map[string]bool{},
-			vmID:  NewCounter(),
+			Name:       name,
+			Hosts:      map[string]bool{},
+			Taps:       map[string]bool{},
+			vmID:       NewCounter(),
+			HostSortBy: "cpucommit",
 		}
 
 		// By default, every mesh-reachable node is part of the namespace
