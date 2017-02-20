@@ -24,7 +24,23 @@ var (
 var plumbCLIHandlers = []minicli.Handler{
 	{ // plumb
 		HelpShort: "plumb external programs with minimega, VMs, and other external programs",
-		HelpLong:  ``,
+		HelpLong: `
+Create pipelines composed of named pipes and external programs. Pipelines pass
+data on standard I/O, with messages split on newlines. Pipelines are
+constructed similar to that of UNIX pipelines. For example, to pipeline named
+pipe "foo" through "sed" and into another pipe "bar":
+
+	plumb foo "sed -u s/foo/moo/" bar
+
+When specifying pipelines, strings that are not found in $PATH are considered
+named pipes.
+
+Pipelines can be composed into larger, nonlinear pipelines. For example, to
+create a simple tree rooted at A with leaves B and C, simply specify multiple
+pipelines:
+
+	plumb a b
+	plumb a c`,
 		Patterns: []string{
 			"plumb <src> <dst>...",
 		},
@@ -46,7 +62,25 @@ var plumbCLIHandlers = []minicli.Handler{
 	},
 	{ // pipe
 		HelpShort: "write to and modify named pipes",
-		HelpLong:  ``,
+		HelpLong: `
+Interact with named pipes. To write to a pipe, simply invoke the pipe API with
+the pipe name and value:
+	
+	pipe foo Hello pipes!
+
+Pipes have several message delivery modes. Based on the mode, messages written
+to a pipe will be delivered to one or more readers. Mode "all" copies messages
+to all readers, "round-robin" chooses a single reader, in-order, and "random"
+selects a random reader. 
+
+Pipes can also have "vias", programs through which all written data is passed
+before being sent to readers. Unlike pipelines, vias are run for every reader.
+This allows for mutating data on a per-reader basis with a single write. For
+example, to send a unique floating-point value on a normal distribution with a
+written mean to all readers:
+
+	pipe foo via normal -stddev 5.0
+	pipe foo 1.5`,
 		Patterns: []string{
 			"pipe",
 			"pipe <pipe> <mode,> <all,round-robin,random>",
