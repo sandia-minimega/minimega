@@ -53,6 +53,8 @@ type Server struct {
 	lastBroadcast time.Time // watchdog time of last command list broadcast
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
+
+	plumber *miniplumber.Plumber
 }
 
 type Process struct {
@@ -65,7 +67,6 @@ type VM interface {
 	GetTags() map[string]string
 	SetCCActive(bool)
 	SetTag(string, string)
-	GetPlumber() *miniplumber.Plumber
 }
 
 type Message struct {
@@ -83,7 +84,7 @@ type Message struct {
 }
 
 // NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string) (*Server, error) {
+func NewServer(port int, path string, plumber *miniplumber.Plumber) (*Server, error) {
 	s := &Server{
 		serialConns:   make(map[string]net.Conn),
 		udsConns:      make(map[string]net.Listener),
@@ -93,6 +94,7 @@ func NewServer(port int, path string) (*Server, error) {
 		path:          path,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		plumber:       plumber,
 	}
 
 	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {

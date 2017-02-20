@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	log "minilog"
-	"miniplumber"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,7 +49,6 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
-	GetPlumber() *miniplumber.Plumber // get the plumber associated with the namespace this vm is in
 	GetCPUs() uint64
 	GetMem() uint64
 
@@ -324,11 +322,6 @@ func (vm *BaseVM) GetType() VMType {
 
 func (vm *BaseVM) GetInstancePath() string {
 	return vm.instancePath
-}
-
-// TODO: add namespace support
-func (vm *BaseVM) GetPlumber() *miniplumber.Plumber {
-	return plumber
 }
 
 func (vm *BaseVM) GetCPUs() uint64 {

@@ -72,7 +72,6 @@ type client struct {
 
 	// pipe readers and writers
 	pipeLock    sync.Mutex
-	plumber     *miniplumber.Plumber
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
 }
@@ -180,7 +179,7 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	return false
 }
 
-func (c *client) pipeHandler(m *Message) {
+func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 	c.pipeLock.Lock()
 	defer c.pipeLock.Unlock()
 
@@ -189,7 +188,7 @@ func (c *client) pipeHandler(m *Message) {
 		// register a new reader, if the client doesn't already have a
 		// reader on this pipe
 		if _, ok := c.pipeReaders[m.Pipe]; !ok {
-			p := c.plumber.NewReader(m.Pipe)
+			p := plumber.NewReader(m.Pipe)
 			c.pipeReaders[m.Pipe] = p
 			go func() {
 				defer func() {
@@ -220,7 +219,7 @@ func (c *client) pipeHandler(m *Message) {
 		}
 	case PIPE_NEW_WRITER:
 		if _, ok := c.pipeWriters[m.Pipe]; !ok {
-			p := c.plumber.NewWriter(m.Pipe)
+			p := plumber.NewWriter(m.Pipe)
 			c.pipeWriters[m.Pipe] = p
 		}
 	case PIPE_CLOSE_READER:

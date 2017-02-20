@@ -198,11 +198,13 @@ func main() {
 	}
 
 	// start services
+	// NOTE: the plumber needs a reference to the meshage node, and cc
+	// needs a reference to the plumber, so the order here counts
 	tapReaperStart()
+	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 	plumberStart(meshageNode)
 	ccStart()
 	commandSocketStart()
-	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)

@@ -318,9 +318,6 @@ func (s *Server) clientHandler(conn net.Conn) {
 		return
 	}
 
-	// get the plumber for this namespace
-	c.plumber = vm.GetPlumber()
-
 	c.Client = handshake.Client
 	if mangled {
 		c.UUID = unmangle(handshake.Client.UUID)
@@ -387,7 +384,7 @@ func (s *Server) clientHandler(conn net.Conn) {
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
 			case MESSAGE_PIPE:
-				c.pipeHandler(&m)
+				c.pipeHandler(s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
