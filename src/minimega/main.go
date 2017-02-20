@@ -202,11 +202,11 @@ func main() {
 	}
 
 	// start services
-	commandSocketStart()
-	ccStart()
 	tapReaperStart()
-	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 	plumberStart(meshageNode)
+	ccStart()
+	commandSocketStart()
+	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 
 	// should be created after meshageStart returns
 	log.Info("change working directory to: %v", *f_iomBase)
