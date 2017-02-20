@@ -105,6 +105,12 @@ func cliPlumbBroadcast(c *minicli.Command, resp *minicli.Response) error {
 	resp.Tabular = [][]string{}
 
 	for _, v := range plumber.Pipelines() {
+		if ns := GetNamespace(); ns != nil {
+			if !strings.Contains(v, fmt.Sprintf("%v//", ns)) {
+				continue
+			}
+			v = strings.Replace(v, fmt.Sprintf("%v//", ns), "", -1)
+		}
 		resp.Tabular = append(resp.Tabular, []string{v})
 	}
 
@@ -154,7 +160,14 @@ func cliPipeBroadcast(c *minicli.Command, resp *minicli.Response) error {
 		resp.Tabular = [][]string{}
 
 		for _, v := range plumber.Pipes() {
-			resp.Tabular = append(resp.Tabular, []string{v.Name(), v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), v.GetVia(), strings.TrimSpace(v.Last())})
+			name := v.Name()
+			if ns := GetNamespace(); ns != nil {
+				if !strings.Contains(name, fmt.Sprintf("%v//", ns)) {
+					continue
+				}
+				name = strings.Replace(name, fmt.Sprintf("%v//", ns), "", -1)
+			}
+			resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), v.GetVia(), strings.TrimSpace(v.Last())})
 		}
 	}
 
