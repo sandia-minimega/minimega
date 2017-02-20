@@ -41,6 +41,8 @@ const (
 	MESSAGE_FORWARD = iota
 	MESSAGE_QUERY
 	MESSAGE_QUERY_RESPONSE
+	MESSAGE_VIA_WRITE
+	MESSAGE_VIA_HOST
 )
 
 type Plumber struct {
@@ -70,6 +72,7 @@ type Pipe struct {
 	last          string
 	log           bool
 	viaCommand    []string
+	viaHost       string
 	readerCache   []int64
 }
 
@@ -94,6 +97,7 @@ type Message struct {
 	Pipe    string
 	Data    map[int64]string
 	Readers []int64
+	Value   string
 }
 
 type int64Sorter []int64
@@ -212,6 +216,29 @@ func (p *Plumber) handleMessages() {
 			case t.C <- &m:
 			case <-t.Done:
 			}
+		case MESSAGE_VIA_WRITE:
+			p.Write(m.Pipe, m.Value)
+		case MESSAGE_VIA_HOST:
+			p.lock.Lock()
+
+			if _, ok := p.pipes[m.Pipe]; !ok {
+				p.pipes[m.Pipe] = &Pipe{
+					name:    m.Pipe,
+					readers: make(map[int64]*Reader),
+				}
+			}
+			pp := p.pipes[m.Pipe]
+
+			pp.lock.Lock()
+
+			if m.Value != "" {
+				pp.viaHost = m.Value
+			} else {
+				pp.viaHost = p.node.Name()
+			}
+
+			pp.lock.Unlock()
+			p.lock.Unlock()
 		default:
 			log.Error("unknown plumber message type: %v", m.Type)
 		}
@@ -313,6 +340,24 @@ func (p *Plumber) Via(pipe string, command []string) {
 	defer pp.lock.Unlock()
 
 	pp.viaCommand = command
+
+	m := &Message{
+		From:  p.node.Name(),
+		Type:  MESSAGE_VIA_HOST,
+		Pipe:  pipe,
+		Value: p.node.Name(),
+	}
+
+	pp.viaHost = p.node.Name()
+
+	if len(command) == 0 {
+		m.Value = ""
+	}
+
+	_, err := p.node.Broadcast(m)
+	if err != nil {
+		log.Errorln(err)
+	}
 }
 
 func (p *Plumber) Mode(pipe string, mode int) {
@@ -530,6 +575,28 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 
 	go func() {
 		for v := range c {
+			// don't do local writes if the via doesn't belong to
+			// us - post it to the owner instead.
+			if pp.viaHost != p.node.Name() && pp.viaHost != "" {
+				p.lock.Lock()
+
+				m := &Message{
+					From: p.node.Name(),
+					Type: MESSAGE_VIA_WRITE,
+					Pipe: pipe,
+				}
+
+				m.Value = v
+
+				_, err := p.node.Set([]string{pp.viaHost}, m)
+				if err != nil {
+					log.Errorln(err)
+				}
+				p.lock.Unlock()
+
+				continue
+			}
+
 			r, err := p.schedule(pipe)
 			if err != nil {
 				log.Errorln(err)
