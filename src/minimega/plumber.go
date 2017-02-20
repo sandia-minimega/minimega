@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"miniplumber"
 	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -78,11 +79,25 @@ func cliPlumb(c *minicli.Command, resp *minicli.Response) error {
 
 		return nil
 	} else {
-		p := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
+		args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
 
-		log.Debug("got plumber production: %v", p)
+		// rewrite pipes with namespace prefixes
+		ns := GetNamespace()
+		if ns != nil {
+			for i, e := range args {
+				if fields := strings.Split(e, "//"); len(fields) == 1 {
+					f := fieldsQuoteEscape("\"", e)
+					_, err := exec.LookPath(f[0])
+					if err != nil {
+						args[i] = fmt.Sprintf("%v//%v", ns, e)
+					}
+				}
+			}
+		}
 
-		return plumber.Plumb(p...)
+		log.Debug("got plumber production: %v", args)
+
+		return plumber.Plumb(args...)
 	}
 }
 
@@ -96,6 +111,14 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 
 func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 	pipe := c.StringArgs["pipe"]
+
+	// rewrite the pipe with the namespace prefix, if any
+	ns := GetNamespace()
+	if ns != nil {
+		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
+			pipe = fmt.Sprintf("%v//%v", ns, pipe)
+		}
+	}
 
 	if c.BoolArgs["mode"] {
 		var mode int
