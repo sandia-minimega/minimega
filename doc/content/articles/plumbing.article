@@ -24,7 +24,7 @@ and minimega instances can even read or write to pipes from other VMs.
 
 The minimega plumber provides two plumbing primitives - _pipes_ and
 _pipelines_. Pipes are I/O points, and support a number of delivery and
-read/write options. Pipeines are compositions of pipes and external programs. 
+read/write options. Pipelines are compositions of pipes and external programs.
 
 ** pipes
 
@@ -39,10 +39,10 @@ message is discarded. No buffering of messages takes place.
 Named pipes are also unique to the namespace they were created in, so it's safe
 to reuse pipe names between experiments.
 
-Pipes can be written to or read from on the minimeg CLI, the host command line,
-attached to miniccc processes via the `cc` API, and from the VM command line
-via a miniccc switch. For example, we can read from a minimega pipe `foo` on
-the command line: 
+Pipes can be written to or read from on the minimega CLI, the host command
+line, attached to miniccc processes via the `cc` API, and from the VM command
+line via a miniccc switch. For example, we can read from a minimega pipe `foo`
+on the command line:
 
 	$ minimega -pipe foo
 
@@ -103,7 +103,12 @@ To change the mode on a named pipe, use the `pipe` API:
 
 *** vias
 
-Vias are single-stage, external programs that are invoked for *every* read that takes place on a named pipe. They are used in places where a value that is written to a pipe needs to be transformed in some way for every reader that message will be forwarded to. For example, say you want readers on pipe `foo` to have a unique, normally distributed floating point value based on a mean written to the pipe:
+Vias are single-stage, external programs that are invoked for *every* read that
+takes place on a named pipe. They are used in places where a value that is
+written to a pipe needs to be transformed in some way for every reader that
+message will be forwarded to. For example, say you want readers on pipe `foo`
+to have a unique, normally distributed floating point value based on a mean
+written to the pipe:
 
 .image via.png
 
