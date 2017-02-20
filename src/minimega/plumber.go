@@ -26,10 +26,15 @@ var plumbCLIHandlers = []minicli.Handler{
 		HelpShort: "plumb external programs with minimega, VMs, and other external programs",
 		HelpLong:  ``,
 		Patterns: []string{
-			"plumb",
 			"plumb <src> <dst>...",
 		},
-		Call: wrapSimpleCLI(cliPlumb),
+		Call: wrapSimpleCLI(cliPlumbLocal),
+	},
+	{ // plumb
+		Patterns: []string{
+			"plumb",
+		},
+		Call: wrapBroadcastCLI(cliPlumbBroadcast),
 	},
 	{
 		HelpShort: "reset plumber state",
@@ -44,12 +49,17 @@ var plumbCLIHandlers = []minicli.Handler{
 		HelpLong:  ``,
 		Patterns: []string{
 			"pipe",
-			"pipe <pipe> <data>",
 			"pipe <pipe> <mode,> <all,round-robin,random>",
 			"pipe <pipe> <log,> <true,false>",
+		},
+		Call: wrapBroadcastCLI(cliPipeBroadcast),
+	},
+	{ // pipe
+		Patterns: []string{
+			"pipe <pipe> <data>",
 			"pipe <pipe> <via,> <command>...",
 		},
-		Call: wrapSimpleCLI(cliPipe),
+		Call: wrapSimpleCLI(cliPipeLocal),
 	},
 	{
 		HelpShort: "reset pipe state",
@@ -68,37 +78,37 @@ func plumberStart(node *meshage.Node) {
 	plumber = miniplumber.New(node)
 }
 
-func cliPlumb(c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["src"]; !ok {
-		resp.Header = []string{"pipeline"}
-		resp.Tabular = [][]string{}
+func cliPlumbLocal(c *minicli.Command, resp *minicli.Response) error {
+	args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
 
-		for _, v := range plumber.Pipelines() {
-			resp.Tabular = append(resp.Tabular, []string{v})
-		}
-
-		return nil
-	} else {
-		args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
-
-		// rewrite pipes with namespace prefixes
-		ns := GetNamespace()
-		if ns != nil {
-			for i, e := range args {
-				if fields := strings.Split(e, "//"); len(fields) == 1 {
-					f := fieldsQuoteEscape("\"", e)
-					_, err := exec.LookPath(f[0])
-					if err != nil {
-						args[i] = fmt.Sprintf("%v//%v", ns, e)
-					}
+	// rewrite pipes with namespace prefixes
+	ns := GetNamespace()
+	if ns != nil {
+		for i, e := range args {
+			if fields := strings.Split(e, "//"); len(fields) == 1 {
+				f := fieldsQuoteEscape("\"", e)
+				_, err := exec.LookPath(f[0])
+				if err != nil {
+					args[i] = fmt.Sprintf("%v//%v", ns, e)
 				}
 			}
 		}
-
-		log.Debug("got plumber production: %v", args)
-
-		return plumber.Plumb(args...)
 	}
+
+	log.Debug("got plumber production: %v", args)
+
+	return plumber.Plumb(args...)
+}
+
+func cliPlumbBroadcast(c *minicli.Command, resp *minicli.Response) error {
+	resp.Header = []string{"pipeline"}
+	resp.Tabular = [][]string{}
+
+	for _, v := range plumber.Pipelines() {
+		resp.Tabular = append(resp.Tabular, []string{v})
+	}
+
+	return nil
 }
 
 func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
@@ -109,7 +119,7 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 	}
 }
 
-func cliPipe(c *minicli.Command, resp *minicli.Response) error {
+func cliPipeBroadcast(c *minicli.Command, resp *minicli.Response) error {
 	pipe := c.StringArgs["pipe"]
 
 	// rewrite the pipe with the namespace prefix, if any
@@ -138,10 +148,6 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		} else {
 			plumber.Log(pipe, false)
 		}
-	} else if c.BoolArgs["via"] {
-		plumber.Via(pipe, c.ListArgs["command"])
-	} else if data, ok := c.StringArgs["data"]; ok {
-		plumber.Write(pipe, data)
 	} else {
 		// get info on all named pipes
 		resp.Header = []string{"name", "mode", "readers", "writers", "via", "last message"}
@@ -152,6 +158,26 @@ func cliPipe(c *minicli.Command, resp *minicli.Response) error {
 		}
 	}
 
+	return nil
+}
+
+func cliPipeLocal(c *minicli.Command, resp *minicli.Response) error {
+	pipe := c.StringArgs["pipe"]
+
+	// rewrite the pipe with the namespace prefix, if any
+	ns := GetNamespace()
+	if ns != nil {
+		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
+			pipe = fmt.Sprintf("%v//%v", ns, pipe)
+		}
+	}
+
+	if c.BoolArgs["via"] {
+		plumber.Via(pipe, c.ListArgs["command"])
+	} else {
+		data := c.StringArgs["data"]
+		plumber.Write(pipe, data)
+	}
 	return nil
 }
 
