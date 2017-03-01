@@ -4,5 +4,9 @@
 	"start" : 1,
 	"end" : 80,
 	"rackwidth" : 8,
-	"rackheight" : 5
+	"rackheight" : 5,
+	"vlan_min": 1000,
+	"vlan_max": 2000
+	"network": "arista",
+	"network_host": "arista",
 }

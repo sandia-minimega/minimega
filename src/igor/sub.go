@@ -127,8 +127,22 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
+	// pick a network segment
+	var vlan int
+	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
+		for _, r := range reservations {
+			if vlan == r.Vlan {
+				continue
+			}
+		}
+		break
+	}
+	if vlan > igorConfig.VLANMax {
+		fatalf("couldn't assign a vlan!")
+	}
+
 	// Ok, build our reservation
-	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles}
+	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles, Vlan: vlan}
 	user, err := user.Current()
 	reservation.Owner = user.Username
 	reservation.Expiration = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
@@ -189,6 +203,12 @@ func runSub(cmd *Command, args []string) {
 		}
 		io.Copy(f, masterfile)
 		f.Close()
+	}
+
+	// update the network config
+	err = networkSet(nodes, vlan)
+	if err != nil {
+		fatalf("error setting network isolation: %v", err)
 	}
 
 	// Truncate the existing reservation file

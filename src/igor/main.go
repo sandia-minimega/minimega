@@ -32,12 +32,17 @@ var igorConfig Config
 
 // The configuration of the system
 type Config struct {
-	TFTPRoot   string
-	Prefix     string
-	Start      int
-	End        int
-	Rackwidth  int
-	Rackheight int
+	TFTPRoot    string
+	Prefix      string
+	Start       int
+	End         int
+	Rackwidth   int
+	Rackheight  int
+	VLANMin     int               `json:"vlan_min"`
+	VLANMax     int               `json:"vlan_max"`
+	NodeMap     map[string]string `json:"node_map"`
+	Network     string
+	NetworkHost string `json:"network_host"`
 }
 
 var Reservations map[string][]string // maps a reservation name to a slice of node names
@@ -314,6 +319,7 @@ type Reservation struct {
 	PXENames   []string // eg C000025B
 	Expiration int64    // UNIX time
 	Owner      string
+	Vlan       int
 }
 
 func getReservations(f io.Reader) []Reservation {
