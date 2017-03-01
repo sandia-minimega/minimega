@@ -69,6 +69,12 @@ func deleteReservation(checkUser bool, args []string) {
 		fatalf("Couldn't find reservation %v", args[0])
 	}
 
+	// clean up the network config
+	err = networkClear(deletedReservation.Hosts)
+	if err != nil {
+		fatalf("error clearing network isolation: %v", err)
+	}
+
 	// Truncate the existing reservation file
 	resdb.Truncate(0)
 	resdb.Seek(0, 0)
@@ -81,6 +87,4 @@ func deleteReservation(checkUser bool, args []string) {
 	for _, pxename := range deletedReservation.PXENames {
 		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 	}
-
-	// clean up the network config
 }
