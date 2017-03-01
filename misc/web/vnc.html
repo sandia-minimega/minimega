@@ -221,6 +221,16 @@
     <script>var INCLUDE_URI = "/novnc/include/";</script>
     <script src="/novnc/include/util.js"></script>
     <script src="/novnc/include/ui.js"></script>
-
+    <script>
+	    window.onload = function () {
+		    var theurl = window.location.pathname; 
+		    var thepath = "tunnel/" + theurl.substring(theurl.lastIndexOf("/")+1);
+		    document.getElementById("noVNC_setting_host").value = window.location.hostname;
+		    document.getElementById("noVNC_setting_port").value = window.location.port;
+		    document.getElementById("noVNC_setting_password").value = "";
+		    document.getElementById("noVNC_setting_path").value = thepath;
+            UI.connect();
+		};
+	</script>
  </body>
 </html>
