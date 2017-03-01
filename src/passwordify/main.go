@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"path/filepath"
 )
 
 var (
@@ -66,7 +67,6 @@ func main() {
 			tdir,
 			"passwd",
 		},
-		Env: nil,
 		Dir: "",
 	}
 	stdout, err := cmd.StdoutPipe()
@@ -117,12 +117,12 @@ func main() {
 		}
 		defer in.Close()
 
-		err = os.Mkdir(tdir+"/root/.ssh", os.ModeDir|0700)
+		err = os.Mkdir(filepath.Join(tdir, "root/.ssh"), os.ModeDir|0700)
 		if err != nil {
 			log.Fatalln("can't make root's ssh directory:", err)
 		}
 
-		out, err := os.OpenFile(tdir+"/root/.ssh/authorized_keys", os.O_RDWR|os.O_CREATE, 0600)
+		out, err := os.OpenFile(filepath.Join(tdir, "root/.ssh/authorized_keys"), os.O_RDWR|os.O_CREATE, 0600)
 		if err != nil {
 			log.Fatalln("Can't open authorized_keys file:", err)
 		}
