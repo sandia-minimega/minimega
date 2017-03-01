@@ -11,8 +11,8 @@ import (
 )
 
 var externalProcesses = map[string]string{
-	"bash":        "bash",
-	"chroot":	"chroot",
+	"bash":   "bash",
+	"chroot": "chroot",
 }
 
 // check for the presence of each of the external processes we may call,

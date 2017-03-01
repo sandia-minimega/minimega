@@ -7,13 +7,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"golang.org/x/crypto/ssh/terminal"
 	"io"
 	"io/ioutil"
 	log "minilog"
 	"os"
-	"syscall"
 	"os/exec"
-	"golang.org/x/crypto/ssh/terminal"
+	"syscall"
 )
 
 var (
@@ -41,7 +41,7 @@ func main() {
 
 	// Make sure the source exists
 	if _, err := os.Stat(source); os.IsNotExist(err) {
-	  log.Fatalln("cannot find source initramfs", source, ":", err)
+		log.Fatalln("cannot find source initramfs", source, ":", err)
 	}
 
 	// Working directory
