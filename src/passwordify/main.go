@@ -13,8 +13,8 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
-	"syscall"
 	"path/filepath"
+	"syscall"
 )
 
 var (
@@ -36,6 +36,8 @@ func main() {
 		usage()
 		os.Exit(1)
 	}
+
+	externalCheck()
 
 	source := flag.Arg(0)
 	destination := flag.Arg(1)
@@ -86,19 +88,26 @@ func main() {
 
 	go func() {
 		defer stdin.Close()
-		fmt.Printf("Enter new root password: ")
-		pw1, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		fmt.Printf("\nRetype new root password: ")
-		pw2, err := terminal.ReadPassword(int(syscall.Stdin))
-		if err != nil {
-			log.Fatalln(err)
-		}
-		fmt.Printf("\n")
-		if string(pw1) != string(pw2) {
-			log.Fatalln("passwords do not match")
+		var pw1, pw2 []byte
+		for {
+			fmt.Printf("Enter new root password: ")
+			pw1, err = terminal.ReadPassword(int(syscall.Stdin))
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Printf("\nRetype new root password: ")
+			pw2, err = terminal.ReadPassword(int(syscall.Stdin))
+			if err != nil {
+				log.Fatalln(err)
+			}
+			fmt.Printf("\n")
+			if string(pw1) != string(pw2) {
+				log.Errorln("passwords do not match")
+			} else if string(pw1) == "" {
+				log.Errorln("password must not be blank")
+			} else {
+				break
+			}
 		}
 		io.WriteString(stdin, string(pw1)+"\n")
 		io.WriteString(stdin, string(pw1)+"\n")
