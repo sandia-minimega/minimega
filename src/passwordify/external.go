@@ -11,12 +11,13 @@ import (
 )
 
 var externalProcesses = map[string]string{
-	"bash":   "bash",
-	"chroot": "chroot",
-	"find":   "find",
-	"cpio":   "cpio",
-	"zcat":   "zcat",
-	"gzip":   "gzip",
+	"bash":       "bash",
+	"chroot":     "chroot",
+	"find":       "find",
+	"cpio":       "cpio",
+	"zcat":       "zcat",
+	"gzip":       "gzip",
+	"ssh-keygen": "ssh-keygen",
 }
 
 // check for the presence of each of the external processes we may call,

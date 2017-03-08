@@ -143,6 +143,33 @@ func main() {
 		out.Sync()
 	}
 
+	// Generate an ssh key and append it to authorized_keys for
+	// passwordless login between hosts running this initrd.
+	cmd = exec.Command("ssh-keygen", "-f", filepath.Join(tdir, "root/.ssh/id_rsa"), "-N", "")
+	stdoutStderr, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	log.Info("ssh-keygen: %s\n", stdoutStderr)
+
+	// Open the authorized keys file...
+	f, err := os.OpenFile(filepath.Join(tdir, "root/.ssh/authorized_keys"), os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	defer f.Close()
+	// Read in the newly generated key...
+	key, err := ioutil.ReadFile(filepath.Join(tdir, "root/.ssh/id_rsa.pub"))
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// And copy it over
+	if _, err = f.Write(key); err != nil {
+		log.Fatalln(err)
+	}
+
 	// Repack initrd
 	initrdCommand = fmt.Sprintf("cd %v && find . -print0 | cpio --quiet  --null -ov --format=newc | gzip -9 > %v", tdir, destination)
 	err = runscript(initrdCommand)
