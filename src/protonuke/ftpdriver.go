@@ -5,13 +5,19 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/goftp/server"
 )
+
+type ReadCloser struct {
+	*bytes.Reader
+}
 
 type FileDriver struct {
 	RootPath string
@@ -19,11 +25,25 @@ type FileDriver struct {
 }
 
 type FileInfo struct {
-	os.FileInfo
-
+	name  string
+	size  int64
+	dir   bool
 	mode  os.FileMode
 	owner string
 	group string
+}
+
+func (r *ReadCloser) Close() error {
+	//noop
+	return nil
+}
+
+func (f *FileInfo) Name() string {
+	return f.name
+}
+
+func (f *FileInfo) Size() int64 {
+	return int64(f.size)
 }
 
 func (f *FileInfo) Mode() os.FileMode {
@@ -36,6 +56,18 @@ func (f *FileInfo) Owner() string {
 
 func (f *FileInfo) Group() string {
 	return f.group
+}
+
+func (f *FileInfo) ModTime() time.Time {
+	return time.Now()
+}
+
+func (f *FileInfo) IsDir() bool {
+	return f.dir
+}
+
+func (f *FileInfo) Sys() interface{} {
+	return nil
 }
 
 func (driver *FileDriver) realPath(path string) string {
@@ -53,7 +85,18 @@ func (driver *FileDriver) ChangeDir(path string) error {
 }
 
 func (driver *FileDriver) Stat(path string) (server.FileInfo, error) {
-	basepath := driver.realPath(path)
+	mockFileInfo := &FileInfo{
+		name:  "ftpFile",
+		mode:  0666,
+		owner: "protonuke",
+		group: "protonuke",
+		size:  int64(len(FTPImage)),
+		dir: true,
+	}
+
+	return mockFileInfo, nil
+
+	/*basepath := driver.realPath(path)
 	rPath, err := filepath.Abs(basepath)
 	if err != nil {
 		return nil, err
@@ -77,7 +120,7 @@ func (driver *FileDriver) Stat(path string) (server.FileInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &FileInfo{f, mode, owner, group}, nil
+	return &FileInfo{f, mode, owner, group}, nil*/
 }
 
 func (driver *FileDriver) ListDir(path string, callback func(server.FileInfo) error) error {
@@ -109,6 +152,13 @@ func (driver *FileDriver) MakeDir(path string) error {
 }
 
 func (driver *FileDriver) GetFile(path string, offset int64) (int64, io.ReadCloser, error) {
+	reader := bytes.NewReader(FTPImage)
+	r := &ReadCloser{
+		reader,
+	}
+	r.Seek(offset, os.SEEK_SET)
+	return int64(r.Len()), r, nil
+
 	rPath := driver.realPath(path)
 	f, err := os.Open(rPath)
 	if err != nil {

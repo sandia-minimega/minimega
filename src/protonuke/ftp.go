@@ -36,6 +36,7 @@ var (
 	tlsAuth     = false
 	connected   = false
 	auth        = false
+	FTPImage    []byte
 )
 
 type FTPAuth struct{}
@@ -256,18 +257,17 @@ func ftpsServer() {
 func ftpMakeImage() {
 	s := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(s)
+
 	pixelcount := f_ftpFileSize / 4
 	side := int(math.Sqrt(float64(pixelcount)))
 	log.Debug("Image served will be %v by %v", side, side)
+
 	m := image.NewRGBA(image.Rect(0, 0, side, side))
 	for i := 0; i < len(m.Pix); i++ {
 		m.Pix[i] = uint8(r.Int())
 	}
+
 	buf := new(bytes.Buffer)
 	png.Encode(buf, m)
-	ftpImage := buf.Bytes()
-	err := ioutil.WriteFile("/tmp/ftpimage", ftpImage, 0644)
-	if err != nil {
-		log.Errorln(err)
-	}
+	FTPImage = buf.Bytes()
 }
