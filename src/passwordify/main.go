@@ -56,14 +56,16 @@ func main() {
 
 	// Unpack initrd
 	initrdCommand := fmt.Sprintf("cd %v && zcat %v | cpio -idmv", tdir, source)
-	err = runscript(initrdCommand)
+	cmd := exec.Command("bash", "-c", initrdCommand)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalln(err)
 	}
+	log.Info("repack: %v\n", output)
 
 	// Set password
 	p := process("chroot")
-	cmd := &exec.Cmd{
+	cmd = &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
@@ -175,49 +177,16 @@ func main() {
 
 	// Repack initrd
 	initrdCommand = fmt.Sprintf("cd %v && find . -print0 | cpio --quiet  --null -ov --format=newc | gzip -9 > %v", tdir, destination)
-	err = runscript(initrdCommand)
+	cmd = exec.Command("bash", "-c", initrdCommand)
+	output, err = cmd.CombinedOutput()
 	if err != nil {
 		log.Fatalln(err)
 	}
+	log.Info("repack: %v\n", output)
 
 	// Cleanup
 	err = os.RemoveAll(tdir)
 	if err != nil {
 		log.Fatalln(err)
 	}
-}
-
-func runscript(cmdString string) error {
-	f, err := ioutil.TempFile("", "passwordify_cmd")
-	if err != nil {
-		return err
-	}
-
-	eName := f.Name()
-
-	f.WriteString(cmdString)
-	f.Close()
-
-	log.Debugln("initrd command:", cmdString)
-
-	p := process("bash")
-	cmd := exec.Command(p, eName)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-	log.LogAll(stdout, log.INFO, "cpio")
-	log.LogAll(stderr, log.INFO, "cpio")
-
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	os.Remove(eName)
-
-	return nil
 }
