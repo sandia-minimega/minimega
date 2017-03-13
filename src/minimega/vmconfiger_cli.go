@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -156,6 +157,66 @@ Note: this configuration only applies to containers.
 			}
 
 			vmConfig.Fifos = i
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures volume",
+		HelpLong: `Attach one or more volumes to a container. These directories will be
+mounted inside the container at the specified location.
+
+For example, to mount /scratch/data to /data inside the container:
+
+ vm config volume /data /scratch/data
+
+Commands with the same <key> will overwrite previous volumes:
+
+ vm config volume /data /scratch/data2
+ vm config volume /data
+ /scratch/data2
+
+Note: this configuration only applies to containers.
+`,
+		Patterns: []string{
+			"vm config volume",
+			"vm config volume <key> [value]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+			if c.StringArgs["key"] == "" {
+				var b bytes.Buffer
+
+				for k, v := range vmConfig.VolumePaths {
+					fmt.Fprintf(&b, "%v -> %v", k, v)
+				}
+
+				r.Response = b.String()
+				return nil
+			}
+
+			if c.StringArgs["value"] == "" {
+				if vmConfig.VolumePaths != nil {
+					r.Response = vmConfig.VolumePaths[c.StringArgs["value"]]
+				}
+				return nil
+			}
+
+			if vmConfig.VolumePaths == nil {
+				vmConfig.VolumePaths = make(map[string]string)
+			}
+
+			v := c.StringArgs["value"]
+
+			// Ensure that relative paths are always relative to /files/
+			if !filepath.IsAbs(v) {
+				v = filepath.Join(*f_iomBase, v)
+			}
+
+			if _, err := os.Stat(v); os.IsNotExist(err) {
+				log.Warn("file does not exist: %v", v)
+			}
+
+			vmConfig.VolumePaths[c.StringArgs["key"]] = v
 
 			return nil
 		}),
@@ -686,6 +747,7 @@ Default: -1
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
 			"clear vm config <virtio-ports,>",
+			"clear vm config <volume,>",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
 			// at most one key will be set in BoolArgs but we don't know what it
@@ -775,6 +837,9 @@ func (v *ContainerConfig) Info(field string) (string, error) {
 	if field == "fifos" {
 		return strconv.FormatUint(v.Fifos, 10), nil
 	}
+	if field == "volume" {
+		return fmt.Sprintf("%v", v.VolumePaths), nil
+	}
 
 	return "", fmt.Errorf("invalid info field: %v", field)
 }
@@ -794,6 +859,9 @@ func (v *ContainerConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "fifos" {
 		v.Fifos = 0
+	}
+	if mask == Wildcard || mask == "volume" {
+		v.VolumePaths = nil
 	}
 }
 

@@ -134,7 +134,8 @@ var vmInfo = []string{
 	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
 	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
-	"filesystem", "hostname", "init", "preinit", "fifo", "console_port",
+	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
+	"console_port",
 	// more generic fields (tags can be huge so throw it at the end)
 	"tags",
 }
