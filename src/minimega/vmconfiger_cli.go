@@ -719,6 +719,43 @@ Default: -1
 		}),
 	},
 	{
+		HelpShort: "configures tags",
+		HelpLong: `Set tags in the same manner as "vm tag". These tags will apply to all
+newly launched VMs.
+`,
+		Patterns: []string{
+			"vm config tags",
+			"vm config tags <key> [value]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+			if c.StringArgs["key"] == "" {
+				var b bytes.Buffer
+
+				for k, v := range vmConfig.Tags {
+					fmt.Fprintf(&b, "%v -> %v", k, v)
+				}
+
+				r.Response = b.String()
+				return nil
+			}
+
+			if c.StringArgs["value"] == "" {
+				if vmConfig.Tags != nil {
+					r.Response = vmConfig.Tags[c.StringArgs["value"]]
+				}
+				return nil
+			}
+
+			if vmConfig.Tags == nil {
+				vmConfig.Tags = make(map[string]string)
+			}
+
+			vmConfig.Tags[c.StringArgs["key"]] = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "reset one or more configurations to default value",
 		Patterns: []string{
 			"clear vm config",

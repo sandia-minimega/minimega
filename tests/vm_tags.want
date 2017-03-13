@@ -1,7 +1,7 @@
 ## # Set some tags and launch VMs
 ## vm config tag color red
 ## vm config tag
-{"color":"red"}
+color -> red
 ## vm launch kvm vm0
 ## vm config tag shape square
 ## vm launch kvm vm[1,2]
@@ -33,7 +33,6 @@ tags
 ## # Make sure that clear only affects the configured tags
 ## clear vm config tag
 ## vm config tag
-{}
 ## .column tags vm info
 tags
 {"color":"blue","shape":"square"}

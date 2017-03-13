@@ -631,7 +631,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			}
 		}
 	case "tags":
-		return vm.Tags.String(), nil
+		return marshal(vm.Tags), nil
 	case "cc_active":
 		return strconv.FormatBool(vm.ActiveCC), nil
 	default:
