@@ -14,7 +14,8 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
+	log "minilog"
+	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -25,6 +26,7 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+	"syscall"
 )
 
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
@@ -40,59 +42,29 @@ type Config struct {
 	Rackheight int
 }
 
-var Reservations map[string][]string // maps a reservation name to a slice of node names
-
-// A Command is an implementation of a go command
-// like go build or go fix.
-type Command struct {
-	// Run runs the command.
-	// The args are the arguments after the command name.
-	Run func(cmd *Command, args []string)
-
-	// UsageLine is the one-line usage message.
-	// The first word in the line is taken to be the command name.
-	UsageLine string
-
-	// Short is the short description shown in the 'go help' output.
-	Short string
-
-	// Long is the long message shown in the 'go help <this-command>' output.
-	Long string
-
-	// Flag is a set of flags specific to this command.
-	Flag flag.FlagSet
-
-	// CustomFlags indicates that the command will do its own
-	// flag parsing.
-	CustomFlags bool
+type TimeSlice struct {
+	Start	int64	// UNIX time
+	Nodes	[]uint64	// slice of len(# of nodes), mapping to reservation IDs
 }
 
-// Name returns the command's name: the first word in the usage line.
-func (c *Command) Name() string {
-	name := c.UsageLine
-	i := strings.Index(name, " ")
-	if i >= 0 {
-		name = name[:i]
-	}
-	return name
+type Reservation struct {
+	ResName    string
+	Hosts      []string // separate, not a range
+	PXENames   []string // eg C000025B
+	StartTime	int64	// UNIX time
+	EndTime		int64	// UNIX time
+	Duration	float64	// minutes
+	Owner      string
+	ID		uint64
 }
 
-func (c *Command) Usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
-	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
-	os.Exit(2)
-}
+var Reservations map[uint64]Reservation // map ID to reservations
 
-// Runnable reports whether the command can be run; otherwise
-// it is a documentation pseudo-command such as importpath.
-func (c *Command) Runnable() bool {
-	return c.Run != nil
-}
+var resdb *os.File
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
 var commands = []*Command{
-	cmdAddtime,
 	cmdDel,
 	cmdShow,
 	cmdSub,
@@ -112,43 +84,38 @@ func setExitStatus(n int) {
 func readConfig(path string) (c Config) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		fatalf("Couldn't read config file: %v", err)
+		log.Fatal("Couldn't read config file: %v", err)
 	}
 
 	err = json.Unmarshal(b, &c)
 	if err != nil {
-		fatalf("Couldn't parse json: %v", err)
+		log.Fatal("Couldn't parse json: %v", err)
 	}
 	return
 }
 
 // Read the reservations, delete any that are too old.
 func cleanOld() {
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	// We lock to make sure it doesn't change from under us
-	// NOTE: not locking for now, haven't decided how important it is
-	//err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
-	reservations := getReservations(resdb)
-
 	now := time.Now().Unix()
 
-	for _, r := range reservations {
-		if r.Expiration < now {
+	for _, r := range Reservations {
+		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
 		}
 	}
 }
 
+func init() {
+	Reservations = make(map[uint64]Reservation)
+}
+
 func main() {
+	var err error
+
+	log.Init()
+
 	flag.Usage = usage
 	flag.Parse()
-	log.SetFlags(0)
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -160,7 +127,21 @@ func main() {
 		return
 	}
 
+	rand.Seed(time.Now().Unix())
+
 	igorConfig = readConfig(*configpath)
+
+	// Read in the reservations
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
+	resdb, err = os.OpenFile(path, os.O_RDWR, 664)
+	if err != nil {
+		log.Fatal("failed to open reservations file: %v", err)
+	}
+	defer resdb.Close()
+	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
+	getReservations(resdb)
+
 
 	// Diagnose common mistake: GOPATH==GOROOT.
 	// This setting is equivalent to not setting GOPATH at all,
@@ -182,14 +163,12 @@ func main() {
 				args = cmd.Flag.Args()
 			}
 			cmd.Run(cmd, args)
-			exit()
 			return
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "go: unknown subcommand %q\nRun 'go help' for usage.\n", args[0])
 	setExitStatus(2)
-	exit()
 }
 
 var usageTemplate = `igor is a scheduler for Mega-style clusters.
@@ -294,39 +273,13 @@ func help(args []string) {
 	os.Exit(2) // failed at 'go help cmd'
 }
 
-func exit() {
-	os.Exit(exitStatus)
-}
-
-func fatalf(format string, args ...interface{}) {
-	errorf(format, args...)
-	exit()
-}
-
-func errorf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-	setExitStatus(1)
-}
-
-type Reservation struct {
-	ResName    string
-	Hosts      []string // separate, not a range
-	PXENames   []string // eg C000025B
-	Expiration int64    // UNIX time
-	Owner      string
-}
-
-func getReservations(f io.Reader) []Reservation {
-	var ret []Reservation
-
+func getReservations(f io.Reader) {
 	dec := json.NewDecoder(f)
-	err := dec.Decode(&ret)
+	err := dec.Decode(&Reservations)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
-		fatalf("failure parsing reservation file: %v", err)
+		log.Fatal("failure parsing reservation file: %v", err)
 	}
-
-	return ret
 }
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B

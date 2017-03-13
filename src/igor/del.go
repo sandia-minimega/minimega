@@ -8,8 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/user"
-	"path/filepath"
-	"syscall"
+	log "minilog"
 )
 
 var cmdDel = &Command{
@@ -32,41 +31,33 @@ func runDel(cmd *Command, args []string) {
 
 func deleteReservation(checkUser bool, args []string) {
 	if len(args) != 1 {
-		fatalf("Invalid arguments")
+		log.Fatalln("Invalid arguments")
 	}
 
 	user, err := user.Current()
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
+		log.Fatal("can't get current user: %v\n", err)
 	}
-	defer resdb.Close()
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-	reservations := getReservations(resdb)
 
-	var newres []Reservation
 	var deletedReservation Reservation
 	found := false
 	if checkUser {
-		for _, r := range reservations {
+		for _, r := range Reservations {
 			if r.ResName == args[0] && r.Owner != user.Username {
-				fatalf("You are not the owner of %v", args[0])
+				log.Fatal("You are not the owner of %v", args[0])
 			}
 		}
 	}
-	for _, r := range reservations {
-		if r.ResName != args[0] {
-			newres = append(newres, r)
-		} else {
+	for _, r := range Reservations {
+		if r.ResName == args[0] {
 			deletedReservation = r
+			delete(Reservations, r.ID)
 			found = true
 		}
 	}
 
 	if !found {
-		fatalf("Couldn't find reservation %v", args[0])
+		log.Fatal("Couldn't find reservation %v", args[0])
 	}
 
 	// Truncate the existing reservation file
@@ -74,7 +65,7 @@ func deleteReservation(checkUser bool, args []string) {
 	resdb.Seek(0, 0)
 	// Write out the new reservations
 	enc := json.NewEncoder(resdb)
-	enc.Encode(newres)
+	enc.Encode(Reservations)
 	resdb.Sync()
 
 	// Delete all the PXE files in the reservation

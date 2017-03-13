@@ -8,13 +8,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"ranges"
-	"syscall"
 	"time"
+	log "minilog"
 )
 
 var cmdSub = &Command{
@@ -73,23 +74,11 @@ func runSub(cmd *Command, args []string) {
 	var IPs []net.IP
 	var pxefiles []string
 
-	// Open and lock the reservation file
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-
-	reservations := getReservations(resdb)
-
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
-		errorf("Missing required argument!")
 		help([]string{"sub"})
-		exit()
+		log.Fatalln("Missing required argument")
+
 	}
 
 	// figure out which nodes to reserve
@@ -103,7 +92,7 @@ func runSub(cmd *Command, args []string) {
 	for _, hostname := range nodes {
 		ip, err := net.LookupIP(hostname)
 		if err != nil {
-			fatalf("failure looking up %v: %v", hostname, err)
+			log.Fatal("failure looking up %v: %v", hostname, err)
 		}
 		IPs = append(IPs, ip...)
 	}
@@ -115,13 +104,13 @@ func runSub(cmd *Command, args []string) {
 
 	// Make sure none of those nodes are reserved
 	// Check every reservation...
-	for _, res := range reservations {
+	for _, res := range Reservations {
 		// For every node in a reservation...
 		for _, node := range res.PXENames {
 			// make sure no node in *our* potential reservation conflicts
 			for _, pxe := range pxefiles {
 				if node == pxe {
-					fatalf("Conflict with reservation %v, specific PXE file %v\n", res.ResName, pxe)
+					log.Fatal("Conflict with reservation %v, specific PXE file %v\n", res.ResName, pxe)
 				}
 			}
 		}
@@ -131,27 +120,29 @@ func runSub(cmd *Command, args []string) {
 	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles}
 	user, err := user.Current()
 	reservation.Owner = user.Username
-	reservation.Expiration = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
+	reservation.EndTime = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
+	reservation.Duration = (time.Duration(subT)).Minutes()
+	reservation.ID = rand.Uint64()
 
 	// Add it to the list of reservations
-	reservations = append(reservations, reservation)
+	Reservations[reservation.ID] = reservation
 
 	// copy kernel and initrd
 	// 1. Validate and open source files
 	ksource, err := os.Open(subK)
 	if err != nil {
-		fatalf("couldn't open kernel: %v", err)
+		log.Fatal("couldn't open kernel: %v", err)
 	}
 	isource, err := os.Open(subI)
 	if err != nil {
-		fatalf("couldn't open initrd: %v", err)
+		log.Fatal("couldn't open initrd: %v", err)
 	}
 
 	// make kernel copy
 	fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
 	kdest, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
+		log.Fatal("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(kdest, ksource)
 	kdest.Close()
@@ -161,7 +152,7 @@ func runSub(cmd *Command, args []string) {
 	fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
 	idest, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
+		log.Fatal("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(idest, isource)
 	idest.Close()
@@ -171,7 +162,7 @@ func runSub(cmd *Command, args []string) {
 	fname = filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", subR)
 	masterfile, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
+		log.Fatal("failed to create %v -- %v", fname, err)
 	}
 	defer masterfile.Close()
 	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
@@ -185,7 +176,7 @@ func runSub(cmd *Command, args []string) {
 		fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
 		f, err := os.Create(fname)
 		if err != nil {
-			fatalf("failed to create %v -- %v", fname, err)
+			log.Fatal("failed to create %v -- %v", fname, err)
 		}
 		io.Copy(f, masterfile)
 		f.Close()
@@ -196,6 +187,6 @@ func runSub(cmd *Command, args []string) {
 	resdb.Seek(0, 0)
 	// Write out the new reservations
 	enc := json.NewEncoder(resdb)
-	enc.Encode(reservations)
+	enc.Encode(Reservations)
 	resdb.Sync()
 }
