@@ -84,6 +84,7 @@ func (g *Generator) Run() error {
 	template.Must(t.New("bool").Parse(boolTemplate))
 	template.Must(t.New("string").Parse(stringTemplate))
 	template.Must(t.New("slice").Parse(sliceTemplate))
+	template.Must(t.New("map").Parse(mapTemplate))
 
 	g.template = t
 
@@ -112,6 +113,7 @@ func (g *Generator) Run() error {
 	"fmt"
 	"minicli"
 	log "minilog"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -265,6 +267,41 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				g.fields[strctName] = append(g.fields[strctName], f)
 
 				g.Execute("slice", f)
+			case *ast.MapType:
+				v, ok := typ.Key.(*ast.Ident)
+				v2, ok2 := typ.Value.(*ast.Ident)
+				if !ok || v.Name != "string" || !ok2 || v2.Name != "string" {
+					log.Error("unhandled type: %v", typ)
+					// always add field, even if we don't generate the handler
+					g.fields[strctName] = append(g.fields[strctName], Field{
+						Field:      name,
+						ConfigName: configName,
+						Default:    "nil",
+						Doc:        doc,
+					})
+
+					continue
+				}
+
+				zero := "nil"
+				if f := strings.Fields(getDefault(doc, "")); len(f) > 0 {
+					for i := range f {
+						f[i] = strings.TrimSuffix(f[i], ",")
+					}
+					zero = fmt.Sprintf("map[string]string{%v}", strings.Join(f, ","))
+				}
+
+				f := Field{
+					Field:      name,
+					ConfigName: configName,
+					Default:    zero,
+					Doc:        doc,
+					Path:       strings.Contains(name, "Path"),
+				}
+
+				g.fields[strctName] = append(g.fields[strctName], f)
+
+				g.Execute("map", f)
 			default:
 				log.Error("unhandled type for %v: %v", name, typ)
 				// always add field, even if we don't generate the handler

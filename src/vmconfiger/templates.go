@@ -79,6 +79,58 @@ const sliceTemplate = `{
 },
 `
 
+const mapTemplate = `{
+	HelpShort: "configures {{ .ConfigName }}",
+	HelpLong: ` + "`{{ .Doc }}`," + `
+	Patterns: []string{
+		"vm config {{ .ConfigName }}",
+		"vm config {{ .ConfigName }} <key> [value]",
+	},
+	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+		if c.StringArgs["key"] == "" {
+			var b bytes.Buffer
+
+			for k, v := range vmConfig.{{ .Field }} {
+				fmt.Fprintf(&b, "%v -> %v", k, v)
+			}
+
+			r.Response = b.String()
+			return nil
+		}
+
+		if c.StringArgs["value"] == "" {
+			if vmConfig.{{ .Field }} != nil {
+				r.Response = vmConfig.{{ .Field }}[c.StringArgs["value"]]
+			}
+			return nil
+		}
+
+		if vmConfig.{{ .Field }} == nil {
+			vmConfig.{{ .Field }} = make(map[string]string)
+		}
+
+		{{ if .Path }}
+		v := c.StringArgs["value"]
+
+		// Ensure that relative paths are always relative to /files/
+		if !filepath.IsAbs(v) {
+			v = filepath.Join(*f_iomBase, v)
+		}
+
+		if _, err := os.Stat(v); os.IsNotExist(err) {
+			log.Warn("file does not exist: %v", v)
+		}
+
+		vmConfig.{{ .Field }}[c.StringArgs["key"]] = v
+		{{ else }}
+		vmConfig.{{ .Field }}[c.StringArgs["key"]] = c.StringArgs["value"]
+		{{ end }}
+
+		return nil
+	}),
+},
+`
+
 // numTemplate handles int64 and uint64
 const numTemplate = `{
 	HelpShort: "configures {{ .ConfigName }}",
