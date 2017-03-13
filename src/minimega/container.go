@@ -1653,6 +1653,7 @@ func containerCleanCgroupDirs() {
 		filepath.Join(*f_cgroup, "freezer", "minimega"),
 		filepath.Join(*f_cgroup, "memory", "minimega"),
 		filepath.Join(*f_cgroup, "devices", "minimega"),
+		filepath.Join(*f_cgroup, "cpu", "minimega"),
 	}
 	for _, d := range paths {
 		_, err := os.Stat(d)
