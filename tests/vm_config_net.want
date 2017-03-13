@@ -77,8 +77,8 @@ After overrides:
 [test_bridge,100,13:37:13:37:00:03 test_bridge,200,13:37:13:37:00:04]
 ## vm launch kvm vm6
 ## .filter name=vm6 .columns name,bridge,vlan,mac vm info
-name | bridge                    | vlan      | mac
-vm6  | [test_bridge test_bridge] | [100 200] | [13:37:13:37:00:03 13:37:13:37:00:04]
+name | bridge                     | vlan       | mac
+vm6  | [test_bridge, test_bridge] | [100, 200] | [13:37:13:37:00:03, 13:37:13:37:00:04]
 ## vm config qemu-override
 id	match	replacement
 
