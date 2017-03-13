@@ -91,7 +91,7 @@ const mapTemplate = `{
 			var b bytes.Buffer
 
 			for k, v := range vmConfig.{{ .Field }} {
-				fmt.Fprintf(&b, "%v -> %v", k, v)
+				fmt.Fprintf(&b, "%v -> %v\n", k, v)
 			}
 
 			r.Response = b.String()
