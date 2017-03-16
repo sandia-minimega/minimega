@@ -5,7 +5,6 @@
 package main
 
 import (
-	"encoding/json"
 	log "minilog"
 	"os"
 	"os/user"
@@ -60,13 +59,8 @@ func deleteReservation(checkUser bool, args []string) {
 		log.Fatal("Couldn't find reservation %v", args[0])
 	}
 
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(Reservations)
-	resdb.Sync()
+	// Update the reservation file
+	putReservations()
 
 	// Delete all the PXE files in the reservation
 	for _, pxename := range deletedReservation.PXENames {

@@ -19,7 +19,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -28,6 +27,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 )
+
+const MINUTES_PER_SLICE = 1	 // must be less than 60!
+const MIN_SCHED_LEN = 72 // minutes, 720 = 12 hours
 
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
 var igorConfig Config
@@ -42,8 +44,10 @@ type Config struct {
 	Rackheight int
 }
 
+// Represents a slice of time
 type TimeSlice struct {
 	Start int64    // UNIX time
+	End	int64	// UNIX time
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
@@ -59,8 +63,10 @@ type Reservation struct {
 }
 
 var Reservations map[uint64]Reservation // map ID to reservations
+var Schedule []*TimeSlice	// The schedule
 
 var resdb *os.File
+var scheddb *os.File
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
@@ -103,6 +109,9 @@ func cleanOld() {
 			deleteReservation(false, []string{r.ResName})
 		}
 	}
+
+	ExpireSchedule()
+	putSchedule()
 }
 
 func init() {
@@ -110,8 +119,6 @@ func init() {
 }
 
 func main() {
-	var err error
-
 	log.Init()
 
 	flag.Usage = usage
@@ -132,22 +139,29 @@ func main() {
 	igorConfig = readConfig(*configpath)
 
 	// Read in the reservations
+	// We open the file here so resdb.Close() doesn't happen until program exit
+	var err error
 	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err = os.OpenFile(path, os.O_RDWR, 664)
+	resdb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
 		log.Fatal("failed to open reservations file: %v", err)
 	}
 	defer resdb.Close()
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-	getReservations(resdb)
 
-	// Diagnose common mistake: GOPATH==GOROOT.
-	// This setting is equivalent to not setting GOPATH at all,
-	// which is not what most people want when they do it.
-	if gopath := os.Getenv("GOPATH"); gopath == runtime.GOROOT() {
-		fmt.Fprintf(os.Stderr, "warning: GOPATH set to GOROOT (%s) has no effect\n", gopath)
+	getReservations()
+
+	// Read in the schedule
+	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
+	scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Warn("failed to open schedule file: %v", err)
 	}
+	defer resdb.Close()
+	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
+	getSchedule()
 
 	// Here, we need to go through and delete any reservations which should be expired.
 	cleanOld()
@@ -272,8 +286,8 @@ func help(args []string) {
 	os.Exit(2) // failed at 'go help cmd'
 }
 
-func getReservations(f io.Reader) {
-	dec := json.NewDecoder(f)
+func getReservations() {
+	dec := json.NewDecoder(resdb)
 	err := dec.Decode(&Reservations)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
@@ -285,4 +299,33 @@ func getReservations(f io.Reader) {
 func toPXE(ip net.IP) string {
 	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
 	return s
+}
+
+func getSchedule() {
+	dec := json.NewDecoder(scheddb)
+	err := dec.Decode(&Schedule)
+	// an empty file is OK, but other errors are not
+	if err != nil && err != io.EOF {
+		log.Fatal("failure parsing schedule file: %v", err)
+	}
+}
+
+func putReservations() {
+	// Truncate the existing reservation file
+	resdb.Truncate(0)
+	resdb.Seek(0, 0)
+	// Write out the new reservations
+	enc := json.NewEncoder(resdb)
+	enc.Encode(Reservations)
+	resdb.Sync()
+}
+
+func putSchedule() {
+	// Truncate the existing schedule file
+	scheddb.Truncate(0)
+	scheddb.Seek(0, 0)
+	// Write out the new schedule
+	enc := json.NewEncoder(scheddb)
+	enc.Encode(Schedule)
+	scheddb.Sync()
 }

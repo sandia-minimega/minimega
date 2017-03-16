@@ -5,7 +5,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -182,11 +181,5 @@ func runSub(cmd *Command, args []string) {
 		f.Close()
 	}
 
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(Reservations)
-	resdb.Sync()
+	putReservations()
 }
