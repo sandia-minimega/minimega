@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	log "minilog"
 	"net"
 	"os"
 	"os/user"
 	"path/filepath"
 	"ranges"
 	"time"
-	log "minilog"
 )
 
 var cmdSub = &Command{

@@ -6,9 +6,9 @@ package main
 
 import (
 	"encoding/json"
+	log "minilog"
 	"os"
 	"os/user"
-	log "minilog"
 )
 
 var cmdDel = &Command{

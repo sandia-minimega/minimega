@@ -14,19 +14,19 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	log "minilog"
 	"math/rand"
+	log "minilog"
 	"net"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"text/template"
 	"time"
 	"unicode"
 	"unicode/utf8"
-	"syscall"
 )
 
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
@@ -43,19 +43,19 @@ type Config struct {
 }
 
 type TimeSlice struct {
-	Start	int64	// UNIX time
-	Nodes	[]uint64	// slice of len(# of nodes), mapping to reservation IDs
+	Start int64    // UNIX time
+	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
 type Reservation struct {
-	ResName    string
-	Hosts      []string // separate, not a range
-	PXENames   []string // eg C000025B
-	StartTime	int64	// UNIX time
-	EndTime		int64	// UNIX time
-	Duration	float64	// minutes
-	Owner      string
-	ID		uint64
+	ResName   string
+	Hosts     []string // separate, not a range
+	PXENames  []string // eg C000025B
+	StartTime int64    // UNIX time
+	EndTime   int64    // UNIX time
+	Duration  float64  // minutes
+	Owner     string
+	ID        uint64
 }
 
 var Reservations map[uint64]Reservation // map ID to reservations
@@ -141,7 +141,6 @@ func main() {
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getReservations(resdb)
-
 
 	// Diagnose common mistake: GOPATH==GOROOT.
 	// This setting is equivalent to not setting GOPATH at all,

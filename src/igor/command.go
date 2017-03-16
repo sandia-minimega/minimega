@@ -10,9 +10,9 @@ package main
 
 import (
 	"flag"
-	"strings"
 	log "minilog"
 	"os"
+	"strings"
 )
 
 // A Command is an implementation of a go command
