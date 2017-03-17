@@ -49,6 +49,8 @@ type VM interface {
 	GetType() VMType
 	GetInstancePath() string
 	GetUUID() string
+	GetCPUs() uint64
+	GetMem() uint64
 
 	// Life cycle functions
 	Launch() error
@@ -320,6 +322,14 @@ func (vm *BaseVM) GetType() VMType {
 
 func (vm *BaseVM) GetInstancePath() string {
 	return vm.instancePath
+}
+
+func (vm *BaseVM) GetCPUs() uint64 {
+	return vm.VCPUs
+}
+
+func (vm *BaseVM) GetMem() uint64 {
+	return vm.Memory
 }
 
 func (vm *BaseVM) Kill() error {
@@ -628,7 +638,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return vm.BaseConfig.Info(field)
 	}
 
-	return fmt.Sprintf("%v", vals), nil
+	return "[" + strings.Join(vals, ", ") + "]", nil
 }
 
 // setState updates the vm state, and write the state to file. Assumes that the
@@ -637,10 +647,7 @@ func (vm *BaseVM) setState(s VMState) {
 	log.Debug("updating vm %v state: %v -> %v", vm.ID, vm.State, s)
 	vm.State = s
 
-	err := ioutil.WriteFile(vm.path("state"), []byte(s.String()), 0666)
-	if err != nil {
-		log.Error("write instance state file: %v", err)
-	}
+	mustWrite(vm.path("state"), s.String())
 }
 
 // setError updates the vm state and records the error in the vm's tags.

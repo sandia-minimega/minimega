@@ -70,7 +70,6 @@ func (vms VMs) Count() int {
 	defer vmLock.Unlock()
 
 	i := 0
-
 	for _, vm := range vms {
 		if inNamespace(vm) {
 			i += 1
@@ -80,12 +79,52 @@ func (vms VMs) Count() int {
 	return i
 }
 
-// CountAll is Count, regardless of namespace.
-func (vms VMs) CountAll() int {
+// Total memory committed across all VMs in current namespace.
+func (vms VMs) MemCommit() uint64 {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	return len(vms)
+	total := uint64(0)
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += vm.GetMem()
+		}
+	}
+
+	return total
+}
+
+// Total cpus committed across all VMs in current namespace.
+func (vms VMs) CPUCommit() uint64 {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	total := uint64(0)
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += vm.GetCPUs()
+		}
+	}
+
+	return total
+}
+
+// Total networks committed across all VMs in current namespace.
+func (vms VMs) NetworkCommit() int {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	total := 0
+
+	for _, vm := range vms {
+		if inNamespace(vm) {
+			total += len(vm.GetNetworks())
+		}
+	}
+
+	return total
 }
 
 // Info populates resp with info about the VMs running in the active namespace.
@@ -298,7 +337,7 @@ func (vms VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms VMs) Launch(namespace string, q QueuedVMs) <-chan error {
+func (vms VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 	out := make(chan error)
 
 	if err := q.GetFiles(); err != nil {
@@ -754,14 +793,15 @@ func globalVMs() VMs {
 	//  * Hosts in the active namespace
 	//  * Hosts connected via meshage plus ourselves
 	var hosts []string
-	if ns := GetNamespace(); ns != nil {
+	ns := GetNamespace()
+	if ns != nil {
 		hosts = ns.hostSlice()
 	} else {
 		hosts = meshageNode.BroadcastRecipients()
 		hosts = append(hosts, hostname)
 	}
 
-	cmds := makeCommandHosts(hosts, cmd)
+	cmds := makeCommandHosts(hosts, cmd, ns)
 
 	// Collected VMs
 	vms := VMs{}
@@ -779,7 +819,7 @@ func globalVMs() VMs {
 					vms[len(vms)] = vm
 				}
 			} else {
-				log.Error("unknown data field in vm info from %v", resp.Host)
+				log.Error("unknown data field in `vm info` from %v", resp.Host)
 			}
 		}
 	}
@@ -826,6 +866,10 @@ func expandLaunchNames(arg string, vms VMs) ([]string, error) {
 
 		if _, err := strconv.Atoi(name); err == nil {
 			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
+		}
+
+		if name == "vince" {
+			log.Warn("vince is unstoppable")
 		}
 
 		for _, vm := range vms {
