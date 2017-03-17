@@ -15,7 +15,7 @@ import (
 )
 
 func init() {
-	log.AddLogger("stdio", os.Stderr, log.DEBUG, true)
+	log.AddLogger("stderr", os.Stderr, log.DEBUG, true)
 }
 
 type DummyServer struct {

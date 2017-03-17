@@ -10,7 +10,8 @@ import (
 
 func init() {
 	// Setup up default logger to log to stdout at the debug level
-	*log.Verbose, *log.File, *log.Level = true, "", "debug"
+	log.LevelFlag = log.DEBUG
+	log.VerboseFlag = true
 
 	log.Init()
 	cliSetup()

@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -15,6 +14,9 @@ import (
 )
 
 var (
+	// current log level
+	logLevel log.Level
+	// file that we are currently logging to
 	logFile *os.File
 )
 
@@ -90,23 +92,16 @@ Resets state for logging. See "help log ..." for more information.`,
 func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 	if len(c.BoolArgs) == 0 {
 		// Print the level
-		resp.Response = *log.Level
+		resp.Response = logLevel.String()
 		return nil
 	}
 
 	// Bool args should only have a single key that is the log level
 	for k := range c.BoolArgs {
-		level, err := log.LevelInt(k)
-		if err != nil {
-			return errors.New("unreachable")
-		}
+		level, _ := log.ParseLevel(k)
 
-		*log.Level = k
-		// forget the error, if they don't exist we shouldn't be setting
-		// their level, so we're fine.
-		log.SetLevel("stdio", level)
-		log.SetLevel("file", level)
-		log.SetLevel("syslog", level)
+		logLevel = level
+		log.SetLevelAll(level)
 	}
 
 	return nil
@@ -115,21 +110,15 @@ func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["false"] {
 		// Turn off logging to stderr
-		log.DelLogger("stdio")
+		log.DelLogger("stderr")
 	} else if len(c.BoolArgs) == 0 {
 		// Print true or false depending on whether stderr is enabled
-		_, err := log.GetLevel("stdio")
+		_, err := log.GetLevel("stderr")
 		resp.Response = strconv.FormatBool(err == nil)
 	} else if c.BoolArgs["true"] {
-		// Enable stderr logging or adjust the level if already enabled
-		level, _ := log.LevelInt(*log.Level)
-		_, err := log.GetLevel("stdio")
-		if err != nil {
-			log.AddLogger("stdio", os.Stderr, level, true)
-		} else {
-			// TODO: Why do this? cliLogLevel updates stdio level whenever
-			// log.FLogLevel is changed.
-			log.SetLevel("stdio", level)
+		// Enable stderr logging if not already enabled
+		if _, err := log.GetLevel("stderr"); err != nil {
+			log.AddLogger("stderr", os.Stderr, logLevel, true)
 		}
 	}
 
@@ -147,8 +136,6 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Enable logging to file if it's not already enabled
-	level, _ := log.LevelInt(*log.Level)
-
 	if logFile != nil {
 		if err := stopFileLogger(); err != nil {
 			return err
@@ -166,7 +153,7 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	log.AddLogger("file", logFile, level, false)
+	log.AddLogger("file", logFile, logLevel, false)
 	return nil
 }
 
@@ -185,9 +172,7 @@ func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
 		}
 	}
 
-	level, _ := log.LevelInt(*log.Level)
-
-	return log.AddSyslog(network, address, "minimega", level)
+	return log.AddSyslog(network, address, "minimega", logLevel)
 }
 
 func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
@@ -244,16 +229,16 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 
 	// Reset level if explicitly cleared or we're clearing everything
 	if c.BoolArgs["level"] || len(c.BoolArgs) == 0 {
-		// Reset to default level
-		*log.Level = "error"
-		log.SetLevel("stdio", log.ERROR)
-		log.SetLevel("file", log.ERROR)
+		// Reset to level from command line flags
+		logLevel = log.LevelFlag
+
+		log.SetLevelAll(logLevel)
 	}
 
 	// Reset stderr if explicitly cleared or we're clearing everything
 	if c.BoolArgs["stderr"] || len(c.BoolArgs) == 0 {
 		// Delete logger to stdout
-		log.DelLogger("stdio")
+		log.DelLogger("stderr")
 	}
 
 	if c.BoolArgs["filter"] || len(c.BoolArgs) == 0 {
