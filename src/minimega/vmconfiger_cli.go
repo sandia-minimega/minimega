@@ -658,6 +658,26 @@ Default: -1
 		}),
 	},
 	{
+		HelpShort: "configures miniccc",
+		HelpLong: `Enable/disable serial command and control layer for this VM.
+
+Default: true
+`,
+		Patterns: []string{
+			"vm config miniccc [true,false]",
+		},
+		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+			if len(c.BoolArgs) == 0 {
+				r.Response = strconv.FormatBool(vmConfig.Miniccc)
+				return nil
+			}
+
+			vmConfig.Miniccc = c.BoolArgs["true"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "reset one or more configurations to default value",
 		Patterns: []string{
 			"clear vm config",
@@ -674,6 +694,7 @@ Default: -1
 			"clear vm config <kernel,>",
 			"clear vm config <memory,>",
 			"clear vm config <migrate,>",
+			"clear vm config <miniccc,>",
 			"clear vm config <networks,>",
 			"clear vm config <preinit,>",
 			"clear vm config <qemu-append,>",
@@ -722,6 +743,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "coschedule" {
 		return fmt.Sprintf("%v", v.Coschedule), nil
 	}
+	if field == "miniccc" {
+		return strconv.FormatBool(v.Miniccc), nil
+	}
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
 	}
@@ -750,6 +774,9 @@ func (v *BaseConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "coschedule" {
 		v.Coschedule = -1
+	}
+	if mask == Wildcard || mask == "miniccc" {
+		v.Miniccc = true
 	}
 	if mask == Wildcard || mask == "networks" {
 		v.Networks = nil

@@ -685,10 +685,12 @@ func (vm *KvmVM) launch() error {
 		return err
 	}
 
-	// connect cc
-	ccPath := vm.path("cc")
-	if err := ccNode.DialSerial(ccPath); err != nil {
-		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
+	if vm.Miniccc {
+		// connect cc
+		ccPath := vm.path("cc")
+		if err := ccNode.DialSerial(ccPath); err != nil {
+			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
+		}
 	}
 
 	// Create goroutine to wait to kill the VM
@@ -867,16 +869,17 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	// virtio-serial
-	// we always get a cc virtio port
-	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
-	args = append(args, "-chardev")
-	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
-	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
-	addr++
-	if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
-		addBus()
+	if vm.Miniccc {
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
+		addr++
+		if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+			addBus()
+		}
 	}
 
 	virtio_slot := 0 // start at 0 since we immediately increment and we already have a cc port
