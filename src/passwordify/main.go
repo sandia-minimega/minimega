@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	f_keys = flag.String("keys", "", "authorized_keys formatted file to install for root")
+	f_keys         = flag.String("keys", "", "authorized_keys formatted file to install for root")
 	f_passwordless = flag.Bool("passwordless", true, "True if image should contain its own id_rsa.pub in authorized_keys for passwordless ssh between nodes")
 )
 
@@ -155,20 +155,20 @@ func main() {
 			log.Fatalln(err)
 		}
 		log.Info("ssh-keygen: %s\n", stdoutStderr)
-	
+
 		// Open the authorized keys file...
 		f, err := os.OpenFile(filepath.Join(tdir, "root/.ssh/authorized_keys"), os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			log.Fatalln(err)
 		}
-	
+
 		defer f.Close()
 		// Read in the newly generated key...
 		key, err := ioutil.ReadFile(filepath.Join(tdir, "root/.ssh/id_rsa.pub"))
 		if err != nil {
 			log.Fatalln(err)
 		}
-	
+
 		// And copy it over
 		if _, err = f.Write(key); err != nil {
 			log.Fatalln(err)
