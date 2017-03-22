@@ -42,14 +42,14 @@ vmr
 .columns names,name .columns names,name vm info
 .columns name,names .columns name,names vm info
 .columns name,names .columns names,name vm info
-.filter name~foo .col namesp,name,st vm info
-.filter name~foo .col name,namesp,st vm info
+.filter name~foo .col namesp,name,state vm info
+.filter name~foo .col name,namesp,state vm info
 
 # Test apropos / prefix matching that should fail
 .columns nam vm info
 .columns nam,s vm info
 .columns s vm info
-.filter name~foo .col st vm info
+.filter name~foo .col state vm info
 
 # Test preprocess
 echo http://localhost/

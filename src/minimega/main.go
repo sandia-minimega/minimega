@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"goreadline"
-	"io/ioutil"
 	"minicli"
 	"miniclient"
 	log "minilog"
@@ -80,6 +79,7 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+	logLevel = log.LevelFlag
 
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
@@ -182,11 +182,8 @@ func main() {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	dst := filepath.Join(*f_base, "minimega.pid")
 	pid := strconv.Itoa(os.Getpid())
-	if err := ioutil.WriteFile(dst, []byte(pid), 0644); err != nil {
-		log.Fatal("unable to write pid: %v", err)
-	}
+	mustWrite(filepath.Join(*f_base, "minimega.pid"), pid)
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable
 	// is not set.
@@ -199,12 +196,6 @@ func main() {
 	ccStart()
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
-
-	// should be created after meshageStart returns
-	log.Info("change working directory to: %v", *f_iomBase)
-	if err := os.Chdir(*f_iomBase); err != nil {
-		teardown()
-	}
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)

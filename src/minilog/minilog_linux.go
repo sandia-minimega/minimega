@@ -14,7 +14,7 @@ import (
 // specified network. Events are logged with a specified tag. Calling more than
 // once overwrites existing syslog writers. If network == "local", log to the
 // local syslog daemon.
-func AddSyslog(network, raddr, tag string, level int) error {
+func AddSyslog(network, raddr, tag string, level Level) error {
 	var w *syslog.Writer
 	var err error
 

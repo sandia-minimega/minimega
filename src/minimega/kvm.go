@@ -289,6 +289,10 @@ func (vm *KvmVM) Stop() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	if vm.Name == "vince" {
+		return errors.New("vince is unstoppable")
+	}
+
 	if vm.State != VM_RUNNING {
 		return vmNotRunning(strconv.Itoa(vm.ID))
 	}
@@ -569,8 +573,8 @@ func (vm *KvmVM) launch() error {
 
 	// write the config for this vm
 	config := vm.BaseConfig.String() + vm.KVMConfig.String()
-	writeOrDie(vm.path("config"), config)
-	writeOrDie(vm.path("name"), vm.Name)
+	mustWrite(vm.path("config"), config)
+	mustWrite(vm.path("name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {

@@ -30,6 +30,7 @@ info include:
 - id*        : the VM ID, as an integer
 - name*      : the VM name, if it exists
 - state*     : one of (building, running, paused, quit, error)
+- uptime     : amount of time since the VM was launched
 - namespace* : namespace the VM belongs to
 - type*      : one of (kvm, container)
 - uuid*      : QEMU system uuid
@@ -656,7 +657,7 @@ func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// default namespace: ""
-	errChan := vms.Launch("", QueuedVMs{names, vmType, vmConfig})
+	errChan := vms.Launch("", &QueuedVMs{names, vmType, vmConfig})
 
 	// Collect all the errors from errChan and turn them into a string
 	collectErrs := func() error {

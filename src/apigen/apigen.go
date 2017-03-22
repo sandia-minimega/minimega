@@ -21,16 +21,14 @@ import (
 )
 
 var (
-	f_template = flag.String("template", "doc/content_templates/api.template", "api generation template")
-	f_minimega = flag.String("minimega", "bin/minimega", "minimega binary to extract json api doc from")
+	f_template = flag.String("template", "", "api generation template")
+	f_bin      = flag.String("bin", "", "binary to extract json api doc from")
+	f_sections = flag.String("sections", "", "CSV of section names")
 )
 
 type apigen struct {
 	Date     string
-	Builtins []*minicli.Handler
-	Mesh     []*minicli.Handler
-	VM       []*minicli.Handler
-	Host     []*minicli.Handler
+	Sections map[string][]*minicli.Handler
 }
 
 func main() {
@@ -38,11 +36,19 @@ func main() {
 
 	log.Init()
 
-	log.Debug("using minimega: %v", *f_minimega)
+	if *f_bin == "" {
+		log.Fatalln("must specify binary")
+	}
+
+	if *f_template == "" {
+		log.Fatalln("must specify template")
+	}
+
+	log.Debug("using binary: %v", *f_bin)
 	log.Debug("using doc template: %v", *f_template)
 
 	// invoke minimega and get the doc json
-	doc, err := exec.Command(*f_minimega, "-cli").Output()
+	doc, err := exec.Command(*f_bin, "-cli").Output()
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -58,26 +64,41 @@ func main() {
 	// populate the apigen date for the template
 	year, month, day := time.Now().Date()
 	api := apigen{
-		Date: fmt.Sprintf("%v %v %v", day, month, year),
+		Date:     fmt.Sprintf("%v %v %v", day, month, year),
+		Sections: map[string][]*minicli.Handler{},
 	}
 
-	// populate the major sections for the template
-	for _, v := range handlers {
-		var p string
-		if strings.HasPrefix(v.SharedPrefix, "clear") {
-			p = strings.TrimPrefix(v.SharedPrefix, "clear ")
-		} else {
-			p = v.SharedPrefix
+	for _, s := range strings.Split(*f_sections, ",") {
+		matches := []*minicli.Handler{}
+
+		for i := range handlers {
+			j := i - len(matches)
+			p := handlers[j].SharedPrefix
+
+			if strings.HasPrefix(p, "clear") {
+				p = strings.TrimPrefix(p, "clear ")
+			}
+
+			if strings.HasPrefix(p, s) {
+				matches = append(matches, handlers[j])
+
+				// delete matched handler
+				handlers = append(handlers[:j], handlers[j+1:]...)
+			}
 		}
-		if strings.HasPrefix(p, ".") {
-			api.Builtins = append(api.Builtins, v)
-		} else if strings.HasPrefix(p, "mesh") {
-			api.Mesh = append(api.Mesh, v)
-		} else if strings.HasPrefix(p, "vm") {
-			api.VM = append(api.VM, v)
-		} else {
-			api.Host = append(api.Host, v)
+
+		log.Info("found %v matches for section %v", len(matches), s)
+
+		if len(matches) == 0 {
+			log.Warn("no matches found for section: %v", s)
 		}
+
+		api.Sections[s] = matches
+	}
+
+	// add section for unmatched handlers
+	if len(handlers) > 0 {
+		api.Sections[""] = handlers
 	}
 
 	// run the template and print to stdout

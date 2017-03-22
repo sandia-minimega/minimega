@@ -68,7 +68,6 @@ func cliSetup() {
 	registerHandlers("vmconfig", vmconfigCLIHandlers)
 	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
-	registerHandlers("web", webCLIHandlers)
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking
@@ -136,7 +135,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 
 		hosts := ns.hostSlice()
 
-		cmds := makeCommandHosts(hosts, c)
+		cmds := makeCommandHosts(hosts, c, ns)
 		for _, cmd := range cmds {
 			cmd.SetRecord(false)
 		}
@@ -181,7 +180,7 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 
 		hosts := ns.hostSlice()
 
-		cmds := makeCommandHosts(hosts, c)
+		cmds := makeCommandHosts(hosts, c, ns)
 		for _, cmd := range cmds {
 			cmd.SetRecord(false)
 		}
@@ -318,10 +317,9 @@ func runCommandGlobally(cmd *minicli.Command) <-chan minicli.Responses {
 }
 
 // makeCommandHosts creates commands to run the given command on a set of hosts
-// handling the special case where the local node is included in the list.
-// makeCommandHosts is namespace-aware -- it generates commands based on the
-// currently active namespace.
-func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
+// handling the special case where localhost is included in the list. Commands
+// are prefixed with "namespace <name>" when a namespace is provided.
+func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*minicli.Command {
 	// filter out the local host, if included
 	var includeLocal bool
 	var hosts2 []string
@@ -347,8 +345,6 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
 	}
 
 	if len(hosts2) > 0 {
-		ns := GetNamespace()
-
 		targets := strings.Join(hosts2, ",")
 
 		// Keep the original CLI input

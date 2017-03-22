@@ -11,14 +11,9 @@ import (
 )
 
 var (
-	vmConfig  VMConfig                    // current vm config, updated by CLI
+	vmConfig  = NewVMConfig()             // current vm config, updated by CLI
 	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
 )
-
-func init() {
-	// set everything to defaults
-	vmConfig.Clear(Wildcard)
-}
 
 // vmconfigCLIHandlers are special cases that are not worth generating via
 // vmconfiger.
@@ -139,7 +134,7 @@ Note: this configuration only applies to KVM-based VMs.`,
 		},
 		Call: wrapSimpleCLI(cliVMConfigQemuOverride),
 	},
-	{ // clear vm config tags
+	{ // clear vm config tag
 		HelpShort: "remove tags for newly launched VMs",
 		HelpLong: `
 Remove tags in the same manner as "clear vm tag".`,

@@ -40,10 +40,12 @@ func (b Bridges) updateBandwidthStats() {
 				continue
 			}
 
+			// Note: we swap the Rx and Tx bytes here because Rx on the host is
+			// Tx on the VM and vice versa.
 			tap.stats = append(tap.stats, tapStat{
 				t:       time.Now(),
-				RxBytes: rx,
-				TxBytes: tx,
+				RxBytes: tx,
+				TxBytes: rx,
 			})
 
 			// truncate to 10 most recent results
@@ -86,6 +88,9 @@ func (t Tap) BandwidthStats() (float64, float64) {
 
 	var rxRate, txRate float64
 
+	n := float64(len(t.stats) - 1)
+
+	// compute weighted moving average of history
 	for i := range t.stats {
 		if i+1 < len(t.stats) {
 			rx := float64(t.stats[i+1].RxBytes - t.stats[i].RxBytes)
@@ -93,14 +98,13 @@ func (t Tap) BandwidthStats() (float64, float64) {
 			d := float64(t.stats[i+1].t.Sub(t.stats[i].t).Seconds())
 
 			// convert raw byte count to MB/s
-			rxRate += rx / float64(1<<20) / d
-			txRate += tx / float64(1<<20) / d
+			rxRate += (n - float64(i)) * (rx / float64(1<<20) / d)
+			txRate += (n - float64(i)) * (tx / float64(1<<20) / d)
 		}
 	}
 
-	// compute average
-	rxRate /= float64(len(t.stats) - 1)
-	txRate /= float64(len(t.stats) - 1)
+	rxRate /= n * (n + 1) / 2
+	txRate /= n * (n + 1) / 2
 
 	return rxRate, txRate
 }

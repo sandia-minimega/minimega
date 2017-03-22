@@ -35,34 +35,19 @@ function initVMDataTable() {
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
             updateJSON('/vms.json', function(vmsData) {
-                updateJSON('/vlans.json', function(vlansData) {
-                    // create mapping of vlans to aliases for easier lookup
-                    var aliases = {};
-                    vlansData.forEach(function(vlan) {
-                        aliases[vlan[2]] = vlan[1];
-                    });
+                // disable auto-refresh there are too many VMs
+                VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
-                    // insert VLAN aliases into VMs network data
-                    vmsData.forEach(function(vm) {
-                        vm["network"].forEach(function(network) {
-                            network["Alias"] = aliases[network["VLAN"]];
-                        });
-                    });
+                // put into a structure that DataTables expects
+                var dataTablesData = {"data": vmsData};
 
-                    // disable auto-refresh there are too many VMs
-                    VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
-
-                    // put into a structure that DataTables expects
-                    var dataTablesData = {"data": vmsData};
-
-                    callback(dataTablesData);
-                });
+                callback(dataTablesData);
             });
         },
         // custom DOM with Boostrap integration
         // http://stackoverflow.com/a/32253335
-        "dom": 
-            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
             //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
             "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
             "<'row'<'col-sm-12 text-center'B>>" +
@@ -83,25 +68,20 @@ function initVMDataTable() {
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" },
+            { "title": "Uptime", "data": "uptime", "visible": false },
             { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
             { "title": "VCPUs", "data": "vcpus" },
             { "title": "Memory", "data": "memory" },
             { "title": "Disk", "data": null, "visible": false, render: renderDisksColumn },
-            { "title": "VLAN", "data": "network", render: function(data, type, full, meta) {
-                // create array with VLAN ID and alias zipped together
-                var vlansWithAliases = data.map(function(e, i) {
-                    return e["VLAN"] + " (" + e["Alias"] + ")";
-                });
-                return renderArray(vlansWithAliases, type, full, meta);
-            } },
-            { "title": "IPv4", "data": "network", render: renderArrayOfObjectsUsingKey("IP4") },
-            { "title": "IPv6", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("IP6") },
-            { "title": "Taps", "data": "network", "visible": false, render: renderArrayOfObjectsUsingKey("Tap") },
+            { "title": "VLAN", "data": "vlan" },
+            { "title": "IPv4", "data": "ip" },
+            { "title": "IPv6", "data": "ip6", "visible": false },
+            { "title": "Taps", "data": "tap", "visible": false },
             { "title": "Tags", "data": "tags", "visible": false, render: renderFilteredObject(function(key) {
                 return key != 'minirouter_log';
             }) },
-            { "title": "Active CC", "data": "activecc", "visible": false },
+            { "title": "Active CC", "data": "cc_active", "visible": false },
             {
                 "title": "VNC",
                 "data": "name",
@@ -115,11 +95,11 @@ function initVMDataTable() {
         "stateDuration": 0
         /*initComplete: function(){
             var api = this.api();
-            api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );  
+            api.buttons().container().appendTo( '#' + api.table().container().id + ' .col-sm-6:eq(0)' );
         }*/
     });
 
-    
+
     // Create second button group for other functionality
     /*
     new $.fn.dataTable.Buttons( vmDataTable, {
@@ -155,8 +135,8 @@ function initHostDataTable() {
             "url": "hosts.json",
             "dataSrc": ""
         },
-        "dom": 
-            "<'row'<'col-sm-5'i><'col-sm-7'p>>" + 
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
             //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
             "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
             "<'row'<'col-sm-12 text-center'B>>" +
@@ -350,7 +330,7 @@ function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
 
 // Generate the appropriate URL for requesting a screenshot
 function screenshotURL (vm, size) {
-    return "screenshot/" + vm.host + "/" + vm.id + ".png?size=" + size;
+    return "screenshot/" + vm.name + ".png?size=" + size;
 }
 
 
@@ -409,9 +389,9 @@ function renderDisksColumn(data, type, full, meta) {
     var html = [];
     var keys = [];
     if (data.type === "container") {
-        var keys = ['container_fspath', 'container_preinit', 'container_init'];
+        var keys = ['filesystem', 'preinit', 'init'];
     } else if (data.type === "kvm") {
-        var keys = ['kvm_initrdpath', 'kvm_kernelpath', 'kvm_diskpaths'];
+        var keys = ['initrd', 'kernel', 'disk'];
     }
 
     for (var i = 0; i < keys.length; i++) {
@@ -421,42 +401,16 @@ function renderDisksColumn(data, type, full, meta) {
     return html.join("<br />");
 }
 
-function renderArray(data, type, full, meta) {
-    var html = [];
-    for (var i = 0; i < data.length; i++) {
-        html.push(data[i]);
-    }
-    return handleEmptyString(html.join(", "));
-}
-
-function renderArrayOfObjectsUsingKey(key) {
-    return function(data, type, full, meta) {
-        return handleEmptyString(data.reduce(
-            function (previous, current) {
-                return previous.concat([handleEmptyString(current[key])]);
-            }, []).join(", ")
-        );
-    };    
-}
-
 function renderFilteredObject(filterFn) {
     return function(data, type, full, meta) {
+        var jsonified = JSON.parse(data);
         var html = [];
-        var keys = Object.keys(data).filter(filterFn);
+        var keys = Object.keys(jsonified).filter(filterFn);
         for (var i = 0; i < keys.length; i++) {
-            html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
+            html.push("<em>" + keys[i] + ":</em> " + jsonified[keys[i]]);
         }
         return handleEmptyString(html.join(", "));
     }
-}
-
-function renderObject(data, type, full, meta) {
-    var html = [];
-    var keys = Object.keys(data);
-    for (var i = 0; i < keys.length; i++) {
-        html.push("<em>" + keys[i] + ":</em> " + data[keys[i]]);
-    }
-    return handleEmptyString(html.join(", "));
 }
 
 // Put an italic "null" in the table where there are fields that aren't set

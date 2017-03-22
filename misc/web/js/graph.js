@@ -368,7 +368,7 @@ function setSidebarNode (id) {
             var nonRouterMachines = [];
             for (var i = 0; i < vlanMachines.length; i++) {
                 var current = vlanMachines[i];
-                if (current.network.length == 1) {
+                if (current.vlan.length == 1) {
                     nonRouterMachines.push(current.uuid);
                 }
             }
@@ -690,37 +690,39 @@ function makeGraph (response, ethers) {
         min: Infinity
     };
 
-    // The response is broken down by hosts. Loop through the machines in each host and populate
-    //  the lists of machines accordingly.
+    // The response is broken down by hosts. Loop through the machines in each
+    // host and populate the lists of machines accordingly.
     for (var i = 0; i < response.length; i++) {
         var vm = response[i];
 
         vm["node_type"] = null;
-        vm["uuid"] = vm["host"] + " " + vm["id"];  // Space suffices as a separator
 
-        // Unconnected machine (no VLANs)
-        if (vm.network.length < 1) {
+        // parse the VLAN string into a list of VLANs
+        vm.vlan = vm.vlan.substring(1, vm.vlan.length - 1).split(", ");
+
+        if (vm.vlan.length == 0) {
+            // Unconnected machine (no VLANs)
             vm["node_type"] = "unconnected";
             unconnected.push(vm);
             network.machines.unconnected.push(vm);
-
-        // Router (multiple VLANs)
-        } else if (vm.network.length > 1) {
+        } else if (vm.vlan.length > 1) {
+            // Router (multiple VLANs)
             vm["node_type"] = "router";
             routers.push(vm);
 
-            for (var j = 0; j < vm.network.length; j++)
-                pushOrCreate(network.machines.vlans, vm.network[j].VLAN, vm);
-
-        // Normal machine (one VLAN)
+            for (var j = 0; j < vm.vlan.length; j++) {
+                pushOrCreate(network.machines.vlans, vm.vlan[j], vm);
+            }
         } else {
+            // Normal machine (one VLAN)
             vm["node_type"] = "normal";
-            pushOrCreate(vlans,                  vm.network[0].VLAN, vm);
-            pushOrCreate(network.machines.vlans, vm.network[0].VLAN, vm);
+            pushOrCreate(vlans,                  vm.vlan[0], vm);
+            pushOrCreate(network.machines.vlans, vm.vlan[0], vm);
         }
     }
 
-    // The first node is drawn under all the rest. This node is for providing a visual cue that a node is selected.
+    // The first node is drawn under all the rest. This node is for providing a
+    // visual cue that a node is selected.
     for (var i = 0; i < ethers; i++) {
         network.nodes.push({
             "vlans":        [],
@@ -733,10 +735,9 @@ function makeGraph (response, ethers) {
         });
     }
 
-    // VLANs need to be processed first, as the routers depend on them to be there to properly
-    //  configure linkages.
-    // Add a node for each VLAN
-    for (var vlan in vlans) {                           // for vlan in vlans
+    // VLANs need to be processed first, as the routers depend on them to be
+    // there to properly configure linkages.
+    for (var vlan in vlans) {
         var index = network.nodes.push({
             "vlans":        [vlan],
             "group":        config.types.normal,
@@ -767,8 +768,8 @@ function makeGraph (response, ethers) {
             "r":            null
         }) - 1;
 
-        for (var j = 0; j < router.network.length; j++) {      // for vlan in router.vlan
-            var vlan = router.network[j].VLAN;
+        for (var j = 0; j < router.vlan.length; j++) {      // for vlan in router.vlan
+            var vlan = router.vlan[j];
             network.nodes[index].vlans.push(vlan);
 
             var from = index;
@@ -864,7 +865,7 @@ function initializeGraph() {
                                     return Number(b).toString(16) })                                                        // ["FF", "FF", "FF"]
                                 .join("");                                                                                  // "FFFFFF"
 
-	grapher.instance = new Grapher()
+    grapher.instance = new Grapher()
         .palette(null)
         .data(grapher.graph);
 
