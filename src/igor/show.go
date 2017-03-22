@@ -5,15 +5,16 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"ranges"
 	"strconv"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 )
@@ -68,16 +69,9 @@ func init() {
 	cmdShow.Run = runShow
 }
 
-// Ping a host, return true if it is alive
-func isAlive(host string) bool {
-	cmd := exec.Command("ping", "-c1", "-W1", host)
-	// no error => is alive
-	return cmd.Run() == nil
-}
-
-// Ping every node (concurrently), then show which nodes are up
-// and which nodes are in which reservation
-func runShow(cmd *Command, args []string) {
+// Use nmap to scan all the nodes and then show which are up and the
+// reservations they below to
+func runShow(_ *Command, _ []string) {
 	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
@@ -90,29 +84,53 @@ func runShow(cmd *Command, args []string) {
 	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
 	reservations := getReservations(resdb)
 
-	nodes := make(map[int]bool)
-
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-
+	names := []string{}
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		wg.Add(1)
-
-		go func(i int) {
-			defer wg.Done()
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			alive := isAlive(hostname)
-
-			// only set if the node is alive (default is down)
-			if alive {
-				mu.Lock()
-				defer mu.Unlock()
-				nodes[i] = alive
-			}
-		}(i)
+		names = append(names, igorConfig.Prefix+strconv.Itoa(i))
 	}
 
-	wg.Wait()
+	nodes := map[int]bool{}
+
+	args := []string{
+		"-sn",
+		"--max-retries=1",
+		"--host-timeout=10ms",
+		"-oG",
+		"-",
+	}
+
+	cmd := exec.Command("nmap", append(args, names...)...)
+
+	out, err := cmd.Output()
+	if err != nil {
+		log.Fatal("unable to scan: %v", err)
+	}
+
+	s := bufio.NewScanner(bytes.NewReader(out))
+
+	for s.Scan() {
+		line := s.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) != 5 {
+			// that's weird
+			continue
+		}
+
+		// trim off ()
+		name := fields[2][1 : len(fields[2])-1]
+
+		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
+		if err != nil {
+			// that's weird
+			continue
+		}
+
+		nodes[v] = true
+	}
 
 	var downNodes []string
 	for i, alive := range nodes {
