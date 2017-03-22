@@ -74,7 +74,7 @@ type Response struct {
 	Header   []string    // Optional header. If set, will be used for both Response and Tabular data.
 	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
 	Error    string      // Because you can't gob/json encode an error type
-	Data     interface{} `json:"-"` // Optional user data
+	Data     interface{} //`json:"-"` // Optional user data
 
 	// Embedded output flags, overrides defaults if set for first response
 	*Flags `json:"-"`
