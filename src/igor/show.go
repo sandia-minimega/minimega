@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -103,7 +102,7 @@ func runShow(_ *Command, _ []string) {
 
 	out, err := cmd.Output()
 	if err != nil {
-		log.Fatal("unable to scan: %v", err)
+		fatalf("unable to scan: %v", err)
 	}
 
 	s := bufio.NewScanner(bytes.NewReader(out))
