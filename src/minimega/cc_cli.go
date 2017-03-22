@@ -83,6 +83,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <process,> <kill,> <pid or all>",
 			"cc <process,> <killall,> <name>",
 
+			"cc <log,> level <debug,info,warn,error,fatal>",
+
 			"cc <commands,>",
 
 			"cc <filter,> [filter]...",
@@ -115,19 +117,20 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command, *minicli.Response) error{
-	"responses":  cliCCResponses,
-	"commands":   cliCCCommand,
-	"filter":     cliCCFilter,
-	"send":       cliCCFileSend,
-	"recv":       cliCCFileRecv,
-	"exec":       cliCCExec,
 	"background": cliCCBackground,
-	"prefix":     cliCCPrefix,
-	"delete":     cliCCDelete,
 	"clients":    cliCCClients,
-	"tunnel":     cliCCTunnel,
-	"rtunnel":    cliCCTunnel,
+	"commands":   cliCCCommand,
+	"delete":     cliCCDelete,
+	"exec":       cliCCExec,
+	"filter":     cliCCFilter,
+	"log":        cliCCLog,
+	"prefix":     cliCCPrefix,
 	"process":    cliCCProcess,
+	"recv":       cliCCFileRecv,
+	"responses":  cliCCResponses,
+	"rtunnel":    cliCCTunnel,
+	"send":       cliCCFileSend,
+	"tunnel":     cliCCTunnel,
 }
 
 func cliCC(c *minicli.Command, resp *minicli.Response) error {
@@ -558,6 +561,30 @@ func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+func cliCCLog(c *minicli.Command, resp *minicli.Response) error {
+	// search for level in BoolArgs, we know that one of the BoolArgs will
+	// parse without error thanks to minicli.
+	var level log.Level
+	for k := range c.BoolArgs {
+		v, err := log.ParseLevel(k)
+		if err == nil {
+			level = v
+			break
+		}
+	}
+
+	cmd := &ron.Command{
+		Level:  &level,
+		Filter: ccGetFilter(),
+	}
+
+	id := ccNode.NewCommand(cmd)
+
+	ccMapPrefix(id)
+
+	return nil
+}
+
 // clients
 func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 	namespace := GetNamespaceName()
@@ -599,7 +626,7 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"id", "prefix", "command", "responses", "background",
-		"send files", "receive files", "filter",
+		"sent", "received", "level", "filter",
 	}
 	resp.Tabular = [][]string{}
 
@@ -625,8 +652,15 @@ func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 			strconv.FormatBool(v.Background),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
-			fmt.Sprintf("%v", v.Filter),
 		}
+
+		if v.Level != nil {
+			row = append(row, v.Level.String())
+		} else {
+			row = append(row, "")
+		}
+
+		row = append(row, fmt.Sprintf("%v", v.Filter))
 
 		resp.Tabular = append(resp.Tabular, row)
 	}
