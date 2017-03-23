@@ -14,9 +14,13 @@ mount -t tmpfs cgroup /sys/fs/cgroup
 mkdir /sys/fs/cgroup/memory
 mkdir /sys/fs/cgroup/freezer
 mkdir /sys/fs/cgroup/devices
+mkdir /sys/fs/cgroup/cpu,cpuacct
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpu
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpuacct
 mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
 mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
 
 # / needs permissions!?
 chmod a+rx /
@@ -74,7 +78,7 @@ then
 	ovs-vsctl add-port mega_bridge $NETS
 else
 	ovs-vsctl add-bond mega_bridge bond0 $NETS lacp=active
-	ovs-vsctl set port bond0 bond_mode=balance-tcp  
+	ovs-vsctl set port bond0 bond_mode=balance-tcp
 fi
 
 ifconfig lo up
