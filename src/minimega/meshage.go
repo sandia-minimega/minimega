@@ -13,6 +13,7 @@ import (
 	"meshage"
 	"minicli"
 	log "minilog"
+	"miniplumber"
 	"ranges"
 	"reflect"
 	"strings"
@@ -62,6 +63,7 @@ func init() {
 	gob.Register(meshageVMLaunch{})
 	gob.Register(meshageVMResponse{})
 	gob.Register(iomeshage.IOMMessage{})
+	gob.Register(miniplumber.Message{})
 }
 
 func meshageStart(host string, namespace string, degree, msaTimeout uint, port int) {
@@ -95,6 +97,8 @@ func meshageMux() {
 			meshageVMResponseChan <- m
 		case iomeshage.IOMMessage:
 			iom.Messages <- m
+		case miniplumber.Message:
+			plumber.Messages <- m
 		default:
 			log.Errorln("got invalid message!")
 		}

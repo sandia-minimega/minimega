@@ -44,6 +44,13 @@ example, to send a file 'foo' and display the contents on a remote VM:
 Files to be sent must be in the filepath directory, as set by the -filepath
 flag when launching minimega.
 
+Executed commands can have their stdio tied to pipes used by the plumb and pipe
+APIs. To use named pipes, simply specify stdin, stdout, or stderr as a
+key=value pair. For example:
+
+	cc exec stderr=foo cat server.log
+	cc background stdin=foo stdout=bar /usr/bin/program
+
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
 Responses can also be displayed on the command line with the 'responses'
@@ -433,10 +440,15 @@ func cliCCFileRecv(c *minicli.Command, resp *minicli.Response) error {
 
 // background (just exec with background==true)
 func cliCCBackground(c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
 	cmd := &ron.Command{
 		Background: true,
-		Command:    c.ListArgs["command"],
+		Command:    command,
 		Filter:     ccGetFilter(),
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
 	}
 
 	id := ccNode.NewCommand(cmd)
@@ -546,11 +558,42 @@ func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+// parse out key/value pairs from the command list for stdio
+func ccCommandPreProcess(c []string) (stdin, stdout, stderr string, command []string) {
+	// pop key/value pairs (up to three) for stdio plumber redirection
+	for i := 0; i < 3 && i < len(c); i++ {
+		f := strings.Split(c[i], "=")
+		if len(f) == 1 {
+			command = c[i:]
+			return
+		}
+		switch f[0] {
+		case "stdin":
+			stdin = f[1]
+		case "stdout":
+			stdout = f[1]
+		case "stderr":
+			stderr = f[1]
+		default:
+			// perhaps some goofy filename with an = in it
+			command = c[i:]
+			return
+		}
+	}
+	command = c[3:]
+	return
+}
+
 // exec
 func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
 	cmd := &ron.Command{
-		Command: c.ListArgs["command"],
+		Command: command,
 		Filter:  ccGetFilter(),
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
 	}
 
 	id := ccNode.NewCommand(cmd)
