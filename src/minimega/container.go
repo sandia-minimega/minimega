@@ -625,8 +625,11 @@ func (old ContainerConfig) Copy() ContainerConfig {
 	// Copy all fields
 	res := old
 
-	// Make deep copy of slices
-	// none yet - placeholder
+	// Make deep copy of volumes
+	res.VolumePaths = map[string]string{}
+	for k, v := range old.VolumePaths {
+		res.VolumePaths[k] = v
+	}
 
 	return res
 }
