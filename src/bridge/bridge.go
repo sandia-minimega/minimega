@@ -65,7 +65,8 @@ type Tap struct {
 
 	IP4 string // Snooped IPv4 address
 	IP6 string // Snooped IPv6 address
-	Qos *qos   // Quality-of-service constraints
+
+	*qos // Quality-of-service constraints
 
 	stats []tapStat
 }
