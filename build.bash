@@ -32,10 +32,18 @@ var (
 
 # build packages
 echo "BUILD PACKAGES (linux)"
-for i in `ls $SCRIPT_DIR/src | grep -v vendor`
+for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
 do
 	echo $i
 	go install $i
+	if [[ $? != 0 ]]; then
+		exit 1
+	fi
+done
+for i in `ls $SCRIPT_DIR/src/plumbing`
+do
+	echo $i
+	go install plumbing/$i
 	if [[ $? != 0 ]]; then
 		exit 1
 	fi

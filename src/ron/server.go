@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"os"
@@ -274,9 +275,11 @@ func (s *Server) clientHandler(conn net.Conn) {
 	defer conn.Close()
 
 	c := &client{
-		conn: conn,
-		enc:  gob.NewEncoder(conn),
-		dec:  gob.NewDecoder(conn),
+		conn:        conn,
+		enc:         gob.NewEncoder(conn),
+		dec:         gob.NewDecoder(conn),
+		pipeReaders: make(map[string]*miniplumber.Reader),
+		pipeWriters: make(map[string]chan<- string),
 	}
 
 	// get the first client struct as a handshake
@@ -383,6 +386,8 @@ func (s *Server) clientHandler(conn net.Conn) {
 				s.responses <- m.Client
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
+			case MESSAGE_PIPE:
+				c.pipeHandler(vm.GetNamespace(), s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
@@ -418,6 +423,17 @@ func (s *Server) removeClient(uuid string) {
 	defer s.clientLock.Unlock()
 	if c, ok := s.clients[uuid]; ok {
 		c.conn.Close()
+
+		// with the client conn closed, close any lingering plumbing
+		c.pipeLock.Lock()
+		defer c.pipeLock.Unlock()
+		for _, p := range c.pipeReaders {
+			p.Close()
+		}
+		for _, p := range c.pipeWriters {
+			close(p)
+		}
+
 		delete(s.clients, uuid)
 	}
 }
