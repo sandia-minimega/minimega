@@ -16,28 +16,28 @@ qos
 ## qos add vm0 0 rate 1 mbit
 ## .columns qos vm info
 qos
-[0: rate 1mbit loss 5 delay 100ms]
+[0: rate 1mbit]
 
 ## qos add vm0 0 delay 200ms
 ## .columns qos vm info
 qos
-[0: rate 1mbit loss 5 delay 200ms]
+[0: delay 200ms]
 
 ## qos add vm0 0 rate 2 mbit
 ## .columns qos vm info
 qos
-[0: rate 2mbit loss 5 delay 200ms]
+[0: rate 2mbit]
 
 ## qos add vm0 0 loss 0.50
 ## .columns qos vm info
 qos
-[0: rate 2mbit loss 0.50 delay 200ms]
+[0: loss 0.50]
 
 ## qos add vm0 0 loss 150
-E: `150` is not a valid loss percentage
+E: invalid loss: `150`
 
 ## qos add vm0 0 delay 100xbit
-E: `100xbit` is not a valid delay parameter
+E: invalid duration: `100xbit`
 
 ## qos add vm0 100 delay 100ms
 E: invalid tap index specified: 100

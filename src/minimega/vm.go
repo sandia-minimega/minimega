@@ -437,7 +437,7 @@ func (vm *BaseVM) ClearAllQos() error {
 			log.Error("failed to get bridge %s for vm %s", nc.Bridge, vm.GetName())
 			return err
 		}
-		err = b.ClearQos(nc.Tap)
+		err = b.RemoveQos(nc.Tap)
 		if err != nil {
 			log.Error("failed to remove qos from vm %s", vm.GetName())
 			return err
@@ -459,7 +459,7 @@ func (vm *BaseVM) ClearQos(tap uint) error {
 		return err
 	}
 
-	return b.ClearQos(nc.Tap)
+	return b.RemoveQos(nc.Tap)
 }
 
 func (vm *BaseVM) GetQos() [][]bridge.QosOption {

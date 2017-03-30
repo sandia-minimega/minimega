@@ -2,10 +2,6 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
-// ipmac attempts to learn about active ip addresses associated with mac
-// addresses on a particular interface, usually a bridge that can see data from
-// many other interfaces. ipmac is used by creating a new ipmac object on a
-// particular interface, and providing one or more MAC addresses to filter on.
 package bridge
 
 import (

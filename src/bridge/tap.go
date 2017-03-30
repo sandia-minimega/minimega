@@ -169,11 +169,6 @@ func (b *Bridge) destroyTap(t string) error {
 
 	tap.Defunct = true
 
-	err := tap.destroyQos()
-	if err != nil {
-		log.Error("failed to clear qos from tap: %v", t)
-	}
-
 	if tap.Host {
 		// Tap is managed by OVS -- calling del-port will delete it for us.
 		return nil
