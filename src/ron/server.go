@@ -293,25 +293,29 @@ func (s *Server) clientHandler(conn net.Conn) {
 	}
 
 	var mangled bool
-	if s.UseVMs {
-		vm, ok := s.vms[handshake.Client.UUID]
-		if !ok {
-			// try again after unmangling the uuid, which qemu does in
-			// certain versions
-			vm, ok = s.vms[unmangle(handshake.Client.UUID)]
-			if !ok {
-				log.Error("unregistered client %v", handshake.Client.UUID)
-				return
-			}
-			mangled = true
-		}
+	var namespace string
 
-		if handshake.Client.Version != version.Revision {
-			log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
-		}
-
-		handshake.Client.Namespace = vm.GetNamespace()
+	vm, ok := s.vms[handshake.Client.UUID]
+	if !ok {
+		// try again after unmangling the uuid, which qemu does in
+		// certain versions
+		mangled = true
+		vm, ok = s.vms[unmangle(handshake.Client.UUID)]
 	}
+
+	if s.UseVMs {
+		if !ok {
+			log.Error("unregistered client %v", handshake.Client.UUID)
+			return
+		}
+		namespace = vm.GetNamespace()
+	}
+
+	if handshake.Client.Version != version.Revision {
+		log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
+	}
+
+	handshake.Client.Namespace = namespace
 
 	if err := c.enc.Encode(&handshake); err != nil {
 		// client disconnected before it read the full handshake
@@ -387,7 +391,7 @@ func (s *Server) clientHandler(conn net.Conn) {
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
 			case MESSAGE_PIPE:
-				c.pipeHandler(vm.GetNamespace(), s.plumber, &m)
+				c.pipeHandler(namespace, s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
