@@ -220,15 +220,17 @@ to remove the drive added above, named 0:
 
 	vm hotplug remove foo 0
 
-To remove all hotplug devices, use ID "all" for the disk ID.`,
+To remove all hotplug devices, use ID "all" for the disk ID.
+
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm hotplug <show,> <vm name>",
-			"vm hotplug <add,> <vm name> <filename>",
-			"vm hotplug <remove,> <vm name> <disk id or all>",
+			"vm hotplug <show,>",
+			"vm hotplug <add,> <target> <filename>",
+			"vm hotplug <remove,> <target> <disk id or all>",
 		},
-		Call: wrapVMTargetCLI(cliVmHotplug),
+		Call: wrapVMTargetCLI(cliVMHotplug),
 		Suggest: wrapSuggest(func(val, prefix string) []string {
-			if val == "vm" {
+			if val == "target" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
 			}
 			return nil
@@ -356,14 +358,17 @@ Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
-"vm cdrom change" implies that the current ISO will be ejected.`,
+"vm cdrom change" ejects the current ISO, if there is one.
+
+
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm cdrom <eject,> <vm name>",
-			"vm cdrom <change,> <vm name> <path>",
+			"vm cdrom <eject,> <target>",
+			"vm cdrom <change,> <target> <path>",
 		},
-		Call: wrapVMTargetCLI(cliVmCdrom),
+		Call: wrapVMTargetCLI(cliVMCdrom),
 		Suggest: wrapSuggest(func(val, prefix string) []string {
-			if val == "vm" {
+			if val == "target" {
 				return cliVMSuggest(prefix, VM_ANY_STATE)
 			}
 			return nil
@@ -489,48 +494,21 @@ func cliVmInfo(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVmCdrom(c *minicli.Command, resp *minicli.Response) error {
-	arg := c.StringArgs["vm"]
+func cliVMCdrom(c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["target"]
 
-	doVms := make([]*KvmVM, 0)
-
-	if arg == Wildcard {
-		doVms = vms.FindKvmVMs()
-	} else {
-		vm, err := vms.FindKvmVM(arg)
-		if err != nil {
+	if c.BoolArgs["eject"] {
+		return makeErrSlice(vms.EjectCD(target))
+	} else if c.BoolArgs["change"] {
+		f := c.StringArgs["path"]
+		if _, err := os.Stat(f); os.IsNotExist(err) {
 			return err
 		}
 
-		doVms = append(doVms, vm)
+		return makeErrSlice(vms.ChangeCD(target, f))
 	}
 
-	if c.BoolArgs["eject"] {
-		for _, v := range doVms {
-			err := v.q.BlockdevEject("ide0-cd1")
-			v.CdromPath = ""
-			if err != nil {
-				return err
-			}
-		}
-	} else if c.BoolArgs["change"] {
-		for _, v := range doVms {
-			// First eject it, then change it
-			err := v.q.BlockdevEject("ide0-cd1")
-			v.CdromPath = ""
-			if err != nil {
-				return err
-			}
-
-			err = v.q.BlockdevChange("ide0-cd1", c.StringArgs["path"])
-			if err != nil {
-				return err
-			}
-			v.CdromPath = c.StringArgs["path"]
-		}
-	}
-
-	return nil
+	return errors.New("unreachable")
 }
 
 func cliVmTag(c *minicli.Command, resp *minicli.Response) error {
@@ -773,67 +751,28 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 	return vm.Migrate(c.StringArgs["filename"])
 }
 
-func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
+func cliVMHotplug(c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["target"]
 
 	if c.BoolArgs["add"] {
-		// generate an id by adding 1 to the highest in the list for the
-		// hotplug devices, 0 if it's empty
-		id := 0
-		for k, _ := range vm.hotplug {
-			if k >= id {
-				id = k + 1
-			}
-		}
-		hid := fmt.Sprintf("hotplug%v", id)
-		log.Debugln("hotplug generated id:", hid)
-
-		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
-		if err != nil {
+		f := c.StringArgs["filename"]
+		if _, err := os.Stat(f); os.IsNotExist(err) {
 			return err
 		}
 
-		log.Debugln("hotplug drive_add response:", r)
-		r, err = vm.q.USBDeviceAdd(hid)
-		if err != nil {
-			return err
-		}
-
-		log.Debugln("hotplug usb device add response:", r)
-		vm.hotplug[id] = c.StringArgs["filename"]
-
-		return nil
+		return makeErrSlice(vms.Hotplug(target, f))
 	} else if c.BoolArgs["remove"] {
-		if c.StringArgs["disk"] == Wildcard {
-			for k := range vm.hotplug {
-				if err := vm.hotplugRemove(k); err != nil {
-					return err
-				}
-			}
+		disk := c.StringArgs["disk"]
 
-			return nil
+		id, err := strconv.Atoi(disk)
+		if err != nil && disk != Wildcard {
+			return fmt.Errorf("invalid disk: `%v`", disk)
 		}
 
-		id, err := strconv.Atoi(c.StringArgs["disk"])
-		if err != nil {
-			return err
-		}
-
-		return vm.hotplugRemove(id)
+		return makeErrSlice(vms.HotplugRemove(target, id, disk == Wildcard))
 	}
 
-	// must be "show"
-	resp.Header = []string{"hotplugid", "file"}
-	resp.Tabular = [][]string{}
-
-	for k, v := range vm.hotplug {
-		resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
-	}
-
-	return nil
+	return makeErrSlice(vms.HotplugInfo(resp))
 }
 
 func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
