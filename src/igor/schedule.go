@@ -2,7 +2,31 @@ package main
 
 import (
 	"time"
+	"errors"
 )
+
+// Returns the index within the given array a contiguous set of '0' entries
+func FindContiguousBlock(nodes []uint64, count int) (int, error) {
+	var i, j int
+	for i = 0; i < len(nodes); i++ {
+		if nodes[i] == 0 {
+			for j = i; j < len(nodes); j++ {
+				// success
+				if (j - i) == count {
+					return i, nil
+				}
+				if nodes[j] != 0 {
+					break
+				}
+			}
+		}
+	}
+	return 0, errors.New("no space available in this slice")
+}
+
+func FindReservationSlot(duration, nodecount int) (Reservation, []*TimeSlice) {
+	return Reservation{}, nil
+}
 
 func InitializeSchedule() {
 	// Create a 'starter'
