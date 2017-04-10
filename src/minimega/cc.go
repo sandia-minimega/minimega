@@ -47,7 +47,7 @@ func ccPrefixIDs(prefix string) []int {
 
 func ccStart() {
 	var err error
-	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase)
+	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase, plumber)
 	if err != nil {
 		log.Fatalln(fmt.Errorf("creating cc node %v", err))
 	}

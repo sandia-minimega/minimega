@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"minicli"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -18,21 +17,27 @@ var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
 		HelpLong: `
-Add quality-of-service (qos) constraints on mega interfaces to
-emulate real networks. Currently only applies qos constraints on the
-egress side / transmit direction. Qos constraints can be stacked with multiple
-calls to <add>, and must be specified explicitly. Any existing constraints will
-be overwritten by additional calls to <add>. Virtual machines can be specified
-with the same target syntax as the "vm start" api.
+Add quality-of-service (qos) constraints on mega interfaces to emulate real
+networks. Currently only applies qos constraints on the egress side / transmit
+direction. Qos constraints can be stacked with multiple calls to <add>, and
+must be specified explicitly. Any existing constraints will be overwritten by
+additional calls to <add>. VM can be specified with the same target syntax as
+the "vm start" api.
 
 Note that qos is namespace aware, and any qos commands will be matched to
 target vms within the currently active namespace.
 
-Qos constraints include:
+qos constraints include:
 
 - loss		: packets will be randomly dropped with a specified probability
 - delay		: delay packets for specified unit of time (ms, ns, etc)
 - rate		: impose a maximum bandwidth on an interface in kbit, mbit, or gbit
+
+Note: due to limitations of the underlying tool, "tc", you can only add rate or
+loss/delay to a VM. Enabling loss or delay will disable rate and vice versa.
+
+Note: qos applies only to "egress" traffic -- "ingress" traffic is not policed
+to the desired rate.
 
 Examples:
 
@@ -115,51 +120,55 @@ func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
 		op.Type = bridge.Rate
 
 		var unit string
-		rate := c.StringArgs["bw"]
-
-		if c.BoolArgs["kbit"] {
-			unit = "kbit"
-		} else if c.BoolArgs["mbit"] {
-			unit = "mbit"
-		} else if c.BoolArgs["gbit"] {
-			unit = "gbit"
-		} else {
-			return op, fmt.Errorf("`%s` invalid: must specify rate as <kbit,mbit, or gbit>", rate)
+		for _, v := range []string{"kbit", "mbit", "gbit"} {
+			if c.BoolArgs[v] {
+				unit = v
+			}
 		}
+
+		rate := c.StringArgs["bw"]
 
 		_, err := strconv.ParseUint(rate, 10, 64)
 		if err != nil {
-			return op, fmt.Errorf("`%s` is not a valid rate parameter", rate)
+			return op, fmt.Errorf("invalid rate: `%v`", rate)
 		}
 
-		op.Value = fmt.Sprintf("%s%s", rate, unit)
-	} else {
-		if c.BoolArgs["loss"] {
-			op.Type = bridge.Loss
+		op.Value = rate + unit
+	} else if c.BoolArgs["loss"] {
+		op.Type = bridge.Loss
 
-			loss := c.StringArgs["percent"]
-			v, err := strconv.ParseFloat(loss, 64)
-			if err != nil || v >= float64(100) || v < 0 {
-				return op, fmt.Errorf("`%s` is not a valid loss percentage",
-					loss)
-			}
-			op.Value = loss
+		loss := c.StringArgs["percent"]
+
+		v, err := strconv.ParseFloat(loss, 64)
+		if err != nil || v >= float64(100) || v < 0 {
+			return op, fmt.Errorf("invalid loss: `%v`", loss)
 		}
-		if c.BoolArgs["delay"] {
-			op.Type = bridge.Delay
 
-			delay := c.StringArgs["duration"]
-			_, err := time.ParseDuration(delay)
+		op.Value = loss
+	} else if c.BoolArgs["delay"] {
+		op.Type = bridge.Delay
+
+		delay := c.StringArgs["duration"]
+
+		v, err := time.ParseDuration(delay)
+		if err != nil {
+			v2, err := time.ParseDuration(delay + "ms")
 			if err != nil {
-				if strings.Contains(err.Error(), "time: missing unit in duration") {
-					// Default to ms
-					delay = fmt.Sprintf("%s%s", delay, "ms")
-				} else {
-					return op, fmt.Errorf("`%s` is not a valid delay parameter", delay)
-				}
+				return op, fmt.Errorf("invalid duration: `%v`", delay)
 			}
-			op.Value = delay
+
+			v = v2
+			delay += "ms"
 		}
+
+		if v < 0 {
+			return op, errors.New("delay cannot be negative")
+		}
+
+		op.Value = delay
+	} else {
+		return op, errors.New("unreachable")
 	}
+
 	return op, nil
 }

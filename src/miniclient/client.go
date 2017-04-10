@@ -5,6 +5,7 @@
 package miniclient
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"goreadline"
@@ -24,8 +25,9 @@ import (
 // Request sent to minimega -- ethier a command to run or a string to return
 // suggestions for
 type Request struct {
-	Command string
-	Suggest string
+	Command   string
+	Suggest   string
+	PlumbPipe string
 }
 
 type Response struct {
@@ -73,6 +75,76 @@ func Dial(base string) (*Conn, error) {
 
 func (mm *Conn) Close() error {
 	return mm.conn.Close()
+}
+
+// Read or write to a named pipe.
+func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
+	err := mm.enc.Encode(Request{
+		PlumbPipe: pipe,
+	})
+	if err != nil {
+		log.Fatal("local pipe gob encode: %v", err)
+	}
+
+	rr, rw, err := os.Pipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	wr, ww, err := os.Pipe()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	var done bool
+
+	go func() {
+		var buf string
+		defer rr.Close()
+		for {
+			err := mm.dec.Decode(&buf)
+			if done {
+				return
+			}
+			if err == io.EOF {
+				log.Fatalln("server disconnected")
+			} else if err != nil {
+				log.Fatal("local command gob decode: %v", err)
+			}
+
+			_, err = rw.WriteString(buf)
+			if done {
+				return
+			}
+			if err != nil {
+				log.Fatal("write: %v", err)
+			}
+		}
+	}()
+
+	go func() {
+		defer rw.Close()
+		defer mm.Close()
+		for {
+			scanner := bufio.NewScanner(wr)
+			for scanner.Scan() {
+				err = mm.enc.Encode(scanner.Text() + "\n")
+				if err != nil {
+					log.Fatal("local command gob encode: %v", err)
+				}
+			}
+
+			// scanners don't return EOF errors
+			if err := scanner.Err(); err != nil {
+				log.Fatal("read: %v", err)
+			}
+
+			log.Debugln("client closed stdin")
+			done = true
+			return
+		}
+	}()
+
+	return rr, ww
 }
 
 // Run a command through a JSON pipe, hand back channel for responses.

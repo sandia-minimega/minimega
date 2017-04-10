@@ -25,22 +25,6 @@ import (
 	"sync"
 )
 
-// Log levels supported:
-// DEBUG -> INFO -> WARN -> ERROR -> FATAL
-const (
-	DEBUG = iota
-	INFO
-	WARN
-	ERROR
-	FATAL
-)
-
-var (
-	Level   = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	Verbose = flag.Bool("v", true, "log on stderr")
-	File    = flag.String("logfile", "", "also log to file")
-)
-
 var (
 	loggers = make(map[string]*minilogger)
 	logLock sync.RWMutex
@@ -55,10 +39,26 @@ var (
 	colorFatal = FgRed
 )
 
+const DefaultLevel = ERROR
+
+var (
+	LevelFlag   = DefaultLevel
+	VerboseFlag bool
+	FileFlag    string
+)
+
+func init() {
+	// Add non-builtin flag type
+	flag.Var(&LevelFlag, "level", "set log level: [debug, info, warn, error, fatal]")
+	flag.BoolVar(&VerboseFlag, "v", true, "log on stderr")
+	flag.BoolVar(&VerboseFlag, "verbose", true, "log on stderr")
+	flag.StringVar(&FileFlag, "logfile", "", "specify file to log to")
+}
+
 // Adds a logger set to log only events at level specified or higher.
 // output: io.Writer instance to which to log (can be os.Stderr or os.Stdout)
 // level:  one of the minilogging levels defined as a constant
-func AddLogger(name string, output io.Writer, level int, color bool) {
+func AddLogger(name string, output io.Writer, level Level, color bool) {
 	logLock.Lock()
 	defer logLock.Unlock()
 
@@ -86,7 +86,7 @@ func Loggers() []string {
 
 // WillLog returns true if logging to a specific log level will result in
 // actual logging. Useful if the logging text itself is expensive to produce.
-func WillLog(level int) bool {
+func WillLog(level Level) bool {
 	logLock.Lock()
 	defer logLock.Unlock()
 
@@ -99,7 +99,7 @@ func WillLog(level int) bool {
 }
 
 // Change a log level for a named logger.
-func SetLevel(name string, level int) error {
+func SetLevel(name string, level Level) error {
 	logLock.Lock()
 	defer logLock.Unlock()
 
@@ -110,8 +110,18 @@ func SetLevel(name string, level int) error {
 	return nil
 }
 
+// SetLevelAll changes the log level for all loggers to the provided level
+func SetLevelAll(level Level) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
+	for _, logger := range loggers {
+		logger.Level = level
+	}
+}
+
 // Return the log level for a named logger.
-func GetLevel(name string) (int, error) {
+func GetLevel(name string) (Level, error) {
 	logLock.Lock()
 	defer logLock.Unlock()
 
@@ -123,8 +133,8 @@ func GetLevel(name string) (int, error) {
 
 // Log all input from an io.Reader, splitting on lines, until EOF. LogAll
 // starts a goroutine and returns immediately.
-func LogAll(i io.Reader, level int, name string) {
-	go func(i io.Reader, level int, name string) {
+func LogAll(i io.Reader, level Level, name string) {
+	go func(i io.Reader, level Level, name string) {
 		r := bufio.NewReader(i)
 		for {
 			d, err := r.ReadString('\n')
@@ -144,51 +154,29 @@ func LogAll(i io.Reader, level int, name string) {
 // Setup log according to flags and OS.
 // Replaces the logSetup() that each package used to have.
 func Init() {
-	level, err := LevelInt(*Level)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
 	color := true
 	if runtime.GOOS == "windows" {
 		color = false
 	}
 
-	if *Verbose {
-		AddLogger("stdio", os.Stderr, level, color)
+	if VerboseFlag {
+		AddLogger("stderr", os.Stderr, LevelFlag, color)
 	}
 
-	if *File != "" {
-		err := os.MkdirAll(filepath.Dir(*File), 0755)
+	if FileFlag != "" {
+		err := os.MkdirAll(filepath.Dir(FileFlag), 0755)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		logfile, err := os.OpenFile(*File, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		logfile, err := os.OpenFile(FileFlag, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		AddLogger("file", logfile, level, false)
-	}
-}
 
-// Return the log level from a string. Useful for parsing log levels from a flag package.
-func LevelInt(l string) (int, error) {
-	switch l {
-	case "debug":
-		return DEBUG, nil
-	case "info":
-		return INFO, nil
-	case "warn":
-		return WARN, nil
-	case "error":
-		return ERROR, nil
-	case "fatal":
-		return FATAL, nil
+		AddLogger("file", logfile, LevelFlag, false)
 	}
-	return -1, errors.New("invalid log level")
 }
 
 func Filters(name string) ([]string, error) {
@@ -238,7 +226,7 @@ func DelFilter(name string, filter string) error {
 	}
 }
 
-func log(level int, name, format string, arg ...interface{}) {
+func log(level Level, name, format string, arg ...interface{}) {
 	logLock.RLock()
 	defer logLock.RUnlock()
 
@@ -249,7 +237,7 @@ func log(level int, name, format string, arg ...interface{}) {
 	}
 }
 
-func logln(level int, name string, arg ...interface{}) {
+func logln(level Level, name string, arg ...interface{}) {
 	logLock.Lock()
 	defer logLock.Unlock()
 
