@@ -46,7 +46,7 @@ func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
 		slices++
 	}
 
-	res.ID = rand.Uint64()
+	res.ID = uint64(rand.Int63())
 
 	// We start with the *second* time slice, because the first is the current slice
 	// and is partially consumed
