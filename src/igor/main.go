@@ -28,8 +28,8 @@ import (
 	"unicode/utf8"
 )
 
-const MINUTES_PER_SLICE = 1	 // must be less than 60!
-const MIN_SCHED_LEN = 72 // minutes, 720 = 12 hours
+const MINUTES_PER_SLICE = 1 // must be less than 60!
+const MIN_SCHED_LEN = 72    // minutes, 720 = 12 hours
 
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
 var igorConfig Config
@@ -47,7 +47,7 @@ type Config struct {
 // Represents a slice of time
 type TimeSlice struct {
 	Start int64    // UNIX time
-	End	int64	// UNIX time
+	End   int64    // UNIX time
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
@@ -63,7 +63,7 @@ type Reservation struct {
 }
 
 var Reservations map[uint64]Reservation // map ID to reservations
-var Schedule []*TimeSlice	// The schedule
+var Schedule []TimeSlice                // The schedule
 
 var resdb *os.File
 var scheddb *os.File
@@ -101,12 +101,43 @@ func readConfig(path string) (c Config) {
 }
 
 // Read the reservations, delete any that are too old.
-func cleanOld() {
+// Copy in netboot files for any reservations that have just started
+func tidyUp() {
 	now := time.Now().Unix()
 
 	for _, r := range Reservations {
 		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
+		} else if r.StartTime < now {
+			// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
+			filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+			if _, err := os.Stat(filename); os.IsNotExist(err) {
+				log.Info("Installing files for reservation ", r.ResName)
+
+				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+				fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+				masterfile, err := os.Create(fname)
+				if err != nil {
+					log.Fatal("failed to create %v -- %v", fname, err)
+				}
+				defer masterfile.Close()
+				masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
+				masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
+				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
+				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
+
+				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+				for _, pxename := range r.PXENames {
+					masterfile.Seek(0, 0)
+					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+					f, err := os.Create(fname)
+					if err != nil {
+						log.Fatal("failed to create %v -- %v", fname, err)
+					}
+					io.Copy(f, masterfile)
+					f.Close()
+				}
+			}
 		}
 	}
 
@@ -163,8 +194,9 @@ func main() {
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
-	// Here, we need to go through and delete any reservations which should be expired.
-	cleanOld()
+	// Here, we need to go through and delete any reservations which should be expired,
+	// and bring in new ones that are just starting
+	tidyUp()
 
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] && cmd.Run != nil {

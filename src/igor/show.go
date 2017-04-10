@@ -123,18 +123,18 @@ func runShow(cmd *Command, args []string) {
 	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
 
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "TIME LEFT", "\t", "NODES")
+	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
 	w.Flush()
 	downrange, _ := rnge.UnsplitRange(downNodes)
 	fmt.Print(BgRed + "DOWN" + Reset)
-	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", downrange)
+	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
 	w.Flush()
+	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		timeleft := fmt.Sprintf("%.1f", time.Unix(r.EndTime, 0).Sub(time.Now()).Hours())
 		fmt.Print(colorize(i, r.ResName))
-		fmt.Fprintln(w, "\t", r.Owner, "\t", timeleft, "hrs \t", unsplit)
+		fmt.Fprintln(w, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 		w.Flush()
 	}
 	w.Flush()

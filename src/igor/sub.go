@@ -7,14 +7,10 @@ package main
 import (
 	"fmt"
 	"io"
-	"math/rand"
 	log "minilog"
-	"net"
 	"os"
 	"os/user"
 	"path/filepath"
-	"ranges"
-	"time"
 )
 
 var cmdSub = &Command{
@@ -43,7 +39,7 @@ OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time in integer hours. (default = 12)
+The -t flag is used to specify the reservation time in integer minutes. (default = 60)
 	`,
 }
 
@@ -65,14 +61,10 @@ func init() {
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
-	cmdSub.Flag.IntVar(&subT, "t", 12, "")
+	cmdSub.Flag.IntVar(&subT, "t", 60, "")
 }
 
 func runSub(cmd *Command, args []string) {
-	var nodes []string
-	var IPs []net.IP
-	var pxefiles []string
-
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
 		help([]string{"sub"})
@@ -80,48 +72,21 @@ func runSub(cmd *Command, args []string) {
 
 	}
 
-	// figure out which nodes to reserve
-	if subW != "" {
-		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-		nodes, _ = rnge.SplitRange(subW)
-	}
-
-	// Convert list of node names to PXE filenames
-	// 1. lookup nodename -> IP
-	for _, hostname := range nodes {
-		ip, err := net.LookupIP(hostname)
-		if err != nil {
-			log.Fatal("failure looking up %v: %v", hostname, err)
-		}
-		IPs = append(IPs, ip...)
-	}
-
-	// 2. IP -> hex
-	for _, ip := range IPs {
-		pxefiles = append(pxefiles, toPXE(ip))
-	}
-
-	// Make sure none of those nodes are reserved
-	// Check every reservation...
-	for _, res := range Reservations {
-		// For every node in a reservation...
-		for _, node := range res.PXENames {
-			// make sure no node in *our* potential reservation conflicts
-			for _, pxe := range pxefiles {
-				if node == pxe {
-					log.Fatal("Conflict with reservation %v, specific PXE file %v\n", res.ResName, pxe)
-				}
-			}
-		}
-	}
-
-	// Ok, build our reservation
-	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles}
 	user, err := user.Current()
+	if err != nil {
+		log.Fatalln("cannot determine current user", err)
+	}
+
+	// Make sure there's not already a reservation with this name
+	for _, r := range Reservations {
+		if r.ResName == subR {
+			log.Fatalln("A reservation named ", subR, " already exists.")
+		}
+	}
+
+	reservation, newSched := FindReservation(subT, subN)
 	reservation.Owner = user.Username
-	reservation.EndTime = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
-	reservation.Duration = (time.Duration(subT)).Minutes()
-	reservation.ID = rand.Uint64()
+	reservation.ResName = subR
 
 	// Add it to the list of reservations
 	Reservations[reservation.ID] = reservation
@@ -157,29 +122,10 @@ func runSub(cmd *Command, args []string) {
 	idest.Close()
 	isource.Close()
 
-	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-	fname = filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", subR)
-	masterfile, err := os.Create(fname)
-	if err != nil {
-		log.Fatal("failed to create %v -- %v", fname, err)
-	}
-	defer masterfile.Close()
-	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
-	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
-	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
-	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
+	fmt.Printf("New Reservation: %#v\n", reservation)
 
-	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-	for _, pxename := range pxefiles {
-		masterfile.Seek(0, 0)
-		fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-		f, err := os.Create(fname)
-		if err != nil {
-			log.Fatal("failed to create %v -- %v", fname, err)
-		}
-		io.Copy(f, masterfile)
-		f.Close()
-	}
+	Schedule = newSched
 
 	putReservations()
+	putSchedule()
 }

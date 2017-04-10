@@ -8,6 +8,7 @@ import (
 	log "minilog"
 	"os"
 	"os/user"
+	"path/filepath"
 )
 
 var cmdDel = &Command{
@@ -47,6 +48,8 @@ func deleteReservation(checkUser bool, args []string) {
 			}
 		}
 	}
+
+	// Remove the reservation
 	for _, r := range Reservations {
 		if r.ResName == args[0] {
 			deletedReservation = r
@@ -59,6 +62,15 @@ func deleteReservation(checkUser bool, args []string) {
 		log.Fatal("Couldn't find reservation %v", args[0])
 	}
 
+	// Now purge it from the schedule
+	for _, s := range Schedule {
+		for i, _ := range s.Nodes {
+			if s.Nodes[i] == deletedReservation.ID {
+				s.Nodes[i] = 0
+			}
+		}
+	}
+
 	// Update the reservation file
 	putReservations()
 
@@ -66,4 +78,12 @@ func deleteReservation(checkUser bool, args []string) {
 	for _, pxename := range deletedReservation.PXENames {
 		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 	}
+
+	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
+
+	// Delete the now unused kernel + initrd
+	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")
+	os.Remove(fname)
+	fname = filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-kernel")
+	os.Remove(fname)
 }

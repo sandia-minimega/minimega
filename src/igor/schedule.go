@@ -1,41 +1,126 @@
 package main
 
 import (
-	"time"
 	"errors"
+	"fmt"
+	"math/rand"
+	log "minilog"
+	"net"
+	"time"
 )
 
-// Returns the index within the given array a contiguous set of '0' entries
-func FindContiguousBlock(nodes []uint64, count int) (int, error) {
-	var i, j int
-	for i = 0; i < len(nodes); i++ {
-		if nodes[i] == 0 {
-			for j = i; j < len(nodes); j++ {
-				// success
-				if (j - i) == count {
-					return i, nil
-				}
-				if nodes[j] != 0 {
-					break
-				}
-			}
+// Returns the indexes within the given array of all contiguous sets of '0' entries
+func FindContiguousBlock(nodes []uint64, count int) ([]int, error) {
+	fmt.Printf("len(nodes) = %d\n", len(nodes))
+	result := []int{}
+	for i := 0; i+count <= len(nodes); i++ {
+		fmt.Printf("testing %d\n", i)
+		if IsFree(nodes, i, count) {
+			result = append(result, i)
+			fmt.Println("good")
 		}
 	}
-	return 0, errors.New("no space available in this slice")
+	if len(result) > 0 {
+		return result, nil
+	} else {
+		return result, errors.New("no space available in this slice")
+	}
 }
 
-func FindReservationSlot(duration, nodecount int) (Reservation, []*TimeSlice) {
-	return Reservation{}, nil
+// Returns true if nodes[index] through nodes[index+count-1] are free
+func IsFree(nodes []uint64, index, count int) bool {
+	for i := index; i < index+count; i++ {
+		if nodes[index] != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// Finds a slice of 'nodecount' nodes that's available for the specified length of time
+// Returns a reservation and a slice of TimeSlices that can be used to replace
+// the current Schedule if the reservation is acceptable.
+func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
+	var res Reservation
+	var newSched []TimeSlice
+
+	slices := minutes / MINUTES_PER_SLICE
+	if (minutes % MINUTES_PER_SLICE) != 0 {
+		slices++
+	}
+
+	res.ID = rand.Uint64()
+
+	// We start with the *second* time slice, because the first is the current slice
+	// and is partially consumed
+	for i := 1; ; i++ {
+		// Make sure the Schedule has enough time left in it
+		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
+			// This will guarantee we'll have enough space for the reservation
+			ExtendSchedule(slices)
+		}
+
+		s := Schedule[i]
+		// Check if there's any open blocks in this slice
+		blocks, err := FindContiguousBlock(s.Nodes, nodecount)
+		if err != nil {
+			continue
+		}
+		fmt.Printf("timeslice %d found blocks of length %d at %v\n", i, nodecount, blocks)
+
+		// For each of the blocks...
+		for _, b := range blocks {
+			// Make a new starter schedule
+			newSched = Schedule
+			var nodenames []string
+			for j := 0; j < slices; j++ {
+				nodenames = []string{}
+				// For simplicity, we'll end up re-checking the first slice, but who cares
+				if !IsFree(newSched[i+j].Nodes, b, nodecount) {
+					fmt.Printf("block at %d in slice %d is not free, breaking\n", b, i+j)
+					break
+				} else {
+					// Mark those nodes reserved
+					for k := b; k < b+nodecount; k++ {
+						newSched[i+j].Nodes[k] = res.ID
+						nodenames = append(nodenames, fmt.Sprintf("%s%d", igorConfig.Prefix, igorConfig.Start+k))
+					}
+				}
+			}
+			// If we got this far, that means this block was free long enough
+			// Now just fill out the rest of the reservation and we're all set
+			var IPs []net.IP
+			// First, go from node name to PXE filename
+			for _, hostname := range nodenames {
+				ip, err := net.LookupIP(hostname)
+				if err != nil {
+					log.Fatal("failure looking up %v: %v", hostname, err)
+				}
+				IPs = append(IPs, ip...)
+			}
+			// Now go IP->hex
+			for _, ip := range IPs {
+				res.PXENames = append(res.PXENames, toPXE(ip))
+			}
+			res.Hosts = nodenames
+			res.StartTime = newSched[i].Start
+			res.EndTime = res.StartTime + int64(minutes*60)
+			res.Duration = time.Unix(res.EndTime, 0).Sub(time.Unix(res.StartTime, 0)).Minutes()
+			goto Done
+		}
+	}
+Done:
+	return res, newSched
 }
 
 func InitializeSchedule() {
 	// Create a 'starter'
-	start := time.Now().Truncate(time.Minute*MINUTES_PER_SLICE) // round down
+	start := time.Now().Truncate(time.Minute * MINUTES_PER_SLICE) // round down
 	end := start.Add((MINUTES_PER_SLICE-1)*time.Minute + 59*time.Second)
-	size := igorConfig.End - igorConfig.Start
-	ts := &TimeSlice{ Start: start.Unix(), End: end.Unix()}
+	size := igorConfig.End - igorConfig.Start + 1
+	ts := TimeSlice{Start: start.Unix(), End: end.Unix()}
 	ts.Nodes = make([]uint64, size)
-	Schedule = []*TimeSlice{ts}
+	Schedule = []TimeSlice{ts}
 
 	// Now expand it to fit the minimum size we want
 	ExtendSchedule(MIN_SCHED_LEN - MINUTES_PER_SLICE) // we already have one slice so subtract
@@ -56,16 +141,16 @@ func ExpireSchedule() {
 	}
 
 	// Now make sure we have at least the minimum length there
-	if (len(Schedule)*MINUTES_PER_SLICE < MIN_SCHED_LEN) {
+	if len(Schedule)*MINUTES_PER_SLICE < MIN_SCHED_LEN {
 		// Expand that schedule
 		ExtendSchedule(MIN_SCHED_LEN - len(Schedule)*MINUTES_PER_SLICE)
 	}
 }
 
 func ExtendSchedule(minutes int) {
-	size := igorConfig.End - igorConfig.Start // size of node slice
+	size := igorConfig.End - igorConfig.Start + 1 // size of node slice
 
-	slices := int(minutes / MINUTES_PER_SLICE)
+	slices := minutes / MINUTES_PER_SLICE
 	if (minutes % MINUTES_PER_SLICE) != 0 {
 		// round up
 		slices++
@@ -75,7 +160,7 @@ func ExtendSchedule(minutes int) {
 		// Everything's in Unix time, which is in units of seconds
 		start := prev.End + 1 // Starts 1 second after the previous reservation ends
 		end := start + (MINUTES_PER_SLICE-1)*60 + 59
-		ts := &TimeSlice{ Start: start, End: end }
+		ts := TimeSlice{Start: start, End: end}
 		ts.Nodes = make([]uint64, size)
 		Schedule = append(Schedule, ts)
 		prev = ts
