@@ -11,13 +11,10 @@ import (
 
 // Returns the indexes within the given array of all contiguous sets of '0' entries
 func FindContiguousBlock(nodes []uint64, count int) ([]int, error) {
-	fmt.Printf("len(nodes) = %d\n", len(nodes))
 	result := []int{}
 	for i := 0; i+count <= len(nodes); i++ {
-		fmt.Printf("testing %d\n", i)
 		if IsFree(nodes, i, count) {
 			result = append(result, i)
-			fmt.Println("good")
 		}
 	}
 	if len(result) > 0 {
@@ -66,7 +63,6 @@ func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
 		if err != nil {
 			continue
 		}
-		fmt.Printf("timeslice %d found blocks of length %d at %v\n", i, nodecount, blocks)
 
 		// For each of the blocks...
 		for _, b := range blocks {
@@ -77,7 +73,6 @@ func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
 				nodenames = []string{}
 				// For simplicity, we'll end up re-checking the first slice, but who cares
 				if !IsFree(newSched[i+j].Nodes, b, nodecount) {
-					fmt.Printf("block at %d in slice %d is not free, breaking\n", b, i+j)
 					break
 				} else {
 					// Mark those nodes reserved
