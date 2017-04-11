@@ -34,10 +34,17 @@ func IsFree(nodes []uint64, index, count int) bool {
 	return true
 }
 
+func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
+	return FindReservationAfter(minutes, nodecount, time.Now().Unix())
+}
+
 // Finds a slice of 'nodecount' nodes that's available for the specified length of time
 // Returns a reservation and a slice of TimeSlices that can be used to replace
 // the current Schedule if the reservation is acceptable.
-func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
+// The 'after' parameter specifies a Unix timestamp that should be taken as the
+// starting time for our search (this allows you to say "give me the first reservation
+// after noon tomorrow")
+func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []TimeSlice) {
 	var res Reservation
 	var newSched []TimeSlice
 
@@ -55,6 +62,10 @@ func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
 		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
 			// This will guarantee we'll have enough space for the reservation
 			ExtendSchedule(slices)
+		}
+
+		if Schedule[i].Start < after {
+			continue
 		}
 
 		s := Schedule[i]

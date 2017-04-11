@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"time"
 )
 
 var cmdSub = &Command{
@@ -32,14 +33,15 @@ file will be copied to a separate directory for use.
 The -n flag indicates that the specified number of nodes should be
 included in the reservation. The first available nodes will be allocated.
 
-The -w flag specifies that the given nodes should be included in the
-reservation. This will return an error if the nodes are already reserved.
-
 OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
 The -t flag is used to specify the reservation time in integer minutes. (default = 60)
+
+The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
+
+The -a flag indicates that the reservation should take place on or after the specified time, given in the format "Jan 2 15:04". Especially useful in conjunction with the -s flag.
 	`,
 }
 
@@ -47,9 +49,10 @@ var subR string // -r flag
 var subK string // -k flag
 var subI string // -i
 var subN int    // -n
-var subW string // -w
 var subC string // -c
 var subT int    // -t
+var subS bool	// -s
+var subA string // -a
 
 func init() {
 	// break init cycle
@@ -59,14 +62,18 @@ func init() {
 	cmdSub.Flag.StringVar(&subK, "k", "", "")
 	cmdSub.Flag.StringVar(&subI, "i", "", "")
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
-	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
 	cmdSub.Flag.IntVar(&subT, "t", 60, "")
+	cmdSub.Flag.BoolVar(&subS, "s", false, "")
+	cmdSub.Flag.StringVar(&subA, "a", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
+	var reservation Reservation	// the new reservation
+	var newSched []TimeSlice	// the new schedule
+
 	// validate arguments
-	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
+	if subR == "" || subK == "" || subI == "" || subN == 0 {
 		help([]string{"sub"})
 		log.Fatalln("Missing required argument")
 
@@ -84,7 +91,27 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	reservation, newSched := FindReservation(subT, subN)
+	when := time.Now()
+	format := "2006-Jan-2-15:04"
+	if subA != "" {
+		loc, _ := time.LoadLocation("Local")
+		t, _ := time.Parse(format, subA)
+		when = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+	}
+
+	// If this is a speculative call, run FindReservationAfter a few times,
+	// print, and exit
+	if subS {
+		fmt.Println("AVAILABLE RESERVATIONS")
+		fmt.Println("START\t\t\tEND")
+		for i := 0; i < 10; i++ {
+			r, _ := FindReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+			fmt.Printf("%v\t%v\n", time.Unix(r.StartTime, 0).Format(format), time.Unix(r.EndTime, 0).Format(format))
+		}
+		return
+	}
+
+	reservation, newSched = FindReservationAfter(subT, subN, when.Unix())
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 
