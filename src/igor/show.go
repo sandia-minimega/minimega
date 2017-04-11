@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"ranges"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -132,6 +133,7 @@ func runShow(_ *Command, _ []string) {
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
 	}
+	sort.Sort(StartSorter(resarray))
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
@@ -172,12 +174,15 @@ func printShelves(alive map[int]bool, resarray []Reservation) {
 
 	// figure out all the node -> reservations ahead of time
 	n2r := map[int]int{}
+	now := time.Now().Unix()
 	for i, r := range resarray {
-		for _, name := range r.Hosts {
-			name := strings.TrimPrefix(name, igorConfig.Prefix)
-			v, err := strconv.Atoi(name)
-			if err == nil {
-				n2r[v] = i
+		if r.StartTime < now {
+			for _, name := range r.Hosts {
+				name := strings.TrimPrefix(name, igorConfig.Prefix)
+				v, err := strconv.Atoi(name)
+				if err == nil {
+					n2r[v] = i
+				}
 			}
 		}
 	}

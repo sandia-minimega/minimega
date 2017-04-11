@@ -8,7 +8,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -16,23 +15,38 @@ import (
 	"io/ioutil"
 	"math/rand"
 	log "minilog"
-	"net"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
-	"text/template"
 	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
-const MINUTES_PER_SLICE = 1 // must be less than 60!
-const MIN_SCHED_LEN = 72    // minutes, 720 = 12 hours
+// Constants
+const MINUTES_PER_SLICE = 1 // must be less than 60! 1, 5, 10, or 15 would be good choices
+// Minimum schedule length in minutes, 720 = 12 hours
+const MIN_SCHED_LEN = 72
 
+// Global Variables
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
 var igorConfig Config
+
+var Reservations map[uint64]Reservation // map ID to reservations
+var Schedule []TimeSlice                // The schedule
+
+var resdb *os.File
+var scheddb *os.File
+
+// Commands lists the available commands and help topics.
+// The order here is the order in which they are printed by 'go help'.
+var commands = []*Command{
+	cmdDel,
+	cmdShow,
+	cmdSub,
+}
+
+var exitStatus = 0
+var exitMu sync.Mutex
 
 // The configuration of the system
 type Config struct {
@@ -62,22 +76,20 @@ type Reservation struct {
 	ID        uint64
 }
 
-var Reservations map[uint64]Reservation // map ID to reservations
-var Schedule []TimeSlice                // The schedule
+// Sort the slice of reservations based on the start time
+type StartSorter []Reservation
 
-var resdb *os.File
-var scheddb *os.File
-
-// Commands lists the available commands and help topics.
-// The order here is the order in which they are printed by 'go help'.
-var commands = []*Command{
-	cmdDel,
-	cmdShow,
-	cmdSub,
+func (s StartSorter) Len() int {
+	return len(s)
 }
 
-var exitStatus = 0
-var exitMu sync.Mutex
+func (s StartSorter) Less(i, j int) bool {
+	return s[i].StartTime < s[j].StartTime
+}
+
+func (s StartSorter) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
 
 func setExitStatus(n int) {
 	exitMu.Lock()
@@ -87,22 +99,9 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
-func readConfig(path string) (c Config) {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		log.Fatal("Couldn't read config file: %v", err)
-	}
-
-	err = json.Unmarshal(b, &c)
-	if err != nil {
-		log.Fatal("Couldn't parse json: %v", err)
-	}
-	return
-}
-
 // Read the reservations, delete any that are too old.
 // Copy in netboot files for any reservations that have just started
-func tidyUp() {
+func housekeeping() {
 	now := time.Now().Unix()
 
 	for _, r := range Reservations {
@@ -178,6 +177,8 @@ func main() {
 		log.Fatal("failed to open reservations file: %v", err)
 	}
 	defer resdb.Close()
+	// This should prevent anyone else from modifying the reservation file while
+	// we're using it. Bonus: Flock goes away if the program crashes so state is easy
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 
@@ -190,14 +191,16 @@ func main() {
 		log.Warn("failed to open schedule file: %v", err)
 	}
 	defer resdb.Close()
+	// We probably don't need to lock this too but I'm playing it safe
 	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
 	// Here, we need to go through and delete any reservations which should be expired,
 	// and bring in new ones that are just starting
-	tidyUp()
+	housekeeping()
 
+	// Now process the command
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] && cmd.Run != nil {
 			cmd.Flag.Usage = func() { cmd.Usage() }
@@ -216,108 +219,7 @@ func main() {
 	setExitStatus(2)
 }
 
-var usageTemplate = `igor is a scheduler for Mega-style clusters.
-
-Usage:
-
-	igor command [arguments]
-
-The commands are:
-{{range .}}{{if .Runnable}}
-    {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
-
-Use "igor help [command]" for more information about a command.
-
-Additional help topics:
-{{range .}}{{if not .Runnable}}
-    {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
-
-Use "igor help [topic]" for more information about that topic.
-
-`
-
-var helpTemplate = `{{if .Runnable}}usage: igor {{.UsageLine}}
-
-{{end}}{{.Long | trim}}
-`
-
-var documentationTemplate = `/*
-{{range .}}{{if .Short}}{{.Short | capitalize}}
-
-{{end}}{{if .Runnable}}Usage:
-
-	igor {{.UsageLine}}
-
-{{end}}{{.Long | trim}}
-
-
-{{end}}*/
-package documentation
-
-`
-
-// tmpl executes the given template text on data, writing the result to w.
-func tmpl(w io.Writer, text string, data interface{}) {
-	t := template.New("top")
-	t.Funcs(template.FuncMap{"trim": strings.TrimSpace, "capitalize": capitalize})
-	template.Must(t.Parse(text))
-	if err := t.Execute(w, data); err != nil {
-		panic(err)
-	}
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	r, n := utf8.DecodeRuneInString(s)
-	return string(unicode.ToTitle(r)) + s[n:]
-}
-
-func printUsage(w io.Writer) {
-	tmpl(w, usageTemplate, commands)
-}
-
-func usage() {
-	printUsage(os.Stderr)
-	os.Exit(2)
-}
-
-// help implements the 'help' command.
-func help(args []string) {
-	if len(args) == 0 {
-		printUsage(os.Stdout)
-		// not exit 2: succeeded at 'go help'.
-		return
-	}
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "usage: go help command\n\nToo many arguments given.\n")
-		os.Exit(2) // failed at 'go help'
-	}
-
-	arg := args[0]
-
-	// 'go help documentation' generates doc.go.
-	if arg == "documentation" {
-		buf := new(bytes.Buffer)
-		printUsage(buf)
-		usage := &Command{Long: buf.String()}
-		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, commands...))
-		return
-	}
-
-	for _, cmd := range commands {
-		if cmd.Name() == arg {
-			tmpl(os.Stdout, helpTemplate, cmd)
-			// not exit 2: succeeded at 'go help cmd'.
-			return
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "Unknown help topic %#q.  Run 'go help'.\n", arg)
-	os.Exit(2) // failed at 'go help cmd'
-}
-
+// Read in the reservations from the already-open resdb file
 func getReservations() {
 	dec := json.NewDecoder(resdb)
 	err := dec.Decode(&Reservations)
@@ -325,12 +227,6 @@ func getReservations() {
 	if err != nil && err != io.EOF {
 		log.Fatal("failure parsing reservation file: %v", err)
 	}
-}
-
-// Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
-func toPXE(ip net.IP) string {
-	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
-	return s
 }
 
 func getSchedule() {
@@ -360,4 +256,17 @@ func putSchedule() {
 	enc := json.NewEncoder(scheddb)
 	enc.Encode(Schedule)
 	scheddb.Sync()
+}
+
+func readConfig(path string) (c Config) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal("Couldn't read config file: %v", err)
+	}
+
+	err = json.Unmarshal(b, &c)
+	if err != nil {
+		log.Fatal("Couldn't parse json: %v", err)
+	}
+	return
 }
