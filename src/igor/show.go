@@ -239,17 +239,6 @@ func printShelves(alive map[int]bool, resarray []Reservation) {
 	fmt.Print(buf.String())
 }
 
-func resContains(reservations []Reservation, node string) (bool, int) {
-	for idx, r := range reservations {
-		for _, name := range r.Hosts {
-			if name == node {
-				return true, idx
-			}
-		}
-	}
-	return false, 0
-}
-
 func colorize(index int, str string) string {
 	return colors[index%len(colors)] + str + Reset
 }
