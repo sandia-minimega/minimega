@@ -199,16 +199,17 @@ func main() {
 	}
 
 	// start services
-	ccServer = ccStart(*f_iomBase, "")
-	if err := ccServer.Listen(*f_ccPort); err != nil {
-		log.Fatal("unable to listen: %v", err)
-	}
-
 	// NOTE: the plumber needs a reference to the meshage node, and cc
 	// needs a reference to the plumber, so the order here counts
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 	plumberStart(meshageNode)
+
+	ccServer = ccStart(*f_iomBase, "")
+	if err := ccServer.Listen(*f_ccPort); err != nil {
+		log.Fatal("unable to listen: %v", err)
+	}
+
 	commandSocketStart()
 
 	// set up signal handling
