@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"ron"
 	"sort"
 	"sync"
 	"time"
@@ -45,6 +46,11 @@ type Namespace struct {
 
 	// How to determine which host is least loaded
 	HostSortBy string
+
+	// Command and control for this namespace
+	ccServer *ron.Server
+	ccFilter *ron.Filter
+	ccPrefix string
 }
 
 var (
@@ -91,6 +97,8 @@ func (n Namespace) Destroy() error {
 	allocatedVLANs.Delete(n.Name, "")
 
 	n.vmID.Stop()
+
+	n.ccServer.Destroy()
 
 	return nil
 }
@@ -318,6 +326,7 @@ func GetOrCreateNamespace(name string) *Namespace {
 			Taps:       map[string]bool{},
 			vmID:       NewCounter(),
 			HostSortBy: "cpucommit",
+			ccServer:   ccStart(*f_iomBase, name),
 		}
 
 		// By default, every mesh-reachable node is part of the namespace

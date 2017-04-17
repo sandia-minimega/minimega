@@ -395,7 +395,7 @@ func (vms VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 
 			err := vm.Launch()
 			if err == nil {
-				ccNode.RegisterVM(vm.GetUUID(), vm)
+				ccRegisterVM(vm)
 			}
 			out <- err
 		}(name)
@@ -509,7 +509,7 @@ func (vms VMs) Flush() {
 				log.Error("clogged VM: %v", err)
 			}
 
-			ccNode.UnregisterVM(vm.GetUUID())
+			ccUnregisterVM(vm)
 
 			delete(vms, i)
 		}
