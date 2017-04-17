@@ -31,6 +31,7 @@ var (
 	f_serial  = flag.String("serial", "", "use serial device instead of tcp")
 	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	f_tag     = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
+	f_pipe    = flag.String("pipe", "", "read/write to or from a named pipe")
 )
 
 const banner = `miniccc, Copyright (2014) Sandia Corporation.
@@ -55,6 +56,11 @@ func main() {
 	}
 
 	log.Init()
+
+	if *f_pipe != "" {
+		pipeHandler(*f_pipe)
+		return
+	}
 
 	if *f_tag {
 		if runtime.GOOS == "windows" {
@@ -130,46 +136,6 @@ func dial() error {
 	return err
 }
 
-func commandSocketStart() {
-	l, err := net.Listen("unix", filepath.Join(*f_path, "miniccc"))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Error("command socket: %v", err)
-		}
-		log.Debugln("client connected")
-		go commandSocketHandle(conn)
-	}
-}
-
-func commandSocketHandle(conn net.Conn) {
-	var err error
-	var k string
-	var v string
-
-	defer conn.Close()
-
-	dec := gob.NewDecoder(conn)
-
-	err = dec.Decode(&k)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-	err = dec.Decode(&v)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	log.Debug("adding key/value: %v : %v", k, v)
-	addTag(k, v)
-}
-
 func updateTag() error {
 	host := filepath.Join(*f_path, "miniccc")
 
@@ -187,6 +153,11 @@ func updateTag() error {
 	}
 
 	enc := gob.NewEncoder(conn)
+
+	err = enc.Encode(MODE_TAG)
+	if err != nil {
+		return err
+	}
 
 	err = enc.Encode(k)
 	if err != nil {

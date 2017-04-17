@@ -5,11 +5,15 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"ranges"
+	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 )
@@ -64,19 +68,9 @@ func init() {
 	cmdShow.Run = runShow
 }
 
-// Ping a host, return true if it is alive
-func isAlive(host string) bool {
-	cmd := exec.Command("ping", "-c1", "-W1", host)
-	err := cmd.Run()
-	if err != nil {
-		return false
-	}
-	return true
-}
-
-// Ping every node (concurrently), then show which nodes are up
-// and which nodes are in which reservation
-func runShow(cmd *Command, args []string) {
+// Use nmap to scan all the nodes and then show which are up and the
+// reservations they below to
+func runShow(_ *Command, _ []string) {
 	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
@@ -89,33 +83,65 @@ func runShow(cmd *Command, args []string) {
 	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
 	reservations := getReservations(resdb)
 
-	// Find out what nodes are down
-	nodesAlive := make(map[int]bool) // if node is alive, set bool to true
-	done := make(chan bool)
-	fifo := make(chan int, 200)
+	names := []string{}
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		fifo <- 1
-		go func(i int) {
-			hostname := fmt.Sprintf("%s%d", igorConfig.Prefix, i)
-			nodesAlive[i] = isAlive(hostname)
-			<-fifo
-			done <- true
-		}(i)
+		names = append(names, igorConfig.Prefix+strconv.Itoa(i))
 	}
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		<-done
+
+	nodes := map[int]bool{}
+
+	args := []string{
+		"-sn",
+		"--max-retries=1",
+		"--host-timeout=10ms",
+		"-oG",
+		"-",
 	}
+
+	cmd := exec.Command("nmap", append(args, names...)...)
+
+	out, err := cmd.Output()
+	if err != nil {
+		fatalf("unable to scan: %v", err)
+	}
+
+	s := bufio.NewScanner(bytes.NewReader(out))
+
+	for s.Scan() {
+		line := s.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) != 5 {
+			// that's weird
+			continue
+		}
+
+		// trim off ()
+		name := fields[2][1 : len(fields[2])-1]
+
+		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
+		if err != nil {
+			// that's weird
+			continue
+		}
+
+		nodes[v] = true
+	}
+
 	var downNodes []string
-	for number, isup := range nodesAlive {
-		if !isup {
-			hostname := fmt.Sprintf("%s%d", igorConfig.Prefix, number)
+	for i, alive := range nodes {
+		if !alive {
+			hostname := igorConfig.Prefix + strconv.Itoa(i)
 			downNodes = append(downNodes, hostname)
 		}
 	}
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
-	printShelves(reservations, nodesAlive)
+	printShelves(reservations, nodes)
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
@@ -141,8 +167,8 @@ func runShow(cmd *Command, args []string) {
 
 func printShelves(reservations []Reservation, alive map[int]bool) {
 	// figure out how many digits we need per node displayed
-	nodewidth := len(fmt.Sprintf("%d", igorConfig.End))
-	nodefmt := "%" + fmt.Sprintf("%d", nodewidth) // for example, %3, for use as %3d or %3s
+	nodewidth := len(strconv.Itoa(igorConfig.End))
+	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s
 
 	// how many nodes per rack?
 	perrack := igorConfig.Rackwidth * igorConfig.Rackheight
@@ -151,48 +177,68 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 	// width of nodes * number of nodes across a rack, plus the number of | characters we need
 	totalwidth := nodewidth*igorConfig.Rackwidth + igorConfig.Rackwidth + 1
 
-	output := ""
+	// figure out all the node -> reservations ahead of time
+	n2r := map[int]int{}
+	for i, r := range reservations {
+		for _, name := range r.Hosts {
+			name := strings.TrimPrefix(name, igorConfig.Prefix)
+			v, err := strconv.Atoi(name)
+			if err == nil {
+				n2r[v] = i
+			}
+		}
+	}
+
+	var buf bytes.Buffer
 	for i := igorConfig.Start; i <= igorConfig.End; i += perrack {
 		for j := 0; j < totalwidth; j++ {
-			output += outline("-")
+			buf.WriteString(Reverse)
+			buf.WriteString("-")
+			buf.WriteString(Reset)
 		}
-		output += "\n"
+		buf.WriteString("\n")
 		for j := i; j < i+perrack; j++ {
 			if (j-1)%igorConfig.Rackwidth == 0 {
-				output += outline("|")
+				buf.WriteString(Reverse)
+				buf.WriteString("|")
+				buf.WriteString(Reset)
 			}
 			if j <= igorConfig.End {
-				if contains, index := resContains(reservations, fmt.Sprintf("%s%d", igorConfig.Prefix, j)); contains {
+				if index, ok := n2r[j]; ok {
 					if alive[j] {
-						output += colorize(index, fmt.Sprintf(nodefmt+"d", j))
+						buf.WriteString(colorize(index, fmt.Sprintf(nodefmt+"d", j)))
 					} else {
-						output += BgRed + fmt.Sprintf(nodefmt+"d", j) + Reset
+						buf.WriteString(BgRed)
+						fmt.Fprintf(&buf, nodefmt+"d", j)
+						buf.WriteString(Reset)
 					}
 				} else {
 					if alive[j] {
-						output += fmt.Sprintf(nodefmt+"d", j)
+						fmt.Fprintf(&buf, nodefmt+"d", j)
 					} else {
-						output += BgRed + fmt.Sprintf(nodefmt+"d", j) + Reset
+						buf.WriteString(BgRed)
+						fmt.Fprintf(&buf, nodefmt+"d", j)
+						buf.WriteString(Reset)
 					}
 				}
 			} else {
-				output += fmt.Sprintf(nodefmt+"s", " ")
+				fmt.Fprintf(&buf, nodefmt+"s", " ")
 			}
-			output += outline("|")
+			buf.WriteString(Reverse)
+			buf.WriteString("|")
+			buf.WriteString(Reset)
 			if (j-1)%igorConfig.Rackwidth == igorConfig.Rackwidth-1 {
-				output += "\n"
+				buf.WriteString("\n")
 			}
 		}
 		for j := 0; j < totalwidth; j++ {
-			output += outline("-")
+			buf.WriteString(Reverse)
+			buf.WriteString("-")
+			buf.WriteString(Reset)
 		}
-		output += "\n\n"
+		buf.WriteString("\n\n")
 	}
-	fmt.Print(output)
-}
-
-func outline(str string) string {
-	return Reverse + str + Reset
+	fmt.Print(buf.String())
 }
 
 func resContains(reservations []Reservation, node string) (bool, int) {

@@ -33,6 +33,13 @@ example, to send a file 'foo' and display the contents on a remote VM:
 Files to be sent must be in the filepath directory, as set by the -filepath
 flag when launching minimega.
 
+Executed commands can have their stdio tied to pipes used by the plumb and pipe
+APIs. To use named pipes, simply specify stdin, stdout, or stderr as a
+key=value pair. For example:
+
+	cc exec stderr=foo cat server.log
+	cc background stdin=foo stdout=bar /usr/bin/program
+
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
 Responses can also be displayed on the command line with the 'responses'
@@ -72,6 +79,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <process,> <kill,> <pid or all>",
 			"cc <process,> <killall,> <name>",
 
+			"cc <log,> level <debug,info,warn,error,fatal>",
+
 			"cc <commands,>",
 
 			"cc <filter,> [filter]...",
@@ -104,19 +113,20 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]func(*minicli.Command, *minicli.Response) error{
-	"responses":  cliCCResponses,
-	"commands":   cliCCCommand,
-	"filter":     cliCCFilter,
-	"send":       cliCCFileSend,
-	"recv":       cliCCFileRecv,
-	"exec":       cliCCExec,
 	"background": cliCCBackground,
-	"prefix":     cliCCPrefix,
-	"delete":     cliCCDelete,
 	"clients":    cliCCClients,
-	"tunnel":     cliCCTunnel,
-	"rtunnel":    cliCCTunnel,
+	"commands":   cliCCCommand,
+	"delete":     cliCCDelete,
+	"exec":       cliCCExec,
+	"filter":     cliCCFilter,
+	"log":        cliCCLog,
+	"prefix":     cliCCPrefix,
 	"process":    cliCCProcess,
+	"recv":       cliCCFileRecv,
+	"responses":  cliCCResponses,
+	"rtunnel":    cliCCTunnel,
+	"send":       cliCCFileSend,
+	"tunnel":     cliCCTunnel,
 }
 
 func cliCC(c *minicli.Command, resp *minicli.Response) error {
@@ -331,9 +341,14 @@ func cliCCFileRecv(c *minicli.Command, resp *minicli.Response) error {
 
 // background (just exec with background==true)
 func cliCCBackground(c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
 	cmd := &ron.Command{
 		Background: true,
-		Command:    c.ListArgs["command"],
+		Command:    command,
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
 	}
 
 	ccNewCommand(cmd, nil, nil)
@@ -370,9 +385,13 @@ func cliCCProcessKillAll(c *minicli.Command, resp *minicli.Response) error {
 
 // exec
 func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
 	cmd := &ron.Command{
-		Command: c.ListArgs["command"],
-		Filter:  ccGetFilter(),
+		Command: command,
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
 	}
 
 	ccNewCommand(cmd, nil, nil)
@@ -432,6 +451,52 @@ func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+// parse out key/value pairs from the command list for stdio
+func ccCommandPreProcess(c []string) (stdin, stdout, stderr string, command []string) {
+	// pop key/value pairs (up to three) for stdio plumber redirection
+	for i := 0; i < 3 && i < len(c); i++ {
+		f := strings.Split(c[i], "=")
+		if len(f) == 1 {
+			command = c[i:]
+			return
+		}
+		switch f[0] {
+		case "stdin":
+			stdin = f[1]
+		case "stdout":
+			stdout = f[1]
+		case "stderr":
+			stderr = f[1]
+		default:
+			// perhaps some goofy filename with an = in it
+			command = c[i:]
+			return
+		}
+	}
+	command = c[3:]
+	return
+}
+
+func cliCCLog(c *minicli.Command, resp *minicli.Response) error {
+	// search for level in BoolArgs, we know that one of the BoolArgs will
+	// parse without error thanks to minicli.
+	var level log.Level
+	for k := range c.BoolArgs {
+		v, err := log.ParseLevel(k)
+		if err == nil {
+			level = v
+			break
+		}
+	}
+
+	cmd := &ron.Command{
+		Level: &level,
+	}
+
+	ccNewCommand(cmd, nil, nil)
+	return nil
+}
+
 // clients
 func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
@@ -458,7 +523,7 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"id", "prefix", "command", "responses", "background",
-		"send files", "receive files", "filter",
+		"sent", "received", "level", "filter",
 	}
 	resp.Tabular = [][]string{}
 
@@ -481,8 +546,15 @@ func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 			strconv.FormatBool(v.Background),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
-			fmt.Sprintf("%v", v.Filter),
 		}
+
+		if v.Level != nil {
+			row = append(row, v.Level.String())
+		} else {
+			row = append(row, "")
+		}
+
+		row = append(row, fmt.Sprintf("%v", v.Filter))
 
 		resp.Tabular = append(resp.Tabular, row)
 	}

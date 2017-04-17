@@ -6,6 +6,7 @@ package ron
 
 import (
 	"fmt"
+	log "minilog"
 	"os"
 	"strings"
 )
@@ -43,6 +44,9 @@ type Command struct {
 	// KillAll kills all processes by name
 	KillAll string
 
+	// Level adjusts the minilog level
+	Level *log.Level
+
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
 	// to be processed.
@@ -54,6 +58,11 @@ type Command struct {
 	// Prefix is an optional field that can be used to track commands. It is
 	// not used by the server or client.
 	Prefix string
+
+	// plumber connections
+	Stdin  string
+	Stdout string
+	Stderr string
 }
 
 type File struct {
@@ -122,5 +131,9 @@ func (c *Command) Copy() *Command {
 		PID:        c.PID,
 		KillAll:    c.KillAll,
 		Prefix:     c.Prefix,
+		Stdin:      c.Stdin,
+		Stdout:     c.Stdout,
+		Stderr:     c.Stderr,
+		Level:      c.Level,
 	}
 }

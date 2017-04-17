@@ -18,6 +18,7 @@ const (
 	MESSAGE_CLIENT
 	MESSAGE_TUNNEL
 	MESSAGE_FILE
+	MESSAGE_PIPE
 )
 
 const (
@@ -33,6 +34,7 @@ type Process struct {
 }
 
 type VM interface {
+	GetNamespace() string
 	GetUUID() string
 	SetCCActive(bool)
 	GetTags() map[string]string
@@ -48,6 +50,9 @@ type Message struct {
 	Filename string
 	Error    string
 	Tunnel   []byte
+	Pipe     string
+	PipeMode int
+	PipeData string
 }
 
 func (t Type) String() string {
@@ -60,6 +65,8 @@ func (t Type) String() string {
 		return "TUNNEL"
 	case MESSAGE_FILE:
 		return "FILE"
+	case MESSAGE_PIPE:
+		return "PIPE"
 	}
 
 	return "UNKNOWN"

@@ -25,7 +25,7 @@ var (
 
 // ccStart starts ron and calls log.Fatal if there is a problem
 func ccStart(path, subpath string) *ron.Server {
-	s, err := ron.NewServer(path, subpath)
+	s, err := ron.NewServer(path, subpath, plumber)
 	if err != nil {
 		log.Fatal("creating cc node %v", err)
 	}

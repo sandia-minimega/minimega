@@ -47,6 +47,7 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
+	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
 
 	vms = VMs{}
 
@@ -79,6 +80,7 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+	logLevel = log.LevelFlag
 
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
@@ -104,6 +106,12 @@ func main() {
 		fmt.Println("minimega", version.Revision, version.Date)
 		fmt.Println(version.Copyright)
 		os.Exit(0)
+	}
+
+	// see pipeMMHandler in plumber.go
+	if *f_pipe != "" {
+		pipeMMHandler()
+		return
 	}
 
 	// warn if we're not root
@@ -191,13 +199,17 @@ func main() {
 	}
 
 	// start services
-	commandSocketStart()
 	ccServer = ccStart(*f_iomBase, "")
 	if err := ccServer.Listen(*f_ccPort); err != nil {
 		log.Fatal("unable to listen: %v", err)
 	}
+
+	// NOTE: the plumber needs a reference to the meshage node, and cc
+	// needs a reference to the plumber, so the order here counts
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
+	plumberStart(meshageNode)
+	commandSocketStart()
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)

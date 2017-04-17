@@ -16,7 +16,7 @@ var (
 
 # testing
 echo "TESTING"
-for i in `ls $SCRIPT_DIR/src | grep -v vendor`
+for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
 do
 	go test $i
 	if [[ $? != 0 ]]; then

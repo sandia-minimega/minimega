@@ -10,12 +10,12 @@ import (
 
 type minilogger struct {
 	*golog.Logger
-	Level   int
+	Level   Level
 	Color   bool // print in color
 	filters []string
 }
 
-func (l *minilogger) prologue(level int, name string) (msg string) {
+func (l *minilogger) prologue(level Level, name string) (msg string) {
 	switch level {
 	case DEBUG:
 		msg += "DEBUG "
@@ -68,7 +68,7 @@ func (l *minilogger) epilogue() string {
 	return ""
 }
 
-func (l *minilogger) log(level int, name, format string, arg ...interface{}) {
+func (l *minilogger) log(level Level, name, format string, arg ...interface{}) {
 	msg := l.prologue(level, name) + fmt.Sprintf(format, arg...) + l.epilogue()
 	for _, f := range l.filters {
 		if strings.Contains(msg, f) {
@@ -78,7 +78,7 @@ func (l *minilogger) log(level int, name, format string, arg ...interface{}) {
 	l.Print(msg)
 }
 
-func (l *minilogger) logln(level int, name string, arg ...interface{}) {
+func (l *minilogger) logln(level Level, name string, arg ...interface{}) {
 	msg := l.prologue(level, name) + fmt.Sprint(arg...) + l.epilogue()
 	for _, f := range l.filters {
 		if strings.Contains(msg, f) {

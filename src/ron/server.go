@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"os"
@@ -58,13 +59,15 @@ type Server struct {
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
 
+	plumber *miniplumber.Plumber
+
 	// set to non-zero value by Server.Destroy
 	isdestroyed uint64
 }
 
 // NewServer creates a ron server. Must call Listen* to actually allow ron to
 // start accepting connections from clients.
-func NewServer(path, subpath string) (*Server, error) {
+func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, error) {
 	s := &Server{
 		conns:         make(map[string]net.Conn),
 		listeners:     make(map[string]net.Listener),
@@ -75,6 +78,7 @@ func NewServer(path, subpath string) (*Server, error) {
 		subpath:       subpath,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		plumber:       plumber,
 	}
 
 	if err := os.MkdirAll(s.responsePath(nil), 0775); err != nil {
@@ -563,9 +567,11 @@ func (s *Server) serve(addr string, ln net.Listener) {
 // there were no errors.
 func (s *Server) handshake(conn net.Conn) (*client, error) {
 	c := &client{
-		conn: conn,
-		enc:  gob.NewEncoder(conn),
-		dec:  gob.NewDecoder(conn),
+		conn:        conn,
+		enc:         gob.NewEncoder(conn),
+		dec:         gob.NewDecoder(conn),
+		pipeReaders: make(map[string]*miniplumber.Reader),
+		pipeWriters: make(map[string]chan<- string),
 	}
 
 	// get the first client struct as a handshake
@@ -581,14 +587,18 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 		return nil, fmt.Errorf("client %v already exists!", m.Client.UUID)
 	}
 
-	if _, ok := s.vms[m.Client.UUID]; !ok {
+	vm, ok := s.vms[m.Client.UUID]
+	if !ok {
 		// try again after unmangling the uuid, which qemu does in certain
 		// versions
-		if _, ok := s.vms[unmangle(m.Client.UUID)]; !ok {
-			return nil, fmt.Errorf("unregistered client %v", m.Client.UUID)
-		}
+		vm, ok = s.vms[unmangle(m.Client.UUID)]
 		c.mangled = true
 	}
+	if !ok {
+		return nil, fmt.Errorf("unregistered client %v", m.Client.UUID)
+	}
+
+	c.Namespace = vm.GetNamespace()
 
 	if m.Client.Version != version.Revision {
 		log.Warn("mismatched miniccc version: %v", m.Client.Version)
@@ -671,6 +681,8 @@ func (s *Server) clientHandler(c *client) {
 				s.responses <- m.Client
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
+			case MESSAGE_PIPE:
+				c.pipeHandler(s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
@@ -706,6 +718,17 @@ func (s *Server) removeClient(uuid string) {
 	defer s.clientLock.Unlock()
 	if c, ok := s.clients[uuid]; ok {
 		c.conn.Close()
+
+		// with the client conn closed, close any lingering plumbing
+		c.pipeLock.Lock()
+		defer c.pipeLock.Unlock()
+		for _, p := range c.pipeReaders {
+			p.Close()
+		}
+		for _, p := range c.pipeWriters {
+			close(p)
+		}
+
 		delete(s.clients, uuid)
 	}
 }
