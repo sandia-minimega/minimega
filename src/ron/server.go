@@ -566,6 +566,20 @@ func (s *Server) serve(addr string, ln net.Listener) {
 // handshake performs a handshake with the client, returning the new client if
 // there were no errors.
 func (s *Server) handshake(conn net.Conn) (*client, error) {
+	// read until we see the magic bytes
+	var buf [3]byte
+	for string(buf[:]) != "RON" {
+		// shift the buffer
+		buf[0] = buf[1]
+		buf[1] = buf[2]
+
+		// read the next byte
+		_, err := conn.Read(buf[2:])
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	c := &client{
 		conn:        conn,
 		enc:         gob.NewEncoder(conn),
