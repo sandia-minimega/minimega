@@ -71,6 +71,7 @@ func init() {
 func runSub(cmd *Command, args []string) {
 	var reservation Reservation	// the new reservation
 	var newSched []TimeSlice	// the new schedule
+	format := "2006-Jan-2-15:04"
 
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || subN == 0 {
@@ -92,7 +93,6 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	when := time.Now()
-	format := "2006-Jan-2-15:04"
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
 		t, _ := time.Parse(format, subA)
