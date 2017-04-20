@@ -101,7 +101,14 @@ func (s *Server) Destroy() {
 
 	s.setDestroyed()
 
-	// stop listening
+	// close all the serial connections
+	s.connsLock.Lock()
+	for _, c := range s.conns {
+		c.Close()
+	}
+	s.connsLock.Unlock()
+
+	// stop all listeners
 	s.listenersLock.Lock()
 	listeners := len(s.listeners)
 	for _, ln := range s.listeners {
@@ -191,12 +198,13 @@ func (s *Server) DialSerial(path string) error {
 
 	s.conns[path] = conn
 
-	c, err := s.handshake(conn)
-	if err != nil {
-		return fmt.Errorf("handshake failed: %v", err)
-	}
-
 	go func() {
+		c, err := s.handshake(conn)
+		if err != nil {
+			log.Error("handshake failed: %v", err)
+			return
+		}
+
 		s.clientHandler(c)
 
 		// client disconnected
