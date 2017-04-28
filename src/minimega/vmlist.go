@@ -532,7 +532,7 @@ func (vms VMs) ClearQoS(target string, tap uint) []error {
 	})
 }
 
-func (vms VMs) Hotplug(target string, f string) []error {
+func (vms VMs) Hotplug(target, file, version string) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
@@ -540,7 +540,7 @@ func (vms VMs) Hotplug(target string, f string) []error {
 		// safe due to applyKVM
 		kvm := vm.(*KvmVM)
 
-		return true, kvm.Hotplug(f)
+		return true, kvm.Hotplug(file, version)
 	})
 }
 
@@ -582,7 +582,7 @@ func (vms VMs) HotplugInfo(resp *minicli.Response) []error {
 	if ns == nil {
 		resp.Header = []string{"namespace"}
 	}
-	resp.Header = append(resp.Header, "name", "id", "file")
+	resp.Header = append(resp.Header, "name", "id", "file", "version")
 
 	return vms.applyKVM(Wildcard, func(vm VM, wild bool) (bool, error) {
 		// safe due to applyKVM
@@ -601,7 +601,7 @@ func (vms VMs) HotplugInfo(resp *minicli.Response) []error {
 			if ns == nil {
 				row = append(row, namespace)
 			}
-			row = append(row, name, strconv.Itoa(k), v)
+			row = append(row, name, strconv.Itoa(k), v.Disk, v.Version)
 
 			resp.Tabular = append(resp.Tabular, row)
 		}

@@ -146,12 +146,17 @@ type qemuOverride struct {
 	Repl  string
 }
 
+type vmHotplug struct {
+	Disk    string
+	Version string
+}
+
 type KvmVM struct {
 	*BaseVM   // embed
 	KVMConfig // embed
 
 	// Internal variables
-	hotplug map[int]string
+	hotplug map[int]vmHotplug
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
@@ -190,7 +195,7 @@ func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
 
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
-	vm.hotplug = make(map[int]string)
+	vm.hotplug = make(map[int]vmHotplug)
 
 	return vm, nil
 }
@@ -706,14 +711,25 @@ func (vm *KvmVM) launch() error {
 	return nil
 }
 
-func (vm *KvmVM) Hotplug(f string) error {
+func (vm *KvmVM) Hotplug(f, version string) error {
+	var bus string
+	switch version {
+	case "", "1.1":
+		version = "1.1"
+		bus = "usb-bus.0"
+	case "2.0":
+		bus = "ehci.0"
+	default:
+		return fmt.Errorf("invalid version: `%v`", version)
+	}
+
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	// generate an id by adding 1 to the highest in the list for the
 	// hotplug devices, 0 if it's empty
 	id := 0
-	for k, _ := range vm.hotplug {
+	for k := range vm.hotplug {
 		if k >= id {
 			id = k + 1
 		}
@@ -726,15 +742,15 @@ func (vm *KvmVM) Hotplug(f string) error {
 	if err != nil {
 		return err
 	}
-
 	log.Debugln("hotplug drive_add response:", r)
-	r, err = vm.q.USBDeviceAdd(hid)
+
+	r, err = vm.q.USBDeviceAdd(hid, bus)
 	if err != nil {
 		return err
 	}
 
 	log.Debugln("hotplug usb device add response:", r)
-	vm.hotplug[id] = f
+	vm.hotplug[id] = vmHotplug{f, version}
 
 	return nil
 }
@@ -787,14 +803,14 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 }
 
 // HotplugInfo returns a deep copy of the VM's hotplug info
-func (vm *KvmVM) HotplugInfo() map[int]string {
+func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	res := map[int]string{}
+	res := map[int]vmHotplug{}
 
 	for k, v := range vm.hotplug {
-		res[k] = v
+		res[k] = vmHotplug{v.Disk, v.Version}
 	}
 
 	return res
@@ -873,9 +889,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-vnc")
 	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
-	args = append(args, "-usbdevice") // this allows absolute pointers in vnc, and works great on android vms
-	args = append(args, "tablet")
-
 	args = append(args, "-smp")
 	args = append(args, strconv.FormatUint(vm.VCPUs, 10))
 
@@ -890,6 +903,13 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-device")
 	args = append(args, "virtio-serial")
+
+	// for USB 1.0, creates bus named usb-bus.0
+	args = append(args, "-usb")
+	// for USB 2.0, creates bus named ehci.0
+	args = append(args, "-device", "usb-ehci,id=ehci")
+	// this allows absolute pointers in vnc, and works great on android vms
+	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
 	// this is non-virtio serial ports
 	// for virtio-serial, look below near the net code

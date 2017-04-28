@@ -214,9 +214,18 @@ name, and the name of the file to add. For example, to add foo.img to VM foo:
 
 	vm hotplug add foo foo.img
 
-The add command will assign a disk ID, shown in vm hotplug show. To remove
-media, use the 'remove' argument with the VM name and the disk ID. For example,
-to remove the drive added above, named 0:
+The add command will assign a disk ID, shown in "vm hotplug". The optional
+parameter allows you to specify whether the drive will appear on the 1.1 or 2.0
+USB bus. For USB 1.1:
+
+	vm hotplug add foo foo.img 1.1
+
+For USB 2.0:
+
+	vm hotplug add foo foo.img 2.0
+
+To remove media, use the 'remove' argument with the VM name and the disk ID.
+For example, to remove the drive added above, named 0:
 
 	vm hotplug remove foo 0
 
@@ -224,8 +233,8 @@ To remove all hotplug devices, use ID "all" for the disk ID.
 
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm hotplug <show,>",
-			"vm hotplug <add,> <target> <filename>",
+			"vm hotplug",
+			"vm hotplug <add,> <target> <filename> [version]",
 			"vm hotplug <remove,> <target> <disk id or all>",
 		},
 		Call: wrapVMTargetCLI(cliVMHotplug),
@@ -760,7 +769,9 @@ func cliVMHotplug(c *minicli.Command, resp *minicli.Response) error {
 			return err
 		}
 
-		return makeErrSlice(vms.Hotplug(target, f))
+		version := c.StringArgs["version"]
+
+		return makeErrSlice(vms.Hotplug(target, f, version))
 	} else if c.BoolArgs["remove"] {
 		disk := c.StringArgs["disk"]
 
