@@ -5,134 +5,328 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	log "minilog"
-	"os"
-	"path/filepath"
 	"ron"
+	"strconv"
 )
 
-const (
-	CC_SERIAL_PERIOD = 5
-)
+// This file provides helper functions for muxing between the global
+// ccServer/ccFilter/ccPrefix and the ones contained in the active namespace.
+// If a namespace is active, those will be used over the global versions. If we
+// move towards a default namespace, this file will be much simpler.
 
 var (
-	ccNode *ron.Server
-	ccPort int
+	ccServer *ron.Server
+	ccFilter *ron.Filter
+	ccPrefix string
 )
 
-func ccMapPrefix(id int) {
-	if ccPrefix != "" {
-		ccPrefixMap[id] = ccPrefix
-		log.Debug("prefix map %v: %v", id, ccPrefix)
+// ccStart starts ron and calls log.Fatal if there is a problem
+func ccStart(path, subpath string) *ron.Server {
+	s, err := ron.NewServer(path, subpath, plumber)
+	if err != nil {
+		log.Fatal("creating cc node %v", err)
 	}
+
+	return s
 }
 
-func ccUnmapPrefix(id int) {
-	if prefix, ok := ccPrefixMap[id]; ok {
-		delete(ccPrefixMap, id)
-		log.Debug("prefix unmap %v: %v", id, prefix)
+// ccGetFilter returns a filter for cc clients
+func ccGetFilter() *ron.Filter {
+	if ns := GetNamespace(); ns != nil {
+		return ns.ccFilter
 	}
+
+	return ccFilter
 }
 
-func ccPrefixIDs(prefix string) []int {
-	var ret []int
-	for k, v := range ccPrefixMap {
-		if v == prefix {
-			ret = append(ret, k)
+// ccSetFilter updates the filter
+func ccSetFilter(f *ron.Filter) {
+	if ns := GetNamespace(); ns != nil {
+		ns.ccFilter = f
+		return
+	}
+
+	ccFilter = f
+}
+
+// ccGetPrefix returns the current prefix
+func ccGetPrefix() string {
+	if ns := GetNamespace(); ns != nil {
+		return ns.ccPrefix
+	}
+
+	return ccPrefix
+}
+
+// ccSetPrefix updates the prefix
+func ccSetPrefix(s string) {
+	if ns := GetNamespace(); ns != nil {
+		ns.ccPrefix = s
+		return
+	}
+
+	ccPrefix = s
+}
+
+// ccDialSerial wraps ron.DialSerial for the specified namespace
+func ccDialSerial(namespace, path string) error {
+	ccServer := ccServer
+	if namespace != "" {
+		ns := GetOrCreateNamespace(namespace)
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.DialSerial(path)
+}
+
+// ccListenUnix wraps ron.ListenUnix for the specified namespace
+func ccListenUnix(namespace, path string) error {
+	ccServer := ccServer
+	if namespace != "" {
+		ns := GetOrCreateNamespace(namespace)
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.ListenUnix(path)
+}
+
+// ccCloseUnix wraps ron.CloseUnix for the specified namespace
+func ccCloseUnix(namespace, path string) {
+	ccServer := ccServer
+	if namespace != "" {
+		ns := GetOrCreateNamespace(namespace)
+		ccServer = ns.ccServer
+	}
+
+	ccServer.CloseUnix(path)
+}
+
+// ccRegisterVM wraps ron.RegisterVM for the specified namespace
+func ccRegisterVM(vm VM) {
+	namespace := vm.GetNamespace()
+
+	ccServer := ccServer
+	if namespace != "" {
+		ns := GetOrCreateNamespace(namespace)
+		ccServer = ns.ccServer
+	}
+
+	ccServer.RegisterVM(vm)
+}
+
+// ccUnregisterVM wraps ron.RegisterVM for the specified namespace
+func ccUnregisterVM(vm VM) {
+	namespace := vm.GetNamespace()
+
+	ccServer := ccServer
+	if namespace != "" {
+		ns := GetOrCreateNamespace(namespace)
+		ccServer = ns.ccServer
+	}
+
+	ccServer.UnregisterVM(vm)
+}
+
+// ccNewCommand takes a command, adds the current filter, and then sends the
+// command to the correct ron server. If a filter or prefix are specified, then
+// they will be used instead of the current values.
+func ccNewCommand(c *ron.Command, f *ron.Filter, p *string) int {
+	ccServer := ccServer
+	ccFilter := ccFilter
+	ccPrefix := ccPrefix
+
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+		ccFilter = ns.ccFilter
+		ccPrefix = ns.ccPrefix
+	}
+
+	if f == nil {
+		c.Filter = ccFilter
+	} else {
+		c.Filter = f
+	}
+	if p == nil {
+		c.Prefix = ccPrefix
+	} else {
+		c.Prefix = *p
+	}
+
+	id := ccServer.NewCommand(c)
+	log.Debug("generated command %v: %v", id, c)
+
+	return id
+}
+
+// ccTunnel creates a forward or reverse tunnel. UUID is only used for forward
+// tunnels.
+func ccTunnel(host, uuid string, src, dst int, reverse bool) error {
+	ccServer := ccServer
+	ccFilter := ccFilter
+
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+		ccFilter = ns.ccFilter
+	}
+
+	if reverse {
+		return ccServer.Reverse(ccFilter, src, host, dst)
+	}
+
+	return ccServer.Forward(uuid, src, host, dst)
+}
+
+func ccGetClients() map[string]*ron.Client {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.GetClients()
+}
+
+func ccClients() int {
+	ccServer := ccServer
+
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.Clients()
+}
+
+func ccCommands() map[int]*ron.Command {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.GetCommands()
+}
+
+// ccResponses returns the responses matching s. s may be:
+//  * Wildcard
+//  * Integer ID
+//  * Prefix
+func ccResponses(s string, raw bool) (string, error) {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	if s == Wildcard {
+		return ccServer.GetResponses(raw)
+	} else if v, err := strconv.Atoi(s); err == nil {
+		return ccServer.GetResponse(v, raw)
+	}
+
+	// must be searching for a prefix
+	var match bool
+	var buf bytes.Buffer
+
+	for _, c := range ccServer.GetCommands() {
+		if c.Prefix == s {
+			s, err := ccServer.GetResponse(c.ID, raw)
+			if err != nil {
+				return "", err
+			}
+
+			buf.WriteString(s)
+
+			match = true
 		}
 	}
-	return ret
-}
 
-func ccStart() {
-	var err error
-	ccNode, err = ron.NewServer(*f_ccPort, *f_iomBase, plumber)
-	if err != nil {
-		log.Fatalln(fmt.Errorf("creating cc node %v", err))
+	if !match {
+		return "", fmt.Errorf("no such prefix: `%v`", s)
 	}
 
-	log.Debug("created ron node at %v %v", ccPort, *f_base)
+	return buf.String(), nil
 }
 
-func ccClear(what string) (err error) {
-	log.Debug("cc clear %v", what)
+// ccDeleteCommands deletes commands matching s. s may be:
+//  * Wildcard
+//  * Integer ID
+//  * Prefix
+func ccDeleteCommands(s string) error {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
 
-	namespace := GetNamespaceName()
+	if s == Wildcard {
+		ccServer.ClearCommands()
+	} else if v, err := strconv.Atoi(s); err == nil {
+		return ccServer.DeleteCommand(v)
+	}
+
+	return ccServer.DeleteCommands(s)
+}
+
+// ccDeleteResponses deletes commands matching s. s may be:
+//  * Wildcard
+//  * Integer ID
+//  * Prefix
+func ccDeleteResponses(s string) error {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	if s == Wildcard {
+		ccServer.ClearResponses()
+	} else if v, err := strconv.Atoi(s); err == nil {
+		return ccServer.DeleteResponse(v)
+	}
+
+	return ccServer.DeleteResponses(s)
+}
+
+// ccGetProcesses returns the processes running on a given client
+func ccGetProcesses(uuid string) ([]*ron.Process, error) {
+	ccServer := ccServer
+	if ns := GetNamespace(); ns != nil {
+		ccServer = ns.ccServer
+	}
+
+	return ccServer.GetProcesses(uuid)
+}
+
+// ccProcessKill kills a process by PID
+func ccProcessKill(pid int) {
+	cmd := &ron.Command{PID: pid}
+
+	ccNewCommand(cmd, nil, nil)
+}
+
+func ccClear(what string) error {
+	namespace := ""
+	ccServer := ccServer
+	ccFilter := &ccFilter
+	ccPrefix := &ccPrefix
+
+	if ns := GetNamespace(); ns != nil {
+		namespace = ns.Name
+		ccServer = ns.ccServer
+		ccFilter = &ns.ccFilter
+		ccPrefix = &ns.ccPrefix
+	}
+
+	log.Info("clearing %v in namespace `%v`", what, namespace)
 
 	switch what {
 	case "filter":
-		ccFilter = nil
+		*ccFilter = nil
 	case "commands":
-		if namespace == "" {
-			ccNode.ResetCommands()
-			ccPrefixMap = make(map[int]string)
-			return
-		}
-
-		errs := errSlice{}
-		for _, v := range ccNode.GetCommands() {
-			// only delete commands for the active namespace
-			if !ccMatchNamespace(v) {
-				continue
-			}
-
-			err := ccNode.DeleteCommand(v.ID)
-			if err != nil {
-				err := fmt.Errorf("cc delete command %v : %v", v.ID, err)
-				errs = append(errs, err)
-			}
-			ccUnmapPrefix(v.ID)
-		}
-		return errs
-	case "responses": // delete everything in miniccc_responses
-		base := filepath.Join(*f_iomBase, ron.RESPONSE_PATH)
-
-		// no active namespace => delete everything
-		if namespace == "" {
-			return os.RemoveAll(base)
-		}
-
-		walker := func(path string, info os.FileInfo, err error) error {
-			// don't do anything if there was an error or it's a directory that
-			// doesn't look like a UUID.
-			if err != nil || !info.IsDir() || !isUUID(info.Name()) {
-				return err
-			}
-
-			if vm := vms.FindVM(info.Name()); vm == nil {
-				log.Debug("skipping VM: %v", info.Name())
-			} else if err := os.RemoveAll(path); err != nil {
-				return err
-			}
-
-			return filepath.SkipDir
-		}
-
-		return filepath.Walk(base, walker)
+		ccServer.ClearCommands()
+	case "responses":
+		ccServer.ClearResponses()
 	case "prefix":
-		ccPrefix = ""
+		*ccPrefix = ""
 	}
 
-	return
-}
-
-// ccGetFilter returns a filter for cc clients, adding the implicit namespace
-// filter, if a namespace is active.
-func ccGetFilter() *ron.Filter {
-	filter := ron.Filter{}
-	if ccFilter != nil {
-		filter = *ccFilter
-	}
-
-	filter.Namespace = GetNamespaceName()
-	return &filter
-}
-
-// ccMatchNamespace tests whether a command is relavant to the active
-// namespace.
-func ccMatchNamespace(c *ron.Command) bool {
-	namespace := GetNamespaceName()
-
-	return namespace == "" || c.Filter == nil || c.Filter.Namespace == namespace
+	return nil
 }

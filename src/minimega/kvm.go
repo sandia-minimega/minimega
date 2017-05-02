@@ -687,7 +687,7 @@ func (vm *KvmVM) launch() error {
 
 	// connect cc
 	ccPath := vm.path("cc")
-	if err := ccNode.DialSerial(ccPath); err != nil {
+	if err := ccDialSerial(vm.Namespace, ccPath); err != nil {
 		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 	}
 

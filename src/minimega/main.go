@@ -204,7 +204,12 @@ func main() {
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 	plumberStart(meshageNode)
-	ccStart()
+
+	ccServer = ccStart(*f_iomBase, "")
+	if err := ccServer.Listen(*f_ccPort); err != nil {
+		log.Fatal("unable to listen: %v", err)
+	}
+
 	commandSocketStart()
 
 	// set up signal handling

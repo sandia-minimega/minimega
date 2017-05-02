@@ -12,14 +12,13 @@ import (
 )
 
 type Filter struct {
-	UUID      string
-	Hostname  string
-	Arch      string
-	OS        string
-	MAC       string
-	IP        string
-	Namespace string
-	Tags      map[string]string
+	UUID     string
+	Hostname string
+	Arch     string
+	OS       string
+	MAC      string
+	IP       string
+	Tags     map[string]string
 }
 
 type Command struct {
@@ -56,6 +55,10 @@ type Command struct {
 	// clients that have responded to this command
 	CheckedIn []string
 
+	// Prefix is an optional field that can be used to track commands. It is
+	// not used by the server or client.
+	Prefix string
+
 	// plumber connections
 	Stdin  string
 	Stdout string
@@ -90,9 +93,6 @@ func (f *Filter) String() string {
 	}
 
 	var res []string
-	if f.Namespace != "" {
-		res = append(res, "namespace="+f.Namespace)
-	}
 	if f.UUID != "" {
 		res = append(res, "uuid="+f.UUID)
 	}
@@ -130,6 +130,7 @@ func (c *Command) Copy() *Command {
 		Filter:     c.Filter,
 		PID:        c.PID,
 		KillAll:    c.KillAll,
+		Prefix:     c.Prefix,
 		Stdin:      c.Stdin,
 		Stdout:     c.Stdout,
 		Stderr:     c.Stderr,

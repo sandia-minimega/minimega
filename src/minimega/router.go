@@ -250,59 +250,35 @@ func (r *Router) Commit() error {
 
 	// remove any previous commands
 	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetName())
-	ids := ccPrefixIDs(prefix)
-	if len(ids) != 0 {
-		for _, v := range ids {
-			c := ccNode.GetCommand(v)
-			if c == nil {
-				return fmt.Errorf("cc delete unknown command %v", v)
-			}
-
-			if !ccMatchNamespace(c) {
-				// skip without warning
-				continue
-			}
-
-			err := ccNode.DeleteCommand(v)
-			if err != nil {
-				return fmt.Errorf("cc delete command %v : %v", v, err)
-			}
-			ccUnmapPrefix(v)
+	if err := ccDeleteCommands(prefix); err != nil {
+		if !strings.HasPrefix(err.Error(), "no such prefix") {
+			return err
 		}
 	}
 
 	filter := &ron.Filter{
-		Namespace: r.vm.GetNamespace(),
-		UUID:      r.vm.GetUUID(),
+		UUID: r.vm.GetUUID(),
 	}
 
 	// issue cc commands for this router
 	cmd := &ron.Command{
-		Filter:  filter,
 		Command: []string{"rm", filepath.Join("/tmp/miniccc/files", prefix)},
 	}
-	id := ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ccNewCommand(cmd, filter, &prefix)
 
 	cmd = &ron.Command{
-		Filter: filter,
+		Prefix: prefix,
 	}
 	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
 		Name: prefix,
 		Perm: 0644,
 	})
-	id = ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ccNewCommand(cmd, filter, &prefix)
 
 	cmd = &ron.Command{
-		Filter:  filter,
 		Command: []string{"minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
 	}
-	id = ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ccNewCommand(cmd, filter, &prefix)
 
 	return nil
 }
