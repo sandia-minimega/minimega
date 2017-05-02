@@ -74,12 +74,14 @@ func deleteReservation(checkUser bool, args []string) {
 	// Update the reservation file
 	putReservations()
 
-	// Delete all the PXE files in the reservation
-	for _, pxename := range deletedReservation.PXENames {
-		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+	if !igorConfig.UseCobbler {
+		// Delete all the PXE files in the reservation
+		for _, pxename := range deletedReservation.PXENames {
+			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+		}
+	
+		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 	}
-
-	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 
 	// Delete the now unused kernel + initrd
 	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")

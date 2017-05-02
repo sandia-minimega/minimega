@@ -56,6 +56,7 @@ type Config struct {
 	End        int
 	Rackwidth  int
 	Rackheight int
+	UseCobbler	bool
 }
 
 // Represents a slice of time
@@ -108,33 +109,35 @@ func housekeeping() {
 		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
 		} else if r.StartTime < now {
-			// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
-			filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-			if _, err := os.Stat(filename); os.IsNotExist(err) {
-				log.Info("Installing files for reservation ", r.ResName)
-
-				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-				fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-				masterfile, err := os.Create(fname)
-				if err != nil {
-					log.Fatal("failed to create %v -- %v", fname, err)
-				}
-				defer masterfile.Close()
-				masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
-				masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
-				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
-				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
-
-				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-				for _, pxename := range r.PXENames {
-					masterfile.Seek(0, 0)
-					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-					f, err := os.Create(fname)
+			if !igorConfig.UseCobbler {
+				// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
+				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+				if _, err := os.Stat(filename); os.IsNotExist(err) {
+					log.Info("Installing files for reservation ", r.ResName)
+	
+					// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+					masterfile, err := os.Create(fname)
 					if err != nil {
 						log.Fatal("failed to create %v -- %v", fname, err)
 					}
-					io.Copy(f, masterfile)
-					f.Close()
+					defer masterfile.Close()
+					masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
+					masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
+					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
+					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
+	
+					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+					for _, pxename := range r.PXENames {
+						masterfile.Seek(0, 0)
+						fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+						f, err := os.Create(fname)
+						if err != nil {
+							log.Fatal("failed to create %v -- %v", fname, err)
+						}
+						io.Copy(f, masterfile)
+						f.Close()
+					}
 				}
 			}
 		}
