@@ -54,6 +54,9 @@ mount /dev/sda1 /scratch
 # bump open file handle limits
 ulimit -n 999999
 
+# increase max PID
+echo 999999 > /proc/sys/kernel/pid_max
+
 # bond all 10G/40G interfaces
 for i in `ls /sys/class/net`
 do
