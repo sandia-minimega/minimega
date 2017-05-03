@@ -204,11 +204,12 @@ func main() {
 	plumberStart(meshageNode)
 
 	// has to happen after meshageNode is created
-	ns := GetOrCreateNamespace("minimega")
+	GetOrCreateNamespace("minimega")
 	SetNamespace("minimega")
-	if err := ns.ccServer.Listen(*f_ccPort); err != nil {
-		log.Fatal("unable to listen: %v", err)
-	}
+	// TODO: mmmga
+	//if err := ns.ccServer.Listen(*f_ccPort); err != nil {
+	//log.Fatal("unable to listen: %v", err)
+	//}
 
 	commandSocketStart()
 
@@ -257,14 +258,10 @@ func teardownf(format string, args ...interface{}) {
 
 func teardown() {
 	// TODO: mmmga -- need to loop through all namespaces and do stuff in each
+	DestroyNamespace(Wildcard)
 
-	//clearAllCaptures()
-	//vncClear()
+	// clean-up non-namespace things
 	dnsmasqKillAll()
-
-	//vms.Kill(Wildcard)
-	//vms.Flush()
-
 	ksmDisable()
 	containerTeardown()
 

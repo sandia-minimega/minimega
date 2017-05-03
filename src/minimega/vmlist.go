@@ -461,7 +461,7 @@ func (vms *VMs) Kill(target string) []error {
 }
 
 // Flush deletes VMs that are in the QUIT or ERROR state.
-func (vms *VMs) Flush() {
+func (vms *VMs) Flush(ns *Namespace) {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
@@ -473,8 +473,6 @@ func (vms *VMs) Flush() {
 				log.Error("clogged VM: %v", err)
 			}
 
-			// TODO: mmmga
-			ns := GetOrCreateNamespace(vm.GetNamespace())
 			ns.ccServer.UnregisterVM(vm)
 
 			delete(vms.m, i)

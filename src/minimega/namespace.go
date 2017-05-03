@@ -120,10 +120,7 @@ func (n Namespace) String() string {
 	return n.Name
 }
 
-func (n Namespace) Destroy() error {
-	// TODO: should we ensure that there are no VMs running in the namespace
-	// before we delete it?
-
+func (n *Namespace) Destroy() error {
 	for _, stats := range n.scheduleStats {
 		// TODO: We could kill the scheduler -- that wouldn't be too hard to do
 		// (add a kill channel and close it here). Easier to make the user
@@ -132,6 +129,20 @@ func (n Namespace) Destroy() error {
 			return errors.New("scheduler still running for namespace")
 		}
 	}
+
+	// Stop all captures
+	n.captures.StopAll()
+
+	// Stop VNC record/replay
+	n.vncRecorder.Clear()
+	n.vncPlayer.Clear()
+
+	// Kill and flush all the VMs
+	n.VMs.Kill(Wildcard)
+	n.VMs.Flush(n)
+
+	// Stop ron server
+	n.ccServer.Destroy()
 
 	// Delete any Taps associated with the namespace
 	for t := range n.Taps {

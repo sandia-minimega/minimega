@@ -621,7 +621,7 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 }
 
 func cliVMFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	ns.Flush()
+	ns.Flush(ns)
 
 	return nil
 }
