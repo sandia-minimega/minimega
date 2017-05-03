@@ -6,6 +6,7 @@
 ## vm config net
 [mega_bridge,100]
 ## vm launch kvm vm0
+## vm launch
 ## .filter name=vm0 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm0  | [mega_bridge] | [100]
@@ -15,6 +16,7 @@ vm0  | [mega_bridge] | [100]
 ## vm config net
 [mega_bridge,100,13:37:13:37:00:00]
 ## vm launch kvm vm1
+## vm launch
 ## .filter name=vm1 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan  | mac
 vm1  | [mega_bridge] | [100] | [13:37:13:37:00:00]
@@ -24,6 +26,7 @@ vm1  | [mega_bridge] | [100] | [13:37:13:37:00:00]
 ## vm config net
 [test_bridge,100]
 ## vm launch kvm vm2
+## vm launch
 ## .filter name=vm2 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm2  | [test_bridge] | [100]
@@ -33,6 +36,7 @@ vm2  | [test_bridge] | [100]
 ## vm config net
 [test_bridge,100,13:37:13:37:00:01]
 ## vm launch kvm vm3
+## vm launch
 ## .filter name=vm3 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan  | mac
 vm3  | [test_bridge] | [100] | [13:37:13:37:00:01]
@@ -42,6 +46,7 @@ vm3  | [test_bridge] | [100] | [13:37:13:37:00:01]
 ## vm config net
 [mega_bridge,100]
 ## vm launch kvm vm4
+## vm launch
 ## .filter name=vm4 .columns name,bridge,vlan vm info
 name | bridge        | vlan
 vm4  | [mega_bridge] | [100]
@@ -59,6 +64,7 @@ After overrides:
 ## vm config net
 [test_bridge,100,13:37:13:37:00:02]
 ## vm launch kvm vm5
+## vm launch
 ## .filter name=vm5 .columns name,bridge,vlan,mac vm info
 name | bridge        | vlan  | mac
 vm5  | [test_bridge] | [100] | [13:37:13:37:00:02]
@@ -76,6 +82,7 @@ After overrides:
 ## vm config net
 [test_bridge,100,13:37:13:37:00:03 test_bridge,200,13:37:13:37:00:04]
 ## vm launch kvm vm6
+## vm launch
 ## .filter name=vm6 .columns name,bridge,vlan,mac vm info
 name | bridge                     | vlan       | mac
 vm6  | [test_bridge, test_bridge] | [100, 200] | [13:37:13:37:00:03, 13:37:13:37:00:04]

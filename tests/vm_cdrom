@@ -5,6 +5,7 @@ shell touch /tmp/minitest1.iso
 # Launch a VM with the iso
 vm config cdrom /tmp/minitest0.iso
 vm launch kvm foo
+vm launch
 
 # Eject and change the cdrom
 .column name,cdrom vm info

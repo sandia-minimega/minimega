@@ -74,6 +74,7 @@ deleted. You may use "all" to delete all namespaces.`,
 	},
 }
 
+// TODO: mmmga
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
@@ -165,12 +166,7 @@ Schedules:
 	respChan <- minicli.Responses{resp}
 }
 
-func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
-	ns := GetNamespace()
-	if ns == nil {
-		return errors.New("cannot run nsmod without active namespace")
-	}
-
+func cliNamespaceMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Empty string should parse fine...
 	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
 	if err != nil {
@@ -240,11 +236,12 @@ func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
 	return errors.New("unreachable")
 }
 
-func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
+// TODO: mmmga
+func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Clearing the namespace global
-		return SetNamespace("")
+		return SetNamespace("minimega")
 	}
 
 	return DestroyNamespace(name)

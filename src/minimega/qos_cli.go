@@ -76,7 +76,7 @@ Example:
 	},
 }
 
-func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
+func cliClearQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
 	if c.StringArgs["interface"] == Wildcard {
@@ -88,10 +88,10 @@ func cliClearQos(c *minicli.Command, resp *minicli.Response) error {
 		return fmt.Errorf("invalid tap index %s", c.StringArgs["interface"])
 	}
 
-	return makeErrSlice(vms.ClearQoS(target, uint(tap)))
+	return makeErrSlice(ns.ClearQoS(target, uint(tap)))
 }
 
-func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
+func cliUpdateQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
 
 	// Wildcard command
@@ -110,7 +110,7 @@ func cliUpdateQos(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	return makeErrSlice(vms.UpdateQos(target, uint(tap), op))
+	return makeErrSlice(ns.UpdateQos(target, uint(tap), op))
 }
 
 func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {

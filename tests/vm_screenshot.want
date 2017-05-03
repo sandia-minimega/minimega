@@ -1,5 +1,6 @@
 ## # Start a VM
 ## vm launch kvm foo
+## vm launch
 
 ## # Should fail, VM not running
 ## # TODO: can't test this right now since the error includes the VM ID

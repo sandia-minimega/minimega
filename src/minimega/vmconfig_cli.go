@@ -10,11 +10,6 @@ import (
 	"minicli"
 )
 
-var (
-	vmConfig  = NewVMConfig()             // current vm config, updated by CLI
-	savedInfo = make(map[string]VMConfig) // saved configs, may be reloaded
-)
-
 // vmconfigCLIHandlers are special cases that are not worth generating via
 // vmconfiger.
 var vmconfigCLIHandlers = []minicli.Handler{
@@ -145,106 +140,106 @@ Remove tags in the same manner as "clear vm tag".`,
 	},
 }
 
-func cliVMConfig(c *minicli.Command, resp *minicli.Response) error {
+func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["save"] {
 		// Save the current config
-		savedInfo[c.StringArgs["name"]] = vmConfig.Copy()
+		ns.savedVMConfig[c.StringArgs["name"]] = ns.vmConfig.Copy()
 
 		return nil
 	} else if c.BoolArgs["restore"] {
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
-			if _, ok := savedInfo[name]; !ok {
+			if _, ok := ns.savedVMConfig[name]; !ok {
 				return fmt.Errorf("config %v does not exist", name)
 			}
 
-			vmConfig = savedInfo[name].Copy()
+			ns.vmConfig = ns.savedVMConfig[name].Copy()
 
 			return nil
-		} else if len(savedInfo) == 0 {
+		} else if len(ns.savedVMConfig) == 0 {
 			return errors.New("no vm configs saved")
 		}
 
 		// List the save configs
-		for k := range savedInfo {
+		for k := range ns.savedVMConfig {
 			resp.Response += fmt.Sprintln(k)
 		}
 
 		return nil
 	} else if c.BoolArgs["clone"] {
 		// Clone the config of an existing vm
-		vm := vms.FindVM(c.StringArgs["vm"])
+		vm := ns.VMs.FindVM(c.StringArgs["vm"])
 		if vm == nil {
 			return vmNotFound(c.StringArgs["vm"])
 		}
 
 		switch vm := vm.(type) {
 		case *KvmVM:
-			vmConfig.BaseConfig = vm.BaseConfig.Copy()
-			vmConfig.KVMConfig = vm.KVMConfig.Copy()
+			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
+			ns.vmConfig.KVMConfig = vm.KVMConfig.Copy()
 		case *ContainerVM:
-			vmConfig.BaseConfig = vm.BaseConfig.Copy()
-			vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
+			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
+			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
 		}
 
 		return nil
 	}
 
 	// Print the config
-	resp.Response = vmConfig.String()
+	resp.Response = ns.vmConfig.String()
 	return nil
 }
 
-func cliVMConfigNet(c *minicli.Command, resp *minicli.Response) error {
+func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.ListArgs) == 0 {
-		resp.Response = vmConfig.NetworkString()
+		resp.Response = ns.vmConfig.NetworkString()
 		return nil
 	}
 
-	vmConfig.Networks = nil
+	ns.vmConfig.Networks = nil
 
 	for _, spec := range c.ListArgs["netspec"] {
-		net, err := processVMNet(spec)
+		net, err := processVMNet(ns.Name, spec)
 		if err != nil {
-			vmConfig.Networks = nil
+			ns.vmConfig.Networks = nil
 			return err
 		}
 
-		vmConfig.Networks = append(vmConfig.Networks, net)
+		ns.vmConfig.Networks = append(ns.vmConfig.Networks, net)
 	}
 
 	return nil
 }
 
-func cliVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
+func cliVMConfigTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	k := c.StringArgs["key"]
 
 	// if Tags were cleared, reinitialize them
-	if vmConfig.Tags == nil {
-		vmConfig.Tags = map[string]string{}
+	if ns.vmConfig.Tags == nil {
+		ns.vmConfig.Tags = map[string]string{}
 	}
 
 	if v, ok := c.StringArgs["value"]; ok {
 		// Setting a new value
-		vmConfig.Tags[k] = v
+		ns.vmConfig.Tags[k] = v
 	} else if k != "" {
 		// Printing a single tag
-		resp.Response = vmConfig.Tags[k]
+		resp.Response = ns.vmConfig.Tags[k]
 	} else {
 		// Printing all configured tags
-		resp.Response = vmConfig.Tags.String()
+		resp.Response = ns.vmConfig.Tags.String()
 	}
 
 	return nil
 }
 
-func cliVMConfigQemuOverride(c *minicli.Command, resp *minicli.Response) error {
+func cliVMConfigQemuOverride(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
-		resp.Response = vmConfig.qemuOverrideString()
+		resp.Response = ns.vmConfig.qemuOverrideString()
 		return nil
 	}
 
-	vmConfig.QemuOverride = append(vmConfig.QemuOverride, qemuOverride{
+	ns.vmConfig.QemuOverride = append(ns.vmConfig.QemuOverride, qemuOverride{
 		Match: c.StringArgs["match"],
 		Repl:  c.StringArgs["replacement"],
 	})
@@ -252,11 +247,11 @@ func cliVMConfigQemuOverride(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliClearVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
+func cliClearVMConfigTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if k := c.StringArgs["key"]; k == Wildcard {
-		vmConfig.Tags = nil
+		ns.vmConfig.Tags = nil
 	} else {
-		delete(vmConfig.Tags, k)
+		delete(ns.vmConfig.Tags, k)
 	}
 
 	return nil

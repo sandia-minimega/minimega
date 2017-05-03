@@ -112,23 +112,23 @@ router takes a number of subcommands:
 	},
 }
 
-func cliRouter(c *minicli.Command, resp *minicli.Response) error {
+func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	vmName := c.StringArgs["vm"]
 
-	vm := vms.FindVM(vmName)
+	vm := ns.FindVM(vmName)
 	if vm == nil {
 		return vmNotFound(vmName)
 	}
 
 	if vmName != "" && len(c.BoolArgs) == 0 { // a summary of a specific router
-		rtr := FindRouter(vm)
+		rtr := ns.FindRouter(vm)
 		if rtr == nil {
 			return fmt.Errorf("vm %v not a router", vmName)
 		}
 		resp.Response = rtr.String()
 	}
 
-	rtr := FindOrCreateRouter(vm)
+	rtr := ns.FindOrCreateRouter(vm)
 
 	if c.BoolArgs["commit"] {
 		return rtr.Commit()
@@ -202,22 +202,22 @@ func cliRouter(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliClearRouter(c *minicli.Command, resp *minicli.Response) error {
+func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	vmName := c.StringArgs["vm"]
 
 	// clear all routers
 	if vmName == "" {
 		// this is safe to do because the only reference to the router
 		// map is in CLI calls
-		routers = make(map[int]*Router)
+		ns.routers = make(map[int]*Router)
 		return nil
 	}
 
-	vm := vms.FindVM(vmName)
+	vm := ns.FindVM(vmName)
 	if vm == nil {
 		return fmt.Errorf("no such vm %v", vmName)
 	}
-	rtr := FindRouter(vm)
+	rtr := ns.FindRouter(vm)
 	if rtr == nil {
 		return fmt.Errorf("no such router %v", vmName)
 	}

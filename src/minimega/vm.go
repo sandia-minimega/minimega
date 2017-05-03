@@ -25,6 +25,7 @@ const (
 	QMP_CONNECT_DELAY     = 100
 )
 
+// TODO: mmmga
 var (
 	killAck chan int // channel that all VMs ack on when killed
 	vmID    *Counter // channel of new VM IDs
@@ -41,7 +42,7 @@ const (
 type VM interface {
 	GetID() int               // GetID returns the VM's per-host unique ID
 	GetName() string          // GetName returns the VM's per-host unique name
-	GetNamespace() string     // GetNamespace returns the VM's namespace
+	GetNamespace() string     // GetNamespace returns the VM's namespace name
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
@@ -107,7 +108,7 @@ type BaseVM struct {
 
 	ID        int
 	Name      string
-	Namespace string // namespace this VM belongs to
+	Namespace string
 	Host      string // hostname where this VM is running
 
 	State      VMState
@@ -125,7 +126,7 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "uptime", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
@@ -142,7 +143,7 @@ var vmInfo = []string{
 // Valid names for output masks for `vm summary`, in preferred output order
 var vmInfoLite = []string{
 	// generic fields
-	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "type", "uuid", "cc_active",
 	// network fields
 	"vlan",
 }
@@ -182,8 +183,8 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Host = hostname
 	vm.Namespace = namespace
+	vm.Host = hostname
 
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
@@ -586,8 +587,6 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return strconv.Itoa(vm.ID), nil
 	case "name":
 		return vm.Name, nil
-	case "namespace":
-		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
 	case "uptime":
@@ -599,7 +598,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
-				vals = append(vals, printVLAN(net.VLAN))
+				vals = append(vals, printVLAN(vm.Namespace, net.VLAN))
 			}
 		}
 	case "bridge":
@@ -674,14 +673,12 @@ func (vm *BaseVM) writeTaps() error {
 
 func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 	// Return error if two VMs have same name or UUID
-	if vm.Namespace == vm2.Namespace {
-		if vm.Name == vm2.Name {
-			return fmt.Errorf("duplicate VM name: %s", vm.Name)
-		}
+	if vm.Name == vm2.Name {
+		return fmt.Errorf("duplicate VM name: %s", vm.Name)
+	}
 
-		if vm.UUID == vm2.UUID {
-			return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
-		}
+	if vm.UUID == vm2.UUID {
+		return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
 	}
 
 	// Warn if we see two VMs that share a MAC on the same VLAN
@@ -699,18 +696,6 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 // path joins instancePath with provided path
 func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
-}
-
-// inNamespace tests whether vm is part of active namespace, if there is one.
-// When there isn't an active namespace, all vms return true.
-func inNamespace(vm VM) bool {
-	if vm == nil {
-		return false
-	}
-
-	namespace := GetNamespaceName()
-
-	return namespace == "" || vm.GetNamespace() == namespace
 }
 
 func vmNotFound(name string) error {

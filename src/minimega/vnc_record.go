@@ -5,25 +5,23 @@
 package main
 
 import (
-	"bufio"
 	"compress/gzip"
 	"errors"
 	"fmt"
 	"io"
 	log "minilog"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
 	"vnc"
 )
 
-var (
-	vncKBRecording   = make(map[string]*vncKBRecord)
-	vncFBRecording   = make(map[string]*vncFBRecord)
-	vncRecordingLock sync.RWMutex
-)
+type vncRecorder struct {
+	kb map[string]*vncKBRecord
+	fb map[string]*vncFBRecord
+
+	sync.RWMutex // embed
+}
 
 type vncKBRecord struct {
 	*vncClient
@@ -32,6 +30,99 @@ type vncKBRecord struct {
 
 type vncFBRecord struct {
 	*vncClient
+}
+
+func (v *vncRecorder) RecordKB(vm *KvmVM, filename string) error {
+	v.Lock()
+	defer v.Unlock()
+
+	// is this vm already being recorded?
+	if _, ok := v.kb[vm.Name]; ok {
+		return fmt.Errorf("kb recording for %v already running", vm.Name)
+	}
+
+	c, err := NewVNCClient(vm)
+	if err != nil {
+		return err
+	}
+
+	c.file, err = os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	r := &vncKBRecord{vncClient: c, last: time.Now()}
+	v.kb[c.ID] = r
+
+	go r.Record()
+
+	return nil
+}
+
+func (v *vncRecorder) RecordFB(vm *KvmVM, filename string) error {
+	v.Lock()
+	defer v.Unlock()
+
+	// is this vm already being recorded?
+	if _, ok := v.fb[vm.Name]; ok {
+		return fmt.Errorf("fb recording for %v already running", vm.Name)
+	}
+
+	c, err := NewVNCClient(vm)
+	if err != nil {
+		return err
+	}
+
+	c.file, err = os.Create(filename)
+	if err != nil {
+		return err
+	}
+
+	c.Conn, err = vnc.Dial(c.Rhost)
+	if err != nil {
+		return err
+	}
+
+	r := &vncFBRecord{c}
+	v.fb[c.ID] = r
+
+	go r.Record()
+
+	return nil
+}
+
+// Route records a message for the correct recording based on the VM
+func (v *vncRecorder) Route(vm VM, msg interface{}) {
+	v.RLock()
+	defer v.RUnlock()
+
+	if r, ok := v.kb[vm.GetName()]; ok {
+		r.RecordMessage(msg)
+	}
+}
+
+// Clear stops all recordings
+func (v *vncRecorder) Clear() {
+	v.Lock()
+	defer v.Unlock()
+
+	for k, r := range v.kb {
+		log.Debug("stopping kb recording for %v", k)
+		if err := r.Stop(); err != nil {
+			log.Error("%v", err)
+		}
+
+		delete(v.kb, k)
+	}
+
+	for k, r := range v.fb {
+		log.Debug("stopping fb recording for %v", k)
+		if err := r.Stop(); err != nil {
+			log.Error("%v", err)
+		}
+
+		delete(v.fb, k)
+	}
 }
 
 // RecordMessage records a VNC client-to-server message in plaintext
@@ -134,111 +225,4 @@ func (v *vncFBRecord) Record() {
 
 		time.Sleep(100 * time.Millisecond)
 	}
-}
-
-func vncRecordKB(vm *KvmVM, filename string) error {
-	vncRecordingLock.Lock()
-	defer vncRecordingLock.Unlock()
-
-	// is this namespace:vm already being recorded?
-	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
-	if _, ok := vncKBRecording[id]; ok {
-		return fmt.Errorf("kb recording for %v already running", vm.Name)
-	}
-
-	c, err := NewVNCClient(vm)
-	if err != nil {
-		return err
-	}
-
-	c.file, err = os.Create(filename)
-	if err != nil {
-		return err
-	}
-
-	r := &vncKBRecord{vncClient: c, last: time.Now()}
-	vncKBRecording[c.ID] = r
-
-	go r.Record()
-
-	return nil
-}
-
-func vncRecordFB(vm *KvmVM, filename string) error {
-	vncRecordingLock.Lock()
-	defer vncRecordingLock.Unlock()
-
-	// is this namespace:vm already being recorded?
-	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
-	if _, ok := vncFBRecording[id]; ok {
-		return fmt.Errorf("fb recording for %v already running", vm.Name)
-	}
-
-	c, err := NewVNCClient(vm)
-	if err != nil {
-		return err
-	}
-
-	c.file, err = os.Create(filename)
-	if err != nil {
-		return err
-	}
-
-	c.Conn, err = vnc.Dial(c.Rhost)
-	if err != nil {
-		return err
-	}
-
-	r := &vncFBRecord{c}
-	vncFBRecording[c.ID] = r
-
-	go r.Record()
-
-	return nil
-}
-
-// vncRoute records a message for the correct recording based on ID
-func vncRoute(ID string, msg interface{}) {
-	vncRecordingLock.RLock()
-	defer vncRecordingLock.RUnlock()
-
-	if r, ok := vncKBRecording[ID]; ok {
-		r.RecordMessage(msg)
-	}
-}
-
-// Returns the duration of a given kbrecording file
-func getDuration(filename string) time.Duration {
-	d := 0
-
-	f, _ := os.Open(filename)
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		s := strings.SplitN(scanner.Text(), ":", 2)
-		// Ignore blank and malformed lines
-		if len(s) != 2 {
-			log.Debug("malformed vnc statement: %s", scanner.Text())
-			continue
-		}
-
-		// Ignore comments in the vnc file
-		if s[0] == "#" {
-			continue
-		}
-
-		i, err := strconv.Atoi(s[0])
-		if err != nil {
-			log.Errorln(err)
-			return 0
-		}
-		d += i
-	}
-
-	duration, err := time.ParseDuration(strconv.Itoa(d) + "ns")
-	if err != nil {
-		log.Errorln(err)
-		return 0
-	}
-
-	return duration
 }

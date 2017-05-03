@@ -81,7 +81,7 @@ func iomeshageInit(node *meshage.Node) {
 	}
 }
 
-func cliFile(c *minicli.Command, resp *minicli.Response) error {
+func cliFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["get"] {
 		return iom.Get(c.StringArgs["file"])
 	} else if c.BoolArgs["delete"] {

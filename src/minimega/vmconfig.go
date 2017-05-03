@@ -203,7 +203,8 @@ func (net NetConfig) String() (s string) {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, printVLAN(net.VLAN))
+	// TODO: mmmga
+	parts = append(parts, printVLAN("", net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)

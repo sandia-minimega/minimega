@@ -49,8 +49,6 @@ var (
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
 
-	vms = VMs{}
-
 	hostname string
 	reserved = []string{Wildcard}
 
@@ -207,6 +205,10 @@ func main() {
 	ccStart()
 	commandSocketStart()
 
+	// has to happen after meshageNode is created
+	GetOrCreateNamespace("minimega")
+	SetNamespace("minimega")
+
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -251,15 +253,14 @@ func teardownf(format string, args ...interface{}) {
 }
 
 func teardown() {
-	// Clear namespace so that we hit all the VMs
-	SetNamespace("")
+	// TODO: mmmga -- need to loop through all namespaces and do stuff in each
 
-	clearAllCaptures()
-	vncClear()
+	//clearAllCaptures()
+	//vncClear()
 	dnsmasqKillAll()
 
-	vms.Kill(Wildcard)
-	vms.Flush()
+	//vms.Kill(Wildcard)
+	//vms.Flush()
 
 	ksmDisable()
 	containerTeardown()

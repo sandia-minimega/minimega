@@ -325,7 +325,7 @@ func PermStrings(source []string) []string {
 //
 //	bridge,vlan,mac,driver
 // If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(spec string) (res NetConfig, err error) {
+func processVMNet(namespace, spec string) (res NetConfig, err error) {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(spec, ",")
 
@@ -367,7 +367,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
 
-	vlan, err := lookupVLAN(v)
+	vlan, err := lookupVLAN(namespace, v)
 	if err != nil {
 		return NetConfig{}, err
 	}
@@ -399,9 +399,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // lookupVLAN uses the allocatedVLANs and active namespace to turn a string
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
-func lookupVLAN(alias string) (int, error) {
-	namespace := GetNamespaceName()
-
+func lookupVLAN(namespace, alias string) (int, error) {
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
@@ -450,9 +448,7 @@ func lookupVLAN(alias string) (int, error) {
 }
 
 // printVLAN uses the allocatedVLANs and active namespace to print a vlan.
-func printVLAN(vlan int) string {
-	namespace := GetNamespaceName()
-
+func printVLAN(namespace string, vlan int) string {
 	return allocatedVLANs.PrintVLAN(namespace, vlan)
 }
 

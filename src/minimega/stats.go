@@ -82,14 +82,14 @@ func (s *HostStats) IsFull() bool {
 	return s.Limit != 0 && s.VMs >= s.Limit
 }
 
-func (h *HostStats) Populate(v string) error {
+func (h *HostStats) Populate(ns *Namespace, v string) error {
 	switch v {
 	case "bandwidth":
 		h.RxBps, h.TxBps = bridges.BandwidthStats()
 	case "cpus":
 		h.CPUs = runtime.NumCPU()
 	case "cpucommit":
-		h.CPUCommit = vms.CPUCommit()
+		h.CPUCommit = ns.CPUCommit()
 	case "load":
 		load, err := ioutil.ReadFile("/proc/loadavg")
 		if err != nil {
@@ -106,7 +106,7 @@ func (h *HostStats) Populate(v string) error {
 		h.Load = strings.Join(f[0:3], " ")
 		return nil
 	case "memcommit":
-		h.MemCommit = vms.MemCommit()
+		h.MemCommit = ns.MemCommit()
 	case "memtotal", "memused":
 		total, used, err := hostStatsMemory()
 		h.MemTotal = total
@@ -115,9 +115,9 @@ func (h *HostStats) Populate(v string) error {
 	case "name":
 		h.Name = hostname
 	case "netcommit":
-		h.NetworkCommit = vms.NetworkCommit()
+		h.NetworkCommit = ns.NetworkCommit()
 	case "vms":
-		h.VMs = vms.Count()
+		h.VMs = ns.VMs.Count()
 	case "uptime":
 		data, err := ioutil.ReadFile("/proc/uptime")
 		if err != nil {
@@ -181,7 +181,7 @@ var hostInfoKeys = []string{
 	"cpucommit", "memcommit", "netcommit",
 }
 
-func cliHost(c *minicli.Command, resp *minicli.Response) error {
+func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	stats := HostStats{
 		Name: hostname,
 	}
@@ -189,7 +189,7 @@ func cliHost(c *minicli.Command, resp *minicli.Response) error {
 
 	// If they selected one of the fields to display
 	for k := range c.BoolArgs {
-		if err := stats.Populate(k); err != nil {
+		if err := stats.Populate(ns, k); err != nil {
 			return err
 		}
 
@@ -202,7 +202,7 @@ func cliHost(c *minicli.Command, resp *minicli.Response) error {
 
 	row := []string{}
 	for _, k := range resp.Header {
-		if err := stats.Populate(k); err != nil {
+		if err := stats.Populate(ns, k); err != nil {
 			return err
 		}
 

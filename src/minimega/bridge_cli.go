@@ -110,11 +110,16 @@ Note: bridge is not a namespace-aware command.`,
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
+func cliHostTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["create"] {
 		b := c.StringArgs["bridge"]
 
-		tap, err := hostTapCreate(b, c.StringArgs["tap"], c.StringArgs["vlan"])
+		vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
+		}
+
+		tap, err := hostTapCreate(b, c.StringArgs["tap"], vlan)
 		if err != nil {
 			return err
 		}
@@ -141,37 +146,38 @@ func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
 
 		if err != nil {
 			// One of the above cases failed, try to clean up the tap
-			if err := hostTapDelete(tap); err != nil {
-				// Welp, we're boned
-				log.Error("zombie tap -- %v %v", tap, err)
+			br, err := getBridge(b)
+			if err == nil {
+				err = br.DestroyTap(tap)
 			}
-
+			if err != nil {
+				// Welp, we're boned
+				log.Error("zombie host tap -- %v %v", tap, err)
+			}
 			return err
 		}
-		// Success!
-		if ns := GetNamespace(); ns != nil {
-			// TODO: probably need lock...
-			ns.Taps[tap] = true
-		}
+
+		// need lock?
+		ns.Taps[tap] = true
 
 		resp.Response = tap
 
 		return nil
 	} else if c.BoolArgs["delete"] {
-		return hostTapDelete(c.StringArgs["id"])
+		return hostTapDelete(ns, c.StringArgs["id"])
 	}
 
 	// Must be the list command
-	hostTapList(resp)
+	hostTapList(ns, resp)
 
 	return nil
 }
 
-func cliHostTapClear(c *minicli.Command, resp *minicli.Response) error {
-	return hostTapDelete(Wildcard)
+func cliHostTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return hostTapDelete(ns, Wildcard)
 }
 
-func cliBridge(c *minicli.Command, resp *minicli.Response) error {
+func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
 
@@ -204,7 +210,7 @@ func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	for _, info := range bridges.Info() {
 		vlans := []string{}
 		for k, _ := range info.VLANs {
-			vlans = append(vlans, printVLAN(k))
+			vlans = append(vlans, printVLAN(ns.Name, k))
 		}
 		sort.Strings(vlans)
 

@@ -123,7 +123,7 @@ See "help cc" for more information.`,
 }
 
 // Functions pointers to the various handlers for the subcommands
-var ccCliSubHandlers = map[string]func(*minicli.Command, *minicli.Response) error{
+var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"background": cliCCBackground,
 	"clients":    cliCCClients,
 	"commands":   cliCCCommand,
@@ -140,7 +140,7 @@ var ccCliSubHandlers = map[string]func(*minicli.Command, *minicli.Response) erro
 	"tunnel":     cliCCTunnel,
 }
 
-func cliCC(c *minicli.Command, resp *minicli.Response) error {
+func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Ensure that cc is running before proceeding
 	if ccNode == nil {
 		return errors.New("cc service not running")
@@ -151,7 +151,7 @@ func cliCC(c *minicli.Command, resp *minicli.Response) error {
 		for k, fn := range ccCliSubHandlers {
 			if c.BoolArgs[k] {
 				log.Debug("cc handler %v", k)
-				return fn(c, resp)
+				return fn(ns, c, resp)
 			}
 		}
 
@@ -172,7 +172,7 @@ func cliCC(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // prefix
-func cliCCPrefix(c *minicli.Command, resp *minicli.Response) error {
+func cliCCPrefix(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if prefix, ok := c.StringArgs["prefix"]; ok {
 		ccPrefix = prefix
 		return nil
@@ -183,7 +183,7 @@ func cliCCPrefix(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // tunnel
-func cliCCTunnel(c *minicli.Command, resp *minicli.Response) error {
+func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	src, err := strconv.Atoi(c.StringArgs["src"])
 	if err != nil {
 		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
@@ -204,7 +204,7 @@ func cliCCTunnel(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // responses
-func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
+func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	raw := c.BoolArgs["raw"]
 	id := c.StringArgs["id"]
 
@@ -220,7 +220,7 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 		// active, check whether the VM is part of the active namespace. This
 		// is a fairly naive way to filter the responses...
 		if namespace != "" && isUUID(info.Name()) {
-			if vm := vms.FindVM(info.Name()); vm == nil {
+			if vm := ns.FindVM(info.Name()); vm == nil {
 				log.Debug("skipping VM: %v", info.Name())
 				return filepath.SkipDir
 			}
@@ -284,7 +284,7 @@ func cliCCResponses(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // filter
-func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
+func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.ListArgs["filter"]) > 0 {
 		filter := &ron.Filter{}
 
@@ -366,7 +366,7 @@ func cliCCFilter(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // send
-func cliCCFileSend(c *minicli.Command, resp *minicli.Response) error {
+func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
 		Filter: ccGetFilter(),
 	}
@@ -418,7 +418,7 @@ func cliCCFileSend(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // recv
-func cliCCFileRecv(c *minicli.Command, resp *minicli.Response) error {
+func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
 		Filter: ccGetFilter(),
 	}
@@ -439,7 +439,7 @@ func cliCCFileRecv(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // background (just exec with background==true)
-func cliCCBackground(c *minicli.Command, resp *minicli.Response) error {
+func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
 
 	cmd := &ron.Command{
@@ -472,7 +472,7 @@ func ccProcessKill(pid int) {
 	ccMapPrefix(id)
 }
 
-func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
+func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
 		ccProcessKill(-1)
@@ -491,7 +491,7 @@ func cliCCProcessKill(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliCCProcessKillAll(c *minicli.Command, resp *minicli.Response) error {
+func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	cmd := &ron.Command{
 		KillAll: c.StringArgs["name"],
 		Filter:  ccGetFilter(),
@@ -506,11 +506,11 @@ func cliCCProcessKillAll(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // process
-func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
+func cliCCProcess(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["kill"] {
-		return cliCCProcessKill(c, resp)
+		return cliCCProcessKill(ns, c, resp)
 	} else if c.BoolArgs["killall"] {
-		return cliCCProcessKillAll(c, resp)
+		return cliCCProcessKillAll(ns, c, resp)
 	}
 
 	// list processes
@@ -525,7 +525,7 @@ func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 		}
 	} else {
 		// get the vm uuid
-		vm := vms.FindVM(v)
+		vm := ns.FindVM(v)
 		if vm == nil {
 			return vmNotFound(v)
 		}
@@ -535,7 +535,7 @@ func cliCCProcess(c *minicli.Command, resp *minicli.Response) error {
 
 	resp.Header = []string{"name", "uuid", "pid", "command"}
 	for _, uuid := range activeVms {
-		vm := vms.FindVM(uuid)
+		vm := ns.FindVM(uuid)
 		if vm == nil {
 			return vmNotFound(v)
 		}
@@ -585,7 +585,7 @@ func ccCommandPreProcess(c []string) (stdin, stdout, stderr string, command []st
 }
 
 // exec
-func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
+func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
 
 	cmd := &ron.Command{
@@ -604,7 +604,7 @@ func cliCCExec(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliCCLog(c *minicli.Command, resp *minicli.Response) error {
+func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// search for level in BoolArgs, we know that one of the BoolArgs will
 	// parse without error thanks to minicli.
 	var level log.Level
@@ -629,23 +629,12 @@ func cliCCLog(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // clients
-func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
-	namespace := GetNamespaceName()
-
+func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"uuid", "hostname", "arch", "os",
-		"ip", "mac",
-	}
-
-	if namespace == "" {
-		resp.Header = append(resp.Header, "namespace")
+		"uuid", "hostname", "arch", "os", "ip", "mac",
 	}
 
 	for _, c := range ccNode.GetActiveClients() {
-		if namespace != "" && namespace != c.Namespace {
-			continue
-		}
-
 		row := []string{
 			c.UUID,
 			c.Hostname,
@@ -655,10 +644,6 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 			fmt.Sprintf("%v", c.MACs),
 		}
 
-		if namespace == "" {
-			row = append(row, c.Namespace)
-		}
-
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
@@ -666,7 +651,7 @@ func cliCCClients(c *minicli.Command, resp *minicli.Response) error {
 }
 
 // command
-func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
+func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"id", "prefix", "command", "responses", "background",
 		"sent", "received", "level", "filter",
@@ -711,7 +696,7 @@ func cliCCCommand(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliCCDelete(c *minicli.Command, resp *minicli.Response) error {
+func cliCCDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["command"] {
 		id := c.StringArgs["id"]
 
@@ -796,7 +781,7 @@ func cliCCDelete(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliCCClear(c *minicli.Command, resp *minicli.Response) error {
+func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Ensure that cc is running before proceeding
 	if ccNode == nil {
 		return errors.New("cc service not running")

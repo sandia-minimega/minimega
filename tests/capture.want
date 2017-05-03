@@ -10,10 +10,6 @@
 ## # Start captures in respective namespaces
 ## namespace foo capture pcap vm foo 0 /dev/null
 ## namespace bar capture pcap vm bar 0 /dev/null
-## capture
-Bridge      | type | interface | mode | compress | path      | namespace
-mega_bridge | pcap | bar:0     | N/A  | false    | /dev/null | bar
-mega_bridge | pcap | foo:0     | N/A  | false    | /dev/null | foo
 ## namespace foo capture
 Bridge      | type | interface | mode | compress | path
 mega_bridge | pcap | foo:0     | N/A  | false    | /dev/null
@@ -23,9 +19,6 @@ mega_bridge | pcap | bar:0     | N/A  | false    | /dev/null
 
 ## # Make sure we only clear the capture in foo namespace
 ## namespace foo clear capture
-## capture
-Bridge      | type | interface | mode | compress | path      | namespace
-mega_bridge | pcap | bar:0     | N/A  | false    | /dev/null | bar
 ## namespace foo capture
 ## namespace bar capture
 Bridge      | type | interface | mode | compress | path
@@ -40,23 +33,27 @@ mega_bridge | pcap | bar:0     | N/A  | false    | /dev/null
 ## namespace foo capture pcap vm car 0 /dev/null
 ## namespace bar capture pcap vm car 0 /dev/null
 ## namespace bar capture pcap vm car 0 /dev/null
-## capture
-Bridge      | type | interface | mode | compress | path      | namespace
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | bar
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | bar
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | foo
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | foo
+## namespace foo capture
+Bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
+## namespace bar capture
+Bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
 
 ## # Delete a capture in one namespace but not the other
 ## namespace foo capture pcap delete vm car
-## capture
-Bridge      | type | interface | mode | compress | path      | namespace
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | bar
-mega_bridge | pcap | car:0     | N/A  | false    | /dev/null | bar
+## namespace foo capture
+## namespace bar capture
+Bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
+mega_bridge | pcap | car:0     | N/A  | false    | /dev/null
 
 ## # Delete all captures in the other namespace
 ## namespace bar capture pcap delete vm all
-## capture
+## namespace foo capture
+## namespace bar capture
 
 ## # Try some things that shouldn't work
 ## namespace foo capture pcap vm car 1 /dev/null

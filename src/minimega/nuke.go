@@ -41,7 +41,7 @@ Should be run with caution.`,
 //  	kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 //  exit()
-func cliNuke(c *minicli.Command, resp *minicli.Response) error {
+func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// nuke any container related items
 	containerNuke()
 
@@ -99,10 +99,11 @@ func nukeTaps(taps []string) {
 // Similar to teardown(), but designed to be called from nuke
 func nukeState() {
 	goreadline.Rlcleanup()
-	vncClear()
-	clearAllCaptures()
 	ksmDisable()
-	vms.CleanDirs()
+
+	// TODO: mmmga why?
+	//clearAllCaptures()
+	//vncClear()
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include

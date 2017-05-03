@@ -100,11 +100,12 @@ func ccClear(what string) (err error) {
 				return err
 			}
 
-			if vm := vms.FindVM(info.Name()); vm == nil {
-				log.Debug("skipping VM: %v", info.Name())
-			} else if err := os.RemoveAll(path); err != nil {
-				return err
-			}
+			// TODO: mmmga
+			//if vm := vms.FindVM(info.Name()); vm == nil {
+			//	log.Debug("skipping VM: %v", info.Name())
+			//} else if err := os.RemoveAll(path); err != nil {
+			//	return err
+			//}
 
 			return filepath.SkipDir
 		}

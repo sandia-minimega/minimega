@@ -497,10 +497,12 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
-	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	go func() {
 		defer l.Close()
+
+		// should never create...
+		ns := GetOrCreateNamespace(vm.Namespace)
 
 		for {
 			// Sit waiting for new connections
@@ -512,7 +514,7 @@ func (vm *KvmVM) connectVNC() error {
 				return
 			}
 
-			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), ns)
+			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), vm.Name)
 
 			go func() {
 				defer remote.Close()
@@ -533,13 +535,13 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
-						vncRoute(ns, msg)
+						ns.vncRecorder.Route(vm, msg)
 						continue
 					}
 
 					// shim is no longer connected
 					if err == io.EOF || strings.Contains(err.Error(), "broken pipe") {
-						log.Info("vnc shim quit: %v", ns)
+						log.Info("vnc shim quit: %v", vm.Name)
 						break
 					}
 

@@ -10,34 +10,34 @@ namespace bar vm launch
 # Start captures in respective namespaces
 namespace foo capture pcap vm foo 0 /dev/null
 namespace bar capture pcap vm bar 0 /dev/null
-capture
 namespace foo capture
 namespace bar capture
 
 # Make sure we only clear the capture in foo namespace
 namespace foo clear capture
-capture
 namespace foo capture
 namespace bar capture
 
-# Clear out all captures
-clear capture
-capture
+# Clear remaining captures
+namespace bar clear capture
 
 # Capture VMs with same names in different namespaces
 namespace foo capture pcap vm car 0 /dev/null
 namespace foo capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
-capture
+namespace foo capture
+namespace bar capture
 
 # Delete a capture in one namespace but not the other
 namespace foo capture pcap delete vm car
-capture
+namespace foo capture
+namespace bar capture
 
 # Delete all captures in the other namespace
 namespace bar capture pcap delete vm all
-capture
+namespace foo capture
+namespace bar capture
 
 # Try some things that shouldn't work
 namespace foo capture pcap vm car 1 /dev/null

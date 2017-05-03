@@ -45,6 +45,18 @@ type Namespace struct {
 
 	// How to determine which host is least loaded
 	HostSortBy string
+
+	VMs // embed VMs for this namespace
+
+	vmConfig      VMConfig
+	savedVMConfig map[string]VMConfig
+
+	captures // embed captures for this namespace
+
+	routers map[int]*Router
+
+	vncRecorder // embed vnc recorder for this namespace
+	vncPlayer   // embed vnc player for this namespace
 }
 
 var (
@@ -52,6 +64,50 @@ var (
 	namespaces    = map[string]*Namespace{}
 	namespaceLock sync.Mutex
 )
+
+func NewNamespace(name string) *Namespace {
+	log.Info("creating new namespace -- `%v`", name)
+
+	ns := &Namespace{
+		Name:       name,
+		Hosts:      map[string]bool{},
+		Taps:       map[string]bool{},
+		vmID:       NewCounter(),
+		HostSortBy: "cpucommit",
+		VMs: VMs{
+			m: make(map[int]VM),
+		},
+		routers: make(map[int]*Router),
+		captures: captures{
+			m: make(map[int]*capture),
+		},
+		vncRecorder: vncRecorder{
+			kb: make(map[string]*vncKBRecord),
+			fb: make(map[string]*vncFBRecord),
+		},
+		vncPlayer: vncPlayer{
+			m: make(map[string]*vncKBPlayback),
+		},
+		vmConfig:      NewVMConfig(),
+		savedVMConfig: make(map[string]VMConfig),
+	}
+
+	// By default, every mesh-reachable node is part of the namespace
+	// except for the local node which is typically the "head" node.
+	for _, host := range meshageNode.BroadcastRecipients() {
+		ns.Hosts[host] = true
+	}
+
+	// If there aren't any other nodes in the mesh, assume that minimega is
+	// running in a single host environment and that we want to launch VMs
+	// on localhost.
+	if len(ns.Hosts) == 0 {
+		log.Info("no meshage peers, adding localhost to the namespace")
+		ns.Hosts[hostname] = true
+	}
+
+	return ns
+}
 
 func (n Namespace) String() string {
 	return n.Name
@@ -104,42 +160,55 @@ func (n Namespace) hostSlice() []string {
 	return hosts
 }
 
-func (n Namespace) AddTap(tap string) {
-	n.Taps[tap] = true
-}
-
-func (n Namespace) HasTap(tap string) bool {
-	return n.Taps[tap]
-}
-
-func (n Namespace) RemoveTap(tap string) {
-	delete(n.Taps, tap)
-}
-
 // Queue handles storing the current VM config to the namespace's queued VMs so
 // that we can launch it in the future.
 func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
-	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
-	// call globalVMs instead of GlobalVMs).
-	names, err := expandLaunchNames(arg, globalVMs())
+	names, err := expandLaunchNames(arg)
 	if err != nil {
 		return err
 	}
 
-	// Create a map so that we can look up existence in constant time
-	namesMap := map[string]bool{}
-	for _, name := range names {
-		namesMap[name] = true
+	if len(names) > 1 && vmConfig.UUID != "" {
+		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
-	delete(namesMap, "") // delete unconfigured name
 
-	// Extra check for name collisions -- look in the already queued VMs
+	// look for name and UUID conflicts across the namespace
+	takenName := map[string]bool{}
+	takenUUID := map[string]bool{}
+
+	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
+	// call globalVMs instead of GlobalVMs).
+	for _, vm := range globalVMs() {
+		takenName[vm.GetName()] = true
+		takenUUID[vm.GetUUID()] = true
+	}
+
+	for _, name := range names {
+		if takenName[name] {
+			return fmt.Errorf("vm already exists with name `%s`", name)
+		}
+	}
+
+	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
+		return fmt.Errorf("vm already exists with UUID `%s`", vmConfig.UUID)
+	}
+
+	// add in all the queued VM names and then recheck
 	for _, q := range n.queue {
 		for _, name := range q.Names {
-			if namesMap[name] {
-				return fmt.Errorf("vm already queued with name `%s`", name)
-			}
+			takenName[name] = true
 		}
+		takenUUID[q.VMConfig.UUID] = true
+	}
+
+	for _, name := range names {
+		if takenName[name] && name != "" {
+			return fmt.Errorf("vm already queued with name `%s`", name)
+		}
+	}
+
+	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
+		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
 	}
 
 	n.queue = append(n.queue, &QueuedVMs{
@@ -269,7 +338,7 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 	// Launching the VMs locally
 	if host == hostname {
 		errs := []error{}
-		for err := range vms.Launch(n.Name, queued) {
+		for err := range n.VMs.Launch(n.Name, queued) {
 			errs = append(errs, err)
 		}
 
@@ -310,31 +379,7 @@ func GetOrCreateNamespace(name string) *Namespace {
 	defer namespaceLock.Unlock()
 
 	if _, ok := namespaces[name]; !ok {
-		log.Info("creating new namespace -- `%v`", name)
-
-		ns := &Namespace{
-			Name:       name,
-			Hosts:      map[string]bool{},
-			Taps:       map[string]bool{},
-			vmID:       NewCounter(),
-			HostSortBy: "cpucommit",
-		}
-
-		// By default, every mesh-reachable node is part of the namespace
-		// except for the local node which is typically the "head" node.
-		for _, host := range meshageNode.BroadcastRecipients() {
-			ns.Hosts[host] = true
-		}
-
-		// If there aren't any other nodes in the mesh, assume that minimega is
-		// running in a single host environment and that we want to launch VMs
-		// on localhost.
-		if len(ns.Hosts) == 0 {
-			log.Info("no meshage peers, adding localhost to the namespace")
-			ns.Hosts[hostname] = true
-		}
-
-		namespaces[name] = ns
+		namespaces[name] = NewNamespace(name)
 	}
 
 	return namespaces[name]
@@ -400,11 +445,15 @@ func DestroyNamespace(name string) error {
 		// If we're deleting the currently active namespace, we should get out of
 		// that namespace
 		if namespace == name {
-			log.Info("active namespace destroyed, deactivating namespaces")
-			namespace = ""
+			log.Info("active namespace destroyed, switching to default namespace")
+			namespace = "minimega"
 		}
 
 		delete(namespaces, n)
+		if n == "minimega" {
+			// recreate automatically
+			namespaces[n] = NewNamespace(n)
+		}
 	}
 
 	if !found && name != Wildcard {

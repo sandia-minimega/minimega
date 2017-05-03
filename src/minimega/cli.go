@@ -37,7 +37,7 @@ var (
 	cmdLock sync.Mutex
 )
 
-type CLIFunc func(*minicli.Command) *minicli.Response
+type wrappedCLIFunc func(*Namespace, *minicli.Command, *minicli.Response) error
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
@@ -84,12 +84,15 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
-func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapSimpleCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ns := GetNamespace()
+
 		resp := &minicli.Response{Host: hostname}
-		if err := fn(c, resp); err != nil {
+		if err := fn(ns, c, resp); err != nil {
 			resp.Error = err.Error()
 		}
+
 		respChan <- minicli.Responses{resp}
 	}
 }
@@ -107,7 +110,7 @@ func errResp(err error) minicli.Responses {
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
-func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapBroadcastCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
@@ -163,7 +166,7 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 
 // wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
 // or more VMs. This is used by commands like `vm start` and `vm kill`.
-func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapVMTargetCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 

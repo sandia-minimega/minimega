@@ -18,10 +18,6 @@ import (
 	"text/tabwriter"
 )
 
-var (
-	routers map[int]*Router = make(map[int]*Router)
-)
-
 type Router struct {
 	vm           VM
 	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
@@ -47,6 +43,43 @@ type dhcp struct {
 	router string
 	dns    string
 	static map[string]string
+}
+
+// Create a new router for vm, or returns an existing router if it already
+// exists
+func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
+	log.Debug("FindOrCreateRouter: %v", vm)
+
+	id := vm.GetID()
+	if r, ok := ns.routers[id]; ok {
+		return r
+	}
+	r := &Router{
+		vm:           vm,
+		IPs:          [][]string{},
+		logLevel:     "error",
+		dhcp:         make(map[string]*dhcp),
+		dns:          make(map[string][]string),
+		rad:          make(map[string]bool),
+		staticRoutes: make(map[string]string),
+		ospfRoutes:   make(map[string]*ospf),
+	}
+	nets := vm.GetNetworks()
+	for i := 0; i < len(nets); i++ {
+		r.IPs = append(r.IPs, []string{})
+	}
+
+	ns.routers[id] = r
+
+	vm.SetTag("minirouter", fmt.Sprintf("%v", id))
+
+	return r
+}
+
+// FindRouter returns an existing router if it exists, otherwise nil
+func (ns *Namespace) FindRouter(vm VM) *Router {
+	id := vm.GetID()
+	return ns.routers[id]
 }
 
 func (r *Router) String() string {
@@ -201,43 +234,6 @@ func (r *Router) generateConfig() error {
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
-// Create a new router for vm, or returns an existing router if it already
-// exists
-func FindOrCreateRouter(vm VM) *Router {
-	log.Debug("FindOrCreateRouter: %v", vm)
-
-	id := vm.GetID()
-	if r, ok := routers[id]; ok {
-		return r
-	}
-	r := &Router{
-		vm:           vm,
-		IPs:          [][]string{},
-		logLevel:     "error",
-		dhcp:         make(map[string]*dhcp),
-		dns:          make(map[string][]string),
-		rad:          make(map[string]bool),
-		staticRoutes: make(map[string]string),
-		ospfRoutes:   make(map[string]*ospf),
-	}
-	nets := vm.GetNetworks()
-	for i := 0; i < len(nets); i++ {
-		r.IPs = append(r.IPs, []string{})
-	}
-
-	routers[id] = r
-
-	vm.SetTag("minirouter", fmt.Sprintf("%v", id))
-
-	return r
-}
-
-// FindRouter returns an existing router if it exists, otherwise nil
-func FindRouter(vm VM) *Router {
-	id := vm.GetID()
-	return routers[id]
-}
-
 func (r *Router) Commit() error {
 	log.Debugln("Commit")
 
@@ -272,8 +268,7 @@ func (r *Router) Commit() error {
 	}
 
 	filter := &ron.Filter{
-		Namespace: r.vm.GetNamespace(),
-		UUID:      r.vm.GetUUID(),
+		UUID: r.vm.GetUUID(),
 	}
 
 	// issue cc commands for this router

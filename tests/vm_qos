@@ -2,6 +2,7 @@
 
 vm config net 100
 vm launch kvm vm0
+vm launch
 
 qos add vm0 0 loss 5
 .columns qos vm info

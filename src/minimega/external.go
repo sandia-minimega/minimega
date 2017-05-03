@@ -66,7 +66,7 @@ versions not met.`,
 		Patterns: []string{
 			"check",
 		},
-		Call: wrapSimpleCLI(func(_ *minicli.Command, _ *minicli.Response) error {
+		Call: wrapSimpleCLI(func(_ *Namespace, _ *minicli.Command, _ *minicli.Response) error {
 			return checkExternal()
 		}),
 	},

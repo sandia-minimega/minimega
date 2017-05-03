@@ -40,7 +40,7 @@ Output the current experiment topology as a graphviz readable 'dot' file.`,
 
 // dot returns a graphviz 'dotfile' string representing the experiment topology
 // from the perspective of this node.
-func cliDot(c *minicli.Command, resp *minicli.Response) error {
+func cliDot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Create the file before running any commands incase there is an error
 	fout, err := os.Create(c.StringArgs["filename"])
 	if err != nil {

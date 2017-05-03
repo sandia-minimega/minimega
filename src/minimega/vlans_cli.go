@@ -52,40 +52,36 @@ about managed VLANs is cleared.`,
 	},
 }
 
-var vlansCLISubHandlers = map[string]func(*minicli.Command, *minicli.Response) error{
+var vlansCLISubHandlers = map[string]wrappedCLIFunc{
 	"add":       cliVLANsAdd,
 	"range":     cliVLANsRange,
 	"blacklist": cliVLANsBlacklist,
 }
 
-func cliVLANs(c *minicli.Command, resp *minicli.Response) error {
+func cliVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Look for matching subhandler
 	if len(c.BoolArgs) > 0 {
 		for k, fn := range vlansCLISubHandlers {
 			if c.BoolArgs[k] {
 				log.Debug("vlan handler %v", k)
-				return fn(c, resp)
+				return fn(ns, c, resp)
 			}
 		}
 	}
 
-	namespace := GetNamespaceName()
-
 	// No match, must want to just print
 	resp.Header = []string{"namespace", "alias", "vlan"}
-	resp.Tabular = allocatedVLANs.Tabular(namespace)
+	resp.Tabular = allocatedVLANs.Tabular(ns.Name)
 
 	return nil
 }
 
-func cliVLANsAdd(c *minicli.Command, resp *minicli.Response) error {
-	namespace := GetNamespaceName()
-
+func cliVLANsAdd(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Prepend `<namespace>//` if it doesn't look like the user already
 	// included it.
 	alias := c.StringArgs["alias"]
 	if !strings.Contains(alias, vlans.AliasSep) {
-		alias = namespace + vlans.AliasSep + alias
+		alias = ns.Name + vlans.AliasSep + alias
 	}
 
 	vlan, err := strconv.Atoi(c.StringArgs["vlan"])
@@ -96,9 +92,7 @@ func cliVLANsAdd(c *minicli.Command, resp *minicli.Response) error {
 	return allocatedVLANs.AddAlias(alias, vlan)
 }
 
-func cliVLANsRange(c *minicli.Command, resp *minicli.Response) error {
-	namespace := GetNamespaceName()
-
+func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["min"] != "" && c.StringArgs["max"] != "" {
 		min, err := strconv.Atoi(c.StringArgs["min"])
 		max, err2 := strconv.Atoi(c.StringArgs["max"])
@@ -109,7 +103,7 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) error {
 			return errors.New("expected min > max")
 		}
 
-		return allocatedVLANs.SetRange(namespace, min, max)
+		return allocatedVLANs.SetRange(ns.Name, min, max)
 	}
 
 	// Must want to display the ranges
@@ -117,7 +111,7 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) error {
 	resp.Tabular = [][]string{}
 
 	for prefix, r := range allocatedVLANs.GetRanges() {
-		if namespace != "" && namespace != prefix {
+		if ns.Name != prefix {
 			continue
 		}
 
@@ -133,7 +127,7 @@ func cliVLANsRange(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVLANsBlacklist(c *minicli.Command, resp *minicli.Response) error {
+func cliVLANsBlacklist(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if v := c.StringArgs["vlan"]; v != "" {
 		vlan, err := strconv.Atoi(v)
 		if err != nil {
@@ -158,20 +152,13 @@ func cliVLANsBlacklist(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliClearVLANs(c *minicli.Command, resp *minicli.Response) error {
-	namespace := GetNamespaceName()
-
+func cliClearVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	prefix := c.StringArgs["prefix"]
-	if namespace != "" {
-		prefix = namespace + vlans.AliasSep + prefix
+	if ns.Name != "" {
+		prefix = ns.Name + vlans.AliasSep + prefix
 	}
 
-	if prefix == "" {
-		// Clearing everything
-		allocatedVLANs = vlans.NewAllocatedVLANs()
-	} else {
-		allocatedVLANs.Delete(namespace, prefix)
-	}
+	allocatedVLANs.Delete(ns.Name, prefix)
 
 	return nil
 }
@@ -181,7 +168,8 @@ func cliClearVLANs(c *minicli.Command, resp *minicli.Response) error {
 // current namespace (completes across namespaces if prefix includes
 // vlans.AliasSep).
 func cliVLANSuggest(prefix string) []string {
-	namespace := GetNamespaceName()
+	// TODO: mmmga
+	namespace := ""
 
 	if !strings.Contains(prefix, vlans.AliasSep) && namespace != "" {
 		prefix = namespace + vlans.AliasSep + prefix

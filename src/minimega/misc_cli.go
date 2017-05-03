@@ -109,7 +109,7 @@ namespace even if one is active.`,
 	},
 }
 
-func cliQuit(c *minicli.Command, resp *minicli.Response) error {
+func cliQuit(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
@@ -129,7 +129,7 @@ func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 	return errors.New("unreachable")
 }
 
-func cliHelp(c *minicli.Command, resp *minicli.Response) error {
+func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
@@ -139,6 +139,7 @@ func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
+// TODO: mmmga
 func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
@@ -203,7 +204,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 }
 
-func cliDebug(c *minicli.Command, resp *minicli.Response) error {
+func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["memory"] {
 		dst := c.StringArgs["file"]
 		if !filepath.IsAbs(dst) {
@@ -265,12 +266,12 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVersion(c *minicli.Command, resp *minicli.Response) error {
+func cliVersion(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
 	return nil
 }
 
-func cliEcho(c *minicli.Command, resp *minicli.Response) error {
+func cliEcho(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = strings.Join(c.ListArgs["args"], " ")
 	return nil
 }

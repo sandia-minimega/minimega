@@ -1,5 +1,6 @@
 # Launch a VM to migrate
 vm launch kvm foo
+vm launch
 
 # Dump migration file
 vm migrate foo foo.migrate
