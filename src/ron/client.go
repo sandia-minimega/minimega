@@ -26,14 +26,13 @@ const (
 )
 
 type Client struct {
-	UUID      string
-	Arch      string
-	OS        string
-	Version   string
-	Hostname  string
-	Namespace string
-	IPs       []string
-	MACs      []string
+	UUID     string
+	Arch     string
+	OS       string
+	Version  string
+	Hostname string
+	IPs      []string
+	MACs     []string
 
 	// Processes that are running in the background
 	Processes map[int]*Process
@@ -71,6 +70,12 @@ type client struct {
 	// client. Should be reset if the command counter is reset.
 	maxCommandID int
 
+	// mangled is true if qemu flipped octets on us
+	mangled bool
+
+	// Namespace for the VM, set during handshake
+	Namespace string
+
 	// pipe readers and writers
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
@@ -104,10 +109,6 @@ func (c *Client) Matches(f *Filter) bool {
 	}
 	if f.OS != "" && f.OS != c.OS {
 		log.Debug("failed match on os: %v != %v", f.OS, c.OS)
-		return false
-	}
-	if f.Namespace != "" && f.Namespace != c.Namespace {
-		log.Debug("failed match on namespace: %v != %v", f.Namespace, c.Namespace)
 		return false
 	}
 
@@ -180,13 +181,13 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	return false
 }
 
-func (c *client) pipeHandler(namespace string, plumber *miniplumber.Plumber, m *Message) {
+func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 	c.pipeLock.Lock()
 	defer c.pipeLock.Unlock()
 
 	pipe := m.Pipe
-	if namespace != "" {
-		pipe = fmt.Sprintf("%v//%v", namespace, m.Pipe)
+	if c.Namespace != "" {
+		pipe = fmt.Sprintf("%v//%v", c.Namespace, m.Pipe)
 	}
 
 	switch m.PipeMode {

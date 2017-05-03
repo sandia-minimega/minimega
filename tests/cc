@@ -23,34 +23,15 @@ shell sleep 10
 .columns uuid,hostname namespace foo cc clients
 .columns uuid,hostname namespace bar cc clients
 
-# run command, wait for clients to check in
-cc exec hostname
-shell sleep 20
-
-# get responses and then clear all
-cc responses all
-clear cc responses
-cc responses all
-
-# run command, wait for clients to check in
-cc exec hostname
-shell sleep 20
-
-# get responses just in one namespace and then clear one namespace
-namespace foo cc responses all
-namespace foo clear cc responses
-namespace foo cc responses all
-cc responses all
-
-# reset
-clear cc responses
-
 # run command in one namespace
 namespace foo cc exec hostname
+namespace bar cc exec hostname
 shell sleep 10
 
-# check response
+# check responses
 cc responses all
+namespace foo cc responses all
+namespace bar cc responses all
 
 # make sure that commands ended up being attributed correctly
 .columns id,responses,filter cc commands
@@ -63,3 +44,7 @@ namespace foo clear cc commands
 # should have no affect
 namespace bar clear cc commands
 .columns id,responses,filter cc commands
+
+# clean up everything
+namespace foo clear cc
+namespace bar clear cc

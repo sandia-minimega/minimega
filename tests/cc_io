@@ -25,3 +25,6 @@ cc exec /bin/ls /tmp/miniccc/files/cc_io.bigfile
 # check results
 shell sleep 5
 cc responses 2
+
+# clean up everything
+clear cc

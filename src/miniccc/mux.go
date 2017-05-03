@@ -49,8 +49,7 @@ func mux() {
 		switch m.Type {
 		case ron.MESSAGE_CLIENT:
 			// ACK of the handshake
-			setNamespace(m.Client.Namespace)
-			log.Info("handshake complete, got namespace %v", m.Client.Namespace)
+			log.Info("handshake complete")
 			go periodic()
 			go commandHandler()
 		case ron.MESSAGE_COMMAND:
@@ -67,14 +66,6 @@ func mux() {
 	}
 
 	log.Info("mux exit: %v", err)
-}
-
-// setNamespace sets the global namespace from the message
-func setNamespace(namespace string) {
-	client.Lock()
-	defer client.Unlock()
-
-	client.Namespace = namespace
 }
 
 func commandHandler() {

@@ -947,7 +947,9 @@ func (vm *ContainerVM) launch() error {
 		// connect cc. Note that we have a local err here because we don't want
 		// to prevent the VM from continuing to launch, even if we can't
 		// connect to cc.
-		if err := ccNode.ListenUnix(ccPath); err != nil {
+		// TODO: mmmga
+		ns := GetOrCreateNamespace(vm.Namespace)
+		if err := ns.ccServer.ListenUnix(ccPath); err != nil {
 			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 		}
 	}
@@ -1040,7 +1042,9 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// cleanup cc domain socket
-		ccNode.CloseUnix(ccPath)
+		// TODO: mmmga
+		ns := GetOrCreateNamespace(vm.Namespace)
+		ns.ccServer.CloseUnix(ccPath)
 
 		vm.unlinkNetns()
 

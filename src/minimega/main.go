@@ -202,12 +202,15 @@ func main() {
 	tapReaperStart()
 	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
 	plumberStart(meshageNode)
-	ccStart()
-	commandSocketStart()
 
 	// has to happen after meshageNode is created
-	GetOrCreateNamespace("minimega")
+	ns := GetOrCreateNamespace("minimega")
 	SetNamespace("minimega")
+	if err := ns.ccServer.Listen(*f_ccPort); err != nil {
+		log.Fatal("unable to listen: %v", err)
+	}
+
+	commandSocketStart()
 
 	// set up signal handling
 	sig := make(chan os.Signal, 1024)

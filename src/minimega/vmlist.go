@@ -362,7 +362,9 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 
 			err := vm.Launch()
 			if err == nil {
-				ccNode.RegisterVM(vm.GetUUID(), vm)
+				// TODO: mmmga
+				ns := GetOrCreateNamespace(vm.GetNamespace())
+				ns.ccServer.RegisterVM(vm)
 			}
 			out <- err
 		}(name)
@@ -471,8 +473,9 @@ func (vms *VMs) Flush() {
 				log.Error("clogged VM: %v", err)
 			}
 
-			// TODO: need to pass ccNode
-			ccNode.UnregisterVM(vm.GetUUID())
+			// TODO: mmmga
+			ns := GetOrCreateNamespace(vm.GetNamespace())
+			ns.ccServer.UnregisterVM(vm)
 
 			delete(vms.m, i)
 		}
