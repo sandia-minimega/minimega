@@ -85,7 +85,8 @@ func NewNamespace(name string) *Namespace {
 		},
 		routers: make(map[int]*Router),
 		captures: captures{
-			m: make(map[int]*capture),
+			m:       make(map[int]*capture),
+			counter: NewCounter(),
 		},
 		vncRecorder: vncRecorder{
 			kb: make(map[string]*vncKBRecord),
@@ -121,6 +122,8 @@ func (n Namespace) String() string {
 }
 
 func (n *Namespace) Destroy() error {
+	log.Info("destroying namespace: %v", n.Name)
+
 	for _, stats := range n.scheduleStats {
 		// TODO: We could kill the scheduler -- that wouldn't be too hard to do
 		// (add a kill channel and close it here). Easier to make the user
@@ -132,6 +135,7 @@ func (n *Namespace) Destroy() error {
 
 	// Stop all captures
 	n.captures.StopAll()
+	n.counter.Stop()
 
 	// Stop VNC record/replay
 	n.vncRecorder.Clear()
@@ -429,6 +433,8 @@ func SetNamespace(name string) error {
 func RevertNamespace(old, curr *Namespace) {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
+
+	log.Info("reverting to namespace: %v", old)
 
 	// This is very odd and should *never* happen unless something has gone
 	// horribly wrong.

@@ -201,13 +201,22 @@ func (c *captures) StopPcapAll() error {
 
 // StopVM stops capture for VM (wildcard supported).
 func (c *captures) StopVM(s, typ string) error {
-	return c.stop(func(v *capture) bool {
+	var found bool
+
+	err := c.stop(func(v *capture) bool {
 		if v.Type != typ || v.VM == nil {
 			return false
 		}
 
-		return v.VM.GetName() == s || s == Wildcard
+		r := v.VM.GetName() == s || s == Wildcard
+		found = r || found
+		return r
 	})
+
+	if err == nil && !found {
+		return vmNotFound(s)
+	}
+	return err
 }
 
 // StopBridge stops capture for bridge (wildcard supported).
