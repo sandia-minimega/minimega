@@ -114,6 +114,7 @@ func runSub(cmd *Command, args []string) {
 	reservation, newSched = FindReservationAfter(subT, subN, when.Unix())
 	reservation.Owner = user.Username
 	reservation.ResName = subR
+	reservation.KernelArgs = subC
 
 	// Add it to the list of reservations
 	Reservations[reservation.ID] = reservation

@@ -17,6 +17,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -54,9 +55,13 @@ type Config struct {
 	Prefix     string
 	Start      int
 	End        int
+	Padlen		int
 	Rackwidth  int
 	Rackheight int
+	PowerOnCommand	string
+	PowerOffCommand	string
 	UseCobbler	bool
+	CobblerDefaultProfile	string
 }
 
 // Represents a slice of time
@@ -75,6 +80,7 @@ type Reservation struct {
 	Duration  float64  // minutes
 	Owner     string
 	ID        uint64
+	KernelArgs	string
 }
 
 // Sort the slice of reservations based on the start time
@@ -105,6 +111,16 @@ func setExitStatus(n int) {
 func housekeeping() {
 	now := time.Now().Unix()
 
+	var cobblerProfiles string
+	if igorConfig.UseCobbler {
+		var err error
+		// Get a list of current profiles
+		cobblerProfiles, err = processWrapper("cobbler", "profile", "list")
+		if err != nil {
+			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
+		}
+	}
+
 	for _, r := range Reservations {
 		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
@@ -122,10 +138,10 @@ func housekeeping() {
 						log.Fatal("failed to create %v -- %v", fname, err)
 					}
 					defer masterfile.Close()
-					masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
-					masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
-					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
-					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
+					masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
 	
 					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 					for _, pxename := range r.PXENames {
@@ -137,6 +153,25 @@ func housekeeping() {
 						}
 						io.Copy(f, masterfile)
 						f.Close()
+					}
+				}
+			} else {
+				// Check if the reservation already exists
+				if !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+					log.Info("Configuring cobbler distro and profile")
+					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
 					}
 				}
 			}

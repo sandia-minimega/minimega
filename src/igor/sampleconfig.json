@@ -3,6 +3,11 @@
 	"prefix" : "kn",
 	"start" : 1,
 	"end" : 20,
+	"padlen" : 0,
 	"rackwidth" : 1,
-	"rackheight" : 20
+	"rackheight" : 20,
+	"usecobbler" : false,
+	"cobblerdefaultprofile": "",
+	"poweroncommand" : "powerbot on",
+	"poweroffcommand" : "powerbot off"
 }

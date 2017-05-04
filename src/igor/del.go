@@ -63,16 +63,17 @@ func deleteReservation(checkUser bool, args []string) {
 	}
 
 	// Now purge it from the schedule
-	for _, s := range Schedule {
-		for i, _ := range s.Nodes {
-			if s.Nodes[i] == deletedReservation.ID {
-				s.Nodes[i] = 0
+	for i, _ := range Schedule {
+		for j, _ := range Schedule[i].Nodes {
+			if Schedule[i].Nodes[j] == deletedReservation.ID {
+				Schedule[i].Nodes[j] = 0
 			}
 		}
 	}
 
 	// Update the reservation file
 	putReservations()
+	putSchedule()
 
 	if !igorConfig.UseCobbler {
 		// Delete all the PXE files in the reservation
@@ -81,6 +82,12 @@ func deleteReservation(checkUser bool, args []string) {
 		}
 	
 		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
+	} else {
+		for _, host := range deletedReservation.Hosts {
+			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
+			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
+		}
 	}
 
 	// Delete the now unused kernel + initrd

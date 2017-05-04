@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	log "minilog"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -89,7 +90,8 @@ func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 					// Mark those nodes reserved
 					for k := b; k < b+nodecount; k++ {
 						newSched[i+j].Nodes[k] = res.ID
-						nodenames = append(nodenames, fmt.Sprintf("%s%d", igorConfig.Prefix, igorConfig.Start+k))
+						fmtstring := "%s%0"+strconv.Itoa(igorConfig.Padlen)+"d"
+						nodenames = append(nodenames, fmt.Sprintf(fmtstring, igorConfig.Prefix, igorConfig.Start+k))
 					}
 				}
 			}
