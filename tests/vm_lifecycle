@@ -1,5 +1,4 @@
 vm launch kvm foo[0-2]
-vm launch
 .columns name,state vm info
 vm start foo0
 .columns name,state vm info

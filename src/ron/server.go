@@ -200,7 +200,10 @@ func (s *Server) DialSerial(path string) error {
 	go func() {
 		c, err := s.handshake(conn)
 		if err != nil {
-			log.Error("handshake failed: %v", err)
+			if err != io.EOF {
+				// supress these, VM was probably never started
+				log.Error("handshake failed: %v", err)
+			}
 			return
 		}
 
@@ -558,7 +561,10 @@ func (s *Server) serve(addr string, ln net.Listener) {
 			log.Info("client connected: %v -> %v", remote, addr)
 			c, err := s.handshake(conn)
 			if err != nil {
-				log.Error("handshake failed: %v", err)
+				if err != io.EOF {
+					// supress these, VM was probably never started
+					log.Error("handshake failed: %v", err)
+				}
 				conn.Close()
 				continue
 			}

@@ -1,5 +1,5 @@
 ## vm launch kvm foo
-## vm launch
+
 ## vm qmp foo '{ "execute": "query-status" }'
 {"return":{"running":false,"singlestep":false,"status":"prelaunch"}}
 ## vm start foo

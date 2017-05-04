@@ -1,6 +1,5 @@
 ## # Launch some VMs
 ## vm launch kvm foo[1-3],bar
-## vm launch
 
 ## # Test different filters
 ## .filter name=bar .column name vm info

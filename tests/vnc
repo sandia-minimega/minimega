@@ -4,7 +4,6 @@
 namespace ns0
 nsmod add-host localhost
 vm launch kvm vm0
-vm launch
 
 # Start a kb recording
 vnc record kb vm0 /tmp/vm0.kbr
@@ -18,7 +17,6 @@ vnc record kb vm0 /tmp/vm0.kbr
 namespace ns1
 nsmod add-host localhost
 vm launch kvm vm1
-vm launch
 
 # This should be blank
 vnc

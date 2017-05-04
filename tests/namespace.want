@@ -1,20 +1,17 @@
 ## # Launch three foos, one in default namespace, others in ns1 and ns2
 ## vm launch kvm foo
-## vm launch
 ## .columns name,state vm info
 name | state
 foo  | BUILDING
 ## namespace ns1
 ## .columns name,state vm info
 ## vm launch kvm foo
-## vm launch
 ## .columns name,state vm info
 name | state
 foo  | BUILDING
 ## namespace ns2
 ## .columns name,state vm info
 ## vm launch kvm foo
-## vm launch
 ## .columns name,state vm info
 name | state
 foo  | BUILDING

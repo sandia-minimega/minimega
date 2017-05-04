@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"minicli"
+	log "minilog"
 	"ranges"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 )
@@ -42,6 +44,7 @@ load     : change host load is computed for scheduler, based on:
 	cpucommit : total CPU commit divided by number of CPUs (default)
 	netcommit : total NIC
 	memcommit : total memory commit divided by total memory
+queue 	 : toggle queueing VMs when launching (default false)
 `,
 		Patterns: []string{
 			"nsmod <add-host,> <hosts>",
@@ -50,6 +53,7 @@ load     : change host load is computed for scheduler, based on:
 			"nsmod <load,> <cpucommit,>",
 			"nsmod <load,> <netcommit,>",
 			"nsmod <load,> <memcommit,>",
+			"nsmod <queue,> [true,false]",
 		},
 		Call: wrapSimpleCLI(cliNamespaceMod),
 	},
@@ -229,6 +233,18 @@ func cliNamespaceMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		}
 
 		resp.Response = ns.HostSortBy
+		return nil
+	} else if c.BoolArgs["queue"] {
+		if c.BoolArgs["true"] || c.BoolArgs["false"] {
+			ns.QueueVMs = c.BoolArgs["true"]
+
+			if len(ns.queue) > 0 {
+				log.Warn("queueing behavior changed when VMs already queued")
+			}
+		} else {
+			resp.Response = strconv.FormatBool(ns.QueueVMs)
+		}
+
 		return nil
 	}
 

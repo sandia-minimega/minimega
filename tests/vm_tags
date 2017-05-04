@@ -4,13 +4,11 @@ vm config tag
 vm launch kvm vm0
 vm config tag shape square
 vm launch kvm vm[1,2]
-vm launch
 .column tags vm info
 
 # Test clearing tags
 clear vm config tag color
 vm launch kvm vm3
-vm launch
 .column tags vm info
 
 # Make sure Tags are truely separate structures

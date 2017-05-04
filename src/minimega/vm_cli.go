@@ -593,30 +593,28 @@ func cliClearVmTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 }
 
 func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// TODO: mmmga -- replicate noblock
+
 	// adding VM to queue
 	if len(c.StringArgs) > 0 {
 		// create a local copy of the current VMConfig
 		vmConfig := ns.vmConfig.Copy()
-
-		arg := c.StringArgs["name"]
 
 		vmType, err := findVMType(c.BoolArgs)
 		if err != nil {
 			return err
 		}
 
-		return ns.Queue(arg, vmType, vmConfig)
+		err = ns.Queue(c.StringArgs["name"], vmType, vmConfig)
+
+		if err == nil && !ns.QueueVMs {
+			// no error queueing and user has disabled queueing -- launch now!
+			return ns.Launch()
+		}
+
+		return err
 	}
 
-	// TODO: mmmga -- replicate noblock
-	if c.BoolArgs["noblock"] {
-		go func() {
-			if err := ns.Launch(); err != nil {
-				log.Error("launch error: %v", err)
-			}
-		}()
-		return nil
-	}
 	return ns.Launch()
 }
 

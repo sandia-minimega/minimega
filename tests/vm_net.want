@@ -1,6 +1,6 @@
 ## vm config net 0
 ## vm launch kvm vm0
-## vm launch
+
 ## .columns name,vlan,bridge vm info
 name | vlan | bridge
 vm0  | [0]  | [mega_bridge]

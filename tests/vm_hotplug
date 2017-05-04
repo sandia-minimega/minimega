@@ -4,7 +4,6 @@ shell touch /tmp/minitest1.img
 
 # Launch a VM to hotplug
 vm launch kvm foo
-vm launch
 
 # Add and then remove drives
 vm hotplug show foo

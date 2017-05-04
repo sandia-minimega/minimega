@@ -49,6 +49,10 @@ type Namespace struct {
 
 	VMs // embed VMs for this namespace
 
+	// QueuedVMs is toggled via nsmod -- whether we should queue VMs or not
+	// when launching
+	QueueVMs bool
+
 	vmConfig      VMConfig
 	savedVMConfig map[string]VMConfig
 
