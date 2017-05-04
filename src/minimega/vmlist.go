@@ -121,9 +121,7 @@ func (vms *VMs) Info(masks []string, resp *minicli.Response) {
 
 	resp.Header = masks
 	// for resp.Data
-	res := VMs{
-		m: make(map[int]VM),
-	}
+	res := []VM{}
 
 	for _, vm := range vms.m {
 		// Update dynamic fields before querying info
@@ -133,7 +131,7 @@ func (vms *VMs) Info(masks []string, resp *minicli.Response) {
 		// Tabular info matches the Data field.
 		vm := vm.Copy()
 
-		res.m[vm.GetID()] = vm
+		res = append(res, vm)
 
 		row := []string{}
 
@@ -757,8 +755,8 @@ func globalVMs() []VM {
 				continue
 			}
 
-			if vms2, ok := resp.Data.(VMs); ok {
-				for _, vm := range vms2.m {
+			if vms2, ok := resp.Data.([]VM); ok {
+				for _, vm := range vms2 {
 					vms = append(vms, vm)
 				}
 			} else {

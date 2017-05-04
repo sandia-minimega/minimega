@@ -804,7 +804,7 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	// write the config for this vm
-	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
+	config := vm.BaseConfig.String(vm.Namespace) + vm.ContainerConfig.String()
 	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
@@ -943,12 +943,12 @@ func (vm *ContainerVM) launch() error {
 
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
+	ns := GetOrCreateNamespace(vm.Namespace)
+
 	if err == nil {
 		// connect cc. Note that we have a local err here because we don't want
 		// to prevent the VM from continuing to launch, even if we can't
 		// connect to cc.
-		// TODO: mmmga
-		ns := GetOrCreateNamespace(vm.Namespace)
 		if err := ns.ccServer.ListenUnix(ccPath); err != nil {
 			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
 		}
@@ -1042,8 +1042,6 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// cleanup cc domain socket
-		// TODO: mmmga
-		ns := GetOrCreateNamespace(vm.Namespace)
 		ns.ccServer.CloseUnix(ccPath)
 
 		vm.unlinkNetns()

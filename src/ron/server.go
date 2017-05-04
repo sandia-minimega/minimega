@@ -88,7 +88,7 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 	go s.responseHandler()
 	go s.clientReaper()
 
-	log.Info("registered new ron server: %v", path)
+	log.Info("registered new ron server: %v", filepath.Join(path, subpath))
 
 	return s, nil
 }
@@ -157,8 +157,7 @@ func (s *Server) Listen(port int) error {
 
 // ListenUnix creates a unix domain socket at the given path and listens for
 // incoming connections. ListenUnix returns on the successful creation of the
-// socket, and accepts connections in a goroutine. If the domain socket file is
-// deleted, the goroutine for ListenUnix exits silently.
+// socket, and accepts connections in a goroutine.
 func (s *Server) ListenUnix(path string) error {
 	log.Info("listening on `%v`", path)
 
@@ -560,6 +559,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 			c, err := s.handshake(conn)
 			if err != nil {
 				log.Error("handshake failed: %v", err)
+				conn.Close()
 				continue
 			}
 

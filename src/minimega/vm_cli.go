@@ -608,7 +608,7 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		return ns.Queue(arg, vmType, vmConfig)
 	}
 
-	// TODO: replicate noblock
+	// TODO: mmmga -- replicate noblock
 	if c.BoolArgs["noblock"] {
 		go func() {
 			if err := ns.Launch(); err != nil {

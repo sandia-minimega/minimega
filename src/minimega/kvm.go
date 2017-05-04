@@ -574,7 +574,7 @@ func (vm *KvmVM) launch() error {
 	}
 
 	// write the config for this vm
-	config := vm.BaseConfig.String() + vm.KVMConfig.String()
+	config := vm.BaseConfig.String(vm.Namespace) + vm.KVMConfig.String()
 	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 

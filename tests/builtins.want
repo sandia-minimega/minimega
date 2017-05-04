@@ -1,5 +1,6 @@
 ## # Launch some VMs
 ## vm launch kvm foo[1-3],bar
+## vm launch
 
 ## # Test different filters
 ## .filter name=bar .column name vm info
@@ -72,46 +73,46 @@ foo3,BUILDING
 ## #.json false
 
 ## # Test apropos / prefix matching on filters and columns
-## .columns names,name .columns name,names vm info
-namespace | name
-          | bar
-          | foo1
-          | foo2
-          | foo3
-## .columns names,name .columns names,name vm info
-namespace | name
-          | bar
-          | foo1
-          | foo2
-          | foo3
-## .columns name,names .columns name,names vm info
-name | namespace
-bar  | 
-foo1 | 
-foo2 | 
-foo3 |
-## .columns name,names .columns names,name vm info
-name | namespace
-bar  | 
-foo1 | 
-foo2 | 
-foo3 |
-## .filter name~foo .col namesp,name,state vm info
-namespace | name | state
-          | foo1 | BUILDING
-          | foo2 | RUNNING
-          | foo3 | BUILDING
-## .filter name~foo .col name,namesp,state vm info
-name | namespace | state
-foo1 |           | BUILDING
-foo2 |           | RUNNING
-foo3 |           | BUILDING
+## .columns ip6,ip .columns ip,ip6 vm info
+ip6  | ip
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip6,ip .columns ip6,ip vm info
+ip6  | ip
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip,ip6 .columns ip,ip6 vm info
+ip   | ip6
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip,ip6 .columns ip6,ip vm info
+ip   | ip6
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .filter name~foo .col ip6,ip,name vm info
+ip6  | ip | name
+[]   | [] | foo1
+[]   | [] | foo2
+[]   | [] | foo3
+## .filter name~foo .col ip,ip6,name vm info
+ip   | ip6 | name
+[]   | []  | foo1
+[]   | []  | foo2
+[]   | []  | foo3
 
 ## # Test apropos / prefix matching that should fail
-## .columns nam vm info
-E: ambiguous column `nam`
-## .columns nam,s vm info
-E: ambiguous column `nam`
+## .columns i vm info
+E: ambiguous column `i`
+## .columns i,s vm info
+E: ambiguous column `i`
 ## .columns s vm info
 E: ambiguous column `s`
 ## .filter name~foo .col state vm info

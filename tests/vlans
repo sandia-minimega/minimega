@@ -27,7 +27,7 @@ namespace bar
 vm config net A # should be 105
 vlans
 vm config net
-vm config net //A # should be 102
+vm config net minimega//A # should be 102
 vlans
 vm config net
 vm config net foo//A # should be 104

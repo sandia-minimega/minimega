@@ -382,7 +382,6 @@ func (v *AllocatedVLANs) Tabular(namespace string) [][]string {
 
 		res = append(res,
 			[]string{
-				parts[0],
 				strings.Join(parts[1:], AliasSep),
 				strconv.Itoa(vlan),
 			})

@@ -186,13 +186,13 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	// Print the config
-	resp.Response = ns.vmConfig.String()
+	resp.Response = ns.vmConfig.String(ns.Name)
 	return nil
 }
 
 func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.ListArgs) == 0 {
-		resp.Response = ns.vmConfig.NetworkString()
+		resp.Response = ns.vmConfig.NetworkString(ns.Name)
 		return nil
 	}
 

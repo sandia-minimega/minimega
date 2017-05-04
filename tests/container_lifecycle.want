@@ -1,6 +1,7 @@
 ## vm config filesystem $containerfs
 ## vm config hostname foo
 ## vm launch container foo[0-2]
+## vm launch
 ## .columns name,state vm info
 name | state
 foo0 | BUILDING

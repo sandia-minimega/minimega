@@ -70,7 +70,7 @@ func cliVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// No match, must want to just print
-	resp.Header = []string{"namespace", "alias", "vlan"}
+	resp.Header = []string{"alias", "vlan"}
 	resp.Tabular = allocatedVLANs.Tabular(ns.Name)
 
 	return nil
@@ -107,7 +107,7 @@ func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	}
 
 	// Must want to display the ranges
-	resp.Header = []string{"namespace", "min", "max", "next"}
+	resp.Header = []string{"min", "max", "next"}
 	resp.Tabular = [][]string{}
 
 	for prefix, r := range allocatedVLANs.GetRanges() {
@@ -117,7 +117,6 @@ func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 		resp.Tabular = append(resp.Tabular,
 			[]string{
-				prefix,
 				strconv.Itoa(r.Min),
 				strconv.Itoa(r.Max),
 				strconv.Itoa(r.Next),
