@@ -67,6 +67,7 @@ provided namespace.
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
+			"cc <listen,> <port>",
 			"cc <clients,>",
 
 			"cc <prefix,> [prefix]",
@@ -128,6 +129,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"rtunnel":    cliCCTunnel,
 	"send":       cliCCFileSend,
 	"tunnel":     cliCCTunnel,
+	"listen":     cliCCListen,
 }
 
 func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -622,6 +624,15 @@ func cliCCDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return errors.New("unreachable")
+}
+
+func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	port, err := strconv.Atoi(c.StringArgs["port"])
+	if err != nil {
+		return err
+	}
+
+	return ns.ccServer.Listen(port)
 }
 
 func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

@@ -315,6 +315,8 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 		return out
 	}
 
+	ns := GetOrCreateNamespace(namespace)
+
 	vms.mu.Lock()
 
 	log.Info("launching %v %v vms", len(q.Names), q.VMType)
@@ -360,8 +362,6 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 
 			err := vm.Launch()
 			if err == nil {
-				// TODO: mmmga
-				ns := GetOrCreateNamespace(vm.GetNamespace())
 				ns.ccServer.RegisterVM(vm)
 			}
 			out <- err
@@ -422,7 +422,7 @@ func (vms *VMs) Stop(target string) []error {
 }
 
 // Kill VMs matching target.
-func (vms *VMs) Kill(target string) []error {
+func (vms *VMs) Kill(ns *Namespace, target string) []error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
@@ -446,7 +446,7 @@ func (vms *VMs) Kill(target string) []error {
 	errs := vms.apply(target, false, applyFunc)
 
 	for len(killedVms) > 0 {
-		id := <-killAck
+		id := <-ns.KillAck
 		log.Info("VM %v killed", id)
 		delete(killedVms, id)
 	}
@@ -714,33 +714,21 @@ func meshageVMLauncher() {
 // GlobalVMs gets the VMs from all hosts in the mesh, filtered to the current
 // namespace, if applicable. The keys of the returned map do not match the VM's
 // ID.
-func GlobalVMs() []VM {
+func GlobalVMs(ns *Namespace) []VM {
 	cmdLock.Lock()
 	defer cmdLock.Unlock()
 
-	return globalVMs()
+	return globalVMs(ns)
 }
 
 // globalVMs is GlobalVMs without locking cmdLock.
-//
-// TODO: mmmga
-func globalVMs() []VM {
+func globalVMs(ns *Namespace) []VM {
 	// Compile info command and set it not to record
 	cmd := minicli.MustCompile("vm info")
 	cmd.SetRecord(false)
-	cmd.SetSource(GetNamespaceName())
+	cmd.SetSource(ns.Name)
 
-	// Figure out which hosts to query:
-	//  * Hosts in the active namespace
-	//  * Hosts connected via meshage plus ourselves
-	var hosts []string
-	ns := GetNamespace()
-	if ns != nil {
-		hosts = ns.hostSlice()
-	} else {
-		hosts = meshageNode.BroadcastRecipients()
-		hosts = append(hosts, hostname)
-	}
+	hosts := ns.hostSlice()
 
 	cmds := makeCommandHosts(hosts, cmd, ns)
 

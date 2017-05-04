@@ -10,7 +10,7 @@ vm launch kvm 1
 vm launch kvm 1
 
 # Try to queue a VM without clearing the UUID
-nsmod queue true
+ns queueing true
 vm launch kvm 1
 
 # Queue VM with specified UUID

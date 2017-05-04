@@ -52,7 +52,7 @@ func (c *captures) CapturePcap(vm VM, iface int, filename string) error {
 
 	// Ensure that relative paths are always relative to /files/
 	if !filepath.IsAbs(filename) {
-		// TODO: mmmga
+		// TODO: should we capture to the VM directory instead?
 		filename = filepath.Join(*f_iomBase, filename)
 	}
 

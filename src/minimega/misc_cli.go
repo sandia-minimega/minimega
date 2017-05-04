@@ -139,7 +139,6 @@ func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-// TODO: mmmga
 func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 

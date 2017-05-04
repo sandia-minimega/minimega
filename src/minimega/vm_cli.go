@@ -476,7 +476,7 @@ func cliVMStop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 }
 
 func cliVMKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.Kill(c.StringArgs["target"]))
+	return makeErrSlice(ns.Kill(ns, c.StringArgs["target"]))
 }
 
 func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -854,8 +854,7 @@ func cliVMSuggest(ns *Namespace, prefix string, mask VMState) []string {
 		res = append(res, Wildcard)
 	}
 
-	// TODO: mmmga (need globalVMs for this namespace)
-	for _, vm := range globalVMs() {
+	for _, vm := range GlobalVMs(ns) {
 		if vm.GetState()&mask == 0 {
 			continue
 		}

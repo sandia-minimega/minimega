@@ -12,7 +12,7 @@ E: cannot launch multiple VMs with a pre-configured UUID
 E: vm already exists with UUID `a5082fed-bc6f-4f77-8c1b-692ce5ef6302`
 
 ## # Try to queue a VM without clearing the UUID
-## nsmod queue true
+## ns queueing true
 ## vm launch kvm 1
 E: vm already exists with UUID `a5082fed-bc6f-4f77-8c1b-692ce5ef6302`
 

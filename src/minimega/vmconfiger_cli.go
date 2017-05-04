@@ -478,7 +478,6 @@ Note: this configuration only applies to KVM-based VMs.
 			for i, v := range vals {
 				// Ensure that relative paths are always relative to /files/
 				if !filepath.IsAbs(v) {
-					// TODO: mmmga
 					v = filepath.Join(*f_iomBase, v)
 					vals[i] = v
 				}

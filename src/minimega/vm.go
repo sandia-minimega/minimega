@@ -25,11 +25,7 @@ const (
 	QMP_CONNECT_DELAY     = 100
 )
 
-// TODO: mmmga
-var (
-	killAck chan int // channel that all VMs ack on when killed
-	vmID    *Counter // channel of new VM IDs
-)
+var vmID *Counter // channel of new VM IDs, shared across namespaces
 
 type VMType int
 
@@ -149,8 +145,6 @@ var vmInfoLite = []string{
 }
 
 func init() {
-	killAck = make(chan int)
-
 	vmID = NewCounter()
 
 	// for serializing VMs

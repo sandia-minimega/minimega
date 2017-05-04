@@ -132,7 +132,7 @@ func (old BaseConfig) Copy() BaseConfig {
 func (vm *BaseConfig) String(namespace string) string {
 	// create output
 	var o bytes.Buffer
-	fmt.Fprintln(&o, "Current VM configuration:")
+	fmt.Fprintln(&o, "VM configuration:")
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)

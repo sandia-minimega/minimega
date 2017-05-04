@@ -364,7 +364,7 @@ func (vm *KVMConfig) String() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "Current KVM configuration:")
+	fmt.Fprintln(&o, "KVM configuration:")
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
@@ -690,7 +690,6 @@ func (vm *KvmVM) launch() error {
 	// connect cc
 	ccPath := vm.path("cc")
 
-	// TODO: mmmga
 	ns := GetOrCreateNamespace(vm.Namespace)
 	if err := ns.ccServer.DialSerial(ccPath); err != nil {
 		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
@@ -705,7 +704,7 @@ func (vm *KvmVM) launch() error {
 			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
-			killAck <- vm.ID
+			ns.KillAck <- vm.ID
 		}
 	}()
 

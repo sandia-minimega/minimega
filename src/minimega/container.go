@@ -756,7 +756,7 @@ func (vm *ContainerConfig) String() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "Current container configuration:")
+	fmt.Fprintln(&o, "Container configuration:")
 	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FilesystemPath)
 	fmt.Fprintf(w, "Hostname:\t%v\n", vm.Hostname)
 	fmt.Fprintf(w, "Init:\t%v\n", vm.Init)
@@ -1068,7 +1068,7 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		if sendKillAck {
-			killAck <- vm.ID
+			ns.KillAck <- vm.ID
 		}
 	}()
 

@@ -37,7 +37,6 @@ var (
 	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
 	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
-	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
@@ -206,10 +205,6 @@ func main() {
 	// has to happen after meshageNode is created
 	GetOrCreateNamespace("minimega")
 	SetNamespace("minimega")
-	// TODO: mmmga
-	//if err := ns.ccServer.Listen(*f_ccPort); err != nil {
-	//log.Fatal("unable to listen: %v", err)
-	//}
 
 	commandSocketStart()
 
@@ -257,7 +252,7 @@ func teardownf(format string, args ...interface{}) {
 }
 
 func teardown() {
-	// TODO: mmmga -- need to loop through all namespaces and do stuff in each
+	// destroy all namespaces
 	DestroyNamespace(Wildcard)
 
 	// clean-up non-namespace things

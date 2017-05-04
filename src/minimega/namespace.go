@@ -18,6 +18,8 @@ import (
 const (
 	SchedulerRunning   = "running"
 	SchedulerCompleted = "completed"
+
+	DefaultNamespace = "minimega"
 )
 
 type scheduleStat struct {
@@ -33,8 +35,6 @@ type Namespace struct {
 
 	Hosts map[string]bool
 
-	vmID *Counter
-
 	// Queued VMs to launch
 	queue []*QueuedVMs
 
@@ -47,7 +47,8 @@ type Namespace struct {
 	// How to determine which host is least loaded
 	HostSortBy string
 
-	VMs // embed VMs for this namespace
+	VMs              // embed VMs for this namespace
+	KillAck chan int // channel that all VMs in this namespace ACK when killed
 
 	// QueuedVMs is toggled via nsmod -- whether we should queue VMs or not
 	// when launching
@@ -82,11 +83,11 @@ func NewNamespace(name string) *Namespace {
 		Name:       name,
 		Hosts:      map[string]bool{},
 		Taps:       map[string]bool{},
-		vmID:       NewCounter(),
 		HostSortBy: "cpucommit",
 		VMs: VMs{
 			m: make(map[int]VM),
 		},
+		KillAck: make(chan int),
 		routers: make(map[int]*Router),
 		captures: captures{
 			m:       make(map[int]*capture),
@@ -146,8 +147,10 @@ func (n *Namespace) Destroy() error {
 	n.vncPlayer.Clear()
 
 	// Kill and flush all the VMs
-	n.VMs.Kill(Wildcard)
+	n.VMs.Kill(n, Wildcard)
 	n.VMs.Flush(n)
+
+	close(n.KillAck)
 
 	// Stop ron server
 	n.ccServer.Destroy()
@@ -171,8 +174,6 @@ func (n *Namespace) Destroy() error {
 
 	// Free up any VLANs associated with the namespace
 	allocatedVLANs.Delete(n.Name, "")
-
-	n.vmID.Stop()
 
 	n.ccServer.Destroy()
 
@@ -206,7 +207,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
-	for _, vm := range globalVMs() {
+	for _, vm := range globalVMs(n) {
 		takenName[vm.GetName()] = true
 		takenUUID[vm.GetUUID()] = true
 	}
@@ -476,11 +477,11 @@ func DestroyNamespace(name string) error {
 		// that namespace
 		if namespace == name {
 			log.Info("active namespace destroyed, switching to default namespace")
-			namespace = "minimega"
+			namespace = DefaultNamespace
 		}
 
 		delete(namespaces, n)
-		if n == "minimega" {
+		if n == DefaultNamespace {
 			// recreate automatically
 			namespaces[n] = NewNamespace(n)
 		}

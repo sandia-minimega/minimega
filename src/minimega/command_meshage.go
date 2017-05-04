@@ -237,7 +237,6 @@ func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	return nil
 }
 
-// TODO: mmmga
 func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
 	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
 	if err != nil {

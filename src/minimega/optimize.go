@@ -294,7 +294,6 @@ func ksmWrite(filename string, value int) {
 func clearOptimize() {
 	ksmDisable()
 	hugepagesMountPath = ""
-	// TODO: mmmga
 	affinityDisable(nil)
 	affinityClearFilter(nil)
 }
@@ -313,6 +312,11 @@ func affinityEnable(ns *Namespace) error {
 
 func affinityDisable(ns *Namespace) error {
 	affinityEnabled = false
+
+	if ns == nil {
+		return nil
+	}
+
 	for _, vm := range ns.FindKvmVMs() {
 		affinityUnselectCPU(vm)
 		err := vm.AffinityUnset()
@@ -330,7 +334,7 @@ func affinityClearFilter(ns *Namespace) {
 		v := fmt.Sprintf("%v", i)
 		affinityCPUSets[v] = []*KvmVM{}
 	}
-	if affinityEnabled {
+	if affinityEnabled && ns != nil {
 		affinityEnable(ns)
 	}
 }
