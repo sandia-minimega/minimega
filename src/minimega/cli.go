@@ -223,13 +223,15 @@ func wrapVMTargetCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) er
 	}
 }
 
-func wrapSuggest(fn func(string, string) []string) minicli.SuggestFunc {
+func wrapSuggest(fn func(*Namespace, string, string) []string) minicli.SuggestFunc {
+	ns := GetNamespace()
+
 	return func(raw, val, prefix string) []string {
 		if attached != nil {
 			return attached.Suggest(raw)
 		}
 
-		return fn(val, prefix)
+		return fn(ns, val, prefix)
 	}
 }
 

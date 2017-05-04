@@ -166,18 +166,15 @@ func cliClearVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 // Performs a bit of extra work to make sure that the suggestions are in the
 // current namespace (completes across namespaces if prefix includes
 // vlans.AliasSep).
-func cliVLANSuggest(prefix string) []string {
-	// TODO: mmmga
-	namespace := ""
-
-	if !strings.Contains(prefix, vlans.AliasSep) && namespace != "" {
-		prefix = namespace + vlans.AliasSep + prefix
+func cliVLANSuggest(ns *Namespace, prefix string) []string {
+	if !strings.Contains(prefix, vlans.AliasSep) {
+		prefix = ns.Name + vlans.AliasSep + prefix
 	}
 
 	res := allocatedVLANs.GetAliases(prefix)
 
 	for i, v := range res {
-		res[i] = strings.TrimPrefix(v, namespace+vlans.AliasSep)
+		res[i] = strings.TrimPrefix(v, ns.Name+vlans.AliasSep)
 	}
 
 	return res

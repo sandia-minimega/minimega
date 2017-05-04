@@ -128,9 +128,9 @@ description of allowable targets.`,
 			"vm kill <target>",
 		},
 		Call: wrapVMTargetCLI(cliVMKill),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -167,9 +167,9 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 			"vm start <target>",
 		},
 		Call: wrapVMTargetCLI(cliVMStart),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(prefix, ^VM_RUNNING)
+				return cliVMSuggest(ns, prefix, ^VM_RUNNING)
 			}
 			return nil
 		}),
@@ -185,9 +185,9 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 			"vm stop <target>",
 		},
 		Call: wrapVMTargetCLI(cliVMStop),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(prefix, VM_RUNNING)
+				return cliVMSuggest(ns, prefix, VM_RUNNING)
 			}
 			return nil
 		}),
@@ -227,9 +227,9 @@ To remove all hotplug devices, use ID "all" for the disk ID.`,
 			"vm hotplug <remove,> <vm name> <disk id or all>",
 		},
 		Call: wrapVMTargetCLI(cliVMHotplug),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -257,11 +257,11 @@ To move a connection, specify the new VLAN tag and bridge:
 			"vm net <disconnect,> <vm name> <tap position>",
 		},
 		Call: wrapSimpleCLI(cliVMNetMod),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			} else if val == "vlan" {
-				return cliVLANSuggest(prefix)
+				return cliVLANSuggest(ns, prefix)
 			}
 			return nil
 		}),
@@ -279,9 +279,9 @@ and a JSON string, and returns the JSON encoded response. For example:
 			"vm qmp <vm name> <qmp command>",
 		},
 		Call: wrapVMTargetCLI(cliVMQmp),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -311,9 +311,9 @@ You can also specify the maximum dimension:
 			"vm screenshot <vm name> file <filename> [maximum dimension]",
 		},
 		Call: wrapVMTargetCLI(cliVMScreenshot),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -332,9 +332,9 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate <vm name> <filename>",
 		},
 		Call: wrapVMTargetCLI(cliVMMigrate),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -362,9 +362,9 @@ Change a VM to use a new ISO:
 			"vm cdrom <change,> <vm name> <path>",
 		},
 		Call: wrapVMTargetCLI(cliVMCdrom),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -392,9 +392,9 @@ To read a tag:
 			"vm tag <target> <key> <value>", // set
 		},
 		Call: wrapVMTargetCLI(cliVMTag),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -424,9 +424,9 @@ Clear all tags from all VMs:
 			"clear vm tag <target> [tag]",
 		},
 		Call: wrapVMTargetCLI(cliClearVmTag),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
 			}
 			return nil
 		}),
@@ -664,7 +664,6 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		return err
 	}
 
-	// TODO: mmmga
 	path := filepath.Join(*f_base, strconv.Itoa(vm.GetID()), "screenshot.png")
 	if file != "" {
 		path = file
@@ -850,14 +849,15 @@ func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 // and makes suggestions for VM names that have a common prefix. mask
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
-func cliVMSuggest(prefix string, mask VMState) []string {
+func cliVMSuggest(ns *Namespace, prefix string, mask VMState) []string {
 	res := []string{}
 
 	if strings.HasPrefix(Wildcard, prefix) {
 		res = append(res, Wildcard)
 	}
 
-	for _, vm := range GlobalVMs() {
+	// TODO: mmmga (need globalVMs for this namespace)
+	for _, vm := range globalVMs() {
 		if vm.GetState()&mask == 0 {
 			continue
 		}

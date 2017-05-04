@@ -67,9 +67,9 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <delete,> <id or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vlan" {
-				return cliVLANSuggest(prefix)
+				return cliVLANSuggest(ns, prefix)
 			}
 			return nil
 		}),

@@ -234,7 +234,7 @@ func (r *Router) generateConfig() error {
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
-func (r *Router) Commit() error {
+func (r *Router) Commit(ns *Namespace) error {
 	log.Debugln("Commit")
 
 	// build a command list from the router
@@ -243,9 +243,6 @@ func (r *Router) Commit() error {
 		return err
 	}
 	r.updateIPs = false // IPs are no longer stale
-
-	// TODO: mmmga
-	ns := GetOrCreateNamespace(r.vm.GetNamespace())
 
 	// remove any previous commands
 	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetName())

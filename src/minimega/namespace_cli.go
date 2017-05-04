@@ -24,7 +24,7 @@ Control and run commands in namespace environments.`,
 			"namespace <name> (command)",
 		},
 		Call: cliNamespace,
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, false)
 			}
@@ -65,7 +65,7 @@ deleted. You may use "all" to delete all namespaces.`,
 			"clear namespace [name]",
 		},
 		Call: wrapSimpleCLI(cliClearNamespace),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, true)
 			}

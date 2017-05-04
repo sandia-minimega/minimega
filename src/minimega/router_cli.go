@@ -131,7 +131,7 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	rtr := ns.FindOrCreateRouter(vm)
 
 	if c.BoolArgs["commit"] {
-		return rtr.Commit()
+		return rtr.Commit(ns)
 	} else if c.BoolArgs["log"] {
 		var level string
 		if c.BoolArgs["fatal"] {
