@@ -38,6 +38,7 @@ var (
 )
 
 type wrappedCLIFunc func(*Namespace, *minicli.Command, *minicli.Response) error
+type wrappedSuggestFunc func(*Namespace, string, string) []string
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
@@ -84,7 +85,7 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
-func wrapSimpleCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapSimpleCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
@@ -110,7 +111,7 @@ func errResp(err error) minicli.Responses {
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
-func wrapBroadcastCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
@@ -124,14 +125,12 @@ func wrapBroadcastCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) e
 		//   `local`   -- invoke the underlying handler
 		// We use the source field to track whether we have already performed
 		// the `fan out` phase for this command. By default, the source is the
-		// empty string, so when a namespace is not active, we will always have
-		// the `local` behavior. When a namespace is active, the source will
-		// not match the active namespace so we will perform the `fan out`
-		// phase. We immediately set the source to the active namespace so that
-		// when we send the command via mesh, the source will be propagated and
-		// the remote nodes will execute the `local` behavior rather than
-		// trying to `fan out`.
-		if ns == nil || c.Source == ns.Name {
+		// empty string so the source will not match the active namespace and
+		// we will perform the `fan out` phase. We set the source to the active
+		// namespace so that when we send the command via mesh, the source will
+		// be propagated and the remote nodes will execute the `local` behavior
+		// rather than trying to `fan out`.
+		if c.Source == ns.Name {
 			localFunc(c, respChan)
 			return
 		}
@@ -166,7 +165,7 @@ func wrapBroadcastCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) e
 
 // wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
 // or more VMs. This is used by commands like `vm start` and `vm kill`.
-func wrapVMTargetCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
@@ -176,7 +175,7 @@ func wrapVMTargetCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) er
 		log.Debug("namespace: %v, source: %v", ns, c.Source)
 
 		// See note in wrapBroadcastCLI.
-		if ns == nil || c.Source == ns.Name {
+		if c.Source == ns.Name {
 			localFunc(c, respChan)
 			return
 		}
@@ -223,7 +222,7 @@ func wrapVMTargetCLI(fn func(*Namespace, *minicli.Command, *minicli.Response) er
 	}
 }
 
-func wrapSuggest(fn func(*Namespace, string, string) []string) minicli.SuggestFunc {
+func wrapSuggest(fn wrappedSuggestFunc) minicli.SuggestFunc {
 	ns := GetNamespace()
 
 	return func(raw, val, prefix string) []string {
@@ -232,6 +231,18 @@ func wrapSuggest(fn func(*Namespace, string, string) []string) minicli.SuggestFu
 		}
 
 		return fn(ns, val, prefix)
+	}
+}
+
+func wrapVMSuggest(mask VMState) minicli.SuggestFunc {
+	ns := GetNamespace()
+
+	return func(raw, val, prefix string) []string {
+		if attached != nil {
+			return attached.Suggest(raw)
+		}
+
+		return cliVMSuggest(ns, prefix, mask)
 	}
 }
 
@@ -306,22 +317,6 @@ func RunCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	return out
 }
 
-// runCommandGlobally runs the given command across all nodes on meshage,
-// including the local node and combines the results into a single channel.
-func runCommandGlobally(cmd *minicli.Command) <-chan minicli.Responses {
-	// Keep the original CLI input
-	original := cmd.Original
-	record := cmd.Record
-
-	cmd, err := minicli.Compilef("mesh send %s %s", Wildcard, original)
-	if err != nil {
-		log.Fatal("cannot run `%v` globally -- %v", original, err)
-	}
-	cmd.SetRecord(record)
-
-	return runCommands(cmd, cmd.Subcommand)
-}
-
 // makeCommandHosts creates commands to run the given command on a set of hosts
 // handling the special case where localhost is included in the list. Commands
 // are prefixed with "namespace <name>" when a namespace is provided.
@@ -385,12 +380,9 @@ func cliLocal() {
 	defer signal.Stop(sig)
 
 	for {
-		namespace := GetNamespaceName()
+		ns := GetNamespace()
 
-		prompt := "minimega$ "
-		if namespace != "" {
-			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
-		}
+		prompt := fmt.Sprintf("minimega[%v]$ ", ns.Name)
 
 		line, err := goreadline.Readline(prompt, true)
 		if err != nil {
@@ -419,7 +411,7 @@ func cliLocal() {
 
 		// The namespace changed between when we prompted the user (and could
 		// still change before we actually run the command).
-		if namespace != GetNamespaceName() {
+		if ns != GetNamespace() {
 			// TODO: should we abort the command?
 			log.Warn("namespace changed between prompt and execution")
 		}

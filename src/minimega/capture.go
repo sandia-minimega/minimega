@@ -12,7 +12,6 @@ import (
 	"gopcap"
 	log "minilog"
 	"path/filepath"
-	"strings"
 )
 
 type captures struct {
@@ -192,13 +191,6 @@ func (c *captures) StopAll() error {
 	})
 }
 
-// StopPcapAll stops all PCAP captures
-func (c *captures) StopPcapAll() error {
-	return c.stop(func(v *capture) bool {
-		return v.Type == "pcap"
-	})
-}
-
 // StopVM stops capture for VM (wildcard supported).
 func (c *captures) StopVM(s, typ string) error {
 	var found bool
@@ -330,7 +322,7 @@ func updateNetflowTimeouts() {
 		}
 
 		err = br.SetNetflowTimeout(captureNFTimeout)
-		if err != nil && !strings.Contains(err.Error(), "has no netflow object") {
+		if err != nil && err != bridge.ErrNoNetflow {
 			log.Error("unable to update netflow timeout: %v", err)
 		}
 	}

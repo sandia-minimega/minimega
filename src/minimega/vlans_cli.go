@@ -43,8 +43,10 @@ to all *new* VLAN aliases in the current namespace.`,
 Clear one or more aliases, freeing the VLANs for reuse. You should only clear
 allocated VLANs once you have killed all the VMs connected to them.
 
-Note: When no prefix is specified and a namespace is not active, all state
-about managed VLANs is cleared.`,
+By default, "clear vlans" only clears aliases for the current namespace. If
+given "all" as the prefix, all state about managed VLANs is cleared across
+*all* namespaces, including blacklisted VLANS. You should only use this if you
+want a completely clean slate.`,
 		Patterns: []string{
 			"clear vlans [prefix]",
 		},
@@ -153,8 +155,11 @@ func cliVLANsBlacklist(ns *Namespace, c *minicli.Command, resp *minicli.Response
 
 func cliClearVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	prefix := c.StringArgs["prefix"]
-	if ns.Name != "" {
-		prefix = ns.Name + vlans.AliasSep + prefix
+
+	if prefix == Wildcard {
+		log.Info("resetting VLAN state")
+		allocatedVLANs = vlans.NewAllocatedVLANs()
+		return nil
 	}
 
 	allocatedVLANs.Delete(ns.Name, prefix)

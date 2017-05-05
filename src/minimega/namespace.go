@@ -394,13 +394,6 @@ func GetNamespace() *Namespace {
 	return namespaces[namespace]
 }
 
-func GetNamespaceName() string {
-	namespaceLock.Lock()
-	defer namespaceLock.Unlock()
-
-	return namespace
-}
-
 // GetOrCreateNamespace returns the specified namespace, creating one if it
 // doesn't already exist.
 func GetOrCreateNamespace(name string) *Namespace {
@@ -419,13 +412,13 @@ func SetNamespace(name string) error {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
+	if name == "" {
+		return errors.New("namespace name cannot be the empty string")
+	}
+
 	log.Info("setting active namespace: %v", name)
 
 	if name == namespace {
-		if name == "" {
-			return errors.New("namespaces are already disabled")
-		}
-
 		return fmt.Errorf("already in namespace: %v", name)
 	}
 
@@ -447,11 +440,7 @@ func RevertNamespace(old, curr *Namespace) {
 		log.Warn("unexpected namespace, `%v` != `%v`, when reverting to `%v`", namespace, curr, old)
 	}
 
-	if old == nil {
-		namespace = ""
-	} else {
-		namespace = old.Name
-	}
+	namespace = old.Name
 }
 
 func DestroyNamespace(name string) error {
@@ -465,8 +454,6 @@ func DestroyNamespace(name string) error {
 			continue
 		}
 
-		log.Info("destroying namespace: %v", name)
-
 		found = true
 
 		if err := ns.Destroy(); err != nil {
@@ -475,7 +462,7 @@ func DestroyNamespace(name string) error {
 
 		// If we're deleting the currently active namespace, we should get out of
 		// that namespace
-		if namespace == name {
+		if namespace == n {
 			log.Info("active namespace destroyed, switching to default namespace")
 			namespace = DefaultNamespace
 		}
@@ -494,7 +481,9 @@ func DestroyNamespace(name string) error {
 	return nil
 }
 
-func ListNamespaces() []string {
+// ListNamespaces lists all the namespaces. If mark is set, the active
+// namespace will be denoted with [].
+func ListNamespaces(mark bool) []string {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 

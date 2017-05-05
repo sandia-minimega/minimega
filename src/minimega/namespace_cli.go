@@ -11,7 +11,6 @@ import (
 	"minicli"
 	log "minilog"
 	"ranges"
-	"sort"
 	"strconv"
 	"strings"
 )
@@ -42,29 +41,28 @@ different namespace.`,
 Display or modify the active namespace.
 
 - hosts     : list hosts
-- add-host  : add comma-separated list of hosts to the namespace
-- del-host  : delete comma-separated list of hosts from the namespace
+- add-hosts : add comma-separated list of hosts to the namespace
+- del-hosts : delete comma-separated list of hosts from the namespace
 - load      : display or change host load is computed for scheduler, based on:
   - cpucommit : total CPU commit divided by number of CPUs (default)
   - netcommit : total NIC
   - memcommit : total memory commit divided by total memory
-- queue     : print the VM queue
-- queuing   : toggle queueing VMs when launching (default false)
+- queue     : display VM queue
 - flush     : clear the VM queue
+- queuing   : toggle VMs queueing when launching (default false)
 - schedules : display scheduling stats
 `,
 		Patterns: []string{
-			"ns",
 			"ns <hosts,>",
-			"ns <add-host,> <hosts>",
-			"ns <del-host,> <hosts>",
+			"ns <add-hosts,> <hosts>",
+			"ns <del-hosts,> <hosts>",
 			"ns <load,>",
 			"ns <load,> <cpucommit,>",
 			"ns <load,> <netcommit,>",
 			"ns <load,> <memcommit,>",
 			"ns <queue,>",
-			"ns <queueing,> [true,false]",
 			"ns <flush,>",
+			"ns <queueing,> [true,false]",
 			"ns <schedules,>",
 		},
 		Call: wrapSimpleCLI(cliNS),
@@ -72,11 +70,11 @@ Display or modify the active namespace.
 	{ // clear namespace
 		HelpShort: "unset or delete namespace",
 		HelpLong: `
-If a namespace is active, "clear namespace" will deactivate it. If no namespace
-is active, "clear namespace" returns an error and does nothing.
+Without an argument, "clear namespace" will reset the namespace to the default
+namespace, minimega.
 
-If you specify a namespace by name, then the specified namespace will be
-deleted. You may use "all" to delete all namespaces.`,
+With an arugment, "clear namespace <name>" will delete the specified namespace.
+You may use "all" to delete all namespaces.`,
 		Patterns: []string{
 			"clear namespace [name]",
 		},
@@ -93,8 +91,8 @@ deleted. You may use "all" to delete all namespaces.`,
 // Functions pointers to the various handlers for the subcommands
 var nsCliHandlers = map[string]wrappedCLIFunc{
 	"hosts":     cliNamespaceHosts,
-	"add-host":  cliNamespaceAddHost,
-	"del-host":  cliNamespaceDelHost,
+	"add-hosts": cliNamespaceAddHost,
+	"del-hosts": cliNamespaceDelHost,
 	"load":      cliNamespaceLoad,
 	"queue":     cliNamespaceQueue,
 	"queueing":  cliNamespaceQueueing,
@@ -136,36 +134,19 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	other := []string{}
-	for k := range namespaces {
-		if k == namespace {
-			k = "[" + k + "]"
-		}
-		other = append(other, k)
-	}
-
-	sort.Strings(other)
-
-	resp.Response = strings.Join(other, ", ")
-
+	resp.Response = strings.Join(ListNamespaces(true), ", ")
 	respChan <- minicli.Responses{resp}
 }
 
 func cliNS(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Dispatcher for a sub handler
-	if len(c.BoolArgs) > 0 {
-		for k, fn := range nsCliHandlers {
-			if c.BoolArgs[k] {
-				log.Debug("ns handler %v", k)
-				return fn(ns, c, resp)
-			}
+	for k, fn := range nsCliHandlers {
+		if c.BoolArgs[k] {
+			return fn(ns, c, resp)
 		}
-
-		return errors.New("unreachable")
 	}
 
-	// If no sub handler, do something
-	return nil
+	return errors.New("unreachable")
 }
 
 func cliNamespaceHosts(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -321,7 +302,7 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
-		// Clearing the namespace global
+		// Going back to default namespace
 		return SetNamespace(DefaultNamespace)
 	}
 
@@ -337,7 +318,7 @@ func cliNamespaceSuggest(prefix string, wild bool) []string {
 		res = append(res, Wildcard)
 	}
 
-	for _, name := range ListNamespaces() {
+	for _, name := range ListNamespaces(false) {
 		if strings.HasPrefix(name, prefix) {
 			res = append(res, name)
 		}
