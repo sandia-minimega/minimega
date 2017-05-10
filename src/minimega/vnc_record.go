@@ -54,8 +54,6 @@ func (v *vncRecorder) RecordKB(vm *KvmVM, filename string) error {
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
 	v.kb[c.ID] = r
 
-	go r.Record()
-
 	return nil
 }
 
@@ -141,10 +139,6 @@ func (r *vncKBRecord) RecordMessage(msg interface{}) {
 	default:
 		log.Info("unexpected VNC client-to-server message: %#v\n", msg)
 	}
-}
-
-func (r *vncKBRecord) Record() {
-	<-r.done
 }
 
 func (v *vncFBRecord) Record() {

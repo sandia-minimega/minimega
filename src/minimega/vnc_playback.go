@@ -451,7 +451,6 @@ func (v *vncKBPlayback) Stop() error {
 	v.state = Close
 	v.control <- Close
 
-	v.done <- true
 	close(v.done)
 
 	// Cleanup any open playback readers
