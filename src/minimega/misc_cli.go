@@ -277,20 +277,15 @@ func cliEcho(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 	all := []string{
-		"clear capture",
-		"clear cc",
+		// clear non-namespaced things (except history)
 		"clear deploy flags",
-		"clear history",
-		"clear log",
+		"dnsmasq kill all",
+		// clear all namespaced things
 		"clear namespace all",
-		"clear optimize",
-		//"clear qos",
-		"clear router",
-		"clear tap",
-		"clear vlans",
-		"clear vm config",
-		"clear vm tag",
-		"clear vnc",
+		// clear vlan blacklist
+		"clear vlans all",
+		// clear the history last
+		"clear history",
 	}
 
 	// LOCK: this is a CLI hander so we already hold cmdLock (can call
