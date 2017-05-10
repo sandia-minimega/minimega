@@ -9,7 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	log"minilog"
 	"os"
 	"ranges"
 	"strings"
@@ -61,9 +61,18 @@ type Device struct {
 	outlets  map[string]string // map hostname -> outlet name
 }
 
+// IPMI configuration as read from the config file
+type IPMIConf struct {
+	lanInterface string
+	username     string
+	password     string
+	addresses    map[string]string // map hostname -> IPMI IP
+}
+
 // This gets read from the config file
 type Config struct {
 	devices map[string]Device
+	ipmi    IPMIConf
 	prefix  string // node name prefix, e.g. "ccc" for "ccc[1-100]"
 }
 
@@ -71,6 +80,8 @@ type Config struct {
 func readConfig(filename string) (Config, error) {
 	var ret Config
 	ret.devices = make(map[string]Device)
+	var i IPMIConf
+	i.addresses = make(map[string]string)
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -107,8 +118,18 @@ func readConfig(filename string) (Config, error) {
 				}
 			}
 			ret.devices[d.name] = d
-		case "node":
+		case "ipmi":
 			if len(fields) != 4 {
+				return ret, errors.New("IPMI information incomplete")
+			}
+			// i = IPMI struct
+			i.lanInterface = fields[1]
+			i.username = fields[2]
+			i.password = fields[3]
+			ret.ipmi = i
+		case "node":
+			ln := len(fields)
+			if ln != 4 && ln != 5 {
 				continue
 			}
 			nodename := fields[1]
@@ -116,6 +137,9 @@ func readConfig(filename string) (Config, error) {
 			outlet := fields[3]
 			if _, ok := ret.devices[dev]; ok {
 				ret.devices[dev].outlets[nodename] = outlet
+			}
+			if ln == 5 { // IPMI IP
+				ret.ipmi.addresses[nodename] = fields[4]
 			}
 		}
 	}
@@ -160,6 +184,12 @@ func main() {
 		command = "status"
 	}
 
+	ipmiConf := config.ipmi
+	if len(ipmiConf.addresses) != 0 {
+		err = useIPMI(nodes, command)
+		return
+	}
+
 	// Find a list of what devices and ports are affected
 	// by the command
 	devs := make(map[string]Device)
@@ -175,9 +205,10 @@ func main() {
 	// For each device affected, perform the command
 	for _, dev := range devs {
 		var pdu PDU
+		// First, let's see if IPMI is available
 		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
 		if err != nil {
-			log.Print(err)
+			log.Error(err.Error())
 			continue
 		}
 		switch command {
@@ -236,4 +267,41 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 		}
 	}
 	return ret, nil
+}
+
+// This will create a proper node list and execute
+// IPMI commands on each
+func useIPMI(s string, c string) error {
+	ranger, _ := ranges.NewRange(config.prefix, 0, 1000000)
+	nodes, err := ranger.SplitRange(s)
+	if err != nil {
+		return err
+	}
+
+	ipmiConf := config.ipmi
+	ipmi := NewIPMI(ipmiConf.username, ipmiConf.password, ipmiConf.lanInterface)
+	addrs := ipmiConf.addresses
+
+	var devs map[string]string
+	devs = make(map[string]string)
+
+	for _, n := range nodes {
+		devs[n] = addrs[n]
+	}
+	switch c {
+		case "on":
+			err = ipmi.On(devs)
+		case "off":
+			err = ipmi.Off(devs)
+		case "cycle":
+			err = ipmi.Cycle(devs)
+		case "status":
+			err = ipmi.Status(devs)
+		default:
+			usage()
+	}
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	return nil
 }
