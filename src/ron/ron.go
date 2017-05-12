@@ -54,6 +54,10 @@ type Server struct {
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
 
+	// UseVMs controls whether ron uses VM callbacks or not (see VM interface
+	// defined below).
+	UseVMs bool
+
 	plumber *miniplumber.Plumber
 }
 
@@ -94,6 +98,7 @@ func NewServer(port int, path string, plumber *miniplumber.Plumber) (*Server, er
 		path:          path,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		UseVMs:        true,
 		plumber:       plumber,
 	}
 
