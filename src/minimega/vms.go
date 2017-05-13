@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bridge"
 	"errors"
 	"fmt"
 	"meshage"
@@ -148,64 +147,6 @@ func (vms *VMs) Info(masks []string, resp *minicli.Response) {
 	}
 
 	resp.Data = res
-}
-
-func (vms *VMs) SetTag(target, key, value string) {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// For each VM, set tag using key/value.
-	vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		vm.SetTag(key, value)
-
-		return true, nil
-	})
-}
-
-func (vms *VMs) GetTags(target, key string) []Tag {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	res := []Tag{}
-
-	// For each VM, start it if it's in a startable state. Cannot be run in
-	// parallel since it aggregates results in res.
-	vms.applySerial(target, func(vm VM, wild bool) (bool, error) {
-		if key == Wildcard {
-			for k, v := range vm.GetTags() {
-				res = append(res, Tag{
-					Key:   k,
-					Value: v,
-					ID:    vm.GetID(),
-				})
-			}
-
-			return true, nil
-		}
-
-		// TODO: return false if tag not set?
-		res = append(res, Tag{
-			Key:   key,
-			Value: vm.Tag(key),
-			ID:    vm.GetID(),
-		})
-
-		return true, nil
-	})
-
-	return res
-}
-
-func (vms *VMs) ClearTags(target, key string) {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// For each VM, set tag using key/value. Can be run in parallel.
-	vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		vm.ClearTag(key)
-
-		return true, nil
-	})
 }
 
 // FindVM finds a VM based on its ID, name, or UUID.
@@ -376,59 +317,32 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 	return out
 }
 
-// Start VMs matching target.
-func (vms *VMs) Start(target string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// For each VM, start it if it's in a startable state.
-	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
-			// If wild, we only start VMs in the building or running state
-			return true, vm.Start()
-		} else if !wild && vm.GetState()&VM_RUNNING == 0 {
-			// If not wild, start VMs that aren't already running
-			return true, vm.Start()
-		}
-
-		return false, nil
-	})
-}
-
-// Stop VMs matching target.
-func (vms *VMs) Stop(target string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// For each VM, stop it if it's running.
-	return vms.apply(target, func(vm VM, _ bool) (bool, error) {
-		if vm.GetState()&VM_RUNNING != 0 {
-			return true, vm.Stop()
-		}
-
-		return false, nil
-	})
-}
-
 // Kill VMs matching target.
 func (vms *VMs) Kill(ns *Namespace, target string) []error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
+	// synchronizes access to killedVms
+	var mu sync.Mutex
+
 	killedVms := map[int]bool{}
 
 	// For each VM, kill it if it's in a killable state. Should not be run in
 	// parallel because we record the IDs of the VMs we kill in killedVms.
-	errs := vms.applySerial(target, func(vm VM, _ bool) (bool, error) {
+	errs := vms.apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
 
 		if err := vm.Kill(); err != nil {
 			log.Error("unleash the zombie VM: %v", err)
-		} else {
-			killedVms[vm.GetID()] = true
+			return true, err
 		}
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		killedVms[vm.GetID()] = true
 		return true, nil
 	})
 
@@ -463,134 +377,6 @@ func (vms *VMs) Flush(ns *Namespace) {
 			delete(vms.m, i)
 		}
 	}
-}
-
-func (vms *VMs) UpdateQos(target string, tap uint, op bridge.QosOption) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// For each VM, update the tap Qos
-	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		return true, vm.UpdateQos(tap, op)
-	})
-}
-
-func (vms *VMs) ClearAllQos(target string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// Clear qos for all vm taps
-	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		return true, vm.ClearAllQos()
-	})
-}
-
-func (vms *VMs) ClearQoS(target string, tap uint) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	// Clear Qos for each vm
-	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
-		return true, vm.ClearQos(tap)
-	})
-}
-
-func (vms *VMs) Hotplug(target, file, version string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
-		// safe due to applyKVM
-		kvm := vm.(*KvmVM)
-
-		return true, kvm.Hotplug(file, version)
-	})
-}
-
-func (vms *VMs) HotplugRemove(target string, id int, all bool) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
-		// safe due to applyKVM
-		kvm := vm.(*KvmVM)
-
-		if all {
-			err := kvm.HotplugRemoveAll()
-			if wild && err != nil && err.Error() == "no hotplug devices to remove" {
-				// suppress error if more than one target
-				err = nil
-			}
-			return true, err
-		}
-
-		err := kvm.HotplugRemove(id)
-		if wild && err != nil && err.Error() == "no such hotplug device" {
-			// suppress error if more than one target
-			err = nil
-		}
-
-		return true, err
-	})
-}
-
-func (vms *VMs) HotplugInfo(resp *minicli.Response) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	var mu sync.Mutex
-
-	resp.Header = []string{"name", "id", "file", "version"}
-
-	return vms.applyKVM(Wildcard, func(vm VM, wild bool) (bool, error) {
-		// safe due to applyKVM
-		kvm := vm.(*KvmVM)
-
-		name := vm.GetName()
-		res := kvm.HotplugInfo()
-
-		// synchronize adding results to resp
-		mu.Lock()
-		defer mu.Unlock()
-
-		for k, v := range res {
-			resp.Tabular = append(resp.Tabular, []string{
-				name, strconv.Itoa(k), v.Disk, v.Version,
-			})
-		}
-
-		return true, nil
-	})
-}
-
-func (vms *VMs) EjectCD(target string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
-		// safe due to applyKVM
-		kvm := vm.(*KvmVM)
-
-		err := kvm.EjectCD()
-		if wild && err != nil && err.Error() == "no cdrom inserted" {
-			// suppress error if more than one target
-			err = nil
-		}
-
-		return true, nil
-	})
-}
-
-func (vms *VMs) ChangeCD(target string, f string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
-		// safe due to applyKVM
-		kvm := vm.(*KvmVM)
-
-		return true, kvm.ChangeCD(f)
-	})
 }
 
 func (vms *VMs) ProcStats(d time.Duration) []*VMProcStats {
@@ -646,8 +432,17 @@ func (vms *VMs) ProcStats(d time.Duration) []*VMProcStats {
 	return res
 }
 
-// apply is the fan out/in method to apply a function to a set of VMs specified
-// by target. Specifically, it:
+// Apply fn to VMs, wrapping apply, with proper locking. Collapses error slice
+// into single error.
+func (vms *VMs) Apply(target string, fn vmApplyFunc) error {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	return makeErrSlice(vms.apply(target, fn))
+}
+
+// apply is the fan-out/fan-in method to apply a function to a set of VMs
+// specified by target. Specifically, it:
 //
 // 	1. Expands target to a list of VM names and IDs (or wild)
 // 	2. Invokes fn on all the matching VMs
@@ -751,40 +546,6 @@ func (vms *VMs) apply(target string, fn vmApplyFunc) []error {
 	}
 
 	return errs
-}
-
-// applySerial wraps applyFunc in a mutex so that they run serially.
-func (vms *VMs) applySerial(target string, fn vmApplyFunc) []error {
-	var mu sync.Mutex
-
-	return vms.apply(target, func(vm VM, w bool) (bool, error) {
-		mu.Lock()
-		defer mu.Unlock()
-
-		return fn(vm, w)
-	})
-}
-
-// applyKVM wraps applyFunc with filter for KvmVMs.
-func (vms *VMs) applyKVM(target string, fn vmApplyFunc) []error {
-	return vms.apply(target, func(vm VM, w bool) (bool, error) {
-		if vm, ok := vm.(*KvmVM); ok {
-			return fn(vm, w)
-		}
-
-		return false, nil
-	})
-}
-
-// applyContainer wraps applyFunc with filter for ContainerVMs.
-func (vms *VMs) applyContainer(target string, fn vmApplyFunc) []error {
-	return vms.apply(target, func(vm VM, w bool) (bool, error) {
-		if vm, ok := vm.(*ContainerVM); ok {
-			return fn(vm, w)
-		}
-
-		return false, nil
-	})
 }
 
 // meshageVMLauncher handles VM launches sent by the scheduler

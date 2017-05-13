@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -385,7 +386,7 @@ Clear all tags from all VMs:
 			"clear vm tag",
 			"clear vm tag <vm target> [tag]",
 		},
-		Call:    wrapVMTargetCLI(cliClearVmTag),
+		Call:    wrapVMTargetCLI(cliClearVMTag),
 		Suggest: wrapVMSuggest(VM_ANY_STATE),
 	},
 	{ // vm top
@@ -425,11 +426,32 @@ func init() {
 }
 
 func cliVMStart(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.Start(c.StringArgs["vm"]))
+	target := c.StringArgs["vm"]
+
+	// For each VM, start it if it's in a startable state.
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
+			// If wild, we only start VMs in the building or running state
+			return true, vm.Start()
+		} else if !wild && vm.GetState()&VM_RUNNING == 0 {
+			// If not wild, start VMs that aren't already running
+			return true, vm.Start()
+		}
+
+		return false, nil
+	})
 }
 
 func cliVMStop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.VMs.Stop(c.StringArgs["vm"]))
+	target := c.StringArgs["vm"]
+
+	return ns.VMs.Apply(target, func(vm VM, _ bool) (bool, error) {
+		if vm.GetState()&VM_RUNNING != 0 {
+			return true, vm.Stop()
+		}
+
+		return false, nil
+	})
 }
 
 func cliVMKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -450,14 +472,34 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	target := c.StringArgs["vm"]
 
 	if c.BoolArgs["eject"] {
-		return makeErrSlice(ns.VMs.EjectCD(target))
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
+
+			err := kvm.EjectCD()
+			if wild && err != nil && err.Error() == "no cdrom inserted" {
+				// suppress error if more than one target
+				err = nil
+			}
+
+			return true, nil
+		})
 	} else if c.BoolArgs["change"] {
 		f := c.StringArgs["path"]
 		if _, err := os.Stat(f); os.IsNotExist(err) {
 			return err
 		}
 
-		return makeErrSlice(ns.VMs.ChangeCD(target, f))
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
+
+			return true, kvm.ChangeCD(f)
+		})
 	}
 
 	return errors.New("unreachable")
@@ -479,32 +521,48 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			return errors.New("cannot assign to wildcard")
 		}
 
-		ns.SetTag(target, key, value)
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			vm.SetTag(key, value)
 
-		return nil
+			return true, nil
+		})
 	}
 
 	if key == Wildcard {
-		resp.Header = []string{"id", "tag", "value"}
+		resp.Header = []string{"name", "tag", "value"}
 	} else {
-		resp.Header = []string{"id", "value"}
+		resp.Header = []string{"name", "value"}
 	}
 
-	for _, tag := range ns.GetTags(target, key) {
-		row := []string{strconv.Itoa(tag.ID)}
+	// synchronizes appends to resp.Tabular
+	var mu sync.Mutex
+
+	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		name := vm.GetName()
 
 		if key == Wildcard {
-			row = append(row, tag.Key)
+			for k, v := range vm.GetTags() {
+				resp.Tabular = append(resp.Tabular, []string{
+					name, k, v,
+				})
+			}
+
+			return true, nil
 		}
 
-		row = append(row, tag.Value)
-		resp.Tabular = append(resp.Tabular, row)
-	}
+		// TODO: return false if tag not set?
+		resp.Tabular = append(resp.Tabular, []string{
+			name, key, vm.Tag(key),
+		})
 
-	return nil
+		return true, nil
+	})
 }
 
-func cliClearVmTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+func cliClearVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Get the specified tag name or use Wildcard if not provided
 	key, ok := c.StringArgs["key"]
 	if !ok {
@@ -517,9 +575,11 @@ func cliClearVmTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		target = Wildcard
 	}
 
-	ns.ClearTags(target, key)
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		vm.ClearTag(key)
 
-	return nil
+		return true, nil
+	})
 }
 
 func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -648,7 +708,13 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 		version := c.StringArgs["version"]
 
-		return makeErrSlice(ns.VMs.Hotplug(target, f, version))
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			if kvm, ok := vm.(*KvmVM); ok {
+				return true, kvm.Hotplug(f, version)
+			}
+
+			return false, nil
+		})
 	} else if c.BoolArgs["remove"] {
 		disk := c.StringArgs["disk"]
 
@@ -657,10 +723,56 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			return fmt.Errorf("invalid disk: `%v`", disk)
 		}
 
-		return makeErrSlice(ns.VMs.HotplugRemove(target, id, disk == Wildcard))
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
+
+			if disk == Wildcard {
+				err := kvm.HotplugRemoveAll()
+				if wild && err != nil && err.Error() == "no hotplug devices to remove" {
+					// suppress error if more than one target
+					err = nil
+				}
+				return true, err
+			}
+
+			err := kvm.HotplugRemove(id)
+			if wild && err != nil && err.Error() == "no such hotplug device" {
+				// suppress error if more than one target
+				err = nil
+			}
+
+			return true, err
+		})
 	}
 
-	return makeErrSlice(ns.VMs.HotplugInfo(resp))
+	resp.Header = []string{"name", "id", "file", "version"}
+
+	// synchronizes appends to resp.Tabular
+	var mu sync.Mutex
+
+	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+		kvm, ok := vm.(*KvmVM)
+		if !ok {
+			return false, nil
+		}
+
+		name := vm.GetName()
+		res := kvm.HotplugInfo()
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		for k, v := range res {
+			resp.Tabular = append(resp.Tabular, []string{
+				name, strconv.Itoa(k), v.Disk, v.Version,
+			})
+		}
+
+		return true, nil
+	})
 }
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

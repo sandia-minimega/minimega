@@ -9,10 +9,6 @@ import (
 	"time"
 )
 
-// Used to calulate burst rate for the token bucket filter qdisc
-const KERNEL_TIMER_FREQ uint64 = 250
-const MIN_BURST_SIZE uint64 = 2048
-
 var qosCLIHandlers = []minicli.Handler{
 	{
 		HelpShort: "add qos constraints to an interface",
@@ -54,45 +50,50 @@ Examples:
 
 	qos add all 0 rate 1 mbit`,
 		Patterns: []string{
-			"qos <add,> <target> <interface> <loss,> <percent>",
-			"qos <add,> <target> <interface> <delay,> <duration>",
-			"qos <add,> <target> <interface> <rate,> <bw> <kbit,mbit,gbit>",
-		}, Call: wrapVMTargetCLI(cliUpdateQos),
+			"qos <add,> <vm target> <interface> <loss,> <percent>",
+			"qos <add,> <vm target> <interface> <delay,> <duration>",
+			"qos <add,> <vm target> <interface> <rate,> <bw> <kbit,mbit,gbit>",
+		},
+		Call:    wrapVMTargetCLI(cliUpdateQos),
+		Suggest: wrapVMSuggest(VM_ANY_STATE),
 	},
 	{
 		HelpShort: "clear qos constraints on an interface",
 		HelpLong: `
-Remove quality-of-service constraints on a mega interface. This command is
-namespace aware and will only clear the qos from vms within the active
-namespace.
+Remove QoS constraints from a VM's interface. To clear QoS from all interfaces
+for a VM, use the wildcard:
 
-Example:
+	clear qos foo all
 
-	Remove all qos constraints on the 1st interface for the vms foo and bar
-	clear qos foo,bar 1`,
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"clear qos <target> [interface]",
-		}, Call: wrapVMTargetCLI(cliClearQos),
+			"clear qos <vm target> [tap index]",
+		},
+		Call:    wrapVMTargetCLI(cliClearQos),
+		Suggest: wrapVMSuggest(VM_ANY_STATE),
 	},
 }
 
 func cliClearQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["target"]
+	index := c.StringArgs["tap"]
 
-	if c.StringArgs["interface"] == Wildcard {
-		return fmt.Errorf("qos for wildcard taps not supported")
+	tap, err := strconv.ParseUint(index, 10, 32)
+	if err != nil && index != Wildcard {
+		return fmt.Errorf("invalid tap index %s", index)
 	}
 
-	tap, err := strconv.ParseUint(c.StringArgs["interface"], 10, 32)
-	if err != nil {
-		return fmt.Errorf("invalid tap index %s", c.StringArgs["interface"])
-	}
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		if index == Wildcard {
+			return true, vm.ClearAllQos()
+		}
 
-	return makeErrSlice(ns.ClearQoS(target, uint(tap)))
+		return true, vm.ClearQos(uint(tap))
+	})
 }
 
 func cliUpdateQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["target"]
+	target := c.StringArgs["vm"]
 
 	// Wildcard command
 	if c.StringArgs["interface"] == Wildcard {
@@ -110,7 +111,9 @@ func cliUpdateQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	return makeErrSlice(ns.UpdateQos(target, uint(tap), op))
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		return true, vm.UpdateQos(uint(tap), op)
+	})
 }
 
 func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
