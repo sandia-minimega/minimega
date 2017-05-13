@@ -431,17 +431,8 @@ func cliLocal() {
 // cliPreprocess performs expansion on a single string and returns the update
 // string or an error.
 func cliPreprocess(v string) (string, error) {
-	if strings.HasPrefix(v, "$") {
-		end := strings.IndexAny(v, "/ ")
-		if end == -1 {
-			end = len(v)
-		}
-		if v2 := os.Getenv(v[1:end]); v2 != "" {
-			return v2 + v[end:], nil
-		}
-
-		return "", fmt.Errorf("undefined: %v", v)
-	}
+	// expand any ${var} or $var env variables
+	v = os.ExpandEnv(v)
 
 	if u, err := url.Parse(v); err == nil {
 		switch u.Scheme {

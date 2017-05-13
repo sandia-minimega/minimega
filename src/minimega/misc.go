@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
@@ -268,6 +269,22 @@ func mustWrite(fpath, data string) {
 	if err := ioutil.WriteFile(fpath, []byte(data), 0664); err != nil {
 		log.Fatal("write %v failed: %v", fpath, err)
 	}
+}
+
+// marshal returns the JSON-marshaled version of `v`. If we are unable to
+// marshal it for whatever reason, we log an error and return an empty string.
+func marshal(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+
+	b, err := json.Marshal(v)
+	if err != nil {
+		log.Error("unable to marshal %v: %v", v, err)
+		return ""
+	}
+
+	return string(b)
 }
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for

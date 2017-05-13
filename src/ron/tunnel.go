@@ -83,7 +83,7 @@ func Trunk(remote net.Conn, uuid string, fn func(*Message) error) {
 	}
 
 	if err != io.ErrClosedPipe {
-		log.Error("trunk failed for %v: %v", err)
+		log.Error("trunk failed for %v: %v", uuid, err)
 	}
 
 	log.Debug("trunk exit for %v", uuid)

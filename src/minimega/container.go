@@ -259,6 +259,22 @@ type ContainerConfig struct {
 	//
 	// Note: this configuration only applies to containers.
 	Fifos uint64
+
+	// Attach one or more volumes to a container. These directories will be
+	// mounted inside the container at the specified location.
+	//
+	// For example, to mount /scratch/data to /data inside the container:
+	//
+	//  vm config volume /data /scratch/data
+	//
+	// Commands with the same <key> will overwrite previous volumes:
+	//
+	//  vm config volume /data /scratch/data2
+	//  vm config volume /data
+	//  /scratch/data2
+	//
+	// Note: this configuration only applies to containers.
+	VolumePaths map[string]string
 }
 
 type ContainerVM struct {
@@ -372,8 +388,8 @@ func containerTeardown() {
 //	7 :  uuid
 //	8 :  number of fifos
 //	9 :  preinit program
-//	10 :  init program (relative to filesystem path)
-//	11:  init args
+//	10+: source:target volumes, `--` signifies end
+//	11+ :  init program and args (relative to filesystem path)
 func containerShim() {
 	args := flag.Args()
 	if flag.NArg() < 11 { // 11 because init args can be nil
@@ -411,7 +427,19 @@ func containerShim() {
 		log.Fatalln(err)
 	}
 	vmPreinit := args[9]
-	vmInit := args[10:]
+
+	// find `--` separator between vmVolumes and vmInit
+	var vmVolumes, vmInit []string
+	for i, v := range args[10:] {
+		if v == "--" {
+			vmInit = args[10+i+1:]
+			break
+		}
+		vmVolumes = append(vmVolumes, v)
+	}
+
+	log.Debug("vmVolumes: %v", vmVolumes)
+	log.Debug("vmInit: %v", vmInit)
 
 	// set hostname
 	log.Debug("vm %v hostname", vmID)
@@ -433,6 +461,13 @@ func containerShim() {
 	err = containerMountDefaults(vmFSPath)
 	if err != nil {
 		log.Fatal("containerMountDefaults: %v", err)
+	}
+
+	// mount volumes
+	log.Debug("vm %v containerMountVolumes", vmID)
+	err = containerMountVolumes(vmFSPath, vmVolumes)
+	if err != nil {
+		log.Fatal("containerMountVolumes: %v", err)
 	}
 
 	// mknod
@@ -590,8 +625,11 @@ func (old ContainerConfig) Copy() ContainerConfig {
 	// Copy all fields
 	res := old
 
-	// Make deep copy of slices
-	// none yet - placeholder
+	// Make deep copy of volumes
+	res.VolumePaths = map[string]string{}
+	for k, v := range old.VolumePaths {
+		res.VolumePaths[k] = v
+	}
 
 	return res
 }
@@ -717,6 +755,8 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 	switch field {
 	case "console_port":
 		return strconv.Itoa(vm.ConsolePort), nil
+	case "volume":
+		return marshal(vm.VolumePaths), nil
 	}
 
 	return vm.ContainerConfig.Info(field)
@@ -762,6 +802,10 @@ func (vm *ContainerConfig) String() string {
 	fmt.Fprintf(w, "Init:\t%v\n", vm.Init)
 	fmt.Fprintf(w, "Pre-init:\t%v\n", vm.Preinit)
 	fmt.Fprintf(w, "FIFOs:\t%v\n", vm.Fifos)
+	fmt.Fprintf(w, "Volumes:\t\n")
+	for k, v := range vm.VolumePaths {
+		fmt.Fprintf(w, "\t%v -> %v\n", k, v)
+	}
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -881,6 +925,13 @@ func (vm *ContainerVM) launch() error {
 		fmt.Sprintf("%v", vm.Fifos),
 		preinit,
 	}
+	for k, v := range vm.VolumePaths {
+		// Create source:target pairs
+		// TODO: should probably handle spaces
+		args = append(args, fmt.Sprintf("%v:%v", v, k))
+	}
+	// denotes end of volumes
+	args = append(args, "--")
 	args = append(args, vm.Init...)
 
 	// launch the container
@@ -1551,6 +1602,28 @@ func containerMountDefaults(fsPath string) error {
 	return nil
 }
 
+func containerMountVolumes(fsPath string, volumes []string) error {
+	for _, v := range volumes {
+		f := strings.Split(v, ":")
+		if len(f) != 2 {
+			return fmt.Errorf("invalid volume, expected `source:target`: %v", v)
+		}
+
+		source := f[0]
+		target := filepath.Join(fsPath, f[1])
+
+		if err := os.MkdirAll(target, 0755); err != nil {
+			return err
+		}
+
+		if err := syscall.Mount(source, target, "", syscall.MS_BIND, ""); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
 	// walk minimega cgroups for tasks, killing each one
@@ -1655,6 +1728,7 @@ func containerCleanCgroupDirs() {
 		filepath.Join(*f_cgroup, "freezer", "minimega"),
 		filepath.Join(*f_cgroup, "memory", "minimega"),
 		filepath.Join(*f_cgroup, "devices", "minimega"),
+		filepath.Join(*f_cgroup, "cpu", "minimega"),
 	}
 	for _, d := range paths {
 		_, err := os.Stat(d)

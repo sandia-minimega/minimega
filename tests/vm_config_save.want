@@ -27,6 +27,7 @@ Hostname:
 Init:            [/init]
 Pre-init:        
 FIFOs:           0
+Volumes:
 
 ## # Set a bunch of things
 ## vm config uuid 9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
@@ -63,6 +64,7 @@ Hostname:
 Init:            [/init]
 Pre-init:        
 FIFOs:           0
+Volumes:
 
 ## # Test save/clear/restore
 ## vm config save test
@@ -96,6 +98,7 @@ Hostname:
 Init:            [/init]
 Pre-init:        
 FIFOs:           0
+Volumes:
 ## vm config restore test
 ## vm config
 VM configuration:
@@ -126,3 +129,4 @@ Hostname:
 Init:            [/init]
 Pre-init:        
 FIFOs:           0
+Volumes:

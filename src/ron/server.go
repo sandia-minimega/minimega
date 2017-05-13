@@ -25,6 +25,9 @@ import (
 )
 
 type Server struct {
+	// UseVMs controls whether ron uses VM callbacks or not (see ron.VM)
+	UseVMs bool
+
 	// conns stores connected but not necessarily active connections. Includes
 	// serial connections.
 	conns map[string]net.Conn
@@ -69,6 +72,7 @@ type Server struct {
 // start accepting connections from clients.
 func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, error) {
 	s := &Server{
+		UseVMs:        true,
 		conns:         make(map[string]net.Conn),
 		listeners:     make(map[string]net.Listener),
 		commands:      make(map[int]*Command),
@@ -615,24 +619,35 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 		return nil, fmt.Errorf("client %v already exists!", m.Client.UUID)
 	}
 
-	vm, ok := s.vms[m.Client.UUID]
-	if !ok {
-		// try again after unmangling the uuid, which qemu does in certain
-		// versions
-		vm, ok = s.vms[unmangle(m.Client.UUID)]
-		c.mangled = true
-	}
-	if !ok {
-		return nil, fmt.Errorf("unregistered client %v", m.Client.UUID)
+	var namespace string
+
+	if s.UseVMs {
+		vm, ok := s.vms[m.Client.UUID]
+		if !ok {
+			// try again after unmangling the uuid, which qemu does in certain
+			// versions
+			vm, ok = s.vms[unmangle(m.Client.UUID)]
+			c.mangled = true
+		}
+		if !ok {
+			return nil, fmt.Errorf("unregistered client %v", m.Client.UUID)
+		}
+
+		namespace = vm.GetNamespace()
 	}
 
-	c.Namespace = vm.GetNamespace()
+	c.Namespace = namespace
 
 	if m.Client.Version != version.Revision {
 		log.Warn("mismatched miniccc version: %v", m.Client.Version)
 	}
 
+	// TODO: if the client blocks, ron will hang... probably not good
 	if err := c.enc.Encode(&m); err != nil {
+		// client disconnected before it read the full handshake
+		if err != io.EOF {
+			log.Errorln(err)
+		}
 		return nil, err
 	}
 
@@ -844,16 +859,17 @@ func (s *Server) route(m *Message) {
 			return
 		}
 
-		vm, ok := s.vms[uuid]
-		if !ok {
-			// odd, someone must have unregistered the client...
-			log.Error("unregistered client %v", uuid)
-			return
-		}
-
 		if m.Type == MESSAGE_COMMAND {
-			// update client's tags in case we're matching based on them
-			c.Tags = vm.GetTags()
+			if s.UseVMs {
+				vm, ok := s.vms[uuid]
+				if !ok {
+					// odd, someone must have unregistered the client...
+					log.Error("unregistered client %v", uuid)
+					return
+				}
+				// update client's tags in case we're matching based on them
+				c.Tags = vm.GetTags()
+			}
 
 			// create a copy of the Message
 			m2 := *m
@@ -980,6 +996,10 @@ func (s *Server) updateClient(cin *Client) {
 
 	c.Client = cin
 	c.checkin = time.Now()
+
+	if !s.UseVMs {
+		return
+	}
 
 	vm, ok := s.vms[cin.UUID]
 	if !ok {

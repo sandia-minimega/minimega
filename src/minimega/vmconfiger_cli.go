@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -10,6 +11,19 @@ import (
 	"path/filepath"
 	"strconv"
 )
+
+func checkPath(v string) string {
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(v) {
+		v = filepath.Join(*f_iomBase, v)
+	}
+
+	if _, err := os.Stat(v); os.IsNotExist(err) {
+		log.Warn("file does not exist: %v", v)
+	}
+
+	return v
+}
 
 var vmconfigerCLIHandlers = []minicli.Handler{
 	{
@@ -29,16 +43,7 @@ Note: this configuration only applies to containers and must be specified.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.FilesystemPath = v
 
@@ -161,6 +166,57 @@ Note: this configuration only applies to containers.
 		}),
 	},
 	{
+		HelpShort: "configures volume",
+		HelpLong: `Attach one or more volumes to a container. These directories will be
+mounted inside the container at the specified location.
+
+For example, to mount /scratch/data to /data inside the container:
+
+ vm config volume /data /scratch/data
+
+Commands with the same <key> will overwrite previous volumes:
+
+ vm config volume /data /scratch/data2
+ vm config volume /data
+ /scratch/data2
+
+Note: this configuration only applies to containers.
+`,
+		Patterns: []string{
+			"vm config volume",
+			"vm config volume <key> [value]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if c.StringArgs["key"] == "" {
+				var b bytes.Buffer
+
+				for k, v := range ns.vmConfig.VolumePaths {
+					fmt.Fprintf(&b, "%v -> %v\n", k, v)
+				}
+
+				r.Response = b.String()
+				return nil
+			}
+
+			if c.StringArgs["value"] == "" {
+				if ns.vmConfig.VolumePaths != nil {
+					r.Response = ns.vmConfig.VolumePaths[c.StringArgs["value"]]
+				}
+				return nil
+			}
+
+			if ns.vmConfig.VolumePaths == nil {
+				ns.vmConfig.VolumePaths = make(map[string]string)
+			}
+
+			v := checkPath(c.StringArgs["value"])
+
+			ns.vmConfig.VolumePaths[c.StringArgs["key"]] = v
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures qemu",
 		HelpLong: `Set the QEMU process to invoke. Relative paths are ok. When unspecified,
 minimega uses "kvm" in the default path.
@@ -176,16 +232,7 @@ Note: this configuration only applies to KVM-based VMs.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.QemuPath = v
 
@@ -208,16 +255,7 @@ Note: this configuration only applies to KVM-based VMs.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.KernelPath = v
 
@@ -240,16 +278,7 @@ Note: this configuration only applies to KVM-based VMs.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.InitrdPath = v
 
@@ -272,16 +301,7 @@ Note: this configuration only applies to KVM-based VMs.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.CdromPath = v
 
@@ -307,16 +327,7 @@ Note: this configuration only applies to KVM-based VMs.
 				return nil
 			}
 
-			v := c.StringArgs["value"]
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(v) {
-				v = filepath.Join(*f_iomBase, v)
-			}
-
-			if _, err := os.Stat(v); os.IsNotExist(err) {
-				log.Warn("file does not exist: %v", v)
-			}
+			v := checkPath(c.StringArgs["value"])
 
 			ns.vmConfig.MigratePath = v
 
@@ -475,16 +486,8 @@ Note: this configuration only applies to KVM-based VMs.
 
 			vals := c.ListArgs["value"]
 
-			for i, v := range vals {
-				// Ensure that relative paths are always relative to /files/
-				if !filepath.IsAbs(v) {
-					v = filepath.Join(*f_iomBase, v)
-					vals[i] = v
-				}
-
-				if _, err := os.Stat(v); os.IsNotExist(err) {
-					log.Warn("file does not exist: %v", v)
-				}
+			for i := range vals {
+				vals[i] = checkPath(vals[i])
 			}
 
 			ns.vmConfig.DiskPaths = vals
@@ -658,6 +661,43 @@ Default: -1
 		}),
 	},
 	{
+		HelpShort: "configures tags",
+		HelpLong: `Set tags in the same manner as "vm tag". These tags will apply to all
+newly launched VMs.
+`,
+		Patterns: []string{
+			"vm config tags",
+			"vm config tags <key> [value]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if c.StringArgs["key"] == "" {
+				var b bytes.Buffer
+
+				for k, v := range ns.vmConfig.Tags {
+					fmt.Fprintf(&b, "%v -> %v\n", k, v)
+				}
+
+				r.Response = b.String()
+				return nil
+			}
+
+			if c.StringArgs["value"] == "" {
+				if ns.vmConfig.Tags != nil {
+					r.Response = ns.vmConfig.Tags[c.StringArgs["value"]]
+				}
+				return nil
+			}
+
+			if ns.vmConfig.Tags == nil {
+				ns.vmConfig.Tags = make(map[string]string)
+			}
+
+			ns.vmConfig.Tags[c.StringArgs["key"]] = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "reset one or more configurations to default value",
 		Patterns: []string{
 			"clear vm config",
@@ -686,6 +726,7 @@ Default: -1
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
 			"clear vm config <virtio-ports,>",
+			"clear vm config <volume,>",
 		},
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			// at most one key will be set in BoolArgs but we don't know what it
@@ -775,6 +816,9 @@ func (v *ContainerConfig) Info(field string) (string, error) {
 	if field == "fifos" {
 		return strconv.FormatUint(v.Fifos, 10), nil
 	}
+	if field == "volume" {
+		return fmt.Sprintf("%v", v.VolumePaths), nil
+	}
 
 	return "", fmt.Errorf("invalid info field: %v", field)
 }
@@ -794,6 +838,9 @@ func (v *ContainerConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "fifos" {
 		v.Fifos = 0
+	}
+	if mask == Wildcard || mask == "volume" {
+		v.VolumePaths = nil
 	}
 }
 
