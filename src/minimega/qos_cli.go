@@ -75,7 +75,7 @@ See "vm start" for a full description of allowable targets.`,
 }
 
 func cliClearQos(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["target"]
+	target := c.StringArgs["vm"]
 	index := c.StringArgs["tap"]
 
 	tap, err := strconv.ParseUint(index, 10, 32)
