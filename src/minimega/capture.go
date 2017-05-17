@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bridge"
 	"errors"
 	"fmt"
 	"gonetflow"
@@ -27,10 +28,21 @@ type capture struct {
 }
 
 var (
-	captureEntries   = make(map[int]*capture)
-	captureID        = NewCounter()
-	captureNFTimeout = 10
+	captureEntries = make(map[int]*capture)
+	captureID      = NewCounter()
 )
+
+var captureConfig = struct {
+	SnapLen  uint64
+	Filter   string
+	Mode     string
+	Compress bool
+	Timeout  uint64
+}{
+	SnapLen: 1600,
+	Mode:    "raw",
+	Timeout: 10,
+}
 
 func (c *capture) InNamespace(namespace string) bool {
 	if namespace == "" || c.VM == nil {
@@ -151,7 +163,10 @@ func startCapturePcap(v string, ifnum int, fname string) error {
 		return err
 	}
 
-	id, err := br.CaptureTap(nics[ifnum].Tap, fname, "")
+	id, err := br.CaptureTap(nics[ifnum].Tap, fname, bridge.CaptureConfig{
+		SnapLen: uint32(captureConfig.SnapLen),
+		Filter:  captureConfig.Filter,
+	})
 	if err != nil {
 		return err
 	}
@@ -184,7 +199,10 @@ func startBridgeCapturePcap(b, fname string) error {
 		fname = filepath.Join(*f_iomBase, fname)
 	}
 
-	id, err := br.Capture(fname, "")
+	id, err := br.Capture(fname, bridge.CaptureConfig{
+		SnapLen: uint32(captureConfig.SnapLen),
+		Filter:  captureConfig.Filter,
+	})
 	if err != nil {
 		return err
 	}
@@ -336,6 +354,8 @@ func getNetflowFromBridge(b string) (*gonetflow.Netflow, error) {
 
 // getOrCreateNetflow wraps calls to getBridge and getNetflowFromBridge,
 // creating each, if needed.
+//
+// TODO: separate netflow object per namespace?
 func getOrCreateNetflow(b string) (*gonetflow.Netflow, error) {
 	// create the bridge if necessary
 	br, err := getBridge(b)
@@ -348,7 +368,7 @@ func getOrCreateNetflow(b string) (*gonetflow.Netflow, error) {
 		return nil, err
 	} else if nf == nil {
 		// create a new netflow object
-		nf, err = br.NewNetflow(captureNFTimeout)
+		nf, err = br.NewNetflow(int(captureConfig.Timeout))
 	}
 
 	return nf, err
@@ -362,7 +382,7 @@ func captureUpdateNFTimeouts() {
 			continue
 		}
 
-		err = br.SetNetflowTimeout(captureNFTimeout)
+		err = br.SetNetflowTimeout(int(captureConfig.Timeout))
 		if err != nil && !strings.Contains(err.Error(), "has no netflow object") {
 			log.Error("unable to update netflow timeout: %v", err)
 		}

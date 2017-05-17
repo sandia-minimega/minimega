@@ -16,6 +16,20 @@ import (
 	"github.com/google/gopacket/pcapgo"
 )
 
+const DefaultSnapLen = 1600
+
+type CaptureConfig struct {
+	// Filter is a BPF string to apply to all packets. See `man pcap-filter`
+	// for the syntax and semantics.
+	Filter string
+
+	// SnapLen controls how many bytes to capture for each packet. According to
+	// `man pcap`, 65535 should be sufficient to capture full packets on most
+	// networks. If you only need headers, you can set it much lower (i.e.
+	// 200). When zero, we use DefaultSnapLen.
+	SnapLen uint32
+}
+
 // stopCapture stops a capture by ID which is assumed to exist
 func (b *Bridge) stopCapture(id int) {
 	tap := b.captures[id].tap
@@ -37,16 +51,34 @@ func (b *Bridge) stopCapture(id int) {
 	log.Info("stopped capture: %v %v", tap, id)
 }
 
-func (b *Bridge) captureTap(tap, fname, filter string) (int, error) {
-	log.Info("capture %v to %v with filter `%v`", tap, fname, filter)
+func (b *Bridge) captureTap(tap, fname string, config ...CaptureConfig) (int, error) {
+	log.Info("capture %v to %v", tap, fname)
 
-	handle, err := pcap.OpenLive(tap, 1600, true, time.Second)
+	// start with defaults
+	c := CaptureConfig{
+		SnapLen: DefaultSnapLen,
+	}
+
+	// if there are configs, only process the first one
+	if len(config) > 0 {
+		c2 := config[0]
+		log.Debug("using config: %v", c2)
+
+		if c2.SnapLen == 0 {
+			c2.SnapLen = DefaultSnapLen
+		}
+
+		c.Filter = c2.Filter
+		c.SnapLen = c2.SnapLen
+	}
+
+	handle, err := pcap.OpenLive(tap, int32(c.SnapLen), true, time.Second)
 	if err != nil {
 		return 0, err
 	}
 
-	if filter != "" {
-		if err := handle.SetBPFFilter(filter); err != nil {
+	if c.Filter != "" {
+		if err := handle.SetBPFFilter(c.Filter); err != nil {
 			handle.Close()
 			return 0, err
 		}
@@ -61,7 +93,7 @@ func (b *Bridge) captureTap(tap, fname, filter string) (int, error) {
 	w := pcapgo.NewWriter(f)
 
 	// write the file header
-	if err := w.WriteFileHeader(65536, layers.LinkTypeEthernet); err != nil {
+	if err := w.WriteFileHeader(c.SnapLen, layers.LinkTypeEthernet); err != nil {
 		handle.Close()
 		f.Close()
 		return 0, err
@@ -108,9 +140,10 @@ func (b *Bridge) captureTap(tap, fname, filter string) (int, error) {
 	return id, nil
 }
 
-// Capture traffic from a bridge to the given file with an optional BPF.
-// Returns an ID which can be passed to RemoveCapture to stop the capture.
-func (b *Bridge) Capture(fname, filter string) (int, error) {
+// Capture traffic from a bridge to fname. Only the first config is used, if
+// there is more than one. Returns an ID which can be passed to RemoveCapture
+// to stop the capture.
+func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -119,7 +152,7 @@ func (b *Bridge) Capture(fname, filter string) (int, error) {
 		return 0, err
 	}
 
-	id, err := b.captureTap(tap, fname, filter)
+	id, err := b.captureTap(tap, fname, config...)
 	if err != nil {
 		if err := b.removeMirror(tap); err != nil {
 			// Welp, we're boned
@@ -132,9 +165,10 @@ func (b *Bridge) Capture(fname, filter string) (int, error) {
 	return id, nil
 }
 
-// CaptureTap captures traffic for the specified tap with an optional BPF.
-// Returns an ID which can be passed to RemoveCapture to stop the capture.
-func (b *Bridge) CaptureTap(tap, fname, filter string) (int, error) {
+// CaptureTap captures traffic for the specified tap to fname. Only the first
+// config is used, if there is more than one. Returns an ID which can be passed
+// to RemoveCapture to stop the capture.
+func (b *Bridge) CaptureTap(tap, fname string, config ...CaptureConfig) (int, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -142,7 +176,7 @@ func (b *Bridge) CaptureTap(tap, fname, filter string) (int, error) {
 		return 0, fmt.Errorf("unknown tap on bridge %v: %v", b.Name, tap)
 	}
 
-	return b.captureTap(tap, fname, filter)
+	return b.captureTap(tap, fname, config...)
 }
 
 func (b *Bridge) StopCapture(id int) error {
