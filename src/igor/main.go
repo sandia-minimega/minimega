@@ -62,6 +62,7 @@ type Config struct {
 	PowerOffCommand	string
 	UseCobbler	bool
 	CobblerDefaultProfile	string
+	AutoReboot	bool
 }
 
 // Represents a slice of time
@@ -154,6 +155,7 @@ func housekeeping() {
 						io.Copy(f, masterfile)
 						f.Close()
 					}
+					PowerCycle(r.Hosts)
 				}
 			} else {
 				// Check if the reservation already exists
@@ -173,6 +175,7 @@ func housekeeping() {
 							log.Fatal("cobbler: %v", err)
 						}
 					}
+					PowerCycle(r.Hosts)
 				}
 			}
 		}
@@ -180,6 +183,38 @@ func housekeeping() {
 
 	ExpireSchedule()
 	putSchedule()
+}
+
+func PowerCycle(Hosts []string) {
+	if igorConfig.AutoReboot {
+		if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
+			// Use non-cobbler commands
+			for _, h := range Hosts {
+				command := append(strings.Split(igorConfig.PowerOffCommand, " "), h)
+				fmt.Printf("command = %v\n", command)
+				_, err := processWrapper(command...)
+				if err != nil {
+					log.Error("power off command returned %v", err)
+				}
+				command = append(strings.Split(igorConfig.PowerOnCommand, " "), h)
+				_, err = processWrapper(command...)
+				if err != nil {
+					log.Error("power on command returned %v", err)
+				}
+			}
+		} else if igorConfig.UseCobbler {
+			for _, h := range Hosts {
+				_, err := processWrapper("cobbler", "system", "poweroff", "--name="+h)
+				if err != nil {
+					log.Error("cobbler power off command returned %v", err)
+				}
+				_, err = processWrapper("cobbler", "system", "poweron", "--name="+h)
+				if err != nil {
+					log.Error("cobbler power on command returned %v", err)
+				}
+			}
+		}
+	}
 }
 
 func init() {

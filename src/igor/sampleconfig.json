@@ -9,5 +9,6 @@
 	"usecobbler" : false,
 	"cobblerdefaultprofile": "",
 	"poweroncommand" : "powerbot on",
-	"poweroffcommand" : "powerbot off"
+	"poweroffcommand" : "powerbot off",
+	"autoreboot": true
 }
