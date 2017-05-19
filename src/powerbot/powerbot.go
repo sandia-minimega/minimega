@@ -9,7 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	log"minilog"
+	log "minilog"
 	"os"
 	"ranges"
 	"strings"
@@ -17,7 +17,7 @@ import (
 
 var (
 	f_config = flag.String("config", "/etc/powerbot.conf", "path to config file")
-	f_PDU = flag.Bool("pdu", false, "Force PDU only")
+	f_PDU    = flag.Bool("pdu", false, "Force PDU only")
 	config   Config
 )
 
@@ -64,17 +64,18 @@ type Device struct {
 
 // IPMI configuration as read from the config file
 type IPMIData struct {
-	ip           string
-	username     string
-	password     string
+	ip       string
+	password string
+	username string
 }
 
 // This gets read from the config file
 type Config struct {
-	nodes   []string
-	devices map[string]Device
-	ipmis   map[string]IPMIData // hostname -> IPMIData
-	prefix  string // node name prefix, e.g. "ccc" for "ccc[1-100]"
+	nodes    []string
+	devices  map[string]Device
+	ipmiPath string
+	ipmis    map[string]IPMIData // hostname -> IPMIData
+	prefix   string              // node name prefix, e.g. "ccc" for "ccc[1-100]"
 }
 
 // Parse the config file and store it in the global config
@@ -82,6 +83,7 @@ func readConfig(filename string) (Config, error) {
 	var ret Config
 	ret.devices = make(map[string]Device)
 	ret.ipmis = make(map[string]IPMIData)
+	ret.ipmiPath = "ipmitool"
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -113,6 +115,8 @@ func readConfig(filename string) (Config, error) {
 			d.password = fields[6]
 			d.outlets = make(map[string]string)
 			ret.devices[d.name] = d
+		case "ipmi":
+			ret.ipmiPath = fields[1]
 		case "node":
 			ln := len(fields)
 			nodename := fields[1]
@@ -204,7 +208,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	fmt.Println("\nAttempting PDU commands...\n")
+	fmt.Println("\nAttempting PDU commands...")
 
 	// For each device affected, perform the command
 	for _, dev := range devs {
@@ -271,36 +275,35 @@ func useIPMI(s []string, c string) []string {
 	ipmis := config.ipmis
 	var ret []string
 	var dummyMap map[string]string //doesn't apply to IPMI
-	fmt.Println("\nAttempting IPMI commands...\n")
+	log.Info("Attempting IPMI commands...")
 
-	for _,n := range s {
+	for _, n := range s {
 		var ipmi PDU
 		var err error
 		if ipmiData, ok := ipmis[n]; !ok {
 			ret = append(ret, n)
-			fmt.Printf("No data for %s, skipping...\n", n)
+			log.Info("No data for %s, skipping...", n)
 			continue
 		} else {
-			ipmi = NewIPMI(ipmiData.ip, ipmiData.username, ipmiData.password)
+			ipmi = NewIPMI(ipmiData.ip, ipmiData.password, config.ipmiPath, ipmiData.username)
 		}
-		fmt.Printf("%s: ", n)
+		log.Info("%s: ", n)
 		switch c {
-			case "on":
-				err = ipmi.On(dummyMap)
-			case "off":
-				err = ipmi.Off(dummyMap)
-			case "cycle":
-				err = ipmi.Cycle(dummyMap)
-			case "status":
-				err = ipmi.Status(dummyMap)
-			default:
-				usage()
+		case "on":
+			err = ipmi.On(dummyMap)
+		case "off":
+			err = ipmi.Off(dummyMap)
+		case "cycle":
+			err = ipmi.Cycle(dummyMap)
+		case "status":
+			err = ipmi.Status(dummyMap)
+		default:
+			usage()
 		}
 		if err != nil {
 			ret = append(ret, n)
-			fmt.Printf("Failed to use IPMI for %s, adding to PDU list, if available.\n", n)
+			log.Info("Failed to use IPMI for %s, adding to PDU list, if available.", n)
 		}
 	}
-
 	return ret
 }
