@@ -29,6 +29,8 @@ Usage, <arg> = required, [arg] = optional:
 	powerbot cycle <nodelist>
         powerbot status [nodelist]
         powerbot                    # equivalent to "powerbot status"
+	powerbot temp <nodelist>    # IPMI only - temp sensor info
+	powerbot full <nodelist>   # IPMI only - full sensor info
 
 Node lists are in standard range format, i.e. node[1-5,8-10,15]
 `)
@@ -42,6 +44,8 @@ type PDU interface {
 	Off(map[string]string) error
 	Cycle(map[string]string) error
 	Status(map[string]string) error
+	Temp() error // IPMI only - noop for PDUs
+	Info() error // IPMI only - noop for PDUs
 }
 
 // This maps the Device.pdutype variable to a function
@@ -65,6 +69,7 @@ type Device struct {
 // IPMI configuration as read from the config file
 type IPMIData struct {
 	ip       string
+	node	 string
 	password string
 	username string
 }
@@ -132,6 +137,7 @@ func readConfig(filename string) (Config, error) {
 				ipmi.ip = fields[4]
 				ipmi.username = fields[5]
 				ipmi.password = fields[6]
+				ipmi.node = nodename
 				ret.ipmis[nodename] = ipmi
 			}
 		}
@@ -147,6 +153,7 @@ func main() {
 	// Get flags and arguments
 	flag.Parse()
 	args := flag.Args()
+	log.Init()
 
 	if len(args) == 0 {
 		command = "status"
@@ -208,7 +215,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	fmt.Println("\nAttempting PDU commands...")
+	log.Info("Attempting PDU commands...")
 
 	// For each device affected, perform the command
 	for _, dev := range devs {
@@ -229,6 +236,7 @@ func main() {
 		case "status":
 			pdu.Status(dev.outlets)
 		default:
+			fmt.Println("Invalid PDU command")
 			usage()
 		}
 	}
@@ -285,9 +293,8 @@ func useIPMI(s []string, c string) []string {
 			log.Info("No data for %s, skipping...", n)
 			continue
 		} else {
-			ipmi = NewIPMI(ipmiData.ip, ipmiData.password, config.ipmiPath, ipmiData.username)
+			ipmi = NewIPMI(ipmiData.ip, ipmiData.node, ipmiData.password, config.ipmiPath, ipmiData.username)
 		}
-		log.Info("%s: ", n)
 		switch c {
 		case "on":
 			err = ipmi.On(dummyMap)
@@ -297,6 +304,10 @@ func useIPMI(s []string, c string) []string {
 			err = ipmi.Cycle(dummyMap)
 		case "status":
 			err = ipmi.Status(dummyMap)
+		case "temp":
+			err = ipmi.Temp()
+		case "info":
+			err = ipmi.Info()
 		default:
 			usage()
 		}

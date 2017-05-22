@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	log "minilog"
 	"os/exec"
 )
@@ -13,6 +14,7 @@ import (
 // Wrapper for ipmitool.
 type IPMI struct {
 	ip       string
+	node	 string
 	password string
 	path     string
 	username string
@@ -20,8 +22,9 @@ type IPMI struct {
 
 // Create a new instance. The port should point to the device's telnet
 // CLI port, which appears to usually be 5214.
-func NewIPMI(ip, password, path, username string) PDU {
+func NewIPMI(ip, node, password, path, username string) PDU {
 	var ipmi IPMI
+	ipmi.node = node
 	ipmi.path = path
 	ipmi.ip = ip
 	ipmi.username = username
@@ -30,26 +33,46 @@ func NewIPMI(ip, password, path, username string) PDU {
 }
 
 func (i IPMI) On(addMap map[string]string) error {
-	return i.sendCommand("chassis power on")
+	out, err := i.sendCommand("chassis power on")
+	log.Info("%v: %v", i.node, out)
+	return err
 }
 
 func (i IPMI) Off(addMap map[string]string) error {
-	return i.sendCommand("chassis power off")
+	out, err := i.sendCommand("chassis power off")
+	log.Info("%v: %v", i.node, out)
+	return err
 }
 
 func (i IPMI) Cycle(addMap map[string]string) error {
-	return i.sendCommand("chassis power cycle")
+	out, err := i.sendCommand("chassis power cycle")
+	log.Info("%v: %v", i.node, out)
+	return err
 }
 
 func (i IPMI) Status(addMap map[string]string) error {
-	return i.sendCommand("chassis power status")
+	out, err := i.sendCommand("chassis power status")
+	fmt.Printf("%v: %v", i.node, out)
+	return err
 }
 
-func (i IPMI) sendCommand(c string) error {
-	opts := append(i.args(), c)
-	out, err := run(i.path, opts...)
-	log.Info(out)
+func (i IPMI) Temp() error {
+	out, err := i.sendCommand("sdr type Temperature")
+	fmt.Println(i.node, ":")
+	fmt.Println(out)
 	return err
+}
+
+func (i IPMI) Info() error {
+	fmt.Println(i.node, ":")
+	out, err := i.sendCommand("sdr elist full")
+	fmt.Println(out)
+	return err
+}
+
+func (i IPMI) sendCommand(c string) (string, error) {
+	opts := append(i.args(), c)
+	return run(i.path, opts...)
 }
 
 func (i IPMI) args() []string {
