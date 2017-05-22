@@ -235,8 +235,9 @@ func main() {
 			pdu.Cycle(dev.outlets)
 		case "status":
 			pdu.Status(dev.outlets)
+		case "temp", "info":
+			fmt.Println("Invalid PDU command; Remaining nodes skipped.")
 		default:
-			fmt.Println("Invalid PDU command")
 			usage()
 		}
 	}
@@ -313,7 +314,8 @@ func useIPMI(s []string, c string) []string {
 		}
 		if err != nil {
 			ret = append(ret, n)
-			log.Info("Failed to use IPMI for %s, adding to PDU list, if available.", n)
+			log.Info("Failed to use IPMI for %s, adding to PDU list, if available:", n)
+			log.Info(err.Error())
 		}
 	}
 	return ret

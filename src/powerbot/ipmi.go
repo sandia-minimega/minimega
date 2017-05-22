@@ -52,7 +52,9 @@ func (i IPMI) Cycle(addMap map[string]string) error {
 
 func (i IPMI) Status(addMap map[string]string) error {
 	out, err := i.sendCommand("chassis power status")
-	fmt.Printf("%v: %v", i.node, out)
+	if err == nil {
+		fmt.Printf("%v: %v", i.node, out)
+	}
 	return err
 }
 
