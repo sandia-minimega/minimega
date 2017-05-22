@@ -69,7 +69,7 @@ type Device struct {
 // IPMI configuration as read from the config file
 type IPMIData struct {
 	ip       string
-	node	 string
+	node     string
 	password string
 	username string
 }

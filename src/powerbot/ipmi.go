@@ -14,7 +14,7 @@ import (
 // Wrapper for ipmitool.
 type IPMI struct {
 	ip       string
-	node	 string
+	node     string
 	password string
 	path     string
 	username string
