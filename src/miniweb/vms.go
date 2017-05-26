@@ -6,23 +6,64 @@ package main
 
 import (
 	"fmt"
+	"minicli"
 	log "minilog"
 	"strings"
 )
 
-func vmInfo(name string, columns []string) []map[string]string {
+func vmInfo(columns, filters []string) []map[string]string {
 	cmd := "vm info"
-	if name != "" {
-		// TODO: quotes?
-		cmd = fmt.Sprintf(".filter name=%v %v", name, cmd)
+
+	// apply filters first so we don't need to worry about the columns not
+	// including the filtered fields.
+	for _, f := range filters {
+		cmd = fmt.Sprintf(".filter %v %v", f, cmd)
 	}
 
-	if len(columns) != 0 {
-		// TODO: quotes?
+	// quote all the columns in case there are spaces
+	for i, c := range columns {
+		columns[i] = fmt.Sprintf("%q", c)
+	}
+
+	// copy all fields in header order
+	doVM := func(resp *minicli.Response, row []string) map[string]string {
+		vm := map[string]string{
+			"host": resp.Host,
+		}
+
+		for i, header := range resp.Header {
+			vm[header] = row[i]
+		}
+
+		return vm
+	}
+
+	if len(columns) > 0 {
 		cmd = fmt.Sprintf(".columns %v %v", strings.Join(columns, ","), cmd)
+
+		// replace doVM to only copy fields in column order
+		doVM = func(resp *minicli.Response, row []string) map[string]string {
+			vm := map[string]string{}
+			for _, column := range columns {
+				if strings.Contains(column, "host") {
+					vm["host"] = resp.Host
+					continue
+				}
+
+				for i, header := range resp.Header {
+					if strings.Contains(column, header) {
+						vm[header] = row[i]
+					}
+				}
+			}
+			return vm
+		}
 	}
 
-	res := []map[string]string{}
+	// don't record command in history
+	cmd = fmt.Sprintf(".record false %v", cmd)
+
+	vms := []map[string]string{}
 
 	for resps := range mm.Run(cmd) {
 		for _, resp := range resps.Resp {
@@ -32,33 +73,10 @@ func vmInfo(name string, columns []string) []map[string]string {
 			}
 
 			for _, row := range resp.Tabular {
-				vm := map[string]string{}
-				for _, column := range columns {
-					if column == "host" {
-						vm["host"] = resp.Host
-						continue
-					}
-
-					for i, header := range resp.Header {
-						if column == header {
-							vm[header] = row[i]
-						}
-					}
-				}
-
-				res = append(res, vm)
+				vms = append(vms, doVM(resp, row))
 			}
 		}
 	}
 
-	if len(res) == 0 {
-		log.Errorln("no vms")
-		return nil
-	}
-
-	if name != "" && len(res) > 1 {
-		log.Errorln("lots of vms")
-	}
-
-	return res
+	return vms
 }
