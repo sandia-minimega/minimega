@@ -7,15 +7,20 @@ import (
 	log "minilog"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
-// Returns the indexes within the given array of all contiguous sets of '0' entries
-func FindContiguousBlock(nodes []uint64, count int) ([]int, error) {
-	result := []int{}
+// Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries
+func FindContiguousBlock(nodes []uint64, count int) ([][]int, error) {
+	result := [][]int{}
 	for i := 0; i+count <= len(nodes); i++ {
 		if IsFree(nodes, i, count) {
-			result = append(result, i)
+			inner := []int{}
+			for j := 0; j < count; j++ {
+				inner = append(inner, i+j)
+			}
+			result = append(result, inner)
 		}
 	}
 	if len(result) > 0 {
@@ -23,6 +28,15 @@ func FindContiguousBlock(nodes []uint64, count int) ([]int, error) {
 	} else {
 		return result, errors.New("no space available in this slice")
 	}
+}
+
+func AreNodesFree(clusternodes []uint64, requestedindexes []int) bool {
+	for _, idx := range requestedindexes {
+		if !IsFree(clusternodes, idx, 1) {
+			return false
+		}
+	}
+	return true
 }
 
 // Returns true if nodes[index] through nodes[index+count-1] are free
@@ -35,7 +49,7 @@ func IsFree(nodes []uint64, index, count int) bool {
 	return true
 }
 
-func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
+func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice, error) {
 	return FindReservationAfter(minutes, nodecount, time.Now().Unix())
 }
 
@@ -45,13 +59,37 @@ func FindReservation(minutes, nodecount int) (Reservation, []TimeSlice) {
 // The 'after' parameter specifies a Unix timestamp that should be taken as the
 // starting time for our search (this allows you to say "give me the first reservation
 // after noon tomorrow")
-func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []TimeSlice) {
+func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []TimeSlice, error) {
+	return FindReservationGeneric(minutes, nodecount, []string{}, false, after)
+}
+
+// Finds a slice of 'nodecount' nodes that's available for the specified length of time
+// Returns a reservation and a slice of TimeSlices that can be used to replace
+// the current Schedule if the reservation is acceptable.
+// The 'after' parameter specifies a Unix timestamp that should be taken as the
+// starting time for our search (this allows you to say "give me the first reservation
+// after noon tomorrow")
+// 'requestednodes' = a list of node names
+// 'specific' = true if we want the nodes in requestednodes rather than a range
+func FindReservationGeneric(minutes, nodecount int, requestednodes []string, specific bool, after int64) (Reservation, []TimeSlice, error) {
 	var res Reservation
+	var err error
 	var newSched []TimeSlice
 
 	slices := minutes / MINUTES_PER_SLICE
 	if (minutes % MINUTES_PER_SLICE) != 0 {
 		slices++
+	}
+
+	// convert hostnames to indexes
+	var requestedindexes []int
+	for _, hostname := range requestednodes {
+		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
+		n, err := strconv.Atoi(ns)
+		if err != nil {
+			return res, newSched, errors.New("invalid hostname "+ hostname)
+		}
+		requestedindexes = append(requestedindexes, n - igorConfig.Start)
 	}
 
 	res.ID = uint64(rand.Int63())
@@ -62,7 +100,7 @@ func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 		// Make sure the Schedule has enough time left in it
 		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
 			// This will guarantee we'll have enough space for the reservation
-			ExtendSchedule(slices)
+			ExtendSchedule(minutes)
 		}
 
 		if Schedule[i].Start < after {
@@ -70,10 +108,19 @@ func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 		}
 
 		s := Schedule[i]
+		var blocks [][]int
 		// Check if there's any open blocks in this slice
-		blocks, err := FindContiguousBlock(s.Nodes, nodecount)
-		if err != nil {
-			continue
+		if specific {
+			if AreNodesFree(s.Nodes, requestedindexes) {
+				blocks = [][]int{requestedindexes}
+			} else {
+				continue
+			}
+		} else {
+			blocks, err = FindContiguousBlock(s.Nodes, nodecount)
+			if err != nil {
+				continue
+			}
 		}
 
 		// For each of the blocks...
@@ -84,14 +131,15 @@ func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 			for j := 0; j < slices; j++ {
 				nodenames = []string{}
 				// For simplicity, we'll end up re-checking the first slice, but who cares
-				if !IsFree(newSched[i+j].Nodes, b, nodecount) {
+				if !AreNodesFree(newSched[i+j].Nodes, b) {
 					break
 				} else {
 					// Mark those nodes reserved
-					for k := b; k < b+nodecount; k++ {
-						newSched[i+j].Nodes[k] = res.ID
+					//for k := b; k < b+nodecount; k++ {
+					for _, idx := range b {
+						newSched[i+j].Nodes[idx] = res.ID
 						fmtstring := "%s%0"+strconv.Itoa(igorConfig.Padlen)+"d"
-						nodenames = append(nodenames, fmt.Sprintf(fmtstring, igorConfig.Prefix, igorConfig.Start+k))
+						nodenames = append(nodenames, fmt.Sprintf(fmtstring, igorConfig.Prefix, igorConfig.Start+idx))
 					}
 				}
 			}
@@ -118,7 +166,7 @@ func FindReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 		}
 	}
 Done:
-	return res, newSched
+	return res, newSched, nil
 }
 
 func InitializeSchedule() {

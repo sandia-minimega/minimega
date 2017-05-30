@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"ranges"
 	"time"
 )
 
@@ -53,6 +54,7 @@ var subC string // -c
 var subT int    // -t
 var subS bool	// -s
 var subA string // -a
+var subW string // -w
 
 func init() {
 	// break init cycle
@@ -66,15 +68,17 @@ func init() {
 	cmdSub.Flag.IntVar(&subT, "t", 60, "")
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
+	cmdSub.Flag.StringVar(&subW, "w", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
+	var nodes []string	// if the user has requested specific nodes
 	var reservation Reservation	// the new reservation
 	var newSched []TimeSlice	// the new schedule
 	format := "2006-Jan-2-15:04"
 
 	// validate arguments
-	if subR == "" || subK == "" || subI == "" || subN == 0 {
+	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
 		help([]string{"sub"})
 		log.Fatalln("Missing required argument")
 
@@ -92,6 +96,12 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
+	// figure out which nodes to reserve
+	if subW != "" {
+		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+		nodes, _ = rnge.SplitRange(subW)
+	}
+
 	when := time.Now()
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
@@ -105,13 +115,31 @@ func runSub(cmd *Command, args []string) {
 		fmt.Println("AVAILABLE RESERVATIONS")
 		fmt.Println("START\t\t\tEND")
 		for i := 0; i < 10; i++ {
-			r, _ := FindReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+			var r Reservation
+			if subN > 0 {
+				r, _, err = FindReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else if subW != "" {
+				r, _, err = FindReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			}
 			fmt.Printf("%v\t%v\n", time.Unix(r.StartTime, 0).Format(format), time.Unix(r.EndTime, 0).Format(format))
 		}
 		return
 	}
 
-	reservation, newSched = FindReservationAfter(subT, subN, when.Unix())
+	if subN > 0 {
+		reservation, newSched, err = FindReservationAfter(subT, subN, when.Unix())
+	} else if subW != "" {
+		reservation, newSched, err = FindReservationGeneric(subT, 0, nodes, true, when.Unix())
+	}
+	if err != nil {
+		log.Fatalln(err)
+	}
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 	reservation.KernelArgs = subC
