@@ -583,6 +583,10 @@ func (vm *KvmVM) launch() error {
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		nic := &vm.Networks[i]
+		if nic.Tap != "" {
+			// tap has already been created, don't need to do again
+			continue
+		}
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
@@ -591,12 +595,14 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
+		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
 			return err
 		}
+
+		nic.Tap = tap
 	}
 
 	if len(vm.Networks) > 0 {

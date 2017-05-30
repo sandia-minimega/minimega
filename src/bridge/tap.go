@@ -9,47 +9,33 @@ import (
 	log "minilog"
 )
 
-// CreateTap creates and adds a tap to a bridge. If a name is not provided, one
-// will be automatically generated.
-func (b *Bridge) CreateTap(tap, mac string, lan int) (string, error) {
+// CreateTap creates a new tap and adds it to the bridge. mac is the MAC
+// address to assign to the interface. vlan is the VLAN for the traffic.
+func (b *Bridge) CreateTap(mac string, vlan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.createTap(tap, mac, lan)
-}
-
-func (b *Bridge) createTap(t, mac string, lan int) (string, error) {
-	log.Info("creating tap on bridge: %v %v %v %v", b.Name, t, mac, lan)
+	log.Info("creating tap on bridge %v: %v %v", b.Name, mac, vlan)
 
 	// reap taps before creating to avoid someone killing/restarting a vm
 	// faster than the periodic tap reaper
 	b.reapTaps()
 
-	if _, ok := b.taps[t]; ok {
-		return t, fmt.Errorf("tap already on bridge")
-	}
+	tap := <-b.nameChan
 
-	tap := t
-	if tap == "" {
-		tap = <-b.nameChan
-	}
+	var created bool
 
-	var existed bool
-
-	if err := createTap(tap); err == errAlreadyExists && t != "" {
-		// Caller provided a name so assume it was created for us
-		existed = true
-	} else if err != nil {
-		return "", err
-	}
-
-	err := upInterface(tap, false)
+	err := createTap(tap)
 	if err == nil {
-		err = b.addTap(tap, mac, lan, false)
+		created = true
+		err = upInterface(tap, false)
+	}
+	if err == nil {
+		err = b.addTap(tap, mac, vlan, false)
 	}
 
-	// Clean up the tap we just created, if it didn't already exist.
-	if err != nil && !existed {
+	// clean up the tap we created
+	if err != nil && created {
 		if err := destroyTap(tap); err != nil {
 			// Welp, we're boned
 			log.Error("zombie tap -- %v %v", tap, err)
