@@ -577,24 +577,26 @@ func (p *Plumber) newWriter(pipe string) chan<- string {
 		for v := range c {
 			// don't do local writes if the via doesn't belong to
 			// us - post it to the owner instead.
-			if pp.viaHost != p.node.Name() && pp.viaHost != "" {
-				p.lock.Lock()
+			if p.node != nil {
+				if pp.viaHost != p.node.Name() && pp.viaHost != "" {
+					p.lock.Lock()
 
-				m := &Message{
-					From: p.node.Name(),
-					Type: MESSAGE_VIA_WRITE,
-					Pipe: pipe,
+					m := &Message{
+						From: p.node.Name(),
+						Type: MESSAGE_VIA_WRITE,
+						Pipe: pipe,
+					}
+
+					m.Value = v
+
+					_, err := p.node.Set([]string{pp.viaHost}, m)
+					if err != nil {
+						log.Errorln(err)
+					}
+					p.lock.Unlock()
+
+					continue
 				}
-
-				m.Value = v
-
-				_, err := p.node.Set([]string{pp.viaHost}, m)
-				if err != nil {
-					log.Errorln(err)
-				}
-				p.lock.Unlock()
-
-				continue
 			}
 
 			r, err := p.schedule(pipe)

@@ -80,11 +80,12 @@ func NewPlumberReader(pipe string) (*miniplumber.Reader, error) {
 	return r, nil
 }
 
+// writes may go to an upstream via, so instead of having a local writer that
+// local readers can consume, we simply upstream writes and allow messages
+// destined for local readers to echo right back down.
 func NewPlumberWriter(pipe string) (chan<- string, error) {
 	plumberLock.Lock()
 	defer plumberLock.Unlock()
-
-	w := plumber.NewWriter(pipe)
 
 	m := &ron.Message{
 		Type:     ron.MESSAGE_PIPE,
@@ -93,14 +94,11 @@ func NewPlumberWriter(pipe string) (chan<- string, error) {
 	}
 
 	if err := sendMessage(m); err != nil {
-		close(w)
 		return nil, err
 	}
 
 	writerCount[pipe]++
 
-	// we have to intercept writes in order to forward them up to minimega,
-	// so we do an indirect just like miniplumber itself does internally.
 	ww := make(chan string)
 	go func() {
 		for v := range ww {
@@ -108,9 +106,7 @@ func NewPlumberWriter(pipe string) (chan<- string, error) {
 			if err != nil {
 				log.Errorln(err)
 			}
-			w <- v
 		}
-		close(w)
 
 		plumberLock.Lock()
 		defer plumberLock.Unlock()
