@@ -39,7 +39,7 @@ import (
 )
 
 const (
-	POLL_ATTEMPTS = 5
+	POLL_ATTEMPTS = 1000
 	POLL_WAIT     = time.Duration(1 * time.Millisecond)
 )
 
