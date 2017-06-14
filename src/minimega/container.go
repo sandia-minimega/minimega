@@ -39,6 +39,11 @@ import (
 )
 
 const (
+	POLL_ATTEMPTS = 5
+	POLL_WAIT     = time.Duration(1 * time.Millisecond)
+)
+
+const (
 	CONTAINER_MAGIC        = "CONTAINER"
 	CONTAINER_NONE         = "CONTAINER_NONE"
 	CONTAINER_KILL_TIMEOUT = 5 * time.Second
@@ -1357,6 +1362,21 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 		if err := os.MkdirAll(cgroup, 0755); err != nil {
 			return err
 		}
+	}
+
+	// poll for the new mkdir to populate. Why we have to do this in the
+	// 21st century is beyond me.
+	var populateSuccess bool
+	for i := 0; i < POLL_ATTEMPTS; i++ {
+		_, err := os.Lstat(filepath.Join(cgroupFreezer, "freezer.state"))
+		if err == nil {
+			populateSuccess = true
+			break
+		}
+		time.Sleep(POLL_WAIT)
+	}
+	if !populateSuccess {
+		return fmt.Errorf("cgroup directory never populated!?: %v", cgroupFreezer)
 	}
 
 	// devices
