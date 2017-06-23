@@ -24,7 +24,7 @@ import (
 )
 
 // Constants
-const MINUTES_PER_SLICE = 10 // must be less than 60! 1, 5, 10, or 15 would be good choices
+const MINUTES_PER_SLICE = 1 // must be less than 60! 1, 5, 10, or 15 would be good choices
 // Minimum schedule length in minutes, 720 = 12 hours
 const MIN_SCHED_LEN = 72
 

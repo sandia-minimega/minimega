@@ -82,8 +82,8 @@ func runShow(_ *Command, _ []string) {
 	args := []string{
 		"-sn",
 		"-PS22",
-		"--max-retries=1",
-		"--host-timeout=10ms",
+		"--max-retries=2",
+		"--host-timeout=300ms",
 		"-oG",
 		"-",
 	}
