@@ -63,6 +63,13 @@ type Config struct {
 	UseCobbler	bool
 	CobblerDefaultProfile	string
 	AutoReboot	bool
+	VLANMin     int               `json:"vlan_min"`
+	VLANMax     int               `json:"vlan_max"`
+	NodeMap     map[string]string `json:"node_map"`
+	Network     string
+	NetworkUser     string
+	NetworkPassword	string
+	NetworkURL string `json:"network_url"`
 }
 
 // Represents a slice of time
@@ -82,6 +89,7 @@ type Reservation struct {
 	Owner     string
 	ID        uint64
 	KernelArgs	string
+	Vlan	int
 }
 
 // Sort the slice of reservations based on the start time
@@ -126,6 +134,11 @@ func housekeeping() {
 		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
 		} else if r.StartTime < now {
+			// update network config
+			err := networkSet(r.Hosts, r.Vlan)
+			if err != nil {
+				log.Error("error setting network isolation: %v", err)
+			}
 			if !igorConfig.UseCobbler {
 				// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
 				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
@@ -222,6 +235,8 @@ func init() {
 }
 
 func main() {
+	var err error
+
 	log.Init()
 
 	flag.Usage = usage
@@ -243,7 +258,6 @@ func main() {
 
 	// Read in the reservations
 	// We open the file here so resdb.Close() doesn't happen until program exit
-	var err error
 	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	resdb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {

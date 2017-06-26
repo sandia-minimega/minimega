@@ -82,7 +82,8 @@ func runShow(_ *Command, _ []string) {
 	args := []string{
 		"-sn",
 		"-PS22",
-		"--max-retries=2",
+		"--max-retries=1",
+		"--unprivileged",
 		"--host-timeout=300ms",
 		"-oG",
 		"-",
@@ -94,7 +95,6 @@ func runShow(_ *Command, _ []string) {
 	if err != nil {
 		log.Fatal("unable to scan: %v", err)
 	}
-
 	s := bufio.NewScanner(bytes.NewReader(out))
 
 	for s.Scan() {
@@ -122,8 +122,8 @@ func runShow(_ *Command, _ []string) {
 	}
 
 	var downNodes []string
-	for i, alive := range nodes {
-		if !alive {
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		if !nodes[i] {
 			hostname := igorConfig.Prefix + strconv.Itoa(i)
 			downNodes = append(downNodes, hostname)
 		}

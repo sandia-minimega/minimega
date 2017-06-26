@@ -74,6 +74,12 @@ func deleteReservation(checkUser bool, args []string) {
 	// Update the reservation file
 	putReservations()
 	putSchedule()
+	
+	// clean up the network config
+	err = networkClear(deletedReservation.Hosts)
+	if err != nil {
+		log.Fatal("error clearing network isolation: %v", err)
+	}
 
 	if !igorConfig.UseCobbler {
 		// Delete all the PXE files in the reservation

@@ -140,6 +140,22 @@ func runSub(cmd *Command, args []string) {
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	// pick a network segment
+	var vlan int
+	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
+		for _, r := range Reservations {
+			if vlan == r.Vlan {
+				continue
+			}
+		}
+		break
+	}
+	if vlan > igorConfig.VLANMax {
+		log.Fatal("couldn't assign a vlan!")
+	}
+	reservation.Vlan = vlan
+
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 	reservation.KernelArgs = subC
@@ -178,9 +194,19 @@ func runSub(cmd *Command, args []string) {
 	idest.Close()
 	isource.Close()
 
-	fmt.Printf("New Reservation: %#v\n", reservation)
+	timefmt := "Jan 2 15:04"
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
+	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
+	fmt.Printf("Nodes: %v\n", unsplit)
 
 	Schedule = newSched
+
+	// update the network config
+	//err = networkSet(reservation.Hosts, vlan)
+	//if err != nil {
+	//	log.Fatal("error setting network isolation: %v", err)
+	//}
 
 	putReservations()
 	putSchedule()
