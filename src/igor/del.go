@@ -74,7 +74,7 @@ func deleteReservation(checkUser bool, args []string) {
 	// Update the reservation file
 	putReservations()
 	putSchedule()
-	
+
 	// clean up the network config
 	err = networkClear(deletedReservation.Hosts)
 	if err != nil {
@@ -86,7 +86,7 @@ func deleteReservation(checkUser bool, args []string) {
 		for _, pxename := range deletedReservation.PXENames {
 			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 		}
-	
+
 		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 	} else {
 		for _, host := range deletedReservation.Hosts {

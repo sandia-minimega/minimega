@@ -51,25 +51,25 @@ var exitMu sync.Mutex
 
 // The configuration of the system
 type Config struct {
-	TFTPRoot   string
-	Prefix     string
-	Start      int
-	End        int
-	Padlen		int
-	Rackwidth  int
-	Rackheight int
-	PowerOnCommand	string
-	PowerOffCommand	string
-	UseCobbler	bool
-	CobblerDefaultProfile	string
-	AutoReboot	bool
-	VLANMin     int               `json:"vlan_min"`
-	VLANMax     int               `json:"vlan_max"`
-	NodeMap     map[string]string `json:"node_map"`
-	Network     string
-	NetworkUser     string
-	NetworkPassword	string
-	NetworkURL string `json:"network_url"`
+	TFTPRoot              string
+	Prefix                string
+	Start                 int
+	End                   int
+	Padlen                int
+	Rackwidth             int
+	Rackheight            int
+	PowerOnCommand        string
+	PowerOffCommand       string
+	UseCobbler            bool
+	CobblerDefaultProfile string
+	AutoReboot            bool
+	VLANMin               int               `json:"vlan_min"`
+	VLANMax               int               `json:"vlan_max"`
+	NodeMap               map[string]string `json:"node_map"`
+	Network               string
+	NetworkUser           string
+	NetworkPassword       string
+	NetworkURL            string `json:"network_url"`
 }
 
 // Represents a slice of time
@@ -80,16 +80,16 @@ type TimeSlice struct {
 }
 
 type Reservation struct {
-	ResName   string
-	Hosts     []string // separate, not a range
-	PXENames  []string // eg C000025B
-	StartTime int64    // UNIX time
-	EndTime   int64    // UNIX time
-	Duration  float64  // minutes
-	Owner     string
-	ID        uint64
-	KernelArgs	string
-	Vlan	int
+	ResName    string
+	Hosts      []string // separate, not a range
+	PXENames   []string // eg C000025B
+	StartTime  int64    // UNIX time
+	EndTime    int64    // UNIX time
+	Duration   float64  // minutes
+	Owner      string
+	ID         uint64
+	KernelArgs string
+	Vlan       int
 }
 
 // Sort the slice of reservations based on the start time
@@ -144,7 +144,7 @@ func housekeeping() {
 				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 				if _, err := os.Stat(filename); os.IsNotExist(err) {
 					log.Info("Installing files for reservation ", r.ResName)
-	
+
 					// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 					masterfile, err := os.Create(fname)
@@ -156,7 +156,7 @@ func housekeeping() {
 					masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
 					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
 					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
-	
+
 					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 					for _, pxename := range r.PXENames {
 						masterfile.Seek(0, 0)

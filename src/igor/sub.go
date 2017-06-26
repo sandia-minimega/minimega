@@ -52,7 +52,7 @@ var subI string // -i
 var subN int    // -n
 var subC string // -c
 var subT int    // -t
-var subS bool	// -s
+var subS bool   // -s
 var subA string // -a
 var subW string // -w
 
@@ -72,9 +72,9 @@ func init() {
 }
 
 func runSub(cmd *Command, args []string) {
-	var nodes []string	// if the user has requested specific nodes
-	var reservation Reservation	// the new reservation
-	var newSched []TimeSlice	// the new schedule
+	var nodes []string          // if the user has requested specific nodes
+	var reservation Reservation // the new reservation
+	var newSched []TimeSlice    // the new schedule
 	format := "2006-Jan-2-15:04"
 
 	// validate arguments

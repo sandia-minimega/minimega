@@ -6,9 +6,9 @@ package main
 
 import (
 	"fmt"
+	log "minilog"
 	"os/exec"
 	"time"
-	log "minilog"
 )
 
 // processWrapper executes the given arg list and returns a combined

@@ -2,12 +2,12 @@ package main
 
 import (
 	"bytes"
-	"fmt"
-	"text/template"
 	"encoding/json"
-	"strings"
-	"net/http"
+	"fmt"
 	"io/ioutil"
+	"net/http"
+	"strings"
+	"text/template"
 )
 
 func init() {
@@ -37,17 +37,17 @@ type AristaConfig struct {
 }
 
 func aristaJSONRPC(user, password, URL string, commands []string) error {
-	data , err := json.Marshal(map[string]interface{}{
+	data, err := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
-		"method": "runCmds",
-		"id": 1,
-		"params": map[string]interface{}{ "version": 1, "cmds": commands},
+		"method":  "runCmds",
+		"id":      1,
+		"params":  map[string]interface{}{"version": 1, "cmds": commands},
 	})
 	if err != nil {
 		return fmt.Errorf("marshal: %v", err)
 	}
 
-	path := fmt.Sprintf("http://%s:%s@%s", user, password, URL)	
+	path := fmt.Sprintf("http://%s:%s@%s", user, password, URL)
 	resp, err := http.Post(path, "application/json", strings.NewReader(string(data)))
 	if err != nil {
 		return fmt.Errorf("post: %v", err)

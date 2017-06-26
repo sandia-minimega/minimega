@@ -87,9 +87,9 @@ func FindReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
 		n, err := strconv.Atoi(ns)
 		if err != nil {
-			return res, newSched, errors.New("invalid hostname "+ hostname)
+			return res, newSched, errors.New("invalid hostname " + hostname)
 		}
-		requestedindexes = append(requestedindexes, n - igorConfig.Start)
+		requestedindexes = append(requestedindexes, n-igorConfig.Start)
 	}
 
 	res.ID = uint64(rand.Int63())
@@ -138,7 +138,7 @@ func FindReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 					//for k := b; k < b+nodecount; k++ {
 					for _, idx := range b {
 						newSched[i+j].Nodes[idx] = res.ID
-						fmtstring := "%s%0"+strconv.Itoa(igorConfig.Padlen)+"d"
+						fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 						nodenames = append(nodenames, fmt.Sprintf(fmtstring, igorConfig.Prefix, igorConfig.Start+idx))
 					}
 				}
