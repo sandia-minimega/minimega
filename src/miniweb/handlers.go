@@ -163,7 +163,7 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 
 	switch vmType {
 	case "kvm":
-		http.ServeFile(w, r, filepath.Join(*f_root, "vnc_auto.html"))
+		http.ServeFile(w, r, filepath.Join(*f_root, "vnc.html"))
 	case "container":
 		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
 	default:
