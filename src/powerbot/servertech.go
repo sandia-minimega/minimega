@@ -172,3 +172,13 @@ func (p ServerTechPDU) Status(ports map[string]string) error {
 	p.logout()
 	return nil
 }
+
+func (p ServerTechPDU) Temp() error {
+	//noop
+	return nil
+}
+
+func (p ServerTechPDU) Info() error {
+	//noop
+	return nil
+}
