@@ -109,7 +109,7 @@ func runSub(cmd *Command, args []string) {
 		when = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
 	}
 
-	// If this is a speculative call, run FindReservationAfter a few times,
+	// If this is a speculative call, run findReservationAfter a few times,
 	// print, and exit
 	if subS {
 		fmt.Println("AVAILABLE RESERVATIONS")
@@ -117,12 +117,12 @@ func runSub(cmd *Command, args []string) {
 		for i := 0; i < 10; i++ {
 			var r Reservation
 			if subN > 0 {
-				r, _, err = FindReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
 			} else if subW != "" {
-				r, _, err = FindReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
@@ -133,9 +133,9 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	if subN > 0 {
-		reservation, newSched, err = FindReservationAfter(subT, subN, when.Unix())
+		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
 	} else if subW != "" {
-		reservation, newSched, err = FindReservationGeneric(subT, 0, nodes, true, when.Unix())
+		reservation, newSched, err = findReservationGeneric(subT, 0, nodes, true, when.Unix())
 	}
 	if err != nil {
 		log.Fatalln(err)

@@ -168,7 +168,7 @@ func housekeeping() {
 						io.Copy(f, masterfile)
 						f.Close()
 					}
-					PowerCycle(r.Hosts)
+					powerCycle(r.Hosts)
 				}
 			} else {
 				// Check if the reservation already exists
@@ -188,17 +188,17 @@ func housekeeping() {
 							log.Fatal("cobbler: %v", err)
 						}
 					}
-					PowerCycle(r.Hosts)
+					powerCycle(r.Hosts)
 				}
 			}
 		}
 	}
 
-	ExpireSchedule()
+	expireSchedule()
 	putSchedule()
 }
 
-func PowerCycle(Hosts []string) {
+func powerCycle(Hosts []string) {
 	if igorConfig.AutoReboot {
 		if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
 			// Use non-cobbler commands
