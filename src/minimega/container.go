@@ -510,11 +510,11 @@ func containerShim() {
 		log.Fatal("containerRemountReadOnly: %v", err)
 	}
 
-	// mask uuid path
+	// mask uuid path if possible - not all platforms have dmi
 	log.Debug("uuid bind mount: %v -> %v", vmUUID, containerUUIDLink)
 	err = syscall.Mount(vmUUID, filepath.Join(vmFSPath, containerUUIDLink), "", syscall.MS_BIND, "")
 	if err != nil {
-		log.Fatal("containerUUIDLink: %v", err)
+		log.Warn("containerUUIDLink: %v", err)
 	}
 
 	// bind mount fifos
