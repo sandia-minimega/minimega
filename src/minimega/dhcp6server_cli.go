@@ -1,3 +1,7 @@
+// Copyright (2017) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package main
 
 import (
@@ -12,10 +16,10 @@ import (
 
 var dhcp6CLIHandlers = []minicli.Handler{
 	{ // dhcp6Server
-		HelpShort: "start a dhcpv6 server on a specified ip",
+		HelpShort: "start a dhcpv6 server which serves a specified ip",
 		HelpLong: `
-Start a dhcp/dns server on a specified IP. For example,
-to start a DHCP server which servers IP address dead:beef:d34d:b33f::10, do:
+Start a dhcp/dns server that serves a specified IP. For example,
+to start a DHCP server which serves IP address dead:beef:d34d:b33f::10, do:
 
 	dhcp6 ip dead:beef:d34d:b33f::10
 

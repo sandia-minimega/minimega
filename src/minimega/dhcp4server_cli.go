@@ -1,3 +1,7 @@
+// Copyright (2017) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package main
 
 import (
@@ -64,6 +68,7 @@ func cliDhcp4Server(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	go func(i string, h *DHCPHandler) {
+		log.Printf("binding DHCPv4 server to interface %v...\n", i)
 		err := dhcp4.ListenAndServeIf(i, h)
 		log.Printf("DHCPv4 Server error: %v\n", err)
 	}(iface, handler)
