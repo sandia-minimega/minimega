@@ -1,6 +1,3 @@
-// Command dhcp6d is an example DHCPv6 server.  It can only assign a
-// single IPv6 address, and is not a complete DHCPv6 server implementation
-// by any means.  It is meant to demonstrate usage of package dhcp6.
 package main
 
 import (
