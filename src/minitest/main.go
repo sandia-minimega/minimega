@@ -29,14 +29,31 @@ var skippedExtensions = []string{
 }
 
 var (
-	f_base    = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_testDir = flag.String("dir", "tests", "path to directory containing tests")
-	f_run     = flag.String("run", "", "run only tests matching the regular expression")
+	f_base  = flag.String("base", BASE_PATH, "base path for minimega data")
+	f_tests = flag.String("dir", "tests", "path to directory containing tests")
+	f_run   = flag.String("run", "", "run only tests matching the regular expression")
 )
+
+// matchRe is compiled from f_run before calling runTests
+var matchRe *regexp.Regexp
+
+type Client struct {
+	*miniclient.Conn // embed
+}
+
+// mustRunCommands wraps runCommands and calls log.Fatal if there's an error.
+func (c Client) mustRunCommands(file string) string {
+	s, err := c.runCommands(file)
+	if err != nil {
+		log.Fatal("%v", err)
+	}
+
+	return s
+}
 
 // runCommands reads and runs all the commands from a file. Return the
 // concatenation of all the Responses or an error.
-func runCommands(mm *miniclient.Conn, file string) (string, error) {
+func (c Client) runCommands(file string) (string, error) {
 	var res string
 	var err error
 
@@ -56,7 +73,7 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 			res += "\n"
 		}
 
-		for resps := range mm.Run(cmd) {
+		for resps := range c.Run(cmd) {
 			if err != nil {
 				continue
 			}
@@ -80,107 +97,98 @@ func runCommands(mm *miniclient.Conn, file string) (string, error) {
 	return res, nil
 }
 
-func runTests() {
-	mm, err := miniclient.Dial(*f_base)
+func (c Client) runTests(dir string, prolog, epilog []string) {
+	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		log.Fatal("%v", err)
+		log.Fatal("unable to read files in %v: %v", dir, err)
 	}
-
-	// TODO: Should we quit minimega and restart it between each test?
-	//quit := mustCompile(t, "quit 2")
-
-	files, err := ioutil.ReadDir(*f_testDir)
-	if err != nil {
-		log.Fatal("%v", err)
-	}
-
-	var prolog, epilog string
 
 	// Check to see if the prolog and epilog files exist
 	for _, info := range files {
-		if info.Name() == PROLOG {
-			prolog = path.Join(*f_testDir, info.Name())
+		name := info.Name()
+
+		if name == PROLOG {
+			// append new prolog so that it gets run last
+			prolog = append(prolog, path.Join(dir, name))
 		}
 
-		if info.Name() == EPILOG {
-			epilog = path.Join(*f_testDir, info.Name())
-		}
-	}
-
-	var matchRe *regexp.Regexp
-	if *f_run != "" {
-		log.Debug("only running files matching `%v`", *f_run)
-		matchRe, err = regexp.Compile(*f_run)
-		if err != nil {
-			log.Fatal("invalid regexp: %v", err)
+		if name == EPILOG {
+			// prepend new epilog so that it gets run first
+			epilog = append([]string{path.Join(dir, name)}, epilog...)
 		}
 	}
 
-outer:
 	for _, info := range files {
 		name := info.Name()
-		for _, ext := range skippedExtensions {
-			if strings.HasSuffix(name, ext) {
-				continue outer
-			}
-		}
+		abs := path.Join(dir, name)
 
-		// Skip hidden files -- probably not valid tets
-		if strings.HasPrefix(name, ".") {
+		if info.IsDir() {
+			log.Info("processing tests on subdir: %v", name)
+			c.runTests(abs, prolog, epilog)
 			continue
 		}
 
-		// Don't run the prolog or epilog
-		if name == PROLOG || name == EPILOG {
+		if !shouldRun(name) {
+			log.Debug("skipping %v", name)
 			continue
 		}
 
-		// If a regexp is defined, skip files that don't match
-		if matchRe != nil && !matchRe.Match([]byte(name)) {
-			log.Debug("skipping %v due to regexp", name)
-			continue
-		}
-
-		if prolog != "" {
+		for _, p := range prolog {
 			// Run the prolog commands
-			log.Debug("Running prolog")
-			if _, err := runCommands(mm, prolog); err != nil {
-				log.Fatal("%v", err)
-			}
+			log.Debug("running prolog: %v", p)
+			c.mustRunCommands(p)
 		}
 
-		log.Info("Running commands from %s", name)
-		fpath := path.Join(*f_testDir, name)
+		log.Info("running commands from %s", name)
+		got := c.mustRunCommands(abs)
 
-		got, err := runCommands(mm, fpath)
-		if err != nil {
-			log.Fatal("%v", err)
-		}
-
-		if epilog != "" {
-			// Run the prolog commands
-			log.Debug("Running epilog")
-			if _, err := runCommands(mm, epilog); err != nil {
-				log.Fatal("%v", err)
-			}
+		for _, e := range epilog {
+			// Run the epilog commands
+			log.Debug("running epilog: %v", e)
+			c.mustRunCommands(e)
 		}
 
 		// Record the output for offline comparison
-		if err := ioutil.WriteFile(fpath+".got", []byte(got), os.FileMode(0644)); err != nil {
-			log.Error("unable to write `%s` -- %v", fpath+".got", err)
+		if err := ioutil.WriteFile(abs+".got", []byte(got), os.FileMode(0644)); err != nil {
+			log.Error("unable to write `%s` -- %v", abs+".got", err)
 		}
 
-		want, err := ioutil.ReadFile(fpath + ".want")
+		want, err := ioutil.ReadFile(abs + ".want")
 		if err != nil {
-			log.Error("unable to read file `%s` -- %v", fpath+".want", err)
+			log.Error("unable to read file `%s` -- %v", abs+".want", err)
 			continue
 		}
 
 		if got != string(want) {
 			log.Error("got != want for %s", name)
 		}
-		//mm.runCommand(quit)
 	}
+}
+
+// shouldRun tests to see whether a given filename represents a valid test file
+func shouldRun(f string) bool {
+	for _, ext := range skippedExtensions {
+		if strings.HasSuffix(f, ext) {
+			return false
+		}
+	}
+
+	// Skip hidden files -- probably not valid tests
+	if strings.HasPrefix(f, ".") {
+		return false
+	}
+
+	// Don't run the prolog or epilog
+	if f == PROLOG || f == EPILOG {
+		return false
+	}
+
+	// If a regexp is defined, skip files that don't match
+	if matchRe != nil && !matchRe.Match([]byte(f)) {
+		return false
+	}
+
+	return true
 }
 
 func usage() {
@@ -200,9 +208,22 @@ func main() {
 
 	log.Init()
 
-	// TODO: Run minimega, and keep restarting it until all the tests have been
-	// run. This allows us to not worry about cleaning up the state fully
-	// within each test.
+	if *f_run != "" {
+		var err error
+		log.Debug("only running files matching `%v`", *f_run)
 
-	runTests()
+		matchRe, err = regexp.Compile(*f_run)
+		if err != nil {
+			log.Fatal("invalid regexp: %v", err)
+		}
+	}
+
+	mm, err := miniclient.Dial(*f_base)
+	if err != nil {
+		log.Fatal("%v", err)
+	}
+
+	c := Client{mm}
+
+	c.runTests(*f_tests, nil, nil)
 }
