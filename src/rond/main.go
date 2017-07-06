@@ -8,7 +8,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"goreadline"
+	"io"
 	"minicli"
 	log "minilog"
 	"minipager"
@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"ron"
+
+	"github.com/chzyer/readline"
 )
 
 var (
@@ -63,15 +65,23 @@ func main() {
 }
 
 func localREPL() {
+	rl, err := readline.New("rond$ ")
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer rl.Close()
+
 	for {
-		line, err := goreadline.Readline("rond$ ", true)
-		if err != nil {
-			return
+		line, err := rl.Readline()
+		if err == readline.ErrInterrupt {
+			continue
+		} else if err == io.EOF {
+			break
 		}
 
 		log.Debug("got line from stdin: `%s`", line)
 
-		resps, err := minicli.ProcessString(string(line), false)
+		resps, err := minicli.ProcessString(line, false)
 		if err != nil {
 			log.Errorln(err)
 			continue
