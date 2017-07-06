@@ -8,7 +8,6 @@ import (
 	"bridge"
 	"bufio"
 	"errors"
-	"goreadline"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
@@ -98,7 +97,6 @@ func nukeTaps(taps []string) {
 // Nuke all possible leftover state
 // Similar to teardown(), but designed to be called from nuke
 func nukeState() {
-	goreadline.Rlcleanup()
 	vncClear()
 	clearAllCaptures()
 	ksmDisable()
