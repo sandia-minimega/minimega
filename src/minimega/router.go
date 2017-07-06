@@ -259,22 +259,27 @@ func (r *Router) Commit(ns *Namespace) error {
 	// issue cc commands for this router
 	cmd := &ron.Command{
 		Command: []string{"rm", filepath.Join("/tmp/miniccc/files", prefix)},
+		Prefix:  prefix,
+		Filter:  filter,
 	}
-	ccNewCommand(ns, cmd, filter, &prefix)
+	ns.ccServer.NewCommand(cmd)
 
 	cmd = &ron.Command{
 		Prefix: prefix,
+		Filter: filter,
 	}
 	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
 		Name: prefix,
 		Perm: 0644,
 	})
-	ccNewCommand(ns, cmd, filter, &prefix)
+	ns.ccServer.NewCommand(cmd)
 
 	cmd = &ron.Command{
 		Command: []string{"minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
+		Prefix:  prefix,
+		Filter:  filter,
 	}
-	ccNewCommand(ns, cmd, filter, &prefix)
+	ns.ccServer.NewCommand(cmd)
 
 	return nil
 }

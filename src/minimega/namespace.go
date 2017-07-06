@@ -47,8 +47,7 @@ type Namespace struct {
 	// How to determine which host is least loaded
 	HostSortBy string
 
-	VMs              // embed VMs for this namespace
-	KillAck chan int // channel that all VMs in this namespace ACK when killed
+	VMs // embed VMs for this namespace
 
 	// QueuedVMs is toggled via nsmod -- whether we should queue VMs or not
 	// when launching
@@ -79,6 +78,7 @@ var (
 func NewNamespace(name string) *Namespace {
 	log.Info("creating new namespace -- `%v`", name)
 
+	// so many maps
 	ns := &Namespace{
 		Name:       name,
 		Hosts:      map[string]bool{},
@@ -87,7 +87,6 @@ func NewNamespace(name string) *Namespace {
 		VMs: VMs{
 			m: make(map[int]VM),
 		},
-		KillAck: make(chan int),
 		routers: make(map[int]*Router),
 		captures: captures{
 			m:       make(map[int]*capture),
@@ -102,8 +101,27 @@ func NewNamespace(name string) *Namespace {
 		},
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
-		ccServer:      ccStart(*f_iomBase, name),
 	}
+
+	if name == DefaultNamespace {
+		// default only contains this node by default
+		ns.Hosts[hostname] = true
+
+		// default cc does not use a subpath
+		ccServer, err := ron.NewServer(*f_iomBase, "", plumber)
+		if err != nil {
+			log.Fatal("creating cc node %v", err)
+		}
+		ns.ccServer = ccServer
+
+		return ns
+	}
+
+	ccServer, err := ron.NewServer(*f_iomBase, name, plumber)
+	if err != nil {
+		log.Fatal("creating cc node %v", err)
+	}
+	ns.ccServer = ccServer
 
 	// By default, every mesh-reachable node is part of the namespace
 	// except for the local node which is typically the "head" node.
@@ -147,10 +165,8 @@ func (n *Namespace) Destroy() error {
 	n.vncPlayer.Clear()
 
 	// Kill and flush all the VMs
-	n.VMs.Kill(n, Wildcard)
-	n.VMs.Flush(n)
-
-	close(n.KillAck)
+	n.Kill(Wildcard)
+	n.Flush()
 
 	// Stop ron server
 	n.ccServer.Destroy()
@@ -178,15 +194,6 @@ func (n *Namespace) Destroy() error {
 	n.ccServer.Destroy()
 
 	return nil
-}
-
-func (n Namespace) hostSlice() []string {
-	hosts := []string{}
-	for host := range n.Hosts {
-		hosts = append(hosts, host)
-	}
-
-	return hosts
 }
 
 // Queue handles storing the current VM config to the namespace's queued VMs so
@@ -249,11 +256,11 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	return nil
 }
 
-// Launch runs the scheduler and launches VMs across the namespace. Blocks
-// until all the `vm launch ... noblock` commands are in-flight.
+// Schedule runs the scheduler, launching VMs across the cluster. Blocks until
+// all the `vm launch ...` commands are in-flight.
 //
 // LOCK: Assumes cmdLock is held.
-func (n *Namespace) Launch() error {
+func (n *Namespace) Schedule() error {
 	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
@@ -360,20 +367,59 @@ func (n *Namespace) Launch() error {
 	return nil
 }
 
+// Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
+// until all the VMs are launched.
+func (n *Namespace) Launch(q *QueuedVMs) []error {
+	vms, errChan := n.VMs.Launch(q)
+
+	// fire off goroutine to do the registration
+	go func() {
+		for vm := range vms {
+			n.ccServer.RegisterVM(vm)
+
+			if err := vm.Connect(n.ccServer); err != nil {
+				log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
+			}
+		}
+	}()
+
+	// collect all the errors
+	errs := []error{}
+	for err := range errChan {
+		errs = append(errs, err)
+	}
+
+	return errs
+}
+
+// Flush wraps VMs.Flush, unregistering the flushed VMs with ron.
+func (n *Namespace) Flush() {
+	for _, vm := range n.VMs.Flush() {
+		n.ccServer.UnregisterVM(vm)
+	}
+}
+
+// NewCommand takes a command, adds the current filter and prefix, and then
+// sends the command to ron.
+func (ns *Namespace) NewCommand(c *ron.Command) int {
+	c.Filter = ns.ccFilter
+	c.Prefix = ns.ccPrefix
+
+	id := ns.ccServer.NewCommand(c)
+	log.Debug("generated command %v: %v", id, c)
+
+	return id
+}
+
 // hostLaunch launches a queuedVM on the specified host and namespace.
 func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- minicli.Responses) {
 	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
 
 	// Launching the VMs locally
 	if host == hostname {
-		errs := []error{}
-		for err := range n.VMs.Launch(n.Name, queued) {
-			errs = append(errs, err)
-		}
-
 		resp := &minicli.Response{Host: hostname}
 
-		if err := makeErrSlice(errs); err != nil {
+		if err := makeErrSlice(n.Launch(queued)); err != nil {
 			resp.Error = err.Error()
 		}
 
@@ -385,11 +431,26 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 	forward(meshageLaunch(host, n.Name, queued), respChan)
 }
 
-// GetNamespace returns the active namespace. Returns nil if there isn't a
-// namespace active.
+// hostSlice converts the hosts map into a slice of hostnames
+func (n Namespace) hostSlice() []string {
+	hosts := []string{}
+	for host := range n.Hosts {
+		hosts = append(hosts, host)
+	}
+
+	return hosts
+}
+
+// GetNamespace returns the active namespace.
 func GetNamespace() *Namespace {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
+
+	_, ok := namespaces[namespace]
+	if namespace == DefaultNamespace && !ok {
+		// recreate automatically
+		namespaces[namespace] = NewNamespace(namespace)
+	}
 
 	return namespaces[namespace]
 }
@@ -468,10 +529,6 @@ func DestroyNamespace(name string) error {
 		}
 
 		delete(namespaces, n)
-		if n == DefaultNamespace {
-			// recreate automatically
-			namespaces[n] = NewNamespace(n)
-		}
 	}
 
 	if !found && name != Wildcard {

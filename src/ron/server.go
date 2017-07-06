@@ -126,7 +126,7 @@ func (s *Server) Destroy() {
 	// delete the listener, we can guarantee that there will be
 	for listeners > 0 {
 		log.Info("waiting on %v listeners to shutdown", listeners)
-		time.Sleep(5 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 
 		s.listenersLock.Lock()
 		listeners = len(s.listeners)
@@ -794,6 +794,62 @@ func (s *Server) sendCommands(uuid string) {
 	s.route(m)
 }
 
+// NewFilesSendCommand creates a command to send to clients to read the listed
+// files, expanding globs.
+func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
+	cmd := &Command{}
+
+	for _, f := range files {
+		f = filepath.Clean(f)
+
+		if filepath.IsAbs(f) && !strings.HasPrefix(f, s.path) {
+			return nil, fmt.Errorf("can only send files from %v", s.path)
+		}
+
+		var send []string
+		var err error
+
+		for _, subpath := range []string{s.subpath, ""} {
+			f := filepath.Join(s.path, subpath, f)
+
+			send, err = filepath.Glob(f)
+			if err != nil {
+				// file may not exist in the subpath
+				continue
+			}
+
+			if len(send) > 0 {
+				break
+			}
+		}
+
+		if err != nil || len(send) == 0 {
+			return nil, fmt.Errorf("no such file %v", f)
+		}
+
+		for _, f := range send {
+			fi, err := os.Stat(f)
+			if err != nil {
+				return nil, err
+			}
+			// remove prefix
+			f, err = filepath.Rel(s.path, f)
+			if err != nil {
+				return nil, err
+			}
+
+			perm := fi.Mode() & os.ModePerm
+			cmd.FilesSend = append(cmd.FilesSend, &File{
+				Name: f,
+				Perm: perm,
+			})
+		}
+	}
+
+	return cmd, nil
+
+}
+
 // readFile reads the file by name and returns a message that can be sent back
 // to the client.
 func (s *Server) readFile(f string) *Message {
@@ -1031,7 +1087,7 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 func (s *Server) clientReaper() {
 	for {
 		if s.destroyed() {
-			log.Info("reaping client reaper")
+			log.Debug("reaping client reaper")
 			return
 		}
 

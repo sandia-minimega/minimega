@@ -455,7 +455,7 @@ func cliVMStop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 }
 
 func cliVMKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.Kill(ns, c.StringArgs["vm"]))
+	return makeErrSlice(ns.Kill(c.StringArgs["vm"]))
 }
 
 func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -597,17 +597,17 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!
-			return ns.Launch()
+			return ns.Schedule()
 		}
 
 		return err
 	}
 
-	return ns.Launch()
+	return ns.Schedule()
 }
 
 func cliVMFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	ns.Flush(ns)
+	ns.Flush()
 
 	return nil
 }

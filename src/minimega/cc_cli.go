@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
-	"os"
-	"path/filepath"
 	"ron"
 	"sort"
 	"strconv"
@@ -316,47 +314,13 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	cmd := &ron.Command{}
+	cmd, err := ns.ccServer.NewFilesSendCommand(c.ListArgs["file"])
+	if err != nil {
+		return err
 
-	// Add new files to send, expand globs
-	for _, arg := range c.ListArgs["file"] {
-		if !filepath.IsAbs(arg) {
-			arg = filepath.Join(*f_iomBase, arg)
-		}
-		arg = filepath.Clean(arg)
-
-		if !strings.HasPrefix(arg, *f_iomBase) {
-			return fmt.Errorf("can only send files from %v", *f_iomBase)
-		}
-
-		files, err := filepath.Glob(arg)
-		if err != nil {
-			return fmt.Errorf("non-existent files %v", arg)
-		}
-
-		if len(files) == 0 {
-			return fmt.Errorf("no such file %v", arg)
-		}
-
-		for _, f := range files {
-			file, err := filepath.Rel(*f_iomBase, f)
-			if err != nil {
-				return fmt.Errorf("parsing filesend: %v", err)
-			}
-			fi, err := os.Stat(f)
-			if err != nil {
-				return err
-			}
-
-			perm := fi.Mode() & os.ModePerm
-			cmd.FilesSend = append(cmd.FilesSend, &ron.File{
-				Name: file,
-				Perm: perm,
-			})
-		}
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 
@@ -371,7 +335,7 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		})
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 
@@ -387,7 +351,7 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		Stderr:     stderr,
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 
@@ -395,7 +359,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
 		cmd := &ron.Command{PID: -1}
-		ccNewCommand(ns, cmd, nil, nil)
+		ns.NewCommand(cmd)
 
 		return nil
 	}
@@ -407,7 +371,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	}
 
 	cmd := &ron.Command{PID: pid}
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 
 	return nil
 }
@@ -417,7 +381,7 @@ func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 		KillAll: c.StringArgs["name"],
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 
@@ -432,7 +396,7 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		Stderr:  stderr,
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 
@@ -531,7 +495,7 @@ func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		Level: &level,
 	}
 
-	ccNewCommand(ns, cmd, nil, nil)
+	ns.NewCommand(cmd)
 	return nil
 }
 

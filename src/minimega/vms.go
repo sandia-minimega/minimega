@@ -237,76 +237,65 @@ func (vms *VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
-func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
-	out := make(chan error)
-
-	if err := q.GetFiles(); err != nil {
-		// send from separate goroutine to avoid deadlock
-		go func() {
-			defer close(out)
-			out <- err
-		}()
-
-		return out
-	}
-
-	ns := GetOrCreateNamespace(namespace)
-
-	vms.mu.Lock()
-
-	log.Info("launching %v %v vms", len(q.Names), q.VMType)
-	start := time.Now()
-
-	var wg sync.WaitGroup
-
-	for _, name := range q.Names {
-		// This uses the global vmConfigs so we have to create the VMs in the
-		// CLI thread (before the next command gets processed which could
-		// change the vmConfigs).
-		vm, err := NewVM(name, namespace, q.VMType, q.VMConfig)
-		if err == nil {
-			for _, vm2 := range vms.m {
-				if err = vm2.Conflicts(vm); err != nil {
-					break
-				}
-			}
-		}
-
-		if err != nil {
-			// Send from new goroutine to prevent deadlock since we haven't
-			// even returned the output channel yet... hopefully we won't spawn
-			// too many goroutines.
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-
-				out <- err
-			}()
-			continue
-		}
-
-		// Record newly created VM
-		vms.m[vm.GetID()] = vm
-
-		// The actual launching can happen in parallel, we just want to
-		// make sure that we complete all the one-vs-all VM checks and add
-		// to vms while holding the vms.mu.
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-
-			err := vm.Launch()
-			if err == nil {
-				ns.ccServer.RegisterVM(vm)
-			}
-			out <- err
-		}(name)
-	}
+// Launch takes QueuedVMs and launches them after performing a few sanity
+// checks. Launch returns the VMs it launched and any errors that occured.
+func (vms *VMs) Launch(q *QueuedVMs) (<-chan VM, <-chan error) {
+	errs := make(chan error)
+	launched := make(chan VM)
 
 	go func() {
-		// Don't unlock until we've finished launching all the VMs
+		defer close(launched)
+		defer close(errs)
+
+		// prefetch any files associated with VMs
+		if err := q.GetFiles(); err != nil {
+			errs <- err
+			return
+		}
+
+		vms.mu.Lock()
 		defer vms.mu.Unlock()
-		defer close(out)
+
+		var wg sync.WaitGroup
+
+		log.Info("launching %v %v vms", len(q.Names), q.VMType)
+		start := time.Now()
+
+		for _, name := range q.Names {
+			// Create new VM and test it for conflicts against other VMs.
+			vm, err := NewVM(name, namespace, q.VMType, q.VMConfig)
+			if err == nil {
+				for _, vm2 := range vms.m {
+					if err = vm2.Conflicts(vm); err != nil {
+						break
+					}
+				}
+			}
+
+			if err != nil {
+				errs <- err
+				continue
+			}
+
+			// Add the newly created VM to the map so that it gets included in
+			// future conflict tests.
+			vms.m[vm.GetID()] = vm
+
+			// The actual launching can happen in parallel while we keep checking
+			// for conflicts.
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+
+				// Note: the VM is already in the VMs map
+				if err := vm.Launch(); err != nil {
+					errs <- err
+					return
+				}
+
+				launched <- vm
+			}(name)
+		}
 
 		wg.Wait()
 
@@ -314,21 +303,15 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 		log.Info("launched %v %v vms in %v", len(q.Names), q.VMType, stop.Sub(start))
 	}()
 
-	return out
+	return launched, errs
 }
 
 // Kill VMs matching target.
-func (vms *VMs) Kill(ns *Namespace, target string) []error {
+func (vms *VMs) Kill(target string) []error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
-	// synchronizes access to killedVms
-	var mu sync.Mutex
-
-	killedVms := map[int]bool{}
-
-	// For each VM, kill it if it's in a killable state. Should not be run in
-	// parallel because we record the IDs of the VMs we kill in killedVms.
+	// For each VM, kill it if it's in a killable state.
 	errs := vms.apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
@@ -339,30 +322,19 @@ func (vms *VMs) Kill(ns *Namespace, target string) []error {
 			return true, err
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
-
-		killedVms[vm.GetID()] = true
 		return true, nil
 	})
-
-	for len(killedVms) > 0 {
-		id := <-ns.KillAck
-		log.Info("VM %v killed", id)
-		delete(killedVms, id)
-	}
-
-	for id := range killedVms {
-		log.Info("VM %d failed to acknowledge kill", id)
-	}
 
 	return errs
 }
 
-// Flush deletes VMs that are in the QUIT or ERROR state.
-func (vms *VMs) Flush(ns *Namespace) {
+// Flush deletes VMs that are in the QUIT or ERROR state. Returns a list of the
+// VMs that were flushed.
+func (vms *VMs) Flush() []VM {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
+
+	flushed := []VM{}
 
 	for i, vm := range vms.m {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
@@ -372,11 +344,13 @@ func (vms *VMs) Flush(ns *Namespace) {
 				log.Error("clogged VM: %v", err)
 			}
 
-			ns.ccServer.UnregisterVM(vm)
+			flushed = append(flushed, vm)
 
 			delete(vms.m, i)
 		}
 	}
+
+	return flushed
 }
 
 func (vms *VMs) ProcStats(d time.Duration) []*VMProcStats {
@@ -554,16 +528,11 @@ func meshageVMLauncher() {
 		go func(m *meshage.Message) {
 			cmd := m.Body.(meshageVMLaunch)
 
-			errs := []string{}
-
 			ns := GetOrCreateNamespace(cmd.Namespace)
 
-			if len(errs) == 0 {
-				for err := range ns.VMs.Launch(cmd.Namespace, cmd.QueuedVMs) {
-					if err != nil {
-						errs = append(errs, err.Error())
-					}
-				}
+			errs := []string{}
+			for _, err := range ns.Launch(cmd.QueuedVMs) {
+				errs = append(errs, err.Error())
 			}
 
 			to := []string{m.Source}

@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"ron"
 	"strconv"
 	"strings"
 	"sync"
@@ -49,7 +50,7 @@ type VM interface {
 	GetCPUs() uint64
 	GetMem() uint64
 
-	// Life cycle functions
+	// Lifecycle functions
 	Launch() error
 	Kill() error
 	Start() error
@@ -72,6 +73,7 @@ type VM interface {
 
 	SetCCActive(bool)
 	HasCC() bool
+	Connect(*ron.Server) error
 
 	UpdateNetworks()
 
@@ -113,6 +115,7 @@ type BaseVM struct {
 	ActiveCC   bool // set when CC is active
 
 	lock sync.Mutex // synchronizes changes to this VM
+	cond *sync.Cond
 
 	kill chan bool // channel to signal the vm to shut down
 
@@ -149,7 +152,7 @@ func init() {
 	vmID = NewCounter()
 
 	// for serializing VMs
-	gob.Register(VMs{})
+	gob.Register([]VM{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 }
@@ -206,6 +209,8 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 
 	vm.State = VM_BUILDING
 	vm.LaunchTime = time.Now()
+
+	vm.cond = &sync.Cond{L: &vm.lock}
 
 	// New VMs are returned pre-locked. This ensures that the first operation
 	// called on a new VM is Launch.
@@ -328,6 +333,7 @@ func (vm *BaseVM) GetMem() uint64 {
 	return vm.Memory
 }
 
+// Kill a VM. Blocks until the VM process has terminated.
 func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -340,6 +346,11 @@ func (vm *BaseVM) Kill() error {
 	// stop. Anyone blocking on the channel will unblock immediately.
 	// http://golang.org/ref/spec#Receive_operator
 	close(vm.kill)
+
+	// wait until the VM is in an unkillable state (it must have been killed)
+	for vm.State&VM_KILLABLE != 0 {
+		vm.cond.Wait()
+	}
 
 	return nil
 }
@@ -644,11 +655,18 @@ func (vm *BaseVM) setState(s VMState) {
 	mustWrite(vm.path("state"), s.String())
 }
 
-// setError updates the vm state and records the error in the vm's tags.
-// Assumes that the caller has locked the vm.
-func (vm *BaseVM) setError(err error) {
+// setErrorf logs the error, updates the vm state, and records the error in the
+// vm's tags. Assumes that the caller has locked the vm. Returns the final
+// error.
+func (vm *BaseVM) setErrorf(format string, arg ...interface{}) error {
+	// create the error
+	err := fmt.Errorf(format, arg...)
+
+	log.Errorln("vm %v: %v", vm.ID, err)
 	vm.Tags["error"] = err.Error()
 	vm.setState(VM_ERROR)
+
+	return err
 }
 
 // writeTaps writes the vm's taps to disk in the vm's instance path.

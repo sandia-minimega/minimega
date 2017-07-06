@@ -49,7 +49,7 @@ Display or modify the active namespace.
   - memcommit : total memory commit divided by total memory
 - queue     : display VM queue
 - flush     : clear the VM queue
-- queuing   : toggle VMs queueing when launching (default false)
+- queueing  : toggle VMs queueing when launching (default false)
 - schedules : display scheduling stats
 `,
 		Patterns: []string{

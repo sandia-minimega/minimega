@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"qmp"
+	"ron"
 	"strconv"
 	"strings"
 	"sync"
@@ -285,9 +286,7 @@ func (vm *KvmVM) Start() (err error) {
 
 	log.Info("starting VM: %v", vm.ID)
 	if err := vm.q.Start(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to start: %v", err)
 	}
 
 	vm.setState(VM_RUNNING)
@@ -309,9 +308,7 @@ func (vm *KvmVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.q.Stop(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unstoppable: %v")
 	}
 
 	vm.setState(VM_PAUSED)
@@ -494,7 +491,7 @@ func (vm *KvmVM) connectQMP() (err error) {
 	}
 
 	// Never connected successfully
-	return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
+	return errors.New("qmp timeout")
 }
 
 func (vm *KvmVM) connectVNC() error {
@@ -593,24 +590,18 @@ func (vm *KvmVM) launch() error {
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
-			log.Error("get bridge: %v", err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to get bridge %v: %v", nic.Bridge, err)
 		}
 
 		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
 		if err != nil {
-			log.Error("create tap: %v", err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
 	}
 
 	if len(vm.Networks) > 0 {
 		if err := vm.writeTaps(); err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to write taps: %v", err)
 		}
 	}
 
@@ -626,7 +617,7 @@ func (vm *KvmVM) launch() error {
 	if path == "" {
 		p, err := process("kvm")
 		if err != nil {
-			return err
+			return vm.setErrorf("kvm not in PATH")
 		}
 		path = p
 	}
@@ -639,10 +630,7 @@ func (vm *KvmVM) launch() error {
 	}
 
 	if err := cmd.Start(); err != nil {
-		err = fmt.Errorf("start qemu: %v %v", err, sErr.String())
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
 	}
 
 	vm.pid = cmd.Process.Pid
@@ -663,8 +651,7 @@ func (vm *KvmVM) launch() error {
 
 		// Check if the process quit for some reason other than being killed
 		if err != nil && err.Error() != "signal: killed" {
-			log.Error("kill qemu: %v %v", err, sErr.String())
-			vm.setError(err)
+			vm.setErrorf("qemu killed: %v %v", err, sErr)
 		} else if vm.State != VM_ERROR {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)
@@ -680,9 +667,7 @@ func (vm *KvmVM) launch() error {
 		// Failed to connect to qmp so clean up the process
 		cmd.Process.Kill()
 
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to connect to qmp socket: %v", err)
 	}
 
 	go qmpLogger(vm.ID, vm.q)
@@ -691,21 +676,13 @@ func (vm *KvmVM) launch() error {
 		// Failed to connect to vnc so clean up the process
 		cmd.Process.Kill()
 
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
-
-	// connect cc
-	ccPath := vm.path("cc")
-
-	ns := GetOrCreateNamespace(vm.Namespace)
-	if err := ns.ccServer.DialSerial(ccPath); err != nil {
-		log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
+		return vm.setErrorf("unable to connect to vnc shim: %v", err)
 	}
 
 	// Create goroutine to wait to kill the VM
 	go func() {
+		defer vm.cond.Signal()
+
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -713,11 +690,17 @@ func (vm *KvmVM) launch() error {
 			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
-			ns.KillAck <- vm.ID
 		}
 	}()
 
 	return nil
+}
+
+func (vm *KvmVM) Connect(cc *ron.Server) error {
+	// connect cc
+	ccPath := vm.path("cc")
+
+	return cc.DialSerial(ccPath)
 }
 
 func (vm *KvmVM) Hotplug(f, version string) error {

@@ -162,7 +162,7 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		log.Infoln("killing process:", t)
 
 		out, err := processWrapper(args...)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "No such process") {
 			log.Error("%v: %v", err, out)
 		}
 	}
