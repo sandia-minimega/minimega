@@ -223,24 +223,24 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 }
 
 func wrapSuggest(fn wrappedSuggestFunc) minicli.SuggestFunc {
-	ns := GetNamespace()
-
 	return func(raw, val, prefix string) []string {
 		if attached != nil {
 			return attached.Suggest(raw)
 		}
+
+		ns := GetNamespace()
 
 		return fn(ns, val, prefix)
 	}
 }
 
 func wrapVMSuggest(mask VMState) minicli.SuggestFunc {
-	ns := GetNamespace()
-
 	return func(raw, val, prefix string) []string {
 		if attached != nil {
 			return attached.Suggest(raw)
 		}
+
+		ns := GetNamespace()
 
 		return cliVMSuggest(ns, prefix, mask)
 	}

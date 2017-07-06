@@ -662,7 +662,7 @@ func (vm *BaseVM) setErrorf(format string, arg ...interface{}) error {
 	// create the error
 	err := fmt.Errorf(format, arg...)
 
-	log.Errorln("vm %v: %v", vm.ID, err)
+	log.Error("vm %v: %v", vm.ID, err)
 	vm.Tags["error"] = err.Error()
 	vm.setState(VM_ERROR)
 

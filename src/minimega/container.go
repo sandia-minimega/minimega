@@ -1686,7 +1686,9 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 
 			if i, err := strconv.Atoi(pid); err == nil {
 				log.Info("killing process: %v", i)
-				if err := syscall.Kill(i, syscall.SIGKILL); err != nil {
+				if err := syscall.Kill(i, syscall.SIGKILL); err == nil {
+					continue
+				} else if !strings.Contains(err.Error(), "no such process") {
 					log.Error("unable to kill %v: %v", i, err)
 				}
 			}
