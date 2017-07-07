@@ -1,0 +1,11 @@
+#!/bin/sh
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+
+ifconfig lo up
+ifconfig veth0 up
+dhclient -v veth0
+
+/miniccc -v=false -family unix -parent /cc -logfile /miniccc.log &
+
+sh
