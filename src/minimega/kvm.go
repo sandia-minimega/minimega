@@ -486,7 +486,7 @@ func (vm *KvmVM) connectQMP() (err error) {
 			return
 		}
 
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
+		log.Debug("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
 		time.Sleep(delay)
 	}
 
@@ -651,7 +651,7 @@ func (vm *KvmVM) launch() error {
 
 		// Check if the process quit for some reason other than being killed
 		if err != nil && err.Error() != "signal: killed" {
-			vm.setErrorf("qemu killed: %v %v", err, sErr)
+			vm.setErrorf("qemu killed: %v %v", err, sErr.String())
 		} else if vm.State != VM_ERROR {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)

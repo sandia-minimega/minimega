@@ -809,17 +809,19 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 		var send []string
 		var err error
 
-		for _, subpath := range []string{s.subpath, ""} {
-			f := filepath.Join(s.path, subpath, f)
-
+		if filepath.IsAbs(f) {
+			// if the file is absolute, glob it
 			send, err = filepath.Glob(f)
-			if err != nil {
-				// file may not exist in the subpath
-				continue
-			}
+		} else {
+			// if the file is relative, look in the subpath first and then in
+			// the global directory
+			for _, subpath := range []string{s.subpath, ""} {
+				f := filepath.Join(s.path, subpath, f)
 
-			if len(send) > 0 {
-				break
+				send, err = filepath.Glob(f)
+				if len(send) > 0 {
+					break
+				}
 			}
 		}
 

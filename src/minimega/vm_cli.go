@@ -555,7 +555,7 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 		// TODO: return false if tag not set?
 		resp.Tabular = append(resp.Tabular, []string{
-			name, key, vm.Tag(key),
+			name, vm.Tag(key),
 		})
 
 		return true, nil
