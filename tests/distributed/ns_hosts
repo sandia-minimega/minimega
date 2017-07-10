@@ -1,0 +1,13 @@
+namespace test
+
+ns hosts
+ns del-hosts all
+ns hosts
+ns add-hosts mm[1-3]
+ns hosts
+ns add-hosts all
+ns hosts
+ns del-hosts mm3
+ns hosts
+ns add-hosts all
+ns hosts

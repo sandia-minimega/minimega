@@ -1,0 +1,21 @@
+namespace test
+
+vm config filesystem /root/uminicccfs
+vm launch container vm[0-3]
+.columns name,state vm info
+
+# change VM states
+vm start all
+.columns name,state vm info
+vm kill vm[1-2]
+.columns name,state vm info
+vm stop all
+.columns name,state vm info
+vm start all
+.columns name,state vm info
+vm flush
+.columns name,state vm info
+vm kill all
+.columns name,state vm info
+vm flush
+.columns name,state vm info
