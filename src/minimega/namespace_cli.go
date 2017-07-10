@@ -208,6 +208,11 @@ func cliNamespaceDelHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 			break
 		}
 
+		// Resolve `localhost` to actual hostname
+		if host == Localhost {
+			host = hostname
+		}
+
 		delete(ns.Hosts, host)
 	}
 
