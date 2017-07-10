@@ -291,7 +291,7 @@ func mustWrite(fpath, data string) {
 	log.Debug("writing to %v", fpath)
 
 	if err := ioutil.WriteFile(fpath, []byte(data), 0664); err != nil {
-		Shutdown("write %v failed: %v", fpath, err)
+		log.Fatal("write %v failed: %v", fpath, err)
 	}
 }
 
