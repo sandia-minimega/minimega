@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goreadline"
 	"minicli"
 	"miniclient"
 	log "minilog"
@@ -269,7 +268,6 @@ func teardown() {
 	}
 
 	commandSocketRemove()
-	goreadline.Rlcleanup()
 
 	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
 		log.Fatalln(err)

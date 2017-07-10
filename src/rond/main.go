@@ -8,7 +8,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"goreadline"
+	"io"
 	"minicli"
 	log "minilog"
 	"minipager"
@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"ron"
+
+	"github.com/peterh/liner"
 )
 
 var (
@@ -63,15 +65,24 @@ func main() {
 }
 
 func localREPL() {
+	input := liner.NewLiner()
+	defer input.Close()
+
+	input.SetCtrlCAborts(true)
+	input.SetTabCompletionStyle(liner.TabPrints)
+
 	for {
-		line, err := goreadline.Readline("rond$ ", true)
-		if err != nil {
-			return
+		line, err := input.Prompt("rond$ ")
+		if err == liner.ErrPromptAborted {
+			continue
+		} else if err == io.EOF {
+			break
 		}
 
 		log.Debug("got line from stdin: `%s`", line)
+		input.AppendHistory(line)
 
-		resps, err := minicli.ProcessString(string(line), false)
+		resps, err := minicli.ProcessString(line, false)
 		if err != nil {
 			log.Errorln(err)
 			continue

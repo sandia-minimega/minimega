@@ -20,16 +20,20 @@ package main
 
 import (
 	"fmt"
-	"goreadline"
+	"io"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"minipager"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"unicode"
+
+	"github.com/peterh/liner"
 )
 
 var (
@@ -230,35 +234,89 @@ func wrapSuggest(fn func(string, string) []string) minicli.SuggestFunc {
 	}
 }
 
-func defaultCompleter(line string) []string {
-	// last term on the line is complete so there's nothing to complete
-	if strings.HasSuffix(line, " ") {
-		return nil
-	}
-
-	f := strings.Fields(line)
-	if len(f) == 0 {
-		return nil
-	}
-
+// envCompleter completes environment variables
+func envCompleter(s string) []string {
 	// handle that begin with a '$' and complete based on the
 	// available env variables
-	if strings.HasPrefix(f[len(f)-1], "$") {
-		prefix := strings.TrimPrefix(f[len(f)-1], "$")
-
-		var res []string
-
-		for _, env := range os.Environ() {
-			k := strings.SplitN(env, "=", 2)[0]
-			if strings.HasPrefix(k, prefix) {
-				res = append(res, k)
-			}
-		}
-
-		return res
+	if !strings.HasPrefix(s, "$") {
+		return nil
 	}
 
-	return iomCompleter(f[len(f)-1])
+	prefix := strings.TrimPrefix(s, "$")
+
+	var res []string
+
+	for _, env := range os.Environ() {
+		k := strings.SplitN(env, "=", 2)[0]
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, k)
+		}
+	}
+
+	return res
+}
+
+// fileCompleter
+func fileCompleter(path string) []string {
+	var res []string
+
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+
+	files, _ := ioutil.ReadDir(dir)
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), base) {
+			res = append(res, filepath.Join(dir, f.Name()))
+		}
+	}
+
+	return res
+}
+
+func cliCompleter(line string) []string {
+	prep := func(s []string) []string {
+		if len(s) == 0 {
+			return s
+		}
+
+		sort.Strings(s)
+
+		// remove the last term from the line
+		line := strings.TrimRightFunc(line, func(r rune) bool {
+			return !unicode.IsSpace(r)
+		})
+
+		// create new result that is line + suggestion + whitespace
+		r := make([]string, len(s))
+		for i := range s {
+			r[i] = line + s[i] + " "
+		}
+
+		return r
+	}
+
+	// completing commands has the highest priority
+	suggest := minicli.Suggest(line)
+	if len(suggest) > 0 {
+		return prep(suggest)
+	}
+
+	// completing partial word
+	if !strings.HasSuffix(line, " ") {
+		f := strings.Fields(line)
+
+		if len(f) > 0 {
+			last := f[len(f)-1]
+
+			suggest = append(suggest, envCompleter(last)...)
+			suggest = append(suggest, iomCompleter(last)...)
+			suggest = append(suggest, fileCompleter(last)...)
+		} else {
+			suggest = append(suggest, fileCompleter("./")...)
+		}
+	}
+
+	return prep(suggest)
 }
 
 // forward receives minicli.Responses from in and forwards them to out.
@@ -368,33 +426,38 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*mi
 
 // local command line interface, wrapping readline
 func cliLocal() {
-	goreadline.DefaultCompleter = defaultCompleter
+	input := liner.NewLiner()
+	defer input.Close()
 
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		for range sig {
-			goreadline.Signal()
-		}
-	}()
-	defer signal.Stop(sig)
+	input.SetCtrlCAborts(true)
+	input.SetTabCompletionStyle(liner.TabPrints)
+	input.SetCompleter(cliCompleter)
 
 	for {
 		namespace := GetNamespaceName()
-
 		prompt := "minimega$ "
+
 		if namespace != "" {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
 		}
 
-		line, err := goreadline.Readline(prompt, true)
-		if err != nil {
-			return
+		line, err := input.Prompt(prompt)
+		if err == liner.ErrPromptAborted {
+			continue
+		} else if err == io.EOF {
+			break
 		}
-		command := string(line)
-		log.Debug("got from stdin: `%v`", command)
 
-		cmd, err := minicli.Compile(command)
+		log.Debug("got line from stdin: `%v`", line)
+
+		// skip blank lines
+		if line == "" {
+			continue
+		}
+
+		input.AppendHistory(line)
+
+		cmd, err := minicli.Compile(line)
 		if err != nil {
 			log.Error("%v", err)
 			//fmt.Printf("closest match: TODO\n")
