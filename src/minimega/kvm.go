@@ -571,7 +571,7 @@ func (vm *KvmVM) launch() error {
 	// check and create a directory for it.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			teardownf("unable to create VM dir: %v", err)
+			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
 	}
 

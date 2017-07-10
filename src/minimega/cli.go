@@ -425,10 +425,7 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*mi
 }
 
 // local command line interface, wrapping readline
-func cliLocal() {
-	input := liner.NewLiner()
-	defer input.Close()
-
+func cliLocal(input *liner.State) {
 	input.SetCtrlCAborts(true)
 	input.SetTabCompletionStyle(liner.TabPrints)
 	input.SetCompleter(cliCompleter)

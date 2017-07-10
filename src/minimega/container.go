@@ -833,7 +833,7 @@ func (vm *ContainerVM) launch() error {
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			teardownf("unable to create VM dir: %v", err)
+			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
 
 		if vm.Snapshot {
