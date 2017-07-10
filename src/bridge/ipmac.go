@@ -79,7 +79,7 @@ func (b *Bridge) updateIP(mac string, ip net.IP) {
 		return
 	}
 
-	log.Debug("got mac/ip pair:", mac, ip)
+	log.Debug("got mac/ip pair: %v, %v", mac, ip)
 
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
