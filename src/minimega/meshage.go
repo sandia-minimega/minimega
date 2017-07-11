@@ -66,7 +66,7 @@ func init() {
 	gob.Register(miniplumber.Message{})
 }
 
-func meshageStart(host string, namespace string, degree, msaTimeout uint, port int) {
+func meshageStart(host, namespace string, degree, msaTimeout uint, port int) error {
 	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper
@@ -77,10 +77,7 @@ func meshageStart(host string, namespace string, degree, msaTimeout uint, port i
 	go meshageHandler()
 	go meshageVMLauncher()
 
-	iomeshageInit(meshageNode)
-
-	// wait a bit to let things settle
-	time.Sleep(500 * time.Millisecond)
+	return iomeshageStart(meshageNode)
 }
 
 func meshageMux() {
