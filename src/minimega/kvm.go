@@ -974,13 +974,13 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	if vm.CdromPath != "" {
 		args = append(args, "-drive")
-		args = append(args, "file="+vm.CdromPath+",if=ide,index=1,media=cdrom")
+		args = append(args, "file="+vm.CdromPath+",media=cdrom")
 		args = append(args, "-boot")
 		args = append(args, "once=d")
 	} else {
 		// add an empty cdrom
 		args = append(args, "-drive")
-		args = append(args, "if=ide,index=1,media=cdrom")
+		args = append(args, "media=cdrom")
 	}
 
 	// net
