@@ -826,7 +826,7 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 		}
 
 		if err != nil || len(send) == 0 {
-			return nil, fmt.Errorf("no such file %v", f)
+			return nil, fmt.Errorf("no such file: %v", f)
 		}
 
 		for _, f := range send {

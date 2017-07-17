@@ -49,8 +49,7 @@ type Namespace struct {
 
 	VMs // embed VMs for this namespace
 
-	// QueuedVMs is toggled via nsmod -- whether we should queue VMs or not
-	// when launching
+	// QueuedVMs toggles whether we should queue VMs or not when launching
 	QueueVMs bool
 
 	vmConfig      VMConfig
@@ -107,7 +106,7 @@ func NewNamespace(name string) *Namespace {
 		// default only contains this node by default
 		ns.Hosts[hostname] = true
 
-		// default cc does not use a subpath
+		// default does not use a subpath
 		ccServer, err := ron.NewServer(*f_iomBase, "", plumber)
 		if err != nil {
 			log.Fatal("creating cc node %v", err)
@@ -269,9 +268,11 @@ func (n *Namespace) Schedule() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
-	// Query for the host stats on all machines. We want the global load of
-	// hosts so we pass nil as the namespace to run host sans-namespace.
-	cmd := minicli.MustCompile("host")
+	// Query for the host stats on all machines.
+	// TODO: We want the global load of hosts so we pass nil as the namespace
+	// to run host sans-namespace.
+	cmd := minicli.MustCompilef("namespace %q host", n.Name)
+	cmd.SetSource(n.Name)
 	cmd.SetRecord(false)
 	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
 

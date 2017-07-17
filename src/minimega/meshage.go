@@ -119,7 +119,7 @@ func meshageRecipients(hosts string) ([]string, error) {
 	ns := GetNamespace()
 
 	if hosts == Wildcard {
-		if ns == nil {
+		if ns == nil || ns.Name == DefaultNamespace {
 			return meshageNode.BroadcastRecipients(), nil
 		}
 
