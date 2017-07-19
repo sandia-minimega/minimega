@@ -249,7 +249,7 @@ func envCompleter(s string) []string {
 	for _, env := range os.Environ() {
 		k := strings.SplitN(env, "=", 2)[0]
 		if strings.HasPrefix(k, prefix) {
-			res = append(res, k)
+			res = append(res, "$"+k)
 		}
 	}
 
@@ -260,13 +260,26 @@ func envCompleter(s string) []string {
 func fileCompleter(path string) []string {
 	var res []string
 
-	dir := filepath.Dir(path)
-	base := filepath.Base(path)
+	var dir, prefix string
+
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
+		dir = path
+		prefix = ""
+	} else {
+		dir = filepath.Dir(path)
+		prefix = filepath.Base(path)
+	}
 
 	files, _ := ioutil.ReadDir(dir)
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), base) {
-			res = append(res, filepath.Join(dir, f.Name()))
+		if strings.HasPrefix(f.Name(), prefix) {
+			name := filepath.Join(dir, f.Name())
+
+			if f.IsDir() {
+				name += string(os.PathSeparator)
+			}
+
+			res = append(res, name)
 		}
 	}
 
@@ -289,7 +302,10 @@ func cliCompleter(line string) []string {
 		// create new result that is line + suggestion + whitespace
 		r := make([]string, len(s))
 		for i := range s {
-			r[i] = line + s[i] + " "
+			r[i] = line + s[i]
+			if !strings.HasSuffix(s[i], string(os.PathSeparator)) {
+				r[i] += " "
+			}
 		}
 
 		return r
