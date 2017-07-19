@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -232,26 +231,22 @@ func tunnelHandler(ws *websocket.Conn) {
 }
 
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
-	// get VMs that aren't in the quit or error state
-	vms := vmInfo(nil, []string{
-		"state!=quit",
-		"state!=error",
-	})
+	var vms []map[string]string
 
-	sort.Slice(vms, func(i, j int) bool {
-		h := vms[i]["host"]
-		h2 := vms[j]["host"]
+	if strings.HasSuffix(r.URL.Path, "/info.json") {
+		// don't care about quit or error state
+		vms = vmInfo(nil, []string{
+			"state!=quit",
+			"state!=error",
+		})
+	} else if strings.HasSuffix(r.URL.Path, "/top.json") {
+		vms = vmTop(nil, nil)
+	} else {
+		http.NotFound(w, r)
+		return
+	}
 
-		if h == h2 {
-			id, _ := strconv.Atoi(vms[i]["id"])
-			id2, _ := strconv.Atoi(vms[j]["id"])
-
-			return id < id2
-		}
-
-		return h < h2
-	})
-
+	sortVMs(vms)
 	respondJSON(w, vms)
 }
 

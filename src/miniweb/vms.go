@@ -5,78 +5,36 @@
 package main
 
 import (
-	"fmt"
-	"minicli"
-	log "minilog"
-	"strings"
+	"sort"
+	"strconv"
 )
 
 func vmInfo(columns, filters []string) []map[string]string {
-	cmd := "vm info"
+	return runTabular("vm info", columns, filters)
+}
 
-	// apply filters first so we don't need to worry about the columns not
-	// including the filtered fields.
-	for _, f := range filters {
-		cmd = fmt.Sprintf(".filter %v %v", f, cmd)
-	}
+func vmTop(columns, filters []string) []map[string]string {
+	return runTabular("vm top", columns, filters)
+}
 
-	// quote all the columns in case there are spaces
-	for i, c := range columns {
-		columns[i] = fmt.Sprintf("%q", c)
-	}
+func sortVMs(vms []map[string]string) {
+	sort.Slice(vms, func(i, j int) bool {
+		h := vms[i]["host"]
+		h2 := vms[j]["host"]
 
-	// copy all fields in header order
-	doVM := func(resp *minicli.Response, row []string) map[string]string {
-		vm := map[string]string{
-			"host": resp.Host,
-		}
+		if h == h2 {
+			// used IDs, if present
+			id, err := strconv.Atoi(vms[i]["id"])
+			id2, err2 := strconv.Atoi(vms[j]["id"])
 
-		for i, header := range resp.Header {
-			vm[header] = row[i]
-		}
-
-		return vm
-	}
-
-	if len(columns) > 0 {
-		cmd = fmt.Sprintf(".columns %v %v", strings.Join(columns, ","), cmd)
-
-		// replace doVM to only copy fields in column order
-		doVM = func(resp *minicli.Response, row []string) map[string]string {
-			vm := map[string]string{}
-			for _, column := range columns {
-				if strings.Contains(column, "host") {
-					vm["host"] = resp.Host
-					continue
-				}
-
-				for i, header := range resp.Header {
-					if strings.Contains(column, header) {
-						vm[header] = row[i]
-					}
-				}
-			}
-			return vm
-		}
-	}
-
-	// don't record command in history
-	cmd = fmt.Sprintf(".record false %v", cmd)
-
-	vms := []map[string]string{}
-
-	for resps := range mm.Run(cmd) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
+			if err == nil && err2 == nil {
+				return id < id2
 			}
 
-			for _, row := range resp.Tabular {
-				vms = append(vms, doVM(resp, row))
-			}
+			// fallback on names (hopefully present)
+			return vms[i]["name"] < vms[j]["name"]
 		}
-	}
 
-	return vms
+		return h < h2
+	})
 }
