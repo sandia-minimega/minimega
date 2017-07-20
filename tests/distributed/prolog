@@ -4,12 +4,10 @@ vm config filesystem $minirouterfs
 vm launch container router
 
 router router interface 0 10.0.0.254/24
-router router dhcp 10.0.0.254 range 10.0.0.1 10.0.0.5
+router router dhcp 10.0.0.254 range 10.0.0.1 10.0.0.3
 router router dns 10.0.0.1 mm1
 router router dns 10.0.0.2 mm2
 router router dns 10.0.0.3 mm3
-router router dns 10.0.0.4 mm4
-router router dns 10.0.0.5 mm5
 router router commit
 
 # launch VMs to run minimega
@@ -18,7 +16,7 @@ vm config net LAN
 vm config initrd $images/miniception.initrd
 vm config kernel $images/miniception.kernel
 vm config memory 4096
-vm launch kvm 5
+vm launch kvm 3
 
 # start all VMs
 vm start all
