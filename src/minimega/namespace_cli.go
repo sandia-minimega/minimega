@@ -110,12 +110,16 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns2 := GetOrCreateNamespace(name)
 
 		if c.Subcommand != nil {
-			// Setting namespace for a single command, revert back afterwards
-			defer RevertNamespace(ns, ns2)
-			if err := SetNamespace(name); err != nil {
-				resp.Error = err.Error()
-				respChan <- minicli.Responses{resp}
-				return
+			// If we're not already in the desired namespace, change to it
+			// before running the command and then revert back afterwards. If
+			// we're already in the namespace, just run the command.
+			if ns.Name != name {
+				if err := SetNamespace(name); err != nil {
+					resp.Error = err.Error()
+					respChan <- minicli.Responses{resp}
+					return
+				}
+				defer RevertNamespace(ns, ns2)
 			}
 
 			// Run the subcommand and forward the responses.

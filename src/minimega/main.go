@@ -203,8 +203,8 @@ func main() {
 	plumberStart(meshageNode)
 
 	// has to happen after meshageNode is created
-	GetOrCreateNamespace("minimega")
-	SetNamespace("minimega")
+	GetOrCreateNamespace(DefaultNamespace)
+	SetNamespace(DefaultNamespace)
 
 	commandSocketStart()
 

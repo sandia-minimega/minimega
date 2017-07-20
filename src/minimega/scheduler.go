@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	log "minilog"
 	"sort"
@@ -179,6 +180,10 @@ func incHostStats(stats *HostStats, config VMConfig) {
 
 func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (map[string][]*QueuedVMs, error) {
 	res := map[string][]*QueuedVMs{}
+
+	if len(hosts) == 0 {
+		return nil, errors.New("no hosts to schedule VMs on")
+	}
 
 	if len(hosts) == 1 {
 		log.Warn("only one host in namespace, scheduling all VMs on it")
