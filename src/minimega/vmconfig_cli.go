@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"minicli"
+	"strconv"
 )
 
 // vmconfigCLIHandlers are special cases that are not worth generating via
@@ -156,13 +157,25 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 		return nil
 	} else if c.BoolArgs["clone"] {
-		// Clone the config of an existing vm
-		vm := ns.VMs.FindVM(c.StringArgs["vm"])
-		if vm == nil {
-			return vmNotFound(c.StringArgs["vm"])
+		// Clone the config of an existing vm, search across the namespace
+		name := c.StringArgs["vm"]
+		id, err := strconv.Atoi(name)
+
+		var found VM
+
+		for _, vm := range globalVMs(ns) {
+			if err == nil && id == vm.GetID() {
+				found = vm
+			} else if name == vm.GetName() {
+				found = vm
+			}
 		}
 
-		switch vm := vm.(type) {
+		if found == nil {
+			return vmNotFound(name)
+		}
+
+		switch vm := found.(type) {
 		case *KvmVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.KVMConfig = vm.KVMConfig.Copy()

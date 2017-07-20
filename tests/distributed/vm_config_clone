@@ -1,0 +1,12 @@
+namespace test
+
+# launch a VM to clone
+vm config filesystem /root/uminicccfs
+vm launch container A
+
+clear vm config
+
+# attempt to clone A's config
+vm config filesystem
+vm config clone A
+vm config filesystem
