@@ -5,60 +5,36 @@
 package main
 
 import (
-	"fmt"
-	log "minilog"
-	"strings"
+	"sort"
+	"strconv"
 )
 
-func vmInfo(name string, columns []string) []map[string]string {
-	cmd := "vm info"
-	if name != "" {
-		// TODO: quotes?
-		cmd = fmt.Sprintf(".filter name=%v %v", name, cmd)
-	}
+func vmInfo(columns, filters []string) []map[string]string {
+	return runTabular("vm info", columns, filters)
+}
 
-	if len(columns) != 0 {
-		// TODO: quotes?
-		cmd = fmt.Sprintf(".columns %v %v", strings.Join(columns, ","), cmd)
-	}
+func vmTop(columns, filters []string) []map[string]string {
+	return runTabular("vm top", columns, filters)
+}
 
-	res := []map[string]string{}
+func sortVMs(vms []map[string]string) {
+	sort.Slice(vms, func(i, j int) bool {
+		h := vms[i]["host"]
+		h2 := vms[j]["host"]
 
-	for resps := range mm.Run(cmd) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
+		if h == h2 {
+			// used IDs, if present
+			id, err := strconv.Atoi(vms[i]["id"])
+			id2, err2 := strconv.Atoi(vms[j]["id"])
+
+			if err == nil && err2 == nil {
+				return id < id2
 			}
 
-			for _, row := range resp.Tabular {
-				vm := map[string]string{}
-				for _, column := range columns {
-					if column == "host" {
-						vm["host"] = resp.Host
-						continue
-					}
-
-					for i, header := range resp.Header {
-						if column == header {
-							vm[header] = row[i]
-						}
-					}
-				}
-
-				res = append(res, vm)
-			}
+			// fallback on names (hopefully present)
+			return vms[i]["name"] < vms[j]["name"]
 		}
-	}
 
-	if len(res) == 0 {
-		log.Errorln("no vms")
-		return nil
-	}
-
-	if name != "" && len(res) > 1 {
-		log.Errorln("lots of vms")
-	}
-
-	return res
+		return h < h2
+	})
 }

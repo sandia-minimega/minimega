@@ -15,7 +15,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -157,7 +156,9 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	var vmType string
 
 	columns := []string{"type"}
-	for _, vm := range vmInfo(name, columns) {
+	filters := []string{fmt.Sprintf("name=%q", name)}
+
+	for _, vm := range vmInfo(columns, filters) {
 		vmType = vm["type"]
 	}
 
@@ -185,7 +186,9 @@ func tunnelHandler(ws *websocket.Conn) {
 	var port int
 
 	columns := []string{"host", "type", "vnc_port", "console_port"}
-	for _, vm := range vmInfo(name, columns) {
+	filters := []string{fmt.Sprintf("name=%q", name)}
+
+	for _, vm := range vmInfo(columns, filters) {
 		host = vm["host"]
 
 		switch vm["type"] {
@@ -228,47 +231,23 @@ func tunnelHandler(ws *websocket.Conn) {
 }
 
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
-	// we want a map of "hostname + id" to vm info so that it can be sorted
-	vms := make(map[string]map[string]interface{}, 0)
+	var vms []map[string]string
 
-	for resps := range mm.Run(".filter state!=quit .filter state!=error vm info") {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			for _, row := range resp.Tabular {
-				vm := map[string]interface{}{}
-
-				vm["host"] = resp.Host
-
-				for i, header := range resp.Header {
-					vm[header] = row[i]
-				}
-
-				// assume that there's a host and id column... " " is invalid
-				// as a hostname, so we use it as a separator.
-				key := fmt.Sprintf("%v %v", vm["host"], vm["id"])
-				vms[key] = vm
-			}
-		}
+	if strings.HasSuffix(r.URL.Path, "/info.json") {
+		// don't care about quit or error state
+		vms = vmInfo(nil, []string{
+			"state!=quit",
+			"state!=error",
+		})
+	} else if strings.HasSuffix(r.URL.Path, "/top.json") {
+		vms = vmTop(nil, nil)
+	} else {
+		http.NotFound(w, r)
+		return
 	}
 
-	// Make a slice of all keys, then sort it
-	keys := []string{}
-	for k, _ := range vms {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	// Make a sorted slice of values from the sorted slice of keys
-	sorted := make([]map[string]interface{}, len(vms))
-	for i, k := range keys {
-		sorted[i] = vms[k]
-	}
-
-	respondJSON(w, sorted)
+	sortVMs(vms)
+	respondJSON(w, vms)
 }
 
 func hostsHandler(w http.ResponseWriter, r *http.Request) {
