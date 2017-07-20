@@ -832,7 +832,7 @@ func (vm *KvmVM) ChangeCD(f string) error {
 		}
 	}
 
-	err := vm.q.BlockdevChange("ide0-cd1", f)
+	err := vm.q.BlockdevChange("ide0-cd0", f)
 	if err == nil {
 		vm.CdromPath = f
 	}
@@ -852,7 +852,7 @@ func (vm *KvmVM) EjectCD() error {
 }
 
 func (vm *KvmVM) ejectCD() error {
-	err := vm.q.BlockdevEject("ide0-cd1")
+	err := vm.q.BlockdevEject("ide0-cd0")
 	if err == nil {
 		vm.CdromPath = ""
 	}
@@ -948,6 +948,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
 	}
 
+	// put cdrom *before* disks so that it is always connected to ide0 -- this
+	// allows us to use a hardcoded block device name in cdrom eject/change.
+	if vm.CdromPath != "" {
+		args = append(args, "-drive")
+		args = append(args, "file="+vm.CdromPath+",media=cdrom")
+		args = append(args, "-boot")
+		args = append(args, "once=d")
+	} else {
+		// add an empty cdrom
+		args = append(args, "-drive")
+		args = append(args, "media=cdrom")
+	}
+
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {
 			args = append(args, "-drive")
@@ -970,17 +983,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	if len(vm.Append) > 0 {
 		args = append(args, "-append")
 		args = append(args, unescapeString(vm.Append))
-	}
-
-	if vm.CdromPath != "" {
-		args = append(args, "-drive")
-		args = append(args, "file="+vm.CdromPath+",if=ide,index=1,media=cdrom")
-		args = append(args, "-boot")
-		args = append(args, "once=d")
-	} else {
-		// add an empty cdrom
-		args = append(args, "-drive")
-		args = append(args, "if=ide,index=1,media=cdrom")
 	}
 
 	// net
