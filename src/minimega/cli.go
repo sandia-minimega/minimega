@@ -327,9 +327,12 @@ func cliCompleter(line string) []string {
 			suggest = append(suggest, envCompleter(last)...)
 			suggest = append(suggest, iomCompleter(last)...)
 			suggest = append(suggest, fileCompleter(last)...)
-		} else {
-			suggest = append(suggest, fileCompleter("./")...)
 		}
+	}
+
+	// last resort, complete files from current directory
+	if len(suggest) == 0 {
+		suggest = append(suggest, fileCompleter(*f_iomBase)...)
 	}
 
 	return prep(suggest)
