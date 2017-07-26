@@ -14,10 +14,12 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"github.com/kr/pty"
 	"golang.org/x/net/websocket"
 )
 
@@ -173,14 +175,14 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func tunnelHandler(ws *websocket.Conn) {
-	// URL should be of the form `/tunnel/<name>`
+	// URL should be of the form `/ws/tunnel/<name>`
 	path := strings.Trim(ws.Config().Location.Path, "/")
 
 	fields := strings.Split(path, "/")
-	if len(fields) != 2 {
+	if len(fields) != 3 {
 		return
 	}
-	name := fields[1]
+	name := fields[2]
 
 	var host string
 	var port int
@@ -298,4 +300,29 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, vlans)
+}
+
+func consoleHandler(ws *websocket.Conn) {
+	// start minimega in a new pty
+	cmd := exec.Command("bin/minimega", "-attach")
+
+	tty, err := pty.Start(cmd)
+	if err != nil {
+		log.Error("start failed:", err)
+		return
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Process.Wait()
+		tty.Close()
+	}()
+
+	go io.Copy(ws, tty)
+	io.Copy(tty, ws)
+
+	cmd.Process.Kill()
+
+	if _, err := cmd.Process.Wait(); err != nil {
+		log.Error("wait failed: %v", err)
+	}
 }

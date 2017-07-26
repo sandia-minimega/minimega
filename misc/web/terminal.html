@@ -11,7 +11,7 @@
 		term.open(terminalContainer);
 		term.resize(80, 24);
 
-		path = "/tunnel/" + window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1)
+		path = "/ws/tunnel/" + window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1)
 		socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
 		socket = new WebSocket(socketURL);
 		socket.onopen = runterminal;

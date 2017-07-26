@@ -82,7 +82,10 @@ func main() {
 
 	mux.HandleFunc("/connect/", connectHandler)
 	mux.HandleFunc("/screenshot/", screenshotHandler)
-	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
+	mux.Handle("/ws/tunnel/", websocket.Handler(tunnelHandler))
+
+	mux.HandleFunc("/console", templateHander)
+	mux.Handle("/ws/console/", websocket.Handler(consoleHandler))
 
 	server := &http.Server{
 		Addr:    *f_addr,
