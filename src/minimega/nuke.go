@@ -8,7 +8,6 @@ import (
 	"bridge"
 	"bufio"
 	"errors"
-	"goreadline"
 	"io/ioutil"
 	"minicli"
 	log "minilog"

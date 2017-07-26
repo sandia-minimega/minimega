@@ -1260,7 +1260,7 @@ var UI;
 
         // Display the desktop name in the document title
         updateDocumentTitle: function(rfb, name) {
-            document.title = name + " - noVNC";
+            //document.title = name + " - noVNC";
         },
 
         //Helper to add options to dropdown.

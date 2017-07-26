@@ -30,11 +30,11 @@ var ssDataTable;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-// Initialize the VM DataTable and set up an automatic reload
-function initVMDataTable() {
+// Initialize the `vm info` DataTable and set up an automatic reload
+function initVMInfoDataTable() {
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
-            updateJSON('/vms.json', function(vmsData) {
+            updateJSON('/vms/info.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
@@ -127,6 +127,68 @@ function initVMDataTable() {
     }
 }
 
+// Initialize the `vm top` DataTable and set up an automatic reload
+function initVMTopDataTable() {
+    var vmDataTable = $('#vms-dataTable').DataTable({
+        "ajax": function( data, callback, settings) {
+            updateJSON('/vms/top.json', function(vmsData) {
+                // disable auto-refresh there are too many VMs
+                VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
+
+                // put into a structure that DataTables expects
+                var dataTablesData = {"data": vmsData};
+
+                callback(dataTablesData);
+            });
+        },
+        // custom DOM with Boostrap integration
+        // http://stackoverflow.com/a/32253335
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility',
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [10, 25, 50, 100, 250, 500, -1],
+            [10, 25, 50, 100, 250, 500, "All"]
+        ],
+        "pageLength": 500,
+        "columns": [
+            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
+            { "title": "Host", "data": "host" },
+            { "title": "Name", "data": "name" },
+            { "title": "Virtual", "data": "virt" },
+            { "title": "Resident", "data": "res", "visible": false },
+            { "title": "Shared", "data": "shr", "visible": false },
+            { "title": "CPU", "data": "cpu" },
+            { "title": "VCPU", "data": "vcpu" },
+            { "title": "Time", "data": "time" },
+            { "title": "Processes", "data": "procs" },
+            { "title": "Rx", "data": "rx" },
+            { "title": "Tx", "data": "tx" },
+        ],
+        "order": [[ 0, 'asc' ], [ 1, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+
+    if (VM_REFRESH_TIMEOUT >= 1000) {
+        setInterval(function() {
+            if (VM_REFRESH_ENABLE) {
+                vmDataTable.ajax.reload(null, false);
+            }
+        }, VM_REFRESH_TIMEOUT);
+    }
+}
+
 
 // Initialize the Host DataTable and set up an automatic reload
 function initHostDataTable() {
@@ -199,12 +261,12 @@ function initHostDataTable() {
 
 // Initialize the Screenshot DataTable and set up an automatic reload
 function initScreenshotDataTable() {
-    updateJSON('/vms.json', updateScreenshotTable);
+    updateJSON('/vms/info.json', updateScreenshotTable);
 
     if (IMAGE_REFRESH_TIMEOUT > 0) {
         setInterval(function() {
             if (IMAGE_REFRESH_ENABLE) {
-                updateJSON('/vms.json', updateScreenshotTable);
+                updateJSON('/vms/info.json', updateScreenshotTable);
             }
         }, IMAGE_REFRESH_TIMEOUT);
     }

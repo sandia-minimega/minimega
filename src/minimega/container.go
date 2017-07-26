@@ -515,11 +515,11 @@ func containerShim() {
 		log.Fatal("containerRemountReadOnly: %v", err)
 	}
 
-	// mask uuid path
+	// mask uuid path if possible - not all platforms have dmi
 	log.Debug("uuid bind mount: %v -> %v", vmUUID, containerUUIDLink)
 	err = syscall.Mount(vmUUID, filepath.Join(vmFSPath, containerUUIDLink), "", syscall.MS_BIND, "")
 	if err != nil {
-		log.Fatal("containerUUIDLink: %v", err)
+		log.Warn("containerUUIDLink: %v", err)
 	}
 
 	// bind mount fifos
@@ -826,7 +826,7 @@ func (vm *ContainerVM) launch() error {
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			teardownf("unable to create VM dir: %v", err)
+			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
 
 		if vm.Snapshot {

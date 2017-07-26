@@ -17,9 +17,9 @@ var routerCLIHandlers = []minicli.Handler{
 Configure running minirouter VMs running minirouter and miniccc.
 
 Routers are configured by specifying or updating a configuration, and then
-applying that configuration with a commit command. For example, to configure
-a router on a running VM named 'foo' to serve DHCP on 10.0.0.0/24 with a
-range of IPs:
+applying that configuration with a commit command. For example, to configure a
+router on a running VM named 'foo' to serve DHCP on 10.0.0.0/24 with a range of
+IPs:
 
 	router foo dhcp 10.0.0.0 range 10.0.0.100 10.0.0.200
 	router foo commit
@@ -50,13 +50,15 @@ router takes a number of subcommands:
 
 - 'upstream': Set upstream server for DNS.
 
+- 'gw': Set default gateway which will be used if there is no matching route.
+
 - 'ra': Enable neighbor discovery protocol router advertisements for a given
   subnet.
 
 - 'route': Set static or OSPF routes. Static routes include a subnet and
-  next-hop. OSPF routes include an area and a network index corresponding to
-  the interface described in 'vm config net'. For example, to enable OSPF on
-  area 0 for both interfaces of a router:
+  next-hop. OSPF routes include an area and a network index corresponding to the
+  interface described in 'vm config net'. For example, to enable OSPF on area 0
+  for both interfaces of a router:
 
 	vm config net 100 200
 	# ...
@@ -74,6 +76,7 @@ router takes a number of subcommands:
 			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <upstream,> <ip>",
+			"router <vm> <gw,> <gw>",
 			"router <vm> <ra,> <subnet>",
 			"router <vm> <route,> <static,> <network> <next-hop>",
 			"router <vm> <route,> <ospf,> <area> <network>",
@@ -99,6 +102,7 @@ router takes a number of subcommands:
 			"clear router <vm> <dns,>",
 			"clear router <vm> <dns,> <ip>",
 			"clear router <vm> <upstream,>",
+			"clear router <vm> <gw,>",
 			"clear router <vm> <ra,>",
 			"clear router <vm> <ra,> <subnet>",
 			"clear router <vm> <route,>",
@@ -181,6 +185,9 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	} else if c.BoolArgs["upstream"] {
 		ip := c.StringArgs["ip"]
 		rtr.Upstream(ip)
+		return nil
+	} else if c.BoolArgs["gw"] {
+		rtr.Gateway(c.StringArgs["gw"])
 		return nil
 	} else if c.BoolArgs["ra"] {
 		subnet := c.StringArgs["subnet"]
@@ -270,6 +277,8 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return rtr.DNSDel(ip)
 	} else if c.BoolArgs["upstream"] {
 		return rtr.UpstreamDel()
+	} else if c.BoolArgs["gw"] {
+		return rtr.GatewayDel()
 	} else if c.BoolArgs["ra"] {
 		subnet := c.StringArgs["subnet"]
 		return rtr.RADDel(subnet)

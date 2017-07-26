@@ -575,7 +575,7 @@ func (vm *KvmVM) launch() error {
 	// check and create a directory for it.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			teardownf("unable to create VM dir: %v", err)
+			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
 	}
 
@@ -587,16 +587,22 @@ func (vm *KvmVM) launch() error {
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		nic := &vm.Networks[i]
+		if nic.Tap != "" {
+			// tap has already been created, don't need to do again
+			continue
+		}
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
 			return vm.setErrorf("unable to get bridge %v: %v", nic.Bridge, err)
 		}
 
-		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
+		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
 		if err != nil {
 			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
+
+		nic.Tap = tap
 	}
 
 	if len(vm.Networks) > 0 {
@@ -818,7 +824,7 @@ func (vm *KvmVM) ChangeCD(f string) error {
 		}
 	}
 
-	err := vm.q.BlockdevChange("ide0-cd1", f)
+	err := vm.q.BlockdevChange("ide0-cd0", f)
 	if err == nil {
 		vm.CdromPath = f
 	}
@@ -838,7 +844,7 @@ func (vm *KvmVM) EjectCD() error {
 }
 
 func (vm *KvmVM) ejectCD() error {
-	err := vm.q.BlockdevEject("ide0-cd1")
+	err := vm.q.BlockdevEject("ide0-cd0")
 	if err == nil {
 		vm.CdromPath = ""
 	}
@@ -934,6 +940,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
 	}
 
+	// put cdrom *before* disks so that it is always connected to ide0 -- this
+	// allows us to use a hardcoded block device name in cdrom eject/change.
+	if vm.CdromPath != "" {
+		args = append(args, "-drive")
+		args = append(args, "file="+vm.CdromPath+",media=cdrom")
+		args = append(args, "-boot")
+		args = append(args, "once=d")
+	} else {
+		// add an empty cdrom
+		args = append(args, "-drive")
+		args = append(args, "media=cdrom")
+	}
+
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {
 			args = append(args, "-drive")
@@ -956,17 +975,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	if len(vm.Append) > 0 {
 		args = append(args, "-append")
 		args = append(args, unescapeString(vm.Append))
-	}
-
-	if vm.CdromPath != "" {
-		args = append(args, "-drive")
-		args = append(args, "file="+vm.CdromPath+",if=ide,index=1,media=cdrom")
-		args = append(args, "-boot")
-		args = append(args, "once=d")
-	} else {
-		// add an empty cdrom
-		args = append(args, "-drive")
-		args = append(args, "if=ide,index=1,media=cdrom")
 	}
 
 	// net

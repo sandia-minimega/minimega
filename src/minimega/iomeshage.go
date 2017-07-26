@@ -72,13 +72,10 @@ You can also supply globs (wildcards) with the * operator. For example:
 	},
 }
 
-func iomeshageInit(node *meshage.Node) {
+func iomeshageStart(node *meshage.Node) error {
 	var err error
 	iom, err = iomeshage.New(*f_iomBase, node)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
+	return err
 }
 
 func cliFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

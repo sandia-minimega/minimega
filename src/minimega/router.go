@@ -26,6 +26,7 @@ type Router struct {
 	dhcp         map[string]*dhcp
 	dns          map[string][]string
 	upstream     string
+	gw           string
 	rad          map[string]bool // using a bool placeholder here for later RAD options
 	staticRoutes map[string]string
 	ospfRoutes   map[string]*ospf
@@ -123,6 +124,10 @@ func (r *Router) String() string {
 		fmt.Fprintf(&o, "Upstream DNS: %v\n", r.upstream)
 	}
 
+	if r.gw != "" {
+		fmt.Fprintf(&o, "Default Gateway: %v\n", r.gw)
+	}
+
 	if len(r.rad) > 0 {
 		fmt.Fprintf(&o, "Router Advertisements:\n")
 		var keys []string
@@ -212,6 +217,11 @@ func (r *Router) generateConfig() error {
 	}
 	if r.upstream != "" {
 		fmt.Fprintf(&out, "dnsmasq upstream %v\n", r.upstream)
+	}
+	if r.gw != "" {
+		fmt.Fprintf(&out, "route add default gw %v\n", r.gw)
+	} else {
+		fmt.Fprintf(&out, "route del default")
 	}
 	for subnet, _ := range r.rad {
 		fmt.Fprintf(&out, "dnsmasq ra %v\n", subnet)
@@ -471,6 +481,16 @@ func (r *Router) Upstream(ip string) {
 
 func (r *Router) UpstreamDel() error {
 	r.upstream = ""
+
+	return nil
+}
+
+func (r *Router) Gateway(gw string) {
+	r.gw = gw
+}
+
+func (r *Router) GatewayDel() error {
+	r.gw = ""
 
 	return nil
 }
