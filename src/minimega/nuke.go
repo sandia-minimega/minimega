@@ -83,7 +83,6 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	// clean up possibly leftover state
 	ksmDisable()
-	goreadline.Rlcleanup()
 
 	os.Exit(0)
 	return errors.New("unreachable")
