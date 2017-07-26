@@ -1,25 +1,27 @@
 {{define "content"}}
 <div id="content">
-	<div id="terminal"></div>
+    <div id="terminal"></div>
 </div>
 
 <link rel="stylesheet" href="/xterm.js/src/xterm.css"/>
 <script src="/xterm.js/dist/xterm.js"></script>
 <script src="/xterm.js/addons/attach/attach.js"></script>
 <script>
-    var terminalContainer = document.getElementById('#terminal');
-    var term = new Terminal();
-    term.open(terminalContainer);
-    term.resize(80, 24);
+    $(document).ready(function() {
+        $('nav a[href$="' + "console" + '"]').addClass("current-view");
 
-    path = "/ws/console/";
-    socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
-    socket = new WebSocket(socketURL);
-    socket.onopen = runterminal;
+        var terminalContainer = document.getElementById('#terminal');
+        var term = new Terminal();
+        term.open(terminalContainer);
+        term.resize(80, 24);
 
-    function runterminal() {
-        term.attach(socket);
-        term._initialized = true;
-    };
+        path = "/ws/console/";
+        socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
+        socket = new WebSocket(socketURL);
+        socket.onopen = function() {
+            term.attach(socket);
+            term._initialized = true;
+        };
+    });
 </script>
 {{end}}
