@@ -26,7 +26,6 @@ var captureCLIHandlers = []minicli.Handler{
 			"capture <pcap,> <filter,> [bpf]",
 			"capture <netflow,> <mode,> [raw,ascii]",
 			"capture <netflow,> <gzip,> [true,false]",
-			"capture <netflow,> <timeout,> [timeout in seconds]",
 		},
 		Call: wrapBroadcastCLI(cliCaptureConfig),
 	},
@@ -65,7 +64,7 @@ Examples:
 	# Capture netflow for mega_bridge to foo.netflow
 	capture netflow bridge mega_bridge foo.netflow
 
-	# Capture the 0-th interface for VM foo to foo.pcap
+	# Capture all bridge foo traffic to foo.pcap
 	capture pcap bridge foo foo.pcap
 
 	# Capture the 0-th interface for VM foo to foo.pcap
@@ -84,20 +83,30 @@ calling "capture pcap delete vm <name>" stops all the captures for that VM. To
 stop all captures of all types, use "clear capture".
 
 Notes with namespaces:
- * "capture" lists captures across the namespace
- * Each namespace has its own configuration for captures (e.g. snaplen, mode)
- * Netflow objects are shared across namespaces meaning that their timeouts are
-   also shared -- and terrible.
- * "capture pcap vm ..." captures traffic for a VM in the current namespace,
-   regardless of what host it is running on
- * "capture netflow ..." and "capture pcap ..." only run on the local node so
-   you must use meshage you wish to use them
- * Traffic captured from a bridge, may include traffic from other namespaces
- * "clear capture" clears captures across the namespace`,
+ * Capturing traffic directly from the bridge (as PCAP or netflow) is not
+   recommended if different namespaces share the same bridge. If this is the
+   case, the captured traffic would contain data from across namespaces.
+ * Due to the way Open vSwitch implements netflow, there can be only one
+   netflow object per bridge. This means that the netflow timeout is shared
+   across namespaces. Additionally, note that the API is also not
+   bridge-specific.
+
+Due to the above intricacies, the following commands only run on the local
+minimega instance:
+
+	capture <netflow,> <bridge,> <bridge> <filename>
+	capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>
+	capture <netflow,> <delete,> bridge <name>
+	capture <netflow,> <timeout,> [timeout in seconds]
+	capture <pcap,> bridge <bridge> <filename>
+	capture <pcap,> <delete,> bridge <name>
+
+`,
 		Patterns: []string{
 			"capture <netflow,> <bridge,> <bridge> <filename>",
 			"capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>",
 			"capture <netflow,> <delete,> bridge <name>",
+			"capture <netflow,> <timeout,> [timeout in seconds]",
 
 			"capture <pcap,> bridge <bridge> <filename>",
 			"capture <pcap,> <delete,> bridge <name>",
@@ -169,20 +178,6 @@ func cliCaptureConfig(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		resp.Response = strconv.FormatBool(captureConfig.Compress)
-		return nil
-	} else if c.BoolArgs["timeout"] {
-		// TODO: ugh, captureUpdateNFTimeouts?
-		if v, ok := c.StringArgs["timeout"]; ok {
-			i, err := strconv.ParseUint(v, 10, 32)
-			if err != nil {
-				return err
-			}
-
-			captureConfig.Timeout = i
-			return nil
-		}
-
-		resp.Response = strconv.FormatUint(captureConfig.Timeout, 10)
 		return nil
 	}
 
@@ -337,6 +332,22 @@ func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 			c.StringArgs["hostname:port"],
 			captureConfig.Mode == "ascii",
 		)
+	} else if c.BoolArgs["timeout"] {
+		if v, ok := c.StringArgs["timeout"]; ok {
+			i, err := strconv.ParseUint(v, 10, 32)
+			if err != nil {
+				return err
+			}
+
+			captureNFTimeout = int(i)
+
+			captureUpdateNFTimeouts()
+
+			return nil
+		}
+
+		resp.Response = strconv.Itoa(captureNFTimeout)
+		return nil
 	}
 
 	return errors.New("unreachable")

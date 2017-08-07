@@ -37,12 +37,13 @@ var captureConfig = struct {
 	Filter   string
 	Mode     string
 	Compress bool
-	Timeout  uint64
 }{
 	SnapLen: 1600,
 	Mode:    "raw",
-	Timeout: 10,
 }
+
+// Active timeout for connections in seconds
+var captureNFTimeout = 10
 
 func (c *capture) InNamespace(namespace string) bool {
 	if namespace == "" || c.VM == nil {
@@ -355,7 +356,8 @@ func getNetflowFromBridge(b string) (*gonetflow.Netflow, error) {
 // getOrCreateNetflow wraps calls to getBridge and getNetflowFromBridge,
 // creating each, if needed.
 //
-// TODO: separate netflow object per namespace?
+// Note that we cannot have a separate netflow object per namespace because OVS
+// doesn't support more than one netflow object per bridge.
 func getOrCreateNetflow(b string) (*gonetflow.Netflow, error) {
 	// create the bridge if necessary
 	br, err := getBridge(b)
@@ -368,7 +370,7 @@ func getOrCreateNetflow(b string) (*gonetflow.Netflow, error) {
 		return nil, err
 	} else if nf == nil {
 		// create a new netflow object
-		nf, err = br.NewNetflow(int(captureConfig.Timeout))
+		nf, err = br.NewNetflow(captureNFTimeout)
 	}
 
 	return nf, err
@@ -382,7 +384,7 @@ func captureUpdateNFTimeouts() {
 			continue
 		}
 
-		err = br.SetNetflowTimeout(int(captureConfig.Timeout))
+		err = br.SetNetflowTimeout(captureNFTimeout)
 		if err != nil && !strings.Contains(err.Error(), "has no netflow object") {
 			log.Error("unable to update netflow timeout: %v", err)
 		}
