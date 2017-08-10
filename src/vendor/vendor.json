@@ -1,0 +1,73 @@
+{
+	"comment": "",
+	"ignore": "test",
+	"package": [
+		{
+			"checksumSHA1": "ROWmPjNSzKSdJJk5IMv6qE6MeQQ=",
+			"path": "github.com/c9s/goprocinfo",
+			"revision": "19cb9f127a9c8d2034cf59ccb683cdb94b9deb6c",
+			"revisionTime": "2015-10-25T19:11:53Z"
+		},
+		{
+			"checksumSHA1": "yl4kIRJT7IYT83DkCfcuD9Y3FI4=",
+			"path": "github.com/google/gopacket",
+			"revision": "2040752af7f5cf5f83eff139e987a36d2fed62fc",
+			"revisionTime": "2016-09-23T17:23:10Z"
+		},
+		{
+			"checksumSHA1": "IyHKjCdrqRRLTAKBHEh6wUhkgiI=",
+			"path": "github.com/jbuchbinder/gopnm",
+			"revision": "5176c556b9ce7e87b54b92744dc86f058f520e86",
+			"revisionTime": "2015-02-23T21:27:18Z"
+		},
+		{
+			"checksumSHA1": "HVxIIhwG2vbG9Wv1tBeSGavtI6Q=",
+			"path": "github.com/kr/pty",
+			"revision": "2c10821df3c3cf905230d078702dfbe9404c9b23",
+			"revisionTime": "2017-03-07T14:53:09Z"
+		},
+		{
+			"checksumSHA1": "OUZ1FFXyKs+Cfg9M9rmXqqweQck=",
+			"path": "github.com/miekg/dns",
+			"revision": "db96a2b759cdef4f11a34506a42eb8d1290c598e",
+			"revisionTime": "2016-07-26T03:20:27Z"
+		},
+		{
+			"checksumSHA1": "r5eQHkttko6kxroDEENXbmXKrSs=",
+			"path": "github.com/nfnt/resize",
+			"revision": "891127d8d1b52734debe1b3c3d7e747502b6c366",
+			"revisionTime": "2016-07-24T20:39:20Z"
+		},
+		{
+			"checksumSHA1": "BcKVRsLhMzSj4ksVqslEThK6tjA=",
+			"path": "github.com/peterh/liner",
+			"revision": "88609521dc4b6c858fd4c98b628147da928ce4ac",
+			"revisionTime": "2017-03-17T01:49:00Z"
+		},
+		{
+			"checksumSHA1": "HSzEA32rVv/GeWvRLRQXXGXTPTA=",
+			"path": "github.com/ziutek/telnet",
+			"revision": "49d9be70897fe0a7400a152121453075b2835866",
+			"revisionTime": "2015-04-27T11:54:47Z"
+		},
+		{
+			"checksumSHA1": "MlEHIE/60sB86Lmf0MPTIXHzKzE=",
+			"path": "golang.org/x/crypto/curve25519",
+			"revision": "b176d7def5d71bdd214203491f89843ed217f420",
+			"revisionTime": "2017-07-23T04:49:35Z"
+		},
+		{
+			"checksumSHA1": "H4UKwSf/71sWaIE+M9VZpSpVDwc=",
+			"path": "golang.org/x/crypto/ssh",
+			"revision": "575fdbe86e5dd89229707ebec0575ce7d088a4a6",
+			"revisionTime": "2015-10-30T16:56:38Z"
+		},
+		{
+			"checksumSHA1": "likOl7O0BJntqagR050kkOBuY4o=",
+			"path": "golang.org/x/net/websocket",
+			"revision": "7553b97266dcbbf78298bd1a2b12d9c9aaae5f40",
+			"revisionTime": "2016-05-31T05:38:05Z"
+		}
+	],
+	"rootPath": "/data/repos/sandia/minimega/src"
+}

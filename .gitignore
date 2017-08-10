@@ -10,3 +10,4 @@ misc/python/minimega.py
 doc/content/articles/api.article
 doc/content/articles/minirouter_api.article
 tests/*.got
+.cache
