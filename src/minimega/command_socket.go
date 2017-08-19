@@ -113,7 +113,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// client wants a suggestion
 		if r.Suggest != "" {
-			err = sendLocalSuggest(enc, minicli.Suggest(r.Suggest))
+			err = sendLocalSuggest(enc, cliCompleter(r.Suggest))
 			continue
 		}
 
