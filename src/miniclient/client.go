@@ -7,6 +7,7 @@ package miniclient
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"minicli"
@@ -40,6 +41,9 @@ type Response struct {
 
 type Conn struct {
 	url string
+
+	// first error encountered
+	err error
 
 	conn net.Conn
 
@@ -81,7 +85,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 		PlumbPipe: pipe,
 	})
 	if err != nil {
-		log.Fatal("local pipe gob encode: %v", err)
+		mm.err = fmt.Errorf("local pipe gob encode: %v", err)
+		return nil, nil
 	}
 
 	rr, rw, err := os.Pipe()
@@ -104,9 +109,11 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 				return
 			}
 			if err == io.EOF {
-				log.Fatalln("server disconnected")
+				mm.err = errors.New("server disconnected")
+				return
 			} else if err != nil {
-				log.Fatal("local command gob decode: %v", err)
+				mm.err = fmt.Errorf("local command gob decode: %v", err)
+				return
 			}
 
 			_, err = rw.WriteString(buf)
@@ -114,7 +121,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 				return
 			}
 			if err != nil {
-				log.Fatal("write: %v", err)
+				mm.err = fmt.Errorf("write: %v", err)
+				return
 			}
 		}
 	}()
@@ -147,11 +155,12 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 
 // Run a command through a JSON pipe, hand back channel for responses.
 func (mm *Conn) Run(cmd string) chan *Response {
+	out := make(chan *Response)
+
 	if cmd == "" {
 		// Language spec: "Receiving from a nil channel blocks forever."
 		// Instead, make and immediately close the channel so that range
 		// doesn't block and receives no values.
-		out := make(chan *Response)
 		close(out)
 
 		return out
@@ -161,27 +170,31 @@ func (mm *Conn) Run(cmd string) chan *Response {
 
 	err := mm.enc.Encode(Request{Command: cmd})
 	if err != nil {
-		log.Fatal("local command gob encode: %v", err)
+		mm.err = fmt.Errorf("local command gob encode: %v", err)
+
+		// see above
+		close(out)
+		return out
 	}
 	log.Debugln("encoded command:", cmd)
 
-	respChan := make(chan *Response)
-
 	go func() {
 		defer mm.lock.Unlock()
-		defer close(respChan)
+		defer close(out)
 
 		for {
 			var r Response
 			if err := mm.dec.Decode(&r); err != nil {
 				if err == io.EOF {
-					log.Fatalln("server disconnected")
+					mm.err = errors.New("server disconnected")
+					return
 				}
 
-				log.Fatal("local command gob decode: %v", err)
+				mm.err = fmt.Errorf("local command gob decode: %v", err)
+				return
 			}
 
-			respChan <- &r
+			out <- &r
 			if !r.More {
 				log.Debugln("got last message")
 				break
@@ -191,7 +204,7 @@ func (mm *Conn) Run(cmd string) chan *Response {
 		}
 	}()
 
-	return respChan
+	return out
 }
 
 // Run a command and print the response.
@@ -210,22 +223,35 @@ func (mm *Conn) RunAndPrint(cmd string, page bool) {
 }
 
 func (mm *Conn) Suggest(input string) []string {
+	mm.lock.Lock()
+	defer mm.lock.Unlock()
+
 	err := mm.enc.Encode(Request{Suggest: input})
 	if err != nil {
-		log.Fatal("local command gob encode: %v", err)
+		mm.err = fmt.Errorf("local command gob encode: %v", err)
+		return nil
 	}
 	log.Debugln("encoded suggest:", input)
 
 	var r Response
 	if err := mm.dec.Decode(&r); err != nil {
 		if err == io.EOF {
-			log.Fatalln("server disconnected")
+			mm.err = errors.New("server disconnected")
+			return nil
 		}
 
-		log.Fatal("local command gob decode: %v", err)
+		mm.err = fmt.Errorf("local command gob decode: %v", err)
+		return nil
 	}
 
 	return r.Suggest
+}
+
+func (mm *Conn) Error() error {
+	mm.lock.Lock()
+	defer mm.lock.Unlock()
+
+	return mm.err
 }
 
 // Attach creates a CLI interface to the dialed minimega instance
@@ -275,5 +301,10 @@ func (mm *Conn) Attach() {
 		quit = false
 
 		mm.RunAndPrint(line, true)
+
+		if err := mm.Error(); err != nil {
+			log.Errorln(err)
+			break
+		}
 	}
 }
