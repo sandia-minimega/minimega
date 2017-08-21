@@ -70,10 +70,10 @@ func main() {
 
 	mux.HandleFunc("/", indexHandler)
 
-	mux.HandleFunc("/vms", templateHander)
-	mux.HandleFunc("/hosts", templateHander)
-	mux.HandleFunc("/graph", templateHander)
-	mux.HandleFunc("/tilevnc", templateHander)
+	mux.HandleFunc("/vms", templateHandler)
+	mux.HandleFunc("/hosts", templateHandler)
+	mux.HandleFunc("/graph", templateHandler)
+	mux.HandleFunc("/tilevnc", templateHandler)
 
 	mux.HandleFunc("/hosts.json", hostsHandler)
 	mux.HandleFunc("/vlans.json", vlansHandler)
@@ -84,8 +84,9 @@ func main() {
 	mux.HandleFunc("/screenshot/", screenshotHandler)
 	mux.Handle("/ws/tunnel/", websocket.Handler(tunnelHandler))
 
-	mux.HandleFunc("/console", templateHander)
-	mux.Handle("/ws/console/", websocket.Handler(consoleHandler))
+	mux.HandleFunc("/console", consoleHandler)
+	mux.HandleFunc("/console/", consoleHandler)
+	mux.Handle("/ws/console/", websocket.Handler(consoleWsHandler))
 
 	server := &http.Server{
 		Addr:    *f_addr,
