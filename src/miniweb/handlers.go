@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
@@ -27,6 +28,7 @@ import (
 )
 
 var ptys = map[int]*os.File{}
+var ptyMu sync.Mutex
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
 	js, err := json.Marshal(data)
@@ -326,7 +328,8 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.Info("spawned new minimega console, pid = %v", pid)
 
-		// TODO: ptys lock
+		ptyMu.Lock()
+		defer ptyMu.Unlock()
 		ptys[pid] = tty
 
 		data := struct{ Pid int }{
@@ -354,6 +357,8 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ptyMu.Lock()
+	defer ptyMu.Unlock()
 	tty, ok := ptys[pid]
 	if !ok {
 		http.Error(w, "pty not found", http.StatusNotFound)
@@ -408,15 +413,18 @@ func consoleWsHandler(ws *websocket.Conn) {
 		return
 	}
 
-	// TODO: ptys lock
+	ptyMu.Lock()
 	tty, ok := ptys[pid]
+	// only one person should connect to the console
+	delete(ptys, pid)
+	ptyMu.Unlock()
+
 	if !ok {
 		log.Error("pid not found: %v", fields[2])
 		return
 	}
 
 	defer func() {
-		delete(ptys, pid)
 		tty.Close()
 	}()
 
