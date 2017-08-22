@@ -55,6 +55,7 @@ Additional fields are available for KVM-based VMs:
 - kernel        : kernel image
 - initrd        : initrd image
 - migrate       : qemu migration image
+- pid           : pid of qemu process
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
