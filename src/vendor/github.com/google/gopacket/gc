@@ -153,6 +153,9 @@ popd
 pushd tcpassembly
 go test ./...
 popd
+pushd reassembly
+go test ./...
+popd
 pushd layers
 gofmt -w gen.go
 go build gen.go
@@ -179,6 +182,10 @@ if [ -f /usr/include/pfring.h ]; then
   go build
   popd
 fi
+
+for travis_script in `ls .travis.*.sh`; do
+  ./$travis_script
+done
 
 # Run our initial commit
 git commit "$@"
