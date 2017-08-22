@@ -330,6 +330,8 @@ func (vm *KvmVM) Info(field string) (string, error) {
 	switch field {
 	case "vnc_port":
 		return strconv.Itoa(vm.VNCPort), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	}
 
 	return vm.KVMConfig.Info(field)
