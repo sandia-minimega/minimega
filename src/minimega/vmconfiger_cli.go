@@ -661,21 +661,21 @@ Default: -1
 		}),
 	},
 	{
-		HelpShort: "configures miniccc",
+		HelpShort: "configures backchannel",
 		HelpLong: `Enable/disable serial command and control layer for this VM.
 
 Default: true
 `,
 		Patterns: []string{
-			"vm config miniccc [true,false]",
+			"vm config backchannel [true,false]",
 		},
 		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
 			if len(c.BoolArgs) == 0 {
-				r.Response = strconv.FormatBool(vmConfig.Miniccc)
+				r.Response = strconv.FormatBool(vmConfig.Backchannel)
 				return nil
 			}
 
-			vmConfig.Miniccc = c.BoolArgs["true"]
+			vmConfig.Backchannel = c.BoolArgs["true"]
 
 			return nil
 		}),
@@ -722,6 +722,7 @@ newly launched VMs.
 		Patterns: []string{
 			"clear vm config",
 			"clear vm config <append,>",
+			"clear vm config <backchannel,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
 			"clear vm config <coschedule,>",
@@ -734,7 +735,6 @@ newly launched VMs.
 			"clear vm config <kernel,>",
 			"clear vm config <memory,>",
 			"clear vm config <migrate,>",
-			"clear vm config <miniccc,>",
 			"clear vm config <networks,>",
 			"clear vm config <preinit,>",
 			"clear vm config <qemu-append,>",
@@ -784,8 +784,8 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "coschedule" {
 		return fmt.Sprintf("%v", v.Coschedule), nil
 	}
-	if field == "miniccc" {
-		return strconv.FormatBool(v.Miniccc), nil
+	if field == "backchannel" {
+		return strconv.FormatBool(v.Backchannel), nil
 	}
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
@@ -816,8 +816,8 @@ func (v *BaseConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "coschedule" {
 		v.Coschedule = -1
 	}
-	if mask == Wildcard || mask == "miniccc" {
-		v.Miniccc = true
+	if mask == Wildcard || mask == "backchannel" {
+		v.Backchannel = true
 	}
 	if mask == Wildcard || mask == "networks" {
 		v.Networks = nil

@@ -695,7 +695,7 @@ func (vm *KvmVM) launch() error {
 		return err
 	}
 
-	if vm.Miniccc {
+	if vm.Backchannel {
 		// connect cc
 		ccPath := vm.path("cc")
 		if err := ccNode.DialSerial(ccPath); err != nil {
@@ -1009,7 +1009,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	// virtio-serial
-	if vm.Miniccc {
+	if vm.Backchannel {
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
 		args = append(args, "-chardev")

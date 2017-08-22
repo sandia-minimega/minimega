@@ -994,7 +994,7 @@ func (vm *ContainerVM) launch() error {
 
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
-	if err == nil && vm.Miniccc {
+	if err == nil && vm.Backchannel {
 		// connect cc. Note that we have a local err here because we don't want
 		// to prevent the VM from continuing to launch, even if we can't
 		// connect to cc.
@@ -1091,7 +1091,7 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// cleanup cc domain socket
-		if vm.Miniccc {
+		if vm.Backchannel {
 			ccNode.CloseUnix(ccPath)
 		}
 
