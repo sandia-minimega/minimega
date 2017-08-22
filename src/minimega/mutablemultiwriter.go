@@ -13,10 +13,14 @@ type mutableMultiWriter struct {
 func (t *mutableMultiWriter) Write(p []byte) (n int, err error) {
 	t.Lock()
 	defer t.Unlock()
-	for _, w := range t.writers {
+	for i, w := range t.writers {
+		if w == nil {
+			continue
+		}
 		n, err = w.Write(p)
 		if err != nil {
-			return
+			// if a write fails, get rid of the writer
+			t.writers[i] = nil
 		}
 		if n != len(p) {
 			err = io.ErrShortWrite
@@ -30,6 +34,17 @@ func (t *mutableMultiWriter) AddWriter(writer io.Writer) {
 	t.Lock()
 	defer t.Unlock()
 	t.writers = append(t.writers, writer)
+}
+
+func (t *mutableMultiWriter) DelWriter(writer io.Writer) {
+	t.Lock()
+	defer t.Unlock()
+	for i, _ := range t.writers {
+		if t.writers[i] == writer {
+			t.writers = append(t.writers[:i], t.writers[i+1:]...)
+			return
+		}
+	}
 }
 
 // MultiWriter creates a writer that duplicates its writes to all the

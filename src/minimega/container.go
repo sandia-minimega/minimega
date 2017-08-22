@@ -1196,15 +1196,16 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 
 			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
 			//TODO: copy scrollback to conn
-			io.Copy(conn, vm.scrollBack)
-			//TODO: register conn into the mutable-multiwriter
-			vm.consoleMultiWriter.AddWriter(vm.scrollBack)
+			//io.Copy(conn, vm.scrollBack)
+			// register conn into the mutable-multiwriter
+			vm.consoleMultiWriter.AddWriter(conn)
 
-			// copy from the pty to the connection (terminal output)
-			//go io.Copy(conn, pseudotty)
 			// copy from the connection to the pty (user input)
-			io.Copy(pseudotty, conn)
-			log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+			go func() {
+				io.Copy(pseudotty, conn)
+				log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+				vm.consoleMultiWriter.DelWriter(conn)
+			}()
 		}
 	}
 
