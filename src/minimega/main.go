@@ -7,7 +7,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"goreadline"
 	"minicli"
 	"miniclient"
 	log "minilog"
@@ -20,8 +19,12 @@ import (
 	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 	"version"
+
+	"github.com/peterh/liner"
 )
 
 const (
@@ -47,6 +50,7 @@ var (
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
+	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
 
 	vms = VMs{}
 
@@ -54,6 +58,10 @@ var (
 	reserved = []string{Wildcard}
 
 	attached *miniclient.Conn
+
+	// channel to shutdown minimega
+	shutdown   = make(chan os.Signal, 1)
+	shutdownMu sync.Mutex
 )
 
 const (
@@ -79,6 +87,7 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+	logLevel = log.LevelFlag
 
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
@@ -104,6 +113,12 @@ func main() {
 		fmt.Println("minimega", version.Revision, version.Date)
 		fmt.Println(version.Copyright)
 		os.Exit(0)
+	}
+
+	// see pipeMMHandler in plumber.go
+	if *f_pipe != "" {
+		pipeMMHandler()
+		return
 	}
 
 	// warn if we're not root
@@ -191,41 +206,42 @@ func main() {
 	}
 
 	// start services
-	commandSocketStart()
-	ccStart()
+	// NOTE: the plumber needs a reference to the meshage node, and cc
+	// needs a reference to the plumber, so the order here counts
 	tapReaperStart()
-	meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port)
+
+	if err := meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port); err != nil {
+		// TODO: we've created the PID file...
+		log.Fatal("unable to start meshage: %v", err)
+	}
+
+	// wait a bit to let mesh settle
+	time.Sleep(500 * time.Millisecond)
+
+	plumberStart(meshageNode)
+	ccStart()
+	commandSocketStart()
 
 	// set up signal handling
-	sig := make(chan os.Signal, 1024)
-	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		first := true
-		for s := range sig {
-			if s == os.Interrupt && first {
-				// do nothing
-				continue
-			}
-
-			if *f_panic {
-				panic("teardown")
-			}
-			if first {
-				log.Info("caught signal, tearing down, ctrl-c again will force quit")
-				go teardown()
-				first = false
-			} else {
-				os.Exit(1)
-			}
-		}
-	}()
+	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	if !*f_nostdin {
-		cliLocal()
-	} else {
-		<-sig
+		// start CLI
+		input := liner.NewLiner()
+		defer input.Close()
+
+		go func() {
+			cliLocal(input)
+			Shutdown("quitting")
+		}()
+	}
+
+	sig := <-shutdown
+	if sig != nil {
+		log.Warn("caught Ctrl-C, shutting down")
+
 		if *f_panic {
+			// panic if we got a signal
 			panic("teardown")
 		}
 	}
@@ -233,10 +249,27 @@ func main() {
 	teardown()
 }
 
-func teardownf(format string, args ...interface{}) {
-	log.Error(format, args...)
+func Shutdown(format string, args ...interface{}) {
+	// make sure we only close the shutdown channel once. There's no reason to
+	// unlock since we can only shutdown once.
+	shutdownMu.Lock()
 
-	teardown()
+	msg := fmt.Sprintf(format, args...)
+
+	// Some callstack voodoo magic
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		if fn := runtime.FuncForPC(pc); fn != nil {
+			file, line := fn.FileLine(pc)
+			file = filepath.Base(file)
+
+			log.Warn("shutdown initiated by %v:%v: %v", file, line, msg)
+		}
+	}
+
+	close(shutdown)
+
+	// block forever
+	<-make(chan int)
 }
 
 func teardown() {
@@ -258,7 +291,6 @@ func teardown() {
 	}
 
 	commandSocketRemove()
-	goreadline.Rlcleanup()
 
 	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
 		log.Fatalln(err)
@@ -268,6 +300,4 @@ func teardown() {
 		pprof.StopCPUProfile()
 		cpuProfileOut.Close()
 	}
-
-	os.Exit(0)
 }

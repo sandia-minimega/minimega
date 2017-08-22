@@ -20,16 +20,20 @@ package main
 
 import (
 	"fmt"
-	"goreadline"
+	"io"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"minipager"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"unicode"
+
+	"github.com/peterh/liner"
 )
 
 var (
@@ -68,6 +72,7 @@ func cliSetup() {
 	registerHandlers("vmconfig", vmconfigCLIHandlers)
 	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
+	registerHandlers("plumb", plumbCLIHandlers)
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking
@@ -229,35 +234,110 @@ func wrapSuggest(fn func(string, string) []string) minicli.SuggestFunc {
 	}
 }
 
-func defaultCompleter(line string) []string {
-	// last term on the line is complete so there's nothing to complete
-	if strings.HasSuffix(line, " ") {
-		return nil
-	}
-
-	f := strings.Fields(line)
-	if len(f) == 0 {
-		return nil
-	}
-
+// envCompleter completes environment variables
+func envCompleter(s string) []string {
 	// handle that begin with a '$' and complete based on the
 	// available env variables
-	if strings.HasPrefix(f[len(f)-1], "$") {
-		prefix := strings.TrimPrefix(f[len(f)-1], "$")
+	if !strings.HasPrefix(s, "$") {
+		return nil
+	}
 
-		var res []string
+	prefix := strings.TrimPrefix(s, "$")
 
-		for _, env := range os.Environ() {
-			k := strings.SplitN(env, "=", 2)[0]
-			if strings.HasPrefix(k, prefix) {
-				res = append(res, k)
+	var res []string
+
+	for _, env := range os.Environ() {
+		k := strings.SplitN(env, "=", 2)[0]
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, "$"+k)
+		}
+	}
+
+	return res
+}
+
+// fileCompleter
+func fileCompleter(path string) []string {
+	var res []string
+
+	var dir, prefix string
+
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
+		dir = path
+		prefix = ""
+	} else {
+		dir = filepath.Dir(path)
+		prefix = filepath.Base(path)
+	}
+
+	files, _ := ioutil.ReadDir(dir)
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), prefix) {
+			name := filepath.Join(dir, f.Name())
+
+			if f.IsDir() {
+				name += string(os.PathSeparator)
+			}
+
+			res = append(res, name)
+		}
+	}
+
+	return res
+}
+
+func cliCompleter(line string) []string {
+	prep := func(s []string) []string {
+		if len(s) == 0 {
+			return s
+		}
+
+		sort.Strings(s)
+
+		// remove the last term from the line
+		line := strings.TrimRightFunc(line, func(r rune) bool {
+			return !unicode.IsSpace(r)
+		})
+
+		// create new result that is line + suggestion + whitespace
+		r := make([]string, len(s))
+		for i := range s {
+			r[i] = line + s[i]
+			if !strings.HasSuffix(s[i], string(os.PathSeparator)) {
+				r[i] += " "
 			}
 		}
 
-		return res
+		return r
 	}
 
-	return iomCompleter(f[len(f)-1])
+	// completing commands has the highest priority
+	suggest := minicli.Suggest(line)
+	if len(suggest) > 0 {
+		return prep(suggest)
+	}
+
+	// completing partial word
+	if !strings.HasSuffix(line, " ") {
+		f := strings.Fields(line)
+
+		if len(f) > 0 {
+			last := f[len(f)-1]
+
+			suggest = append(suggest, envCompleter(last)...)
+			suggest = append(suggest, iomCompleter(last)...)
+			suggest = append(suggest, fileCompleter(last)...)
+		}
+
+		return prep(suggest)
+	}
+
+	// last resort, complete files from current directory
+	if len(suggest) == 0 {
+		suggest = append(suggest, fileCompleter(*f_iomBase)...)
+	}
+
+	return prep(suggest)
 }
 
 // forward receives minicli.Responses from in and forwards them to out.
@@ -366,34 +446,36 @@ func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*mi
 }
 
 // local command line interface, wrapping readline
-func cliLocal() {
-	goreadline.DefaultCompleter = defaultCompleter
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		for range sig {
-			goreadline.Signal()
-		}
-	}()
-	defer signal.Stop(sig)
+func cliLocal(input *liner.State) {
+	input.SetCtrlCAborts(true)
+	input.SetTabCompletionStyle(liner.TabPrints)
+	input.SetCompleter(cliCompleter)
 
 	for {
 		namespace := GetNamespaceName()
-
 		prompt := "minimega$ "
+
 		if namespace != "" {
 			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
 		}
 
-		line, err := goreadline.Readline(prompt, true)
-		if err != nil {
-			return
+		line, err := input.Prompt(prompt)
+		if err == liner.ErrPromptAborted {
+			continue
+		} else if err == io.EOF {
+			break
 		}
-		command := string(line)
-		log.Debug("got from stdin: `%v`", command)
 
-		cmd, err := minicli.Compile(command)
+		log.Debug("got line from stdin: `%v`", line)
+
+		// skip blank lines
+		if line == "" {
+			continue
+		}
+
+		input.AppendHistory(line)
+
+		cmd, err := minicli.Compile(line)
 		if err != nil {
 			log.Error("%v", err)
 			//fmt.Printf("closest match: TODO\n")
@@ -433,17 +515,8 @@ func cliLocal() {
 // cliPreprocess performs expansion on a single string and returns the update
 // string or an error.
 func cliPreprocess(v string) (string, error) {
-	if strings.HasPrefix(v, "$") {
-		end := strings.IndexAny(v, "/ ")
-		if end == -1 {
-			end = len(v)
-		}
-		if v2 := os.Getenv(v[1:end]); v2 != "" {
-			return v2 + v[end:], nil
-		}
-
-		return "", fmt.Errorf("undefined: %v", v)
-	}
+	// expand any ${var} or $var env variables
+	v = os.ExpandEnv(v)
 
 	if u, err := url.Parse(v); err == nil {
 		switch u.Scheme {

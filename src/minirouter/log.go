@@ -5,10 +5,8 @@
 package main
 
 import (
-	"fmt"
 	"minicli"
 	log "minilog"
-	"os"
 	"strings"
 )
 
@@ -17,16 +15,10 @@ const (
 )
 
 func logSetupPushUp() {
-	level, err := log.LevelInt(*log.Level)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
-	}
-
 	// a special logger for pushing logs up to minimega
 	if *f_miniccc != "" && *f_u == "" {
 		var f tagLogger
-		log.AddLogger("taglogger", &f, level, false)
+		log.AddLogger("taglogger", &f, log.LevelFlag, false)
 	}
 }
 
@@ -50,7 +42,7 @@ func (t *tagLogger) Write(p []byte) (int, error) {
 func init() {
 	minicli.Register(&minicli.Handler{
 		Patterns: []string{
-			"log level <fatal,error,warn,info,debug>",
+			"log level <debug,info,warn,error,fatal>",
 		},
 		Call: handleLog,
 	})
@@ -61,21 +53,15 @@ func handleLog(c *minicli.Command, r chan<- minicli.Responses) {
 		r <- nil
 	}()
 
-	var level int
-	if c.BoolArgs["fatal"] {
-		level = log.FATAL
-	} else if c.BoolArgs["error"] {
-		level = log.ERROR
-	} else if c.BoolArgs["warn"] {
-		level = log.WARN
-	} else if c.BoolArgs["info"] {
-		level = log.INFO
-	} else if c.BoolArgs["debug"] {
-		level = log.DEBUG
+	// search for level in BoolArgs, we know that one of the BoolArgs will
+	// parse without error thanks to minicli.
+	for k := range c.BoolArgs {
+		v, err := log.ParseLevel(k)
+		if err == nil {
+			log.SetLevelAll(v)
+			return
+		}
 	}
 
-	loggers := log.Loggers()
-	for _, l := range loggers {
-		log.SetLevel(l, level)
-	}
+	// unreachable
 }

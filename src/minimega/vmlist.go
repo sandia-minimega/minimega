@@ -11,7 +11,6 @@ import (
 	"meshage"
 	"minicli"
 	log "minilog"
-	"os"
 	"ranges"
 	"runtime"
 	"strconv"
@@ -170,14 +169,12 @@ func (vms VMs) SetTag(target, key, value string) {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	// For each VM, set tag using key/value. Can be run in parallel.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	// For each VM, set tag using key/value.
+	vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		vm.SetTag(key, value)
 
 		return true, nil
-	}
-
-	vms.apply(target, true, applyFunc)
+	})
 }
 
 func (vms VMs) GetTags(target, key string) []Tag {
@@ -186,9 +183,9 @@ func (vms VMs) GetTags(target, key string) []Tag {
 
 	res := []Tag{}
 
-	// For each VM, start it if it's in a startable state. Cannot be run in parallel since
-	// it aggregates results in res.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	// For each VM, start it if it's in a startable state. Cannot be run in
+	// parallel since it aggregates results in res.
+	vms.applySerial(target, func(vm VM, wild bool) (bool, error) {
 		if key == Wildcard {
 			for k, v := range vm.GetTags() {
 				res = append(res, Tag{
@@ -209,9 +206,7 @@ func (vms VMs) GetTags(target, key string) []Tag {
 		})
 
 		return true, nil
-	}
-
-	vms.apply(target, false, applyFunc)
+	})
 
 	return res
 }
@@ -221,13 +216,11 @@ func (vms VMs) ClearTags(target, key string) {
 	defer vmLock.Unlock()
 
 	// For each VM, set tag using key/value. Can be run in parallel.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		vm.ClearTag(key)
 
 		return true, nil
-	}
-
-	vms.apply(target, true, applyFunc)
+	})
 }
 
 // FindVM finds a VM in the active namespace based on its ID, name, or UUID.
@@ -420,9 +413,8 @@ func (vms VMs) Start(target string) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	// For each VM, start it if it's in a startable state. Can be run in
-	// parallel.
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	// For each VM, start it if it's in a startable state.
+	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
 			// If wild, we only start VMs in the building or running state
 			return true, vm.Start()
@@ -432,9 +424,7 @@ func (vms VMs) Start(target string) []error {
 		}
 
 		return false, nil
-	}
-
-	return vms.apply(target, true, applyFunc)
+	})
 }
 
 // Stop VMs matching target.
@@ -442,16 +432,14 @@ func (vms VMs) Stop(target string) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
-	// For each VM, stop it if it's running. Can be run in parallel.
-	applyFunc := func(vm VM, _ bool) (bool, error) {
+	// For each VM, stop it if it's running.
+	return vms.apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_RUNNING != 0 {
 			return true, vm.Stop()
 		}
 
 		return false, nil
-	}
-
-	return vms.apply(target, true, applyFunc)
+	})
 }
 
 // Kill VMs matching target.
@@ -463,7 +451,7 @@ func (vms VMs) Kill(target string) []error {
 
 	// For each VM, kill it if it's in a killable state. Should not be run in
 	// parallel because we record the IDs of the VMs we kill in killedVms.
-	applyFunc := func(vm VM, _ bool) (bool, error) {
+	errs := vms.applySerial(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -474,9 +462,7 @@ func (vms VMs) Kill(target string) []error {
 			killedVms[vm.GetID()] = true
 		}
 		return true, nil
-	}
-
-	errs := vms.apply(target, false, applyFunc)
+	})
 
 	for len(killedVms) > 0 {
 		id := <-killAck
@@ -516,44 +502,24 @@ func (vms VMs) Flush() {
 	}
 }
 
-// CleanDirs removes all instance directories in the minimega base directory
-func (vms VMs) CleanDirs() {
-	vmLock.Lock()
-	defer vmLock.Unlock()
-
-	log.Debugln("cleanDirs")
-	for _, vm := range vms {
-		path := vm.GetInstancePath()
-		log.Debug("cleaning instance path: %v", path)
-		err := os.RemoveAll(path)
-		if err != nil {
-			log.Error("clearDirs: %v", err)
-		}
-	}
-}
-
 func (vms VMs) UpdateQos(target string, tap uint, op bridge.QosOption) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	// For each VM, update the tap Qos
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		return true, vm.UpdateQos(tap, op)
-	}
-
-	return vms.apply(target, true, applyFunc)
+	})
 }
 
-func (vms VMs) ClearAllQos(target string) {
+func (vms VMs) ClearAllQos(target string) []error {
 	vmLock.Lock()
 	defer vmLock.Unlock()
 
 	// Clear qos for all vm taps
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		return true, vm.ClearAllQos()
-	}
-
-	vms.apply(target, true, applyFunc)
+	})
 }
 
 func (vms VMs) ClearQoS(target string, tap uint) []error {
@@ -561,11 +527,117 @@ func (vms VMs) ClearQoS(target string, tap uint) []error {
 	defer vmLock.Unlock()
 
 	// Clear Qos for each vm
-	applyFunc := func(vm VM, wild bool) (bool, error) {
+	return vms.apply(target, func(vm VM, wild bool) (bool, error) {
 		return true, vm.ClearQos(tap)
-	}
+	})
+}
 
-	return vms.apply(target, true, applyFunc)
+func (vms VMs) Hotplug(target, file, version string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
+		// safe due to applyKVM
+		kvm := vm.(*KvmVM)
+
+		return true, kvm.Hotplug(file, version)
+	})
+}
+
+func (vms VMs) HotplugRemove(target string, id int, all bool) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
+		// safe due to applyKVM
+		kvm := vm.(*KvmVM)
+
+		if all {
+			err := kvm.HotplugRemoveAll()
+			if wild && err != nil && err.Error() == "no hotplug devices to remove" {
+				// suppress error if more than one target
+				err = nil
+			}
+			return true, err
+		}
+
+		err := kvm.HotplugRemove(id)
+		if wild && err != nil && err.Error() == "no such hotplug device" {
+			// suppress error if more than one target
+			err = nil
+		}
+
+		return true, err
+	})
+}
+
+func (vms VMs) HotplugInfo(resp *minicli.Response) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	var mu sync.Mutex
+
+	ns := GetNamespace()
+
+	if ns == nil {
+		resp.Header = []string{"namespace"}
+	}
+	resp.Header = append(resp.Header, "name", "id", "file", "version")
+
+	return vms.applyKVM(Wildcard, func(vm VM, wild bool) (bool, error) {
+		// safe due to applyKVM
+		kvm := vm.(*KvmVM)
+
+		name := vm.GetName()
+		namespace := vm.GetNamespace()
+		res := kvm.HotplugInfo()
+
+		// synchronize adding results to resp
+		mu.Lock()
+		defer mu.Unlock()
+
+		for k, v := range res {
+			var row []string
+			if ns == nil {
+				row = append(row, namespace)
+			}
+			row = append(row, name, strconv.Itoa(k), v.Disk, v.Version)
+
+			resp.Tabular = append(resp.Tabular, row)
+		}
+
+		return true, nil
+	})
+}
+
+func (vms VMs) EjectCD(target string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
+		// safe due to applyKVM
+		kvm := vm.(*KvmVM)
+
+		err := kvm.EjectCD()
+		if wild && err != nil && err.Error() == "no cdrom inserted" {
+			// suppress error if more than one target
+			err = nil
+		}
+
+		return true, nil
+	})
+}
+
+func (vms VMs) ChangeCD(target string, f string) []error {
+	vmLock.Lock()
+	defer vmLock.Unlock()
+
+	return vms.applyKVM(target, func(vm VM, wild bool) (bool, error) {
+		// safe due to applyKVM
+		kvm := vm.(*KvmVM)
+
+		return true, kvm.ChangeCD(f)
+	})
 }
 
 func (vms VMs) ProcStats(d time.Duration) []*VMProcStats {
@@ -638,15 +710,11 @@ func (vms VMs) ProcStats(d time.Duration) []*VMProcStats {
 // specifying whether the invocation was wild or not. The fn returns a boolean
 // that indicates whether the target was applicable (e.g. calling start on an
 // already running VM would not be applicable) and an error.
-//
-// The concurrent boolean controls whether fn is run concurrently on multiple
-// VMs or not. If the fns alter state they can set this flag to false rather
-// than dealing with locking.
-func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
+func (vms VMs) apply(target string, fn vmApplyFunc) []error {
 	// Some callstack voodoo magic
 	if pc, _, _, ok := runtime.Caller(1); ok {
 		if fn := runtime.FuncForPC(pc); fn != nil {
-			log.Debug("applying %v to %v (concurrent = %t)", fn.Name(), target, concurrent)
+			log.Debug("applying %v to %v", fn.Name(), target)
 		}
 	}
 
@@ -700,12 +768,7 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 			delete(ids, vm.GetID())
 			wg.Add(1)
 
-			// Use concurrency only if requested
-			if concurrent {
-				go magicFn(vm)
-			} else {
-				magicFn(vm)
-			}
+			go magicFn(vm)
 		}
 	}
 
@@ -744,6 +807,40 @@ func (vms VMs) apply(target string, concurrent bool, fn vmApplyFunc) []error {
 	}
 
 	return errs
+}
+
+// applySerial wraps applyFunc in a mutex so that they run serially.
+func (vms VMs) applySerial(target string, fn vmApplyFunc) []error {
+	var mu sync.Mutex
+
+	return vms.apply(target, func(vm VM, w bool) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		return fn(vm, w)
+	})
+}
+
+// applyKVM wraps applyFunc with filter for KvmVMs.
+func (vms VMs) applyKVM(target string, fn vmApplyFunc) []error {
+	return vms.apply(target, func(vm VM, w bool) (bool, error) {
+		if vm, ok := vm.(*KvmVM); ok {
+			return fn(vm, w)
+		}
+
+		return false, nil
+	})
+}
+
+// applyContainer wraps applyFunc with filter for ContainerVMs.
+func (vms VMs) applyContainer(target string, fn vmApplyFunc) []error {
+	return vms.apply(target, func(vm VM, w bool) (bool, error) {
+		if vm, ok := vm.(*ContainerVM); ok {
+			return fn(vm, w)
+		}
+
+		return false, nil
+	})
 }
 
 // meshageVMLauncher handles VM launches sent by the scheduler

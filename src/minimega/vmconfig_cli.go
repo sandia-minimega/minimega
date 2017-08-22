@@ -108,17 +108,6 @@ Calling vm config net with no arguments prints the current configuration.`,
 		},
 		Call: wrapSimpleCLI(cliVMConfigNet),
 	},
-	{ // vm config tag
-		HelpShort: "set tags for newly launched VMs",
-		HelpLong: `
-Set tags in the same manner as "vm tag". These tags will apply to all newly
-launched VMs.`,
-		Patterns: []string{
-			"vm config tag [key]",
-			"vm config tag <key> <value>",
-		},
-		Call: wrapSimpleCLI(cliVMConfigTag),
-	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
 		HelpLong: `
@@ -211,28 +200,6 @@ func cliVMConfigNet(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		vmConfig.Networks = append(vmConfig.Networks, net)
-	}
-
-	return nil
-}
-
-func cliVMConfigTag(c *minicli.Command, resp *minicli.Response) error {
-	k := c.StringArgs["key"]
-
-	// if Tags were cleared, reinitialize them
-	if vmConfig.Tags == nil {
-		vmConfig.Tags = map[string]string{}
-	}
-
-	if v, ok := c.StringArgs["value"]; ok {
-		// Setting a new value
-		vmConfig.Tags[k] = v
-	} else if k != "" {
-		// Printing a single tag
-		resp.Response = vmConfig.Tags[k]
-	} else {
-		// Printing all configured tags
-		resp.Response = vmConfig.Tags.String()
 	}
 
 	return nil

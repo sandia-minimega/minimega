@@ -6,13 +6,23 @@ package ron
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	PIPE_NEW_READER = iota
+	PIPE_NEW_WRITER
+	PIPE_CLOSE_READER
+	PIPE_CLOSE_WRITER
+	PIPE_DATA
 )
 
 type Client struct {
@@ -60,6 +70,11 @@ type client struct {
 	// maxCommandID is the highest command ID that we have processed for this
 	// client. Should be reset if the command counter is reset.
 	maxCommandID int
+
+	// pipe readers and writers
+	pipeLock    sync.Mutex
+	pipeReaders map[string]*miniplumber.Reader
+	pipeWriters map[string]chan<- string
 }
 
 func (c *client) sendMessage(m *Message) error {
@@ -163,4 +178,79 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	}
 
 	return false
+}
+
+func (c *client) pipeHandler(namespace string, plumber *miniplumber.Plumber, m *Message) {
+	c.pipeLock.Lock()
+	defer c.pipeLock.Unlock()
+
+	pipe := m.Pipe
+	if namespace != "" {
+		pipe = fmt.Sprintf("%v//%v", namespace, m.Pipe)
+	}
+
+	switch m.PipeMode {
+	case PIPE_NEW_READER:
+		// register a new reader, if the client doesn't already have a
+		// reader on this pipe
+		if _, ok := c.pipeReaders[pipe]; !ok {
+			p := plumber.NewReader(pipe)
+			c.pipeReaders[pipe] = p
+			go func() {
+				defer func() {
+					c.pipeLock.Lock()
+					defer c.pipeLock.Unlock()
+					delete(c.pipeReaders, pipe)
+				}()
+				for {
+					select {
+					case v := <-p.C:
+						c.sendMessage(&Message{
+							Type:     MESSAGE_PIPE,
+							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+							PipeMode: PIPE_DATA,
+							PipeData: v,
+						})
+					case <-p.Done:
+						// signal the close downstream
+						c.sendMessage(&Message{
+							Type:     MESSAGE_PIPE,
+							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+							PipeMode: PIPE_CLOSE_READER,
+						})
+						return
+					}
+				}
+			}()
+		}
+	case PIPE_NEW_WRITER:
+		if _, ok := c.pipeWriters[pipe]; !ok {
+			p := plumber.NewWriter(pipe)
+			c.pipeWriters[pipe] = p
+		}
+	case PIPE_CLOSE_READER:
+		if p, ok := c.pipeReaders[pipe]; ok {
+			// the reader goroutine will delete the reader from the
+			// map. We do this because miniplumber can close the
+			// reader for us asynchronously, and we want to clean
+			// up accordingly.
+			p.Close()
+		}
+	case PIPE_CLOSE_WRITER:
+		if p, ok := c.pipeWriters[pipe]; ok {
+			close(p)
+			delete(c.pipeWriters, pipe)
+		}
+	case PIPE_DATA:
+		// incoming data to the server is a write. The corresponding
+		// data message in the miniccc client is a read.
+		if p, ok := c.pipeWriters[pipe]; ok {
+			p <- m.PipeData
+		} else {
+			log.Error("no such pipe: %v", pipe)
+		}
+	default:
+		log.Error("unknown message type: %v", m.PipeMode)
+		return
+	}
 }

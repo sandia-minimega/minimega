@@ -2,26 +2,48 @@
 ## shell touch /tmp/minitest0.iso
 ## shell touch /tmp/minitest1.iso
 
+## # Launch a VM without an iso
+## vm launch kvm diskless
+
 ## # Launch a VM with the iso
 ## vm config cdrom /tmp/minitest0.iso
 ## vm launch kvm foo
 
+## # Add cdrom to diskless
+## vm cdrom change diskless /tmp/minitest0.iso
+
 ## # Eject and change the cdrom
 ## .column name,cdrom vm info
-name | cdrom
-foo  | /tmp/minitest0.iso
+name     | cdrom
+diskless | /tmp/minitest0.iso
+foo      | /tmp/minitest0.iso
 ## vm cdrom eject foo
 ## .column name,cdrom vm info
-name | cdrom
-foo  |
+name     | cdrom
+diskless | /tmp/minitest0.iso
+foo      |
 ## vm cdrom change foo /tmp/minitest1.iso
 ## .column name,cdrom vm info
-name | cdrom
-foo  | /tmp/minitest1.iso
+name     | cdrom
+diskless | /tmp/minitest0.iso
+foo      | /tmp/minitest1.iso
 ## vm cdrom change foo /tmp/minitest0.iso
 ## .column name,cdrom vm info
-name | cdrom
-foo  | /tmp/minitest0.iso
+name     | cdrom
+diskless | /tmp/minitest0.iso
+foo      | /tmp/minitest0.iso
+
+## # Eject/change all
+## vm cdrom change all /tmp/minitest1.iso
+## .column name,cdrom vm info
+name     | cdrom
+diskless | /tmp/minitest1.iso
+foo      | /tmp/minitest1.iso
+## vm cdrom eject all
+## .column name,cdrom vm info
+name     | cdrom
+diskless | 
+foo      |
 
 ## # Remove test files
 ## shell rm /tmp/minitest0.iso /tmp/minitest1.iso

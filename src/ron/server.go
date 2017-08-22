@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/ioutil"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"os"
@@ -274,9 +275,11 @@ func (s *Server) clientHandler(conn net.Conn) {
 	defer conn.Close()
 
 	c := &client{
-		conn: conn,
-		enc:  gob.NewEncoder(conn),
-		dec:  gob.NewDecoder(conn),
+		conn:        conn,
+		enc:         gob.NewEncoder(conn),
+		dec:         gob.NewDecoder(conn),
+		pipeReaders: make(map[string]*miniplumber.Reader),
+		pipeWriters: make(map[string]chan<- string),
 	}
 
 	// get the first client struct as a handshake
@@ -290,23 +293,30 @@ func (s *Server) clientHandler(conn net.Conn) {
 	}
 
 	var mangled bool
+	var namespace string
+
 	vm, ok := s.vms[handshake.Client.UUID]
 	if !ok {
 		// try again after unmangling the uuid, which qemu does in
 		// certain versions
+		mangled = true
 		vm, ok = s.vms[unmangle(handshake.Client.UUID)]
+	}
+
+	if s.UseVMs {
 		if !ok {
 			log.Error("unregistered client %v", handshake.Client.UUID)
 			return
 		}
-		mangled = true
+		namespace = vm.GetNamespace()
 	}
 
 	if handshake.Client.Version != version.Revision {
 		log.Warn("mismatched miniccc version: %v", handshake.Client.Version)
 	}
 
-	handshake.Client.Namespace = vm.GetNamespace()
+	handshake.Client.Namespace = namespace
+
 	if err := c.enc.Encode(&handshake); err != nil {
 		// client disconnected before it read the full handshake
 		if err != io.EOF {
@@ -380,6 +390,8 @@ func (s *Server) clientHandler(conn net.Conn) {
 				s.responses <- m.Client
 			case MESSAGE_COMMAND:
 				// this shouldn't be sent via the client...
+			case MESSAGE_PIPE:
+				c.pipeHandler(namespace, s.plumber, &m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}
@@ -415,6 +427,17 @@ func (s *Server) removeClient(uuid string) {
 	defer s.clientLock.Unlock()
 	if c, ok := s.clients[uuid]; ok {
 		c.conn.Close()
+
+		// with the client conn closed, close any lingering plumbing
+		c.pipeLock.Lock()
+		defer c.pipeLock.Unlock()
+		for _, p := range c.pipeReaders {
+			p.Close()
+		}
+		for _, p := range c.pipeWriters {
+			close(p)
+		}
+
 		delete(s.clients, uuid)
 	}
 }
@@ -474,16 +497,17 @@ func (s *Server) route(m *Message) {
 			return
 		}
 
-		vm, ok := s.vms[uuid]
-		if !ok {
-			// odd, someone must have unregistered the client...
-			log.Error("unregistered client %v", uuid)
-			return
-		}
-
 		if m.Type == MESSAGE_COMMAND {
-			// update client's tags in case we're matching based on them
-			c.Tags = vm.GetTags()
+			if s.UseVMs {
+				vm, ok := s.vms[uuid]
+				if !ok {
+					// odd, someone must have unregistered the client...
+					log.Error("unregistered client %v", uuid)
+					return
+				}
+				// update client's tags in case we're matching based on them
+				c.Tags = vm.GetTags()
+			}
 
 			// create a copy of the Message
 			m2 := *m
@@ -614,6 +638,10 @@ func (s *Server) updateClient(cin *Client) {
 
 	c.Client = cin
 	c.checkin = time.Now()
+
+	if !s.UseVMs {
+		return
+	}
 
 	vm, ok := s.vms[cin.UUID]
 	if !ok {

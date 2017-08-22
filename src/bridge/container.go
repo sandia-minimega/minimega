@@ -9,44 +9,55 @@ import (
 	log "minilog"
 )
 
-// CreateContainerTap creates and adds a veth tap, t, to a bridge. If a name is
-// not provided, one will be automatically generated. ns is the network
-// namespace for the tap. mac is the MAC address to assign to the interface.
-// vlan is the VLAN for the traffic. index is the veth interface number for the
-// container.
-func (b *Bridge) CreateContainerTap(t string, ns, mac string, vlan, index int) (tap string, err error) {
+// CreateContainerTap creates a veth tap and adds it to the bridge. tap is the
+// name of the tap, it will be automatically generated if unspecified. ns is
+// the network namespace for the tap. mac is the MAC address to assign to the
+// interface. vlan is the VLAN for the traffic. index is the veth interface
+// number for the container.
+func (b *Bridge) CreateContainerTap(tap, ns, mac string, vlan, index int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	tap = t
+	log.Info("creating veth tap on bridge %v: %v %v %v %v %v", b.Name, tap, ns, mac, vlan, index)
+
+	// reap taps before creating to avoid someone killing/restarting a vm
+	// faster than the periodic tap reaper
+	b.reapTaps()
+
+	if _, ok := b.taps[tap]; ok {
+		return tap, fmt.Errorf("tap already on bridge")
+	}
+
 	if tap == "" {
 		tap = <-b.nameChan
 	}
 
-	if err := createVeth(tap, ns); err != nil {
-		return "", err
-	}
-
-	// Clean up the tap we just created, if it didn't already exist.
-	defer func() {
-		if err != nil {
-			if err := destroyTap(tap); err != nil {
-				// Welp, we're boned
-				log.Error("zombie tap -- %v %v", tap, err)
-			}
-			tap = ""
-		}
-	}()
-
-	if err = upInterface(tap, false); err != nil {
-		return "", err
-	}
-
+	// name of the interface inside the container
 	iface := fmt.Sprintf("veth%v", index)
-	if err = setMAC(ns, iface, mac); err != nil {
-		return
+
+	var created bool
+
+	err := createVeth(tap, ns)
+	if err == nil {
+		created = true
+		err = upInterface(tap, false)
+	}
+	if err == nil {
+		err = setMAC(ns, iface, mac)
+	}
+	if err == nil {
+		err = b.addTap(tap, mac, vlan, false)
 	}
 
-	// Add the interface
-	return tap, b.addTap(tap, mac, vlan, false)
+	// clean up the tap we created
+	if err != nil && created {
+		if err := destroyTap(tap); err != nil {
+			// Welp, we're boned
+			log.Error("zombie tap -- %v %v", tap, err)
+		}
+
+		return "", err
+	}
+
+	return tap, nil
 }

@@ -238,6 +238,18 @@ Removes an alias by name. See .alias for a listing of aliases.`,
 		},
 		Call: cliUnalias,
 	},
+	{ // env
+		HelpShort: "print or set env variables",
+		HelpLong: `
+Print or update env variables. To unset an env variables, use:
+
+	.env <name> ""`,
+		Patterns: []string{
+			".env [name]",
+			".env <name> <value>",
+		},
+		Call: cliEnv,
+	},
 }
 
 var hostname string
@@ -545,6 +557,35 @@ func cliUnalias(c *Command, out chan<- Responses) {
 	delete(aliases, c.StringArgs["alias"])
 
 	resp := &Response{Host: hostname}
+
+	out <- Responses{resp}
+	return
+}
+
+func cliEnv(c *Command, out chan<- Responses) {
+	k := c.StringArgs["name"]
+	v, ok := c.StringArgs["value"]
+
+	resp := &Response{Host: hostname}
+
+	if v != "" {
+		if err := os.Setenv(k, v); err != nil {
+			resp.Error = err.Error()
+		}
+	} else if ok {
+		if err := os.Unsetenv(k); err != nil {
+			resp.Error = err.Error()
+		}
+	} else if k != "" {
+		resp.Response = os.Getenv(k)
+	} else {
+		resp.Header = []string{"key", "value"}
+		for _, kv := range os.Environ() {
+			parts := strings.SplitN(kv, "=", 2)
+			resp.Tabular = append(resp.Tabular, parts)
+		}
+
+	}
 
 	out <- Responses{resp}
 	return

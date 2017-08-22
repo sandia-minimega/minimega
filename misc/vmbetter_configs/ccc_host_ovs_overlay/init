@@ -14,9 +14,13 @@ mount -t tmpfs cgroup /sys/fs/cgroup
 mkdir /sys/fs/cgroup/memory
 mkdir /sys/fs/cgroup/freezer
 mkdir /sys/fs/cgroup/devices
+mkdir /sys/fs/cgroup/cpu,cpuacct
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpu
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpuacct
 mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
 mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
 
 # / needs permissions!?
 chmod a+rx /
@@ -50,15 +54,19 @@ mount /dev/sda1 /scratch
 # bump open file handle limits
 ulimit -n 999999
 
+# increase max PID
+echo 999999 > /proc/sys/kernel/pid_max
+
 # bond all 10G/40G interfaces
-for i in `ls /sys/class/net`
-do
-        G=`ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep -e "ixgbe" -e "mlx4_core"`
-        if [ -n "$G" ]
-        then
-                NETS="$NETS $i"
+for i in $(ls /sys/class/net); do
+	out=$(ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep -e "ixgbe" -e "mlx4_core")
+	if [ -n "$out" ]; then
+		NETS="$NETS $i"
 		ifconfig $i up
-        fi
+		# disable bonding for now -- only one host could use bonding and it
+		# only has one wired connection so bonding doesn't work
+		break
+	fi
 done
 
 echo "bonding nets $NETS"
@@ -73,8 +81,9 @@ if [ $numnets -eq 1 ]
 then
 	ovs-vsctl add-port mega_bridge $NETS
 else
+	# see above -- we have disabled bonding for now
 	ovs-vsctl add-bond mega_bridge bond0 $NETS lacp=active
-	ovs-vsctl set port bond0 bond_mode=balance-tcp  
+	ovs-vsctl set port bond0 bond_mode=balance-tcp
 fi
 
 ifconfig lo up

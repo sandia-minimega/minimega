@@ -6,6 +6,7 @@ package ron
 
 import (
 	log "minilog"
+	"miniplumber"
 	"net"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ const (
 	MESSAGE_CLIENT
 	MESSAGE_TUNNEL
 	MESSAGE_FILE
+	MESSAGE_PIPE
 )
 
 const (
@@ -51,6 +53,12 @@ type Server struct {
 	lastBroadcast time.Time // watchdog time of last command list broadcast
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
+
+	// UseVMs controls whether ron uses VM callbacks or not (see VM interface
+	// defined below).
+	UseVMs bool
+
+	plumber *miniplumber.Plumber
 }
 
 type Process struct {
@@ -74,10 +82,13 @@ type Message struct {
 	Filename string
 	Error    string
 	Tunnel   []byte
+	Pipe     string
+	PipeMode int
+	PipeData string
 }
 
 // NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string) (*Server, error) {
+func NewServer(port int, path string, plumber *miniplumber.Plumber) (*Server, error) {
 	s := &Server{
 		serialConns:   make(map[string]net.Conn),
 		udsConns:      make(map[string]net.Listener),
@@ -87,6 +98,8 @@ func NewServer(port int, path string) (*Server, error) {
 		path:          path,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		UseVMs:        true,
+		plumber:       plumber,
 	}
 
 	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {
@@ -115,6 +128,8 @@ func (t Type) String() string {
 		return "TUNNEL"
 	case MESSAGE_FILE:
 		return "FILE"
+	case MESSAGE_PIPE:
+		return "PIPE"
 	}
 
 	return "UNKNOWN"

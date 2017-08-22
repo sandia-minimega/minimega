@@ -76,8 +76,9 @@ func main() {
 	mux.HandleFunc("/tilevnc", templateHander)
 
 	mux.HandleFunc("/hosts.json", hostsHandler)
-	mux.HandleFunc("/vms.json", vmsHandler)
 	mux.HandleFunc("/vlans.json", vlansHandler)
+	mux.HandleFunc("/vms/info.json", vmsHandler)
+	mux.HandleFunc("/vms/top.json", vmsHandler)
 
 	mux.HandleFunc("/connect/", connectHandler)
 	mux.HandleFunc("/screenshot/", screenshotHandler)

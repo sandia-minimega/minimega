@@ -146,12 +146,17 @@ type qemuOverride struct {
 	Repl  string
 }
 
+type vmHotplug struct {
+	Disk    string
+	Version string
+}
+
 type KvmVM struct {
 	*BaseVM   // embed
 	KVMConfig // embed
 
 	// Internal variables
-	hotplug map[int]string
+	hotplug map[int]vmHotplug
 
 	pid int
 	q   qmp.Conn // qmp connection for this vm
@@ -190,7 +195,7 @@ func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
 
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
-	vm.hotplug = make(map[int]string)
+	vm.hotplug = make(map[int]vmHotplug)
 
 	return vm, nil
 }
@@ -467,7 +472,6 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 	}
 
 	return pngResult, nil
-
 }
 
 func (vm *KvmVM) connectQMP() (err error) {
@@ -567,7 +571,7 @@ func (vm *KvmVM) launch() error {
 	// check and create a directory for it.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			teardownf("unable to create VM dir: %v", err)
+			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
 	}
 
@@ -579,6 +583,10 @@ func (vm *KvmVM) launch() error {
 	// create and add taps if we are associated with any networks
 	for i := range vm.Networks {
 		nic := &vm.Networks[i]
+		if nic.Tap != "" {
+			// tap has already been created, don't need to do again
+			continue
+		}
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
@@ -587,12 +595,14 @@ func (vm *KvmVM) launch() error {
 			return err
 		}
 
-		nic.Tap, err = br.CreateTap(nic.Tap, nic.MAC, nic.VLAN)
+		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
 		if err != nil {
 			log.Error("create tap: %v", err)
 			vm.setError(err)
 			return err
 		}
+
+		nic.Tap = tap
 	}
 
 	if len(vm.Networks) > 0 {
@@ -709,11 +719,79 @@ func (vm *KvmVM) launch() error {
 	return nil
 }
 
+func (vm *KvmVM) Hotplug(f, version string) error {
+	var bus string
+	switch version {
+	case "", "1.1":
+		version = "1.1"
+		bus = "usb-bus.0"
+	case "2.0":
+		bus = "ehci.0"
+	default:
+		return fmt.Errorf("invalid version: `%v`", version)
+	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// generate an id by adding 1 to the highest in the list for the
+	// hotplug devices, 0 if it's empty
+	id := 0
+	for k := range vm.hotplug {
+		if k >= id {
+			id = k + 1
+		}
+	}
+
+	hid := fmt.Sprintf("hotplug%v", id)
+	log.Debugln("hotplug generated id:", hid)
+
+	r, err := vm.q.DriveAdd(hid, f)
+	if err != nil {
+		return err
+	}
+	log.Debugln("hotplug drive_add response:", r)
+
+	r, err = vm.q.USBDeviceAdd(hid, bus)
+	if err != nil {
+		return err
+	}
+
+	log.Debugln("hotplug usb device add response:", r)
+	vm.hotplug[id] = vmHotplug{f, version}
+
+	return nil
+}
+
+func (vm *KvmVM) HotplugRemoveAll() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if len(vm.hotplug) == 0 {
+		return errors.New("no hotplug devices to remove")
+	}
+
+	for k := range vm.hotplug {
+		if err := vm.hotplugRemove(k); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (vm *KvmVM) HotplugRemove(id int) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.hotplugRemove(id)
+}
+
 func (vm *KvmVM) hotplugRemove(id int) error {
 	hid := fmt.Sprintf("hotplug%v", id)
 	log.Debugln("hotplug id:", hid)
 	if _, ok := vm.hotplug[id]; !ok {
-		return errors.New("no such hotplug device id")
+		return errors.New("no such hotplug device")
 	}
 
 	resp, err := vm.q.USBDeviceDel(hid)
@@ -730,6 +808,58 @@ func (vm *KvmVM) hotplugRemove(id int) error {
 	log.Debugln("hotplug usb drive del response:", resp)
 	delete(vm.hotplug, id)
 	return nil
+}
+
+// HotplugInfo returns a deep copy of the VM's hotplug info
+func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	res := map[int]vmHotplug{}
+
+	for k, v := range vm.hotplug {
+		res[k] = vmHotplug{v.Disk, v.Version}
+	}
+
+	return res
+}
+
+func (vm *KvmVM) ChangeCD(f string) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.CdromPath != "" {
+		if err := vm.ejectCD(); err != nil {
+			return err
+		}
+	}
+
+	err := vm.q.BlockdevChange("ide0-cd0", f)
+	if err == nil {
+		vm.CdromPath = f
+	}
+
+	return err
+}
+
+func (vm *KvmVM) EjectCD() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.CdromPath == "" {
+		return errors.New("no cdrom inserted")
+	}
+
+	return vm.ejectCD()
+}
+
+func (vm *KvmVM) ejectCD() error {
+	err := vm.q.BlockdevEject("ide0-cd0")
+	if err == nil {
+		vm.CdromPath = ""
+	}
+
+	return err
 }
 
 func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
@@ -767,9 +897,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-vnc")
 	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
-	args = append(args, "-usbdevice") // this allows absolute pointers in vnc, and works great on android vms
-	args = append(args, "tablet")
-
 	args = append(args, "-smp")
 	args = append(args, strconv.FormatUint(vm.VCPUs, 10))
 
@@ -784,6 +911,13 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-device")
 	args = append(args, "virtio-serial")
+
+	// for USB 1.0, creates bus named usb-bus.0
+	args = append(args, "-usb")
+	// for USB 2.0, creates bus named ehci.0
+	args = append(args, "-device", "usb-ehci,id=ehci")
+	// this allows absolute pointers in vnc, and works great on android vms
+	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
 	// this is non-virtio serial ports
 	// for virtio-serial, look below near the net code
@@ -816,6 +950,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
 	}
 
+	// put cdrom *before* disks so that it is always connected to ide0 -- this
+	// allows us to use a hardcoded block device name in cdrom eject/change.
+	if vm.CdromPath != "" {
+		args = append(args, "-drive")
+		args = append(args, "file="+vm.CdromPath+",media=cdrom")
+		args = append(args, "-boot")
+		args = append(args, "once=d")
+	} else {
+		// add an empty cdrom
+		args = append(args, "-drive")
+		args = append(args, "media=cdrom")
+	}
+
 	if len(vm.DiskPaths) != 0 {
 		for _, diskPath := range vm.DiskPaths {
 			args = append(args, "-drive")
@@ -838,13 +985,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	if len(vm.Append) > 0 {
 		args = append(args, "-append")
 		args = append(args, unescapeString(vm.Append))
-	}
-
-	if vm.CdromPath != "" {
-		args = append(args, "-drive")
-		args = append(args, "file="+vm.CdromPath+",if=ide,index=1,media=cdrom")
-		args = append(args, "-boot")
-		args = append(args, "once=d")
 	}
 
 	// net

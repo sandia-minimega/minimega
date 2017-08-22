@@ -60,6 +60,47 @@ func commandSocketHandle(c net.Conn) {
 			break
 		}
 
+		// check the plumbing
+		if r.PlumbPipe != "" {
+			reader := plumber.NewReader(r.PlumbPipe)
+			writer := plumber.NewWriter(r.PlumbPipe)
+
+			go func() {
+				for {
+					select {
+					case <-reader.Done:
+						return
+					case line := <-reader.C:
+						if err := enc.Encode(line); err != nil {
+							if !strings.Contains(err.Error(), "write: broken pipe") {
+								log.Errorln(err)
+							}
+							break
+						}
+					}
+				}
+
+			}()
+
+			for err == nil {
+				var line string
+				err = dec.Decode(&line)
+				if err != nil {
+					break
+				}
+
+				if line != "" {
+					writer <- line
+				}
+			}
+
+			// stop the reader
+			reader.Close()
+			close(writer)
+
+			break
+		}
+
 		// should have a command or suggestion but not both
 		if (r.Command == "") == (r.Suggest == "") {
 			resp := &minicli.Response{
@@ -72,7 +113,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// client wants a suggestion
 		if r.Suggest != "" {
-			err = sendLocalSuggest(enc, minicli.Suggest(r.Suggest))
+			err = sendLocalSuggest(enc, cliCompleter(r.Suggest))
 			continue
 		}
 

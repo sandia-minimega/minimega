@@ -118,14 +118,14 @@ func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 
 		go func() {
 			time.Sleep(time.Duration(delay) * time.Second)
-			teardown()
+			Shutdown("quitting")
 		}()
 
 		resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
 		return nil
 	}
 
-	teardown()
+	Shutdown("quitting")
 	return errors.New("unreachable")
 }
 

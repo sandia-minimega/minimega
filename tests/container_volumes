@@ -1,0 +1,20 @@
+vm config filesystem $containerfs
+shell mkdir /tmp/minivolume
+shell touch /tmp/minivolume/tumbleweed
+
+vm config volume /scratch /tmp/minivolume
+vm config volume
+vm config uuid 67fd0bd5-d419-4ec2-94a7-077f52450e7a
+vm launch container foo
+
+vm start all
+
+cc exec ls /scratch
+
+# wait for command to check in
+shell sleep 10
+
+cc response all
+
+# cleanup
+shell rm -r /tmp/minivolume
