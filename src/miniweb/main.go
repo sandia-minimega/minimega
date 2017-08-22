@@ -27,9 +27,11 @@ Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.`
 
 var (
-	f_addr = flag.String("addr", defaultAddr, "listen address")
-	f_root = flag.String("root", defaultRoot, "base path for web files")
-	f_base = flag.String("base", defaultBase, "base path for minimega")
+	f_addr      = flag.String("addr", defaultAddr, "listen address")
+	f_root      = flag.String("root", defaultRoot, "base path for web files")
+	f_base      = flag.String("base", defaultBase, "base path for minimega")
+	f_passwords = flag.String("passwords", "", "password file for auth")
+	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
 )
 
 var mm *miniclient.Conn
@@ -47,6 +49,24 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+
+	if *f_bootstrap {
+		if *f_passwords == "" {
+			log.Fatalln("must specify -password for bootstrap")
+		}
+
+		if err := bootstrap(*f_passwords); err != nil {
+			log.Fatalln(err)
+		}
+
+		return
+	}
+
+	if *f_passwords != "" {
+		if err := parsePasswords(*f_passwords); err != nil {
+			log.Fatalln(err)
+		}
+	}
 
 	mm, err = miniclient.Dial(*f_base)
 	if err != nil {
@@ -68,20 +88,21 @@ func main() {
 		}
 	}
 
-	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/", mustAuth(indexHandler))
 
-	mux.HandleFunc("/vms", templateHander)
-	mux.HandleFunc("/hosts", templateHander)
-	mux.HandleFunc("/graph", templateHander)
-	mux.HandleFunc("/tilevnc", templateHander)
+	mux.HandleFunc("/vms", mustAuth(templateHander))
+	mux.HandleFunc("/hosts", mustAuth(templateHander))
+	mux.HandleFunc("/graph", mustAuth(templateHander))
+	mux.HandleFunc("/tilevnc", mustAuth(templateHander))
 
-	mux.HandleFunc("/hosts.json", hostsHandler)
-	mux.HandleFunc("/vlans.json", vlansHandler)
-	mux.HandleFunc("/vms/info.json", vmsHandler)
-	mux.HandleFunc("/vms/top.json", vmsHandler)
+	mux.HandleFunc("/hosts.json", mustAuth(hostsHandler))
+	mux.HandleFunc("/vlans.json", mustAuth(vlansHandler))
+	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
+	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
 
-	mux.HandleFunc("/connect/", connectHandler)
-	mux.HandleFunc("/screenshot/", screenshotHandler)
+	mux.HandleFunc("/connect/", mustAuth(connectHandler))
+	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
+	// TODO: Auth?
 	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
 
 	server := &http.Server{
