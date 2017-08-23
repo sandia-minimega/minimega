@@ -9,6 +9,7 @@ package layers
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -140,7 +141,7 @@ func (ip *IPv4) SerializeTo(b gopacket.SerializeBuffer, opts gopacket.SerializeO
 
 			// sanity checking to protect us from buffer overrun
 			if len(opt.OptionData) > int(opt.OptionLength-2) {
-				return fmt.Errorf("option length is smaller than length of option data")
+				return errors.New("option length is smaller than length of option data")
 			}
 			copy(bytes[curLocation+2:curLocation+int(opt.OptionLength)], opt.OptionData)
 			curLocation += int(opt.OptionLength)
@@ -199,6 +200,7 @@ func (ip *IPv4) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	ip.Checksum = binary.BigEndian.Uint16(data[10:12])
 	ip.SrcIP = data[12:16]
 	ip.DstIP = data[16:20]
+	ip.Options = ip.Options[:0]
 	// Set up an initial guess for contents/payload... we'll reset these soon.
 	ip.BaseLayer = BaseLayer{Contents: data}
 
@@ -222,7 +224,7 @@ func (ip *IPv4) DecodeFromBytes(data []byte, df gopacket.DecodeFeedback) error {
 	} else if cmp < 0 {
 		df.SetTruncated()
 		if int(ip.IHL)*4 > len(data) {
-			return fmt.Errorf("Not all IP header bytes available")
+			return errors.New("Not all IP header bytes available")
 		}
 	}
 	ip.Contents = data[:ip.IHL*4]
@@ -285,7 +287,7 @@ func checkIPv4Address(addr net.IP) (net.IP, error) {
 		return c, nil
 	}
 	if len(addr) == net.IPv6len {
-		return nil, fmt.Errorf("address is IPv6")
+		return nil, errors.New("address is IPv6")
 	}
 	return nil, fmt.Errorf("wrong length of %d bytes instead of %d", len(addr), net.IPv4len)
 }
