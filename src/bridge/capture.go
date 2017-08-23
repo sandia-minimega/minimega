@@ -38,6 +38,9 @@ func (b *Bridge) stopCapture(id int) {
 
 	atomic.StoreUint64(b.captures[id].isstopped, 1)
 
+	// do this after setting isstopped to prevent error in packet copier
+	b.captures[id].handle.Close()
+
 	if b.mirrors[tap] {
 		if err := b.removeMirror(tap); err != nil {
 			log.Error("stop capture %v %v: %v", tap, id, err)
@@ -107,6 +110,7 @@ func (b *Bridge) captureTap(tap, fname string, config ...CaptureConfig) (int, er
 		tap:       tap,
 		isstopped: &stopped,
 		ack:       ack,
+		handle:    handle,
 	}
 
 	// start a goroutine to do the capture, runs until it encounters an error
@@ -130,7 +134,8 @@ func (b *Bridge) captureTap(tap, fname string, config ...CaptureConfig) (int, er
 			}
 		}
 
-		if err != nil && atomic.LoadUint64(&stopped) != 0 {
+		// only report error if the capture isn't stopped
+		if err != nil && atomic.LoadUint64(&stopped) == 0 {
 			log.Error("packet copier for %v: %v", tap, err)
 		}
 

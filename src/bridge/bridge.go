@@ -84,6 +84,9 @@ type capture struct {
 
 	// ack is closed when the goroutine doing the capture closes
 	ack chan bool
+
+	// pcap handle, needed so that we can close it in stopCapture
+	handle *pcap.Handle
 }
 
 type tapStat struct {
@@ -112,11 +115,7 @@ func (b *Bridge) destroy() error {
 	b.setDestroyed()
 
 	if b.handle != nil {
-		// Don't close the handle otherwise we might cause a deadlock:
-		//   https://github.com/google/gopacket/issues/253
-		// We will leak the handle but bridges are usually only destroyed when
-		// the program is terminating so it won't be leaked for long.
-		// b.handle.Close()
+		b.handle.Close()
 	}
 
 	// first get all of the taps off of this bridge and destroy them

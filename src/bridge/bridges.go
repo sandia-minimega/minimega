@@ -127,8 +127,7 @@ cleanup:
 	}
 
 	if br.handle != nil {
-		// See note in Bridge.destroy().
-		// br.handle.Close()
+		br.handle.Close()
 	}
 
 	// Try to delete the bridge, if we created it
