@@ -13,7 +13,6 @@ import (
 	"minicli"
 	log "minilog"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +41,6 @@ var hostCLIHandlers = []minicli.Handler{
 		HelpLong: `
 Report information about the host:
 
-- bandwidth  : RX/TX bandwidth stats
 - cpucommit  : total cpu commit
 - cpus       : number of cpus
 - load       : system load average
@@ -51,24 +49,26 @@ Report information about the host:
 - memused    : memory used in MB
 - name       : name of the machine
 - netcommit  : total network interface commit
-- vms        : number of VMs
+- rx         : RX bandwidth stats (MB/s)
+- tx         : TX bandwidth stats (MB/s)
 - uptime     : uptime
+- vms        : number of VMs
 
-All stats about VMs are based on the active namespace. To see information
-across namespaces, run "mesh send all host".`,
+All VM-based stats are computed across namespaces.`,
 		Patterns: []string{
 			"host",
-			"host <bandwidth,>",
-			"host <cpus,>",
 			"host <cpucommit,>",
+			"host <cpus,>",
 			"host <load,>",
 			"host <memcommit,>",
 			"host <memtotal,>",
 			"host <memused,>",
 			"host <name,>",
 			"host <netcommit,>",
-			"host <vms,>",
+			"host <rx,>",
+			"host <tx,>",
 			"host <uptime,>",
+			"host <vms,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -82,72 +82,12 @@ func (s *HostStats) IsFull() bool {
 	return s.Limit != 0 && s.VMs >= s.Limit
 }
 
-func (h *HostStats) Populate(ns *Namespace, v string) error {
-	switch v {
-	case "bandwidth":
-		h.RxBps, h.TxBps = bridges.BandwidthStats()
-	case "cpus":
-		h.CPUs = runtime.NumCPU()
-	case "cpucommit":
-		h.CPUCommit = ns.CPUCommit()
-	case "load":
-		load, err := ioutil.ReadFile("/proc/loadavg")
-		if err != nil {
-			return err
-		}
-
-		// loadavg should look something like
-		// 	0.31 0.28 0.24 1/309 21658
-		f := strings.Fields(string(load))
-		if len(f) != 5 {
-			return fmt.Errorf("could not read loadavg")
-		}
-
-		h.Load = strings.Join(f[0:3], " ")
-		return nil
-	case "memcommit":
-		h.MemCommit = ns.MemCommit()
-	case "memtotal", "memused":
-		total, used, err := hostStatsMemory()
-		h.MemTotal = total
-		h.MemUsed = used
-		return err
-	case "name":
-		h.Name = hostname
-	case "netcommit":
-		h.NetworkCommit = ns.NetworkCommit()
-	case "vms":
-		h.VMs = ns.VMs.Count()
-	case "uptime":
-		data, err := ioutil.ReadFile("/proc/uptime")
-		if err != nil {
-			return err
-		}
-
-		// uptime should look something like
-		//  2641.71 9287.55
-		f := strings.Fields(string(data))
-		if len(f) != 2 {
-			return fmt.Errorf("could not read uptime")
-		}
-
-		uptime, err := time.ParseDuration(f[0] + "s")
-		if err != nil {
-			return err
-		}
-
-		h.Uptime = uptime
-	default:
-		return errors.New("unreachable")
-	}
-
-	return nil
-}
-
 func (h *HostStats) Print(v string) string {
 	switch v {
-	case "bandwidth":
-		return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", h.RxBps, h.TxBps)
+	case "rx":
+		return fmt.Sprintf("%.1f", h.RxBps)
+	case "tx":
+		return fmt.Sprintf("%.1f", h.TxBps)
 	case "cpus":
 		return strconv.Itoa(h.CPUs)
 	case "cpucommit":
@@ -177,22 +117,16 @@ func (h *HostStats) Print(v string) string {
 // Preferred ordering of host info fields in tabular. Don't include name --
 // it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
-	"cpus", "load", "memused", "memtotal", "bandwidth", "vms", "uptime",
-	"cpucommit", "memcommit", "netcommit",
+	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "cpucommit",
+	"memcommit", "netcommit", "uptime",
 }
 
 func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stats := HostStats{
-		Name: hostname,
-	}
-	resp.Data = &stats
+	stats := NewHostStats()
+	resp.Data = stats
 
 	// If they selected one of the fields to display
 	for k := range c.BoolArgs {
-		if err := stats.Populate(ns, k); err != nil {
-			return err
-		}
-
 		resp.Response = stats.Print(k)
 		return nil
 	}
@@ -202,15 +136,27 @@ func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	row := []string{}
 	for _, k := range resp.Header {
-		if err := stats.Populate(ns, k); err != nil {
-			return err
-		}
-
 		row = append(row, stats.Print(k))
 	}
 	resp.Tabular = [][]string{row}
 
 	return nil
+}
+
+func hostLoad() (string, error) {
+	load, err := ioutil.ReadFile("/proc/loadavg")
+	if err != nil {
+		return "", err
+	}
+
+	// loadavg should look something like
+	// 	0.31 0.28 0.24 1/309 21658
+	f := strings.Fields(string(load))
+	if len(f) != 5 {
+		return "", fmt.Errorf("could not read loadavg")
+	}
+
+	return strings.Join(f[0:3], " "), nil
 }
 
 func hostStatsMemory() (int, int, error) {
@@ -269,4 +215,25 @@ func hostStatsMemory() (int, int, error) {
 	outputMemTotal := memTotal / 1024
 
 	return outputMemTotal, outputMemUsed, nil
+}
+
+func hostUptime() (time.Duration, error) {
+	data, err := ioutil.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0, err
+	}
+
+	// uptime should look something like
+	//  2641.71 9287.55
+	f := strings.Fields(string(data))
+	if len(f) != 2 {
+		return 0, errors.New("malformed uptime, expected float float")
+	}
+
+	uptime, err := time.ParseDuration(f[0] + "s")
+	if err != nil {
+		return 0, err
+	}
+
+	return uptime, nil
 }

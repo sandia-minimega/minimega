@@ -10,6 +10,7 @@ import (
 	"minicli"
 	log "minilog"
 	"ron"
+	"runtime"
 	"sort"
 	"sync"
 	"time"
@@ -269,9 +270,7 @@ func (n *Namespace) Schedule() error {
 	}
 
 	// Query for the host stats on all machines.
-	// TODO: We want the global load of hosts so we pass nil as the namespace
-	// to run host sans-namespace.
-	cmd := minicli.MustCompilef("namespace %q host", n.Name)
+	cmd := minicli.MustCompilef("host", n.Name)
 	cmd.SetSource(n.Name)
 	cmd.SetRecord(false)
 	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
@@ -559,4 +558,41 @@ func ListNamespaces(mark bool) []string {
 	sort.Strings(res)
 
 	return res
+}
+
+// NewHostStats populates HostStats with fields spanning all namespaces.
+func NewHostStats() *HostStats {
+	h := HostStats{
+		Name: hostname,
+	}
+
+	var err error
+
+	// compute fields that don't require namespaceLock
+	h.CPUs = runtime.NumCPU()
+	h.Load, err = hostLoad()
+	if err != nil {
+		log.Error("unable to compute load: %v", err)
+	}
+	h.MemTotal, h.MemUsed, err = hostStatsMemory()
+	if err != nil {
+		log.Error("unable to compute memory stats: %v", err)
+	}
+	h.RxBps, h.TxBps = bridges.BandwidthStats()
+	h.Uptime, err = hostUptime()
+	if err != nil {
+		log.Error("unable to compute uptime: %v", err)
+	}
+
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	for _, ns := range namespaces {
+		h.CPUCommit += ns.CPUCommit()
+		h.MemCommit += ns.MemCommit()
+		h.NetworkCommit += ns.NetworkCommit()
+		h.VMs += ns.VMs.Count()
+	}
+
+	return &h
 }
