@@ -221,7 +221,7 @@ func (r *Router) generateConfig() error {
 	if r.gw != "" {
 		fmt.Fprintf(&out, "route add default gw %v\n", r.gw)
 	} else {
-		fmt.Fprintf(&out, "route del default")
+		fmt.Fprintf(&out, "route del default\n")
 	}
 	for subnet, _ := range r.rad {
 		fmt.Fprintf(&out, "dnsmasq ra %v\n", subnet)

@@ -27,9 +27,10 @@ Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.`
 
 var (
-	f_addr = flag.String("addr", defaultAddr, "listen address")
-	f_root = flag.String("root", defaultRoot, "base path for web files")
-	f_base = flag.String("base", defaultBase, "base path for minimega")
+	f_addr    = flag.String("addr", defaultAddr, "listen address")
+	f_root    = flag.String("root", defaultRoot, "base path for web files")
+	f_base    = flag.String("base", defaultBase, "base path for minimega")
+	f_console = flag.Bool("console", false, "enable console")
 )
 
 var mm *miniclient.Conn
@@ -70,10 +71,10 @@ func main() {
 
 	mux.HandleFunc("/", indexHandler)
 
-	mux.HandleFunc("/vms", templateHander)
-	mux.HandleFunc("/hosts", templateHander)
-	mux.HandleFunc("/graph", templateHander)
-	mux.HandleFunc("/tilevnc", templateHander)
+	mux.HandleFunc("/vms", templateHandler)
+	mux.HandleFunc("/hosts", templateHandler)
+	mux.HandleFunc("/graph", templateHandler)
+	mux.HandleFunc("/tilevnc", templateHandler)
 
 	mux.HandleFunc("/hosts.json", hostsHandler)
 	mux.HandleFunc("/vlans.json", vlansHandler)
@@ -82,7 +83,18 @@ func main() {
 
 	mux.HandleFunc("/connect/", connectHandler)
 	mux.HandleFunc("/screenshot/", screenshotHandler)
-	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
+	mux.Handle("/ws/tunnel/", websocket.Handler(tunnelHandler))
+
+	if *f_console {
+		mux.HandleFunc("/console", consoleHandler)
+		mux.HandleFunc("/console/", consoleHandler)
+		mux.Handle("/ws/console/", websocket.Handler(consoleWsHandler))
+	} else {
+		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)
+			return
+		})
+	}
 
 	server := &http.Server{
 		Addr:    *f_addr,

@@ -88,7 +88,7 @@ func NewNamespace(name string) *Namespace {
 		},
 		routers: make(map[int]*Router),
 		captures: captures{
-			m:       make(map[int]*capture),
+			m:       make(map[int]capture),
 			counter: NewCounter(),
 		},
 		vncRecorder: vncRecorder{

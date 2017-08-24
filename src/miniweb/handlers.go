@@ -14,12 +14,21 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
+	"unsafe"
 
+	"github.com/kr/pty"
 	"golang.org/x/net/websocket"
 )
+
+var ptys = map[int]*os.File{}
+var ptyMu sync.Mutex
 
 func respondJSON(w http.ResponseWriter, data interface{}) {
 	js, err := json.Marshal(data)
@@ -43,10 +52,9 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/vms", 302)
 }
 
-// Templated HTML responses
-func templateHander(w http.ResponseWriter, r *http.Request) {
+func renderTemplate(w http.ResponseWriter, r *http.Request, t string, d interface{}) {
 	lp := filepath.Join(*f_root, "templates", "_layout.tmpl")
-	fp := filepath.Join(*f_root, "templates", r.URL.Path+".tmpl")
+	fp := filepath.Join(*f_root, "templates", t)
 
 	info, err := os.Stat(fp)
 	if err != nil {
@@ -68,10 +76,15 @@ func templateHander(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := tmpl.ExecuteTemplate(w, "layout", nil); err != nil {
+	if err := tmpl.ExecuteTemplate(w, "layout", d); err != nil {
 		log.Error(err.Error())
 		http.Error(w, http.StatusText(500), 500)
 	}
+}
+
+// Templated HTML responses
+func templateHandler(w http.ResponseWriter, r *http.Request) {
+	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
 }
 
 // screenshotHandler serves routes like /screenshot/<name>.png. Optional size
@@ -173,14 +186,14 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func tunnelHandler(ws *websocket.Conn) {
-	// URL should be of the form `/tunnel/<name>`
+	// URL should be of the form `/ws/tunnel/<name>`
 	path := strings.Trim(ws.Config().Location.Path, "/")
 
 	fields := strings.Split(path, "/")
-	if len(fields) != 2 {
+	if len(fields) != 3 {
 		return
 	}
-	name := fields[1]
+	name := fields[2]
 
 	var host string
 	var port int
@@ -298,4 +311,132 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, vlans)
+}
+
+func consoleHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/console" {
+		// create a new console
+		cmd := exec.Command("bin/minimega", "-attach")
+
+		tty, err := pty.Start(cmd)
+		if err != nil {
+			log.Error("start failed:", err)
+			return
+		}
+
+		pid := cmd.Process.Pid
+
+		log.Info("spawned new minimega console, pid = %v", pid)
+
+		ptyMu.Lock()
+		defer ptyMu.Unlock()
+		ptys[pid] = tty
+
+		data := struct{ Pid int }{
+			Pid: pid,
+		}
+		renderTemplate(w, r, "console.tmpl", &data)
+		return
+	}
+
+	path := strings.Split(r.URL.Path, "/")
+
+	if len(path) != 4 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	pid, err := strconv.Atoi(path[2])
+	if err != nil {
+		http.Error(w, "invalid pid", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", http.StatusBadRequest)
+		return
+	}
+
+	ptyMu.Lock()
+	defer ptyMu.Unlock()
+	tty, ok := ptys[pid]
+	if !ok {
+		http.Error(w, "pty not found", http.StatusNotFound)
+		return
+	}
+
+	switch path[3] {
+	case "size":
+		rows, err := strconv.ParseUint(r.FormValue("rows"), 10, 16)
+		cols, err2 := strconv.ParseUint(r.FormValue("cols"), 10, 16)
+		if err != nil || err2 != nil {
+			http.Error(w, "invalid rows/cols", http.StatusBadRequest)
+			return
+		}
+
+		log.Info("resize %v to %vx%x", pid, cols, rows)
+
+		ws := struct {
+			R, C, X, Y uint16
+		}{
+			R: uint16(rows), C: uint16(cols),
+		}
+		_, _, errno := syscall.Syscall(
+			syscall.SYS_IOCTL,
+			tty.Fd(),
+			syscall.TIOCSWINSZ,
+			uintptr(unsafe.Pointer(&ws)),
+		)
+		if errno != 0 {
+			log.Error("unable to set winsize: %v", syscall.Errno(errno))
+			http.Error(w, "set winsize failed", http.StatusInternalServerError)
+		}
+
+		// make sure winsize gets processed, hopefully the user isn't typing...
+		time.Sleep(100 * time.Millisecond)
+		io.WriteString(tty, "\n")
+		return
+	}
+}
+
+func consoleWsHandler(ws *websocket.Conn) {
+	// connect to minimega based on PID
+	path := strings.Trim(ws.Config().Location.Path, "/")
+
+	fields := strings.Split(path, "/")
+	if len(fields) != 3 {
+		return
+	}
+	pid, err := strconv.Atoi(fields[2])
+	if err != nil {
+		log.Error("invalid pid: %v", fields[2])
+		return
+	}
+
+	ptyMu.Lock()
+	tty, ok := ptys[pid]
+	// only one person should connect to the console
+	delete(ptys, pid)
+	ptyMu.Unlock()
+
+	if !ok {
+		log.Error("pid not found: %v", fields[2])
+		return
+	}
+
+	defer func() {
+		tty.Close()
+	}()
+
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		log.Error("unable to find process: %v", pid)
+		return
+	}
+
+	go io.Copy(ws, tty)
+	io.Copy(tty, ws)
+
+	proc.Kill()
+	proc.Wait()
 }

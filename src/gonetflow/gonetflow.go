@@ -29,8 +29,8 @@ const (
 type Mode int
 
 const (
-	ASCII Mode = iota
-	RAW
+	RAW Mode = iota
+	ASCII
 )
 
 type Netflow struct {
