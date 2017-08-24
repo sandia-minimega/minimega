@@ -1197,6 +1197,7 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
 			//TODO: copy scrollback to conn
 			//io.Copy(conn, vm.scrollBack)
+			conn.Write(vm.scrollBack.Get())
 			// register conn into the mutable-multiwriter
 			vm.consoleMultiWriter.AddWriter(conn)
 
