@@ -979,6 +979,8 @@ func (vm *ContainerVM) launch() error {
 		// Some error occurred.. clean up the process
 		cmd.Process.Kill()
 
+		vm.unlinkNetns()
+
 		return vm.setErrorf("%v", err)
 	}
 
