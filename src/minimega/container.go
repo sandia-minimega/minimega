@@ -757,6 +757,8 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 		return strconv.Itoa(vm.ConsolePort), nil
 	case "volume":
 		return marshal(vm.VolumePaths), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	}
 
 	return vm.ContainerConfig.Info(field)
