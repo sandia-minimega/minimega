@@ -547,6 +547,11 @@ func ListNamespaces(mark bool) []string {
 
 	res := []string{}
 	for n := range namespaces {
+		if mark && namespace == n {
+			res = append(res, "["+n+"]")
+			continue
+		}
+
 		res = append(res, n)
 	}
 
