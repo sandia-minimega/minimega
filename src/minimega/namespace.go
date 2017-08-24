@@ -270,7 +270,7 @@ func (n *Namespace) Schedule() error {
 	}
 
 	// Query for the host stats on all machines.
-	cmd := minicli.MustCompilef("host", n.Name)
+	cmd := minicli.MustCompile("host")
 	cmd.SetSource(n.Name)
 	cmd.SetRecord(false)
 	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
