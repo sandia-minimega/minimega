@@ -81,10 +81,7 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		log.Errorln(err)
 	}
 
-	// clean up possibly leftover state
-	ksmDisable()
-
-	os.Exit(0)
+	Shutdown("nuked")
 	return errors.New("unreachable")
 }
 

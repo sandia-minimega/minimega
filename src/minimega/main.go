@@ -289,7 +289,7 @@ func teardown() {
 	commandSocketRemove()
 
 	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
 	}
 
 	if cpuProfileOut != nil {
