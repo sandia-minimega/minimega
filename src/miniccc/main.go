@@ -8,7 +8,6 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
-	"io"
 	log "minilog"
 	"net"
 	"os"
@@ -122,11 +121,6 @@ func dial() error {
 			client.conn, err = net.Dial(*f_family, addr)
 		} else {
 			client.conn, err = dialSerial(*f_serial)
-		}
-
-		if err == nil {
-			// write byte sequence to synchronize to server
-			_, err = io.WriteString(client.conn, "RON")
 		}
 
 		if err == nil {
