@@ -21,7 +21,7 @@ a5e980ca-3958-48cc-92e9-93d50c0157ad | foo
 ## cc exec /bin/ls /tmp/miniccc/files/cc_io.bigfile
 
 ## # check results
-## shell sleep 5
+## shell sleep 10
 ## cc responses 2
 2/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
 /tmp/miniccc/files/cc_io.bigfile

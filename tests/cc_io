@@ -19,7 +19,7 @@ cc send cc_io.bigfile
 cc exec /bin/ls /tmp/miniccc/files/cc_io.bigfile
 
 # check results
-shell sleep 5
+shell sleep 10
 cc responses 2
 
 # clean up everything
