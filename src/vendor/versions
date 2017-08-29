@@ -1,6 +1,6 @@
 19cb9f127a9c8d2034cf59ccb683cdb94b9deb6c github.com/c9s/goprocinfo/
 
-2040752af7f5cf5f83eff139e987a36d2fed62fc github.com/google/gopacket/ 
+7d9ba85c47bb41298fed10f5769f793741de187f github.com/google/gopacket/ 
 
 5176c556b9ce7e87b54b92744dc86f058f520e86 github.com/jbuchbinder/gopnm
 
@@ -16,3 +16,4 @@ db96a2b759cdef4f11a34506a42eb8d1290c598e github.com/miekg/dns
 
 fe81982801b5861ad01e643527daac63629b7fdd github.com/goftp/server
 
+88609521dc4b6c858fd4c98b628147da928ce4ac github.com/peterh/liner
