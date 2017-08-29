@@ -758,6 +758,8 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 		return strconv.Itoa(vm.ConsolePort), nil
 	case "volume":
 		return marshal(vm.VolumePaths), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	}
 
 	return vm.ContainerConfig.Info(field)
@@ -1058,6 +1060,7 @@ func (vm *ContainerVM) launch() error {
 			vm.ptyTCPListener.Close()
 		}
 
+		// cleanup cc domain socket
 		if vm.ccServer != nil {
 			vm.ccServer.CloseUnix(ccPath)
 		}
@@ -1090,6 +1093,12 @@ func (vm *ContainerVM) launch() error {
 }
 
 func (vm *ContainerVM) Connect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.RegisterVM(vm)
+
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 

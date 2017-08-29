@@ -25,6 +25,8 @@ var (
 	f_httproot    = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip    = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_httpCookies = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
+	f_ftp         = flag.Bool("ftp", false, "enable ftp service")
+	f_ftps        = flag.Bool("ftps", false, "enable ftp (TLS) service")
 	f_ssh         = flag.Bool("ssh", false, "enable ssh service")
 	f_smtp        = flag.Bool("smtp", false, "enable smtp service")
 	f_smtpUser    = flag.String("smtpuser", "", "specify a particular user to send email to for the given domain, otherwise random")
@@ -43,6 +45,7 @@ var (
 
 	// See main for registering with flag
 	f_httpImageSize = DefaultFileSize
+	f_ftpFileSize   = DefaultFTPFileSize
 
 	hosts map[string]string
 	keys  []string
@@ -64,6 +67,7 @@ func main() {
 
 	// Add non-builtin flag type
 	flag.Var(&f_httpImageSize, "httpimagesize", "size of image to serve in http/https pages (optional suffixes: B, KB, MB. default: MB)")
+	flag.Var(&f_ftpFileSize, "ftpfilesize", "size of image file to serve in ftp/ftps RECV requests (optional suffixes: B, KB, MB. default: MB)")
 
 	flag.Parse()
 
@@ -78,7 +82,7 @@ func main() {
 	}
 
 	// make sure at least one service is enabled
-	if !dns && !*f_http && !*f_https && !*f_ssh && !*f_smtp {
+	if !dns && !*f_http && !*f_https && !*f_ftp && !*f_ftps && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -144,6 +148,20 @@ func main() {
 			go httpTLSServer(protocol)
 		} else {
 			go httpTLSClient(protocol)
+		}
+	}
+	if *f_ftp {
+		if *f_serve {
+			go ftpServer()
+		} else {
+			go ftpClient()
+		}
+	}
+	if *f_ftps {
+		if *f_serve {
+			go ftpsServer()
+		} else {
+			go ftpsClient()
 		}
 	}
 	if *f_ssh {

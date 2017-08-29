@@ -55,6 +55,7 @@ Additional fields are available for KVM-based VMs:
 - kernel        : kernel image
 - initrd        : initrd image
 - migrate       : qemu migration image
+- pid           : pid of qemu process
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
@@ -65,6 +66,7 @@ Additional fields are available for container-based VMs:
 - hostname     : hostname of the container
 - init	       : process to invoke as init
 - preinit      : process to invoke at container launch before isolation
+- pid          : pid of container's init process
 - fifo         : number of fifo devices
 - console_port : port for console shim
 

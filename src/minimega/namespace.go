@@ -375,8 +375,6 @@ func (n *Namespace) Launch(q *QueuedVMs) []error {
 	// fire off goroutine to do the registration
 	go func() {
 		for vm := range vms {
-			n.ccServer.RegisterVM(vm)
-
 			if err := vm.Connect(n.ccServer); err != nil {
 				log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
 			}

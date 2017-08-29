@@ -332,6 +332,8 @@ func (vm *KvmVM) Info(field string) (string, error) {
 	switch field {
 	case "vnc_port":
 		return strconv.Itoa(vm.VNCPort), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	}
 
 	return vm.KVMConfig.Info(field)
@@ -703,6 +705,12 @@ func (vm *KvmVM) launch() error {
 }
 
 func (vm *KvmVM) Connect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.RegisterVM(vm)
+
 	// connect cc
 	ccPath := vm.path("cc")
 
@@ -899,9 +907,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
 
-	args = append(args, "-device")
-	args = append(args, "virtio-serial")
-
 	// for USB 1.0, creates bus named usb-bus.0
 	args = append(args, "-usb")
 	// for USB 2.0, creates bus named ehci.0
@@ -998,42 +1003,41 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		}
 	}
 
-	// virtio-serial
-	// we always get a cc virtio port
-	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial0,bus=pci.%v,addr=0x%x", bus, addr))
-	args = append(args, "-chardev")
-	args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
-	args = append(args, "-device")
-	args = append(args, fmt.Sprintf("virtserialport,nr=1,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc"))
-	addr++
-	if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
-		addBus()
+	// start at -1 so that the first time we call addVirtioDevice we create port 0
+	virtioPort := -1
+
+	addVirtioDevice := func() {
+		virtioPort++
+
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtioPort, bus, addr))
+
+		addr++
+		if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+			addBus()
+		}
 	}
 
-	virtio_slot := 0 // start at 0 since we immediately increment and we already have a cc port
+	// virtio-serial
+	if vm.Backchannel {
+		addVirtioDevice()
+
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
+	}
+
 	for i := uint64(0); i < vm.VirtioPorts; i++ {
-		// qemu port number
-		nr := i%DEV_PER_VIRTIO + 1
-
-		// If port is 1, we're out of slots on the current virtio-serial-pci
-		// device or we're on the first iteration => make a new device
-		if nr == 1 {
-			virtio_slot++
-			args = append(args, "-device")
-			args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtio_slot, bus, addr))
-
-			addr++
-			if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
-				addBus()
-			}
+		// If we've maxed out the device, create a new one
+		if i%DEV_PER_VIRTIO == 0 {
+			addVirtioDevice()
 		}
 
 		args = append(args, "-chardev")
 		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
-
 		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,nr=%v,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", nr, virtio_slot, i, i, i))
+		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", virtioPort, i, i, i))
 	}
 
 	// hook for hugepage support

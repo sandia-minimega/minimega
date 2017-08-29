@@ -8,91 +8,39 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
-	"net"
+	"math/rand"
+	log "minilog"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
-	"text/template"
+	"syscall"
 	"time"
-	"unicode"
-	"unicode/utf8"
 )
 
+// Constants
+const MINUTES_PER_SLICE = 1 // must be less than 60! 1, 5, 10, or 15 would be good choices
+// Minimum schedule length in minutes, 720 = 12 hours
+const MIN_SCHED_LEN = 72
+
+// Global Variables
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
 var igorConfig Config
 
-// The configuration of the system
-type Config struct {
-	TFTPRoot   string
-	Prefix     string
-	Start      int
-	End        int
-	Rackwidth  int
-	Rackheight int
-}
+var Reservations map[uint64]Reservation // map ID to reservations
+var Schedule []TimeSlice                // The schedule
 
-var Reservations map[string][]string // maps a reservation name to a slice of node names
-
-// A Command is an implementation of a go command
-// like go build or go fix.
-type Command struct {
-	// Run runs the command.
-	// The args are the arguments after the command name.
-	Run func(cmd *Command, args []string)
-
-	// UsageLine is the one-line usage message.
-	// The first word in the line is taken to be the command name.
-	UsageLine string
-
-	// Short is the short description shown in the 'go help' output.
-	Short string
-
-	// Long is the long message shown in the 'go help <this-command>' output.
-	Long string
-
-	// Flag is a set of flags specific to this command.
-	Flag flag.FlagSet
-
-	// CustomFlags indicates that the command will do its own
-	// flag parsing.
-	CustomFlags bool
-}
-
-// Name returns the command's name: the first word in the usage line.
-func (c *Command) Name() string {
-	name := c.UsageLine
-	i := strings.Index(name, " ")
-	if i >= 0 {
-		name = name[:i]
-	}
-	return name
-}
-
-func (c *Command) Usage() {
-	fmt.Fprintf(os.Stderr, "usage: %s\n\n", c.UsageLine)
-	fmt.Fprintf(os.Stderr, "%s\n", strings.TrimSpace(c.Long))
-	os.Exit(2)
-}
-
-// Runnable reports whether the command can be run; otherwise
-// it is a documentation pseudo-command such as importpath.
-func (c *Command) Runnable() bool {
-	return c.Run != nil
-}
+var resdb *os.File
+var scheddb *os.File
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
 var commands = []*Command{
-	cmdAddtime,
 	cmdDel,
 	cmdShow,
 	cmdSub,
@@ -100,6 +48,64 @@ var commands = []*Command{
 
 var exitStatus = 0
 var exitMu sync.Mutex
+
+// The configuration of the system
+type Config struct {
+	TFTPRoot              string
+	Prefix                string
+	Start                 int
+	End                   int
+	Padlen                int
+	Rackwidth             int
+	Rackheight            int
+	PowerOnCommand        string
+	PowerOffCommand       string
+	UseCobbler            bool
+	CobblerDefaultProfile string
+	AutoReboot            bool
+	VLANMin               int               `json:"vlan_min"`
+	VLANMax               int               `json:"vlan_max"`
+	NodeMap               map[string]string `json:"node_map"`
+	Network               string
+	NetworkUser           string
+	NetworkPassword       string
+	NetworkURL            string `json:"network_url"`
+}
+
+// Represents a slice of time
+type TimeSlice struct {
+	Start int64    // UNIX time
+	End   int64    // UNIX time
+	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
+}
+
+type Reservation struct {
+	ResName    string
+	Hosts      []string // separate, not a range
+	PXENames   []string // eg C000025B
+	StartTime  int64    // UNIX time
+	EndTime    int64    // UNIX time
+	Duration   float64  // minutes
+	Owner      string
+	ID         uint64
+	KernelArgs string
+	Vlan       int
+}
+
+// Sort the slice of reservations based on the start time
+type StartSorter []Reservation
+
+func (s StartSorter) Len() int {
+	return len(s)
+}
+
+func (s StartSorter) Less(i, j int) bool {
+	return s[i].StartTime < s[j].StartTime
+}
+
+func (s StartSorter) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
 
 func setExitStatus(n int) {
 	exitMu.Lock()
@@ -109,46 +115,132 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
-func readConfig(path string) (c Config) {
-	b, err := ioutil.ReadFile(path)
-	if err != nil {
-		fatalf("Couldn't read config file: %v", err)
-	}
-
-	err = json.Unmarshal(b, &c)
-	if err != nil {
-		fatalf("Couldn't parse json: %v", err)
-	}
-	return
-}
-
 // Read the reservations, delete any that are too old.
-func cleanOld() {
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	// We lock to make sure it doesn't change from under us
-	// NOTE: not locking for now, haven't decided how important it is
-	//err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
-	reservations := getReservations(resdb)
-
+// Copy in netboot files for any reservations that have just started
+func housekeeping() {
 	now := time.Now().Unix()
 
-	for _, r := range reservations {
-		if r.Expiration < now {
+	var cobblerProfiles string
+	if igorConfig.UseCobbler {
+		var err error
+		// Get a list of current profiles
+		cobblerProfiles, err = processWrapper("cobbler", "profile", "list")
+		if err != nil {
+			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
+		}
+	}
+
+	for _, r := range Reservations {
+		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
+		} else if r.StartTime < now {
+			// update network config
+			err := networkSet(r.Hosts, r.Vlan)
+			if err != nil {
+				log.Error("error setting network isolation: %v", err)
+			}
+			if !igorConfig.UseCobbler {
+				// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
+				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+				if _, err := os.Stat(filename); os.IsNotExist(err) {
+					log.Info("Installing files for reservation ", r.ResName)
+
+					// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+					masterfile, err := os.Create(fname)
+					if err != nil {
+						log.Fatal("failed to create %v -- %v", fname, err)
+					}
+					defer masterfile.Close()
+					masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
+					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
+
+					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+					for _, pxename := range r.PXENames {
+						masterfile.Seek(0, 0)
+						fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+						f, err := os.Create(fname)
+						if err != nil {
+							log.Fatal("failed to create %v -- %v", fname, err)
+						}
+						io.Copy(f, masterfile)
+						f.Close()
+					}
+					powerCycle(r.Hosts)
+				}
+			} else {
+				// Check if the reservation already exists
+				if !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+					log.Info("Configuring cobbler distro and profile")
+					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+					}
+					powerCycle(r.Hosts)
+				}
+			}
+		}
+	}
+
+	expireSchedule()
+	putSchedule()
+}
+
+func powerCycle(Hosts []string) {
+	if igorConfig.AutoReboot {
+		if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
+			// Use non-cobbler commands
+			for _, h := range Hosts {
+				command := append(strings.Split(igorConfig.PowerOffCommand, " "), h)
+				fmt.Printf("command = %v\n", command)
+				_, err := processWrapper(command...)
+				if err != nil {
+					log.Error("power off command returned %v", err)
+				}
+				command = append(strings.Split(igorConfig.PowerOnCommand, " "), h)
+				_, err = processWrapper(command...)
+				if err != nil {
+					log.Error("power on command returned %v", err)
+				}
+			}
+		} else if igorConfig.UseCobbler {
+			for _, h := range Hosts {
+				_, err := processWrapper("cobbler", "system", "poweroff", "--name="+h)
+				if err != nil {
+					log.Error("cobbler power off command returned %v", err)
+				}
+				_, err = processWrapper("cobbler", "system", "poweron", "--name="+h)
+				if err != nil {
+					log.Error("cobbler power on command returned %v", err)
+				}
+			}
 		}
 	}
 }
 
+func init() {
+	Reservations = make(map[uint64]Reservation)
+}
+
 func main() {
+	var err error
+
+	log.Init()
+
 	flag.Usage = usage
 	flag.Parse()
-	log.SetFlags(0)
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -160,18 +252,42 @@ func main() {
 		return
 	}
 
+	rand.Seed(time.Now().Unix())
+
 	igorConfig = readConfig(*configpath)
 
-	// Diagnose common mistake: GOPATH==GOROOT.
-	// This setting is equivalent to not setting GOPATH at all,
-	// which is not what most people want when they do it.
-	if gopath := os.Getenv("GOPATH"); gopath == runtime.GOROOT() {
-		fmt.Fprintf(os.Stderr, "warning: GOPATH set to GOROOT (%s) has no effect\n", gopath)
+	// Read in the reservations
+	// We open the file here so resdb.Close() doesn't happen until program exit
+	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
+	resdb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Fatal("failed to open reservations file: %v", err)
 	}
+	defer resdb.Close()
+	// This should prevent anyone else from modifying the reservation file while
+	// we're using it. Bonus: Flock goes away if the program crashes so state is easy
+	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 
-	// Here, we need to go through and delete any reservations which should be expired.
-	cleanOld()
+	getReservations()
 
+	// Read in the schedule
+	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
+	scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Warn("failed to open schedule file: %v", err)
+	}
+	defer resdb.Close()
+	// We probably don't need to lock this too but I'm playing it safe
+	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
+	getSchedule()
+
+	// Here, we need to go through and delete any reservations which should be expired,
+	// and bring in new ones that are just starting
+	housekeeping()
+
+	// Now process the command
 	for _, cmd := range commands {
 		if cmd.Name() == args[0] && cmd.Run != nil {
 			cmd.Flag.Usage = func() { cmd.Usage() }
@@ -182,155 +298,62 @@ func main() {
 				args = cmd.Flag.Args()
 			}
 			cmd.Run(cmd, args)
-			exit()
 			return
 		}
 	}
 
 	fmt.Fprintf(os.Stderr, "go: unknown subcommand %q\nRun 'go help' for usage.\n", args[0])
 	setExitStatus(2)
-	exit()
 }
 
-var usageTemplate = `igor is a scheduler for Mega-style clusters.
-
-Usage:
-
-	igor command [arguments]
-
-The commands are:
-{{range .}}{{if .Runnable}}
-    {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
-
-Use "igor help [command]" for more information about a command.
-
-Additional help topics:
-{{range .}}{{if not .Runnable}}
-    {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
-
-Use "igor help [topic]" for more information about that topic.
-
-`
-
-var helpTemplate = `{{if .Runnable}}usage: igor {{.UsageLine}}
-
-{{end}}{{.Long | trim}}
-`
-
-var documentationTemplate = `/*
-{{range .}}{{if .Short}}{{.Short | capitalize}}
-
-{{end}}{{if .Runnable}}Usage:
-
-	igor {{.UsageLine}}
-
-{{end}}{{.Long | trim}}
-
-
-{{end}}*/
-package documentation
-
-`
-
-// tmpl executes the given template text on data, writing the result to w.
-func tmpl(w io.Writer, text string, data interface{}) {
-	t := template.New("top")
-	t.Funcs(template.FuncMap{"trim": strings.TrimSpace, "capitalize": capitalize})
-	template.Must(t.Parse(text))
-	if err := t.Execute(w, data); err != nil {
-		panic(err)
-	}
-}
-
-func capitalize(s string) string {
-	if s == "" {
-		return s
-	}
-	r, n := utf8.DecodeRuneInString(s)
-	return string(unicode.ToTitle(r)) + s[n:]
-}
-
-func printUsage(w io.Writer) {
-	tmpl(w, usageTemplate, commands)
-}
-
-func usage() {
-	printUsage(os.Stderr)
-	os.Exit(2)
-}
-
-// help implements the 'help' command.
-func help(args []string) {
-	if len(args) == 0 {
-		printUsage(os.Stdout)
-		// not exit 2: succeeded at 'go help'.
-		return
-	}
-	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "usage: go help command\n\nToo many arguments given.\n")
-		os.Exit(2) // failed at 'go help'
-	}
-
-	arg := args[0]
-
-	// 'go help documentation' generates doc.go.
-	if arg == "documentation" {
-		buf := new(bytes.Buffer)
-		printUsage(buf)
-		usage := &Command{Long: buf.String()}
-		tmpl(os.Stdout, documentationTemplate, append([]*Command{usage}, commands...))
-		return
-	}
-
-	for _, cmd := range commands {
-		if cmd.Name() == arg {
-			tmpl(os.Stdout, helpTemplate, cmd)
-			// not exit 2: succeeded at 'go help cmd'.
-			return
-		}
-	}
-
-	fmt.Fprintf(os.Stderr, "Unknown help topic %#q.  Run 'go help'.\n", arg)
-	os.Exit(2) // failed at 'go help cmd'
-}
-
-func exit() {
-	os.Exit(exitStatus)
-}
-
-func fatalf(format string, args ...interface{}) {
-	errorf(format, args...)
-	exit()
-}
-
-func errorf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-	setExitStatus(1)
-}
-
-type Reservation struct {
-	ResName    string
-	Hosts      []string // separate, not a range
-	PXENames   []string // eg C000025B
-	Expiration int64    // UNIX time
-	Owner      string
-}
-
-func getReservations(f io.Reader) []Reservation {
-	var ret []Reservation
-
-	dec := json.NewDecoder(f)
-	err := dec.Decode(&ret)
+// Read in the reservations from the already-open resdb file
+func getReservations() {
+	dec := json.NewDecoder(resdb)
+	err := dec.Decode(&Reservations)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
-		fatalf("failure parsing reservation file: %v", err)
+		log.Fatal("failure parsing reservation file: %v", err)
 	}
-
-	return ret
 }
 
-// Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
-func toPXE(ip net.IP) string {
-	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
-	return s
+func getSchedule() {
+	dec := json.NewDecoder(scheddb)
+	err := dec.Decode(&Schedule)
+	// an empty file is OK, but other errors are not
+	if err != nil && err != io.EOF {
+		log.Fatal("failure parsing schedule file: %v", err)
+	}
+}
+
+func putReservations() {
+	// Truncate the existing reservation file
+	resdb.Truncate(0)
+	resdb.Seek(0, 0)
+	// Write out the new reservations
+	enc := json.NewEncoder(resdb)
+	enc.Encode(Reservations)
+	resdb.Sync()
+}
+
+func putSchedule() {
+	// Truncate the existing schedule file
+	scheddb.Truncate(0)
+	scheddb.Seek(0, 0)
+	// Write out the new schedule
+	enc := json.NewEncoder(scheddb)
+	enc.Encode(Schedule)
+	scheddb.Sync()
+}
+
+func readConfig(path string) (c Config) {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		log.Fatal("Couldn't read config file: %v", err)
+	}
+
+	err = json.Unmarshal(b, &c)
+	if err != nil {
+		log.Fatal("Couldn't parse json: %v", err)
+	}
+	return
 }

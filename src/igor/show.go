@@ -8,10 +8,11 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	log "minilog"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"ranges"
+	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -71,18 +72,6 @@ func init() {
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
 func runShow(_ *Command, _ []string) {
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	// We lock to make sure it doesn't change from under us
-	// NOTE: not locking for now, haven't decided how important it is
-	//err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	//defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN)	// this will unlock it later
-	reservations := getReservations(resdb)
-
 	names := []string{}
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		names = append(names, igorConfig.Prefix+strconv.Itoa(i))
@@ -92,8 +81,10 @@ func runShow(_ *Command, _ []string) {
 
 	args := []string{
 		"-sn",
+		"-PS22",
 		"--max-retries=1",
-		"--host-timeout=10ms",
+		"--unprivileged",
+		"--host-timeout=300ms",
 		"-oG",
 		"-",
 	}
@@ -102,9 +93,8 @@ func runShow(_ *Command, _ []string) {
 
 	out, err := cmd.Output()
 	if err != nil {
-		fatalf("unable to scan: %v", err)
+		log.Fatal("unable to scan: %v", err)
 	}
-
 	s := bufio.NewScanner(bytes.NewReader(out))
 
 	for s.Scan() {
@@ -132,40 +122,46 @@ func runShow(_ *Command, _ []string) {
 	}
 
 	var downNodes []string
-	for i, alive := range nodes {
-		if !alive {
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		if !nodes[i] {
 			hostname := igorConfig.Prefix + strconv.Itoa(i)
 			downNodes = append(downNodes, hostname)
 		}
 	}
 
+	// For colors... eww
+	resarray := []Reservation{}
+	for _, r := range Reservations {
+		resarray = append(resarray, r)
+	}
+	sort.Sort(StartSorter(resarray))
+
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
-	printShelves(reservations, nodes)
+	printShelves(nodes, resarray)
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
 
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "TIME LEFT", "\t", "NODES")
+	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
 	w.Flush()
 	downrange, _ := rnge.UnsplitRange(downNodes)
 	fmt.Print(BgRed + "DOWN" + Reset)
-	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", downrange)
+	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
 	w.Flush()
-	for idx, r := range reservations {
+	timefmt := "Jan 2 15:04"
+	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		timeleft := fmt.Sprintf("%.1f", time.Unix(r.Expiration, 0).Sub(time.Now()).Hours())
-		//		fmt.Fprintln(w, colorize(idx, r.ResName), "\t", r.Owner, "\t", timeleft, "\t", unsplit)
-		fmt.Print(colorize(idx, r.ResName))
-		fmt.Fprintln(w, "\t", r.Owner, "\t", timeleft, "\t", unsplit)
+		fmt.Print(colorize(i, r.ResName))
+		fmt.Fprintln(w, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 		w.Flush()
 	}
 	w.Flush()
 }
 
-func printShelves(reservations []Reservation, alive map[int]bool) {
+func printShelves(alive map[int]bool, resarray []Reservation) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(strconv.Itoa(igorConfig.End))
 	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s
@@ -179,12 +175,15 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 
 	// figure out all the node -> reservations ahead of time
 	n2r := map[int]int{}
-	for i, r := range reservations {
-		for _, name := range r.Hosts {
-			name := strings.TrimPrefix(name, igorConfig.Prefix)
-			v, err := strconv.Atoi(name)
-			if err == nil {
-				n2r[v] = i
+	now := time.Now().Unix()
+	for i, r := range resarray {
+		if r.StartTime < now {
+			for _, name := range r.Hosts {
+				name := strings.TrimPrefix(name, igorConfig.Prefix)
+				v, err := strconv.Atoi(name)
+				if err == nil {
+					n2r[v] = i
+				}
 			}
 		}
 	}
@@ -239,17 +238,6 @@ func printShelves(reservations []Reservation, alive map[int]bool) {
 		buf.WriteString("\n\n")
 	}
 	fmt.Print(buf.String())
-}
-
-func resContains(reservations []Reservation, node string) (bool, int) {
-	for idx, r := range reservations {
-		for _, name := range r.Hosts {
-			if name == node {
-				return true, idx
-			}
-		}
-	}
-	return false, 0
 }
 
 func colorize(index int, str string) string {
