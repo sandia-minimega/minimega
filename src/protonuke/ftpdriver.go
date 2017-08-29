@@ -91,7 +91,7 @@ func (driver *FileDriver) Stat(path string) (server.FileInfo, error) {
 		owner: "protonuke",
 		group: "protonuke",
 		size:  int64(len(FTPImage)),
-		dir: true,
+		dir:   true,
 	}
 
 	return mockFileInfo, nil
@@ -158,21 +158,6 @@ func (driver *FileDriver) GetFile(path string, offset int64) (int64, io.ReadClos
 	}
 	r.Seek(offset, os.SEEK_SET)
 	return int64(r.Len()), r, nil
-
-	rPath := driver.realPath(path)
-	f, err := os.Open(rPath)
-	if err != nil {
-		return 0, nil, err
-	}
-
-	info, err := f.Stat()
-	if err != nil {
-		return 0, nil, err
-	}
-
-	f.Seek(offset, os.SEEK_SET)
-
-	return info.Size(), f, nil
 }
 
 func (driver *FileDriver) PutFile(destPath string, data io.Reader, appendData bool) (int64, error) {
