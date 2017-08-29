@@ -5,15 +5,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
-	"net"
+	log "minilog"
 	"os"
 	"os/user"
 	"path/filepath"
 	"ranges"
-	"syscall"
 	"time"
 )
 
@@ -36,14 +34,15 @@ file will be copied to a separate directory for use.
 The -n flag indicates that the specified number of nodes should be
 included in the reservation. The first available nodes will be allocated.
 
-The -w flag specifies that the given nodes should be included in the
-reservation. This will return an error if the nodes are already reserved.
-
 OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time in integer hours. (default = 12)
+The -t flag is used to specify the reservation time in integer minutes. (default = 60)
+
+The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
+
+The -a flag indicates that the reservation should take place on or after the specified time, given in the format "Jan 2 15:04". Especially useful in conjunction with the -s flag.
 	`,
 }
 
@@ -51,9 +50,11 @@ var subR string // -r flag
 var subK string // -k flag
 var subI string // -i
 var subN int    // -n
-var subW string // -w
 var subC string // -c
 var subT int    // -t
+var subS bool   // -s
+var subA string // -a
+var subW string // -w
 
 func init() {
 	// break init cycle
@@ -63,33 +64,36 @@ func init() {
 	cmdSub.Flag.StringVar(&subK, "k", "", "")
 	cmdSub.Flag.StringVar(&subI, "i", "", "")
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
-	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
-	cmdSub.Flag.IntVar(&subT, "t", 12, "")
+	cmdSub.Flag.IntVar(&subT, "t", 60, "")
+	cmdSub.Flag.BoolVar(&subS, "s", false, "")
+	cmdSub.Flag.StringVar(&subA, "a", "", "")
+	cmdSub.Flag.StringVar(&subW, "w", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
-	var nodes []string
-	var IPs []net.IP
-	var pxefiles []string
-
-	// Open and lock the reservation file
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-
-	reservations := getReservations(resdb)
+	var nodes []string          // if the user has requested specific nodes
+	var reservation Reservation // the new reservation
+	var newSched []TimeSlice    // the new schedule
+	format := "2006-Jan-2-15:04"
 
 	// validate arguments
 	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
-		errorf("Missing required argument!")
 		help([]string{"sub"})
-		exit()
+		log.Fatalln("Missing required argument")
+
+	}
+
+	user, err := user.Current()
+	if err != nil {
+		log.Fatalln("cannot determine current user", err)
+	}
+
+	// Make sure there's not already a reservation with this name
+	for _, r := range Reservations {
+		if r.ResName == subR {
+			log.Fatalln("A reservation named ", subR, " already exists.")
+		}
 	}
 
 	// figure out which nodes to reserve
@@ -98,60 +102,83 @@ func runSub(cmd *Command, args []string) {
 		nodes, _ = rnge.SplitRange(subW)
 	}
 
-	// Convert list of node names to PXE filenames
-	// 1. lookup nodename -> IP
-	for _, hostname := range nodes {
-		ip, err := net.LookupIP(hostname)
-		if err != nil {
-			fatalf("failure looking up %v: %v", hostname, err)
-		}
-		IPs = append(IPs, ip...)
+	when := time.Now()
+	if subA != "" {
+		loc, _ := time.LoadLocation("Local")
+		t, _ := time.Parse(format, subA)
+		when = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
 	}
 
-	// 2. IP -> hex
-	for _, ip := range IPs {
-		pxefiles = append(pxefiles, toPXE(ip))
-	}
-
-	// Make sure none of those nodes are reserved
-	// Check every reservation...
-	for _, res := range reservations {
-		// For every node in a reservation...
-		for _, node := range res.PXENames {
-			// make sure no node in *our* potential reservation conflicts
-			for _, pxe := range pxefiles {
-				if node == pxe {
-					fatalf("Conflict with reservation %v, specific PXE file %v\n", res.ResName, pxe)
+	// If this is a speculative call, run findReservationAfter a few times,
+	// print, and exit
+	if subS {
+		fmt.Println("AVAILABLE RESERVATIONS")
+		fmt.Println("START\t\t\tEND")
+		for i := 0; i < 10; i++ {
+			var r Reservation
+			if subN > 0 {
+				r, _, err = findReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else if subW != "" {
+				r, _, err = findReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				if err != nil {
+					log.Fatalln(err)
 				}
 			}
+			fmt.Printf("%v\t%v\n", time.Unix(r.StartTime, 0).Format(format), time.Unix(r.EndTime, 0).Format(format))
 		}
+		return
 	}
 
-	// Ok, build our reservation
-	reservation := Reservation{ResName: subR, Hosts: nodes, PXENames: pxefiles}
-	user, err := user.Current()
+	if subN > 0 {
+		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
+	} else if subW != "" {
+		reservation, newSched, err = findReservationGeneric(subT, 0, nodes, true, when.Unix())
+	}
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// pick a network segment
+	var vlan int
+	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
+		for _, r := range Reservations {
+			if vlan == r.Vlan {
+				continue
+			}
+		}
+		break
+	}
+	if vlan > igorConfig.VLANMax {
+		log.Fatal("couldn't assign a vlan!")
+	}
+	reservation.Vlan = vlan
+
 	reservation.Owner = user.Username
-	reservation.Expiration = (time.Now().Add(time.Duration(subT) * time.Hour)).Unix()
+	reservation.ResName = subR
+	reservation.KernelArgs = subC
 
 	// Add it to the list of reservations
-	reservations = append(reservations, reservation)
+	Reservations[reservation.ID] = reservation
 
 	// copy kernel and initrd
 	// 1. Validate and open source files
 	ksource, err := os.Open(subK)
 	if err != nil {
-		fatalf("couldn't open kernel: %v", err)
+		log.Fatal("couldn't open kernel: %v", err)
 	}
 	isource, err := os.Open(subI)
 	if err != nil {
-		fatalf("couldn't open initrd: %v", err)
+		log.Fatal("couldn't open initrd: %v", err)
 	}
 
 	// make kernel copy
 	fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
 	kdest, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
+		log.Fatal("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(kdest, ksource)
 	kdest.Close()
@@ -161,41 +188,26 @@ func runSub(cmd *Command, args []string) {
 	fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
 	idest, err := os.Create(fname)
 	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
+		log.Fatal("failed to create %v -- %v", fname, err)
 	}
 	io.Copy(idest, isource)
 	idest.Close()
 	isource.Close()
 
-	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-	fname = filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", subR)
-	masterfile, err := os.Create(fname)
-	if err != nil {
-		fatalf("failed to create %v -- %v", fname, err)
-	}
-	defer masterfile.Close()
-	masterfile.WriteString(fmt.Sprintf("default %s\n\n", subR))
-	masterfile.WriteString(fmt.Sprintf("label %s\n", subR))
-	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", subR))
-	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", subR, subC))
+	timefmt := "Jan 2 15:04"
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
+	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
+	fmt.Printf("Nodes: %v\n", unsplit)
 
-	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-	for _, pxename := range pxefiles {
-		masterfile.Seek(0, 0)
-		fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-		f, err := os.Create(fname)
-		if err != nil {
-			fatalf("failed to create %v -- %v", fname, err)
-		}
-		io.Copy(f, masterfile)
-		f.Close()
-	}
+	Schedule = newSched
 
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(reservations)
-	resdb.Sync()
+	// update the network config
+	//err = networkSet(reservation.Hosts, vlan)
+	//if err != nil {
+	//	log.Fatal("error setting network isolation: %v", err)
+	//}
+
+	putReservations()
+	putSchedule()
 }
