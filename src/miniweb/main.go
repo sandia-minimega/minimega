@@ -12,8 +12,6 @@ import (
 	log "minilog"
 	"net/http"
 	"path/filepath"
-
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -102,8 +100,6 @@ func main() {
 
 	mux.HandleFunc("/connect/", mustAuth(connectHandler))
 	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
-	// TODO: Auth?
-	mux.Handle("/tunnel/", websocket.Handler(tunnelHandler))
 
 	server := &http.Server{
 		Addr:    *f_addr,
