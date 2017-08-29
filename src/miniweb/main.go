@@ -12,6 +12,8 @@ import (
 	log "minilog"
 	"net/http"
 	"path/filepath"
+
+	"golang.org/x/net/websocket"
 )
 
 const (
@@ -30,6 +32,7 @@ var (
 	f_base      = flag.String("base", defaultBase, "base path for minimega")
 	f_passwords = flag.String("passwords", "", "password file for auth")
 	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
+	f_console   = flag.Bool("console", false, "enable console")
 )
 
 var mm *miniclient.Conn
@@ -88,10 +91,10 @@ func main() {
 
 	mux.HandleFunc("/", mustAuth(indexHandler))
 
-	mux.HandleFunc("/vms", mustAuth(templateHander))
-	mux.HandleFunc("/hosts", mustAuth(templateHander))
-	mux.HandleFunc("/graph", mustAuth(templateHander))
-	mux.HandleFunc("/tilevnc", mustAuth(templateHander))
+	mux.HandleFunc("/vms", mustAuth(templateHandler))
+	mux.HandleFunc("/hosts", mustAuth(templateHandler))
+	mux.HandleFunc("/graph", mustAuth(templateHandler))
+	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 
 	mux.HandleFunc("/hosts.json", mustAuth(hostsHandler))
 	mux.HandleFunc("/vlans.json", mustAuth(vlansHandler))
@@ -100,6 +103,17 @@ func main() {
 
 	mux.HandleFunc("/connect/", mustAuth(connectHandler))
 	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
+
+	if *f_console {
+		mux.HandleFunc("/console", consoleHandler)
+		mux.HandleFunc("/console/", consoleHandler)
+		mux.Handle("/ws/console/", websocket.Handler(consoleWsHandler))
+	} else {
+		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)
+			return
+		})
+	}
 
 	server := &http.Server{
 		Addr:    *f_addr,

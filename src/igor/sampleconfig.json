@@ -2,7 +2,27 @@
 	"tftproot" : "/home/john/tftpboot/",
 	"prefix" : "kn",
 	"start" : 1,
-	"end" : 80,
-	"rackwidth" : 8,
-	"rackheight" : 5
+	"end" : 5,
+	"padlen" : 0,
+	"rackwidth" : 1,
+	"rackheight" : 5,
+	"usecobbler" : false,
+	"cobblerdefaultprofile": "",
+	"poweroncommand" : "powerbot on",
+	"poweroffcommand" : "powerbot off",
+	"autoreboot": false
+	"vlan_min": 1000,
+	"vlan_max": 2000,
+	"network": "arista",
+	"networkuser": "admin",
+	"networkpassword": "admin",
+	"network_url": "arista:80/command-api",
+	"node_map":
+	{
+		"kn1": "Et1/1",
+		"kn2": "Et1/2",
+		"kn3": "Et1/3",
+		"kn4": "Et1/4",
+		"kn5": "Et1/5"
+	}
 }

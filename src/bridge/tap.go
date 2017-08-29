@@ -53,27 +53,30 @@ func (b *Bridge) CreateHostTap(tap string, lan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.createHostTap(tap, lan)
+	if tap == "" {
+		tap = <-b.nameChan
+	}
+
+	if err := b.createHostTap(tap, lan); err != nil {
+		return "", err
+	}
+
+	return tap, nil
 }
 
-func (b *Bridge) createHostTap(t string, lan int) (string, error) {
-	log.Info("creating host tap on bridge: %v %v", b.Name, t)
+func (b *Bridge) createHostTap(tap string, lan int) error {
+	log.Info("creating host tap on bridge: %v %v", b.Name, tap)
 
 	// reap taps before creating to avoid someone killing/restarting a vm
 	// faster than the periodic tap reaper
 	b.reapTaps()
 
-	if _, ok := b.taps[t]; ok {
-		return t, fmt.Errorf("tap already on bridge")
-	}
-
-	tap := t
-	if tap == "" {
-		tap = <-b.nameChan
+	if _, ok := b.taps[tap]; ok {
+		return fmt.Errorf("tap already on bridge")
 	}
 
 	if err := b.addTap(tap, "", lan, true); err != nil {
-		return "", err
+		return err
 	}
 
 	if err := upInterface(tap, true); err != nil {
@@ -83,10 +86,10 @@ func (b *Bridge) createHostTap(t string, lan int) (string, error) {
 			log.Error("zombie tap -- %v %v", tap, err)
 		}
 
-		return "", err
+		return err
 	}
 
-	return tap, nil
+	return nil
 }
 
 // AddTap adds an existing tap to the bridge. Can be used in conjunction with

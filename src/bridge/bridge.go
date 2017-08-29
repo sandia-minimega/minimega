@@ -25,7 +25,13 @@ type Bridge struct {
 	Name     string
 	preExist bool
 
-	mirror  string
+	// mirrors records the mirror tap names used by captures
+	mirrors map[string]bool
+
+	// captures records the "stop" flags that are set to non-zero values when
+	// we want to stop a capture.
+	captures map[int]capture
+
 	trunks  map[string]bool
 	tunnels map[string]bool
 
@@ -48,9 +54,9 @@ type BridgeInfo struct {
 	Name     string
 	PreExist bool
 	VLANs    []int
-	Mirror   string
 	Trunks   []string
 	Tunnels  []string
+	Mirrors  []string
 }
 
 // Tap represents an interface that is attached to an openvswitch bridge.
@@ -69,6 +75,19 @@ type Tap struct {
 	*qos // Quality-of-service constraints
 
 	stats []tapStat
+}
+
+type capture struct {
+	tap string
+
+	// isstopped is set to non-zero when stopped
+	isstopped *uint64
+
+	// ack is closed when the goroutine doing the capture closes
+	ack chan bool
+
+	// pcap handle, needed so that we can close it in stopCapture
+	handle *pcap.Handle
 }
 
 type tapStat struct {
@@ -97,11 +116,7 @@ func (b *Bridge) destroy() error {
 	b.setDestroyed()
 
 	if b.handle != nil {
-		// Don't close the handle otherwise we might cause a deadlock:
-		//   https://github.com/google/gopacket/issues/253
-		// We will leak the handle but bridges are usually only destroyed when
-		// the program is terminating so it won't be leaked for long.
-		// b.handle.Close()
+		b.handle.Close()
 	}
 
 	// first get all of the taps off of this bridge and destroy them
@@ -126,11 +141,8 @@ func (b *Bridge) destroy() error {
 			return err
 		}
 	}
-
-	if b.mirror != "" {
-		if err := b.destroyMirror(); err != nil {
-			return err
-		}
+	for v := range b.captures {
+		b.stopCapture(v)
 	}
 
 	if b.nf != nil {

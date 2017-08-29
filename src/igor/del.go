@@ -5,11 +5,10 @@
 package main
 
 import (
-	"encoding/json"
+	log "minilog"
 	"os"
 	"os/user"
 	"path/filepath"
-	"syscall"
 )
 
 var cmdDel = &Command{
@@ -32,53 +31,74 @@ func runDel(cmd *Command, args []string) {
 
 func deleteReservation(checkUser bool, args []string) {
 	if len(args) != 1 {
-		fatalf("Invalid arguments")
+		log.Fatalln("Invalid arguments")
 	}
 
 	user, err := user.Current()
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
 	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
+		log.Fatal("can't get current user: %v\n", err)
 	}
-	defer resdb.Close()
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-	reservations := getReservations(resdb)
 
-	var newres []Reservation
 	var deletedReservation Reservation
 	found := false
 	if checkUser {
-		for _, r := range reservations {
+		for _, r := range Reservations {
 			if r.ResName == args[0] && r.Owner != user.Username {
-				fatalf("You are not the owner of %v", args[0])
+				log.Fatal("You are not the owner of %v", args[0])
 			}
 		}
 	}
-	for _, r := range reservations {
-		if r.ResName != args[0] {
-			newres = append(newres, r)
-		} else {
+
+	// Remove the reservation
+	for _, r := range Reservations {
+		if r.ResName == args[0] {
 			deletedReservation = r
+			delete(Reservations, r.ID)
 			found = true
 		}
 	}
 
 	if !found {
-		fatalf("Couldn't find reservation %v", args[0])
+		log.Fatal("Couldn't find reservation %v", args[0])
 	}
 
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(newres)
-	resdb.Sync()
-
-	// Delete all the PXE files in the reservation
-	for _, pxename := range deletedReservation.PXENames {
-		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+	// Now purge it from the schedule
+	for i, _ := range Schedule {
+		for j, _ := range Schedule[i].Nodes {
+			if Schedule[i].Nodes[j] == deletedReservation.ID {
+				Schedule[i].Nodes[j] = 0
+			}
+		}
 	}
+
+	// Update the reservation file
+	putReservations()
+	putSchedule()
+
+	// clean up the network config
+	err = networkClear(deletedReservation.Hosts)
+	if err != nil {
+		log.Fatal("error clearing network isolation: %v", err)
+	}
+
+	if !igorConfig.UseCobbler {
+		// Delete all the PXE files in the reservation
+		for _, pxename := range deletedReservation.PXENames {
+			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+		}
+
+		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
+	} else {
+		for _, host := range deletedReservation.Hosts {
+			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
+			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
+		}
+	}
+
+	// Delete the now unused kernel + initrd
+	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")
+	os.Remove(fname)
+	fname = filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-kernel")
+	os.Remove(fname)
 }
