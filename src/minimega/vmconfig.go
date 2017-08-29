@@ -142,6 +142,7 @@ func (vm *BaseConfig) String() string {
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "Schedule host:\t%v\n", vm.Schedule)
 	fmt.Fprintf(w, "Coschedule limit:\t%v\n", vm.Coschedule)
+	fmt.Fprintf(w, "Backchannel:\t%v\n", vm.Backchannel)
 	if vm.Tags != nil {
 		fmt.Fprintf(w, "Tags:\t%v\n", marshal(vm.Tags))
 	} else {

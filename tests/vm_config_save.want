@@ -7,6 +7,7 @@ Snapshot:         true
 UUID:             
 Schedule host:    
 Coschedule limit: -1
+Backchannel:      true
 Tags:             {}
 
 Current KVM configuration:
@@ -44,6 +45,7 @@ Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
 Coschedule limit: -1
+Backchannel:      true
 Tags:             {}
 
 Current KVM configuration:
@@ -78,6 +80,7 @@ Snapshot:         true
 UUID:             
 Schedule host:    
 Coschedule limit: -1
+Backchannel:      true
 Tags:             {}
 
 Current KVM configuration:
@@ -109,6 +112,7 @@ Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
 Coschedule limit: -1
+Backchannel:      true
 Tags:             {}
 
 Current KVM configuration:

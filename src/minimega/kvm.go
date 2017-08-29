@@ -909,9 +909,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
 
-	args = append(args, "-device")
-	args = append(args, "virtio-serial")
-
 	// for USB 1.0, creates bus named usb-bus.0
 	args = append(args, "-usb")
 	// for USB 2.0, creates bus named ehci.0
