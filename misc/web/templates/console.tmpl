@@ -6,6 +6,8 @@
 <link rel="stylesheet" href="/xterm.js/dist/xterm.css"/>
 <script src="/xterm.js/dist/xterm.js"></script>
 <script src="/xterm.js/addons/attach/attach.js"></script>
+<script src="/xterm.js/addons/attach/attach.js"></script>
+<script src="/xterm.js/addons/fit/fit.js"></script>
 <script>
     $(document).ready(function() {
 		var pid = "{{ .Pid }}";
@@ -24,11 +26,12 @@
 			fetch(url, {method: 'POST', credentials: 'include'});
 		});
 
-		var cols = 80;
-		var rows = 24;
-
 		term.open(terminalContainer);
-		term.resize(cols, rows);
+		term.fit();
+
+		$(window).resize(function() {
+			term.fit();
+		});
 
 		protocol = "ws://";
 		if (window.location.protocol == "https:") {
@@ -37,16 +40,11 @@
 		path = window.location.pathname + '/' + pid + '/ws';
 		socketURL = protocol+window.location.host+path;
 
-		fetch(window.location.pathname + '/' + pid +'/size?cols='+cols+'&rows='+rows, {
-			method: 'POST',
-			credentials: 'include'
-		}).then(function () {
-			socket = new WebSocket(socketURL);
-			socket.onopen = function() {
-				term.attach(socket);
-				term._initialized = true;
-			};
-		});
+		socket = new WebSocket(socketURL);
+		socket.onopen = function() {
+			term.attach(socket);
+			term._initialized = true;
+		};
     });
 </script>
 {{end}}
