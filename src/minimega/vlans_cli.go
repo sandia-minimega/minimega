@@ -8,6 +8,7 @@ import (
 	"errors"
 	"minicli"
 	log "minilog"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"vlans"
@@ -91,7 +92,13 @@ func cliVLANsAdd(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		return errors.New("expected integer VLAN")
 	}
 
-	return allocatedVLANs.AddAlias(alias, vlan)
+	err = allocatedVLANs.AddAlias(alias, vlan)
+	if err == nil {
+		// update file so that we have a copy of the vlans if minimega crashes
+		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
+	}
+
+	return err
 }
 
 func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -163,6 +170,7 @@ func cliClearVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	}
 
 	allocatedVLANs.Delete(ns.Name, prefix)
+	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
 	return nil
 }

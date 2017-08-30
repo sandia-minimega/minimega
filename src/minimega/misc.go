@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 	"unicode"
 	"vlans"
@@ -388,38 +389,10 @@ func lookupVLAN(namespace, alias string) (int, error) {
 		return 0, err
 	}
 
-	if !created {
-		return vlan, nil
+	if created {
+		// update file so that we have a copy of the vlans if minimega crashes
+		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 	}
-
-	// Broadcast out vlan alias to everyone so that we have a record of the
-	// aliases, should this node crash.
-	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
-	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
-		s = fmt.Sprintf("namespace %q %v", namespace, s)
-	}
-	cmd := minicli.MustCompile(s)
-	cmd.SetRecord(false)
-	cmd.SetSource(namespace)
-
-	respChan, err := meshageSend(cmd, Wildcard)
-	if err != nil {
-		// don't propagate the error since this is supposed to be best-effort.
-		log.Error("unable to broadcast alias update: %v", err)
-		return vlan, nil
-	}
-
-	// read all the responses, looking for errors
-	go func() {
-		for resps := range respChan {
-			for _, resp := range resps {
-				if resp.Error != "" {
-					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
-				}
-			}
-		}
-
-	}()
 
 	return vlan, nil
 }
@@ -427,6 +400,25 @@ func lookupVLAN(namespace, alias string) (int, error) {
 // printVLAN uses the allocatedVLANs and active namespace to print a vlan.
 func printVLAN(namespace string, vlan int) string {
 	return allocatedVLANs.PrintVLAN(namespace, vlan)
+}
+
+// vlanInfo returns formatted information about all the vlans.
+func vlanInfo() string {
+	info := allocatedVLANs.Tabular("")
+	if len(info) == 0 {
+		return ""
+	}
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Alias\tVLAN\n")
+	for _, i := range info {
+		fmt.Fprintf(w, "%v\t%v\n", i[0], i[1])
+	}
+
+	w.Flush()
+	return o.String()
 }
 
 // wget downloads a URL and writes it to disk, creates parent directories if

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"path/filepath"
 	"ron"
 	"runtime"
 	"sort"
@@ -190,6 +191,7 @@ func (n *Namespace) Destroy() error {
 
 	// Free up any VLANs associated with the namespace
 	allocatedVLANs.Delete(n.Name, "")
+	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
 	n.ccServer.Destroy()
 

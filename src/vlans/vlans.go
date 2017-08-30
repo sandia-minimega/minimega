@@ -375,14 +375,20 @@ func (v *AllocatedVLANs) Tabular(namespace string) [][]string {
 	res := [][]string{}
 
 	for alias, vlan := range v.byAlias {
-		parts := strings.Split(alias, AliasSep)
-		if namespace != "" && namespace != parts[0] {
-			continue
+		parts := strings.SplitN(alias, AliasSep, 2)
+		if namespace != "" {
+			if namespace != parts[0] {
+				continue
+			}
+
+			// if we're matching on namespace, we should trim that from the
+			// alias we return
+			parts = parts[1:]
 		}
 
 		res = append(res,
 			[]string{
-				strings.Join(parts[1:], AliasSep),
+				strings.Join(parts, AliasSep),
 				strconv.Itoa(vlan),
 			})
 	}

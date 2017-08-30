@@ -238,7 +238,9 @@ func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
-	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
+	ns := GetNamespace()
+
+	in, err := meshageSend(ns, c.Subcommand, c.StringArgs["clients"])
 	if err != nil {
 		respChan <- errResp(err)
 		return
