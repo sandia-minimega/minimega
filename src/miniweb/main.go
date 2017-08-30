@@ -31,6 +31,8 @@ var (
 	f_passwords = flag.String("passwords", "", "password file for auth")
 	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
 	f_console   = flag.Bool("console", false, "enable console")
+	f_key       = flag.String("key", "", "key file for TLS in PEM format")
+	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
 )
 
 var mm *miniclient.Conn
@@ -117,5 +119,14 @@ func main() {
 		Handler: mux,
 	}
 
+	if *f_cert != "" && *f_key != "" {
+		log.Info("serving HTTPS on %v", *f_addr)
+		log.Fatalln(server.ListenAndServeTLS(*f_cert, *f_key))
+	}
+	if *f_cert != "" || *f_key != "" {
+		log.Fatalln("must specify both cert and key files to enable TLS")
+	}
+
+	log.Info("serving HTTP on %v", *f_addr)
 	log.Fatalln(server.ListenAndServe())
 }

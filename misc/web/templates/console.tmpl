@@ -30,10 +30,12 @@
 		term.open(terminalContainer);
 		term.resize(cols, rows);
 
-		hostname = window.location.hostname;
-		port = window.location.port;
+		protocol = "ws://";
+		if (window.location.protocol == "https:") {
+			protocol = "wss://";
+		}
 		path = window.location.pathname + '/' + pid + '/ws';
-		socketURL = "ws://"+hostname+":"+port+path;
+		socketURL = protocol+window.location.host+path;
 
 		fetch(window.location.pathname + '/' + pid +'/size?cols='+cols+'&rows='+rows, {method: 'POST'}).then(function () {
 			socket = new WebSocket(socketURL);
