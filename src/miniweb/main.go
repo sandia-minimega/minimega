@@ -12,8 +12,6 @@ import (
 	log "minilog"
 	"net/http"
 	"path/filepath"
-
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -27,10 +25,14 @@ Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.`
 
 var (
-	f_addr    = flag.String("addr", defaultAddr, "listen address")
-	f_root    = flag.String("root", defaultRoot, "base path for web files")
-	f_base    = flag.String("base", defaultBase, "base path for minimega")
-	f_console = flag.Bool("console", false, "enable console")
+	f_addr      = flag.String("addr", defaultAddr, "listen address")
+	f_root      = flag.String("root", defaultRoot, "base path for web files")
+	f_base      = flag.String("base", defaultBase, "base path for minimega")
+	f_passwords = flag.String("passwords", "", "password file for auth")
+	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
+	f_console   = flag.Bool("console", false, "enable console")
+	f_key       = flag.String("key", "", "key file for TLS in PEM format")
+	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
 )
 
 var mm *miniclient.Conn
@@ -48,6 +50,24 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+
+	if *f_bootstrap {
+		if *f_passwords == "" {
+			log.Fatalln("must specify -password for bootstrap")
+		}
+
+		if err := bootstrap(*f_passwords); err != nil {
+			log.Fatalln(err)
+		}
+
+		return
+	}
+
+	if *f_passwords != "" {
+		if err := parsePasswords(*f_passwords); err != nil {
+			log.Fatalln(err)
+		}
+	}
 
 	mm, err = miniclient.Dial(*f_base)
 	if err != nil {
@@ -69,26 +89,24 @@ func main() {
 		}
 	}
 
-	mux.HandleFunc("/", indexHandler)
+	mux.HandleFunc("/", mustAuth(indexHandler))
 
-	mux.HandleFunc("/vms", templateHandler)
-	mux.HandleFunc("/hosts", templateHandler)
-	mux.HandleFunc("/graph", templateHandler)
-	mux.HandleFunc("/tilevnc", templateHandler)
+	mux.HandleFunc("/vms", mustAuth(templateHandler))
+	mux.HandleFunc("/hosts", mustAuth(templateHandler))
+	mux.HandleFunc("/graph", mustAuth(templateHandler))
+	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 
-	mux.HandleFunc("/hosts.json", hostsHandler)
-	mux.HandleFunc("/vlans.json", vlansHandler)
-	mux.HandleFunc("/vms/info.json", vmsHandler)
-	mux.HandleFunc("/vms/top.json", vmsHandler)
+	mux.HandleFunc("/hosts.json", mustAuth(hostsHandler))
+	mux.HandleFunc("/vlans.json", mustAuth(vlansHandler))
+	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
+	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
 
-	mux.HandleFunc("/connect/", connectHandler)
-	mux.HandleFunc("/screenshot/", screenshotHandler)
-	mux.Handle("/ws/tunnel/", websocket.Handler(tunnelHandler))
+	mux.HandleFunc("/connect/", mustAuth(connectHandler))
+	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
 
 	if *f_console {
-		mux.HandleFunc("/console", consoleHandler)
-		mux.HandleFunc("/console/", consoleHandler)
-		mux.Handle("/ws/console/", websocket.Handler(consoleWsHandler))
+		mux.HandleFunc("/console", mustAuth(consoleHandler))
+		mux.HandleFunc("/console/", mustAuth(consoleHandler))
 	} else {
 		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)
@@ -101,5 +119,14 @@ func main() {
 		Handler: mux,
 	}
 
+	if *f_cert != "" && *f_key != "" {
+		log.Info("serving HTTPS on %v", *f_addr)
+		log.Fatalln(server.ListenAndServeTLS(*f_cert, *f_key))
+	}
+	if *f_cert != "" || *f_key != "" {
+		log.Fatalln("must specify both cert and key files to enable TLS")
+	}
+
+	log.Info("serving HTTP on %v", *f_addr)
 	log.Fatalln(server.ListenAndServe())
 }
