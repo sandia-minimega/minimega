@@ -240,7 +240,7 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetName()))
+	filename := filepath.Join(*f_iomBase, r.vm.GetNamespace(), fmt.Sprintf("minirouter-%v", r.vm.GetName()))
 	return ioutil.WriteFile(filename, out.Bytes(), 0644)
 }
 
