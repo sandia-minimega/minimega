@@ -25,6 +25,15 @@ type PasswordEntry struct {
 
 var passwords = []PasswordEntry{}
 
+func (p PasswordEntry) Match(username, password string) bool {
+	if username != p.Username {
+		return false
+	}
+
+	err := bcrypt.CompareHashAndPassword(p.Password, []byte(password))
+	return err == nil
+}
+
 func savePasswords(fname string) error {
 	f, err := os.OpenFile(fname, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
@@ -49,44 +58,34 @@ func parsePasswords(fname string) error {
 
 func mustAuth(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// check if URL is password protected. If there are multiple matches,
-		// prefer the longest match.
-		var match PasswordEntry
+		// check if URL is password protected
+		var matches []PasswordEntry
 		for _, entry := range passwords {
 			if strings.HasPrefix(r.URL.Path, entry.Path) {
-				if len(entry.Path) > len(match.Path) {
-					match = entry
-				}
+				matches = append(matches, entry)
 			}
 		}
 
-		// no match or password is empty, either way -- authenticated
-		if len(match.Password) == 0 {
+		// no matches -- must not require auth
+		if len(matches) == 0 {
 			f(w, r)
 			return
 		}
 
+		// test all the matches and call f if any match credentials
 		username, password, ok := r.BasicAuth()
-		if !ok {
-			w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
+		if ok {
+			for _, match := range matches {
+				if match.Match(username, password) {
+					f(w, r)
+					return
+				}
+			}
 		}
 
-		// check username and password match
-		if username != match.Username {
-			w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-		if err := bcrypt.CompareHashAndPassword(match.Password, []byte(password)); err != nil {
-			w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		// must match -- authenticated
-		f(w, r)
+		// all matches failed
+		w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
 }
 
