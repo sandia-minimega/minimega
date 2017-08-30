@@ -154,47 +154,21 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func connectHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form `/connect/<name>`
+	// URL should be of the form:
+	//   /connect/<name>/
+	//   /connect/<name>/ws
+	log.Info("connect request: %v", r.URL.Path)
+
 	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(fields) != 2 {
+	if len(fields) < 2 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
+
 	name := fields[1]
 
-	// set no-cache headers
-	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
-	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
-	w.Header().Set("Expires", "0")                                         // Proxies.
-
+	// find info about the VM that we need to connect
 	var vmType string
-
-	columns := []string{"type"}
-	filters := []string{fmt.Sprintf("name=%q", name)}
-
-	for _, vm := range vmInfo(columns, filters) {
-		vmType = vm["type"]
-	}
-
-	switch vmType {
-	case "kvm":
-		http.ServeFile(w, r, filepath.Join(*f_root, "vnc.html"))
-	case "container":
-		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
-	default:
-		http.NotFound(w, r)
-	}
-}
-
-func tunnelHandler(ws *websocket.Conn) {
-	// URL should be of the form `/ws/tunnel/<name>`
-	path := strings.Trim(ws.Config().Location.Path, "/")
-
-	fields := strings.Split(path, "/")
-	if len(fields) != 3 {
-		return
-	}
-	name := fields[2]
-
 	var host string
 	var port int
 
@@ -203,18 +177,12 @@ func tunnelHandler(ws *websocket.Conn) {
 
 	for _, vm := range vmInfo(columns, filters) {
 		host = vm["host"]
+		vmType = vm["type"]
 
 		switch vm["type"] {
 		case "kvm":
-			// Undocumented "feature" of websocket -- need to set to
-			// PayloadType in order for a direct io.Copy to work.
-			ws.PayloadType = websocket.BinaryFrame
-
 			port, _ = strconv.Atoi(vm["vnc_port"])
 		case "container":
-			// See above. The javascript terminal needs it to be a TextFrame.
-			ws.PayloadType = websocket.TextFrame
-
 			port, _ = strconv.Atoi(vm["console_port"])
 		default:
 			log.Info("unknown VM type: %v", vm["type"])
@@ -222,25 +190,64 @@ func tunnelHandler(ws *websocket.Conn) {
 		}
 	}
 
-	if host == "" || port == 0 {
+	if vmType == "" || host == "" || port == 0 {
+		http.NotFound(w, r)
 		return
 	}
 
-	// connect to the remote host
-	rhost := fmt.Sprintf("%v:%v", host, port)
-	remote, err := net.Dial("tcp", rhost)
-	if err != nil {
-		log.Errorln(err)
+	// check the request again to decide whether to serve the page or tunnel
+	// the request
+	if len(fields) == 3 && fields[2] == "ws" {
+		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
+
+		return
+	} else if len(fields) >= 3 {
+		http.NotFound(w, r)
 		return
 	}
-	defer remote.Close()
 
-	log.Info("ws client connected to %v", rhost)
+	// set no-cache headers
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate") // HTTP 1.1.
+	w.Header().Set("Pragma", "no-cache")                                   // HTTP 1.0.
+	w.Header().Set("Expires", "0")                                         // Proxies.
 
-	go io.Copy(ws, remote)
-	io.Copy(remote, ws)
+	switch vmType {
+	case "kvm":
+		http.ServeFile(w, r, filepath.Join(*f_root, "vnc.html"))
+	case "container":
+		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
+	}
+}
 
-	log.Info("ws client disconnected from %v", rhost)
+// connectWsHandler returns a function to service a websocket for the given VM
+func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
+	return func(ws *websocket.Conn) {
+		switch vmType {
+		case "kvm":
+			// Undocumented "feature" of websocket -- need to set to
+			// PayloadType in order for a direct io.Copy to work.
+			ws.PayloadType = websocket.BinaryFrame
+		case "container":
+			// See above. The javascript terminal needs it to be a TextFrame.
+			ws.PayloadType = websocket.TextFrame
+		}
+
+		// connect to the remote host
+		rhost := fmt.Sprintf("%v:%v", host, port)
+		remote, err := net.Dial("tcp", rhost)
+		if err != nil {
+			log.Errorln(err)
+			return
+		}
+		defer remote.Close()
+
+		log.Info("ws client connected to %v", rhost)
+
+		go io.Copy(ws, remote)
+		io.Copy(remote, ws)
+
+		log.Info("ws client disconnected from %v", rhost)
+	}
 }
 
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
@@ -314,6 +321,10 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
+	// URL should be of the form:
+	//   /console
+	//   /console/<pid>/ws
+	//   /console/<pid>/size
 	if r.URL.Path == "/console" {
 		// create a new console
 		cmd := exec.Command("bin/minimega", "-attach")
@@ -358,12 +369,12 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ptyMu.Lock()
-	defer ptyMu.Unlock()
 	tty, ok := ptys[pid]
 	if !ok {
 		http.Error(w, "pty not found", http.StatusNotFound)
 		return
 	}
+	ptyMu.Unlock()
 
 	switch path[3] {
 	case "size":
@@ -396,47 +407,36 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		io.WriteString(tty, "\n")
 		return
+	case "ws":
+		// run this in a separate goroutine so that we unlock ptyMu
+		websocket.Handler(consoleWsHandler(tty, pid)).ServeHTTP(w, r)
+
+		return
 	}
 }
 
-func consoleWsHandler(ws *websocket.Conn) {
-	// connect to minimega based on PID
-	path := strings.Trim(ws.Config().Location.Path, "/")
+// consoleWsHandler returns a function to service a websocket for the given pty
+func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
+	return func(ws *websocket.Conn) {
+		defer func() {
+			tty.Close()
+		}()
 
-	fields := strings.Split(path, "/")
-	if len(fields) != 3 {
-		return
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			log.Error("unable to find process: %v", pid)
+			return
+		}
+
+		go io.Copy(ws, tty)
+		io.Copy(tty, ws)
+
+		proc.Kill()
+		proc.Wait()
+
+		ptyMu.Lock()
+		defer ptyMu.Unlock()
+
+		delete(ptys, pid)
 	}
-	pid, err := strconv.Atoi(fields[2])
-	if err != nil {
-		log.Error("invalid pid: %v", fields[2])
-		return
-	}
-
-	ptyMu.Lock()
-	tty, ok := ptys[pid]
-	// only one person should connect to the console
-	delete(ptys, pid)
-	ptyMu.Unlock()
-
-	if !ok {
-		log.Error("pid not found: %v", fields[2])
-		return
-	}
-
-	defer func() {
-		tty.Close()
-	}()
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		log.Error("unable to find process: %v", pid)
-		return
-	}
-
-	go io.Copy(ws, tty)
-	io.Copy(tty, ws)
-
-	proc.Kill()
-	proc.Wait()
 }
