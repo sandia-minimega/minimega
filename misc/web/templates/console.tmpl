@@ -21,7 +21,7 @@
 
 			var url = window.location.pathname + '/' + pid +'/size?cols=' + cols + '&rows=' + rows;
 
-			fetch(url, {method: 'POST'});
+			fetch(url, {method: 'POST', credentials: 'include'});
 		});
 
 		var cols = 80;
@@ -37,7 +37,10 @@
 		path = window.location.pathname + '/' + pid + '/ws';
 		socketURL = protocol+window.location.host+path;
 
-		fetch(window.location.pathname + '/' + pid +'/size?cols='+cols+'&rows='+rows, {method: 'POST'}).then(function () {
+		fetch(window.location.pathname + '/' + pid +'/size?cols='+cols+'&rows='+rows, {
+			method: 'POST',
+			credentials: 'include'
+		}).then(function () {
 			socket = new WebSocket(socketURL);
 			socket.onopen = function() {
 				term.attach(socket);

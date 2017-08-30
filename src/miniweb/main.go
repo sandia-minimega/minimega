@@ -105,8 +105,8 @@ func main() {
 	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
 
 	if *f_console {
-		mux.HandleFunc("/console", consoleHandler)
-		mux.HandleFunc("/console/", consoleHandler)
+		mux.HandleFunc("/console", mustAuth(consoleHandler))
+		mux.HandleFunc("/console/", mustAuth(consoleHandler))
 	} else {
 		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)

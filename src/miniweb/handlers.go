@@ -408,9 +408,6 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(tty, "\n")
 		return
 	case "ws":
-		// only one person should connect to the console
-		delete(ptys, pid)
-
 		// run this in a separate goroutine so that we unlock ptyMu
 		websocket.Handler(consoleWsHandler(tty, pid)).ServeHTTP(w, r)
 
@@ -436,5 +433,10 @@ func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
 
 		proc.Kill()
 		proc.Wait()
+
+		ptyMu.Lock()
+		defer ptyMu.Unlock()
+
+		delete(ptys, pid)
 	}
 }
