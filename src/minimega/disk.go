@@ -77,7 +77,8 @@ should be quoted. For example:
 	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
 
 Disk image paths are always relative to the 'files' directory. Users may also
-use absolute paths if desired.`,
+use absolute paths if desired. The backing images for snapshots should always
+be in the files directory.`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <image> [dst image]",
@@ -91,6 +92,10 @@ use absolute paths if desired.`,
 
 // diskSnapshot creates a new image, dst, using src as the backing image.
 func diskSnapshot(src, dst string) error {
+	if !strings.HasPrefix(src, *f_iomBase) {
+		log.Warn("minimega expects backing images to be in the files directory")
+	}
+
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
 	if err != nil {
 		return fmt.Errorf("%v: %v", out, err)
@@ -298,7 +303,7 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 }
 
 func cliDisk(c *minicli.Command, resp *minicli.Response) error {
-	image := c.StringArgs["image"]
+	image := filepath.Clean(c.StringArgs["image"])
 
 	// Ensure that relative paths are always relative to /files/
 	if !filepath.IsAbs(image) {
