@@ -12,8 +12,6 @@ import (
 	log "minilog"
 	"net/http"
 	"path/filepath"
-
-	"golang.org/x/net/websocket"
 )
 
 const (
@@ -107,7 +105,6 @@ func main() {
 	if *f_console {
 		mux.HandleFunc("/console", consoleHandler)
 		mux.HandleFunc("/console/", consoleHandler)
-		mux.Handle("/ws/console/", websocket.Handler(consoleWsHandler))
 	} else {
 		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)

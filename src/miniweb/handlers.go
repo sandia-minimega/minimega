@@ -198,7 +198,7 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	// check the request again to decide whether to serve the page or tunnel
 	// the request
 	if len(fields) == 3 && fields[2] == "ws" {
-		websocket.Handler(tunnelHandler(vmType, host, port)).ServeHTTP(w, r)
+		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
 
 		return
 	} else if len(fields) >= 3 {
@@ -219,8 +219,8 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// tunnelHandler returns a function to service a websocket for the given VM
-func tunnelHandler(vmType, host string, port int) func(*websocket.Conn) {
+// connectWsHandler returns a function to service a websocket for the given VM
+func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
 	return func(ws *websocket.Conn) {
 		switch vmType {
 		case "kvm":
@@ -321,6 +321,10 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
+	// URL should be of the form:
+	//   /console
+	//   /console/<pid>/ws
+	//   /console/<pid>/size
 	if r.URL.Path == "/console" {
 		// create a new console
 		cmd := exec.Command("bin/minimega", "-attach")
@@ -365,12 +369,12 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ptyMu.Lock()
-	defer ptyMu.Unlock()
 	tty, ok := ptys[pid]
 	if !ok {
 		http.Error(w, "pty not found", http.StatusNotFound)
 		return
 	}
+	ptyMu.Unlock()
 
 	switch path[3] {
 	case "size":
@@ -403,47 +407,34 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(100 * time.Millisecond)
 		io.WriteString(tty, "\n")
 		return
+	case "ws":
+		// only one person should connect to the console
+		delete(ptys, pid)
+
+		// run this in a separate goroutine so that we unlock ptyMu
+		websocket.Handler(consoleWsHandler(tty, pid)).ServeHTTP(w, r)
+
+		return
 	}
 }
 
-func consoleWsHandler(ws *websocket.Conn) {
-	// connect to minimega based on PID
-	path := strings.Trim(ws.Config().Location.Path, "/")
+// consoleWsHandler returns a function to service a websocket for the given pty
+func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
+	return func(ws *websocket.Conn) {
+		defer func() {
+			tty.Close()
+		}()
 
-	fields := strings.Split(path, "/")
-	if len(fields) != 3 {
-		return
+		proc, err := os.FindProcess(pid)
+		if err != nil {
+			log.Error("unable to find process: %v", pid)
+			return
+		}
+
+		go io.Copy(ws, tty)
+		io.Copy(tty, ws)
+
+		proc.Kill()
+		proc.Wait()
 	}
-	pid, err := strconv.Atoi(fields[2])
-	if err != nil {
-		log.Error("invalid pid: %v", fields[2])
-		return
-	}
-
-	ptyMu.Lock()
-	tty, ok := ptys[pid]
-	// only one person should connect to the console
-	delete(ptys, pid)
-	ptyMu.Unlock()
-
-	if !ok {
-		log.Error("pid not found: %v", fields[2])
-		return
-	}
-
-	defer func() {
-		tty.Close()
-	}()
-
-	proc, err := os.FindProcess(pid)
-	if err != nil {
-		log.Error("unable to find process: %v", pid)
-		return
-	}
-
-	go io.Copy(ws, tty)
-	io.Copy(tty, ws)
-
-	proc.Kill()
-	proc.Wait()
 }
