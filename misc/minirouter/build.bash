@@ -16,7 +16,7 @@ mkdir -p minirouterfs/etc
 mkdir -p minirouterfs/root
 mkdir -p minirouterfs/lib/x86_64-linux-gnu
 
-wget https://busybox.net/downloads/binaries/busybox-x86_64
+wget https://busybox.net/downloads/binaries/1.21.1/busybox-x86_64
 mv busybox-x86_64 minirouterfs/bin/busybox
 chmod a+rx minirouterfs/bin/busybox
 
@@ -41,6 +41,7 @@ cp `which bird6` minirouterfs/usr/sbin
 
 go run ../ldd.go minirouterfs/miniccc minirouterfs
 go run ../ldd.go minirouterfs/minirouter minirouterfs
+go run ../ldd.go minirouterfs/sbin/dhclient minirouterfs
 go run ../ldd.go minirouterfs/sbin/ip minirouterfs
 go run ../ldd.go minirouterfs/usr/sbin/dnsmasq minirouterfs
 go run ../ldd.go minirouterfs/usr/sbin/bird minirouterfs

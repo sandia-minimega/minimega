@@ -240,8 +240,16 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, r.vm.GetNamespace(), fmt.Sprintf("minirouter-%v", r.vm.GetName()))
-	return ioutil.WriteFile(filename, out.Bytes(), 0644)
+	filename := fmt.Sprintf("minirouter-%v", r.vm.GetName())
+
+	// HAX: the default namespace doesn't get a subdir so we should drop the
+	// minirouter conf in f_iomBase
+	path := *f_iomBase
+	if namespace := r.vm.GetNamespace(); namespace != DefaultNamespace {
+		path = filepath.Join(*f_iomBase, namespace)
+	}
+
+	return ioutil.WriteFile(filepath.Join(path, filename), out.Bytes(), 0644)
 }
 
 func (r *Router) Commit(ns *Namespace) error {

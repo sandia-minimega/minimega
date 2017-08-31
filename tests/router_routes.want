@@ -78,6 +78,7 @@ ip add 0 1.0.0.1/24
 ip add 1 2.0.0.1/24
 ip flush
 log level error
+route del default
 ## router routerB interface 0 2.0.0.2/24
 ## router routerB interface 1 3.0.0.2/24
 ## router routerB dhcp 3.0.0.0 static 00:1f:53:02:0b:52 3.0.0.3
@@ -97,6 +98,6 @@ log level error
 ## cc filter hostname=vmB
 ## cc exec ping -c 1 1.0.0.3
 ## clear cc filter
-## # cc responses 
+## # cc responses
 ## # TODO: ping isn't always the same as it shows timing information, fix minitest
 ## # or fix the test
