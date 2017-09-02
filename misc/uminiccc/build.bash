@@ -55,5 +55,6 @@ sed -i 's/bash/sh/' uminicccfs/sbin/dhclient-script
 cp  /lib/x86_64-linux-gnu/libnss* uminicccfs/lib/x86_64-linux-gnu/
 
 echo "root:x:0:0:root:/root:/bin/sh" > uminicccfs/etc/passwd
+echo "# UNCONFIGURED FSTAB FOR BASE SYSTEM" > uminicccfs/etc/fstab
 
 tar czf uminicccfs.tar.gz uminicccfs

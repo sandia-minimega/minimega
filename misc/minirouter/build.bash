@@ -61,5 +61,6 @@ sed -i 's/bash/sh/' minirouterfs/sbin/dhclient-script
 cp  /lib/x86_64-linux-gnu/libnss* minirouterfs/lib/x86_64-linux-gnu/
 
 echo "root:x:0:0:root:/root:/bin/sh" > minirouterfs/etc/passwd
+echo "# UNCONFIGURED FSTAB FOR BASE SYSTEM" > minirouterfs/etc/fstab
 
 tar czf minirouter.tar.gz minirouterfs

@@ -76,6 +76,7 @@ ip add 0 1.2.3.4/24
 ip add 1 5.6.7.8/24
 ip flush
 log level error
+route del default
 
 ## # check on interface ips
 ## shell sleep 15
@@ -84,7 +85,7 @@ log level error
 ## shell sleep 30
 ## .columns ip vm info
 ip
-[1.2.3.4 5.6.7.8]
+[1.2.3.4, 5.6.7.8]
 
 ## # router dhcp
 ## clear router vm0
@@ -295,6 +296,7 @@ ip add 0 1.2.3.4/24
 ip add 0 5.6.7.8/24
 ip flush
 log level error
+route del default
 
 ## cc filter hostname=vm1
 ## cc exec dhclient -v veth0
@@ -302,7 +304,7 @@ log level error
 ## shell sleep 30
 ## .columns ip .filter name=vm1 vm info
 ip
-[1.2.3.250 ]
+[1.2.3.250, ]
 
 ## # dns and dynamic updates
 ## router vm0 dns 1.1.1.1 foo.com
@@ -376,6 +378,7 @@ dnsmasq dns 1.1.1.1 foo.com
 dnsmasq dns 2.2.2.2 bar.com
 dnsmasq flush
 log level error
+route del default
 ## shell sleep 15
 ## clear cc responses
 ## cc filter hostname=vm1
@@ -387,13 +390,13 @@ Server:    1.2.3.4
 Address 1: 1.2.3.4
 
 Name:      foo.com
-Address 1: 1.1.1.1 foo.com
+Address 1: 1.1.1.1
 
 Server:    1.2.3.4
 Address 1: 1.2.3.4
 
 Name:      bar.com
-Address 1: 2.2.2.2 bar.com
+Address 1: 2.2.2.2
 
 ## # router advertisements
 ## router vm0 interface 0 2001:1::1/64
@@ -481,4 +484,5 @@ ip add 0 2001:1::1/64
 ip add 0 5.6.7.8/24
 ip flush
 log level error
+route del default
 ## # we don't have a reliable way to test SLAAC addressing so we don't do it
