@@ -148,8 +148,9 @@ the scheduler:
 
 	minimega[foo]$ vm launch
 	minimega[foo]$ ns schedules
-	start                                                     | end                                                       | state     | launched | failures | total | hosts
-	2017-08-30 10:31:48.185555159 -0700 PDT m=+1167.158893308 | 2017-08-30 10:31:48.469128395 -0700 PDT m=+1167.442466504 | completed | 2        | 0        | 2     | 1
+	start               | end                 | state     | launched | failures | total | hosts
+	02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 1        | 0        | 1     | 1
+
 
 The scheduler, described below, distributes the queued VMs to nodes in the
 namespace and starts them. Once the queue is flushed, the VMs become visible in

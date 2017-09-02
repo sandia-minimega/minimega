@@ -13,6 +13,7 @@ import (
 	"ranges"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var namespaceCLIHandlers = []minicli.Handler{
@@ -289,11 +290,11 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	for _, stats := range ns.scheduleStats {
 		var end string
 		if !stats.end.IsZero() {
-			end = fmt.Sprintf("%v", stats.end)
+			end = stats.end.Format(time.RFC822)
 		}
 
 		row := []string{
-			stats.start.String(),
+			stats.start.Format(time.RFC822),
 			end,
 			stats.state,
 			strconv.Itoa(stats.launched),
