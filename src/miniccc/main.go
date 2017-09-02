@@ -86,7 +86,7 @@ func main() {
 		pidPath := filepath.Join(*f_path, "miniccc.pid")
 
 		// try to find existing miniccc process
-		data, err := ioutil.ReadFile(filepath.Join(*f_path, "miniccc.pid"))
+		data, err := ioutil.ReadFile(pidPath)
 		if err == nil {
 			pid, err := strconv.Atoi(string(data))
 			if err == nil {
