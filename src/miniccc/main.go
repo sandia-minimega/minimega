@@ -8,12 +8,14 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	log "minilog"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 	"version"
@@ -78,7 +80,31 @@ func main() {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	log.Debug("starting ron client with UUID: %v", client.UUID)
+	log.Info("starting ron client with UUID: %v", client.UUID)
+
+	if runtime.GOOS != "windows" {
+		pidPath := filepath.Join(*f_path, "miniccc.pid")
+
+		// try to find existing miniccc process
+		data, err := ioutil.ReadFile(filepath.Join(*f_path, "miniccc.pid"))
+		if err == nil {
+			pid, err := strconv.Atoi(string(data))
+			if err == nil {
+				log.Info("search for miniccc pid: %v", pid)
+				if processExists(pid) {
+					log.Fatal("miniccc already running")
+				}
+				log.Info("process not found")
+			}
+		}
+
+		// write PID file
+		pid := strconv.Itoa(os.Getpid())
+		if err := ioutil.WriteFile(pidPath, []byte(pid), 0664); err != nil {
+			log.Fatal("write pid failed: %v", err)
+		}
+		defer os.Remove(pidPath)
+	}
 
 	if err := dial(); err != nil {
 		log.Fatal("unable to connect: %v", err)
@@ -89,7 +115,13 @@ func main() {
 
 	// create a listening domain socket for tag updates
 	if runtime.GOOS != "windows" {
-		go commandSocketStart()
+		// path for tag update
+		udsPath := filepath.Join(*f_path, "miniccc")
+
+		// clean up defunct state
+		os.Remove(udsPath)
+
+		go commandSocketStart(udsPath)
 	}
 
 	// wait for SIGTERM

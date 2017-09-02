@@ -706,6 +706,14 @@ func (vm *ContainerVM) Start() (err error) {
 		if err := vm.launch(); err != nil {
 			return err
 		}
+
+		// Reconnect cc
+		if vm.ccServer != nil {
+			ccPath := filepath.Join(vm.effectivePath, "cc")
+			if err := vm.ccServer.ListenUnix(ccPath); err != nil {
+				return err
+			}
+		}
 	}
 
 	log.Info("starting VM: %v", vm.ID)
