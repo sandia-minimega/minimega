@@ -34,10 +34,11 @@ var captureCLIHandlers = []minicli.Handler{
 	{ // capture for VM
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
-			"capture <pcap,> vm <name> <interface index> <filename>",
-			"capture <pcap,> <delete,> vm <name>",
+			"capture <pcap,> vm <vm name> <interface index> <filename>",
+			"capture <pcap,> <delete,> vm <vm name>",
 		},
-		Call: wrapVMTargetCLI(cliCaptureVM),
+		Call:    wrapVMTargetCLI(cliCaptureVM),
+		Suggest: wrapVMSuggest(VM_ANY_STATE),
 	},
 	{ // capture
 		HelpShort: "capture experiment data",
@@ -113,6 +114,12 @@ minimega instance:
 			"capture <pcap,> <delete,> bridge <bridge>",
 		},
 		Call: wrapSimpleCLI(cliCapture),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
+			}
+			return nil
+		}),
 	},
 	{ // clear capture
 		HelpShort: "reset capture state",

@@ -11,6 +11,7 @@ import (
 	log "minilog"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 var bridgeCLIHandlers = []minicli.Handler{
@@ -64,12 +65,16 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <create,> <vlan> bridge <bridge> name [tap name]",
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
-			"tap <delete,> <id or all>",
+			"tap <delete,> <tap name or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vlan" {
 				return cliVLANSuggest(ns, prefix)
+			} else if val == "tap" {
+				return cliTapSuggest(ns, prefix)
+			} else if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
 			}
 			return nil
 		}),
@@ -106,6 +111,12 @@ Note: bridge is not a namespace-aware command.`,
 			"bridge <notunnel,> <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
+			}
+			return nil
+		}),
 	},
 }
 
@@ -224,4 +235,33 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	}
 
 	return nil
+}
+
+func cliTapSuggest(ns *Namespace, prefix string) []string {
+	res := []string{}
+
+	if strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
+
+	// TODO: need lock?
+	for tap := range ns.Taps {
+		if strings.HasPrefix(tap, prefix) {
+			res = append(res, tap)
+		}
+	}
+
+	return res
+}
+
+func cliBridgeSuggest(ns *Namespace, prefix string) []string {
+	var res []string
+
+	for _, v := range bridges.Info() {
+		if strings.HasPrefix(v.Name, prefix) {
+			res = append(res, v.Name)
+		}
+	}
+
+	return res
 }
