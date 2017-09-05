@@ -241,9 +241,9 @@ func cliCaptureList(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 }
 
 func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	name := c.StringArgs["name"]
-	fname := c.StringArgs["filename"]
+	name := c.StringArgs["vm"]
 	iface := c.StringArgs["interface"]
+	fname := c.StringArgs["filename"]
 
 	// stopping capture for one or all VMs
 	if c.BoolArgs["delete"] {
