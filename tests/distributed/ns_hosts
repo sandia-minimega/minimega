@@ -1,13 +1,13 @@
-namespace test
-
 ns hosts
 ns del-hosts all
 ns hosts
 ns add-hosts mm[1-2]
 ns hosts
 ns add-hosts all
+ns del-hosts localhost
 ns hosts
 ns del-hosts mm2
 ns hosts
 ns add-hosts all
+ns del-hosts localhost
 ns hosts

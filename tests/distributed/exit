@@ -1,0 +1,13 @@
+namespace miniception
+
+# pull logs for minimega
+cc filter minimega=true
+cc recv /minimega.log
+cc recv /minimega.out
+
+shell sleep 30
+
+clear all
+
+# give meshage a chance to notice dead connections
+shell sleep 60

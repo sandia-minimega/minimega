@@ -8,7 +8,7 @@ import (
 	"miniclient"
 	log "minilog"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -21,6 +21,8 @@ the U.S. Government retains certain rights in this software.`
 
 	PROLOG = "prolog"
 	EPILOG = "epilog"
+	ENTER  = "enter"
+	EXIT   = "exit"
 )
 
 var skippedExtensions = []string{
@@ -97,34 +99,52 @@ func (c Client) runCommands(file string) (string, error) {
 	return res, nil
 }
 
-func (c Client) runTests(dir string, prolog, epilog []string) {
+// write s to f
+func writeString(f, s string) {
+	if err := ioutil.WriteFile(f, []byte(s), os.FileMode(0644)); err != nil {
+		log.Error("unable to write to `%s`: %v", f, err)
+	}
+}
+
+func (c Client) runTests(dir string) {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Fatal("unable to read files in %v: %v", dir, err)
 	}
 
-	// Check to see if the prolog and epilog files exist
+	var prolog, epilog string
+
+	// Check to see if any special files exist
 	for _, info := range files {
-		name := info.Name()
+		abs := filepath.Join(dir, info.Name())
 
-		if name == PROLOG {
-			// append new prolog so that it gets run last
-			prolog = append(prolog, path.Join(dir, name))
-		}
-
-		if name == EPILOG {
-			// prepend new epilog so that it gets run first
-			epilog = append([]string{path.Join(dir, name)}, epilog...)
+		switch info.Name() {
+		case PROLOG:
+			prolog = abs
+		case EPILOG:
+			epilog = abs
+		case ENTER:
+			log.Debug("running enter dir: %v", dir)
+			got := c.mustRunCommands(abs)
+			writeString(abs+".got", got)
+		case EXIT:
+			defer func() {
+				log.Debug("running exit dir: %v", dir)
+				got := c.mustRunCommands(abs)
+				writeString(abs+".got", got)
+			}()
 		}
 	}
 
+	var subdirs []string
+
 	for _, info := range files {
 		name := info.Name()
-		abs := path.Join(dir, name)
+		abs := filepath.Join(dir, name)
 
 		if info.IsDir() {
-			log.Info("processing tests on subdir: %v", name)
-			c.runTests(abs, prolog, epilog)
+			// run the subdirectories last
+			subdirs = append(subdirs, abs)
 			continue
 		}
 
@@ -133,25 +153,21 @@ func (c Client) runTests(dir string, prolog, epilog []string) {
 			continue
 		}
 
-		for _, p := range prolog {
-			// Run the prolog commands
-			log.Debug("running prolog: %v", p)
-			c.mustRunCommands(p)
+		if prolog != "" {
+			log.Debug("running prolog: %v", prolog)
+			c.mustRunCommands(prolog)
 		}
 
 		log.Info("running commands from %s", name)
 		got := c.mustRunCommands(abs)
 
-		for _, e := range epilog {
-			// Run the epilog commands
-			log.Debug("running epilog: %v", e)
-			c.mustRunCommands(e)
+		if epilog != "" {
+			log.Debug("running epilog: %v", epilog)
+			c.mustRunCommands(epilog)
 		}
 
 		// Record the output for offline comparison
-		if err := ioutil.WriteFile(abs+".got", []byte(got), os.FileMode(0644)); err != nil {
-			log.Error("unable to write `%s` -- %v", abs+".got", err)
-		}
+		writeString(abs+".got", got)
 
 		want, err := ioutil.ReadFile(abs + ".want")
 		if err != nil {
@@ -162,6 +178,11 @@ func (c Client) runTests(dir string, prolog, epilog []string) {
 		if got != string(want) {
 			log.Error("got != want for %s", name)
 		}
+	}
+
+	for _, subdir := range subdirs {
+		log.Info("processing tests in subdir: %v", subdir)
+		c.runTests(subdir)
 	}
 }
 
@@ -178,8 +199,8 @@ func shouldRun(f string) bool {
 		return false
 	}
 
-	// Don't run the prolog or epilog
-	if f == PROLOG || f == EPILOG {
+	// Don't run special files
+	if f == PROLOG || f == EPILOG || f == ENTER || f == EXIT {
 		return false
 	}
 
@@ -225,5 +246,5 @@ func main() {
 
 	c := Client{mm}
 
-	c.runTests(*f_tests, nil, nil)
+	c.runTests(*f_tests)
 }

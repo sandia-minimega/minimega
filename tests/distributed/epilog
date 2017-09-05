@@ -1,1 +1,8 @@
-mesh hangup mm1
+# reset remote nodes
+namespace mgmt
+ns add-host all
+mesh send all clear all
+clear namespace mgmt
+
+# reset local node
+clear namespace distributed

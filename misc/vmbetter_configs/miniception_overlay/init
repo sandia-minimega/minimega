@@ -57,6 +57,5 @@ for d in $(ls /sys/class/virtio-ports); do
 done
 
 /miniccc -v=false -serial /dev/virtio-ports/cc -logfile /miniccc.log &
-/minimega -v=false -logfile /minimega.log -nostdin -degree 2 &
 
 setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
