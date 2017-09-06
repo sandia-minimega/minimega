@@ -112,6 +112,25 @@ func (c Client) runTests(dir string) {
 		log.Fatal("unable to read files in %v: %v", dir, err)
 	}
 
+	// Do a quick scan of the directory to see if we can run any tests before
+	// running enter
+	var shouldEnter bool
+
+	for _, info := range files {
+		if info.IsDir() {
+			continue
+		}
+
+		shouldEnter = shouldEnter || shouldRun(info.Name())
+	}
+
+	if !shouldEnter {
+		// TODO: we could need to run tests in subdirectories... this is too
+		// complicated to implement right now.
+		log.Info("skipping dir, no tests to run: %v", dir)
+		return
+	}
+
 	var prolog, epilog string
 
 	// Check to see if any special files exist
