@@ -175,7 +175,7 @@ func cliHostTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 
 		return nil
 	} else if c.BoolArgs["delete"] {
-		return hostTapDelete(ns, c.StringArgs["id"])
+		return hostTapDelete(ns, c.StringArgs["tap"])
 	}
 
 	// Must be the list command
