@@ -1,6 +1,10 @@
 # launch a VM to clone
 vm config filesystem /root/uminicccfs
+vm config schedule mm1
 vm launch container A
+
+# check that we launched where we thought
+.annotate true .columns name vm info
 
 clear vm config
 

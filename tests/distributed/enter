@@ -42,7 +42,7 @@ cc background bash -c "/tmp/miniccc/files/minimega -v=false -logfile /minimega.l
 tap create LAN ip 10.0.0.100/24
 
 # wait for VMs to launch and minimega to start
-shell sleep 60
+shell sleep 30
 
 # dial the nodes
 mesh dial 10.0.0.1
