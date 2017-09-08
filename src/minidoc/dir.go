@@ -55,6 +55,16 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	} else if isDir {
 		return
 	}
+
+	// try to render .html as a template
+	if filepath.Ext(name) == ".html" {
+		if err := renderHTML(w, name); err != nil {
+			log.Errorln(err)
+			http.Error(w, err.Error(), 500)
+		}
+		return
+	}
+
 	http.FileServer(http.Dir(*f_root)).ServeHTTP(w, r)
 }
 
@@ -70,6 +80,9 @@ var (
 	// contentTemplate maps the presentable file extensions to the
 	// template to be executed.
 	contentTemplate map[string]*template.Template
+
+	// layoutTemplate holds the page layout
+	layoutTemplate *template.Template
 )
 
 func initTemplates(base string) error {
@@ -94,12 +107,23 @@ func initTemplates(base string) error {
 	}
 
 	var err error
+	layoutTemplate, err = template.ParseFiles(filepath.Join(base, "layout.tmpl"))
+	if err != nil {
+		return err
+	}
+
 	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "dir.tmpl"))
 	if err != nil {
 		return err
 	}
 
-	return nil
+	tmpl, err := layoutTemplate.Clone()
+	if err != nil {
+		return err
+	}
+
+	dirListTemplate, err = dirListTemplate.AddParseTree("layout.tmpl", tmpl.Tree)
+	return err
 }
 
 // renderDoc reads the present file, gets its template representation,
@@ -116,6 +140,25 @@ func renderDoc(w io.Writer, docFile string) error {
 
 	// Execute the template.
 	return doc.Render(w, tmpl)
+}
+
+// renderHTML parses the html file as a template and tries to execute it with
+// layoutTemplate. Reparses the html file each time.
+func renderHTML(w io.Writer, name string) error {
+	log.Info("renderHTML: %v", name)
+
+	f := filepath.Join(*f_root, name)
+	tmpl, err := layoutTemplate.Clone()
+	if err != nil {
+		return err
+	}
+
+	tmpl, err = tmpl.ParseFiles(f)
+	if err != nil {
+		return err
+	}
+
+	return tmpl.Execute(w, nil)
 }
 
 func parse(name string, mode present.ParseMode) (*present.Doc, error) {
@@ -161,13 +204,8 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 		}
 		// If there's an index.html, send that back and bail out
 		if fi.Name() == "index.html" {
-			ih, err := os.Open(filepath.Join(*f_root, e.Path))
-			if err != nil {
-				return false, err
-			}
-			io.Copy(w, ih)
 			// returning true is naughty but whatever
-			return true, nil
+			return true, renderHTML(w, e.Path)
 		}
 
 		if fi.IsDir() && showDir(e) {
