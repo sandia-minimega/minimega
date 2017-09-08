@@ -271,7 +271,7 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func hostsHandler(w http.ResponseWriter, r *http.Request) {
-	hosts := [][]interface{}{}
+	var hosts [][]string
 
 	cmd := "host"
 
@@ -283,10 +283,7 @@ func hostsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			for _, row := range resp.Tabular {
-				res := []interface{}{}
-				for _, v := range row {
-					res = append(res, v)
-				}
+				res := append([]string{resp.Host}, row...)
 				hosts = append(hosts, res)
 			}
 		}

@@ -234,9 +234,12 @@ function initHostDataTable() {
                 return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
             } },
             { "title": "Memory Total", visible: false },
-            { "title": "Bandwidth" },
+            { "title": "Rx Bandwidth" },
+            { "title": "Tx Bandwidth" },
             { "title": "VMs" },
-            { "title": "VMs (all)" },
+            { "title": "CPU Commit" },
+            { "title": "Mem Commit" },
+            { "title": "Net Commit" },
             { "title": "Uptime" , render: function(data, type, full, meta) {
                 // calculate days separately
                 var seconds = parseInt(data);
