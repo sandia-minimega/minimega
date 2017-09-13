@@ -213,6 +213,11 @@ names within a namespace. VMs of the same name can exist in different
 namespaces. Users should use VM names rather than IDs to perform actions on VMs
 since multiple hosts can have VMs with the same ID.
 
+** vlans API
+
+Setting `vlans`range` in the default namespace applies to all namespaces that
+do not have their own range specified.
+
 ** cc API
 
 minimega starts a separate `cc` server for each namespace. Each server creates

@@ -102,6 +102,13 @@ func cliVLANsAdd(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 }
 
 func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// ranges are special if we're in the default namespace -- a range gets set
+	// globally for all namespaces.
+	name := ns.Name
+	if name == DefaultNamespace {
+		name = ""
+	}
+
 	if c.StringArgs["min"] != "" && c.StringArgs["max"] != "" {
 		min, err := strconv.Atoi(c.StringArgs["min"])
 		max, err2 := strconv.Atoi(c.StringArgs["max"])
@@ -112,7 +119,7 @@ func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			return errors.New("expected min > max")
 		}
 
-		return allocatedVLANs.SetRange(ns.Name, min, max)
+		return allocatedVLANs.SetRange(name, min, max)
 	}
 
 	// Must want to display the ranges
@@ -120,7 +127,7 @@ func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	resp.Tabular = [][]string{}
 
 	for prefix, r := range allocatedVLANs.GetRanges() {
-		if ns.Name != prefix {
+		if name != prefix {
 			continue
 		}
 
