@@ -49,11 +49,9 @@ and `wrapVMTargetCLI`. `wrapVMTargetCLI` behaves the same as `wrapBroadcastCLI`
 but includes an additional step to filter `vm not found` errors from the nodes
 that aren't running the target VM.
 
-The fan out behavior simply calls `mesh`send`all` with the original command
-embedded in a `namespace`<namespace>`(command)` command and collecting the
-responses. Note that `all` resolves to the nodes that belong in the active
-namespace and that the embedding ensures that the correct namespace is active
-on the remote node when it executes the command.
+The fan out behavior simply calls `mesh`send` with the original command
+embedded in a `namespace`<namespace>`(command)` command and the hosts in the
+current namespace as the target. It then collects and displays the responses.
 
 One complication with the above approach is that how does the remote node know
 that it should perform the local behavior rather than trying to fan out again?

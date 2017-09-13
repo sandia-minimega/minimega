@@ -29,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -138,14 +139,6 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 			localFunc(c, respChan)
 			return
 		}
-		c.SetSource(ns.Name)
-
-		hosts := ns.hostSlice()
-
-		cmds := makeCommandHosts(hosts, c, ns)
-		for _, cmd := range cmds {
-			cmd.SetRecord(false)
-		}
 
 		res := minicli.Responses{}
 
@@ -153,7 +146,7 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 		// successful commands.
 		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
-		for resps := range runCommands(cmds...) {
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
 			// problem if commands that return multiple responses are wrapped
@@ -183,14 +176,6 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 			localFunc(c, respChan)
 			return
 		}
-		c.SetSource(ns.Name)
-
-		hosts := ns.hostSlice()
-
-		cmds := makeCommandHosts(hosts, c, ns)
-		for _, cmd := range cmds {
-			cmd.SetRecord(false)
-		}
 
 		res := minicli.Responses{}
 		var ok bool
@@ -201,7 +186,7 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 		// successful commands.
 		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
-		for resps := range runCommands(cmds...) {
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
@@ -396,50 +381,38 @@ func RunCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	return out
 }
 
-// makeCommandHosts creates commands to run the given command on a set of hosts
-// handling the special case where localhost is included in the list. Commands
-// are prefixed with "namespace <name>" when a namespace is provided.
-func makeCommandHosts(hosts []string, cmd *minicli.Command, ns *Namespace) []*minicli.Command {
-	// filter out the local host, if included
-	var includeLocal bool
-	var hosts2 []string
-
-	for _, host := range hosts {
-		if host == hostname {
-			includeLocal = true
-		} else {
-			// Quote the hostname in case there are spaces
-			hosts2 = append(hosts2, fmt.Sprintf("%q", host))
-		}
-	}
-
+// namespaceCommands creates commands to run the given command on all hosts in
+// the namespace including the special case where localhost is included in the
+// list. All commands will be prefixed with "namespace <name>", have their
+// source set to the namespace name, and be record false.
+func namespaceCommands(ns *Namespace, cmd *minicli.Command) []*minicli.Command {
 	var cmds = []*minicli.Command{}
 
-	if includeLocal {
-		// Create a deep copy of the command by recompiling it
-		cmd2 := minicli.MustCompile(cmd.Original)
-		cmd2.SetRecord(cmd.Record)
-		cmd2.SetSource(cmd.Source)
+	var peers []string
 
+	for host := range ns.Hosts {
+		if host == hostname {
+			// Create a deep copy of the command by recompiling it
+			cmd2 := minicli.MustCompile(cmd.Original)
+			cmds = append(cmds, cmd2)
+		} else {
+			// Quote the hostname in case there are spaces
+			peers = append(peers, strconv.Quote(host))
+		}
+	}
+
+	if len(peers) > 0 {
+		targets := strings.Join(peers, ",")
+
+		// use `%q` to quote the namespace name in case there are spaces,
+		// targets and original command should be fine as-is
+		cmd2 := minicli.MustCompilef("mesh send %v namespace %q %v", targets, ns.Name, cmd.Original)
 		cmds = append(cmds, cmd2)
 	}
 
-	if len(hosts2) > 0 {
-		targets := strings.Join(hosts2, ",")
-
-		// Keep the original CLI input
-		original := cmd.Original
-
-		// Prefix with namespace, if one is set
-		if ns != nil {
-			original = fmt.Sprintf("namespace %q %v", ns.Name, original)
-		}
-
-		cmd2 := minicli.MustCompilef("mesh send %s %s", targets, original)
-		cmd2.SetRecord(cmd.Record)
-		cmd2.SetSource(cmd.Source)
-
-		cmds = append(cmds, cmd2)
+	for _, cmd := range cmds {
+		cmd.SetSource(ns.Name)
+		cmd.SetRecord(false)
 	}
 
 	return cmds

@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"iomeshage"
 	"math"
@@ -109,25 +110,13 @@ func meshageSnooper(m *meshage.Message) {
 	}
 }
 
-// meshageRecipients expands a hosts into a list of hostnames. Supports
-// expanding Wildcard to all hosts in the mesh or all hosts in the active
-// namespace.
-func meshageRecipients(ns *Namespace, hosts string) ([]string, error) {
-	if hosts == Wildcard {
-		recipients := []string{}
-
-		// Wildcard expands to all hosts in the namespace, except the local
-		// host, if included
-		for host := range ns.Hosts {
-			if host == hostname {
-				log.Info("excluding localhost, %v, from `%v`", hostname, Wildcard)
-				continue
-			}
-
-			recipients = append(recipients, host)
-		}
-
-		return recipients, nil
+// meshageSend sends a command to a list of hosts, returning a channel that the
+// responses will be sent to. This is non-blocking -- the channel is created
+// and then returned after a couple of sanity checks.
+func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, error) {
+	// HAX: Ensure we aren't sending read or mesh send commands over meshage
+	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
+		return nil, fmt.Errorf("cannot run `%s` over mesh", c.Original)
 	}
 
 	recipients, err := ranges.SplitList(hosts)
@@ -135,33 +124,15 @@ func meshageRecipients(ns *Namespace, hosts string) ([]string, error) {
 		return nil, err
 	}
 
-	// If a namespace is active, warn if the user is trying to mesh send hosts
-	// outside the namespace
-	if ns != nil {
-		for _, host := range recipients {
-			if !ns.Hosts[host] {
-				log.Warn("%v is not part of namespace %v", host, ns.Name)
+	for _, r := range recipients {
+		if r == Wildcard {
+			if len(recipients) > 1 {
+				return nil, errors.New("wildcard included amongst list of recipients")
 			}
+
+			recipients = meshageNode.BroadcastRecipients()
+			break
 		}
-	}
-
-	return recipients, nil
-}
-
-// meshageSend sends a command to a list of hosts, returning a channel that the
-// responses will be sent to. This is non-blocking -- the channel is created
-// and then returned after a couple of sanity checks. Should be not be invoked
-// as a goroutine as it checks the active namespace when expanding hosts.
-func meshageSend(ns *Namespace, c *minicli.Command, hosts string) (<-chan minicli.Responses, error) {
-	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		return nil, fmt.Errorf("cannot run `%s` over mesh", c.Original)
-	}
-
-	// expand the hosts to a list of recipients, must be done synchronously
-	recipients, err := meshageRecipients(ns, hosts)
-	if err != nil {
-		return nil, err
 	}
 
 	meshageCommandLock.Lock()

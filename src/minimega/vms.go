@@ -557,14 +557,8 @@ func GlobalVMs(ns *Namespace) []VM {
 
 // globalVMs is GlobalVMs without locking cmdLock.
 func globalVMs(ns *Namespace) []VM {
-	// Compile info command and set it not to record
-	cmd := minicli.MustCompile("vm info")
-	cmd.SetRecord(false)
-	cmd.SetSource(ns.Name)
-
-	hosts := ns.hostSlice()
-
-	cmds := makeCommandHosts(hosts, cmd, ns)
+	// run `vm info` across the namespace
+	cmds := namespaceCommands(ns, minicli.MustCompile("vm info"))
 
 	// Collected VMs
 	vms := []VM{}

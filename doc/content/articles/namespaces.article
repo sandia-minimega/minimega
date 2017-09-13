@@ -213,12 +213,6 @@ names within a namespace. VMs of the same name can exist in different
 namespaces. Users should use VM names rather than IDs to perform actions on VMs
 since multiple hosts can have VMs with the same ID.
 
-** mesh API
-
-The `mesh` API has a minor tweak -- when a namespace is active, `mesh`send`all`
-now resolves `all` to hosts in the namespace rather than all hosts in the
-cluster.
-
 ** cc API
 
 minimega starts a separate `cc` server for each namespace. Each server creates

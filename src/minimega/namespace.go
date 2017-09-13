@@ -271,11 +271,8 @@ func (n *Namespace) Schedule() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
-	// Query for the host stats on all machines.
-	cmd := minicli.MustCompile("host")
-	cmd.SetSource(n.Name)
-	cmd.SetRecord(false)
-	cmds := makeCommandHosts(n.hostSlice(), cmd, nil)
+	// run `host` across the namespace
+	cmds := namespaceCommands(n, minicli.MustCompile("host"))
 
 	// key is hostname, value is map with keys from hostInfoKeys
 	hostStats := []*HostStats{}

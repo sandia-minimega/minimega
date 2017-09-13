@@ -37,9 +37,9 @@ type HostStats struct {
 
 var hostCLIHandlers = []minicli.Handler{
 	{ // host
-		HelpShort: "report information about the host",
+		HelpShort: "report information about hosts",
 		HelpLong: `
-Report information about the host:
+Report information about hosts in the current namespace:
 
 - cpucommit  : total cpu commit
 - cpus       : number of cpus
