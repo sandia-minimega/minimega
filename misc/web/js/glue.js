@@ -237,6 +237,7 @@ function initHostDataTable() {
             { "title": "Rx Bandwidth" },
             { "title": "Tx Bandwidth" },
             { "title": "VMs" },
+            { "title": "VM Limit" },
             { "title": "CPU Commit" },
             { "title": "Mem Commit" },
             { "title": "Net Commit" },
