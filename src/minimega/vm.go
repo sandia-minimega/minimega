@@ -49,6 +49,7 @@ type VM interface {
 	GetUUID() string
 	GetCPUs() uint64
 	GetMem() uint64
+	GetCoschedule() int
 
 	// Lifecycle functions
 	Launch() error
@@ -331,6 +332,10 @@ func (vm *BaseVM) GetCPUs() uint64 {
 
 func (vm *BaseVM) GetMem() uint64 {
 	return vm.Memory
+}
+
+func (vm *BaseVM) GetCoschedule() int {
+	return int(vm.Coschedule)
 }
 
 // Kill a VM. Blocks until the VM process has terminated.

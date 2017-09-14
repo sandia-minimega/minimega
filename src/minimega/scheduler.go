@@ -250,7 +250,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 				// number of peers is one less than the number of VMs that we
 				// should launch on the node
 				limit := limit + 1
-				if stats.Limit == 0 {
+				if stats.Limit == -1 {
 					// set initial limit
 					log.Debug("set initial limit on %v to %v", stats.Name, limit)
 					stats.Limit = limit
@@ -264,7 +264,7 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 			// schedule the VMs on the host, update commit accordingly
 			incHostStats(stats, q.VMConfig)
 
-			if stats.Limit != 0 && stats.VMs > stats.Limit {
+			if stats.Limit != -1 && stats.VMs > stats.Limit {
 				dumpSchedule()
 				return nil, fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host, stats.Limit)
 			}

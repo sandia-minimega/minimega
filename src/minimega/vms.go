@@ -71,6 +71,26 @@ func (vms *VMs) Count() int {
 	return len(vms.m)
 }
 
+// Limit is the lowest coschedule value for VMs (-1 is no limit)
+func (vms *VMs) Limit() int {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	// assume unlimited
+	limit := -1
+
+	for _, vm := range vms.m {
+		// update if limit is unlimited or we're not unlimited and we're less
+		// than the previous limit
+		v := vm.GetCoschedule()
+		if limit == -1 || (v != -1 && v < limit) {
+			limit = v
+		}
+	}
+
+	return limit
+}
+
 // Total memory committed across all VMs.
 func (vms *VMs) MemCommit() uint64 {
 	vms.mu.Lock()

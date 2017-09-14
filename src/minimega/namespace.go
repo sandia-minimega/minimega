@@ -584,11 +584,27 @@ func NewHostStats() *HostStats {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
+	// default is unlimited unless we find out otherwise
+	h.Limit = -1
+
 	for _, ns := range namespaces {
 		h.CPUCommit += ns.CPUCommit()
 		h.MemCommit += ns.MemCommit()
 		h.NetworkCommit += ns.NetworkCommit()
 		h.VMs += ns.VMs.Count()
+
+		// update if limit is unlimited or we're not unlimited and we're less
+		// than the previous limit
+		v := ns.VMs.Limit()
+		if h.Limit == -1 || (v != -1 && v < h.Limit) {
+			h.Limit = v
+		}
+	}
+
+	if h.Limit != -1 {
+		// we add one here because if we say `vm config coschedule 0` then what
+		// we really want is there to only be one VM on the host
+		h.Limit += 1
 	}
 
 	return &h

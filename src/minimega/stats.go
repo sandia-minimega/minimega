@@ -26,13 +26,12 @@ type HostStats struct {
 	MemTotal      int
 	MemUsed       int
 	VMs           int
+	Limit         int
 	CPUCommit     uint64
 	MemCommit     uint64
 	NetworkCommit int
 	Load          string
 	Uptime        time.Duration
-
-	Limit int // for scheduler, not used by the host API
 }
 
 var hostCLIHandlers = []minicli.Handler{
@@ -53,6 +52,7 @@ Report information about hosts in the current namespace:
 - tx         : TX bandwidth stats (MB/s)
 - uptime     : uptime
 - vms        : number of VMs
+- vmlimit    : limit based on coschedule values (-1 is no limit)
 
 All VM-based stats are computed across namespaces.`,
 		Patterns: []string{
@@ -69,6 +69,7 @@ All VM-based stats are computed across namespaces.`,
 			"host <tx,>",
 			"host <uptime,>",
 			"host <vms,>",
+			"host <vmlimit,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -79,7 +80,7 @@ func init() {
 }
 
 func (s *HostStats) IsFull() bool {
-	return s.Limit != 0 && s.VMs >= s.Limit
+	return s.Limit != -1 && s.VMs >= s.Limit
 }
 
 func (h *HostStats) Print(v string) string {
@@ -106,6 +107,8 @@ func (h *HostStats) Print(v string) string {
 		return strconv.Itoa(h.NetworkCommit)
 	case "vms":
 		return strconv.Itoa(h.VMs)
+	case "vmlimit":
+		return strconv.Itoa(h.Limit)
 	case "uptime":
 		return h.Uptime.String()
 	}
@@ -117,8 +120,8 @@ func (h *HostStats) Print(v string) string {
 // Preferred ordering of host info fields in tabular. Don't include name --
 // it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
-	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "cpucommit",
-	"memcommit", "netcommit", "uptime",
+	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "vmlimit",
+	"cpucommit", "memcommit", "netcommit", "uptime",
 }
 
 func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
