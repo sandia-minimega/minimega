@@ -41,6 +41,7 @@ func fakeHostData(N int, uniform bool) []*HostStats {
 			NetworkCommit: int(c),
 			CPUs:          1, // actual number doesn't matter
 			MemTotal:      1, // actual number doesn't matter
+			Limit:         -1,
 		})
 	}
 
@@ -104,10 +105,12 @@ func TestCPUCommit(t *testing.T) {
 	h := &HostStats{
 		CPUCommit: 1,
 		CPUs:      1,
+		Limit:     -1,
 	}
 	h2 := &HostStats{
 		CPUCommit: 2,
 		CPUs:      1,
+		Limit:     -1,
 	}
 
 	if !cpuCommit(h, h2) {
@@ -128,10 +131,12 @@ func TestMemCommit(t *testing.T) {
 	h := &HostStats{
 		MemCommit: 1,
 		MemTotal:  1,
+		Limit:     -1,
 	}
 	h2 := &HostStats{
 		MemCommit: 2,
 		MemTotal:  1,
+		Limit:     -1,
 	}
 
 	if !memoryCommit(h, h2) {
@@ -151,9 +156,11 @@ func TestNetCommit(t *testing.T) {
 	// h < h2
 	h := &HostStats{
 		NetworkCommit: 1,
+		Limit:         -1,
 	}
 	h2 := &HostStats{
 		NetworkCommit: 2,
+		Limit:         -1,
 	}
 
 	if !networkCommit(h, h2) {
