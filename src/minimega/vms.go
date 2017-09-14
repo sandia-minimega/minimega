@@ -91,46 +91,22 @@ func (vms *VMs) Limit() int {
 	return limit
 }
 
-// Total memory committed across all VMs.
-func (vms *VMs) MemCommit() uint64 {
+// Returns the total cpu, memory, and network commit across all VMs.
+func (vms *VMs) Commit() (uint64, uint64, int) {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
-	total := uint64(0)
+	cpu := uint64(0)
+	mem := uint64(0)
+	net := 0
 
 	for _, vm := range vms.m {
-		total += vm.GetMem()
+		cpu += vm.GetCPUs()
+		mem += vm.GetMem()
+		net += len(vm.GetNetworks())
 	}
 
-	return total
-}
-
-// Total cpus committed across all VMs.
-func (vms *VMs) CPUCommit() uint64 {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	total := uint64(0)
-
-	for _, vm := range vms.m {
-		total += vm.GetCPUs()
-	}
-
-	return total
-}
-
-// Total networks committed across all VMs.
-func (vms *VMs) NetworkCommit() int {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
-
-	total := 0
-
-	for _, vm := range vms.m {
-		total += len(vm.GetNetworks())
-	}
-
-	return total
+	return cpu, mem, net
 }
 
 // Info populates resp with info about launched VMs.

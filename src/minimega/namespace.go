@@ -588,9 +588,10 @@ func NewHostStats() *HostStats {
 	h.Limit = -1
 
 	for _, ns := range namespaces {
-		h.CPUCommit += ns.CPUCommit()
-		h.MemCommit += ns.MemCommit()
-		h.NetworkCommit += ns.NetworkCommit()
+		cpu, mem, net := ns.VMs.Commit()
+		h.CPUCommit += cpu
+		h.MemCommit += mem
+		h.NetworkCommit += net
 		h.VMs += ns.VMs.Count()
 
 		// update if limit is unlimited or we're not unlimited and we're less
