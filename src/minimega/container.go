@@ -1548,54 +1548,48 @@ func containerSetupRoot(fsPath string) error {
 	return syscall.Mount(fsPath, fsPath, "bind", syscall.MS_BIND|syscall.MS_REC, "")
 }
 
+// mkdirMount makes the target directory before trying to mount to it. Has
+// the same arguments as syscall.Mount.
+func mkdirMount(source, target, fstype string, flags uintptr, data string) error {
+	log.Debug("mkdirMount: %v", target)
+
+	if err := os.MkdirAll(target, 0755); err != nil {
+		return err
+	}
+
+	return syscall.Mount(source, target, fstype, flags, data)
+}
+
 func containerMountDefaults(fsPath string) error {
 	log.Debug("mountDefaults: %v", fsPath)
 
 	var err error
 
-	err = syscall.Mount("proc", filepath.Join(fsPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
+	err = mkdirMount("proc", filepath.Join(fsPath, "proc"), "proc", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
+	err = mkdirMount("tmpfs", filepath.Join(fsPath, "dev"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_STRICTATIME, "mode=755")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(fsPath, "dev", "shm"), 0755)
+	err = mkdirMount("tmpfs", filepath.Join(fsPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(fsPath, "dev", "mqueue"), 0755)
+	err = mkdirMount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID, "newinstance,ptmxmode=666,gid=5,mode=620")
 	if err != nil {
 		log.Errorln(err)
 		return err
 	}
 
-	err = os.MkdirAll(filepath.Join(fsPath, "dev", "pts"), 0755)
-	if err != nil {
-		log.Errorln(err)
-		return err
-	}
-
-	err = syscall.Mount("tmpfs", filepath.Join(fsPath, "dev", "shm"), "tmpfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "mode=1777,size=65536k")
-	if err != nil {
-		log.Errorln(err)
-		return err
-	}
-
-	err = syscall.Mount("pts", filepath.Join(fsPath, "dev", "pts"), "devpts", syscall.MS_NOEXEC|syscall.MS_NOSUID, "newinstance,ptmxmode=666,gid=5,mode=620")
-	if err != nil {
-		log.Errorln(err)
-		return err
-	}
-
-	err = syscall.Mount("sysfs", filepath.Join(fsPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
+	err = mkdirMount("sysfs", filepath.Join(fsPath, "sys"), "sysfs", syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV|syscall.MS_RDONLY, "")
 	if err != nil {
 		log.Errorln(err)
 		return err
@@ -1614,11 +1608,7 @@ func containerMountVolumes(fsPath string, volumes []string) error {
 		source := f[0]
 		target := filepath.Join(fsPath, f[1])
 
-		if err := os.MkdirAll(target, 0755); err != nil {
-			return err
-		}
-
-		if err := syscall.Mount(source, target, "", syscall.MS_BIND, ""); err != nil {
+		if err := mkdirMount(source, target, "", syscall.MS_BIND, ""); err != nil {
 			return err
 		}
 	}
