@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"ranges"
+	"strings"
 	"time"
 )
 
@@ -30,6 +31,9 @@ kernel will be copied to a separate directory for use.
 
 The -i flag gives the location of the initrd the nodes should boot. This
 file will be copied to a separate directory for use.
+
+The -profile flag gives the name of a Cobbler profile the nodes should
+boot. This flag takes precedence over the -k and -i flags.
 
 The -n flag indicates that the specified number of nodes should be
 included in the reservation. The first available nodes will be allocated.
@@ -55,6 +59,7 @@ var subT int    // -t
 var subS bool   // -s
 var subA string // -a
 var subW string // -w
+var subProfile string // -profile
 
 func init() {
 	// break init cycle
@@ -69,6 +74,7 @@ func init() {
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
+	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
@@ -78,10 +84,29 @@ func runSub(cmd *Command, args []string) {
 	format := "2006-Jan-2-15:04"
 
 	// validate arguments
-	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
+	if subR == "" || (subN == 0 && subW == "") {
 		help([]string{"sub"})
 		log.Fatalln("Missing required argument")
+	}
 
+	if (subK == "" || subI == "") && subProfile == "" {
+		help([]string{"sub"})
+		log.Fatalln("Must specify either a kernel & initrd, or a Cobbler profile")
+	}
+
+	if subProfile != "" && !igorConfig.UseCobbler {
+		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
+	}
+
+	// Validate the cobbler profile
+	if subProfile != "" {
+		cobblerProfiles, err := processWrapper("cobbler", "profile", "list")
+		if err != nil {
+			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
+		}
+		if !strings.Contains(cobblerProfiles, subProfile) {
+			log.Fatal("Cobbler profile does not exist: ", subProfile)
+		}
 	}
 
 	user, err := user.Current()
@@ -159,40 +184,44 @@ func runSub(cmd *Command, args []string) {
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 	reservation.KernelArgs = subC
+	reservation.CobblerProfile = subProfile	// safe to do even if unset
 
 	// Add it to the list of reservations
 	Reservations[reservation.ID] = reservation
 
-	// copy kernel and initrd
-	// 1. Validate and open source files
-	ksource, err := os.Open(subK)
-	if err != nil {
-		log.Fatal("couldn't open kernel: %v", err)
+	// If we're not doing a Cobbler profile...
+	if subProfile == "" {
+		// copy kernel and initrd
+		// 1. Validate and open source files
+		ksource, err := os.Open(subK)
+		if err != nil {
+			log.Fatal("couldn't open kernel: %v", err)
+		}
+		isource, err := os.Open(subI)
+		if err != nil {
+			log.Fatal("couldn't open initrd: %v", err)
+		}
+	
+		// make kernel copy
+		fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
+		kdest, err := os.Create(fname)
+		if err != nil {
+			log.Fatal("failed to create %v -- %v", fname, err)
+		}
+		io.Copy(kdest, ksource)
+		kdest.Close()
+		ksource.Close()
+	
+		// make initrd copy
+		fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
+		idest, err := os.Create(fname)
+		if err != nil {
+			log.Fatal("failed to create %v -- %v", fname, err)
+		}
+		io.Copy(idest, isource)
+		idest.Close()
+		isource.Close()
 	}
-	isource, err := os.Open(subI)
-	if err != nil {
-		log.Fatal("couldn't open initrd: %v", err)
-	}
-
-	// make kernel copy
-	fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
-	kdest, err := os.Create(fname)
-	if err != nil {
-		log.Fatal("failed to create %v -- %v", fname, err)
-	}
-	io.Copy(kdest, ksource)
-	kdest.Close()
-	ksource.Close()
-
-	// make initrd copy
-	fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
-	idest, err := os.Create(fname)
-	if err != nil {
-		log.Fatal("failed to create %v -- %v", fname, err)
-	}
-	io.Copy(idest, isource)
-	idest.Close()
-	isource.Close()
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)

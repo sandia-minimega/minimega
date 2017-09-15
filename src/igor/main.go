@@ -80,16 +80,17 @@ type TimeSlice struct {
 }
 
 type Reservation struct {
-	ResName    string
-	Hosts      []string // separate, not a range
-	PXENames   []string // eg C000025B
-	StartTime  int64    // UNIX time
-	EndTime    int64    // UNIX time
-	Duration   float64  // minutes
-	Owner      string
-	ID         uint64
-	KernelArgs string
-	Vlan       int
+	ResName        string
+	CobblerProfile string   // Optional; if set, use this Cobbler profile instead of a kernel+initrd
+	Hosts          []string // separate, not a range
+	PXENames       []string // eg C000025B
+	StartTime      int64    // UNIX time
+	EndTime        int64    // UNIX time
+	Duration       float64  // minutes
+	Owner          string
+	ID             uint64
+	KernelArgs     string
+	Vlan           int
 }
 
 // Sort the slice of reservations based on the start time
@@ -171,8 +172,8 @@ func housekeeping() {
 					powerCycle(r.Hosts)
 				}
 			} else {
-				// Check if the reservation already exists
-				if !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+				// If we're not using an existing profile, create one and set the nodes to use it
+				if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
 					log.Info("Configuring cobbler distro and profile")
 					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
@@ -189,6 +190,14 @@ func housekeeping() {
 						}
 					}
 					powerCycle(r.Hosts)
+				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
+					// If the requested profile exists, go ahead and set the nodes to use it
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+					}
 				}
 			}
 		}
