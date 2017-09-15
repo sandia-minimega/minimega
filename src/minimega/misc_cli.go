@@ -96,12 +96,8 @@ VM). Stops on the first invalid command.`,
 	{ // clear all
 		HelpShort: "reset all resettable ",
 		HelpLong: `
-minimega has many "clear ..." handlers. This attempts to invoke them all to
-reset minimega to as vanilla a state as possible. Restarting minimega is
-preferable.
-
-This command only runs locally and is not broadcast to all members of the
-namespace even if one is active.`,
+Runs all the "clear ..." handlers on the local instance -- as close to nuke as
+you can get without restarting minimega. Restarting minimega is preferable.`,
 		Patterns: []string{
 			"clear all",
 		},
@@ -204,12 +200,13 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 }
 
 func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["memory"] {
-		dst := c.StringArgs["file"]
-		if !filepath.IsAbs(dst) {
-			dst = path.Join(*f_iomBase, dst)
-		}
+	// make sure path is relative to files if not absolute
+	dst := c.StringArgs["file"]
+	if !filepath.IsAbs(dst) {
+		dst = path.Join(*f_iomBase, dst)
+	}
 
+	if c.BoolArgs["memory"] {
 		log.Info("writing memory profile to %v", dst)
 
 		f, err := os.Create(dst)
@@ -222,11 +219,6 @@ func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
 			return errors.New("CPU profile still running")
-		}
-
-		dst := c.StringArgs["file"]
-		if !filepath.IsAbs(dst) {
-			dst = path.Join(*f_iomBase, dst)
 		}
 
 		log.Info("writing cpu profile to %v", dst)

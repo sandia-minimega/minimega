@@ -72,7 +72,7 @@ func cliDot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 		fmt.Fprintf(writer, "%v [style=filled, color=%v];\n", text, color)
 
-		for _, net := range getConfig(vm).Networks {
+		for _, net := range vm.GetNetworks() {
 			fmt.Fprintf(writer, "%v -- %v\n", text, net.VLAN)
 			vlans[net.VLAN] = true
 		}

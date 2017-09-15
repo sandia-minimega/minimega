@@ -735,14 +735,3 @@ func vmNotContainer(name string) error {
 func isVMNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
 }
-
-func getConfig(vm VM) BaseConfig {
-	switch vm := vm.(type) {
-	case *KvmVM:
-		return vm.BaseConfig
-	case *ContainerVM:
-		return vm.BaseConfig
-	}
-
-	return BaseConfig{}
-}
