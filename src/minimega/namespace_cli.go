@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -52,6 +51,7 @@ Display or modify the active namespace.
 - flush     : clear the VM queue
 - queueing  : toggle VMs queueing when launching (default false)
 - schedules : display scheduling stats
+- run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
 			"ns <hosts,>",
@@ -64,9 +64,9 @@ Display or modify the active namespace.
 			"ns <queue,>",
 			"ns <flush,>",
 			"ns <queueing,> [true,false]",
-			"ns <schedules,>",
+			"ns <run,> (command)",
 		},
-		Call: wrapSimpleCLI(cliNS),
+		Call: cliNS,
 	},
 	{ // clear namespace
 		HelpShort: "unset or delete namespace",
@@ -90,15 +90,16 @@ You may use "all" to delete all namespaces.`,
 }
 
 // Functions pointers to the various handlers for the subcommands
-var nsCliHandlers = map[string]wrappedCLIFunc{
-	"hosts":     cliNamespaceHosts,
-	"add-hosts": cliNamespaceAddHost,
-	"del-hosts": cliNamespaceDelHost,
-	"load":      cliNamespaceLoad,
-	"queue":     cliNamespaceQueue,
-	"queueing":  cliNamespaceQueueing,
-	"flush":     cliNamespaceFlush,
-	"schedules": cliNamespaceSchedules,
+var nsCliHandlers = map[string]minicli.CLIFunc{
+	"hosts":     wrapSimpleCLI(cliNamespaceHosts),
+	"add-hosts": wrapSimpleCLI(cliNamespaceAddHost),
+	"del-hosts": wrapSimpleCLI(cliNamespaceDelHost),
+	"load":      wrapSimpleCLI(cliNamespaceLoad),
+	"queue":     wrapSimpleCLI(cliNamespaceQueue),
+	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
+	"flush":     wrapSimpleCLI(cliNamespaceFlush),
+	"schedules": wrapSimpleCLI(cliNamespaceSchedules),
+	"run":       cliNamespaceRun,
 }
 
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -143,15 +144,14 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	respChan <- minicli.Responses{resp}
 }
 
-func cliNS(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+func cliNS(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// Dispatcher for a sub handler
 	for k, fn := range nsCliHandlers {
 		if c.BoolArgs[k] {
-			return fn(ns, c, resp)
+			fn(c, respChan)
+			return
 		}
 	}
-
-	return errors.New("unreachable")
 }
 
 func cliNamespaceHosts(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -317,6 +317,28 @@ func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	}
 
 	return DestroyNamespace(name)
+}
+
+func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	// HAX: Ensure we aren't sending read or mesh send commands over meshage
+	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
+		err := fmt.Errorf("cannot run `%s` using ns run", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
+	res := minicli.Responses{}
+
+	// see wrapBroadcastCLI
+	for resps := range runCommands(namespaceCommands(ns, c.Subcommand)...) {
+		for _, resp := range resps {
+			res = append(res, resp)
+		}
+	}
+
+	respChan <- res
 }
 
 // cliNamespaceSuggest suggests namespaces that have the given prefix. If wild

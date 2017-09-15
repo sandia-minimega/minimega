@@ -4,18 +4,6 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
-// command line interface for minimega
-//
-// The command line interface wraps a number of commands listed in the
-// cliCommands map. Each entry to the map defines a function that is called
-// when the command is invoked on the command line, as well as short and long
-// form help. The record parameter instructs the cli to put the command in the
-// command history.
-//
-// The cli uses the readline library for command history and tab completion.
-// A separate command history is kept and used for writing the buffer out to
-// disk.
-
 package main
 
 import (
@@ -37,10 +25,8 @@ import (
 	"github.com/peterh/liner"
 )
 
-var (
-	// Prevents multiple commands from running at the same time
-	cmdLock sync.Mutex
-)
+// Prevents multiple commands from running at the same time
+var cmdLock sync.Mutex
 
 type wrappedCLIFunc func(*Namespace, *minicli.Command, *minicli.Response) error
 type wrappedSuggestFunc func(*Namespace, string, string) []string
@@ -81,8 +67,7 @@ func cliSetup() {
 // if any of the handlers fail to register.
 func registerHandlers(name string, handlers []minicli.Handler) {
 	for i := range handlers {
-		err := minicli.Register(&handlers[i])
-		if err != nil {
+		if err := minicli.Register(&handlers[i]); err != nil {
 			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
 		}
 	}
@@ -133,8 +118,7 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 		// empty string so the source will not match the active namespace and
 		// we will perform the `fan out` phase. We set the source to the active
 		// namespace so that when we send the command via mesh, the source will
-		// be propagated and the remote nodes will execute the `local` behavior
-		// rather than trying to `fan out`.
+		// be propagated and they will execute the `local` behavior.
 		if c.Source == ns.Name {
 			localFunc(c, respChan)
 			return
@@ -142,9 +126,6 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		res := minicli.Responses{}
 
-		// Broadcast to all machines, collecting errors and forwarding
-		// successful commands.
-		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			// TODO: we are flattening commands that return multiple responses
@@ -182,9 +163,6 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		var notFound string
 
-		// Broadcast to all machines, collecting errors and forwarding
-		// successful commands.
-		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			for _, resp := range resps {
@@ -201,10 +179,8 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		if !ok && len(res) == 0 {
 			// Presumably, we weren't able to find the VM
-			res = append(res, &minicli.Response{
-				Host:  hostname,
-				Error: notFound,
-			})
+			respChan <- errResp(notFound)
+			return
 		}
 
 		respChan <- res
