@@ -64,6 +64,7 @@ Display or modify the active namespace.
 			"ns <queue,>",
 			"ns <flush,>",
 			"ns <queueing,> [true,false]",
+			"ns <schedules,>",
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
