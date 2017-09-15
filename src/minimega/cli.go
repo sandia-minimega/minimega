@@ -7,6 +7,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -179,7 +180,7 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		if !ok && len(res) == 0 {
 			// Presumably, we weren't able to find the VM
-			respChan <- errResp(notFound)
+			respChan <- errResp(errors.New(notFound))
 			return
 		}
 
