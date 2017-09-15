@@ -392,6 +392,30 @@ func lookupVLAN(namespace, alias string) (int, error) {
 	if created {
 		// update file so that we have a copy of the vlans if minimega crashes
 		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
+
+		// broadcast out the alias to the cluster so that the other nodes can
+		// print the alias correctly
+		cmd := minicli.MustCompilef("namespace %v vlans add %q %v", namespace, alias, vlan)
+		cmd.SetRecord(false)
+		cmd.SetSource(namespace)
+
+		respChan, err := meshageSend(cmd, Wildcard)
+		if err != nil {
+			// don't propagate the error since this is supposed to be best-effort.
+			log.Error("unable to broadcast alias update: %v", err)
+			return vlan, nil
+		}
+
+		// read all the responses, looking for errors
+		go func() {
+			for resps := range respChan {
+				for _, resp := range resps {
+					if resp.Error != "" {
+						log.Error("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+					}
+				}
+			}
+		}()
 	}
 
 	return vlan, nil
