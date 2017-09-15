@@ -369,7 +369,7 @@ func (n *Namespace) Schedule() error {
 // Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
 // until all the VMs are launched.
 func (n *Namespace) Launch(q *QueuedVMs) []error {
-	vms, errChan := n.VMs.Launch(q)
+	vms, errChan := n.VMs.Launch(n.Name, q)
 
 	// fire off goroutine to do the registration
 	go func() {

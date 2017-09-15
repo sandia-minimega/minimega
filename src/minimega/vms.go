@@ -235,7 +235,7 @@ func (vms *VMs) FindKvmVMs() []*KvmVM {
 
 // Launch takes QueuedVMs and launches them after performing a few sanity
 // checks. Launch returns the VMs it launched and any errors that occured.
-func (vms *VMs) Launch(q *QueuedVMs) (<-chan VM, <-chan error) {
+func (vms *VMs) Launch(namespace string, q *QueuedVMs) (<-chan VM, <-chan error) {
 	errs := make(chan error)
 	launched := make(chan VM)
 
