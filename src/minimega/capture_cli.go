@@ -7,7 +7,9 @@ package main
 import (
 	"errors"
 	"fmt"
+	"gonetflow"
 	"minicli"
+	"path/filepath"
 	"strconv"
 )
 
@@ -32,10 +34,11 @@ var captureCLIHandlers = []minicli.Handler{
 	{ // capture for VM
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
-			"capture <pcap,> vm <name> <interface index> <filename>",
-			"capture <pcap,> <delete,> vm <name>",
+			"capture <pcap,> vm <vm name> <interface index> <filename>",
+			"capture <pcap,> <delete,> vm <vm name>",
 		},
-		Call: wrapVMTargetCLI(cliCaptureVM),
+		Call:    wrapVMTargetCLI(cliCaptureVM),
+		Suggest: wrapVMSuggest(VM_ANY_STATE),
 	},
 	{ // capture
 		HelpShort: "capture experiment data",
@@ -107,11 +110,16 @@ minimega instance:
 			"capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>",
 			"capture <netflow,> <delete,> bridge <name>",
 			"capture <netflow,> <timeout,> [timeout in seconds]",
-
 			"capture <pcap,> bridge <bridge> <filename>",
-			"capture <pcap,> <delete,> bridge <name>",
+			"capture <pcap,> <delete,> bridge <bridge>",
 		},
 		Call: wrapSimpleCLI(cliCapture),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
+			}
+			return nil
+		}),
 	},
 	{ // clear capture
 		HelpShort: "reset capture state",
@@ -125,19 +133,19 @@ information.`,
 	},
 }
 
-func cliCapture(c *minicli.Command, resp *minicli.Response) error {
+func cliCapture(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["netflow"] {
 		// Capture to netflow
-		return cliCaptureNetflow(c, resp)
+		return cliCaptureNetflow(ns, c, resp)
 	} else if c.BoolArgs["pcap"] {
 		// Capture to pcap
-		return cliCapturePcap(c, resp)
+		return cliCapturePcap(ns, c, resp)
 	}
 
 	return errors.New("unreachable")
 }
 
-func cliCaptureConfig(c *minicli.Command, resp *minicli.Response) error {
+func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["snaplen"] {
 		if v, ok := c.StringArgs["size"]; ok {
 			i, err := strconv.ParseUint(v, 10, 32)
@@ -145,100 +153,84 @@ func cliCaptureConfig(c *minicli.Command, resp *minicli.Response) error {
 				return err
 			}
 
-			captureConfig.SnapLen = i
+			ns.captures.SnapLen = uint32(i)
 			return nil
 		}
 
-		resp.Response = strconv.FormatUint(captureConfig.SnapLen, 10)
+		resp.Response = strconv.FormatUint(uint64(ns.captures.SnapLen), 10)
 		return nil
 	} else if c.BoolArgs["filter"] {
 		if v, ok := c.StringArgs["bpf"]; ok {
 			// TODO: check syntax?
-			captureConfig.Filter = v
+			ns.captures.Filter = v
 			return nil
 		}
 
-		resp.Response = captureConfig.Filter
+		resp.Response = ns.captures.Filter
 		return nil
 	} else if c.BoolArgs["mode"] {
 		if c.BoolArgs["raw"] {
-			captureConfig.Mode = "raw"
+			ns.captures.Mode = gonetflow.RAW
 			return nil
 		} else if c.BoolArgs["ascii"] {
-			captureConfig.Mode = "ascii"
+			ns.captures.Mode = gonetflow.ASCII
 			return nil
 		}
 
-		resp.Response = captureConfig.Mode
+		resp.Response = ns.captures.Mode.String()
 		return nil
 	} else if c.BoolArgs["gzip"] {
 		if c.BoolArgs["true"] || c.BoolArgs["false"] {
-			captureConfig.Compress = c.BoolArgs["true"]
+			ns.captures.Compress = c.BoolArgs["true"]
 			return nil
 		}
 
-		resp.Response = strconv.FormatBool(captureConfig.Compress)
+		resp.Response = strconv.FormatBool(ns.captures.Compress)
 		return nil
 	}
 
 	return errors.New("unreachable")
 }
 
-func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
-	namespace := GetNamespaceName()
-
-	resp.Header = []string{"Bridge"}
-
-	if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
-		resp.Header = append(resp.Header, "type")
-	}
-
-	if !c.BoolArgs["netflow"] {
-		resp.Header = append(resp.Header, "interface")
-	}
-	if !c.BoolArgs["pcap"] {
-		resp.Header = append(resp.Header, "mode", "compress")
-	}
-
-	resp.Header = append(resp.Header, "path")
-
-	if namespace == "" {
-		resp.Header = append(resp.Header, "namespace")
+func cliCaptureList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	resp.Header = []string{
+		"bridge",
+		"type",
+		"interface",
+		"mode",
+		"compress",
+		"path",
 	}
 
 	resp.Tabular = [][]string{}
-	for _, v := range captureEntries {
-		if !v.InNamespace(namespace) {
-			continue
-		}
 
-		row := []string{
-			v.Bridge,
-		}
+	for _, v := range ns.captures.m {
+		var row []string
 
-		if !c.BoolArgs["netflow"] && !c.BoolArgs["pcap"] {
-			row = append(row, v.Type)
-		}
-
-		if !c.BoolArgs["netflow"] || (c.BoolArgs["pcap"] && v.Type == "pcap") {
-			if v.VM != nil {
-				row = append(row, fmt.Sprintf("%v:%v", v.VM.GetName(), v.Interface))
-			} else {
-				row = append(row, "N/A")
+		switch v := v.(type) {
+		case *pcapVMCapture:
+			row = []string{
+				v.Bridge,
+				v.Type(),
+				fmt.Sprintf("%v:%v", v.VM.GetName(), v.Interface),
+				"", "",
+				v.Path,
 			}
-		}
-
-		if !c.BoolArgs["pcap"] || (c.BoolArgs["netflow"] && v.Type == "netflow") {
-			row = append(row, v.Mode, strconv.FormatBool(v.Compress))
-		}
-
-		row = append(row, v.Path)
-
-		if namespace == "" {
-			if v.VM != nil {
-				row = append(row, v.VM.GetNamespace())
-			} else {
-				row = append(row, "N/A")
+		case *pcapBridgeCapture:
+			row = []string{
+				v.Bridge,
+				v.Type(),
+				"", "", "",
+				v.Path,
+			}
+		case *netflowCapture:
+			row = []string{
+				v.Bridge,
+				v.Type(),
+				"",
+				v.Mode.String(),
+				strconv.FormatBool(v.Compress),
+				v.Path,
 			}
 		}
 
@@ -246,79 +238,84 @@ func cliCaptureList(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return nil
-
-	// TODO: How does this fit in?
-	//
-	// get netflow stats for each bridge
-	//var nfstats string
-	//b := enumerateBridges()
-	//for _, v := range b {
-	//	nf, err := getNetflowFromBridge(v)
-	//	if err != nil {
-	//		if !strings.Contains(err.Error(), "has no netflow object") {
-	//			return cliResponse{
-	//				Error: err.Error(),
-	//			}
-	//		}
-	//		continue
-	//	}
-	//	nfstats += fmt.Sprintf("Bridge %v:\n", v)
-	//	nfstats += fmt.Sprintf("minimega listening on port: %v\n", nf.GetPort())
-	//	nfstats += nf.GetStats()
-	//}
-
-	//out := o.String() + "\n" + nfstats
 }
 
-func cliCaptureVM(c *minicli.Command, resp *minicli.Response) error {
-	name := c.StringArgs["name"]
+func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	name := c.StringArgs["vm"]
+	iface := c.StringArgs["interface"]
+	fname := c.StringArgs["filename"]
+
+	// stopping capture for one or all VMs
 	if c.BoolArgs["delete"] {
-		// stop a capture
-		return clearCapture("pcap", "vm", name)
+		return ns.captures.StopVM(name)
 	}
 
-	fname := c.StringArgs["filename"]
-	iface := c.StringArgs["interface"]
-
-	// Capture VM:interface -> pcap
+	// capture VM:interface -> pcap
 	num, err := strconv.Atoi(iface)
 	if err != nil {
 		return fmt.Errorf("invalid interface: `%v`", iface)
 	}
 
-	return startCapturePcap(name, num, fname)
+	vm := ns.FindVM(name)
+	if vm == nil {
+		return vmNotFound(name)
+	}
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(fname) {
+		// TODO: should we capture to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
+
+	return ns.captures.CaptureVM(vm, num, fname)
 }
 
-func cliCaptureClear(c *minicli.Command, resp *minicli.Response) error {
-	return clearAllCaptures()
+func cliCaptureClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return ns.captures.StopAll()
 }
 
 // cliCapturePcap manages the CLI for starting and stopping captures to pcap.
-func cliCapturePcap(c *minicli.Command, resp *minicli.Response) error {
+func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	b := c.StringArgs["bridge"]
+	fname := c.StringArgs["filename"]
+
 	if c.BoolArgs["delete"] {
-		// Stop a capture
-		return clearCapture("pcap", "bridge", c.StringArgs["name"])
-	} else if c.StringArgs["bridge"] != "" {
-		// Capture bridge -> pcap
-		return startBridgeCapturePcap(c.StringArgs["bridge"], c.StringArgs["filename"])
+		return ns.captures.StopBridge(b, "pcap")
 	}
 
-	return errors.New("unreachable")
+	return ns.captures.CaptureBridge(b, fname)
 }
 
 // cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.
-func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
+func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	b := c.StringArgs["bridge"]
+
 	if c.BoolArgs["delete"] {
-		// Stop a capture
-		return clearCapture("netflow", "bridge", c.StringArgs["name"])
-	} else if c.StringArgs["filename"] != "" {
+		return ns.captures.StopBridge(b, "netflow")
+	} else if c.BoolArgs["timeout"] {
+		// Set or get the netflow timeout
+		timeout := c.StringArgs["timeout"]
+		val, err := strconv.Atoi(timeout)
+		if timeout != "" {
+			resp.Response = strconv.Itoa(captureNFTimeout)
+		} else if err != nil {
+			return fmt.Errorf("invalid timeout parameter: `%v`", timeout)
+		} else {
+			captureNFTimeout = val
+			updateNetflowTimeouts()
+		}
+
+		return nil
+	} else if c.BoolArgs["file"] {
 		// Capture -> netflow (file)
-		return startCaptureNetflowFile(
-			c.StringArgs["bridge"],
-			c.StringArgs["filename"],
-			captureConfig.Mode == "ascii",
-			captureConfig.Compress,
-		)
+		fname := c.StringArgs["filename"]
+
+		// Ensure that relative paths are always relative to /files/
+		if !filepath.IsAbs(fname) {
+			fname = filepath.Join(*f_iomBase, fname)
+		}
+
+		return ns.captures.CaptureNetflowFile(b, fname)
 	} else if c.BoolArgs["socket"] {
 		// Capture -> netflow (socket)
 		transport := "tcp"
@@ -326,12 +323,9 @@ func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 			transport = "udp"
 		}
 
-		return startCaptureNetflowSocket(
-			c.StringArgs["bridge"],
-			transport,
-			c.StringArgs["hostname:port"],
-			captureConfig.Mode == "ascii",
-		)
+		host := c.StringArgs["hostname:port"]
+
+		return ns.captures.CaptureNetflowSocket(b, transport, host)
 	} else if c.BoolArgs["timeout"] {
 		if v, ok := c.StringArgs["timeout"]; ok {
 			i, err := strconv.ParseUint(v, 10, 32)
@@ -341,7 +335,7 @@ func cliCaptureNetflow(c *minicli.Command, resp *minicli.Response) error {
 
 			captureNFTimeout = int(i)
 
-			captureUpdateNFTimeouts()
+			updateNetflowTimeouts()
 
 			return nil
 		}

@@ -40,7 +40,6 @@ var (
 	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
 	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
-	f_ccPort     = flag.Int("ccport", 9002, "cc port to listen on")
 	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
@@ -51,8 +50,6 @@ var (
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
-
-	vms = VMs{}
 
 	hostname string
 	reserved = []string{Wildcard}
@@ -219,7 +216,11 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	plumberStart(meshageNode)
-	ccStart()
+
+	// has to happen after meshageNode is created
+	GetOrCreateNamespace(DefaultNamespace)
+	SetNamespace(DefaultNamespace)
+
 	commandSocketStart()
 
 	// set up signal handling
@@ -273,16 +274,11 @@ func Shutdown(format string, args ...interface{}) {
 }
 
 func teardown() {
-	// Clear namespace so that we hit all the VMs
-	SetNamespace("")
+	// destroy all namespaces
+	DestroyNamespace(Wildcard)
 
-	clearAllCaptures()
-	vncClear()
+	// clean-up non-namespace things
 	dnsmasqKillAll()
-
-	vms.Kill(Wildcard)
-	vms.Flush()
-
 	ksmDisable()
 	containerTeardown()
 
@@ -293,7 +289,7 @@ func teardown() {
 	commandSocketRemove()
 
 	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
-		log.Fatalln(err)
+		log.Errorln(err)
 	}
 
 	if cpuProfileOut != nil {

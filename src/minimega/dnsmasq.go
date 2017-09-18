@@ -233,7 +233,7 @@ func (d *dnsmasqServer) writeDHCPopts() {
 	ioutil.WriteFile(filepath.Join(d.DHCPoptsdir, "dhcp-options"), []byte(contents), 0755)
 }
 
-func cliDnsmasqConfigure(c *minicli.Command, resp *minicli.Response) error {
+func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	argID := c.StringArgs["ID"]
 	id, err := strconv.Atoi(argID)
 	if argID != Wildcard && err != nil {
@@ -310,7 +310,7 @@ func cliDnsmasqConfigure(c *minicli.Command, resp *minicli.Response) error {
 	return errors.New("unreachable")
 }
 
-func cliDnsmasq(c *minicli.Command, resp *minicli.Response) error {
+func cliDnsmasq(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["id"] == Wildcard {
 		// Must be "kill all"
 		return dnsmasqKillAll()

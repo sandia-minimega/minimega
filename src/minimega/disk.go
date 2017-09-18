@@ -302,7 +302,7 @@ func diskInjectCleanup(mntDir, nbdPath string) {
 	}
 }
 
-func cliDisk(c *minicli.Command, resp *minicli.Response) error {
+func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	image := filepath.Clean(c.StringArgs["image"])
 
 	// Ensure that relative paths are always relative to /files/

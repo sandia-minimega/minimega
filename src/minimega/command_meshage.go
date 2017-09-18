@@ -142,7 +142,7 @@ func meshageHandler() {
 }
 
 // cli commands for meshage control
-func cliMeshageDegree(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageDegree(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["degree"] != "" {
 		degree, err := strconv.ParseUint(c.StringArgs["degree"], 0, 10)
 		if err != nil {
@@ -157,15 +157,15 @@ func cliMeshageDegree(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliMeshageDial(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageDial(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return meshageNode.Dial(c.StringArgs["hostname"])
 }
 
-func cliMeshageHangup(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageHangup(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return meshageNode.Hangup(c.StringArgs["hostname"])
 }
 
-func cliMeshageDot(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageDot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	f, err := os.Create(c.StringArgs["filename"])
 	if err != nil {
 		return err
@@ -176,7 +176,7 @@ func cliMeshageDot(c *minicli.Command, resp *minicli.Response) error {
 	return err
 }
 
-func cliMeshageList(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 
 	var keys []string
@@ -197,7 +197,7 @@ func cliMeshageList(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliMeshageStatus(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageStatus(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	mesh := meshageNode.Mesh()
 	degree := meshageNode.GetDegree()
 	nodes := len(mesh)
@@ -216,7 +216,7 @@ func cliMeshageStatus(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliMeshageTimeout(c *minicli.Command, resp *minicli.Response) error {
+func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["timeout"] != "" {
 		timeout, err := strconv.Atoi(c.StringArgs["timeout"])
 		if err != nil {

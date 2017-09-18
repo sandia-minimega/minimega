@@ -102,8 +102,10 @@ func (old VMConfig) Copy() VMConfig {
 	}
 }
 
-func (vm VMConfig) String() string {
-	return vm.BaseConfig.String() + vm.KVMConfig.String() + vm.ContainerConfig.String()
+func (vm VMConfig) String(namespace string) string {
+	return vm.BaseConfig.String(namespace) +
+		vm.KVMConfig.String() +
+		vm.ContainerConfig.String()
 }
 
 func (vm *VMConfig) Clear(mask string) {
@@ -129,15 +131,15 @@ func (old BaseConfig) Copy() BaseConfig {
 	return res
 }
 
-func (vm *BaseConfig) String() string {
+func (vm *BaseConfig) String(namespace string) string {
 	// create output
 	var o bytes.Buffer
-	fmt.Fprintln(&o, "Current VM configuration:")
+	fmt.Fprintln(&o, "VM configuration:")
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "Memory:\t%v\n", vm.Memory)
 	fmt.Fprintf(w, "VCPUs:\t%v\n", vm.VCPUs)
-	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString())
+	fmt.Fprintf(w, "Networks:\t%v\n", vm.NetworkString(namespace))
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.Snapshot)
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "Schedule host:\t%v\n", vm.Schedule)
@@ -153,10 +155,10 @@ func (vm *BaseConfig) String() string {
 	return o.String()
 }
 
-func (vm *BaseConfig) NetworkString() string {
+func (vm *BaseConfig) NetworkString(namespace string) string {
 	parts := []string{}
 	for _, net := range vm.Networks {
-		parts = append(parts, net.String())
+		parts = append(parts, net.String(namespace))
 	}
 
 	return fmt.Sprintf("[%s]", strings.Join(parts, " "))
@@ -190,13 +192,13 @@ func (vm *BaseConfig) QosString(b, t, i string) string {
 }
 
 // TODO: Handle if there are spaces or commas in the tap/bridge names
-func (net NetConfig) String() (s string) {
+func (net NetConfig) String(namespace string) (s string) {
 	parts := []string{}
 	if net.Bridge != "" {
 		parts = append(parts, net.Bridge)
 	}
 
-	parts = append(parts, printVLAN(net.VLAN))
+	parts = append(parts, printVLAN(namespace, net.VLAN))
 
 	if net.MAC != "" {
 		parts = append(parts, net.MAC)

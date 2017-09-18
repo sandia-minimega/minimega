@@ -89,7 +89,7 @@ Resets state for logging. See "help log ..." for more information.`,
 	},
 }
 
-func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
+func cliLogLevel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.BoolArgs) == 0 {
 		// Print the level
 		resp.Response = logLevel.String()
@@ -107,7 +107,7 @@ func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
+func cliLogStderr(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["false"] {
 		// Turn off logging to stderr
 		log.DelLogger("stderr")
@@ -125,7 +125,7 @@ func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
+func cliLogFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		// Print true or false depending on whether file is enabled
 		if logFile != nil {
@@ -157,7 +157,7 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
+func cliLogSyslog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	var network string
 	var address string
 
@@ -175,7 +175,7 @@ func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
 	return log.AddSyslog(network, address, "minimega", logLevel)
 }
 
-func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
+func cliLogFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		var filters []string
 		loggers := log.Loggers()
@@ -214,7 +214,7 @@ func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
+func cliLogClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Reset file if explicitly cleared or we're clearing everything
 	if c.BoolArgs["file"] || len(c.BoolArgs) == 0 {
 		if err := stopFileLogger(); err != nil {

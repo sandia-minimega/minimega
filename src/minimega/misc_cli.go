@@ -96,12 +96,8 @@ VM). Stops on the first invalid command.`,
 	{ // clear all
 		HelpShort: "reset all resettable ",
 		HelpLong: `
-minimega has many "clear ..." handlers. This attempts to invoke them all to
-reset minimega to as vanilla a state as possible. Restarting minimega is
-preferable.
-
-This command only runs locally and is not broadcast to all members of the
-namespace even if one is active.`,
+Runs all the "clear ..." handlers on the local instance -- as close to nuke as
+you can get without restarting minimega. Restarting minimega is preferable.`,
 		Patterns: []string{
 			"clear all",
 		},
@@ -109,7 +105,7 @@ namespace even if one is active.`,
 	},
 }
 
-func cliQuit(c *minicli.Command, resp *minicli.Response) error {
+func cliQuit(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
@@ -129,7 +125,7 @@ func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 	return errors.New("unreachable")
 }
 
-func cliHelp(c *minicli.Command, resp *minicli.Response) error {
+func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
@@ -203,13 +199,14 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 }
 
-func cliDebug(c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["memory"] {
-		dst := c.StringArgs["file"]
-		if !filepath.IsAbs(dst) {
-			dst = path.Join(*f_iomBase, dst)
-		}
+func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// make sure path is relative to files if not absolute
+	dst := c.StringArgs["file"]
+	if !filepath.IsAbs(dst) {
+		dst = path.Join(*f_iomBase, dst)
+	}
 
+	if c.BoolArgs["memory"] {
 		log.Info("writing memory profile to %v", dst)
 
 		f, err := os.Create(dst)
@@ -222,11 +219,6 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
 			return errors.New("CPU profile still running")
-		}
-
-		dst := c.StringArgs["file"]
-		if !filepath.IsAbs(dst) {
-			dst = path.Join(*f_iomBase, dst)
 		}
 
 		log.Info("writing cpu profile to %v", dst)
@@ -265,32 +257,27 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVersion(c *minicli.Command, resp *minicli.Response) error {
+func cliVersion(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
 	return nil
 }
 
-func cliEcho(c *minicli.Command, resp *minicli.Response) error {
+func cliEcho(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = strings.Join(c.ListArgs["args"], " ")
 	return nil
 }
 
 func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 	all := []string{
-		"clear capture",
-		"clear cc",
+		// clear non-namespaced things (except history)
 		"clear deploy flags",
-		"clear history",
-		"clear log",
+		"dnsmasq kill all",
+		// clear all namespaced things
 		"clear namespace all",
-		"clear optimize",
-		//"clear qos",
-		"clear router",
-		"clear tap",
-		"clear vlans",
-		"clear vm config",
-		"clear vm tag",
-		"clear vnc",
+		// clear vlan blacklist
+		"clear vlans all",
+		// clear the history last
+		"clear history",
 	}
 
 	// LOCK: this is a CLI hander so we already hold cmdLock (can call

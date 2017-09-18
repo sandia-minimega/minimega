@@ -1,5 +1,5 @@
 ## vm config
-Current VM configuration:
+VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
@@ -10,7 +10,7 @@ Coschedule limit: -1
 Backchannel:      true
 Tags:             {}
 
-Current KVM configuration:
+KVM configuration:
 Migrate Path:       
 Disk Paths:         []
 CDROM Path:         
@@ -22,7 +22,7 @@ QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
 
-Current container configuration:
+Container configuration:
 Filesystem Path: 
 Hostname:        
 Init:            [/init]
@@ -37,7 +37,7 @@ Volumes:
 ## vm config memory 1024
 ## vm config qemu-append -k en-us
 ## vm config
-Current VM configuration:
+VM configuration:
 Memory:           1024
 VCPUs:            4
 Networks:         [mega_bridge,10,b4:b6:76:69:68:68]
@@ -48,7 +48,7 @@ Coschedule limit: -1
 Backchannel:      true
 Tags:             {}
 
-Current KVM configuration:
+KVM configuration:
 Migrate Path:       
 Disk Paths:         []
 CDROM Path:         
@@ -60,7 +60,7 @@ QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
 
-Current container configuration:
+Container configuration:
 Filesystem Path: 
 Hostname:        
 Init:            [/init]
@@ -72,7 +72,7 @@ Volumes:
 ## vm config save test
 ## clear vm config
 ## vm config
-Current VM configuration:
+VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
@@ -83,7 +83,7 @@ Coschedule limit: -1
 Backchannel:      true
 Tags:             {}
 
-Current KVM configuration:
+KVM configuration:
 Migrate Path:       
 Disk Paths:         []
 CDROM Path:         
@@ -95,7 +95,7 @@ QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
 
-Current container configuration:
+Container configuration:
 Filesystem Path: 
 Hostname:        
 Init:            [/init]
@@ -104,7 +104,7 @@ FIFOs:           0
 Volumes:
 ## vm config restore test
 ## vm config
-Current VM configuration:
+VM configuration:
 Memory:           1024
 VCPUs:            4
 Networks:         [mega_bridge,10,b4:b6:76:69:68:68]
@@ -115,7 +115,7 @@ Coschedule limit: -1
 Backchannel:      true
 Tags:             {}
 
-Current KVM configuration:
+KVM configuration:
 Migrate Path:       
 Disk Paths:         []
 CDROM Path:         
@@ -127,7 +127,7 @@ QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
 
-Current container configuration:
+Container configuration:
 Filesystem Path: 
 Hostname:        
 Init:            [/init]

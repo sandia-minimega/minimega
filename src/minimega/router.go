@@ -18,10 +18,6 @@ import (
 	"text/tabwriter"
 )
 
-var (
-	routers map[int]*Router = make(map[int]*Router)
-)
-
 type Router struct {
 	vm           VM
 	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
@@ -48,6 +44,43 @@ type dhcp struct {
 	router string
 	dns    string
 	static map[string]string
+}
+
+// Create a new router for vm, or returns an existing router if it already
+// exists
+func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
+	log.Debug("FindOrCreateRouter: %v", vm)
+
+	id := vm.GetID()
+	if r, ok := ns.routers[id]; ok {
+		return r
+	}
+	r := &Router{
+		vm:           vm,
+		IPs:          [][]string{},
+		logLevel:     "error",
+		dhcp:         make(map[string]*dhcp),
+		dns:          make(map[string][]string),
+		rad:          make(map[string]bool),
+		staticRoutes: make(map[string]string),
+		ospfRoutes:   make(map[string]*ospf),
+	}
+	nets := vm.GetNetworks()
+	for i := 0; i < len(nets); i++ {
+		r.IPs = append(r.IPs, []string{})
+	}
+
+	ns.routers[id] = r
+
+	vm.SetTag("minirouter", fmt.Sprintf("%v", id))
+
+	return r
+}
+
+// FindRouter returns an existing router if it exists, otherwise nil
+func (ns *Namespace) FindRouter(vm VM) *Router {
+	id := vm.GetID()
+	return ns.routers[id]
 }
 
 func (r *Router) String() string {
@@ -207,48 +240,19 @@ func (r *Router) generateConfig() error {
 	}
 	fmt.Fprintf(&out, "bird commit\n")
 
-	filename := filepath.Join(*f_iomBase, fmt.Sprintf("minirouter-%v", r.vm.GetName()))
-	return ioutil.WriteFile(filename, out.Bytes(), 0644)
-}
+	filename := fmt.Sprintf("minirouter-%v", r.vm.GetName())
 
-// Create a new router for vm, or returns an existing router if it already
-// exists
-func FindOrCreateRouter(vm VM) *Router {
-	log.Debug("FindOrCreateRouter: %v", vm)
-
-	id := vm.GetID()
-	if r, ok := routers[id]; ok {
-		return r
-	}
-	r := &Router{
-		vm:           vm,
-		IPs:          [][]string{},
-		logLevel:     "error",
-		dhcp:         make(map[string]*dhcp),
-		dns:          make(map[string][]string),
-		rad:          make(map[string]bool),
-		staticRoutes: make(map[string]string),
-		ospfRoutes:   make(map[string]*ospf),
-	}
-	nets := vm.GetNetworks()
-	for i := 0; i < len(nets); i++ {
-		r.IPs = append(r.IPs, []string{})
+	// HAX: the default namespace doesn't get a subdir so we should drop the
+	// minirouter conf in f_iomBase
+	path := *f_iomBase
+	if namespace := r.vm.GetNamespace(); namespace != DefaultNamespace {
+		path = filepath.Join(*f_iomBase, namespace)
 	}
 
-	routers[id] = r
-
-	vm.SetTag("minirouter", fmt.Sprintf("%v", id))
-
-	return r
+	return ioutil.WriteFile(filepath.Join(path, filename), out.Bytes(), 0644)
 }
 
-// FindRouter returns an existing router if it exists, otherwise nil
-func FindRouter(vm VM) *Router {
-	id := vm.GetID()
-	return routers[id]
-}
-
-func (r *Router) Commit() error {
+func (r *Router) Commit(ns *Namespace) error {
 	log.Debugln("Commit")
 
 	// build a command list from the router
@@ -260,59 +264,40 @@ func (r *Router) Commit() error {
 
 	// remove any previous commands
 	prefix := fmt.Sprintf("minirouter-%v", r.vm.GetName())
-	ids := ccPrefixIDs(prefix)
-	if len(ids) != 0 {
-		for _, v := range ids {
-			c := ccNode.GetCommand(v)
-			if c == nil {
-				return fmt.Errorf("cc delete unknown command %v", v)
-			}
-
-			if !ccMatchNamespace(c) {
-				// skip without warning
-				continue
-			}
-
-			err := ccNode.DeleteCommand(v)
-			if err != nil {
-				return fmt.Errorf("cc delete command %v : %v", v, err)
-			}
-			ccUnmapPrefix(v)
+	if err := ns.ccServer.DeleteCommands(prefix); err != nil {
+		if !strings.HasPrefix(err.Error(), "no such prefix") {
+			return err
 		}
 	}
 
 	filter := &ron.Filter{
-		Namespace: r.vm.GetNamespace(),
-		UUID:      r.vm.GetUUID(),
+		UUID: r.vm.GetUUID(),
 	}
 
 	// issue cc commands for this router
 	cmd := &ron.Command{
-		Filter:  filter,
 		Command: []string{"rm", filepath.Join("/tmp/miniccc/files", prefix)},
+		Prefix:  prefix,
+		Filter:  filter,
 	}
-	id := ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ns.ccServer.NewCommand(cmd)
 
 	cmd = &ron.Command{
+		Prefix: prefix,
 		Filter: filter,
 	}
 	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
 		Name: prefix,
 		Perm: 0644,
 	})
-	id = ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ns.ccServer.NewCommand(cmd)
 
 	cmd = &ron.Command{
-		Filter:  filter,
 		Command: []string{"minirouter", "-u", filepath.Join("/tmp/miniccc/files", prefix)},
+		Prefix:  prefix,
+		Filter:  filter,
 	}
-	id = ccNode.NewCommand(cmd)
-	log.Debug("generated command %v : %v", id, cmd)
-	ccPrefixMap[id] = prefix
+	ns.ccServer.NewCommand(cmd)
 
 	return nil
 }

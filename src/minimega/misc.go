@@ -21,9 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 	"unicode"
 	"vlans"
@@ -109,29 +109,6 @@ func generateUUID() string {
 	uuid = uuid[:len(uuid)-1]
 	log.Debug("generated UUID: %v", string(uuid))
 	return string(uuid)
-}
-
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-
-	parts := strings.Split(s, "-")
-	if len(parts) != 5 {
-		return false
-	}
-
-	for i, v := range []int{8, 4, 4, 4, 12} {
-		if len(parts[i]) != v {
-			return false
-		}
-
-		if _, err := strconv.ParseInt(parts[i], 16, 64); err != nil {
-			return false
-		}
-	}
-
-	return true
 }
 
 // generate a random mac address and return as a string
@@ -298,6 +275,10 @@ func mustWrite(fpath, data string) {
 // marshal returns the JSON-marshaled version of `v`. If we are unable to
 // marshal it for whatever reason, we log an error and return an empty string.
 func marshal(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+
 	b, err := json.Marshal(v)
 	if err != nil {
 		log.Error("unable to marshal %v: %v", v, err)
@@ -305,22 +286,6 @@ func marshal(v interface{}) string {
 	}
 
 	return string(b)
-}
-
-// PermStrings creates a random permutation of the source slice using the
-// "inside-out" version of the Fisher-Yates algorithm.
-func PermStrings(source []string) []string {
-	res := make([]string, len(source))
-
-	for i := range source {
-		j := rand.Intn(i + 1)
-		if j != i {
-			res[i] = res[j]
-		}
-		res[j] = source[i]
-	}
-
-	return res
 }
 
 // processVMNet processes the input specifying the bridge, vlan, and mac for
@@ -338,7 +303,7 @@ func PermStrings(source []string) []string {
 //
 //	bridge,vlan,mac,driver
 // If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(spec string) (res NetConfig, err error) {
+func processVMNet(namespace, spec string) (res NetConfig, err error) {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(spec, ",")
 
@@ -380,7 +345,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 
 	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
 
-	vlan, err := lookupVLAN(v)
+	vlan, err := lookupVLAN(namespace, v)
 	if err != nil {
 		return NetConfig{}, err
 	}
@@ -412,9 +377,7 @@ func processVMNet(spec string) (res NetConfig, err error) {
 // lookupVLAN uses the allocatedVLANs and active namespace to turn a string
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
-func lookupVLAN(alias string) (int, error) {
-	namespace := GetNamespaceName()
-
+func lookupVLAN(namespace, alias string) (int, error) {
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
@@ -426,47 +389,60 @@ func lookupVLAN(alias string) (int, error) {
 		return 0, err
 	}
 
-	if !created {
-		return vlan, nil
-	}
+	if created {
+		// update file so that we have a copy of the vlans if minimega crashes
+		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
-	// Broadcast out vlan alias to everyone so that we have a record of the
-	// aliases, should this node crash.
-	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
-	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
-		s = fmt.Sprintf("namespace %q %v", namespace, s)
-	}
-	cmd := minicli.MustCompile(s)
-	cmd.SetRecord(false)
-	cmd.SetSource(namespace)
+		// broadcast out the alias to the cluster so that the other nodes can
+		// print the alias correctly
+		cmd := minicli.MustCompilef("namespace %v vlans add %q %v", namespace, alias, vlan)
+		cmd.SetRecord(false)
+		cmd.SetSource(namespace)
 
-	respChan, err := meshageSend(cmd, Wildcard)
-	if err != nil {
-		// don't propagate the error since this is supposed to be best-effort.
-		log.Error("unable to broadcast alias update: %v", err)
-		return vlan, nil
-	}
-
-	// read all the responses, looking for errors
-	go func() {
-		for resps := range respChan {
-			for _, resp := range resps {
-				if resp.Error != "" {
-					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
-				}
-			}
+		respChan, err := meshageSend(cmd, Wildcard)
+		if err != nil {
+			// don't propagate the error since this is supposed to be best-effort.
+			log.Error("unable to broadcast alias update: %v", err)
+			return vlan, nil
 		}
 
-	}()
+		// read all the responses, looking for errors
+		go func() {
+			for resps := range respChan {
+				for _, resp := range resps {
+					if resp.Error != "" {
+						log.Error("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+					}
+				}
+			}
+		}()
+	}
 
 	return vlan, nil
 }
 
 // printVLAN uses the allocatedVLANs and active namespace to print a vlan.
-func printVLAN(vlan int) string {
-	namespace := GetNamespaceName()
-
+func printVLAN(namespace string, vlan int) string {
 	return allocatedVLANs.PrintVLAN(namespace, vlan)
+}
+
+// vlanInfo returns formatted information about all the vlans.
+func vlanInfo() string {
+	info := allocatedVLANs.Tabular("")
+	if len(info) == 0 {
+		return ""
+	}
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Alias\tVLAN\n")
+	for _, i := range info {
+		fmt.Fprintf(w, "%v\t%v\n", i[0], i[1])
+	}
+
+	w.Flush()
+	return o.String()
 }
 
 // wget downloads a URL and writes it to disk, creates parent directories if

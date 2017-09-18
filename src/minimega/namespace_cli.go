@@ -6,72 +6,101 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"minicli"
+	log "minilog"
 	"ranges"
+	"strconv"
 	"strings"
-	"text/tabwriter"
+	"time"
 )
 
 var namespaceCLIHandlers = []minicli.Handler{
 	{ // namespace
-		HelpShort: "control namespace environments",
+		HelpShort: "display or change namespace",
 		HelpLong: `
-Control and run commands in namespace environments.`,
+With no arguments, "namespace" prints all the namespaces, the active namespace
+will be displayed in brackets (e.g. "[minimega]"). When a namespace is
+specified, it changes the active namespace or runs a single command in the
+different namespace.`,
 		Patterns: []string{
 			"namespace [name]",
 			"namespace <name> (command)",
 		},
 		Call: cliNamespace,
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, false)
 			}
 			return nil
 		}),
 	},
-	{ // nsmod
-		HelpShort: "modify namespace environments",
+	{ // ns
+		HelpShort: "tinker with active namespace",
 		HelpLong: `
-Modify settings of the currently active namespace.
+Display or modify the active namespace.
 
-add-host : add comma-separated list of hosts to the namespace
-del-host : delete comma-separated list of hosts from the namespace
-load     : change host load is computed for scheduler, based on:
-	cpucommit : total CPU commit divided by number of CPUs (default)
-	netcommit : total NIC
-	memcommit : total memory commit divided by total memory
+- hosts     : list hosts
+- add-hosts : add comma-separated list of hosts to the namespace
+- del-hosts : delete comma-separated list of hosts from the namespace
+- load      : display or change host load is computed for scheduler, based on:
+  - cpucommit : total CPU commit divided by number of CPUs (default)
+  - netcommit : total NIC
+  - memcommit : total memory commit divided by total memory
+- queue     : display VM queue
+- flush     : clear the VM queue
+- queueing  : toggle VMs queueing when launching (default false)
+- schedules : display scheduling stats
+- run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
-			"nsmod <add-host,> <hosts>",
-			"nsmod <del-host,> <hosts>",
-			"nsmod <load,>",
-			"nsmod <load,> <cpucommit,>",
-			"nsmod <load,> <netcommit,>",
-			"nsmod <load,> <memcommit,>",
+			"ns <hosts,>",
+			"ns <add-hosts,> <hosts>",
+			"ns <del-hosts,> <hosts>",
+			"ns <load,>",
+			"ns <load,> <cpucommit,>",
+			"ns <load,> <netcommit,>",
+			"ns <load,> <memcommit,>",
+			"ns <queue,>",
+			"ns <flush,>",
+			"ns <queueing,> [true,false]",
+			"ns <schedules,>",
+			"ns <run,> (command)",
 		},
-		Call: wrapSimpleCLI(cliNamespaceMod),
+		Call: cliNS,
 	},
 	{ // clear namespace
 		HelpShort: "unset or delete namespace",
 		HelpLong: `
-If a namespace is active, "clear namespace" will deactivate it. If no namespace
-is active, "clear namespace" returns an error and does nothing.
+Without an argument, "clear namespace" will reset the namespace to the default
+namespace, minimega.
 
-If you specify a namespace by name, then the specified namespace will be
-deleted. You may use "all" to delete all namespaces.`,
+With an arugment, "clear namespace <name>" will delete the specified namespace.
+You may use "all" to delete all namespaces.`,
 		Patterns: []string{
 			"clear namespace [name]",
 		},
 		Call: wrapSimpleCLI(cliClearNamespace),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, true)
 			}
 			return nil
 		}),
 	},
+}
+
+// Functions pointers to the various handlers for the subcommands
+var nsCliHandlers = map[string]minicli.CLIFunc{
+	"hosts":     wrapSimpleCLI(cliNamespaceHosts),
+	"add-hosts": wrapSimpleCLI(cliNamespaceAddHost),
+	"del-hosts": wrapSimpleCLI(cliNamespaceDelHost),
+	"load":      wrapSimpleCLI(cliNamespaceLoad),
+	"queue":     wrapSimpleCLI(cliNamespaceQueue),
+	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
+	"flush":     wrapSimpleCLI(cliNamespaceFlush),
+	"schedules": wrapSimpleCLI(cliNamespaceSchedules),
+	"run":       cliNamespaceRun,
 }
 
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -84,12 +113,16 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns2 := GetOrCreateNamespace(name)
 
 		if c.Subcommand != nil {
-			// Setting namespace for a single command, revert back afterwards
-			defer RevertNamespace(ns, ns2)
-			if err := SetNamespace(name); err != nil {
-				resp.Error = err.Error()
-				respChan <- minicli.Responses{resp}
-				return
+			// If we're not already in the desired namespace, change to it
+			// before running the command and then revert back afterwards. If
+			// we're already in the namespace, just run the command.
+			if ns.Name != name {
+				if err := SetNamespace(name); err != nil {
+					resp.Error = err.Error()
+					respChan <- minicli.Responses{resp}
+					return
+				}
+				defer RevertNamespace(ns, ns2)
 			}
 
 			// Run the subcommand and forward the responses.
@@ -108,146 +141,205 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	if ns == nil {
-		resp.Response = fmt.Sprintf("Namespaces: %v", ListNamespaces())
-		respChan <- minicli.Responses{resp}
-		return
-	}
-
-	hosts := []string{}
-	for h := range ns.Hosts {
-		hosts = append(hosts, h)
-	}
-
-	taps := []string{}
-	for t := range ns.Taps {
-		taps = append(taps, t)
-	}
-
-	// TODO: Make this pretty or divide it up somehow
-	resp.Response = fmt.Sprintf(`Namespace: "%v"
-Hosts: %v
-Taps: %v
-Scheduler: %v
-Number of queued VMs: %v
-
-Schedules:
-`,
-		namespace,
-		ranges.UnsplitList(hosts),
-		ranges.UnsplitList(taps),
-		ns.HostSortBy,
-		len(ns.queue))
-
-	var o bytes.Buffer
-	w := new(tabwriter.Writer)
-	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(w, "start\tend\tstate\tlaunched\tfailures\ttotal\thosts")
-	for _, stats := range ns.scheduleStats {
-		var end string
-		if !stats.end.IsZero() {
-			end = fmt.Sprintf("%v", stats.end)
-		}
-
-		fmt.Fprintf(w, "%v\t%v\t%v\t%v\t%v\t%v\t%v\n",
-			stats.start,
-			end,
-			stats.state,
-			stats.launched,
-			stats.failures,
-			stats.total,
-			stats.hosts)
-	}
-	w.Flush()
-
-	resp.Response += o.String()
-
+	resp.Response = strings.Join(ListNamespaces(true), ", ")
 	respChan <- minicli.Responses{resp}
 }
 
-func cliNamespaceMod(c *minicli.Command, resp *minicli.Response) error {
-	ns := GetNamespace()
-	if ns == nil {
-		return errors.New("cannot run nsmod without active namespace")
+func cliNS(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// Dispatcher for a sub handler
+	for k, fn := range nsCliHandlers {
+		if c.BoolArgs[k] {
+			fn(c, respChan)
+			return
+		}
 	}
+}
 
-	// Empty string should parse fine...
+func cliNamespaceHosts(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	resp.Response = ranges.UnsplitList(ns.hostSlice())
+	return nil
+}
+
+func cliNamespaceAddHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
 	if err != nil {
 		return fmt.Errorf("invalid hosts -- %v", err)
 	}
 
-	if c.BoolArgs["add-host"] {
-		peers := map[string]bool{}
-		for _, peer := range meshageNode.BroadcastRecipients() {
-			peers[peer] = true
-		}
-
-		// Test that the host is actually in the mesh. If it's not, we could
-		// try to mesh dial it... Returning an error is simpler, for now.
-		for i := range hosts {
-			// Add all the peers if we see a wildcard
-			if hosts[i] == Wildcard {
-				for peer := range peers {
-					ns.Hosts[peer] = true
-				}
-
-				return nil
-			}
-
-			// Resolve `localhost` to actual hostname
-			if hosts[i] == Localhost {
-				hosts[i] = hostname
-			}
-
-			// Otherwise, ensure that the peer is in the mesh
-			if hosts[i] != hostname && !peers[hosts[i]] {
-				return fmt.Errorf("unknown host: `%v`", hosts[i])
-			}
-		}
-
-		// After all have been checked, updated the namespace
-		for _, host := range hosts {
-			ns.Hosts[host] = true
-		}
-
-		return nil
-	} else if c.BoolArgs["del-host"] {
-		for _, host := range hosts {
-			if host == Wildcard {
-				ns.Hosts = map[string]bool{}
-				break
-			}
-
-			delete(ns.Hosts, host)
-		}
-
-		return nil
-	} else if c.BoolArgs["load"] {
-		// check if we're updating the sort by func
-		for k := range hostSortByFns {
-			if c.BoolArgs[k] {
-				ns.HostSortBy = k
-				return nil
-			}
-		}
-
-		resp.Response = ns.HostSortBy
-		return nil
+	peers := map[string]bool{}
+	for _, peer := range meshageNode.BroadcastRecipients() {
+		peers[peer] = true
 	}
 
-	// boo, should be unreachable
-	return errors.New("unreachable")
+	// Test that the host is actually in the mesh. If it's not, we could
+	// try to mesh dial it... Returning an error is simpler, for now.
+	for i := range hosts {
+		// Add all the peers if we see a wildcard
+		if hosts[i] == Wildcard {
+			for peer := range peers {
+				ns.Hosts[peer] = true
+			}
+
+			return nil
+		}
+
+		// Resolve `localhost` to actual hostname
+		if hosts[i] == Localhost {
+			hosts[i] = hostname
+		}
+
+		// Otherwise, ensure that the peer is in the mesh
+		if hosts[i] != hostname && !peers[hosts[i]] {
+			return fmt.Errorf("unknown host: `%v`", hosts[i])
+		}
+	}
+
+	// After all have been checked, updated the namespace
+	for _, host := range hosts {
+		ns.Hosts[host] = true
+	}
+
+	return nil
 }
 
-func cliClearNamespace(c *minicli.Command, resp *minicli.Response) error {
+func cliNamespaceDelHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+	if err != nil {
+		return fmt.Errorf("invalid hosts -- %v", err)
+	}
+
+	for _, host := range hosts {
+		if host == Wildcard {
+			ns.Hosts = map[string]bool{}
+			break
+		}
+
+		// Resolve `localhost` to actual hostname
+		if host == Localhost {
+			host = hostname
+		}
+
+		delete(ns.Hosts, host)
+	}
+
+	return nil
+}
+
+func cliNamespaceLoad(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// check if we're updating the sort by func
+	for k := range hostSortByFns {
+		if c.BoolArgs[k] {
+			ns.HostSortBy = k
+			return nil
+		}
+	}
+
+	resp.Response = ns.HostSortBy
+	return nil
+}
+
+func cliNamespaceQueue(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	var buf bytes.Buffer
+
+	for _, q := range ns.queue {
+		var names []string
+		for _, n := range q.Names {
+			if n != "" {
+				names = append(names, n)
+			}
+		}
+
+		fmt.Fprintf(&buf, "VMs: %v\n", len(q.Names))
+		buf.WriteString("Names: ")
+		buf.WriteString(ranges.UnsplitList(names))
+		buf.WriteString("\n")
+		buf.WriteString("VM Type: ")
+		buf.WriteString(q.VMType.String())
+		buf.WriteString("\n\n")
+		buf.WriteString(q.VMConfig.String(ns.Name))
+		buf.WriteString("\n\n")
+	}
+
+	resp.Response = buf.String()
+	return nil
+}
+
+func cliNamespaceQueueing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["true"] || c.BoolArgs["false"] {
+		ns.QueueVMs = c.BoolArgs["true"]
+
+		if len(ns.queue) > 0 {
+			log.Warn("queueing behavior changed when VMs already queued")
+		}
+	} else {
+		resp.Response = strconv.FormatBool(ns.QueueVMs)
+	}
+
+	return nil
+}
+
+func cliNamespaceFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	ns.queue = nil
+	return nil
+}
+
+func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	resp.Header = []string{
+		"start", "end", "state", "launched", "failures", "total", "hosts",
+	}
+
+	for _, stats := range ns.scheduleStats {
+		var end string
+		if !stats.end.IsZero() {
+			end = stats.end.Format(time.RFC822)
+		}
+
+		row := []string{
+			stats.start.Format(time.RFC822),
+			end,
+			stats.state,
+			strconv.Itoa(stats.launched),
+			strconv.Itoa(stats.failures),
+			strconv.Itoa(stats.total),
+			strconv.Itoa(stats.hosts),
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
+}
+
+func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	name := c.StringArgs["name"]
 	if name == "" {
-		// Clearing the namespace global
-		return SetNamespace("")
+		// Going back to default namespace
+		return SetNamespace(DefaultNamespace)
 	}
 
 	return DestroyNamespace(name)
+}
+
+func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	// HAX: Ensure we aren't sending read or mesh send commands over meshage
+	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
+		err := fmt.Errorf("cannot run `%s` using ns run", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
+	res := minicli.Responses{}
+
+	// see wrapBroadcastCLI
+	for resps := range runCommands(namespaceCommands(ns, c.Subcommand)...) {
+		for _, resp := range resps {
+			res = append(res, resp)
+		}
+	}
+
+	respChan <- res
 }
 
 // cliNamespaceSuggest suggests namespaces that have the given prefix. If wild
@@ -259,7 +351,7 @@ func cliNamespaceSuggest(prefix string, wild bool) []string {
 		res = append(res, Wildcard)
 	}
 
-	for _, name := range ListNamespaces() {
+	for _, name := range ListNamespaces(false) {
 		if strings.HasPrefix(name, prefix) {
 			res = append(res, name)
 		}

@@ -2,22 +2,22 @@
 ## vm config net 101
 ## vm config net A # should be 102
 ## vlans
-namespace | alias | vlan
-          | A     | 102
+alias | vlan
+A     | 102
 ## vm config net
 [mega_bridge,A (102)]
 ## vm config net B # should be 103
 ## vlans
-namespace | alias | vlan
-          | A     | 102
-          | B     | 103
+alias | vlan
+A     | 102
+B     | 103
 ## vm config net
 [mega_bridge,B (103)]
 ## vm config net A # should be 102
 ## vlans
-namespace | alias | vlan
-          | A     | 102
-          | B     | 103
+alias | vlan
+A     | 102
+B     | 103
 ## vm config net
 [mega_bridge,A (102)]
 
@@ -27,11 +27,11 @@ namespace | alias | vlan
 E: alias already in use
 ## vlans add bar 300
 ## vlans
-namespace | alias | vlan
-          | A     | 102
-          | B     | 103
-          | bar   | 300
-          | foo   | 200
+alias | vlan
+A     | 102
+B     | 103
+bar   | 300
+foo   | 200
 ## vm config net foo
 ## vm config net
 [mega_bridge,foo (200)]
@@ -40,27 +40,27 @@ namespace | alias | vlan
 ## namespace foo
 ## vm config net A # should be 104
 ## vlans
-namespace | alias | vlan
-foo       | A     | 104
+alias | vlan
+A     | 104
 ## vm config net
 [mega_bridge,A (104)]
 ## namespace bar
 ## vm config net A # should be 105
 ## vlans
-namespace | alias | vlan
-bar       | A     | 105
+alias | vlan
+A     | 105
 ## vm config net
 [mega_bridge,A (105)]
-## vm config net //A # should be 102
+## vm config net minimega//A # should be 102
 ## vlans
-namespace | alias | vlan
-bar       | A     | 105
+alias | vlan
+A     | 105
 ## vm config net
-[mega_bridge,//A (102)]
+[mega_bridge,minimega//A (102)]
 ## vm config net foo//A # should be 104
 ## vlans
-namespace | alias | vlan
-bar       | A     | 105
+alias | vlan
+A     | 105
 ## vm config net
 [mega_bridge,foo//A (104)]
 ## clear namespace
@@ -72,8 +72,8 @@ E: expected min > max
 ## vlans range 120 130
 ## vm config net B # should be 120
 ## vlans
-namespace | alias | vlan
-foo       | A     | 104
-foo       | B     | 120
+alias | vlan
+A     | 104
+B     | 120
 ## vm config net
 [mega_bridge,B (120)]

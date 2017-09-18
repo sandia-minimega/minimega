@@ -41,18 +41,18 @@ const stringTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
-			r.Response = vmConfig.{{ .Field }}
+			r.Response = ns.vmConfig.{{ .Field }}
 			return nil
 		}
 
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
 
-		vmConfig.{{ .Field }} = v
+		ns.vmConfig.{{ .Field }} = v
 		{{ else }}
-		vmConfig.{{ .Field }} = c.StringArgs["value"]
+		ns.vmConfig.{{ .Field }} = c.StringArgs["value"]
 		{{ end }}
 
 		return nil
@@ -66,13 +66,13 @@ const sliceTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]...",
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.ListArgs) == 0 {
-			if len(vmConfig.{{ .Field }}) == 0 {
+			if len(ns.vmConfig.{{ .Field }}) == 0 {
 				return nil
 			}
 
-			r.Response = fmt.Sprintf("%v", vmConfig.{{ .Field }})
+			r.Response = fmt.Sprintf("%v", ns.vmConfig.{{ .Field }})
 			return nil
 		}
 
@@ -83,9 +83,9 @@ const sliceTemplate = `{
 			vals[i] = checkPath(vals[i])
 		}
 
-		vmConfig.{{ .Field }} = vals
+		ns.vmConfig.{{ .Field }} = vals
 		{{ else }}
-		vmConfig.{{ .Field }} = c.ListArgs["value"]
+		ns.vmConfig.{{ .Field }} = c.ListArgs["value"]
 		{{ end }}
 
 		return nil
@@ -100,11 +100,11 @@ const mapTemplate = `{
 		"vm config {{ .ConfigName }}",
 		"vm config {{ .ConfigName }} <key> [value]",
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if c.StringArgs["key"] == "" {
 			var b bytes.Buffer
 
-			for k, v := range vmConfig.{{ .Field }} {
+			for k, v := range ns.vmConfig.{{ .Field }} {
 				fmt.Fprintf(&b, "%v -> %v\n", k, v)
 			}
 
@@ -113,22 +113,22 @@ const mapTemplate = `{
 		}
 
 		if c.StringArgs["value"] == "" {
-			if vmConfig.{{ .Field }} != nil {
-				r.Response = vmConfig.{{ .Field }}[c.StringArgs["value"]]
+			if ns.vmConfig.{{ .Field }} != nil {
+				r.Response = ns.vmConfig.{{ .Field }}[c.StringArgs["value"]]
 			}
 			return nil
 		}
 
-		if vmConfig.{{ .Field }} == nil {
-			vmConfig.{{ .Field }} = make(map[string]string)
+		if ns.vmConfig.{{ .Field }} == nil {
+			ns.vmConfig.{{ .Field }} = make(map[string]string)
 		}
 
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
 
-		vmConfig.{{ .Field }}[c.StringArgs["key"]] = v
+		ns.vmConfig.{{ .Field }}[c.StringArgs["key"]] = v
 		{{ else }}
-		vmConfig.{{ .Field }}[c.StringArgs["key"]] = c.StringArgs["value"]
+		ns.vmConfig.{{ .Field }}[c.StringArgs["key"]] = c.StringArgs["value"]
 		{{ end }}
 
 		return nil
@@ -143,12 +143,12 @@ const numTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
 			{{- if .Signed }}
-			r.Response = strconv.FormatInt(vmConfig.{{ .Field }}, 10)
+			r.Response = strconv.FormatInt(ns.vmConfig.{{ .Field }}, 10)
 			{{- else }}
-			r.Response = strconv.FormatUint(vmConfig.{{ .Field }}, 10)
+			r.Response = strconv.FormatUint(ns.vmConfig.{{ .Field }}, 10)
 			{{- end }}
 			return nil
 		}
@@ -162,7 +162,7 @@ const numTemplate = `{
 			return err
 		}
 
-		vmConfig.{{ .Field }} = i
+		ns.vmConfig.{{ .Field }} = i
 
 		return nil
 	}),
@@ -175,13 +175,13 @@ const boolTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [true,false]",
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.BoolArgs) == 0 {
-			r.Response = strconv.FormatBool(vmConfig.{{ .Field }})
+			r.Response = strconv.FormatBool(ns.vmConfig.{{ .Field }})
 			return nil
 		}
 
-		vmConfig.{{ .Field }} = c.BoolArgs["true"]
+		ns.vmConfig.{{ .Field }} = c.BoolArgs["true"]
 
 		return nil
 	}),
@@ -196,7 +196,7 @@ const clearTemplate = `{
 		"clear vm config <{{ .ConfigName }},>",
 		{{- end }}
 	},
-	Call: wrapSimpleCLI(func (c *minicli.Command, r *minicli.Response) error {
+	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		// at most one key will be set in BoolArgs but we don't know what it
 		// will be so we have to loop through the args and set whatever key we
 		// see.
@@ -205,7 +205,7 @@ const clearTemplate = `{
 			mask = k
 		}
 
-		vmConfig.Clear(mask)
+		ns.vmConfig.Clear(mask)
 
 		return nil
 	}),

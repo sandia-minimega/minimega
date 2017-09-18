@@ -1,0 +1,59 @@
+# bring up miniception environment
+namespace miniception
+
+# clear out old responses
+clear cc responses
+
+# launch VMs to serve DHCP
+vm config net LAN
+vm config filesystem $minirouterfs
+vm launch container router
+
+router router interface 0 10.0.0.254/24
+router router dhcp 10.0.0.254 range 10.0.0.1 10.0.0.3
+router router dns 10.0.0.1 mm1
+router router dns 10.0.0.2 mm2
+router router dns 10.0.0.3 mm3
+router router commit
+
+# launch VMs to run minimega
+clear vm config
+vm config tag minimega true
+vm config net LAN
+vm config initrd $images/miniception.initrd
+vm config kernel $images/miniception.kernel
+vm config memory 4096
+vm launch kvm 3
+
+# start all VMs
+vm start all
+
+# send uminiccc image and untar
+shell cp bin/minimega /tmp/minimega/files
+shell cp $images/uminicccfs.tar.gz /tmp/minimega/files
+cc filter minimega=true
+cc send minimega
+cc send uminicccfs.tar.gz
+cc exec tar -C /root/ -xf /tmp/miniccc/files/uminicccfs.tar.gz
+cc exec /usr/share/openvswitch/scripts/ovs-ctl start
+cc background bash -c "/tmp/miniccc/files/minimega -v=false -logfile /minimega.log -nostdin -degree 2 &> /minimega.out"
+
+# create a tap to talk to VM network
+tap create LAN ip 10.0.0.100/24
+
+# wait for VMs to launch and minimega to start
+shell sleep 30
+
+# dial the nodes
+mesh dial 10.0.0.1
+mesh dial 10.0.0.2
+mesh dial 10.0.0.3
+
+shell sleep 30
+
+# print out status
+vm info
+mesh status
+mesh list
+cc commands
+cc process list all

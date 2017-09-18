@@ -59,7 +59,7 @@ flags used when launching minimega.`,
 
 var deployFlags []string
 
-func cliDeploy(c *minicli.Command, resp *minicli.Response) error {
+func cliDeploy(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	hosts := c.StringArgs["hosts"]
 	user := c.StringArgs["user"]
 	sudo := c.BoolArgs["sudo"]
@@ -177,7 +177,7 @@ func deployGetFlags() string {
 	return strings.Join(flags, " ")
 }
 
-func cliDeployClear(c *minicli.Command, resp *minicli.Response) error {
+func cliDeployClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	deployFlags = nil
 	return nil
 }

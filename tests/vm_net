@@ -1,5 +1,6 @@
 vm config net 0
 vm launch kvm vm0
+
 .columns name,vlan,bridge vm info
 vm net disconnect vm0 0
 .columns name,vlan,bridge vm info

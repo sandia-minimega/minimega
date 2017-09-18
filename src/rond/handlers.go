@@ -40,7 +40,7 @@ var cliHandlers = []minicli.Handler{
 				"UUID", "arch", "OS", "hostname", "IPs", "MACs",
 			}
 
-			for _, client := range rond.GetActiveClients() {
+			for _, client := range rond.GetClients() {
 				row := []string{
 					client.UUID,
 					client.Arch,
@@ -104,7 +104,7 @@ var cliHandlers = []minicli.Handler{
 				"UUID", "pid", "command",
 			}
 
-			for _, client := range rond.GetActiveClients() {
+			for _, client := range rond.GetClients() {
 				for _, proc := range client.Processes {
 					row := []string{
 						client.UUID,

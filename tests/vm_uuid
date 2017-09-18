@@ -1,3 +1,7 @@
+# Try to launch two VMs with the same UUID
+vm config uuid f3b8b039-2f26-43d0-908c-b0de030a44ed
+vm launch kvm 2
+
 # Launch VM with specified UUID
 vm config uuid a5082fed-bc6f-4f77-8c1b-692ce5ef6302
 vm launch kvm 1
@@ -5,6 +9,13 @@ vm launch kvm 1
 # Try to launch another without clearing the UUID
 vm launch kvm 1
 
-# Try to launch two VMs with the same UUID
-vm config uuid f3b8b039-2f26-43d0-908c-b0de030a44ed
-vm launch kvm 2
+# Try to queue a VM without clearing the UUID
+ns queueing true
+vm launch kvm 1
+
+# Queue VM with specified UUID
+vm config uuid f4785e82-48c4-4cf2-95b8-f00918e111da
+vm launch kvm 1
+
+# Try to queue another VM with same UUID
+vm launch kvm 1

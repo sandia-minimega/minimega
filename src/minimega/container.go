@@ -21,7 +21,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/kr/pty"
 	"io"
 	"io/ioutil"
 	log "minilog"
@@ -29,6 +28,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"ron"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,6 +36,8 @@ import (
 	"text/tabwriter"
 	"time"
 	"unsafe"
+
+	"github.com/kr/pty"
 )
 
 const (
@@ -286,6 +288,9 @@ type ContainerVM struct {
 	ptyUnixListener net.Listener
 	ptyTCPListener  net.Listener
 	netns           string
+
+	// ccServer is the server we are Connect'd to
+	ccServer *ron.Server
 
 	ConsolePort int
 }
@@ -701,13 +706,19 @@ func (vm *ContainerVM) Start() (err error) {
 		if err := vm.launch(); err != nil {
 			return err
 		}
+
+		// Reconnect cc
+		if vm.ccServer != nil {
+			ccPath := filepath.Join(vm.effectivePath, "cc")
+			if err := vm.ccServer.ListenUnix(ccPath); err != nil {
+				return err
+			}
+		}
 	}
 
 	log.Info("starting VM: %v", vm.ID)
 	if err := vm.thaw(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unstartable: %v", err)
 	}
 
 	vm.setState(VM_RUNNING)
@@ -729,9 +740,7 @@ func (vm *ContainerVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.freeze(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unstoppable: %v", err)
 	}
 
 	vm.setState(VM_PAUSED)
@@ -798,7 +807,7 @@ func (vm *ContainerConfig) String() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "Current container configuration:")
+	fmt.Fprintln(&o, "Container configuration:")
 	fmt.Fprintf(w, "Filesystem Path:\t%v\n", vm.FilesystemPath)
 	fmt.Fprintf(w, "Hostname:\t%v\n", vm.Hostname)
 	fmt.Fprintf(w, "Init:\t%v\n", vm.Init)
@@ -819,16 +828,8 @@ func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
 	err := containerInit()
-	if err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
-	if !containerInitSuccess {
-		err = fmt.Errorf("cgroups are not initialized, cannot continue")
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+	if err != nil || !containerInitSuccess {
+		return vm.setErrorf("cgroups are not initialized, cannot continue")
 	}
 
 	// If this is the first time launching the VM, do the final configuration
@@ -840,9 +841,7 @@ func (vm *ContainerVM) launch() error {
 
 		if vm.Snapshot {
 			if err := vm.overlayMount(); err != nil {
-				log.Error("overlayMount: %v", err)
-				vm.setError(err)
-				return err
+				return vm.setErrorf("overlayMount: %v", err)
 			}
 		} else {
 			vm.effectivePath = vm.FilesystemPath
@@ -850,7 +849,7 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	// write the config for this vm
-	config := vm.BaseConfig.String() + vm.ContainerConfig.String()
+	config := vm.BaseConfig.String(vm.Namespace) + vm.ContainerConfig.String()
 	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
@@ -861,21 +860,15 @@ func (vm *ContainerVM) launch() error {
 	// before it enters the container
 	parentLog, childLog, err := os.Pipe()
 	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("pipe: %v", err)
 	}
 	parentSync1, childSync1, err := os.Pipe()
 	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("pipe: %v", err)
 	}
 	childSync2, parentSync2, err := os.Pipe()
 	if err != nil {
-		log.Error("pipe: %v", err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("pipe: %v", err)
 	}
 
 	// create the uuid path that will bind mount into sysfs in the
@@ -887,9 +880,7 @@ func (vm *ContainerVM) launch() error {
 	for i := uint64(0); i < vm.Fifos; i++ {
 		p := vm.path(fmt.Sprintf("fifo%v", i))
 		if err = syscall.Mkfifo(p, 0660); err != nil {
-			log.Error("fifo: %v", err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("fifo: %v", err)
 		}
 	}
 
@@ -954,9 +945,7 @@ func (vm *ContainerVM) launch() error {
 	pseudotty, err := pty.Start(cmd)
 	if err != nil {
 		vm.overlayUnmount()
-		log.Error("start container: %v", err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("start container: %v", err)
 	}
 
 	vm.pid = cmd.Process.Pid
@@ -996,21 +985,13 @@ func (vm *ContainerVM) launch() error {
 
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
-	if err == nil && vm.Backchannel {
-		// connect cc. Note that we have a local err here because we don't want
-		// to prevent the VM from continuing to launch, even if we can't
-		// connect to cc.
-		if err := ccNode.ListenUnix(ccPath); err != nil {
-			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
-		}
-	}
-
 	if err != nil {
 		// Some error occurred.. clean up the process
 		cmd.Process.Kill()
 
-		vm.setError(err)
-		return err
+		vm.unlinkNetns()
+
+		return vm.setErrorf("%v", err)
 	}
 
 	// Channel to signal when the process has exited
@@ -1024,13 +1005,13 @@ func (vm *ContainerVM) launch() error {
 	}()
 
 	go func() {
-		cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID))
-		cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vm.ID))
-		cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vm.ID))
-		cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega", fmt.Sprintf("%v", vm.ID))
-		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+		defer vm.cond.Signal()
 
-		sendKillAck := false
+		cgroupFreezer := vm.cgroup("freezer")
+		cgroupMemory := vm.cgroup("memory")
+		cgroupDevices := vm.cgroup("devices")
+		cgroupCPU := vm.cgroup("cpu")
+		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
 
 		select {
 		case err := <-errChan:
@@ -1042,8 +1023,7 @@ func (vm *ContainerVM) launch() error {
 			// we don't need to check the error for a clean kill,
 			// as there's no way to get here if we killed it.
 			if err != nil {
-				log.Error("kill container: %v", err)
-				vm.setError(err)
+				vm.setErrorf("killed container: %v", err)
 			}
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
@@ -1055,8 +1035,7 @@ func (vm *ContainerVM) launch() error {
 
 			// containers cannot exit unless thawed, so thaw it if necessary
 			if err := vm.thaw(); err != nil {
-				log.Errorln(err)
-				vm.setError(err)
+				vm.setErrorf("unable to thaw container: %v", err)
 			}
 
 			// wait for the taskset to actually exit (from uninterruptible
@@ -1064,8 +1043,7 @@ func (vm *ContainerVM) launch() error {
 			for {
 				t, err := ioutil.ReadFile(filepath.Join(cgroupFreezer, "tasks"))
 				if err != nil {
-					log.Errorln(err)
-					vm.setError(err)
+					vm.setErrorf("unable to read tasks: %v", err)
 					break
 				}
 				if len(t) == 0 {
@@ -1081,8 +1059,6 @@ func (vm *ContainerVM) launch() error {
 			for err := range errChan {
 				log.Debug("kill container: %v", err)
 			}
-
-			sendKillAck = true // wait to ack until we've cleaned up
 		}
 
 		if vm.ptyUnixListener != nil {
@@ -1093,8 +1069,8 @@ func (vm *ContainerVM) launch() error {
 		}
 
 		// cleanup cc domain socket
-		if vm.Backchannel {
-			ccNode.CloseUnix(ccPath)
+		if vm.ccServer != nil {
+			vm.ccServer.CloseUnix(ccPath)
 		}
 
 		vm.unlinkNetns()
@@ -1119,13 +1095,25 @@ func (vm *ContainerVM) launch() error {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)
 		}
-
-		if sendKillAck {
-			killAck <- vm.ID
-		}
 	}()
 
 	return nil
+}
+
+func (vm *ContainerVM) Connect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.RegisterVM(vm)
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	vm.ccServer = cc
+	ccPath := filepath.Join(vm.effectivePath, "cc")
+
+	return cc.ListenUnix(ccPath)
 }
 
 func (vm *ContainerVM) launchNetwork() error {
@@ -1270,7 +1258,7 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 }
 
 func (vm *ContainerVM) freeze() error {
-	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "freezer.state")
+	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
 	if err := ioutil.WriteFile(freezer, []byte("FROZEN"), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
@@ -1279,7 +1267,7 @@ func (vm *ContainerVM) freeze() error {
 }
 
 func (vm *ContainerVM) thaw() error {
-	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "freezer.state")
+	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
 	if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
@@ -1287,8 +1275,12 @@ func (vm *ContainerVM) thaw() error {
 	return nil
 }
 
+func (vm *ContainerVM) cgroup(s string) string {
+	return filepath.Join(*f_cgroup, s, "minimega", strconv.Itoa(vm.ID))
+}
+
 func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
-	freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vm.ID), "cgroup.procs")
+	freezer := filepath.Join(vm.cgroup("freezer"), "cgroup.procs")
 	b, err := ioutil.ReadFile(freezer)
 	if err != nil {
 		return nil, err
@@ -1402,10 +1394,10 @@ func containerChroot(fsPath string) error {
 }
 
 func containerPopulateCgroups(vmID, vcpus, memory int) error {
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vmID))
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", fmt.Sprintf("%v", vmID))
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", fmt.Sprintf("%v", vmID))
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega", fmt.Sprintf("%v", vmID))
+	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", strconv.Itoa(vmID))
+	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", strconv.Itoa(vmID))
+	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", strconv.Itoa(vmID))
+	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega", strconv.Itoa(vmID))
 	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
 
 	for _, cgroup := range cgroups {
@@ -1691,20 +1683,21 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 		for _, pid := range strings.Fields(string(d)) {
 			log.Debug("found pid: %v", pid)
 
-			// attempt to unfreeze the cgroup first, ignoring any
-			// errors
+			// attempt to unfreeze the cgroup first, ignoring any errors
 			// the vm id is the second to last field in the path
 			pathFields := strings.Split(path, string(os.PathSeparator))
 			vmID := pathFields[len(pathFields)-2]
 
-			freezer := filepath.Join(*f_cgroup, "freezer", "minimega", fmt.Sprintf("%v", vmID), "freezer.state")
+			freezer := filepath.Join(*f_cgroup, "freezer", "minimega", vmID, "freezer.state")
 			if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
 				log.Debugln(err)
 			}
 
 			if i, err := strconv.Atoi(pid); err == nil {
 				log.Info("killing process: %v", i)
-				if err := syscall.Kill(i, syscall.SIGKILL); err != nil {
+				if err := syscall.Kill(i, syscall.SIGKILL); err == nil {
+					continue
+				} else if !strings.Contains(err.Error(), "no such process") {
 					log.Error("unable to kill %v: %v", i, err)
 				}
 			}

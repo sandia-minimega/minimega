@@ -38,16 +38,16 @@ vmr
 #.json false
 
 # Test apropos / prefix matching on filters and columns
-.columns names,name .columns name,names vm info
-.columns names,name .columns names,name vm info
-.columns name,names .columns name,names vm info
-.columns name,names .columns names,name vm info
-.filter name~foo .col namesp,name,state vm info
-.filter name~foo .col name,namesp,state vm info
+.columns ip6,ip .columns ip,ip6 vm info
+.columns ip6,ip .columns ip6,ip vm info
+.columns ip,ip6 .columns ip,ip6 vm info
+.columns ip,ip6 .columns ip6,ip vm info
+.filter name~foo .col ip6,ip,name vm info
+.filter name~foo .col ip,ip6,name vm info
 
 # Test apropos / prefix matching that should fail
-.columns nam vm info
-.columns nam,s vm info
+.columns i vm info
+.columns i,s vm info
 .columns s vm info
 .filter name~foo .col state vm info
 

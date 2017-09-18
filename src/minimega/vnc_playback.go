@@ -8,16 +8,18 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 	"vnc"
 )
 
-var (
-	vncPlaying     = make(map[string]*vncKBPlayback)
-	vncPlayingLock sync.RWMutex
-)
+type vncPlayer struct {
+	m map[string]*vncKBPlayback
+
+	sync.RWMutex // embed
+}
 
 type Event interface {
 	Write(w io.Writer) error
@@ -142,10 +144,16 @@ func NewVncKbPlayback(c *vncClient, pr *PlaybackReader) *vncKBPlayback {
 
 // Creates a new VNC connection, the initial playback reader, and starts the
 // vnc playback
-func vncPlaybackKB(vm *KvmVM, filename string) error {
+func (v *vncPlayer) PlaybackKB(vm *KvmVM, filename string) error {
+	v.Lock()
+	defer v.Unlock()
+
+	return v.playbackKB(vm, filename)
+}
+
+func (v *vncPlayer) playbackKB(vm *KvmVM, filename string) error {
 	// Is this playback already running?
-	id := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
-	if _, ok := vncPlaying[id]; ok {
+	if _, ok := v.m[vm.Name]; ok {
 		return fmt.Errorf("kb playback %v already playing", vm.Name)
 	}
 
@@ -171,10 +179,48 @@ func vncPlaybackKB(vm *KvmVM, filename string) error {
 
 	p := NewVncKbPlayback(c, pr)
 
-	vncPlaying[c.ID] = p
+	v.m[c.ID] = p
 
 	go p.Play()
 	return nil
+}
+
+func (v *vncPlayer) Inject(vm *KvmVM, s string) error {
+	v.Lock()
+	defer v.Unlock()
+
+	if p := v.m[vm.Name]; p != nil {
+		return p.Inject(s)
+	}
+
+	e, err := parseEvent(s)
+	if err != nil {
+		return err
+	}
+
+	if event, ok := e.(Event); ok {
+		// VNC keyboard or mouse event
+		return vncInject(vm, event)
+	}
+
+	// This is an injected LoadFile event without a running playback. This is
+	// equivalent to starting a new vnc playback.
+	return v.playbackKB(vm, e.(string))
+}
+
+// Clear stops all playbacks
+func (v *vncPlayer) Clear() {
+	v.Lock()
+	defer v.Unlock()
+
+	for k, p := range v.m {
+		log.Debug("stopping kb playback for %v", k)
+		if err := p.Stop(); err != nil {
+			log.Error("%v", err)
+		}
+
+		delete(v.m, k)
+	}
 }
 
 // Reads the vnc playback file and sends parsed events on the playback's in
@@ -405,10 +451,7 @@ func (v *vncKBPlayback) Stop() error {
 	v.state = Close
 	v.control <- Close
 
-	v.done <- true
 	close(v.done)
-
-	delete(vncPlaying, v.ID)
 
 	// Cleanup any open playback readers
 	for _, pr := range v.prs {
@@ -452,4 +495,40 @@ func (v *vncKBPlayback) GetStep() (string, error) {
 func (v *vncKBPlayback) timeRemaining() string {
 	elapsed := time.Since(v.start)
 	return (v.duration - elapsed).String()
+}
+
+// Returns the duration of a given kbrecording file
+func getDuration(filename string) time.Duration {
+	d := 0
+
+	f, _ := os.Open(filename)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		s := strings.SplitN(scanner.Text(), ":", 2)
+		// Ignore blank and malformed lines
+		if len(s) != 2 {
+			log.Debug("malformed vnc statement: %s", scanner.Text())
+			continue
+		}
+
+		// Ignore comments in the vnc file
+		if s[0] == "#" {
+			continue
+		}
+
+		i, err := strconv.Atoi(s[0])
+		if err != nil {
+			log.Errorln(err)
+			return 0
+		}
+		d += i
+	}
+
+	duration, err := time.ParseDuration(strconv.Itoa(d) + "ns")
+	if err != nil {
+		log.Errorln(err)
+		return 0
+	}
+
+	return duration
 }

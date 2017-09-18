@@ -16,7 +16,7 @@ mkdir -p minirouterfs/etc
 mkdir -p minirouterfs/root
 mkdir -p minirouterfs/lib/x86_64-linux-gnu
 
-wget https://busybox.net/downloads/binaries/busybox-x86_64 
+wget https://busybox.net/downloads/binaries/1.21.1/busybox-x86_64
 mv busybox-x86_64 minirouterfs/bin/busybox
 chmod a+rx minirouterfs/bin/busybox
 
@@ -39,12 +39,13 @@ cp `which dnsmasq` minirouterfs/usr/sbin
 cp `which bird` minirouterfs/usr/sbin
 cp `which bird6` minirouterfs/usr/sbin
 
-go run ldd.go minirouterfs/miniccc minirouterfs
-go run ldd.go minirouterfs/minirouter minirouterfs
-go run ldd.go minirouterfs/sbin/ip minirouterfs
-go run ldd.go minirouterfs/usr/sbin/dnsmasq minirouterfs
-go run ldd.go minirouterfs/usr/sbin/bird minirouterfs
-go run ldd.go minirouterfs/usr/sbin/bird6 minirouterfs
+go run ../ldd.go minirouterfs/miniccc minirouterfs
+go run ../ldd.go minirouterfs/minirouter minirouterfs
+go run ../ldd.go minirouterfs/sbin/dhclient minirouterfs
+go run ../ldd.go minirouterfs/sbin/ip minirouterfs
+go run ../ldd.go minirouterfs/usr/sbin/dnsmasq minirouterfs
+go run ../ldd.go minirouterfs/usr/sbin/bird minirouterfs
+go run ../ldd.go minirouterfs/usr/sbin/bird6 minirouterfs
 
 # scripts that dhclient depends on
 cp `which dhclient-script` minirouterfs/sbin
@@ -60,5 +61,6 @@ sed -i 's/bash/sh/' minirouterfs/sbin/dhclient-script
 cp  /lib/x86_64-linux-gnu/libnss* minirouterfs/lib/x86_64-linux-gnu/
 
 echo "root:x:0:0:root:/root:/bin/sh" > minirouterfs/etc/passwd
- 
+echo "# UNCONFIGURED FSTAB FOR BASE SYSTEM" > minirouterfs/etc/fstab
+
 tar czf minirouter.tar.gz minirouterfs

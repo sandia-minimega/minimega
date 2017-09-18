@@ -10,26 +10,26 @@
 ## vm hotplug
 ## vm hotplug add foo /tmp/minitest0.img
 ## vm hotplug
-namespace | name | id | file               | version
-          | foo  | 0  | /tmp/minitest0.img | 1.1
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
 ## vm hotplug add foo /tmp/minitest1.img
 ## vm hotplug
-namespace | name | id | file               | version
-          | foo  | 0  | /tmp/minitest0.img | 1.1
-          | foo  | 1  | /tmp/minitest1.img | 1.1
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
+foo  | 1  | /tmp/minitest1.img | 1.1
 ## vm hotplug remove foo 0
 ## vm hotplug
-namespace | name | id | file               | version
-          | foo  | 1  | /tmp/minitest1.img | 1.1
+name | id | file               | version
+foo  | 1  | /tmp/minitest1.img | 1.1
 ## vm hotplug remove foo 1
 ## vm hotplug
 
 ## # Try adding to all
 ## vm hotplug add all /tmp/minitest1.img
 ## vm hotplug
-namespace | name | id | file               | version
-          | bar  | 0  | /tmp/minitest1.img | 1.1
-          | foo  | 0  | /tmp/minitest1.img | 1.1
+name | id | file               | version
+bar  | 0  | /tmp/minitest1.img | 1.1
+foo  | 0  | /tmp/minitest1.img | 1.1
 ## vm hotplug remove all 0
 ## vm hotplug
 
@@ -37,9 +37,9 @@ namespace | name | id | file               | version
 ## vm hotplug add foo /tmp/minitest0.img
 ## vm hotplug add foo /tmp/minitest1.img
 ## vm hotplug
-namespace | name | id | file               | version
-          | foo  | 0  | /tmp/minitest0.img | 1.1
-          | foo  | 1  | /tmp/minitest1.img | 1.1
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
+foo  | 1  | /tmp/minitest1.img | 1.1
 ## vm hotplug remove foo all
 ## vm hotplug
 

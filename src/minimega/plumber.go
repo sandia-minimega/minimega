@@ -65,13 +65,13 @@ pipelines:
 		HelpLong: `
 Interact with named pipes. To write to a pipe, simply invoke the pipe API with
 the pipe name and value:
-	
+
 	pipe foo Hello pipes!
 
 Pipes have several message delivery modes. Based on the mode, messages written
 to a pipe will be delivered to one or more readers. Mode "all" copies messages
 to all readers, "round-robin" chooses a single reader, in-order, and "random"
-selects a random reader. 
+selects a random reader.
 
 Pipes can also have "vias", programs through which all written data is passed
 before being sent to readers. Unlike pipelines, vias are run for every reader.
@@ -112,11 +112,10 @@ func plumberStart(node *meshage.Node) {
 	plumber = miniplumber.New(node)
 }
 
-func cliPlumbLocal(c *minicli.Command, resp *minicli.Response) error {
+func cliPlumbLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
 
 	// rewrite pipes with namespace prefixes
-	ns := GetNamespace()
 	if ns != nil {
 		for i, e := range args {
 			if fields := strings.Split(e, "//"); len(fields) == 1 {
@@ -134,7 +133,7 @@ func cliPlumbLocal(c *minicli.Command, resp *minicli.Response) error {
 	return plumber.Plumb(args...)
 }
 
-func cliPlumbBroadcast(c *minicli.Command, resp *minicli.Response) error {
+func cliPlumbBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"pipeline"}
 	resp.Tabular = [][]string{}
 
@@ -151,7 +150,7 @@ func cliPlumbBroadcast(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
+func cliPlumbClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if pipeline, ok := c.ListArgs["pipeline"]; ok {
 		return plumber.PipelineDelete(pipeline...)
 	} else {
@@ -159,11 +158,10 @@ func cliPlumbClear(c *minicli.Command, resp *minicli.Response) error {
 	}
 }
 
-func cliPipeBroadcast(c *minicli.Command, resp *minicli.Response) error {
+func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	pipe := c.StringArgs["pipe"]
 
 	// rewrite the pipe with the namespace prefix, if any
-	ns := GetNamespace()
 	if ns != nil {
 		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
 			pipe = fmt.Sprintf("%v//%v", ns, pipe)
@@ -208,11 +206,10 @@ func cliPipeBroadcast(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliPipeLocal(c *minicli.Command, resp *minicli.Response) error {
+func cliPipeLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	pipe := c.StringArgs["pipe"]
 
 	// rewrite the pipe with the namespace prefix, if any
-	ns := GetNamespace()
 	if ns != nil {
 		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
 			pipe = fmt.Sprintf("%v//%v", ns, pipe)
@@ -228,7 +225,7 @@ func cliPipeLocal(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliPipeClear(c *minicli.Command, resp *minicli.Response) error {
+func cliPipeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	pipe, ok := c.StringArgs["pipe"]
 
 	if c.BoolArgs["mode"] {

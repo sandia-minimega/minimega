@@ -11,6 +11,7 @@ import (
 	log "minilog"
 	"sort"
 	"strconv"
+	"strings"
 )
 
 var bridgeCLIHandlers = []minicli.Handler{
@@ -64,12 +65,16 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <create,> <vlan> bridge <bridge> name [tap name]",
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
-			"tap <delete,> <id or all>",
+			"tap <delete,> <tap name or all>",
 		},
 		Call: wrapSimpleCLI(cliHostTap),
-		Suggest: wrapSuggest(func(val, prefix string) []string {
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vlan" {
-				return cliVLANSuggest(prefix)
+				return cliVLANSuggest(ns, prefix)
+			} else if val == "tap" {
+				return cliTapSuggest(ns, prefix)
+			} else if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
 			}
 			return nil
 		}),
@@ -106,15 +111,26 @@ Note: bridge is not a namespace-aware command.`,
 			"bridge <notunnel,> <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
+			}
+			return nil
+		}),
 	},
 }
 
 // routines for interfacing bridge mechanisms with the cli
-func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
+func cliHostTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["create"] {
 		b := c.StringArgs["bridge"]
 
-		tap, err := hostTapCreate(b, c.StringArgs["tap"], c.StringArgs["vlan"])
+		vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
+		}
+
+		tap, err := hostTapCreate(b, c.StringArgs["tap"], vlan)
 		if err != nil {
 			return err
 		}
@@ -141,37 +157,38 @@ func cliHostTap(c *minicli.Command, resp *minicli.Response) error {
 
 		if err != nil {
 			// One of the above cases failed, try to clean up the tap
-			if err := hostTapDelete(tap); err != nil {
-				// Welp, we're boned
-				log.Error("zombie tap -- %v %v", tap, err)
+			br, err := getBridge(b)
+			if err == nil {
+				err = br.DestroyTap(tap)
 			}
-
+			if err != nil {
+				// Welp, we're boned
+				log.Error("zombie host tap -- %v %v", tap, err)
+			}
 			return err
 		}
-		// Success!
-		if ns := GetNamespace(); ns != nil {
-			// TODO: probably need lock...
-			ns.Taps[tap] = true
-		}
+
+		// need lock?
+		ns.Taps[tap] = true
 
 		resp.Response = tap
 
 		return nil
 	} else if c.BoolArgs["delete"] {
-		return hostTapDelete(c.StringArgs["id"])
+		return hostTapDelete(ns, c.StringArgs["tap"])
 	}
 
 	// Must be the list command
-	hostTapList(resp)
+	hostTapList(ns, resp)
 
 	return nil
 }
 
-func cliHostTapClear(c *minicli.Command, resp *minicli.Response) error {
-	return hostTapDelete(Wildcard)
+func cliHostTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return hostTapDelete(ns, Wildcard)
 }
 
-func cliBridge(c *minicli.Command, resp *minicli.Response) error {
+func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
 
@@ -204,7 +221,7 @@ func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	for _, info := range bridges.Info() {
 		vlans := []string{}
 		for k, _ := range info.VLANs {
-			vlans = append(vlans, printVLAN(k))
+			vlans = append(vlans, printVLAN(ns.Name, k))
 		}
 		sort.Strings(vlans)
 
@@ -218,4 +235,33 @@ func cliBridge(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	return nil
+}
+
+func cliTapSuggest(ns *Namespace, prefix string) []string {
+	res := []string{}
+
+	if strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
+
+	// TODO: need lock?
+	for tap := range ns.Taps {
+		if strings.HasPrefix(tap, prefix) {
+			res = append(res, tap)
+		}
+	}
+
+	return res
+}
+
+func cliBridgeSuggest(ns *Namespace, prefix string) []string {
+	var res []string
+
+	for _, v := range bridges.Info() {
+		if strings.HasPrefix(v.Name, prefix) {
+			res = append(res, v.Name)
+		}
+	}
+
+	return res
 }

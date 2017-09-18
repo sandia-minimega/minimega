@@ -6,14 +6,8 @@ package ron
 
 import (
 	log "minilog"
-	"miniplumber"
-	"net"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
 )
 
 type Type int
@@ -34,33 +28,6 @@ const (
 	RESPONSE_PATH  = "miniccc_responses"
 )
 
-type Server struct {
-	serialConns map[string]net.Conn // map of connected, but not necessarily active serial connections
-	serialLock  sync.Mutex
-
-	udsConns map[string]net.Listener
-	udsLock  sync.Mutex
-
-	commands       map[int]*Command // map of active commands
-	commandCounter int
-	commandLock    sync.Mutex // lock for commands and commandCounter
-
-	clients    map[string]*client // map of active clients, each of which have a running handler
-	vms        map[string]VM      // map of uuid -> VM
-	clientLock sync.Mutex         // lock for clients and vms
-
-	path          string    // path for serving files
-	lastBroadcast time.Time // watchdog time of last command list broadcast
-
-	responses chan *Client // queue of incoming responses, consumed by the response processor
-
-	// UseVMs controls whether ron uses VM callbacks or not (see VM interface
-	// defined below).
-	UseVMs bool
-
-	plumber *miniplumber.Plumber
-}
-
 type Process struct {
 	PID     int
 	Command []string
@@ -68,8 +35,9 @@ type Process struct {
 
 type VM interface {
 	GetNamespace() string
-	GetTags() map[string]string
+	GetUUID() string
 	SetCCActive(bool)
+	GetTags() map[string]string
 	SetTag(string, string)
 }
 
@@ -85,37 +53,6 @@ type Message struct {
 	Pipe     string
 	PipeMode int
 	PipeData string
-}
-
-// NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string, plumber *miniplumber.Plumber) (*Server, error) {
-	s := &Server{
-		serialConns:   make(map[string]net.Conn),
-		udsConns:      make(map[string]net.Listener),
-		commands:      make(map[int]*Command),
-		clients:       make(map[string]*client),
-		vms:           make(map[string]VM),
-		path:          path,
-		lastBroadcast: time.Now(),
-		responses:     make(chan *Client, 1024),
-		UseVMs:        true,
-		plumber:       plumber,
-	}
-
-	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {
-		return nil, err
-	}
-
-	if err := s.Listen(port); err != nil {
-		return nil, err
-	}
-
-	go s.responseHandler()
-	go s.clientReaper()
-
-	log.Debug("registered new ron server: %v", port)
-
-	return s, nil
 }
 
 func (t Type) String() string {

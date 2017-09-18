@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"qmp"
+	"ron"
 	"strconv"
 	"strings"
 	"sync"
@@ -213,6 +214,11 @@ func (vm *KvmVM) Copy() VM {
 	vm2.BaseVM = vm.BaseVM.copy()
 	vm2.KVMConfig = vm.KVMConfig.Copy()
 
+	vm2.hotplug = make(map[int]vmHotplug)
+	for k, v := range vm.hotplug {
+		vm2.hotplug[k] = v
+	}
+
 	return vm2
 }
 
@@ -280,9 +286,7 @@ func (vm *KvmVM) Start() (err error) {
 
 	log.Info("starting VM: %v", vm.ID)
 	if err := vm.q.Start(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to start: %v", err)
 	}
 
 	vm.setState(VM_RUNNING)
@@ -304,9 +308,7 @@ func (vm *KvmVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.q.Stop(); err != nil {
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unstoppable: %v")
 	}
 
 	vm.setState(VM_PAUSED)
@@ -371,7 +373,7 @@ func (vm *KVMConfig) String() string {
 	var o bytes.Buffer
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
-	fmt.Fprintln(&o, "Current KVM configuration:")
+	fmt.Fprintln(&o, "KVM configuration:")
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
@@ -486,12 +488,12 @@ func (vm *KvmVM) connectQMP() (err error) {
 			return
 		}
 
-		log.Info("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
+		log.Debug("qmp dial to %v : %v, redialing in %v", vm.ID, err, delay)
 		time.Sleep(delay)
 	}
 
 	// Never connected successfully
-	return fmt.Errorf("vm %v failed to connect to qmp: %v", vm.ID, err)
+	return errors.New("qmp timeout")
 }
 
 func (vm *KvmVM) connectVNC() error {
@@ -503,10 +505,12 @@ func (vm *KvmVM) connectVNC() error {
 	// Keep track of shim so that we can close it later
 	vm.vncShim = l
 	vm.VNCPort = l.Addr().(*net.TCPAddr).Port
-	ns := fmt.Sprintf("%v:%v", vm.Namespace, vm.Name)
 
 	go func() {
 		defer l.Close()
+
+		// should never create...
+		ns := GetOrCreateNamespace(vm.Namespace)
 
 		for {
 			// Sit waiting for new connections
@@ -518,7 +522,7 @@ func (vm *KvmVM) connectVNC() error {
 				return
 			}
 
-			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), ns)
+			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), vm.Name)
 
 			go func() {
 				defer remote.Close()
@@ -539,13 +543,13 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
-						vncRoute(ns, msg)
+						ns.vncRecorder.Route(vm, msg)
 						continue
 					}
 
 					// shim is no longer connected
 					if err == io.EOF || strings.Contains(err.Error(), "broken pipe") {
-						log.Info("vnc shim quit: %v", ns)
+						log.Info("vnc shim quit: %v", vm.Name)
 						break
 					}
 
@@ -578,7 +582,7 @@ func (vm *KvmVM) launch() error {
 	}
 
 	// write the config for this vm
-	config := vm.BaseConfig.String() + vm.KVMConfig.String()
+	config := vm.BaseConfig.String(vm.Namespace) + vm.KVMConfig.String()
 	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
@@ -592,16 +596,12 @@ func (vm *KvmVM) launch() error {
 
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
-			log.Error("get bridge: %v", err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to get bridge %v: %v", nic.Bridge, err)
 		}
 
 		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
 		if err != nil {
-			log.Error("create tap: %v", err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
 
 		nic.Tap = tap
@@ -609,9 +609,7 @@ func (vm *KvmVM) launch() error {
 
 	if len(vm.Networks) > 0 {
 		if err := vm.writeTaps(); err != nil {
-			log.Errorln(err)
-			vm.setError(err)
-			return err
+			return vm.setErrorf("unable to write taps: %v", err)
 		}
 	}
 
@@ -627,7 +625,7 @@ func (vm *KvmVM) launch() error {
 	if path == "" {
 		p, err := process("kvm")
 		if err != nil {
-			return err
+			return vm.setErrorf("kvm not in PATH")
 		}
 		path = p
 	}
@@ -640,10 +638,7 @@ func (vm *KvmVM) launch() error {
 	}
 
 	if err := cmd.Start(); err != nil {
-		err = fmt.Errorf("start qemu: %v %v", err, sErr.String())
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
 	}
 
 	vm.pid = cmd.Process.Pid
@@ -664,8 +659,7 @@ func (vm *KvmVM) launch() error {
 
 		// Check if the process quit for some reason other than being killed
 		if err != nil && err.Error() != "signal: killed" {
-			log.Error("kill qemu: %v %v", err, sErr.String())
-			vm.setError(err)
+			vm.setErrorf("qemu killed: %v %v", err, sErr.String())
 		} else if vm.State != VM_ERROR {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)
@@ -681,9 +675,7 @@ func (vm *KvmVM) launch() error {
 		// Failed to connect to qmp so clean up the process
 		cmd.Process.Kill()
 
-		log.Errorln(err)
-		vm.setError(err)
-		return err
+		return vm.setErrorf("unable to connect to qmp socket: %v", err)
 	}
 
 	go qmpLogger(vm.ID, vm.q)
@@ -692,21 +684,13 @@ func (vm *KvmVM) launch() error {
 		// Failed to connect to vnc so clean up the process
 		cmd.Process.Kill()
 
-		log.Errorln(err)
-		vm.setError(err)
-		return err
-	}
-
-	if vm.Backchannel {
-		// connect cc
-		ccPath := vm.path("cc")
-		if err := ccNode.DialSerial(ccPath); err != nil {
-			log.Warn("unable to connect to cc for vm %v: %v", vm.ID, err)
-		}
+		return vm.setErrorf("unable to connect to vnc shim: %v", err)
 	}
 
 	// Create goroutine to wait to kill the VM
 	go func() {
+		defer vm.cond.Signal()
+
 		select {
 		case <-waitChan:
 			log.Info("VM %v exited", vm.ID)
@@ -714,11 +698,23 @@ func (vm *KvmVM) launch() error {
 			log.Info("Killing VM %v", vm.ID)
 			cmd.Process.Kill()
 			<-waitChan
-			killAck <- vm.ID
 		}
 	}()
 
 	return nil
+}
+
+func (vm *KvmVM) Connect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.RegisterVM(vm)
+
+	// connect cc
+	ccPath := vm.path("cc")
+
+	return cc.DialSerial(ccPath)
 }
 
 func (vm *KvmVM) Hotplug(f, version string) error {

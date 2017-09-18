@@ -4,6 +4,7 @@ import (
 	"minicli"
 	log "minilog"
 	"os/exec"
+	"strings"
 )
 
 func init() {
@@ -33,7 +34,9 @@ func handleRoute(c *minicli.Command, r chan<- minicli.Responses) {
 		log.Debug("deleting default route")
 
 		out, err := exec.Command("route", "del", "default").CombinedOutput()
-		if err != nil {
+		// supress error if we tried to delete a default route when there
+		// wasn't one
+		if err != nil && !strings.Contains(string(out), "No such process") {
 			log.Error("unable to delete default route: %v: %v", err, string(out))
 		}
 	}

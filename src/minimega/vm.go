@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"ron"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,10 +26,7 @@ const (
 	QMP_CONNECT_DELAY     = 100
 )
 
-var (
-	killAck chan int // channel that all VMs ack on when killed
-	vmID    *Counter // channel of new VM IDs
-)
+var vmID *Counter // channel of new VM IDs, shared across namespaces
 
 type VMType int
 
@@ -41,7 +39,7 @@ const (
 type VM interface {
 	GetID() int               // GetID returns the VM's per-host unique ID
 	GetName() string          // GetName returns the VM's per-host unique name
-	GetNamespace() string     // GetNamespace returns the VM's namespace
+	GetNamespace() string     // GetNamespace returns the VM's namespace name
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 	GetHost() string          // GetHost returns the hostname that the VM is running on
 	GetState() VMState
@@ -51,8 +49,9 @@ type VM interface {
 	GetUUID() string
 	GetCPUs() uint64
 	GetMem() uint64
+	GetCoschedule() int
 
-	// Life cycle functions
+	// Lifecycle functions
 	Launch() error
 	Kill() error
 	Start() error
@@ -75,6 +74,7 @@ type VM interface {
 
 	SetCCActive(bool)
 	HasCC() bool
+	Connect(*ron.Server) error
 
 	UpdateNetworks()
 
@@ -107,7 +107,7 @@ type BaseVM struct {
 
 	ID        int
 	Name      string
-	Namespace string // namespace this VM belongs to
+	Namespace string
 	Host      string // hostname where this VM is running
 
 	State      VMState
@@ -116,6 +116,7 @@ type BaseVM struct {
 	ActiveCC   bool // set when CC is active
 
 	lock sync.Mutex // synchronizes changes to this VM
+	cond *sync.Cond
 
 	kill chan bool // channel to signal the vm to shut down
 
@@ -125,7 +126,7 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "uptime", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "type", "uuid", "cc_active",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
@@ -143,18 +144,16 @@ var vmInfo = []string{
 // Valid names for output masks for `vm summary`, in preferred output order
 var vmInfoLite = []string{
 	// generic fields
-	"id", "name", "state", "namespace", "type", "uuid", "cc_active",
+	"id", "name", "state", "type", "uuid", "cc_active",
 	// network fields
 	"vlan",
 }
 
 func init() {
-	killAck = make(chan int)
-
 	vmID = NewCounter()
 
 	// for serializing VMs
-	gob.Register(VMs{})
+	gob.Register([]VM{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 }
@@ -183,8 +182,8 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 		vm.Name = name
 	}
 
-	vm.Host = hostname
 	vm.Namespace = namespace
+	vm.Host = hostname
 
 	// generate a UUID if we don't have one
 	if vm.UUID == "" {
@@ -211,6 +210,8 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 
 	vm.State = VM_BUILDING
 	vm.LaunchTime = time.Now()
+
+	vm.cond = &sync.Cond{L: &vm.lock}
 
 	// New VMs are returned pre-locked. This ensures that the first operation
 	// called on a new VM is Launch.
@@ -333,6 +334,11 @@ func (vm *BaseVM) GetMem() uint64 {
 	return vm.Memory
 }
 
+func (vm *BaseVM) GetCoschedule() int {
+	return int(vm.Coschedule)
+}
+
+// Kill a VM. Blocks until the VM process has terminated.
 func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -345,6 +351,11 @@ func (vm *BaseVM) Kill() error {
 	// stop. Anyone blocking on the channel will unblock immediately.
 	// http://golang.org/ref/spec#Receive_operator
 	close(vm.kill)
+
+	// wait until the VM is in an unkillable state (it must have been killed)
+	for vm.State&VM_KILLABLE != 0 {
+		vm.cond.Wait()
+	}
 
 	return nil
 }
@@ -587,8 +598,6 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		return strconv.Itoa(vm.ID), nil
 	case "name":
 		return vm.Name, nil
-	case "namespace":
-		return vm.Namespace, nil
 	case "state":
 		return vm.State.String(), nil
 	case "uptime":
@@ -600,7 +609,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			if net.VLAN == DisconnectedVLAN {
 				vals = append(vals, "disconnected")
 			} else {
-				vals = append(vals, printVLAN(net.VLAN))
+				vals = append(vals, printVLAN(vm.Namespace, net.VLAN))
 			}
 		}
 	case "bridge":
@@ -651,11 +660,18 @@ func (vm *BaseVM) setState(s VMState) {
 	mustWrite(vm.path("state"), s.String())
 }
 
-// setError updates the vm state and records the error in the vm's tags.
-// Assumes that the caller has locked the vm.
-func (vm *BaseVM) setError(err error) {
+// setErrorf logs the error, updates the vm state, and records the error in the
+// vm's tags. Assumes that the caller has locked the vm. Returns the final
+// error.
+func (vm *BaseVM) setErrorf(format string, arg ...interface{}) error {
+	// create the error
+	err := fmt.Errorf(format, arg...)
+
+	log.Error("vm %v: %v", vm.ID, err)
 	vm.Tags["error"] = err.Error()
 	vm.setState(VM_ERROR)
+
+	return err
 }
 
 // writeTaps writes the vm's taps to disk in the vm's instance path.
@@ -675,14 +691,12 @@ func (vm *BaseVM) writeTaps() error {
 
 func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 	// Return error if two VMs have same name or UUID
-	if vm.Namespace == vm2.Namespace {
-		if vm.Name == vm2.Name {
-			return fmt.Errorf("duplicate VM name: %s", vm.Name)
-		}
+	if vm.Name == vm2.Name {
+		return fmt.Errorf("duplicate VM name: %s", vm.Name)
+	}
 
-		if vm.UUID == vm2.UUID {
-			return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
-		}
+	if vm.UUID == vm2.UUID {
+		return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
 	}
 
 	// Warn if we see two VMs that share a MAC on the same VLAN
@@ -700,18 +714,6 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 // path joins instancePath with provided path
 func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
-}
-
-// inNamespace tests whether vm is part of active namespace, if there is one.
-// When there isn't an active namespace, all vms return true.
-func inNamespace(vm VM) bool {
-	if vm == nil {
-		return false
-	}
-
-	namespace := GetNamespaceName()
-
-	return namespace == "" || vm.GetNamespace() == namespace
 }
 
 func vmNotFound(name string) error {
@@ -732,15 +734,4 @@ func vmNotContainer(name string) error {
 
 func isVMNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
-}
-
-func getConfig(vm VM) BaseConfig {
-	switch vm := vm.(type) {
-	case *KvmVM:
-		return vm.BaseConfig
-	case *ContainerVM:
-		return vm.BaseConfig
-	}
-
-	return BaseConfig{}
 }

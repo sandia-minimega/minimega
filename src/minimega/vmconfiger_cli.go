@@ -37,15 +37,15 @@ Note: this configuration only applies to containers and must be specified.
 		Patterns: []string{
 			"vm config filesystem [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.FilesystemPath
+				r.Response = ns.vmConfig.FilesystemPath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.FilesystemPath = v
+			ns.vmConfig.FilesystemPath = v
 
 			return nil
 		}),
@@ -61,13 +61,13 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config hostname [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.Hostname
+				r.Response = ns.vmConfig.Hostname
 				return nil
 			}
 
-			vmConfig.Hostname = c.StringArgs["value"]
+			ns.vmConfig.Hostname = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -84,17 +84,17 @@ Default: "/init"
 		Patterns: []string{
 			"vm config init [value]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
-				if len(vmConfig.Init) == 0 {
+				if len(ns.vmConfig.Init) == 0 {
 					return nil
 				}
 
-				r.Response = fmt.Sprintf("%v", vmConfig.Init)
+				r.Response = fmt.Sprintf("%v", ns.vmConfig.Init)
 				return nil
 			}
 
-			vmConfig.Init = c.ListArgs["value"]
+			ns.vmConfig.Init = c.ListArgs["value"]
 
 			return nil
 		}),
@@ -123,13 +123,13 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config preinit [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.Preinit
+				r.Response = ns.vmConfig.Preinit
 				return nil
 			}
 
-			vmConfig.Preinit = c.StringArgs["value"]
+			ns.vmConfig.Preinit = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -149,9 +149,9 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config fifos [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(vmConfig.Fifos, 10)
+				r.Response = strconv.FormatUint(ns.vmConfig.Fifos, 10)
 				return nil
 			}
 
@@ -160,7 +160,7 @@ Note: this configuration only applies to containers.
 				return err
 			}
 
-			vmConfig.Fifos = i
+			ns.vmConfig.Fifos = i
 
 			return nil
 		}),
@@ -186,11 +186,11 @@ Note: this configuration only applies to containers.
 			"vm config volume",
 			"vm config volume <key> [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if c.StringArgs["key"] == "" {
 				var b bytes.Buffer
 
-				for k, v := range vmConfig.VolumePaths {
+				for k, v := range ns.vmConfig.VolumePaths {
 					fmt.Fprintf(&b, "%v -> %v\n", k, v)
 				}
 
@@ -199,19 +199,19 @@ Note: this configuration only applies to containers.
 			}
 
 			if c.StringArgs["value"] == "" {
-				if vmConfig.VolumePaths != nil {
-					r.Response = vmConfig.VolumePaths[c.StringArgs["value"]]
+				if ns.vmConfig.VolumePaths != nil {
+					r.Response = ns.vmConfig.VolumePaths[c.StringArgs["value"]]
 				}
 				return nil
 			}
 
-			if vmConfig.VolumePaths == nil {
-				vmConfig.VolumePaths = make(map[string]string)
+			if ns.vmConfig.VolumePaths == nil {
+				ns.vmConfig.VolumePaths = make(map[string]string)
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.VolumePaths[c.StringArgs["key"]] = v
+			ns.vmConfig.VolumePaths[c.StringArgs["key"]] = v
 
 			return nil
 		}),
@@ -226,15 +226,15 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config qemu [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.QemuPath
+				r.Response = ns.vmConfig.QemuPath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.QemuPath = v
+			ns.vmConfig.QemuPath = v
 
 			return nil
 		}),
@@ -249,15 +249,15 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config kernel [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.KernelPath
+				r.Response = ns.vmConfig.KernelPath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.KernelPath = v
+			ns.vmConfig.KernelPath = v
 
 			return nil
 		}),
@@ -272,15 +272,15 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config initrd [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.InitrdPath
+				r.Response = ns.vmConfig.InitrdPath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.InitrdPath = v
+			ns.vmConfig.InitrdPath = v
 
 			return nil
 		}),
@@ -295,15 +295,15 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config cdrom [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.CdromPath
+				r.Response = ns.vmConfig.CdromPath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.CdromPath = v
+			ns.vmConfig.CdromPath = v
 
 			return nil
 		}),
@@ -321,15 +321,15 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config migrate [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.MigratePath
+				r.Response = ns.vmConfig.MigratePath
 				return nil
 			}
 
 			v := checkPath(c.StringArgs["value"])
 
-			vmConfig.MigratePath = v
+			ns.vmConfig.MigratePath = v
 
 			return nil
 		}),
@@ -349,13 +349,13 @@ Default: "host"
 		Patterns: []string{
 			"vm config cpu [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.CPU
+				r.Response = ns.vmConfig.CPU
 				return nil
 			}
 
-			vmConfig.CPU = c.StringArgs["value"]
+			ns.vmConfig.CPU = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -383,9 +383,9 @@ Replace 4 with another number.
 		Patterns: []string{
 			"vm config serial-ports [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(vmConfig.SerialPorts, 10)
+				r.Response = strconv.FormatUint(ns.vmConfig.SerialPorts, 10)
 				return nil
 			}
 
@@ -394,7 +394,7 @@ Replace 4 with another number.
 				return err
 			}
 
-			vmConfig.SerialPorts = i
+			ns.vmConfig.SerialPorts = i
 
 			return nil
 		}),
@@ -418,9 +418,9 @@ To create three virtio-serial ports:
 		Patterns: []string{
 			"vm config virtio-ports [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(vmConfig.VirtioPorts, 10)
+				r.Response = strconv.FormatUint(ns.vmConfig.VirtioPorts, 10)
 				return nil
 			}
 
@@ -429,7 +429,7 @@ To create three virtio-serial ports:
 				return err
 			}
 
-			vmConfig.VirtioPorts = i
+			ns.vmConfig.VirtioPorts = i
 
 			return nil
 		}),
@@ -448,17 +448,17 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config append [value]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
-				if len(vmConfig.Append) == 0 {
+				if len(ns.vmConfig.Append) == 0 {
 					return nil
 				}
 
-				r.Response = fmt.Sprintf("%v", vmConfig.Append)
+				r.Response = fmt.Sprintf("%v", ns.vmConfig.Append)
 				return nil
 			}
 
-			vmConfig.Append = c.ListArgs["value"]
+			ns.vmConfig.Append = c.ListArgs["value"]
 
 			return nil
 		}),
@@ -474,13 +474,13 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config disk [value]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
-				if len(vmConfig.DiskPaths) == 0 {
+				if len(ns.vmConfig.DiskPaths) == 0 {
 					return nil
 				}
 
-				r.Response = fmt.Sprintf("%v", vmConfig.DiskPaths)
+				r.Response = fmt.Sprintf("%v", ns.vmConfig.DiskPaths)
 				return nil
 			}
 
@@ -490,7 +490,7 @@ Note: this configuration only applies to KVM-based VMs.
 				vals[i] = checkPath(vals[i])
 			}
 
-			vmConfig.DiskPaths = vals
+			ns.vmConfig.DiskPaths = vals
 
 			return nil
 		}),
@@ -506,17 +506,17 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config qemu-append [value]...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
-				if len(vmConfig.QemuAppend) == 0 {
+				if len(ns.vmConfig.QemuAppend) == 0 {
 					return nil
 				}
 
-				r.Response = fmt.Sprintf("%v", vmConfig.QemuAppend)
+				r.Response = fmt.Sprintf("%v", ns.vmConfig.QemuAppend)
 				return nil
 			}
 
-			vmConfig.QemuAppend = c.ListArgs["value"]
+			ns.vmConfig.QemuAppend = c.ListArgs["value"]
 
 			return nil
 		}),
@@ -529,13 +529,13 @@ given a random one when it is launched.
 		Patterns: []string{
 			"vm config uuid [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.UUID
+				r.Response = ns.vmConfig.UUID
 				return nil
 			}
 
-			vmConfig.UUID = c.StringArgs["value"]
+			ns.vmConfig.UUID = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -549,9 +549,9 @@ Default: 1
 		Patterns: []string{
 			"vm config vcpus [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(vmConfig.VCPUs, 10)
+				r.Response = strconv.FormatUint(ns.vmConfig.VCPUs, 10)
 				return nil
 			}
 
@@ -560,7 +560,7 @@ Default: 1
 				return err
 			}
 
-			vmConfig.VCPUs = i
+			ns.vmConfig.VCPUs = i
 
 			return nil
 		}),
@@ -574,9 +574,9 @@ Default: 2048
 		Patterns: []string{
 			"vm config memory [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(vmConfig.Memory, 10)
+				r.Response = strconv.FormatUint(ns.vmConfig.Memory, 10)
 				return nil
 			}
 
@@ -585,7 +585,7 @@ Default: 2048
 				return err
 			}
 
-			vmConfig.Memory = i
+			ns.vmConfig.Memory = i
 
 			return nil
 		}),
@@ -602,13 +602,13 @@ Default: true
 		Patterns: []string{
 			"vm config snapshot [true,false]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.BoolArgs) == 0 {
-				r.Response = strconv.FormatBool(vmConfig.Snapshot)
+				r.Response = strconv.FormatBool(ns.vmConfig.Snapshot)
 				return nil
 			}
 
-			vmConfig.Snapshot = c.BoolArgs["true"]
+			ns.vmConfig.Snapshot = c.BoolArgs["true"]
 
 			return nil
 		}),
@@ -621,13 +621,13 @@ launching VMs in a namespace.
 		Patterns: []string{
 			"vm config schedule [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = vmConfig.Schedule
+				r.Response = ns.vmConfig.Schedule
 				return nil
 			}
 
-			vmConfig.Schedule = c.StringArgs["value"]
+			ns.vmConfig.Schedule = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -644,9 +644,9 @@ Default: -1
 		Patterns: []string{
 			"vm config coschedule [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatInt(vmConfig.Coschedule, 10)
+				r.Response = strconv.FormatInt(ns.vmConfig.Coschedule, 10)
 				return nil
 			}
 
@@ -655,7 +655,7 @@ Default: -1
 				return err
 			}
 
-			vmConfig.Coschedule = i
+			ns.vmConfig.Coschedule = i
 
 			return nil
 		}),
@@ -669,13 +669,13 @@ Default: true
 		Patterns: []string{
 			"vm config backchannel [true,false]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.BoolArgs) == 0 {
-				r.Response = strconv.FormatBool(vmConfig.Backchannel)
+				r.Response = strconv.FormatBool(ns.vmConfig.Backchannel)
 				return nil
 			}
 
-			vmConfig.Backchannel = c.BoolArgs["true"]
+			ns.vmConfig.Backchannel = c.BoolArgs["true"]
 
 			return nil
 		}),
@@ -689,11 +689,11 @@ newly launched VMs.
 			"vm config tags",
 			"vm config tags <key> [value]",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if c.StringArgs["key"] == "" {
 				var b bytes.Buffer
 
-				for k, v := range vmConfig.Tags {
+				for k, v := range ns.vmConfig.Tags {
 					fmt.Fprintf(&b, "%v -> %v\n", k, v)
 				}
 
@@ -702,17 +702,17 @@ newly launched VMs.
 			}
 
 			if c.StringArgs["value"] == "" {
-				if vmConfig.Tags != nil {
-					r.Response = vmConfig.Tags[c.StringArgs["value"]]
+				if ns.vmConfig.Tags != nil {
+					r.Response = ns.vmConfig.Tags[c.StringArgs["value"]]
 				}
 				return nil
 			}
 
-			if vmConfig.Tags == nil {
-				vmConfig.Tags = make(map[string]string)
+			if ns.vmConfig.Tags == nil {
+				ns.vmConfig.Tags = make(map[string]string)
 			}
 
-			vmConfig.Tags[c.StringArgs["key"]] = c.StringArgs["value"]
+			ns.vmConfig.Tags[c.StringArgs["key"]] = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -749,7 +749,7 @@ newly launched VMs.
 			"clear vm config <virtio-ports,>",
 			"clear vm config <volume,>",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, r *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			// at most one key will be set in BoolArgs but we don't know what it
 			// will be so we have to loop through the args and set whatever key we
 			// see.
@@ -758,7 +758,7 @@ newly launched VMs.
 				mask = k
 			}
 
-			vmConfig.Clear(mask)
+			ns.vmConfig.Clear(mask)
 
 			return nil
 		}),

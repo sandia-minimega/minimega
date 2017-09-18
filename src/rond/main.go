@@ -50,11 +50,14 @@ func main() {
 		log.Fatal("unable to get hostname: %v", hostname)
 	}
 
-	rond, err = ron.NewServer(*f_port, *f_path, nil)
+	rond, err = ron.NewServer(*f_path, "", nil)
 	if err != nil {
 		log.Fatal("unable to create server: %v", err)
 	}
 
+	if err := rond.Listen(*f_port); err != nil {
+		log.Fatal("unable to listen: %v", err)
+	}
 	rond.UseVMs = false
 
 	if *f_nostdin {

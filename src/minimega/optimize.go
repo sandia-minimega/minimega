@@ -92,10 +92,10 @@ information.`,
 }
 
 func init() {
-	affinityClearFilter()
+	affinityClearFilter(nil)
 }
 
-func cliOptimize(c *minicli.Command, resp *minicli.Response) error {
+func cliOptimize(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["ksm"] {
 		if len(c.BoolArgs) == 1 {
 			// Must want to print ksm status
@@ -157,14 +157,14 @@ func cliOptimize(c *minicli.Command, resp *minicli.Response) error {
 			}
 
 			if affinityEnabled {
-				affinityEnable()
+				affinityEnable(ns)
 			}
 		} else if c.BoolArgs["true"] && !affinityEnabled {
 			// Enabling affinity
-			affinityEnable()
+			affinityEnable(ns)
 		} else if c.BoolArgs["false"] && affinityEnabled {
 			// Disabling affinity
-			affinityDisable()
+			affinityDisable(ns)
 		}
 
 		return nil
@@ -179,13 +179,13 @@ func cliOptimize(c *minicli.Command, resp *minicli.Response) error {
 	return err
 }
 
-func cliOptimizeClear(c *minicli.Command, resp *minicli.Response) error {
+func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["affinity"] && c.BoolArgs["filter"] {
 		// Reset affinity filter
-		affinityClearFilter()
+		affinityClearFilter(ns)
 	} else if c.BoolArgs["affinity"] {
 		// Reset affinity (disable)
-		affinityDisable()
+		affinityDisable(ns)
 	} else if c.BoolArgs["hugepages"] {
 		// Reset hugepages (disable)
 		hugepagesMountPath = ""
@@ -293,13 +293,13 @@ func ksmWrite(filename string, value int) {
 func clearOptimize() {
 	ksmDisable()
 	hugepagesMountPath = ""
-	affinityDisable()
-	affinityClearFilter()
+	affinityDisable(nil)
+	affinityClearFilter(nil)
 }
 
-func affinityEnable() error {
+func affinityEnable(ns *Namespace) error {
 	affinityEnabled = true
-	for _, vm := range vms.FindKvmVMs() {
+	for _, vm := range ns.FindKvmVMs() {
 		cpu := affinitySelectCPU(vm)
 		err := vm.AffinitySet(cpu)
 		if err != nil {
@@ -309,9 +309,14 @@ func affinityEnable() error {
 	return nil
 }
 
-func affinityDisable() error {
+func affinityDisable(ns *Namespace) error {
 	affinityEnabled = false
-	for _, vm := range vms.FindKvmVMs() {
+
+	if ns == nil {
+		return nil
+	}
+
+	for _, vm := range ns.FindKvmVMs() {
 		affinityUnselectCPU(vm)
 		err := vm.AffinityUnset()
 		if err != nil {
@@ -321,15 +326,15 @@ func affinityDisable() error {
 	return nil
 }
 
-func affinityClearFilter() {
+func affinityClearFilter(ns *Namespace) {
 	cpu := runtime.NumCPU()
 	affinityCPUSets = make(map[string][]*KvmVM)
 	for i := 0; i < cpu; i++ {
 		v := fmt.Sprintf("%v", i)
 		affinityCPUSets[v] = []*KvmVM{}
 	}
-	if affinityEnabled {
-		affinityEnable()
+	if affinityEnabled && ns != nil {
+		affinityEnable(ns)
 	}
 }
 
@@ -387,7 +392,7 @@ func (vm *KvmVM) CheckAffinity() {
 func (vm *KvmVM) AffinitySet(cpu string) error {
 	log.Debugln("affinitySet")
 
-	out, err := processWrapper("taskset", "-a", "-p", fmt.Sprintf("%v", cpu), fmt.Sprintf("%v", vm.pid))
+	out, err := processWrapper("taskset", "-a", "-p", cpu, strconv.Itoa(vm.pid))
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, out)
 	}
@@ -397,7 +402,7 @@ func (vm *KvmVM) AffinitySet(cpu string) error {
 func (vm *KvmVM) AffinityUnset() error {
 	log.Debugln("affinityUnset")
 
-	out, err := processWrapper("taskset", "-p", "0xffffffffffffffff", fmt.Sprintf("%v", vm.pid))
+	out, err := processWrapper("taskset", "-p", "0xffffffffffffffff", strconv.Itoa(vm.pid))
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, out)
 	}

@@ -9,7 +9,6 @@ import (
 	"io"
 	log "minilog"
 	"net"
-	"path/filepath"
 )
 
 const (
@@ -17,8 +16,8 @@ const (
 	MODE_PIPE
 )
 
-func commandSocketStart() {
-	l, err := net.Listen("unix", filepath.Join(*f_path, "miniccc"))
+func commandSocketStart(path string) {
+	l, err := net.Listen("unix", path)
 	if err != nil {
 		log.Fatalln(err)
 	}

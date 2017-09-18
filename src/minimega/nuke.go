@@ -40,7 +40,10 @@ Should be run with caution.`,
 //  	kill all containers
 //	remove everything inside of info.BasePath (careful, that's dangerous)
 //  exit()
-func cliNuke(c *minicli.Command, resp *minicli.Response) error {
+func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// nuke any state we have
+	DestroyNamespace(Wildcard)
+
 	// nuke any container related items
 	containerNuke()
 
@@ -78,10 +81,7 @@ func cliNuke(c *minicli.Command, resp *minicli.Response) error {
 		log.Errorln(err)
 	}
 
-	// clean up possibly leftover state
-	nukeState()
-
-	os.Exit(0)
+	Shutdown("nuked")
 	return errors.New("unreachable")
 }
 
@@ -92,14 +92,6 @@ func nukeTaps(taps []string) {
 			log.Error("%v -- %v", t, err)
 		}
 	}
-}
-
-// Nuke all possible leftover state
-// Similar to teardown(), but designed to be called from nuke
-func nukeState() {
-	vncClear()
-	clearAllCaptures()
-	ksmDisable()
 }
 
 // return names of bridges as shown in f_base/bridges. Optionally include
@@ -165,7 +157,7 @@ func nukeWalker(path string, info os.FileInfo, err error) error {
 		log.Infoln("killing process:", t)
 
 		out, err := processWrapper(args...)
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "No such process") {
 			log.Error("%v: %v", err, out)
 		}
 	}
