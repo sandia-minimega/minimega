@@ -1178,7 +1178,7 @@ func (vm *ContainerVM) overlayUnmount() error {
 
 func (vm *ContainerVM) console(pseudotty *os.File) {
 	// initialize scrollback
-	vm.scrollBack = NewByteFifo(5000)	// 80x24 is 1920 characters, but we want a little history for e.g. vim
+	vm.scrollBack = NewByteFifo(1920)	// 80x24 is 1920 characters, but we want a little history for e.g. vim
 	// Create the multiwriter and add the scrollback to it to start
 	vm.consoleMultiWriter = NewMutableMultiWriter(vm.scrollBack)
 	go io.Copy(vm.consoleMultiWriter, pseudotty)
@@ -1195,11 +1195,6 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 			}
 
 			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
-			//TODO: copy scrollback to conn
-			//io.Copy(conn, vm.scrollBack)
-			conn.Write(vm.scrollBack.Get())
-			// register conn into the mutable-multiwriter
-			vm.consoleMultiWriter.AddWriter(conn)
 
 			// copy from the connection to the pty (user input)
 			go func() {
@@ -1207,6 +1202,12 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 				log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
 				vm.consoleMultiWriter.DelWriter(conn)
 			}()
+
+			// register conn into the mutable-multiwriter
+			vm.consoleMultiWriter.AddWriter(conn)
+
+			// Copy scrollback to conn
+			conn.Write(vm.scrollBack.Get())
 		}
 	}
 
