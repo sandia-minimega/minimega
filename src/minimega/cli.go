@@ -41,6 +41,8 @@ func cliSetup() {
 	registerHandlers("cc", ccCLIHandlers)
 	registerHandlers("deploy", deployCLIHandlers)
 	registerHandlers("disk", diskCLIHandlers)
+	registerHandlers("dhcp4", dhcp4CLIHandlers)
+	registerHandlers("dhcp6", dhcp6CLIHandlers)
 	registerHandlers("dnsmasq", dnsmasqCLIHandlers)
 	registerHandlers("dot", dotCLIHandlers)
 	registerHandlers("external", externalCLIHandlers)
