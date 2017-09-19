@@ -11,7 +11,7 @@ import (
 )
 
 type byteFifo struct {
-	data []byte
+	data  []byte
 	limit int // max size
 	sync.Mutex
 }

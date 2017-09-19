@@ -294,8 +294,8 @@ type ContainerVM struct {
 
 	ConsolePort int
 
-	scrollBack	*byteFifo
-	consoleMultiWriter	*mutableMultiWriter
+	scrollBack         *byteFifo
+	consoleMultiWriter *mutableMultiWriter
 }
 
 // Ensure that ContainerVM implements the VM interface
@@ -1221,7 +1221,7 @@ func (vm *ContainerVM) overlayUnmount() error {
 
 func (vm *ContainerVM) console(pseudotty *os.File) {
 	// initialize scrollback
-	vm.scrollBack = NewByteFifo(1920)	// 80x24 is 1920 characters, but we want a little history for e.g. vim
+	vm.scrollBack = NewByteFifo(1920) // 80x24 is 1920 characters, but we want a little history for e.g. vim
 	// Create the multiwriter and add the scrollback to it to start
 	vm.consoleMultiWriter = NewMutableMultiWriter(vm.scrollBack)
 	go io.Copy(vm.consoleMultiWriter, pseudotty)
