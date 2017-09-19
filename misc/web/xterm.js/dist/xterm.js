@@ -1507,7 +1507,8 @@ fg=this.defAttr>>9&0x1ff;bg=this.defAttr&0x1ff;}else{this.error('Unknown SGR att
  *   CSI ? 5 0  n  No Locator, if not.
  */Terminal.prototype.deviceStatus=function(params){if(!this.prefix){switch(params[0]){case 5:// status report
 this.send('\x1b[0n');break;case 6:// cursor position
-this.send('\x1b['+(this.y+1)+';'+(this.x+1)+'R');break;}}else if(this.prefix==='?'){// modern xterm doesnt seem to
+//this.send('\x1b['+(this.y+1)+';'+(this.x+1)+'R');
+break;}}else if(this.prefix==='?'){// modern xterm doesnt seem to
 // respond to any of these except ?6, 6, and 5
 switch(params[0]){case 6:// cursor position
 this.send('\x1b[?'+(this.y+1)+';'+(this.x+1)+'R');break;case 15:// no printer

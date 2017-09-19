@@ -293,6 +293,9 @@ type ContainerVM struct {
 	ccServer *ron.Server
 
 	ConsolePort int
+
+	scrollBack	*byteFifo
+	consoleMultiWriter	*mutableMultiWriter
 }
 
 // Ensure that ContainerVM implements the VM interface
@@ -1217,6 +1220,12 @@ func (vm *ContainerVM) overlayUnmount() error {
 }
 
 func (vm *ContainerVM) console(pseudotty *os.File) {
+	// initialize scrollback
+	vm.scrollBack = NewByteFifo(1920)	// 80x24 is 1920 characters, but we want a little history for e.g. vim
+	// Create the multiwriter and add the scrollback to it to start
+	vm.consoleMultiWriter = NewMutableMultiWriter(vm.scrollBack)
+	go io.Copy(vm.consoleMultiWriter, pseudotty)
+
 	serve := func(l net.Listener) {
 		for {
 			conn, err := l.Accept()
@@ -1229,9 +1238,19 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 			}
 
 			log.Info("new connection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
-			go io.Copy(conn, pseudotty)
-			io.Copy(pseudotty, conn)
-			log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+
+			// copy from the connection to the pty (user input)
+			go func() {
+				io.Copy(pseudotty, conn)
+				log.Info("disconnection: %v -> %v for %v", conn.RemoteAddr(), l.Addr(), vm.ID)
+				vm.consoleMultiWriter.DelWriter(conn)
+			}()
+
+			// register conn into the mutable-multiwriter
+			vm.consoleMultiWriter.AddWriter(conn)
+
+			// Copy scrollback to conn
+			conn.Write(vm.scrollBack.Get())
 		}
 	}
 
