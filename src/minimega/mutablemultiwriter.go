@@ -1,8 +1,8 @@
 package main
 
 import (
-	"sync"
 	"io"
+	"sync"
 )
 
 type mutableMultiWriter struct {
