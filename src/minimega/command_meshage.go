@@ -238,6 +238,10 @@ func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// set the source so that remote nodes do not try to do any non-local
+	// behaviors, see wrapBroadcastCLI.
+	c.Subcommand.SetSource("meshage")
+
 	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
 	if err != nil {
 		respChan <- errResp(err)

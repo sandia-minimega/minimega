@@ -284,6 +284,8 @@ func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// runCommands instead of RunCommands).
 	for _, v := range all {
 		cmd := minicli.MustCompile(v)
+		// keep the original source
+		cmd.SetSource(c.Source)
 
 		forward(runCommands(cmd), respChan)
 	}
