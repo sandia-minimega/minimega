@@ -1,0 +1,11 @@
+# force namespace creation on remote hosts
+namespace foo vm info
+
+# check that it was created
+mesh send all namespace
+
+# destroy the namespace
+clear namespace foo
+
+# check that it was destroyed
+mesh send all namespace

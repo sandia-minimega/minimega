@@ -75,12 +75,14 @@ Display or modify the active namespace.
 Without an argument, "clear namespace" will reset the namespace to the default
 namespace, minimega.
 
-With an arugment, "clear namespace <name>" will delete the specified namespace.
-You may use "all" to delete all namespaces.`,
+With an argument, "clear namespace <name>" will destroy the specified
+namespace, cleaning up all state associated with it. You may use "all" to
+destroy all namespaces. This command is broadcast to the cluster to clean up
+any remote state as well.`,
 		Patterns: []string{
 			"clear namespace [name]",
 		},
-		Call: wrapSimpleCLI(cliClearNamespace),
+		Call: cliClearNamespace,
 		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, true)
@@ -310,14 +312,51 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	return nil
 }
 
-func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
+	resp := &minicli.Response{Host: hostname}
+
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Going back to default namespace
-		return SetNamespace(DefaultNamespace)
+		if err := SetNamespace(DefaultNamespace); err != nil {
+			respChan <- errResp(err)
+		}
+
+		respChan <- minicli.Responses{resp}
+		return
 	}
 
-	return DestroyNamespace(name)
+	// destroy the namespace locally first
+	if err := DestroyNamespace(name); err != nil {
+		respChan <- errResp(err)
+		return
+	}
+
+	// destroy the namespace on all remote hosts as well
+	if c.Source == "" {
+		// recompile and set source so that we don't try to broadcast again
+		cmd := minicli.MustCompilef(c.Original)
+		cmd.Source = name
+
+		respChan2, err := meshageSend(cmd, Wildcard)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		res := minicli.Responses{resp}
+
+		for resps := range respChan2 {
+			for _, resp := range resps {
+				res = append(res, resp)
+			}
+		}
+
+		respChan <- res
+		return
+	}
+
+	respChan <- minicli.Responses{resp}
 }
 
 func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
