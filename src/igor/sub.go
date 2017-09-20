@@ -46,7 +46,7 @@ The -t flag is used to specify the reservation time in integer minutes. (default
 
 The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
 
-The -a flag indicates that the reservation should take place on or after the specified time, given in the format "Jan 2 15:04". Especially useful in conjunction with the -s flag.
+The -a flag indicates that the reservation should take place on or after the specified time, given in the format "2017-Jan-2-15:04". Especially useful in conjunction with the -s flag.
 	`,
 }
 

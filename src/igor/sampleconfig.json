@@ -1,5 +1,5 @@
 {
-	"tftproot" : "/home/john/tftpboot/",
+	"tftproot" : "/tftpboot/",
 	"prefix" : "kn",
 	"start" : 1,
 	"end" : 5,
@@ -10,10 +10,10 @@
 	"cobblerdefaultprofile": "",
 	"poweroncommand" : "powerbot on",
 	"poweroffcommand" : "powerbot off",
-	"autoreboot": false
+	"autoreboot": false,
+	"network": "",
 	"vlan_min": 1000,
 	"vlan_max": 2000,
-	"network": "arista",
 	"networkuser": "admin",
 	"networkpassword": "admin",
 	"network_url": "arista:80/command-api",
