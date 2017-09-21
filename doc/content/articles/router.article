@@ -9,7 +9,7 @@ The minimega authors
 functions such as DHCP, DNS, IPv4/IPv6 assignments, and, of course, routing.
 The `minirouter` tool is interfaced by minimega's `router` API, described
 below, and the minimega distribution provides a prebuilt `minirouter` container
-image. 
+image.
 
 `minirouter` currently supports several protocols and capabilities including
 DHCP, DNS, router advertisements, OSPF, and static routes. It can route in
@@ -29,16 +29,16 @@ minirouter at startup.
 
 ** Building a KVM image
 
-You can also build a disk image for booting in KVM. First, copy the
-minirouter binary into the overlay directory:
+You can also build a disk image for booting in KVM. First, copy the miniccc and
+minirouter binaries into the overlay directory:
 
 	$ cp bin/minirouter misc/vmbetter_configs/minirouter_overlay
+	$ cp bin/minirouter misc/vmbetter_configs/minirouter_overlay
 
-Then build the image with vmbetter (see [[tutorials/vmbetter.article][the vmbetter tutorial for more information]])
+Then build the image with vmbetter (see
+[[tutorials/vmbetter.article][the vmbetter tutorial for more information]])
 
-	$ ./bin/vmbetter -branch stable -qcow -level debug misc/vmbetter_configs/minirouter.conf
-
-Depending on your system, you may need to set the `-mbr` flag.
+	$ ./bin/vmbetter -branch stable -level debug misc/vmbetter_configs/minirouter.conf
 
 ** Running minirouter without an image
 
@@ -51,7 +51,7 @@ minirouter must be able to access the miniccc tool and files directory
 (see `minirouter`-h` for default paths).
 
 `minirouter` uses `iptool`, `dnsmasq`, `dhclient`, and `bird`, all of which
-must be installed but not already running. `minirouter` must run as root. 
+must be installed but not already running. `minirouter` must run as root.
 
 Beyond these few requirements, `minirouter` should run on most linux
 systems.
@@ -86,7 +86,7 @@ For example, to add the IP 10.0.0.1/24 to the second interface on a
 `minirouter` VM:
 
 	minimega$ vm config net a b
-	
+
 	# add an ip to interface b (index 1)
 	minimega$ router foo interface 1 10.0.0.1/24
 
@@ -100,7 +100,7 @@ Multiple addresses can be added to the same interface as well:
 We use [[http://www.thekelleys.org.uk/dnsmasq/doc.html][dnsmasq]] to provide
 DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
 extensive support for various DHCP and DNS options, and `minirouter` uses a
-subset of common capabilities. 
+subset of common capabilities.
 
 ** DHCP
 
@@ -175,17 +175,17 @@ IPv6 routes are added in the same way:
 specifying the OSPF area and *interface* to include in the area. OSPF generally
 supports specifying networks and many other options, which `minirouter` may add
 in the future. For now, specifying an interface (and all of the networks on
-that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`. 
+that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`.
 
 Interfaces are identified by the index in which they were added by the
 `vm`config`net` API. For example, to add the first and third network of the
 router VM to area 0 in an OSPF route:
-	
+
 	minimega$ vm config net a b c
-	
+
 	# add interface 'a', index 0
 	minimega$ router foo route ospf 0 0
-	
+
 	# add interface 'c', index 2
 	minimega$ router foo route ospf 0 2
 
