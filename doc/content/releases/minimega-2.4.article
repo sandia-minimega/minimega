@@ -11,6 +11,13 @@ existing API which will improve user experience and programmability.
 
 ** Major changes and milestones
 
+*** miniplumber
+
+Add plumbing support to minimega and miniccc to facilitate non-networked
+communication between VMs, processes on guests or hosts, and instances of
+minimega. See the miniplumber [[/articles/plumbing.article][article]] and
+[[/presentations/miniplumber.slide][presentation]] for details.
+
 *** namespaces
 
 In 2.3, we introduced namespaces as the first step towards more portable
