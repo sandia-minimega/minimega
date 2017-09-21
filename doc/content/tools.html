@@ -81,7 +81,7 @@ instance to find crashes.
 This utility installs a root password or root SSH keys in a ramdisk image. It
 is intended to help prevent interference between users on a cluster by
 implementing login controls on the bootable image. Running
-`sudo`passwordify`SOURCE`NEW` will unpack the *source* ramdisk image, prompt
+`sudo passwordify SOURCE NEW` will unpack the *source* ramdisk image, prompt
 for a root password, and re-pack it into the specified *new* file, leaving the
 source unchanged. The `-keys` flag allows you to specify an authorized_keys
 formatted file (one public key per line) to be installed in the ramdisk's
