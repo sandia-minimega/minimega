@@ -33,6 +33,7 @@ var (
 	f_console   = flag.Bool("console", false, "enable console")
 	f_key       = flag.String("key", "", "key file for TLS in PEM format")
 	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
+	f_namespace = flag.String("namespace", "", "limit miniweb to a namespace")
 )
 
 var mm *miniclient.Conn

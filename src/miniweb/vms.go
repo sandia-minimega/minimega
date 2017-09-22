@@ -9,14 +9,6 @@ import (
 	"strconv"
 )
 
-func vmInfo(columns, filters []string) []map[string]string {
-	return runTabular("vm info", columns, filters)
-}
-
-func vmTop(columns, filters []string) []map[string]string {
-	return runTabular("vm top", columns, filters)
-}
-
 func sortVMs(vms []map[string]string) {
 	sort.Slice(vms, func(i, j int) bool {
 		h := vms[i]["host"]

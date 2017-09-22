@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"io"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -153,10 +152,10 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// connectHandler handles the following URLs:
+//   /connect/<name>/
+//   /connect/<name>/ws
 func connectHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form:
-	//   /connect/<name>/
-	//   /connect/<name>/ws
 	log.Info("connect request: %v", r.URL.Path)
 
 	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
@@ -172,10 +171,14 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	var host string
 	var port int
 
-	columns := []string{"host", "type", "vnc_port", "console_port"}
-	filters := []string{fmt.Sprintf("name=%q", name)}
+	cmd := &Command{
+		Command:   "vm info",
+		Namespace: *f_namespace,
+		Columns:   []string{"host", "type", "vnc_port", "console_port"},
+		Filters:   []string{fmt.Sprintf("name=%q", name)},
+	}
 
-	for _, vm := range vmInfo(columns, filters) {
+	for _, vm := range runTabular(cmd) {
 		host = vm["host"]
 		vmType = vm["type"]
 
@@ -219,49 +222,37 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// connectWsHandler returns a function to service a websocket for the given VM
-func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
-	return func(ws *websocket.Conn) {
-		switch vmType {
-		case "kvm":
-			// Undocumented "feature" of websocket -- need to set to
-			// PayloadType in order for a direct io.Copy to work.
-			ws.PayloadType = websocket.BinaryFrame
-		case "container":
-			// See above. The javascript terminal needs it to be a TextFrame.
-			ws.PayloadType = websocket.TextFrame
-		}
-
-		// connect to the remote host
-		rhost := fmt.Sprintf("%v:%v", host, port)
-		remote, err := net.Dial("tcp", rhost)
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-		defer remote.Close()
-
-		log.Info("ws client connected to %v", rhost)
-
-		go io.Copy(ws, remote)
-		io.Copy(remote, ws)
-
-		log.Info("ws client disconnected from %v", rhost)
-	}
-}
-
+// vmsHandler handles the following URLs:
+//   /vms/info.json
+//   /vms/top.json
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("vms request: %v", r.URL.Path)
+
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(fields) != 2 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
 	var vms []map[string]string
 
-	if strings.HasSuffix(r.URL.Path, "/info.json") {
+	cmd := &Command{
+		Namespace: *f_namespace,
 		// don't care about quit or error state
-		vms = vmInfo(nil, []string{
+		Filters: []string{
 			"state!=quit",
 			"state!=error",
-		})
-	} else if strings.HasSuffix(r.URL.Path, "/top.json") {
-		vms = vmTop(nil, nil)
-	} else {
+		},
+	}
+
+	switch fields[1] {
+	case "info.json":
+		cmd.Command = "vm info"
+		vms = runTabular(cmd)
+	case "top.json":
+		cmd.Command = "vm top"
+		vms = runTabular(cmd)
+	default:
 		http.NotFound(w, r)
 		return
 	}
@@ -270,12 +261,18 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, vms)
 }
 
+// hostsHandler handles the following URLs:
+//   /hosts.json
 func hostsHandler(w http.ResponseWriter, r *http.Request) {
 	var hosts [][]string
 
-	cmd := "host"
+	cmd := &Command{
+		Command:   "host",
+		Namespace: *f_namespace,
+	}
 
-	for resps := range mm.Run(cmd) {
+	// TODO: replace with runTabular?
+	for resps := range mm.Run(cmd.String()) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -292,12 +289,18 @@ func hostsHandler(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, hosts)
 }
 
+// vlansHandler handles the following URLs:
+//   /vlans.json
 func vlansHandler(w http.ResponseWriter, r *http.Request) {
 	vlans := [][]interface{}{}
 
-	cmd := "vlans"
+	cmd := &Command{
+		Command:   "vlans",
+		Namespace: *f_namespace,
+	}
 
-	for resps := range mm.Run(cmd) {
+	// TODO: replace with runTabular?
+	for resps := range mm.Run(cmd.String()) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)
@@ -317,11 +320,11 @@ func vlansHandler(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, vlans)
 }
 
+// consoleHandler handles the following URLs:
+//   /console
+//   /console/<pid>/ws
+//   /console/<pid>/size
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form:
-	//   /console
-	//   /console/<pid>/ws
-	//   /console/<pid>/size
 	if r.URL.Path == "/console" {
 		// create a new console
 		cmd := exec.Command("bin/minimega", "-attach")
@@ -409,31 +412,5 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		websocket.Handler(consoleWsHandler(tty, pid)).ServeHTTP(w, r)
 
 		return
-	}
-}
-
-// consoleWsHandler returns a function to service a websocket for the given pty
-func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
-	return func(ws *websocket.Conn) {
-		defer func() {
-			tty.Close()
-		}()
-
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			log.Error("unable to find process: %v", pid)
-			return
-		}
-
-		go io.Copy(ws, tty)
-		io.Copy(tty, ws)
-
-		proc.Kill()
-		proc.Wait()
-
-		ptyMu.Lock()
-		defer ptyMu.Unlock()
-
-		delete(ptys, pid)
 	}
 }
