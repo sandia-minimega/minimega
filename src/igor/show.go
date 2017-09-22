@@ -256,7 +256,6 @@ var colors = []string{
 	BgBlue,
 	BgMagenta,
 	BgCyan,
-	BgBrightBlack,
 	BgBrightGreen,
 	BgBrightYellow,
 	BgBrightBlue,

@@ -173,32 +173,38 @@ func housekeeping() {
 					powerCycle(r.Hosts)
 				}
 			} else {
-				// If we're not using an existing profile, create one and set the nodes to use it
-				if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
-					log.Info("Configuring cobbler distro and profile")
-					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
-					if err != nil {
-						log.Fatal("cobbler: %v", err)
-					}
-					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
-					if err != nil {
-						log.Fatal("cobbler: %v", err)
-					}
-					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+				// We use the same structures under pxelinux.cfg to know if a cobbler res is set up, too
+				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+				if _, err := os.Stat(filename); os.IsNotExist(err) {
+					// If we're not using an existing profile, create one and set the nodes to use it
+					if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+						log.Info("Configuring cobbler distro and profile")
+						_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
-					}
-					powerCycle(r.Hosts)
-				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
-					// If the requested profile exists, go ahead and set the nodes to use it
-					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
+						_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
+						for _, host := range r.Hosts {
+							_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+							if err != nil {
+								log.Fatal("cobbler: %v", err)
+							}
+						}
+						powerCycle(r.Hosts)
+					} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
+						// If the requested profile exists, go ahead and set the nodes to use it
+						for _, host := range r.Hosts {
+							_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
+							if err != nil {
+								log.Fatal("cobbler: %v", err)
+							}
+						}
+						powerCycle(r.Hosts)
 					}
+					os.Create(filename)
 				}
 			}
 		}

@@ -42,7 +42,7 @@ func areNodesFree(clusternodes []uint64, requestedindexes []int) bool {
 // Returns true if nodes[index] through nodes[index+count-1] are free
 func isFree(nodes []uint64, index, count int) bool {
 	for i := index; i < index+count; i++ {
-		if nodes[index] != 0 {
+		if nodes[i] != 0 {
 			return false
 		}
 	}
@@ -124,6 +124,7 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 		}
 
 		// For each of the blocks...
+	BlockLoop:
 		for _, b := range blocks {
 			// Make a new starter schedule
 			newSched = Schedule
@@ -132,7 +133,7 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 				nodenames = []string{}
 				// For simplicity, we'll end up re-checking the first slice, but who cares
 				if !areNodesFree(newSched[i+j].Nodes, b) {
-					break
+					continue BlockLoop
 				} else {
 					// Mark those nodes reserved
 					//for k := b; k < b+nodecount; k++ {
