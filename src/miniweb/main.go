@@ -97,8 +97,8 @@ func main() {
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 
-	mux.HandleFunc("/hosts.json", mustAuth(hostsHandler))
-	mux.HandleFunc("/vlans.json", mustAuth(vlansHandler))
+	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
+	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
 	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
 

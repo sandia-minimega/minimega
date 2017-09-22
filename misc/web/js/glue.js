@@ -130,7 +130,7 @@ function initVMInfoDataTable() {
 // Initialize the `vm top` DataTable and set up an automatic reload
 function initVMTopDataTable() {
     var vmDataTable = $('#vms-dataTable').DataTable({
-        "ajax": function( data, callback, settings) {
+        "ajax": function(data, callback, settings) {
             updateJSON('/vms/top.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
@@ -161,7 +161,6 @@ function initVMTopDataTable() {
         ],
         "pageLength": 500,
         "columns": [
-            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "Virtual", "data": "virt" },
@@ -215,33 +214,33 @@ function initHostDataTable() {
         ],
         "pageLength": -1,
         "columns": [
-            { "title": "Name" },
-            { "title": "CPUs" },
-            { "title": "Load", render: function(data, type, full, meta) {
+            { "title": "Name", "data": "host" },
+            { "title": "CPUs", "data": "cpus" },
+            { "title": "Load", "data": "load", render: function(data, type, full) {
                 var loads = data.split(" ");
-                var cpus = parseInt(full[1]);
+                var cpus = parseInt(full["cpus"]);
                 var loadsOverCPUsHtml = loads.map(function(load) {
                     return colorSpanWithThresholds(load, load, 1.5*cpus, 1.0*cpus);
                 });
                 return loadsOverCPUsHtml.join(" ");
             } },
-            { "title": "Memory Used", render: function(data, type, full, meta) {
-                var memUsed = parseInt(full[3]);
-                var memTotal = parseInt(full[4]);
-                var memUnits = full[4].replace(/[0-9]/g, '');
+            { "title": "Memory Used", "data": "memused", render: function(data, type, full) {
+                var memUsed = parseInt(data);
+                var memTotal = parseInt(full["memtotal"]);
+                var memUnits = full["memtotal"].replace(/[0-9]/g, '');
                 var text = memUsed + "/" + memTotal + memUnits;
                 var memRatio = memUsed / memTotal;
                 return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
             } },
-            { "title": "Memory Total", visible: false },
-            { "title": "Rx Bandwidth" },
-            { "title": "Tx Bandwidth" },
-            { "title": "VMs" },
-            { "title": "VM Limit" },
-            { "title": "CPU Commit" },
-            { "title": "Mem Commit" },
-            { "title": "Net Commit" },
-            { "title": "Uptime" , render: function(data, type, full, meta) {
+            { "title": "Memory Total", "data": "memtotal", visible: false },
+            { "title": "Rx Bandwidth", "data": "rx" },
+            { "title": "Tx Bandwidth", "data": "tx" },
+            { "title": "VMs", "data": "vms" },
+            { "title": "VM Limit", "data": "vmlimit" },
+            { "title": "CPU Commit", "data": "cpucommit" },
+            { "title": "Mem Commit", "data": "memcommit" },
+            { "title": "Net Commit", "data": "netcommit" },
+            { "title": "Uptime", "data": "uptime", render: function(data, type, full, meta) {
                 // calculate days separately
                 var seconds = parseInt(data);
                 var days = Math.floor(seconds / 86400);

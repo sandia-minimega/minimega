@@ -261,63 +261,25 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, vms)
 }
 
-// hostsHandler handles the following URLs:
-//   /hosts.json
-func hostsHandler(w http.ResponseWriter, r *http.Request) {
-	var hosts [][]string
-
-	cmd := &Command{
-		Command:   "host",
-		Namespace: *f_namespace,
-	}
-
-	// TODO: replace with runTabular?
-	for resps := range mm.Run(cmd.String()) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			for _, row := range resp.Tabular {
-				res := append([]string{resp.Host}, row...)
-				hosts = append(hosts, res)
-			}
-		}
-	}
-
-	respondJSON(w, hosts)
-}
-
-// vlansHandler handles the following URLs:
+// tabularHandler handles the following URLs:
 //   /vlans.json
-func vlansHandler(w http.ResponseWriter, r *http.Request) {
-	vlans := [][]interface{}{}
-
+//   /hosts.json
+func tabularHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := &Command{
-		Command:   "vlans",
 		Namespace: *f_namespace,
 	}
 
-	// TODO: replace with runTabular?
-	for resps := range mm.Run(cmd.String()) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			for _, row := range resp.Tabular {
-				res := []interface{}{}
-				for _, v := range row {
-					res = append(res, v)
-				}
-				vlans = append(vlans, res)
-			}
-		}
+	switch strings.Trim(r.URL.Path, "/") {
+	case "vlans.json":
+		cmd.Command = "vlans"
+	case "hosts.json":
+		cmd.Command = "host"
+	default:
+		http.NotFound(w, r)
+		return
 	}
 
-	respondJSON(w, vlans)
+	respondJSON(w, runTabular(cmd))
 }
 
 // consoleHandler handles the following URLs:
