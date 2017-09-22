@@ -50,15 +50,15 @@ The -a flag indicates that the reservation should take place on or after the spe
 	`,
 }
 
-var subR string // -r flag
-var subK string // -k flag
-var subI string // -i
-var subN int    // -n
-var subC string // -c
-var subT int    // -t
-var subS bool   // -s
-var subA string // -a
-var subW string // -w
+var subR string       // -r flag
+var subK string       // -k flag
+var subI string       // -i
+var subN int          // -n
+var subC string       // -c
+var subT int          // -t
+var subS bool         // -s
+var subA string       // -a
+var subW string       // -w
 var subProfile string // -profile
 
 func init() {
@@ -184,7 +184,7 @@ func runSub(cmd *Command, args []string) {
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 	reservation.KernelArgs = subC
-	reservation.CobblerProfile = subProfile	// safe to do even if unset
+	reservation.CobblerProfile = subProfile // safe to do even if unset
 
 	// Add it to the list of reservations
 	Reservations[reservation.ID] = reservation
@@ -201,7 +201,7 @@ func runSub(cmd *Command, args []string) {
 		if err != nil {
 			log.Fatal("couldn't open initrd: %v", err)
 		}
-	
+
 		// make kernel copy
 		fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
 		kdest, err := os.Create(fname)
@@ -211,7 +211,7 @@ func runSub(cmd *Command, args []string) {
 		io.Copy(kdest, ksource)
 		kdest.Close()
 		ksource.Close()
-	
+
 		// make initrd copy
 		fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
 		idest, err := os.Create(fname)

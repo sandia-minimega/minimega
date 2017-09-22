@@ -70,6 +70,7 @@ type Config struct {
 	NetworkUser           string
 	NetworkPassword       string
 	NetworkURL            string `json:"network_url"`
+	DNSServer             string
 }
 
 // Represents a slice of time

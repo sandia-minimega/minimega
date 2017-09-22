@@ -73,13 +73,18 @@ func init() {
 // reservations they below to
 func runShow(_ *Command, _ []string) {
 	names := []string{}
+	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		names = append(names, igorConfig.Prefix+strconv.Itoa(i))
+		names = append(names, fmt.Sprintf(fmtstring, igorConfig.Prefix, i))
 	}
 
 	nodes := map[int]bool{}
 
-	args := []string{
+	args := []string{}
+	if igorConfig.DNSServer != "" {
+		args = append(args, "--dns-servers", igorConfig.DNSServer)
+	}
+	args = append(args,
 		"-sn",
 		"-PS22",
 		"--max-retries=1",
@@ -87,7 +92,7 @@ func runShow(_ *Command, _ []string) {
 		"--host-timeout=300ms",
 		"-oG",
 		"-",
-	}
+	)
 
 	cmd := exec.Command("nmap", append(args, names...)...)
 
@@ -111,7 +116,8 @@ func runShow(_ *Command, _ []string) {
 
 		// trim off ()
 		name := fields[2][1 : len(fields[2])-1]
-
+		// get rid of any domain that may exist
+		name = strings.Split(name, ".")[0]
 		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
 		if err != nil {
 			// that's weird
