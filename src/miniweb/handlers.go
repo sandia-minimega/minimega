@@ -288,6 +288,7 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 // tabularHandler handles the following URLs:
 //   /vlans.json
 //   /hosts.json
+//   /namespaces.json
 func tabularHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := NewCommand(r)
 
@@ -296,6 +297,8 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 		cmd.Command = "vlans"
 	case "hosts.json":
 		cmd.Command = "host"
+	case "namespaces.json":
+		cmd.Command = "namespace"
 	default:
 		http.NotFound(w, r)
 		return

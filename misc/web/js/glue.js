@@ -194,7 +194,6 @@ function initVMTopDataTable() {
     }
 }
 
-
 // Initialize the Host DataTable and set up an automatic reload
 function initHostDataTable() {
     var hostDataTable = $('#hosts-dataTable').DataTable({
@@ -263,6 +262,55 @@ function initHostDataTable() {
     if (HOST_REFRESH_TIMEOUT > 0) {
         setInterval(function() {
             hostDataTable.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+
+// Initialize the Namespace DataTable and set up an automatic reload
+function initNamespacesDataTable() {
+    console.log("initNamespacesDataTable");
+
+    var table = $('#namespaces-dataTable').DataTable({
+        "ajax": {
+            "url": "namespaces.json",
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Name", "data": "namespace", render:  function ( data, type, full, meta ) {
+                return '<a href="/'+data+'/vms">'+data+'</a>';
+            } },
+            { "title": "VMs", "data": "vms" },
+            { "title": "VLANs", "data": "vlans" },
+            { "title": "Active", "data": "active" },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
         }, HOST_REFRESH_TIMEOUT);
     }
 }
