@@ -19,10 +19,15 @@ var namespaceCLIHandlers = []minicli.Handler{
 	{ // namespace
 		HelpShort: "display or change namespace",
 		HelpLong: `
-With no arguments, "namespace" prints all the namespaces, the active namespace
-will be displayed in brackets (e.g. "[minimega]"). When a namespace is
-specified, it changes the active namespace or runs a single command in the
-different namespace.`,
+With no arguments, "namespace" prints summary info about namespaces:
+
+- name   : name of the namespace
+- vms    : number of VMs
+- vlans  : range of VLANs, empty if not set
+- active : active or not
+
+When a namespace is specified, it changes the active namespace or runs a single
+command in the different namespace.`,
 		Patterns: []string{
 			"namespace [name]",
 			"namespace <name> (command)",
@@ -141,7 +146,22 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	resp.Response = strings.Join(ListNamespaces(true), ", ")
+	resp.Header = []string{"namespace", "vms", "vlans", "active"}
+	for _, info := range InfoNamespaces() {
+		row := []string{
+			info.Name,
+			strconv.Itoa(info.VMs),
+			"",
+			strconv.FormatBool(info.Active),
+		}
+
+		if info.MinVLAN != 0 || info.MaxVLAN != 0 {
+			row[2] = fmt.Sprintf("%v-%v", info.MinVLAN, info.MaxVLAN)
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
 	respChan <- minicli.Responses{resp}
 }
 
@@ -351,7 +371,7 @@ func cliNamespaceSuggest(prefix string, wild bool) []string {
 		res = append(res, Wildcard)
 	}
 
-	for _, name := range ListNamespaces(false) {
+	for _, name := range ListNamespaces() {
 		if strings.HasPrefix(name, prefix) {
 			res = append(res, name)
 		}
