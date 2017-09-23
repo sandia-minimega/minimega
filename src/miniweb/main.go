@@ -44,6 +44,8 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+var mux = http.NewServeMux()
+
 func main() {
 	var err error
 
@@ -79,8 +81,6 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	mux := http.NewServeMux()
 
 	for _, f := range files {
 		if f.IsDir() {

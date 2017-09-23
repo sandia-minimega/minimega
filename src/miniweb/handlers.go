@@ -41,14 +41,42 @@ func respondJSON(w http.ResponseWriter, data interface{}) {
 	w.Write(js)
 }
 
-// indexHandler redirect / to /vms
+// indexHandler handles all unmatched URLs, redirects / to /vms
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+	if r.URL.Path == "/" {
+		http.Redirect(w, r, "/vms", 302)
 		return
 	}
 
-	http.Redirect(w, r, "/vms", 302)
+	// potentially prefixed with a namespace
+	log.Debug("URL: %v", r.URL)
+
+	// split URL into <namespace>/<rest of URL>
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	fields := strings.SplitN(path, "/", 2)
+
+	// only have a possible namespace -- redirect
+	if len(fields) == 1 {
+		http.Redirect(w, r, path+"/", 302)
+		return
+	}
+
+	// add namespace to query values
+	v := r.URL.Query()
+	if v.Get("namespace") != "" {
+		// something strange is going on
+		http.NotFound(w, r)
+		return
+	}
+	v.Set("namespace", fields[0])
+
+	// patch up query and hand back to the mux
+	r.URL.RawQuery = v.Encode()
+	r.URL.Path = "/" + fields[1]
+
+	log.Debug("new URL: %v", r.URL)
+
+	mux.ServeHTTP(w, r)
 }
 
 func renderTemplate(w http.ResponseWriter, r *http.Request, t string, d interface{}) {
@@ -86,15 +114,14 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
 }
 
-// screenshotHandler serves routes like /screenshot/<name>.png. Optional size
-// query parameter dictates the size of the screenshot.
+// screenshotHandler handles the following URLs:
+//   /screenshot/<name>.png
 func screenshotHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form `/screenshot/<name>.png`
-	path := strings.Trim(r.URL.Path, "/")
+	log.Info("screenshot request: %v", r.URL.Path)
 
-	fields := strings.Split(path, "/")
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(fields) != 2 || !strings.HasSuffix(fields[1], ".png") {
-		http.NotFound(w, r)
+		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
 
@@ -106,11 +133,12 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: replace w with base64 encoder?
 	do_encode := r.URL.Query().Get("base64") != ""
 
-	cmd := fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
+	cmd := NewCommand(r)
+	cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
 
 	var screenshot []byte
 
-	for resps := range mm.Run(cmd) {
+	for resps := range mm.Run(cmd.String()) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
@@ -171,12 +199,10 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	var host string
 	var port int
 
-	cmd := &Command{
-		Command:   "vm info",
-		Namespace: *f_namespace,
-		Columns:   []string{"host", "type", "vnc_port", "console_port"},
-		Filters:   []string{fmt.Sprintf("name=%q", name)},
-	}
+	cmd := NewCommand(r)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host", "type", "vnc_port", "console_port"}
+	cmd.Filters = []string{fmt.Sprintf("name=%q", name)}
 
 	for _, vm := range runTabular(cmd) {
 		host = vm["host"]
@@ -226,7 +252,7 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 //   /vms/info.json
 //   /vms/top.json
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("vms request: %v", r.URL.Path)
+	log.Info("vms request: %v", r.URL)
 
 	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(fields) != 2 {
@@ -236,13 +262,11 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var vms []map[string]string
 
-	cmd := &Command{
-		Namespace: *f_namespace,
-		// don't care about quit or error state
-		Filters: []string{
-			"state!=quit",
-			"state!=error",
-		},
+	cmd := NewCommand(r)
+	// don't care about quit or error state
+	cmd.Filters = []string{
+		"state!=quit",
+		"state!=error",
 	}
 
 	switch fields[1] {
@@ -265,9 +289,7 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 //   /vlans.json
 //   /hosts.json
 func tabularHandler(w http.ResponseWriter, r *http.Request) {
-	cmd := &Command{
-		Namespace: *f_namespace,
-	}
+	cmd := NewCommand(r)
 
 	switch strings.Trim(r.URL.Path, "/") {
 	case "vlans.json":

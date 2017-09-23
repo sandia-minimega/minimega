@@ -562,7 +562,10 @@ function makeTable (parent, data) {
 
 // Used to get the new graph info via AJAX.
 function getVMInfo () {
-    d3.text("/vms/info.json", function (error, info) {
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/graph"));
+
+    d3.text(path+"/vms/info.json", function (error, info) {
         if ((info != grapher.jsonString) && (cursor.node == null)) {
             if (error) return console.warn(error);
 

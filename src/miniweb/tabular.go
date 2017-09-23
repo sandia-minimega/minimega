@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"net/http"
 	"strings"
 )
 
@@ -16,6 +17,18 @@ type Command struct {
 	Columns   []string
 	Filters   []string
 	Namespace string
+}
+
+// NewCommand creates a command with the correct namespace.
+func NewCommand(r *http.Request) *Command {
+	namespace := *f_namespace
+	if namespace == "" {
+		namespace = r.URL.Query().Get("namespace")
+	}
+
+	return &Command{
+		Namespace: namespace,
+	}
 }
 
 func (c *Command) String() string {

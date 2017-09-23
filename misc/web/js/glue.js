@@ -32,9 +32,12 @@ var ssDataTable;
 
 // Initialize the `vm info` DataTable and set up an automatic reload
 function initVMInfoDataTable() {
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vms"));
+
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
-            updateJSON('/vms/info.json', function(vmsData) {
+            updateJSON(path+'/vms/info.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
@@ -129,9 +132,12 @@ function initVMInfoDataTable() {
 
 // Initialize the `vm top` DataTable and set up an automatic reload
 function initVMTopDataTable() {
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vms"));
+
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function(data, callback, settings) {
-            updateJSON('/vms/top.json', function(vmsData) {
+            updateJSON(path+'/vms/top.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
@@ -264,12 +270,15 @@ function initHostDataTable() {
 
 // Initialize the Screenshot DataTable and set up an automatic reload
 function initScreenshotDataTable() {
-    updateJSON('/vms/info.json', updateScreenshotTable);
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/tilevnc"));
+
+    updateJSON(path+"/vms/info.json", updateScreenshotTable);
 
     if (IMAGE_REFRESH_TIMEOUT > 0) {
         setInterval(function() {
             if (IMAGE_REFRESH_ENABLE) {
-                updateJSON('/vms/info.json', updateScreenshotTable);
+                updateJSON(path+"/vms/info.json", updateScreenshotTable);
             }
         }, IMAGE_REFRESH_TIMEOUT);
     }
@@ -408,7 +417,7 @@ function connectURL (vm) {
 // Add more cowbell
 function initCowbell () {
     var audioElement = document.createElement('audio');
-    audioElement.setAttribute('src', 'images/cow_and_bell_1243222141.mp3');
+    audioElement.setAttribute('src', '/images/cow_and_bell_1243222141.mp3');
     $('#nav-container').dblclick(function() {
         audioElement.currentTime = 0;
         audioElement.play();
