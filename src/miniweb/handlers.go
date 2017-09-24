@@ -114,6 +114,13 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
 }
 
+// filesHandler ignores subpaths and renders the files template
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("files hander: %v", r.URL.Path)
+
+	renderTemplate(w, r, "files.tmpl", nil)
+}
+
 // screenshotHandler handles the following URLs:
 //   /screenshot/<name>.png
 func screenshotHandler(w http.ResponseWriter, r *http.Request) {
@@ -263,24 +270,23 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 	var vms []map[string]string
 
 	cmd := NewCommand(r)
-	// don't care about quit or error state
-	cmd.Filters = []string{
-		"state!=quit",
-		"state!=error",
-	}
 
 	switch fields[1] {
 	case "info.json":
 		cmd.Command = "vm info"
-		vms = runTabular(cmd)
+		// don't care about quit or error state
+		cmd.Filters = []string{
+			"state!=quit",
+			"state!=error",
+		}
 	case "top.json":
 		cmd.Command = "vm top"
-		vms = runTabular(cmd)
 	default:
 		http.NotFound(w, r)
 		return
 	}
 
+	vms = runTabular(cmd)
 	sortVMs(vms)
 	respondJSON(w, vms)
 }
@@ -299,6 +305,9 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 		cmd.Command = "host"
 	case "namespaces.json":
 		cmd.Command = "namespace"
+	case "files.json":
+		path := r.URL.Query().Get("path")
+		cmd.Command = fmt.Sprintf("ns run file list %q", path)
 	default:
 		http.NotFound(w, r)
 		return

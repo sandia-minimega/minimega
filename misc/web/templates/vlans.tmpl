@@ -1,0 +1,34 @@
+{{define "content"}}
+<div id="content">
+    <div id="vlans-table" class="box">
+        <h1 class="box-header">VLANs</h1>
+        <div class="box-content">
+            <table id="vlans-dataTable" class="table table-striped table-bordered dataTable no-footer"></table>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript" src="/libs/dataTables/jquery.dataTables.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.bootstrap.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.buttons.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.colVis.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.html5.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.bootstrap.js"></script>
+
+<script type="text/javascript" src="/js/glue.js"></script>
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('nav a[href$="' + "vlans" + '"]').addClass("current-view");
+
+		var path = window.location.pathname;
+		path = path.substr(0, path.indexOf("/vlans"));
+
+		if (path != "") {
+			// trim off leading / to get the namespace name
+			$("h1.box-header").text("VLANs: "+path.substr(1));
+		}
+
+        initVLANsDataTable();
+    });
+</script>
+{{end}}

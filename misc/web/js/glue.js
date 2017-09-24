@@ -298,8 +298,129 @@ function initNamespacesDataTable() {
                 return '<a href="/'+data+'/vms">'+data+'</a>';
             } },
             { "title": "VMs", "data": "vms" },
-            { "title": "VLANs", "data": "vlans" },
+            { "title": "VLANs", "data": "vlans", render:  function ( data, type, full, meta ) {
+                if (data == "") {
+                    data = "Inherited";
+                }
+
+                return '<a href="/'+full["namespace"]+'/vlans">'+data+'</a>';
+            } },
             { "title": "Active", "data": "active" },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+// Initialize the VLANs DataTable and set up an automatic reload
+function initVLANsDataTable() {
+    console.log("initVLANsDataTable");
+
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vlans"));
+
+    var table = $('#vlans-dataTable').DataTable({
+        "ajax": {
+            "url": path+"/vlans.json",
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Alias", "data": "alias" },
+            { "title": "VLAN", "data": "vlan" },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+// Initialize the Files DataTable and set up an automatic reload
+function initFilesDataTable() {
+    console.log("initFilesDataTable");
+
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/files/"));
+
+    var subdir = window.location.pathname;
+    subdir = subdir.substr(subdir.indexOf("/files/")+"/files/".length);
+
+    var table = $('#files-dataTable').DataTable({
+        "ajax": {
+            "url": path+"/files.json?path="+subdir,
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Host", "data": "host" },
+            { "title": "Name", "data": "name", render:  function ( data, type, full, meta ) {
+                if ( full["dir"] != "" ) {
+                    var p = window.location.pathname;
+                    if (!p.endsWith("/")) {
+                        p += "/";
+                    }
+                    return '<a href="'+p+data+'/">'+data+'</a>';
+                }
+
+                return data;
+            } },
+            { "title": "Size", "data": "size", render:  function ( data, type, full, meta ) {
+                // From https://stackoverflow.com/a/22023833
+                var exp = Math.log(data) / Math.log(1024) | 0;
+                var result = (data / Math.pow(1024, exp)).toFixed(2);
+
+                return result + ' ' + (exp == 0 ? 'bytes': 'KMGTPEZY'[exp - 1] + 'B');
+
+            } },
         ],
         "order": [[ 0, 'asc' ]],
         "stateSave": true,
