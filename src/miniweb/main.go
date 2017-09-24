@@ -108,8 +108,7 @@ func main() {
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
 
-	mux.HandleFunc("/connect/", mustAuth(connectHandler))
-	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
+	mux.HandleFunc("/vm/", mustAuth(vmHandler))
 
 	if *f_console {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))

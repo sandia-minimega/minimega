@@ -116,23 +116,15 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 
 // filesHandler ignores subpaths and renders the files template
 func filesHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("files hander: %v", r.URL.Path)
+	log.Info("files handler: %v", r.URL.Path)
 
 	renderTemplate(w, r, "files.tmpl", nil)
 }
 
-// screenshotHandler handles the following URLs:
-//   /screenshot/<name>.png
-func screenshotHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("screenshot request: %v", r.URL.Path)
-
-	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(fields) != 2 || !strings.HasSuffix(fields[1], ".png") {
-		http.Error(w, "invalid path", http.StatusBadRequest)
-		return
-	}
-
-	name := strings.TrimSuffix(fields[1], ".png")
+// screenshotHandler handles the following URLs via vmHandler:
+//   /vm/<name>/screenshot.png
+func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
+	log.Info("screenshotHandler handler: %v", r.URL.Path)
 
 	// TODO: sanitize?
 	size := r.URL.Query().Get("size")
@@ -187,19 +179,11 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// connectHandler handles the following URLs:
-//   /connect/<name>/
-//   /connect/<name>/ws
-func connectHandler(w http.ResponseWriter, r *http.Request) {
+// connectHandler handles the following URLs via vmHandler:
+//   /vm/<name>/connect/
+//   /vm/<name>/connect/ws
+func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Info("connect request: %v", r.URL.Path)
-
-	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(fields) < 2 {
-		http.Error(w, "invalid path", http.StatusBadRequest)
-		return
-	}
-
-	name := fields[1]
 
 	// find info about the VM that we need to connect
 	var vmType string
@@ -233,12 +217,9 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// check the request again to decide whether to serve the page or tunnel
 	// the request
-	if len(fields) == 3 && fields[2] == "ws" {
+	if strings.HasSuffix(r.URL.Path, "/ws") {
 		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
 
-		return
-	} else if len(fields) >= 3 {
-		http.NotFound(w, r)
 		return
 	}
 
@@ -253,6 +234,54 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	case "container":
 		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
 	}
+}
+
+// vmHandler handles the following URLs:
+//   /vm/<name>/connect/
+//   /vm/<name>/connect/ws
+//   /vm/<name>/screenshot.png
+//   POST /vm/<name>/start
+//   POST /vm/<name>/stop
+//   POST /vm/<name>/kill
+func vmHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("vm request: %v", r.URL.Path)
+
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(fields) < 3 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	name := fields[1]
+
+	switch fields[2] {
+	case "connect":
+		if len(fields) == 3 || len(fields) == 4 {
+			connectHandler(w, r, name)
+			return
+		}
+	case "screenshot.png":
+		if len(fields) == 3 {
+			screenshotHandler(w, r, name)
+			return
+		}
+	case "start", "stop", "kill":
+		if r.Method == http.MethodPost && len(fields) == 3 {
+			cmd := NewCommand(r)
+			cmd.Command = fmt.Sprintf("vm %v %q", fields[2], name)
+
+			var res string
+			for resps := range mm.Run(cmd.String()) {
+				res += resps.Rendered
+			}
+
+			w.Write([]byte(res))
+			return
+		}
+	}
+
+	http.NotFound(w, r)
+	return
 }
 
 // vmsHandler handles the following URLs:

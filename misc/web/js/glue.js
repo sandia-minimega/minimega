@@ -67,10 +67,19 @@ function initVMInfoDataTable() {
         ],
         "pageLength": 500,
         "columns": [
-            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
-            { "title": "State", "data": "state" },
+            { "title": "State", "data": "state" , render:  function ( data, type, full, meta ) {
+				var res = "<span>"+data+"</span>";
+				if (data == "BUILDING" || data == "PAUSED") {
+					res += '<i class="fa fa-play-circle" id="'+full["name"]+'-start"></i>';
+				} else if (data == "RUNNING") {
+					res += '<i class="fa fa-pause-circle" id="'+full["name"]+'-stop"></i>';
+				}
+				res += '<i class="fa fa-times-circle" id="'+full["name"]+'-kill"></i>';
+
+				return res;
+			} },
             { "title": "Uptime", "data": "uptime", "visible": false },
             { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
@@ -89,7 +98,7 @@ function initVMInfoDataTable() {
                 "title": "VNC",
                 "data": "name",
                 render:  function ( data, type, full, meta ) {
-                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
+                    return '<a href="'+connectURL(full)+'" target="_blank">Connect</a>';
                 }
             },
         ],
@@ -120,6 +129,27 @@ function initVMInfoDataTable() {
     vmDataTable.buttons( 1, null ).container()
         .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
     */
+
+	// set onclick handler for all <i> to update VM
+	$(document).on("click", "#vms-dataTable i", function() {
+		var id = $(this).attr("id");
+		var name = id.substr(0, id.lastIndexOf("-"));
+		var action = id.substr(id.lastIndexOf("-")+1);
+
+		var p = path;
+		if (!p.endsWith("/")) {
+			p += "/";
+		}
+		p += "vm/"+name+"/"+action;
+
+		$.ajax({
+			type: "POST",
+			url: p,
+			success: function() {
+                vmDataTable.ajax.reload(null, false);
+			},
+		})
+	});
 
     if (VM_REFRESH_TIMEOUT >= 1000) {
         setInterval(function() {
@@ -573,13 +603,13 @@ function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
 
 // Generate the appropriate URL for requesting a screenshot
 function screenshotURL (vm, size) {
-    return "screenshot/" + vm.name + ".png?size=" + size;
+    return "vm/" + vm.name + "/screenshot.png?size=" + size;
 }
 
 
 // Generate the appropriate URL for a connection
 function connectURL (vm) {
-    return "connect/" + vm.name
+    return "vm/" + vm.name + "/connect";
 }
 
 
