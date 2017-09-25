@@ -327,7 +327,6 @@ function initNamespacesDataTable() {
             { "title": "Name", "data": "namespace", render:  function ( data, type, full, meta ) {
                 return '<a href="/'+data+'/vms">'+data+'</a>';
             } },
-            { "title": "VMs", "data": "vms" },
             { "title": "VLANs", "data": "vlans", render:  function ( data, type, full, meta ) {
                 if (data == "") {
                     data = "Inherited";

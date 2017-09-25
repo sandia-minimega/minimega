@@ -572,10 +572,9 @@ func InfoNamespaces() []NamespaceInfo {
 	defer namespaceLock.Unlock()
 
 	res := []NamespaceInfo{}
-	for n, ns := range namespaces {
+	for n := range namespaces {
 		info := NamespaceInfo{
 			Name:   n,
-			VMs:    ns.VMs.Count(),
 			Active: namespace == n,
 		}
 

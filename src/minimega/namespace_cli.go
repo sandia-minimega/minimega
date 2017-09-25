@@ -22,7 +22,6 @@ var namespaceCLIHandlers = []minicli.Handler{
 With no arguments, "namespace" prints summary info about namespaces:
 
 - name   : name of the namespace
-- vms    : number of VMs
 - vlans  : range of VLANs, empty if not set
 - active : active or not
 
@@ -146,11 +145,10 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	resp.Header = []string{"namespace", "vms", "vlans", "active"}
+	resp.Header = []string{"namespace", "vlans", "active"}
 	for _, info := range InfoNamespaces() {
 		row := []string{
 			info.Name,
-			strconv.Itoa(info.VMs),
 			"",
 			strconv.FormatBool(info.Active),
 		}
