@@ -366,6 +366,13 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 		for resps := range respChan2 {
 			for _, resp := range resps {
+				// suppress warnings if we created and deleted the namespace
+				// locally without actually running any commands to create the
+				// namespace remotely.
+				if strings.HasPrefix(resp.Error, "unknown namespace:") {
+					resp.Error = ""
+				}
+
 				res = append(res, resp)
 			}
 		}
