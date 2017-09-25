@@ -3,11 +3,20 @@
 
 ## # check that it was created
 ## mesh send all namespace
-[minimega], foo
+namespace | vlans    | active
+foo       |          | false
+foo       |          | false
+foo       |          | false
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
 
 ## # destroy the namespace
 ## clear namespace foo
 
 ## # check that it was destroyed
 ## mesh send all namespace
-[minimega]
+namespace | vlans    | active
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
