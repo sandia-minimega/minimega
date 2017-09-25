@@ -97,11 +97,9 @@ func main() {
 	mux.HandleFunc("/vlans", mustAuth(templateHandler))
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
-	mux.HandleFunc("/namespaces", mustAuth(templateHandler))
 
 	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
-	mux.HandleFunc("/namespaces.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
 	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
 
@@ -109,6 +107,16 @@ func main() {
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
 
 	mux.HandleFunc("/vm/", mustAuth(vmHandler))
+
+	if *f_namespace == "" {
+		mux.HandleFunc("/namespaces", mustAuth(templateHandler))
+		mux.HandleFunc("/namespaces.json", mustAuth(tabularHandler))
+	} else {
+		mux.HandleFunc("/namespaces", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "namespaces disabled, see -namespace flag", http.StatusNotImplemented)
+			return
+		})
+	}
 
 	if *f_console {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))

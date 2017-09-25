@@ -48,6 +48,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// don't mess with this if we are tied to a namespace
+	if *f_namespace != "" {
+		http.NotFound(w, r)
+		return
+	}
+
 	// potentially prefixed with a namespace
 	log.Debug("URL: %v", r.URL)
 
