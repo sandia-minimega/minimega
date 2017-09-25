@@ -70,6 +70,14 @@ type Namespace struct {
 	ccPrefix string
 }
 
+type NamespaceInfo struct {
+	Name    string
+	VMs     int
+	MinVLAN int
+	MaxVLAN int
+	Active  bool
+}
+
 var (
 	namespace     string
 	namespaces    = map[string]*Namespace{}
@@ -258,6 +266,33 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	return nil
 }
 
+// hostStats returns stats from hosts in the namespace.
+//
+// LOCK: Assumes cmdLock is held.
+func (n *Namespace) hostStats() []*HostStats {
+	// run `host` across the namespace
+	cmds := namespaceCommands(n, minicli.MustCompile("host"))
+
+	res := []*HostStats{}
+
+	for resps := range runCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if v, ok := resp.Data.(*HostStats); ok {
+				res = append(res, v)
+			} else {
+				log.Error("unknown data field in `host` from %v", resp.Host)
+			}
+		}
+	}
+
+	return res
+}
+
 // Schedule runs the scheduler, launching VMs across the cluster. Blocks until
 // all the `vm launch ...` commands are in-flight.
 //
@@ -271,27 +306,7 @@ func (n *Namespace) Schedule() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
-	// run `host` across the namespace
-	cmds := namespaceCommands(n, minicli.MustCompile("host"))
-
-	// key is hostname, value is map with keys from hostInfoKeys
-	hostStats := []*HostStats{}
-
-	// LOCK: this is only called via `vm launch` so cmdLock is already held
-	for resps := range runCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if v, ok := resp.Data.(*HostStats); ok {
-				hostStats = append(hostStats, v)
-			} else {
-				log.Error("unknown data field in `host` from %v", resp.Host)
-			}
-		}
-	}
+	hostStats := n.hostStats()
 
 	var hostSorter hostSortBy
 	for k, fn := range hostSortByFns {
@@ -535,24 +550,43 @@ func DestroyNamespace(name string) error {
 	return nil
 }
 
-// ListNamespaces lists all the namespaces. If mark is set, the active
-// namespace will be denoted with [].
-func ListNamespaces(mark bool) []string {
+// ListNamespaces lists all the namespaces.
+func ListNamespaces() []string {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
 	res := []string{}
 	for n := range namespaces {
-		if mark && namespace == n {
-			res = append(res, "["+n+"]")
-			continue
-		}
-
 		res = append(res, n)
 	}
 
 	// make sure the order is always the same
 	sort.Strings(res)
+
+	return res
+}
+
+// InfoNamespaces returns information about all namespaces
+func InfoNamespaces() []NamespaceInfo {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	res := []NamespaceInfo{}
+	for n := range namespaces {
+		info := NamespaceInfo{
+			Name:   n,
+			Active: namespace == n,
+		}
+
+		for prefix, r := range allocatedVLANs.GetRanges() {
+			if prefix == n || (prefix == "" && n == DefaultNamespace) {
+				info.MinVLAN = r.Min
+				info.MaxVLAN = r.Max
+			}
+		}
+
+		res = append(res, info)
+	}
 
 	return res
 }

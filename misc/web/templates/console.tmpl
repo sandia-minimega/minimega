@@ -14,7 +14,7 @@
 
 		$('nav a[href$="' + "console" + '"]').addClass("current-view");
 
-		var terminalContainer = document.getElementById('#terminal');
+		var terminalContainer = document.getElementById('terminal');
 		var term = new Terminal();
 
 		term.on('resize', function (size) {
