@@ -16,9 +16,11 @@ import (
 	"time"
 )
 
-var (
-	meshageCommandLock sync.Mutex
-)
+// SourceMeshage is used to prevent some commands running via meshage such as
+// `read` and `mesh send`.
+const SourceMeshage = "meshage"
+
+var meshageCommandLock sync.Mutex
 
 var meshageCLIHandlers = []minicli.Handler{
 	{ // mesh degree
@@ -238,9 +240,16 @@ func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response
 }
 
 func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		err := fmt.Errorf("cannot run `%s` via meshage", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
 	// set the source so that remote nodes do not try to do any non-local
 	// behaviors, see wrapBroadcastCLI.
-	c.Subcommand.SetSource("meshage")
+	c.Subcommand.SetSource(SourceMeshage)
 
 	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
 	if err != nil {

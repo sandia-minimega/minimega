@@ -585,6 +585,11 @@ func cliClearVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 }
 
 func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		return fmt.Errorf("cannot run `%s` via meshage", c.Original)
+	}
+
 	// adding VM to queue
 	if len(c.StringArgs) > 0 {
 		// create a local copy of the current VMConfig

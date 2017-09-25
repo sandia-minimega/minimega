@@ -360,14 +360,26 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 }
 
 func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := GetNamespace()
-
-	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		err := fmt.Errorf("cannot run `%s` using ns run", c.Original)
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		err := fmt.Errorf("cannot run `%s` via meshage", c.Original)
 		respChan <- errResp(err)
 		return
 	}
+
+	// HAX: Make sure we don't run strange nested commands. We have to test for
+	// these explicity rather than allow the handlers to check because the
+	// Source for the locally executed commands will be the current namespace
+	// and not "Meshage".
+	for _, forbidden := range []string{"read", "mesh send", "ns run", "vm launch"} {
+		if hasCommand(c.Subcommand, forbidden) {
+			err := fmt.Errorf("cannot run `%s` using `ns run`", c.Subcommand.Original)
+			respChan <- errResp(err)
+			return
+		}
+	}
+
+	ns := GetNamespace()
 
 	res := minicli.Responses{}
 
