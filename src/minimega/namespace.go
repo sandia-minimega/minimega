@@ -266,6 +266,33 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	return nil
 }
 
+// hostStats returns stats from hosts in the namespace.
+//
+// LOCK: Assumes cmdLock is held.
+func (n *Namespace) hostStats() []*HostStats {
+	// run `host` across the namespace
+	cmds := namespaceCommands(n, minicli.MustCompile("host"))
+
+	res := []*HostStats{}
+
+	for resps := range runCommands(cmds...) {
+		for _, resp := range resps {
+			if resp.Error != "" {
+				log.Errorln(resp.Error)
+				continue
+			}
+
+			if v, ok := resp.Data.(*HostStats); ok {
+				res = append(res, v)
+			} else {
+				log.Error("unknown data field in `host` from %v", resp.Host)
+			}
+		}
+	}
+
+	return res
+}
+
 // Schedule runs the scheduler, launching VMs across the cluster. Blocks until
 // all the `vm launch ...` commands are in-flight.
 //
@@ -279,27 +306,7 @@ func (n *Namespace) Schedule() error {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
-	// run `host` across the namespace
-	cmds := namespaceCommands(n, minicli.MustCompile("host"))
-
-	// key is hostname, value is map with keys from hostInfoKeys
-	hostStats := []*HostStats{}
-
-	// LOCK: this is only called via `vm launch` so cmdLock is already held
-	for resps := range runCommands(cmds...) {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			if v, ok := resp.Data.(*HostStats); ok {
-				hostStats = append(hostStats, v)
-			} else {
-				log.Error("unknown data field in `host` from %v", resp.Host)
-			}
-		}
-	}
+	hostStats := n.hostStats()
 
 	var hostSorter hostSortBy
 	for k, fn := range hostSortByFns {
