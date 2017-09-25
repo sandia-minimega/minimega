@@ -154,7 +154,7 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 
 		if info.MinVLAN != 0 || info.MaxVLAN != 0 {
-			row[2] = fmt.Sprintf("%v-%v", info.MinVLAN, info.MaxVLAN)
+			row[1] = fmt.Sprintf("%v-%v", info.MinVLAN, info.MaxVLAN)
 		}
 
 		resp.Tabular = append(resp.Tabular, row)
