@@ -49,7 +49,8 @@ type Namespace struct {
 	// How to determine which host is least loaded
 	HostSortBy string
 
-	VMs // embed VMs for this namespace
+	VMs  // embed VMs for this namespace
+	vmID *Counter
 
 	// QueuedVMs toggles whether we should queue VMs or not when launching
 	QueueVMs bool
@@ -96,6 +97,7 @@ func NewNamespace(name string) *Namespace {
 		VMs: VMs{
 			m: make(map[int]VM),
 		},
+		vmID:    NewCounter(),
 		routers: make(map[int]*Router),
 		captures: captures{
 			m:       make(map[int]capture),
@@ -164,6 +166,8 @@ func (n *Namespace) Destroy() error {
 			return errors.New("scheduler still running for namespace")
 		}
 	}
+
+	n.vmID.Stop()
 
 	// Stop all captures
 	n.captures.StopAll()
@@ -350,6 +354,14 @@ func (n *Namespace) Schedule() error {
 			defer wg.Done()
 
 			for _, q := range queue {
+				// set name here instead of on the remote host to ensure that we
+				// get names that are unique across the namespace
+				for i, name := range q.Names {
+					if name == "" {
+						q.Names[i] = fmt.Sprintf("vm-%v-%v", n.Name, n.vmID.Next())
+					}
+				}
+
 				n.hostLaunch(host, q, respChan)
 			}
 		}(host, queue)
