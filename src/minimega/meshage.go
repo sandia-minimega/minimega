@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"iomeshage"
 	"math"
 	"math/rand"
@@ -114,11 +113,6 @@ func meshageSnooper(m *meshage.Message) {
 // responses will be sent to. This is non-blocking -- the channel is created
 // and then returned after a couple of sanity checks.
 func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, error) {
-	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		return nil, fmt.Errorf("cannot run `%s` over mesh", c.Original)
-	}
-
 	recipients, err := ranges.SplitList(hosts)
 	if err != nil {
 		return nil, err

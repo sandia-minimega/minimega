@@ -136,6 +136,13 @@ func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		err := fmt.Errorf("cannot run `%s` via meshage", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
 	resp := &minicli.Response{Host: hostname}
 
 	check := c.BoolArgs["check"]
@@ -284,6 +291,8 @@ func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// runCommands instead of RunCommands).
 	for _, v := range all {
 		cmd := minicli.MustCompile(v)
+		// keep the original source
+		cmd.SetSource(c.Source)
 
 		forward(runCommands(cmd), respChan)
 	}
