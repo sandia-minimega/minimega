@@ -5,8 +5,10 @@ The minimega authors
 
 * Introduction
 
-`miniweb` is a webserver for minimega based on the `web` API that existed until
-2.3 but with many more features.
+`miniweb` is a standalone webserver for minimega. It replaces the `web` API
+that existed until the 2.3 release. We split `miniweb` out to improve
+maintainability and ease feature development. As such, `miniweb` has many more
+features than the old `web` API.
 
 * Running miniweb
 
