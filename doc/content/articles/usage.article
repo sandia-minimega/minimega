@@ -330,26 +330,26 @@ the current VM description:
 	VCPUS:    2
 	Networks: [mega_bridge,experiment (101)]
 	Snapshot: true
-	UUID:     
+	UUID:
 	Tags:     {}
-	
+
 	Current KVM configuration:
-	Migrate Path:       
+	Migrate Path:
 	Disk Paths:         [/tmp/bar.qcow2]
-	CDROM Path:         
-	Kernel Path:        
-	Initrd Path:        
-	Kernel Append:      
+	CDROM Path:
+	Kernel Path:
+	Initrd Path:
+	Kernel Append:
 	QEMU Path:          /usr/bin/kvm
 	QEMU Append:        []
 	SerialPorts:        0
 	Virtio-SerialPorts: 0
-	
+
 	Current container configuration:
-	Filesystem Path: 
-	Hostname:        
+	Filesystem Path:
+	Hostname:
 	Init:            [/init]
-	Pre-init:        
+	Pre-init:
 	FIFOs:           0
 
 This looks fine, empty fields are either just not included in the next VM to
@@ -369,26 +369,26 @@ And look at our configuration again:
 	VCPUS:    2
 	Networks: [mega_bridge,experiment (101)]
 	Snapshot: true
-	UUID:     
+	UUID:
 	Tags:     {}
-	
+
 	Current KVM configuration:
-	Migrate Path:       
+	Migrate Path:
 	Disk Paths:         [/tmp/bar.qcow2]
-	CDROM Path:         
+	CDROM Path:
 	Kernel Path:        /tmp/foo.kernel
 	Initrd Path:        /tmp/foo.initrd
-	Kernel Append:      
+	Kernel Append:
 	QEMU Path:          /usr/bin/kvm
 	QEMU Append:        []
 	SerialPorts:        0
 	Virtio-SerialPorts: 0
-	
+
 	Current container configuration:
-	Filesystem Path: 
-	Hostname:        
+	Filesystem Path:
+	Hostname:
 	Init:            [/init]
-	Pre-init:        
+	Pre-init:
 	FIFOs:           0
 
 Something isn't right here, we see that while the initrd and kernel fields are
@@ -405,26 +405,26 @@ And look at the config one last time:
 	VCPUS:    2
 	Networks: [mega_bridge,experiment (101)]
 	Snapshot: true
-	UUID:     
+	UUID:
 	Tags:     {}
-	
+
 	Current KVM configuration:
-	Migrate Path:       
+	Migrate Path:
 	Disk Paths:         []
-	CDROM Path:         
+	CDROM Path:
 	Kernel Path:        /tmp/foo.kernel
 	Initrd Path:        /tmp/foo.initrd
-	Kernel Append:      
+	Kernel Append:
 	QEMU Path:          /usr/bin/kvm
 	QEMU Append:        []
 	SerialPorts:        0
 	Virtio-SerialPorts: 0
-	
+
 	Current container configuration:
-	Filesystem Path: 
-	Hostname:        
+	Filesystem Path:
+	Hostname:
 	Init:            [/init]
-	Pre-init:        
+	Pre-init:
 	FIFOs:           0
 
 ** Launching Virtual Machines
@@ -739,36 +739,9 @@ script:
 
 * Web Interface
 
-To enable viewing the GUI or console of a running VM, minimega has a web
-interface that can connect a client to a VNC session for that VM using novnc.
-Furthermore, minimega will automatically create websocket based tunnels to
-connected nodes on a cluster to the node serving the web interface. This
-enables the user to run a minimega instance on the head node of a cluster,
-running the web interface only, and have connections automatically tunneled
-into the cluster nodes which may not be directly routable from outside the
-cluster.
-
-In order to run the web interface, minimega must have access to included static
-content. This is provided in the distribution under `misc/web`.
-
-To change the path minimega should use for static content, use the `web`
-command:
-
-	minimega$ web root /path/to/web
-
-To start the web interface, use the `web` command with no arguments:
-
-	minimega$ web
-
-By default, minimega uses port 9001 for the web interface. To use a different
-port or hostname, specify the hostname:port with the `web` command:
-
-	minimega$ web foo:80
-
-The hostname is optional. To have minimega listen on all interfaces, simply
-omit the hostname:
-
-	minimega$ web :80
+minimega includes a standalone webserver called `miniweb` that users can use to
+view VM state and connect to running VMs. See the
+[[/articles/miniweb.article][miniweb]] article for more information.
 
 * Multi-node Usage
 

@@ -45,8 +45,8 @@ This is the biggest lock in minimega -- it serializes all commands from the
 CLI, meshage, the domain socket, and other sources.  All `cli*` handlers assume
 that this lock is held when they are invoked.  `RunCommands`, which wraps
 `minicli.ProcessCommand`, acquires the cmdLock and should be used for all
-asynchronous tasks (e.g. handling web requests). If a handler needs to run a
-subsequent command, it may use `runCommands` instead since the cmdLock is
+asynchronous tasks (e.g. handling meshage requests). If a handler needs to run
+a subsequent command, it may use `runCommands` instead since the cmdLock is
 already held. `minicli.ProcessCommand` should only be called by `runCommands`.
 
 This lock greatly reduces the overall locking in minimega -- if data is only
@@ -93,12 +93,6 @@ getting and setting the active namespace and creating a new namespace. The
 exported `*Namespace` functions acquire this lock automatically. We currently
 do not use this lock to synchronize access to the underlying Namespace structs
 -- these should be synchronized via the `cmdLock`.
-
-*** `externalProcessesLock`
-
-`externalProcessesLock` synchronizes access the `customExternalProcesses` map.
-This map allows users to update the names of external dependencies and is
-accessed every time minimega creates a process.
 
 ** Hierarchy of locks
 
