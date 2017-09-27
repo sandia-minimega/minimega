@@ -54,6 +54,24 @@ for more information.
 
 We added `ns`run` to run a command on all nodes in the namespace.
 
+*** capture API
+
+The `capture` API was rewritten and is now much more stable than before. We
+have used it with thousands of captures without crashing.
+
+Added new APIs to configure the snaplen and BPF for new PCAP captures. Added
+new APIs to configure ASCII or Raw and compression for new netflow captures.
+Simplified the `capture`netflow` API to use the stored configuration rather
+than pass it in the command.
+
+*** container VCPUs
+
+Containers had a VCPUs parameter but no CPU limit was actually enforced. Now,
+we use the `cpu` cgroup to set a quota on processing time for the container
+based on the value of `vm`config`vcpus`.
+
+** Additional new features
+
 *** cc listen API
 
 To support above changes to `cc`, we removed the `-ccport` flag and replaced it
@@ -65,31 +83,9 @@ Added new API to change miniccc's log level at runtime: `cc`log`level`.
 
 It uses the value of `cc`filter` to determine which VMs to update.
 
-*** capture API
-
-The `capture` API was rewritten and is now much more stable than before. We
-have used it with thousands of captures without crashing.
-
-Added new APIs to configure the snaplen and BPF for new PCAP captures. Added
-new APIs to configure ASCII or Raw and compression for new netflow captures.
-Simplified the `capture`netflow` API to use the stored configuration rather
-than pass it in the command.
-
 *** router API
 
 Added `router`<vm>`gw` API to set the routers default gateway.
-
-*** container VCPUs
-
-Containers had a VCPUs parameter but no CPU limit was actually enforced. Now,
-we use the `cpu` cgroup to set a quota on processing time for the container
-based on the value of `vm`config`vcpus`.
-
-*** containers
-
-minimega now creates `/proc`, `/dev`, `/dev/shm`, `/dev/pts`, `/sys` in the
-container filesystem if they do not exist. Solved an issue where containers
-would fail to start.
 
 *** vm top API
 
@@ -108,7 +104,7 @@ column for QEMU process for VMs and for init process for containers.
 Added `vm`config`volume` API to specify additional directories to mount into
 the container's filesystem.
 
-*** vm config backchannel
+*** vm config backchannel API
 
 Added `vm`config`backchannel` to control whether a network-less backchannel is
 created for the VM/container or not. Solved an issue where some VMs only
@@ -136,22 +132,6 @@ connect the device to -- either 1.1 or 2.0.
 Renamed `vm`hotplug`show` to `vm`hotplug`. To limit results to a particular VM,
 use `.filter`.
 
-*** miniweb
-
-Split the webserver that would run as part of minimega with the `web` API into
-a separate binary -- miniweb. This binary has all the same functions as the old
-`web` API but is implemented in a much more maintainable way. Added the
-following functionality:
-
- - `vm`top` view
- - Per-path authentication
- - TLS support
-
-Improved the container's web console so that multiple users can view the same
-console at the same time. minimega also stores some "scrollback" from the
-container's console, so when a new console connects it can re-play recent
-output rather than presenting a blank screen.
-
 *** host API
 
 Added many new columns to support the scheduler. See `help`host` for details.
@@ -161,46 +141,87 @@ Added many new columns to support the scheduler. See `help`host` for details.
 Added `clear`all` API to reset minimega to a vanilla state. Restarting is still
 preferred.
 
-*** Completion over `-attach`
+*** vyatta API
+
+Removed deprecated API.
+
+*** web API
+
+Removed API. See replacement, [[#TOC_2.3.1.][miniweb]].
+
+*** .preprocess API
+
+Added `.preprocess` API to disable preprocessor. minimega automatically fetches
+files with a `file:` or `http://` prefix -- this API allows you to disable that
+preprocessing. For example, `.preprocess`false`cc`exec`curl`http://...`.
+
+*** .env API
+
+Added `.env` API to print/update/unset environment variables.
+
+*** Apropos for .columns, .filter APIs
+
+Added apropos support for `.columns` and `.filter`. Users can now uses a
+distinct prefix for column names rather than the full column name.
+
+*** QEMU flags
+
+Changed the default video driver from cirrus to std.
+
+*** VLANs file
+
+minimega now writes out the VLAN mappings to the filesystem.
+
+*** Tabbed completion
 
 minimega now completes commands when using the `-attach` interface.
 
-*** Completion
-
 Added completion for namespace, tap, and bridge names in supporting APIs.
 
-*** vlans file
-
-minimega now writes out the VLAN mappings to the filesystem.
+Added environment variable completions.
 
 *** Header uniformity
 
 Updated the headers on several API to make them easier to use with `.columns`
 and `.filter`:
 
- - `bridge`
- - `capture`
- - `cc`
- - `debug`
- - `disk`
- - `dnsmasq`
- - `file status`
- - `mesh status`
- - `optimize`
- - `vm hotplug`
- - `vm tag`
+ - bridge
+ - capture
+ - cc
+ - debug
+ - disk
+ - dnsmasq
+ - file status
+ - mesh status
+ - optimize
+ - vm hotplug
+ - vm tag
 
 All column names should now be one word and lowercase.
-
-*** vyatta API
-
-Removed deprecated API.
 
 *** Readline replacement
 
 Replaced the GNU Readline library in minimega with a pure Go implementation,
 eliminating a C dependency. Users may notice slightly different behaviors
 between the implementations.
+
+*** Vanity URL
+
+Users can now clone minimega via `http://minimega.org/minimega.git` which
+redirects to the Github repo.
+
+*** Travis Integration
+
+Added Travis integration to Github. Added new script `check.bash` to ensure
+source code meets `gofmt` and `go`vet` standards.
+
+** Auxillary Tools
+
+*** miniweb
+
+Created standalone webserver based on `web` API. Added many
+new features, see the [[/articles/miniweb.article][miniweb]] article for more
+information.
 
 *** igor
 
@@ -218,9 +239,39 @@ reservation.
 
 *** passwordify
 
-Added utility modify credentials for a ramdisk image.
+Added new tool to modify credentials for a ramdisk image.
+
+*** vmconfiger
+
+Added new tool to automatically generate the `vm config` APIs. This helps keep
+documentation consistent and simplifies adding new `vm config` APIs.
+
+*** protonuke
+
+Added a flag to enable cookie jar for protonuke http and https clients.
+
+Added simple FTP server and client.
+
+*** powerbot
+
+Add IPMI support.
+
+*** minitest
+
+Added recursive mode and new distributed tests.
+
+*** rond
+
+Added new standalone `ron` server that can be used separate from minimega to
+provide command-and-control to physical machines. Partially implemented.
 
 * Bug fixes
+
+** containers
+
+minimega now creates `/proc`, `/dev`, `/dev/shm`, `/dev/pts`, `/sys` in the
+container filesystem if they do not exist. Solved an issue where containers
+would fail to start.
 
 ** bandwidth on VMs
 
@@ -234,12 +285,14 @@ Use tbf instead of netem for rate limiting since netem does not seem to behave
 correctly between VMs on different hosts. Unfortunately, this means that rate
 and loss/delay are mutually exclusive now.
 
-** Restarting miniccc
+** miniccc
 
 In 2.3, miniccc added support to set upstream tags using a UDS. This socket was
 not properly cleaned up and would prevent miniccc from restarting if the VM
 reboots. Changed miniccc so that it deletes the UDS if it does not detect that
 there is an instance on miniccc running.
+
+Fix UUID handler for Windows.
 
 * Availability
 
