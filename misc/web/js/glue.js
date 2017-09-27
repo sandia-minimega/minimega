@@ -32,9 +32,12 @@ var ssDataTable;
 
 // Initialize the `vm info` DataTable and set up an automatic reload
 function initVMInfoDataTable() {
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vms"));
+
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
-            updateJSON('/vms/info.json', function(vmsData) {
+            updateJSON(path+'/vms/info.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
@@ -64,10 +67,19 @@ function initVMInfoDataTable() {
         ],
         "pageLength": 500,
         "columns": [
-            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
-            { "title": "State", "data": "state" },
+            { "title": "State", "data": "state" , render:  function ( data, type, full, meta ) {
+				var res = "<span>"+data+"</span>";
+				if (data == "BUILDING" || data == "PAUSED") {
+					res += '<i class="fa fa-play-circle" id="'+full["name"]+'-start"></i>';
+				} else if (data == "RUNNING") {
+					res += '<i class="fa fa-pause-circle" id="'+full["name"]+'-stop"></i>';
+				}
+				res += '<i class="fa fa-times-circle" id="'+full["name"]+'-kill"></i>';
+
+				return res;
+			} },
             { "title": "Uptime", "data": "uptime", "visible": false },
             { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
@@ -86,7 +98,7 @@ function initVMInfoDataTable() {
                 "title": "VNC",
                 "data": "name",
                 render:  function ( data, type, full, meta ) {
-                    return '<a href="connect/'+data+'" target="_blank">Connect</a>';
+                    return '<a href="'+connectURL(full)+'" target="_blank">Connect</a>';
                 }
             },
         ],
@@ -118,6 +130,27 @@ function initVMInfoDataTable() {
         .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
     */
 
+	// set onclick handler for all <i> to update VM
+	$(document).on("click", "#vms-dataTable i", function() {
+		var id = $(this).attr("id");
+		var name = id.substr(0, id.lastIndexOf("-"));
+		var action = id.substr(id.lastIndexOf("-")+1);
+
+		var p = path;
+		if (!p.endsWith("/")) {
+			p += "/";
+		}
+		p += "vm/"+name+"/"+action;
+
+		$.ajax({
+			type: "POST",
+			url: p,
+			success: function() {
+                vmDataTable.ajax.reload(null, false);
+			},
+		})
+	});
+
     if (VM_REFRESH_TIMEOUT >= 1000) {
         setInterval(function() {
             if (VM_REFRESH_ENABLE) {
@@ -129,9 +162,12 @@ function initVMInfoDataTable() {
 
 // Initialize the `vm top` DataTable and set up an automatic reload
 function initVMTopDataTable() {
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vms"));
+
     var vmDataTable = $('#vms-dataTable').DataTable({
-        "ajax": function( data, callback, settings) {
-            updateJSON('/vms/top.json', function(vmsData) {
+        "ajax": function(data, callback, settings) {
+            updateJSON(path+'/vms/top.json', function(vmsData) {
                 // disable auto-refresh there are too many VMs
                 VM_REFRESH_ENABLE = Object.keys(vmsData).length <= VM_REFRESH_THESHOLD;
 
@@ -161,7 +197,6 @@ function initVMTopDataTable() {
         ],
         "pageLength": 500,
         "columns": [
-            { "title": "Namespace", "data": "namespace", "visible": false, render: handleEmptyString },
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "Virtual", "data": "virt" },
@@ -189,7 +224,6 @@ function initVMTopDataTable() {
     }
 }
 
-
 // Initialize the Host DataTable and set up an automatic reload
 function initHostDataTable() {
     var hostDataTable = $('#hosts-dataTable').DataTable({
@@ -215,33 +249,33 @@ function initHostDataTable() {
         ],
         "pageLength": -1,
         "columns": [
-            { "title": "Name" },
-            { "title": "CPUs" },
-            { "title": "Load", render: function(data, type, full, meta) {
+            { "title": "Name", "data": "host" },
+            { "title": "CPUs", "data": "cpus" },
+            { "title": "Load", "data": "load", render: function(data, type, full) {
                 var loads = data.split(" ");
-                var cpus = parseInt(full[1]);
+                var cpus = parseInt(full["cpus"]);
                 var loadsOverCPUsHtml = loads.map(function(load) {
                     return colorSpanWithThresholds(load, load, 1.5*cpus, 1.0*cpus);
                 });
                 return loadsOverCPUsHtml.join(" ");
             } },
-            { "title": "Memory Used", render: function(data, type, full, meta) {
-                var memUsed = parseInt(full[3]);
-                var memTotal = parseInt(full[4]);
-                var memUnits = full[4].replace(/[0-9]/g, '');
+            { "title": "Memory Used", "data": "memused", render: function(data, type, full) {
+                var memUsed = parseInt(data);
+                var memTotal = parseInt(full["memtotal"]);
+                var memUnits = full["memtotal"].replace(/[0-9]/g, '');
                 var text = memUsed + "/" + memTotal + memUnits;
                 var memRatio = memUsed / memTotal;
                 return colorSpanWithThresholds(text, memRatio, 0.9, 0.8);
             } },
-            { "title": "Memory Total", visible: false },
-            { "title": "Rx Bandwidth" },
-            { "title": "Tx Bandwidth" },
-            { "title": "VMs" },
-            { "title": "VM Limit" },
-            { "title": "CPU Commit" },
-            { "title": "Mem Commit" },
-            { "title": "Net Commit" },
-            { "title": "Uptime" , render: function(data, type, full, meta) {
+            { "title": "Memory Total", "data": "memtotal", visible: false },
+            { "title": "Rx Bandwidth", "data": "rx" },
+            { "title": "Tx Bandwidth", "data": "tx" },
+            { "title": "VMs", "data": "vms" },
+            { "title": "VM Limit", "data": "vmlimit" },
+            { "title": "CPU Commit", "data": "cpucommit" },
+            { "title": "Mem Commit", "data": "memcommit" },
+            { "title": "Net Commit", "data": "netcommit" },
+            { "title": "Uptime", "data": "uptime", render: function(data, type, full, meta) {
                 // calculate days separately
                 var seconds = parseInt(data);
                 var days = Math.floor(seconds / 86400);
@@ -263,14 +297,186 @@ function initHostDataTable() {
 }
 
 
+// Initialize the Namespace DataTable and set up an automatic reload
+function initNamespacesDataTable() {
+    console.log("initNamespacesDataTable");
+
+    var table = $('#namespaces-dataTable').DataTable({
+        "ajax": {
+            "url": "namespaces.json",
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Name", "data": "namespace", render:  function ( data, type, full, meta ) {
+                return '<a href="/'+data+'/vms">'+data+'</a>';
+            } },
+            { "title": "VLANs", "data": "vlans", render:  function ( data, type, full, meta ) {
+                if (data == "") {
+                    data = "Inherited";
+                }
+
+                return '<a href="/'+full["namespace"]+'/vlans">'+data+'</a>';
+            } },
+            { "title": "Active", "data": "active" },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+// Initialize the VLANs DataTable and set up an automatic reload
+function initVLANsDataTable() {
+    console.log("initVLANsDataTable");
+
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/vlans"));
+
+    var table = $('#vlans-dataTable').DataTable({
+        "ajax": {
+            "url": path+"/vlans.json",
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Alias", "data": "alias" },
+            { "title": "VLAN", "data": "vlan" },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+// Initialize the Files DataTable and set up an automatic reload
+function initFilesDataTable() {
+    console.log("initFilesDataTable");
+
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/files/"));
+
+    var subdir = window.location.pathname;
+    subdir = subdir.substr(subdir.indexOf("/files/")+"/files/".length);
+
+    var table = $('#files-dataTable').DataTable({
+        "ajax": {
+            "url": path+"/files.json?path="+subdir,
+            "dataSrc": ""
+        },
+        "dom":
+            "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
+            //"<'row'<'col-sm-3'l><'col-sm-6 text-center'B><'col-sm-3'f>>" +
+            "<'row'<'col-sm-6'l><'col-sm-6'f>>" +
+            "<'row'<'col-sm-12 text-center'B>>" +
+            "<'row'<'col-sm-12'tr>>",
+        "buttons": [
+            'columnsVisibility'
+        ],
+        "autoWidth": false,
+        "paging": true,
+        "lengthChange": true,
+        "lengthMenu": [
+            [25, 50, 100, 200, -1],
+            [25, 50, 100, 200, "All"]
+        ],
+        "pageLength": -1,
+        "columns": [
+            { "title": "Host", "data": "host" },
+            { "title": "Name", "data": "name", render:  function ( data, type, full, meta ) {
+                if ( full["dir"] != "" ) {
+                    var p = window.location.pathname;
+                    if (!p.endsWith("/")) {
+                        p += "/";
+                    }
+                    return '<a href="'+p+data+'/">'+data+'</a>';
+                }
+
+                return data;
+            } },
+            { "title": "Size", "data": "size", render:  function ( data, type, full, meta ) {
+                // From https://stackoverflow.com/a/22023833
+                var exp = Math.log(data) / Math.log(1024) | 0;
+                var result = (data / Math.pow(1024, exp)).toFixed(2);
+
+                return result + ' ' + (exp == 0 ? 'bytes': 'KMGTPEZY'[exp - 1] + 'B');
+
+            } },
+        ],
+        "order": [[ 0, 'asc' ]],
+        "stateSave": true,
+        "stateDuration": 0
+    });
+
+    table.draw();
+
+    if (HOST_REFRESH_TIMEOUT > 0) {
+        setInterval(function() {
+            table.ajax.reload(null, false);
+        }, HOST_REFRESH_TIMEOUT);
+    }
+}
+
+
 // Initialize the Screenshot DataTable and set up an automatic reload
 function initScreenshotDataTable() {
-    updateJSON('/vms/info.json', updateScreenshotTable);
+    var path = window.location.pathname;
+    path = path.substr(0, path.indexOf("/tilevnc"));
+
+    updateJSON(path+"/vms/info.json", updateScreenshotTable);
 
     if (IMAGE_REFRESH_TIMEOUT > 0) {
         setInterval(function() {
             if (IMAGE_REFRESH_ENABLE) {
-                updateJSON('/vms/info.json', updateScreenshotTable);
+                updateJSON(path+"/vms/info.json", updateScreenshotTable);
             }
         }, IMAGE_REFRESH_TIMEOUT);
     }
@@ -396,20 +602,20 @@ function colorSpanWithThresholds(text, value, thresholdRed, thresholdYellow) {
 
 // Generate the appropriate URL for requesting a screenshot
 function screenshotURL (vm, size) {
-    return "screenshot/" + vm.name + ".png?size=" + size;
+    return "vm/" + vm.name + "/screenshot.png?size=" + size;
 }
 
 
 // Generate the appropriate URL for a connection
 function connectURL (vm) {
-    return "connect/" + vm.name
+    return "vm/" + vm.name + "/connect";
 }
 
 
 // Add more cowbell
 function initCowbell () {
     var audioElement = document.createElement('audio');
-    audioElement.setAttribute('src', 'images/cow_and_bell_1243222141.mp3');
+    audioElement.setAttribute('src', '/images/cow_and_bell_1243222141.mp3');
     $('#nav-container').dblclick(function() {
         audioElement.currentTime = 0;
         audioElement.play();

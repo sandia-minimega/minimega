@@ -33,6 +33,7 @@ var (
 	f_console   = flag.Bool("console", false, "enable console")
 	f_key       = flag.String("key", "", "key file for TLS in PEM format")
 	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
+	f_namespace = flag.String("namespace", "", "limit miniweb to a namespace")
 )
 
 var mm *miniclient.Conn
@@ -42,6 +43,8 @@ func usage() {
 	fmt.Println("usage: miniweb [option]...")
 	flag.PrintDefaults()
 }
+
+var mux = http.NewServeMux()
 
 func main() {
 	var err error
@@ -79,8 +82,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	mux := http.NewServeMux()
-
 	for _, f := range files {
 		if f.IsDir() {
 			path := fmt.Sprintf("/%s/", f.Name())
@@ -93,16 +94,29 @@ func main() {
 
 	mux.HandleFunc("/vms", mustAuth(templateHandler))
 	mux.HandleFunc("/hosts", mustAuth(templateHandler))
+	mux.HandleFunc("/vlans", mustAuth(templateHandler))
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 
-	mux.HandleFunc("/hosts.json", mustAuth(hostsHandler))
-	mux.HandleFunc("/vlans.json", mustAuth(vlansHandler))
+	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
+	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
 	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
 
-	mux.HandleFunc("/connect/", mustAuth(connectHandler))
-	mux.HandleFunc("/screenshot/", mustAuth(screenshotHandler))
+	mux.HandleFunc("/files/", mustAuth(filesHandler))
+	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
+
+	mux.HandleFunc("/vm/", mustAuth(vmHandler))
+
+	if *f_namespace == "" {
+		mux.HandleFunc("/namespaces", mustAuth(templateHandler))
+		mux.HandleFunc("/namespaces.json", mustAuth(tabularHandler))
+	} else {
+		mux.HandleFunc("/namespaces", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "namespaces disabled, see -namespace flag", http.StatusNotImplemented)
+			return
+		})
+	}
 
 	if *f_console {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))

@@ -1,0 +1,22 @@
+## # force namespace creation on remote hosts
+## namespace foo vm info
+
+## # check that it was created
+## mesh send all namespace
+namespace | vlans    | active
+foo       |          | false
+foo       |          | false
+foo       |          | false
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
+
+## # destroy the namespace
+## clear namespace foo
+
+## # check that it was destroyed
+## mesh send all namespace
+namespace | vlans    | active
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true
+minimega  | 101-4096 | true

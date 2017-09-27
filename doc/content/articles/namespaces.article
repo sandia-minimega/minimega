@@ -52,11 +52,12 @@ To return to the default namespace, use:
 	minimega[foo]$ clear namespace
 	minimega[minimega]$
 
-When run without arguments, `namespace` displays the available namespaces. The current
-namespace will be denoted by `[]`:
+When run without arguments, `namespace` prints summary info about namespaces:
 
 	minimega[minimega]$ namespace
-	[minimega], foo
+	namespace | vms | vlans    | active
+	foo       | 0   |          | false
+	minimega  | 0   | 101-4096 | true
 
 To make it easier to run commands that target a namespace, users may prefix
 commands with the namespace they with to use. For example, to display

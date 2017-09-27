@@ -1,0 +1,18 @@
+# these commands should all be disallowed (and not hang minimega)
+
+mesh send all mesh send all host
+mesh send all ns run host
+mesh send all read foo
+
+namespace with-local
+ns add-host localhost
+ns run mesh send all host
+ns run ns run host
+ns run read foo
+clear namespace with-local
+
+namespace without-local
+ns run mesh send all host
+ns run ns run host
+ns run read foo
+clear namespace without-local

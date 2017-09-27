@@ -19,10 +19,14 @@ var namespaceCLIHandlers = []minicli.Handler{
 	{ // namespace
 		HelpShort: "display or change namespace",
 		HelpLong: `
-With no arguments, "namespace" prints all the namespaces, the active namespace
-will be displayed in brackets (e.g. "[minimega]"). When a namespace is
-specified, it changes the active namespace or runs a single command in the
-different namespace.`,
+With no arguments, "namespace" prints summary info about namespaces:
+
+- name   : name of the namespace
+- vlans  : range of VLANs, empty if not set
+- active : active or not
+
+When a namespace is specified, it changes the active namespace or runs a single
+command in the different namespace.`,
 		Patterns: []string{
 			"namespace [name]",
 			"namespace <name> (command)",
@@ -75,12 +79,14 @@ Display or modify the active namespace.
 Without an argument, "clear namespace" will reset the namespace to the default
 namespace, minimega.
 
-With an arugment, "clear namespace <name>" will delete the specified namespace.
-You may use "all" to delete all namespaces.`,
+With an argument, "clear namespace <name>" will destroy the specified
+namespace, cleaning up all state associated with it. You may use "all" to
+destroy all namespaces. This command is broadcast to the cluster to clean up
+any remote state as well.`,
 		Patterns: []string{
 			"clear namespace [name]",
 		},
-		Call: wrapSimpleCLI(cliClearNamespace),
+		Call: cliClearNamespace,
 		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
 			if val == "name" {
 				return cliNamespaceSuggest(prefix, true)
@@ -141,7 +147,21 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	resp.Response = strings.Join(ListNamespaces(true), ", ")
+	resp.Header = []string{"namespace", "vlans", "active"}
+	for _, info := range InfoNamespaces() {
+		row := []string{
+			info.Name,
+			"",
+			strconv.FormatBool(info.Active),
+		}
+
+		if info.MinVLAN != 0 || info.MaxVLAN != 0 {
+			row[1] = fmt.Sprintf("%v-%v", info.MinVLAN, info.MaxVLAN)
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
 	respChan <- minicli.Responses{resp}
 }
 
@@ -310,25 +330,81 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	return nil
 }
 
-func cliClearNamespace(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
+	resp := &minicli.Response{Host: hostname}
+
 	name := c.StringArgs["name"]
 	if name == "" {
 		// Going back to default namespace
-		return SetNamespace(DefaultNamespace)
+		if err := SetNamespace(DefaultNamespace); err != nil {
+			respChan <- errResp(err)
+		}
+
+		respChan <- minicli.Responses{resp}
+		return
 	}
 
-	return DestroyNamespace(name)
-}
-
-func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := GetNamespace()
-
-	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		err := fmt.Errorf("cannot run `%s` using ns run", c.Original)
+	// destroy the namespace locally first
+	if err := DestroyNamespace(name); err != nil {
 		respChan <- errResp(err)
 		return
 	}
+
+	// destroy the namespace on all remote hosts as well
+	if c.Source == "" {
+		// recompile and set source so that we don't try to broadcast again
+		cmd := minicli.MustCompilef(c.Original)
+		cmd.Source = name
+
+		respChan2, err := meshageSend(cmd, Wildcard)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		res := minicli.Responses{resp}
+
+		for resps := range respChan2 {
+			for _, resp := range resps {
+				// suppress warnings if we created and deleted the namespace
+				// locally without actually running any commands to create the
+				// namespace remotely.
+				if strings.HasPrefix(resp.Error, "unknown namespace:") {
+					resp.Error = ""
+				}
+
+				res = append(res, resp)
+			}
+		}
+
+		respChan <- res
+		return
+	}
+
+	respChan <- minicli.Responses{resp}
+}
+
+func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		err := fmt.Errorf("cannot run `%s` via meshage", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
+	// HAX: Make sure we don't run strange nested commands. We have to test for
+	// these explicity rather than allow the handlers to check because the
+	// Source for the locally executed commands will be the current namespace
+	// and not "Meshage".
+	for _, forbidden := range []string{"read", "mesh send", "ns run", "vm launch"} {
+		if hasCommand(c.Subcommand, forbidden) {
+			err := fmt.Errorf("cannot run `%s` using `ns run`", c.Subcommand.Original)
+			respChan <- errResp(err)
+			return
+		}
+	}
+
+	ns := GetNamespace()
 
 	res := minicli.Responses{}
 
@@ -351,7 +427,7 @@ func cliNamespaceSuggest(prefix string, wild bool) []string {
 		res = append(res, Wildcard)
 	}
 
-	for _, name := range ListNamespaces(false) {
+	for _, name := range ListNamespaces() {
 		if strings.HasPrefix(name, prefix) {
 			res = append(res, name)
 		}

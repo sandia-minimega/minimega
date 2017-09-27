@@ -1,0 +1,52 @@
+{{define "content"}}
+<div id="content">
+    <div id="files-table" class="box">
+        <h1 class="box-header">Files: /</h1>
+        <div class="box-content">
+            <table id="files-dataTable" class="table table-striped table-bordered dataTable no-footer"></table>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript" src="/libs/dataTables/jquery.dataTables.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.bootstrap.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.buttons.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.colVis.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.html5.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.bootstrap.js"></script>
+
+<script type="text/javascript" src="/js/glue.js"></script>
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('nav a[href$="' + "files" + '"]').addClass("current-view");
+
+		var base = "/files/";
+
+		// before is namespace
+		var path = window.location.pathname;
+		path = path.substr(0, path.indexOf(base));
+		// after is subdir
+		var subdir = window.location.pathname;
+		subdir = subdir.substr(subdir.indexOf(base)+base.length);
+
+		$('nav a').each(function() {
+			var href = $(this).attr("href");
+			if (!href.startsWith("/")) {
+				$(this).attr("href", path+"/"+href);
+			}
+		});
+
+		if (subdir != "") {
+			var p = window.location.pathname;
+			if (!p.endsWith("/")) {
+				p += "/"
+			}
+
+			$("h1.box-header").text("Files: " + subdir)
+				.after('<a href="'+p+'..">Up a level</a>');
+		}
+
+        initFilesDataTable();
+    });
+</script>
+{{end}}

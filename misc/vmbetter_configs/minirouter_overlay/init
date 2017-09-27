@@ -52,6 +52,10 @@ for d in $(ls /sys/class/virtio-ports); do
 	ln -s -T /dev/$d /dev/virtio-ports/$name
 done
 
+# enable IP forwarding by default
+sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv4.ip_forward=1
+
 /miniccc -v=false -serial /dev/virtio-ports/cc -logfile /miniccc.log &
 /minirouter -v=false -logfile /minirouter.log &
 

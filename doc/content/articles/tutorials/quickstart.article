@@ -69,18 +69,18 @@ The very first thing we can do is check the default configuration:
 	Memory:   2048
 	VCPUS:    1
 	Networks: []
-	
+
 	Current KVM configuration:
-	Migrate Path:       
+	Migrate Path:
 	Disk Paths:         []
-	CDROM Path:         
-	Kernel Path:        
-	Initrd Path:        
-	Kernel Append:      
+	CDROM Path:
+	Kernel Path:
+	Initrd Path:
+	Kernel Append:
 	QEMU Path:          /usr/bin/kvm
 	QEMU Append:        []
 	Snapshot:           true
-	UUID:               
+	UUID:
 	SerialPorts:        0
 	Virtio-SerialPorts: 0
 
@@ -123,7 +123,7 @@ get an IP:
 If this fails, it's possible that you don't have dnsmasq installed, or that
 dnsmasq is already running. You don't *need* dnsmasq, but without it you'll
 have to access the VM through VNC, since SSH won't work.
-	 
+
 * Step 3: Launch and start the VM
 
 Although we've configured the VM parameters, we have not actually started any
@@ -157,14 +157,10 @@ passwordless login for the root user.
 
 ** Web interface
 
-The web interface is the friendliest way to see VMs. Assuming you ran minimega
-from the root of the minimega repository, you can start the web interface like
-this:
-
-    minimega$ web
-
-Now point your web browser to [[http://localhost:9001]] and scroll down to the
-section "VM Screenshots". You should see something like this:
+The web interface is the friendliest way to see VMs. Start
+[[/articles/miniweb.article][miniweb]] and then point your web browser to
+[[http://localhost:9001]] and scroll down to the section "VM Screenshots". You
+should see something like this:
 
 .image quickstart/mm-web.png
 

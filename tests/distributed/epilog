@@ -1,8 +1,5 @@
 # reset remote nodes
-namespace mgmt
-ns add-host all
 mesh send all clear all
-clear namespace mgmt
 
-# reset local node
+# can't clear all locally otherwise we'd lose our miniception VMs
 clear namespace distributed

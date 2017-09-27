@@ -11,7 +11,6 @@ import (
 	"html/template"
 	"io"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -42,14 +41,48 @@ func respondJSON(w http.ResponseWriter, data interface{}) {
 	w.Write(js)
 }
 
-// indexHandler redirect / to /vms
+// indexHandler handles all unmatched URLs, redirects / to /vms
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
+	if r.URL.Path == "/" {
+		http.Redirect(w, r, "/vms", 302)
+		return
+	}
+
+	// don't mess with this if we are tied to a namespace
+	if *f_namespace != "" {
 		http.NotFound(w, r)
 		return
 	}
 
-	http.Redirect(w, r, "/vms", 302)
+	// potentially prefixed with a namespace
+	log.Debug("URL: %v", r.URL)
+
+	// split URL into <namespace>/<rest of URL>
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	fields := strings.SplitN(path, "/", 2)
+
+	// only have a possible namespace -- redirect
+	if len(fields) == 1 {
+		http.Redirect(w, r, path+"/", 302)
+		return
+	}
+
+	// add namespace to query values
+	v := r.URL.Query()
+	if v.Get("namespace") != "" {
+		// something strange is going on
+		http.NotFound(w, r)
+		return
+	}
+	v.Set("namespace", fields[0])
+
+	// patch up query and hand back to the mux
+	r.URL.RawQuery = v.Encode()
+	r.URL.Path = "/" + fields[1]
+
+	log.Debug("new URL: %v", r.URL)
+
+	mux.ServeHTTP(w, r)
 }
 
 func renderTemplate(w http.ResponseWriter, r *http.Request, t string, d interface{}) {
@@ -87,19 +120,17 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
 }
 
-// screenshotHandler serves routes like /screenshot/<name>.png. Optional size
-// query parameter dictates the size of the screenshot.
-func screenshotHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form `/screenshot/<name>.png`
-	path := strings.Trim(r.URL.Path, "/")
+// filesHandler ignores subpaths and renders the files template
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("files handler: %v", r.URL.Path)
 
-	fields := strings.Split(path, "/")
-	if len(fields) != 2 || !strings.HasSuffix(fields[1], ".png") {
-		http.NotFound(w, r)
-		return
-	}
+	renderTemplate(w, r, "files.tmpl", nil)
+}
 
-	name := strings.TrimSuffix(fields[1], ".png")
+// screenshotHandler handles the following URLs via vmHandler:
+//   /vm/<name>/screenshot.png
+func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
+	log.Info("screenshotHandler handler: %v", r.URL.Path)
 
 	// TODO: sanitize?
 	size := r.URL.Query().Get("size")
@@ -107,11 +138,12 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	// TODO: replace w with base64 encoder?
 	do_encode := r.URL.Query().Get("base64") != ""
 
-	cmd := fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
+	cmd := NewCommand(r)
+	cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
 
 	var screenshot []byte
 
-	for resps := range mm.Run(cmd) {
+	for resps := range mm.Run(cmd.String()) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
@@ -153,29 +185,23 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func connectHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form:
-	//   /connect/<name>/
-	//   /connect/<name>/ws
+// connectHandler handles the following URLs via vmHandler:
+//   /vm/<name>/connect/
+//   /vm/<name>/connect/ws
+func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Info("connect request: %v", r.URL.Path)
-
-	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-	if len(fields) < 2 {
-		http.Error(w, "invalid path", http.StatusBadRequest)
-		return
-	}
-
-	name := fields[1]
 
 	// find info about the VM that we need to connect
 	var vmType string
 	var host string
 	var port int
 
-	columns := []string{"host", "type", "vnc_port", "console_port"}
-	filters := []string{fmt.Sprintf("name=%q", name)}
+	cmd := NewCommand(r)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host", "type", "vnc_port", "console_port"}
+	cmd.Filters = []string{fmt.Sprintf("name=%q", name)}
 
-	for _, vm := range vmInfo(columns, filters) {
+	for _, vm := range runTabular(cmd) {
 		host = vm["host"]
 		vmType = vm["type"]
 
@@ -197,12 +223,9 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 
 	// check the request again to decide whether to serve the page or tunnel
 	// the request
-	if len(fields) == 3 && fields[2] == "ws" {
+	if strings.HasSuffix(r.URL.Path, "/ws") {
 		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
 
-		return
-	} else if len(fields) >= 3 {
-		http.NotFound(w, r)
 		return
 	}
 
@@ -219,109 +242,120 @@ func connectHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// connectWsHandler returns a function to service a websocket for the given VM
-func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
-	return func(ws *websocket.Conn) {
-		switch vmType {
-		case "kvm":
-			// Undocumented "feature" of websocket -- need to set to
-			// PayloadType in order for a direct io.Copy to work.
-			ws.PayloadType = websocket.BinaryFrame
-		case "container":
-			// See above. The javascript terminal needs it to be a TextFrame.
-			ws.PayloadType = websocket.TextFrame
-		}
+// vmHandler handles the following URLs:
+//   /vm/<name>/connect/
+//   /vm/<name>/connect/ws
+//   /vm/<name>/screenshot.png
+//   POST /vm/<name>/start
+//   POST /vm/<name>/stop
+//   POST /vm/<name>/kill
+func vmHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("vm request: %v", r.URL.Path)
 
-		// connect to the remote host
-		rhost := fmt.Sprintf("%v:%v", host, port)
-		remote, err := net.Dial("tcp", rhost)
-		if err != nil {
-			log.Errorln(err)
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(fields) < 3 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
+	name := fields[1]
+
+	switch fields[2] {
+	case "connect":
+		if len(fields) == 3 || len(fields) == 4 {
+			connectHandler(w, r, name)
 			return
 		}
-		defer remote.Close()
+	case "screenshot.png":
+		if len(fields) == 3 {
+			screenshotHandler(w, r, name)
+			return
+		}
+	case "start", "stop", "kill":
+		if r.Method == http.MethodPost && len(fields) == 3 {
+			cmd := NewCommand(r)
+			cmd.Command = fmt.Sprintf("vm %v %q", fields[2], name)
 
-		log.Info("ws client connected to %v", rhost)
+			var res string
+			for resps := range mm.Run(cmd.String()) {
+				res += resps.Rendered
+			}
 
-		go io.Copy(ws, remote)
-		io.Copy(remote, ws)
-
-		log.Info("ws client disconnected from %v", rhost)
+			w.Write([]byte(res))
+			return
+		}
 	}
+
+	http.NotFound(w, r)
+	return
 }
 
+// vmsHandler handles the following URLs:
+//   /vms/info.json
+//   /vms/top.json
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
+	log.Info("vms request: %v", r.URL)
+
+	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(fields) != 2 {
+		http.Error(w, "invalid path", http.StatusBadRequest)
+		return
+	}
+
 	var vms []map[string]string
 
-	if strings.HasSuffix(r.URL.Path, "/info.json") {
+	cmd := NewCommand(r)
+
+	switch fields[1] {
+	case "info.json":
+		cmd.Command = "vm info"
 		// don't care about quit or error state
-		vms = vmInfo(nil, []string{
+		cmd.Filters = []string{
 			"state!=quit",
 			"state!=error",
-		})
-	} else if strings.HasSuffix(r.URL.Path, "/top.json") {
-		vms = vmTop(nil, nil)
-	} else {
+		}
+	case "top.json":
+		cmd.Command = "vm top"
+	default:
 		http.NotFound(w, r)
 		return
 	}
 
+	vms = runTabular(cmd)
 	sortVMs(vms)
 	respondJSON(w, vms)
 }
 
-func hostsHandler(w http.ResponseWriter, r *http.Request) {
-	var hosts [][]string
+// tabularHandler handles the following URLs:
+//   /vlans.json
+//   /hosts.json
+//   /namespaces.json
+func tabularHandler(w http.ResponseWriter, r *http.Request) {
+	cmd := NewCommand(r)
 
-	cmd := "host"
-
-	for resps := range mm.Run(cmd) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			for _, row := range resp.Tabular {
-				res := append([]string{resp.Host}, row...)
-				hosts = append(hosts, res)
-			}
-		}
+	switch strings.Trim(r.URL.Path, "/") {
+	case "vlans.json":
+		cmd.Command = "vlans"
+	case "hosts.json":
+		cmd.Command = "host"
+	case "namespaces.json":
+		cmd.Command = "namespace"
+	case "files.json":
+		path := r.URL.Query().Get("path")
+		cmd.Command = fmt.Sprintf("ns run file list %q", path)
+	default:
+		http.NotFound(w, r)
+		return
 	}
 
-	respondJSON(w, hosts)
+	respondJSON(w, runTabular(cmd))
 }
 
-func vlansHandler(w http.ResponseWriter, r *http.Request) {
-	vlans := [][]interface{}{}
-
-	cmd := "vlans"
-
-	for resps := range mm.Run(cmd) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				log.Errorln(resp.Error)
-				continue
-			}
-
-			for _, row := range resp.Tabular {
-				res := []interface{}{}
-				for _, v := range row {
-					res = append(res, v)
-				}
-				vlans = append(vlans, res)
-			}
-		}
-	}
-
-	respondJSON(w, vlans)
-}
-
+// consoleHandler handles the following URLs:
+//   /console
+//   /console/<pid>/ws
+//   /console/<pid>/size
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
-	// URL should be of the form:
-	//   /console
-	//   /console/<pid>/ws
-	//   /console/<pid>/size
 	if r.URL.Path == "/console" {
 		// create a new console
 		cmd := exec.Command("bin/minimega", "-attach")
@@ -409,31 +443,5 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		websocket.Handler(consoleWsHandler(tty, pid)).ServeHTTP(w, r)
 
 		return
-	}
-}
-
-// consoleWsHandler returns a function to service a websocket for the given pty
-func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
-	return func(ws *websocket.Conn) {
-		defer func() {
-			tty.Close()
-		}()
-
-		proc, err := os.FindProcess(pid)
-		if err != nil {
-			log.Error("unable to find process: %v", pid)
-			return
-		}
-
-		go io.Copy(ws, tty)
-		io.Copy(tty, ws)
-
-		proc.Kill()
-		proc.Wait()
-
-		ptyMu.Lock()
-		defer ptyMu.Unlock()
-
-		delete(ptys, pid)
 	}
 }

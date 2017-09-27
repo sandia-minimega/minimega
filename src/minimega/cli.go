@@ -109,8 +109,6 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
-		log.Debug("namespace: %v, command: %#v", ns, c)
-
 		// Wrapped commands have two behaviors:
 		//   `fan out` -- send the command to all hosts in the active namespace
 		//   `local`   -- invoke the underlying handler
@@ -120,7 +118,7 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 		// we will perform the `fan out` phase. We set the source to the active
 		// namespace so that when we send the command via mesh, the source will
 		// be propagated and they will execute the `local` behavior.
-		if c.Source == ns.Name {
+		if c.Source != "" {
 			localFunc(c, respChan)
 			return
 		}
@@ -151,10 +149,8 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
-		log.Debug("namespace: %v, source: %v", ns, c.Source)
-
 		// See note in wrapBroadcastCLI.
-		if c.Source == ns.Name {
+		if c.Source != "" {
 			localFunc(c, respChan)
 			return
 		}
