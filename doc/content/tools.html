@@ -90,5 +90,20 @@ RSA keys are in its authorized_keys file, which will allow multiple nodes
 booted from the same image to ssh to each other without needing password input.
 </p>
 
+<h2>rond: standalone command-and-control server</h2>
+
+<p>
+minimega includes a `ron` server to provide command-and-control for VMs. rond
+is a standalone command-and-control server with its own CLI to control physical
+machines running miniccc.
+</p>
+
+<h2>vmconfiger: code generation</h2>
+
+<p>
+vmconfiger generates the `vm config` APIs automatically for minimega. Only
+developers that are changing the VMConfig structs will need to use this. It
+runs automatically with `go generate`.
+</p>
 
 {{ end }}
