@@ -38,7 +38,7 @@ var captureCLIHandlers = []minicli.Handler{
 			"capture <pcap,> <delete,> vm <vm name>",
 		},
 		Call:    wrapVMTargetCLI(cliCaptureVM),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // capture
 		HelpShort: "capture experiment data",

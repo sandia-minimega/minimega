@@ -196,15 +196,20 @@ func wrapSuggest(fn wrappedSuggestFunc) minicli.SuggestFunc {
 	}
 }
 
-func wrapVMSuggest(mask VMState) minicli.SuggestFunc {
+func wrapVMSuggest(mask VMState, wild bool) minicli.SuggestFunc {
 	return func(raw, val, prefix string) []string {
 		if attached != nil {
 			return attached.Suggest(raw)
 		}
 
+		// only make suggestions for VM fields
+		if val != "vm" {
+			return nil
+		}
+
 		ns := GetNamespace()
 
-		return cliVMSuggest(ns, prefix, mask)
+		return cliVMSuggest(ns, prefix, mask, wild)
 	}
 }
 
