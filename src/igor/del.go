@@ -91,8 +91,10 @@ func deleteReservation(checkUser bool, args []string) {
 	} else {
 		for _, host := range deletedReservation.Hosts {
 			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
-			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
-			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
+			if deletedReservation.CobblerProfile == "" {
+				processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
+				processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
+			}
 		}
 	}
 
