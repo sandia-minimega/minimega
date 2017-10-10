@@ -17,6 +17,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"ranges"
 	"strings"
 	"sync"
 	"syscall"
@@ -44,6 +45,7 @@ var commands = []*Command{
 	cmdDel,
 	cmdShow,
 	cmdSub,
+	cmdPower,
 }
 
 var exitStatus = 0
@@ -71,6 +73,9 @@ type Config struct {
 	NetworkPassword       string
 	NetworkURL            string `json:"network_url"`
 	DNSServer             string
+	LogFile               string
+	NodeLimit             int
+	TimeLimit             int
 }
 
 // Represents a slice of time
@@ -117,6 +122,13 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
+func emitReservationLog(action string, res Reservation) {
+	format := "2006-Jan-2-15:04"
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	unsplit, _ := rnge.UnsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
+}
+
 // Read the reservations, delete any that are too old.
 // Copy in netboot files for any reservations that have just started
 func housekeeping() {
@@ -128,84 +140,83 @@ func housekeeping() {
 		// Get a list of current profiles
 		cobblerProfiles, err = processWrapper("cobbler", "profile", "list")
 		if err != nil {
-			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
+			log.Fatal("couldn't get list of cobbler profiles: %v\n", cobblerProfiles)
 		}
 	}
 
 	for _, r := range Reservations {
+		// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists. This is how we verify if the reservation is installed or not
+		filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 		if r.EndTime < now {
 			deleteReservation(false, []string{r.ResName})
-		} else if r.StartTime < now {
+		} else if _, err := os.Stat(filename); os.IsNotExist(err) && r.StartTime < now {
+			emitReservationLog("INSTALL", r)
 			// update network config
 			err := networkSet(r.Hosts, r.Vlan)
 			if err != nil {
 				log.Error("error setting network isolation: %v", err)
 			}
 			if !igorConfig.UseCobbler {
-				// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
-				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-				if _, err := os.Stat(filename); os.IsNotExist(err) {
-					log.Info("Installing files for reservation ", r.ResName)
+				log.Info("Installing files for reservation ", r.ResName)
 
-					// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-					masterfile, err := os.Create(fname)
+				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+				masterfile, err := os.Create(filename)
+				if err != nil {
+					log.Fatal("failed to create %v -- %v", filename, err)
+				}
+				defer masterfile.Close()
+				masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
+
+				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+				for _, pxename := range r.PXENames {
+					masterfile.Seek(0, 0)
+					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+					f, err := os.Create(fname)
 					if err != nil {
 						log.Fatal("failed to create %v -- %v", fname, err)
 					}
-					defer masterfile.Close()
-					masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
-
-					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-					for _, pxename := range r.PXENames {
-						masterfile.Seek(0, 0)
-						fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-						f, err := os.Create(fname)
+					io.Copy(f, masterfile)
+					f.Close()
+				}
+				powerCycle(r.Hosts)
+			} else {
+				// If we're not using an existing profile, create one and set the nodes to use it
+				if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
+					if err != nil {
+						log.Fatal("cobbler: %v", err)
+					}
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
 						if err != nil {
-							log.Fatal("failed to create %v -- %v", fname, err)
+							log.Fatal("cobbler: %v", err)
 						}
-						io.Copy(f, masterfile)
-						f.Close()
+					}
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--network-enabled=true")
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+					}
+					powerCycle(r.Hosts)
+				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
+					// If the requested profile exists, go ahead and set the nodes to use it
+					for _, host := range r.Hosts {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
 					}
 					powerCycle(r.Hosts)
 				}
-			} else {
-				// We use the same structures under pxelinux.cfg to know if a cobbler res is set up, too
-				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-				if _, err := os.Stat(filename); os.IsNotExist(err) {
-					// If we're not using an existing profile, create one and set the nodes to use it
-					if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
-						log.Info("Configuring cobbler distro and profile")
-						_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						for _, host := range r.Hosts {
-							_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
-							if err != nil {
-								log.Fatal("cobbler: %v", err)
-							}
-						}
-						powerCycle(r.Hosts)
-					} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
-						// If the requested profile exists, go ahead and set the nodes to use it
-						for _, host := range r.Hosts {
-							_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
-							if err != nil {
-								log.Fatal("cobbler: %v", err)
-							}
-						}
-						powerCycle(r.Hosts)
-					}
-					os.Create(filename)
-				}
+				os.Create(filename)
 			}
 		}
 	}
@@ -216,33 +227,8 @@ func housekeeping() {
 
 func powerCycle(Hosts []string) {
 	if igorConfig.AutoReboot {
-		if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
-			// Use non-cobbler commands
-			for _, h := range Hosts {
-				command := append(strings.Split(igorConfig.PowerOffCommand, " "), h)
-				fmt.Printf("command = %v\n", command)
-				_, err := processWrapper(command...)
-				if err != nil {
-					log.Error("power off command returned %v", err)
-				}
-				command = append(strings.Split(igorConfig.PowerOnCommand, " "), h)
-				_, err = processWrapper(command...)
-				if err != nil {
-					log.Error("power on command returned %v", err)
-				}
-			}
-		} else if igorConfig.UseCobbler {
-			for _, h := range Hosts {
-				_, err := processWrapper("cobbler", "system", "poweroff", "--name="+h)
-				if err != nil {
-					log.Error("cobbler power off command returned %v", err)
-				}
-				_, err = processWrapper("cobbler", "system", "poweron", "--name="+h)
-				if err != nil {
-					log.Error("cobbler power on command returned %v", err)
-				}
-			}
-		}
+		doPower(Hosts, "off")
+		doPower(Hosts, "on")
 	}
 }
 
@@ -271,6 +257,15 @@ func main() {
 	rand.Seed(time.Now().Unix())
 
 	igorConfig = readConfig(*configpath)
+
+	// Add another logger for the logfile, if set
+	if igorConfig.LogFile != "" {
+		logfile, err := os.OpenFile(igorConfig.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		if err != nil {
+			log.Fatal("Couldn't create logfile %v: %v", igorConfig.LogFile, err)
+		}
+		log.AddLogger("file", logfile, log.INFO, false)
+	}
 
 	// Read in the reservations
 	// We open the file here so resdb.Close() doesn't happen until program exit

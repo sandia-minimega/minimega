@@ -10,7 +10,7 @@ package main
 
 import (
 	"flag"
-	log "minilog"
+	"fmt"
 	"os"
 	"strings"
 )
@@ -51,8 +51,8 @@ func (c *Command) Name() string {
 }
 
 func (c *Command) Usage() {
-	log.Error("usage: %s\n\n", c.UsageLine)
-	log.Error("%s\n", strings.TrimSpace(c.Long))
+	fmt.Printf("usage: %s\n\n", c.UsageLine)
+	fmt.Printf("%s\n", strings.TrimSpace(c.Long))
 	os.Exit(2)
 }
 

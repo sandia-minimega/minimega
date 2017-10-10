@@ -7,7 +7,6 @@ package main
 import (
 	log "minilog"
 	"os"
-	"os/user"
 	"path/filepath"
 )
 
@@ -34,7 +33,7 @@ func deleteReservation(checkUser bool, args []string) {
 		log.Fatalln("Invalid arguments")
 	}
 
-	user, err := user.Current()
+	user, err := getUser()
 	if err != nil {
 		log.Fatal("can't get current user: %v\n", err)
 	}
@@ -86,8 +85,6 @@ func deleteReservation(checkUser bool, args []string) {
 		for _, pxename := range deletedReservation.PXENames {
 			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 		}
-
-		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 	} else {
 		for _, host := range deletedReservation.Hosts {
 			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
@@ -98,9 +95,15 @@ func deleteReservation(checkUser bool, args []string) {
 		}
 	}
 
+	// We use this to indicate if a reservation has been created or not
+	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
+
 	// Delete the now unused kernel + initrd
 	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")
 	os.Remove(fname)
 	fname = filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-kernel")
 	os.Remove(fname)
+
+	emitReservationLog("DELETED", deletedReservation)
+
 }
