@@ -193,17 +193,23 @@ func housekeeping() {
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
-					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+					done := make(chan bool)
+					systemfunc := func(h string) {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile=igor_"+r.ResName)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+						done<- true
 					}
 					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--network-enabled=true")
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
+						go systemfunc(host)
+					}
+					for _, _ = range r.Hosts {
+						<-done
 					}
 					powerCycle(r.Hosts)
 				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {

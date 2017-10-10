@@ -86,12 +86,20 @@ func deleteReservation(checkUser bool, args []string) {
 			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
 		}
 	} else {
+		done := make(chan bool)
+		f := func(h string) {
+			processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+igorConfig.CobblerDefaultProfile)
+			done<- true
+		}
 		for _, host := range deletedReservation.Hosts {
-			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
-			if deletedReservation.CobblerProfile == "" {
-				processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
-				processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
-			}
+			go f(host)
+		}
+		for _, _ = range deletedReservation.Hosts {
+			<-done
+		}
+		if deletedReservation.CobblerProfile == "" {
+			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
+			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
 		}
 	}
 
