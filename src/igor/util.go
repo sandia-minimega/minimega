@@ -8,11 +8,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	log "minilog"
 	"net"
 	"os"
 	"os/user"
+	"ranges"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -137,4 +140,13 @@ func getUser() (*user.User, error) {
 		return user.Lookup(username)
 	}
 	return user.Current()
+}
+
+// Emits a log event stating that a particular action has occurred for a reservation
+// and prints out a summary of the reservation.
+func emitReservationLog(action string, res Reservation) {
+	format := "2006-Jan-2-15:04"
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	unsplit, _ := rnge.UnsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
 }

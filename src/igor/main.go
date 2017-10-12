@@ -17,7 +17,6 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"ranges"
 	"strings"
 	"sync"
 	"syscall"
@@ -25,17 +24,27 @@ import (
 )
 
 // Constants
-const MINUTES_PER_SLICE = 1 // must be less than 60! 1, 5, 10, or 15 would be good choices
+
+// The length of a single time-slice in the schedule.
+// Must be less than 60! 1, 5, 10, or 15 are good choices
+// Shorter length means less waiting for reservations to start, but bigger schedule files.
+const MINUTES_PER_SLICE = 1
+
 // Minimum schedule length in minutes, 720 = 12 hours
-const MIN_SCHED_LEN = 72
+const MIN_SCHED_LEN = 720
 
 // Global Variables
+// This flag can be set regardless of which subcommand is executed
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
+
+// The configuration we read in from the file
 var igorConfig Config
 
+// Our most important data structures: the reservation list, and the schedule
 var Reservations map[uint64]Reservation // map ID to reservations
 var Schedule []TimeSlice                // The schedule
 
+// The files from which we read the reservations & schedule
 var resdb *os.File
 var scheddb *os.File
 
@@ -53,38 +62,65 @@ var exitMu sync.Mutex
 
 // The configuration of the system
 type Config struct {
-	TFTPRoot              string
-	Prefix                string
-	Start                 int
-	End                   int
-	Padlen                int
-	Rackwidth             int
-	Rackheight            int
-	PowerOnCommand        string
-	PowerOffCommand       string
-	UseCobbler            bool
+	// TFTPRoot is where the igor configs are stored.
+	// It should be the root of your TFTP server if not using Cobbler
+	// If using Cobbler, it should be /var/lib/igor
+	TFTPRoot string
+	// The prefix for cluster nodes, e.g. 'kn' if nodes are named kn01 etc.
+	Prefix string
+	// The first node number in the cluster, (usually 1)
+	Start int
+	// The last node number in the cluster
+	End int
+	// How wide the numeric part of a node name must be padded.
+	// If you have a node named kn001, set Padlen to 3
+	// If you have one named kn1, set it to 0.
+	Padlen int
+	// Width and height of each rack in the cluster. Only used for display purposes
+	Rackwidth  int
+	Rackheight int
+	// printf-formatted string to power on/off a single node
+	// e.g. "powerman on %s"
+	PowerOnCommand  string
+	PowerOffCommand string
+	// True if using Cobbler to manage nodes
+	UseCobbler bool
+	// If using Cobbler, nodes not in a reservation will be set to this profile
 	CobblerDefaultProfile string
-	AutoReboot            bool
-	VLANMin               int               `json:"vlan_min"`
-	VLANMax               int               `json:"vlan_max"`
-	NodeMap               map[string]string `json:"node_map"`
-	Network               string
-	NetworkUser           string
-	NetworkPassword       string
-	NetworkURL            string `json:"network_url"`
-	DNSServer             string
-	LogFile               string
-	NodeLimit             int
-	TimeLimit             int
+	// If set to true, nodes will be automatically rebooted when
+	// the reservation starts, if possible
+	AutoReboot bool
+	// VLAN segmentation options
+	// VLANMin/VLANMax: specify a range of VLANs to use
+	// NodeMap: maps hostnames to switch port names
+	// Network: selects which type of switch is in use. Set to "" to disable VLAN segmentation
+	// NetworkUser/NetworkPassword: login info for a switch user capable of configuring ports
+	// NetworkURL: HTTP URL for sending API commands to the switch
+	VLANMin         int               `json:"vlan_min"`
+	VLANMax         int               `json:"vlan_max"`
+	NodeMap         map[string]string `json:"node_map"`
+	Network         string
+	NetworkUser     string
+	NetworkPassword string
+	NetworkURL      string `json:"network_url"`
+	// Set this to a DNS server if multiple servers are available and hostname lookups are failing
+	DNSServer string
+	// A file to receive log info
+	LogFile string
+	// NodeLimit: max nodes a non-root user can reserve
+	// TimeLimit: max time a non-root user can reserve
+	NodeLimit int
+	TimeLimit int
 }
 
-// Represents a slice of time
+// Represents a slice of time in the Schedule
 type TimeSlice struct {
 	Start int64    // UNIX time
 	End   int64    // UNIX time
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
+// Represents a single reservation
 type Reservation struct {
 	ResName        string
 	CobblerProfile string   // Optional; if set, use this Cobbler profile instead of a kernel+initrd
@@ -122,13 +158,7 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
-func emitReservationLog(action string, res Reservation) {
-	format := "2006-Jan-2-15:04"
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	unsplit, _ := rnge.UnsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
-}
-
+// Runs at startup to handle automated tasks that need to happen now.
 // Read the reservations, delete any that are too old.
 // Copy in netboot files for any reservations that have just started
 func housekeeping() {
@@ -148,8 +178,10 @@ func housekeeping() {
 		// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists. This is how we verify if the reservation is installed or not
 		filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 		if r.EndTime < now {
+			// Reservation expired; delete it
 			deleteReservation(false, []string{r.ResName})
 		} else if _, err := os.Stat(filename); os.IsNotExist(err) && r.StartTime < now {
+			// Reservation should have started but has not yet been installed
 			emitReservationLog("INSTALL", r)
 			// update network config
 			err := networkSet(r.Hosts, r.Vlan)
@@ -157,8 +189,7 @@ func housekeeping() {
 				log.Error("error setting network isolation: %v", err)
 			}
 			if !igorConfig.UseCobbler {
-				log.Info("Installing files for reservation ", r.ResName)
-
+				// Manual file installation happens now
 				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 				masterfile, err := os.Create(filename)
 				if err != nil {
@@ -181,29 +212,36 @@ func housekeeping() {
 					io.Copy(f, masterfile)
 					f.Close()
 				}
-				powerCycle(r.Hosts)
 			} else {
-				// If we're not using an existing profile, create one and set the nodes to use it
+				// Configure Cobbler to boot the correct stuff
+				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
 				if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+					// Create the distro from the kernel+ramdisk
 					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
+
+					// Create a profile from the distro we just made
 					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
+
+					// Now set each host to boot from that profile
+					// Do it in parallel because Cobbler commands are slow
 					done := make(chan bool)
 					systemfunc := func(h string) {
 						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile=igor_"+r.ResName)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
+						// We make sure to set netboot enabled so the nodes can boot
 						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
-						done<- true
+						done <- true
 					}
 					for _, host := range r.Hosts {
 						go systemfunc(host)
@@ -211,31 +249,38 @@ func housekeeping() {
 					for _, _ = range r.Hosts {
 						<-done
 					}
-					powerCycle(r.Hosts)
 				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
 					// If the requested profile exists, go ahead and set the nodes to use it
-					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile)
+					done := make(chan bool)
+					systemfunc := func(h string) {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+r.CobblerProfile)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
+						// We make sure to set netboot enabled so the nodes can boot
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+						done <- true
 					}
-					powerCycle(r.Hosts)
+					for _, host := range r.Hosts {
+						go systemfunc(host)
+					}
+					for _, _ = range r.Hosts {
+						<-done
+					}
 				}
 				os.Create(filename)
 			}
+			// Now reboot the hosts (if autoreboot is set)
+			powerCycle(r.Hosts)
 		}
 	}
 
+	// Clean up the schedule and write it out
 	expireSchedule()
 	putSchedule()
-}
-
-func powerCycle(Hosts []string) {
-	if igorConfig.AutoReboot {
-		doPower(Hosts, "off")
-		doPower(Hosts, "on")
-	}
 }
 
 func init() {
@@ -333,6 +378,7 @@ func getReservations() {
 	}
 }
 
+// Read in the schedule from the already-open schedule file
 func getSchedule() {
 	dec := json.NewDecoder(scheddb)
 	err := dec.Decode(&Schedule)
@@ -342,6 +388,7 @@ func getSchedule() {
 	}
 }
 
+// Write out the reservations
 func putReservations() {
 	// Truncate the existing reservation file
 	resdb.Truncate(0)
@@ -352,6 +399,7 @@ func putReservations() {
 	resdb.Sync()
 }
 
+// Write out the schedule
 func putSchedule() {
 	// Truncate the existing schedule file
 	scheddb.Truncate(0)
@@ -362,6 +410,7 @@ func putSchedule() {
 	scheddb.Sync()
 }
 
+// Read in the configuration from the specified path.
 func readConfig(path string) (c Config) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {

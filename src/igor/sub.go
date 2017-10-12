@@ -124,6 +124,9 @@ func runSub(cmd *Command, args []string) {
 	if subW != "" {
 		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ = rnge.SplitRange(subW)
+		if len(nodes) == 0 {
+			log.Fatal("Couldn't parse node specification %v\n", subW)
+		}
 	}
 
 	// Make sure the reservation doesn't exceed any limits

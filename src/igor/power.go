@@ -39,6 +39,14 @@ func init() {
 
 }
 
+// Turn a node off and on again.
+func powerCycle(Hosts []string) {
+	if igorConfig.AutoReboot {
+		doPower(Hosts, "off")
+		doPower(Hosts, "on")
+	}
+}
+
 func doPower(hosts []string, action string) {
 	user, err := getUser()
 	if err != nil {
@@ -57,6 +65,7 @@ func doPower(hosts []string, action string) {
 		log.Fatal("no valid method of rebooting nodes available")
 	}
 
+	// Do it in parallel because this can take a while
 	done := make(chan bool)
 	f := func(h, commandformat string) {
 		command := strings.Split(fmt.Sprintf(commandformat, h), " ")
@@ -78,7 +87,7 @@ func doPower(hosts []string, action string) {
 	}
 }
 
-// Remove the specified reservation.
+// Turn a node on or off
 func runPower(cmd *Command, args []string) {
 	if len(args) != 1 {
 		log.Fatalln(cmdPower.UsageLine)
@@ -94,6 +103,7 @@ func runPower(cmd *Command, args []string) {
 	}
 
 	if powerR != "" {
+		// The user specified a reservation name
 		found := false
 		for _, r := range Reservations {
 			if r.ResName == powerR && r.StartTime < time.Now().Unix() {
@@ -110,11 +120,15 @@ func runPower(cmd *Command, args []string) {
 			log.Fatal("Cannot find an active reservation %v", powerR)
 		}
 	} else if powerN != "" {
+		// The user specified some nodes. We need to verify they 'own' all those nodes.
 		// Instead of looking through the reservations, we'll look at the current slice of the Schedule
 		currentSched := Schedule[0]
 		// Get the array of nodes the user specified
 		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ := rnge.SplitRange(powerN)
+		if len(nodes) == 0 {
+			log.Fatal("Couldn't parse node specification %v\n", subW)
+		}
 		// This will be the list of nodes to actually power on/off (in a user-owned reservation)
 		var validatedNodes []string
 		for _, n := range nodes {
