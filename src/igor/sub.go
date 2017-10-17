@@ -141,7 +141,7 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	when := time.Now()
+	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
 		t, _ := time.Parse(format, subA)
