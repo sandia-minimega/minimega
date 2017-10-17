@@ -8,10 +8,14 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	log "minilog"
 	"net"
 	"os"
+	"os/user"
+	"ranges"
 	"strings"
 	"text/template"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -122,4 +126,27 @@ func help(args []string) {
 func toPXE(ip net.IP) string {
 	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
 	return s
+}
+
+// Get the calling user. First try $SUDO_USER, then $USER, then just
+// user.Current() as the last resort
+func getUser() (*user.User, error) {
+	username := os.Getenv("SUDO_USER")
+	if username != "" {
+		return user.Lookup(username)
+	}
+	username = os.Getenv("USER")
+	if username != "" {
+		return user.Lookup(username)
+	}
+	return user.Current()
+}
+
+// Emits a log event stating that a particular action has occurred for a reservation
+// and prints out a summary of the reservation.
+func emitReservationLog(action string, res Reservation) {
+	format := "2006-Jan-2-15:04"
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	unsplit, _ := rnge.UnsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
 }

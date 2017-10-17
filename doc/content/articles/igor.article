@@ -156,6 +156,19 @@ it. To get rid of our "testing" reservation from above, simply run:
 
         $ igor del testing
 
+** Power control
+
+When properly configured, igor can turn nodes on and off. You can only affect
+nodes in a reservation that is 1) currently active and 2) owned by you.
+
+To turn off all the nodes in a reservation named 'foo':
+
+	$ igor power -r foo off
+
+To turn on nodes kn2, kn3, kn4, and kn7:
+
+	$ igor power -n kn[2-4,7] on
+
 * Building/Installing
 
 igor is included as part of the minimega distribution. All the compilation and
@@ -237,6 +250,9 @@ the igor.conf configuration file. This could be a useful way to keep your
 nodes occupied when not in use, if you configure your default profile to
 automatically perform some form of computation when booted.
 
+You also need to configure Cobbler such that the user 'igor' can run the
+`cobbler` command-line tool.
+
 When you configure igor you will still need to set the `tftproot` variable,
 as igor needs a directory to use for its state files. To avoid conflicts
 with Cobbler, we recommend creating `/var/lib/igor` and using that.
@@ -246,6 +262,19 @@ with Cobbler, we recommend creating `/var/lib/igor` and using that.
 Follow the instructions in the [[installing.article][installation article]]
 to get minimega downloaded or built from source. The igor
 binary will be in the bin/ subdirectory.
+
+*** A note about calling igor
+
+The `igor` binary we build expects to run as the 'igor' user so it can access
+the reservation and scheduling configurations. Previously, we accomplished this
+by setting the SUID bit on the igor binary. However, igor is now integrated
+with Cobbler and uses a command-line Python program to execute Cobbler commands.
+Linux disables the SUID bit when an interpreted program is called. For that
+reason, we now install a sudo rule which allows any user to run `/usr/local/bin/igor-bin`
+as user 'igor' without entering a password (see the file `sudo-rule` in the
+igor source directory) and install a shell script (`igor.sh`) into
+`/usr/local/bin/igor` to perform the sudo automatically. To a user, it should
+appear the same as ever.
 
 ** Installation
 
@@ -275,10 +304,13 @@ what one of ours looks like:
 		"padlen" : 0,
 		"rackwidth" : 1,
 		"rackheight" : 5,
+		"logfile": "/var/log/igor/log",
+		"timelimit":    4320,
+		"nodelimit":    3,
 		"usecobbler" : false,
 		"cobblerdefaultprofile": "",
-		"poweroncommand" : "powerbot on",
-		"poweroffcommand" : "powerbot off",
+		"poweroncommand" : "powerbot on %s",
+		"poweroffcommand" : "powerbot off %s",
 		"autoreboot": false,
 		"network": "",
 		"vlan_min": 1000,
@@ -310,7 +342,7 @@ in quotes. The "padlen" option is for use on clusters that 'pad' numbers;
 if your first node is named kn001 instead of kn1, "padlen" should be
 set to 3.
 
-"Rackheight" and "rackwidth" define the physical dimensions of your
+"rackheight" and "rackwidth" define the physical dimensions of your
 cluster hardware, for use with `igor`show`. We have a cluster composed of
 13 shelves, each containing 5 shelves of 8 PCs each. When `igor`show`
 runs, part of the information it gives is a diagram of "racks"; one
@@ -340,6 +372,19 @@ prefer a big grid, you can set rackheight = sqrt(# nodes) and
 rackwidth = sqrt(# nodes). This will just show one big grid of all
 your nodes.
 
+The "logfile" setting configures a location to write out logs of created
+and deleted reservations, as well as information about power on/off events
+and other debugging info.
+
+The "timelimit" option configures the maximum number of minutes a reservation
+can last. If a longer reservation is needed, root is allowed to make reservations
+of unlimited length. Set the option to 0 to allow any user to make unlimited
+reservations.
+
+The "nodelimit" option configures the maximum number of nodes a reservation
+can contain. root can make reservations of arbitrary size. Set the option
+to 0 to disable the limit.
+
 *** Cobbler-specific options
 The "usecobbler" option specifies whether or not igor should attempt to
 use Cobbler. If it is set to true, make sure the igor user has permission
@@ -355,8 +400,8 @@ starts. Setting the "autoreboot" option enables this.
 
 The "poweroncommand" and "poweroffcommand" options specify which command
 should be executed to power on and power off nodes. It should be executable
-by the igor user and take as its final argument a node name; for example,
-the configuration shown above sets "poweroncommand" to "powerbot on". This
+by the igor user and use '%s' to represent the name of a node; for example,
+the configuration shown above sets "poweroncommand" to "powerbot on %s". This
 means igor will run `powerbot`on`kn1` to turn on node kn1.
 
 *** Network segmentation options
@@ -395,3 +440,11 @@ core switch. In the example shown here, the node kn1 is on the first
 port of the first line-card in the switch. If a reservation is created
 containing kn1 and kn2, igor will connect to the switch and configure
 ports Et1/1 and Et1/2 to be in the same QinQ domain.
+
+*** Other options
+Although it is typically not needed, the "dnsserver" configuration option
+allows you to specify which DNS server igor should use when resolving
+node names. This can be necessary when multiple DNS servers are specified
+in the head node's resolv.conf, but only one contains records for the cluster
+nodes. If you can ping a node manually, but igor shows it as down, setting
+this option may solve the problem.

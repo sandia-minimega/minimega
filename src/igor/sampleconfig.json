@@ -8,8 +8,8 @@
 	"rackheight" : 5,
 	"usecobbler" : false,
 	"cobblerdefaultprofile": "",
-	"poweroncommand" : "powerbot on",
-	"poweroffcommand" : "powerbot off",
+	"poweroncommand" : "powerbot on %s",
+	"poweroffcommand" : "powerbot off %s",
 	"autoreboot": false,
 	"network": "",
 	"vlan_min": 1000,
@@ -24,5 +24,8 @@
 		"kn3": "Et1/3",
 		"kn4": "Et1/4",
 		"kn5": "Et1/5"
-	}
+	},
+	"logfile": "/var/log/igor/log",
+	"timelimit":    4320,
+	"nodelimit":    50
 }

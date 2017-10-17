@@ -36,6 +36,7 @@ type AristaConfig struct {
 	VLAN int
 }
 
+// Issue the given commands via the specified URL, username, and password.
 func aristaJSONRPC(user, password, URL string, commands []string) error {
 	data, err := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",

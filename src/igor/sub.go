@@ -9,7 +9,6 @@ import (
 	"io"
 	log "minilog"
 	"os"
-	"os/user"
 	"path/filepath"
 	"ranges"
 	"strings"
@@ -109,7 +108,7 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	user, err := user.Current()
+	user, err := getUser()
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
@@ -125,6 +124,21 @@ func runSub(cmd *Command, args []string) {
 	if subW != "" {
 		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ = rnge.SplitRange(subW)
+		if len(nodes) == 0 {
+			log.Fatal("Couldn't parse node specification %v\n", subW)
+		}
+	}
+
+	// Make sure the reservation doesn't exceed any limits
+	if user.Username != "root" && igorConfig.NodeLimit > 0 {
+		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
+			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
+		}
+	}
+	if user.Username != "root" && igorConfig.TimeLimit > 0 {
+		if subT > igorConfig.TimeLimit {
+			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
+		}
 	}
 
 	when := time.Now()
@@ -168,10 +182,11 @@ func runSub(cmd *Command, args []string) {
 
 	// pick a network segment
 	var vlan int
+VlanLoop:
 	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
 		for _, r := range Reservations {
 			if vlan == r.Vlan {
-				continue
+				continue VlanLoop
 			}
 		}
 		break
@@ -228,6 +243,8 @@ func runSub(cmd *Command, args []string) {
 	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
 	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
+
+	emitReservationLog("CREATED", reservation)
 
 	Schedule = newSched
 

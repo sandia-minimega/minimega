@@ -78,8 +78,10 @@ func runShow(_ *Command, _ []string) {
 		names = append(names, fmt.Sprintf(fmtstring, igorConfig.Prefix, i))
 	}
 
+	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
 
+	// Use nmap to determine what nodes are up
 	args := []string{}
 	if igorConfig.DNSServer != "" {
 		args = append(args, "--dns-servers", igorConfig.DNSServer)
@@ -93,15 +95,14 @@ func runShow(_ *Command, _ []string) {
 		"-oG",
 		"-",
 	)
-
 	cmd := exec.Command("nmap", append(args, names...)...)
-
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal("unable to scan: %v", err)
 	}
 	s := bufio.NewScanner(bytes.NewReader(out))
 
+	// Parse the results of nmap
 	for s.Scan() {
 		line := s.Text()
 		if strings.HasPrefix(line, "#") {
@@ -124,9 +125,11 @@ func runShow(_ *Command, _ []string) {
 			continue
 		}
 
+		// If we found a node name in the output, that means it's up, so mark it as up
 		nodes[v] = true
 	}
 
+	// Gather a list of which nodes are down
 	var downNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		if !nodes[i] {
@@ -135,7 +138,7 @@ func runShow(_ *Command, _ []string) {
 		}
 	}
 
-	// For colors... eww
+	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
