@@ -171,10 +171,13 @@ func runSub(cmd *Command, args []string) {
 		return
 	}
 
-	if subN > 0 {
-		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
-	} else if subW != "" {
+	if subW != "" {
+		if subN > 0 {
+			log.Fatalln("Both -n and -w options used. Operation canceled.")
+		}
 		reservation, newSched, err = findReservationGeneric(subT, 0, nodes, true, when.Unix())
+	} else if subN > 0 {
+		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
 	}
 	if err != nil {
 		log.Fatalln(err)
