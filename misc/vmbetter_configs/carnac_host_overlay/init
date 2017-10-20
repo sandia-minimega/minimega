@@ -88,11 +88,13 @@ ip link set mega_bridge up
 
 dhclient -v eth0
 
-# reuse last octet of management IP for hostname and mega_bridge
-last=$(ip addr show dev eth0 | grep -Po 'inet \K[^/]+' | cut -d. -f4)
+# reuse last two octets for experimental plane IP and do a reverse lookup on
+# that to figure out the hostname
+last=$(ip addr show dev eth0 | grep -Po 'inet \K[^/]+' | cut -d. -f3-4)
 if [ -n "$last" ]; then
-	hostname en$last.100g
-	ip addr add dev mega_bridge 10.100.4.$last/24
+	addr=10.100.$last
+	ip addr add dev mega_bridge $addr/23
+	hostname $(nslookup $addr | grep name | awk '{print $4}' | sed 's/.$//')
 fi
 
 # ssh
