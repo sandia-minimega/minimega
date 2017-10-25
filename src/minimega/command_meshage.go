@@ -112,11 +112,11 @@ func meshageHandler() {
 				return
 			}
 
-			// Copy the Record flag at each level of nested command
+			// Copy the flags at each level of nested command
 			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
-				// could all be the post statement...
 				c.Record = c2.Record
 				c.Source = c2.Source
+				c.Preprocess = c2.Preprocess
 				c, c2 = c.Subcommand, c2.Subcommand
 			}
 
