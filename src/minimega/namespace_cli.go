@@ -131,6 +131,13 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 				defer RevertNamespace(ns, ns2)
 			}
 
+			// we don't want to see both:
+			// 		namespace foo vm info
+			// 		vm info
+			// in the logs (well, we would actually see them in reverse order
+			// because the inner command runs first).
+			c.Subcommand.Record = false
+
 			// Run the subcommand and forward the responses.
 			//
 			// LOCK: This is a CLI so we already hold cmdLock (can call
