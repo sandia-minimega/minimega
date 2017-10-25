@@ -234,8 +234,12 @@ func cliMeshageTimeout(ns *Namespace, c *minicli.Command, resp *minicli.Response
 		return nil
 	}
 
-	// get current value
-	resp.Response = fmt.Sprintf("%v", meshageTimeout)
+	if meshageTimeout == math.MaxInt64 {
+		resp.Response = "unlimited"
+	} else {
+		resp.Response = meshageTimeout.String()
+	}
+
 	return nil
 }
 
