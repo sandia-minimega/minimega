@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"ranges"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -95,8 +95,8 @@ func runSub(cmd *Command, args []string) {
 			days, err = strconv.Atoi(subT[:dInd])
 			if err == nil {
 				duration = days * 24 * 60 //convert to minutes
-				subT = subT[dInd+1:] //remove days from string
-				if subT != "" { // capture any additional time
+				subT = subT[dInd+1:]      //remove days from string
+				if subT != "" {           // capture any additional time
 					nanoseconds, err = time.ParseDuration(subT)
 				}
 			}
@@ -105,7 +105,7 @@ func runSub(cmd *Command, args []string) {
 			log.Fatal("Unable to parse -t argument: %v\n", err)
 		}
 	}
-	fmt.Printf("duration: %v, nano: %v\n",duration, nanoseconds/time.Minute)
+	fmt.Printf("duration: %v, nano: %v\n", duration, nanoseconds/time.Minute)
 	duration = duration + int(nanoseconds/time.Minute)
 	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
 		duration = MINUTES_PER_SLICE
