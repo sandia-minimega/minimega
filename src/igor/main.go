@@ -328,7 +328,10 @@ func main() {
 	defer resdb.Close()
 	// This should prevent anyone else from modifying the reservation file while
 	// we're using it. Bonus: Flock goes away if the program crashes so state is easy
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+		// TODO: should we wait?
+		log.Fatal("unable to lock reservations file -- someone else is running igor")
+	}
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 
 	getReservations()
@@ -341,7 +344,10 @@ func main() {
 	}
 	defer resdb.Close()
 	// We probably don't need to lock this too but I'm playing it safe
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+		// TODO: should we wait?
+		log.Fatal("unable to lock schedule file -- someone else is running igor")
+	}
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
