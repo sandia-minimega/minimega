@@ -305,6 +305,11 @@ func main() {
 		return
 	}
 
+	if args[0] == "version" {
+		printVersion()
+		return
+	}
+
 	rand.Seed(time.Now().Unix())
 
 	igorConfig = readConfig(*configpath)

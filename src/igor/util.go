@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+	"version"
 )
 
 var usageTemplate = `igor is a scheduler for Mega-style clusters.
@@ -31,6 +32,7 @@ The commands are:
     {{.Name | printf "%-11s"}} {{.Short}}{{end}}{{end}}
 
 Use "igor help [command]" for more information about a command.
+Use "igor version" for version information.
 
 Additional help topics:
 {{range .}}{{if not .Runnable}}
@@ -120,6 +122,10 @@ func help(args []string) {
 
 	fmt.Fprintf(os.Stderr, "Unknown help topic %#q.  Run 'go help'.\n", arg)
 	os.Exit(2) // failed at 'go help cmd'
+}
+
+func printVersion() {
+	fmt.Println("igor", version.Revision, version.Date)
 }
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
