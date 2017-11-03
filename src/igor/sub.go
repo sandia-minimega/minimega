@@ -42,7 +42,7 @@ OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time. Time denominations should be specified in days(d), hours(h), and minutes(m), in that order. Example: To make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6 hours, 30 minutes: -t 4d6h30m (default = 60m)
+The -t flag is used to specify the reservation time. Time denominations should be specified in days(d), hours(h), and minutes(m), in that order. Days are defined as 24*60 minutes. Example: To make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6 hours, 30 minutes: -t 4d6h30m (default = 60m)
 
 The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
 
@@ -60,7 +60,6 @@ var subS bool         // -s
 var subA string       // -a
 var subW string       // -w
 var subProfile string // -profile
-var duration int      // parsed subT Duration in minutes
 
 func init() {
 	// break init cycle
@@ -86,12 +85,11 @@ func runSub(cmd *Command, args []string) {
 
 	// parse duration requested
 	var days int = 0
-	duration = 0
+	duration := 0
 	nanoseconds, err := time.ParseDuration(subT)
 	if err != nil {
 		// Check for a number of days in the argument
-		var dInd int
-		if dInd = strings.Index(subT, "d"); dInd >= 0 {
+		if dInd := strings.Index(subT, "d"); dInd >= 0 {
 			days, err = strconv.Atoi(subT[:dInd])
 			if err == nil {
 				duration = days * 24 * 60 //convert to minutes
