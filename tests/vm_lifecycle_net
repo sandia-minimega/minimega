@@ -1,6 +1,6 @@
 # launch container and kvm with one network interface
 vm config net A
-vm config filesystem $containerfs
+vm config filesystem $minicccfs
 vm launch container vm0
 vm launch kvm vm1
 
