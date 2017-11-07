@@ -20,12 +20,6 @@ import (
 	"time"
 )
 
-const (
-	VM_NET_DRIVER_DEFAULT = "e1000"
-	QMP_CONNECT_RETRY     = 50
-	QMP_CONNECT_DELAY     = 100
-)
-
 var vmID *Counter // channel of new VM IDs, shared across namespaces
 
 type VMType int

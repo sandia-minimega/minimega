@@ -14,7 +14,9 @@ import (
 	"go/token"
 	log "minilog"
 	"os"
+	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 )
@@ -27,6 +29,8 @@ type Field struct {
 	Type       string // field type
 	Doc        string // field documentation
 	Default    string // default value, parsed from doc
+	Validate   string // name of function to validate argument
+	Suggest    string // name of function to use for Suggest
 
 	Path   bool // if filepath should be checked
 	Signed bool // for int64 vs uint64
@@ -179,6 +183,11 @@ func (g *Generator) handleNode(node ast.Node) bool {
 			log.Info("%#v", field)
 			name := field.Names[0].Name
 			doc := field.Doc.Text()
+			var tag reflect.StructTag
+			if field.Tag != nil {
+				v, _ := strconv.Unquote(field.Tag.Value)
+				tag = reflect.StructTag(v)
+			}
 
 			configName := name
 			if strings.Contains(name, "Path") {
@@ -215,10 +224,14 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					ConfigName: configName,
 					Type:       typ.Name,
 					Default:    zero,
+					Validate:   tag.Get("validate"),
+					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
 					Signed:     signed,
 					Path:       strings.Contains(name, "Path"),
 				}
+
+				log.Info("field: %#v", f)
 
 				g.fields[strctName] = append(g.fields[strctName], f)
 
@@ -234,6 +247,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 						Field:      name,
 						ConfigName: configName,
 						Default:    "nil",
+						Validate:   tag.Get("validate"),
+						Suggest:    tag.Get("suggest"),
 						Doc:        doc,
 					})
 
@@ -254,6 +269,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					Field:      name,
 					ConfigName: configName,
 					Default:    zero,
+					Validate:   tag.Get("validate"),
+					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
 					Path:       strings.Contains(name, "Path"),
 				}
@@ -271,6 +288,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 						Field:      name,
 						ConfigName: configName,
 						Default:    "nil",
+						Validate:   tag.Get("validate"),
+						Suggest:    tag.Get("suggest"),
 						Doc:        doc,
 					})
 
@@ -289,6 +308,8 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					Field:      name,
 					ConfigName: configName,
 					Default:    zero,
+					Validate:   tag.Get("validate"),
+					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
 					Path:       strings.Contains(name, "Path"),
 				}

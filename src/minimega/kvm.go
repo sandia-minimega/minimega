@@ -32,14 +32,18 @@ const (
 	DEV_PER_BUS    = 32
 	DEV_PER_VIRTIO = 30 // Max of 30 virtio ports/device (0 and 32 are reserved)
 
-	DefaultKVMCPU = "host"
+	QMP_CONNECT_RETRY = 50
+	QMP_CONNECT_DELAY = 100
 )
 
+const DefaultDriver = "e1000"
+
 type KVMConfig struct {
-	// Set the QEMU process to invoke. Relative paths are ok. When unspecified,
-	// minimega uses "kvm" in the default path.
+	// Set the QEMU binary name to invoke. Relative paths are ok.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
+	//
+	// Default: "kvm"
 	QemuPath string
 
 	// Attach a kernel image to a VM. If set, QEMU will boot from this image
@@ -71,14 +75,25 @@ type KVMConfig struct {
 
 	// Set the virtual CPU architecture.
 	//
-	// By default, set to 'host' which matches the host architecture. See 'kvm
-	// -cpu help' for a list of architectures available for your version of
-	// kvm.
+	// By default, set to 'host' which matches the host CPU. See 'qemu -cpu
+	// help' for a list of supported CPUs.
+	//
+	// The accepted values for this configuration depend on the QEMU binary
+	// name specified by 'vm config qemu'.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
 	//
 	// Default: "host"
-	CPU string
+	CPU string `validate:"validCPU" suggest:"wrapSuggest(suggestCPU)"`
+
+	// Specify the machine type. See 'qemu -M help' for a list supported
+	// machine types.
+	//
+	// The accepted values for this configuration depend on the QEMU binary
+	// name specified by 'vm config qemu'.
+	//
+	// Note: this configuration only applies to KVM-based VMs.
+	Machine string `validate:"validMachine" suggest:"wrapSuggest(suggestMachine)"`
 
 	// Specify the serial ports that will be created for the VM to use. Serial
 	// ports specified will be mapped to the VM's /dev/ttySX device, where X
@@ -169,9 +184,16 @@ type KvmVM struct {
 // Ensure that KvmVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
 
-var KVMNetworkDrivers struct {
-	drivers []string
-	sync.Once
+var QemuCapabibilities struct {
+	// guards below
+	sync.Mutex
+
+	// name -> values
+	m map[string]map[string]bool
+}
+
+func init() {
+	QemuCapabibilities.m = make(map[string]map[string]bool)
 }
 
 // Copy makes a deep copy and returns reference to the new struct.
@@ -621,18 +643,9 @@ func (vm *KvmVM) launch() error {
 	args = vmConfig.applyQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
-	path := vm.KVMConfig.QemuPath
-	if path == "" {
-		p, err := process("kvm")
-		if err != nil {
-			return vm.setErrorf("kvm not in PATH")
-		}
-		path = p
-	}
-
 	cmd := &exec.Cmd{
-		Path:   path,
-		Args:   append([]string{path}, args...),
+		Path:   vm.QemuPath,
+		Args:   append([]string{vm.QemuPath}, args...),
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
@@ -884,6 +897,10 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-name")
 	args = append(args, strconv.Itoa(id))
 
+	if vm.Machine != "" {
+		args = append(args, "-M", vm.Machine)
+	}
+
 	args = append(args, "-m")
 	args = append(args, strconv.FormatUint(vm.Memory, 10))
 
@@ -1094,46 +1111,217 @@ func qmpLogger(id int, q qmp.Conn) {
 	}
 }
 
-func isNetworkDriver(driver string) bool {
-	KVMNetworkDrivers.Do(func() {
-		drivers := []string{}
+// qemuCPUs returns a list of supported QEMU CPUs for the specified qemu
+// binary. Saves the results to QemuCapabibilities so that we only need to run
+// the command once.
+func qemuCPUs(qemu string) (map[string]bool, error) {
+	QemuCapabibilities.Lock()
+	defer QemuCapabibilities.Unlock()
 
-		out, err := processWrapper("kvm", "-device", "help")
-		if err != nil {
-			log.Error("unable to determine kvm network drivers -- %v", err)
-			return
+	name := qemu + "CPUs"
+
+	// test if the key exists
+	if v, ok := QemuCapabibilities.m[name]; ok {
+		return v, nil
+	}
+
+	out, err := processWrapper(qemu, "-cpu", "?")
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
+	}
+
+	// format should be something like:
+	//
+	// ```
+	// Available CPUs:
+	// x86              486
+	// x86  Broadwell-noTSX  Intel Core Processor (Broadwell, no TSX)
+	// x86        Broadwell  Intel Core Processor (Broadwell)
+	// ```
+	//
+	// Ends with a blank line
+	cpus := map[string]bool{}
+
+	scanner := bufio.NewScanner(strings.NewReader(out))
+	scanner.Scan() // skip header
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 2 {
+			break
 		}
 
-		var foundHeader bool
+		cpus[fields[1]] = true
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
+	}
 
-		scanner := bufio.NewScanner(strings.NewReader(out))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !foundHeader && strings.Contains(line, "Network devices:") {
-				foundHeader = true
-			} else if foundHeader && line == "" {
-				break
-			} else if foundHeader {
-				parts := strings.Split(line, " ")
-				driver := strings.Trim(parts[1], `",`)
-				drivers = append(drivers, driver)
-			}
+	QemuCapabibilities.m[name] = cpus
+
+	return cpus, nil
+}
+
+// qemuMachines returns a list of supported QEMU machines for the specified
+// qemu binary. Saves the results to QemuCapabibilities so that we only need to
+// run the command once.
+func qemuMachines(qemu string) (map[string]bool, error) {
+	QemuCapabibilities.Lock()
+	defer QemuCapabibilities.Unlock()
+
+	name := qemu + "Machines"
+
+	// test if the key exists
+	if v, ok := QemuCapabibilities.m[name]; ok {
+		return v, nil
+	}
+
+	out, err := processWrapper(qemu, "-M", "?")
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine valid QEMU machines -- %v", err)
+	}
+
+	// format should be something like:
+	//
+	// ```
+	// Supported machines are:
+	// pc-i440fx-2.9        Standard PC (i440FX + PIIX, 1996)
+	// pc-i440fx-2.8        Standard PC (i440FX + PIIX, 1996)
+	// ```
+	machines := map[string]bool{}
+
+	scanner := bufio.NewScanner(strings.NewReader(out))
+	scanner.Scan() // skip header
+	for scanner.Scan() {
+		fields := strings.Fields(scanner.Text())
+		if len(fields) < 1 {
+			break
 		}
 
-		if err := scanner.Err(); err != nil {
-			log.Error("unable to determine kvm network drivers -- %v", err)
-			return
-		}
+		machines[fields[0]] = true
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("unable to determine valid QEMU machines -- %v", err)
+	}
 
-		log.Debug("detected network drivers: %v", drivers)
-		KVMNetworkDrivers.drivers = drivers
-	})
+	QemuCapabibilities.m[name] = machines
 
-	for _, d := range KVMNetworkDrivers.drivers {
-		if d == driver {
-			return true
+	return machines, nil
+}
+
+// qemuNICs returns a list of supported QEMU NICs for the specified qemu binary
+// and machine type. Saves the results to QemuCapabibilities so that we only
+// need to run the command once.
+func qemuNICs(qemu, machine string) (map[string]bool, error) {
+	QemuCapabibilities.Lock()
+	defer QemuCapabibilities.Unlock()
+
+	name := qemu + machine + "NICs"
+
+	// test if the key exists
+	if v, ok := QemuCapabibilities.m[name]; ok {
+		return v, nil
+	}
+
+	args := []string{qemu}
+	if machine != "" {
+		args = append(args, "-M", machine)
+	}
+	args = append(args, "-net", "nic,model=?")
+
+	out, err := processWrapper(args...)
+	if err != nil {
+		return nil, fmt.Errorf("unable to determine valid QEMU nics -- %v", err)
+	}
+
+	// format should be something like:
+	//
+	// ```
+	// qemu: Supported NIC models: ne2k_pci,i82551,i82557b,i82559er,rtl8139,e1000,pcnet,virtio
+	// ```
+	nics := map[string]bool{}
+
+	fields := strings.Fields(out)
+	if len(fields) != 5 {
+		// what is the format?
+		return nil, errors.New("unexpected format for QEMU nics")
+	}
+
+	for _, k := range strings.Split(fields[4], ",") {
+		nics[k] = true
+	}
+
+	QemuCapabibilities.m[name] = nics
+
+	return nics, nil
+}
+
+func validCPU(vmConfig VMConfig, cpu string) error {
+	cpus, err := qemuCPUs(vmConfig.QemuPath)
+	if err != nil {
+		return err
+	}
+
+	if !cpus[cpu] {
+		return fmt.Errorf("invalid QEMU CPU: `%v`, see help", cpu)
+	}
+
+	return nil
+}
+
+func validMachine(vmConfig VMConfig, machine string) error {
+	machines, err := qemuMachines(vmConfig.QemuPath)
+	if err != nil {
+		return err
+	}
+
+	if !machines[machine] {
+		return fmt.Errorf("invalid QEMU machine: `%v`, see help", machine)
+	}
+
+	return nil
+}
+
+func validNIC(vmConfig VMConfig, nic string) error {
+	nics, err := qemuNICs(vmConfig.QemuPath, vmConfig.Machine)
+	if err != nil {
+		return err
+	}
+
+	if !nics[nic] {
+		return fmt.Errorf("invalid QEMU nic: `%v`, see help", nic)
+	}
+
+	return nil
+}
+
+func qemuSuggest(vals map[string]bool, prefix string) []string {
+	var res []string
+
+	for k := range vals {
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, k)
 		}
 	}
 
-	return false
+	return res
+}
+
+func suggestCPU(ns *Namespace, val, prefix string) []string {
+	cpus, err := qemuCPUs(ns.vmConfig.QemuPath)
+	if err != nil {
+		log.Info("suggest failed: %v", err)
+		return nil
+	}
+
+	return qemuSuggest(cpus, prefix)
+}
+
+func suggestMachine(ns *Namespace, val, prefix string) []string {
+	machines, err := qemuMachines(ns.vmConfig.QemuPath)
+	if err != nil {
+		log.Info("suggest failed: %v", err)
+		return nil
+	}
+
+	return qemuSuggest(machines, prefix)
 }

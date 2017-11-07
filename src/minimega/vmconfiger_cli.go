@@ -6,24 +6,8 @@ import (
 	"bytes"
 	"fmt"
 	"minicli"
-	log "minilog"
-	"os"
-	"path/filepath"
 	"strconv"
 )
-
-func checkPath(v string) string {
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(v) {
-		v = filepath.Join(*f_iomBase, v)
-	}
-
-	if _, err := os.Stat(v); os.IsNotExist(err) {
-		log.Warn("file does not exist: %v", v)
-	}
-
-	return v
-}
 
 var vmconfigerCLIHandlers = []minicli.Handler{
 	{
@@ -37,6 +21,7 @@ Note: this configuration only applies to containers and must be specified.
 		Patterns: []string{
 			"vm config filesystem [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.FilesystemPath
@@ -61,6 +46,7 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config hostname [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.Hostname
@@ -84,6 +70,7 @@ Default: "/init"
 		Patterns: []string{
 			"vm config init [value]...",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
 				if len(ns.vmConfig.Init) == 0 {
@@ -123,6 +110,7 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config preinit [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.Preinit
@@ -149,6 +137,7 @@ Note: this configuration only applies to containers.
 		Patterns: []string{
 			"vm config fifos [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatUint(ns.vmConfig.Fifos, 10)
@@ -186,6 +175,7 @@ Note: this configuration only applies to containers.
 			"vm config volume",
 			"vm config volume <key> [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if c.StringArgs["key"] == "" {
 				var b bytes.Buffer
@@ -218,14 +208,16 @@ Note: this configuration only applies to containers.
 	},
 	{
 		HelpShort: "configures qemu",
-		HelpLong: `Set the QEMU process to invoke. Relative paths are ok. When unspecified,
-minimega uses "kvm" in the default path.
+		HelpLong: `Set the QEMU binary name to invoke. Relative paths are ok.
 
 Note: this configuration only applies to KVM-based VMs.
+
+Default: "kvm"
 `,
 		Patterns: []string{
 			"vm config qemu [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.QemuPath
@@ -249,6 +241,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config kernel [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.KernelPath
@@ -272,6 +265,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config initrd [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.InitrdPath
@@ -295,6 +289,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config cdrom [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.CdromPath
@@ -321,6 +316,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config migrate [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.MigratePath
@@ -338,9 +334,11 @@ Note: this configuration only applies to KVM-based VMs.
 		HelpShort: "configures cpu",
 		HelpLong: `Set the virtual CPU architecture.
 
-By default, set to 'host' which matches the host architecture. See 'kvm
--cpu help' for a list of architectures available for your version of
-kvm.
+By default, set to 'host' which matches the host CPU. See 'qemu -cpu
+help' for a list of supported CPUs.
+
+The accepted values for this configuration depend on the QEMU binary
+name specified by 'vm config qemu'.
 
 Note: this configuration only applies to KVM-based VMs.
 
@@ -349,13 +347,51 @@ Default: "host"
 		Patterns: []string{
 			"vm config cpu [value]",
 		},
+
+		Suggest: wrapSuggest(suggestCPU),
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.CPU
 				return nil
 			}
 
+			if err := validCPU(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
 			ns.vmConfig.CPU = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures machine",
+		HelpLong: `Specify the machine type. See 'qemu -M help' for a list supported
+machine types.
+
+The accepted values for this configuration depend on the QEMU binary
+name specified by 'vm config qemu'.
+
+Note: this configuration only applies to KVM-based VMs.
+`,
+		Patterns: []string{
+			"vm config machine [value]",
+		},
+
+		Suggest: wrapSuggest(suggestMachine),
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Machine
+				return nil
+			}
+
+			if err := validMachine(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
+			ns.vmConfig.Machine = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -383,6 +419,7 @@ Replace 4 with another number.
 		Patterns: []string{
 			"vm config serial-ports [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatUint(ns.vmConfig.SerialPorts, 10)
@@ -418,6 +455,7 @@ To create three virtio-serial ports:
 		Patterns: []string{
 			"vm config virtio-ports [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatUint(ns.vmConfig.VirtioPorts, 10)
@@ -448,6 +486,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config append [value]...",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
 				if len(ns.vmConfig.Append) == 0 {
@@ -474,6 +513,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config disk [value]...",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
 				if len(ns.vmConfig.DiskPaths) == 0 {
@@ -506,6 +546,7 @@ Note: this configuration only applies to KVM-based VMs.
 		Patterns: []string{
 			"vm config qemu-append [value]...",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.ListArgs) == 0 {
 				if len(ns.vmConfig.QemuAppend) == 0 {
@@ -529,6 +570,7 @@ given a random one when it is launched.
 		Patterns: []string{
 			"vm config uuid [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.UUID
@@ -549,6 +591,7 @@ Default: 1
 		Patterns: []string{
 			"vm config vcpus [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatUint(ns.vmConfig.VCPUs, 10)
@@ -574,6 +617,7 @@ Default: 2048
 		Patterns: []string{
 			"vm config memory [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatUint(ns.vmConfig.Memory, 10)
@@ -621,6 +665,7 @@ launching VMs in a namespace.
 		Patterns: []string{
 			"vm config schedule [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.Schedule
@@ -644,6 +689,7 @@ Default: -1
 		Patterns: []string{
 			"vm config coschedule [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = strconv.FormatInt(ns.vmConfig.Coschedule, 10)
@@ -689,6 +735,7 @@ newly launched VMs.
 			"vm config tags",
 			"vm config tags <key> [value]",
 		},
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if c.StringArgs["key"] == "" {
 				var b bytes.Buffer
@@ -733,6 +780,7 @@ newly launched VMs.
 			"clear vm config <init,>",
 			"clear vm config <initrd,>",
 			"clear vm config <kernel,>",
+			"clear vm config <machine,>",
 			"clear vm config <memory,>",
 			"clear vm config <migrate,>",
 			"clear vm config <networks,>",
@@ -890,6 +938,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "cpu" {
 		return v.CPU, nil
 	}
+	if field == "machine" {
+		return v.Machine, nil
+	}
 	if field == "serial-ports" {
 		return strconv.FormatUint(v.SerialPorts, 10), nil
 	}
@@ -914,7 +965,7 @@ func (v *KVMConfig) Info(field string) (string, error) {
 
 func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "qemu" {
-		v.QemuPath = ""
+		v.QemuPath = "kvm"
 	}
 	if mask == Wildcard || mask == "kernel" {
 		v.KernelPath = ""
@@ -930,6 +981,9 @@ func (v *KVMConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "cpu" {
 		v.CPU = "host"
+	}
+	if mask == Wildcard || mask == "machine" {
+		v.Machine = ""
 	}
 	if mask == Wildcard || mask == "serial-ports" {
 		v.SerialPorts = 0

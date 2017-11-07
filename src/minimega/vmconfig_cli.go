@@ -202,16 +202,21 @@ func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return nil
 	}
 
+	nics, err := qemuNICs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
+	if err != nil {
+		return err
+	}
+
 	ns.vmConfig.Networks = nil
 
 	for _, spec := range c.ListArgs["netspec"] {
-		net, err := processVMNet(ns.Name, spec)
+		net, err := parseNetspec(ns.Name, nics, spec)
 		if err != nil {
 			ns.vmConfig.Networks = nil
 			return err
 		}
 
-		ns.vmConfig.Networks = append(ns.vmConfig.Networks, net)
+		ns.vmConfig.Networks = append(ns.vmConfig.Networks, *net)
 	}
 
 	return nil
