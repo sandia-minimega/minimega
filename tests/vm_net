@@ -28,6 +28,9 @@ vm net connect c0 0 LAN3
 vm net connect all 0 LAN3
 .columns name,vlan,bridge vm info
 
+# reconnect back to mega_bridge
+vm net connect all 0 LAN3 mega_bridge
+
 # start everything and repeat
 vm start all
 
@@ -54,6 +57,9 @@ vm net connect c0 0 LAN3
 .columns name,vlan,bridge vm info
 vm net connect all 0 LAN3
 .columns name,vlan,bridge vm info
+
+# reconnect back to mega_bridge
+vm net connect all 0 LAN3 mega_bridge
 
 # kill all and repeat
 vm kill all

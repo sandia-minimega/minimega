@@ -805,9 +805,6 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	bridge := c.StringArgs["bridge"]
-	if bridge == "" {
-		bridge = DefaultBridge
-	}
 
 	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		if c.BoolArgs["disconnect"] {

@@ -61,22 +61,25 @@ k1   | [LAN2 (102)] | [mega_bridge2]
 name | vlan         | bridge
 c0   | [LAN2 (102)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect c0 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect all 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
-c1   | [LAN3 (103)] | [mega_bridge]
-k0   | [LAN3 (103)] | [mega_bridge]
-k1   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]
+
+## # reconnect back to mega_bridge
+## vm net connect all 0 LAN3 mega_bridge
 
 ## # start everything and repeat
 ## vm start all
@@ -133,22 +136,25 @@ k1   | [LAN2 (102)] | [mega_bridge2]
 name | vlan         | bridge
 c0   | [LAN2 (102)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect c0 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect all 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
-c1   | [LAN3 (103)] | [mega_bridge]
-k0   | [LAN3 (103)] | [mega_bridge]
-k1   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]
+
+## # reconnect back to mega_bridge
+## vm net connect all 0 LAN3 mega_bridge
 
 ## # kill all and repeat
 ## vm kill all
@@ -205,19 +211,19 @@ k1   | [LAN2 (102)] | [mega_bridge2]
 name | vlan         | bridge
 c0   | [LAN2 (102)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect c0 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
 c1   | [LAN2 (102)] | [mega_bridge2]
-k0   | [LAN3 (103)] | [mega_bridge]
+k0   | [LAN3 (103)] | [mega_bridge2]
 k1   | [LAN2 (102)] | [mega_bridge2]
 ## vm net connect all 0 LAN3
 ## .columns name,vlan,bridge vm info
 name | vlan         | bridge
-c0   | [LAN3 (103)] | [mega_bridge]
-c1   | [LAN3 (103)] | [mega_bridge]
-k0   | [LAN3 (103)] | [mega_bridge]
-k1   | [LAN3 (103)] | [mega_bridge]
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]

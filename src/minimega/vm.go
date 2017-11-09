@@ -519,7 +519,17 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 
 	net := &vm.Networks[pos]
 
-	log.Debug("moving network connection: %v %v %v -> %v %v", vm.ID, pos, net.VLAN, bridge, vlan)
+	// special case -- if bridge is not specified, reconnect tap to the same
+	// bridge if it is already on a bridge.
+	if bridge == "" {
+		bridge = net.Bridge
+	}
+	// fallback -- connect to the default bridge.
+	if bridge == "" {
+		bridge = DefaultBridge
+	}
+
+	log.Info("moving network connection: %v %v %v:%v -> %v:%v", vm.ID, pos, net.Bridge, net.VLAN, bridge, vlan)
 
 	// Do this before disconnecting from the old bridge in case the new one was
 	// mistyped or invalid.
