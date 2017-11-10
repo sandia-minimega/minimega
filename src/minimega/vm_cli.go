@@ -242,7 +242,9 @@ optional bridge:
 
 	vm net vm-0 0 100 mega_bridge
 
-If the bridge name is omitted, the VM will be connected to "mega_bridge".`,
+If the bridge name is omitted, the interface will be reconnected to the same
+bridge that it is already on. If the interface is not connected to a bridge, it
+will be connected to the default bridge, "mega_bridge".`,
 		Patterns: []string{
 			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
 			"vm net <disconnect,> <vm target> <tap position>",
