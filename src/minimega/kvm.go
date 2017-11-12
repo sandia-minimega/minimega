@@ -406,6 +406,8 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
+	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
+	fmt.Fprintf(w, "Machine:\t%v\n", vm.Machine)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -1111,10 +1113,10 @@ func qmpLogger(id int, q qmp.Conn) {
 	}
 }
 
-// qemuCPUs returns a list of supported QEMU CPUs for the specified qemu
-// binary. Saves the results to QemuCapabibilities so that we only need to run
-// the command once.
-func qemuCPUs(qemu string) (map[string]bool, error) {
+// qemuCPUs returns a list of supported QEMU CPUs for the specified qemu binary
+// and machine type. Saves the results to QemuCapabibilities so that we only
+// need to run the command once.
+func qemuCPUs(qemu, machine string) (map[string]bool, error) {
 	QemuCapabibilities.Lock()
 	defer QemuCapabibilities.Unlock()
 
@@ -1125,8 +1127,18 @@ func qemuCPUs(qemu string) (map[string]bool, error) {
 		return v, nil
 	}
 
-	out, err := processWrapper(qemu, "-cpu", "?")
+	args := []string{qemu}
+	if machine != "" {
+		args = append(args, "-M", machine)
+	}
+	args = append(args, "-cpu", "?")
+
+	out, err := processWrapper(args...)
 	if err != nil {
+		if machine == "" {
+			return nil, errors.New("unable to determine valid QEMU CPUs, try configuring machine first")
+
+		}
 		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
 	}
 
@@ -1139,6 +1151,15 @@ func qemuCPUs(qemu string) (map[string]bool, error) {
 	// x86        Broadwell  Intel Core Processor (Broadwell)
 	// ```
 	//
+	// or
+	//
+	// ```
+	// Available CPUs:
+	// x
+	// y
+	// z
+	// ```
+	//
 	// Ends with a blank line
 	cpus := map[string]bool{}
 
@@ -1146,11 +1167,18 @@ func qemuCPUs(qemu string) (map[string]bool, error) {
 	scanner.Scan() // skip header
 	for scanner.Scan() {
 		fields := strings.Fields(scanner.Text())
-		if len(fields) < 2 {
+		if len(fields) == 0 {
 			break
 		}
 
-		cpus[fields[1]] = true
+		switch fields[0] {
+		case "x86":
+			if len(fields) >= 2 {
+				cpus[fields[1]] = true
+			}
+		default:
+			cpus[fields[1]] = true
+		}
 	}
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
@@ -1256,7 +1284,7 @@ func qemuNICs(qemu, machine string) (map[string]bool, error) {
 }
 
 func validCPU(vmConfig VMConfig, cpu string) error {
-	cpus, err := qemuCPUs(vmConfig.QemuPath)
+	cpus, err := qemuCPUs(vmConfig.QemuPath, vmConfig.Machine)
 	if err != nil {
 		return err
 	}
@@ -1307,7 +1335,7 @@ func qemuSuggest(vals map[string]bool, prefix string) []string {
 }
 
 func suggestCPU(ns *Namespace, val, prefix string) []string {
-	cpus, err := qemuCPUs(ns.vmConfig.QemuPath)
+	cpus, err := qemuCPUs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
 	if err != nil {
 		log.Info("suggest failed: %v", err)
 		return nil
