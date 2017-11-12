@@ -1120,7 +1120,7 @@ func qemuCPUs(qemu, machine string) (map[string]bool, error) {
 	QemuCapabibilities.Lock()
 	defer QemuCapabibilities.Unlock()
 
-	name := qemu + "CPUs"
+	name := qemu + machine + "CPUs"
 
 	// test if the key exists
 	if v, ok := QemuCapabibilities.m[name]; ok {
@@ -1155,9 +1155,9 @@ func qemuCPUs(qemu, machine string) (map[string]bool, error) {
 	//
 	// ```
 	// Available CPUs:
-	// x
-	// y
-	// z
+	//  arm1026
+	//  arm1136
+	//  arm1136-r2
 	// ```
 	//
 	// Ends with a blank line
