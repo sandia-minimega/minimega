@@ -1,4 +1,4 @@
-## vm config filesystem $containerfs
+## vm config filesystem $minicccfs
 ## vm launch container foo
 ## vm start all
 
