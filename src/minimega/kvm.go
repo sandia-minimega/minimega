@@ -645,9 +645,19 @@ func (vm *KvmVM) launch() error {
 	args = vmConfig.applyQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
+	// if the QemuPath is not absolute, try a lookup based on $PATH
+	qemu := vm.QemuPath
+	if !filepath.IsAbs(qemu) {
+		v, err := process(qemu)
+		if err != nil {
+			return vm.setErrorf("unable to launch VM: %v", err)
+		}
+		qemu = v
+	}
+
 	cmd := &exec.Cmd{
-		Path:   vm.QemuPath,
-		Args:   append([]string{vm.QemuPath}, args...),
+		Path:   qemu,
+		Args:   append([]string{qemu}, args...),
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
