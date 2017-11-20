@@ -73,11 +73,10 @@ type vncKBPlayback struct {
 	state Control
 }
 
-// Playback's control loop. Listens for sends on both the control
-// channel and the event channel. A pause on the control channel will cause the
-// goroutine to block until it receives a resume. A close will teardown the
-// running playback. Otherwise, events received on in are sent to the out
-// channel.
+// Playback's control loop. Listens for sends on both the control channel and
+// the event channel. A pause on the control channel will cause the goroutine
+// to block until it receives a resume. A close will teardown the running
+// playback. Otherwise, events received on in are sent to the out channel.
 func NewVncControl(in chan Event) *vncControl {
 	c := &vncControl{
 		in:      in,
@@ -116,16 +115,12 @@ func NewVncControl(in chan Event) *vncControl {
 // the playback stops. This goroutine is also responsible for closing the vnc
 // connection once the playback is terminated.
 func (v *vncKBPlayback) playEvents() {
-	for {
-		e, more := <-v.out
-		if more {
-			v.err = e.Write(v.Conn)
-			if v.err != nil {
-				log.Warn(v.err.Error())
-			}
-		} else {
-			v.vncClient.Stop()
-			return
+	defer v.vncClient.Stop()
+
+	for e := range v.out {
+		v.err = e.Write(v.Conn)
+		if v.err != nil {
+			log.Warn(v.err.Error())
 		}
 	}
 }
@@ -500,9 +495,14 @@ func (v *vncKBPlayback) timeRemaining() string {
 
 // Returns the duration of a given kbrecording file
 func getDuration(filename string) time.Duration {
+	f, err := os.Open(filename)
+	if err != nil {
+		return 0
+	}
+	defer f.Close()
+
 	d := 0
 
-	f, _ := os.Open(filename)
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		s := strings.SplitN(scanner.Text(), ":", 2)
@@ -525,11 +525,5 @@ func getDuration(filename string) time.Duration {
 		d += i
 	}
 
-	duration, err := time.ParseDuration(strconv.Itoa(d) + "ns")
-	if err != nil {
-		log.Errorln(err)
-		return 0
-	}
-
-	return duration
+	return time.Duration(d)
 }
