@@ -78,6 +78,7 @@ func (v *vncRecorder) RecordFB(vm *KvmVM, filename string) error {
 
 	c.Conn, err = vnc.Dial(c.Rhost)
 	if err != nil {
+		c.file.Close()
 		return err
 	}
 
