@@ -1187,7 +1187,7 @@ func qemuCPUs(qemu, machine string) (map[string]bool, error) {
 				cpus[fields[1]] = true
 			}
 		default:
-			cpus[fields[1]] = true
+			cpus[fields[0]] = true
 		}
 	}
 	if err := scanner.Err(); err != nil {
