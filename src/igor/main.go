@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -164,13 +165,21 @@ func setExitStatus(n int) {
 func housekeeping() {
 	now := time.Now().Unix()
 
-	var cobblerProfiles string
+	cobblerProfiles := map[string]bool{}
 	if igorConfig.UseCobbler {
-		var err error
 		// Get a list of current profiles
-		cobblerProfiles, err = processWrapper("cobbler", "profile", "list")
+		out, err := processWrapper("cobbler", "profile", "list")
 		if err != nil {
 			log.Fatal("couldn't get list of cobbler profiles: %v\n", cobblerProfiles)
+		}
+
+		scanner := bufio.NewScanner(strings.NewReader(out))
+		for scanner.Scan() {
+			cobblerProfiles[strings.TrimSpace(scanner.Text())] = true
+		}
+
+		if err := scanner.Err(); err != nil {
+			log.Fatal("unable to read cobbler profiles: %v", err)
 		}
 	}
 
@@ -215,7 +224,7 @@ func housekeeping() {
 			} else {
 				// Configure Cobbler to boot the correct stuff
 				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
-				if r.CobblerProfile == "" && !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
+				if r.CobblerProfile == "" && !cobblerProfiles["igor_"+r.ResName] {
 					// Create the distro from the kernel+ramdisk
 					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
@@ -249,7 +258,7 @@ func housekeeping() {
 					for _, _ = range r.Hosts {
 						<-done
 					}
-				} else if r.CobblerProfile != "" && strings.Contains(cobblerProfiles, r.CobblerProfile) {
+				} else if r.CobblerProfile != "" && cobblerProfiles[r.CobblerProfile] {
 					// If the requested profile exists, go ahead and set the nodes to use it
 					done := make(chan bool)
 					systemfunc := func(h string) {
