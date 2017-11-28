@@ -103,7 +103,7 @@ func runSub(cmd *Command, args []string) {
 			log.Fatal("Unable to parse -t argument: %v\n", err)
 		}
 	}
-	fmt.Printf("duration: %v, nano: %v\n", duration, nanoseconds/time.Minute)
+	log.Debug("duration: %v, nano: %v\n", duration, nanoseconds/time.Minute)
 	duration = duration + int(nanoseconds/time.Minute)
 	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
 		duration = MINUTES_PER_SLICE
