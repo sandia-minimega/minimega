@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"miniclient"
 	log "minilog"
 	"net/http"
 	"path/filepath"
@@ -35,8 +34,6 @@ var (
 	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
 	f_namespace = flag.String("namespace", "", "limit miniweb to a namespace")
 )
-
-var mm *miniclient.Conn
 
 func usage() {
 	fmt.Println(banner)
@@ -70,11 +67,6 @@ func main() {
 		if err := parsePasswords(*f_passwords); err != nil {
 			log.Fatalln(err)
 		}
-	}
-
-	mm, err = miniclient.Dial(*f_base)
-	if err != nil {
-		log.Fatalln(err)
 	}
 
 	files, err := ioutil.ReadDir(*f_root)
