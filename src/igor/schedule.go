@@ -98,9 +98,9 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 
 	res.ID = uint64(rand.Int63())
 
-	// We start with the *second* time slice, because the first is the current slice
-	// and is partially consumed
-	for i := 1; ; i++ {
+	// We start with the current time slice, even though it is partially consumed
+	// This is to keep the reservation from starting 1 minute into the future
+	for i := 0; ; i++ {
 		// Make sure the Schedule has enough time left in it
 		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
 			// This will guarantee we'll have enough space for the reservation

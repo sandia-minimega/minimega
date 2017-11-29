@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"ranges"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,7 +42,7 @@ OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time in integer minutes. (default = 60)
+The -t flag is used to specify the reservation time. Time denominations should be specified in days(d), hours(h), and minutes(m), in that order. Days are defined as 24*60 minutes. Example: To make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6 hours, 30 minutes: -t 4d6h30m (default = 60m)
 
 The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
 
@@ -54,7 +55,7 @@ var subK string       // -k flag
 var subI string       // -i
 var subN int          // -n
 var subC string       // -c
-var subT int          // -t
+var subT string       // -t
 var subS bool         // -s
 var subA string       // -a
 var subW string       // -w
@@ -69,7 +70,7 @@ func init() {
 	cmdSub.Flag.StringVar(&subI, "i", "", "")
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
-	cmdSub.Flag.IntVar(&subT, "t", 60, "")
+	cmdSub.Flag.StringVar(&subT, "t", "60m", "")
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
@@ -81,6 +82,32 @@ func runSub(cmd *Command, args []string) {
 	var reservation Reservation // the new reservation
 	var newSched []TimeSlice    // the new schedule
 	format := "2006-Jan-2-15:04"
+
+	// parse duration requested
+	var days int = 0
+	duration := 0
+	nanoseconds, err := time.ParseDuration(subT)
+	if err != nil {
+		// Check for a number of days in the argument
+		if dInd := strings.Index(subT, "d"); dInd >= 0 {
+			days, err = strconv.Atoi(subT[:dInd])
+			if err == nil {
+				duration = days * 24 * 60 //convert to minutes
+				subT = subT[dInd+1:]      //remove days from string
+				if subT != "" {           // capture any additional time
+					nanoseconds, err = time.ParseDuration(subT)
+				}
+			}
+		}
+		if err != nil {
+			log.Fatal("Unable to parse -t argument: %v\n", err)
+		}
+	}
+	log.Debug("duration: %v, nano: %v\n", duration, nanoseconds/time.Minute)
+	duration = duration + int(nanoseconds/time.Minute)
+	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
+		duration = MINUTES_PER_SLICE
+	}
 
 	// validate arguments
 	if subR == "" || (subN == 0 && subW == "") {
@@ -136,12 +163,12 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 	if user.Username != "root" && igorConfig.TimeLimit > 0 {
-		if subT > igorConfig.TimeLimit {
+		if duration > igorConfig.TimeLimit {
 			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
 		}
 	}
 
-	when := time.Now()
+	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
 		t, _ := time.Parse(format, subA)
@@ -156,12 +183,12 @@ func runSub(cmd *Command, args []string) {
 		for i := 0; i < 10; i++ {
 			var r Reservation
 			if subN > 0 {
-				r, _, err = findReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationAfter(duration, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
 			} else if subW != "" {
-				r, _, err = findReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationGeneric(duration, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
@@ -171,10 +198,13 @@ func runSub(cmd *Command, args []string) {
 		return
 	}
 
-	if subN > 0 {
-		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
-	} else if subW != "" {
-		reservation, newSched, err = findReservationGeneric(subT, 0, nodes, true, when.Unix())
+	if subW != "" {
+		if subN > 0 {
+			log.Fatalln("Both -n and -w options used. Operation canceled.")
+		}
+		reservation, newSched, err = findReservationGeneric(duration, 0, nodes, true, when.Unix())
+	} else if subN > 0 {
+		reservation, newSched, err = findReservationAfter(duration, subN, when.Unix())
 	}
 	if err != nil {
 		log.Fatalln(err)
