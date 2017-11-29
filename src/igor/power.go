@@ -94,7 +94,7 @@ func runPower(cmd *Command, args []string) {
 	}
 	action := args[0]
 	if action != "on" && action != "off" {
-		log.Fatal("must specify on or off")
+		log.Fatalln("must specify on or off")
 	}
 
 	user, err := getUser()
