@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"ranges"
-	"strings"
 	"time"
 )
 
@@ -99,11 +98,8 @@ func runSub(cmd *Command, args []string) {
 
 	// Validate the cobbler profile
 	if subProfile != "" {
-		cobblerProfiles, err := processWrapper("cobbler", "profile", "list")
-		if err != nil {
-			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
-		}
-		if !strings.Contains(cobblerProfiles, subProfile) {
+		cobblerProfiles := getCobblerProfiles()
+		if !cobblerProfiles[subProfile] {
 			log.Fatal("Cobbler profile does not exist: ", subProfile)
 		}
 	}

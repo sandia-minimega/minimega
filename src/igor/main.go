@@ -8,7 +8,6 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -18,7 +17,6 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -167,20 +165,7 @@ func housekeeping() {
 
 	cobblerProfiles := map[string]bool{}
 	if igorConfig.UseCobbler {
-		// Get a list of current profiles
-		out, err := processWrapper("cobbler", "profile", "list")
-		if err != nil {
-			log.Fatal("couldn't get list of cobbler profiles: %v\n", cobblerProfiles)
-		}
-
-		scanner := bufio.NewScanner(strings.NewReader(out))
-		for scanner.Scan() {
-			cobblerProfiles[strings.TrimSpace(scanner.Text())] = true
-		}
-
-		if err := scanner.Err(); err != nil {
-			log.Fatal("unable to read cobbler profiles: %v", err)
-		}
+		cobblerProfiles = getCobblerProfiles()
 	}
 
 	for _, r := range Reservations {
