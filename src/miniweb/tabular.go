@@ -111,7 +111,7 @@ func runTabular(cmd *Command) []map[string]string {
 
 	res := []map[string]string{}
 
-	for resps := range mm.Run(cmd.String()) {
+	for resps := range run(cmd) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				log.Errorln(resp.Error)

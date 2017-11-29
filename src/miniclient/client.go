@@ -162,7 +162,6 @@ func (mm *Conn) Run(cmd string) chan *Response {
 		// Instead, make and immediately close the channel so that range
 		// doesn't block and receives no values.
 		close(out)
-
 		return out
 	}
 
@@ -171,6 +170,8 @@ func (mm *Conn) Run(cmd string) chan *Response {
 	err := mm.enc.Encode(Request{Command: cmd})
 	if err != nil {
 		mm.err = fmt.Errorf("local command gob encode: %v", err)
+
+		mm.lock.Unlock()
 
 		// see above
 		close(out)
