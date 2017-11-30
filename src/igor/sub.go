@@ -26,28 +26,36 @@ REQUIRED FLAGS:
 
 The -r flag sets the name for the reservation.
 
-The -k flag gives the location of the kernel the nodes should boot. This
-kernel will be copied to a separate directory for use.
+The -k flag gives the location of the kernel the nodes should boot. This kernel
+will be copied to a separate directory for use.
 
-The -i flag gives the location of the initrd the nodes should boot. This
-file will be copied to a separate directory for use.
+The -i flag gives the location of the initrd the nodes should boot. This file
+will be copied to a separate directory for use.
 
-The -profile flag gives the name of a Cobbler profile the nodes should
-boot. This flag takes precedence over the -k and -i flags.
+The -profile flag gives the name of a Cobbler profile the nodes should boot.
+This flag takes precedence over the -k and -i flags.
 
-The -n flag indicates that the specified number of nodes should be
-included in the reservation. The first available nodes will be allocated.
+The -n flag indicates that the specified number of nodes should be included in
+the reservation. The first available nodes will be allocated.
 
 OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time. Time denominations should be specified in days(d), hours(h), and minutes(m), in that order. Days are defined as 24*60 minutes. Example: To make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6 hours, 30 minutes: -t 4d6h30m (default = 60m)
+The -t flag is used to specify the reservation time. Time denominations should
+be specified in days(d), hours(h), and minutes(m), in that order. Unitless
+numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To
+make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6
+hours, 30 minutes: -t 4d6h30m (default = 60m).
 
-The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
+The -s flag is a boolean to enable 'speculative' mode; this will print a
+selection of available times for the reservation, but will not actually make
+the reservation. Intended to be used with the -a flag to select a specific time
+slot.
 
-The -a flag indicates that the reservation should take place on or after the specified time, given in the format "2017-Jan-2-15:04". Especially useful in conjunction with the -s flag.
-	`,
+The -a flag indicates that the reservation should take place on or after the
+specified time, given in the format "2017-Jan-2-15:04". Especially useful in
+conjunction with the -s flag.`,
 }
 
 var subR string       // -r flag
@@ -83,31 +91,35 @@ func runSub(cmd *Command, args []string) {
 	var newSched []TimeSlice    // the new schedule
 	format := "2006-Jan-2-15:04"
 
-	// parse duration requested
-	var days int = 0
+	// duration is in minutes
 	duration := 0
-	nanoseconds, err := time.ParseDuration(subT)
-	if err != nil {
-		// Check for a number of days in the argument
-		if dInd := strings.Index(subT, "d"); dInd >= 0 {
-			days, err = strconv.Atoi(subT[:dInd])
-			if err == nil {
-				duration = days * 24 * 60 //convert to minutes
-				subT = subT[dInd+1:]      //remove days from string
-				if subT != "" {           // capture any additional time
-					nanoseconds, err = time.ParseDuration(subT)
-				}
+
+	v, err := strconv.Atoi(subT)
+	if err == nil {
+		duration = v
+	} else {
+		index := strings.Index(subT, "d")
+		if index > 0 {
+			days, err := strconv.Atoi(subT[:index])
+			if err != nil {
+				log.Fatal("unable to parse -t: %v", err)
 			}
+			duration = days * 24 * 60 // convert to minutes
 		}
-		if err != nil {
-			log.Fatal("Unable to parse -t argument: %v\n", err)
+
+		if index+1 < len(subT) {
+			v, err := time.ParseDuration(subT[index+1:])
+			if err != nil {
+				log.Fatal("unable to parse -t: %v", err)
+			}
+			duration += int(v / time.Minute)
 		}
 	}
-	log.Debug("duration: %v, nano: %v\n", duration, nanoseconds/time.Minute)
-	duration = duration + int(nanoseconds/time.Minute)
+
 	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
 		duration = MINUTES_PER_SLICE
 	}
+	log.Debug("duration: %v minutes", duration)
 
 	// validate arguments
 	if subR == "" || (subN == 0 && subW == "") {
@@ -128,7 +140,7 @@ func runSub(cmd *Command, args []string) {
 	if subProfile != "" {
 		cobblerProfiles := getCobblerProfiles()
 		if !cobblerProfiles[subProfile] {
-			log.Fatal("Cobbler profile does not exist: ", subProfile)
+			log.Fatal("Cobbler profile does not exist: %v", subProfile)
 		}
 	}
 
@@ -140,7 +152,7 @@ func runSub(cmd *Command, args []string) {
 	// Make sure there's not already a reservation with this name
 	for _, r := range Reservations {
 		if r.ResName == subR {
-			log.Fatalln("A reservation named ", subR, " already exists.")
+			log.Fatal("A reservation named %v already exists.", subR)
 		}
 	}
 
@@ -149,7 +161,7 @@ func runSub(cmd *Command, args []string) {
 		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ = rnge.SplitRange(subW)
 		if len(nodes) == 0 {
-			log.Fatal("Couldn't parse node specification %v\n", subW)
+			log.Fatal("Couldn't parse node specification %v", subW)
 		}
 	}
 
