@@ -39,7 +39,7 @@ type Command struct {
 	Source string
 }
 
-func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
+func newCommand(pattern PatternItems, input *Input, call CLIFunc) (*Command, int, bool) {
 	exact := true
 	cmd := Command{
 		Original:   input.Original,
