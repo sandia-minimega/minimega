@@ -61,42 +61,25 @@ except NameError:
 		return isinstance(obj, str)
 
 
-def connect(path='/tmp/minimega/minimega', debug=False):
+def connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False):
 	'''
 	Connect to the minimega instance with UNIX socket at <path> and return
 	a new minimega API object.
 	'''
-	mm = minimega(path)
-	mm._debug = debug
-	for resps in mm.version():
-		for resp in resps['Resp']:
-			if __version__ not in resp['Response']:
-				print('WARNING: API was built using a different version of minimega')
+	mm = minimega(path, raise_errors, debug)
+	for resp in mm.version():
+		if __version__ not in resp['Response']:
+			print('WARNING: API was built using a different version of minimega')
 	return mm
 
 
-def raise_error(v):
-	'''
-	raise_error walks the response from minimega and raises an error for any
-	non-empty errors.
-	'''
-	for resps in v:
-		for resp in resps['Resp']:
-			if resp['Error'] != '':
-				raise minimega.Error(resp['Error'])
-
-
-def print_rows(v):
+def print_rows(resps):
 	'''
 	print_rows walks the response from minimega and prints all tabular data.
-	Raises an error for any non-empty errors.
 	'''
-	for resps in v:
-		for resp in resps['Resp']:
-			if resp['Error'] != '':
-				raise minimega.Error(resp['Error'])
-			for row in resp['Tabular'] or []:
-				print row
+	for resp in resps:
+		for row in resp['Tabular'] or []:
+			print row
 
 
 class minimega:
@@ -108,12 +91,18 @@ class minimega:
 	be returned unless an Exception is thrown.
 	'''
 
-	def __init__(self, path, timeout=None):
-		'''Connects to the minimega instance with Unix socket at <path>.'''
-		self.mm = self
-		self.lock = Lock()
-		self._debug = False
+	def __init__(self, path, raise_errors, debug, timeout=None):
+		'''
+		Connects to the minimega instance with Unix socket at <path>. If
+		<raise_errors> is set, the Python APIs will raise an Exception whenever
+		minimega returns a response with an error.
+		'''
+		self.moreResponses = False
+
+		self._lock = Lock()
 		self._path = path
+		self._raise_errors = raise_errors
+		self._debug = debug
 		self._timeout = timeout
 		self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		self._socket.settimeout(timeout if timeout != None else DEFAULT_TIMEOUT)
@@ -148,6 +137,11 @@ class minimega:
 
 		if self._debug:
 			print('[debug] response: ' + str(response))
+		if self._raise_errors:
+			for resp in response['Resp']:
+				if resp['Error'] != '':
+					raise Error(resp['Error'])
+
 		return response
 
 
@@ -158,19 +152,42 @@ class minimega:
 		'''
 		msg = json.dumps({'Command': ' '.join([str(v) for v in args if v])})
 
-		if self._debug:
-			print('[debug] sending cmd: ' + msg)
+		with self._lock:
+			if self.moreResponses:
+				raise Error('more responses to be read from last command')
 
-		with self.lock:
+			if self._debug:
+				print('[debug] sending cmd: ' + msg)
+
 			if len(msg) != self._socket.send(msg.encode('utf-8')):
 				raise Error('failed to write message to minimega')
 
 			response = self._get_response()
+			if response['More']:
+				self.moreResponses = True
+
+			return response['Resp']
+
+
+	def streamResponses(self):
+		'''
+		streamResponses returns a generator for additional responses to a
+		previous command.
+		'''
+
+		with self._lock:
+			if not self.moreResponses:
+				raise Error('no responses to stream from last command')
+
+			self.moreResponses = False
+
+			response = self._get_response()
+
 			while response['More']:
-				yield response
+				yield response['Resp']
 				response = self._get_response()
 
-			yield response
+			yield response['Resp']
 
 
 	{{ range $cmd := .Commands }}
