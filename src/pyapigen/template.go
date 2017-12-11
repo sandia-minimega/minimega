@@ -75,7 +75,7 @@ def connect(path='/tmp/minimega/minimega', debug=False):
 	return mm
 
 
-def raise_error(mm, v):
+def raise_error(v):
 	'''
 	raise_error walks the response from minimega and raises an error for any
 	non-empty errors.
@@ -86,12 +86,12 @@ def raise_error(mm, v):
 				raise minimega.Error(resp['Error'])
 
 
-def print_rows(mm, v):
+def print_rows(v):
 	'''
 	print_rows walks the response from minimega and prints all tabular data.
 	Raises an error for any non-empty errors.
 	'''
-	for resps in mm.vm_info():
+	for resps in v:
 		for resp in resps['Resp']:
 			if resp['Error'] != '':
 				raise minimega.Error(resp['Error'])
