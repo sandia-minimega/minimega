@@ -38,10 +38,12 @@ var (
 	hitTLSChan       chan uint64
 	httpSiteCache    []string
 	httpTLSSiteCache []string
-	httpImage        []byte
 	httpReady        bool
 	httpLock         sync.Mutex
 	httpFS           http.Handler
+
+	httpImageMu sync.RWMutex // guards below
+	httpImages  map[FileSize][]byte
 )
 
 type HtmlContent struct {
@@ -332,7 +334,9 @@ func httpSetup() {
 	}
 
 	http.HandleFunc("/", httpHandler)
-	httpMakeImage()
+
+	httpImages = make(map[FileSize][]byte)
+	httpMakeImage(f_httpImageSize)
 
 	var err error
 	htmlTemplate, err = template.New("output").Parse(htmlsrc)
@@ -397,17 +401,14 @@ func httpTLSServer(p string) {
 	log.Fatalln(server.Serve(tlsListener))
 }
 
-func httpMakeImage() {
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-
-	pixelcount := f_httpImageSize / 4
+func httpMakeImage(size FileSize) {
+	pixelcount := size / 4
 	side := int(math.Sqrt(float64(pixelcount)))
 	log.Debug("Image served will be %v by %v", side, side)
 
 	m := image.NewRGBA(image.Rect(0, 0, side, side))
 	for i := 0; i < len(m.Pix); i++ {
-		m.Pix[i] = uint8(r.Int())
+		m.Pix[i] = uint8(rand.Int())
 	}
 
 	buf := new(bytes.Buffer)
@@ -420,7 +421,10 @@ func httpMakeImage() {
 		png.Encode(buf, m)
 	}
 
-	httpImage = buf.Bytes()
+	httpImageMu.Lock()
+	defer httpImageMu.Unlock()
+
+	httpImages[size] = buf.Bytes()
 }
 
 func hitCounter() {
@@ -439,6 +443,41 @@ func hitTLSCounter() {
 	}
 }
 
+func httpImageHandler(w http.ResponseWriter, r *http.Request) {
+	size := f_httpImageSize
+
+	v := r.URL.Query()
+	if v.Get("size") != "" {
+		size2, err := ParseFileSize(v.Get("size"))
+		if err != nil {
+			http.Error(w, "invalid size", http.StatusBadRequest)
+			return
+		}
+		size = size2
+	}
+
+	var buf []byte
+	var ok bool
+
+	httpImageMu.RLock()
+	buf, ok = httpImages[size]
+	httpImageMu.RUnlock()
+
+	if !ok {
+		httpMakeImage(size)
+	}
+
+	httpImageMu.RLock()
+	buf, _ = httpImages[size]
+	httpImageMu.RUnlock()
+
+	if *f_httpGzip {
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Content-Type", "image/png")
+	}
+	w.Write(buf)
+}
+
 func httpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Debug("request: %v %v", r.RemoteAddr, r.URL.String())
 	var usingTLS bool
@@ -450,27 +489,21 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now().UnixNano()
 	if httpFS != nil {
 		httpFS.ServeHTTP(w, r)
+	} else if r.Method == http.MethodPost {
+		w.WriteHeader(http.StatusAccepted)
+	} else if strings.HasSuffix(r.URL.Path, "image.png") {
+		httpImageHandler(w, r)
 	} else {
-		if r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusAccepted)
-		} else if strings.HasSuffix(r.URL.Path, "image.png") {
-			if *f_httpGzip {
-				w.Header().Set("Content-Encoding", "gzip")
-				w.Header().Set("Content-Type", "image/png")
-			}
-			w.Write(httpImage)
-		} else {
-			h := &HtmlContent{
-				URLs:   randomURLs(),
-				Hits:   hits,
-				URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
-				Host:   r.Host,
-				Secure: usingTLS,
-			}
-			err := htmlTemplate.Execute(w, h)
-			if err != nil {
-				log.Errorln(err)
-			}
+		h := &HtmlContent{
+			URLs:   randomURLs(),
+			Hits:   hits,
+			URI:    fmt.Sprintf("%v %v", r.RemoteAddr, r.URL.String()),
+			Host:   r.Host,
+			Secure: usingTLS,
+		}
+		err := htmlTemplate.Execute(w, h)
+		if err != nil {
+			log.Errorln(err)
 		}
 	}
 

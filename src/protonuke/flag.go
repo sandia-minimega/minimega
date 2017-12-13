@@ -19,7 +19,7 @@ const DefaultFileSize = FileSize(3 * 1 << 20)
 // DefaultFTPFileSize is 500KB
 const DefaultFTPFileSize = FileSize(500 * 1 << 10)
 
-func (f *FileSize) Set(s string) error {
+func ParseFileSize(s string) (FileSize, error) {
 	for i, suffix := range []string{"B", "KB", "MB"} {
 		if strings.HasSuffix(s, suffix) {
 			v, err := strconv.Atoi(strings.TrimSuffix(s, suffix))
@@ -27,19 +27,22 @@ func (f *FileSize) Set(s string) error {
 				continue
 			}
 
-			*f = FileSize(v * (1 << uint(10*i)))
-			return nil
+			return FileSize(v * (1 << uint(10*i))), nil
 		}
 	}
 
 	// Assume MB
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		return errors.New("invalid file size, expected value[B,KB,MB]")
+		return 0, errors.New("invalid file size, expected value[B,KB,MB]")
 	}
 
-	*f = FileSize(v * (1 << 20))
-	return nil
+	return FileSize(v * (1 << 20)), nil
+}
+
+func (f *FileSize) Set(s string) (err error) {
+	*f, err = ParseFileSize(s)
+	return
 }
 
 func (f *FileSize) String() string {
