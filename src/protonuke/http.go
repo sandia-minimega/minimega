@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"version"
 )
 
 const (
@@ -485,6 +486,8 @@ func httpHandler(w http.ResponseWriter, r *http.Request) {
 		log.Debugln("request using tls")
 		usingTLS = true
 	}
+
+	w.Header().Set("Server", "protonuke/"+version.Revision)
 
 	start := time.Now().UnixNano()
 	if httpFS != nil {
