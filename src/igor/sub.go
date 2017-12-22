@@ -288,10 +288,10 @@ VlanLoop:
 	Schedule = newSched
 
 	// update the network config
-	//err = networkSet(reservation.Hosts, vlan)
-	//if err != nil {
-	//	log.Fatal("error setting network isolation: %v", err)
-	//}
+	err = networkSet(reservation.Hosts, vlan)
+	if err != nil {
+		log.Fatal("error setting network isolation: %v", err)
+	}
 
 	putReservations()
 	putSchedule()

@@ -89,9 +89,8 @@ func runShow(_ *Command, _ []string) {
 	args = append(args,
 		"-sn",
 		"-PS22",
-		"--max-retries=1",
 		"--unprivileged",
-		"--host-timeout=300ms",
+		"-T5",
 		"-oG",
 		"-",
 	)
