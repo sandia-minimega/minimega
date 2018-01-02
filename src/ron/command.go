@@ -75,6 +75,16 @@ func (f File) String() string {
 	return f.Name
 }
 
+func (f *File) Copy() *File {
+	f2 := &File{
+		Name: f.Name,
+		Perm: f.Perm,
+	}
+	f2.Data = append(f2.Data, f.Data...)
+
+	return f2
+}
+
 type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
@@ -118,22 +128,38 @@ func (f *Filter) String() string {
 	return strings.Join(res, " && ")
 }
 
-// Creates a copy of c
+// Creates a copy of c.
 func (c *Command) Copy() *Command {
-	return &Command{
+	c2 := &Command{
 		ID:         c.ID,
 		Background: c.Background,
-		Command:    c.Command,
-		FilesSend:  c.FilesSend,
-		FilesRecv:  c.FilesRecv,
-		CheckedIn:  c.CheckedIn,
-		Filter:     c.Filter,
 		PID:        c.PID,
 		KillAll:    c.KillAll,
 		Prefix:     c.Prefix,
 		Stdin:      c.Stdin,
 		Stdout:     c.Stdout,
 		Stderr:     c.Stderr,
-		Level:      c.Level,
 	}
+
+	// make deep copies
+	c2.Command = append(c2.Command, c.Command...)
+	c2.CheckedIn = append(c2.CheckedIn, c.CheckedIn...)
+
+	for _, f := range c.FilesSend {
+		c2.FilesSend = append(c2.FilesSend, f.Copy())
+	}
+	for _, f := range c.FilesRecv {
+		c2.FilesRecv = append(c2.FilesRecv, f.Copy())
+	}
+
+	if c.Filter != nil {
+		c2.Filter = new(Filter)
+		*c2.Filter = *c.Filter
+	}
+	if c.Level != nil {
+		c2.Level = new(log.Level)
+		*c2.Level = *c.Level
+	}
+
+	return c2
 }
