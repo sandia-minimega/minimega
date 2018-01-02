@@ -528,7 +528,7 @@ function setPopupMachine (vm, node) {
 }
 
 function makeConnectLink(vm) {
-    return "<a target=\"_blank\" href=\"connect/" + vm.name + "\">" + vm.name + "</a>"
+    return "<a target=\"_blank\" href=\"vm/" + vm.name + "/connect\">" + vm.name + "</a>"
 }
 
 function addConnectLink(parent, vm) {
