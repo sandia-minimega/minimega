@@ -26,17 +26,27 @@ type vncClient struct {
 }
 
 // NewVNCClient creates a new VNC client for the target VM.
-func NewVNCClient(vm *KvmVM) (*vncClient, error) {
+func NewVNCClient(vm *KvmVM) *vncClient {
 	rhost := fmt.Sprintf("%v:%v", hostname, vm.VNCPort)
 
-	c := &vncClient{
+	return &vncClient{
 		ID:    vm.Name,
 		Rhost: rhost,
 		start: time.Now(),
 		VM:    vm,
 		done:  make(chan bool),
 	}
+}
 
+func DialVNC(vm *KvmVM) (*vncClient, error) {
+	c := NewVNCClient(vm)
+
+	conn, err := vnc.Dial(c.Rhost)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Conn = conn
 	return c, nil
 }
 
@@ -53,17 +63,11 @@ func (v *vncClient) Stop() error {
 }
 
 func vncInject(vm *KvmVM, e Event) error {
-	c, err := NewVNCClient(vm)
+	c, err := DialVNC(vm)
 	if err != nil {
 		return err
 	}
+	defer c.Stop()
 
-	c.Conn, err = vnc.Dial(c.Rhost)
-	if err != nil {
-		return err
-	}
-
-	err = e.Write(c.Conn)
-	c.Stop()
-	return err
+	return e.Write(c.Conn)
 }

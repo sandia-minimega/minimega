@@ -198,6 +198,8 @@ func cliVNCList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	ns.vncPlayer.RLock()
 	defer ns.vncPlayer.RUnlock()
 
+	ns.vncPlayer.reap()
+
 	for _, v := range ns.vncRecorder.kb {
 		resp.Tabular = append(resp.Tabular, []string{
 			v.VM.Name, "record kb",
@@ -215,18 +217,9 @@ func cliVNCList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	}
 
 	for _, v := range ns.vncPlayer.m {
-		var r string
-		if v.state == Pause {
-			r = "PAUSED"
-		} else {
-			r = v.timeRemaining() + " remaining"
+		if info := v.Info(); info != nil {
+			resp.Tabular = append(resp.Tabular, info)
 		}
-
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "playback kb",
-			r,
-			v.file.Name(),
-		})
 	}
 
 	return nil
