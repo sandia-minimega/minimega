@@ -388,9 +388,10 @@ func namespaceCommands(ns *Namespace, cmd *minicli.Command) []*minicli.Command {
 		cmds = append(cmds, cmd2)
 	}
 
-	for _, cmd := range cmds {
-		cmd.SetSource(ns.Name)
-		cmd.SetRecord(false)
+	for _, cmd2 := range cmds {
+		cmd2.SetSource(ns.Name)
+		cmd2.SetRecord(false)
+		cmd2.SetPreprocess(cmd.Preprocess)
 	}
 
 	return cmds
