@@ -23,7 +23,7 @@ var (
 
 var plumbCLIHandlers = []minicli.Handler{
 	{ // plumb
-		HelpShort: "plumb external programs with minimega, VMs, and other external programs",
+		HelpShort: "plumb I/O between minimega, VMs, and external programs",
 		HelpLong: `
 Create pipelines composed of named pipes and external programs. Pipelines pass
 data on standard I/O, with messages split on newlines. Pipelines are
