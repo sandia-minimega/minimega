@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	"path/filepath"
 	"time"
 )
 
@@ -32,22 +33,23 @@ and keyboard actions by the user or of the framebuffer for the VM.`,
 		HelpLong: `
 Playback and interact with a previously recorded vnc kb session file.
 
-If play is selected, the specified file (created using vnc record) will be
-read and processed as a sequence of time-stamped mouse/keyboard events to send
-to the specified VM.
+If play is selected, the specified file (created using vnc record) will be read
+and processed as a sequence of time-stamped mouse/keyboard events to send to
+the specified VM.
 
-Playbacks can be paused with the pause command, and resumed using continue.
-The step command will immediately move to the next event contained in the playback
-file. Use the getstep command to view the current vnc event. Calling stop will end
-a playback.
+Playbacks can be paused with the pause command, and resumed using continue. The
+step command will immediately move to the next event contained in the playback
+file. Use the getstep command to view the current vnc event. Calling stop will
+end a playback.
 
-Vnc playback also supports injecting mouse/keyboard events in the format found in
-the playback file. Injected commands must omit the time delta as they are sent
-immediately.
+Vnc playback also supports injecting mouse/keyboard events in the format found
+in the playback file. Injected commands must omit the time delta as they are
+sent immediately.
 
 vnc host vm_id inject PointerEvent,0,465,245
 
-Comments in the playback file are logged at the info level. An example is given below.
+Comments in the playback file are logged at the info level. An example is given
+below.
 
 #: This is an example of a vnc playback comment`,
 		Patterns: []string{
@@ -88,6 +90,11 @@ List all running vnc playback/recording instances. See "help vnc" for more infor
 
 func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	fname := c.StringArgs["filename"]
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(fname) {
+		// TODO: should we capture to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
 
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
@@ -139,9 +146,12 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 }
 
 func cliVNCRecord(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	var err error
-
 	fname := c.StringArgs["filename"]
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(fname) {
+		// TODO: should we capture to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
 
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
