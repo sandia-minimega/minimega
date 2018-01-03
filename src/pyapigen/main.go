@@ -45,6 +45,7 @@ func parseCLI(minimega string) ([]*minicli.Handler, error) {
 
 func usage() {
 	fmt.Printf("USAGE: %v path/to/minimega\n", os.Args[0])
+	flag.PrintDefaults()
 }
 
 func main() {
