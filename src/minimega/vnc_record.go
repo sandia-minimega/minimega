@@ -41,15 +41,13 @@ func (v *vncRecorder) RecordKB(vm *KvmVM, filename string) error {
 		return fmt.Errorf("kb recording for %v already running", vm.Name)
 	}
 
-	c, err := NewVNCClient(vm)
-	if err != nil {
-		return err
-	}
+	c := NewVNCClient(vm)
 
-	c.file, err = os.Create(filename)
+	f, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
+	c.file = f
 
 	r := &vncKBRecord{vncClient: c, last: time.Now()}
 	v.kb[c.ID] = r
@@ -66,17 +64,12 @@ func (v *vncRecorder) RecordFB(vm *KvmVM, filename string) error {
 		return fmt.Errorf("fb recording for %v already running", vm.Name)
 	}
 
-	c, err := NewVNCClient(vm)
+	c, err := DialVNC(vm)
 	if err != nil {
 		return err
 	}
 
 	c.file, err = os.Create(filename)
-	if err != nil {
-		return err
-	}
-
-	c.Conn, err = vnc.Dial(c.Rhost)
 	if err != nil {
 		return err
 	}

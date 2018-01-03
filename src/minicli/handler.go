@@ -15,30 +15,31 @@ type Handler struct {
 	HelpLong  string   `json:"help_long"`  // a descriptive help message
 	Patterns  []string `json:"patterns"`   // the pattern that the input should match
 
-	// prefix shared by all patterns, automatically populated when
-	SharedPrefix string `json:"shared_prefix"`
-
-	// call back to invoke when the raw input matches the pattern
+	// Call to invoke when the raw input matches the pattern
 	Call CLIFunc `json:"-"`
 
-	// the processed patterns, will be automatically populated when the command
-	// is registered
+	// SharedPrefix is a prefix shared by all patterns. Populated by minicli
+	// when the Handler is registered.
+	SharedPrefix string `json:"shared_prefix"`
+
+	// PatternItems are the processed patterns. Populated by minicli when the
+	// Handler is registered.
 	PatternItems [][]PatternItem `json:"parsed_patterns"`
 
 	// Suggest provides suggestions for variable completion. For example, the
 	// `vm stop` command might provide a listing of the currently running VM
 	// names if the user tries to tab complete the "target". The function takes
-	// three arguments: the raw input string, the variable name (e.g.
-	// "target"), and the user's input for the variable so far.
+	// three arguments: the raw input string, the variable name (e.g. "vm"),
+	// and the user's input for the variable so far.
 	Suggest SuggestFunc `json:"-"`
 }
 
-// compileCommand tests whether the input matches the Handler's pattern and
-// builds a command based on the input. If there was no match, the returned
-// Command will be nil. The second return value is the number of elements of the
-// Handler's pattern that were matched. This can be used to determine which
-// handler was the closest match. The third return value is true if there
-// pattern is an exact match, not an apropos match.
+// compile tests whether the input matches the Handler's pattern and builds a
+// command based on the input. If there was no match, the returned Command will
+// be nil. The second return value is the number of elements of the Handler's
+// pattern that were matched. This can be used to determine which handler was
+// the closest match. The third return value is true if there pattern is an
+// exact match, not an apropos match.
 func (h *Handler) compile(input *Input) (*Command, int, bool) {
 	var maxMatchLen int
 	var cmd *Command
@@ -110,7 +111,7 @@ outer:
 			case item.Type&listItem != 0:
 				// Nothing to suggest for lists
 				continue outer
-			case item.Type == commandItem:
+			case item.Type&commandItem != 0:
 				// This is fun, need to recurse to complete the subcommand
 				log.Debug("recursing to find suggestions for %q", input.items[i:])
 				suggestions = append(suggestions, suggest(raw, &Input{
@@ -159,7 +160,7 @@ outer:
 				}
 				suggestions = append(suggestions, h.Suggest(raw, item.Key, prefix)...)
 			}
-		case commandItem:
+		case commandItem, commandItem | optionalItem:
 			log.Debug("recursing to find suggestions for %q", input.items[i:])
 			suggestions = append(suggestions, suggest(raw, &Input{
 				Original: input.Original,
