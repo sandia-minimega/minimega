@@ -132,6 +132,16 @@ connect the device to -- either 1.1 or 2.0.
 Renamed `vm`hotplug`show` to `vm`hotplug`. To limit results to a particular VM,
 use `.filter`.
 
+*** vm net API
+
+Similarly to the `vm`cdrom` API, `vm`net` now supports addressing one or more
+VMs using the syntax from `vm`start`.
+
+The bridge parameter is now optional and defaults to the bridge that the tap is
+already connected to (or `mega_bridge` if the tap is disconnected).
+
+Changed the parameter order in order to support the above changes.
+
 *** host API
 
 Added many new columns to support the scheduler. See `help`host` for details.
@@ -141,6 +151,10 @@ Added many new columns to support the scheduler. See `help`host` for details.
 Added `clear`all` API to reset minimega to a vanilla state. Restarting is still
 preferred.
 
+*** help API
+
+Added support for sub-command help (e.g. `help vnc record`).
+
 *** vyatta API
 
 Removed deprecated API.
@@ -148,6 +162,11 @@ Removed deprecated API.
 *** web API
 
 Removed API. See replacement, [[#TOC_2.3.1.][miniweb]].
+
+*** vnc API
+
+Changed the default location for reading and writing recordings to the
+iomeshage directory rather than the current directory.
 
 *** .preprocess API
 
