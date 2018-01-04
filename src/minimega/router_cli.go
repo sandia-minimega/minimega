@@ -81,7 +81,8 @@ router takes a number of subcommands:
 			"router <vm> <route,> <static,> <network> <next-hop>",
 			"router <vm> <route,> <ospf,> <area> <network>",
 		},
-		Call: wrapVMTargetCLI(cliRouter),
+		Call:    wrapVMTargetCLI(cliRouter),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // clear router
 		HelpShort: "",
@@ -112,7 +113,8 @@ router takes a number of subcommands:
 			"clear router <vm> <route,> <ospf,> <area>",
 			"clear router <vm> <route,> <ospf,> <area> <network>",
 		},
-		Call: wrapVMTargetCLI(cliClearRouter),
+		Call:    wrapVMTargetCLI(cliClearRouter),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 }
 

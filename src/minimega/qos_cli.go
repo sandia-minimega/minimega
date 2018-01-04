@@ -55,7 +55,7 @@ Examples:
 			"qos <add,> <vm target> <interface> <rate,> <bw> <kbit,mbit,gbit>",
 		},
 		Call:    wrapVMTargetCLI(cliUpdateQos),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{
 		HelpShort: "clear qos constraints on an interface",
@@ -70,7 +70,7 @@ See "vm start" for a full description of allowable targets.`,
 			"clear qos <vm target> [tap index]",
 		},
 		Call:    wrapVMTargetCLI(cliClearQos),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 }
 

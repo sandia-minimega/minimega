@@ -143,7 +143,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 
 	var screenshot []byte
 
-	for resps := range mm.Run(cmd.String()) {
+	for resps := range run(cmd) {
 		for _, resp := range resps.Resp {
 			if resp.Error != "" {
 				if strings.HasPrefix(resp.Error, "vm not running:") {
@@ -277,7 +277,7 @@ func vmHandler(w http.ResponseWriter, r *http.Request) {
 			cmd.Command = fmt.Sprintf("vm %v %q", fields[2], name)
 
 			var res string
-			for resps := range mm.Run(cmd.String()) {
+			for resps := range run(cmd) {
 				res += resps.Rendered
 			}
 

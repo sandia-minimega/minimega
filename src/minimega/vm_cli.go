@@ -124,7 +124,7 @@ description of allowable targets.`,
 			"vm kill <vm target>",
 		},
 		Call:    wrapVMTargetCLI(cliVMKill),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -158,7 +158,7 @@ wildcard, only vms in the building or paused state will be started.`, Wildcard),
 			"vm start <vm target>",
 		},
 		Call:    wrapVMTargetCLI(cliVMStart),
-		Suggest: wrapVMSuggest(^VM_RUNNING),
+		Suggest: wrapVMSuggest(^VM_RUNNING, true),
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -171,7 +171,7 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 			"vm stop <vm target>",
 		},
 		Call:    wrapVMTargetCLI(cliVMStop),
-		Suggest: wrapVMSuggest(VM_RUNNING),
+		Suggest: wrapVMSuggest(VM_RUNNING, true),
 	},
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
@@ -219,36 +219,44 @@ See "vm start" for a full description of allowable targets.`,
 			"vm hotplug <remove,> <vm target> <disk id or all>",
 		},
 		Call:    wrapVMTargetCLI(cliVMHotplug),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
 		HelpLong: `
-Disconnect or move existing network connections on a running VM.
+Disconnect or move existing network connections for one or more VMs. See "vm
+start" for a full description of allowable targets.
 
 Network connections are indicated by their position in vm net (same order in vm
 info) and are zero indexed. For example, to disconnect the first network
-connection from a VM named vm-0 with 4 network connections:
+connection from a VM named vm-0:
 
 	vm net disconnect vm-0 0
 
-To disconnect the second connection:
+To disconnect the second interface:
 
 	vm net disconnect vm-0 1
 
-To move a connection, specify the new VLAN tag and bridge:
+To move a connection, specify the interface number, the new VLAN tag and
+optional bridge:
 
-	vm net <vm name> 0 bridgeX 100`,
+	vm net vm-0 0 100 mega_bridge
+
+If the bridge name is omitted, the interface will be reconnected to the same
+bridge that it is already on. If the interface is not connected to a bridge, it
+will be connected to the default bridge, "mega_bridge".`,
 		Patterns: []string{
-			"vm net <connect,> <vm name> <tap position> <bridge> <vlan>",
-			"vm net <disconnect,> <vm name> <tap position>",
+			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
+			"vm net <disconnect,> <vm target> <tap position>",
 		},
-		Call: wrapSimpleCLI(cliVMNetMod),
+		Call: wrapVMTargetCLI(cliVMNetMod),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(ns, prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE, false)
 			} else if val == "vlan" {
 				return cliVLANSuggest(ns, prefix)
+			} else if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
 			}
 			return nil
 		}),
@@ -266,7 +274,7 @@ and a JSON string, and returns the JSON encoded response. For example:
 			"vm qmp <vm name> <qmp command>",
 		},
 		Call:    wrapVMTargetCLI(cliVMQmp),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm screenshot
 		HelpShort: "take a screenshot of a running vm",
@@ -293,7 +301,7 @@ You can also specify the maximum dimension:
 			"vm screenshot <vm name> file <filename> [maximum dimension]",
 		},
 		Call:    wrapVMTargetCLI(cliVMScreenshot),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
@@ -309,7 +317,7 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate <vm name> <filename>",
 		},
 		Call:    wrapVMTargetCLI(cliVMMigrate),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
@@ -337,7 +345,7 @@ See "vm start" for a full description of allowable targets.`,
 			"vm cdrom <change,> <vm target> <path>",
 		},
 		Call:    wrapVMTargetCLI(cliVMCdrom),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
@@ -362,7 +370,7 @@ To read a tag:
 			"vm tag <vm target> <key> <value>", // set
 		},
 		Call:    wrapVMTargetCLI(cliVMTag),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // clear vm tag
 		HelpShort: "remove tags from a VM",
@@ -389,7 +397,7 @@ Clear all tags from all VMs:
 			"clear vm tag <vm target> [tag]",
 		},
 		Call:    wrapVMTargetCLI(cliClearVMTag),
-		Suggest: wrapVMSuggest(VM_ANY_STATE),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm top
 		HelpShort: "view vm resource utilization",
@@ -783,26 +791,30 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 }
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	vm := ns.FindVM(c.StringArgs["vm"])
-	if vm == nil {
-		return vmNotFound(c.StringArgs["vm"])
-	}
+	target := c.StringArgs["vm"]
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
 		return err
 	}
 
-	if c.BoolArgs["disconnect"] {
-		return vm.NetworkDisconnect(pos)
+	var vlan int
+	if !c.BoolArgs["disconnect"] {
+		vlan, err = lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
+		}
 	}
 
-	vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
-	if err != nil {
-		return err
-	}
+	bridge := c.StringArgs["bridge"]
 
-	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		if c.BoolArgs["disconnect"] {
+			return true, vm.NetworkDisconnect(pos)
+		}
+
+		return true, vm.NetworkConnect(pos, bridge, vlan)
+	})
 }
 
 func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -857,10 +869,10 @@ func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 // and makes suggestions for VM names that have a common prefix. mask
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
-func cliVMSuggest(ns *Namespace, prefix string, mask VMState) []string {
+func cliVMSuggest(ns *Namespace, prefix string, mask VMState, wild bool) []string {
 	res := []string{}
 
-	if strings.HasPrefix(Wildcard, prefix) {
+	if strings.HasPrefix(Wildcard, prefix) && wild {
 		res = append(res, Wildcard)
 	}
 

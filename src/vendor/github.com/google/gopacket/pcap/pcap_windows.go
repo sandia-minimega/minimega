@@ -7,8 +7,13 @@
 
 package pcap
 
-func (p *Handle) openLive() error {
+import (
+	"runtime"
+)
+
+func (p *Handle) setNonBlocking() error {
 	// do nothing
+	return nil
 }
 
 // waitForPacket waits for a packet or for the timeout to expire.

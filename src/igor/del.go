@@ -7,7 +7,6 @@ package main
 import (
 	log "minilog"
 	"os"
-	"os/user"
 	"path/filepath"
 )
 
@@ -29,18 +28,22 @@ func runDel(cmd *Command, args []string) {
 	deleteReservation(true, args)
 }
 
+// The checkUser argument specifies whether or not we should compare the current
+// username to the username of the deleted reservation. It is set to 'true' when
+// a reservation is deleted at the command line, and 'false' when the reservation
+// is deleted because it has expired.
 func deleteReservation(checkUser bool, args []string) {
+	var deletedReservation Reservation
+
 	if len(args) != 1 {
 		log.Fatalln("Invalid arguments")
 	}
 
-	user, err := user.Current()
+	user, err := getUser()
 	if err != nil {
 		log.Fatal("can't get current user: %v\n", err)
 	}
 
-	var deletedReservation Reservation
-	found := false
 	if checkUser {
 		for _, r := range Reservations {
 			if r.ResName == args[0] && r.Owner != user.Username {
@@ -50,6 +53,7 @@ func deleteReservation(checkUser bool, args []string) {
 	}
 
 	// Remove the reservation
+	found := false
 	for _, r := range Reservations {
 		if r.ResName == args[0] {
 			deletedReservation = r
@@ -57,7 +61,6 @@ func deleteReservation(checkUser bool, args []string) {
 			found = true
 		}
 	}
-
 	if !found {
 		log.Fatal("Couldn't find reservation %v", args[0])
 	}
@@ -84,21 +87,38 @@ func deleteReservation(checkUser bool, args []string) {
 	if !igorConfig.UseCobbler {
 		// Delete all the PXE files in the reservation
 		for _, pxename := range deletedReservation.PXENames {
-			os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+			os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename))
 		}
-
-		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 	} else {
+		// Set all nodes in the reservation back to the default profile
+		// Cobbler commands are slow, so we run them in parallel.
+		done := make(chan bool)
+		f := func(h string) {
+			processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+igorConfig.CobblerDefaultProfile)
+			done <- true
+		}
 		for _, host := range deletedReservation.Hosts {
-			processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+			go f(host)
+		}
+		for _, _ = range deletedReservation.Hosts {
+			<-done
+		}
+		// Delete the profile and distro we created for this reservation
+		if deletedReservation.CobblerProfile == "" {
 			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
 			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
 		}
 	}
+
+	// We use this to indicate if a reservation has been created or not
+	// It's used with Cobbler too, even though we don't manually manage PXE files.
+	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 
 	// Delete the now unused kernel + initrd
 	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")
 	os.Remove(fname)
 	fname = filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-kernel")
 	os.Remove(fname)
+
+	emitReservationLog("DELETED", deletedReservation)
 }

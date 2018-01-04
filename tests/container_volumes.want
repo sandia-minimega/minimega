@@ -1,4 +1,4 @@
-## vm config filesystem $containerfs
+## vm config filesystem $minicccfs
 ## shell mkdir /tmp/minivolume
 ## shell touch /tmp/minivolume/tumbleweed
 

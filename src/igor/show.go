@@ -73,13 +73,20 @@ func init() {
 // reservations they below to
 func runShow(_ *Command, _ []string) {
 	names := []string{}
+	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		names = append(names, igorConfig.Prefix+strconv.Itoa(i))
+		names = append(names, fmt.Sprintf(fmtstring, igorConfig.Prefix, i))
 	}
 
+	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
 
-	args := []string{
+	// Use nmap to determine what nodes are up
+	args := []string{}
+	if igorConfig.DNSServer != "" {
+		args = append(args, "--dns-servers", igorConfig.DNSServer)
+	}
+	args = append(args,
 		"-sn",
 		"-PS22",
 		"--max-retries=1",
@@ -87,16 +94,15 @@ func runShow(_ *Command, _ []string) {
 		"--host-timeout=300ms",
 		"-oG",
 		"-",
-	}
-
+	)
 	cmd := exec.Command("nmap", append(args, names...)...)
-
 	out, err := cmd.Output()
 	if err != nil {
 		log.Fatal("unable to scan: %v", err)
 	}
 	s := bufio.NewScanner(bytes.NewReader(out))
 
+	// Parse the results of nmap
 	for s.Scan() {
 		line := s.Text()
 		if strings.HasPrefix(line, "#") {
@@ -111,16 +117,19 @@ func runShow(_ *Command, _ []string) {
 
 		// trim off ()
 		name := fields[2][1 : len(fields[2])-1]
-
+		// get rid of any domain that may exist
+		name = strings.Split(name, ".")[0]
 		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
 		if err != nil {
 			// that's weird
 			continue
 		}
 
+		// If we found a node name in the output, that means it's up, so mark it as up
 		nodes[v] = true
 	}
 
+	// Gather a list of which nodes are down
 	var downNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		if !nodes[i] {
@@ -129,7 +138,7 @@ func runShow(_ *Command, _ []string) {
 		}
 	}
 
-	// For colors... eww
+	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
@@ -250,7 +259,6 @@ var colors = []string{
 	BgBlue,
 	BgMagenta,
 	BgCyan,
-	BgBrightBlack,
 	BgBrightGreen,
 	BgBrightYellow,
 	BgBrightBlue,

@@ -9,6 +9,7 @@ var (
 	networkClearFuncs map[string]func([]string) error
 )
 
+// Configure the given nodes into the specified 802.1ad outer VLAN
 func networkSet(nodes []string, vlan int) error {
 	if igorConfig.Network == "" {
 		// they don't want to do vlan segmentation
@@ -23,6 +24,7 @@ func networkSet(nodes []string, vlan int) error {
 	return f(nodes, vlan)
 }
 
+// Clear any 802.1ad configuration on the given nodes
 func networkClear(nodes []string) error {
 	if igorConfig.Network == "" {
 		// they don't want to do vlan segmentation

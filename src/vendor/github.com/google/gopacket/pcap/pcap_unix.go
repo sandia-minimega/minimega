@@ -32,11 +32,11 @@ int pcap_wait(pcap_t *p, int usec) {
 	tv.tv_usec = usec;
 
 	if(usec != 0) {
-		return select(1, &fds, NULL, NULL, &tv);
+		return select(fd+1, &fds, NULL, NULL, &tv);
 	}
 
 	// block indefinitely if no timeout provided
-	return select(1, &fds, NULL, NULL, NULL);
+	return select(fd+1, &fds, NULL, NULL, NULL);
 }
 */
 import "C"
@@ -46,7 +46,7 @@ import (
 	"unsafe"
 )
 
-func (p *Handle) openLive() error {
+func (p *Handle) setNonBlocking() error {
 	buf := (*C.char)(C.calloc(errorBufferSize, 1))
 	defer C.free(unsafe.Pointer(buf))
 
@@ -61,11 +61,6 @@ func (p *Handle) openLive() error {
 
 // waitForPacket waits for a packet or for the timeout to expire.
 func (p *Handle) waitForPacket() {
-	if p.timeout == BlockForever {
-		C.pcap_wait(p.cptr, 0)
-		return
-	}
-
 	// need to wait less than the read timeout according to pcap documentation.
 	// timeoutMillis rounds up to at least one millisecond so we can safely
 	// subtract up to a millisecond.

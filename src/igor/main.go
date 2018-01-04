@@ -17,24 +17,33 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
 )
 
 // Constants
-const MINUTES_PER_SLICE = 1 // must be less than 60! 1, 5, 10, or 15 would be good choices
+
+// The length of a single time-slice in the schedule.
+// Must be less than 60! 1, 5, 10, or 15 are good choices
+// Shorter length means less waiting for reservations to start, but bigger schedule files.
+const MINUTES_PER_SLICE = 1
+
 // Minimum schedule length in minutes, 720 = 12 hours
-const MIN_SCHED_LEN = 72
+const MIN_SCHED_LEN = 720
 
 // Global Variables
+// This flag can be set regardless of which subcommand is executed
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
+
+// The configuration we read in from the file
 var igorConfig Config
 
+// Our most important data structures: the reservation list, and the schedule
 var Reservations map[uint64]Reservation // map ID to reservations
 var Schedule []TimeSlice                // The schedule
 
+// The files from which we read the reservations & schedule
 var resdb *os.File
 var scheddb *os.File
 
@@ -44,6 +53,7 @@ var commands = []*Command{
 	cmdDel,
 	cmdShow,
 	cmdSub,
+	cmdPower,
 }
 
 var exitStatus = 0
@@ -51,45 +61,77 @@ var exitMu sync.Mutex
 
 // The configuration of the system
 type Config struct {
-	TFTPRoot              string
-	Prefix                string
-	Start                 int
-	End                   int
-	Padlen                int
-	Rackwidth             int
-	Rackheight            int
-	PowerOnCommand        string
-	PowerOffCommand       string
-	UseCobbler            bool
+	// TFTPRoot is where the igor configs are stored.
+	// It should be the root of your TFTP server if not using Cobbler
+	// If using Cobbler, it should be /var/lib/igor
+	TFTPRoot string
+	// The prefix for cluster nodes, e.g. 'kn' if nodes are named kn01 etc.
+	Prefix string
+	// The first node number in the cluster, (usually 1)
+	Start int
+	// The last node number in the cluster
+	End int
+	// How wide the numeric part of a node name must be padded.
+	// If you have a node named kn001, set Padlen to 3
+	// If you have one named kn1, set it to 0.
+	Padlen int
+	// Width and height of each rack in the cluster. Only used for display purposes
+	Rackwidth  int
+	Rackheight int
+	// printf-formatted string to power on/off a single node
+	// e.g. "powerman on %s"
+	PowerOnCommand  string
+	PowerOffCommand string
+	// True if using Cobbler to manage nodes
+	UseCobbler bool
+	// If using Cobbler, nodes not in a reservation will be set to this profile
 	CobblerDefaultProfile string
-	AutoReboot            bool
-	VLANMin               int               `json:"vlan_min"`
-	VLANMax               int               `json:"vlan_max"`
-	NodeMap               map[string]string `json:"node_map"`
-	Network               string
-	NetworkUser           string
-	NetworkPassword       string
-	NetworkURL            string `json:"network_url"`
+	// If set to true, nodes will be automatically rebooted when
+	// the reservation starts, if possible
+	AutoReboot bool
+	// VLAN segmentation options
+	// VLANMin/VLANMax: specify a range of VLANs to use
+	// NodeMap: maps hostnames to switch port names
+	// Network: selects which type of switch is in use. Set to "" to disable VLAN segmentation
+	// NetworkUser/NetworkPassword: login info for a switch user capable of configuring ports
+	// NetworkURL: HTTP URL for sending API commands to the switch
+	VLANMin         int               `json:"vlan_min"`
+	VLANMax         int               `json:"vlan_max"`
+	NodeMap         map[string]string `json:"node_map"`
+	Network         string
+	NetworkUser     string
+	NetworkPassword string
+	NetworkURL      string `json:"network_url"`
+	// Set this to a DNS server if multiple servers are available and hostname lookups are failing
+	DNSServer string
+	// A file to receive log info
+	LogFile string
+	// NodeLimit: max nodes a non-root user can reserve
+	// TimeLimit: max time a non-root user can reserve
+	NodeLimit int
+	TimeLimit int
 }
 
-// Represents a slice of time
+// Represents a slice of time in the Schedule
 type TimeSlice struct {
 	Start int64    // UNIX time
 	End   int64    // UNIX time
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
+// Represents a single reservation
 type Reservation struct {
-	ResName    string
-	Hosts      []string // separate, not a range
-	PXENames   []string // eg C000025B
-	StartTime  int64    // UNIX time
-	EndTime    int64    // UNIX time
-	Duration   float64  // minutes
-	Owner      string
-	ID         uint64
-	KernelArgs string
-	Vlan       int
+	ResName        string
+	CobblerProfile string   // Optional; if set, use this Cobbler profile instead of a kernel+initrd
+	Hosts          []string // separate, not a range
+	PXENames       []string // eg C000025B
+	StartTime      int64    // UNIX time
+	EndTime        int64    // UNIX time
+	Duration       float64  // minutes
+	Owner          string
+	ID             uint64
+	KernelArgs     string
+	Vlan           int
 }
 
 // Sort the slice of reservations based on the start time
@@ -115,119 +157,124 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
+// Runs at startup to handle automated tasks that need to happen now.
 // Read the reservations, delete any that are too old.
 // Copy in netboot files for any reservations that have just started
 func housekeeping() {
 	now := time.Now().Unix()
 
-	var cobblerProfiles string
+	cobblerProfiles := map[string]bool{}
 	if igorConfig.UseCobbler {
-		var err error
-		// Get a list of current profiles
-		cobblerProfiles, err = processWrapper("cobbler", "profile", "list")
-		if err != nil {
-			log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
-		}
+		cobblerProfiles = getCobblerProfiles()
 	}
 
 	for _, r := range Reservations {
+		// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists. This is how we verify if the reservation is installed or not
+		filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 		if r.EndTime < now {
+			// Reservation expired; delete it
 			deleteReservation(false, []string{r.ResName})
-		} else if r.StartTime < now {
+		} else if _, err := os.Stat(filename); os.IsNotExist(err) && r.StartTime < now {
+			// Reservation should have started but has not yet been installed
+			emitReservationLog("INSTALL", r)
 			// update network config
 			err := networkSet(r.Hosts, r.Vlan)
 			if err != nil {
 				log.Error("error setting network isolation: %v", err)
 			}
 			if !igorConfig.UseCobbler {
-				// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists
-				filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-				if _, err := os.Stat(filename); os.IsNotExist(err) {
-					log.Info("Installing files for reservation ", r.ResName)
+				// Manual file installation happens now
+				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+				masterfile, err := os.Create(filename)
+				if err != nil {
+					log.Fatal("failed to create %v -- %v", filename, err)
+				}
+				defer masterfile.Close()
+				masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
+				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
 
-					// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
-					masterfile, err := os.Create(fname)
+				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+				for _, pxename := range r.PXENames {
+					masterfile.Seek(0, 0)
+					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+					f, err := os.Create(fname)
 					if err != nil {
 						log.Fatal("failed to create %v -- %v", fname, err)
 					}
-					defer masterfile.Close()
-					masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
-					masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
-
-					// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-					for _, pxename := range r.PXENames {
-						masterfile.Seek(0, 0)
-						fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-						f, err := os.Create(fname)
-						if err != nil {
-							log.Fatal("failed to create %v -- %v", fname, err)
-						}
-						io.Copy(f, masterfile)
-						f.Close()
-					}
-					powerCycle(r.Hosts)
+					io.Copy(f, masterfile)
+					f.Close()
 				}
 			} else {
-				// Check if the reservation already exists
-				if !strings.Contains(cobblerProfiles, "igor_"+r.ResName) {
-					log.Info("Configuring cobbler distro and profile")
+				// Configure Cobbler to boot the correct stuff
+				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
+				if r.CobblerProfile == "" && !cobblerProfiles["igor_"+r.ResName] {
+					// Create the distro from the kernel+ramdisk
 					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
+
+					// Create a profile from the distro we just made
 					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
-					for _, host := range r.Hosts {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName)
+
+					// Now set each host to boot from that profile
+					// Do it in parallel because Cobbler commands are slow
+					done := make(chan bool)
+					systemfunc := func(h string) {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile=igor_"+r.ResName)
 						if err != nil {
 							log.Fatal("cobbler: %v", err)
 						}
+						// We make sure to set netboot enabled so the nodes can boot
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+						done <- true
 					}
-					powerCycle(r.Hosts)
+					for _, host := range r.Hosts {
+						go systemfunc(host)
+					}
+					for _, _ = range r.Hosts {
+						<-done
+					}
+				} else if r.CobblerProfile != "" && cobblerProfiles[r.CobblerProfile] {
+					// If the requested profile exists, go ahead and set the nodes to use it
+					done := make(chan bool)
+					systemfunc := func(h string) {
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+r.CobblerProfile)
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+						// We make sure to set netboot enabled so the nodes can boot
+						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
+						if err != nil {
+							log.Fatal("cobbler: %v", err)
+						}
+						done <- true
+					}
+					for _, host := range r.Hosts {
+						go systemfunc(host)
+					}
+					for _, _ = range r.Hosts {
+						<-done
+					}
 				}
+				os.Create(filename)
 			}
+			// Now reboot the hosts (if autoreboot is set)
+			powerCycle(r.Hosts)
 		}
 	}
 
+	// Clean up the schedule and write it out
 	expireSchedule()
 	putSchedule()
-}
-
-func powerCycle(Hosts []string) {
-	if igorConfig.AutoReboot {
-		if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
-			// Use non-cobbler commands
-			for _, h := range Hosts {
-				command := append(strings.Split(igorConfig.PowerOffCommand, " "), h)
-				fmt.Printf("command = %v\n", command)
-				_, err := processWrapper(command...)
-				if err != nil {
-					log.Error("power off command returned %v", err)
-				}
-				command = append(strings.Split(igorConfig.PowerOnCommand, " "), h)
-				_, err = processWrapper(command...)
-				if err != nil {
-					log.Error("power on command returned %v", err)
-				}
-			}
-		} else if igorConfig.UseCobbler {
-			for _, h := range Hosts {
-				_, err := processWrapper("cobbler", "system", "poweroff", "--name="+h)
-				if err != nil {
-					log.Error("cobbler power off command returned %v", err)
-				}
-				_, err = processWrapper("cobbler", "system", "poweron", "--name="+h)
-				if err != nil {
-					log.Error("cobbler power on command returned %v", err)
-				}
-			}
-		}
-	}
 }
 
 func init() {
@@ -252,9 +299,23 @@ func main() {
 		return
 	}
 
+	if args[0] == "version" {
+		printVersion()
+		return
+	}
+
 	rand.Seed(time.Now().Unix())
 
 	igorConfig = readConfig(*configpath)
+
+	// Add another logger for the logfile, if set
+	if igorConfig.LogFile != "" {
+		logfile, err := os.OpenFile(igorConfig.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+		if err != nil {
+			log.Fatal("Couldn't create logfile %v: %v", igorConfig.LogFile, err)
+		}
+		log.AddLogger("file", logfile, log.INFO, false)
+	}
 
 	// Read in the reservations
 	// We open the file here so resdb.Close() doesn't happen until program exit
@@ -266,7 +327,10 @@ func main() {
 	defer resdb.Close()
 	// This should prevent anyone else from modifying the reservation file while
 	// we're using it. Bonus: Flock goes away if the program crashes so state is easy
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+		// TODO: should we wait?
+		log.Fatal("unable to lock reservations file -- someone else is running igor")
+	}
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 
 	getReservations()
@@ -279,7 +343,10 @@ func main() {
 	}
 	defer resdb.Close()
 	// We probably don't need to lock this too but I'm playing it safe
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
+	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+		// TODO: should we wait?
+		log.Fatal("unable to lock schedule file -- someone else is running igor")
+	}
 	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
@@ -316,6 +383,7 @@ func getReservations() {
 	}
 }
 
+// Read in the schedule from the already-open schedule file
 func getSchedule() {
 	dec := json.NewDecoder(scheddb)
 	err := dec.Decode(&Schedule)
@@ -325,6 +393,7 @@ func getSchedule() {
 	}
 }
 
+// Write out the reservations
 func putReservations() {
 	// Truncate the existing reservation file
 	resdb.Truncate(0)
@@ -335,6 +404,7 @@ func putReservations() {
 	resdb.Sync()
 }
 
+// Write out the schedule
 func putSchedule() {
 	// Truncate the existing schedule file
 	scheddb.Truncate(0)
@@ -345,6 +415,7 @@ func putSchedule() {
 	scheddb.Sync()
 }
 
+// Read in the configuration from the specified path.
 func readConfig(path string) (c Config) {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {

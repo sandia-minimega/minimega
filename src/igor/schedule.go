@@ -12,6 +12,7 @@ import (
 )
 
 // Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries
+// Basically: figures out where in the list of nodes there are 'count' unallocated nodes.
 func findContiguousBlock(nodes []uint64, count int) ([][]int, error) {
 	result := [][]int{}
 	for i := 0; i+count <= len(nodes); i++ {
@@ -30,6 +31,8 @@ func findContiguousBlock(nodes []uint64, count int) ([][]int, error) {
 	}
 }
 
+// Checks if the nodes at requestedindexes within the clusternodes array are all set to 0,
+// meaning nothing has reserved them.
 func areNodesFree(clusternodes []uint64, requestedindexes []int) bool {
 	for _, idx := range requestedindexes {
 		if !isFree(clusternodes, idx, 1) {
@@ -39,16 +42,17 @@ func areNodesFree(clusternodes []uint64, requestedindexes []int) bool {
 	return true
 }
 
-// Returns true if nodes[index] through nodes[index+count-1] are free
+// Returns true if nodes[index] through nodes[index+count-1] are free (set to 0)
 func isFree(nodes []uint64, index, count int) bool {
 	for i := index; i < index+count; i++ {
-		if nodes[index] != 0 {
+		if nodes[i] != 0 {
 			return false
 		}
 	}
 	return true
 }
 
+// Find the first available reservation of 'minutes' length and 'nodecount' nodes.
 func findReservation(minutes, nodecount int) (Reservation, []TimeSlice, error) {
 	return findReservationAfter(minutes, nodecount, time.Now().Unix())
 }
@@ -94,9 +98,9 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 
 	res.ID = uint64(rand.Int63())
 
-	// We start with the *second* time slice, because the first is the current slice
-	// and is partially consumed
-	for i := 1; ; i++ {
+	// We start with the current time slice, even though it is partially consumed
+	// This is to keep the reservation from starting 1 minute into the future
+	for i := 0; ; i++ {
 		// Make sure the Schedule has enough time left in it
 		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
 			// This will guarantee we'll have enough space for the reservation
@@ -108,6 +112,7 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 		}
 
 		s := Schedule[i]
+		// 'blocks' is a slice of cluster segments which are not allocated yet; in other words, potential sets of nodes to allocate
 		var blocks [][]int
 		// Check if there's any open blocks in this slice
 		if specific {
@@ -124,15 +129,19 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 		}
 
 		// For each of the blocks...
+	BlockLoop:
 		for _, b := range blocks {
 			// Make a new starter schedule
 			newSched = Schedule
 			var nodenames []string
+			// Make sure the block we're checking is free for as long as we need it.
 			for j := 0; j < slices; j++ {
 				nodenames = []string{}
 				// For simplicity, we'll end up re-checking the first slice, but who cares
+				// If the block of nodes we're looking at are available, mark them as 'ours', otherwise
+				// move on to the next block
 				if !areNodesFree(newSched[i+j].Nodes, b) {
-					break
+					continue BlockLoop
 				} else {
 					// Mark those nodes reserved
 					//for k := b; k < b+nodecount; k++ {
@@ -169,6 +178,7 @@ Done:
 	return res, newSched, nil
 }
 
+// Create an empty schedule, in case we don't have one or the old one completely expired.
 func initializeSchedule() {
 	// Create a 'starter'
 	start := time.Now().Truncate(time.Minute * MINUTES_PER_SLICE) // round down
@@ -182,6 +192,7 @@ func initializeSchedule() {
 	extendSchedule(MIN_SCHED_LEN - MINUTES_PER_SLICE) // we already have one slice so subtract
 }
 
+// Clear out outdated time slices from the schedule and extend if needed
 func expireSchedule() {
 	// If the last element of the schedule is expired, or it's empty, let's start fresh
 	if len(Schedule) == 0 || Schedule[len(Schedule)-1].End < time.Now().Unix() {
@@ -203,6 +214,7 @@ func expireSchedule() {
 	}
 }
 
+// Extend the schedule to be 'minutes' long.
 func extendSchedule(minutes int) {
 	size := igorConfig.End - igorConfig.Start + 1 // size of node slice
 

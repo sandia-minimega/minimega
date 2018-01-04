@@ -9,9 +9,10 @@ import (
 	"io"
 	log "minilog"
 	"os"
-	"os/user"
 	"path/filepath"
 	"ranges"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -25,36 +26,48 @@ REQUIRED FLAGS:
 
 The -r flag sets the name for the reservation.
 
-The -k flag gives the location of the kernel the nodes should boot. This
-kernel will be copied to a separate directory for use.
+The -k flag gives the location of the kernel the nodes should boot. This kernel
+will be copied to a separate directory for use.
 
-The -i flag gives the location of the initrd the nodes should boot. This
-file will be copied to a separate directory for use.
+The -i flag gives the location of the initrd the nodes should boot. This file
+will be copied to a separate directory for use.
 
-The -n flag indicates that the specified number of nodes should be
-included in the reservation. The first available nodes will be allocated.
+The -profile flag gives the name of a Cobbler profile the nodes should boot.
+This flag takes precedence over the -k and -i flags.
+
+The -n flag indicates that the specified number of nodes should be included in
+the reservation. The first available nodes will be allocated.
 
 OPTIONAL FLAGS:
 
 The -c flag sets any kernel command line arguments. (eg "console=tty0").
 
-The -t flag is used to specify the reservation time in integer minutes. (default = 60)
+The -t flag is used to specify the reservation time. Time denominations should
+be specified in days(d), hours(h), and minutes(m), in that order. Unitless
+numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To
+make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6
+hours, 30 minutes: -t 4d6h30m (default = 60m).
 
-The -s flag is a boolean to enable 'speculative' mode; this will print a selection of available times for the reservation, but will not actually make the reservation. Intended to be used with the -a flag to select a specific time slot.
+The -s flag is a boolean to enable 'speculative' mode; this will print a
+selection of available times for the reservation, but will not actually make
+the reservation. Intended to be used with the -a flag to select a specific time
+slot.
 
-The -a flag indicates that the reservation should take place on or after the specified time, given in the format "Jan 2 15:04". Especially useful in conjunction with the -s flag.
-	`,
+The -a flag indicates that the reservation should take place on or after the
+specified time, given in the format "2017-Jan-2-15:04". Especially useful in
+conjunction with the -s flag.`,
 }
 
-var subR string // -r flag
-var subK string // -k flag
-var subI string // -i
-var subN int    // -n
-var subC string // -c
-var subT int    // -t
-var subS bool   // -s
-var subA string // -a
-var subW string // -w
+var subR string       // -r flag
+var subK string       // -k flag
+var subI string       // -i
+var subN int          // -n
+var subC string       // -c
+var subT string       // -t
+var subS bool         // -s
+var subA string       // -a
+var subW string       // -w
+var subProfile string // -profile
 
 func init() {
 	// break init cycle
@@ -65,10 +78,11 @@ func init() {
 	cmdSub.Flag.StringVar(&subI, "i", "", "")
 	cmdSub.Flag.IntVar(&subN, "n", 0, "")
 	cmdSub.Flag.StringVar(&subC, "c", "", "")
-	cmdSub.Flag.IntVar(&subT, "t", 60, "")
+	cmdSub.Flag.StringVar(&subT, "t", "60m", "")
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
+	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
@@ -77,14 +91,60 @@ func runSub(cmd *Command, args []string) {
 	var newSched []TimeSlice    // the new schedule
 	format := "2006-Jan-2-15:04"
 
-	// validate arguments
-	if subR == "" || subK == "" || subI == "" || (subN == 0 && subW == "") {
-		help([]string{"sub"})
-		log.Fatalln("Missing required argument")
+	// duration is in minutes
+	duration := 0
 
+	v, err := strconv.Atoi(subT)
+	if err == nil {
+		duration = v
+	} else {
+		index := strings.Index(subT, "d")
+		if index > 0 {
+			days, err := strconv.Atoi(subT[:index])
+			if err != nil {
+				log.Fatal("unable to parse -t: %v", err)
+			}
+			duration = days * 24 * 60 // convert to minutes
+		}
+
+		if index+1 < len(subT) {
+			v, err := time.ParseDuration(subT[index+1:])
+			if err != nil {
+				log.Fatal("unable to parse -t: %v", err)
+			}
+			duration += int(v / time.Minute)
+		}
 	}
 
-	user, err := user.Current()
+	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
+		duration = MINUTES_PER_SLICE
+	}
+	log.Debug("duration: %v minutes", duration)
+
+	// validate arguments
+	if subR == "" || (subN == 0 && subW == "") {
+		help([]string{"sub"})
+		log.Fatalln("Missing required argument")
+	}
+
+	if (subK == "" || subI == "") && subProfile == "" {
+		help([]string{"sub"})
+		log.Fatalln("Must specify either a kernel & initrd, or a Cobbler profile")
+	}
+
+	if subProfile != "" && !igorConfig.UseCobbler {
+		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
+	}
+
+	// Validate the cobbler profile
+	if subProfile != "" {
+		cobblerProfiles := getCobblerProfiles()
+		if !cobblerProfiles[subProfile] {
+			log.Fatal("Cobbler profile does not exist: %v", subProfile)
+		}
+	}
+
+	user, err := getUser()
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
@@ -92,7 +152,7 @@ func runSub(cmd *Command, args []string) {
 	// Make sure there's not already a reservation with this name
 	for _, r := range Reservations {
 		if r.ResName == subR {
-			log.Fatalln("A reservation named ", subR, " already exists.")
+			log.Fatal("A reservation named %v already exists.", subR)
 		}
 	}
 
@@ -100,9 +160,24 @@ func runSub(cmd *Command, args []string) {
 	if subW != "" {
 		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 		nodes, _ = rnge.SplitRange(subW)
+		if len(nodes) == 0 {
+			log.Fatal("Couldn't parse node specification %v", subW)
+		}
 	}
 
-	when := time.Now()
+	// Make sure the reservation doesn't exceed any limits
+	if user.Username != "root" && igorConfig.NodeLimit > 0 {
+		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
+			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
+		}
+	}
+	if user.Username != "root" && igorConfig.TimeLimit > 0 {
+		if duration > igorConfig.TimeLimit {
+			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
+		}
+	}
+
+	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
 		t, _ := time.Parse(format, subA)
@@ -117,12 +192,12 @@ func runSub(cmd *Command, args []string) {
 		for i := 0; i < 10; i++ {
 			var r Reservation
 			if subN > 0 {
-				r, _, err = findReservationAfter(subT, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationAfter(duration, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
 			} else if subW != "" {
-				r, _, err = findReservationGeneric(subT, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
+				r, _, err = findReservationGeneric(duration, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
 				if err != nil {
 					log.Fatalln(err)
 				}
@@ -132,10 +207,13 @@ func runSub(cmd *Command, args []string) {
 		return
 	}
 
-	if subN > 0 {
-		reservation, newSched, err = findReservationAfter(subT, subN, when.Unix())
-	} else if subW != "" {
-		reservation, newSched, err = findReservationGeneric(subT, 0, nodes, true, when.Unix())
+	if subW != "" {
+		if subN > 0 {
+			log.Fatalln("Both -n and -w options used. Operation canceled.")
+		}
+		reservation, newSched, err = findReservationGeneric(duration, 0, nodes, true, when.Unix())
+	} else if subN > 0 {
+		reservation, newSched, err = findReservationAfter(duration, subN, when.Unix())
 	}
 	if err != nil {
 		log.Fatalln(err)
@@ -143,10 +221,11 @@ func runSub(cmd *Command, args []string) {
 
 	// pick a network segment
 	var vlan int
+VlanLoop:
 	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
 		for _, r := range Reservations {
 			if vlan == r.Vlan {
-				continue
+				continue VlanLoop
 			}
 		}
 		break
@@ -159,46 +238,52 @@ func runSub(cmd *Command, args []string) {
 	reservation.Owner = user.Username
 	reservation.ResName = subR
 	reservation.KernelArgs = subC
+	reservation.CobblerProfile = subProfile // safe to do even if unset
 
 	// Add it to the list of reservations
 	Reservations[reservation.ID] = reservation
 
-	// copy kernel and initrd
-	// 1. Validate and open source files
-	ksource, err := os.Open(subK)
-	if err != nil {
-		log.Fatal("couldn't open kernel: %v", err)
-	}
-	isource, err := os.Open(subI)
-	if err != nil {
-		log.Fatal("couldn't open initrd: %v", err)
-	}
+	// If we're not doing a Cobbler profile...
+	if subProfile == "" {
+		// copy kernel and initrd
+		// 1. Validate and open source files
+		ksource, err := os.Open(subK)
+		if err != nil {
+			log.Fatal("couldn't open kernel: %v", err)
+		}
+		isource, err := os.Open(subI)
+		if err != nil {
+			log.Fatal("couldn't open initrd: %v", err)
+		}
 
-	// make kernel copy
-	fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
-	kdest, err := os.Create(fname)
-	if err != nil {
-		log.Fatal("failed to create %v -- %v", fname, err)
-	}
-	io.Copy(kdest, ksource)
-	kdest.Close()
-	ksource.Close()
+		// make kernel copy
+		fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
+		kdest, err := os.Create(fname)
+		if err != nil {
+			log.Fatal("failed to create %v -- %v", fname, err)
+		}
+		io.Copy(kdest, ksource)
+		kdest.Close()
+		ksource.Close()
 
-	// make initrd copy
-	fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
-	idest, err := os.Create(fname)
-	if err != nil {
-		log.Fatal("failed to create %v -- %v", fname, err)
+		// make initrd copy
+		fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
+		idest, err := os.Create(fname)
+		if err != nil {
+			log.Fatal("failed to create %v -- %v", fname, err)
+		}
+		io.Copy(idest, isource)
+		idest.Close()
+		isource.Close()
 	}
-	io.Copy(idest, isource)
-	idest.Close()
-	isource.Close()
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
 	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
+
+	emitReservationLog("CREATED", reservation)
 
 	Schedule = newSched
 
