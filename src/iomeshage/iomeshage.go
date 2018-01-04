@@ -633,28 +633,37 @@ func (iom *IOMeshage) Status() []*Transfer {
 
 // Delete a file
 func (iom *IOMeshage) Delete(file string) error {
-	file = iom.dirPrep(file)
-
-	if file == iom.base {
-		// the user *probably* doesn't want to actually remove the iom.base
-		// directory since them they wouldn't be able to transfer any more
-		// files. Instead, remove all it's contents.
-		log.Info("deleting iomeshage directory contents")
-		files, err := ioutil.ReadDir(file)
-		if err != nil {
-			return err
-		}
-
-		for _, file := range files {
-			if err := os.RemoveAll(filepath.Join(iom.base, file.Name())); err != nil {
-				return err
-			}
-		}
-
-		return nil
+	glob, err := filepath.Glob(iom.dirPrep(file))
+	if err != nil {
+		return err
 	}
 
-	return os.RemoveAll(file)
+	for _, v := range glob {
+		if v == iom.base {
+			// the user *probably* doesn't want to actually remove the iom.base
+			// directory since them they wouldn't be able to transfer any more
+			// files. Instead, remove all it's contents.
+			log.Info("deleting iomeshage directory contents")
+			files, err := ioutil.ReadDir(iom.base)
+			if err != nil {
+				return err
+			}
+
+			for _, file := range files {
+				if err := os.RemoveAll(filepath.Join(iom.base, file.Name())); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}
+
+		if err := os.RemoveAll(v); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Get a full path, with the iom base directory and any trailing "/".
