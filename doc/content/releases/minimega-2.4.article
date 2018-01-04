@@ -83,6 +83,10 @@ Added new API to change miniccc's log level at runtime: `cc`log`level`.
 
 It uses the value of `cc`filter` to determine which VMs to update.
 
+*** file API
+
+`file`delete` now supports globs (e.g. `file`delete`*.qcow`).
+
 *** router API
 
 Added `router`<vm>`gw` API to set the routers default gateway.
@@ -271,6 +275,10 @@ Added a flag to enable cookie jar for protonuke http and https clients.
 
 Added simple FTP server and client.
 
+Added size query parameter to `image.png` to request image of specified size.
+protonuke generates the image on the first request and stores it for future
+requests.
+
 *** powerbot
 
 Add IPMI support.
@@ -339,4 +347,4 @@ look for the web directory in `misc/web`).
 Source of the entire distribution is available on
 [[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
 for cloning or forking minimega on github.com. In order to build minimega, you
-will need a Go 1.8+ compiler, libreadline, and libpcap headers.
+will need a Go 1.8+ compiler and libpcap headers.
