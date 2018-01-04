@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io/ioutil"
 	"minicli"
+	log "minilog"
 	"os"
 	"path/filepath"
 	"ron"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var filter *ron.Filter
@@ -254,6 +256,43 @@ Send one or more files. Supports globs such as:
 				}
 
 				resp.Tabular = append(resp.Tabular, row)
+			}
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "clear commands",
+		Patterns: []string{
+			"clear commands",
+		},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			rond.ClearCommands()
+			return nil
+		}),
+	},
+	{
+		HelpShort: "wait sends a no-op command and waits for all clients to check in",
+		Patterns: []string{
+			"checkpoint",
+		},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			clients := rond.Clients()
+
+			// echo -n is pretty close to a no-op...
+			id := rond.NewCommand(&ron.Command{
+				Command: []string{"echo", "-n"},
+			})
+
+			for {
+				log.Info("waiting for clients to check in for command %v", id)
+
+				c := rond.GetCommand(id)
+				if c != nil && len(c.CheckedIn) == clients {
+					break
+				}
+
+				time.Sleep(10 * time.Second)
 			}
 
 			return nil

@@ -61,7 +61,8 @@ the node.
 
 You can also supply globs (wildcards) with the * operator. For example:
 
-	file get *.qcow2`,
+	file get *.qcow2
+	file delete *.qcow2`,
 		Patterns: []string{
 			"file <list,> [path]",
 			"file <get,> <file>",
