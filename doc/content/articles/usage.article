@@ -119,10 +119,11 @@ over the network.
 
 ** Command Prompt
 
-minimega uses a readline-based command prompt for input. Just like bash and
-other readline-based interfaces, you can use an `.inputrc` file, tab completion
-on paths, and history. Commands are input simply as `<command> <arguments>`,
-with arguments split on whitespace, and grouped by "" or '', just like bash.
+minimega uses a readline-like command prompt for input. Just like bash,
+minimega supports tab completion on commands and paths, line editing via
+emacs-like bindings, and history. Commands are input simply as
+`<command> <arguments>`, with arguments split on whitespace, and grouped by ""
+or '', just like bash.
 
 For example, to set a disk to boot (the list of commands are described later):
 

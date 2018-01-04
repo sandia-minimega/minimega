@@ -8,7 +8,6 @@ addons:
   apt:
     packages:
     - libpcap-dev
-    - libreadline-dev
 install: true
 script:
   - ./check.bash
