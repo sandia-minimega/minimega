@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	log "minilog"
@@ -240,12 +242,11 @@ VlanLoop:
 	reservation.KernelArgs = subC
 	reservation.CobblerProfile = subProfile // safe to do even if unset
 
-	// Add it to the list of reservations
-	Reservations[reservation.ID] = reservation
-
 	// If we're not doing a Cobbler profile...
 	if subProfile == "" {
-		// copy kernel and initrd
+		reservation.Kernel = subK
+		reservation.Initrd = subI
+
 		// 1. Validate and open source files
 		ksource, err := os.Open(subK)
 		if err != nil {
@@ -256,26 +257,56 @@ VlanLoop:
 			log.Fatal("couldn't open initrd: %v", err)
 		}
 
-		// make kernel copy
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
-		kdest, err := os.Create(fname)
+		// hash kernel
+		khash := sha1.New()
+		_, err = io.Copy(khash, ksource)
 		if err != nil {
-			log.Fatal("failed to create %v -- %v", fname, err)
+			log.Fatal("couldn't hash kernel %v: -- %v", subK, err)
 		}
-		io.Copy(kdest, ksource)
-		kdest.Close()
-		ksource.Close()
+		reservation.KernelHash = hex.EncodeToString(khash.Sum(nil))
 
-		// make initrd copy
-		fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
-		idest, err := os.Create(fname)
+		// hash initrd
+		ihash := sha1.New()
+		_, err = io.Copy(ihash, isource)
 		if err != nil {
-			log.Fatal("failed to create %v -- %v", fname, err)
+			log.Fatal("couldn't hash initrd %v: -- %v", subI, err)
 		}
-		io.Copy(idest, isource)
-		idest.Close()
-		isource.Close()
+		reservation.InitrdHash = hex.EncodeToString(ihash.Sum(nil))
+
+		// check if there's already a copy of this kernel
+		fname := filepath.Join(igorConfig.TFTPRoot, "igor", reservation.KernelHash+"-kernel")
+		_, err = os.Stat(fname)
+		if err != nil {
+			// make kernel copy
+			kdest, err := os.Create(fname)
+			if err != nil {
+				log.Fatal("failed to create %v -- %v", fname, err)
+			}
+			io.Copy(kdest, ksource)
+			kdest.Close()
+			ksource.Close()
+		} else {
+			log.Info("kernel with identical hash %v already exists, skipping copy.", reservation.KernelHash)
+		}
+
+		fname = filepath.Join(igorConfig.TFTPRoot, "igor", reservation.InitrdHash+"-initrd")
+		_, err = os.Stat(fname)
+		if err != nil {
+			// make initrd copy
+			idest, err := os.Create(fname)
+			if err != nil {
+				log.Fatal("failed to create %v -- %v", fname, err)
+			}
+			io.Copy(idest, isource)
+			idest.Close()
+			isource.Close()
+		} else {
+			log.Info("initrd with identical hash %v already exists, skipping copy.", reservation.InitrdHash)
+		}
 	}
+
+	// Add it to the list of reservations
+	Reservations[reservation.ID] = reservation
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)

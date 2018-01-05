@@ -132,6 +132,10 @@ type Reservation struct {
 	ID             uint64
 	KernelArgs     string
 	Vlan           int
+	Kernel         string
+	Initrd         string
+	KernelHash     string
+	InitrdHash     string
 }
 
 // Sort the slice of reservations based on the start time
@@ -192,8 +196,8 @@ func housekeeping() {
 				defer masterfile.Close()
 				masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
 				masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
+				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.KernelHash))
+				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.InitrdHash, r.KernelArgs))
 
 				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 				for _, pxename := range r.PXENames {
@@ -211,7 +215,7 @@ func housekeeping() {
 				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
 				if r.CobblerProfile == "" && !cobblerProfiles["igor_"+r.ResName] {
 					// Create the distro from the kernel+ramdisk
-					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
+					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
