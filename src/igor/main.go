@@ -8,6 +8,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -54,6 +55,7 @@ var commands = []*Command{
 	cmdShow,
 	cmdSub,
 	cmdPower,
+	cmdNotify,
 }
 
 var exitStatus = 0
@@ -110,6 +112,9 @@ type Config struct {
 	// TimeLimit: max time a non-root user can reserve
 	NodeLimit int
 	TimeLimit int
+
+	// Domain for email address
+	Domain string
 }
 
 // Represents a slice of time in the Schedule
@@ -340,7 +345,7 @@ func main() {
 	getReservations()
 
 	// Read in the schedule
-	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
+	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.gob")
 	scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
 		log.Warn("failed to open schedule file: %v", err)
@@ -389,7 +394,7 @@ func getReservations() {
 
 // Read in the schedule from the already-open schedule file
 func getSchedule() {
-	dec := json.NewDecoder(scheddb)
+	dec := gob.NewDecoder(scheddb)
 	err := dec.Decode(&Schedule)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
@@ -414,7 +419,7 @@ func putSchedule() {
 	scheddb.Truncate(0)
 	scheddb.Seek(0, 0)
 	// Write out the new schedule
-	enc := json.NewEncoder(scheddb)
+	enc := gob.NewEncoder(scheddb)
 	enc.Encode(Schedule)
 	scheddb.Sync()
 }
