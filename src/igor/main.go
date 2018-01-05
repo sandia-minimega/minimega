@@ -55,6 +55,7 @@ var commands = []*Command{
 	cmdShow,
 	cmdSub,
 	cmdPower,
+	cmdNotify,
 }
 
 var exitStatus = 0
@@ -111,6 +112,9 @@ type Config struct {
 	// TimeLimit: max time a non-root user can reserve
 	NodeLimit int
 	TimeLimit int
+
+	// Domain for email address
+	Domain string
 }
 
 // Represents a slice of time in the Schedule
