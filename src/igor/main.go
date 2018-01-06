@@ -313,7 +313,7 @@ func main() {
 		return
 	}
 
-	rand.Seed(time.Now().Unix())
+	rand.Seed(time.Now().UnixNano())
 
 	igorConfig = readConfig(*configpath)
 
@@ -350,13 +350,13 @@ func main() {
 	if err != nil {
 		log.Warn("failed to open schedule file: %v", err)
 	}
-	defer resdb.Close()
+	defer scheddb.Close()
 	// We probably don't need to lock this too but I'm playing it safe
-	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+	if err := syscall.Flock(int(scheddb.Fd()), syscall.LOCK_EX); err != nil {
 		// TODO: should we wait?
 		log.Fatal("unable to lock schedule file -- someone else is running igor")
 	}
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
+	defer syscall.Flock(int(scheddb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
 	// Here, we need to go through and delete any reservations which should be expired,
