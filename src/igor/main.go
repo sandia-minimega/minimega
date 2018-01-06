@@ -313,7 +313,7 @@ func main() {
 		return
 	}
 
-	rand.Seed(time.Now().Unix())
+	rand.Seed(time.Now().UnixNano())
 
 	igorConfig = readConfig(*configpath)
 
