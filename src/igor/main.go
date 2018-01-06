@@ -52,6 +52,7 @@ var scheddb *os.File
 var commands = []*Command{
 	cmdDel,
 	cmdShow,
+	cmdStats,
 	cmdSub,
 	cmdPower,
 }
