@@ -1,4 +1,4 @@
-vm config filesystem $minicccfs
+vm config filesystem $images/minicccfs
 vm config hostname foo
 vm launch container foo[0-2]
 
