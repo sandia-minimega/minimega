@@ -87,6 +87,52 @@ func init() {
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
+// install src into dir, using the hash as the file name. Returns the hash or
+// an error.
+func install(src, dir, suffix string) (string, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// hash the file
+	hash := sha1.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
+	}
+
+	fname := hex.EncodeToString(hash.Sum(nil))
+
+	dst := filepath.Join(dir, fname+suffix)
+
+	// copy the file if it doesn't already exist
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		// need to go back to the beginning of the file since we already read
+		// it once to do the hashing
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+
+		f2, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		defer f2.Close()
+
+		if _, err := io.Copy(f2, f); err != nil {
+			return "", fmt.Errorf("unable to install %v: %v", src, err)
+		}
+	} else if err != nil {
+		// strange...
+		return "", err
+	} else {
+		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
+	}
+
+	return fname, nil
+}
+
 func runSub(cmd *Command, args []string) {
 	var nodes []string          // if the user has requested specific nodes
 	var reservation Reservation // the new reservation
@@ -247,61 +293,19 @@ VlanLoop:
 		reservation.Kernel = subK
 		reservation.Initrd = subI
 
-		// 1. Validate and open source files
-		ksource, err := os.Open(subK)
-		if err != nil {
-			log.Fatal("couldn't open kernel: %v", err)
-		}
-		isource, err := os.Open(subI)
-		if err != nil {
-			log.Fatal("couldn't open initrd: %v", err)
-		}
+		dir := filepath.Join(igorConfig.TFTPRoot, "igor")
 
-		// hash kernel
-		khash := sha1.New()
-		_, err = io.Copy(khash, ksource)
-		if err != nil {
-			log.Fatal("couldn't hash kernel %v: -- %v", subK, err)
-		}
-		reservation.KernelHash = hex.EncodeToString(khash.Sum(nil))
-
-		// hash initrd
-		ihash := sha1.New()
-		_, err = io.Copy(ihash, isource)
-		if err != nil {
-			log.Fatal("couldn't hash initrd %v: -- %v", subI, err)
-		}
-		reservation.InitrdHash = hex.EncodeToString(ihash.Sum(nil))
-
-		// check if there's already a copy of this kernel
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", reservation.KernelHash+"-kernel")
-		_, err = os.Stat(fname)
-		if err != nil {
-			// make kernel copy
-			kdest, err := os.Create(fname)
-			if err != nil {
-				log.Fatal("failed to create %v -- %v", fname, err)
-			}
-			io.Copy(kdest, ksource)
-			kdest.Close()
-			ksource.Close()
+		if hash, err := install(subK, dir, "-kernel"); err != nil {
+			log.Fatal("reservation failed: %v", err)
 		} else {
-			log.Info("kernel with identical hash %v already exists, skipping copy.", reservation.KernelHash)
+			reservation.KernelHash = hash
 		}
 
-		fname = filepath.Join(igorConfig.TFTPRoot, "igor", reservation.InitrdHash+"-initrd")
-		_, err = os.Stat(fname)
-		if err != nil {
-			// make initrd copy
-			idest, err := os.Create(fname)
-			if err != nil {
-				log.Fatal("failed to create %v -- %v", fname, err)
-			}
-			io.Copy(idest, isource)
-			idest.Close()
-			isource.Close()
+		if hash, err := install(subI, dir, "-initrd"); err != nil {
+			// TODO: we may leak a kernel here
+			log.Fatal("reservation failed: %v", err)
 		} else {
-			log.Info("initrd with identical hash %v already exists, skipping copy.", reservation.InitrdHash)
+			reservation.InitrdHash = hash
 		}
 	}
 
@@ -321,6 +325,7 @@ VlanLoop:
 	// update the network config
 	err = networkSet(reservation.Hosts, vlan)
 	if err != nil {
+		// TODO: we may leak a kernel and initrd here
 		log.Fatal("error setting network isolation: %v", err)
 	}
 
