@@ -6,7 +6,7 @@ clear cc responses
 
 # launch VMs to serve DHCP
 vm config net LAN
-vm config filesystem $minirouterfs
+vm config filesystem $images/uminirouterfs
 vm launch container router
 
 router router interface 0 10.0.0.254/24
