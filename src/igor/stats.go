@@ -9,6 +9,7 @@ import (
 	"fmt"
 	log "minilog"
 	"os"
+	"ranges"
 	"strconv"
 	"strings"
 	"time"
@@ -36,12 +37,26 @@ func init() {
 
 }
 
+type Resdata struct {
+	User      string
+	ResStart  time.Time
+	ResEnd    time.Time
+	ActualEnd time.Time
+	Duration  int
+	Nodes     []string
+}
+
 type Stats struct {
 	// list of stats based on a user
-	NumRes int
-	NumNodes int
+	NumRes               int
+	NodesUsed            map[string]bool
+	NumNodes             int
 	TotalDurationMinutes int
 }
+
+var (
+	reservations = map[string][]Resdata{}
+)
 
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
@@ -55,10 +70,11 @@ func runStats(_ *Command, _ []string) {
 	}
 	duration = d
 
-	format := "2006/01/02"
+	formatshort := "2006/01/02"
+	formatlong := "2006-Jan-2-15:04"
 	now := time.Now()
 	start := now.AddDate(0, 0, -duration)
-	fmt.Printf("Start: %v; Now: %v\n", start, now)
+	//fmt.Printf("Start: %v; Now: %v\n", start, now)
 
 	// open and read in log file
 	f, err := os.Open(igorConfig.LogFile)
@@ -75,30 +91,67 @@ func runStats(_ *Command, _ []string) {
 		if len(fields) < 2 {
 			continue
 		}
-		tStamp, err := time.Parse(format, fields[0])
+		tStamp, err := time.Parse(formatshort, fields[0])
 		if err != nil {
-			fmt.Printf("Error parsing time stamp: %v\n", err)
+			//fmt.Printf("Error parsing time stamp: %v\n", err)
 			continue
 		}
 		if tStamp.Before(start) {
 			continue
 		}
-		if fields[4] != "INSTALL" {
-			continue
+
+		for _, a := range fields {
+			if a == "INSTALL" {
+				var st Stats
+				var err error
+				data := Resdata{}
+				data.User = strings.TrimLeft(fields[5], "user=")
+				resname := strings.TrimLeft(fields[6], "resname=")
+				nodes := strings.TrimLeft(fields[7], "nodes=")
+				data.ResStart, err = time.Parse(formatlong, strings.TrimLeft(fields[8], "start="))
+				if err != nil {
+					log.Fatal("%v", err)
+				}
+				data.ResEnd, err = time.Parse(formatlong, strings.TrimLeft(fields[9], "end="))
+				if err != nil {
+					log.Fatal("%v", err)
+				}
+				data.Duration, err = strconv.Atoi(strings.TrimLeft(fields[10], "duration="))
+				if err != nil {
+					log.Fatal("Error converting duration: %v", err)
+				}
+				if s, ok := statMap[data.User]; ok {
+					st = s
+				} else {
+					st = Stats{}
+					st.NodesUsed = make(map[string]bool)
+				}
+				st.NumRes++
+				st.TotalDurationMinutes += duration
+				nodelist, err := ranges.SplitList(nodes)
+				if err != nil {
+					log.Fatal("%v", err)
+				}
+				for _, n := range nodelist {
+					if st.NodesUsed[n] != true {
+						st.NodesUsed[n] = true
+						st.NumNodes += 1
+					}
+				}
+				data.Nodes = nodelist
+				statMap[data.User] = st
+				reservations[resname] = append(reservations[resname], data)
+			}
 		}
-		var st Stats
-		userField := fields[5]
-		user := userField[5:]
-		if s, ok := statMap[user]; ok  {
-			st = s
-		} else {
-			st = Stats{}
-		}
-		st.NumRes++
-		statMap[user] = st
-		fmt.Printf("%v\n", tStamp)
+		//fmt.Printf("%v\n", tStamp)
 	}
 
 	// Build database
-	fmt.Printf("%v\n",statMap)
+	for k,v := range reservations {
+		fmt.Printf("\n%v\n", k)
+		for _, d := range v {
+			fmt.Printf("%v\n",d)
+		}
+	}
+	fmt.Printf("\n%v\n", statMap)
 }
