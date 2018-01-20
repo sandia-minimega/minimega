@@ -36,17 +36,6 @@ func init() {
 
 	cmdExtend.Flag.StringVar(&subR, "r", "", "")
 	cmdExtend.Flag.StringVar(&subT, "t", "60m", "")
-/*	cmdExtend.Flag.StringVar(&subR, "r", "", "")
-	cmdExtend.Flag.StringVar(&subK, "k", "", "")
-	cmdExtend.Flag.StringVar(&subI, "i", "", "")
-	cmdExtend.Flag.IntVar(&subN, "n", 0, "")
-	cmdExtend.Flag.StringVar(&subC, "c", "", "")
-	cmdExtend.Flag.StringVar(&subT, "t", "60m", "")
-	cmdExtend.Flag.BoolVar(&subS, "s", false, "")
-	cmdExtend.Flag.StringVar(&subA, "a", "", "")
-	cmdExtend.Flag.StringVar(&subW, "w", "", "")
-	cmdExtend.Flag.StringVar(&subProfile, "profile", "", "")
-*/
 }
 
 func runExtend(cmd *Command, args []string) {
