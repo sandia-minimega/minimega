@@ -1,7 +1,7 @@
 # ospf routes
 clear cc responses
-vm config filesystem $minirouterfs
-vm config preinit $minirouterfs/preinit
+vm config filesystem $images/uminirouterfs
+vm config preinit $images/uminirouterfs/preinit
 vm config net a b
 vm launch container routerA
 vm config net b c
