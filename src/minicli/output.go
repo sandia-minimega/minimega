@@ -118,7 +118,7 @@ func (r Responses) Error() string {
 
 			// add a newline unless this is our last iteration
 			if i != len(r)-1 {
-				fmt.Fprintf(&buf, "\n")
+				io.WriteString(&buf, "\n")
 			}
 		}
 	}
@@ -220,21 +220,21 @@ func (r Responses) printTabular(buf io.Writer, header []string, data [][]string)
 	if r.headers() {
 		for i, h := range header {
 			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
+				io.WriteString(w, "\t| ")
 			}
-			fmt.Fprintf(w, h)
+			io.WriteString(w, h)
 		}
-		fmt.Fprintf(w, "\n")
+		io.WriteString(w, "\n")
 	}
 
 	for _, row := range data {
 		for i, v := range row {
 			if i != 0 {
-				fmt.Fprintf(w, "\t| ")
+				io.WriteString(w, "\t| ")
 			}
-			fmt.Fprintf(w, v)
+			io.WriteString(w, v)
 		}
-		fmt.Fprintf(w, "\n")
+		io.WriteString(w, "\n")
 	}
 }
 
