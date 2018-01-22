@@ -79,7 +79,7 @@ def print_rows(resps):
 	'''
 	for resp in resps:
 		for row in resp['Tabular'] or []:
-			print row
+			print(row)
 
 
 class minimega:
