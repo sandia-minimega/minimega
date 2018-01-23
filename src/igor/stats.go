@@ -23,16 +23,23 @@ Show usage statistics for a range of days prior to today or duration of log hist
 
 REQUIRED FLAGS:
 
-The -d flag specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the previous 7 days (provided igor log goes back that far.)
+-d   Duration (in days) - specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the previous 7 days (provided igor log goes back that far.)
+
+OPTIONAL FLAGS:
+
+-v   verbose
+
 	`,
 }
 
 var subD string // -d flag
+var subV bool   // -v flag
 
 func init() {
 	// break init cycle
 	cmdStats.Run = runStats
 	cmdStats.Flag.StringVar(&subD, "d", "", "")
+	cmdStats.Flag.BoolVar(&subV, "v", false, "")
 
 }
 
@@ -63,7 +70,7 @@ var (
 )
 
 // Helper function to capture reservation data from logs and store for processing
-func gatherInstallData(fields []string, s time.Time, e time.Time) ResData {
+func gatherInstallData(fields []string, s time.Time, e time.Time) {
 	var err error
 	rd := ResData{}
 
@@ -84,7 +91,6 @@ func gatherInstallData(fields []string, s time.Time, e time.Time) ResData {
 	rd.Nodes = nodelist
 	user := strings.TrimLeft(fields[5], "user=")
 	reservations[user] = append(reservations[user], rd)
-	return rd
 }
 
 func gatherDeleteData(fields []string, s time.Time, e time.Time) {
@@ -98,11 +104,6 @@ func gatherDeleteData(fields []string, s time.Time, e time.Time) {
 		log.Fatal("%v", err)
 	}
 	ae := time.Date(ad.Year(), ad.Month(), ad.Day(), at.Hour(), at.Minute(), at.Second(), 0, at.Location())
-	fmt.Printf("ae: %v\nstatStartDate: %v\n", ae, statStartDate)
-	// if it was deleted before our stat range, we don't care about this
-	if ae.Before(statStartDate) {
-		return
-	}
 
 	resName := strings.TrimLeft(fields[6], "resname=")
 	user := strings.TrimLeft(fields[5], "user=")
@@ -111,6 +112,7 @@ func gatherDeleteData(fields []string, s time.Time, e time.Time) {
 		if r.ResStart == s && r.ResName == resName {
 			// this is a delete for a res we know about
 			r.ActualEnd = ae
+			r.ActualDuration = ae.Sub(r.ResStart)
 			reservations[user][i] = r
 			notFound = false
 		}
@@ -118,14 +120,10 @@ func gatherDeleteData(fields []string, s time.Time, e time.Time) {
 	if notFound {
 		// We did not know about this reservation
 		// the log was likely reset after it started
-		rd := gatherInstallData(fields, s, e)
-		rd.ActualEnd = ae
-		rd.ActualDuration = ae.Sub(statStartDate)
-		for i, r := range reservations[user] {
-			if r.ResStart == s && r.ResName == resName {
-				reservations[user][i] = rd
-			}
-		}
+		gatherInstallData(fields, s, e)
+		idx := len(reservations[user]) - 1
+		reservations[user][idx].ActualEnd = ae
+		reservations[user][idx].ActualDuration = ae.Sub(statStartDate)
 	}
 }
 
@@ -185,40 +183,59 @@ func runStats(_ *Command, _ []string) {
 	for n, rd := range reservations {
 		var uResCount, uEarlyCancel int
 		var uDuration time.Duration
-
-		globalStats.NumUsers += 1
-		fmt.Printf("%v\n", n)
+		userHadValidRes := false
+		if subV {
+			fmt.Printf("%v\n", n)
+		}
 		for _, d := range rd {
-			fmt.Printf("Res: %v\n", d.ResName)
+			if d.ActualEnd.Before(statStartDate) {
+				continue //ended before period we care about
+			}
+			if d.ActualEnd.Before(d.ResStart) {
+				continue //deleted a queued res that had not yet started
+			}
+			userHadValidRes = true
+			if subV {
+				fmt.Printf("Res: %v\n", d.ResName)
+			}
 			for _, n := range d.Nodes {
-				fmt.Printf("%v\n", n)
+				if subV {
+					fmt.Printf("%v ", n)
+				}
 				globalStats.NodesUsed[n] += 1
 			}
-			fmt.Printf("ResStart: %v, ResEnd: %v\n", d.ResStart, d.ResEnd)
+			nodeMultiplier := time.Duration(len(d.Nodes))
+			if subV {
+				fmt.Printf("\nResStart: %v, ResEnd: %v\n", d.ResStart, d.ResEnd)
+			}
 			if d.ActualDuration.Minutes() == 0 { // we never saw this res get deleted
 				if statStartDate.Before(d.ResStart) {
-					uDuration += time.Now().Sub(d.ResStart)
+					uDuration += nodeMultiplier * time.Now().Sub(d.ResStart)
 				} else {
-					uDuration += time.Now().Sub(statStartDate)
+					uDuration += nodeMultiplier * time.Now().Sub(statStartDate)
 				}
 			} else {
-				uDuration += d.ActualDuration
+				uDuration += nodeMultiplier * d.ActualDuration
 			}
 			uResCount += 1
 			earlyCancel := false
-			// fuzzy math here because igor log uses 2 different granularities of timestamps
-			// so direct comparisons won't work
-			//TODO: Fix timestamp inconsistencies in igor logs
-			if (d.ResEnd.Sub(d.ActualEnd).Minutes()) < 1.0 {
+			// fuzzy math here because igor takes a few seconds to delete a res
+			if (d.ResEnd.Sub(d.ActualEnd).Minutes()) > 1.0 {
 				earlyCancel = true
 				uEarlyCancel += 1
 			}
-			fmt.Printf("Actual End: %v, Actual Duration: %v\n", d.ActualEnd, uDuration)
-			fmt.Printf("Early Cancel: %v\n\n", earlyCancel)
+			if subV {
+				fmt.Printf("Actual End: %v, Actual Duration: %v\n", d.ActualEnd, d.ActualDuration)
+				fmt.Printf("Early Cancel: %v\n", earlyCancel)
+				fmt.Printf("Total user duration: %v\n\n", uDuration)
+			}
 		}
-		globalStats.NumRes += uResCount
-		globalStats.TotalDurationMinutes += uDuration
-		globalStats.TotalEarlyCancels += uEarlyCancel
+		if userHadValidRes {
+			globalStats.NumUsers += 1
+			globalStats.NumRes += uResCount
+			globalStats.TotalDurationMinutes += uDuration
+			globalStats.TotalEarlyCancels += uEarlyCancel
+		}
 	}
 	for _, d := range globalStats.NodesUsed {
 		if d > 0 {
