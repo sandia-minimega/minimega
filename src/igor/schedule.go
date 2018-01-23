@@ -44,6 +44,9 @@ func areNodesFree(clusternodes []uint64, requestedindexes []int) bool {
 
 // Returns true if nodes[index] through nodes[index+count-1] are free (set to 0)
 func isFree(nodes []uint64, index, count int) bool {
+	if index+count > len(nodes) {
+		log.Fatalln("Requested nodes are out of range.")
+	}
 	for i := index; i < index+count; i++ {
 		if nodes[i] != 0 {
 			return false
