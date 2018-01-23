@@ -77,25 +77,23 @@ ip link set lo up
 ip link set eth0 up
 ip link set eth2 up
 
-# setup a minimega bridge with the 10G interface trunked and bring up other interfaces
-modprobe openvswitch_mod
+dhclient -v eth0
+
+# start openvswitch
 /etc/init.d/openvswitch-switch start
+
+# setup mega_bridge
 ovs-vsctl add-br mega_bridge
 ovs-vsctl set Bridge mega_bridge stp_enable=false
 ovs-vsctl add-port mega_bridge eth2
-
 ip link set mega_bridge up
 
-dhclient -v eth0
+# set the ip on mega_bridge to mimic the management IP
+ip=$(ip addr show dev eth0 | grep -Po 'inet \K[^ ]+' | sed s/192.168./10.100./)
+ip addr add dev mega_bridge $ip
 
-# reuse last two octets for experimental plane IP and do a reverse lookup on
-# that to figure out the hostname
-last=$(ip addr show dev eth0 | grep -Po 'inet \K[^/]+' | cut -d. -f3-4)
-if [ -n "$last" ]; then
-	addr=10.100.$last
-	ip addr add dev mega_bridge $addr/23
-	hostname $(nslookup $addr | grep name | awk '{print $4}' | sed 's/.$//')
-fi
+# set the hostname based on reverse lookup
+hostname $(nslookup ${ip%/*} | sed -n 's/.*name = \(.\+\)./\1/p')
 
 # ssh
 mkdir /var/run/sshd
