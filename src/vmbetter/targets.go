@@ -204,9 +204,9 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	log.LogAll(stdout, log.INFO, "cpio")
+	log.LogAll(stdout, log.DEBUG, "cpio")
 	// the cpio command outputs regular stuff to stderr, so i have a hack to push all output to the INFO level, instead of INFO/ERROR
-	log.LogAll(stderr, log.INFO, "cpio")
+	log.LogAll(stderr, log.DEBUG, "cpio")
 
 	err = cmd.Run()
 	if err != nil {
