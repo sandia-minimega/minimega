@@ -11,6 +11,18 @@ import (
 	"time"
 )
 
+func checkValidNodeRange(nodes []string) (bool, error) {
+	result := true
+	indexes, err := getNodeIndexes(nodes)
+	if err != nil {
+		return false, err
+	}
+	if indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1 {
+		return false, errors.New("Requested node range outside of allowable range")
+	}
+	return result, err
+}
+
 // Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries
 // Basically: figures out where in the list of nodes there are 'count' unallocated nodes.
 func findContiguousBlock(nodes []uint64, count int) ([][]int, error) {
@@ -44,9 +56,6 @@ func areNodesFree(clusternodes []uint64, requestedindexes []int) bool {
 
 // Returns true if nodes[index] through nodes[index+count-1] are free (set to 0)
 func isFree(nodes []uint64, index, count int) bool {
-	if index+count > len(nodes) {
-		log.Fatalln("Requested nodes are out of range.")
-	}
 	for i := index; i < index+count; i++ {
 		if nodes[i] != 0 {
 			return false
@@ -70,6 +79,20 @@ func findReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 	return findReservationGeneric(minutes, nodecount, []string{}, false, after)
 }
 
+// Helper function to convert string list of nodes into ints
+func getNodeIndexes(requestedNodes []string) ([]int, error) {
+	var requestedindexes []int
+	for _, hostname := range requestedNodes {
+		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
+		n, err := strconv.Atoi(ns)
+		if err != nil {
+			return requestedindexes, errors.New("invalid hostname " + hostname)
+		}
+		requestedindexes = append(requestedindexes, n-igorConfig.Start)
+	}
+	return requestedindexes, nil
+}
+
 // Finds a slice of 'nodecount' nodes that's available for the specified length of time
 // Returns a reservation and a slice of TimeSlices that can be used to replace
 // the current Schedule if the reservation is acceptable.
@@ -89,15 +112,7 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 	}
 
 	// convert hostnames to indexes
-	var requestedindexes []int
-	for _, hostname := range requestednodes {
-		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
-		n, err := strconv.Atoi(ns)
-		if err != nil {
-			return res, newSched, errors.New("invalid hostname " + hostname)
-		}
-		requestedindexes = append(requestedindexes, n-igorConfig.Start)
-	}
+	requestedindexes, err := getNodeIndexes(requestednodes)
 
 	res.ID = uint64(rand.Int63())
 

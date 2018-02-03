@@ -224,6 +224,9 @@ func runSub(cmd *Command, args []string) {
 			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
 		}
 	}
+	if inRange, err := checkValidNodeRange(nodes); !inRange {
+		log.Fatal("Invalid node range: %v", err)
+	}
 
 	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
 	if subA != "" {

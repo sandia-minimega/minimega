@@ -129,6 +129,11 @@ func runPower(cmd *Command, args []string) {
 		if len(nodes) == 0 {
 			log.Fatal("Couldn't parse node specification %v\n", subW)
 		}
+		// make sure the range is valid
+		if inRange, err := checkValidNodeRange(nodes); !inRange {
+			log.Fatal("Invalid node range: %v", err)
+		}
+
 		// This will be the list of nodes to actually power on/off (in a user-owned reservation)
 		var validatedNodes []string
 		for _, n := range nodes {
@@ -139,7 +144,7 @@ func runPower(cmd *Command, args []string) {
 				log.Fatal("choked on a node named %v", n)
 			}
 
-			resID := currentSched.Nodes[index]
+			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
 				if r.ID == resID && r.Owner == user.Username {
 					// Success! This node is in a reservation owned by the user
