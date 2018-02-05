@@ -9,7 +9,7 @@ import (
 	log "minilog"
 	"ranges"
 	"strconv"
-	"strings"
+//	"strings"
 	"time"
 )
 
@@ -42,35 +42,16 @@ func runExtend(cmd *Command, args []string) {
 	// duration is in minutes
 	duration := 0
 
-	v, err := strconv.Atoi(subT)
-	if err == nil {
-		duration = v
-	} else {
-		index := strings.Index(subT, "d")
-		if index > 0 {
-			days, err := strconv.Atoi(subT[:index])
-			if err != nil {
-				log.Fatal("unable to parse -t: %v", err)
-			}
-			duration = days * 24 * 60 // convert to minutes
-		}
-
-		if index+1 < len(subT) {
-			v, err := time.ParseDuration(subT[index+1:])
-			if err != nil {
-				log.Fatal("unable to parse -t: %v", err)
-			}
-			duration += int(v / time.Minute)
-		}
-	}
-
-	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
+	duration, err := parseDuration(subT)
+	if err != nil {
+		log.Fatal("unable to parse -t: %v", err)
+	} else if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
 		log.Fatal("Please specify an extension of at least %v minute(s) in length.", MINUTES_PER_SLICE)
 		//duration = MINUTES_PER_SLICE
 	}
 	log.Debug("duration: %v minutes", duration)
 
-	// validate arguments
+	// Validate arguments
 	if subR == "" || subT == "" {
 		help([]string{"extend"})
 		log.Fatalln("Missing required argument")
@@ -81,36 +62,46 @@ func runExtend(cmd *Command, args []string) {
 		log.Fatalln("cannot determine current user", err)
 	}
 
-	// Make sure the reservation doesn't exceed any limits
-	if user.Username != "root" && igorConfig.TimeLimit > 0 {
-		if duration > igorConfig.TimeLimit {
-			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
-		}
-	}
-
 	// Make sure there's already a reservation with this name
+	exists := false
+
 	for _, r := range Reservations {
-		if r.ResName == subR {
+		if r.ResName == subR { // The reservation name is unique
 			if r.Owner != user.Username {
-				log.Fatal("Insufficient permissions for accessing reservation %v", subR)
+				log.Fatal("You are not the owner of reservation %v", subR)
 			}
 
-			// Check to see if nodes are free to extend
-			hosts := r.Hosts
-			for _, s := range Reservations {
-				if s.ResName != r.ResName {
-					for _, i := range hosts {
-						for _, j := range s.Hosts {
-							if i == j && s.StartTime >= r.StartTime && s.StartTime < r.EndTime + int64(60*duration) {
-								log.Fatal("Cannot make reservation due to conflict with reservation %v", s.ResName)
-							}
-						}
+			// Make sure the reservation doesn't exceed any limits
+			if user.Username != "root" && igorConfig.TimeLimit > 0 {
+				if float64(duration) + r.Duration > float64(igorConfig.TimeLimit) {
+					log.Fatal("Only root can extend a reservation longer than %v minutes", igorConfig.TimeLimit)
+				}
+			}
+
+			// Check to see if nodes are free to extend; if so, update the Schedule
+			for i := 0; i < duration; i++ {
+				for _, host := range r.Hosts {
+					// Allow for rune-encoded cluster prefix names
+					preflen := len([]rune(igorConfig.Prefix))
+					// TODO: Needs a better check; will reserve nodes 1-5 if ccc[11-15] are reserved and someone dynamically
+					//	 changes the prefix from "ccc" (len 3) to "cccc" (len 4) in igor.conf
+					if preflen >= len([]rune(host)) {
+						log.Fatal("Could not parse cluster prefix name (Did you change your config file?)")
+					}
+					idx, err := strconv.Atoi(host[preflen:]) // Get node index, e.g. for "ccc[4-6],ccc8" idx iterates over 4,5,6,8
+					if err != nil {
+						//should not see this unless cluster node naming convention changes
+						log.Fatal("could not get host indices")
+					}
+					if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes, idx, idx) {
+						log.Fatal("Cannot extend reservation due to conflict")
+					} else {
+						Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes[idx] = r.ID
 					}
 				}
 			}
 
 			// Set new end time
-			fmt.Println(r.EndTime, duration, int64(60*duration))
 			r.EndTime += int64(60*duration)
 			r.Duration += float64(duration)
 
@@ -124,16 +115,15 @@ func runExtend(cmd *Command, args []string) {
 
 			emitReservationLog("EXTENDED", r)
 
+			exists = true
+
 			break
 		}
 	}
 
-	//TODO: Call new Sched
-	//Schedule = newSched
-
-	timefmt := "Jan 2 15:04"
-	for _, r := range Reservations {
-		fmt.Printf("%v, %v\n", r.ResName, time.Unix(r.EndTime, 0).Format(timefmt))
+	// If the reservation does not exist then we error out
+	if !exists {
+		log.Fatal("Reservation %v does not exist", subR)
 	}
 
 	// Update the reservation file
