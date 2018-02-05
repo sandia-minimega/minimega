@@ -13,8 +13,8 @@ import (
 	"os"
 	"path/filepath"
 	"ranges"
-	"strconv"
-	"strings"
+//	"strconv"
+//	"strings"
 	"time"
 )
 
@@ -141,7 +141,7 @@ func runSub(cmd *Command, args []string) {
 
 	// duration is in minutes
 	duration := 0
-
+/*
 	v, err := strconv.Atoi(subT)
 	if err == nil {
 		duration = v
@@ -163,8 +163,12 @@ func runSub(cmd *Command, args []string) {
 			duration += int(v / time.Minute)
 		}
 	}
+*/
 
-	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
+	duration, err := parseDuration(subT)
+	if err != nil {
+		log.Fatal("unable to parse -t: %v", err)
+	} else if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
 		duration = MINUTES_PER_SLICE
 	}
 	log.Debug("duration: %v minutes", duration)
