@@ -11,16 +11,12 @@ import (
 	"time"
 )
 
-func checkValidNodeRange(nodes []string) (bool, error) {
-	result := true
+func checkValidNodeRange(nodes []string) bool {
 	indexes, err := getNodeIndexes(nodes)
 	if err != nil {
-		return false, err
+		log.Fatal("Unable to get node indexes: %v", err)
 	}
-	if indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1 {
-		return false, errors.New("Requested node range outside of allowable range")
-	}
-	return result, err
+	return !(indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1)
 }
 
 // Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries

@@ -130,8 +130,8 @@ func runPower(cmd *Command, args []string) {
 			log.Fatal("Couldn't parse node specification %v\n", subW)
 		}
 		// make sure the range is valid
-		if inRange, err := checkValidNodeRange(nodes); !inRange {
-			log.Fatal("Invalid node range: %v", err)
+		if !checkValidNodeRange(nodes) {
+			log.Fatalln("Invalid node range.")
 		}
 
 		// This will be the list of nodes to actually power on/off (in a user-owned reservation)
