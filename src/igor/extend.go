@@ -8,8 +8,6 @@ import (
 	"fmt"
 	log "minilog"
 	"ranges"
-	"strconv"
-//	"strings"
 	"time"
 )
 
@@ -80,19 +78,12 @@ func runExtend(cmd *Command, args []string) {
 
 			// Check to see if nodes are free to extend; if so, update the Schedule
 			for i := 0; i < duration; i++ {
-				for _, host := range r.Hosts {
-					// Allow for rune-encoded cluster prefix names
-					preflen := len([]rune(igorConfig.Prefix))
-					// TODO: Needs a better check; will reserve nodes 1-5 if ccc[11-15] are reserved and someone dynamically
-					//	 changes the prefix from "ccc" (len 3) to "cccc" (len 4) in igor.conf
-					if preflen >= len([]rune(host)) {
-						log.Fatal("Could not parse cluster prefix name (Did you change your config file?)")
-					}
-					idx, err := strconv.Atoi(host[preflen:]) // Get node index, e.g. for "ccc[4-6],ccc8" idx iterates over 4,5,6,8
-					if err != nil {
-						//should not see this unless cluster node naming convention changes
-						log.Fatal("could not get host indices")
-					}
+				nodes, err := getNodeIndexes(r.Hosts)
+				if err != nil {
+					log.Fatal("Could not get host indices: %v", err)
+				}
+
+				for _, idx := range nodes {
 					if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes, idx, idx) {
 						log.Fatal("Cannot extend reservation due to conflict")
 					} else {
