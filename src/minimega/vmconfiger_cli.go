@@ -366,6 +366,36 @@ Default: "host"
 		}),
 	},
 	{
+		HelpShort: "configures cores",
+		HelpLong: `Set the number of CPU cores per socket.
+
+Default: 1
+`,
+		Patterns: []string{
+			"vm config cores [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatUint(ns.vmConfig.Cores, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			if err := checkCores(ns.vmConfig, i); err != nil {
+				return err
+			}
+
+			ns.vmConfig.Cores = i
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures machine",
 		HelpLong: `Specify the machine type. See 'qemu -M help' for a list supported
 machine types.
@@ -772,6 +802,7 @@ newly launched VMs.
 			"clear vm config <backchannel,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
+			"clear vm config <cores,>",
 			"clear vm config <coschedule,>",
 			"clear vm config <disk,>",
 			"clear vm config <fifos,>",
@@ -938,6 +969,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "cpu" {
 		return v.CPU, nil
 	}
+	if field == "cores" {
+		return strconv.FormatUint(v.Cores, 10), nil
+	}
 	if field == "machine" {
 		return v.Machine, nil
 	}
@@ -981,6 +1015,9 @@ func (v *KVMConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "cpu" {
 		v.CPU = "host"
+	}
+	if mask == Wildcard || mask == "cores" {
+		v.Cores = 1
 	}
 	if mask == Wildcard || mask == "machine" {
 		v.Machine = ""

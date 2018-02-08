@@ -86,6 +86,11 @@ type KVMConfig struct {
 	// Default: "host"
 	CPU string `validate:"validCPU" suggest:"wrapSuggest(suggestCPU)"`
 
+	// Set the number of CPU cores per socket.
+	//
+	// Default: 1
+	Cores uint64 `validate:"checkCores"`
+
 	// Specify the machine type. See 'qemu -M help' for a list supported
 	// machine types.
 	//
@@ -406,8 +411,9 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
-	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
 	fmt.Fprintf(w, "Machine:\t%v\n", vm.Machine)
+	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
+	fmt.Fprintf(w, "Cores:\t%v\n", vm.Cores)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -925,7 +931,11 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
 	args = append(args, "-smp")
-	args = append(args, strconv.FormatUint(vm.VCPUs, 10))
+	smp := strconv.FormatUint(vm.VCPUs, 10)
+	if vm.Cores != 1 {
+		smp += ",cores=" + strconv.FormatUint(vm.Cores, 10)
+	}
+	args = append(args, smp)
 
 	args = append(args, "-qmp")
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
@@ -1291,6 +1301,14 @@ func qemuNICs(qemu, machine string) (map[string]bool, error) {
 	QemuCapabibilities.m[name] = nics
 
 	return nics, nil
+}
+
+func checkCores(vmConfig VMConfig, cores uint64) error {
+	if vmConfig.VCPUs < cores {
+		return errors.New("vcpus must be greater than or equal to the number of cores")
+	}
+
+	return nil
 }
 
 func validCPU(vmConfig VMConfig, cpu string) error {
