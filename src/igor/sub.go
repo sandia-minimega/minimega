@@ -211,6 +211,9 @@ func runSub(cmd *Command, args []string) {
 		if len(nodes) == 0 {
 			log.Fatal("Couldn't parse node specification %v", subW)
 		}
+		if !checkValidNodeRange(nodes) {
+			log.Fatalln("Invalid node range")
+		}
 	}
 
 	// Make sure the reservation doesn't exceed any limits
@@ -223,9 +226,6 @@ func runSub(cmd *Command, args []string) {
 		if duration > igorConfig.TimeLimit {
 			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
 		}
-	}
-	if !checkValidNodeRange(nodes) {
-		log.Fatalln("Invalid node range")
 	}
 
 	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
