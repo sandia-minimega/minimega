@@ -21,7 +21,9 @@ import (
 // blacklist contains commands to filter out so they don't show up in the API
 // this list should also include any commands you want to generate manually
 var blacklist = map[string]bool{
-	"help": true,
+	"help":            true,
+	"namespace":       true,
+	"clear namespace": true,
 }
 
 var (
