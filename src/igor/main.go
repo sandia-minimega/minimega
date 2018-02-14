@@ -347,8 +347,7 @@ func main() {
 	// Read in the schedule
 	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.gob")
 	usejson := false
-	_, err = os.Stat(path)
-	if err != nil {
+	if _, err = os.Stat(path); os.IsNotExist(err) {
 		log.Warn("failed to find gob schedule file: %v\nAttempting to open legacy json file...", err)
 		path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
 		scheddb, err = os.Open(path)
@@ -418,14 +417,15 @@ func getReservations() {
 
 // Read in the schedule from the already-open schedule file
 func getSchedule(usejson bool) {
-	var err error
-	if usejson {
-		dec := json.NewDecoder(scheddb)
-		err = dec.Decode(&Schedule)
-	} else {
-		dec := gob.NewDecoder(scheddb)
-		err = dec.Decode(&Schedule)
+	var decoder interface {
+		Decode(interface{}) error
 	}
+	if usejson {
+		decoder = json.NewDecoder(scheddb)
+	} else {
+		decoder = gob.NewDecoder(scheddb)
+	}
+	err := decoder.Decode(&Schedule)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
 		log.Fatal("failure parsing schedule file: %v", err)
