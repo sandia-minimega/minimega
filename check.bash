@@ -2,6 +2,8 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+. $SCRIPT_DIR/env.bash
+
 cd $SCRIPT_DIR/src
 
 echo "CHECKING SOURCE CODE"
