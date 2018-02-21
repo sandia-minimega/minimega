@@ -9,22 +9,23 @@ OUTPUT="$(find . ! \( -path './vendor' -prune \) -type f -name '*.go' -exec gofm
 if [ -n "$OUTPUT" ]; then
     echo "$OUTPUT"
     echo "gofmt - FAILED"
-    FMT_ERRORS=true
-else
-	echo "gofmt - OK"
-fi
-
-# note: we redirect go vet's output on STDERR to STDOUT
-OUTPUT="$(find . ! \( -path './vendor' -prune \) -type f -name '*.go' -exec go vet {} 2>&1 \;)"
-if [ -n "$OUTPUT" ]; then
-    echo "$OUTPUT"
-    echo "go vet - FAILED"
-    VET_ERRORS=true
-else
-	echo "go vet - OK"
-fi
-echo
-
-if [ "$FMT_ERRORS" = "true" ] | [ "$VET_ERRORS" = "true" ]; then
     exit 1
 fi
+
+echo "gofmt - OK"
+echo
+
+# note: we redirect go vet's output on STDERR to STDOUT
+echo "VET PACKAGES"
+for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
+do
+	echo $i
+	go vet $i
+	if [[ $? != 0 ]]; then
+        echo "go vet - FAILED"
+		exit 1
+	fi
+done
+
+echo "govet - OK"
+echo
