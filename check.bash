@@ -4,10 +4,18 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 . $SCRIPT_DIR/env.bash
 
-cd $SCRIPT_DIR/src
+# set the version from the repo
+VERSION=`git --git-dir $SCRIPT_DIR/.git rev-parse HEAD`
+DATE=`date --rfc-3339=date`
+echo "package version
 
-echo "CHECKING SOURCE CODE"
-OUTPUT="$(find . ! \( -path './vendor' -prune \) -type f -name '*.go' -exec gofmt -d -l {} \;)"
+var (
+	Revision = \"$VERSION\"
+	Date     = \"$DATE\"
+)" > $SCRIPT_DIR/src/version/version.go
+
+echo "CHECKING FMT"
+OUTPUT="$(find $SCRIPT_DIR/src ! \( -path '*vendor*' -prune \) -type f -name '*.go' -exec gofmt -d -l {} \;)"
 if [ -n "$OUTPUT" ]; then
     echo "$OUTPUT"
     echo "gofmt - FAILED"
