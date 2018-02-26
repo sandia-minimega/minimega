@@ -465,6 +465,25 @@ func (n Namespace) hostSlice() []string {
 	return hosts
 }
 
+// processVMNets parses a list of netspecs using processVMNet and updates the
+// active vmConfig.
+func (n *Namespace) processVMNets(vals []string) error {
+	n.vmConfig.Networks = nil
+
+	for _, spec := range vals {
+		nic, err := processVMNet(n.Name, spec)
+		if err != nil {
+			n.vmConfig.Networks = nil
+			return err
+		}
+		nic.Raw = spec
+
+		n.vmConfig.Networks = append(n.vmConfig.Networks, nic)
+	}
+
+	return nil
+}
+
 // GetNamespace returns the active namespace.
 func GetNamespace() *Namespace {
 	namespaceLock.Lock()
