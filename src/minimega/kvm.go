@@ -394,8 +394,17 @@ func (vm *KvmVM) QMPRaw(input string) (string, error) {
 }
 
 func (vm *KvmVM) Migrate(filename string) error {
-	path := filepath.Join(*f_iomBase, filename)
-	return vm.q.MigrateDisk(path)
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// migrating the VM will pause it
+	vm.setState(VM_PAUSED)
+
+	return vm.q.MigrateDisk(filename)
 }
 
 func (vm *KvmVM) QueryMigrate() (string, float64, error) {
@@ -411,7 +420,8 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	if s, ok := r["status"]; ok {
 		status = s.(string)
 	} else {
-		return status, completed, fmt.Errorf("could not decode status: %v", r)
+		// if there is no status, it means that there is no active migration
+		return "", 0.0, nil
 	}
 
 	var ram map[string]interface{}
