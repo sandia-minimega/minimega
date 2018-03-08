@@ -211,6 +211,9 @@ func runSub(cmd *Command, args []string) {
 		if len(nodes) == 0 {
 			log.Fatal("Couldn't parse node specification %v", subW)
 		}
+		if !checkValidNodeRange(nodes) {
+			log.Fatalln("Invalid node range")
+		}
 	}
 
 	// Make sure the reservation doesn't exceed any limits
