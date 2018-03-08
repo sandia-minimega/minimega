@@ -727,7 +727,7 @@ func (vm *KvmVM) Connect(cc *ron.Server) error {
 	return cc.DialSerial(ccPath)
 }
 
-func (vm *KvmVM) Hotplug(f, version string) error {
+func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	var bus string
 	switch version {
 	case "", "1.1":
@@ -760,7 +760,7 @@ func (vm *KvmVM) Hotplug(f, version string) error {
 	}
 	log.Debugln("hotplug drive_add response:", r)
 
-	r, err = vm.q.USBDeviceAdd(hid, bus)
+	r, err = vm.q.USBDeviceAdd(hid, bus, serial)
 	if err != nil {
 		return err
 	}

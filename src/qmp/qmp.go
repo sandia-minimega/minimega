@@ -382,11 +382,14 @@ func (q *Conn) DriveAdd(id, file string) (string, error) {
 	return resp, err
 }
 
-func (q *Conn) USBDeviceAdd(id, bus string) (string, error) {
+func (q *Conn) USBDeviceAdd(id, bus, serial string) (string, error) {
 	if !q.ready {
 		return "", ERR_READY
 	}
 	arg := fmt.Sprintf("device_add usb-storage,id=%v,drive=%v,bus=%v", id, id, bus)
+	if serial != "" {
+		arg = fmt.Sprintf("device_add usb-storage,id=%v,drive=%v,bus=%v,serial=%v", id, id, bus, serial)
+	}
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
