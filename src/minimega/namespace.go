@@ -151,7 +151,7 @@ func NewNamespace(name string) *Namespace {
 	return ns
 }
 
-func (n Namespace) String() string {
+func (n *Namespace) String() string {
 	return n.Name
 }
 
@@ -456,7 +456,7 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 }
 
 // hostSlice converts the hosts map into a slice of hostnames
-func (n Namespace) hostSlice() []string {
+func (n *Namespace) hostSlice() []string {
 	hosts := []string{}
 	for host := range n.Hosts {
 		hosts = append(hosts, host)
