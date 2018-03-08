@@ -889,8 +889,6 @@ func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
 func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	var args []string
 
-	args = append(args, "-enable-kvm")
-
 	args = append(args, "-name")
 	args = append(args, strconv.Itoa(id))
 
