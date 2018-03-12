@@ -5,12 +5,17 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"strconv"
 )
+
+type ConfigWriter interface {
+	WriteConfig(io.Writer) error
+}
 
 func checkPath(v string) string {
 	// Ensure that relative paths are always relative to /files/
@@ -827,6 +832,38 @@ func (v *BaseConfig) Clear(mask string) {
 	}
 }
 
+func (v *BaseConfig) WriteConfig(w io.Writer) error {
+	if v.UUID != "" {
+		fmt.Fprintf(w, "vm config uuid %v\n", v.UUID)
+	}
+	if v.VCPUs != 1 {
+		fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
+	}
+	if v.Memory != 2048 {
+		fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
+	}
+	if v.Snapshot != true {
+		fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	}
+	if v.Schedule != "" {
+		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
+	}
+	if v.Coschedule != -1 {
+		fmt.Fprintf(w, "vm config coschedule %v\n", v.Coschedule)
+	}
+	if v.Backchannel != true {
+		fmt.Fprintf(w, "vm config backchannel %t\n", v.Backchannel)
+	}
+	if err := v.Networks.WriteConfig(w); err != nil {
+		return err
+	}
+	for k, v := range v.Tags {
+		fmt.Fprintf(w, "vm config tags %v %v\n", k, v)
+	}
+
+	return nil
+}
+
 func (v *ContainerConfig) Info(field string) (string, error) {
 	if field == "filesystem" {
 		return v.FilesystemPath, nil
@@ -869,6 +906,29 @@ func (v *ContainerConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "volume" {
 		v.VolumePaths = nil
 	}
+}
+
+func (v *ContainerConfig) WriteConfig(w io.Writer) error {
+	if v.FilesystemPath != "" {
+		fmt.Fprintf(w, "vm config filesystem %v\n", v.FilesystemPath)
+	}
+	if v.Hostname != "" {
+		fmt.Fprintf(w, "vm config hostname %v\n", v.Hostname)
+	}
+	if len(v.Init) > 0 {
+		fmt.Fprintf(w, "vm config init %v\n", v.Init)
+	}
+	if v.Preinit != "" {
+		fmt.Fprintf(w, "vm config preinit %v\n", v.Preinit)
+	}
+	if v.Fifos != 0 {
+		fmt.Fprintf(w, "vm config fifos %v\n", v.Fifos)
+	}
+	for k, v := range v.VolumePaths {
+		fmt.Fprintf(w, "vm config volume %v %v\n", k, v)
+	}
+
+	return nil
 }
 
 func (v *KVMConfig) Info(field string) (string, error) {
@@ -949,4 +1009,45 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "qemu-override" {
 		v.QemuOverride = nil
 	}
+}
+
+func (v *KVMConfig) WriteConfig(w io.Writer) error {
+	if v.QemuPath != "" {
+		fmt.Fprintf(w, "vm config qemu %v\n", v.QemuPath)
+	}
+	if v.KernelPath != "" {
+		fmt.Fprintf(w, "vm config kernel %v\n", v.KernelPath)
+	}
+	if v.InitrdPath != "" {
+		fmt.Fprintf(w, "vm config initrd %v\n", v.InitrdPath)
+	}
+	if v.CdromPath != "" {
+		fmt.Fprintf(w, "vm config cdrom %v\n", v.CdromPath)
+	}
+	if v.MigratePath != "" {
+		fmt.Fprintf(w, "vm config migrate %v\n", v.MigratePath)
+	}
+	if v.CPU != "host" {
+		fmt.Fprintf(w, "vm config cpu %v\n", v.CPU)
+	}
+	if v.SerialPorts != 0 {
+		fmt.Fprintf(w, "vm config serial-ports %v\n", v.SerialPorts)
+	}
+	if v.VirtioPorts != 0 {
+		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
+	}
+	if len(v.Append) > 0 {
+		fmt.Fprintf(w, "vm config append %v\n", v.Append)
+	}
+	if len(v.DiskPaths) > 0 {
+		fmt.Fprintf(w, "vm config disk %v\n", v.DiskPaths)
+	}
+	if len(v.QemuAppend) > 0 {
+		fmt.Fprintf(w, "vm config qemu-append %v\n", v.QemuAppend)
+	}
+	if err := v.QemuOverride.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return nil
 }

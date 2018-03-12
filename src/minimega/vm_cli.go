@@ -710,7 +710,22 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	return vm.Migrate(c.StringArgs["filename"])
+	fname := c.StringArgs["filename"]
+
+	if !filepath.IsAbs(fname) {
+		// TODO: should we write to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
+
+	if _, err := os.Stat(filepath.Dir(fname)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(fname), 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return vm.Migrate(fname)
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

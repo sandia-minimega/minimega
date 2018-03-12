@@ -14,10 +14,15 @@ import (
 	"minicli"
 	log "minilog"
 	"bytes"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
 )
+
+type ConfigWriter interface {
+	WriteConfig(io.Writer) error
+}
 
 func checkPath(v string) string {
 	// Ensure that relative paths are always relative to /files/
@@ -215,7 +220,7 @@ const clearTemplate = `{
 const funcsTemplate = `
 {{ range $type, $fields := . }}
 func (v *{{ $type }}) Info(field string) (string, error) {
-		{{- range $fields }}
+	{{- range $fields }}
 		if field == "{{ .ConfigName }}" {
 			{{- if eq .Type "string" }}
 			return v.{{ .Field }}, nil
@@ -227,17 +232,45 @@ func (v *{{ $type }}) Info(field string) (string, error) {
 			return fmt.Sprintf("%v", v.{{ .Field }}), nil
 			{{- end }}
 		}
-		{{- end }}
+	{{- end }}
 
-		return "", fmt.Errorf("invalid info field: %v", field)
+	return "", fmt.Errorf("invalid info field: %v", field)
 }
 
 func (v *{{ $type }} ) Clear(mask string) {
-		{{- range $fields }}
+	{{- range $fields }}
 		if mask == Wildcard || mask == "{{ .ConfigName }}" {
 			v.{{ .Field }} = {{ .Default }}
 		}
+	{{- end }}
+}
+
+func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
+	{{- range $fields }}
+		{{- if eq .Type "bool" }}
+			if v.{{ .Field }} != {{ .Default }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %t\n", v.{{ .Field }})
+			}
+		{{- else if eq .Type "map" }}
+			for k, v := range v.{{ .Field }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v %v\n", k, v)
+			}
+		{{- else if eq .Type "string" "int64" "uint64"}}
+			if v.{{ .Field }} != {{ .Default }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", v.{{ .Field }})
+			}
+		{{- else if eq .Type "slice"}}
+			if len(v.{{ .Field }}) > 0 {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", v.{{ .Field }})
+			}
+		{{- else }}
+			if err := v.{{ .Field }}.WriteConfig(w); err != nil {
+				return err
+			}
 		{{- end }}
+	{{- end }}
+
+	return nil
 }
 {{ end }}
 `

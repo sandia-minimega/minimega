@@ -7,8 +7,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"minicli"
 	log "minilog"
+	"os"
 	"path/filepath"
 	"ron"
 	"runtime"
@@ -471,14 +473,106 @@ func (n *Namespace) processVMNets(vals []string) error {
 	n.vmConfig.Networks = nil
 
 	for _, spec := range vals {
-		nic, err := processVMNet(n.Name, spec)
+		nic, err := ParseNetConfig(spec)
 		if err != nil {
 			n.vmConfig.Networks = nil
 			return err
 		}
+
+		vlan, err := lookupVLAN(n.Name, nic.Alias)
+		if err != nil {
+			n.vmConfig.Networks = nil
+			return err
+		}
+
+		nic.VLAN = vlan
 		nic.Raw = spec
 
 		n.vmConfig.Networks = append(n.vmConfig.Networks, nic)
+	}
+
+	return nil
+}
+
+// Snapshot creates a snapshot of a namespace so that it can be restored later.
+// If dir is not an absolute path, it will be a subdirectory of iomBase.
+//
+// LOCK: Assumes cmdLock is held.
+func (n *Namespace) Snapshot(dir string) error {
+	var useIOM bool
+	if !filepath.IsAbs(dir) {
+		useIOM = true
+		dir = filepath.Join(*f_iomBase, "snapshots", dir)
+	}
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	f, err := os.Create(filepath.Join(dir, "launch.mm"))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
+	// call globalVMs instead of GlobalVMs).
+	for _, vm := range globalVMs(n) {
+		dst := filepath.Join(dir, vm.GetName()) + ".migrate"
+		cmd := minicli.MustCompilef("vm migrate %q %v", vm.GetName(), dst)
+		cmd.Record = false
+
+		var respChan <-chan minicli.Responses
+		if vm.GetHost() == hostname {
+			// run locally
+			respChan = runCommands(cmd)
+		} else {
+			// run remotely
+			cmd = minicli.MustCompilef("namespace %q %v", n.Name, cmd.Original)
+			cmd.Source = n.Name
+			cmd.Record = false
+
+			var err error
+			respChan, err = meshageSend(cmd, vm.GetHost())
+			if err != nil {
+				return err
+			}
+		}
+
+		// read all the responses and look for any errors
+		if err := consume(respChan); err != nil {
+			return err
+		}
+
+		funcs := []func(io.Writer) error{}
+
+		// TODO: this is gross
+		switch vm := vm.(type) {
+		case *KvmVM:
+			funcs = append(funcs,
+				vm.BaseConfig.WriteConfig,
+				vm.KVMConfig.WriteConfig)
+		case *ContainerVM:
+			funcs = append(funcs,
+				vm.BaseConfig.WriteConfig,
+				vm.ContainerConfig.WriteConfig)
+		}
+
+		for _, fn := range funcs {
+			if err := fn(f); err != nil {
+				return err
+			}
+		}
+
+		// override the migrate path
+		if useIOM {
+			rel, _ := filepath.Rel(*f_iomBase, dst)
+			fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
+		} else {
+			fmt.Fprintf(f, "vm config migrate %v\n", dst)
+		}
+
+		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
 
 	return nil

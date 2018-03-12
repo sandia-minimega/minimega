@@ -253,6 +253,7 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Type:       "slice",
 					Default:    zero,
 					Doc:        doc,
 					Path:       strings.Contains(name, "Path"),
@@ -288,6 +289,7 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Type:       "map",
 					Default:    zero,
 					Doc:        doc,
 					Path:       strings.Contains(name, "Path"),

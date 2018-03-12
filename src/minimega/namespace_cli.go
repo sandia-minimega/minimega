@@ -55,6 +55,7 @@ Display or modify the active namespace.
 - flush     : clear the VM queue
 - queueing  : toggle VMs queueing when launching (default false)
 - schedules : display scheduling stats
+- snapshot  : take a snapshot of namespace or print snapshot progress
 - run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
@@ -69,6 +70,7 @@ Display or modify the active namespace.
 			"ns <flush,>",
 			"ns <queueing,> [true,false]",
 			"ns <schedules,>",
+			"ns <snapshot,> [name]",
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
@@ -106,6 +108,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
 	"flush":     wrapSimpleCLI(cliNamespaceFlush),
 	"schedules": wrapSimpleCLI(cliNamespaceSchedules),
+	"snapshot":  cliNamespaceSnapshot,
 	"run":       cliNamespaceRun,
 }
 
@@ -335,6 +338,25 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	}
 
 	return nil
+}
+
+func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	if _, ok := c.StringArgs["name"]; !ok {
+		cmd := minicli.MustCompile("vm migrate")
+		forward(runCommands(namespaceCommands(ns, cmd)...), respChan)
+
+		return
+	}
+
+	// start new snapshot
+	resp := &minicli.Response{Host: hostname}
+	if err := ns.Snapshot(c.StringArgs["name"]); err != nil {
+		resp.Error = err.Error()
+	}
+
+	respChan <- minicli.Responses{resp}
 }
 
 func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
