@@ -50,6 +50,7 @@ var (
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
+	f_httpAddr   = flag.String("http", ":9006", "address to listen on for HTTP requests, empty string disables")
 
 	hostname string
 	reserved = []string{Wildcard}
@@ -222,6 +223,7 @@ func main() {
 	SetNamespace(DefaultNamespace)
 
 	commandSocketStart()
+	commandHttpStart()
 
 	// set up signal handling
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
@@ -287,6 +289,7 @@ func teardown() {
 	}
 
 	commandSocketRemove()
+	commandHttpStop()
 
 	if err := os.Remove(filepath.Join(*f_base, "minimega.pid")); err != nil {
 		log.Errorln(err)
