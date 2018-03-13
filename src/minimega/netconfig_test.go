@@ -8,6 +8,16 @@ import (
 	"testing"
 )
 
+func init() {
+	// populate the network drivers so that we don't need to invoke KVM
+	KVMNetworkDrivers.Do(func() {
+		KVMNetworkDrivers.drivers = []string{
+			"e1000",
+			"virtio-net-pci",
+		}
+	})
+}
+
 func TestParseNetConfig(t *testing.T) {
 	examples := []string{
 		"foo",
