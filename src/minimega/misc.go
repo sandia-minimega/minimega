@@ -16,7 +16,6 @@ import (
 	"math/rand"
 	"minicli"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -28,7 +27,6 @@ import (
 	"unicode"
 	"vlans"
 
-	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
 	"github.com/nfnt/resize"
 )
@@ -39,14 +37,6 @@ type errSlice []error
 // number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
 type loggingMutex struct {
 	sync.Mutex // embed
-}
-
-var validMACPrefix [][3]byte
-
-func init() {
-	for k, _ := range macs.ValidMACPrefixMap {
-		validMACPrefix = append(validMACPrefix, k)
-	}
 }
 
 // makeErrSlice turns a slice of errors into an errSlice which implements the
@@ -121,21 +111,6 @@ func randomMac() string {
 	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
 	log.Info("generated mac: %v", mac)
 	return mac
-}
-
-func isMac(mac string) bool {
-	_, err := net.ParseMAC(mac)
-	return err == nil
-}
-
-func allocatedMac(mac string) bool {
-	hw, err := net.ParseMAC(mac)
-	if err != nil {
-		return false
-	}
-
-	_, allocated := macs.ValidMACPrefixMap[[3]byte{hw[0], hw[1], hw[2]}]
-	return allocated
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),

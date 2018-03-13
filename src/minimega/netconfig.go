@@ -9,10 +9,21 @@ import (
 	"fmt"
 	"io"
 	log "minilog"
+	"net"
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/google/gopacket/macs"
 )
+
+var validMACPrefix [][3]byte
+
+func init() {
+	for k, _ := range macs.ValidMACPrefixMap {
+		validMACPrefix = append(validMACPrefix, k)
+	}
+}
 
 // NetConfig contains all the network-related config for an interface. The IP
 // addresses are automagically populated by snooping ARP traffic. The bandwidth
@@ -70,7 +81,7 @@ func ParseNetConfig(spec string) (res NetConfig, err error) {
 	case 1:
 		v = f[0]
 	case 2:
-		if isMac(f[1]) {
+		if isMAC(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
 		} else if isNetworkDriver(f[1]) {
@@ -81,10 +92,10 @@ func ParseNetConfig(spec string) (res NetConfig, err error) {
 			b, v = f[0], f[1]
 		}
 	case 3:
-		if isMac(f[2]) {
+		if isMAC(f[2]) {
 			// bridge, vlan, mac
 			b, v, m = f[0], f[1], f[2]
-		} else if isMac(f[1]) {
+		} else if isMAC(f[1]) {
 			// vlan, mac, driver
 			v, m, d = f[0], f[1], f[2]
 		} else {
@@ -103,12 +114,12 @@ func ParseNetConfig(spec string) (res NetConfig, err error) {
 
 	log.Info(`got bridge="%v", alias="%v", mac="%v", driver="%v"`, b, v, m, d)
 
-	if m != "" && !isMac(m) {
+	if m != "" && !isMAC(m) {
 		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
 	}
 
 	// warn on valid but not allocated macs
-	if m != "" && !allocatedMac(m) {
+	if m != "" && !isAllocatedMAC(m) {
 		log.Warn("unallocated mac address: %v", m)
 	}
 
@@ -174,4 +185,19 @@ func (c NetConfigs) WriteConfig(w io.Writer) error {
 	}
 
 	return nil
+}
+
+func isMAC(mac string) bool {
+	_, err := net.ParseMAC(mac)
+	return err == nil
+}
+
+func isAllocatedMAC(mac string) bool {
+	hw, err := net.ParseMAC(mac)
+	if err != nil {
+		return false
+	}
+
+	_, allocated := macs.ValidMACPrefixMap[[3]byte{hw[0], hw[1], hw[2]}]
+	return allocated
 }
