@@ -346,9 +346,20 @@ func main() {
 
 	// Read in the schedule
 	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.gob")
-	scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
-	if err != nil {
-		log.Warn("failed to open schedule file: %v", err)
+	usejson := false
+	if _, err = os.Stat(path); os.IsNotExist(err) {
+		log.Warn("failed to find gob schedule file: %v\nAttempting to open legacy json file...", err)
+		path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
+		scheddb, err = os.Open(path)
+		usejson = true
+		if err != nil {
+			log.Warn("failed to open json schedule file: %v", err)
+		}
+	} else {
+		scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+		if err != nil {
+			log.Warn("failed to open schedule file: %v", err)
+		}
 	}
 	defer scheddb.Close()
 	// We probably don't need to lock this too but I'm playing it safe
@@ -357,7 +368,19 @@ func main() {
 		log.Fatal("unable to lock schedule file -- someone else is running igor")
 	}
 	defer syscall.Flock(int(scheddb.Fd()), syscall.LOCK_UN) // this will unlock it later
-	getSchedule()
+	getSchedule(usejson)
+
+	// close the json file; we will be (over)writing to a gob file
+	if usejson {
+		log.Warn("Closing json file and opening gob file")
+		path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.gob")
+		scheddb.Close()
+		scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+		if err != nil {
+			log.Warn("failed to open schedule file: %v", err)
+		}
+	}
+	defer scheddb.Close()
 
 	// Here, we need to go through and delete any reservations which should be expired,
 	// and bring in new ones that are just starting
@@ -393,9 +416,16 @@ func getReservations() {
 }
 
 // Read in the schedule from the already-open schedule file
-func getSchedule() {
-	dec := gob.NewDecoder(scheddb)
-	err := dec.Decode(&Schedule)
+func getSchedule(usejson bool) {
+	var decoder interface {
+		Decode(interface{}) error
+	}
+	if usejson {
+		decoder = json.NewDecoder(scheddb)
+	} else {
+		decoder = gob.NewDecoder(scheddb)
+	}
+	err := decoder.Decode(&Schedule)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
 		log.Fatal("failure parsing schedule file: %v", err)

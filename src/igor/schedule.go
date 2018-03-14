@@ -210,6 +210,11 @@ func initializeSchedule() {
 func expireSchedule() {
 	// If the last element of the schedule is expired, or it's empty, let's start fresh
 	if len(Schedule) == 0 || Schedule[len(Schedule)-1].End < time.Now().Unix() {
+		if len(Schedule) == 0 {
+			log.Warn("Schedule is empty, initializing new schedule.")
+		} else {
+			log.Warn("Schedule is expired, initializing new schedule.")
+		}
 		initializeSchedule()
 	}
 
