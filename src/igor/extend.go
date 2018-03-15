@@ -21,6 +21,8 @@ REQUIRED FLAGS:
 
 The -r flag specifies the name of the existing reservation.
 
+OPTIONAL FLAGS:
+
 The -t flag is used to specify the reservation extension time. Time denominations should
 be specified in days(d), hours(h), and minutes(m), in that order. Unitless
 numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To
@@ -50,7 +52,7 @@ func runExtend(cmd *Command, args []string) {
 	log.Debug("duration: %v minutes", duration)
 
 	// Validate arguments
-	if subR == "" || subT == "" {
+	if subR == "" {
 		help([]string{"extend"})
 		log.Fatalln("Missing required argument")
 	}
@@ -60,65 +62,60 @@ func runExtend(cmd *Command, args []string) {
 		log.Fatalln("cannot determine current user", err)
 	}
 
-	// Make sure there's already a reservation with this name
-	exists := false
-
 	for _, r := range Reservations {
-		if r.ResName == subR { // The reservation name is unique
-			if r.Owner != user.Username {
-				log.Fatal("You are not the owner of reservation %v", subR)
-			}
-
-			// Make sure the reservation doesn't exceed any limits
-			if user.Username != "root" && igorConfig.TimeLimit > 0 {
-				if float64(duration) + r.Duration > float64(igorConfig.TimeLimit) {
-					log.Fatal("Only root can extend a reservation longer than %v minutes", igorConfig.TimeLimit)
-				}
-			}
-
-			// Check to see if nodes are free to extend; if so, update the Schedule
-			for i := 0; i < duration; i++ {
-				nodes, err := getNodeIndexes(r.Hosts)
-				if err != nil {
-					log.Fatal("Could not get host indices: %v", err)
-				}
-
-				for _, idx := range nodes {
-					if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes, idx, idx) {
-						log.Fatal("Cannot extend reservation due to conflict")
-					} else {
-						Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes[idx] = r.ID
-					}
-				}
-			}
-
-			// Set new end time
-			r.EndTime += int64(60*duration)
-			r.Duration += float64(duration)
-
-			Reservations[r.ID] = r
-
-			timefmt := "Jan 2 15:04"
-			rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-			fmt.Printf("Reservation %v extended to %v\n", r.ResName, time.Unix(r.EndTime, 0).Format(timefmt))
-			unsplit, _ := rnge.UnsplitRange(r.Hosts)
-			fmt.Printf("Nodes: %v\n", unsplit)
-
-			emitReservationLog("EXTENDED", r)
-
-			exists = true
-
-			break
+		if r.ResName != subR {
+			continue
 		}
+
+		// The reservation name is unique if it exists
+		if r.Owner != user.Username {
+			log.Fatal("You are not the owner of reservation %v", subR)
+		}
+
+		// Make sure the reservation doesn't exceed any limits
+		if user.Username != "root" && igorConfig.TimeLimit > 0 {
+			if float64(duration) + r.Duration > float64(igorConfig.TimeLimit) {
+				log.Fatal("Only root can extend a reservation longer than %v minutes", igorConfig.TimeLimit)
+			}
+		}
+
+		// Check to see if nodes are free to extend; if so, update the Schedule
+		for i := 0; i < duration; i++ {
+			nodes, err := getNodeIndexes(r.Hosts)
+			if err != nil {
+				log.Fatal("Could not get host indices: %v", err)
+			}
+
+			for _, idx := range nodes {
+				if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes, idx, idx) {
+					log.Fatal("Cannot extend reservation due to conflict")
+				} else {
+					Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes[idx] = r.ID
+				}
+			}
+		}
+
+		// Set new end time
+		r.EndTime += int64(60*duration)
+		r.Duration += float64(duration)
+
+		Reservations[r.ID] = r
+
+		timefmt := "Jan 2 15:04"
+		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+		fmt.Printf("Reservation %v extended to %v\n", r.ResName, time.Unix(r.EndTime, 0).Format(timefmt))
+		unsplit, _ := rnge.UnsplitRange(r.Hosts)
+		fmt.Printf("Nodes: %v\n", unsplit)
+
+		emitReservationLog("EXTENDED", r)
+
+		// Update the reservation file
+		putReservations()
+		putSchedule()
+
+		return
 	}
 
-	// If the reservation does not exist then we error out
-	if !exists {
-		log.Fatal("Reservation %v does not exist", subR)
-	}
-
-	// Update the reservation file
-	putReservations()
-	putSchedule()
-
+	// We didn't find the reservation, so error out
+	log.Fatal("Reservation %v does not exist", subR)
 }
