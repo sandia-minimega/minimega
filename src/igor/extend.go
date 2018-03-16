@@ -40,14 +40,11 @@ func init() {
 
 func runExtend(cmd *Command, args []string) {
 	// duration is in minutes
-	duration := 0
-
 	duration, err := parseDuration(subT)
 	if err != nil {
 		log.Fatal("unable to parse -t: %v", err)
-	} else if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
-		log.Fatal("Please specify an extension of at least %v minute(s) in length.", MINUTES_PER_SLICE)
-		//duration = MINUTES_PER_SLICE
+	} else if duration%MINUTES_PER_SLICE != 0 { // Reserve at least (duration) minutes worth of slices
+		duration = (duration/MINUTES_PER_SLICE + 1) * MINUTES_PER_SLICE
 	}
 	log.Debug("duration: %v minutes", duration)
 
@@ -80,17 +77,17 @@ func runExtend(cmd *Command, args []string) {
 		}
 
 		// Check to see if nodes are free to extend; if so, update the Schedule
-		for i := 0; i < duration; i++ {
+		for i := 0; i < duration/MINUTES_PER_SLICE; i++ {
 			nodes, err := getNodeIndexes(r.Hosts)
 			if err != nil {
 				log.Fatal("Could not get host indices: %v", err)
 			}
 
 			for _, idx := range nodes {
-				if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
+				if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60/MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
 					log.Fatal("Cannot extend reservation due to conflict")
 				} else {
-					Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
+					Schedule[(r.EndTime-Schedule[0].Start)/60/MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
 				}
 			}
 		}

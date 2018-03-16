@@ -138,8 +138,6 @@ func runSub(cmd *Command, args []string) {
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes
-	duration := 0
-
 	duration, err := parseDuration(subT)
 	if err != nil {
 		log.Fatal("unable to parse -t: %v", err)
