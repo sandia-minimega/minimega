@@ -79,6 +79,16 @@ sophisticated enough to do so. Instead, we try to clean up all state such as
 flushing all VMs and deleting all taps. Some state is not reset such as the IDs
 for VMs. Test cases should be written to exclude these fields, if possible.
 
+** images
+
+The minitests included in the distribution make use of several images which are
+expected in the `$images` directory. These images are:
+
+- minicccfs: vmbetter-based container filesystem from `miniccc_container.conf`
+- miniception: vmbetter-based kernel/initrd from `miniception.conf`
+- uminicccfs: busybox-based container filesystem from `misc/uminicccfs`
+- uminirouterfs:  busybox-based container filesystem from `misc/uminirouterfs`
+
 ** Gotchas
 
 Writing new test cases can be tricky because some values are dynamically

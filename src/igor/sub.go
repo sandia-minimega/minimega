@@ -5,6 +5,8 @@
 package main
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	log "minilog"
@@ -85,6 +87,52 @@ func init() {
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
+// install src into dir, using the hash as the file name. Returns the hash or
+// an error.
+func install(src, dir, suffix string) (string, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// hash the file
+	hash := sha1.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
+	}
+
+	fname := hex.EncodeToString(hash.Sum(nil))
+
+	dst := filepath.Join(dir, fname+suffix)
+
+	// copy the file if it doesn't already exist
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		// need to go back to the beginning of the file since we already read
+		// it once to do the hashing
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+
+		f2, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		defer f2.Close()
+
+		if _, err := io.Copy(f2, f); err != nil {
+			return "", fmt.Errorf("unable to install %v: %v", src, err)
+		}
+	} else if err != nil {
+		// strange...
+		return "", err
+	} else {
+		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
+	}
+
+	return fname, nil
+}
+
 func runSub(cmd *Command, args []string) {
 	var nodes []string          // if the user has requested specific nodes
 	var reservation Reservation // the new reservation
@@ -163,6 +211,9 @@ func runSub(cmd *Command, args []string) {
 		if len(nodes) == 0 {
 			log.Fatal("Couldn't parse node specification %v", subW)
 		}
+		if !checkValidNodeRange(nodes) {
+			log.Fatalln("Invalid node range")
+		}
 	}
 
 	// Make sure the reservation doesn't exceed any limits
@@ -240,42 +291,29 @@ VlanLoop:
 	reservation.KernelArgs = subC
 	reservation.CobblerProfile = subProfile // safe to do even if unset
 
-	// Add it to the list of reservations
-	Reservations[reservation.ID] = reservation
-
 	// If we're not doing a Cobbler profile...
 	if subProfile == "" {
-		// copy kernel and initrd
-		// 1. Validate and open source files
-		ksource, err := os.Open(subK)
-		if err != nil {
-			log.Fatal("couldn't open kernel: %v", err)
-		}
-		isource, err := os.Open(subI)
-		if err != nil {
-			log.Fatal("couldn't open initrd: %v", err)
+		reservation.Kernel = subK
+		reservation.Initrd = subI
+
+		dir := filepath.Join(igorConfig.TFTPRoot, "igor")
+
+		if hash, err := install(subK, dir, "-kernel"); err != nil {
+			log.Fatal("reservation failed: %v", err)
+		} else {
+			reservation.KernelHash = hash
 		}
 
-		// make kernel copy
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-kernel")
-		kdest, err := os.Create(fname)
-		if err != nil {
-			log.Fatal("failed to create %v -- %v", fname, err)
+		if hash, err := install(subI, dir, "-initrd"); err != nil {
+			// TODO: we may leak a kernel here
+			log.Fatal("reservation failed: %v", err)
+		} else {
+			reservation.InitrdHash = hash
 		}
-		io.Copy(kdest, ksource)
-		kdest.Close()
-		ksource.Close()
-
-		// make initrd copy
-		fname = filepath.Join(igorConfig.TFTPRoot, "igor", subR+"-initrd")
-		idest, err := os.Create(fname)
-		if err != nil {
-			log.Fatal("failed to create %v -- %v", fname, err)
-		}
-		io.Copy(idest, isource)
-		idest.Close()
-		isource.Close()
 	}
+
+	// Add it to the list of reservations
+	Reservations[reservation.ID] = reservation
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
@@ -290,6 +328,7 @@ VlanLoop:
 	// update the network config
 	err = networkSet(reservation.Hosts, vlan)
 	if err != nil {
+		// TODO: we may leak a kernel and initrd here
 		log.Fatal("error setting network isolation: %v", err)
 	}
 

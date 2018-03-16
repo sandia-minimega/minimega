@@ -1,6 +1,6 @@
 vm config net LAN
 vm launch kvm k[0-1]
-vm config filesystem $minicccfs
+vm config filesystem $images/minicccfs
 vm launch container c[0-1]
 .columns name,vlan,bridge vm info
 

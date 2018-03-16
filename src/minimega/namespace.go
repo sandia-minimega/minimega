@@ -151,7 +151,7 @@ func NewNamespace(name string) *Namespace {
 	return ns
 }
 
-func (n Namespace) String() string {
+func (n *Namespace) String() string {
 	return n.Name
 }
 
@@ -456,13 +456,32 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 }
 
 // hostSlice converts the hosts map into a slice of hostnames
-func (n Namespace) hostSlice() []string {
+func (n *Namespace) hostSlice() []string {
 	hosts := []string{}
 	for host := range n.Hosts {
 		hosts = append(hosts, host)
 	}
 
 	return hosts
+}
+
+// processVMNets parses a list of netspecs using processVMNet and updates the
+// active vmConfig.
+func (n *Namespace) processVMNets(vals []string) error {
+	n.vmConfig.Networks = nil
+
+	for _, spec := range vals {
+		nic, err := processVMNet(n.Name, spec)
+		if err != nil {
+			n.vmConfig.Networks = nil
+			return err
+		}
+		nic.Raw = spec
+
+		n.vmConfig.Networks = append(n.vmConfig.Networks, nic)
+	}
+
+	return nil
 }
 
 // GetNamespace returns the active namespace.

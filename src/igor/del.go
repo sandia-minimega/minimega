@@ -114,11 +114,25 @@ func deleteReservation(checkUser bool, args []string) {
 	// It's used with Cobbler too, even though we don't manually manage PXE files.
 	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 
-	// Delete the now unused kernel + initrd
-	fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-initrd")
-	os.Remove(fname)
-	fname = filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.ResName+"-kernel")
-	os.Remove(fname)
+	// If no other reservations are using them, delete the kernel and/or initrd
+	ifound := false
+	kfound := false
+	for _, r := range Reservations {
+		if r.InitrdHash == deletedReservation.InitrdHash {
+			ifound = true
+		}
+		if r.KernelHash == deletedReservation.KernelHash {
+			kfound = true
+		}
+	}
+	if !ifound {
+		fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.InitrdHash+"-initrd")
+		os.Remove(fname)
+	}
+	if !kfound {
+		fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.KernelHash+"-kernel")
+		os.Remove(fname)
+	}
 
 	emitReservationLog("DELETED", deletedReservation)
 }
