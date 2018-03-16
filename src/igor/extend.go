@@ -74,7 +74,7 @@ func runExtend(cmd *Command, args []string) {
 
 		// Make sure the reservation doesn't exceed any limits
 		if user.Username != "root" && igorConfig.TimeLimit > 0 {
-			if float64(duration) + r.Duration > float64(igorConfig.TimeLimit) {
+			if float64(duration)+r.Duration > float64(igorConfig.TimeLimit) {
 				log.Fatal("Only root can extend a reservation longer than %v minutes", igorConfig.TimeLimit)
 			}
 		}
@@ -87,16 +87,16 @@ func runExtend(cmd *Command, args []string) {
 			}
 
 			for _, idx := range nodes {
-				if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes, idx, idx) {
+				if !isFree(Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
 					log.Fatal("Cannot extend reservation due to conflict")
 				} else {
-					Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE + int64(i)].Nodes[idx] = r.ID
+					Schedule[(r.EndTime-Schedule[0].Start)/60*MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
 				}
 			}
 		}
 
 		// Set new end time
-		r.EndTime += int64(60*duration)
+		r.EndTime += int64(60 * duration)
 		r.Duration += float64(duration)
 
 		Reservations[r.ID] = r

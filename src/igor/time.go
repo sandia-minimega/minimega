@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 // parseDuration parses a duration, supporting a 'd' suffix in addition to those supported by time.ParseDuration.
 // Returns the duration in minutes on success or -1 and error message on failure.
 func parseDuration(s string) (int, error) {
