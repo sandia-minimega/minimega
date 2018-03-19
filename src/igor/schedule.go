@@ -235,7 +235,7 @@ func expireSchedule() {
 	}
 }
 
-// Extend the schedule to be 'minutes' long.
+// Extend the schedule by 'minutes'.
 func extendSchedule(minutes int) {
 	size := igorConfig.End - igorConfig.Start + 1 // size of node slice
 
