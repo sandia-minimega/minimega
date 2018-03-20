@@ -5,10 +5,6 @@ import (
 )
 
 func TestParseDuration(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping test in short mode.")
-	}
-
 	// zero: should parse
 	duration, err := parseDuration("0")
 	if duration != 0 {
