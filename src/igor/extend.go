@@ -79,10 +79,10 @@ func runExtend(cmd *Command, args []string) {
 		}
 
 		// Make sure there's enough space in the Schedule for the reservation
-		time_to_res_end := (r.EndTime-Schedule[0].Start)/60 // number of minutes from beginning of Schedule to end of r
-		curr_sched_min := len(Schedule)*MINUTES_PER_SLICE // total number of minutes in the current Schedule
-		if int(time_to_res_end) + duration >= int(curr_sched_min) {
-			extendSchedule(int(time_to_res_end) + duration - int(curr_sched_min))
+		resEnd := (r.EndTime - Schedule[0].Start) / 60 // number of minutes from beginning of Schedule to end of r
+		schedEnd := len(Schedule) * MINUTES_PER_SLICE  // total number of minutes in the current Schedule
+		if int(resEnd)+duration >= int(schedEnd) {
+			extendSchedule(int(resEnd) + duration - int(schedEnd))
 		}
 
 		// Check to see if nodes are free to extend; if so, update the Schedule
@@ -94,10 +94,10 @@ func runExtend(cmd *Command, args []string) {
 
 			for _, idx := range nodes {
 				// Check if each node is free on the Schedule
-				if !isFree(Schedule[time_to_res_end/MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
+				if !isFree(Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
 					log.Fatal("Cannot extend reservation due to conflict")
 				} else {
-					Schedule[time_to_res_end/MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
+					Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
 				}
 			}
 		}
