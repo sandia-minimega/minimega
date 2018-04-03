@@ -182,6 +182,8 @@ function checkHover (e) {
 
 
 // Set the appropriate color for a VM
+// if hex is true, returns the hex value
+// instead of the index into the palette
 function vmColor (vm, hex) {
     var colorNumber;
 
@@ -201,6 +203,8 @@ function vmColor (vm, hex) {
 
 // Calculate the color for a node. Color is determined by getting the highest-priority color of all
 //  VMs in the node
+// if hex is true, returns the hex value
+// instead of the index into the palette
 function nodeColor (node, hex) {
     for (var i = 0; i < node.machines.length; i++) {
         var vm = node.machines[i];
@@ -699,6 +703,9 @@ function makeGraph (response, ethers) {
         var vm = response[i];
 
         vm["node_type"] = null;
+
+        // parse the tags string into a map of tags
+        vm.tags = JSON.parse(vm.tags);
 
         // parse the VLAN string into a list of VLANs
         vm.vlan = vm.vlan.substring(1, vm.vlan.length - 1).split(", ");
