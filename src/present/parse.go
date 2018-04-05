@@ -172,6 +172,7 @@ func (t Text) TemplateName() string { return "text" }
 // List represents a bulleted list.
 type List struct {
 	Bullet []string
+	Nested bool
 }
 
 func (l List) TemplateName() string { return "list" }
@@ -339,6 +340,14 @@ func parseSections(ctx *Context, name string, lines *Lines, number []int, doc *D
 				}
 				lines.back()
 				e = List{Bullet: b}
+			case strings.HasPrefix(text, "-- "):
+				var b []string
+				for ok && strings.HasPrefix(text, "-- ") {
+					b = append(b, text[2:])
+					text, ok = lines.next()
+				}
+				lines.back()
+				e = List{Bullet: b, Nested: true}
 			case strings.HasPrefix(text, prefix+"* "):
 				lines.back()
 				subsecs, err := parseSections(ctx, name, lines, section.Number, doc)
