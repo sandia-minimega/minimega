@@ -67,8 +67,8 @@ func runExtend(cmd *Command, args []string) {
 		}
 
 		// The reservation name is unique if it exists
-		if r.Owner != user.Username {
-			log.Fatal("You are not the owner of reservation %v", subR)
+		if r.Owner != user.Username && user.Username != "root" {
+			log.Fatal("Cannot access reservation %v: insufficient privileges", subR)
 		}
 
 		// Make sure the reservation doesn't exceed any limits
