@@ -43,7 +43,7 @@ func BuildRootFS(buildPath string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stdout, log.DEBUG, "cp")
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	err = cmd.Run()
@@ -489,7 +489,7 @@ func copyQcow2(src, dst string) error {
 		return err
 	}
 
-	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stdout, log.DEBUG, "cp")
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	log.Debug("copy with with cmd: %v", cmd)
