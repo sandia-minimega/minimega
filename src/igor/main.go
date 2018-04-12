@@ -55,6 +55,7 @@ var commands = []*Command{
 	cmdShow,
 	cmdSub,
 	cmdPower,
+	cmdExtend,
 	cmdNotify,
 }
 
