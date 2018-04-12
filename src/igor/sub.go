@@ -141,8 +141,10 @@ func runSub(cmd *Command, args []string) {
 	duration, err := parseDuration(subT)
 	if err != nil {
 		log.Fatal("unable to parse -t: %v", err)
-	} else if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
-		duration = MINUTES_PER_SLICE
+	} else if duration <= 0 {
+		log.Fatal("Please specify a positive value for -t")
+	} else if duration%MINUTES_PER_SLICE != 0 { // Reserve at least (duration) minutes worth of slices, in increments of MINUTES_PER_SLICE
+		duration = (duration/MINUTES_PER_SLICE + 1) * MINUTES_PER_SLICE
 	}
 	log.Debug("duration: %v minutes", duration)
 
