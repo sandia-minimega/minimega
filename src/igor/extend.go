@@ -74,7 +74,7 @@ func runExtend(cmd *Command, args []string) {
 		// Make sure the reservation doesn't exceed any limits
 		if user.Username != "root" && igorConfig.TimeLimit > 0 {
 			if float64(duration)+r.Duration > float64(igorConfig.TimeLimit) {
-				log.Fatal("Only root can extend a reservation longer than %v minutes", igorConfig.TimeLimit)
+				log.Fatal("Only root can extend a reservation longer than %v minutes. The maximum allowable time you may extend is %v minutes.", igorConfig.TimeLimit, float64(igorConfig.TimeLimit)-r.Duration)
 			}
 		}
 
