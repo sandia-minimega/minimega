@@ -165,7 +165,7 @@ func runSub(cmd *Command, args []string) {
 
 	// Validate the cobbler profile
 	if subProfile != "" {
-		cobblerProfiles := getCobblerProfiles()
+		cobblerProfiles := CobblerProfiles()
 		if !cobblerProfiles[subProfile] {
 			log.Fatal("Cobbler profile does not exist: %v", subProfile)
 		}

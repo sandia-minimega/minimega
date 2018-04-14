@@ -125,25 +125,6 @@ type TimeSlice struct {
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
-// Represents a single reservation
-type Reservation struct {
-	ResName        string
-	CobblerProfile string   // Optional; if set, use this Cobbler profile instead of a kernel+initrd
-	Hosts          []string // separate, not a range
-	PXENames       []string // eg C000025B
-	StartTime      int64    // UNIX time
-	EndTime        int64    // UNIX time
-	Duration       float64  // minutes
-	Owner          string
-	ID             uint64
-	KernelArgs     string
-	Vlan           int
-	Kernel         string
-	Initrd         string
-	KernelHash     string
-	InitrdHash     string
-}
-
 // Sort the slice of reservations based on the start time
 type StartSorter []Reservation
 
@@ -173,18 +154,14 @@ func setExitStatus(n int) {
 func housekeeping() {
 	now := time.Now().Unix()
 
-	cobblerProfiles := map[string]bool{}
-	if igorConfig.UseCobbler {
-		cobblerProfiles = getCobblerProfiles()
-	}
+	backend := GetBackend()
 
 	for _, r := range Reservations {
 		// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists. This is how we verify if the reservation is installed or not
-		filename := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 		if r.EndTime < now {
 			// Reservation expired; delete it
 			deleteReservation(false, []string{r.ResName})
-		} else if _, err := os.Stat(filename); os.IsNotExist(err) && r.StartTime < now {
+		} else if _, err := os.Stat(r.Filename()); os.IsNotExist(err) && r.StartTime < now {
 			// Reservation should have started but has not yet been installed
 			emitReservationLog("INSTALL", r)
 			// update network config
@@ -192,93 +169,20 @@ func housekeeping() {
 			if err != nil {
 				log.Error("error setting network isolation: %v", err)
 			}
-			if !igorConfig.UseCobbler {
-				// Manual file installation happens now
-				// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
-				masterfile, err := os.Create(filename)
-				if err != nil {
-					log.Fatal("failed to create %v -- %v", filename, err)
-				}
-				defer masterfile.Close()
-				masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.KernelHash))
-				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.InitrdHash, r.KernelArgs))
 
-				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
-				for _, pxename := range r.PXENames {
-					masterfile.Seek(0, 0)
-					fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
-					f, err := os.Create(fname)
-					if err != nil {
-						log.Fatal("failed to create %v -- %v", fname, err)
-					}
-					io.Copy(f, masterfile)
-					f.Close()
-				}
-			} else {
-				// Configure Cobbler to boot the correct stuff
-				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
-				if r.CobblerProfile == "" && !cobblerProfiles["igor_"+r.ResName] {
-					// Create the distro from the kernel+ramdisk
-					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
-					if err != nil {
-						log.Fatal("cobbler: %v", err)
-					}
-
-					// Create a profile from the distro we just made
-					_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
-					if err != nil {
-						log.Fatal("cobbler: %v", err)
-					}
-
-					// Now set each host to boot from that profile
-					// Do it in parallel because Cobbler commands are slow
-					done := make(chan bool)
-					systemfunc := func(h string) {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile=igor_"+r.ResName)
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						// We make sure to set netboot enabled so the nodes can boot
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						done <- true
-					}
-					for _, host := range r.Hosts {
-						go systemfunc(host)
-					}
-					for _, _ = range r.Hosts {
-						<-done
-					}
-				} else if r.CobblerProfile != "" && cobblerProfiles[r.CobblerProfile] {
-					// If the requested profile exists, go ahead and set the nodes to use it
-					done := make(chan bool)
-					systemfunc := func(h string) {
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+r.CobblerProfile)
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						// We make sure to set netboot enabled so the nodes can boot
-						_, err = processWrapper("cobbler", "system", "edit", "--name="+h, "--netboot-enabled=true")
-						if err != nil {
-							log.Fatal("cobbler: %v", err)
-						}
-						done <- true
-					}
-					for _, host := range r.Hosts {
-						go systemfunc(host)
-					}
-					for _, _ = range r.Hosts {
-						<-done
-					}
-				}
-				os.Create(filename)
+			if err := backend.Install(r); err != nil {
+				log.Fatal("unable to install: %v", err)
 			}
-			// Now reboot the hosts (if autoreboot is set)
-			powerCycle(r.Hosts)
+
+			if igorConfig.AutoReboot {
+				if err := backend.Power(r.Hosts, false); err != nil {
+					log.Fatal("unable to power off: %v", err)
+				}
+
+				if err := backend.Power(r.Hosts, true); err != nil {
+					log.Fatal("unable to power on: %v", err)
+				}
+			}
 		}
 	}
 
@@ -408,9 +312,12 @@ func putReservations() {
 	// Truncate the existing reservation file
 	resdb.Truncate(0)
 	resdb.Seek(0, 0)
+
 	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(Reservations)
+	if err := json.NewEncoder(resdb).Encode(Reservations); err != nil {
+		log.Fatal("unable to encode reservations: %v", err)
+	}
+
 	resdb.Sync()
 }
 
@@ -419,9 +326,12 @@ func putSchedule() {
 	// Truncate the existing schedule file
 	scheddb.Truncate(0)
 	scheddb.Seek(0, 0)
+
 	// Write out the new schedule
-	enc := gob.NewEncoder(scheddb)
-	enc.Encode(Schedule)
+	if err := gob.NewEncoder(scheddb).Encode(Schedule); err != nil {
+		log.Fatal("unable to encode schedule: %v", err)
+	}
+
 	scheddb.Sync()
 }
 
