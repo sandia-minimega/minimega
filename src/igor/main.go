@@ -114,6 +114,14 @@ type Config struct {
 	NodeLimit int
 	TimeLimit int
 
+	// ConcurrencyLimit is the maximum number of parallel commands igor
+	// executes for cobbler and power management.
+	ConcurrencyLimit uint
+
+	// CommandRetries is the maximum number of times igor will rerun a command
+	// that fails.
+	CommandRetries uint
+
 	// Domain for email address
 	Domain string
 }

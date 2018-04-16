@@ -39,7 +39,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		}
 
 		// Now set each host to boot from that profile
-		runner := NewRunner(0, 2)
+		runner := DefaultRunner()
 
 		for _, host := range r.Hosts {
 			host := host
@@ -60,7 +60,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		}
 	} else if r.CobblerProfile != "" && b.profiles[r.CobblerProfile] {
 		// If the requested profile exists, go ahead and set the nodes to use it
-		runner := NewRunner(0, 2)
+		runner := DefaultRunner()
 
 		for _, host := range r.Hosts {
 			host := host
@@ -89,7 +89,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 }
 
 func (c *CobblerBackend) Uninstall(r Reservation) error {
-	runner := NewRunner(0, 2)
+	runner := DefaultRunner()
 
 	// Set all nodes in the reservation back to the default profile
 	for _, host := range r.Hosts {
@@ -124,7 +124,7 @@ func (c *CobblerBackend) Power(hosts []string, on bool) error {
 		command = "poweron"
 	}
 
-	runner := NewRunner(0, 2)
+	runner := DefaultRunner()
 
 	for _, host := range hosts {
 		host := host

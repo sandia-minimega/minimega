@@ -21,6 +21,11 @@ type Runner struct {
 	err  error
 }
 
+// DefaultRunner returns a runner with parameters based on igorConfig.
+func DefaultRunner() *Runner {
+	return NewRunner(igorConfig.ConcurrencyLimit, igorConfig.CommandRetries)
+}
+
 // NewRunner returns a runner that can be used to run things in parallel. A
 // limit of 0 implies no limit in the number of parallel runs. Retries
 // specifies the number of times to rerun a function that returns an error. A
