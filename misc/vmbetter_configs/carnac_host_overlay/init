@@ -1,0 +1,114 @@
+#!/bin/sh
+
+export PATH
+
+# mount volatile filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
+mount -t tmpfs cgroup /sys/fs/cgroup
+mkdir /sys/fs/cgroup/memory
+mkdir /sys/fs/cgroup/freezer
+mkdir /sys/fs/cgroup/devices
+mkdir /sys/fs/cgroup/cpu,cpuacct
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpu
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpuacct
+mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
+mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
+mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
+
+# / needs permissions!?
+chmod a+rx /
+
+# minimega needs
+modprobe igb
+modprobe ixgbe
+modprobe mlx4_core
+modprobe mlx5_core
+modprobe loop
+modprobe tun
+modprobe nbd max_part=10
+modprobe kvm-intel
+
+# local disks
+modprobe sd
+modprobe sd_mod
+modprobe scsi_transport_sas
+modprobe scsi_mod
+modprobe libata
+modprobe ext4
+modprobe libsas
+modprobe ahci
+modprobe isci
+modprobe hid
+modprobe hid_generic
+modprobe usbhid
+modprobe ehci-pci
+
+# settle :(
+sleep 10
+
+# format and mount the local disk for scratch space
+fdisk /dev/sda << EOF
+g
+n
+
+
+
+Y
+w
+EOF
+yes | mkfs.ext4 /dev/sda1
+mount /dev/sda1 /scratch
+
+# bump open file handle limits
+ulimit -n 999999
+
+# increase max PID
+echo 999999 > /proc/sys/kernel/pid_max
+
+# enable lo/management/experiment networks
+ip link set lo up
+ip link set eth0 up
+ip link set eth2 up
+
+dhclient -v eth0
+
+# start openvswitch
+/etc/init.d/openvswitch-switch start
+
+# setup mega_bridge
+ovs-vsctl add-br mega_bridge
+ovs-vsctl set Bridge mega_bridge stp_enable=false
+ovs-vsctl add-port mega_bridge eth2
+ip link set mega_bridge up
+
+# set the ip on mega_bridge to mimic the management IP
+ip=$(ip addr show dev eth0 | grep -Po 'inet \K[^ ]+' | sed s/192.168./10.100./)
+ip addr add dev mega_bridge $ip
+
+# set the hostname based on reverse lookup
+hostname $(nslookup ${ip%/*} | sed -n 's/.*name = \(.\+\)./\1/p')
+
+# ssh
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+# ntp
+/etc/init.d/ntp start
+
+# arp tuning
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv4/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv4/neigh/default/gc_thresh3
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh1
+echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh2
+echo 65536 > /proc/sys/net/ipv6/neigh/default/gc_thresh3
+
+# attach a real tty to the console
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'

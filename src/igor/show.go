@@ -38,6 +38,8 @@ const (
 	FgCyan    = "\x1b[36m"
 	FgWhite   = "\x1b[37m"
 
+	FgLightWhite = "\x1b[97m"
+
 	BgBlack         = "\x1b[40m"
 	BgRed           = "\x1b[41m"
 	BgGreen         = "\x1b[42m"
@@ -89,9 +91,8 @@ func runShow(_ *Command, _ []string) {
 	args = append(args,
 		"-sn",
 		"-PS22",
-		"--max-retries=1",
 		"--unprivileged",
-		"--host-timeout=300ms",
+		"-T5",
 		"-oG",
 		"-",
 	)
@@ -250,18 +251,31 @@ func printShelves(alive map[int]bool, resarray []Reservation) {
 }
 
 func colorize(index int, str string) string {
-	return colors[index%len(colors)] + str + Reset
+	return fgColors[index%len(fgColors)] + bgColors[index%len(bgColors)] + str + Reset
 }
 
-var colors = []string{
+var fgColors = []string{
+	FgLightWhite,
+	FgLightWhite,
+	FgLightWhite,
+	FgLightWhite,
+	FgBlack,
+	FgBlack,
+	FgBlack,
+	FgBlack,
+	FgBlack,
+	FgBlack,
+}
+
+var bgColors = []string{
 	BgGreen,
-	BgYellow,
 	BgBlue,
 	BgMagenta,
 	BgCyan,
+	BgYellow,
 	BgBrightGreen,
-	BgBrightYellow,
 	BgBrightBlue,
 	BgBrightMagenta,
 	BgBrightCyan,
+	BgBrightYellow,
 }

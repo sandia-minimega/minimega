@@ -11,6 +11,21 @@ import (
 	"time"
 )
 
+// Checks if node numbers are consistent with the range specified in an igor configuration file.
+// Returns true if the range is valid and false if invalid.
+// Note that an empty list is considered to have a valid node range since all nodes specified
+// (in this case none) fall within the proper range.
+func checkValidNodeRange(nodes []string) bool {
+	indexes, err := getNodeIndexes(nodes)
+	if err != nil {
+		log.Fatal("Unable to get node indexes: %v", err)
+	} else if len(indexes) == 0 {
+		// An empty list has a valid node range.
+		return true
+	}
+	return !(indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1)
+}
+
 // Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries
 // Basically: figures out where in the list of nodes there are 'count' unallocated nodes.
 func findContiguousBlock(nodes []uint64, count int) ([][]int, error) {
@@ -67,6 +82,20 @@ func findReservationAfter(minutes, nodecount int, after int64) (Reservation, []T
 	return findReservationGeneric(minutes, nodecount, []string{}, false, after)
 }
 
+// Helper function to convert string list of nodes into ints
+func getNodeIndexes(requestedNodes []string) ([]int, error) {
+	var requestedindexes []int
+	for _, hostname := range requestedNodes {
+		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
+		n, err := strconv.Atoi(ns)
+		if err != nil {
+			return requestedindexes, errors.New("invalid hostname " + hostname)
+		}
+		requestedindexes = append(requestedindexes, n-igorConfig.Start)
+	}
+	return requestedindexes, nil
+}
+
 // Finds a slice of 'nodecount' nodes that's available for the specified length of time
 // Returns a reservation and a slice of TimeSlices that can be used to replace
 // the current Schedule if the reservation is acceptable.
@@ -86,21 +115,13 @@ func findReservationGeneric(minutes, nodecount int, requestednodes []string, spe
 	}
 
 	// convert hostnames to indexes
-	var requestedindexes []int
-	for _, hostname := range requestednodes {
-		ns := strings.TrimPrefix(hostname, igorConfig.Prefix)
-		n, err := strconv.Atoi(ns)
-		if err != nil {
-			return res, newSched, errors.New("invalid hostname " + hostname)
-		}
-		requestedindexes = append(requestedindexes, n-igorConfig.Start)
-	}
+	requestedindexes, err := getNodeIndexes(requestednodes)
 
 	res.ID = uint64(rand.Int63())
 
-	// We start with the *second* time slice, because the first is the current slice
-	// and is partially consumed
-	for i := 1; ; i++ {
+	// We start with the current time slice, even though it is partially consumed
+	// This is to keep the reservation from starting 1 minute into the future
+	for i := 0; ; i++ {
 		// Make sure the Schedule has enough time left in it
 		if len(Schedule[i:])*MINUTES_PER_SLICE <= minutes {
 			// This will guarantee we'll have enough space for the reservation
@@ -196,6 +217,11 @@ func initializeSchedule() {
 func expireSchedule() {
 	// If the last element of the schedule is expired, or it's empty, let's start fresh
 	if len(Schedule) == 0 || Schedule[len(Schedule)-1].End < time.Now().Unix() {
+		if len(Schedule) == 0 {
+			log.Warn("Schedule is empty, initializing new schedule.")
+		} else {
+			log.Info("Schedule file is expired, initializing new schedule.")
+		}
 		initializeSchedule()
 	}
 
@@ -214,7 +240,7 @@ func expireSchedule() {
 	}
 }
 
-// Extend the schedule to be 'minutes' long.
+// Extend the schedule by 'minutes'.
 func extendSchedule(minutes int) {
 	size := igorConfig.End - igorConfig.Start + 1 // size of node slice
 

@@ -367,7 +367,7 @@ func parseNetspec(namespace string, nics map[string]bool, spec string) (*NetConf
 		return nil, errors.New("malformed netspec")
 	}
 
-	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
+	log.Info(`got bridge="%v", vlan="%v", mac="%v", driver="%v"`, b, v, m, d)
 
 	vlan, err := lookupVLAN(namespace, v)
 	if err != nil {
@@ -405,6 +405,10 @@ func parseNetspec(namespace string, nics map[string]bool, spec string) (*NetConf
 // into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
 // cluster.
 func lookupVLAN(namespace, alias string) (int, error) {
+	if alias == "" {
+		return 0, errors.New("VLAN must be non-empty string")
+	}
+
 	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error

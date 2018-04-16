@@ -424,8 +424,17 @@ func (vm *KvmVM) QMPRaw(input string) (string, error) {
 }
 
 func (vm *KvmVM) Migrate(filename string) error {
-	path := filepath.Join(*f_iomBase, filename)
-	return vm.q.MigrateDisk(path)
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// migrating the VM will pause it
+	vm.setState(VM_PAUSED)
+
+	return vm.q.MigrateDisk(filename)
 }
 
 func (vm *KvmVM) QueryMigrate() (string, float64, error) {
@@ -441,7 +450,8 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	if s, ok := r["status"]; ok {
 		status = s.(string)
 	} else {
-		return status, completed, fmt.Errorf("could not decode status: %v", r)
+		// if there is no status, it means that there is no active migration
+		return "", 0.0, nil
 	}
 
 	var ram map[string]interface{}
@@ -748,7 +758,7 @@ func (vm *KvmVM) Connect(cc *ron.Server) error {
 	return cc.DialSerial(ccPath)
 }
 
-func (vm *KvmVM) Hotplug(f, version string) error {
+func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	var bus string
 	switch version {
 	case "", "1.1":
@@ -781,7 +791,7 @@ func (vm *KvmVM) Hotplug(f, version string) error {
 	}
 	log.Debugln("hotplug drive_add response:", r)
 
-	r, err = vm.q.USBDeviceAdd(hid, bus)
+	r, err = vm.q.USBDeviceAdd(hid, bus, serial)
 	if err != nil {
 		return err
 	}
@@ -909,8 +919,6 @@ func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
 // build the qemu args.
 func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	var args []string
-
-	args = append(args, "-enable-kvm")
 
 	args = append(args, "-name")
 	args = append(args, strconv.Itoa(id))

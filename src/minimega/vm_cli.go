@@ -216,6 +216,7 @@ See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
 			"vm hotplug",
 			"vm hotplug <add,> <vm target> <filename> [version]",
+			"vm hotplug <add,> <vm target> <filename> serial <serial> [version]",
 			"vm hotplug <remove,> <vm target> <disk id or all>",
 		},
 		Call:    wrapVMTargetCLI(cliVMHotplug),
@@ -224,31 +225,39 @@ See "vm start" for a full description of allowable targets.`,
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
 		HelpLong: `
-Disconnect or move existing network connections on a running VM.
+Disconnect or move existing network connections for one or more VMs. See "vm
+start" for a full description of allowable targets.
 
 Network connections are indicated by their position in vm net (same order in vm
 info) and are zero indexed. For example, to disconnect the first network
-connection from a VM named vm-0 with 4 network connections:
+connection from a VM named vm-0:
 
 	vm net disconnect vm-0 0
 
-To disconnect the second connection:
+To disconnect the second interface:
 
 	vm net disconnect vm-0 1
 
-To move a connection, specify the new VLAN tag and bridge:
+To move a connection, specify the interface number, the new VLAN tag and
+optional bridge:
 
-	vm net <vm name> 0 bridgeX 100`,
+	vm net vm-0 0 100 mega_bridge
+
+If the bridge name is omitted, the interface will be reconnected to the same
+bridge that it is already on. If the interface is not connected to a bridge, it
+will be connected to the default bridge, "mega_bridge".`,
 		Patterns: []string{
-			"vm net <connect,> <vm name> <tap position> <bridge> <vlan>",
-			"vm net <disconnect,> <vm name> <tap position>",
+			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
+			"vm net <disconnect,> <vm target> <tap position>",
 		},
-		Call: wrapSimpleCLI(cliVMNetMod),
+		Call: wrapVMTargetCLI(cliVMNetMod),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
 				return cliVMSuggest(ns, prefix, VM_ANY_STATE, false)
 			} else if val == "vlan" {
 				return cliVLANSuggest(ns, prefix)
+			} else if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
 			}
 			return nil
 		}),
@@ -714,10 +723,11 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		}
 
 		version := c.StringArgs["version"]
+		serial := c.StringArgs["serial"]
 
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			if kvm, ok := vm.(*KvmVM); ok {
-				return true, kvm.Hotplug(f, version)
+				return true, kvm.Hotplug(f, version, serial)
 			}
 
 			return false, nil
@@ -783,26 +793,30 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 }
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	vm := ns.FindVM(c.StringArgs["vm"])
-	if vm == nil {
-		return vmNotFound(c.StringArgs["vm"])
-	}
+	target := c.StringArgs["vm"]
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
 		return err
 	}
 
-	if c.BoolArgs["disconnect"] {
-		return vm.NetworkDisconnect(pos)
+	var vlan int
+	if !c.BoolArgs["disconnect"] {
+		vlan, err = lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
+		}
 	}
 
-	vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
-	if err != nil {
-		return err
-	}
+	bridge := c.StringArgs["bridge"]
 
-	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		if c.BoolArgs["disconnect"] {
+			return true, vm.NetworkDisconnect(pos)
+		}
+
+		return true, vm.NetworkConnect(pos, bridge, vlan)
+	})
 }
 
 func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

@@ -123,10 +123,10 @@ outer:
 	// problematic as we have commands: "vm info" and "vm info search <terms>"
 	// that share the same prefix.
 	if len(pattern) != len(input.items) {
-		return nil, len(pattern) - 1, exact
+		return nil, len(pattern), exact
 	}
 
-	return &cmd, len(pattern) - 1, exact
+	return &cmd, len(pattern), exact
 }
 
 // SetSource sets the Source field for a command and all nested subcommands.

@@ -280,102 +280,56 @@ func Suggest(input string) []string {
 
 //
 func Help(input string) string {
-	helpShort := make(map[string]string)
-
-	_, err := lexInput(input)
+	inputItems, err := lexInput(input)
 	if err != nil {
-		return "Error parsing help input: " + err.Error()
+		return fmt.Sprintf("unable to parse `%v`: %v", input, err)
 	}
 
-	// Figure out the literal string prefixes for each handler
-	groups := make(map[string][]*Handler)
-	for _, handler := range handlers {
-		prefix := handler.SharedPrefix
-		if _, ok := groups[prefix]; !ok {
-			groups[prefix] = make([]*Handler, 0)
-		}
-
-		groups[prefix] = append(groups[prefix], handler)
+	if len(inputItems.items) == 0 {
+		return printHelpShort(handlers)
 	}
 
-	// User entered a valid command prefix as the argument to help, display help
-	// for that group of handlers.
-	if group, ok := groups[input]; input != "" && ok {
-		// Only one handler with a given pattern prefix, give the long help message
-		if len(group) == 1 {
-			return group[0].helpLong()
-		}
+	matches := []*Handler{}
+	max := -1
 
-		count := 0
-		for _, v := range group {
-			if len(v.HelpLong) > 0 {
-				count += 1
-			}
-		}
-		// If only one entry has long help, do magic!
-		if count == 1 {
-			handler := &Handler{}
-			for _, v := range group {
-				handler.Patterns = append(handler.Patterns, v.Patterns...)
-				if len(v.HelpLong) > 0 {
-					handler.HelpLong = v.HelpLong
-				}
-			}
-			handler.parsePatterns()
-			return handler.helpLong()
-		}
+	for _, h := range handlers {
+		_, length, _ := h.compile(inputItems)
 
-		// Weird case, multiple handlers share the same prefix. Print the short
-		// help for each handler for each pattern registered.
-		// TODO: Is there something better we can do?
-		for _, handler := range group {
-			for _, pattern := range handler.Patterns {
-				helpShort[pattern] = handler.helpShort()
-			}
-		}
-
-		return printHelpShort(helpShort)
-	}
-
-	// Look for groups who have input as a prefix of the prefix, print help for
-	// the handlers in those groups. If input is the empty string, we will end
-	// up printing the full help short.
-	matches := []string{}
-	for prefix := range groups {
-		if strings.HasPrefix(prefix, input) {
-			matches = append(matches, prefix)
+		if length > max {
+			max = length
+			matches = []*Handler{h}
+		} else if length == max {
+			matches = append(matches, h)
 		}
 	}
 
 	if len(matches) == 0 {
-		// If there's a closest match, display the long help for it
-		//handler, _ := closestMatch(inputItems)
-		//if handler != nil {
-		//	return handler.helpLong()
-		//}
-
-		// Found an unresolvable command
 		return fmt.Sprintf("no help entry for `%s`", input)
-	} else if len(matches) == 1 && len(groups[matches[0]]) == 1 {
-		// Very special case, one prefix match and only one handler.
-		return groups[matches[0]][0].helpLong()
+	} else if len(matches) == 1 {
+		return matches[0].helpLong()
 	}
 
-	// List help short for all matches
-	for _, prefix := range matches {
-		group := groups[prefix]
-		if len(group) == 1 {
-			helpShort[prefix] = group[0].helpShort()
-		} else {
-			for _, handler := range group {
-				for _, pattern := range handler.Patterns {
-					helpShort[pattern] = handler.helpShort()
-				}
-			}
+	// look for special case -- there are multiple handlers but only one has
+	// long help text.
+	count := 0
+	for _, v := range matches {
+		if len(v.HelpLong) > 0 {
+			count += 1
 		}
 	}
+	if count == 1 {
+		handler := &Handler{}
+		for _, v := range matches {
+			handler.Patterns = append(handler.Patterns, v.Patterns...)
+			if len(v.HelpLong) > 0 {
+				handler.HelpLong = v.HelpLong
+			}
+		}
+		handler.parsePatterns()
+		return handler.helpLong()
+	}
 
-	return printHelpShort(helpShort)
+	return printHelpShort(matches)
 }
 
 func (c Command) String() string {

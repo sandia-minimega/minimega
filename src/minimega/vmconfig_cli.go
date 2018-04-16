@@ -37,6 +37,10 @@ To clone the configuration of an existing VM:
 
 	vm config clone <vm name>
 
+Clone reparses the original network "vm config net". If the cloned VM was
+configured with a static MAC, the VM config will not be launchable. Clone also
+clears the UUID.
+
 Calling clear vm config will clear all VM configuration options, but will not
 remove saved configurations.`,
 		Patterns: []string{
@@ -45,7 +49,8 @@ remove saved configurations.`,
 			"vm config <restore,> [name]",
 			"vm config <clone,> <vm name>",
 		},
-		Call: wrapSimpleCLI(cliVMConfig),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+		Call:    wrapSimpleCLI(cliVMConfig),
 	},
 	{ // vm config net
 		HelpShort: "specify network interfaces for VM",
@@ -188,7 +193,16 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
 		}
 
-		return nil
+		// clear UUID since we can't launch VMs with the same UUID
+		ns.vmConfig.UUID = ""
+
+		// reprocess the network configs from their original input
+		vals := []string{}
+		for _, nic := range ns.vmConfig.Networks {
+			vals = append(vals, nic.Raw)
+		}
+
+		return ns.processVMNets(vals)
 	}
 
 	// Print the config
@@ -202,24 +216,7 @@ func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return nil
 	}
 
-	nics, err := qemuNICs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
-	if err != nil {
-		return err
-	}
-
-	ns.vmConfig.Networks = nil
-
-	for _, spec := range c.ListArgs["netspec"] {
-		net, err := parseNetspec(ns.Name, nics, spec)
-		if err != nil {
-			ns.vmConfig.Networks = nil
-			return err
-		}
-
-		ns.vmConfig.Networks = append(ns.vmConfig.Networks, *net)
-	}
-
-	return nil
+	return ns.processVMNets(c.ListArgs["netspec"])
 }
 
 func cliVMConfigQemuOverride(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

@@ -5,7 +5,7 @@
 package main
 
 import (
-	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"ron"
+	"strings"
 
 	"github.com/peterh/liner"
 )
@@ -24,6 +25,8 @@ var (
 	f_port    = flag.Int("port", 9005, "port to listen on")
 	f_path    = flag.String("path", "/tmp/rond", "path for files")
 	f_nostdin = flag.Bool("nostdin", false, "disable reading from stdin")
+
+	f_e = flag.Bool("e", false, "execute command on running rond")
 )
 
 var (
@@ -35,6 +38,21 @@ func main() {
 	flag.Parse()
 
 	log.Init()
+
+	if *f_e {
+		rond, err := Dial(filepath.Join(*f_path, "rond"))
+		if err != nil {
+			log.Fatal("unable to dial: %v", err)
+		}
+		rond.Pager = minipager.DefaultPager
+
+		// TODO: Need to escape?
+		cmd := strings.Join(flag.Args(), " ")
+		log.Info("got command: `%v`", cmd)
+
+		rond.RunAndPrint(cmd, false)
+		return
+	}
 
 	// register CLI handlers
 	for i := range cliHandlers {
@@ -118,30 +136,58 @@ func commandSocket() {
 		go func(c net.Conn) {
 			defer c.Close()
 
-			// just read comments off the wire
-			scanner := bufio.NewScanner(conn)
-			for scanner.Scan() {
-				line := scanner.Text()
+			enc := json.NewEncoder(c)
+			dec := json.NewDecoder(c)
 
-				log.Debug("got line from socket: `%v`", line)
+			var err error
 
-				resps, err := minicli.ProcessString(string(line), false)
+			for err == nil {
+				var r Request
+
+				if err = dec.Decode(&r); err != nil {
+					log.Errorln(err)
+					return
+				}
+
+				log.Debug("got commands from socket: `%v`", r.Command)
+
+				resps, err := minicli.ProcessString(r.Command, false)
 				if err != nil {
 					log.Errorln(err)
-					continue
+					return
 				}
 
+				// HAX: Work around so that we can add the more boolean.
+				var prev minicli.Responses
+
+				// Keep sending until we hit the first error, then just consume the
+				// channel to ensure that we release any locks acquired by cmd.
 				for resp := range resps {
-					_, err := c.Write([]byte(resp.String()))
-					if err != nil {
-						log.Error("unable to write response: %v", err)
-						continue
+					if prev != nil && err == nil {
+						err = sendLocalResp(enc, prev, true)
+					} else if err != nil && len(resp) > 0 {
+						log.Info("dropping resp from %v", resp[0].Host)
 					}
+
+					prev = resp
 				}
-			}
-			if err := scanner.Err(); err != nil {
-				log.Errorln(err)
+
+				if err == nil {
+					err = sendLocalResp(enc, prev, false)
+				}
 			}
 		}(conn)
 	}
+}
+
+func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
+	r := Response{
+		More: more,
+	}
+	if resp != nil {
+		r.Resp = resp
+		r.Rendered = resp.String()
+	}
+
+	return enc.Encode(&r)
 }

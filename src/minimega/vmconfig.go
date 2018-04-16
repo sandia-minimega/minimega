@@ -86,6 +86,10 @@ type NetConfig struct {
 	IP6    string
 
 	RxRate, TxRate float64 // Most recent bandwidth measurements for Tap
+
+	// Raw string that we used when creating this network config will be
+	// reparsed if we ever clone the VM that has this config.
+	Raw string
 }
 
 func NewVMConfig() VMConfig {
