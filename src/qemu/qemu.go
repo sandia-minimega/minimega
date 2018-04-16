@@ -69,7 +69,7 @@ func NICs(qemu, machine string) (map[string]bool, error) {
 	if machine != "" {
 		cmd = append(cmd, "-M", machine)
 	}
-	cmd = append(cmd, "-net", "nic,model=?")
+	cmd = append(cmd, "-device", "?")
 
 	res, err := caps(name, cmd, parseNICs)
 	if err != nil {
