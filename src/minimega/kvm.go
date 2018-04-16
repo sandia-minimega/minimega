@@ -6,7 +6,6 @@ package main
 
 import (
 	"bridge"
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -18,11 +17,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"qemu"
 	"qmp"
 	"ron"
 	"strconv"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 	"vnc"
@@ -188,18 +187,6 @@ type KvmVM struct {
 
 // Ensure that KvmVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
-
-var QemuCapabibilities struct {
-	// guards below
-	sync.Mutex
-
-	// name -> values
-	m map[string]map[string]bool
-}
-
-func init() {
-	QemuCapabibilities.m = make(map[string]map[string]bool)
-}
 
 // Copy makes a deep copy and returns reference to the new struct.
 func (old KVMConfig) Copy() KVMConfig {
@@ -1141,176 +1128,6 @@ func qmpLogger(id int, q qmp.Conn) {
 	}
 }
 
-// qemuCPUs returns a list of supported QEMU CPUs for the specified qemu binary
-// and machine type. Saves the results to QemuCapabibilities so that we only
-// need to run the command once.
-func qemuCPUs(qemu, machine string) (map[string]bool, error) {
-	QemuCapabibilities.Lock()
-	defer QemuCapabibilities.Unlock()
-
-	name := qemu + machine + "CPUs"
-
-	// test if the key exists
-	if v, ok := QemuCapabibilities.m[name]; ok {
-		return v, nil
-	}
-
-	args := []string{qemu}
-	if machine != "" {
-		args = append(args, "-M", machine)
-	}
-	args = append(args, "-cpu", "?")
-
-	out, err := processWrapper(args...)
-	if err != nil {
-		if machine == "" {
-			return nil, errors.New("unable to determine valid QEMU CPUs, try configuring machine first")
-
-		}
-		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
-	}
-
-	// format should be something like:
-	//
-	// ```
-	// Available CPUs:
-	// x86              486
-	// x86  Broadwell-noTSX  Intel Core Processor (Broadwell, no TSX)
-	// x86        Broadwell  Intel Core Processor (Broadwell)
-	// ```
-	//
-	// or
-	//
-	// ```
-	// Available CPUs:
-	//  arm1026
-	//  arm1136
-	//  arm1136-r2
-	// ```
-	//
-	// Ends with a blank line
-	cpus := map[string]bool{}
-
-	scanner := bufio.NewScanner(strings.NewReader(out))
-	scanner.Scan() // skip header
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) == 0 {
-			break
-		}
-
-		switch fields[0] {
-		case "x86":
-			if len(fields) >= 2 {
-				cpus[fields[1]] = true
-			}
-		default:
-			cpus[fields[0]] = true
-		}
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("unable to determine valid QEMU CPUs -- %v", err)
-	}
-
-	QemuCapabibilities.m[name] = cpus
-
-	return cpus, nil
-}
-
-// qemuMachines returns a list of supported QEMU machines for the specified
-// qemu binary. Saves the results to QemuCapabibilities so that we only need to
-// run the command once.
-func qemuMachines(qemu string) (map[string]bool, error) {
-	QemuCapabibilities.Lock()
-	defer QemuCapabibilities.Unlock()
-
-	name := qemu + "Machines"
-
-	// test if the key exists
-	if v, ok := QemuCapabibilities.m[name]; ok {
-		return v, nil
-	}
-
-	out, err := processWrapper(qemu, "-M", "?")
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine valid QEMU machines -- %v", err)
-	}
-
-	// format should be something like:
-	//
-	// ```
-	// Supported machines are:
-	// pc-i440fx-2.9        Standard PC (i440FX + PIIX, 1996)
-	// pc-i440fx-2.8        Standard PC (i440FX + PIIX, 1996)
-	// ```
-	machines := map[string]bool{}
-
-	scanner := bufio.NewScanner(strings.NewReader(out))
-	scanner.Scan() // skip header
-	for scanner.Scan() {
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 1 {
-			break
-		}
-
-		machines[fields[0]] = true
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("unable to determine valid QEMU machines -- %v", err)
-	}
-
-	QemuCapabibilities.m[name] = machines
-
-	return machines, nil
-}
-
-// qemuNICs returns a list of supported QEMU NICs for the specified qemu binary
-// and machine type. Saves the results to QemuCapabibilities so that we only
-// need to run the command once.
-func qemuNICs(qemu, machine string) (map[string]bool, error) {
-	QemuCapabibilities.Lock()
-	defer QemuCapabibilities.Unlock()
-
-	name := qemu + machine + "NICs"
-
-	// test if the key exists
-	if v, ok := QemuCapabibilities.m[name]; ok {
-		return v, nil
-	}
-
-	args := []string{qemu}
-	if machine != "" {
-		args = append(args, "-M", machine)
-	}
-	args = append(args, "-net", "nic,model=?")
-
-	out, err := processWrapper(args...)
-	if err != nil {
-		return nil, fmt.Errorf("unable to determine valid QEMU nics -- %v", err)
-	}
-
-	// format should be something like:
-	//
-	// ```
-	// qemu: Supported NIC models: ne2k_pci,i82551,i82557b,i82559er,rtl8139,e1000,pcnet,virtio
-	// ```
-	nics := map[string]bool{}
-
-	fields := strings.Fields(out)
-	if len(fields) != 5 {
-		// what is the format?
-		return nil, errors.New("unexpected format for QEMU nics")
-	}
-
-	for _, k := range strings.Split(fields[4], ",") {
-		nics[k] = true
-	}
-
-	QemuCapabibilities.m[name] = nics
-
-	return nics, nil
-}
-
 func checkCores(vmConfig VMConfig, cores uint64) error {
 	if vmConfig.VCPUs < cores {
 		return errors.New("vcpus must be greater than or equal to the number of cores")
@@ -1320,7 +1137,7 @@ func checkCores(vmConfig VMConfig, cores uint64) error {
 }
 
 func validCPU(vmConfig VMConfig, cpu string) error {
-	cpus, err := qemuCPUs(vmConfig.QemuPath, vmConfig.Machine)
+	cpus, err := qemu.CPUs(vmConfig.QemuPath, vmConfig.Machine)
 	if err != nil {
 		return err
 	}
@@ -1333,7 +1150,7 @@ func validCPU(vmConfig VMConfig, cpu string) error {
 }
 
 func validMachine(vmConfig VMConfig, machine string) error {
-	machines, err := qemuMachines(vmConfig.QemuPath)
+	machines, err := qemu.Machines(vmConfig.QemuPath)
 	if err != nil {
 		return err
 	}
@@ -1346,7 +1163,7 @@ func validMachine(vmConfig VMConfig, machine string) error {
 }
 
 func validNIC(vmConfig VMConfig, nic string) error {
-	nics, err := qemuNICs(vmConfig.QemuPath, vmConfig.Machine)
+	nics, err := qemu.NICs(vmConfig.QemuPath, vmConfig.Machine)
 	if err != nil {
 		return err
 	}
@@ -1371,7 +1188,7 @@ func qemuSuggest(vals map[string]bool, prefix string) []string {
 }
 
 func suggestCPU(ns *Namespace, val, prefix string) []string {
-	cpus, err := qemuCPUs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
+	cpus, err := qemu.CPUs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
 	if err != nil {
 		log.Info("suggest failed: %v", err)
 		return nil
@@ -1381,7 +1198,7 @@ func suggestCPU(ns *Namespace, val, prefix string) []string {
 }
 
 func suggestMachine(ns *Namespace, val, prefix string) []string {
-	machines, err := qemuMachines(ns.vmConfig.QemuPath)
+	machines, err := qemu.Machines(ns.vmConfig.QemuPath)
 	if err != nil {
 		log.Info("suggest failed: %v", err)
 		return nil

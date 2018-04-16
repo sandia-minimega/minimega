@@ -10,6 +10,7 @@ import (
 	"minicli"
 	log "minilog"
 	"path/filepath"
+	"qemu"
 	"ron"
 	"runtime"
 	"sort"
@@ -469,7 +470,7 @@ func (n *Namespace) hostSlice() []string {
 // active vmConfig.
 func (n *Namespace) processVMNets(vals []string) error {
 	// get valid NIC drivers for current qemu/machine
-	nics, err := qemuNICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
+	nics, err := qemu.NICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
 	if err != nil {
 		return err
 	}
