@@ -71,7 +71,7 @@ func (b *TFTPBackend) Power(hosts []string, on bool) error {
 		return errors.New("power configuration missing")
 	}
 
-	runner := NewRunner(0)
+	runner := NewRunner(0, 2)
 
 	for _, host := range hosts {
 		host := host

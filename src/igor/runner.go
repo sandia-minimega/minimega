@@ -4,9 +4,15 @@
 
 package main
 
-import "sync"
+import (
+	log "minilog"
+	"sync"
+	"time"
+)
 
 type Runner struct {
+	retries uint
+
 	tokens chan bool
 
 	wg sync.WaitGroup
@@ -16,9 +22,13 @@ type Runner struct {
 }
 
 // NewRunner returns a runner that can be used to run things in parallel. A
-// limit of 0 implies no limit in the number of parallel runs.
-func NewRunner(limit int) *Runner {
-	r := &Runner{}
+// limit of 0 implies no limit in the number of parallel runs. Retries
+// specifies the number of times to rerun a function that returns an error. A
+// value of 0 means only run the function once.
+func NewRunner(limit, retries uint) *Runner {
+	r := &Runner{
+		retries: retries,
+	}
 
 	if limit < 1 {
 		// no limit so make tokens return immediately
@@ -28,7 +38,7 @@ func NewRunner(limit int) *Runner {
 		r.tokens = make(chan bool, limit)
 
 		// fill channel
-		for i := 0; i < limit; i++ {
+		for i := uint(0); i < limit; i++ {
 			r.tokens <- true
 		}
 	}
@@ -49,10 +59,18 @@ func (r *Runner) Run(fn func() error) {
 			r.tokens <- v
 		}
 
-		if err := fn(); err != nil {
-			r.once.Do(func() {
-				r.err = err
-			})
+		for i := uint(0); i < r.retries+1; i++ {
+			if err := fn(); err != nil {
+				r.once.Do(func() {
+					r.err = err
+				})
+
+				log.Error("attempt %v/%v, error: %v", i+1, r.retries+1, err)
+				time.Sleep(time.Second)
+				continue
+			}
+
+			break
 		}
 	}()
 }
