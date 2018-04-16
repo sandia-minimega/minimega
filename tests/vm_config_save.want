@@ -17,10 +17,13 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      []
-QEMU Path:          
+QEMU Path:          kvm
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
+Machine:            
+CPU:                host
+Cores:              1
 
 Container configuration:
 Filesystem Path: 
@@ -55,10 +58,13 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      []
-QEMU Path:          
+QEMU Path:          kvm
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
+Machine:            
+CPU:                host
+Cores:              1
 
 Container configuration:
 Filesystem Path: 
@@ -90,10 +96,13 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      []
-QEMU Path:          
+QEMU Path:          kvm
 QEMU Append:        []
 SerialPorts:        0
 Virtio-SerialPorts: 0
+Machine:            
+CPU:                host
+Cores:              1
 
 Container configuration:
 Filesystem Path: 
@@ -122,10 +131,13 @@ CDROM Path:
 Kernel Path:        
 Initrd Path:        
 Kernel Append:      []
-QEMU Path:          
+QEMU Path:          kvm
 QEMU Append:        [-k en-us]
 SerialPorts:        0
 Virtio-SerialPorts: 0
+Machine:            
+CPU:                host
+Cores:              1
 
 Container configuration:
 Filesystem Path: 
