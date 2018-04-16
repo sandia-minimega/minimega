@@ -43,6 +43,12 @@ func (r *Runner) Run(fn func() error) {
 	go func() {
 		defer r.wg.Done()
 
+		// rate limit, only put token back if it was valid (closed channel
+		// returns zero value)
+		if v := <-r.tokens; v {
+			r.tokens <- v
+		}
+
 		if err := fn(); err != nil {
 			r.once.Do(func() {
 				r.err = err

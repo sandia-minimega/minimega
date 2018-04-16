@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	log "minilog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -26,7 +25,7 @@ func (b *TFTPBackend) Install(r Reservation) error {
 	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 	masterfile, err := os.Create(r.Filename())
 	if err != nil {
-		log.Fatal("failed to create %v -- %v", r.Filename(), err)
+		return fmt.Errorf("failed to create %v -- %v", r.Filename(), err)
 	}
 	defer masterfile.Close()
 
