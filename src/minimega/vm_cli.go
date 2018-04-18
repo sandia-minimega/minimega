@@ -216,6 +216,7 @@ See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
 			"vm hotplug",
 			"vm hotplug <add,> <vm target> <filename> [version]",
+			"vm hotplug <add,> <vm target> <filename> serial <serial> [version]",
 			"vm hotplug <remove,> <vm target> <disk id or all>",
 		},
 		Call:    wrapVMTargetCLI(cliVMHotplug),
@@ -722,10 +723,11 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		}
 
 		version := c.StringArgs["version"]
+		serial := c.StringArgs["serial"]
 
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			if kvm, ok := vm.(*KvmVM); ok {
-				return true, kvm.Hotplug(f, version)
+				return true, kvm.Hotplug(f, version, serial)
 			}
 
 			return false, nil

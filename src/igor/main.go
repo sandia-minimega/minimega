@@ -8,6 +8,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -54,6 +55,8 @@ var commands = []*Command{
 	cmdShow,
 	cmdSub,
 	cmdPower,
+	cmdExtend,
+	cmdNotify,
 }
 
 var exitStatus = 0
@@ -110,6 +113,9 @@ type Config struct {
 	// TimeLimit: max time a non-root user can reserve
 	NodeLimit int
 	TimeLimit int
+
+	// Domain for email address
+	Domain string
 }
 
 // Represents a slice of time in the Schedule
@@ -132,6 +138,10 @@ type Reservation struct {
 	ID             uint64
 	KernelArgs     string
 	Vlan           int
+	Kernel         string
+	Initrd         string
+	KernelHash     string
+	InitrdHash     string
 }
 
 // Sort the slice of reservations based on the start time
@@ -192,8 +202,8 @@ func housekeeping() {
 				defer masterfile.Close()
 				masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
 				masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.ResName))
-				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.ResName, r.KernelArgs))
+				masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.KernelHash))
+				masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.InitrdHash, r.KernelArgs))
 
 				// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 				for _, pxename := range r.PXENames {
@@ -211,7 +221,7 @@ func housekeeping() {
 				// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
 				if r.CobblerProfile == "" && !cobblerProfiles["igor_"+r.ResName] {
 					// Create the distro from the kernel+ramdisk
-					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.ResName+"-initrd"), "--kopts="+r.KernelArgs)
+					_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
 					if err != nil {
 						log.Fatal("cobbler: %v", err)
 					}
@@ -304,7 +314,7 @@ func main() {
 		return
 	}
 
-	rand.Seed(time.Now().Unix())
+	rand.Seed(time.Now().UnixNano())
 
 	igorConfig = readConfig(*configpath)
 
@@ -336,18 +346,18 @@ func main() {
 	getReservations()
 
 	// Read in the schedule
-	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.json")
+	path = filepath.Join(igorConfig.TFTPRoot, "/igor/schedule.gob")
 	scheddb, err = os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
 		log.Warn("failed to open schedule file: %v", err)
 	}
-	defer resdb.Close()
+	defer scheddb.Close()
 	// We probably don't need to lock this too but I'm playing it safe
-	if err := syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX); err != nil {
+	if err := syscall.Flock(int(scheddb.Fd()), syscall.LOCK_EX); err != nil {
 		// TODO: should we wait?
 		log.Fatal("unable to lock schedule file -- someone else is running igor")
 	}
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
+	defer syscall.Flock(int(scheddb.Fd()), syscall.LOCK_UN) // this will unlock it later
 	getSchedule()
 
 	// Here, we need to go through and delete any reservations which should be expired,
@@ -385,7 +395,7 @@ func getReservations() {
 
 // Read in the schedule from the already-open schedule file
 func getSchedule() {
-	dec := json.NewDecoder(scheddb)
+	dec := gob.NewDecoder(scheddb)
 	err := dec.Decode(&Schedule)
 	// an empty file is OK, but other errors are not
 	if err != nil && err != io.EOF {
@@ -410,7 +420,7 @@ func putSchedule() {
 	scheddb.Truncate(0)
 	scheddb.Seek(0, 0)
 	// Write out the new schedule
-	enc := json.NewEncoder(scheddb)
+	enc := gob.NewEncoder(scheddb)
 	enc.Encode(Schedule)
 	scheddb.Sync()
 }

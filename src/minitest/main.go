@@ -195,7 +195,7 @@ func (c Client) runTests(dir string) {
 		}
 
 		if got != string(want) {
-			log.Error("got != want for %s", name)
+			fmt.Printf("got != want for %s\n", name)
 		}
 	}
 

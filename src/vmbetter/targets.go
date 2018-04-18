@@ -43,7 +43,7 @@ func BuildRootFS(buildPath string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stdout, log.DEBUG, "cp")
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	err = cmd.Run()
@@ -204,9 +204,9 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 	if err != nil {
 		return err
 	}
-	log.LogAll(stdout, log.INFO, "cpio")
+	log.LogAll(stdout, log.DEBUG, "cpio")
 	// the cpio command outputs regular stuff to stderr, so i have a hack to push all output to the INFO level, instead of INFO/ERROR
-	log.LogAll(stderr, log.INFO, "cpio")
+	log.LogAll(stderr, log.DEBUG, "cpio")
 
 	err = cmd.Run()
 	if err != nil {
@@ -489,7 +489,7 @@ func copyQcow2(src, dst string) error {
 		return err
 	}
 
-	log.LogAll(stdout, log.INFO, "cp")
+	log.LogAll(stdout, log.DEBUG, "cp")
 	log.LogAll(stderr, log.ERROR, "cp")
 
 	log.Debug("copy with with cmd: %v", cmd)

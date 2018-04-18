@@ -265,7 +265,7 @@ func Error(format string, arg ...interface{}) {
 }
 
 func Fatal(format string, arg ...interface{}) {
-	log(FATAL, "", format, arg)
+	log(FATAL, "", format, arg...)
 
 	os.Exit(1)
 }
