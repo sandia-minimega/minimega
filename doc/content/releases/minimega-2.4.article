@@ -23,7 +23,7 @@ minimega. See the miniplumber [[/articles/plumbing.article][article]] and
 In 2.3, we introduced namespaces as the first step towards more portable
 experiments. In 2.4, we have refactored namespaces to be more comprehensive.
 minimega is now always in a namespace -- `minimega` by default. All state
-associated with the namespace (e.g. VMs, taps, captures, VNC) is now
+associated with a namespace (e.g. VMs, taps, captures, VNC) is now
 automatically cleaned up when it is destroyed.
 
 As part of this refactor, we have made several APIs work properly with
@@ -74,8 +74,11 @@ based on the value of `vm`config`vcpus`.
 
 *** cc listen API
 
-To support above changes to `cc`, we removed the `-ccport` flag and replaced it
-with the `cc`listen` API. This runs on all hosts in the namespace.
+To support the above changes to `cc`, we removed the `-ccport` flag and
+replaced it with the `cc`listen` API. This runs on all hosts in the namespace.
+
+`cc`listen` must be run manually if users wish to use a network-based
+backchannel for command and control.
 
 *** cc log level API
 
@@ -93,8 +96,8 @@ Added `router`<vm>`gw` API to set the routers default gateway.
 
 *** vm top API
 
-Added `vm`top` API to inspect resources that VMs and containers are actively
-using.
+Added `vm`top` API to show the memory and CPU resources that VMs and containers
+are actively using.
 
 *** vm info API
 
@@ -130,8 +133,9 @@ a CD in `vm`config`cdrom`.
 Similarly to the `vm`cdrom` API, `vm`hotplug` now supports addressing one or
 more VMs using the syntax from `vm`start`.
 
-`vm`hotplug` also now includes an optional parameter to specify the USB bus to
-connect the device to -- either 1.1 or 2.0.
+`vm`hotplug` also now includes two optional parameters: the USB version and USB
+serial number. The USB version controls which bus the device is connected to --
+either 1.1 or 2.0. The serial number is visible to the VM.
 
 Renamed `vm`hotplug`show` to `vm`hotplug`. To limit results to a particular VM,
 use `.filter`.
@@ -208,17 +212,17 @@ Added environment variable completions.
 Updated the headers on several API to make them easier to use with `.columns`
 and `.filter`:
 
- - bridge
- - capture
- - cc
- - debug
- - disk
- - dnsmasq
- - file status
- - mesh status
- - optimize
- - vm hotplug
- - vm tag
+- bridge
+- capture
+- cc
+- debug
+- disk
+- dnsmasq
+- file status
+- mesh status
+- optimize
+- vm hotplug
+- vm tag
 
 All column names should now be one word and lowercase.
 
@@ -245,6 +249,28 @@ source code meets `gofmt` and `go`vet` standards.
 Created standalone webserver based on `web` API. Added many
 new features, see the [[/articles/miniweb.article][miniweb]] article for more
 information.
+
+*** vmbetter
+
+The vmbetter configs included with minimega have been heavily refactored.
+Specifically, we:
+
+- Added new host config for CARNAC.
+- Renamed ccc_host_ovs to ccc_host.
+- Added new configs to build images with the dependencies to build minimega.
+- Renamed miniccc_virtio to miniccc.
+- Deleted protonuke.
+- Changed ccc_host to set experiment IP from management IP.
+- Set motd throughout.
+- Added symbolic links to miniccc and minirouter (so that they copy in automatically from bin/).
+
+The last change means that users no longer have to copy binaries into the
+overlay directory before building.
+
+*** uminiccc/uminirouterfs
+
+Added a busybox-based container filesystem that includes miniccc based on the
+busybox-based minirouter filesystem (renamed to uminirouterfs).
 
 *** igor
 
@@ -345,6 +371,6 @@ look for the web directory in `misc/web`).
 ** Building from source
 
 Source of the entire distribution is available on
-[[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
+[[https://github.com/sandia-minimega/minimega][Github]]. Follow the directions
 for cloning or forking minimega on github.com. In order to build minimega, you
 will need a Go 1.8+ compiler and libpcap headers.
