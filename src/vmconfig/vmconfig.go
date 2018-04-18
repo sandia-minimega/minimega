@@ -33,26 +33,26 @@ type Config struct {
 // any parents. Config is invalid on any non-nil error.
 func ReadConfig(path string) (c Config, err error) {
 	c.Path = path
-	err = read(path, &c)
+	err = read(path, "", &c)
 	return
 }
 
 // reentrant read routine. Will be called recursively if a 'parents' key exists in the config file
-func read(path string, c *Config) error {
+func read(path, prev string, c *Config) error {
 	f, err := os.Open(path)
 	if err != nil {
-		if strings.Contains(err.Error(), "no such file") { // file doesn't exist, let's try some path magic
-			if path == c.Path {
-				return err
-			}
-			newpath := filepath.Join(filepath.Dir(c.Path), filepath.Base(path))
-			f, err = os.Open(newpath)
+		// file doesn't exist, let's try some path magic
+		if strings.Contains(err.Error(), "no such file") && prev != "" {
+			// maybe the parent is relative to the prev file
+			path2 := filepath.Join(filepath.Dir(prev), path)
+
+			f, err = os.Open(path2)
 			if err != nil {
 				return err
 			}
-			log.Warn("could not find %v, but found a similar one at %v, using that instead", path, newpath)
-		} else {
-			return err
+
+			log.Warn("could not find %v, but found %v, using that instead", path, path2)
+			path = path2
 		}
 	}
 	defer f.Close()
@@ -84,7 +84,7 @@ func read(path string, c *Config) error {
 		case "parents":
 			for _, i := range d {
 				log.Infoln("reading config:", i)
-				err = read(i, c)
+				err = read(i, path, c)
 				c.Parents = append(c.Parents, i)
 				if err != nil {
 					return err
