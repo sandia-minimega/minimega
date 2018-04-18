@@ -96,6 +96,12 @@ func read(path, prev string, c *Config) error {
 			// trim any trailing "/"
 			for i, j := range d {
 				d[i] = strings.TrimRight(j, "/")
+
+				// if not absolute, the overlay should be a relative path from
+				// the directory containing this config
+				if !filepath.IsAbs(d[i]) {
+					d[i] = filepath.Join(filepath.Dir(path), d[i])
+				}
 			}
 			c.Overlays = append(c.Overlays, d...)
 		case "postbuild":
