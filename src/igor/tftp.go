@@ -71,17 +71,11 @@ func (b *TFTPBackend) Power(hosts []string, on bool) error {
 		return errors.New("power configuration missing")
 	}
 
-	runner := DefaultRunner()
+	runner := DefaultRunner(func(host string) error {
+		cmd := strings.Split(fmt.Sprintf(command, host), " ")
+		_, err := processWrapper(cmd...)
+		return err
+	})
 
-	for _, host := range hosts {
-		host := host
-
-		runner.Run(func() error {
-			cmd := strings.Split(fmt.Sprintf(command, host), " ")
-			_, err := processWrapper(cmd...)
-			return err
-		})
-	}
-
-	return runner.Error()
+	return runner.RunAll(hosts)
 }
