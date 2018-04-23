@@ -358,7 +358,7 @@ func (n *Namespace) Schedule() error {
 				// get names that are unique across the namespace
 				for i, name := range q.Names {
 					if name == "" {
-						q.Names[i] = fmt.Sprintf("vm-%v-%v", n.Name, n.vmID.Next())
+						q.Names[i] = fmt.Sprintf("vm-%v", n.vmID.Next())
 					}
 				}
 
