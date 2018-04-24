@@ -8,6 +8,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -317,30 +318,40 @@ func getSchedule() {
 
 // Write out the reservations
 func putReservations() {
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-
-	// Write out the new reservations
-	if err := json.NewEncoder(resdb).Encode(Reservations); err != nil {
+	if err := writeTo(resdb, Reservations); err != nil {
 		log.Fatal("unable to encode reservations: %v", err)
 	}
-
-	resdb.Sync()
 }
 
 // Write out the schedule
 func putSchedule() {
-	// Truncate the existing schedule file
-	scheddb.Truncate(0)
-	scheddb.Seek(0, 0)
-
-	// Write out the new schedule
-	if err := gob.NewEncoder(scheddb).Encode(Schedule); err != nil {
+	if err := writeTo(scheddb, Schedule); err != nil {
 		log.Fatal("unable to encode schedule: %v", err)
 	}
+}
 
-	scheddb.Sync()
+// writeTo writes d to f, encoded as gob
+func writeTo(f *os.File, d interface{}) error {
+	var buf bytes.Buffer
+
+	// Encode to buf so that we know the length to truncate to
+	if err := gob.NewEncoder(&buf).Encode(d); err != nil {
+		return err
+	}
+
+	f.Seek(0, 0)
+
+	n, err := io.Copy(f, &buf)
+	if err != nil {
+		return err
+	}
+
+	// Truncate to the number of bytes written
+	if err := f.Truncate(n); err != nil {
+		return err
+	}
+
+	return f.Sync()
 }
 
 // Read in the configuration from the specified path.
