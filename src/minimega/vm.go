@@ -79,8 +79,8 @@ type VM interface {
 	UpdateNetworks()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
-	// connected to the specified bridge and VLAN.
-	NetworkConnect(int, string, int) error
+	// connected to the specified VLAN and Bridge.
+	NetworkConnect(int, int, string) error
 
 	// NetworkDisconnect updates the VM's config to reflect that the specified
 	// tap has been disconnected.
@@ -509,10 +509,15 @@ func (vm *BaseVM) HasCC() bool {
 	return vm.ActiveCC
 }
 
-func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
+func (vm *BaseVM) NetworkConnect(pos, vlan int, bridge string) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	return vm.networkConnect(pos, vlan, bridge)
+}
+
+// networkConnect assumes that the VM lock is held.
+func (vm *BaseVM) networkConnect(pos, vlan int, bridge string) error {
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
 	}
@@ -548,8 +553,6 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 		if err := src.RemoveTap(nic.Tap); err != nil {
 			return err
 		}
-
-		src.ReapTaps()
 	}
 
 	// Connect to the new bridge
@@ -568,6 +571,11 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	return vm.networkDisconnect(pos)
+}
+
+// networkDisconnect assumes that the VM lock is held.
+func (vm *BaseVM) networkDisconnect(pos int) error {
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
 	}
