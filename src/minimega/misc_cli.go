@@ -283,6 +283,8 @@ func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 		"clear namespace all",
 		// clear vlan blacklist
 		"clear vlans all",
+		// clear pipes and plumbing
+		"clear plumb",
 		// clear the history last
 		"clear history",
 	}
