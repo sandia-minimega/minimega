@@ -66,6 +66,13 @@ func (v *vncKBPlayback) writeEvents() {
 			break
 		}
 	}
+
+	// stop ourselves in a separate goroutine to avoid a deadlock
+	go v.Stop()
+
+	for range v.out {
+		// drain the channel
+	}
 }
 
 func NewVncKbPlayback(c *vncClient) *vncKBPlayback {

@@ -1,10 +1,6 @@
-This directory contains the pieces for minimega.org's App Engine
-website. If you're not one of the minimega.org owners, you may still
-find this useful to check out how your changes to minidoc might look
-when pushed.
+This directory contains the pieces for minimega.org's App Engine website. If
+you're not one of the minimega.org owners, you may still find this useful to
+check out how your changes to minidoc might look when pushed.
 
-Run "update-files.sh /path/to/minimega-root" to pull in the
-appropriate files. The appcfg.py command it prints is only suitable if
-you have push permissions for the minimega.org app engine
-site. Otherwise, you can run "goapp serve" to run a local instance for
-testing.
+Run "update.bash" to pull the latest minimega repo and update tip. This script
+assumes that you have the google-cloud-sdk downloaded to /data/appengine.

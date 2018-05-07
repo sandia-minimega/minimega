@@ -10,8 +10,14 @@ It determines how the formatting actions are rendered.
 
 {{define "list"}}
   <ul>
+  {{ if .Nested }}
+    <ul>
+  {{end}}
   {{range .Bullet}}
     <li>{{style .}}</li>
+  {{end}}
+  {{ if .Nested }}
+    </ul>
   {{end}}
   </ul>
 {{end}}

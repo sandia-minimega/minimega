@@ -71,11 +71,21 @@ VM). Stops on the first invalid command.`,
 	},
 	{ // debug
 		HelpShort: "display internal debug information",
+		HelpLong: `
+debug can help find and resolve issues with minimega. Without arguments, debug
+prints the go version, the number of goroutines, and the number of cgo calls.
+
+With arguments, debug writes files that can be read using "go tool pprof":
+
+- memory: sampling of all heap allocations
+- cpu: starts CPU profiling (must be stopped before read)
+- goroutine: stack traces of all current goroutines`,
 		Patterns: []string{
 			"debug",
 			"debug <memory,> <file>",
 			"debug <cpu,> <start,> <file>",
 			"debug <cpu,> <stop,>",
+			"debug <goroutine,> <file>",
 		},
 		Call: wrapSimpleCLI(cliDebug),
 	},
@@ -207,33 +217,36 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 }
 
 func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	// make sure path is relative to files if not absolute
 	dst := c.StringArgs["file"]
-	if !filepath.IsAbs(dst) {
-		dst = path.Join(*f_iomBase, dst)
+
+	var f *os.File
+	if dst != "" {
+		// make sure path is relative to files if not absolute
+		if !filepath.IsAbs(dst) {
+			dst = path.Join(*f_iomBase, dst)
+		}
+
+		log.Info("writing debug info to %v", dst)
+
+		var err error
+		if f, err = os.Create(dst); err != nil {
+			return err
+		}
 	}
 
 	if c.BoolArgs["memory"] {
-		log.Info("writing memory profile to %v", dst)
-
-		f, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
 		defer f.Close()
 
-		return pprof.WriteHeapProfile(f)
+		return pprof.Lookup("heap").WriteTo(f, 0)
+	} else if c.BoolArgs["goroutine"] {
+		defer f.Close()
+
+		return pprof.Lookup("goroutine").WriteTo(f, 2)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
 			return errors.New("CPU profile still running")
 		}
 
-		log.Info("writing cpu profile to %v", dst)
-
-		f, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
 		cpuProfileOut = f
 
 		return pprof.StartCPUProfile(cpuProfileOut)
@@ -283,6 +296,9 @@ func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 		"clear namespace all",
 		// clear vlan blacklist
 		"clear vlans all",
+		// clear plumbing and pipes
+		"clear plumb",
+		"clear pipe",
 		// clear the history last
 		"clear history",
 	}
