@@ -815,7 +815,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			return true, vm.NetworkDisconnect(pos)
 		}
 
-		return true, vm.NetworkConnect(pos, bridge, vlan)
+		return true, vm.NetworkConnect(pos, vlan, bridge)
 	})
 }
 
