@@ -26,38 +26,61 @@ type Runner struct {
 
 // DefaultRunner returns a runner with parameters based on igorConfig.
 func DefaultRunner(fn RunnerFn) *Runner {
-	return NewRunner(fn, igorConfig.ConcurrencyLimit, igorConfig.CommandRetries)
-}
-
-type RunnerFn func(string) error
-
-// NewRunner returns a runner that can be used to run things in parallel. A
-// limit of 0 implies no limit in the number of parallel runs. Retries
-// specifies the number of times to rerun a function that returns an error. A
-// value of 0 means only run the function once.
-func NewRunner(fn RunnerFn, limit, retries uint) *Runner {
-	r := &Runner{
-		fn:      fn,
-		retries: retries,
-	}
-
-	if limit < 1 {
-		// no limit so make tokens return immediately
-		r.tokens = make(chan bool)
-		close(r.tokens)
-	} else {
-		r.tokens = make(chan bool, limit)
-
-		// fill channel
-		for i := uint(0); i < limit; i++ {
-			r.tokens <- true
-		}
+	r, err := NewRunner(fn, Limit(igorConfig.ConcurrencyLimit), Retries(igorConfig.CommandRetries))
+	if err != nil {
+		log.Fatal("invalid parameters: %v", err)
 	}
 
 	return r
 }
 
-// Run another function.
+type RunnerFn func(string) error
+
+// NewRunner returns a runner that can be used to run fn in parallel.
+func NewRunner(fn RunnerFn, options ...func(*Runner) error) (*Runner, error) {
+	r := &Runner{
+		fn:     fn,
+		tokens: make(chan bool),
+	}
+	// assume no limit so make tokens return immediately
+	close(r.tokens)
+
+	for _, option := range options {
+		if err := option(r); err != nil {
+			return nil, err
+		}
+	}
+
+	return r, nil
+}
+
+// Limit runner to v concurrent runs.
+func Limit(v uint) func(*Runner) error {
+	return func(r *Runner) error {
+		if v > 0 {
+			r.tokens = make(chan bool, v)
+
+			// fill channel
+			for i := uint(0); i < v; i++ {
+				r.tokens <- true
+			}
+		}
+
+		return nil
+	}
+}
+
+// Retries specifies the number of times to rerun a function that returns an
+// error.
+func Retries(v uint) func(*Runner) error {
+	return func(r *Runner) error {
+		r.retries = v
+
+		return nil
+	}
+}
+
+// Run function on a host.
 func (r *Runner) Run(host string) {
 	r.wg.Add(1)
 
@@ -93,6 +116,7 @@ func (r *Runner) Run(host string) {
 	}()
 }
 
+// RunAll runs function on each host and returns r.Error().
 func (r *Runner) RunAll(hosts []string) error {
 	for _, host := range hosts {
 		r.Run(host)
