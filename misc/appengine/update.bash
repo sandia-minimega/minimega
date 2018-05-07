@@ -17,6 +17,7 @@ if [ -d $REPO ]; then
 fi
 
 git clone $URL $REPO
+(cd $REPO && bash all.bash)
 
 if [ -d $TARGET ]; then
     rm -rf $TARGET
