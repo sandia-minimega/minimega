@@ -41,7 +41,7 @@ cp -r $REPO/src/vendor/golang.org/x/net/websocket $TARGET/src/golang.org/x/net/
 
 # update tip.minimega.org
 cd $TARGET/app
-$SDK/bin/gcloud app deploy --project pivotal-sonar-90317 --version 1
+GOPATH=$TARGET $SDK/bin/gcloud app deploy --quiet --project pivotal-sonar-90317 --version 1
 
 # update minimega.org
-#$SDK/bin/gcloud app deploy --project even-electron-88116 --version 1
+#GOPATH=$TARGET $SDK/bin/gcloud app deploy --quiet --project even-electron-88116 --version 1
