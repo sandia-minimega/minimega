@@ -154,6 +154,10 @@ Changed the parameter order in order to support the above changes.
 
 Added many new columns to support the scheduler. See `help`host` for details.
 
+*** debug API
+
+Added `debug`goroutine` to dump goroutine stack traces to file.
+
 *** clear all API
 
 Added `clear`all` API to reset minimega to a vanilla state. Restarting is still
