@@ -52,15 +52,13 @@ echo
 
 # build windows packages
 echo "BUILD PACKAGES (windows)"
-echo "protonuke"
-GOOS=windows go install protonuke
-if [[ $? != 0 ]]; then
-	exit 1
-fi
-echo "miniccc"
-GOOS=windows go install miniccc
-if [[ $? != 0 ]]; then
-	exit 1
-fi
+for i in "protonuke" "miniccc"; do
+    echo $i
+    GOOS=windows go build -o $SCRIPT_DIR/bin/$i.exe $i
+    if [[ $? != 0 ]]; then
+        exit 1
+    fi
+done
 echo
+
 unset GOOS
