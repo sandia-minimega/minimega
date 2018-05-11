@@ -255,6 +255,12 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		}
 	}
 
+	// explicitly flush buffers
+	out, err := processWrapper("blockdev", "--flushbufs", path)
+	if err != nil {
+		return fmt.Errorf("unable to flush: %v %v", out, err)
+	}
+
 	return nil
 }
 
