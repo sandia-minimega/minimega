@@ -8,7 +8,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/gob"
 	"encoding/json"
 	"flag"
@@ -318,40 +317,42 @@ func getSchedule() {
 
 // Write out the reservations
 func putReservations() {
-	if err := writeTo(resdb, Reservations); err != nil {
+	tmp, err := ioutil.TempFile("/tmp", "igor-reservations")
+	if err != nil {
+		log.Fatal("unable to create tmp file: %v", err)
+	}
+
+	if err := json.NewEncoder(tmp).Encode(Reservations); err != nil {
 		log.Fatal("unable to encode reservations: %v", err)
+	}
+
+	if err := tmp.Close(); err != nil {
+		log.Fatal("update reservations failed: %v", err)
+	}
+
+	if err := os.Rename(tmp.Name(), resdb.Name()); err != nil {
+		log.Fatal("update reservations failed: %v", err)
 	}
 }
 
 // Write out the schedule
 func putSchedule() {
-	if err := writeTo(scheddb, Schedule); err != nil {
+	tmp, err := ioutil.TempFile("/tmp", "igor-schedule")
+	if err != nil {
+		log.Fatal("unable to create tmp file: %v", err)
+	}
+
+	if err := gob.NewEncoder(tmp).Encode(Schedule); err != nil {
 		log.Fatal("unable to encode schedule: %v", err)
 	}
-}
 
-// writeTo writes d to f, encoded as gob
-func writeTo(f *os.File, d interface{}) error {
-	var buf bytes.Buffer
-
-	// Encode to buf so that we know the length to truncate to
-	if err := gob.NewEncoder(&buf).Encode(d); err != nil {
-		return err
+	if err := tmp.Close(); err != nil {
+		log.Fatal("update schedule failed: %v", err)
 	}
 
-	f.Seek(0, 0)
-
-	n, err := io.Copy(f, &buf)
-	if err != nil {
-		return err
+	if err := os.Rename(tmp.Name(), scheddb.Name()); err != nil {
+		log.Fatal("update schedule failed: %v", err)
 	}
-
-	// Truncate to the number of bytes written
-	if err := f.Truncate(n); err != nil {
-		return err
-	}
-
-	return f.Sync()
 }
 
 // Read in the configuration from the specified path.
