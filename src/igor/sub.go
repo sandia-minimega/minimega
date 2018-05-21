@@ -300,17 +300,16 @@ VlanLoop:
 	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
 
-	emitReservationLog("CREATED", reservation)
-
 	Schedule = newSched
 
 	// update the network config
 	err = networkSet(reservation.Hosts, vlan)
 	if err != nil {
 		// TODO: we may leak a kernel and initrd here
-		log.Fatal("error setting network isolation: %v", err)
+		log.Fatal("unable to set up network isolation")
 	}
 
-	putReservations()
-	putSchedule()
+	emitReservationLog("CREATED", reservation)
+
+	dirty = true
 }

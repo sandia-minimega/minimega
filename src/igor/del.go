@@ -74,10 +74,6 @@ func deleteReservation(checkUser bool, args []string) {
 		}
 	}
 
-	// Update the reservation file
-	putReservations()
-	putSchedule()
-
 	// clean up the network config
 	if err := networkClear(deletedReservation.Hosts); err != nil {
 		log.Fatal("error clearing network isolation: %v", err)
@@ -111,4 +107,6 @@ func deleteReservation(checkUser bool, args []string) {
 	}
 
 	emitReservationLog("DELETED", deletedReservation)
+
+	dirty = true
 }
