@@ -41,6 +41,7 @@ func NewRunner(fn RunnerFn, options ...func(*Runner) error) (*Runner, error) {
 	r := &Runner{
 		fn:     fn,
 		tokens: make(chan bool),
+		errs:   make(map[string]error),
 	}
 	// assume no limit so make tokens return immediately
 	close(r.tokens)
@@ -99,12 +100,15 @@ func (r *Runner) Run(host string) {
 		var err error
 
 		for i := uint(0); i < r.retries+1; i++ {
+			if i > 0 {
+				time.Sleep(time.Second)
+			}
+
 			if err = r.fn(host); err == nil {
 				break
 			}
 
 			log.Error("attempt %v/%v on %v, error: %v", i+1, r.retries+1, host, err)
-			time.Sleep(time.Second)
 		}
 
 		if err != nil {
