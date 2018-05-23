@@ -33,7 +33,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		if b.profiles[profile] {
 			// That's strange... a cobbler profile already exists. Perhaps we
 			// didn't fully clean up when deleting the profile.
-			if err := c.removeProfile(profile); err != nil {
+			if err := b.removeProfile(profile); err != nil {
 				return err
 			}
 		}
@@ -92,7 +92,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 	return err
 }
 
-func (c *CobblerBackend) Uninstall(r Reservation) error {
+func (b *CobblerBackend) Uninstall(r Reservation) error {
 	// Set all nodes in the reservation back to the default profile
 	runner := DefaultRunner(func(host string) error {
 		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
@@ -105,13 +105,13 @@ func (c *CobblerBackend) Uninstall(r Reservation) error {
 
 	// Delete the profile and distro we created for this reservation
 	if r.CobblerProfile == "" {
-		return c.removeProfile("igor_" + r.ResName)
+		return b.removeProfile("igor_" + r.ResName)
 	}
 
 	return nil
 }
 
-func (c *CobblerProfile) removeProfile(profile string) error {
+func (b *CobblerBackend) removeProfile(profile string) error {
 	if _, err := processWrapper("cobbler", "profile", "remove", "--name="+profile); err != nil {
 		return err
 	}
@@ -120,7 +120,7 @@ func (c *CobblerProfile) removeProfile(profile string) error {
 	return err
 }
 
-func (c *CobblerBackend) Power(hosts []string, on bool) error {
+func (b *CobblerBackend) Power(hosts []string, on bool) error {
 	command := "poweroff"
 	if on {
 		command = "poweron"
