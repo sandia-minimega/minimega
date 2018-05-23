@@ -23,25 +23,36 @@ func NewCobblerBackend() Backend {
 	}
 }
 
+// Install configures Cobbler to boot the correct stuff
 func (b *CobblerBackend) Install(r Reservation) error {
-	// Configure Cobbler to boot the correct stuff
-	// If we're using a kernel+ramdisk instead of an existing profile, create a profile and set the nodes to boot from it
-	if r.CobblerProfile == "" && !b.profiles["igor_"+r.ResName] {
+	// If we're using a kernel+ramdisk instead of an existing profile, create a
+	// profile and set the nodes to boot from it
+	if r.CobblerProfile == "" {
+		profile := "igor_" + r.ResName
+
+		if b.profiles[profile] {
+			// That's strange... a cobbler profile already exists. Perhaps we
+			// didn't fully clean up when deleting the profile.
+			if err := c.removeProfile(profile); err != nil {
+				return err
+			}
+		}
+
 		// Create the distro from the kernel+ramdisk
-		_, err := processWrapper("cobbler", "distro", "add", "--name=igor_"+r.ResName, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
+		_, err := processWrapper("cobbler", "distro", "add", "--name="+profile, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
 		if err != nil {
 			return err
 		}
 
 		// Create a profile from the distro we just made
-		_, err = processWrapper("cobbler", "profile", "add", "--name=igor_"+r.ResName, "--distro=igor_"+r.ResName)
+		_, err = processWrapper("cobbler", "profile", "add", "--name="+profile, "--distro="+profile)
 		if err != nil {
 			return err
 		}
 
 		// Now set each host to boot from that profile
 		runner := DefaultRunner(func(host string) error {
-			if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile=igor_"+r.ResName); err != nil {
+			if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+profile); err != nil {
 				return err
 			}
 
@@ -53,7 +64,11 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		if err := runner.RunAll(r.Hosts); err != nil {
 			return fmt.Errorf("unable to set cobbler profile: %v", err)
 		}
-	} else if r.CobblerProfile != "" && b.profiles[r.CobblerProfile] {
+	} else {
+		if !b.profiles[r.CobblerProfile] {
+			return fmt.Errorf("cobbler profile does not exist: %v", r.CobblerProfile)
+		}
+
 		// If the requested profile exists, go ahead and set the nodes to use it
 		runner := DefaultRunner(func(host string) error {
 			if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile); err != nil {
@@ -90,15 +105,19 @@ func (c *CobblerBackend) Uninstall(r Reservation) error {
 
 	// Delete the profile and distro we created for this reservation
 	if r.CobblerProfile == "" {
-		if _, err := processWrapper("cobbler", "profile", "remove", "--name=igor_"+r.ResName); err != nil {
-			return err
-		}
-
-		_, err := processWrapper("cobbler", "distro", "remove", "--name=igor_"+r.ResName)
-		return err
+		return c.removeProfile("igor_" + r.ResName)
 	}
 
 	return nil
+}
+
+func (c *CobblerProfile) removeProfile(profile string) error {
+	if _, err := processWrapper("cobbler", "profile", "remove", "--name="+profile); err != nil {
+		return err
+	}
+
+	_, err := processWrapper("cobbler", "distro", "remove", "--name="+profile)
+	return err
 }
 
 func (c *CobblerBackend) Power(hosts []string, on bool) error {
