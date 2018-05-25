@@ -29,7 +29,7 @@ var (
 	f_base      = flag.String("base", defaultBase, "base path for minimega")
 	f_passwords = flag.String("passwords", "", "password file for auth")
 	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
-	f_console   = flag.Bool("console", false, "enable console")
+	f_console   = flag.Bool("console", false, "enable console and commands")
 	f_key       = flag.String("key", "", "key file for TLS in PEM format")
 	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
 	f_namespace = flag.String("namespace", "", "limit miniweb to a namespace")
@@ -113,11 +113,14 @@ func main() {
 	if *f_console {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))
 		mux.HandleFunc("/console/", mustAuth(consoleHandler))
+		mux.HandleFunc("/command", mustAuth(commandHandler))
 	} else {
-		mux.HandleFunc("/console", func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "console disabled, see -console flag", http.StatusNotImplemented)
+		disabled := func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "disabled, see -console flag", http.StatusNotImplemented)
 			return
-		})
+		}
+		mux.HandleFunc("/console", disabled)
+		mux.HandleFunc("/command", disabled)
 	}
 
 	server := &http.Server{
