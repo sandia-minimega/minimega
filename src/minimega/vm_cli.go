@@ -684,7 +684,7 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"id", "name", "status", "complete (%%)"}
+		resp.Header = []string{"id", "name", "status", "complete (%)"}
 
 		for _, vm := range ns.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()

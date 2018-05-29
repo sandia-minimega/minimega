@@ -505,6 +505,10 @@ func (n *Namespace) Snapshot(dir string) error {
 		dir = filepath.Join(*f_iomBase, "snapshots", dir)
 	}
 
+	if _, err := os.Stat(dir); err == nil {
+		return errors.New("snapshot with this name already exists")
+	}
+
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}

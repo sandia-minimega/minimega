@@ -457,7 +457,7 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 		return status, completed, fmt.Errorf("zero total ram!")
 	}
 
-	completed = transferred / total
+	completed = transferred / total * 100
 
 	return status, completed, nil
 }

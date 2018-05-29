@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -343,15 +344,52 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
 	ns := GetNamespace()
 
-	if _, ok := c.StringArgs["name"]; !ok {
-		cmd := minicli.MustCompile("vm migrate")
-		forward(runCommands(namespaceCommands(ns, cmd)...), respChan)
+	resp := &minicli.Response{Host: hostname}
 
+	if _, ok := c.StringArgs["name"]; !ok {
+		cmd := minicli.MustCompile(".columns status vm migrate")
+
+		var err error
+
+		var total, completed int
+
+		for resps := range runCommands(namespaceCommands(ns, cmd)...) {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					if err == nil {
+						err = errors.New(resp.Error)
+					}
+
+					continue
+				}
+
+				for _, row := range resp.Tabular {
+					if len(row) == 1 {
+						if row[0] == "completed" {
+							completed += 1
+						}
+
+						total += 1
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Header = []string{"completed", "total"}
+			resp.Tabular = append(resp.Tabular, []string{
+				strconv.Itoa(completed),
+				strconv.Itoa(total),
+			})
+		}
+
+		respChan <- minicli.Responses{resp}
 		return
 	}
 
 	// start new snapshot
-	resp := &minicli.Response{Host: hostname}
 	if err := ns.Snapshot(c.StringArgs["name"]); err != nil {
 		resp.Error = err.Error()
 	}
