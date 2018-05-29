@@ -11,10 +11,17 @@ import (
 	"time"
 )
 
+// Checks if node numbers are consistent with the range specified in an igor configuration file.
+// Returns true if the range is valid and false if invalid.
+// Note that an empty list is considered to have a valid node range since all nodes specified
+// (in this case none) fall within the proper range.
 func checkValidNodeRange(nodes []string) bool {
 	indexes, err := getNodeIndexes(nodes)
 	if err != nil {
 		log.Fatal("Unable to get node indexes: %v", err)
+	} else if len(indexes) == 0 {
+		// An empty list has a valid node range.
+		return true
 	}
 	return !(indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1)
 }
@@ -210,6 +217,11 @@ func initializeSchedule() {
 func expireSchedule() {
 	// If the last element of the schedule is expired, or it's empty, let's start fresh
 	if len(Schedule) == 0 || Schedule[len(Schedule)-1].End < time.Now().Unix() {
+		if len(Schedule) == 0 {
+			log.Warn("Schedule is empty, initializing new schedule.")
+		} else {
+			log.Info("Schedule file is expired, initializing new schedule.")
+		}
 		initializeSchedule()
 	}
 
@@ -228,7 +240,7 @@ func expireSchedule() {
 	}
 }
 
-// Extend the schedule to be 'minutes' long.
+// Extend the schedule by 'minutes'.
 func extendSchedule(minutes int) {
 	size := igorConfig.End - igorConfig.Start + 1 // size of node slice
 

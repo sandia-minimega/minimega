@@ -55,13 +55,23 @@ type vncKBPlayback struct {
 	closed     bool          // set after playback closed
 }
 
-// playEvents writes events from the out channel to the vnc connection.
+// writeEvents reads events from the out channel and write them to the vnc
+// connection. Closes the connection when it drains the channel.
 func (v *vncKBPlayback) writeEvents() {
+	defer v.Conn.Close()
+
 	for e := range v.out {
 		if err := e.Write(v.Conn); err != nil {
 			log.Error("unable to write vnc event: %v", err)
 			break
 		}
+	}
+
+	// stop ourselves in a separate goroutine to avoid a deadlock
+	go v.Stop()
+
+	for range v.out {
+		// drain the channel
 	}
 }
 
@@ -269,7 +279,6 @@ func (v *vncKBPlayback) playFile(parent *os.File, filename string) error {
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -352,11 +361,16 @@ func (v *vncKBPlayback) Start(filename string) error {
 
 	go v.writeEvents()
 	go func() {
-		defer v.Stop()
-
 		if err := v.playFile(nil, filename); err != nil {
 			log.Error("playback failed: %v", err)
 		}
+
+		// finished producing -- close output so the underlying connection
+		// closes (see writeEvents)
+		close(v.out)
+
+		// finished with this playback
+		v.Stop()
 	}()
 
 	return nil

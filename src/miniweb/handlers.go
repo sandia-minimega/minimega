@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"minicli"
 	log "minilog"
 	"net/http"
 	"os"
@@ -355,6 +356,8 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 //   /console
 //   /console/<pid>/ws
 //   /console/<pid>/size
+//
+// Must have -console=true to enable.
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/console" {
 		// create a new console
@@ -444,4 +447,46 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+}
+
+// commandHandler handles the following URLs:
+//   /command
+//
+// Example usage:
+//   curl 'http://localhost:9001/command' -d '{
+//   	"command": "vm info"
+//   }'
+//
+//   curl 'http://localhost:9001/command' -d '{
+//   	"command": "vm info",
+//   	"columns": ["name", "hostname"],
+//   	"filters": ["state=building"]
+//   }'
+//
+// Must have -console=true to enable.
+func commandHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "must use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cmd := NewCommand(r)
+	if err := json.NewDecoder(r.Body).Decode(cmd); err != nil {
+		log.Error("unable to parse body: %v", err)
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if cmd.Command == "" {
+		http.Error(w, "must specify command", http.StatusBadRequest)
+		return
+	}
+
+	resps := []minicli.Responses{}
+
+	for resp := range run(cmd) {
+		resps = append(resps, resp.Resp)
+	}
+
+	respondJSON(w, resps)
 }

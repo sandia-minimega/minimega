@@ -4,9 +4,9 @@
 ## # should all have a unique name
 ## .column name vm info
 name
-vm-distributed-0
-vm-distributed-1
-vm-distributed-2
-vm-distributed-3
-vm-distributed-4
-vm-distributed-5
+vm-0
+vm-1
+vm-2
+vm-3
+vm-4
+vm-5
