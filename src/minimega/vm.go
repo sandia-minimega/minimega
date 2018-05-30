@@ -19,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"vlans"
 )
 
 var vmID *Counter // channel of new VM IDs, shared across namespaces
@@ -560,8 +561,12 @@ func (vm *BaseVM) networkConnect(pos, vlan int, bridge string) error {
 
 	// Record updates to the VM config
 	nic.Alias = ""
-	if v, err := allocatedVLANs.GetAlias(vlan); err == nil {
-		nic.Alias = v
+	if alias, err := vlans.GetAlias(vlan); err == nil {
+		if alias.Namespace != vm.Namespace {
+			nic.Alias = alias.String()
+		} else {
+			nic.Alias = alias.Value
+		}
 	}
 	nic.VLAN = vlan
 	nic.Bridge = bridge

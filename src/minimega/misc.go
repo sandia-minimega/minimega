@@ -263,21 +263,20 @@ func marshal(v interface{}) string {
 	return string(b)
 }
 
-// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
-// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
-// cluster.
+// lookupVLAN uses the vlans and active namespace to turn a string into a VLAN.
+// If the VLAN didn't already exist, broadcasts the update to the cluster.
 func lookupVLAN(namespace, alias string) (int, error) {
 	if alias == "" {
 		return 0, errors.New("VLAN must be non-empty string")
 	}
 
-	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	vlan, err := vlans.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
 		return vlan, err
 	}
 
-	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	vlan, created, err := vlans.Allocate(namespace, alias)
 	if err != nil {
 		return 0, err
 	}
@@ -314,14 +313,14 @@ func lookupVLAN(namespace, alias string) (int, error) {
 	return vlan, nil
 }
 
-// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+// printVLAN uses the vlans and active namespace to print a vlan.
 func printVLAN(namespace string, vlan int) string {
-	return allocatedVLANs.PrintVLAN(namespace, vlan)
+	return vlans.PrintVLAN(namespace, vlan)
 }
 
 // vlanInfo returns formatted information about all the vlans.
 func vlanInfo() string {
-	info := allocatedVLANs.Tabular("")
+	info := vlans.Tabular("")
 	if len(info) == 0 {
 		return ""
 	}

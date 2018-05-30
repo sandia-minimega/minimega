@@ -16,6 +16,7 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"vlans"
 )
 
 const (
@@ -203,7 +204,7 @@ func (n *Namespace) Destroy() error {
 	}
 
 	// Free up any VLANs associated with the namespace
-	allocatedVLANs.Delete(n.Name, "")
+	vlans.Delete(n.Name, "")
 	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
 	n.ccServer.Destroy()
@@ -690,7 +691,7 @@ func InfoNamespaces() []NamespaceInfo {
 			Active: namespace == n,
 		}
 
-		for prefix, r := range allocatedVLANs.GetRanges() {
+		for prefix, r := range vlans.GetRanges() {
 			if prefix == n || (prefix == "" && n == DefaultNamespace) {
 				info.MinVLAN = r.Min
 				info.MaxVLAN = r.Max
