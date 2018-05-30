@@ -597,9 +597,6 @@ func (vm *KvmVM) launch() error {
 		}
 	}
 
-	// write the config for this vm
-	config := vm.BaseConfig.String(vm.Namespace) + vm.KVMConfig.String()
-	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
 	// create and add taps if we are associated with any networks
@@ -883,6 +880,14 @@ func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
 	}
 
 	return map[int]*ProcStats{vm.pid: p}, nil
+}
+
+func (vm *KvmVM) WriteConfig(w io.Writer) error {
+	if err := vm.BaseConfig.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return vm.KVMConfig.WriteConfig(w)
 }
 
 // qemuArgs build the horribly long qemu argument string

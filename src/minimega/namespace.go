@@ -7,7 +7,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io"
 	"minicli"
 	log "minilog"
 	"os"
@@ -548,24 +547,8 @@ func (n *Namespace) Snapshot(dir string) error {
 			return err
 		}
 
-		funcs := []func(io.Writer) error{}
-
-		// TODO: this is gross
-		switch vm := vm.(type) {
-		case *KvmVM:
-			funcs = append(funcs,
-				vm.BaseConfig.WriteConfig,
-				vm.KVMConfig.WriteConfig)
-		case *ContainerVM:
-			funcs = append(funcs,
-				vm.BaseConfig.WriteConfig,
-				vm.ContainerConfig.WriteConfig)
-		}
-
-		for _, fn := range funcs {
-			if err := fn(f); err != nil {
-				return err
-			}
+		if err := vm.WriteConfig(f); err != nil {
+			return err
 		}
 
 		// override the migrate path

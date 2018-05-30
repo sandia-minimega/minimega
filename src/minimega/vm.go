@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	log "minilog"
 	"os"
@@ -87,6 +88,9 @@ type VM interface {
 	ClearAllQos() error
 
 	ProcStats() (map[int]*ProcStats, error)
+
+	// WriteConfig writes the VM's config to the provided writer.
+	WriteConfig(io.Writer) error
 
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM
@@ -555,8 +559,14 @@ func (vm *BaseVM) networkConnect(pos, vlan int, bridge string) error {
 	}
 
 	// Record updates to the VM config
+	nic.Alias = ""
+	if v, err := allocatedVLANs.GetAlias(vlan); err == nil {
+		nic.Alias = v
+	}
 	nic.VLAN = vlan
 	nic.Bridge = bridge
+
+	// TODO: what to do with nic.Raw?
 
 	return nil
 }
@@ -592,8 +602,11 @@ func (vm *BaseVM) networkDisconnect(pos int) error {
 		return err
 	}
 
+	nic.Alias = ""
 	nic.Bridge = ""
 	nic.VLAN = DisconnectedVLAN
+
+	// TODO: what to do with nic.Raw?
 
 	return nil
 }
@@ -726,6 +739,20 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 // path joins instancePath with provided path
 func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
+}
+
+func writeVMConfig(vm VM) error {
+	log.Info("writing vm config")
+
+	name := filepath.Join(vm.GetInstancePath(), "config")
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return vm.WriteConfig(f)
 }
 
 func vmNotFound(name string) error {
