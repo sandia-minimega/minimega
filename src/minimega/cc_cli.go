@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"path/filepath"
 	"ron"
 	"sort"
 	"strconv"
@@ -67,6 +68,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc",
 			"cc <listen,> <port>",
 			"cc <clients,>",
+			"cc <filter,> [filter]...",
+			"cc <commands,>",
 
 			"cc <prefix,> [prefix]",
 
@@ -81,14 +84,12 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <log,> level <debug,info,warn,error,fatal>",
 
-			"cc <commands,>",
-
-			"cc <filter,> [filter]...",
-
 			"cc <responses,> <id or prefix or all> [raw,]",
 
 			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
+
+			"cc <mount,> <uuid>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
@@ -128,6 +129,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"send":       cliCCFileSend,
 	"tunnel":     cliCCTunnel,
 	"listen":     cliCCListen,
+	"mount":      cliCCMount,
 }
 
 func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -597,6 +599,17 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return ns.ccServer.Listen(port)
+}
+
+func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	uuid := c.StringArgs["uuid"]
+
+	vm := ns.VMs.FindVM(uuid)
+	if vm == nil {
+		return vmNotFound(uuid)
+	}
+
+	return ns.ccServer.Mount(uuid, filepath.Join(vm.GetInstancePath(), "ufs"))
 }
 
 func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

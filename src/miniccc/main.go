@@ -34,6 +34,7 @@ var (
 	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	f_tag     = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
 	f_pipe    = flag.String("pipe", "", "read/write to or from a named pipe")
+	f_ufs     = flag.Bool("ufs", false, "expose filesystem over cc connection")
 )
 
 const banner = `miniccc, Copyright (2014) Sandia Corporation.
@@ -105,6 +106,8 @@ func main() {
 		}
 		defer os.Remove(pidPath)
 	}
+
+	client.UFS = *f_ufs
 
 	if err := dial(); err != nil {
 		log.Fatal("unable to connect: %v", err)

@@ -17,14 +17,6 @@ import (
 	"time"
 )
 
-const (
-	PIPE_NEW_READER = iota
-	PIPE_NEW_WRITER
-	PIPE_CLOSE_READER
-	PIPE_CLOSE_WRITER
-	PIPE_DATA
-)
-
 type Client struct {
 	UUID     string
 	Arch     string
@@ -33,6 +25,9 @@ type Client struct {
 	Hostname string
 	IPs      []string
 	MACs     []string
+
+	// UFS is true if the client has a filesystem available to mount
+	UFS bool
 
 	// Processes that are running in the background
 	Processes map[int]*Process
@@ -80,6 +75,10 @@ type client struct {
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
+
+	rootFS struct {
+		conn io.ReadWriteCloser
+	}
 }
 
 func (c *client) sendMessage(m *Message) error {
