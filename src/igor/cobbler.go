@@ -8,18 +8,19 @@ import (
 	"bufio"
 	"fmt"
 	log "minilog"
-	"os"
 	"path/filepath"
 	"strings"
 )
 
 type CobblerBackend struct {
 	profiles map[string]bool
+	distros  map[string]bool
 }
 
 func NewCobblerBackend() Backend {
 	return &CobblerBackend{
 		profiles: CobblerProfiles(),
+		distros:  CobblerDistros(),
 	}
 }
 
@@ -30,12 +31,10 @@ func (b *CobblerBackend) Install(r Reservation) error {
 	if r.CobblerProfile == "" {
 		profile := "igor_" + r.ResName
 
-		if b.profiles[profile] {
-			// That's strange... a cobbler profile already exists. Perhaps we
-			// didn't fully clean up when deleting the profile.
-			if err := b.removeProfile(profile); err != nil {
-				return err
-			}
+		// Try to clean up any leftover profile/distro with this name. Will
+		// be a no-op if there are no conflicts.
+		if err := b.removeProfile(profile); err != nil {
+			return err
 		}
 
 		// Create the distro from the kernel+ramdisk
@@ -64,32 +63,31 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		if err := runner.RunAll(r.Hosts); err != nil {
 			return fmt.Errorf("unable to set cobbler profile: %v", err)
 		}
-	} else {
-		if !b.profiles[r.CobblerProfile] {
-			return fmt.Errorf("cobbler profile does not exist: %v", r.CobblerProfile)
-		}
 
-		// If the requested profile exists, go ahead and set the nodes to use it
-		runner := DefaultRunner(func(host string) error {
-			if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile); err != nil {
-				return err
-			}
+		return nil
+	}
 
-			// We make sure to set netboot enabled so the nodes can boot
-			_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--netboot-enabled=true")
+	// install profile by name
+	if !b.profiles[r.CobblerProfile] {
+		return fmt.Errorf("cobbler profile does not exist: %v", r.CobblerProfile)
+	}
+
+	// If the requested profile exists, go ahead and set the nodes to use it
+	runner := DefaultRunner(func(host string) error {
+		if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile); err != nil {
 			return err
-		})
-
-		if err := runner.RunAll(r.Hosts); err != nil {
-			return fmt.Errorf("unable to set cobbler profile: %v", err)
 		}
+
+		// We make sure to set netboot enabled so the nodes can boot
+		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--netboot-enabled=true")
+		return err
+	})
+
+	if err := runner.RunAll(r.Hosts); err != nil {
+		return fmt.Errorf("unable to set cobbler profile: %v", err)
 	}
 
-	f, err := os.Create(r.Filename())
-	if err == nil {
-		f.Close()
-	}
-	return err
+	return nil
 }
 
 func (b *CobblerBackend) Uninstall(r Reservation) error {
@@ -112,11 +110,16 @@ func (b *CobblerBackend) Uninstall(r Reservation) error {
 }
 
 func (b *CobblerBackend) removeProfile(profile string) error {
-	if _, err := processWrapper("cobbler", "profile", "remove", "--name="+profile); err != nil {
-		return err
+	var err error
+
+	if b.profiles[profile] {
+		_, err = processWrapper("cobbler", "profile", "remove", "--name="+profile)
 	}
 
-	_, err := processWrapper("cobbler", "distro", "remove", "--name="+profile)
+	if err == nil && b.distros[profile] {
+		_, err = processWrapper("cobbler", "distro", "remove", "--name="+profile)
+	}
+
 	return err
 }
 
@@ -135,12 +138,20 @@ func (b *CobblerBackend) Power(hosts []string, on bool) error {
 }
 
 func CobblerProfiles() map[string]bool {
+	return cobblerList("cobbler", "profile", "list")
+}
+
+func CobblerDistros() map[string]bool {
+	return cobblerList("cobbler", "distro", "list")
+}
+
+func cobblerList(args ...string) map[string]bool {
 	res := map[string]bool{}
 
 	// Get a list of current profiles
-	out, err := processWrapper("cobbler", "profile", "list")
+	out, err := processWrapper(args...)
 	if err != nil {
-		log.Fatal("couldn't get list of cobbler profiles: %v\n", err)
+		log.Fatal("unable to get list from cobbler: %v\n", err)
 	}
 
 	scanner := bufio.NewScanner(strings.NewReader(out))
@@ -149,7 +160,7 @@ func CobblerProfiles() map[string]bool {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Fatal("unable to read cobbler profiles: %v", err)
+		log.Fatal("unable to read cobbler list: %v", err)
 	}
 
 	return res

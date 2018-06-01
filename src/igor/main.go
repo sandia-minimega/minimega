@@ -97,37 +97,62 @@ func housekeeping() {
 	backend := GetBackend()
 
 	for _, r := range Reservations {
-		// Check if $TFTPROOT/pxelinux.cfg/igor/ResName exists. This is how we verify if the reservation is installed or not
 		if r.EndTime < now {
 			// Reservation expired; delete it
 			deleteReservation(false, []string{r.ResName})
 
 			dirty = true
-		} else if _, err := os.Stat(r.Filename()); os.IsNotExist(err) && r.StartTime < now {
-			// Reservation should have started but has not yet been installed
-			emitReservationLog("INSTALL", r)
-			// update network config
-			err := networkSet(r.Hosts, r.Vlan)
-			if err != nil {
-				log.Error("error setting network isolation: %v", err)
-			}
-
-			if err := backend.Install(r); err != nil {
-				log.Fatal("unable to install: %v", err)
-			}
-
-			if igorConfig.AutoReboot {
-				if err := backend.Power(r.Hosts, false); err != nil {
-					log.Fatal("unable to power off: %v", err)
-				}
-
-				if err := backend.Power(r.Hosts, true); err != nil {
-					log.Fatal("unable to power on: %v", err)
-				}
-			}
-
-			dirty = true
+		} else if r.StartTime >= now {
+			// Reservation is in the future, ignore for now
+			continue
 		}
+
+		// already installed
+		if r.Installed {
+			continue
+		}
+
+		// check to see if we need to install the reservation
+		if _, err := os.Stat(r.Filename()); err == nil {
+			// also already installed
+			log.Info("%v is already installed", r.ResName)
+
+			r.Installed = true
+			// TODO: make Reservations map[int]*Reservation
+			Reservations[r.ID] = r
+			dirty = true
+
+			continue
+		}
+
+		// Reservation has started but has not yet been installed
+		emitReservationLog("INSTALL", r)
+
+		// update network config
+		err := networkSet(r.Hosts, r.Vlan)
+		if err != nil {
+			log.Error("error setting network isolation: %v", err)
+		}
+
+		if err := backend.Install(r); err != nil {
+			log.Fatal("unable to install: %v", err)
+		}
+
+		if igorConfig.AutoReboot {
+			if err := backend.Power(r.Hosts, false); err != nil {
+				log.Fatal("unable to power off: %v", err)
+			}
+
+			if err := backend.Power(r.Hosts, true); err != nil {
+				log.Fatal("unable to power on: %v", err)
+			}
+		}
+
+		r.Installed = true
+		// TODO: make Reservations map[int]*Reservation
+		Reservations[r.ID] = r
+
+		dirty = true
 	}
 
 	// Remove expired time slices from the schedule
@@ -141,10 +166,10 @@ func init() {
 func main() {
 	var err error
 
-	log.Init()
-
 	flag.Usage = usage
 	flag.Parse()
+
+	log.Init()
 
 	args := flag.Args()
 	if len(args) < 1 {
@@ -174,20 +199,31 @@ func main() {
 		log.AddLogger("file", logfile, log.INFO, false)
 	}
 
-	// Read in the reservations and schedule
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
-	db, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	// We open and lock the lock file before trying to open the data file
+	// because the data file may have been changed by the instance of igor that
+	// holds the lock.
+	lockPath := filepath.Join(igorConfig.TFTPRoot, "/igor/lock")
+	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
+
+	lock, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
-		log.Fatal("failed to open data file %v: %v", path, err)
+		log.Fatal("failed to open data file %v: %v", lockPath, err)
+	}
+	defer lock.Close()
+
+	// Lock the file so we don't have simultaneous updates
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		log.Fatal("unable to lock file -- please retry")
+	}
+	// unlock at the end later
+	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+
+	db, err := os.OpenFile(dataPath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Fatal("failed to open data file %v: %v", dataPath, err)
 	}
 	defer db.Close()
 
-	// Lock the file so we don't have simultaneous updates
-	if err := syscall.Flock(int(db.Fd()), syscall.LOCK_EX); err != nil {
-		log.Fatal("unable to lock schedule file -- please retry")
-	}
-	// unlock at the end later
-	defer syscall.Flock(int(db.Fd()), syscall.LOCK_UN)
 	readData(db)
 
 	// Here, we need to go through and delete any reservations which should be
@@ -207,7 +243,9 @@ func main() {
 			cmd.Run(cmd, args)
 
 			if dirty {
+				log.Info("writing data file")
 				writeData(db)
+				log.Info("writing reservations file")
 				writeReservations()
 			}
 
