@@ -9,7 +9,6 @@ package ufs
 import (
 	"flag"
 	"os"
-	"syscall"
 
 	"github.com/Harvey-OS/ninep/protocol"
 )
@@ -43,44 +42,6 @@ func OModeToUnixFlags(mode protocol.Mode) int {
 	}
 
 	return ret
-}
-
-// IsBlock reports if the file is a block device
-func isBlock(d os.FileInfo) bool {
-	sysif := d.Sys()
-	if sysif == nil {
-		return false
-	}
-	stat := sysif.(*syscall.Stat_t)
-	return (stat.Mode & syscall.S_IFMT) == syscall.S_IFBLK
-}
-
-// IsChar reports if the file is a character device
-func isChar(d os.FileInfo) bool {
-	sysif := d.Sys()
-	if sysif == nil {
-		return false
-	}
-	stat := sysif.(*syscall.Stat_t)
-	return (stat.Mode & syscall.S_IFMT) == syscall.S_IFCHR
-}
-
-func fileInfoToQID(d os.FileInfo) protocol.QID {
-	var qid protocol.QID
-	sysif := d.Sys()
-
-	// on systems with inodes, use it.
-	if sysif != nil {
-		stat := sysif.(*syscall.Stat_t)
-		qid.Path = uint64(stat.Ino)
-	} else {
-		qid.Path = uint64(d.ModTime().UnixNano())
-	}
-
-	qid.Version = uint32(d.ModTime().UnixNano() / 1000000)
-	qid.Type = dirToQIDType(d)
-
-	return qid
 }
 
 func dirToQIDType(d os.FileInfo) uint8 {
