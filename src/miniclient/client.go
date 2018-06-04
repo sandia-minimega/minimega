@@ -36,7 +36,7 @@ type Response struct {
 	More     bool // whether there are more responses coming
 
 	// Suggest is returned in response to Suggest request
-	Suggest []string `json:"omitempty"`
+	Suggest []string `json:",omitempty"`
 }
 
 type Conn struct {
