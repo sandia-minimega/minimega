@@ -74,40 +74,13 @@ func deleteReservation(checkUser bool, args []string) {
 		}
 	}
 
-	// Update the reservation file
-	putReservations()
-	putSchedule()
-
 	// clean up the network config
-	err = networkClear(deletedReservation.Hosts)
-	if err != nil {
+	if err := networkClear(deletedReservation.Hosts); err != nil {
 		log.Fatal("error clearing network isolation: %v", err)
 	}
 
-	if !igorConfig.UseCobbler {
-		// Delete all the PXE files in the reservation
-		for _, pxename := range deletedReservation.PXENames {
-			os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename))
-		}
-	} else {
-		// Set all nodes in the reservation back to the default profile
-		// Cobbler commands are slow, so we run them in parallel.
-		done := make(chan bool)
-		f := func(h string) {
-			processWrapper("cobbler", "system", "edit", "--name="+h, "--profile="+igorConfig.CobblerDefaultProfile)
-			done <- true
-		}
-		for _, host := range deletedReservation.Hosts {
-			go f(host)
-		}
-		for _, _ = range deletedReservation.Hosts {
-			<-done
-		}
-		// Delete the profile and distro we created for this reservation
-		if deletedReservation.CobblerProfile == "" {
-			processWrapper("cobbler", "profile", "remove", "--name=igor_"+deletedReservation.ResName)
-			processWrapper("cobbler", "distro", "remove", "--name=igor_"+deletedReservation.ResName)
-		}
+	if err := GetBackend().Uninstall(deletedReservation); err != nil {
+		log.Fatal("unable to uninstall reservation: %v", err)
 	}
 
 	// We use this to indicate if a reservation has been created or not
@@ -115,8 +88,7 @@ func deleteReservation(checkUser bool, args []string) {
 	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
 
 	// If no other reservations are using them, delete the kernel and/or initrd
-	ifound := false
-	kfound := false
+	var ifound, kfound bool
 	for _, r := range Reservations {
 		if r.InitrdHash == deletedReservation.InitrdHash {
 			ifound = true
@@ -135,4 +107,6 @@ func deleteReservation(checkUser bool, args []string) {
 	}
 
 	emitReservationLog("DELETED", deletedReservation)
+
+	dirty = true
 }

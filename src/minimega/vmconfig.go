@@ -24,6 +24,10 @@ type VMConfig struct {
 	ContainerConfig
 }
 
+type ConfigWriter interface {
+	WriteConfig(io.Writer) error
+}
+
 // BaseConfig contains all fields common to all VM types.
 type BaseConfig struct {
 	// Configures the UUID for a virtual machine. If not set, the VM will be

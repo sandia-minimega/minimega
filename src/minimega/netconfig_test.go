@@ -8,17 +8,12 @@ import (
 	"testing"
 )
 
-func init() {
-	// populate the network drivers so that we don't need to invoke KVM
-	KVMNetworkDrivers.Do(func() {
-		KVMNetworkDrivers.drivers = []string{
-			"e1000",
-			"virtio-net-pci",
-		}
-	})
-}
-
 func TestParseNetConfig(t *testing.T) {
+	nics := map[string]bool{
+		"e1000":          true,
+		"virtio-net-pci": true,
+	}
+
 	examples := []string{
 		"foo",
 		"foo,virtio-net-pci",
@@ -32,7 +27,7 @@ func TestParseNetConfig(t *testing.T) {
 	}
 
 	for _, s := range examples {
-		r, err := ParseNetConfig(s)
+		r, err := ParseNetConfig(s, nics)
 		if err != nil {
 			t.Fatalf("unable to parse `%v`: %v", s, err)
 		}

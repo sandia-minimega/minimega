@@ -6,7 +6,6 @@ package main
 
 import (
 	"bridge"
-	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
@@ -18,11 +17,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"qemu"
 	"qmp"
 	"ron"
 	"strconv"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"time"
 	"vnc"
@@ -39,11 +38,14 @@ const (
 	QMP_CONNECT_DELAY = 100
 )
 
+const DefaultDriver = "e1000"
+
 type KVMConfig struct {
-	// Set the QEMU process to invoke. Relative paths are ok. When unspecified,
-	// minimega uses "kvm" in the default path.
+	// Set the QEMU binary name to invoke. Relative paths are ok.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
+	//
+	// Default: "kvm"
 	QemuPath string
 
 	// Attach a kernel image to a VM. If set, QEMU will boot from this image
@@ -75,14 +77,30 @@ type KVMConfig struct {
 
 	// Set the virtual CPU architecture.
 	//
-	// By default, set to 'host' which matches the host architecture. See 'kvm
-	// -cpu help' for a list of architectures available for your version of
-	// kvm.
+	// By default, set to 'host' which matches the host CPU. See 'qemu -cpu
+	// help' for a list of supported CPUs.
+	//
+	// The accepted values for this configuration depend on the QEMU binary
+	// name specified by 'vm config qemu'.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
 	//
 	// Default: "host"
-	CPU string
+	CPU string `validate:"validCPU" suggest:"wrapSuggest(suggestCPU)"`
+
+	// Set the number of CPU cores per socket.
+	//
+	// Default: 1
+	Cores uint64 `validate:"checkCores"`
+
+	// Specify the machine type. See 'qemu -M help' for a list supported
+	// machine types.
+	//
+	// The accepted values for this configuration depend on the QEMU binary
+	// name specified by 'vm config qemu'.
+	//
+	// Note: this configuration only applies to KVM-based VMs.
+	Machine string `validate:"validMachine" suggest:"wrapSuggest(suggestMachine)"`
 
 	// Specify the serial ports that will be created for the VM to use. Serial
 	// ports specified will be mapped to the VM's /dev/ttySX device, where X
@@ -174,11 +192,6 @@ type KvmVM struct {
 
 // Ensure that KvmVM implements the VM interface
 var _ VM = (*KvmVM)(nil)
-
-var KVMNetworkDrivers struct {
-	drivers []string
-	sync.Once
-}
 
 // Copy makes a deep copy and returns reference to the new struct.
 func (old KVMConfig) Copy() KVMConfig {
@@ -390,6 +403,9 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
 	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
+	fmt.Fprintf(w, "Machine:\t%v\n", vm.Machine)
+	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
+	fmt.Fprintf(w, "Cores:\t%v\n", vm.Cores)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -634,18 +650,19 @@ func (vm *KvmVM) launch() error {
 	args = vmConfig.applyQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
 
-	path := vm.KVMConfig.QemuPath
-	if path == "" {
-		p, err := process("kvm")
+	// if the QemuPath is not absolute, try a lookup based on $PATH
+	qemu := vm.QemuPath
+	if !filepath.IsAbs(qemu) {
+		v, err := process(qemu)
 		if err != nil {
-			return vm.setErrorf("kvm not in PATH")
+			return vm.setErrorf("unable to launch VM: %v", err)
 		}
-		path = p
+		qemu = v
 	}
 
 	cmd := &exec.Cmd{
-		Path:   path,
-		Args:   append([]string{path}, args...),
+		Path:   qemu,
+		Args:   append([]string{qemu}, args...),
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
@@ -903,6 +920,10 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-name")
 	args = append(args, strconv.Itoa(id))
 
+	if vm.Machine != "" {
+		args = append(args, "-M", vm.Machine)
+	}
+
 	args = append(args, "-m")
 	args = append(args, strconv.FormatUint(vm.Memory, 10))
 
@@ -915,7 +936,11 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
 	args = append(args, "-smp")
-	args = append(args, strconv.FormatUint(vm.VCPUs, 10))
+	smp := strconv.FormatUint(vm.VCPUs, 10)
+	if vm.Cores != 1 {
+		smp += ",cores=" + strconv.FormatUint(vm.Cores, 10)
+	}
+	args = append(args, smp)
 
 	args = append(args, "-qmp")
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
@@ -1123,46 +1148,81 @@ func qmpLogger(id int, q qmp.Conn) {
 	}
 }
 
-func isNetworkDriver(driver string) bool {
-	KVMNetworkDrivers.Do(func() {
-		drivers := []string{}
+func checkCores(vmConfig VMConfig, cores uint64) error {
+	if vmConfig.VCPUs < cores {
+		return errors.New("vcpus must be greater than or equal to the number of cores")
+	}
 
-		out, err := processWrapper("kvm", "-device", "help")
-		if err != nil {
-			log.Error("unable to determine kvm network drivers -- %v", err)
-			return
-		}
+	return nil
+}
 
-		var foundHeader bool
+func validCPU(vmConfig VMConfig, cpu string) error {
+	cpus, err := qemu.CPUs(vmConfig.QemuPath, vmConfig.Machine)
+	if err != nil {
+		return err
+	}
 
-		scanner := bufio.NewScanner(strings.NewReader(out))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !foundHeader && strings.Contains(line, "Network devices:") {
-				foundHeader = true
-			} else if foundHeader && line == "" {
-				break
-			} else if foundHeader {
-				parts := strings.Split(line, " ")
-				driver := strings.Trim(parts[1], `",`)
-				drivers = append(drivers, driver)
-			}
-		}
+	if !cpus[cpu] {
+		return fmt.Errorf("invalid QEMU CPU: `%v`, see help", cpu)
+	}
 
-		if err := scanner.Err(); err != nil {
-			log.Error("unable to determine kvm network drivers -- %v", err)
-			return
-		}
+	return nil
+}
 
-		log.Debug("detected network drivers: %v", drivers)
-		KVMNetworkDrivers.drivers = drivers
-	})
+func validMachine(vmConfig VMConfig, machine string) error {
+	machines, err := qemu.Machines(vmConfig.QemuPath)
+	if err != nil {
+		return err
+	}
 
-	for _, d := range KVMNetworkDrivers.drivers {
-		if d == driver {
-			return true
+	if !machines[machine] {
+		return fmt.Errorf("invalid QEMU machine: `%v`, see help", machine)
+	}
+
+	return nil
+}
+
+func validNIC(vmConfig VMConfig, nic string) error {
+	nics, err := qemu.NICs(vmConfig.QemuPath, vmConfig.Machine)
+	if err != nil {
+		return err
+	}
+
+	if !nics[nic] {
+		return fmt.Errorf("invalid QEMU nic: `%v`, see help", nic)
+	}
+
+	return nil
+}
+
+func qemuSuggest(vals map[string]bool, prefix string) []string {
+	var res []string
+
+	for k := range vals {
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, k)
 		}
 	}
 
-	return false
+	return res
+}
+
+func suggestCPU(ns *Namespace, val, prefix string) []string {
+	cpus, err := qemu.CPUs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
+	if err != nil {
+		log.Info("suggest failed: %v", err)
+		return nil
+	}
+
+	return qemuSuggest(cpus, prefix)
+}
+
+func suggestMachine(ns *Namespace, val, prefix string) []string {
+	machines, err := qemu.Machines(ns.vmConfig.QemuPath)
+	if err != nil {
+		log.Info("suggest failed: %v", err)
+		return nil
+	}
+
+	return qemuSuggest(machines, prefix)
 }

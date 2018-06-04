@@ -10,6 +10,7 @@ import (
 	"io"
 	log "minilog"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -72,11 +73,16 @@ func NewVMConfig() VMConfig {
 //	bridge,vlan alias,mac,driver
 //
 // If there are 2 or 3 fields, just the last field for the presence of a mac
-func ParseNetConfig(spec string) (res NetConfig, err error) {
+func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 	// example: my_bridge,100,00:00:00:00:00:00
 	f := strings.Split(spec, ",")
 
+	isDriver := func(d string) bool {
+		return nics[d]
+	}
+
 	var b, v, m, d string
+
 	switch len(f) {
 	case 1:
 		v = f[0]
@@ -84,7 +90,7 @@ func ParseNetConfig(spec string) (res NetConfig, err error) {
 		if isMAC(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
-		} else if isNetworkDriver(f[1]) {
+		} else if isDriver(f[1]) {
 			// vlan, driver
 			v, d = f[0], f[1]
 		} else {
@@ -95,42 +101,46 @@ func ParseNetConfig(spec string) (res NetConfig, err error) {
 		if isMAC(f[2]) {
 			// bridge, vlan, mac
 			b, v, m = f[0], f[1], f[2]
-		} else if isMAC(f[1]) {
+		} else if isMAC(f[1]) && isDriver(f[2]) {
 			// vlan, mac, driver
 			v, m, d = f[0], f[1], f[2]
-		} else {
+		} else if isDriver(f[2]) {
 			// bridge, vlan, driver
 			b, v, d = f[0], f[1], f[2]
+		} else {
+			return nil, errors.New("malformed netspec")
 		}
 	case 4:
-		b, v, m, d = f[0], f[1], f[2], f[3]
+		if isMAC(f[2]) && isDriver(f[3]) {
+			b, v, m, d = f[0], f[1], f[2], f[3]
+		} else {
+			return nil, errors.New("malformed netspec")
+		}
 	default:
-		return NetConfig{}, errors.New("malformed netspec")
-	}
-
-	if d != "" && !isNetworkDriver(d) {
-		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
+		return nil, errors.New("malformed netspec")
 	}
 
 	log.Info(`got bridge="%v", alias="%v", mac="%v", driver="%v"`, b, v, m, d)
 
-	if m != "" && !isMAC(m) {
-		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
-	}
-
-	// warn on valid but not allocated macs
-	if m != "" && !isAllocatedMAC(m) {
-		log.Warn("unallocated mac address: %v", m)
-	}
-
 	if b == "" {
 		b = DefaultBridge
 	}
-	if d == "" {
-		d = DefaultKVMDriver
+
+	if d == "" && isDriver(DefaultDriver) {
+		d = DefaultDriver
+	} else if d == "" {
+		// use alphabetically first driver
+		vals := []string{}
+		for k := range nics {
+			vals = append(vals, k)
+		}
+		sort.Strings(vals)
+		d = vals[0]
+
+		log.Info("default driver `%v` is not available, using `%v` instead", DefaultDriver, d)
 	}
 
-	return NetConfig{
+	return &NetConfig{
 		Alias:  v,
 		Bridge: b,
 		MAC:    strings.ToLower(m),

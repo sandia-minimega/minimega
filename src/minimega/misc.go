@@ -263,6 +263,19 @@ func marshal(v interface{}) string {
 	return string(b)
 }
 
+func checkPath(v string) string {
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(v) {
+		v = filepath.Join(*f_iomBase, v)
+	}
+
+	if _, err := os.Stat(v); os.IsNotExist(err) {
+		log.Warn("file does not exist: %v", v)
+	}
+
+	return v
+}
+
 // lookupVLAN uses the vlans and active namespace to turn a string into a VLAN.
 // If the VLAN didn't already exist, broadcasts the update to the cluster.
 func lookupVLAN(namespace, alias string) (int, error) {

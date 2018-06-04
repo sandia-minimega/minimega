@@ -116,9 +116,7 @@ func runExtend(cmd *Command, args []string) {
 
 		emitReservationLog("EXTENDED", r)
 
-		// Update the reservation file
-		putReservations()
-		putSchedule()
+		dirty = true
 
 		return
 	}

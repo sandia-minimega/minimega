@@ -217,7 +217,7 @@ func (h *Handler) helpShort() string {
 func (h *Handler) helpLong() string {
 	res := "Usage:\n"
 	for _, pattern := range h.PatternItems {
-		res += fmt.Sprintf("\t%s\n", patternItems(pattern))
+		res += fmt.Sprintf("\t%s\n", PatternItems(pattern))
 	}
 	res += "\n"
 	// Fallback on HelpShort if there's no HelpLong
