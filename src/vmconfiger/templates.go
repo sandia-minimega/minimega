@@ -12,25 +12,9 @@ package {{ .Package }}
 import (
 	"fmt"
 	"minicli"
-	log "minilog"
 	"bytes"
-	"os"
-	"path/filepath"
 	"strconv"
 )
-
-func checkPath(v string) string {
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(v) {
-		v = filepath.Join(*f_iomBase, v)
-	}
-
-	if _, err := os.Stat(v); os.IsNotExist(err) {
-		log.Warn("file does not exist: %v", v)
-	}
-
-	return v
-}
 
 var vmconfigerCLIHandlers = []minicli.Handler{
 `
@@ -41,11 +25,20 @@ const stringTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
 			r.Response = ns.vmConfig.{{ .Field }}
 			return nil
 		}
+
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, c.StringArgs["value"]); err != nil {
+			return err
+		}
+		{{ end }}
 
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
@@ -66,6 +59,9 @@ const sliceTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]...",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.ListArgs) == 0 {
 			if len(ns.vmConfig.{{ .Field }}) == 0 {
@@ -75,6 +71,13 @@ const sliceTemplate = `{
 			r.Response = fmt.Sprintf("%v", ns.vmConfig.{{ .Field }})
 			return nil
 		}
+		{{ if .Validate }}
+		for _, v := range c.ListArgs["value"] {
+			if err := {{.Validate}}(ns.vmConfig, v); err != nil {
+				return err
+			}
+		}
+		{{ end }}
 
 		{{ if .Path }}
 		vals := c.ListArgs["value"]
@@ -100,6 +103,9 @@ const mapTemplate = `{
 		"vm config {{ .ConfigName }}",
 		"vm config {{ .ConfigName }} <key> [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if c.StringArgs["key"] == "" {
 			var b bytes.Buffer
@@ -123,6 +129,13 @@ const mapTemplate = `{
 			ns.vmConfig.{{ .Field }} = make(map[string]string)
 		}
 
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, c.StringArgs["key"], c.StringArgs["value"]); err != nil {
+			return err
+		}
+		{{ end }}
+
+
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
 
@@ -143,6 +156,9 @@ const numTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
 			{{- if .Signed }}
@@ -161,6 +177,12 @@ const numTemplate = `{
 		if err != nil {
 			return err
 		}
+
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, i); err != nil {
+			return err
+		}
+		{{ end }}
 
 		ns.vmConfig.{{ .Field }} = i
 
