@@ -44,25 +44,23 @@ func deleteReservation(checkUser bool, args []string) {
 		log.Fatal("can't get current user: %v\n", err)
 	}
 
-	if checkUser {
-		for _, r := range Reservations {
-			if r.ResName == args[0] && r.Owner != user.Username {
-				log.Fatal("You are not the owner of %v", args[0])
-			}
-		}
-	}
-
 	// Remove the reservation
 	found := false
 	for _, r := range Reservations {
-		if r.ResName == args[0] {
-			deletedReservation = r
-			delete(Reservations, r.ID)
-			found = true
+		if r.ResName != args[0] {
+			continue
 		}
+
+		if checkUser && (r.Owner != user.Username && user.Username != "root") {
+			log.Fatal("You are not the owner of %v", args[0])
+		}
+
+		deletedReservation = r
+		delete(Reservations, r.ID)
+		found = true
 	}
 	if !found {
-		log.Fatal("Couldn't find reservation %v", args[0])
+		log.Fatal("unable to find reservation %v", args[0])
 	}
 
 	// Now purge it from the schedule

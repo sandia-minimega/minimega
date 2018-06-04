@@ -47,7 +47,8 @@ func writeData(f *os.File) {
 		Schedule,
 	}
 
-	tmp, err := ioutil.TempFile("/tmp", "igor")
+	// TODO: we should remove any leftover tmpdata files
+	tmp, err := ioutil.TempFile(igorConfig.TFTPRoot, "tmpdata")
 	if err != nil {
 		log.Fatal("unable to create tmp file: %v", err)
 	}
@@ -72,7 +73,7 @@ func writeData(f *os.File) {
 func writeReservations() {
 	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0664)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
 	if err != nil {
 		log.Fatal("failed to open file %v: %v", path, err)
 	}

@@ -22,11 +22,12 @@ type Reservation struct {
 	Initrd         string
 	KernelHash     string
 	InitrdHash     string
+
+	// Installed is set when the reservation is first installed
+	Installed bool
 }
 
 // Filename returns the filename that stores the reservation configuration
-//
-// TODO: why don't we store a bool in the reservation?
 func (r Reservation) Filename() string {
 	return filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
 }
