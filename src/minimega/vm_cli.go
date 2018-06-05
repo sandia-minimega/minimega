@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"minicli"
+	log "minilog"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -684,7 +685,7 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"id", "name", "status", "complete (%%)"}
+		resp.Header = []string{"id", "name", "status", "complete (%)"}
 
 		for _, vm := range ns.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
@@ -710,7 +711,22 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	return vm.Migrate(c.StringArgs["filename"])
+	fname := c.StringArgs["filename"]
+
+	if !filepath.IsAbs(fname) {
+		// TODO: should we write to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
+
+	if _, err := os.Stat(filepath.Dir(fname)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(fname), 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return vm.Migrate(fname)
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -811,11 +827,28 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	bridge := c.StringArgs["bridge"]
 
 	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		var err error
+
+		log.Info("vm networks: %v", vm.GetNetworks())
+
 		if c.BoolArgs["disconnect"] {
-			return true, vm.NetworkDisconnect(pos)
+			err = vm.NetworkDisconnect(pos)
+		} else {
+			err = vm.NetworkConnect(pos, vlan, bridge)
 		}
 
-		return true, vm.NetworkConnect(pos, vlan, bridge)
+		if err != nil {
+			return true, err
+		}
+
+		log.Info("vm networks: %v", vm.GetNetworks())
+
+		if err := writeVMConfig(vm); err != nil {
+			// don't propagate this error
+			log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+		}
+
+		return true, nil
 	})
 }
 

@@ -13,31 +13,38 @@ import (
 	"sync"
 )
 
+// BlacklistedVLAN is used to track manually reserved VLANs
 const BlacklistedVLAN = "BLACKLISTED"
-const AliasSep = "//"
+
+// DisconnectedVLAN always resolves to VLAN -1
+const DisconnectedVLAN = "DISCONNECTED"
+
+// VLANStart and VLANEnd are the default ranges for VLAN allocation
 const VLANStart, VLANEnd = 101, 4096
 
 var ErrUnallocated = errors.New("unallocated")
 var ErrOutOfVLANs = errors.New("out of VLANs")
 
+var Default = NewVLANs()
+
 type Range struct {
 	Min, Max, Next int
 }
 
-// AllocatedVLANs stores the state for the VLANs that we've allocated so far
-type AllocatedVLANs struct {
-	byVLAN  map[int]string
-	byAlias map[string]int
+// VLANs stores the state for the VLANs that we've allocated so far
+type VLANs struct {
+	byVLAN  map[int]Alias
+	byAlias map[Alias]int
 
 	ranges map[string]*Range
 
 	sync.Mutex
 }
 
-func NewAllocatedVLANs() *AllocatedVLANs {
-	return &AllocatedVLANs{
-		byVLAN:  make(map[int]string),
-		byAlias: make(map[string]int),
+func NewVLANs() *VLANs {
+	return &VLANs{
+		byVLAN:  make(map[int]Alias),
+		byAlias: make(map[Alias]int),
 		ranges: map[string]*Range{
 			"": &Range{
 				Min:  VLANStart,
@@ -51,46 +58,42 @@ func NewAllocatedVLANs() *AllocatedVLANs {
 // Allocate looks up the VLAN for the provided alias. If one has not already
 // been assigned, it will allocate the next available VLAN. Returns the VLAN
 // and flag for whether the alias was created or not.
-func (v *AllocatedVLANs) Allocate(namespace, s string) (int, bool, error) {
+func (v *VLANs) Allocate(namespace, alias string) (int, bool, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	// Prepend the namespace if the alias doesn't look like it contains a
-	// namespace already.
-	if !strings.Contains(s, AliasSep) {
-		s = namespace + AliasSep + s
-	}
+	a := ParseAlias(namespace, alias)
 
-	if vlan, ok := v.byAlias[s]; ok {
+	if vlan, ok := v.byAlias[a]; ok {
 		return vlan, false, nil
 	}
 
 	// Not assigned, allocate a new VLAN
-	vlan, err := v.allocate(s)
+	vlan, err := v.allocate(a)
 	return vlan, true, err
 }
 
 // allocate a VLAN for the alias. This should only be invoked if the caller has
 // acquired the lock for v.
-func (v *AllocatedVLANs) allocate(alias string) (int, error) {
-	log.Debug("creating alias for %v", alias)
+func (v *VLANs) allocate(a Alias) (int, error) {
+	log.Debug("creating alias for %v", a)
 
 	// Find the next unallocated VLAN, taking into account that a range may be
 	// specified for the supplied alias.
 	r := v.ranges[""] // default
-	for prefix, r2 := range v.ranges {
-		if strings.HasPrefix(alias, prefix+AliasSep) {
+	for namespace, r2 := range v.ranges {
+		if a.Namespace == namespace {
 			r = r2
 		}
 	}
 
-	log.Debug("found range for alias %v: %v", alias, r)
+	log.Debug("found range for alias %v: %v", a, r)
 
 	// Find the next unallocated VLAN
 outer:
 	for {
 		// Look to see if a VLAN is already allocated
-		for v.byVLAN[r.Next] != "" {
+		for _, ok := v.byVLAN[r.Next]; ok; _, ok = v.byVLAN[r.Next] {
 			r.Next += 1
 		}
 
@@ -119,40 +122,44 @@ outer:
 		break
 	}
 
-	log.Info("adding VLAN alias %v => %v", alias, r.Next)
+	log.Info("adding VLAN alias %v => %v", a, r.Next)
 
-	v.byVLAN[r.Next] = alias
-	v.byAlias[alias] = r.Next
+	v.byVLAN[r.Next] = a
+	v.byAlias[a] = r.Next
 
 	return r.Next, nil
 }
 
 // AddAlias sets the VLAN for the provided alias.
-func (v *AllocatedVLANs) AddAlias(alias string, vlan int) error {
+func (v *VLANs) AddAlias(namespace, alias string, vlan int) error {
 	v.Lock()
 	defer v.Unlock()
 
+	a := ParseAlias(namespace, alias)
+
 	log.Info("adding VLAN alias %v => %v", alias, vlan)
 
-	if _, ok := v.byAlias[alias]; ok {
+	if _, ok := v.byAlias[a]; ok {
 		return errors.New("alias already in use")
 	}
 	if _, ok := v.byVLAN[vlan]; ok {
 		return errors.New("vlan already in use")
 	}
 
-	v.byVLAN[vlan] = alias
-	v.byAlias[alias] = vlan
+	v.byVLAN[vlan] = a
+	v.byAlias[a] = vlan
 
 	return nil
 }
 
 // GetVLAN returns the VLAN for a given alias or ErrUnallocated.
-func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
+func (v *VLANs) GetVLAN(namespace, alias string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	if vlan, ok := v.byAlias[alias]; ok {
+	a := ParseAlias(namespace, alias)
+
+	if vlan, ok := v.byAlias[a]; ok {
 		return vlan, nil
 	}
 
@@ -161,58 +168,59 @@ func (v *AllocatedVLANs) GetVLAN(alias string) (int, error) {
 
 // GetAlias returns the alias for a given VLAN or ErrUnallocated. Note that
 // previously Blacklisted VLANs will return the const BlacklistedVLAN.
-func (v *AllocatedVLANs) GetAlias(vlan int) (string, error) {
+func (v *VLANs) GetAlias(vlan int) (Alias, error) {
 	v.Lock()
 	defer v.Unlock()
 
-	if alias, ok := v.byVLAN[vlan]; ok {
-		return alias, nil
+	if a, ok := v.byVLAN[vlan]; ok {
+		return a, nil
 	}
 
-	return "", ErrUnallocated
+	return Alias{}, ErrUnallocated
 }
 
 // GetAliases returns a list of aliases with the given prefix.
-func (v *AllocatedVLANs) GetAliases(prefix string) []string {
+func (v *VLANs) GetAliases(prefix string) []string {
 	v.Lock()
 	defer v.Unlock()
 
 	res := []string{}
-	for k := range v.byAlias {
-		if strings.HasPrefix(k, prefix) {
-			res = append(res, k)
+	for a := range v.byAlias {
+		if strings.HasPrefix(a.String(), prefix) {
+			res = append(res, a.Value)
 		}
 	}
 
 	return res
 }
 
-// Delete allocation for aliases matching a given prefix. Also clears any
-// ranges set for the given prefix.
-func (v *AllocatedVLANs) Delete(namespace, prefix string) {
+// Delete allocation for aliases matching a given namespace. Also clears any
+// ranges set for the given namespace if the prefix is empty.
+func (v *VLANs) Delete(namespace, prefix string) {
 	v.Lock()
 	defer v.Unlock()
 
-	// Prepend active namespace if it doesn't look like the user is trying to
-	// supply a namespace already.
-	if !strings.Contains(prefix, AliasSep) {
-		prefix = namespace + AliasSep + prefix
-	}
+	log.Info("deleting VLAN for %v//%v", namespace, prefix)
 
-	log.Info("deleting VLAN aliases with prefix: `%v`", prefix)
+	for a, vlan := range v.byAlias {
+		if !strings.HasPrefix(a.Value, prefix) {
+			continue
+		}
 
-	for alias, vlan := range v.byAlias {
-		if strings.HasPrefix(alias, prefix) {
+		if a.Namespace == namespace {
 			delete(v.byVLAN, vlan)
-			delete(v.byAlias, alias)
+			delete(v.byAlias, a)
 		}
 	}
 
-	// Don't delete the default range
-	if prefix != AliasSep {
-		delete(v.ranges, strings.TrimSuffix(prefix, AliasSep))
+	if prefix != "" {
+		return
+	}
+
+	// never delete the default range
+	if namespace != "" {
+		delete(v.ranges, namespace)
 	} else {
-		// However, do reset the Min/Max ranges
 		v.ranges[""].Min = VLANStart
 		v.ranges[""].Max = VLANEnd
 	}
@@ -223,22 +231,22 @@ func (v *AllocatedVLANs) Delete(namespace, prefix string) {
 	}
 }
 
-// SetRange reserves a range of VLANs for a particular prefix. VLANs are
+// SetRange reserves a range of VLANs for a particular namespace. VLANs are
 // allocated in the range [min, max).
-func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
+func (v *VLANs) SetRange(namespace string, min, max int) error {
 	v.Lock()
 	defer v.Unlock()
 
-	log.Info("setting range for %v: [%v, %v)", prefix, min, max)
+	log.Info("setting range for %v: [%v, %v)", namespace, min, max)
 
 	// Test for conflicts with other ranges
-	for prefix2, r := range v.ranges {
-		if prefix == prefix2 || prefix2 == "" {
+	for namespace2, r := range v.ranges {
+		if namespace == namespace2 || namespace2 == "" {
 			continue
 		}
 
 		if min < r.Max && r.Min <= max {
-			return fmt.Errorf("range overlaps with another namespace: %v", prefix2)
+			return fmt.Errorf("range overlaps with another namespace: %v", namespace2)
 		}
 	}
 
@@ -249,7 +257,7 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 		}
 	}
 
-	v.ranges[prefix] = &Range{
+	v.ranges[namespace] = &Range{
 		Min:  min,
 		Max:  max,
 		Next: min,
@@ -259,7 +267,7 @@ func (v *AllocatedVLANs) SetRange(prefix string, min, max int) error {
 }
 
 // GetRanges returns a copy of the ranges currently in use.
-func (v *AllocatedVLANs) GetRanges() map[string]Range {
+func (v *VLANs) GetRanges() map[string]Range {
 	v.Lock()
 	defer v.Unlock()
 
@@ -275,7 +283,7 @@ func (v *AllocatedVLANs) GetRanges() map[string]Range {
 // Blacklist marks a VLAN as manually configured which removes it from the
 // allocation pool. For instance, if a user runs `vm config net 100`, VLAN 100
 // would be marked as blacklisted.
-func (v *AllocatedVLANs) Blacklist(vlan int) {
+func (v *VLANs) Blacklist(vlan int) {
 	v.Lock()
 	defer v.Unlock()
 
@@ -284,23 +292,23 @@ func (v *AllocatedVLANs) Blacklist(vlan int) {
 
 // blacklist the VLAN. This should only be invoked if the caller has acquired
 // the lock for v.
-func (v *AllocatedVLANs) blacklist(vlan int) {
+func (v *VLANs) blacklist(vlan int) {
 	log.Info("blacklisting %v", vlan)
 
-	if alias, ok := v.byVLAN[vlan]; ok {
-		delete(v.byAlias, alias)
+	if a, ok := v.byVLAN[vlan]; ok {
+		delete(v.byAlias, a)
 	}
-	v.byVLAN[vlan] = BlacklistedVLAN
+	v.byVLAN[vlan] = Alias{Value: BlacklistedVLAN}
 }
 
 // GetBlacklist returns a list of VLANs that have been blacklisted.
-func (v *AllocatedVLANs) GetBlacklist() []int {
+func (v *VLANs) GetBlacklist() []int {
 	v.Lock()
 	defer v.Unlock()
 
 	res := []int{}
 	for vlan, alias := range v.byVLAN {
-		if alias == BlacklistedVLAN {
+		if alias.Value == BlacklistedVLAN {
 			res = append(res, vlan)
 		}
 	}
@@ -311,20 +319,22 @@ func (v *AllocatedVLANs) GetBlacklist() []int {
 // ParseVLAN parses s and returns a VLAN. If s can be parsed as an integer, the
 // resulting integer is returned. If s matches an existing alias, that VLAN is
 // returned. Otherwise, returns ErrUnallocated.
-func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
+func (v *VLANs) ParseVLAN(namespace, s string) (int, error) {
 	v.Lock()
 	defer v.Unlock()
 
 	log.Debug("parsing vlan: %v namespace: %v", s, namespace)
 
-	vlan, err := strconv.Atoi(s)
+	a := ParseAlias(namespace, s)
+
+	vlan, err := strconv.Atoi(a.Value)
 	if err == nil {
 		// Check to ensure that VLAN is sane
 		if vlan < 0 || vlan >= 4096 {
 			return 0, errors.New("invalid VLAN (0 <= vlan < 4096)")
 		}
 
-		if alias, ok := v.byVLAN[vlan]; ok && alias != BlacklistedVLAN {
+		if alias, ok := v.byVLAN[vlan]; ok && alias.Value != BlacklistedVLAN {
 			// Warn the user if they supplied an integer and it matches a VLAN
 			// that has an alias.
 			log.Warn("VLAN %d has alias %v", vlan, alias)
@@ -338,13 +348,7 @@ func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 		return vlan, nil
 	}
 
-	// Prepend active namespace if it doesn't look like the user is trying to
-	// supply a namespace already.
-	if !strings.Contains(s, AliasSep) {
-		s = namespace + AliasSep + s
-	}
-
-	if vlan, ok := v.byAlias[s]; ok {
+	if vlan, ok := v.byAlias[a]; ok {
 		return vlan, nil
 	}
 
@@ -353,45 +357,86 @@ func (v *AllocatedVLANs) ParseVLAN(namespace, s string) (int, error) {
 
 // PrintVLAN prints the alias for the VLAN, if one is set. Will trim off the
 // namespace prefix if it matches the currently active namespace.
-func (v *AllocatedVLANs) PrintVLAN(namespace string, vlan int) string {
+func (v *VLANs) PrintVLAN(namespace string, vlan int) string {
 	v.Lock()
 	defer v.Unlock()
 
-	if alias, ok := v.byVLAN[vlan]; ok && alias != BlacklistedVLAN {
+	if alias, ok := v.byVLAN[vlan]; ok && alias.Value != BlacklistedVLAN {
 		// If we're in the namespace identified by the alias, we can trim off
 		// the `<namespace>//` prefix.
-		parts := strings.Split(alias, AliasSep)
-		if namespace == parts[0] {
-			alias = strings.Join(parts[1:], AliasSep)
+		s := alias.String()
+		if alias.Namespace == namespace {
+			s = alias.Value
 		}
 
-		return fmt.Sprintf("%v (%d)", alias, vlan)
+		return fmt.Sprintf("%v (%d)", s, vlan)
 	}
 
 	return strconv.Itoa(vlan)
 }
 
-func (v *AllocatedVLANs) Tabular(namespace string) [][]string {
+func (v *VLANs) Tabular(namespace string) [][]string {
 	res := [][]string{}
 
 	for alias, vlan := range v.byAlias {
-		parts := strings.SplitN(alias, AliasSep, 2)
-		if namespace != "" {
-			if namespace != parts[0] {
-				continue
-			}
+		var s string
 
-			// if we're matching on namespace, we should trim that from the
-			// alias we return
-			parts = parts[1:]
+		// if we're matching on namespace, we should trim that from the alias
+		// that we return
+		if namespace == "" {
+			s = alias.String()
+		} else if namespace == alias.Namespace {
+			s = alias.Value
+		} else {
+			continue
 		}
 
 		res = append(res,
 			[]string{
-				strings.Join(parts, AliasSep),
+				s,
 				strconv.Itoa(vlan),
 			})
 	}
 
 	return res
+}
+
+func Allocate(namespace, s string) (int, bool, error) {
+	return Default.Allocate(namespace, s)
+}
+func AddAlias(namespace, alias string, vlan int) error {
+	return Default.AddAlias(namespace, alias, vlan)
+}
+func GetVLAN(namespace, alias string) (int, error) {
+	return Default.GetVLAN(namespace, alias)
+}
+func GetAlias(vlan int) (Alias, error) {
+	return Default.GetAlias(vlan)
+}
+func GetAliases(prefix string) []string {
+	return Default.GetAliases(prefix)
+}
+func Delete(namespace, alias string) {
+	Default.Delete(namespace, alias)
+}
+func SetRange(prefix string, min, max int) error {
+	return Default.SetRange(prefix, min, max)
+}
+func GetRanges() map[string]Range {
+	return Default.GetRanges()
+}
+func Blacklist(vlan int) {
+	Default.Blacklist(vlan)
+}
+func GetBlacklist() []int {
+	return Default.GetBlacklist()
+}
+func ParseVLAN(namespace, s string) (int, error) {
+	return Default.ParseVLAN(namespace, s)
+}
+func PrintVLAN(namespace string, vlan int) string {
+	return Default.PrintVLAN(namespace, vlan)
+}
+func Tabular(namespace string) [][]string {
+	return Default.Tabular(namespace)
 }

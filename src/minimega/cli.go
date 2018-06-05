@@ -326,6 +326,22 @@ func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	}
 }
 
+// consume reads all responses, returning the first error it encounters. Will
+// always drain the channel before returning.
+func consume(in <-chan minicli.Responses) error {
+	var err error
+
+	for resps := range in {
+		for _, resp := range resps {
+			if resp.Error != "" && err == nil {
+				err = errors.New(resp.Error)
+			}
+		}
+	}
+
+	return err
+}
+
 // runCommands is RunCommands without locking cmdLock.
 func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)

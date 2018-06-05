@@ -16,12 +16,10 @@ import (
 	"math/rand"
 	"minicli"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -29,7 +27,6 @@ import (
 	"unicode"
 	"vlans"
 
-	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
 	"github.com/nfnt/resize"
 )
@@ -40,14 +37,6 @@ type errSlice []error
 // number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
 type loggingMutex struct {
 	sync.Mutex // embed
-}
-
-var validMACPrefix [][3]byte
-
-func init() {
-	for k, _ := range macs.ValidMACPrefixMap {
-		validMACPrefix = append(validMACPrefix, k)
-	}
 }
 
 // makeErrSlice turns a slice of errors into an errSlice which implements the
@@ -122,20 +111,6 @@ func randomMac() string {
 	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
 	log.Info("generated mac: %v", mac)
 	return mac
-}
-
-func isMac(mac string) bool {
-	m, err := net.ParseMAC(mac)
-	if err != nil {
-		return false
-	}
-
-	// check to see if the MAC address is valid and warn if not
-	if _, ok := macs.ValidMACPrefixMap[[3]byte{m[0], m[1], m[2]}]; !ok {
-		log.Warn("unallocated mac address: %v", m)
-	}
-
-	return true
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
@@ -301,121 +276,20 @@ func checkPath(v string) string {
 	return v
 }
 
-// parseNetspec parses the input specifying the bridge, vlan, mac, and network
-// driver for one VM interface. Takes the namespace to lookup VLAN aliases and
-// a list of valid network drivers. This takes a bit of parsing, because the
-// entry can be in a few forms:
-//
-// 	vlan
-//
-//	vlan,mac
-//	bridge,vlan
-//	vlan,driver
-//
-//	bridge,vlan,mac
-//	vlan,mac,driver
-//	bridge,vlan,driver
-//
-//	bridge,vlan,mac,driver
-//
-// If there are 2 or 3 fields, just the last field for the presence of a mac
-func parseNetspec(namespace string, nics map[string]bool, spec string) (*NetConfig, error) {
-	f := strings.Split(spec, ",")
-
-	isDriver := func(d string) bool {
-		return nics[d]
-	}
-
-	var b, v, m, d string
-
-	// populate b, v, m, and d based on how many fields there are, performing
-	// validation to make sure we have a valid MAC and network driver.
-	switch len(f) {
-	case 1:
-		v = f[0]
-	case 2:
-		if isMac(f[1]) {
-			// vlan, mac
-			v, m = f[0], f[1]
-		} else if isDriver(f[1]) {
-			// vlan, driver
-			v, d = f[0], f[1]
-		} else {
-			// bridge, vlan
-			b, v = f[0], f[1]
-		}
-	case 3:
-		if isMac(f[2]) {
-			// bridge, vlan, mac
-			b, v, m = f[0], f[1], f[2]
-		} else if isMac(f[1]) && isDriver(f[2]) {
-			// vlan, mac, driver
-			v, m, d = f[0], f[1], f[2]
-		} else if isDriver(f[2]) {
-			// bridge, vlan, driver
-			b, v, d = f[0], f[1], f[2]
-		} else {
-			return nil, errors.New("malformed netspec")
-		}
-	case 4:
-		if isMac(f[2]) && nics[f[3]] {
-			b, v, m, d = f[0], f[1], f[2], f[3]
-		} else {
-			return nil, errors.New("malformed netspec")
-		}
-	default:
-		return nil, errors.New("malformed netspec")
-	}
-
-	log.Info(`got bridge="%v", vlan="%v", mac="%v", driver="%v"`, b, v, m, d)
-
-	vlan, err := lookupVLAN(namespace, v)
-	if err != nil {
-		return nil, err
-	}
-
-	if b == "" {
-		b = DefaultBridge
-	}
-
-	if d == "" && isDriver(DefaultDriver) {
-		d = DefaultDriver
-	} else if d == "" {
-		// use alphabetically first driver
-		vals := []string{}
-		for k := range nics {
-			vals = append(vals, k)
-		}
-		sort.Strings(vals)
-		d = vals[0]
-
-		log.Info("default driver `%v` is not available, using `%v` instead", DefaultDriver, d)
-	}
-
-	c := NetConfig{
-		VLAN:   vlan,
-		Bridge: b,
-		MAC:    strings.ToLower(m),
-		Driver: d,
-	}
-	return &c, nil
-}
-
-// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
-// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
-// cluster.
+// lookupVLAN uses the vlans and active namespace to turn a string into a VLAN.
+// If the VLAN didn't already exist, broadcasts the update to the cluster.
 func lookupVLAN(namespace, alias string) (int, error) {
 	if alias == "" {
 		return 0, errors.New("VLAN must be non-empty string")
 	}
 
-	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	vlan, err := vlans.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
 		return vlan, err
 	}
 
-	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	vlan, created, err := vlans.Allocate(namespace, alias)
 	if err != nil {
 		return 0, err
 	}
@@ -452,14 +326,14 @@ func lookupVLAN(namespace, alias string) (int, error) {
 	return vlan, nil
 }
 
-// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+// printVLAN uses the vlans and active namespace to print a vlan.
 func printVLAN(namespace string, vlan int) string {
-	return allocatedVLANs.PrintVLAN(namespace, vlan)
+	return vlans.PrintVLAN(namespace, vlan)
 }
 
 // vlanInfo returns formatted information about all the vlans.
 func vlanInfo() string {
-	info := allocatedVLANs.Tabular("")
+	info := vlans.Tabular("")
 	if len(info) == 0 {
 		return ""
 	}

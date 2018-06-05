@@ -268,6 +268,7 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Type:       "slice",
 					Default:    zero,
 					Validate:   tag.Get("validate"),
 					Suggest:    tag.Get("suggest"),
@@ -307,6 +308,7 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Type:       "map",
 					Default:    zero,
 					Validate:   tag.Get("validate"),
 					Suggest:    tag.Get("suggest"),
