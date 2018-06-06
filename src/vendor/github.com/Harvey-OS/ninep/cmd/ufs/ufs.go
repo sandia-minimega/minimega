@@ -10,12 +10,13 @@ import (
 	"net"
 
 	"github.com/Harvey-OS/ninep/filesystem"
-	"github.com/Harvey-OS/ninep/protocol"
 )
 
 var (
 	ntype = flag.String("ntype", "tcp4", "Default network type")
 	naddr = flag.String("addr", ":5640", "Network address")
+	root  = flag.String("root", "/", "Set the root for all attaches")
+	debug = flag.Bool("debug", false, "print debug messages")
 )
 
 func main() {
@@ -25,20 +26,13 @@ func main() {
 		log.Fatalf("Listen failed: %v", err)
 	}
 
-	for {
-		c, err := l.Accept()
-		if err != nil {
-			log.Printf("Accept: %v", err)
-		}
-
-		_, err = ufs.NewUFS(func(s *protocol.Server) error {
-			s.FromNet, s.ToNet = c, c
-			s.Trace = nil // log.Printf
-			return nil
-		})
-		if err != nil {
-			log.Printf("Error: %v", err)
-		}
+	fs := &ufs.FileServer{
+		RootPath: *root,
+		Debug:    *debug,
+		Trace:    log.Printf,
 	}
 
+	if err := fs.Serve(l); err != nil {
+		log.Fatal(err)
+	}
 }

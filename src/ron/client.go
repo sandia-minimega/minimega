@@ -73,9 +73,8 @@ type client struct {
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
 
-	rootFS struct {
-		conn io.ReadWriteCloser
-	}
+	ufsListener net.Listener
+	ufsConn     net.Conn
 }
 
 func (c *client) sendMessage(m *Message) error {

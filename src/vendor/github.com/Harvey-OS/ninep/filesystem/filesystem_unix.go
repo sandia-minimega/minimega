@@ -8,9 +8,11 @@
 
 package ufs
 
+import "io"
+
 // resetDir seeks to the beginning of the file so that the file list can be
 // read again.
-func resetDir(f *File) error {
-	_, err := f.File.Seek(0, SeekStart)
+func resetDir(f *file) error {
+	_, err := f.file.Seek(0, io.SeekStart)
 	return err
 }

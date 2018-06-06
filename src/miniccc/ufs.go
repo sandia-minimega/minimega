@@ -5,22 +5,34 @@
 package main
 
 import (
-	"io"
 	log "minilog"
 	"net"
+	"os"
+	"path/filepath"
 	"ron"
 	"runtime"
 
 	"github.com/Harvey-OS/ninep/filesystem"
-	"github.com/Harvey-OS/ninep/protocol"
 )
 
 var rootFS struct {
 	running bool
 
-	// bidirectional pipes
-	toUFS, toRon     io.WriteCloser
-	fromUFS, fromRon io.ReadCloser
+	fs *ufs.FileServer
+
+	remote, local net.Conn
+}
+
+func init() {
+	rootPath := "/"
+	if runtime.GOOS == "windows" {
+		rootPath = filepath.VolumeName(os.Getenv("SYSTEMROOT")) + "\\"
+	}
+
+	rootFS.fs = &ufs.FileServer{
+		RootPath: rootPath,
+		Trace:    log.Info,
+	}
 }
 
 // ufsMessage handles a message from the server and relays it to UFS
@@ -32,25 +44,13 @@ func ufsMessage(m *ron.Message) {
 			return
 		}
 
-		if runtime.GOOS == "windows" {
-			//*ufs.Root = filepath.VolumeName(os.Getenv("SYSTEMROOT")) + "\\"
-		}
-
-		//log.Info("starting ufs, root = %v", *ufs.Root)
 		rootFS.running = true
 
-		// reader, writer
-		rootFS.fromUFS, rootFS.toRon = net.Pipe()
-		rootFS.fromRon, rootFS.toUFS = net.Pipe()
+		rootFS.remote, rootFS.local = net.Pipe()
 
-		go ron.Trunk(rootFS.fromUFS, client.UUID, ufsSendMessage)
+		go ron.Trunk(rootFS.remote, client.UUID, ufsSendMessage)
 
-		_, err := ufs.NewUFS(func(s *protocol.Server) error {
-			s.FromNet, s.ToNet = rootFS.fromRon, rootFS.toRon
-			s.Trace = log.Info
-			return nil
-		})
-		if err != nil {
+		if err := rootFS.fs.Accept(rootFS.local); err != nil {
 			log.Error("ufs error: %v", err)
 			rootFS.running = false
 		}
@@ -61,7 +61,7 @@ func ufsMessage(m *ron.Message) {
 		}
 
 		rootFS.running = false
-		rootFS.fromRon.Close()
+		rootFS.remote.Close()
 	case ron.UFS_DATA:
 		if !rootFS.running {
 			log.Error("ufs not running")
@@ -69,7 +69,7 @@ func ufsMessage(m *ron.Message) {
 		}
 
 		// relay the Tunnel data from ron
-		rootFS.toUFS.Write(m.Tunnel)
+		rootFS.remote.Write(m.Tunnel)
 	}
 }
 

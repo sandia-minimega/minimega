@@ -5,23 +5,21 @@
 package ron
 
 import (
+	"errors"
 	"fmt"
 	log "minilog"
 	"net"
-	"os"
 )
 
-func (s *Server) Mount(uuid string, dst string) error {
+// ListenUFS starts a listener to connect to UFS running on the VM specified by
+// the UUID. Returns the TCP port or an error.
+func (s *Server) ListenUFS(uuid string) (int, error) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
 	c, ok := s.clients[uuid]
 	if !ok {
-		return fmt.Errorf("no such client: %v", uuid)
-	}
-
-	if err := os.Mkdir(dst, 0700); err != nil {
-		return err
+		return 0, fmt.Errorf("no such client: %v", uuid)
 	}
 
 	m := &Message{
@@ -30,18 +28,22 @@ func (s *Server) Mount(uuid string, dst string) error {
 		UfsMode: UFS_OPEN,
 	}
 	if err := c.sendMessage(m); err != nil {
-		return err
+		return 0, err
 	}
 
-	// Is it possible to do this without creating a domain socket? It looks
-	// like maybe we could pass file descriptors to 9p.
-	l, err := net.Listen("unix", dst+"-unix")
+	// Listen on random tcp port
+	l, err := net.Listen("tcp4", ":0")
 	if err != nil {
-		return err
+		return 0, err
 	}
+	c.ufsListener = l
+
+	addr := l.Addr().(*net.TCPAddr)
 
 	go func() {
-		log.Info("waiting for connections to ufs")
+		defer l.Close()
+		log.Info("waiting for connections to ufs on %v", addr)
+
 		for {
 			conn, err := l.Accept()
 			if err != nil {
@@ -49,7 +51,8 @@ func (s *Server) Mount(uuid string, dst string) error {
 				continue
 			}
 
-			c.rootFS.conn = conn
+			log.Info("new connection from %v", conn.RemoteAddr())
+			c.ufsConn = conn
 
 			Trunk(conn, c.UUID, func(m *Message) error {
 				m.Type = MESSAGE_UFS
@@ -69,11 +72,10 @@ func (s *Server) Mount(uuid string, dst string) error {
 		}
 	}()
 
-	return nil
-	//syscall.Mount(dst+"-unix", dst, "9p", 0, "trans=unix,noextend")
+	return addr.Port, nil
 }
 
-func (s *Server) Unmount(uuid string) error {
+func (s *Server) DisconnectUFS(uuid string) error {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
@@ -82,10 +84,9 @@ func (s *Server) Unmount(uuid string) error {
 		return fmt.Errorf("no such client: %v", uuid)
 	}
 
-	// TODO
-	/*
-		syscall.Umount
-	*/
+	if c.ufsListener == nil {
+		return errors.New("ufs is not running")
+	}
 
 	m := &Message{
 		Type:    MESSAGE_UFS,
@@ -96,9 +97,15 @@ func (s *Server) Unmount(uuid string) error {
 		log.Error("unable to close: %v", err)
 	}
 
+	c.ufsListener.Close()
+
+	if c.ufsConn != nil {
+		c.ufsConn.Close()
+	}
+
 	return nil
 }
 
 func (c *client) ufsMessage(m *Message) {
-	c.rootFS.conn.Write(m.Tunnel)
+	c.ufsConn.Write(m.Tunnel)
 }

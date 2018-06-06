@@ -6,10 +6,9 @@ package ufs
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io"
-	"log"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -20,36 +19,44 @@ import (
 )
 
 const (
-	SeekStart = 0
+	DefaultIOunit = 8192
+	DefaultAddr   = ":5640"
 )
 
-type File struct {
+type file struct {
 	protocol.QID
 	fullName string
-	File     *os.File
+	file     *os.File
 	// We can't know how big a serialized dentry is until we serialize it.
 	// At that point it might be too big. We save it here if that happens,
 	// and on the next directory read we start with that.
 	oflow []byte
 }
 
+// FileServer defines parameters for running a file system and it implements
+// the protocol.NineServer interface.
 type FileServer struct {
-	mu        *sync.Mutex
-	root      *File
-	rootPath  string
-	Versioned bool
-	Files     map[protocol.FID]*File
-	IOunit    protocol.MaxSize
-}
+	// TCP address to listen on, default is DefaultAddr
+	Addr string
 
-type DebugFileServer struct {
-	*FileServer
-}
+	// RootPath to prefix on all file operations
+	RootPath string
 
-var (
-	debug = flag.Int("debug", 0, "print debug messages")
-	root  = flag.String("root", "/", "Set the root for all attaches")
-)
+	// IOunit, default is DefaultIOunit
+	IOunit protocol.MaxSize
+
+	// Trace function for logging
+	Trace protocol.Tracer
+
+	// Debug server adds additional before and after tracing to file operations
+	// using Trace
+	Debug bool
+
+	mu        sync.Mutex
+	root      *file
+	versioned bool
+	files     map[protocol.FID]*file
+}
 
 func stat(s string) (*protocol.Dir, protocol.QID, error) {
 	var q protocol.QID
@@ -65,23 +72,29 @@ func stat(s string) (*protocol.Dir, protocol.QID, error) {
 	return d, q, nil
 }
 
-func (e *FileServer) Rversion(msize protocol.MaxSize, version string) (protocol.MaxSize, string, error) {
-	if version != "9P2000" {
-		return 0, "", fmt.Errorf("%v not supported; only 9P2000", version)
-	}
-	e.Versioned = true
-	return msize, version, nil
-}
-
-func (e *FileServer) getFile(fid protocol.FID) (*File, error) {
+func (e *FileServer) getFile(fid protocol.FID) (*file, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	f, ok := e.Files[fid]
+	f, ok := e.files[fid]
 	if !ok {
 		return nil, fmt.Errorf("does not exist")
 	}
 
 	return f, nil
+}
+
+func (e *FileServer) logf(format string, args ...interface{}) {
+	if e.Trace != nil {
+		e.Trace(format, args...)
+	}
+}
+
+func (e *FileServer) Rversion(msize protocol.MaxSize, version string) (protocol.MaxSize, string, error) {
+	if version != "9P2000" {
+		return 0, "", fmt.Errorf("%v not supported; only 9P2000", version)
+	}
+	e.versioned = true
+	return msize, version, nil
 }
 
 func (e *FileServer) Rattach(fid protocol.FID, afid protocol.FID, uname string, aname string) (protocol.QID, error) {
@@ -90,14 +103,14 @@ func (e *FileServer) Rattach(fid protocol.FID, afid protocol.FID, uname string, 
 	}
 	// There should be no .. or other such junk in the Aname. Clean it up anyway.
 	aname = path.Join("/", aname)
-	aname = path.Join(e.rootPath, aname)
+	aname = path.Join(e.RootPath, aname)
 	st, err := os.Stat(aname)
 	if err != nil {
 		return protocol.QID{}, err
 	}
-	r := &File{fullName: aname}
+	r := &file{fullName: aname}
 	r.QID = fileInfoToQID(st)
-	e.Files[fid] = r
+	e.files[fid] = r
 	e.root = r
 	return r.QID, nil
 }
@@ -108,7 +121,7 @@ func (e *FileServer) Rflush(o protocol.Tag) error {
 
 func (e *FileServer) Rwalk(fid protocol.FID, newfid protocol.FID, paths []string) ([]protocol.QID, error) {
 	e.mu.Lock()
-	f, ok := e.Files[fid]
+	f, ok := e.files[fid]
 	e.mu.Unlock()
 	if !ok {
 		return nil, fmt.Errorf("does not exist")
@@ -116,12 +129,12 @@ func (e *FileServer) Rwalk(fid protocol.FID, newfid protocol.FID, paths []string
 	if len(paths) == 0 {
 		e.mu.Lock()
 		defer e.mu.Unlock()
-		_, ok := e.Files[newfid]
+		_, ok := e.files[newfid]
 		if ok {
 			return nil, fmt.Errorf("FID in use: clone walk, fid %d newfid %d", fid, newfid)
 		}
 		nf := *f
-		e.Files[newfid] = &nf
+		e.files[newfid] = &nf
 		return []protocol.QID{}, nil
 	}
 	p := f.fullName
@@ -163,36 +176,37 @@ func (e *FileServer) Rwalk(fid protocol.FID, newfid protocol.FID, paths []string
 	defer e.mu.Unlock()
 	// this is quite unlikely, which is why we don't bother checking for it first.
 	if fid != newfid {
-		if _, ok := e.Files[newfid]; ok {
+		if _, ok := e.files[newfid]; ok {
 			return nil, fmt.Errorf("FID in use: walk to %v, fid %v, newfid %v", paths, fid, newfid)
 		}
 	}
-	e.Files[newfid] = &File{fullName: p, QID: q[i]}
+	e.files[newfid] = &file{fullName: p, QID: q[i]}
 	return q, nil
 }
 
 func (e *FileServer) Ropen(fid protocol.FID, mode protocol.Mode) (protocol.QID, protocol.MaxSize, error) {
 	e.mu.Lock()
-	f, ok := e.Files[fid]
+	f, ok := e.files[fid]
 	e.mu.Unlock()
 	if !ok {
 		return protocol.QID{}, 0, fmt.Errorf("does not exist")
 	}
 
 	var err error
-	f.File, err = os.OpenFile(f.fullName, OModeToUnixFlags(mode), 0)
+	f.file, err = os.OpenFile(f.fullName, modeToUnixFlags(mode), 0)
 	if err != nil {
 		return protocol.QID{}, 0, err
 	}
 
 	return f.QID, e.IOunit, nil
 }
+
 func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, mode protocol.Mode) (protocol.QID, protocol.MaxSize, error) {
 	f, err := e.getFile(fid)
 	if err != nil {
 		return protocol.QID{}, 0, err
 	}
-	if f.File != nil {
+	if f.file != nil {
 		return protocol.QID{}, 0, fmt.Errorf("FID already open")
 	}
 	n := path.Join(f.fullName, name)
@@ -203,7 +217,7 @@ func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, 
 		if err != nil {
 			return protocol.QID{}, 0, err
 		}
-		f.File, err = os.Open(n)
+		f.file, err = os.Open(n)
 		if err != nil {
 			return protocol.QID{}, 0, err
 		}
@@ -212,7 +226,7 @@ func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, 
 		return q, 8000, err
 	}
 
-	m := OModeToUnixFlags(mode) | os.O_CREATE | os.O_TRUNC
+	m := modeToUnixFlags(mode) | os.O_CREATE | os.O_TRUNC
 	p := os.FileMode(perm) & 0777
 	of, err := os.OpenFile(n, m, p)
 	if err != nil {
@@ -224,9 +238,10 @@ func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, 
 	}
 	f.fullName = n
 	f.QID = q
-	f.File = of
+	f.file = of
 	return q, 8000, err
 }
+
 func (e *FileServer) Rclunk(fid protocol.FID) error {
 	_, err := e.clunk(fid)
 	return err
@@ -249,6 +264,7 @@ func (e *FileServer) Rstat(fid protocol.FID) ([]byte, error) {
 	protocol.Marshaldir(&b, *d)
 	return b.Bytes(), nil
 }
+
 func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 	var changed bool
 	f, err := e.getFile(fid)
@@ -296,7 +312,7 @@ func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 		// we will make it relative to root. This is a gigantic performance
 		// improvement in systems that allow it.
 		if filepath.IsAbs(dir.Name) {
-			newname = path.Join(e.rootPath, dir.Name)
+			newname = path.Join(e.RootPath, dir.Name)
 		}
 
 		// If to exists, and to is a directory, we can't do the
@@ -341,25 +357,25 @@ func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 		}
 	}
 
-	if !changed && f.File != nil {
-		f.File.Sync()
+	if !changed && f.file != nil {
+		f.file.Sync()
 	}
 	return nil
 }
 
-func (e *FileServer) clunk(fid protocol.FID) (*File, error) {
+func (e *FileServer) clunk(fid protocol.FID) (*file, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	f, ok := e.Files[fid]
+	f, ok := e.files[fid]
 	if !ok {
 		return nil, fmt.Errorf("does not exist")
 	}
-	delete(e.Files, fid)
+	delete(e.files, fid)
 	// What do we do if we can't close it?
 	// All I can think of is to log it.
-	if f.File != nil {
-		if err := f.File.Close(); err != nil {
-			log.Printf("Close of %v failed: %v", f.fullName, err)
+	if f.file != nil {
+		if err := f.file.Close(); err != nil {
+			e.logf("Close of %v failed: %v", f.fullName, err)
 		}
 	}
 	return f, nil
@@ -380,7 +396,7 @@ func (e *FileServer) Rread(fid protocol.FID, o protocol.Offset, c protocol.Count
 	if err != nil {
 		return nil, err
 	}
-	if f.File == nil {
+	if f.file == nil {
 		return nil, fmt.Errorf("FID not open")
 	}
 	if f.QID.Type&protocol.QTDIR != 0 {
@@ -406,7 +422,7 @@ func (e *FileServer) Rread(fid protocol.FID, o protocol.Offset, c protocol.Count
 				return b.Bytes()[:pos], nil
 			}
 			pos += b.Len()
-			st, err := f.File.Readdir(1)
+			st, err := f.file.Readdir(1)
 			if err == io.EOF {
 				return b.Bytes(), nil
 			}
@@ -429,7 +445,7 @@ func (e *FileServer) Rread(fid protocol.FID, o protocol.Offset, c protocol.Count
 	// N.B. even if they ask for 0 bytes on some file systems it is important to pass
 	// through a zero byte read (not Unix, of course).
 	b := make([]byte, c)
-	n, err := f.File.ReadAt(b, int64(o))
+	n, err := f.file.ReadAt(b, int64(o))
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
@@ -441,7 +457,7 @@ func (e *FileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (prot
 	if err != nil {
 		return -1, err
 	}
-	if f.File == nil {
+	if f.file == nil {
 		return -1, fmt.Errorf("FID not open")
 	}
 
@@ -449,168 +465,87 @@ func (e *FileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (prot
 	// through a zero byte write (not Unix, of course). Also, let the underlying file system
 	// manage the error if the open mode was wrong. No need to duplicate the logic.
 
-	n, err := f.File.WriteAt(b, int64(o))
+	n, err := f.file.WriteAt(b, int64(o))
 	return protocol.Count(n), err
 }
 
-func (e *DebugFileServer) Rversion(msize protocol.MaxSize, version string) (protocol.MaxSize, string, error) {
-	log.Printf(">>> Tversion %v %v\n", msize, version)
-	msize, version, err := e.FileServer.Rversion(msize, version)
-	if err == nil {
-		log.Printf("<<< Rversion %v %v\n", msize, version)
-	} else {
-		log.Printf("<<< Error %v\n", err)
+// ListenAndServe starts a new Listener on e.Addr and then calls serve.
+func (e *FileServer) ListenAndServe() error {
+	addr := e.Addr
+	if addr == "" {
+		addr = DefaultAddr
 	}
-	return msize, version, err
-}
 
-func (e *DebugFileServer) Rattach(fid protocol.FID, afid protocol.FID, uname string, aname string) (protocol.QID, error) {
-	log.Printf(">>> Tattach fid %v,  afid %v, uname %v, aname %v\n", fid, afid,
-	           uname, aname)
-	qid, err := e.FileServer.Rattach(fid, afid, uname, aname)
-	if err == nil {
-		log.Printf("<<< Rattach %v\n", qid)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return qid, err
-}
-
-func (e *DebugFileServer) Rflush(o protocol.Tag) error {
-	log.Printf(">>> Tflush tag %v\n", o)
-	err := e.FileServer.Rflush(o)
-	if err == nil {
-		log.Printf("<<< Rflush\n")
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return err
-}
-
-func (e *DebugFileServer) Rwalk(fid protocol.FID, newfid protocol.FID, paths []string) ([]protocol.QID, error) {
-	log.Printf(">>> Twalk fid %v, newfid %v, paths %v\n", fid, newfid, paths)
-	qid, err := e.FileServer.Rwalk(fid, newfid, paths)
-	if err == nil {
-		log.Printf("<<< Rwalk %v\n", qid)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return qid, err
-}
-
-func (e *DebugFileServer) Ropen(fid protocol.FID, mode protocol.Mode) (protocol.QID, protocol.MaxSize, error) {
-	log.Printf(">>> Topen fid %v, mode %v\n", fid, mode)
-	qid, iounit, err := e.FileServer.Ropen(fid, mode)
-	if err == nil {
-		log.Printf("<<< Ropen %v %v\n", qid, iounit)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return qid, iounit, err
-}
-
-func (e *DebugFileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, mode protocol.Mode) (protocol.QID, protocol.MaxSize, error) {
-	log.Printf(">>> Tcreate fid %v, name %v, perm %v, mode %v\n", fid, name,
-	           perm, mode)
-	qid, iounit, err := e.FileServer.Rcreate(fid, name, perm, mode)
-	if err == nil {
-		log.Printf("<<< Rcreate %v %v\n", qid, iounit)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return qid, iounit, err
-}
-
-func (e *DebugFileServer) Rclunk(fid protocol.FID) error {
-	log.Printf(">>> Tclunk fid %v\n", fid)
-	err := e.FileServer.Rclunk(fid)
-	if err == nil {
-		log.Printf("<<< Rclunk\n")
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return err
-}
-
-func (e *DebugFileServer) Rstat(fid protocol.FID) ([]byte, error) {
-	log.Printf(">>> Tstat fid %v\n", fid)
-	b, err := e.FileServer.Rstat(fid)
-	if err == nil {
-		dir, _ := protocol.Unmarshaldir(bytes.NewBuffer(b))
-		log.Printf("<<< Rstat %v\n", dir)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return b, err
-}
-
-func (e *DebugFileServer) Rwstat(fid protocol.FID, b []byte) error {
-	dir, _ := protocol.Unmarshaldir(bytes.NewBuffer(b))
-	log.Printf(">>> Twstat fid %v, %v\n", fid, dir)
-	err := e.FileServer.Rwstat(fid, b)
-	if err == nil {
-		log.Printf("<<< Rwstat\n")
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return err
-}
-
-func (e *DebugFileServer) Rremove(fid protocol.FID) error {
-	log.Printf(">>> Tremove fid %v\n", fid)
-	err := e.FileServer.Rremove(fid)
-	if err == nil {
-		log.Printf("<<< Rremove\n")
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return err
-}
-
-func (e *DebugFileServer) Rread(fid protocol.FID, o protocol.Offset, c protocol.Count) ([]byte, error) {
-	log.Printf(">>> Tread fid %v, off %v, count %v\n", fid, o, c)
-	b, err := e.FileServer.Rread(fid, o, c)
-	if err == nil {
-		log.Printf("<<< Rread %v\n", len(b))
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return b, err
-}
-
-func (e *DebugFileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (protocol.Count, error) {
-	log.Printf(">>> Twrite fid %v, off %v, count %v\n", fid, o, len(b))
-	c, err := e.FileServer.Rwrite(fid, o, b)
-	if err == nil {
-		log.Printf("<<< Rwrite %v\n", c)
-	} else {
-		log.Printf("<<< Error %v\n", err)
-	}
-	return c, err
-}
-
-
-type ServerOpt func(*protocol.Server) error
-
-func NewUFS(opts ...protocol.ServerOpt) (*protocol.Server, error) {
-	f := &FileServer{}
-	f.Files = make(map[protocol.FID]*File)
-	f.mu = &sync.Mutex{}
-	f.rootPath = *root // for now.
-	// any opts for the ufs layer can be added here too ...
-	var d protocol.NineServer = f
-	var s *protocol.Server
-	var err error
-	if *debug == 0 {
-		s, err = protocol.NewServer(f, opts...)
-	} else {
-		d = &DebugFileServer{f}
-		s, err = protocol.NewServer(d, opts...)
-	}
+	ln, err := net.Listen("tcp", addr)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	f.IOunit = 8192
-	s.Start()
-	return s, nil
+
+	return e.Serve(ln)
+}
+
+// Serve accepts incoming connections on the Listener and calls e.Accept on
+// each connection.
+func (e *FileServer) Serve(l net.Listener) error {
+	defer l.Close()
+
+	var tempDelay time.Duration // how long to sleep on accept failure
+
+	// from http.Server.Serve
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				if tempDelay == 0 {
+					tempDelay = 5 * time.Millisecond
+				} else {
+					tempDelay *= 2
+				}
+				if max := 1 * time.Second; tempDelay > max {
+					tempDelay = max
+				}
+				e.logf("ufs: Accept error: %v; retrying in %v", err, tempDelay)
+				time.Sleep(tempDelay)
+				continue
+			}
+			return err
+		}
+		tempDelay = 0
+
+		if err := e.Accept(conn); err != nil {
+			return err
+		}
+	}
+}
+
+// Accept creates a new protocol.Server to serve files to the connection.
+func (e *FileServer) Accept(conn io.ReadWriteCloser) error {
+	// initialize fields if haven't already
+	e.mu.Lock()
+	if e.files == nil {
+		e.files = make(map[protocol.FID]*file)
+	}
+
+	if e.IOunit == 0 {
+		e.IOunit = DefaultIOunit
+	}
+	e.mu.Unlock()
+
+	var s protocol.NineServer = e
+	if e.Debug {
+		s = &debugFileServer{e}
+	}
+
+	p, err := protocol.NewServer(s, func(p *protocol.Server) error {
+		p.FromNet, p.ToNet = conn, conn
+		p.Trace = e.Trace
+
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	p.Start()
+	return nil
 }

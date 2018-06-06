@@ -603,7 +603,7 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	id := c.StringArgs["uuid"]
-	path := c.StringArgs["path"]
+	//path := c.StringArgs["path"]
 
 	if id != "" {
 		// id can be UUID or VM's name
@@ -612,7 +612,12 @@ func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 			return vmNotFound(id)
 		}
 
-		return ns.ccServer.Mount(vm.GetUUID(), path)
+		port, err := ns.ccServer.ListenUFS(vm.GetUUID())
+		if err != nil {
+			return err
+		}
+		resp.Response = strconv.Itoa(port)
+		return nil
 	}
 
 	// TODO: display existing mounts

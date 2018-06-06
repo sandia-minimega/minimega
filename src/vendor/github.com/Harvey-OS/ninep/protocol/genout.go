@@ -1931,8 +1931,5 @@ _ = b.Next(2) // eat the length too
 	D.ModUser = string(b.Bytes()[:l])
 	_ = b.Next(int(l))
 
-if b.Len() > 0 {
-err = fmt.Errorf("Packet too long: %d bytes left over after decode", b.Len())
-}
 return
 }

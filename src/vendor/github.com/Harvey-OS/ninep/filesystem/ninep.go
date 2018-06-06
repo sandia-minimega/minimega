@@ -17,7 +17,7 @@ var (
 	user = flag.String("user", "harvey", "Default user name")
 )
 
-func OModeToUnixFlags(mode protocol.Mode) int {
+func modeToUnixFlags(mode protocol.Mode) int {
 	ret := int(0)
 	switch mode & 3 {
 	case protocol.OREAD:

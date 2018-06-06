@@ -6,17 +6,16 @@ package protocol
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
-	"os"
-	"flag"
-	"runtime"
-	"log"
-	"path/filepath"
-	"runtime/pprof"
 	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+	"runtime"
+	"runtime/pprof"
 	"sync/atomic"
-	
 )
 
 var serverprofile = flag.String("serverprofile", "", "This is for specifying the prefix of the output file for the profile")
@@ -640,7 +639,7 @@ func Dispatch(s *Server, b *bytes.Buffer, t MType) error {
 			m := fmt.Sprintf("Dispatch: %v not allowed before Tversion", RPCNames[t])
 			// Yuck. Provide helper.
 			d := b.Bytes()
-			MarshalRerrorPkt(b, Tag(d[0])|Tag(d[1]<<8), m)
+			MarshalRerrorPkt(b, Tag(d[0])|Tag(d[1])<<8, m)
 			return fmt.Errorf("Dispatch: %v not allowed before Tversion", RPCNames[t])
 		}
 	}
