@@ -26,9 +26,6 @@ type Client struct {
 	IPs      []string
 	MACs     []string
 
-	// UFS is true if the client has a filesystem available to mount
-	UFS bool
-
 	// Processes that are running in the background
 	Processes map[int]*Process
 

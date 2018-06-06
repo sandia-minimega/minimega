@@ -5,12 +5,10 @@
 package ron
 
 import (
-	"errors"
 	"fmt"
 	log "minilog"
 	"net"
 	"os"
-	"syscall"
 )
 
 func (s *Server) Mount(uuid string, dst string) error {
@@ -20,10 +18,6 @@ func (s *Server) Mount(uuid string, dst string) error {
 	c, ok := s.clients[uuid]
 	if !ok {
 		return fmt.Errorf("no such client: %v", uuid)
-	}
-
-	if !c.UFS {
-		return errors.New("client does not have ufs enabled")
 	}
 
 	if err := os.Mkdir(dst, 0700); err != nil {
@@ -55,7 +49,6 @@ func (s *Server) Mount(uuid string, dst string) error {
 				continue
 			}
 
-			log.Info("got ufs connection: %v", conn)
 			c.rootFS.conn = conn
 
 			Trunk(conn, c.UUID, func(m *Message) error {
@@ -76,7 +69,8 @@ func (s *Server) Mount(uuid string, dst string) error {
 		}
 	}()
 
-	return syscall.Mount(dst+"-unix", dst, "9p", 0, "trans=unix,noextend")
+	return nil
+	//syscall.Mount(dst+"-unix", dst, "9p", 0, "trans=unix,noextend")
 }
 
 func (s *Server) Unmount(uuid string) error {
@@ -88,23 +82,19 @@ func (s *Server) Unmount(uuid string) error {
 		return fmt.Errorf("no such client: %v", uuid)
 	}
 
-	if !c.UFS {
-		return errors.New("client does not have ufs enabled")
-	}
-
 	// TODO
 	/*
 		syscall.Umount
-
-		m := &Message{
-			Type:    MESSAGE_UFS,
-			UUID:    uuid,
-			UfsMode: UFS_CLOSE,
-		}
-		if err := c.sendMessage(m); err != nil {
-			log.Error("unable to close: %v", err)
-		}
 	*/
+
+	m := &Message{
+		Type:    MESSAGE_UFS,
+		UUID:    uuid,
+		UfsMode: UFS_CLOSE,
+	}
+	if err := c.sendMessage(m); err != nil {
+		log.Error("unable to close: %v", err)
+	}
 
 	return nil
 }

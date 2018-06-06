@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
-	"path/filepath"
 	"ron"
 	"sort"
 	"strconv"
@@ -89,7 +88,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
 
-			"cc <mount,> <uuid>",
+			"cc <mount,>",
+			"cc <mount,> <uuid or name> <path>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
@@ -602,14 +602,30 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 }
 
 func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	uuid := c.StringArgs["uuid"]
+	id := c.StringArgs["uuid"]
+	path := c.StringArgs["path"]
 
-	vm := ns.VMs.FindVM(uuid)
-	if vm == nil {
-		return vmNotFound(uuid)
+	if id != "" {
+		// id can be UUID or VM's name
+		vm := ns.VMs.FindVM(id)
+		if vm == nil {
+			return vmNotFound(id)
+		}
+
+		return ns.ccServer.Mount(vm.GetUUID(), path)
 	}
 
-	return ns.ccServer.Mount(uuid, filepath.Join(vm.GetInstancePath(), "ufs"))
+	// TODO: display existing mounts
+	/*
+		resp.Header = []string{"client", "path"}
+		resp.Tabular = [][]string{
+			[]string{
+				strconv.Itoa(ns.ccServer.Clients()),
+			},
+		}
+	*/
+
+	return nil
 }
 
 func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

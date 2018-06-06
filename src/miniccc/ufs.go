@@ -9,71 +9,61 @@ import (
 	log "minilog"
 	"net"
 	"ron"
-	"sync/atomic"
+	"runtime"
 
 	"github.com/Harvey-OS/ninep/filesystem"
 	"github.com/Harvey-OS/ninep/protocol"
 )
 
 var rootFS struct {
-	running uint64
+	running bool
 
 	// bidirectional pipes
 	toUFS, toRon     io.WriteCloser
 	fromUFS, fromRon io.ReadCloser
 }
 
-func ufsRunning() bool {
-	return atomic.LoadUint64(&rootFS.running) > 0
-}
-
 // ufsMessage handles a message from the server and relays it to UFS
 func ufsMessage(m *ron.Message) {
-	if !client.UFS {
-		log.Error("ignoring UFS message")
-		return
-	}
-
 	switch m.UfsMode {
 	case ron.UFS_OPEN:
-		if ufsRunning() {
+		if rootFS.running {
 			log.Error("ufs is already running")
 			return
 		}
+
+		if runtime.GOOS == "windows" {
+			//*ufs.Root = filepath.VolumeName(os.Getenv("SYSTEMROOT")) + "\\"
+		}
+
+		//log.Info("starting ufs, root = %v", *ufs.Root)
+		rootFS.running = true
 
 		// reader, writer
 		rootFS.fromUFS, rootFS.toRon = net.Pipe()
 		rootFS.fromRon, rootFS.toUFS = net.Pipe()
 
-		rootFS.running = 1
-
 		go ron.Trunk(rootFS.fromUFS, client.UUID, ufsSendMessage)
 
-		go func() {
-			defer atomic.StoreUint64(&rootFS.running, 0)
-			defer rootFS.fromUFS.Close()
-
-			log.Info("starting ufs")
-
-			_, err := ufs.NewUFS(func(s *protocol.Server) error {
-				s.FromNet, s.ToNet = rootFS.fromRon, rootFS.toRon
-				s.Trace = nil // log.Printf
-				return nil
-			})
-			if err != nil {
-				log.Error("ufs error: %v", err)
-			}
-		}()
+		_, err := ufs.NewUFS(func(s *protocol.Server) error {
+			s.FromNet, s.ToNet = rootFS.fromRon, rootFS.toRon
+			s.Trace = log.Info
+			return nil
+		})
+		if err != nil {
+			log.Error("ufs error: %v", err)
+			rootFS.running = false
+		}
 	case ron.UFS_CLOSE:
-		if !ufsRunning() {
+		if !rootFS.running {
 			log.Error("ufs not running")
 			return
 		}
 
-		// start close
-		rootFS.toUFS.Close()
+		rootFS.running = false
+		rootFS.fromRon.Close()
 	case ron.UFS_DATA:
-		if !ufsRunning() {
+		if !rootFS.running {
 			log.Error("ufs not running")
 			return
 		}
