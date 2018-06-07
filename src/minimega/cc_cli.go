@@ -11,11 +11,20 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"net"
 	"ron"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
+
+type ccMount struct {
+	Addr string
+	Path string
+}
+
+var ccMounts = map[string]ccMount{}
 
 var ccCLIHandlers = []minicli.Handler{
 	{ // cc
@@ -88,13 +97,19 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
 
-			"cc <mount,>",
-			"cc <mount,> <uuid or name> <path>",
-
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
+
+			"cc <mount,>",
 		},
 		Call: wrapBroadcastCLI(cliCC),
+	},
+	{ // cc mount uuid
+		HelpShort: "mount VM filesystem",
+		Patterns: []string{
+			"cc <mount,> <uuid or name> [path]",
+		},
+		Call: cliCCMountUUID,
 	},
 	{ // clear cc
 		HelpShort: "reset command and control state",
@@ -602,35 +617,185 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 }
 
 func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	id := c.StringArgs["uuid"]
-	//path := c.StringArgs["path"]
+	resp.Header = []string{"vm", "addr", "path"}
 
-	if id != "" {
-		// id can be UUID or VM's name
-		vm := ns.VMs.FindVM(id)
-		if vm == nil {
-			return vmNotFound(id)
-		}
-
-		port, err := ns.ccServer.ListenUFS(vm.GetUUID())
-		if err != nil {
-			return err
-		}
-		resp.Response = strconv.Itoa(port)
-		return nil
+	for uuid, mnt := range ccMounts {
+		resp.Tabular = append(resp.Tabular, []string{
+			uuid,
+			mnt.Addr,
+			mnt.Path,
+		})
 	}
 
-	// TODO: display existing mounts
-	/*
-		resp.Header = []string{"client", "path"}
-		resp.Tabular = [][]string{
-			[]string{
-				strconv.Itoa(ns.ccServer.Clients()),
-			},
-		}
-	*/
-
 	return nil
+}
+
+func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	resp := &minicli.Response{Host: hostname}
+
+	id := c.StringArgs["uuid"]
+	path := c.StringArgs["path"]
+
+	if path == "" && c.Source == "" {
+		// TODO: we could generate a sane default
+		resp.Error = "must provide a mount path"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	var vm VM
+
+	// If we're doing the local behavior, only look at the local VMs.
+	// Otherwise, look globally. See note in cli.go.
+	if c.Source == "" {
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		for _, vm2 := range globalVMs(ns) {
+			if vm2.GetName() == id || vm2.GetUUID() == id {
+				vm = vm2
+				break
+			}
+		}
+	} else {
+		vm = ns.VMs.FindVM(id)
+	}
+
+	if vm == nil {
+		resp.Error = vmNotFound(id).Error()
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// sanity check
+	if c.Source != "" && vm.GetHost() != hostname {
+		resp.Error = "holy heisenvm"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if vm.GetHost() == hostname {
+		// VM is running locally
+		if mnt, ok := ccMounts[vm.GetUUID()]; ok {
+			resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		// Start UFS
+		port, err := ns.ccServer.ListenUFS(vm.GetUUID())
+		if err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Debug("ufs for %v started on %v", vm.GetUUID(), port)
+
+		mnt := ccMount{
+			Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
+			Path: path,
+		}
+
+		if path == "" {
+			resp.Response = strconv.Itoa(port)
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Info("mount for %v from :%v to %v", vm.GetUUID(), port, path)
+
+		// do the mount
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+
+		if err := syscall.Mount("127.0.0.1", path, "9p", 0, opts); err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		ccMounts[vm.GetUUID()] = mnt
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if mnt, ok := ccMounts[vm.GetUUID()]; ok {
+		resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// VM is running on a remote host
+	cmd := minicli.MustCompilef("namespace %v cc mount %v", ns.Name, vm.GetUUID())
+	cmd.SetSource(ns.Name)
+	cmd.SetRecord(false)
+
+	respChan2, err := meshageSend(cmd, vm.GetHost())
+	if err != nil {
+		resp.Error = err.Error()
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	var port int
+
+	for resps := range respChan2 {
+		for _, resp := range resps {
+			// error from previous response... there should only be one
+			if err != nil {
+				continue
+			}
+
+			if resp.Error != "" {
+				err = errors.New(resp.Error)
+			} else {
+				port, err = strconv.Atoi(resp.Response)
+			}
+		}
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
+	} else if port == 0 {
+		resp.Error = "unable to find UFS port"
+	} else {
+		log.Info("remote mount for %v from %v:%v to %v", vm.GetUUID(), vm.GetHost(), port, path)
+
+		addr, err := net.ResolveIPAddr("ip", vm.GetHost())
+		if err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Info("resolved host %v to %v", vm.GetHost(), addr)
+
+		// do the (remote) mount
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+
+		if err := syscall.Mount(addr.IP.String(), path, "9p", 0, opts); err != nil {
+			resp.Error = err.Error()
+		} else {
+			ccMounts[vm.GetUUID()] = ccMount{
+				Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
+				Path: path,
+			}
+		}
+	}
+
+	respChan <- minicli.Responses{resp}
+	return
 }
 
 func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
