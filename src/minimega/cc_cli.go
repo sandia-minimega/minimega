@@ -12,6 +12,7 @@ import (
 	"minicli"
 	log "minilog"
 	"net"
+	"os"
 	"ron"
 	"sort"
 	"strconv"
@@ -130,7 +131,7 @@ See "help cc" for more information.`,
 			"clear cc <prefix,>",
 			"clear cc <responses,>",
 		},
-		Call: wrapBroadcastCLI(cliCCClear),
+		Call: wrapSimpleCLI(cliCCClear),
 	},
 	{ // clear cc mount
 		HelpShort: "unmount VM filesystem",
@@ -693,6 +694,13 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
+	if _, err := os.Stat(path); path != "" && os.IsNotExist(err) {
+		resp.Error = "mount point does not exist"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
 	var vm VM
 
 	// If we're doing the local behavior, only look at the local VMs.
@@ -762,7 +770,7 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		log.Info("mount for %v from :%v to %v", vm.GetUUID(), port, path)
 
 		// do the mount
-		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+		opts := fmt.Sprintf("ro,trans=tcp,port=%v,version=9p2000", port)
 
 		if err := syscall.Mount("127.0.0.1", path, "9p", 0, opts); err != nil {
 			if err := ns.ccServer.DisconnectUFS(vm.GetUUID()); err != nil {
@@ -836,7 +844,7 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		log.Info("resolved host %v to %v", vm.GetHost(), addr)
 
 		// do the (remote) mount
-		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+		opts := fmt.Sprintf("ro,trans=tcp,port=%v,version=9p2000", port)
 
 		if err := syscall.Mount(addr.IP.String(), path, "9p", 0, opts); err != nil {
 			resp.Error = err.Error()
@@ -854,31 +862,46 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 }
 
 func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	for what := range ccCliSubHandlers {
-		// We only want to clear something if it was specified on the
-		// command line or if we're clearing everything (nothing was
-		// specified).
-		if c.BoolArgs[what] || len(c.BoolArgs) == 0 {
-			log.Info("clearing %v in namespace `%v`", what, ns.Name)
+	// local behavior, see cli.go
+	if c.Source != "" {
+		for what := range ccCliSubHandlers {
+			// We only want to clear something if it was specified on the
+			// command line or if we're clearing everything (nothing was
+			// specified).
+			if c.BoolArgs[what] || len(c.BoolArgs) == 0 {
+				log.Info("clearing %v in namespace `%v`", what, ns.Name)
 
-			switch what {
-			case "filter":
-				ns.ccFilter = nil
-			case "commands":
-				ns.ccServer.ClearCommands()
-			case "responses":
-				ns.ccServer.ClearResponses()
-			case "prefix":
-				ns.ccPrefix = ""
+				switch what {
+				case "filter":
+					ns.ccFilter = nil
+				case "commands":
+					ns.ccServer.ClearCommands()
+				case "responses":
+					ns.ccServer.ClearResponses()
+				case "prefix":
+					ns.ccPrefix = ""
+				}
 			}
 		}
+
+		if len(c.BoolArgs) == 0 {
+			// clear mounts too (not a sub handler)
+			if err := ns.clearCCMount(""); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	}
 
-	if len(c.BoolArgs) == 0 {
-		// TODO: also clear mounts
+	// local clean up
+	if err := ns.clearCCMount(""); err != nil {
+		return err
 	}
 
-	return nil
+	// fan out behavior
+	// LOCK: this is a CLI handler so we already hold the cmdLock.
+	return consume(runCommands(namespaceCommands(ns, c)...))
 }
 
 func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -888,56 +911,19 @@ func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	id := c.StringArgs["uuid"]
 
-	for uuid, mnt := range ns.ccMounts {
-		switch id {
-		case "", uuid, mnt.Name, mnt.Path:
-			// match
-		default:
-			continue
-		}
+	if err := ns.clearCCMount(id); err != nil {
+		resp.Error = err.Error()
 
-		if mnt.Path != "" {
-			if err := syscall.Unmount(mnt.Path, 0); err != nil {
-				resp.Error = err.Error()
-
-				respChan <- minicli.Responses{resp}
-				return
-			}
-		}
-
-		vm := ns.VMs.FindVM(uuid)
-		if vm == nil {
-			// VM was mounted from remote host
-			delete(ns.ccMounts, uuid)
-			continue
-		}
-
-		// VM is running locally
-		if err := ns.ccServer.DisconnectUFS(uuid); err != nil {
-			resp.Error = err.Error()
-
-			respChan <- minicli.Responses{resp}
-			return
-		}
-
-		delete(ns.ccMounts, uuid)
+		respChan <- minicli.Responses{resp}
+		return
 	}
 
-	// copied from wrapBroadcastCLI
 	if c.Source == "" {
-		var err string
-
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
-		for resps := range runCommands(namespaceCommands(ns, c)...) {
-			for _, resp := range resps {
-				// save the first error
-				if resp.Error != "" && err == "" {
-					err = resp.Error
-				}
-			}
+		err := consume(runCommands(namespaceCommands(ns, c)...))
+		if err != nil {
+			resp.Error = err.Error()
 		}
-
-		resp.Error = err
 	}
 
 	respChan <- minicli.Responses{resp}
