@@ -109,7 +109,7 @@ use/abuse this implementation detail:
 
 Calling vm config net with no arguments prints the current configuration.`,
 		Patterns: []string{
-			"vm config net [netspec]...",
+			"vm config networks [netspec]...",
 		},
 		Call: wrapSimpleCLI(cliVMConfigNet),
 	},

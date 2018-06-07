@@ -289,6 +289,11 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) (<-chan VM, <-chan error)
 					return
 				}
 
+				if err := writeVMConfig(vm); err != nil {
+					errs <- err
+					return
+				}
+
 				launched <- vm
 			}(name)
 		}

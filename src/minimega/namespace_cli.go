@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -55,6 +56,7 @@ Display or modify the active namespace.
 - flush     : clear the VM queue
 - queueing  : toggle VMs queueing when launching (default false)
 - schedules : display scheduling stats
+- snapshot  : take a snapshot of namespace or print snapshot progress
 - run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
@@ -69,6 +71,7 @@ Display or modify the active namespace.
 			"ns <flush,>",
 			"ns <queueing,> [true,false]",
 			"ns <schedules,>",
+			"ns <snapshot,> [name]",
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
@@ -106,6 +109,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
 	"flush":     wrapSimpleCLI(cliNamespaceFlush),
 	"schedules": wrapSimpleCLI(cliNamespaceSchedules),
+	"snapshot":  cliNamespaceSnapshot,
 	"run":       cliNamespaceRun,
 }
 
@@ -335,6 +339,62 @@ func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	}
 
 	return nil
+}
+
+func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	resp := &minicli.Response{Host: hostname}
+
+	if _, ok := c.StringArgs["name"]; !ok {
+		cmd := minicli.MustCompile(".columns status vm migrate")
+
+		var err error
+
+		var total, completed int
+
+		for resps := range runCommands(namespaceCommands(ns, cmd)...) {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					if err == nil {
+						err = errors.New(resp.Error)
+					}
+
+					continue
+				}
+
+				for _, row := range resp.Tabular {
+					if len(row) == 1 {
+						if row[0] == "completed" {
+							completed += 1
+						}
+
+						total += 1
+					}
+				}
+			}
+		}
+
+		if err != nil {
+			resp.Error = err.Error()
+		} else {
+			resp.Header = []string{"completed", "total"}
+			resp.Tabular = append(resp.Tabular, []string{
+				strconv.Itoa(completed),
+				strconv.Itoa(total),
+			})
+		}
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// start new snapshot
+	if err := ns.Snapshot(c.StringArgs["name"]); err != nil {
+		resp.Error = err.Error()
+	}
+
+	respChan <- minicli.Responses{resp}
 }
 
 func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {

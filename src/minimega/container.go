@@ -851,9 +851,6 @@ func (vm *ContainerVM) launch() error {
 		}
 	}
 
-	// write the config for this vm
-	config := vm.BaseConfig.String(vm.Namespace) + vm.ContainerConfig.String()
-	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
@@ -1379,6 +1376,14 @@ func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
 	}
 
 	return res, nil
+}
+
+func (vm *ContainerVM) WriteConfig(w io.Writer) error {
+	if err := vm.BaseConfig.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return vm.ContainerConfig.WriteConfig(w)
 }
 
 func containerSetCapabilities() error {
