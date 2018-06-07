@@ -69,6 +69,8 @@ type Namespace struct {
 	ccServer *ron.Server
 	ccFilter *ron.Filter
 	ccPrefix string
+
+	ccMounts map[string]ccMount
 }
 
 type NamespaceInfo struct {
@@ -112,6 +114,7 @@ func NewNamespace(name string) *Namespace {
 		},
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
+		ccMounts:      make(map[string]ccMount),
 	}
 
 	if name == DefaultNamespace {

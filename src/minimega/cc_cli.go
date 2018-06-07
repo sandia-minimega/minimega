@@ -20,11 +20,13 @@ import (
 )
 
 type ccMount struct {
+	// Name of the VM, kept to help with unmount
+	Name string
+	// Addr for UFS
 	Addr string
+	// Path where the filesystem is mounted
 	Path string
 }
-
-var ccMounts = map[string]ccMount{}
 
 var ccCLIHandlers = []minicli.Handler{
 	{ // cc
@@ -99,15 +101,20 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
-
-			"cc <mount,>",
 		},
 		Call: wrapBroadcastCLI(cliCC),
+	},
+	{ // cc mount
+		HelpShort: "list mounted filesystems",
+		Patterns: []string{
+			"cc mount",
+		},
+		Call: cliCCMount,
 	},
 	{ // cc mount uuid
 		HelpShort: "mount VM filesystem",
 		Patterns: []string{
-			"cc <mount,> <uuid or name> [path]",
+			"cc mount <uuid or name> [path]",
 		},
 		Call: cliCCMountUUID,
 	},
@@ -124,6 +131,13 @@ See "help cc" for more information.`,
 			"clear cc <responses,>",
 		},
 		Call: wrapBroadcastCLI(cliCCClear),
+	},
+	{ // clear cc mount
+		HelpShort: "unmount VM filesystem",
+		Patterns: []string{
+			"clear cc mount [uuid or name or path]",
+		},
+		Call: cliCCClearMount,
 	},
 }
 
@@ -144,7 +158,6 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"send":       cliCCFileSend,
 	"tunnel":     cliCCTunnel,
 	"listen":     cliCCListen,
-	"mount":      cliCCMount,
 }
 
 func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -616,18 +629,52 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	return ns.ccServer.Listen(port)
 }
 
-func cliCCMount(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	resp.Header = []string{"vm", "addr", "path"}
+// cliCCMount needs to collect mounts from both the local ccMounts for the
+// namespace and across the cluster.
+func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
 
-	for uuid, mnt := range ccMounts {
-		resp.Tabular = append(resp.Tabular, []string{
-			uuid,
-			mnt.Addr,
-			mnt.Path,
-		})
+	// makeResponse creates a response from the namespace's ccMounts
+	makeResponse := func() *minicli.Response {
+		resp := &minicli.Response{Host: hostname}
+
+		resp.Header = []string{"name", "uuid", "addr", "path"}
+
+		for uuid, mnt := range ns.ccMounts {
+			resp.Tabular = append(resp.Tabular, []string{
+				mnt.Name,
+				uuid,
+				mnt.Addr,
+				mnt.Path,
+			})
+		}
+
+		return resp
 	}
 
-	return nil
+	// local behavior, see cli.go
+	if c.Source != "" {
+		respChan <- minicli.Responses{makeResponse()}
+		return
+	}
+
+	var res minicli.Responses
+
+	// LOCK: this is a CLI handler so we already hold the cmdLock.
+	for resps := range runCommands(namespaceCommands(ns, c)...) {
+		for _, resp := range resps {
+			res = append(res, resp)
+		}
+	}
+
+	// if local node is not in namespace, append local response too
+	if !ns.Hosts[hostname] {
+		res = append(res, makeResponse())
+	}
+
+	respChan <- res
+
+	return
 }
 
 func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -679,7 +726,7 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	if vm.GetHost() == hostname {
 		// VM is running locally
-		if mnt, ok := ccMounts[vm.GetUUID()]; ok {
+		if mnt, ok := ns.ccMounts[vm.GetUUID()]; ok {
 			resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
 
 			respChan <- minicli.Responses{resp}
@@ -698,11 +745,14 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		log.Debug("ufs for %v started on %v", vm.GetUUID(), port)
 
 		mnt := ccMount{
+			Name: vm.GetName(),
 			Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
 			Path: path,
 		}
 
 		if path == "" {
+			ns.ccMounts[vm.GetUUID()] = mnt
+
 			resp.Response = strconv.Itoa(port)
 
 			respChan <- minicli.Responses{resp}
@@ -715,19 +765,23 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
 
 		if err := syscall.Mount("127.0.0.1", path, "9p", 0, opts); err != nil {
+			if err := ns.ccServer.DisconnectUFS(vm.GetUUID()); err != nil {
+				// zombie UFS
+				log.Error("unable to disconnect ufs for %v: %v", vm.GetUUID(), err)
+			}
 			resp.Error = err.Error()
 
 			respChan <- minicli.Responses{resp}
 			return
 		}
 
-		ccMounts[vm.GetUUID()] = mnt
+		ns.ccMounts[vm.GetUUID()] = mnt
 
 		respChan <- minicli.Responses{resp}
 		return
 	}
 
-	if mnt, ok := ccMounts[vm.GetUUID()]; ok {
+	if mnt, ok := ns.ccMounts[vm.GetUUID()]; ok {
 		resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
 
 		respChan <- minicli.Responses{resp}
@@ -787,7 +841,8 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		if err := syscall.Mount(addr.IP.String(), path, "9p", 0, opts); err != nil {
 			resp.Error = err.Error()
 		} else {
-			ccMounts[vm.GetUUID()] = ccMount{
+			ns.ccMounts[vm.GetUUID()] = ccMount{
+				Name: vm.GetName(),
 				Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
 				Path: path,
 			}
@@ -819,5 +874,72 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		}
 	}
 
+	if len(c.BoolArgs) == 0 {
+		// TODO: also clear mounts
+	}
+
 	return nil
+}
+
+func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	resp := &minicli.Response{Host: hostname}
+
+	id := c.StringArgs["uuid"]
+
+	for uuid, mnt := range ns.ccMounts {
+		switch id {
+		case "", uuid, mnt.Name, mnt.Path:
+			// match
+		default:
+			continue
+		}
+
+		if mnt.Path != "" {
+			if err := syscall.Unmount(mnt.Path, 0); err != nil {
+				resp.Error = err.Error()
+
+				respChan <- minicli.Responses{resp}
+				return
+			}
+		}
+
+		vm := ns.VMs.FindVM(uuid)
+		if vm == nil {
+			// VM was mounted from remote host
+			delete(ns.ccMounts, uuid)
+			continue
+		}
+
+		// VM is running locally
+		if err := ns.ccServer.DisconnectUFS(uuid); err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		delete(ns.ccMounts, uuid)
+	}
+
+	// copied from wrapBroadcastCLI
+	if c.Source == "" {
+		var err string
+
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
+			for _, resp := range resps {
+				// save the first error
+				if resp.Error != "" && err == "" {
+					err = resp.Error
+				}
+			}
+		}
+
+		resp.Error = err
+	}
+
+	respChan <- minicli.Responses{resp}
+	return
 }

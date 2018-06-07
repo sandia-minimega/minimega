@@ -36,6 +36,9 @@ func (s *Server) ListenUFS(uuid string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	c.Lock()
+	defer c.Unlock()
 	c.ufsListener = l
 
 	addr := l.Addr().(*net.TCPAddr)
@@ -47,19 +50,33 @@ func (s *Server) ListenUFS(uuid string) (int, error) {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				log.Error("command socket: %v", err)
-				continue
+				log.Error("accept failed: %v", err)
+
+				c.Lock()
+				defer c.Unlock()
+
+				c.ufsListener = nil
+				return
 			}
 
 			log.Info("new connection from %v", conn.RemoteAddr())
+			c.Lock()
 			c.ufsConn = conn
+			c.Unlock()
 
+			// blocks until connection is done
 			Trunk(conn, c.UUID, func(m *Message) error {
 				m.Type = MESSAGE_UFS
 				m.UfsMode = UFS_DATA
 
 				return c.sendMessage(m)
 			})
+
+			c.Lock()
+			c.ufsConn = nil
+			c.Unlock()
+
+			conn.Close()
 
 			m := &Message{
 				Type:    MESSAGE_UFS,
@@ -84,6 +101,9 @@ func (s *Server) DisconnectUFS(uuid string) error {
 		return fmt.Errorf("no such client: %v", uuid)
 	}
 
+	c.Lock()
+	defer c.Unlock()
+
 	if c.ufsListener == nil {
 		return errors.New("ufs is not running")
 	}
@@ -98,9 +118,11 @@ func (s *Server) DisconnectUFS(uuid string) error {
 	}
 
 	c.ufsListener.Close()
+	c.ufsListener = nil
 
 	if c.ufsConn != nil {
 		c.ufsConn.Close()
+		c.ufsConn = nil
 	}
 
 	return nil
