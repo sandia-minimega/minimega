@@ -228,6 +228,29 @@ the receive command.
 
 .mega cc/recv2.mm
 
+** Full filesystem access
+
+The `cc`mount` can be used to mount the guest filesystem on the host. This is
+accomplished by a 9p server integrated into miniccc that serves the guest's
+filesystem over the existing connection to the command and control server.
+`cc`mount` is fully integrated with namespaces -- you may mount a VM's
+filesystem to the head node, regardless of which host is actually running the
+VM. In order to mount the filesystem, you'll need to use either the name or
+UUID of the VM:
+
+    cc mount vm-0 /mnt
+
+To list existing mounts, run it with no arguments:
+
+    cc mount
+
+You can unmount a specific VM or mount by path using:
+
+    clear cc mount [uuid or name or path].
+
+Without an argument, `clear`cc`mount` clears all mounts. This also occurs when
+you call `clear`cc`.
+
 * Examining Responses
 
 We've seen the use of `cc`responses` several times so far. The `responses`

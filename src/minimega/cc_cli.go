@@ -33,10 +33,10 @@ var ccCLIHandlers = []minicli.Handler{
 	{ // cc
 		HelpShort: "command and control commands",
 		HelpLong: `
-Command and control for virtual machines running the miniccc client. Commands
-may include regular commands, backgrounded commands, and any number of sent
-and/or received files. Commands will be executed in command creation order. For
-example, to send a file 'foo' and display the contents on a remote VM:
+Command and control for VMs running the miniccc client. Commands may include
+regular commands, backgrounded commands, and any number of sent and/or received
+files. Commands will be executed in command creation order. For example, to
+send a file 'foo' and display the contents on a remote VM:
 
 	cc send foo
 	cc exec cat foo
@@ -70,9 +70,6 @@ If users wish, they may drop the tag= prefix and key=value pairs will be
 treated as tags:
 
 	cc filter foo=bar
-
-When a namespace is active, there is an implicit filter for vms with the
-provided namespace.
 
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
