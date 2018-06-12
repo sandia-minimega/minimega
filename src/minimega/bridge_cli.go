@@ -43,6 +43,13 @@ ip/netmask:
 
 	tap create 5 dhcp
 
+Tap mirror creates a new tap, mirror traffic from a source tap. This mirror can
+be used by the host or a VM.
+
+	tap mirror mega_tap0 name mega_mirror0
+
+If the mirror name is not provided, one is automatically generated.
+
 To delete a host tap, use the delete command and tap name from the tap list:
 
 	tap delete <id>
@@ -65,9 +72,13 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <create,> <vlan> bridge <bridge> name [tap name]",
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
+			"tap <mirror,> <src name>",
+			"tap <mirror,> <src name> name <tap name>",
+			"tap <mirror,> <src name> name <tap name> bridge <bridge>",
+			"tap <mirror,> <src name> bridge <bridge>",
 			"tap <delete,> <tap name or all>",
 		},
-		Call: wrapSimpleCLI(cliHostTap),
+		Call: wrapSimpleCLI(cliTap),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vlan" {
 				return cliVLANSuggest(ns, prefix)
@@ -86,7 +97,7 @@ Reset state for taps. See "help tap" for more information.`,
 		Patterns: []string{
 			"clear tap",
 		},
-		Call: wrapSimpleCLI(cliHostTapClear),
+		Call: wrapSimpleCLI(cliTapClear),
 	},
 	{ // bridge
 		HelpShort: "display information and modify virtual bridges",
@@ -120,62 +131,14 @@ Note: bridge is not a namespace-aware command.`,
 	},
 }
 
-// routines for interfacing bridge mechanisms with the cli
-func cliHostTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["create"] {
-		b := c.StringArgs["bridge"]
-
-		vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
-		if err != nil {
-			return err
-		}
-
-		tap, err := hostTapCreate(b, c.StringArgs["tap"], vlan)
-		if err != nil {
-			return err
-		}
-
-		if c.BoolArgs["dhcp"] {
-			log.Debug("obtaining dhcp on tap %v", tap)
-
-			var out string
-			out, err = processWrapper("dhclient", tap)
-			if err != nil {
-				err = fmt.Errorf("dhcp error %v: `%v`", err, out)
-			}
-		} else if c.StringArgs["ip"] != "" {
-			ip := c.StringArgs["ip"]
-
-			log.Debug("setting ip on tap %v: %v", tap, ip)
-
-			var out string
-			out, err = processWrapper("ip", "addr", "add", "dev", tap, ip)
-			if err != nil {
-				err = fmt.Errorf("ip error %v: `%v`", err, out)
-			}
-		}
-
-		if err != nil {
-			// One of the above cases failed, try to clean up the tap
-			br, err := getBridge(b)
-			if err == nil {
-				err = br.DestroyTap(tap)
-			}
-			if err != nil {
-				// Welp, we're boned
-				log.Error("zombie host tap -- %v %v", tap, err)
-			}
-			return err
-		}
-
-		// need lock?
-		ns.Taps[tap] = true
-
-		resp.Response = tap
-
-		return nil
-	} else if c.BoolArgs["delete"] {
-		return hostTapDelete(ns, c.StringArgs["tap"])
+func cliTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["create"]:
+		return cliTapCreate(ns, c, resp)
+	case c.BoolArgs["mirror"]:
+		return cliTapMirror(ns, c, resp)
+	case c.BoolArgs["delete"]:
+		return cliTapCreate(ns, c, resp)
 	}
 
 	// Must be the list command
@@ -184,7 +147,82 @@ func cliHostTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	return nil
 }
 
-func cliHostTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	b := c.StringArgs["bridge"]
+
+	vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
+	if err != nil {
+		return err
+	}
+
+	tap, err := hostTapCreate(b, c.StringArgs["tap"], vlan)
+	if err != nil {
+		return err
+	}
+
+	if c.BoolArgs["dhcp"] {
+		log.Debug("obtaining dhcp on tap %v", tap)
+
+		var out string
+		out, err = processWrapper("dhclient", tap)
+		if err != nil {
+			err = fmt.Errorf("dhcp error %v: `%v`", err, out)
+		}
+	} else if c.StringArgs["ip"] != "" {
+		ip := c.StringArgs["ip"]
+
+		log.Debug("setting ip on tap %v: %v", tap, ip)
+
+		var out string
+		out, err = processWrapper("ip", "addr", "add", "dev", tap, ip)
+		if err != nil {
+			err = fmt.Errorf("ip error %v: `%v`", err, out)
+		}
+	}
+
+	if err != nil {
+		// One of the above cases failed, try to clean up the tap
+		br, err := getBridge(b)
+		if err == nil {
+			err = br.DestroyTap(tap)
+		}
+		if err != nil {
+			// Welp, we're boned
+			log.Error("zombie host tap -- %v %v", tap, err)
+		}
+		return err
+	}
+
+	// need lock?
+	ns.Taps[tap] = true
+
+	resp.Response = tap
+
+	return nil
+}
+
+func cliTapMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	br, err := getBridge(c.StringArgs["bridge"])
+	if err != nil {
+		return err
+	}
+
+	mirror, err := br.CreateMirror(c.StringArgs["src"], c.StringArgs["dst"])
+	if err != nil {
+		return err
+	}
+
+	ns.Taps[mirror] = true
+	resp.Response = mirror
+
+	return nil
+}
+
+func cliTapDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return hostTapDelete(ns, c.StringArgs["tap"])
+}
+
+func cliTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return hostTapDelete(ns, Wildcard)
 }
 

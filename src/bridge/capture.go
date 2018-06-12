@@ -42,7 +42,7 @@ func (b *Bridge) stopCapture(id int) {
 	b.captures[id].handle.Close()
 
 	if b.mirrors[tap] {
-		if err := b.removeMirror(tap); err != nil {
+		if err := b.destroyMirror(tap); err != nil {
 			log.Error("stop capture %v %v: %v", tap, id, err)
 		}
 	}
@@ -152,14 +152,14 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	tap, err := b.addMirror()
+	tap, err := b.createMirror("", "")
 	if err != nil {
 		return 0, err
 	}
 
 	id, err := b.captureTap(tap, fname, config...)
 	if err != nil {
-		if err := b.removeMirror(tap); err != nil {
+		if err := b.destroyMirror(tap); err != nil {
 			// Welp, we're boned
 			log.Error("zombie mirror -- %v:%v %v", b.Name, tap, err)
 		}
