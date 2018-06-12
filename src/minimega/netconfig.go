@@ -11,9 +11,7 @@ import (
 	log "minilog"
 	"net"
 	"sort"
-	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/google/gopacket/macs"
 )
@@ -153,27 +151,19 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 func (c NetConfig) String() string {
 	parts := []string{}
 
-	prep := func(s string) string {
-		if strings.IndexFunc(s, unicode.IsSpace) > -1 {
-			return strconv.Quote(s)
-		}
-
-		return s
-	}
-
 	if c.Bridge != "" && c.Bridge != DefaultBridge {
-		parts = append(parts, prep(c.Bridge))
+		parts = append(parts, quoteIfSpace(c.Bridge))
 	}
 
-	parts = append(parts, prep(c.Alias))
+	parts = append(parts, quoteIfSpace(c.Alias))
 
 	if c.MAC != "" {
-		// shouldn't need to prep MAC since it is a valid MAC
+		// shouldn't need to quote MAC since it is a valid MAC
 		parts = append(parts, c.MAC)
 	}
 
 	if c.Driver != "" && c.Driver != DefaultKVMDriver {
-		parts = append(parts, prep(c.Driver))
+		parts = append(parts, quoteIfSpace(c.Driver))
 	}
 
 	return strings.Join(parts, ",")
