@@ -57,13 +57,22 @@ commands.`,
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
 the file in manually. read stops if it reads an invalid command. read does not
-stop if a command returns an error.
+stop if a command returns an error. Nested reads are not permitted.
+
+Because reading and executing long files can take a while, the read command
+releases the command lock that it holds so commands from other clients
+(including miniweb) can be interleaved. To prevent issues with another script
+changing the namespace and commands being run in a different namespace than
+originally intended, read records the active namespace when it starts and
+prepends that namespace to all commands that it reads from the file. If it
+reads a command that would change the active namespace, read updates its state
+so that the new namespace is prepended instead.
 
 If the optional argument check is specified then read doesn't execute any of
 the commands in the file. Instead, it checks that all the commands are
 syntactically valid. This can identify mistyped commands in scripts before you
 read them. It cannot check for semantic errors (e.g. killing a non-existent
-VM). Stops on the first invalid command.`,
+VM). The check stops at the first invalid command.`,
 		Patterns: []string{
 			"read <file> [check,]",
 		},
@@ -153,6 +162,8 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
+	ns := GetNamespace()
+
 	resp := &minicli.Response{Host: hostname}
 
 	check := c.BoolArgs["check"]
@@ -202,7 +213,32 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			continue
 		}
 
+		// HAX: check to see if the command that we're about to run changes the
+		// namespace. If it does, we need to adjust the namespace that we
+		// prepend to all commands.
+		var namespace string
+		for cmd := cmd; cmd != nil; cmd = cmd.Subcommand {
+			// found command to change namespace
+			if strings.HasPrefix(cmd.Pattern, "namespace") && cmd.Subcommand == nil {
+				namespace = cmd.StringArgs["name"]
+			}
+		}
+
+		if namespace == "" {
+			// no change in namespace so recompile the command to execute in
+			// the original namespace
+			cmd = minicli.MustCompilef("namespace %q %v", ns.Name, command)
+		}
+
 		forward(RunCommands(cmd), respChan)
+
+		if namespace != "" {
+			log.Info("read switching to namespace `%v`", namespace)
+
+			// update the namespace that we prepend to match the newly
+			// activated namespace
+			ns = GetOrCreateNamespace(namespace)
+		}
 	}
 
 	if err != nil {
