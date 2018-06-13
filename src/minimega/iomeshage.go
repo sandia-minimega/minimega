@@ -107,17 +107,19 @@ func cliFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"dir", "name", "size"}
 	resp.Tabular = [][]string{}
 
-	files, err := iom.List(path)
-	if err == nil && files != nil {
-		for _, f := range files {
-			var dir string
-			if f.Dir {
-				dir = "<dir>"
-			}
+	files, err := iom.List(path, false)
+	if err != nil {
+		return err
+	}
 
-			row := []string{dir, f.Name, strconv.FormatInt(f.Size, 10)}
-			resp.Tabular = append(resp.Tabular, row)
+	for _, f := range files {
+		var dir string
+		if f.IsDir() {
+			dir = "<dir>"
 		}
+
+		row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10)}
+		resp.Tabular = append(resp.Tabular, row)
 	}
 
 	return nil
@@ -184,7 +186,7 @@ outer:
 	for {
 		for _, f := range iom.Status() {
 			if strings.Contains(f.Filename, file) {
-				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
+				log.Info("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
 				time.Sleep(IOM_HELPER_WAIT)
 				continue outer
 			}

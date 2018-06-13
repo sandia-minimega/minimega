@@ -10,17 +10,17 @@ E: file not found
 
 ## # See if files are there
 ## file list /minitest
-dir  | name | size
-     | bar  | 0
-     | foo  | 0
+dir  | name         | size
+     | minitest/bar | 0
+     | minitest/foo | 0
 ## file get /minitest/foo
 ## file get /minitest/bar
 
 ## # Try to delete the files
 ## file delete /minitest/foo
 ## file list /minitest
-dir  | name | size
-     | bar  | 0
+dir  | name         | size
+     | minitest/bar | 0
 ## file delete /minitest/bar
 ## file list /minitest
 
