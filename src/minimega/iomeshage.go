@@ -62,14 +62,19 @@ the node.
 You can also supply globs (wildcards) with the * operator. For example:
 
 	file get *.qcow2
-	file delete *.qcow2`,
+	file delete *.qcow2
+
+The stream command allows users to stream files through the Response. Each part
+of the file is returned as a separate response which can then be combined to
+form the original file. This command blocks until the stream is complete.`,
 		Patterns: []string{
 			"file <list,> [path]",
 			"file <get,> <file>",
+			"file <stream,> <file>",
 			"file <delete,> <file>",
 			"file <status,>",
 		},
-		Call: wrapSimpleCLI(cliFile),
+		Call: cliFile,
 	},
 }
 
@@ -79,50 +84,77 @@ func iomeshageStart(node *meshage.Node) error {
 	return err
 }
 
-func cliFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["get"] {
-		return iom.Get(c.StringArgs["file"])
-	} else if c.BoolArgs["delete"] {
-		return iom.Delete(c.StringArgs["file"])
-	} else if c.BoolArgs["status"] {
-		transfers := iom.Status()
+func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
+	fname := c.StringArgs["file"]
+
+	switch {
+	case c.BoolArgs["list"]:
+		path := c.StringArgs["path"]
+		if path == "" {
+			path = "/"
+		}
+
+		resp := &minicli.Response{Host: hostname}
+
+		resp.Header = []string{"dir", "name", "size"}
+		resp.Tabular = [][]string{}
+
+		files, err := iom.List(path, false)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		for _, f := range files {
+			var dir string
+			if f.IsDir() {
+				dir = "<dir>"
+			}
+
+			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10)}
+			resp.Tabular = append(resp.Tabular, row)
+		}
+
+		respChan <- minicli.Responses{resp}
+		return
+	case c.BoolArgs["get"]:
+		respChan <- errResp(iom.Get(fname))
+		return
+	case c.BoolArgs["stream"]:
+		stream, err := iom.Stream(fname)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		for v := range stream {
+			resp := &minicli.Response{
+				Host: hostname,
+				Data: v,
+			}
+
+			respChan <- minicli.Responses{resp}
+		}
+
+		return
+	case c.BoolArgs["delete"]:
+		respChan <- errResp(iom.Delete(fname))
+		return
+	case c.BoolArgs["status"]:
+		resp := &minicli.Response{Host: hostname}
+
 		resp.Header = []string{"filename", "tempdir", "completed", "queued"}
 		resp.Tabular = [][]string{}
 
-		for _, f := range transfers {
+		for _, f := range iom.Status() {
 			completed := fmt.Sprintf("%v/%v", len(f.Parts), f.NumParts)
 			row := []string{f.Filename, f.Dir, completed, fmt.Sprintf("%v", f.Queued)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 
-		return nil
+		respChan <- minicli.Responses{resp}
+		return
 	}
-
-	// must be "list"
-	path := c.StringArgs["path"]
-	if path == "" {
-		path = "/"
-	}
-
-	resp.Header = []string{"dir", "name", "size"}
-	resp.Tabular = [][]string{}
-
-	files, err := iom.List(path, false)
-	if err != nil {
-		return err
-	}
-
-	for _, f := range files {
-		var dir string
-		if f.IsDir() {
-			dir = "<dir>"
-		}
-
-		row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10)}
-		resp.Tabular = append(resp.Tabular, row)
-	}
-
-	return nil
 }
 
 // iomHelper supports grabbing files for internal minimega operations. It

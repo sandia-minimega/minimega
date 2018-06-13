@@ -36,16 +36,6 @@
 			}
 		});
 
-		if (subdir != "") {
-			var p = window.location.pathname;
-			if (!p.endsWith("/")) {
-				p += "/"
-			}
-
-			$("h1.box-header").text("Files: " + subdir)
-				.after('<a href="'+p+'..">Up a level</a>');
-		}
-
         initFilesDataTable();
     });
 </script>
