@@ -60,7 +60,7 @@ func lookPath(file string) (string, error) {
 
 	// file contains a slash, shouldn't search files path
 	if strings.Contains(file, "/") {
-		return "", &exec.Error{file, exec.ErrNotFound}
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
 	}
 
 	file = filepath.Join(*f_path, "files", file)
