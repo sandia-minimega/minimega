@@ -152,22 +152,39 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	tap, err := b.createMirror("", "")
-	if err != nil {
+	var id int
+
+	tap := <-b.nameChan
+	if err := b.createHostTap(tap, 0); err != nil {
 		return 0, err
 	}
 
-	id, err := b.captureTap(tap, fname, config...)
+	err := b.createMirror("", tap)
 	if err != nil {
-		if err := b.destroyMirror(tap); err != nil {
-			// Welp, we're boned
-			log.Error("zombie mirror -- %v:%v %v", b.Name, tap, err)
-		}
-
-		return 0, err
+		goto DestroyTap
 	}
 
+	id, err = b.captureTap(tap, fname, config...)
+	if err != nil {
+		goto DestroyMirror
+	}
+
+	// no errors!
 	return id, nil
+
+DestroyMirror:
+	// Clean up the mirror that we just created
+	if err := b.destroyMirror(tap); err != nil {
+		log.Error("zombie mirror -- %v:%v %v", b.Name, tap, err)
+	}
+
+DestroyTap:
+	// Clean up the tap we just created
+	if err := b.destroyTap(tap); err != nil {
+		log.Error("zombie tap -- %v %v", tap, err)
+	}
+
+	return 0, err
 }
 
 // CaptureTap captures traffic for the specified tap to fname. Only the first

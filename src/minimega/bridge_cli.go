@@ -43,12 +43,12 @@ ip/netmask:
 
 	tap create 5 dhcp
 
-Tap mirror creates a new tap, mirror traffic from a source tap. This mirror can
-be used by the host or a VM.
+Tap mirror mirrors packets that traverse the source tap to the destination tap.
+Both taps should already exist. You can use taps for VMs from "vm info" or host
+taps. For example, to mirror traffic that traverse mega_tapX to mega_tapY on
+the default bridge:
 
-	tap mirror mega_tap0 name mega_mirror0
-
-If the mirror name is not provided, one is automatically generated.
+	tap mirror mega_tapX mega_tapY
 
 To delete a host tap, use the delete command and tap name from the tap list:
 
@@ -72,10 +72,7 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <create,> <vlan> bridge <bridge> name [tap name]",
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
-			"tap <mirror,> <src name>",
-			"tap <mirror,> <src name> name <tap name>",
-			"tap <mirror,> <src name> name <tap name> bridge <bridge>",
-			"tap <mirror,> <src name> bridge <bridge>",
+			"tap <mirror,> <src name> <dst name> [bridge]",
 			"tap <delete,> <tap name or all>",
 		},
 		Call: wrapSimpleCLI(cliTap),
@@ -207,15 +204,7 @@ func cliTapMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	mirror, err := br.CreateMirror(c.StringArgs["src"], c.StringArgs["dst"])
-	if err != nil {
-		return err
-	}
-
-	ns.Taps[mirror] = true
-	resp.Response = mirror
-
-	return nil
+	return br.CreateMirror(c.StringArgs["src"], c.StringArgs["dst"])
 }
 
 func cliTapDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

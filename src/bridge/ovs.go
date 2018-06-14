@@ -113,9 +113,9 @@ func ovsDelPort(bridge, tap string) error {
 	return nil
 }
 
-// ovsMirror creates a mirror on bridge from src to dst. If src is empty,
+// ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
 // mirrors the entire bridge.
-func ovsMirror(bridge, src, dst string) error {
+func ovsAddMirror(bridge, src, dst string) error {
 	findPort := func(name, tap string) []string {
 		return []string{
 			"--",
@@ -165,7 +165,33 @@ func ovsMirror(bridge, src, dst string) error {
 	)
 
 	if _, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("create mirror failed: %v", err)
+		return fmt.Errorf("add mirror failed: %v", err)
+	}
+
+	return nil
+}
+
+func ovsDelMirror(bridge, tap string) error {
+	// delete the mirror for this bridge
+	args := []string{
+		// get mirror ID by name, store in @m
+		"--",
+		"--id=@m",
+		"get",
+		"mirror",
+		fmt.Sprintf("mirror-%v", tap),
+
+		// remove mirror from bridge
+		"--",
+		"remove",
+		"bridge",
+		bridge,
+		"mirrors",
+		"@m",
+	}
+
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("delete mirror failed: %v", err)
 	}
 
 	return nil

@@ -11,46 +11,40 @@ import (
 )
 
 // CreateMirror mirrors traffic. src is the tap to mirror, an empty src implies
-// mirroring the entire bridge. dst is the tap to mirror to, an empty dst will
-// use an automatically generated tap name. Returns the dst tap name or an
-// error.
-func (b *Bridge) CreateMirror(src, dst string) (string, error) {
+// mirroring the entire bridge. dst is the tap to mirror to, which must already
+// exist.
+func (b *Bridge) CreateMirror(src, dst string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
-
-	// check src tap exists *before* we go ahead and assign a name
-	if _, ok := b.taps[src]; src != "" && !ok {
-		return "", errors.New("source tap is not on bridge")
-	}
-
-	if dst == "" {
-		dst = <-b.nameChan
-	}
 
 	return b.createMirror(src, dst)
 }
 
-func (b *Bridge) createMirror(src, dst string) (string, error) {
+func (b *Bridge) createMirror(src, dst string) error {
 	log.Info("adding mirror on bridge: %v:%v to %v", b.Name, src, dst)
 
-	// get a host tap on VLAN 0
-	if err := b.createHostTap(dst, 0); err != nil {
-		return "", err
+	// check source tap exists, if it is set
+	if _, ok := b.taps[src]; src != "" && !ok {
+		return errors.New("source tap is not on bridge")
 	}
 
-	if err := ovsMirror(b.Name, src, dst); err != nil {
-		// Clean up the tap we just created
-		if err := b.destroyTap(dst); err != nil {
-			// Welp, we're boned
-			log.Error("zombie tap -- %v %v", dst, err)
-		}
+	// check destination tap exists
+	if _, ok := b.taps[dst]; !ok {
+		return errors.New("destination tap is not on bridge")
+	}
 
-		return "", fmt.Errorf("add mirror failed: %v", err)
+	// make sure we aren't mirroring to the same tap twice
+	if b.mirrors[dst] {
+		return errors.New("destination tap is already a mirror")
+	}
+
+	if err := ovsAddMirror(b.Name, src, dst); err != nil {
+		return err
 	}
 
 	b.mirrors[dst] = true
 
-	return dst, nil
+	return nil
 }
 
 func (b *Bridge) DestroyMirror(tap string) error {
@@ -67,30 +61,7 @@ func (b *Bridge) destroyMirror(tap string) error {
 		return fmt.Errorf("tap is not a mirror on bridge %v: %v", b.Name, tap)
 	}
 
-	// delete the mirror for this bridge
-	args := []string{
-		// get mirror ID by name, store in @m
-		"--",
-		"--id=@m",
-		"get",
-		"mirror",
-		fmt.Sprintf("mirror-%v", tap),
-
-		// remove mirror from bridge
-		"--",
-		"remove",
-		"bridge",
-		b.Name,
-		"mirrors",
-		"@m",
-	}
-
-	if _, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("remove mirror failed: %v", err)
-	}
-
-	// delete the associated host tap
-	if err := b.destroyTap(tap); err != nil {
+	if err := ovsDelMirror(b.Name, tap); err != nil {
 		return err
 	}
 
