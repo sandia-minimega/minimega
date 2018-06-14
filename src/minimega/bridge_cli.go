@@ -135,7 +135,7 @@ func cliTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	case c.BoolArgs["mirror"]:
 		return cliTapMirror(ns, c, resp)
 	case c.BoolArgs["delete"]:
-		return cliTapCreate(ns, c, resp)
+		return cliTapDelete(ns, c, resp)
 	}
 
 	// Must be the list command
