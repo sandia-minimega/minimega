@@ -767,7 +767,7 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		log.Info("mount for %v from :%v to %v", vm.GetUUID(), port, path)
 
 		// do the mount
-		opts := fmt.Sprintf("ro,trans=tcp,port=%v,version=9p2000", port)
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
 
 		if err := syscall.Mount("127.0.0.1", path, "9p", 0, opts); err != nil {
 			if err := ns.ccServer.DisconnectUFS(vm.GetUUID()); err != nil {
@@ -841,7 +841,7 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 		log.Info("resolved host %v to %v", vm.GetHost(), addr)
 
 		// do the (remote) mount
-		opts := fmt.Sprintf("ro,trans=tcp,port=%v,version=9p2000", port)
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
 
 		if err := syscall.Mount(addr.IP.String(), path, "9p", 0, opts); err != nil {
 			resp.Error = err.Error()

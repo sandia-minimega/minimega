@@ -176,6 +176,9 @@ func (n *Namespace) Destroy() error {
 
 	n.vmID.Stop()
 
+	// unmount
+	n.clearCCMount("")
+
 	// Stop all captures
 	n.captures.StopAll()
 	n.counter.Stop()
