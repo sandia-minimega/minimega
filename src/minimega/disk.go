@@ -159,12 +159,21 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		return err
 	}
 	log.Debug("temporary mount point: %v", mntDir)
+	defer func() {
+		if err := os.Remove(mntDir); err != nil {
+			log.Error("rm mount dir failed: %v", err)
+		}
+	}()
 
 	nbdPath, err := nbd.ConnectImage(dst)
 	if err != nil {
 		return err
 	}
-	defer diskInjectCleanup(mntDir, nbdPath)
+	defer func() {
+		if err := nbd.DisconnectDevice(nbdPath); err != nil {
+			log.Error("nbd disconnect failed: %v", err)
+		}
+	}()
 
 	path := nbdPath
 
@@ -242,6 +251,11 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 			return fmt.Errorf("%v: %v", out, err)
 		}
 	}
+	defer func() {
+		if err := syscall.Unmount(mntDir, 0); err != nil {
+			log.Error("unmount failed: %v", err)
+		}
+	}()
 
 	// copy files/folders into mntDir
 	for dst, src := range pairs {
@@ -287,24 +301,6 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 	}
 
 	return pairs, nil
-}
-
-// diskInjectCleanup handles unmounting, disconnecting nbd, and removing mount
-// directory after diskInject.
-func diskInjectCleanup(mntDir, nbdPath string) {
-	log.Info("cleaning up disk inject: %s %s", mntDir, nbdPath)
-
-	if err := syscall.Unmount(mntDir, 0); err != nil {
-		log.Error("unmount failed: %v", err)
-	}
-
-	if err := nbd.DisconnectDevice(nbdPath); err != nil {
-		log.Error("nbd disconnect failed: %v", err)
-	}
-
-	if err := os.Remove(mntDir); err != nil {
-		log.Error("rm mount dir failed: %v", err)
-	}
 }
 
 func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
