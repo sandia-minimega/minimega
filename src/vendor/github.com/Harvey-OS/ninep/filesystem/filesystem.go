@@ -6,9 +6,10 @@ package ufs
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
-	"net"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,11 +17,6 @@ import (
 	"time"
 
 	"github.com/Harvey-OS/ninep/protocol"
-)
-
-const (
-	DefaultIOunit = 8192
-	DefaultAddr   = ":5640"
 )
 
 type file struct {
@@ -33,30 +29,20 @@ type file struct {
 	oflow []byte
 }
 
-// FileServer defines parameters for running a file system and it implements
-// the protocol.NineServer interface.
 type FileServer struct {
-	// TCP address to listen on, default is DefaultAddr
-	Addr string
-
-	// RootPath to prefix on all file operations
-	RootPath string
-
-	// IOunit, default is DefaultIOunit
-	IOunit protocol.MaxSize
-
-	// Trace function for logging
-	Trace protocol.Tracer
-
-	// Debug server adds additional before and after tracing to file operations
-	// using Trace
-	Debug bool
-
-	mu        sync.Mutex
 	root      *file
-	versioned bool
-	files     map[protocol.FID]*file
+	rootPath  string
+	Versioned bool
+	IOunit    protocol.MaxSize
+
+	// mu guards below
+	mu    sync.Mutex
+	files map[protocol.FID]*file
+
+	trace protocol.Tracer
 }
+
+type ServerOpt func(*FileServer) error
 
 func stat(s string) (*protocol.Dir, protocol.QID, error) {
 	var q protocol.QID
@@ -72,6 +58,56 @@ func stat(s string) (*protocol.Dir, protocol.QID, error) {
 	return d, q, nil
 }
 
+func NewServer(opts ...ServerOpt) (*FileServer, error) {
+	s := &FileServer{
+		files: make(map[protocol.FID]*file),
+		trace: nologf,
+	}
+
+	for _, opt := range opts {
+		if err := opt(s); err != nil {
+			return nil, err
+		}
+	}
+
+	return s, nil
+}
+
+func Root(root string) ServerOpt {
+	return func(s *FileServer) error {
+		s.rootPath = root
+		return nil
+	}
+}
+
+func IOunit(size protocol.MaxSize) ServerOpt {
+	return func(s *FileServer) error {
+		s.IOunit = size
+		return nil
+	}
+}
+
+func Trace(tracer protocol.Tracer) ServerOpt {
+	return func(s *FileServer) error {
+		if tracer == nil {
+			return errors.New("tracer cannot be nil")
+		}
+		s.trace = tracer
+		return nil
+	}
+}
+
+// nologf does nothing and is the default trace function
+func nologf(format string, args ...interface{}) {}
+
+func (e *FileServer) Rversion(msize protocol.MaxSize, version string) (protocol.MaxSize, string, error) {
+	if version != "9P2000" {
+		return 0, "", fmt.Errorf("%v not supported; only 9P2000", version)
+	}
+	e.Versioned = true
+	return msize, version, nil
+}
+
 func (e *FileServer) getFile(fid protocol.FID) (*file, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -83,27 +119,13 @@ func (e *FileServer) getFile(fid protocol.FID) (*file, error) {
 	return f, nil
 }
 
-func (e *FileServer) logf(format string, args ...interface{}) {
-	if e.Trace != nil {
-		e.Trace(format, args...)
-	}
-}
-
-func (e *FileServer) Rversion(msize protocol.MaxSize, version string) (protocol.MaxSize, string, error) {
-	if version != "9P2000" {
-		return 0, "", fmt.Errorf("%v not supported; only 9P2000", version)
-	}
-	e.versioned = true
-	return msize, version, nil
-}
-
 func (e *FileServer) Rattach(fid protocol.FID, afid protocol.FID, uname string, aname string) (protocol.QID, error) {
 	if afid != protocol.NOFID {
 		return protocol.QID{}, fmt.Errorf("We don't do auth attach")
 	}
 	// There should be no .. or other such junk in the Aname. Clean it up anyway.
 	aname = path.Join("/", aname)
-	aname = path.Join(e.RootPath, aname)
+	aname = path.Join(e.rootPath, aname)
 	st, err := os.Stat(aname)
 	if err != nil {
 		return protocol.QID{}, err
@@ -145,26 +167,21 @@ func (e *FileServer) Rwalk(fid protocol.FID, newfid protocol.FID, paths []string
 		p = path.Join(p, paths[i])
 		st, err := os.Lstat(p)
 		if err != nil {
-			// From the RFC: If the first element cannot
-			// be walked for any reason, Rerror is
-			// returned. Otherwise, the walk will return an
-			// Rwalk message containing nwqid qids
-			// corresponding, in order, to the files that
-			// are visited by the nwqid successful
-			// elementwise walks; nwqid is therefore either
-			// nwname or the index of the first elementwise
-			// walk that failed. The value of nwqid cannot
-			// be zero unless nwname is zero. Also, nwqid
-			// will always be less than or equal to
-			// nwname. Only if it is equal, however, will
-			// newfid be affected, in which case newfid
-			// will represent the file reached by the final
-			// elementwise walk requested in the message.
+			// From the RFC: If the first element cannot be walked for any
+			// reason, Rerror is returned. Otherwise, the walk will return an
+			// Rwalk message containing nwqid qids corresponding, in order, to
+			// the files that are visited by the nwqid successful elementwise
+			// walks; nwqid is therefore either nwname or the index of the
+			// first elementwise walk that failed. The value of nwqid cannot be
+			// zero unless nwname is zero. Also, nwqid will always be less than
+			// or equal to nwname. Only if it is equal, however, will newfid be
+			// affected, in which case newfid will represent the file reached
+			// by the final elementwise walk requested in the message.
 			//
-			// to sum up: if any walks have succeeded, you
-			// return the QIDS for one more than the last successful walk
+			// to sum up: if any walks have succeeded, you return the QIDS for
+			// one more than the last successful walk
 			if i == 0 {
-				return nil, fmt.Errorf("does not exist")
+				return nil, fmt.Errorf("file does not exist")
 			}
 			// we only get here if i is > 0 and less than nwname,
 			// so the i should be safe.
@@ -200,7 +217,6 @@ func (e *FileServer) Ropen(fid protocol.FID, mode protocol.Mode) (protocol.QID, 
 
 	return f.QID, e.IOunit, nil
 }
-
 func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, mode protocol.Mode) (protocol.QID, protocol.MaxSize, error) {
 	f, err := e.getFile(fid)
 	if err != nil {
@@ -241,7 +257,6 @@ func (e *FileServer) Rcreate(fid protocol.FID, name string, perm protocol.Perm, 
 	f.file = of
 	return q, 8000, err
 }
-
 func (e *FileServer) Rclunk(fid protocol.FID) error {
 	_, err := e.clunk(fid)
 	return err
@@ -264,7 +279,6 @@ func (e *FileServer) Rstat(fid protocol.FID) ([]byte, error) {
 	protocol.Marshaldir(&b, *d)
 	return b.Bytes(), nil
 }
-
 func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 	var changed bool
 	f, err := e.getFile(fid)
@@ -312,7 +326,7 @@ func (e *FileServer) Rwstat(fid protocol.FID, b []byte) error {
 		// we will make it relative to root. This is a gigantic performance
 		// improvement in systems that allow it.
 		if filepath.IsAbs(dir.Name) {
-			newname = path.Join(e.RootPath, dir.Name)
+			newname = path.Join(e.rootPath, dir.Name)
 		}
 
 		// If to exists, and to is a directory, we can't do the
@@ -375,7 +389,7 @@ func (e *FileServer) clunk(fid protocol.FID) (*file, error) {
 	// All I can think of is to log it.
 	if f.file != nil {
 		if err := f.file.Close(); err != nil {
-			e.logf("Close of %v failed: %v", f.fullName, err)
+			log.Printf("Close of %v failed: %v", f.fullName, err)
 		}
 	}
 	return f, nil
@@ -467,85 +481,4 @@ func (e *FileServer) Rwrite(fid protocol.FID, o protocol.Offset, b []byte) (prot
 
 	n, err := f.file.WriteAt(b, int64(o))
 	return protocol.Count(n), err
-}
-
-// ListenAndServe starts a new Listener on e.Addr and then calls serve.
-func (e *FileServer) ListenAndServe() error {
-	addr := e.Addr
-	if addr == "" {
-		addr = DefaultAddr
-	}
-
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
-	return e.Serve(ln)
-}
-
-// Serve accepts incoming connections on the Listener and calls e.Accept on
-// each connection.
-func (e *FileServer) Serve(l net.Listener) error {
-	defer l.Close()
-
-	var tempDelay time.Duration // how long to sleep on accept failure
-
-	// from http.Server.Serve
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-				e.logf("ufs: Accept error: %v; retrying in %v", err, tempDelay)
-				time.Sleep(tempDelay)
-				continue
-			}
-			return err
-		}
-		tempDelay = 0
-
-		if err := e.Accept(conn); err != nil {
-			return err
-		}
-	}
-}
-
-// Accept creates a new protocol.Server to serve files to the connection.
-func (e *FileServer) Accept(conn io.ReadWriteCloser) error {
-	// initialize fields if haven't already
-	e.mu.Lock()
-	if e.files == nil {
-		e.files = make(map[protocol.FID]*file)
-	}
-
-	if e.IOunit == 0 {
-		e.IOunit = DefaultIOunit
-	}
-	e.mu.Unlock()
-
-	var s protocol.NineServer = e
-	if e.Debug {
-		s = &debugFileServer{e}
-	}
-
-	p, err := protocol.NewServer(s, func(p *protocol.Server) error {
-		p.FromNet, p.ToNet = conn, conn
-		p.Trace = e.Trace
-
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	p.Start()
-	return nil
 }

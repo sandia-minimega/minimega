@@ -3,8 +3,8 @@ package ufs
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path"
 	"strings"
@@ -18,7 +18,7 @@ func print(f string, args ...interface{}) {
 }
 
 func TestNew(t *testing.T) {
-	n, err := NewUFS()
+	n, err := NewServer()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,11 +63,10 @@ func TestMount(t *testing.T) {
 		}
 	}
 
-	sr, cw := io.Pipe()
-	cr, sw := io.Pipe()
+	p, p2 := net.Pipe()
 
 	c, err := protocol.NewClient(func(c *protocol.Client) error {
-		c.FromNet, c.ToNet = cr, cw
+		c.FromNet, c.ToNet = p, p
 		return nil
 	},
 		func(c *protocol.Client) error {
@@ -80,13 +79,17 @@ func TestMount(t *testing.T) {
 	}
 	t.Logf("Client is %v", c.String())
 
-	n, err := NewUFS(func(s *protocol.Server) error {
-		s.FromNet, s.ToNet = sr, sw
-		s.Trace = print //t.Logf
-		return nil
-	})
+	fs, err := NewServer()
 	if err != nil {
 		t.Fatal(err)
+	}
+	n, err := protocol.NewServer(fs, protocol.Trace(print))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := n.Accept(p2); err != nil {
+		t.Fatalf("Accept: want nil, got %v", err)
 	}
 
 	t.Logf("n is %v", n)

@@ -7,11 +7,10 @@ package protocol
 import (
 	"bytes"
 	"fmt"
-	"io"
+	"net"
 	"os"
 	"reflect"
 	"testing"
-
 )
 
 var (
@@ -20,6 +19,12 @@ var (
 
 func print(f string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, f+"\n", args...)
+}
+
+func newEcho() *echo {
+	return &echo{
+		qids: make(map[FID]QID),
+	}
 }
 
 // Two files, dotu was true.
@@ -308,10 +313,10 @@ func (e *echo) Rwrite(f FID, o Offset, b []byte) (Count, error) {
 	return -1, fmt.Errorf("Write: bad FID %v", f)
 }
 func TestTManyRPCs(t *testing.T) {
-	sr, cw := io.Pipe()
-	cr, sw := io.Pipe()
+	p, p2 := net.Pipe()
+
 	c, err := NewClient(func(c *Client) error {
-		c.FromNet, c.ToNet = cr, cw
+		c.FromNet, c.ToNet = p, p
 		return nil
 	},
 		func(c *Client) error {
@@ -324,22 +329,16 @@ func TestTManyRPCs(t *testing.T) {
 	}
 	t.Logf("Client is %v", c.String())
 
-	e := &echo{}
-	s, err := NewServer(e, func(s *Server) error {
-		s.FromNet, s.ToNet = sr, sw
-		s.Trace = print
-		return nil
-	})
-
+	e := newEcho()
+	s, err := NewServer(e, Trace(print))
 	if err != nil {
 		t.Fatalf("NewServer: want nil, got %v", err)
 	}
 
-	e.qids = make(map[FID]QID)
+	if err := s.Accept(p2); err != nil {
+		t.Fatalf("Accept: want nil, got %v", err)
+	}
 
-	t.Logf("Start the server")
-	s.Start()
-	t.Logf("started")
 	for i := 0; i < 256*1024; i++ {
 		_, _, err := c.CallTversion(8000, "9P2000")
 		if err != nil {
@@ -349,10 +348,10 @@ func TestTManyRPCs(t *testing.T) {
 }
 
 func TestTMessages(t *testing.T) {
-	sr, cw := io.Pipe()
-	cr, sw := io.Pipe()
+	p, p2 := net.Pipe()
+
 	c, err := NewClient(func(c *Client) error {
-		c.FromNet, c.ToNet = cr, cw
+		c.FromNet, c.ToNet = p, p
 		return nil
 	},
 		func(c *Client) error {
@@ -365,21 +364,16 @@ func TestTMessages(t *testing.T) {
 	}
 	t.Logf("Client is %v", c.String())
 
-	e := &echo{}
-	s, err := NewServer(e, func(s *Server) error {
-		s.FromNet, s.ToNet = sr, sw
-		s.Trace = print // t.Logf
-		s.NS = e
-		return nil
-	})
-
+	e := newEcho()
+	s, err := NewServer(e, Trace(print))
 	if err != nil {
 		t.Fatalf("NewServer: want nil, got %v", err)
 	}
 
-	e.qids = make(map[FID]QID)
+	if err := s.Accept(p2); err != nil {
+		t.Fatalf("Accept: want nil, got %v", err)
+	}
 
-	s.Start()
 	// If things really go to hell, change this to true.
 	if false {
 		m, v, err := c.CallTversion(8000, "9P2000")
@@ -389,12 +383,6 @@ func TestTMessages(t *testing.T) {
 		t.Logf("CallTversion: msize %v version %v", m, v)
 		t.Fatalf("Quit early")
 	}
-
-	t.Logf("Server is %v", s.String())
-	if _, err = c.CallTattach(0, 0, "", ""); err == nil {
-		t.Fatalf("CallTattach: want err, got nil")
-	}
-	t.Logf("CallTattach: wanted an error and got %v", err)
 
 	m, v, err := c.CallTversion(8000, "9p3000")
 	if err == nil {
@@ -493,11 +481,10 @@ func TestTMessages(t *testing.T) {
 }
 
 func BenchmarkNull(b *testing.B) {
+	p, p2 := net.Pipe()
 
-	sr, cw := io.Pipe()
-	cr, sw := io.Pipe()
 	c, err := NewClient(func(c *Client) error {
-		c.FromNet, c.ToNet = cr, cw
+		c.FromNet, c.ToNet = p, p
 		return nil
 	},
 		func(c *Client) error {
@@ -509,9 +496,8 @@ func BenchmarkNull(b *testing.B) {
 	}
 	b.Logf("Client is %v", c.String())
 
-	e := &echo{}
+	e := newEcho()
 	s, err := NewServer(e, func(s *Server) error {
-		s.FromNet, s.ToNet = sr, sw
 		s.NS = e
 		return nil
 	})
@@ -520,9 +506,10 @@ func BenchmarkNull(b *testing.B) {
 		b.Fatalf("NewServer: want nil, got %v", err)
 	}
 
-	e.qids = make(map[FID]QID)
+	if err := s.Accept(p2); err != nil {
+		b.Fatalf("Accept: want nil, got %v", err)
+	}
 
-	s.Start()
 	b.Logf("%d iterations", b.N)
 	for i := 0; i < b.N; i++ {
 		if _, err := c.CallTread(FID(2), 0, 5); err != nil {

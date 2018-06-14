@@ -13,26 +13,17 @@ import (
 	"runtime"
 
 	"github.com/Harvey-OS/ninep/filesystem"
+	"github.com/Harvey-OS/ninep/protocol"
 )
 
 var rootFS struct {
+	// embed
+	*protocol.Server
+
 	running bool
 
-	fs *ufs.FileServer
-
+	// active connection, set when running
 	remote, local net.Conn
-}
-
-func init() {
-	rootPath := "/"
-	if runtime.GOOS == "windows" {
-		rootPath = filepath.VolumeName(os.Getenv("SYSTEMROOT")) + "\\"
-	}
-
-	rootFS.fs = &ufs.FileServer{
-		RootPath: rootPath,
-		Trace:    log.Info,
-	}
 }
 
 // ufsMessage handles a message from the server and relays it to UFS
@@ -44,13 +35,39 @@ func ufsMessage(m *ron.Message) {
 			return
 		}
 
+		if rootFS.Server == nil {
+			log.Info("init rootFS")
+			root := "/"
+			if runtime.GOOS == "windows" {
+				// TODO: what if there is more that one volume?
+				root = filepath.VolumeName(os.Getenv("SYSTEMROOT")) + "\\"
+			}
+
+			fs, err := ufs.NewServer(ufs.Root(root), ufs.Trace(log.Debug))
+			if err != nil {
+				log.Error("unable to create file server: %v", err)
+				return
+			}
+
+			ps, err := protocol.NewServer(fs, protocol.Trace(log.Debug))
+			if err != nil {
+				log.Error("unable to create ninep server: %v", err)
+				return
+			}
+			rootFS.Server = ps
+
+			log.Info("init'd rootFS")
+		}
+
 		rootFS.running = true
 
 		rootFS.remote, rootFS.local = net.Pipe()
 
 		go ron.Trunk(rootFS.remote, client.UUID, ufsSendMessage)
 
-		if err := rootFS.fs.Accept(rootFS.local); err != nil {
+		log.Info("accepting tunneled connection")
+
+		if err := rootFS.Accept(rootFS.local); err != nil {
 			log.Error("ufs error: %v", err)
 			rootFS.running = false
 		}
