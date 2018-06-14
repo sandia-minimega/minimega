@@ -176,7 +176,6 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 
 	// decide whether to mount partition or raw disk
 	if partition != "none" {
-
 		// keep rereading partitions and waiting for them to show up for a bit
 		timeoutTime := time.Now().Add(5 * time.Second)
 		for i := 1; ; i++ {
@@ -338,7 +337,7 @@ func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 		return diskSnapshot(image, dst)
 	} else if c.BoolArgs["inject"] {
-		partition := "1"
+		var partition string
 
 		if strings.Contains(image, ":") {
 			parts := strings.Split(image, ":")
