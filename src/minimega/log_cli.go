@@ -5,12 +5,14 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -18,6 +20,8 @@ var (
 	logLevel log.Level
 	// file that we are currently logging to
 	logFile *os.File
+
+	logRing *log.Ring
 )
 
 var logCLIHandlers = []minicli.Handler{
@@ -47,6 +51,20 @@ Log to a file. To disable file logging, call "clear log file".`,
 			"log file [file]",
 		},
 		Call: wrapSimpleCLI(cliLogFile),
+	},
+	{ // log ring
+		HelpShort: "enable, disable, or dump log ring",
+		HelpLong: `
+The log ring contains recent log messages, if it is enabled. By default
+the ring is not enabled. When enabling it, the user can specify a size. The
+larger the size, the more memory the logs will consume. The log ring can be
+cleared by re-enabling it with the same (or different) size.
+
+To disable the log ring, call "clear log ring".`,
+		Patterns: []string{
+			"log ring [size]",
+		},
+		Call: wrapSimpleCLI(cliLogRing),
 	},
 	{ // log filter
 		HelpShort: "filter logging messages",
@@ -84,6 +102,7 @@ Resets state for logging. See "help log ..." for more information.`,
 			"clear log <stderr,>",
 			"clear log <filter,>",
 			"clear log <syslog,>",
+			"clear log <ring,>",
 		},
 		Call: wrapSimpleCLI(cliLogClear),
 	},
@@ -154,6 +173,34 @@ func cliLogFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	}
 
 	log.AddLogger("file", logFile, logLevel, false)
+	return nil
+}
+
+func cliLogRing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.StringArgs["size"] == "" {
+		// must want a log dump
+		if logRing == nil {
+			return errors.New("cannot dump log ring, not enabled")
+		}
+
+		resp.Response = strings.Join(logRing.Dump(), "")
+		return nil
+	}
+
+	// make sure they passed a valid size
+	size, err := strconv.Atoi(c.StringArgs["size"])
+	if err != nil {
+		return err
+	}
+
+	if logRing != nil {
+		log.Info("re-enabling log ring")
+
+		log.DelLogger("ring")
+	}
+
+	logRing = log.NewRing(size)
+	log.AddLogRing("ring", logRing, logLevel)
 	return nil
 }
 
@@ -239,6 +286,12 @@ func cliLogClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	if c.BoolArgs["stderr"] || len(c.BoolArgs) == 0 {
 		// Delete logger to stdout
 		log.DelLogger("stderr")
+	}
+
+	// Reset log ring if explicitly cleared or we're clearing everything
+	if c.BoolArgs["ring"] || len(c.BoolArgs) == 0 {
+		log.DelLogger("ring")
+		logRing = nil
 	}
 
 	if c.BoolArgs["filter"] || len(c.BoolArgs) == 0 {
