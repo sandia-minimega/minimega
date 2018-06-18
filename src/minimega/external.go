@@ -42,6 +42,7 @@ var externalDependencies = map[string]bool{
 	"blockdev":  true, // used in disk.go
 	"ovs-vsctl": true, // used in external.go
 	"taskset":   true, // used in optimize.go
+	"tar":       true, // used in cli.go
 }
 
 func init() {
