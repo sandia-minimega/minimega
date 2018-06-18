@@ -20,12 +20,14 @@ selected VM. Can also record the framebuffer for the specified VM so that a
 user can watch a video of interactions with the VM.
 
 If record is selected, a file will be created containing a record of mouse
-and keyboard actions by the user or of the framebuffer for the VM.`,
+and keyboard actions by the user or of the framebuffer for the VM.
+
+Note: recordings are written to the host where the VM is running.`,
 		Patterns: []string{
 			"vnc <record,> <kb,fb> <vm name> <filename>",
 			"vnc <stop,> <kb,fb> <vm name>",
 		},
-		Call:    wrapSimpleCLI(cliVNCRecord),
+		Call:    wrapVMTargetCLI(cliVNCRecord),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{
