@@ -61,7 +61,7 @@ below.
 			"vnc <getstep,> <vm name>",
 			"vnc <inject,> <vm name> <cmd>",
 		},
-		Call:    wrapBroadcastCLI(cliVNCPlay),
+		Call:    wrapVMTargetCLI(cliVNCPlay),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{
