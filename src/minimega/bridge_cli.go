@@ -90,9 +90,14 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 	{ // clear tap
 		HelpShort: "reset tap state",
 		HelpLong: `
-Reset state for taps. See "help tap" for more information.`,
+Reset state for taps. To delete individual taps, use "tap delete".
+
+"clear tap mirror" can be used to delete one or all mirrors. Mirrors are
+identified by the destination for the mirror since a source can have multiple
+mirrors. "clear tap" also deletes all mirrors.`,
 		Patterns: []string{
 			"clear tap",
+			"clear tap <mirror,> [name]",
 		},
 		Call: wrapSimpleCLI(cliTapClear),
 	},
@@ -106,7 +111,8 @@ to add interface bar to bridge foo:
 
 	bridge trunk foo bar
 
-To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
+To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For
+example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 
 	bridge tunnel vxlan, mega_bridge 10.0.0.1
 
@@ -204,7 +210,17 @@ func cliTapMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	return br.CreateMirror(c.StringArgs["src"], c.StringArgs["dst"])
+	src := c.StringArgs["src"]
+	dst := c.StringArgs["dst"]
+
+	if err := br.CreateMirror(src, dst); err != nil {
+		return err
+	}
+
+	// need lock?
+	ns.Mirrors[dst] = true
+
+	return nil
 }
 
 func cliTapDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -212,6 +228,13 @@ func cliTapDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 }
 
 func cliTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// always clear the mirrors, if we are only clearing the mirrors, return
+	// and don't clear any taps.
+	err := mirrorDelete(ns, c.StringArgs["name"])
+	if c.BoolArgs["mirror"] || err != nil {
+		return err
+	}
+
 	return hostTapDelete(ns, Wildcard)
 }
 
