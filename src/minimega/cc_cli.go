@@ -71,6 +71,13 @@ treated as tags:
 
 	cc filter foo=bar
 
+"cc mount" allows direct access to a guest's filesystem over the command and
+control connection. When given a VM uuid or name and a path, the VM's
+filesystem is mounted to the local machine at the provided path. "cc mount"
+without arguments displays the existing mounts. Users can use "clear cc mount"
+to unmount the filesystem of one or all VMs. This should be done before killing
+or stopping the VM ("clear namespace <name>" will handle this automatically).
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
