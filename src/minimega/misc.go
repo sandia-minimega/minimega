@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -181,6 +182,14 @@ func unescapeString(input []string) string {
 	}
 	log.Debug("unescapeString generated: %v", ret)
 	return strings.TrimSpace(ret)
+}
+
+func quoteIfSpace(s string) string {
+	if strings.IndexFunc(s, unicode.IsSpace) > -1 {
+		return strconv.Quote(s)
+	}
+
+	return s
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
