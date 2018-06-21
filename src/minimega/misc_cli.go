@@ -111,7 +111,7 @@ you can get without restarting minimega. Restarting minimega is preferable.`,
 		Patterns: []string{
 			"clear all",
 		},
-		Call: cliClearAll,
+		Call: wrapSimpleCLI(cliClearAll),
 	},
 }
 
@@ -292,7 +292,7 @@ func cliEcho(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
+func cliClearAll(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	all := []string{
 		// clear non-namespaced things (except history)
 		"clear deploy flags",
@@ -308,13 +308,15 @@ func cliClearAll(c *minicli.Command, respChan chan<- minicli.Responses) {
 		"clear history",
 	}
 
-	// LOCK: this is a CLI hander so we already hold cmdLock (can call
-	// runCommands instead of RunCommands).
+	var cmds []*minicli.Command
+
+	// LOCK: this is a CLI hander so we already hold the cmdLock.
 	for _, v := range all {
 		cmd := minicli.MustCompile(v)
 		// keep the original source
 		cmd.SetSource(c.Source)
-
-		forward(runCommands(cmd), respChan)
+		cmds = append(cmds, cmd)
 	}
+
+	return consume(runCommands(cmds...))
 }
