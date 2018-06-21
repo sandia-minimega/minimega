@@ -50,6 +50,9 @@ type Namespace struct {
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
 
+	// Names of mirrors associated with this namespace
+	Mirrors map[string]bool
+
 	// How to determine which host is least loaded
 	HostSortBy string
 
@@ -99,6 +102,7 @@ func NewNamespace(name string) *Namespace {
 		Name:       name,
 		Hosts:      map[string]bool{},
 		Taps:       map[string]bool{},
+		Mirrors:    map[string]bool{},
 		HostSortBy: "cpucommit",
 		VMs: VMs{
 			m: make(map[int]VM),
@@ -210,6 +214,9 @@ func (n *Namespace) Destroy() error {
 			return err
 		}
 	}
+
+	// We don't need to delete mirrors -- deleting the taps should clean those
+	// up automatically.
 
 	// Free up any VLANs associated with the namespace
 	vlans.Delete(n.Name, "")

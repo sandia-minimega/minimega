@@ -138,10 +138,15 @@ func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
 }
 
 // DestroyTap removes a tap from the bridge and marks it as defunct. See
-// `Bridge.ReapTaps` to clean up defunct taps.
+// `Bridge.ReapTaps` to clean up defunct taps. If the tap is a mirror, it
+// cleans up the mirror too.
 func (b *Bridge) DestroyTap(tap string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
+
+	if b.mirrors[tap] {
+		return b.destroyMirror(tap)
+	}
 
 	return b.destroyTap(tap)
 }

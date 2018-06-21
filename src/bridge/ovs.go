@@ -113,6 +113,90 @@ func ovsDelPort(bridge, tap string) error {
 	return nil
 }
 
+// ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
+// mirrors the entire bridge.
+func ovsAddMirror(bridge, src, dst string) error {
+	findPort := func(name, tap string) []string {
+		return []string{
+			"--",
+			"--id=@" + name,
+			"get",
+			"port",
+			tap,
+		}
+	}
+
+	args := findPort("dst", dst)
+
+	if src != "" {
+		args = append(args, findPort("src", src)...)
+	}
+
+	// start to creating the mirror, final command depends on src
+	args = append(args,
+		"--",
+		"--id=@m",
+		"create",
+		"mirror",
+		fmt.Sprintf("name=mirror-%v", dst),
+		"output-port=@dst",
+	)
+	if src != "" {
+		// mirror all traffic to/from src port
+		args = append(args,
+			"select-src-port=@src",
+			"select-dst-port=@src",
+		)
+	} else {
+		// mirror all ports
+		args = append(args,
+			"select-all=true",
+		)
+	}
+
+	// add mirror to bridge
+	args = append(args,
+		"--",
+		"add",
+		"bridge",
+		bridge,
+		"mirrors",
+		"@m",
+	)
+
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("add mirror failed: %v", err)
+	}
+
+	return nil
+}
+
+func ovsDelMirror(bridge, tap string) error {
+	// delete the mirror for this bridge
+	args := []string{
+		// get mirror ID by name, store in @m
+		"--",
+		"--id=@m",
+		"get",
+		"mirror",
+		fmt.Sprintf("mirror-%v", tap),
+
+		// remove mirror from bridge
+		"--",
+		"remove",
+		"bridge",
+		bridge,
+		"mirrors",
+		"@m",
+	}
+
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("delete mirror failed: %v", err)
+	}
+
+	return nil
+}
+
 // ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
 // error produced running the command.
 func ovsCmdWrapper(args []string) (string, error) {
