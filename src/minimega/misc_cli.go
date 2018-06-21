@@ -155,9 +155,10 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	resp := &minicli.Response{Host: hostname}
 
+	fname := c.StringArgs["file"]
 	check := c.BoolArgs["check"]
 
-	file, err := os.Open(c.StringArgs["file"])
+	file, err := os.Open(fname)
 	if err != nil {
 		resp.Error = err.Error()
 		respChan <- minicli.Responses{resp}
@@ -174,7 +175,11 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	scanner := bufio.NewScanner(file)
 
+	// line number
+	var line int
+
 	for scanner.Scan() {
+		line += 1
 		var cmd *minicli.Command
 
 		command := scanner.Text()
@@ -206,7 +211,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 
 	if err != nil {
-		resp.Error = err.Error()
+		resp.Error = fmt.Sprintf("%v:%v %v", filepath.Base(fname), line, err)
 		respChan <- minicli.Responses{resp}
 	}
 
