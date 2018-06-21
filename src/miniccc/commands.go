@@ -9,6 +9,7 @@ import (
 	"bytes"
 	log "minilog"
 	"os/exec"
+	"path/filepath"
 	"ron"
 	"strings"
 )
@@ -50,11 +51,27 @@ func processCommand(cmd *ron.Command) {
 	appendResponse(resp)
 }
 
+// lookPath wraps exec.LookPath to check $PATH and the files path
+func lookPath(file string) (string, error) {
+	path, err := exec.LookPath(file)
+	if err == nil {
+		return path, nil
+	}
+
+	// file contains a slash, shouldn't search files path
+	if strings.Contains(file, "/") {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	file = filepath.Join(*f_path, "files", file)
+	return exec.LookPath(file)
+}
+
 func runCommand(stdin, stdout, stderr string, command []string, background bool) (string, string) {
 	done := make(chan struct{})
 	var bufout, buferr bytes.Buffer
 
-	path, err := exec.LookPath(command[0])
+	path, err := lookPath(command[0])
 	if err != nil {
 		log.Errorln(err)
 		close(done)
