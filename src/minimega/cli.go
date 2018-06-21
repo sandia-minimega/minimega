@@ -510,6 +510,48 @@ func cliPreprocess(v string) (string, error) {
 			}
 
 			return "", err
+		case "tar":
+			log.Debug("tar preprocessor")
+
+			path := u.Opaque
+
+			if !filepath.IsAbs(u.Path) {
+				// not absolute -- try to fetch via meshage
+				v2, err := iomHelper(u.Opaque)
+				if err != nil {
+					return v, err
+				}
+				path = v2
+			}
+
+			// check to see how many things are in the top-level directory
+			out, err := processWrapper("tar", "--exclude=*/*", "-tf", path)
+			if err != nil {
+				return v, err
+			}
+
+			if strings.Count(out, "\n") != 1 {
+				return v, errors.New("unable to handle tar without a single top-level directory")
+			}
+
+			// remove trailing "\n"
+			out = out[:len(out)-1]
+
+			// check to see if we already extracted this tar
+			dst := filepath.Join(filepath.Dir(path), out)
+			if _, err := os.Stat(dst); err == nil {
+				return dst, nil
+			}
+
+			log.Debug("untar to %v", dst)
+
+			// do the extraction
+			_, err = processWrapper("tar", "-C", filepath.Dir(path), "-xf", path)
+			if err != nil {
+				return v, err
+			}
+
+			return dst, nil
 		}
 	}
 
