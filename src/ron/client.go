@@ -17,14 +17,6 @@ import (
 	"time"
 )
 
-const (
-	PIPE_NEW_READER = iota
-	PIPE_NEW_WRITER
-	PIPE_CLOSE_READER
-	PIPE_CLOSE_WRITER
-	PIPE_DATA
-)
-
 type Client struct {
 	UUID     string
 	Arch     string
@@ -80,6 +72,9 @@ type client struct {
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
+
+	ufsListener net.Listener
+	ufsConn     net.Conn
 }
 
 func (c *client) sendMessage(m *Message) error {

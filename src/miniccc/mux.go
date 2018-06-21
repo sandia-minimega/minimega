@@ -60,6 +60,8 @@ func mux() {
 			_, err = remote.Write(m.Tunnel)
 		case ron.MESSAGE_PIPE:
 			pipeMessage(&m)
+		case ron.MESSAGE_UFS:
+			ufsMessage(&m)
 		default:
 			err = fmt.Errorf("unknown message type: %v", m.Type)
 		}

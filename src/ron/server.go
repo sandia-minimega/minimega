@@ -712,6 +712,8 @@ func (s *Server) clientHandler(c *client) {
 				// this shouldn't be sent via the client...
 			case MESSAGE_PIPE:
 				c.pipeHandler(s.plumber, &m)
+			case MESSAGE_UFS:
+				c.ufsMessage(&m)
 			default:
 				err = fmt.Errorf("unknown message type: %v", m.Type)
 			}

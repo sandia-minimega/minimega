@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 	"vlans"
 )
@@ -72,6 +73,8 @@ type Namespace struct {
 	ccServer *ron.Server
 	ccFilter *ron.Filter
 	ccPrefix string
+
+	ccMounts map[string]ccMount
 }
 
 type NamespaceInfo struct {
@@ -115,6 +118,7 @@ func NewNamespace(name string) *Namespace {
 		},
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
+		ccMounts:      make(map[string]ccMount),
 	}
 
 	if name == DefaultNamespace {
@@ -171,6 +175,9 @@ func (n *Namespace) Destroy() error {
 	}
 
 	n.vmID.Stop()
+
+	// unmount
+	n.clearCCMount("")
 
 	// Stop all captures
 	n.captures.StopAll()
@@ -568,6 +575,39 @@ func (n *Namespace) Snapshot(dir string) error {
 		}
 
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
+	}
+
+	return nil
+}
+
+func (ns *Namespace) clearCCMount(s string) error {
+	for uuid, mnt := range ns.ccMounts {
+		switch s {
+		case "", uuid, mnt.Name, mnt.Path:
+			// match
+		default:
+			continue
+		}
+
+		if mnt.Path != "" {
+			if err := syscall.Unmount(mnt.Path, 0); err != nil {
+				return err
+			}
+		}
+
+		vm := ns.VMs.FindVM(uuid)
+		if vm == nil {
+			// VM was mounted from remote host
+			delete(ns.ccMounts, uuid)
+			continue
+		}
+
+		// VM is running locally
+		if err := ns.ccServer.DisconnectUFS(uuid); err != nil {
+			return err
+		}
+
+		delete(ns.ccMounts, uuid)
 	}
 
 	return nil
