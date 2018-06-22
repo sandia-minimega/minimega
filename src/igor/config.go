@@ -62,6 +62,11 @@ type Config struct {
 	NodeLimit int
 	TimeLimit int
 
+	// ExtendWithin is the number of minutes before the end of a reservation
+	// that it can be extended. For example, 24*60 would mean that the
+	// reservation can be extended within 24 hours of its expiration.
+	ExtendWithin int
+
 	// ConcurrencyLimit is the maximum number of parallel commands igor
 	// executes for cobbler and power management.
 	ConcurrencyLimit uint

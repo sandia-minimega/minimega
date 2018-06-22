@@ -201,9 +201,9 @@ func runSub(cmd *Command, args []string) {
 			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
 		}
 	}
-	if user.Username != "root" && igorConfig.TimeLimit > 0 {
-		if duration > igorConfig.TimeLimit {
-			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
+	if user.Username != "root" {
+		if err := checkTimeLimit(len(nodes), duration); err != nil {
+			log.Fatalln(err)
 		}
 	}
 
