@@ -94,8 +94,8 @@ func runExtend(cmd *Command, args []string) {
 
 			for _, idx := range nodes {
 				// Check if each node is free on the Schedule
-				if !isFree(Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
-					log.Fatal("Cannot extend reservation due to conflict")
+				if !isFree(Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes, idx, 1) {
+					log.Fatal("Cannot extend reservation due to conflict with another reservation")
 				} else {
 					Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
 				}
