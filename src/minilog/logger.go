@@ -74,7 +74,13 @@ func (l *minilogger) epilogue() string {
 }
 
 func (l *minilogger) log(level Level, name, format string, arg ...interface{}) {
-	l.logln(level, name, fmt.Sprintf(format, arg...))
+	msg := l.prologue(level, name) + fmt.Sprintf(format, arg...) + l.epilogue()
+	for _, f := range l.filters {
+		if strings.Contains(msg, f) {
+			return
+		}
+	}
+	l.Println(msg)
 }
 
 func (l *minilogger) logln(level Level, name string, arg ...interface{}) {
