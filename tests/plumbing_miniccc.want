@@ -1,0 +1,29 @@
+## # Stand up two VMs, foo and bar
+## vm config filesystem $images/minicccfs
+## vm config hostname foo
+## vm launch container foo
+## vm config hostname bar
+## vm launch container bar
+## vm start foo
+## vm start bar
+
+## # Give sufficient build time
+## shell sleep 5s
+
+## # Set up a cat pipeline on bar from foopipe to barpipe (both named pipes)
+## cc filter hostname=bar
+## cc background stdin=foopipe stdout=barpipe cat
+
+## shell sleep 5s
+
+## # Send a message from foo through foopipe
+## cc filter hostname=foo
+## cc exec stdout=foopipe echo "hello, world"
+
+## shell sleep 5s
+
+## # Verify that barpipe received the message from foopipe
+## pipe
+name    | mode | readers | writers | via | last message | message count
+barpipe | all  | 0       | 1       |     | hello, world | 1
+foopipe | all  | 1       | 0       |     | hello, world | 1
