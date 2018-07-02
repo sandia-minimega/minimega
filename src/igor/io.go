@@ -48,7 +48,8 @@ func writeData(f *os.File) {
 	}
 
 	// TODO: we should remove any leftover tmpdata files
-	tmp, err := ioutil.TempFile(igorConfig.TFTPRoot, "tmpdata")
+	tpath := filepath.Join(igorConfig.TFTPRoot, "igor")
+	tmp, err := ioutil.TempFile(tpath, "tmpdata")
 	if err != nil {
 		log.Fatal("unable to create tmp file: %v", err)
 	}
