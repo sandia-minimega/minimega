@@ -141,6 +141,8 @@
     }, o);
 
     if (!o.canvas) this.props.canvas = document.createElement('canvas');
+    if (!o.width) this.props.width = this.props.canvas.clientWidth;
+    if (!o.height) this.props.height = this.props.canvas.clientHeight;
     this.canvas = this.props.canvas;
 
     var webGL = this._getWebGL();
@@ -153,6 +155,9 @@
     // Renderer and view
     this.renderer =  webGL ? new WebGLRenderer(this.props) : new CanvasRenderer(this.props);
     this.rendered = false;
+
+    // Initialize sizes
+    this.resize(this.props.width, this.props.height);
 
     // Sprite array
     this.links = [];
@@ -216,18 +221,12 @@
     * grapher.off
     * ------------------
     * 
-    * Remove a listener from an event, or all listeners from an event if fn is not specified.
+    * Remove a listener from an event.
     */
   Grapher.prototype.off = function (event, fn) {
-    var removeHandler = u.bind(function (fn) {
-      var i = u.indexOf(this.handlers[event], fn);
-      if (i > -1) this.handlers[event].splice(i, 1);
-      this.canvas.removeEventListener(event, fn, false);
-    }, this);
-
-    if (fn && this.handlers[event]) removeHandler(fn);
-    else if (u.isUndefined(fn) && this.handlers[event]) u.each(this.handlers[event], removeHandler);
-
+    var i = u.indexOf(this.handlers[event], fn);
+    if (i > -1) this.handlers[event].splice(i, 1);
+    this.canvas.removeEventListener(event, fn, false);
     return this;
   };
 
@@ -402,6 +401,9 @@
     * Resize the grapher view.
     */
   Grapher.prototype.resize = function (width, height) {
+    this.props.width = width;
+    this.props.height = height;
+
     this.renderer.resize(width, height);
     return this;
   };
@@ -413,8 +415,8 @@
     * Specify or retrieve the width.
     */
   Grapher.prototype.width = function (width) {
-    if (u.isUndefined(width)) return this.canvas.clientWidth;
-    this.resize(width, null);
+    if (u.isUndefined(width)) return this.props.width;
+    this.resize(width, this.props.height);
     return this;
   };
 
@@ -425,8 +427,8 @@
     * Specify or retrieve the height.
     */
   Grapher.prototype.height = function (height) {
-    if (u.isUndefined(height)) return this.canvas.clientHeight;
-    this.resize(null, height);
+    if (u.isUndefined(height)) return this.props.height;
+    this.resize(this.props.width, height);
     return this;
   };
 
@@ -715,8 +717,8 @@
 
   var WebGLRenderer = Renderer.extend({
     init: function (o) {
-      this.initGL(o.webGL);
       this._super(o);
+      this.initGL(o.webGL);
 
       this.NODE_ATTRIBUTES = 6;
       this.LINKS_ATTRIBUTES = 3;
@@ -724,6 +726,7 @@
 
     initGL: function (gl) {
       this.gl = gl;
+      this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
       this.linksProgram = this.initShaders(LinkVertexShaderSource, LinkFragmentShaderSource);
       this.nodesProgram = this.initShaders(NodeVertexShaderSource, NodeFragmentShaderSource);
@@ -731,7 +734,7 @@
       this.gl.linkProgram(this.linksProgram);
       this.gl.linkProgram(this.nodesProgram);
 
-      this.gl.blendFuncSeparate(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA, this.gl.ONE, this.gl.ONE_MINUS_SRC_ALPHA);
+      this.gl.blendFunc(this.gl.SRC_ALPHA, this.gl.ONE_MINUS_SRC_ALPHA);
       this.gl.enable(this.gl.BLEND);
     },
 
@@ -758,8 +761,7 @@
         var node = this.nodeObjects[i];
         var cx = this.transformX(node.x) * this.resolution;
         var cy = this.transformY(node.y) * this.resolution;
-        // adding one px to keep shader area big enough for antialiasing pixesls
-        var r = node.r * Math.abs(this.scale * this.resolution) + 1;
+        var r = node.r * Math.abs(this.scale * this.resolution);
         var color = node.color;
 
 
@@ -809,13 +811,10 @@
 
     resize: function (width, height) {
       this._super(width, height);
-      this.gl.viewport(0, 0, this.gl.drawingBufferWidth, this.gl.drawingBufferHeight);
+      this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     },
 
     render: function () {
-      this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-
-      this.resize();
       this.updateNodesBuffer();
       this.updateLinksBuffer();
       this.renderLinks(); // links have to be rendered first because of blending;
@@ -895,10 +894,10 @@ module.exports = 'uniform vec2 u_resolution;\nattribute vec2 a_position;\nattrib
 module.exports = 'precision mediump float;\nvarying vec4 color;\nvoid main() {\n  gl_FragColor = color;\n}\n';
 }, {}],
 10: [function(require, module, exports) {
-module.exports = 'uniform vec2 u_resolution;\nattribute vec2 a_position;\nattribute float a_color;\nattribute vec2 a_center;\nattribute float a_radius;\nvarying vec3 rgb;\nvarying vec2 center;\nvarying vec2 resolution;\nvarying float radius;\nvoid main() {\n  vec2 clipspace = a_position / u_resolution * 2.0 - 1.0;\n  gl_Position = vec4(clipspace * vec2(1, -1), 0, 1);\n  float c = a_color;\n  rgb.b = mod(c, 256.0); c = floor(c / 256.0);\n  rgb.g = mod(c, 256.0); c = floor(c / 256.0);\n  rgb.r = mod(c, 256.0); c = floor(c / 256.0); rgb /= 255.0;\n  radius = a_radius - 1.0 ;\n  center = a_center;\n  resolution = u_resolution;\n}\n';
+module.exports = 'uniform vec2 u_resolution;\nattribute vec2 a_position;\nattribute float a_color;\nattribute vec2 a_center;\nattribute float a_radius;\nvarying vec4 color;\nvarying vec2 center;\nvarying vec2 resolution;\nvarying float radius;\nvoid main() {\n  vec2 clipspace = a_position / u_resolution * 2.0 - 1.0;\n  gl_Position = vec4(clipspace * vec2(1, -1), 0, 1);\n  float c = a_color;\n  color.b = mod(c, 256.0); c = floor(c / 256.0);\n  color.g = mod(c, 256.0); c = floor(c / 256.0);\n  color.r = mod(c, 256.0); c = floor(c / 256.0); color /= 255.0;\n  color.a = 1.0;\n  radius = a_radius;\n  center = a_center;\n  resolution = u_resolution;\n}\n';
 }, {}],
 11: [function(require, module, exports) {
-module.exports = 'precision mediump float;\nvarying vec3 rgb;\nvarying vec2 center;\nvarying vec2 resolution;\nvarying float radius;\nvoid main() {\n  vec4 color0 = vec4(0.0, 0.0, 0.0, 0.0);\n  float x = gl_FragCoord.x;\n  float y = resolution[1] - gl_FragCoord.y;\n  float dx = center[0] - x;\n  float dy = center[1] - y;\n  float distance = sqrt(dx*dx + dy*dy);\n  float diff = distance - radius;\n  if ( diff < 0.0 ) \n    gl_FragColor = vec4(rgb, 1.0);\n  else if ( diff >= 0.0 && diff <= 1.0 )\n    gl_FragColor = vec4(rgb, 1.0 - diff);\n  else \n    gl_FragColor = color0;\n}\n';
+module.exports = 'precision mediump float;\nvarying vec4 color;\nvarying vec2 center;\nvarying vec2 resolution;\nvarying float radius;\nvoid main() {\n  vec4 color0 = vec4(0.0, 0.0, 0.0, 0.0);\n  float x = gl_FragCoord.x;\n  float y = resolution[1] - gl_FragCoord.y;\n  float dx = center[0] - x;\n  float dy = center[1] - y;\n  float distance = sqrt(dx*dx + dy*dy);\n  if ( distance < radius )\n    gl_FragColor = color;\n  else \n    gl_FragColor = color0;\n}\n';
 }, {}],
 12: [function(require, module, exports) {
 ;(function () {
@@ -916,8 +915,6 @@ module.exports = 'precision mediump float;\nvarying vec3 rgb;\nvarying vec2 cent
       this.resolution = o.resolution || 1;
       this.scale = o.scale;
       this.translate = o.translate;
-
-      this.resize();
     },
     setNodes: function (nodes) { this.nodeObjects = nodes; },
     setLinks: function (links) { this.linkObjects = links; },
@@ -928,11 +925,11 @@ module.exports = 'precision mediump float;\nvarying vec3 rgb;\nvarying vec2 cent
     untransformX: function (x) { return (x - this.translate[0]) / this.scale; },
     untransformY: function (y) { return (y - this.translate[1]) / this.scale; },
     resize: function (width, height) {
-      var displayWidth  = (width || this.canvas.clientWidth) * this.resolution;
-      var displayHeight = (height || this.canvas.clientHeight) * this.resolution;
+      var displayWidth  = width * this.resolution;
+      var displayHeight = height * this.resolution;
 
-      if (this.canvas.width != displayWidth) this.canvas.width  = displayWidth;
-      if (this.canvas.height != displayHeight) this.canvas.height = displayHeight;
+      this.canvas.width  = displayWidth;
+      this.canvas.height = displayHeight;
     }
   };
 
@@ -1000,12 +997,12 @@ module.exports = 'precision mediump float;\nvarying vec3 rgb;\nvarying vec2 cent
   var CanvasRenderer = Renderer.extend({
     init: function (o) {
       this._super(o);
+
       this.context = this.canvas.getContext('2d');
     },
 
     render: function () {
-      this.resize();
-      this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.context.clearRect( 0 , 0 , this.canvas.width, this.canvas.height );
       this.renderLinks();
       this.renderNodes();
     },
@@ -1308,7 +1305,7 @@ function sortedIndex (arr, n) {
 
   while (min < max) {
     var mid = min + max >>> 1;
-    if (n < arr[mid]) max = mid;
+    if (n < mid) max = mid;
     else min = mid + 1;
   }
 
