@@ -991,7 +991,7 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config hostname %v\n", v.Hostname)
 	}
 	if len(v.Init) > 0 {
-		fmt.Fprintf(w, "vm config init %v\n", v.Init)
+		fmt.Fprintf(w, "vm config init %v\n", quoteJoin(v.Init, " "))
 	}
 	if v.Preinit != "" {
 		fmt.Fprintf(w, "vm config preinit %v\n", v.Preinit)
@@ -1130,13 +1130,13 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
 	}
 	if len(v.Append) > 0 {
-		fmt.Fprintf(w, "vm config append %v\n", v.Append)
+		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
 	}
 	if len(v.DiskPaths) > 0 {
-		fmt.Fprintf(w, "vm config disk %v\n", v.DiskPaths)
+		fmt.Fprintf(w, "vm config disk %v\n", quoteJoin(v.DiskPaths, " "))
 	}
 	if len(v.QemuAppend) > 0 {
-		fmt.Fprintf(w, "vm config qemu-append %v\n", v.QemuAppend)
+		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
 	if err := v.QemuOverride.WriteConfig(w); err != nil {
 		return err
