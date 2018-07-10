@@ -156,32 +156,19 @@ func runShow(_ *Command, _ []string) {
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
-	namePad := ""
-	padding := maxResNameLength - 4
-	if padding > 0 {
-		for i := 0; i < padding; i++ {
-			namePad += " "
-		}
-	}
-
+	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", namePad, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
+	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
 	downrange, _ := rnge.UnsplitRange(downNodes)
-	name := fmt.Sprint(BgRed + "DOWN" + namePad + Reset)
+	name := BgRed + fmt.Sprintf(nameFmt, "DOWN") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
 	w.Flush()
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		resName := r.ResName
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		padding := maxResNameLength - len(r.ResName)
-		if padding > 0 {
-			for i := 0; i < padding; i++ {
-				resName += " "
-			}
-		}
-		name = fmt.Sprint(colorize(i, resName))
+		name = colorize(i, fmt.Sprintf(nameFmt, resName))
 		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 		w.Flush()
 	}
