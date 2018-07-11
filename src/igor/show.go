@@ -141,8 +141,12 @@ func runShow(_ *Command, _ []string) {
 
 	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
+	maxResNameLength := 0
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
+		if maxResNameLength < len(r.ResName) {
+			maxResNameLength = len(r.ResName)
+		}
 	}
 	sort.Sort(StartSorter(resarray))
 
@@ -151,21 +155,21 @@ func runShow(_ *Command, _ []string) {
 	printShelves(nodes, resarray)
 
 	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
-
+	w.Init(os.Stdout, 15, 8, 0, '\t', 0)
+	nameFmt := "%" + strconv.Itoa(maxResNameLength+1) + "v"
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
+	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
 	w.Flush()
 	downrange, _ := rnge.UnsplitRange(downNodes)
-	fmt.Print(BgRed + "DOWN" + Reset)
-	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
+	name := BgRed + fmt.Sprintf(nameFmt, "DOWN") + Reset
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
 	w.Flush()
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		fmt.Print(colorize(i, r.ResName))
-		fmt.Fprintln(w, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
+		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
+		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 		w.Flush()
 	}
 	w.Flush()
