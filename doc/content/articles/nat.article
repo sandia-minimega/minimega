@@ -1,0 +1,45 @@
+Connecting to the Internet
+
+The minimega authors
+3 July 2018
+
+* Introduction
+
+It is sometimes useful to connect the experiment network to the Internet to
+install software or access external resources. This article describes the
+simple case of connecting a single VM to the Internet. With minor changes, this
+technique can also be used to connect an entire experiment to the Internet if
+the single VM acts as a router.
+
+* Single VM
+
+The VM must be configured with at least one network interface:
+
+    vm config net LAN
+
+To connect this interface to the Internet, we setup a NAT on the host machine
+by creating a tap:
+
+    tap create LAN ip 10.0.0.1/24 nat0
+
+Enabling IP forwarding on the host machine:
+
+    bash$ sysctl -w net.ipv4.ip_forward=1
+
+And configuring `iptables` to enable the NAT on the host machine:
+
+    bash$ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+    bash$ iptables -A INPUT -i nat0 -j ACCEPT
+    bash$ iptables -A INPUT -i eth0 -m state --state ESTABLISHED,RELATED -j ACCEPT
+    bash$ iptables -A OUTPUT -j ACCEPT
+
+You may need to change eth0 to match the interface on the host machine with
+Internet access.
+
+On the VM, we would then configure a static IP of 10.0.0.2/24, using 10.0.0.1
+as the default gateway. On Linux this can be achieved with the following:
+
+    ip addr add 10.0.0.2/24 dev eth0
+    ip route add default via 10.0.0.1
+
+You may also need to configure DNS on the VM.
