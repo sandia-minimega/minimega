@@ -156,7 +156,7 @@ func runShow(_ *Command, _ []string) {
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 15, 8, 0, '\t', 0)
-	nameFmt := "%" + strconv.Itoa(maxResNameLength + 1) + "v"
+	nameFmt := "%" + strconv.Itoa(maxResNameLength+1) + "v"
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
