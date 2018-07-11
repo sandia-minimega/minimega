@@ -184,12 +184,20 @@ func unescapeString(input []string) string {
 	return strings.TrimSpace(ret)
 }
 
-func quoteIfSpace(s string) string {
-	if strings.IndexFunc(s, unicode.IsSpace) > -1 {
-		return strconv.Quote(s)
+// quoteJoin joins elements from s with sep, quoting any element containing a
+// space.
+func quoteJoin(s []string, sep string) string {
+	s2 := make([]string, len(s))
+
+	for i := range s {
+		if strings.IndexFunc(s[i], unicode.IsSpace) > -1 {
+			s2[i] = strconv.Quote(s[i])
+		} else {
+			s2[i] = s[i]
+		}
 	}
 
-	return s
+	return strings.Join(s2, sep)
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
