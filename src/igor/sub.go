@@ -202,7 +202,13 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 	if user.Username != "root" {
-		if err := checkTimeLimit(len(nodes), duration); err != nil {
+		// nodes is only set if using subW
+		n := len(nodes)
+		if subN > 0 {
+			// must be using subN
+			n = subN
+		}
+		if err := checkTimeLimit(n, duration); err != nil {
 			log.Fatalln(err)
 		}
 	}
