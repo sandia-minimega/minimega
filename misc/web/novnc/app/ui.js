@@ -775,6 +775,9 @@ var UI = {
 
     // Read form control compatible setting from cookie
     getSetting: function(name) {
+        if(name == "path") {
+             return document.getElementById('noVNC_setting_' + name).value;
+        }
         var ctrl = document.getElementById('noVNC_setting_' + name);
         var val = WebUtil.readSetting(name);
         if (typeof val !== 'undefined' && val !== null && ctrl.type === 'checkbox') {
