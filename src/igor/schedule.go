@@ -1,8 +1,13 @@
+// Copyright (2013) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package main
 
 import (
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	log "minilog"
 	"net"
@@ -24,6 +29,26 @@ func checkValidNodeRange(nodes []string) bool {
 		return true
 	}
 	return !(indexes[len(indexes)-1] > igorConfig.End-1 || indexes[0] < igorConfig.Start-1)
+}
+
+func checkTimeLimit(nodes, duration int) error {
+	// no time limit in the config
+	if igorConfig.TimeLimit <= 0 {
+		return nil
+	}
+
+	max := igorConfig.TimeLimit
+	if nodes > 1 {
+		// compute the max reservation length for this many nodes, rounding up
+		// to the nearest minute.
+		max = int(float64(max)/math.Log2(float64(nodes)) + 0.5)
+	}
+
+	if duration > max {
+		return fmt.Errorf("max allowable duration for %v nodes is %v minutes", nodes, max)
+	}
+
+	return nil
 }
 
 // Returns the node numbers within the given array of nodes of all contiguous sets of '0' entries
