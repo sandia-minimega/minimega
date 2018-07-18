@@ -13,7 +13,9 @@ import (
 	"math/rand"
 	log "minilog"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -197,6 +199,15 @@ func main() {
 			log.Fatal("failed to create logfile %v: %v", igorConfig.LogFile, err)
 		}
 		log.AddLogger("file", logfile, log.INFO, false)
+	}
+
+	// Make sure that we are running with effective UID of igor. This ensures
+	// that we write files that we can read later.
+	u, err := user.LookupId(strconv.Itoa(os.Geteuid()))
+	if err != nil {
+		log.Fatal("unable to get effective uid: %v", err)
+	} else if u.Username != "igor" {
+		log.Fatal("effective uid must be igor and not %v", u.Username)
 	}
 
 	// We open and lock the lock file before trying to open the data file
