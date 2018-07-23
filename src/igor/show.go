@@ -21,41 +21,41 @@ import (
 
 // Some color constants for output
 const (
-	Reset      = "\x1b[0m"
-	Bright     = "\x1b[1m"
-	Dim        = "\x1b[2m"
-	Underscore = "\x1b[4m"
-	Blink      = "\x1b[5m"
-	Reverse    = "\x1b[7m"
-	Hidden     = "\x1b[8m"
+	Reset      = "\x1b[0000m"
+	Bright     = "\x1b[0001m"
+	Dim        = "\x1b[0002m"
+	Underscore = "\x1b[0004m"
+	Blink      = "\x1b[0005m"
+	Reverse    = "\x1b[0007m"
+	Hidden     = "\x1b[0008m"
 
-	FgBlack   = "\x1b[30m"
-	FgRed     = "\x1b[31m"
-	FgGreen   = "\x1b[32m"
-	FgYellow  = "\x1b[33m"
-	FgBlue    = "\x1b[34m"
-	FgMagenta = "\x1b[35m"
-	FgCyan    = "\x1b[36m"
-	FgWhite   = "\x1b[37m"
+	FgBlack   = "\x1b[0030m"
+	FgRed     = "\x1b[0031m"
+	FgGreen   = "\x1b[0032m"
+	FgYellow  = "\x1b[0033m"
+	FgBlue    = "\x1b[0034m"
+	FgMagenta = "\x1b[0035m"
+	FgCyan    = "\x1b[0036m"
+	FgWhite   = "\x1b[0037m"
 
-	FgLightWhite = "\x1b[97m"
+	FgLightWhite = "\x1b[0097m"
 
-	BgBlack         = "\x1b[40m"
-	BgRed           = "\x1b[41m"
-	BgGreen         = "\x1b[42m"
-	BgYellow        = "\x1b[43m"
-	BgBlue          = "\x1b[44m"
-	BgMagenta       = "\x1b[45m"
-	BgCyan          = "\x1b[46m"
-	BgWhite         = "\x1b[47m"
-	BgBrightBlack   = "\x1b[100m"
-	BgBrightRed     = "\x1b[101m"
-	BgBrightGreen   = "\x1b[102m"
-	BgBrightYellow  = "\x1b[103m"
-	BgBrightBlue    = "\x1b[104m"
-	BgBrightMagenta = "\x1b[105m"
-	BgBrightCyan    = "\x1b[106m"
-	BgBrightWhite   = "\x1b[107m"
+	BgBlack         = "\x1b[0040m"
+	BgRed           = "\x1b[0041m"
+	BgGreen         = "\x1b[0042m"
+	BgYellow        = "\x1b[0043m"
+	BgBlue          = "\x1b[0044m"
+	BgMagenta       = "\x1b[0045m"
+	BgCyan          = "\x1b[0046m"
+	BgWhite         = "\x1b[0047m"
+	BgBrightBlack   = "\x1b[0100m"
+	BgBrightRed     = "\x1b[0101m"
+	BgBrightGreen   = "\x1b[0102m"
+	BgBrightYellow  = "\x1b[0103m"
+	BgBrightBlue    = "\x1b[0104m"
+	BgBrightMagenta = "\x1b[0105m"
+	BgBrightCyan    = "\x1b[0106m"
+	BgBrightWhite   = "\x1b[0107m"
 )
 
 var cmdShow = &Command{
@@ -156,7 +156,7 @@ func runShow(_ *Command, _ []string) {
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 15, 8, 0, '\t', 0)
-	nameFmt := "%" + strconv.Itoa(maxResNameLength+1) + "v"
+	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
