@@ -16,11 +16,11 @@ import (
 	"math/rand"
 	"minicli"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -28,7 +28,6 @@ import (
 	"unicode"
 	"vlans"
 
-	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
 	"github.com/nfnt/resize"
 )
@@ -39,14 +38,6 @@ type errSlice []error
 // number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
 type loggingMutex struct {
 	sync.Mutex // embed
-}
-
-var validMACPrefix [][3]byte
-
-func init() {
-	for k, _ := range macs.ValidMACPrefixMap {
-		validMACPrefix = append(validMACPrefix, k)
-	}
 }
 
 // makeErrSlice turns a slice of errors into an errSlice which implements the
@@ -123,21 +114,6 @@ func randomMac() string {
 	return mac
 }
 
-func isMac(mac string) bool {
-	_, err := net.ParseMAC(mac)
-	return err == nil
-}
-
-func allocatedMac(mac string) bool {
-	hw, err := net.ParseMAC(mac)
-	if err != nil {
-		return false
-	}
-
-	_, allocated := macs.ValidMACPrefixMap[[3]byte{hw[0], hw[1], hw[2]}]
-	return allocated
-}
-
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
 // 	Example: a b "c d"
@@ -206,6 +182,22 @@ func unescapeString(input []string) string {
 	}
 	log.Debug("unescapeString generated: %v", ret)
 	return strings.TrimSpace(ret)
+}
+
+// quoteJoin joins elements from s with sep, quoting any element containing a
+// space.
+func quoteJoin(s []string, sep string) string {
+	s2 := make([]string, len(s))
+
+	for i := range s {
+		if strings.IndexFunc(s[i], unicode.IsSpace) > -1 {
+			s2[i] = strconv.Quote(s[i])
+		} else {
+			s2[i] = s[i]
+		}
+	}
+
+	return strings.Join(s2, sep)
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
@@ -288,107 +280,33 @@ func marshal(v interface{}) string {
 	return string(b)
 }
 
-// processVMNet processes the input specifying the bridge, vlan, and mac for
-// one interface to a VM and updates the vm config accordingly. This takes a
-// bit of parsing, because the entry can be in a few forms:
-// 	vlan
-//
-//	vlan,mac
-//	bridge,vlan
-//	vlan,driver
-//
-//	bridge,vlan,mac
-//	vlan,mac,driver
-//	bridge,vlan,driver
-//
-//	bridge,vlan,mac,driver
-// If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(namespace, spec string) (res NetConfig, err error) {
-	// example: my_bridge,100,00:00:00:00:00:00
-	f := strings.Split(spec, ",")
-
-	var b, v, m, d string
-	switch len(f) {
-	case 1:
-		v = f[0]
-	case 2:
-		if isMac(f[1]) {
-			// vlan, mac
-			v, m = f[0], f[1]
-		} else if isNetworkDriver(f[1]) {
-			// vlan, driver
-			v, d = f[0], f[1]
-		} else {
-			// bridge, vlan
-			b, v = f[0], f[1]
-		}
-	case 3:
-		if isMac(f[2]) {
-			// bridge, vlan, mac
-			b, v, m = f[0], f[1], f[2]
-		} else if isMac(f[1]) {
-			// vlan, mac, driver
-			v, m, d = f[0], f[1], f[2]
-		} else {
-			// bridge, vlan, driver
-			b, v, d = f[0], f[1], f[2]
-		}
-	case 4:
-		b, v, m, d = f[0], f[1], f[2], f[3]
-	default:
-		return NetConfig{}, errors.New("malformed netspec")
+func checkPath(v string) string {
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(v) {
+		v = filepath.Join(*f_iomBase, v)
 	}
 
-	if d != "" && !isNetworkDriver(d) {
-		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
+	if _, err := os.Stat(v); os.IsNotExist(err) {
+		log.Warn("file does not exist: %v", v)
 	}
 
-	log.Info(`got bridge="%v", vlan="%v", mac="%v", driver="%v"`, b, v, m, d)
-
-	vlan, err := lookupVLAN(namespace, v)
-	if err != nil {
-		return NetConfig{}, err
-	}
-
-	if m != "" && !isMac(m) {
-		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
-	}
-
-	// warn on valid but not allocated macs
-	if m != "" && !allocatedMac(m) {
-		log.Warn("unallocated mac address: %v", m)
-	}
-
-	if b == "" {
-		b = DefaultBridge
-	}
-	if d == "" {
-		d = VM_NET_DRIVER_DEFAULT
-	}
-
-	return NetConfig{
-		VLAN:   vlan,
-		Bridge: b,
-		MAC:    strings.ToLower(m),
-		Driver: d,
-	}, nil
+	return v
 }
 
-// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
-// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
-// cluster.
+// lookupVLAN uses the vlans and active namespace to turn a string into a VLAN.
+// If the VLAN didn't already exist, broadcasts the update to the cluster.
 func lookupVLAN(namespace, alias string) (int, error) {
 	if alias == "" {
 		return 0, errors.New("VLAN must be non-empty string")
 	}
 
-	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	vlan, err := vlans.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
 		return vlan, err
 	}
 
-	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	vlan, created, err := vlans.Allocate(namespace, alias)
 	if err != nil {
 		return 0, err
 	}
@@ -425,14 +343,14 @@ func lookupVLAN(namespace, alias string) (int, error) {
 	return vlan, nil
 }
 
-// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
+// printVLAN uses the vlans and active namespace to print a vlan.
 func printVLAN(namespace string, vlan int) string {
-	return allocatedVLANs.PrintVLAN(namespace, vlan)
+	return vlans.PrintVLAN(namespace, vlan)
 }
 
 // vlanInfo returns formatted information about all the vlans.
 func vlanInfo() string {
-	info := allocatedVLANs.Tabular("")
+	info := vlans.Tabular("")
 	if len(info) == 0 {
 		return ""
 	}

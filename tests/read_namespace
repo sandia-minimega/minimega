@@ -1,0 +1,7 @@
+.columns namespace,active namespace
+namespace foo
+.columns namespace,active namespace
+namespace bar
+.columns namespace,active namespace
+namespace foo namespace
+.columns namespace,active namespace

@@ -160,7 +160,6 @@ func hostTapDelete(ns *Namespace, s string) error {
 
 		// update the host taps for the namespace
 		delete(ns.Taps, tap.Name)
-
 		return nil
 	}
 
@@ -175,4 +174,42 @@ func hostTapDelete(ns *Namespace, s string) error {
 	}
 
 	return delTap(s)
+}
+
+func mirrorDelete(ns *Namespace, name string) error {
+	delMirror := func(m string) error {
+		if !ns.Mirrors[m] {
+			return errors.New("not a valid mirror")
+		}
+
+		tap, err := bridges.FindTap(m)
+		if err != nil {
+			return err
+		}
+
+		br, err := getBridge(tap.Bridge)
+		if err != nil {
+			return err
+		}
+
+		if err := br.DestroyMirror(m); err != nil {
+			return err
+		}
+
+		// update the mirrors for the namespace
+		delete(ns.Mirrors, m)
+		return nil
+	}
+
+	if name == Wildcard || name == "" {
+		for mirror := range ns.Mirrors {
+			if err := delMirror(mirror); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	return delMirror(name)
 }

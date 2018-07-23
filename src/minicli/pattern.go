@@ -44,7 +44,7 @@ type PatternItem struct {
 	Options []string `json:"options,omitempty"`
 }
 
-type patternItems []PatternItem
+type PatternItems []PatternItem
 
 func (p PatternItem) IsOptional() bool {
 	return p.Type&optionalItem != 0
@@ -70,7 +70,7 @@ func (p PatternItem) IsList() bool {
 	return p.Type&listItem != 0
 }
 
-func (items patternItems) String() string {
+func (items PatternItems) String() string {
 	parts := make([]string, len(items))
 
 	for i, v := range items {

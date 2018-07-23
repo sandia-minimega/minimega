@@ -9,6 +9,7 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	log "minilog"
 	"os"
@@ -18,12 +19,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-)
-
-const (
-	VM_NET_DRIVER_DEFAULT = "e1000"
-	QMP_CONNECT_RETRY     = 50
-	QMP_CONNECT_DELAY     = 100
+	"vlans"
 )
 
 var vmID *Counter // channel of new VM IDs, shared across namespaces
@@ -79,8 +75,8 @@ type VM interface {
 	UpdateNetworks()
 
 	// NetworkConnect updates the VM's config to reflect that it has been
-	// connected to the specified bridge and VLAN.
-	NetworkConnect(int, string, int) error
+	// connected to the specified VLAN and Bridge.
+	NetworkConnect(int, int, string) error
 
 	// NetworkDisconnect updates the VM's config to reflect that the specified
 	// tap has been disconnected.
@@ -93,6 +89,9 @@ type VM interface {
 	ClearAllQos() error
 
 	ProcStats() (map[int]*ProcStats, error)
+
+	// WriteConfig writes the VM's config to the provided writer.
+	WriteConfig(io.Writer) error
 
 	// Make a deep copy that shouldn't be used for anything but reads
 	Copy() VM
@@ -509,27 +508,32 @@ func (vm *BaseVM) HasCC() bool {
 	return vm.ActiveCC
 }
 
-func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
+func (vm *BaseVM) NetworkConnect(pos, vlan int, bridge string) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	return vm.networkConnect(pos, vlan, bridge)
+}
+
+// networkConnect assumes that the VM lock is held.
+func (vm *BaseVM) networkConnect(pos, vlan int, bridge string) error {
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
 	}
 
-	net := &vm.Networks[pos]
+	nic := &vm.Networks[pos]
 
 	// special case -- if bridge is not specified, reconnect tap to the same
 	// bridge if it is already on a bridge.
 	if bridge == "" {
-		bridge = net.Bridge
+		bridge = nic.Bridge
 	}
 	// fallback -- connect to the default bridge.
 	if bridge == "" {
 		bridge = DefaultBridge
 	}
 
-	log.Info("moving network connection: %v %v %v:%v -> %v:%v", vm.ID, pos, net.Bridge, net.VLAN, bridge, vlan)
+	log.Info("moving network connection: %v %v %v:%v -> %v:%v", vm.ID, pos, nic.Bridge, nic.VLAN, bridge, vlan)
 
 	// Do this before disconnecting from the old bridge in case the new one was
 	// mistyped or invalid.
@@ -539,27 +543,35 @@ func (vm *BaseVM) NetworkConnect(pos int, bridge string, vlan int) error {
 	}
 
 	// Disconnect from the old bridge, if we were connected
-	if net.VLAN != DisconnectedVLAN {
-		src, err := getBridge(net.Bridge)
+	if nic.VLAN != DisconnectedVLAN {
+		src, err := getBridge(nic.Bridge)
 		if err != nil {
 			return err
 		}
 
-		if err := src.RemoveTap(net.Tap); err != nil {
+		if err := src.RemoveTap(nic.Tap); err != nil {
 			return err
 		}
-
-		src.ReapTaps()
 	}
 
 	// Connect to the new bridge
-	if err := dst.AddTap(net.Tap, net.MAC, vlan, false); err != nil {
+	if err := dst.AddTap(nic.Tap, nic.MAC, vlan, false); err != nil {
 		return err
 	}
 
 	// Record updates to the VM config
-	net.VLAN = vlan
-	net.Bridge = bridge
+	nic.Alias = ""
+	if alias, err := vlans.GetAlias(vlan); err == nil {
+		if alias.Namespace != vm.Namespace {
+			nic.Alias = alias.String()
+		} else {
+			nic.Alias = alias.Value
+		}
+	}
+	nic.VLAN = vlan
+	nic.Bridge = bridge
+
+	// TODO: what to do with nic.Raw?
 
 	return nil
 }
@@ -568,30 +580,38 @@ func (vm *BaseVM) NetworkDisconnect(pos int) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	return vm.networkDisconnect(pos)
+}
+
+// networkDisconnect assumes that the VM lock is held.
+func (vm *BaseVM) networkDisconnect(pos int) error {
 	if len(vm.Networks) <= pos {
 		return fmt.Errorf("no network %v, VM only has %v networks", pos, len(vm.Networks))
 	}
 
-	net := &vm.Networks[pos]
+	nic := &vm.Networks[pos]
 
 	// Don't try to diconnect an interface that is already disconnected...
-	if net.VLAN == DisconnectedVLAN {
+	if nic.VLAN == DisconnectedVLAN {
 		return nil
 	}
 
-	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, net)
+	log.Debug("disconnect network connection: %v %v %v", vm.ID, pos, nic)
 
-	br, err := getBridge(net.Bridge)
+	br, err := getBridge(nic.Bridge)
 	if err != nil {
 		return err
 	}
 
-	if err := br.RemoveTap(net.Tap); err != nil {
+	if err := br.RemoveTap(nic.Tap); err != nil {
 		return err
 	}
 
-	net.Bridge = ""
-	net.VLAN = DisconnectedVLAN
+	nic.Alias = ""
+	nic.Bridge = ""
+	nic.VLAN = DisconnectedVLAN
+
+	// TODO: what to do with nic.Raw?
 
 	return nil
 }
@@ -724,6 +744,20 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 // path joins instancePath with provided path
 func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
+}
+
+func writeVMConfig(vm VM) error {
+	log.Info("writing vm config")
+
+	name := filepath.Join(vm.GetInstancePath(), "config")
+	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0755)
+
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return vm.WriteConfig(f)
 }
 
 func vmNotFound(name string) error {

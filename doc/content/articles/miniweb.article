@@ -163,8 +163,13 @@ CLI.
 
 ** Connecting to VMs
 
-`miniweb` supports VNC for KVM VMs and `term.js` for containers. These are both
-accessed via the `/vm/<name>/<connect>` path.
+`miniweb` supports VNC for KVM VMs and `xterm.js` for containers. These are
+both accessed via the `/vm/<name>/<connect>` path.
+
+The container's web console allows multiple users to view the same console at
+the same time. minimega stores some "scrollback" from the container's console,
+so when a new console connects it can re-play recent output rather than present
+a blank screen.
 
 ** Screenshots
 

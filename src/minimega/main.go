@@ -18,7 +18,6 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,7 +35,6 @@ const (
 
 var (
 	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_e          = flag.Bool("e", false, "execute command on running minimega")
 	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
 	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_port       = flag.Int("port", 9000, "meshage port to listen on")
@@ -45,11 +43,14 @@ var (
 	f_version    = flag.Bool("version", false, "print the version and copyright notices")
 	f_context    = flag.String("context", "minimega", "meshage context for discovery")
 	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
-	f_attach     = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
 	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
+
+	f_e         = flag.Bool("e", false, "execute command on running minimega")
+	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
+	f_namespace = flag.String("namespace", "", "prepend namespace to all -attach and -e commands")
 
 	hostname string
 	reserved = []string{Wildcard}
@@ -148,17 +149,22 @@ func main() {
 		mm.Pager = minipager.DefaultPager
 
 		if *f_e {
-			a := flag.Args()
-			log.Debugln("got args:", a)
+			parts := []string{}
+			if *f_namespace != "" {
+				parts = append(parts, "namespace", *f_namespace)
+			}
 
-			// TODO: Need to escape?
-			cmd := strings.Join(a, " ")
+			for _, arg := range flag.Args() {
+				parts = append(parts, arg)
+			}
+
+			cmd := quoteJoin(parts, " ")
 			log.Infoln("got command: `%v`", cmd)
 
 			mm.RunAndPrint(cmd, false)
 		} else {
 			attached = mm
-			mm.Attach()
+			mm.Attach(*f_namespace)
 		}
 
 		return

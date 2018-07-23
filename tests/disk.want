@@ -14,8 +14,12 @@ E: Information: You may need to update /etc/fstab.
 ## shell qemu-nbd -d /dev/nbd0
 /dev/nbd0 disconnected
 
-## # Inject a file into base image
+## # Should fail because there are two partitions
 ## disk inject foo.qcow2 files /tmp/minimega/XXX:/tmp/minimega/XXX
+E: please specify a partition; multiple found
+
+## # Inject a file into base image
+## disk inject foo.qcow2:1 files /tmp/minimega/XXX:/tmp/minimega/XXX
 ## shell qemu-nbd -c /dev/nbd0 file:foo.qcow2
 ## # suppress output and exit code because partx sometimes fails and we don't care
 ## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
@@ -37,7 +41,7 @@ XXX
 
 ## # Create snapshot, inject a file into first partition of snapshot
 ## disk snapshot foo.qcow2 bar.qcow2
-## disk inject bar.qcow2 files /tmp/minimega/YYY:/tmp/minimega/YYY
+## disk inject bar.qcow2:1 files /tmp/minimega/YYY:/tmp/minimega/YYY
 ## shell qemu-nbd -c /dev/nbd0 file:bar.qcow2
 ## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"
 ## shell bash -c "partx -a /dev/nbd0 &> /dev/null || echo -n"

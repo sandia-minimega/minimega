@@ -10,27 +10,12 @@ const headerTemplate = `
 package {{ .Package }}
 
 import (
-	"fmt"
-	"minicli"
-	log "minilog"
 	"bytes"
-	"os"
-	"path/filepath"
+	"fmt"
+	"io"
+	"minicli"
 	"strconv"
 )
-
-func checkPath(v string) string {
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(v) {
-		v = filepath.Join(*f_iomBase, v)
-	}
-
-	if _, err := os.Stat(v); os.IsNotExist(err) {
-		log.Warn("file does not exist: %v", v)
-	}
-
-	return v
-}
 
 var vmconfigerCLIHandlers = []minicli.Handler{
 `
@@ -41,11 +26,20 @@ const stringTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
 			r.Response = ns.vmConfig.{{ .Field }}
 			return nil
 		}
+
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, c.StringArgs["value"]); err != nil {
+			return err
+		}
+		{{ end }}
 
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
@@ -66,6 +60,9 @@ const sliceTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]...",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.ListArgs) == 0 {
 			if len(ns.vmConfig.{{ .Field }}) == 0 {
@@ -75,6 +72,13 @@ const sliceTemplate = `{
 			r.Response = fmt.Sprintf("%v", ns.vmConfig.{{ .Field }})
 			return nil
 		}
+		{{ if .Validate }}
+		for _, v := range c.ListArgs["value"] {
+			if err := {{.Validate}}(ns.vmConfig, v); err != nil {
+				return err
+			}
+		}
+		{{ end }}
 
 		{{ if .Path }}
 		vals := c.ListArgs["value"]
@@ -100,6 +104,9 @@ const mapTemplate = `{
 		"vm config {{ .ConfigName }}",
 		"vm config {{ .ConfigName }} <key> [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if c.StringArgs["key"] == "" {
 			var b bytes.Buffer
@@ -123,6 +130,13 @@ const mapTemplate = `{
 			ns.vmConfig.{{ .Field }} = make(map[string]string)
 		}
 
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, c.StringArgs["key"], c.StringArgs["value"]); err != nil {
+			return err
+		}
+		{{ end }}
+
+
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
 
@@ -143,6 +157,9 @@ const numTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
 	},
+	{{ if .Suggest }}
+	Suggest: {{ .Suggest }},
+	{{ end }}
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.StringArgs) == 0 {
 			{{- if .Signed }}
@@ -161,6 +178,12 @@ const numTemplate = `{
 		if err != nil {
 			return err
 		}
+
+		{{ if .Validate }}
+		if err := {{.Validate}}(ns.vmConfig, i); err != nil {
+			return err
+		}
+		{{ end }}
 
 		ns.vmConfig.{{ .Field }} = i
 
@@ -215,7 +238,7 @@ const clearTemplate = `{
 const funcsTemplate = `
 {{ range $type, $fields := . }}
 func (v *{{ $type }}) Info(field string) (string, error) {
-		{{- range $fields }}
+	{{- range $fields }}
 		if field == "{{ .ConfigName }}" {
 			{{- if eq .Type "string" }}
 			return v.{{ .Field }}, nil
@@ -227,17 +250,45 @@ func (v *{{ $type }}) Info(field string) (string, error) {
 			return fmt.Sprintf("%v", v.{{ .Field }}), nil
 			{{- end }}
 		}
-		{{- end }}
+	{{- end }}
 
-		return "", fmt.Errorf("invalid info field: %v", field)
+	return "", fmt.Errorf("invalid info field: %v", field)
 }
 
 func (v *{{ $type }} ) Clear(mask string) {
-		{{- range $fields }}
+	{{- range $fields }}
 		if mask == Wildcard || mask == "{{ .ConfigName }}" {
 			v.{{ .Field }} = {{ .Default }}
 		}
+	{{- end }}
+}
+
+func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
+	{{- range $fields }}
+		{{- if eq .Type "bool" }}
+			if v.{{ .Field }} != {{ .Default }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %t\n", v.{{ .Field }})
+			}
+		{{- else if eq .Type "map" }}
+			for k, v := range v.{{ .Field }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v %v\n", k, v)
+			}
+		{{- else if eq .Type "string" "int64" "uint64"}}
+			if v.{{ .Field }} != {{ .Default }} {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", v.{{ .Field }})
+			}
+		{{- else if eq .Type "slice"}}
+			if len(v.{{ .Field }}) > 0 {
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", quoteJoin(v.{{ .Field }}, " "))
+			}
+		{{- else }}
+			if err := v.{{ .Field }}.WriteConfig(w); err != nil {
+				return err
+			}
 		{{- end }}
+	{{- end }}
+
+	return nil
 }
 {{ end }}
 `

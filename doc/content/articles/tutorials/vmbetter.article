@@ -21,7 +21,7 @@ First, make sure you have a [[http://golang.org][Go compiler]] installed. Then,
 install some libraries needed to build minimega and the associated tools:
 
 	# fetch pre-requisites
-	$ sudo apt-get install libpcap-dev libreadline-dev syslinux 
+	$ sudo apt-get install libpcap-dev syslinux
 	# On ubuntu 16.04lts you need these as well
 	$ sudo apt-get debootstrap genisoimage extlinux
 
@@ -117,7 +117,7 @@ Our `.profile` launches X automatically as soon as root logs in, and then
 Now that we've specified *how* to build the image, we can fire up vmbetter and
 actually *build* it. Here's the command I used to build:
 
-	$ sudo ./bin/vmbetter -branch stable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf 
+	$ sudo ./bin/vmbetter -branch stable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf
 
 It's rather complex, so I'll break down each part:
 

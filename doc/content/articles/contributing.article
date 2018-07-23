@@ -64,6 +64,14 @@ If your change is being committed to a branch other than `master`, include
 "updates issue NNN" in the commit log. Never close an issue on a commit in a
 branch other than `master` unless that ticket is specific to that branch.
 
+* Commit messages
+
+Try to adhere to common Git commit message
+[[https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html][format]].
+When working on a one or two tools or packages, we typically prefix the summary
+with the its name (e.g. `minimega: ...`, `minimega,minicli: ...`). For commits
+that span many components, we typically prefix them with `various: ...`.
+
 * Submitting a patch
 
 minimega is hosted on github.com, and we use github's 'pull request'

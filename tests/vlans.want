@@ -5,21 +5,21 @@
 alias | vlan
 A     | 102
 ## vm config net
-[mega_bridge,A (102)]
+[A]
 ## vm config net B # should be 103
 ## vlans
 alias | vlan
 A     | 102
 B     | 103
 ## vm config net
-[mega_bridge,B (103)]
+[B]
 ## vm config net A # should be 102
 ## vlans
 alias | vlan
 A     | 102
 B     | 103
 ## vm config net
-[mega_bridge,A (102)]
+[A]
 
 ## # Manually add aliases
 ## vlans add foo 200
@@ -34,7 +34,7 @@ bar   | 300
 foo   | 200
 ## vm config net foo
 ## vm config net
-[mega_bridge,foo (200)]
+[foo]
 
 ## # Tests with namespaces
 ## namespace foo
@@ -43,26 +43,26 @@ foo   | 200
 alias | vlan
 A     | 104
 ## vm config net
-[mega_bridge,A (104)]
+[A]
 ## namespace bar
 ## vm config net A # should be 105
 ## vlans
 alias | vlan
 A     | 105
 ## vm config net
-[mega_bridge,A (105)]
+[A]
 ## vm config net minimega//A # should be 102
 ## vlans
 alias | vlan
 A     | 105
 ## vm config net
-[mega_bridge,minimega//A (102)]
+[minimega//A]
 ## vm config net foo//A # should be 104
 ## vlans
 alias | vlan
 A     | 105
 ## vm config net
-[mega_bridge,foo//A (104)]
+[foo//A]
 ## clear namespace
 
 ## # Specify ranges
@@ -76,4 +76,4 @@ alias | vlan
 A     | 104
 B     | 120
 ## vm config net
-[mega_bridge,B (120)]
+[B]

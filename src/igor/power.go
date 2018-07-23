@@ -14,7 +14,7 @@ import (
 )
 
 var cmdPower = &Command{
-	UsageLine: "power [-r <reservation name>] [-n <nodes>] on/off",
+	UsageLine: "power [-r <reservation name>] [-n <nodes>] on/off/cycle",
 	Short:     "power-cycle nodes or full reservation",
 	Long: `
 Power-cycle either a full reservation, or some nodes within a reservation owned by you.
@@ -36,54 +36,33 @@ func init() {
 
 	cmdPower.Flag.StringVar(&powerR, "r", "", "")
 	cmdPower.Flag.StringVar(&powerN, "n", "", "")
-
-}
-
-// Turn a node off and on again.
-func powerCycle(Hosts []string) {
-	if igorConfig.AutoReboot {
-		doPower(Hosts, "off")
-		doPower(Hosts, "on")
-	}
 }
 
 func doPower(hosts []string, action string) {
+	backend := GetBackend()
+
 	user, err := getUser()
 	if err != nil {
 		log.Fatal("can't get current user: %v\n", err)
 	}
-	log.Info("POWER	user=%v	nodes=%v	action=%v", user.Username, hosts, action)
-	var offcommand, oncommand string
-	if igorConfig.PowerOffCommand != "" && igorConfig.PowerOnCommand != "" {
-		// Use non-cobbler commands
-		offcommand = igorConfig.PowerOffCommand
-		oncommand = igorConfig.PowerOnCommand
-	} else if igorConfig.UseCobbler {
-		offcommand = "cobbler system poweroff --name %s"
-		oncommand = "cobbler system poweron --name %s"
-	} else {
-		log.Fatal("no valid method of rebooting nodes available")
-	}
 
-	// Do it in parallel because this can take a while
-	done := make(chan bool)
-	f := func(h, commandformat string) {
-		command := strings.Split(fmt.Sprintf(commandformat, h), " ")
-		_, err := processWrapper(command...)
-		if err != nil {
-			log.Error("power command %v returned %v", command, err)
+	log.Info("POWER	user=%v	nodes=%v	action=%v", user.Username, hosts, action)
+
+	switch action {
+	case "off":
+		if err := backend.Power(hosts, false); err != nil {
+			log.Fatal("power off failed: %v", err)
 		}
-		done <- true
-	}
-	for _, h := range hosts {
-		if action == "off" {
-			go f(h, offcommand)
-		} else if action == "on" {
-			go f(h, oncommand)
+	case "cycle":
+		if err := backend.Power(hosts, false); err != nil {
+			log.Fatal("power off failed: %v", err)
 		}
-	}
-	for _, _ = range hosts {
-		<-done
+
+		fallthrough
+	case "on":
+		if err := backend.Power(hosts, true); err != nil {
+			log.Fatal("power on failed: %v", err)
+		}
 	}
 }
 
@@ -92,9 +71,10 @@ func runPower(cmd *Command, args []string) {
 	if len(args) != 1 {
 		log.Fatalln(cmdPower.UsageLine)
 	}
+
 	action := args[0]
-	if action != "on" && action != "off" {
-		log.Fatalln("must specify on or off")
+	if action != "on" && action != "off" && action != "cycle" {
+		log.Fatalln("must specify on, off, or cycle")
 	}
 
 	user, err := getUser()
