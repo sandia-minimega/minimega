@@ -1,0 +1,423 @@
+## # Plumbing tests for vias
+## # Note: These test vias, modes, and a small stress test
+
+## # Setting up VMs
+## vm launch kvm box[1-15]
+## vm start box[1-15]
+## .columns name,state vm info
+host      | name  | state
+applejack | box1  | RUNNING
+applejack | box10 | RUNNING
+applejack | box11 | RUNNING
+applejack | box12 | RUNNING
+applejack | box13 | RUNNING
+applejack | box14 | RUNNING
+applejack | box15 | RUNNING
+applejack | box2  | RUNNING
+applejack | box3  | RUNNING
+applejack | box4  | RUNNING
+applejack | box5  | RUNNING
+applejack | box6  | RUNNING
+applejack | box7  | RUNNING
+applejack | box8  | RUNNING
+applejack | box9  | RUNNING
+
+## # Basic via test
+## # Note: -u means unbuffered and makes the command run faster
+## plumb box1 box2 box3
+## pipe
+host      | name | mode | readers | writers | via | last message | message count
+applejack | box1 | all  | 1       | 0       |     |              | 0
+applejack | box2 | all  | 1       | 1       |     |              | 0
+applejack | box3 | all  | 0       | 1       |     |              | 0
+## pipe box1 via sed -u "s/kittens/cats/"
+## pipe 
+host      | name | mode | readers | writers | via                    | last message | message count
+applejack | box1 | all  | 1       | 0       | sed -u s/kittens/cats/ |              | 0
+applejack | box2 | all  | 1       | 1       |                        |              | 0
+applejack | box3 | all  | 0       | 1       |                        |              | 0
+## pipe box1 "Whiskers on kittens."
+## pipe
+host      | name | mode | readers | writers | via                    | last message         | message count
+applejack | box1 | all  | 1       | 0       | sed -u s/kittens/cats/ | Whiskers on kittens. | 1
+applejack | box2 | all  | 1       | 1       |                        | Whiskers on cats.    | 1
+applejack | box3 | all  | 0       | 1       |                        | Whiskers on cats.    | 1
+
+## # Text manipulation with vias
+## # Single word replace.
+## clear plumb
+## clear pipe
+
+## plumb box1 "sed -u s/packages/boxes/" box2
+## pipe
+host      | name | mode | readers | writers | via | last message | message count
+applejack | box1 | all  | 1       | 0       |     |              | 0
+## pipe box1 "Brown paper packages tied up with strings. packages."
+## pipe
+host      | name | mode | readers | writers | via | last message                                         | message count
+applejack | box1 | all  | 1       | 0       |     | Brown paper packages tied up with strings. packages. | 1
+applejack | box2 | all  | 0       | 1       |     | Brown paper boxes tied up with strings. packages.    | 1
+
+## # Multi-word replace
+## clear plumb
+## clear pipe
+
+## plumb box1 box2 box3
+## pipe
+host      | name | mode | readers | writers | via | last message | message count
+applejack | box1 | all  | 1       | 0       |     |              | 0
+applejack | box2 | all  | 1       | 1       |     |              | 0
+applejack | box3 | all  | 0       | 1       |     |              | 0
+## pipe box1 via sed "s/raindrops/water/g"
+## pipe
+host      | name | mode | readers | writers | via                     | last message | message count
+applejack | box1 | all  | 1       | 0       | sed s/raindrops/water/g |              | 0
+applejack | box2 | all  | 1       | 1       |                         |              | 0
+applejack | box3 | all  | 0       | 1       |                         |              | 0
+## pipe box1 "raindrops on roses, raindrops on roses, raindrops on roses."
+## pipe
+host      | name | mode | readers | writers | via                     | last message                                                | message count
+applejack | box1 | all  | 1       | 0       | sed s/raindrops/water/g | raindrops on roses, raindrops on roses, raindrops on roses. | 1
+applejack | box2 | all  | 1       | 1       |                         | water on roses, water on roses, water on roses.             | 1
+applejack | box3 | all  | 0       | 1       |                         | water on roses, water on roses, water on roses.             | 1
+
+## # Only second word replace
+## pipe box1 via sed "s/kettles/pots/2"
+## pipe
+host      | name | mode | readers | writers | via                  | last message                                                | message count
+applejack | box1 | all  | 1       | 0       | sed s/kettles/pots/2 | raindrops on roses, raindrops on roses, raindrops on roses. | 1
+applejack | box2 | all  | 1       | 1       |                      | water on roses, water on roses, water on roses.             | 1
+applejack | box3 | all  | 0       | 1       |                      | water on roses, water on roses, water on roses.             | 1
+## pipe box1 "bright copper kettles, bright copper kettles, bright copper kettles."
+## pipe
+host      | name | mode | readers | writers | via                  | last message                                                         | message count
+applejack | box1 | all  | 1       | 0       | sed s/kettles/pots/2 | bright copper kettles, bright copper kettles, bright copper kettles. | 2
+applejack | box2 | all  | 1       | 1       |                      | bright copper kettles, bright copper pots, bright copper kettles.    | 2
+applejack | box3 | all  | 0       | 1       |                      | bright copper kettles, bright copper pots, bright copper kettles.    | 2
+
+## # Ignore upper and lower case, focus on every word replace.
+## pipe box1 via sed "s/GEESE/ducks/i"
+## pipe
+host      | name | mode | readers | writers | via                 | last message                                                         | message count
+applejack | box1 | all  | 1       | 0       | sed s/GEESE/ducks/i | bright copper kettles, bright copper kettles, bright copper kettles. | 2
+applejack | box2 | all  | 1       | 1       |                     | bright copper kettles, bright copper pots, bright copper kettles.    | 2
+applejack | box3 | all  | 0       | 1       |                     | bright copper kettles, bright copper pots, bright copper kettles.    | 2
+## pipe box1 "Geese with moonlight, geese with moonlight, GEESE with moonlight."
+## pipe
+host      | name | mode | readers | writers | via                 | last message                                                      | message count
+applejack | box1 | all  | 1       | 0       | sed s/GEESE/ducks/i | Geese with moonlight, geese with moonlight, GEESE with moonlight. | 3
+applejack | box2 | all  | 1       | 1       |                     | ducks with moonlight, geese with moonlight, GEESE with moonlight. | 3
+applejack | box3 | all  | 0       | 1       |                     | ducks with moonlight, geese with moonlight, GEESE with moonlight. | 3
+
+## # Regex, replace line up to specified text.
+## pipe box1 via sed "s/^.*OUO/Sensitive material/"
+## pipe
+host      | name | mode | readers | writers | via                              | last message                                                         | message count
+applejack | box1 | all  | 1       | 0       | sed s/^.*OUO/Sensitive material/ | bright copper kettles, bright copper kettles, bright copper kettles. | 3
+applejack | box2 | all  | 1       | 1       |                                  | bright copper kettles, bright copper pots, bright copper kettles.    | 3
+applejack | box3 | all  | 0       | 1       |                                  | bright copper kettles, bright copper pots, bright copper kettles.    | 3
+## pipe box1 "Warm woolen mittens, we get OUO. These are a few of my favorite things."
+## pipe
+host      | name | mode | readers | writers | via                              | last message                                                            | message count
+applejack | box1 | all  | 1       | 0       | sed s/^.*OUO/Sensitive material/ | Warm woolen mittens, we get OUO. These are a few of my favorite things. | 4
+applejack | box2 | all  | 1       | 1       |                                  | Sensitive material. These are a few of my favorite things.              | 4
+applejack | box3 | all  | 0       | 1       |                                  | Sensitive material. These are a few of my favorite things.              | 4
+
+## # Regex example, you must double escape special characters.
+## pipe box1 via sed "s/and/\\&/g"
+## pipe 
+host      | name | mode | readers | writers | via            | last message                                                      | message count
+applejack | box1 | all  | 1       | 0       | sed s/and/\&/g | Geese with moonlight, geese with moonlight, GEESE with moonlight. | 4
+applejack | box2 | all  | 1       | 1       |                | ducks with moonlight, geese with moonlight, GEESE with moonlight. | 4
+applejack | box3 | all  | 0       | 1       |                | ducks with moonlight, geese with moonlight, GEESE with moonlight. | 4
+## pipe box1 "Roses and kittens and sleigh bells and mittens."
+## pipe
+host      | name | mode | readers | writers | via            | last message                                    | message count
+applejack | box1 | all  | 1       | 0       | sed s/and/\&/g | Roses and kittens and sleigh bells and mittens. | 5
+applejack | box2 | all  | 1       | 1       |                | Roses & kittens & sleigh bells & mittens.       | 5
+applejack | box3 | all  | 0       | 1       |                | Roses & kittens & sleigh bells & mittens.       | 5
+
+## # Multiple replacements per pipe
+## pipe box1 via sed -e "s/and/\\&/" -e "s/kittens/cats/g" -e "s/GEESE/ducks/i"
+## pipe 
+host      | name  | mode | readers | writers | via                                                     | last message                                                   | message count
+applejack | box1  | all  | 1       | 0       | sed -e s/and/\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i | kittens and geese and kittens and GEESE and kittens and geese. | 5
+applejack | box2  | all  | 1       | 1       |                                                         | Roses & kittens & sleigh bells & mittens.                      | 5
+applejack | box3  | all  | 0       | 1       |                                                         | Roses & kittens & sleigh bells & mittens.                      | 5
+## pipe box1 "kittens and geese and kittens and GEESE and kittens and geese."
+## pipe
+host      | name  | mode | readers | writers | via                                                     | last message                                                   | message count
+applejack | box1  | all  | 1       | 0       | sed -e s/and/\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i | kittens and geese and kittens and GEESE and kittens and geese. | 6
+applejack | box2  | all  | 1       | 1       |                                                         | cats & ducks and cats and GEESE and cats and geese.            | 6
+applejack | box3  | all  | 0       | 1       |                                                         | cats & ducks and cats and GEESE and cats and geese.            | 6
+
+## # Number manipulation with vias
+## clear plumb
+## clear pipe
+
+## plumb box1 box2 box3
+## pipe
+host      | name | mode | readers | writers | via | last message | message count
+applejack | box1 | all  | 1       | 0       |     |              | 0
+applejack | box2 | all  | 1       | 1       |     |              | 0
+applejack | box3 | all  | 0       | 1       |     |              | 0
+## pipe box1 via bin/normal -seed 4
+## pipe
+host      | name | mode | readers | writers | via                | last message | message count
+applejack | box1 | all  | 1       | 0       | bin/normal -seed 4 |              | 0
+applejack | box2 | all  | 1       | 1       |                    |              | 0
+applejack | box3 | all  | 0       | 1       |                    |              | 0
+## pipe box1 4.44
+## pipe
+host      | name | mode | readers | writers | via                | last message | message count
+applejack | box1 | all  | 1       | 0       | bin/normal -seed 4 | 4.44         | 1
+applejack | box2 | all  | 1       | 1       |                    |              | 0
+applejack | box3 | all  | 0       | 1       |                    |              | 0
+## pipe box1 5
+## pipe
+host      | name | mode | readers | writers | via                | last message | message count
+applejack | box1 | all  | 1       | 0       | bin/normal -seed 4 | 5            | 2
+applejack | box2 | all  | 1       | 1       |                    | 5            | 2
+applejack | box3 | all  | 0       | 1       |                    | 5            | 2
+## pipe box1 via bin/normal -seed 100
+## pipe
+host      | name | mode | readers | writers | via                  | last message | message count
+applejack | box1 | all  | 1       | 0       | bin/normal -seed 100 | 5            | 2
+applejack | box2 | all  | 1       | 1       |                      | 5            | 2
+applejack | box3 | all  | 0       | 1       |                      | 5            | 2
+## pipe box1 94.09
+## pipe 
+host      | name | mode | readers | writers | via                  | last message | message count
+applejack | box1 | all  | 1       | 0       | bin/normal -seed 100 | 94.09        | 3
+applejack | box2 | all  | 1       | 1       |                      | 94.09        | 3
+applejack | box3 | all  | 0       | 1       |                      | 94.09        | 3
+
+## # Stress test with mode, number and text manipulation
+## clear plumb 
+## clear pipe
+
+## plumb box1 box2 box3
+## plumb box4 box5 box6
+## plumb box6 box7
+## plumb box7 box8 box9 box10 box11 box12 box13 box14 box15
+
+## pipe
+host      | name  | mode | readers | writers | via | last message | message count
+applejack | box1  | all  | 1       | 0       |     |              | 0
+applejack | box10 | all  | 1       | 1       |     |              | 0
+applejack | box11 | all  | 1       | 1       |     |              | 0
+applejack | box12 | all  | 1       | 1       |     |              | 0
+applejack | box13 | all  | 1       | 1       |     |              | 0
+applejack | box14 | all  | 1       | 1       |     |              | 0
+applejack | box15 | all  | 0       | 1       |     |              | 0
+applejack | box2  | all  | 1       | 1       |     |              | 0
+applejack | box3  | all  | 0       | 1       |     |              | 0
+applejack | box4  | all  | 1       | 0       |     |              | 0
+applejack | box5  | all  | 1       | 1       |     |              | 0
+applejack | box6  | all  | 1       | 1       |     |              | 0
+applejack | box7  | all  | 1       | 1       |     |              | 0
+applejack | box8  | all  | 1       | 1       |     |              | 0
+applejack | box9  | all  | 1       | 1       |     |              | 0
+## pipe box6 mode round-robin
+
+## pipe
+host      | name  | mode        | readers | writers | via | last message | message count
+applejack | box1  | all         | 1       | 0       |     |              | 0
+applejack | box10 | all         | 1       | 1       |     |              | 0
+applejack | box11 | all         | 1       | 1       |     |              | 0
+applejack | box12 | all         | 1       | 1       |     |              | 0
+applejack | box13 | all         | 1       | 1       |     |              | 0
+applejack | box14 | all         | 1       | 1       |     |              | 0
+applejack | box15 | all         | 0       | 1       |     |              | 0
+applejack | box2  | all         | 1       | 1       |     |              | 0
+applejack | box3  | all         | 0       | 1       |     |              | 0
+applejack | box4  | all         | 1       | 0       |     |              | 0
+applejack | box5  | all         | 1       | 1       |     |              | 0
+applejack | box6  | round-robin | 1       | 1       |     |              | 0
+applejack | box7  | all         | 1       | 1       |     |              | 0
+applejack | box8  | all         | 1       | 1       |     |              | 0
+applejack | box9  | all         | 1       | 1       |     |              | 0
+## pipe box1 via sed "s/kittens/cats/g"
+## pipe
+host      | name  | mode        | readers | writers | via                  | last message | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g |              | 0
+applejack | box10 | all         | 1       | 1       |                      |              | 0
+applejack | box11 | all         | 1       | 1       |                      |              | 0
+applejack | box12 | all         | 1       | 1       |                      |              | 0
+applejack | box13 | all         | 1       | 1       |                      |              | 0
+applejack | box14 | all         | 1       | 1       |                      |              | 0
+applejack | box15 | all         | 0       | 1       |                      |              | 0
+applejack | box2  | all         | 1       | 1       |                      |              | 0
+applejack | box3  | all         | 0       | 1       |                      |              | 0
+applejack | box4  | all         | 1       | 0       |                      |              | 0
+applejack | box5  | all         | 1       | 1       |                      |              | 0
+applejack | box6  | round-robin | 1       | 1       |                      |              | 0
+applejack | box7  | all         | 1       | 1       |                      |              | 0
+applejack | box8  | all         | 1       | 1       |                      |              | 0
+applejack | box9  | all         | 1       | 1       |                      |              | 0
+## pipe box1 "kittens with whiskers, kittens with whiskers, kittens with whiskers."
+## pipe
+host      | name  | mode        | readers | writers | via                  | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box11 | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box12 | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box13 | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box14 | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box15 | all         | 0       | 1       |                      |                                                                      | 0
+applejack | box2  | all         | 1       | 1       |                      | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                      | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       |                      |                                                                      | 0
+applejack | box5  | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box6  | round-robin | 1       | 1       |                      |                                                                      | 0
+applejack | box7  | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box8  | all         | 1       | 1       |                      |                                                                      | 0
+applejack | box9  | all         | 1       | 1       |                      |                                                                      | 0
+## pipe box4 via sed -e "s/kettles/pots/" -e "s/geese/ducks/i" -e "s/and/\\&/2"
+## pipe
+host      | name  | mode        | readers | writers | via                                                     | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box11 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box12 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box13 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box14 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box15 | all         | 0       | 1       |                                                         |                                                                      | 0
+applejack | box2  | all         | 1       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 |                                                                      | 0
+applejack | box5  | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box6  | round-robin | 1       | 1       |                                                         |                                                                      | 0
+applejack | box7  | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box8  | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box9  | all         | 1       | 1       |                                                         |                                                                      | 0
+## pipe box4 "kittens and geese and kittens and geese and kittens and geese."
+## pipe
+host      | name  | mode        | readers | writers | via                                                     | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box11 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box12 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box13 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box14 | all         | 1       | 1       |                                                         |                                                                      | 0
+applejack | box15 | all         | 0       | 1       |                                                         |                                                                      | 0
+applejack | box2  | all         | 1       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.       | 1
+applejack | box5  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box6  | round-robin | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box7  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box8  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box9  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+## pipe box6 via bin/normal -seed 8000
+## pipe
+host      | name  | mode        | readers | writers | via                                                     | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box11 | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box12 | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box13 | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box14 | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box15 | all         | 0       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box2  | all         | 1       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.       | 1
+applejack | box5  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                   | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box7  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box8  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box9  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+## pipe box6 90.8
+## pipe
+host      | name  | mode        | readers | writers | via                                                     | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box11 | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box12 | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box13 | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box14 | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box15 | all         | 0       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box2  | all         | 1       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.       | 1
+applejack | box5  | all         | 1       | 1       |                                                         | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                   | 90.8                                                                 | 2
+applejack | box7  | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box8  | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+applejack | box9  | all         | 1       | 1       |                                                         | 90.8                                                                 | 2
+## pipe box7 via sed -e "s/kittens/cats/g" -e "s/these are a few of my favorite things/\\:\\)/"
+## pipe
+host      | name  | mode        | readers | writers | via                                                                      | last message                                                         | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers. | 1
+applejack | box10 | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box11 | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box12 | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box13 | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box14 | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box15 | all         | 0       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box2  | all         | 1       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box3  | all         | 0       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.          | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.       | 1
+applejack | box5  | all         | 1       | 1       |                                                                          | kittens and ducks & kittens and geese and kittens and geese.         | 1
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                                    | 90.8                                                                 | 2
+applejack | box7  | all         | 1       | 1       | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | 90.8                                                                 | 2
+applejack | box8  | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+applejack | box9  | all         | 1       | 1       |                                                                          | 90.8                                                                 | 2
+## pipe box7 "kittens and whiskers and kittens and these are a few of my favorite things and kittens."
+## pipe
+host      | name  | mode        | readers | writers | via                                                                      | last message                                                                            | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.                    | 1
+applejack | box10 | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box11 | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box12 | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box13 | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box14 | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box15 | all         | 0       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box2  | all         | 1       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                             | 1
+applejack | box3  | all         | 0       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                             | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.                          | 1
+applejack | box5  | all         | 1       | 1       |                                                                          | kittens and ducks & kittens and geese and kittens and geese.                            | 1
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                                    | 90.8                                                                                    | 2
+applejack | box7  | all         | 1       | 1       | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | kittens and whiskers and kittens and these are a few of my favorite things and kittens. | 3
+applejack | box8  | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+applejack | box9  | all         | 1       | 1       |                                                                          | 90.8                                                                                    | 2
+## pipe box6 88
+## pipe
+host      | name  | mode        | readers | writers | via                                                                      | last message                                                                            | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.                    | 1
+applejack | box10 | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box11 | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box12 | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box13 | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box14 | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box15 | all         | 0       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box2  | all         | 1       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                             | 1
+applejack | box3  | all         | 0       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                             | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.                          | 1
+applejack | box5  | all         | 1       | 1       |                                                                          | kittens and ducks & kittens and geese and kittens and geese.                            | 1
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                                    | 88                                                                                      | 3
+applejack | box7  | all         | 1       | 1       | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | kittens and whiskers and kittens and these are a few of my favorite things and kittens. | 3
+applejack | box8  | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+applejack | box9  | all         | 1       | 1       |                                                                          | cats and whiskers and cats and :) and cats.                                             | 3
+## pipe box4 "Kittens and kettles and geese are fun. Kittens and GEESE and kittens and geese and kittens and geese."
+## pipe
+host      | name  | mode        | readers | writers | via                                                                      | last message                                                                                          | message count
+applejack | box1  | all         | 1       | 0       | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.                                  | 1
+applejack | box10 | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box11 | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box12 | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box13 | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box14 | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box15 | all         | 0       | 1       |                                                                          |                                                                                                       | 5
+applejack | box2  | all         | 1       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                                           | 1
+applejack | box3  | all         | 0       | 1       |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.                                           | 1
+applejack | box4  | all         | 1       | 0       | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | Kittens and kettles and geese are fun. Kittens and GEESE and kittens and geese and kittens and geese. | 2
+applejack | box5  | all         | 1       | 1       |                                                                          | Kittens and pots & ducks are fun. Kittens and GEESE and kittens and geese and kittens and geese.      | 2
+applejack | box6  | round-robin | 1       | 1       | bin/normal -seed 8000                                                    | Kittens and pots & ducks are fun. Kittens and GEESE and kittens and geese and kittens and geese.      | 4
+applejack | box7  | all         | 1       | 1       | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ |                                                                                                       | 5
+applejack | box8  | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+applejack | box9  | all         | 1       | 1       |                                                                          |                                                                                                       | 5
+
+## # Close up shop
+## clear plumb
+## clear pipe

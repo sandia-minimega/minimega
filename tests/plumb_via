@@ -1,0 +1,122 @@
+# Plumbing tests for vias
+# Note: These test vias, modes, and a small stress test
+
+# Setting up VMs
+vm launch kvm box[1-15]
+vm start box[1-15]
+.columns name,state vm info
+
+# Basic via test
+# Note: -u means unbuffered and makes the command run faster
+plumb box1 box2 box3
+pipe
+pipe box1 via sed -u "s/kittens/cats/"
+pipe 
+pipe box1 "Whiskers on kittens."
+pipe
+
+# Text manipulation with vias
+# Single word replace.
+clear plumb
+clear pipe
+
+plumb box1 "sed -u s/packages/boxes/" box2
+pipe
+pipe box1 "Brown paper packages tied up with strings. packages."
+pipe
+
+# Multi-word replace
+clear plumb
+clear pipe
+
+plumb box1 box2 box3
+pipe
+pipe box1 via sed "s/raindrops/water/g"
+pipe
+pipe box1 "raindrops on roses, raindrops on roses, raindrops on roses."
+pipe
+
+# Only second word replace
+pipe box1 via sed "s/kettles/pots/2"
+pipe
+pipe box1 "bright copper kettles, bright copper kettles, bright copper kettles."
+pipe
+
+# Ignore upper and lower case, focus on every word replace.
+pipe box1 via sed "s/GEESE/ducks/i"
+pipe
+pipe box1 "Geese with moonlight, geese with moonlight, GEESE with moonlight."
+pipe
+
+# Regex, replace line up to specified text.
+pipe box1 via sed "s/^.*OUO/Sensitive material/"
+pipe
+pipe box1 "Warm woolen mittens, we get OUO. These are a few of my favorite things."
+pipe
+
+# Regex example, you must double escape special characters.
+pipe box1 via sed "s/and/\\&/g"
+pipe 
+pipe box1 "Roses and kittens and sleigh bells and mittens."
+pipe
+
+# Multiple replacements per pipe
+pipe box1 via sed "s/and/\\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i"
+pipe 
+pipe box1 "kittens and geese and kittens and GEESE and kittens and geese."
+pipe
+
+# Number manipulation with vias
+clear plumb
+clear pipe
+
+plumb box1 box2 box3
+pipe
+pipe box1 via bin/normal -seed 4 
+pipe
+pipe box1 4.44
+pipe
+pipe box1 5
+pipe
+pipe box1 via bin/normal -seed 100
+pipe
+pipe box1 94.09
+pipe 
+ 
+# Stress test with mode, number and text manipulation
+clear plumb 
+clear pipe
+
+plumb box1 box2 box3
+plumb box4 box5 box6
+plumb box6 box7
+plumb box7 box8 box9 box10 box11 box12 box13 box14 box15
+
+pipe
+pipe box6 mode round-robin
+
+pipe
+pipe box1 via sed "s/kittens/cats/g"
+pipe
+pipe box1 "kittens with whiskers, kittens with whiskers, kittens with whiskers."
+pipe
+pipe box4 via sed -e "s/kettles/pots/" -e "s/geese/ducks/i" -e "s/and/\\&/2"
+pipe
+pipe box4 "kittens and geese and kittens and geese and kittens and geese."
+pipe
+pipe box6 via bin/normal -seed 8000
+pipe
+pipe box6 90.8
+pipe
+pipe box7 via sed -e "s/kittens/cats/g" -e "s/these are a few of my favorite things/\\:\\)/"
+pipe
+pipe box7 "kittens and whiskers and kittens and these are a few of my favorite things and kittens."
+pipe
+pipe box6 88
+pipe
+pipe box4 "Kittens and kettles and geese are fun. Kittens and GEESE and kittens and geese and kittens and geese."
+pipe
+
+# Close up shop
+clear plumb
+clear pipe

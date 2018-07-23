@@ -1,0 +1,85 @@
+# Basic plumbing tests
+# Note: These test basic, modes and a small stress test.
+
+# Create VMs for the tests
+vm launch kvm box[1-15]
+vm start box[1-15]
+.columns name,state vm info
+
+# Create basic pipe
+plumb box1 box2
+pipe
+pipe box1 "Hello to you."
+pipe
+
+# Create more complex text tests
+plumb box3 box4
+pipe
+
+plumb box1 box5 box6
+pipe box1 "Everywhere is where I am."
+pipe
+pipe box2 "This is part of the pipe."
+pipe
+
+# Test Modes
+# All mode testing
+pipe box1 mode all
+pipe
+pipe box1 "This is all."
+pipe
+pipe box1 "This is still all."
+pipe
+
+# Random mode testing
+# Note: This tests random with only two boxes. This should work just like mode all.
+# This is not the best way to test random, but there needs to be static output for the tests.
+pipe box3 mode random
+pipe
+pipe box3 "This is random."
+pipe
+pipe box3 "This should show in box3 and box4."
+pipe
+
+# Round-robin mode testing
+pipe box1 mode round-robin
+pipe
+pipe box1 "This is round robin."
+pipe
+pipe box1 "This is round 2."
+pipe
+pipe box1 "This is round 3."
+pipe
+
+# Complex volume tests
+clear plumb
+clear pipe
+
+plumb box1 box2
+plumb box3 box4 box5
+plumb box2 box3
+plumb box5 box6 box7 box8 box9 box10 box11 box12 box13 box14 box15
+
+pipe
+pipe box1 mode round-robin
+pipe box2 mode round-robin
+pipe
+
+pipe box1 "Raindrops on roses."
+pipe
+pipe box3 "Whiskers on kittens."
+pipe
+pipe box2 "Bright copper kettles and warm woolen mittens."
+pipe
+pipe box5 "Brown paper packages tied up with strings."
+pipe
+pipe box1 "These are a few of my favorite things."
+pipe 
+pipe box5 "Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles."
+pipe
+pipe box3 "Wild geese that fly with the moon on their wings, these are a few of my favorite things."
+pipe
+
+# Close up shop
+clear plumb
+clear pipe
