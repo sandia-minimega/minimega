@@ -2,165 +2,166 @@
 ## # Note: These test basic, modes and a small stress test.
 
 ## # Create VMs for the tests
+## .annotate false
 ## vm launch kvm box[1-15]
 ## vm start box[1-15]
 ## .columns name,state vm info
-host      | name  | state
-applejack | box1  | RUNNING
-applejack | box10 | RUNNING
-applejack | box11 | RUNNING
-applejack | box12 | RUNNING
-applejack | box13 | RUNNING
-applejack | box14 | RUNNING
-applejack | box15 | RUNNING
-applejack | box2  | RUNNING
-applejack | box3  | RUNNING
-applejack | box4  | RUNNING
-applejack | box5  | RUNNING
-applejack | box6  | RUNNING
-applejack | box7  | RUNNING
-applejack | box8  | RUNNING
-applejack | box9  | RUNNING
+name  | state
+box1  | RUNNING
+box10 | RUNNING
+box11 | RUNNING
+box12 | RUNNING
+box13 | RUNNING
+box14 | RUNNING
+box15 | RUNNING
+box2  | RUNNING
+box3  | RUNNING
+box4  | RUNNING
+box5  | RUNNING
+box6  | RUNNING
+box7  | RUNNING
+box8  | RUNNING
+box9  | RUNNING
 
 ## # Create basic pipe
 ## plumb box1 box2
 ## pipe
-host      | name | mode | readers | writers | via | last message | message count
-applejack | box1 | all  | 1       | 0       |     |              | 0
-applejack | box2 | all  | 0       | 1       |     |              | 0
+name | mode | readers | writers | via | last message | message count
+box1 | all  | 1       | 0       |     |              | 0
+box2 | all  | 0       | 1       |     |              | 0
 ## pipe box1 "Hello to you."
 ## pipe
-host      | name | mode | readers | writers | via | last message  | message count
-applejack | box1 | all  | 1       | 0       |     | Hello to you. | 1
-applejack | box2 | all  | 0       | 1       |     | Hello to you. | 1
+name | mode | readers | writers | via | last message  | message count
+box1 | all  | 1       | 0       |     | Hello to you. | 1
+box2 | all  | 0       | 1       |     | Hello to you. | 1
 
 ## # Create more complex text tests
 ## plumb box3 box4
 ## pipe
-host      | name | mode | readers | writers | via | last message  | message count
-applejack | box1 | all  | 1       | 0       |     | Hello to you. | 1
-applejack | box2 | all  | 0       | 1       |     | Hello to you. | 1
-applejack | box3 | all  | 1       | 0       |     |               | 0
-applejack | box4 | all  | 0       | 1       |     |               | 0
+name | mode | readers | writers | via | last message  | message count
+box1 | all  | 1       | 0       |     | Hello to you. | 1
+box2 | all  | 0       | 1       |     | Hello to you. | 1
+box3 | all  | 1       | 0       |     |               | 0
+box4 | all  | 0       | 1       |     |               | 0
 
 ## plumb box1 box5 box6
 ## pipe box1 "Everywhere is where I am."
 ## pipe
-host      | name | mode | readers | writers | via | last message              | message count
-applejack | box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-applejack | box2 | all  | 0       | 1       |     | Everywhere is where I am. | 2
-applejack | box3 | all  | 1       | 0       |     |                           | 0
-applejack | box4 | all  | 0       | 1       |     |                           | 0
-applejack | box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-applejack | box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | via | last message              | message count
+box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
+box2 | all  | 0       | 1       |     | Everywhere is where I am. | 2
+box3 | all  | 1       | 0       |     |                           | 0
+box4 | all  | 0       | 1       |     |                           | 0
+box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
+box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
 ## pipe box2 "This is part of the pipe."
 ## pipe
-host      | name | mode | readers | writers | via | last message              | message count
-applejack | box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-applejack | box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
-applejack | box3 | all  | 1       | 0       |     |                           | 0
-applejack | box4 | all  | 0       | 1       |     |                           | 0
-applejack | box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-applejack | box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | via | last message              | message count
+box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
+box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
+box3 | all  | 1       | 0       |     |                           | 0
+box4 | all  | 0       | 1       |     |                           | 0
+box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
+box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
 
 ## # Test Modes
 ## # All mode testing
 ## pipe box1 mode all
 ## pipe
-host      | name | mode | readers | writers | via | last message              | message count
-applejack | box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-applejack | box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
-applejack | box3 | all  | 1       | 0       |     |                           | 0
-applejack | box4 | all  | 0       | 1       |     |                           | 0
-applejack | box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-applejack | box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | via | last message              | message count
+box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
+box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
+box3 | all  | 1       | 0       |     |                           | 0
+box4 | all  | 0       | 1       |     |                           | 0
+box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
+box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
 ## pipe box1 "This is all."
 ## pipe
-host      | name | mode | readers | writers | via | last message              | message count
-applejack | box1 | all  | 2       | 0       |     | This is all.              | 3
-applejack | box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
-applejack | box3 | all  | 1       | 0       |     |                           | 0
-applejack | box4 | all  | 0       | 1       |     |                           | 0
-applejack | box5 | all  | 1       | 1       |     | This is all.              | 2
-applejack | box6 | all  | 0       | 1       |     | This is all.              | 2
+name | mode | readers | writers | via | last message              | message count
+box1 | all  | 2       | 0       |     | This is all.              | 3
+box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
+box3 | all  | 1       | 0       |     |                           | 0
+box4 | all  | 0       | 1       |     |                           | 0
+box5 | all  | 1       | 1       |     | This is all.              | 2
+box6 | all  | 0       | 1       |     | This is all.              | 2
 ## pipe box1 "This is still all."
 ## pipe
-host      | name | mode | readers | writers | via | last message       | message count
-applejack | box1 | all  | 2       | 0       |     | This is still all. | 4
-applejack | box2 | all  | 0       | 1       |     | This is still all. | 5
-applejack | box3 | all  | 1       | 0       |     |                    | 0
-applejack | box4 | all  | 0       | 1       |     |                    | 0
-applejack | box5 | all  | 1       | 1       |     | This is still all. | 3
-applejack | box6 | all  | 0       | 1       |     | This is still all. | 3
+name | mode | readers | writers | via | last message       | message count
+box1 | all  | 2       | 0       |     | This is still all. | 4
+box2 | all  | 0       | 1       |     | This is still all. | 5
+box3 | all  | 1       | 0       |     |                    | 0
+box4 | all  | 0       | 1       |     |                    | 0
+box5 | all  | 1       | 1       |     | This is still all. | 3
+box6 | all  | 0       | 1       |     | This is still all. | 3
 
 ## # Random mode testing
 ## # Note: This tests random with only two boxes. This should work just like mode all.
 ## # This is not the best way to test random, but there needs to be static output for the tests.
 ## pipe box3 mode random
 ## pipe
-host      | name | mode   | readers | writers | via | last message       | message count
-applejack | box1 | all    | 2       | 0       |     | This is still all. | 4
-applejack | box2 | all    | 0       | 1       |     | This is still all. | 5
-applejack | box3 | random | 1       | 0       |     |                    | 0
-applejack | box4 | all    | 0       | 1       |     |                    | 0
-applejack | box5 | all    | 1       | 1       |     | This is still all. | 3
-applejack | box6 | all    | 0       | 1       |     | This is still all. | 3
+name | mode   | readers | writers | via | last message       | message count
+box1 | all    | 2       | 0       |     | This is still all. | 4
+box2 | all    | 0       | 1       |     | This is still all. | 5
+box3 | random | 1       | 0       |     |                    | 0
+box4 | all    | 0       | 1       |     |                    | 0
+box5 | all    | 1       | 1       |     | This is still all. | 3
+box6 | all    | 0       | 1       |     | This is still all. | 3
 ## pipe box3 "This is random."
 ## pipe
-host      | name | mode   | readers | writers | via | last message       | message count
-applejack | box1 | all    | 2       | 0       |     | This is still all. | 4
-applejack | box2 | all    | 0       | 1       |     | This is still all. | 5
-applejack | box3 | random | 1       | 0       |     | This is random.    | 1
-applejack | box4 | all    | 0       | 1       |     | This is random.    | 1
-applejack | box5 | all    | 1       | 1       |     | This is still all. | 3
-applejack | box6 | all    | 0       | 1       |     | This is still all. | 3
+name | mode   | readers | writers | via | last message       | message count
+box1 | all    | 2       | 0       |     | This is still all. | 4
+box2 | all    | 0       | 1       |     | This is still all. | 5
+box3 | random | 1       | 0       |     | This is random.    | 1
+box4 | all    | 0       | 1       |     | This is random.    | 1
+box5 | all    | 1       | 1       |     | This is still all. | 3
+box6 | all    | 0       | 1       |     | This is still all. | 3
 ## pipe box3 "This should show in box3 and box4."
 ## pipe
-host      | name | mode   | readers | writers | via | last message                       | message count
-applejack | box1 | all    | 2       | 0       |     | This is still all.                 | 4
-applejack | box2 | all    | 0       | 1       |     | This is still all.                 | 5
-applejack | box3 | random | 1       | 0       |     | This should show in box3 and box4. | 2
-applejack | box4 | all    | 0       | 1       |     | This should show in box3 and box4. | 2
-applejack | box5 | all    | 1       | 1       |     | This is still all.                 | 3
-applejack | box6 | all    | 0       | 1       |     | This is still all.                 | 3
+name | mode   | readers | writers | via | last message                       | message count
+box1 | all    | 2       | 0       |     | This is still all.                 | 4
+box2 | all    | 0       | 1       |     | This is still all.                 | 5
+box3 | random | 1       | 0       |     | This should show in box3 and box4. | 2
+box4 | all    | 0       | 1       |     | This should show in box3 and box4. | 2
+box5 | all    | 1       | 1       |     | This is still all.                 | 3
+box6 | all    | 0       | 1       |     | This is still all.                 | 3
 
 ## # Round-robin mode testing
 ## pipe box1 mode round-robin
 ## pipe
-host      | name | mode        | readers | writers | via | last message                       | message count
-applejack | box1 | round-robin | 2       | 0       |     | This is still all.                 | 4
-applejack | box2 | all         | 0       | 1       |     | This is still all.                 | 5
-applejack | box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-applejack | box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-applejack | box5 | all         | 1       | 1       |     | This is still all.                 | 3
-applejack | box6 | all         | 0       | 1       |     | This is still all.                 | 3
+name | mode        | readers | writers | via | last message                       | message count
+box1 | round-robin | 2       | 0       |     | This is still all.                 | 4
+box2 | all         | 0       | 1       |     | This is still all.                 | 5
+box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
+box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
+box5 | all         | 1       | 1       |     | This is still all.                 | 3
+box6 | all         | 0       | 1       |     | This is still all.                 | 3
 ## pipe box1 "This is round robin."
 ## pipe
-host      | name | mode        | readers | writers | via | last message                       | message count
-applejack | box1 | round-robin | 2       | 0       |     | This is round robin.               | 5
-applejack | box2 | all         | 0       | 1       |     | This is round robin.               | 6
-applejack | box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-applejack | box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-applejack | box5 | all         | 1       | 1       |     | This is still all.                 | 3
-applejack | box6 | all         | 0       | 1       |     | This is still all.                 | 3
+name | mode        | readers | writers | via | last message                       | message count
+box1 | round-robin | 2       | 0       |     | This is round robin.               | 5
+box2 | all         | 0       | 1       |     | This is round robin.               | 6
+box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
+box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
+box5 | all         | 1       | 1       |     | This is still all.                 | 3
+box6 | all         | 0       | 1       |     | This is still all.                 | 3
 ## pipe box1 "This is round 2."
 ## pipe
-host      | name | mode        | readers | writers | via | last message                       | message count
-applejack | box1 | round-robin | 2       | 0       |     | This is round 2.                   | 6
-applejack | box2 | all         | 0       | 1       |     | This is round robin.               | 6
-applejack | box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-applejack | box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-applejack | box5 | all         | 1       | 1       |     | This is round 2.                   | 4
-applejack | box6 | all         | 0       | 1       |     | This is round 2.                   | 4
+name | mode        | readers | writers | via | last message                       | message count
+box1 | round-robin | 2       | 0       |     | This is round 2.                   | 6
+box2 | all         | 0       | 1       |     | This is round robin.               | 6
+box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
+box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
+box5 | all         | 1       | 1       |     | This is round 2.                   | 4
+box6 | all         | 0       | 1       |     | This is round 2.                   | 4
 ## pipe box1 "This is round 3."
 ## pipe
-host      | name | mode        | readers | writers | via | last message                       | message count
-applejack | box1 | round-robin | 2       | 0       |     | This is round 3.                   | 7
-applejack | box2 | all         | 0       | 1       |     | This is round 3.                   | 7
-applejack | box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-applejack | box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-applejack | box5 | all         | 1       | 1       |     | This is round 2.                   | 4
-applejack | box6 | all         | 0       | 1       |     | This is round 2.                   | 4
+name | mode        | readers | writers | via | last message                       | message count
+box1 | round-robin | 2       | 0       |     | This is round 3.                   | 7
+box2 | all         | 0       | 1       |     | This is round 3.                   | 7
+box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
+box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
+box5 | all         | 1       | 1       |     | This is round 2.                   | 4
+box6 | all         | 0       | 1       |     | This is round 2.                   | 4
 
 ## # Complex volume tests
 ## clear plumb
@@ -172,167 +173,167 @@ applejack | box6 | all         | 0       | 1       |     | This is round 2.     
 ## plumb box5 box6 box7 box8 box9 box10 box11 box12 box13 box14 box15
 
 ## pipe
-host      | name  | mode | readers | writers | via | last message | message count
-applejack | box1  | all  | 1       | 0       |     |              | 0
-applejack | box10 | all  | 1       | 1       |     |              | 0
-applejack | box11 | all  | 1       | 1       |     |              | 0
-applejack | box12 | all  | 1       | 1       |     |              | 0
-applejack | box13 | all  | 1       | 1       |     |              | 0
-applejack | box14 | all  | 1       | 1       |     |              | 0
-applejack | box15 | all  | 0       | 1       |     |              | 0
-applejack | box2  | all  | 1       | 1       |     |              | 0
-applejack | box3  | all  | 1       | 1       |     |              | 0
-applejack | box4  | all  | 1       | 1       |     |              | 0
-applejack | box5  | all  | 1       | 1       |     |              | 0
-applejack | box6  | all  | 1       | 1       |     |              | 0
-applejack | box7  | all  | 1       | 1       |     |              | 0
-applejack | box8  | all  | 1       | 1       |     |              | 0
-applejack | box9  | all  | 1       | 1       |     |              | 0
+name  | mode | readers | writers | via | last message | message count
+box1  | all  | 1       | 0       |     |              | 0
+box10 | all  | 1       | 1       |     |              | 0
+box11 | all  | 1       | 1       |     |              | 0
+box12 | all  | 1       | 1       |     |              | 0
+box13 | all  | 1       | 1       |     |              | 0
+box14 | all  | 1       | 1       |     |              | 0
+box15 | all  | 0       | 1       |     |              | 0
+box2  | all  | 1       | 1       |     |              | 0
+box3  | all  | 1       | 1       |     |              | 0
+box4  | all  | 1       | 1       |     |              | 0
+box5  | all  | 1       | 1       |     |              | 0
+box6  | all  | 1       | 1       |     |              | 0
+box7  | all  | 1       | 1       |     |              | 0
+box8  | all  | 1       | 1       |     |              | 0
+box9  | all  | 1       | 1       |     |              | 0
 ## pipe box1 mode round-robin
 ## pipe box2 mode round-robin
 ## pipe
-host      | name  | mode        | readers | writers | via | last message | message count
-applejack | box1  | round-robin | 1       | 0       |     |              | 0
-applejack | box10 | all         | 1       | 1       |     |              | 0
-applejack | box11 | all         | 1       | 1       |     |              | 0
-applejack | box12 | all         | 1       | 1       |     |              | 0
-applejack | box13 | all         | 1       | 1       |     |              | 0
-applejack | box14 | all         | 1       | 1       |     |              | 0
-applejack | box15 | all         | 0       | 1       |     |              | 0
-applejack | box2  | round-robin | 1       | 1       |     |              | 0
-applejack | box3  | all         | 1       | 1       |     |              | 0
-applejack | box4  | all         | 1       | 1       |     |              | 0
-applejack | box5  | all         | 1       | 1       |     |              | 0
-applejack | box6  | all         | 1       | 1       |     |              | 0
-applejack | box7  | all         | 1       | 1       |     |              | 0
-applejack | box8  | all         | 1       | 1       |     |              | 0
-applejack | box9  | all         | 1       | 1       |     |              | 0
+name  | mode        | readers | writers | via | last message | message count
+box1  | round-robin | 1       | 0       |     |              | 0
+box10 | all         | 1       | 1       |     |              | 0
+box11 | all         | 1       | 1       |     |              | 0
+box12 | all         | 1       | 1       |     |              | 0
+box13 | all         | 1       | 1       |     |              | 0
+box14 | all         | 1       | 1       |     |              | 0
+box15 | all         | 0       | 1       |     |              | 0
+box2  | round-robin | 1       | 1       |     |              | 0
+box3  | all         | 1       | 1       |     |              | 0
+box4  | all         | 1       | 1       |     |              | 0
+box5  | all         | 1       | 1       |     |              | 0
+box6  | all         | 1       | 1       |     |              | 0
+box7  | all         | 1       | 1       |     |              | 0
+box8  | all         | 1       | 1       |     |              | 0
+box9  | all         | 1       | 1       |     |              | 0
 ## pipe box1 "Raindrops on roses."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message        | message count
-applejack | box1  | round-robin | 1       | 0       |     | Raindrops on roses. | 1
-applejack | box10 | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box11 | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box12 | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box13 | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box14 | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box15 | all         | 0       | 1       |     | Raindrops on roses. | 1
-applejack | box2  | round-robin | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box3  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box4  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box5  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box6  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box7  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box8  | all         | 1       | 1       |     | Raindrops on roses. | 1
-applejack | box9  | all         | 1       | 1       |     | Raindrops on roses. | 1
+name  | mode        | readers | writers | via | last message        | message count
+box1  | round-robin | 1       | 0       |     | Raindrops on roses. | 1
+box10 | all         | 1       | 1       |     | Raindrops on roses. | 1
+box11 | all         | 1       | 1       |     | Raindrops on roses. | 1
+box12 | all         | 1       | 1       |     | Raindrops on roses. | 1
+box13 | all         | 1       | 1       |     | Raindrops on roses. | 1
+box14 | all         | 1       | 1       |     | Raindrops on roses. | 1
+box15 | all         | 0       | 1       |     | Raindrops on roses. | 1
+box2  | round-robin | 1       | 1       |     | Raindrops on roses. | 1
+box3  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box4  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box5  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box6  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box7  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box8  | all         | 1       | 1       |     | Raindrops on roses. | 1
+box9  | all         | 1       | 1       |     | Raindrops on roses. | 1
 ## pipe box3 "Whiskers on kittens."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message         | message count
-applejack | box1  | round-robin | 1       | 0       |     | Raindrops on roses.  | 1
-applejack | box10 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box11 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box12 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box13 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box14 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box15 | all         | 0       | 1       |     | Whiskers on kittens. | 2
-applejack | box2  | round-robin | 1       | 1       |     | Raindrops on roses.  | 1
-applejack | box3  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box4  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box5  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box6  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box7  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box8  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-applejack | box9  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+name  | mode        | readers | writers | via | last message         | message count
+box1  | round-robin | 1       | 0       |     | Raindrops on roses.  | 1
+box10 | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box11 | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box12 | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box13 | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box14 | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box15 | all         | 0       | 1       |     | Whiskers on kittens. | 2
+box2  | round-robin | 1       | 1       |     | Raindrops on roses.  | 1
+box3  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box4  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box5  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box6  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box7  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box8  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+box9  | all         | 1       | 1       |     | Whiskers on kittens. | 2
 ## pipe box2 "Bright copper kettles and warm woolen mittens."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message                                   | message count
-applejack | box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
-applejack | box10 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box11 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box12 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box13 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box14 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box15 | all         | 0       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
-applejack | box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box5  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box6  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box7  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box8  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box9  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+name  | mode        | readers | writers | via | last message                                   | message count
+box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
+box10 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box11 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box12 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box13 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box14 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box15 | all         | 0       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
+box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box5  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box6  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box7  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box8  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box9  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
 ## pipe box5 "Brown paper packages tied up with strings."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message                                   | message count
-applejack | box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
-applejack | box10 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box11 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box12 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box13 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box14 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box15 | all         | 0       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
-applejack | box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-applejack | box5  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box6  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box7  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box8  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-applejack | box9  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+name  | mode        | readers | writers | via | last message                                   | message count
+box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
+box10 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box11 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box12 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box13 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box14 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box15 | all         | 0       | 1       |     | Brown paper packages tied up with strings.     | 4
+box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
+box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+box5  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box6  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box7  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box8  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+box9  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
 ## pipe box1 "These are a few of my favorite things."
 ## pipe 
-host      | name  | mode        | readers | writers | via | last message                           | message count
-applejack | box1  | round-robin | 1       | 0       |     | These are a few of my favorite things. | 2
-applejack | box10 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box11 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box12 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box13 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box14 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box15 | all         | 0       | 1       |     | These are a few of my favorite things. | 5
-applejack | box2  | round-robin | 1       | 1       |     | These are a few of my favorite things. | 3
-applejack | box3  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
-applejack | box4  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
-applejack | box5  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box6  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box7  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box8  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-applejack | box9  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+name  | mode        | readers | writers | via | last message                           | message count
+box1  | round-robin | 1       | 0       |     | These are a few of my favorite things. | 2
+box10 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box11 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box12 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box13 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box14 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box15 | all         | 0       | 1       |     | These are a few of my favorite things. | 5
+box2  | round-robin | 1       | 1       |     | These are a few of my favorite things. | 3
+box3  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
+box4  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
+box5  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box6  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box7  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box8  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+box9  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
 ## pipe box5 "Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message                                                                                          | message count
-applejack | box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                                | 2
-applejack | box10 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box11 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box12 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box13 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box14 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box15 | all         | 0       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                                | 3
-applejack | box3  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
-applejack | box4  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
-applejack | box5  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box6  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box7  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box8  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-applejack | box9  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+name  | mode        | readers | writers | via | last message                                                                                          | message count
+box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                                | 2
+box10 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box11 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box12 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box13 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box14 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box15 | all         | 0       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                                | 3
+box3  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
+box4  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
+box5  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box6  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box7  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box8  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+box9  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
 ## pipe box3 "Wild geese that fly with the moon on their wings, these are a few of my favorite things."
 ## pipe
-host      | name  | mode        | readers | writers | via | last message                                                                             | message count
-applejack | box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                   | 2
-applejack | box10 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box11 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box12 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box13 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box14 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box15 | all         | 0       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                   | 3
-applejack | box3  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
-applejack | box4  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
-applejack | box5  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box6  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box7  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box8  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-applejack | box9  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+name  | mode        | readers | writers | via | last message                                                                             | message count
+box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                   | 2
+box10 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box11 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box12 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box13 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box14 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box15 | all         | 0       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                   | 3
+box3  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
+box4  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
+box5  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box6  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box7  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box8  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+box9  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
 
 ## # Close up shop
 ## clear plumb

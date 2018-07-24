@@ -2,6 +2,7 @@
 # Note: These test basic, modes and a small stress test.
 
 # Create VMs for the tests
+.annotate false
 vm launch kvm box[1-15]
 vm start box[1-15]
 .columns name,state vm info

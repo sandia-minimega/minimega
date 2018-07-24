@@ -2,6 +2,7 @@
 # Note: These test vias, modes, and a small stress test
 
 # Setting up VMs
+.annotate false
 vm launch kvm box[1-15]
 vm start box[1-15]
 .columns name,state vm info
@@ -49,9 +50,9 @@ pipe box1 "Geese with moonlight, geese with moonlight, GEESE with moonlight."
 pipe
 
 # Regex, replace line up to specified text.
-pipe box1 via sed "s/^.*OUO/Sensitive material/"
+pipe box1 via sed "s/^.*cats/Packages tied up with strings/"
 pipe
-pipe box1 "Warm woolen mittens, we get OUO. These are a few of my favorite things."
+pipe box1 "Warm woolen mittens, we get cats. These are a few of my favorite things."
 pipe
 
 # Regex example, you must double escape special characters.
