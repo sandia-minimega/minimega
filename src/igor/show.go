@@ -157,6 +157,7 @@ func runShow(_ *Command, _ []string) {
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 15, 8, 0, '\t', 0)
 	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
+	userFmt := "%-7v"
 	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
 	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
@@ -169,7 +170,7 @@ func runShow(_ *Command, _ []string) {
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
 		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
-		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
+		fmt.Fprintln(w, name, "\t", fmt.Sprintf(userFmt, r.Owner), "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 		w.Flush()
 	}
 	w.Flush()
