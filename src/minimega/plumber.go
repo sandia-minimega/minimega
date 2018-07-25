@@ -188,7 +188,7 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		}
 	} else {
 		// get info on all named pipes
-		resp.Header = []string{"name", "mode", "readers", "writers", "via", "last message", "message count"}
+		resp.Header = []string{"name", "mode", "readers", "writers", "via", "previous", "count"}
 		resp.Tabular = [][]string{}
 
 		for _, v := range plumber.Pipes() {
