@@ -201,8 +201,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			break
 		}
 
-		// No command was returned, must have been a blank line or a comment
-		// line. Either way, don't try to run a nil command.
+		// Must have been a blank line. Don't try to run.
 		if cmd == nil {
 			continue
 		}
@@ -222,17 +221,20 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		// namespace. If it does, we need to adjust the namespace that we
 		// prepend to all commands.
 		var namespace string
-		for cmd := cmd; cmd != nil; cmd = cmd.Subcommand {
-			// found command to change namespace
-			if strings.HasPrefix(cmd.Pattern, "namespace") && cmd.Subcommand == nil {
-				namespace = cmd.StringArgs["name"]
-			}
-		}
 
-		if namespace == "" {
-			// no change in namespace so recompile the command to execute in
-			// the original namespace
-			cmd = minicli.MustCompilef("namespace %q %v", ns.Name, command)
+		if !cmd.Nop {
+			for cmd := cmd; cmd != nil; cmd = cmd.Subcommand {
+				// found command to change namespace
+				if strings.HasPrefix(cmd.Pattern, "namespace") && cmd.Subcommand == nil {
+					namespace = cmd.StringArgs["name"]
+				}
+			}
+
+			if namespace == "" {
+				// no change in namespace so recompile the command to execute in
+				// the original namespace
+				cmd = minicli.MustCompilef("namespace %q %v", ns.Name, command)
+			}
 		}
 
 		forward(RunCommands(cmd), respChan)
