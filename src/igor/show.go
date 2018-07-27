@@ -144,10 +144,13 @@ func runShow(_ *Command, _ []string) {
 	maxResNameLength := 0
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
+		// Remember longest reservation name for formatting
 		if maxResNameLength < len(r.ResName) {
 			maxResNameLength = len(r.ResName)
 		}
 	}
+	// nameFmt will create uniform color bars for 1st column
+	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
 	sort.Sort(StartSorter(resarray))
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
@@ -155,23 +158,29 @@ func runShow(_ *Command, _ []string) {
 	printShelves(nodes, resarray)
 
 	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 15, 8, 0, '\t', 0)
-	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
-	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, fmt.Sprintf(nameFmt, "NAME"), "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
-	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
-	w.Flush()
+	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+	// Header Row
+	name := BgBlack + FgWhite + fmt.Sprintf(nameFmt, "NAME") + Reset
+	fmt.Fprintln(w, name, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
+	// Divider lines
+	namedash := ""
+	for i := 0; i < maxResNameLength; i++ {
+		namedash += "-"
+	}
+	name = BgBlack + FgWhite + fmt.Sprintf(nameFmt, namedash) + Reset
+	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------------")
+	// "Down" Node list
 	downrange, _ := rnge.UnsplitRange(downNodes)
-	name := BgRed + fmt.Sprintf(nameFmt, "DOWN") + Reset
+	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
-	w.Flush()
+	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
 		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
 		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
-		w.Flush()
 	}
+	// only 1 flush at the end to ensure alignment
 	w.Flush()
 }
 
