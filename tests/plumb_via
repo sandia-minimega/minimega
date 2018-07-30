@@ -121,3 +121,5 @@ pipe
 # Close up shop
 clear plumb
 clear pipe
+vm kill box[1-15]
+vm flush
