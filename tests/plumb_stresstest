@@ -1,0 +1,76 @@
+# Plumbing stress tests
+# Note: Test plumbing with a large volume of messages and through a long stream of hosts. 
+# Note: This test will use a lot of memory/power.
+
+# Create VMs for the tests
+.annotate false
+vm launch kvm box[1-150]
+vm start box[1-150]
+# .columns name,state vm info
+
+# Set up the mega pipes
+clear plumb
+clear pipe
+
+# Volume pipe
+plumb box1 box2 box3 box4 box5 box6 box7 box8 box9 box10 box11 box12 box13 box14 box15 box16 box17 box18 box19 box20 box21 box22 box23 box24 box25 box26 box27 box28 box29 box30 box31 box32 box33 box34 box35 box36 box37 box38 box39 box40 box41 box42 box43 box44 box45 box46 box47 box48 box49 box50 box51 box52 box53 box54 box55 box56 box57 box58 box59 box60 box61 box62 box63 box64 box65 box66 box67 box68 box69 box70 box71 box72 box73 box74 box75 box76 box77 box78 box79 box80 box81 box82 box83 box84 box85 box86 box87 box88 box89 box90 box91 box92 box93 box94 box95 box96 box97 box98 box99 box100
+
+# Solitary loop pipe
+plumb box101 box102 box103 box104 box105 box106 box107 box108 box109 box110 box101
+
+# First string pipe, connected to other two pipes
+plumb box111 box112 box120 box113 box114 box115 box116 box117 box118 box119
+plumb box120 box121 box122 box123 box124 box125 box126 box127 box128 box129
+plumb box129 box130 box131 box132 box133 box134 box135 box136 box137 box138 box139 box140 box141 box142 box143 box144 box145 box146 box147 box148 box149 box150
+
+# Test long message
+pipe box1 "It's not who I am underneath, but what I do that defines me. He's the hero that Gotham deserves, but not the one it needs right now. Your compassion is a weakness your enemies will not share."
+pipe 
+
+# Test numbers
+# Note: Numbers must be type int
+pipe box111 via bin/normal -seed 8
+pipe
+pipe box129 via bin/normal -seed 100
+pipe
+
+# Test 5 sed conversions
+pipe box111 via sed -e "s/name/cat/" -e "s/father/lion/i" -e "s/it/\\&/2" -e "s/sir/dear/" -e "s/destroy/ruin/"
+pipe box111 "it's not just your name sir! it's your father's name! and it's all that's left of him. don't destroy it."
+pipe
+
+# Test word loop for 10 seconds
+pipe box101 via sed "s/batman/catman/"
+pipe box101 "na"
+shell sleep 10
+pipe
+pipe box129 "batman"
+pipe
+
+# Stop and re-create loop
+# Note: This gives a "pipeline does not exist" and a "pipe already created" error, so there is essentially not a good way to stop the loop until the end of the test. Instead the loop is manipulated to test traffic flow until the end of the test and then everything is cleaned.
+# clear plumb box101 box102 box103 box104 box105 box106 box107 box108 box109 box110
+# plumb box101 box102 box103 box104 box105 box106 box107 box108 box109 box110
+
+# Test number loop for 10 seconds
+pipe box101 via bin/normal -seed 777
+pipe box101 loop
+pipe box101 7
+shell sleep 10
+pipe
+
+# Test 5 sed conversions on loop for 10 seconds
+pipe box101 via sed -e "s/name/cat/" -e "s/father/lion/i" -e "s/it/\\&/2" -e "s/sir/dear/" -e "s/destroy/ruin/"
+pipe box101 loop 
+pipe box101 "it's not just your name sir! it's your father's name! and it's all that's left of him. don't destroy it."
+shell sleep 10
+pipe
+
+# Note: Switching from a number to a text via will result in a freeze. Same from text to number. This only freezes while on a loop and the switch is made. 
+
+# Close up shop
+clear plumb
+clear pipe
+
+vm kill box[1-150]
+vm flush

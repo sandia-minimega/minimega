@@ -62,7 +62,7 @@ pipe box1 "Roses and kittens and sleigh bells and mittens."
 pipe
 
 # Multiple replacements per pipe
-pipe box1 via sed "s/and/\\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i"
+pipe box1 via sed -e "s/and/\\&/" -e "s/kittens/cats/g" -e "s/GEESE/ducks/i"
 pipe 
 pipe box1 "kittens and geese and kittens and GEESE and kittens and geese."
 pipe

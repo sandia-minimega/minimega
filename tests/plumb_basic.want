@@ -26,142 +26,142 @@ box9  | RUNNING
 ## # Create basic pipe
 ## plumb box1 box2
 ## pipe
-name | mode | readers | writers | via | received | message count
-box1 | all  | 1       | 0       |     |          | 0
-box2 | all  | 0       | 1       |     |          | 0
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 0     |     | 
+box2 | all  | 0       | 1       | 0     |     |
 ## pipe box1 "Hello to you."
 ## pipe
-name | mode | readers | writers | via | received      | message count
-box1 | all  | 1       | 0       |     | Hello to you. | 1
-box2 | all  | 0       | 1       |     | Hello to you. | 1
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 1     |     | Hello to you.
+box2 | all  | 0       | 1       | 1     |     | Hello to you.
 
 ## # Create more complex text tests
 ## plumb box3 box4
 ## pipe
-name | mode | readers | writers | via | received      | message count
-box1 | all  | 1       | 0       |     | Hello to you. | 1
-box2 | all  | 0       | 1       |     | Hello to you. | 1
-box3 | all  | 1       | 0       |     |               | 0
-box4 | all  | 0       | 1       |     |               | 0
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 1     |     | Hello to you.
+box2 | all  | 0       | 1       | 1     |     | Hello to you.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     |
 
 ## plumb box1 box5 box6
 ## pipe box1 "Everywhere is where I am."
 ## pipe
-name | mode | readers | writers | via | received                  | message count
-box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-box2 | all  | 0       | 1       |     | Everywhere is where I am. | 2
-box3 | all  | 1       | 0       |     |                           | 0
-box4 | all  | 0       | 1       |     |                           | 0
-box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | count | via | previous
+box1 | all  | 2       | 0       | 2     |     | Everywhere is where I am.
+box2 | all  | 0       | 1       | 2     |     | Everywhere is where I am.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     | 
+box5 | all  | 1       | 1       | 1     |     | Everywhere is where I am.
+box6 | all  | 0       | 1       | 1     |     | Everywhere is where I am.
 ## pipe box2 "This is part of the pipe."
 ## pipe
-name | mode | readers | writers | via | received                  | message count
-box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
-box3 | all  | 1       | 0       |     |                           | 0
-box4 | all  | 0       | 1       |     |                           | 0
-box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | count | via | previous
+box1 | all  | 2       | 0       | 2     |     | Everywhere is where I am.
+box2 | all  | 0       | 1       | 3     |     | This is part of the pipe.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     | 
+box5 | all  | 1       | 1       | 1     |     | Everywhere is where I am.
+box6 | all  | 0       | 1       | 1     |     | Everywhere is where I am.
 
 ## # Test Modes
 ## # All mode testing
 ## pipe box1 mode all
 ## pipe
-name | mode | readers | writers | via | received                  | message count
-box1 | all  | 2       | 0       |     | Everywhere is where I am. | 2
-box2 | all  | 0       | 1       |     | This is part of the pipe. | 3
-box3 | all  | 1       | 0       |     |                           | 0
-box4 | all  | 0       | 1       |     |                           | 0
-box5 | all  | 1       | 1       |     | Everywhere is where I am. | 1
-box6 | all  | 0       | 1       |     | Everywhere is where I am. | 1
+name | mode | readers | writers | count | via | previous
+box1 | all  | 2       | 0       | 2     |     | Everywhere is where I am.
+box2 | all  | 0       | 1       | 3     |     | This is part of the pipe.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     | 
+box5 | all  | 1       | 1       | 1     |     | Everywhere is where I am.
+box6 | all  | 0       | 1       | 1     |     | Everywhere is where I am.
 ## pipe box1 "This is all."
 ## pipe
-name | mode | readers | writers | via | received     | message count
-box1 | all  | 2       | 0       |     | This is all. | 3
-box2 | all  | 0       | 1       |     | This is all. | 4
-box3 | all  | 1       | 0       |     |          | 0
-box4 | all  | 0       | 1       |     |          | 0
-box5 | all  | 1       | 1       |     | This is all. | 2
-box6 | all  | 0       | 1       |     | This is all. | 2
+name | mode | readers | writers | count | via | previous
+box1 | all  | 2       | 0       | 3     |     | This is all.
+box2 | all  | 0       | 1       | 4     |     | This is all.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     | 
+box5 | all  | 1       | 1       | 2     |     | This is all.
+box6 | all  | 0       | 1       | 1     |     | Everywhere is where I am.
 ## pipe box1 "This is still all."
 ## pipe
-name | mode | readers | writers | via | received           | message count
-box1 | all  | 2       | 0       |     | This is still all. | 4
-box2 | all  | 0       | 1       |     | This is still all. | 5
-box3 | all  | 1       | 0       |     |                    | 0
-box4 | all  | 0       | 1       |     |                    | 0
-box5 | all  | 1       | 1       |     | This is still all. | 3
-box6 | all  | 0       | 1       |     | This is still all. | 3
+name | mode | readers | writers | count | via | previous
+box1 | all  | 2       | 0       | 4     |     | This is still all.
+box2 | all  | 0       | 1       | 5     |     | This is still all.
+box3 | all  | 1       | 0       | 0     |     | 
+box4 | all  | 0       | 1       | 0     |     | 
+box5 | all  | 1       | 1       | 3     |     | This is still all.
+box6 | all  | 0       | 1       | 1     |     | Everywhere is where I am.
 
 ## # Random mode testing
 ## # Note: This tests random with only two boxes. This should work just like mode all.
 ## # This is not the best way to test random, but there needs to be static output for the tests.
 ## pipe box3 mode random
 ## pipe
-name | mode   | readers | writers | via | received           | message count
-box1 | all    | 2       | 0       |     | This is still all. | 4
-box2 | all    | 0       | 1       |     | This is still all. | 5
-box3 | random | 1       | 0       |     |                    | 0
-box4 | all    | 0       | 1       |     |                    | 0
-box5 | all    | 1       | 1       |     | This is still all. | 3
-box6 | all    | 0       | 1       |     | This is still all. | 3
+name | mode   | readers | writers | count | via | previous
+box1 | all    | 2       | 0       | 4     |     | This is still all.
+box2 | all    | 0       | 1       | 5     |     | This is still all.
+box3 | random | 1       | 0       | 0     |     | 
+box4 | all    | 0       | 1       | 0     |     | 
+box5 | all    | 1       | 1       | 3     |     | This is still all.
+box6 | all    | 0       | 1       | 1     |     | Everywhere is where I am.
 ## pipe box3 "This is random."
 ## pipe
-name | mode   | readers | writers | via | received           | message count
-box1 | all    | 2       | 0       |     | This is still all. | 4
-box2 | all    | 0       | 1       |     | This is still all. | 5
-box3 | random | 1       | 0       |     | This is random.    | 1
-box4 | all    | 0       | 1       |     | This is random.    | 1
-box5 | all    | 1       | 1       |     | This is still all. | 3
-box6 | all    | 0       | 1       |     | This is still all. | 3
+name | mode   | readers | writers | count | via | previous
+box1 | all    | 2       | 0       | 4     |     | This is still all.
+box2 | all    | 0       | 1       | 5     |     | This is still all.
+box3 | random | 1       | 0       | 1     |     | This is random.
+box4 | all    | 0       | 1       | 1     |     | This is random.
+box5 | all    | 1       | 1       | 3     |     | This is still all.
+box6 | all    | 0       | 1       | 3     |     | This is still all.
 ## pipe box3 "This should show in box3 and box4."
 ## pipe
-name | mode   | readers | writers | via | received                           | message count
-box1 | all    | 2       | 0       |     | This is still all.                 | 4
-box2 | all    | 0       | 1       |     | This is still all.                 | 5
-box3 | random | 1       | 0       |     | This should show in box3 and box4. | 2
-box4 | all    | 0       | 1       |     | This should show in box3 and box4. | 2
-box5 | all    | 1       | 1       |     | This is still all.                 | 3
-box6 | all    | 0       | 1       |     | This is still all.                 | 3
+name | mode   | readers | writers | count | via | previous
+box1 | all    | 2       | 0       | 4     |     | This is still all.
+box2 | all    | 0       | 1       | 5     |     | This is still all.
+box3 | random | 1       | 0       | 2     |     | This should show in box3 and box4.
+box4 | all    | 0       | 1       | 2     |     | This should show in box3 and box4.
+box5 | all    | 1       | 1       | 3     |     | This is still all.
+box6 | all    | 0       | 1       | 3     |     | This is still all.
 
 ## # Round-robin mode testing
 ## pipe box1 mode round-robin
 ## pipe
-name | mode        | readers | writers | via | received                           | message count
-box1 | round-robin | 2       | 0       |     | This is still all.                 | 4
-box2 | all         | 0       | 1       |     | This is still all.                 | 5
-box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-box5 | all         | 1       | 1       |     | This is still all.                 | 3
-box6 | all         | 0       | 1       |     | This is still all.                 | 3
+name | mode        | readers | writers | count | via | previous
+box1 | round-robin | 2       | 0       | 4     |     | This is still all.
+box2 | all         | 0       | 1       | 5     |     | This is still all.
+box3 | random      | 1       | 0       | 2     |     | This should show in box3 and box4.
+box4 | all         | 0       | 1       | 2     |     | This should show in box3 and box4.
+box5 | all         | 1       | 1       | 3     |     | This is still all.
+box6 | all         | 0       | 1       | 3     |     | This is still all.
 ## pipe box1 "This is round robin."
 ## pipe
-name | mode        | readers | writers | via | received                           | message count
-box1 | round-robin | 2       | 0       |     | This is round robin.               | 5
-box2 | all         | 0       | 1       |     | This is round robin.               | 6
-box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-box5 | all         | 1       | 1       |     | This is still all.                 | 3
-box6 | all         | 0       | 1       |     | This is still all.                 | 3
+name | mode        | readers | writers | count | via | previous
+box1 | round-robin | 2       | 0       | 5     |     | This is round robin.
+box2 | all         | 0       | 1       | 5     |     | This is still all.
+box3 | random      | 1       | 0       | 2     |     | This should show in box3 and box4.
+box4 | all         | 0       | 1       | 2     |     | This should show in box3 and box4.
+box5 | all         | 1       | 1       | 4     |     | This is round robin.
+box6 | all         | 0       | 1       | 4     |     | This is round robin.
 ## pipe box1 "This is round 2."
 ## pipe
-name | mode        | readers | writers | via | received                           | message count
-box1 | round-robin | 2       | 0       |     | This is round 2.                   | 6
-box2 | all         | 0       | 1       |     | This is round robin.               | 6
-box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-box5 | all         | 1       | 1       |     | This is round 2.                   | 4
-box6 | all         | 0       | 1       |     | This is round 2.                   | 4
+name | mode        | readers | writers | count | via | previous
+box1 | round-robin | 2       | 0       | 6     |     | This is round 2.
+box2 | all         | 0       | 1       | 6     |     | This is round 2.
+box3 | random      | 1       | 0       | 2     |     | This should show in box3 and box4.
+box4 | all         | 0       | 1       | 2     |     | This should show in box3 and box4.
+box5 | all         | 1       | 1       | 4     |     | This is round robin.
+box6 | all         | 0       | 1       | 4     |     | This is round robin.
 ## pipe box1 "This is round 3."
 ## pipe
-name | mode        | readers | writers | via | received                           | message count
-box1 | round-robin | 2       | 0       |     | This is round 3.                   | 7
-box2 | all         | 0       | 1       |     | This is round 3.                   | 7
-box3 | random      | 1       | 0       |     | This should show in box3 and box4. | 2
-box4 | all         | 0       | 1       |     | This should show in box3 and box4. | 2
-box5 | all         | 1       | 1       |     | This is round 2.                   | 4
-box6 | all         | 0       | 1       |     | This is round 2.                   | 4
+name | mode        | readers | writers | count | via | previous
+box1 | round-robin | 2       | 0       | 7     |     | This is round 3.
+box2 | all         | 0       | 1       | 6     |     | This is round 2.
+box3 | random      | 1       | 0       | 2     |     | This should show in box3 and box4.
+box4 | all         | 0       | 1       | 2     |     | This should show in box3 and box4.
+box5 | all         | 1       | 1       | 5     |     | This is round 3.
+box6 | all         | 0       | 1       | 5     |     | This is round 3.
 
 ## # Complex volume tests
 ## clear plumb
@@ -173,171 +173,172 @@ box6 | all         | 0       | 1       |     | This is round 2.                 
 ## plumb box5 box6 box7 box8 box9 box10 box11 box12 box13 box14 box15
 
 ## pipe
-name  | mode | readers | writers | via | received | message count
-box1  | all  | 1       | 0       |     |          | 0
-box10 | all  | 1       | 1       |     |          | 0
-box11 | all  | 1       | 1       |     |          | 0
-box12 | all  | 1       | 1       |     |          | 0
-box13 | all  | 1       | 1       |     |          | 0
-box14 | all  | 1       | 1       |     |          | 0
-box15 | all  | 0       | 1       |     |          | 0
-box2  | all  | 1       | 1       |     |          | 0
-box3  | all  | 1       | 1       |     |          | 0
-box4  | all  | 1       | 1       |     |          | 0
-box5  | all  | 1       | 1       |     |          | 0
-box6  | all  | 1       | 1       |     |          | 0
-box7  | all  | 1       | 1       |     |          | 0
-box8  | all  | 1       | 1       |     |          | 0
-box9  | all  | 1       | 1       |     |          | 0
+name  | mode | readers | writers | count | via | previous
+box1  | all  | 1       | 0       | 0     |     | 
+box10 | all  | 1       | 1       | 0     |     | 
+box11 | all  | 1       | 1       | 0     |     | 
+box12 | all  | 1       | 1       | 0     |     | 
+box13 | all  | 1       | 1       | 0     |     | 
+box14 | all  | 1       | 1       | 0     |     | 
+box15 | all  | 0       | 1       | 0     |     | 
+box2  | all  | 1       | 1       | 0     |     | 
+box3  | all  | 1       | 1       | 0     |     | 
+box4  | all  | 1       | 1       | 0     |     | 
+box5  | all  | 1       | 1       | 0     |     | 
+box6  | all  | 1       | 1       | 0     |     | 
+box7  | all  | 1       | 1       | 0     |     | 
+box8  | all  | 1       | 1       | 0     |     | 
+box9  | all  | 1       | 1       | 0     |     |
 ## pipe box1 mode round-robin
 ## pipe box2 mode round-robin
 ## pipe
-name  | mode        | readers | writers | via | received | message count
-box1  | round-robin | 1       | 0       |     |          | 0
-box10 | all         | 1       | 1       |     |          | 0
-box11 | all         | 1       | 1       |     |          | 0
-box12 | all         | 1       | 1       |     |          | 0
-box13 | all         | 1       | 1       |     |          | 0
-box14 | all         | 1       | 1       |     |          | 0
-box15 | all         | 0       | 1       |     |          | 0
-box2  | round-robin | 1       | 1       |     |          | 0
-box3  | all         | 1       | 1       |     |          | 0
-box4  | all         | 1       | 1       |     |          | 0
-box5  | all         | 1       | 1       |     |          | 0
-box6  | all         | 1       | 1       |     |          | 0
-box7  | all         | 1       | 1       |     |          | 0
-box8  | all         | 1       | 1       |     |          | 0
-box9  | all         | 1       | 1       |     |          | 0
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 0     |     | 
+box10 | all         | 1       | 1       | 0     |     | 
+box11 | all         | 1       | 1       | 0     |     | 
+box12 | all         | 1       | 1       | 0     |     | 
+box13 | all         | 1       | 1       | 0     |     | 
+box14 | all         | 1       | 1       | 0     |     | 
+box15 | all         | 0       | 1       | 0     |     | 
+box2  | round-robin | 1       | 1       | 0     |     | 
+box3  | all         | 1       | 1       | 0     |     | 
+box4  | all         | 1       | 1       | 0     |     | 
+box5  | all         | 1       | 1       | 0     |     | 
+box6  | all         | 1       | 1       | 0     |     | 
+box7  | all         | 1       | 1       | 0     |     | 
+box8  | all         | 1       | 1       | 0     |     | 
+box9  | all         | 1       | 1       | 0     |     |
 
 ## pipe box1 "Raindrops on roses."
 ## pipe
-name  | mode        | readers | writers | via | received            | message count
-box1  | round-robin | 1       | 0       |     | Raindrops on roses. | 1
-box10 | all         | 1       | 1       |     | Raindrops on roses. | 1
-box11 | all         | 1       | 1       |     | Raindrops on roses. | 1
-box12 | all         | 1       | 1       |     | Raindrops on roses. | 1
-box13 | all         | 1       | 1       |     | Raindrops on roses. | 1
-box14 | all         | 1       | 1       |     | Raindrops on roses. | 1
-box15 | all         | 0       | 1       |     | Raindrops on roses. | 1
-box2  | round-robin | 1       | 1       |     | Raindrops on roses. | 1
-box3  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box4  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box5  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box6  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box7  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box8  | all         | 1       | 1       |     | Raindrops on roses. | 1
-box9  | all         | 1       | 1       |     | Raindrops on roses. | 1
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 1     |     | Raindrops on roses.
+box10 | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box11 | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box12 | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box13 | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box14 | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box15 | all         | 0       | 1       | 1     |     | Raindrops on roses.
+box2  | round-robin | 1       | 1       | 1     |     | Raindrops on roses.
+box3  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box4  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box5  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box6  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box7  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box8  | all         | 1       | 1       | 1     |     | Raindrops on roses.
+box9  | all         | 1       | 1       | 1     |     | Raindrops on roses.
 ## pipe box3 "Whiskers on kittens."
 ## pipe
-name  | mode        | readers | writers | via | received             | message count
-box1  | round-robin | 1       | 0       |     | Raindrops on roses.  | 1
-box10 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box11 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box12 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box13 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box14 | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box15 | all         | 0       | 1       |     | Whiskers on kittens. | 2
-box2  | round-robin | 1       | 1       |     | Raindrops on roses.  | 1
-box3  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box4  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box5  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box6  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box7  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box8  | all         | 1       | 1       |     | Whiskers on kittens. | 2
-box9  | all         | 1       | 1       |     | Whiskers on kittens. | 2
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 1     |     | Raindrops on roses.
+box10 | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box11 | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box12 | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box13 | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box14 | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box15 | all         | 0       | 1       | 2     |     | Whiskers on kittens.
+box2  | round-robin | 1       | 1       | 1     |     | Raindrops on roses.
+box3  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box4  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box5  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box6  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box7  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box8  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
+box9  | all         | 1       | 1       | 2     |     | Whiskers on kittens.
 ## pipe box2 "Bright copper kettles and warm woolen mittens."
 ## pipe
-name  | mode        | readers | writers | via | received                                       | message count
-box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
-box10 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box11 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box12 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box13 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box14 | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box15 | all         | 0       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
-box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box5  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box6  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box7  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box8  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box9  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 1     |     | Raindrops on roses.
+box10 | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box11 | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box12 | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box13 | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box14 | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box15 | all         | 0       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box2  | round-robin | 1       | 1       | 2     |     | Bright copper kettles and warm woolen mittens.
+box3  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box4  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box5  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box6  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box7  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box8  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box9  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
 ## pipe box5 "Brown paper packages tied up with strings."
 ## pipe
-name  | mode        | readers | writers | via | received                                       | message count
-box1  | round-robin | 1       | 0       |     | Raindrops on roses.                            | 1
-box10 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box11 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box12 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box13 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box14 | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box15 | all         | 0       | 1       |     | Brown paper packages tied up with strings.     | 4
-box2  | round-robin | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 2
-box3  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box4  | all         | 1       | 1       |     | Bright copper kettles and warm woolen mittens. | 3
-box5  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box6  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box7  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box8  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
-box9  | all         | 1       | 1       |     | Brown paper packages tied up with strings.     | 4
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 1     |     | Raindrops on roses.
+box10 | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box11 | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box12 | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box13 | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box14 | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box15 | all         | 0       | 1       | 4     |     | Brown paper packages tied up with strings.
+box2  | round-robin | 1       | 1       | 2     |     | Bright copper kettles and warm woolen mittens.
+box3  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box4  | all         | 1       | 1       | 3     |     | Bright copper kettles and warm woolen mittens.
+box5  | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box6  | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box7  | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box8  | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
+box9  | all         | 1       | 1       | 4     |     | Brown paper packages tied up with strings.
 ## pipe box1 "These are a few of my favorite things."
 ## pipe 
-name  | mode        | readers | writers | via | received                               | message count
-box1  | round-robin | 1       | 0       |     | These are a few of my favorite things. | 2
-box10 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box11 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box12 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box13 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box14 | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box15 | all         | 0       | 1       |     | These are a few of my favorite things. | 5
-box2  | round-robin | 1       | 1       |     | These are a few of my favorite things. | 3
-box3  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
-box4  | all         | 1       | 1       |     | These are a few of my favorite things. | 4
-box5  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box6  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box7  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box8  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
-box9  | all         | 1       | 1       |     | These are a few of my favorite things. | 5
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 2     |     | These are a few of my favorite things.
+box10 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box11 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box12 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box13 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box14 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box15 | all         | 0       | 1       | 5     |     | These are a few of my favorite things.
+box2  | round-robin | 1       | 1       | 3     |     | These are a few of my favorite things.
+box3  | all         | 1       | 1       | 4     |     | These are a few of my favorite things.
+box4  | all         | 1       | 1       | 4     |     | These are a few of my favorite things.
+box5  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box6  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box7  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box8  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box9  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
 ## pipe box5 "Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles."
 ## pipe
-name  | mode        | readers | writers | via | received                                                                                              | message count
-box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                                | 2
-box10 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box11 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box12 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box13 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box14 | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box15 | all         | 0       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                                | 3
-box3  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
-box4  | all         | 1       | 1       |     | These are a few of my favorite things.                                                                | 4
-box5  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box6  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box7  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box8  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
-box9  | all         | 1       | 1       |     | Cream colored ponies and crisp apple strudels, doorbells and sleigh bells and schnitzel with noodles. | 6
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 2     |     | These are a few of my favorite things.
+box10 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box11 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box12 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box13 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box14 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box15 | all         | 0       | 1       | 5     |     | These are a few of my favorite things.
+box2  | round-robin | 1       | 1       | 3     |     | These are a few of my favorite things.
+box3  | all         | 1       | 1       | 4     |     | These are a few of my favorite things.
+box4  | all         | 1       | 1       | 4     |     | These are a few of my favorite things.
+box5  | all         | 1       | 2       | 5     |     | These are a few of my favorite things.
+box6  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box7  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box8  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box9  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
 ## pipe box3 "Wild geese that fly with the moon on their wings, these are a few of my favorite things."
 ## pipe
-name  | mode        | readers | writers | via | received                                                                                 | message count
-box1  | round-robin | 1       | 0       |     | These are a few of my favorite things.                                                   | 2
-box10 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box11 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box12 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box13 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box14 | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box15 | all         | 0       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box2  | round-robin | 1       | 1       |     | These are a few of my favorite things.                                                   | 3
-box3  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
-box4  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 5
-box5  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box6  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box7  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box8  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
-box9  | all         | 1       | 1       |     | Wild geese that fly with the moon on their wings, these are a few of my favorite things. | 7
+name  | mode        | readers | writers | count | via | previous
+box1  | round-robin | 1       | 0       | 2     |     | These are a few of my favorite things.
+box10 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box11 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box12 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box13 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box14 | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box15 | all         | 0       | 1       | 5     |     | These are a few of my favorite things.
+box2  | round-robin | 1       | 1       | 3     |     | These are a few of my favorite things.
+box3  | all         | 1       | 2       | 4     |     | These are a few of my favorite things.
+box4  | all         | 1       | 1       | 4     |     | These are a few of my favorite things.
+box5  | all         | 1       | 2       | 5     |     | These are a few of my favorite things.
+box6  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box7  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box8  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
+box9  | all         | 1       | 1       | 5     |     | These are a few of my favorite things.
 
 ## # Close up shop
 ## clear plumb
 ## clear pipe
+E: cannot delete named pipe with open writers
 ## vm kill box[1-15]
 ## vm flush
