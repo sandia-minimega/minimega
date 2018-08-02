@@ -74,6 +74,7 @@ type Pipe struct {
 	viaCommand    []string
 	viaHost       string
 	readerCache   []int64
+	numMessages   int64
 }
 
 type Reader struct {
@@ -966,6 +967,13 @@ func (p *Pipe) GetVia() string {
 	return strings.Join(p.viaCommand, " ")
 }
 
+func (p *Pipe) NumMessages() int64 {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
+	return p.numMessages
+}
+
 // pipe lock is already held
 func (p *Pipe) via(value string) (string, error) {
 	if len(p.viaCommand) == 0 {
@@ -1040,6 +1048,9 @@ func (p *Pipe) write(value string, r int64) {
 			}
 		}
 	}
+
+	// tally the messages
+	p.numMessages += 1
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
