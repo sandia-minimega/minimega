@@ -59,6 +59,9 @@ func main() {
 
 	log.Init()
 
+	// init client
+	NewClient()
+
 	if *f_pipe != "" {
 		pipeHandler(*f_pipe)
 		return
