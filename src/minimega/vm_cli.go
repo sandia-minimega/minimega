@@ -549,7 +549,7 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// synchronizes appends to resp.Tabular
 	var mu sync.Mutex
 
-	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
