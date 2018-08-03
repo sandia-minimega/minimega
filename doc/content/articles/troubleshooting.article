@@ -91,7 +91,15 @@ There are a number of reasons that VM A might not be able to ping the router
 interface on the same subnet. We enumerate a few below:
 
  - Mistyped VLANS: when configuring the VLANs, one or both of the VLANs were mistyped. VMs must be on the same VLAN to ensure layer 2 connectivity.
+ - Duplicate IPs: the IP addresses of the VMs are identical. VMs must have distinct IP addresses on the same subnet to ensure layer 3 connectivity.
  - Subnets misconfigured: the IP address of the VMs are in different subnets. The broadcast address must be the same to ensure layer 3 connectivity.
+
+A helpful tool to enumerate the IPs in a subnet is available on the
+[[https://play.golang.org/p/m8TNTtygK0][Go Playground]]. Simply change the CIDR
+on line 10 and then hit run and the output will be all the IPs in the subnet.
+If both IPs are not in the list, then you will not have layer 3 connectivity.
+The last IP in the list is the broadcast IP and is typically not used by an
+individual VM.
 
 `ip`neighbor` can be used to list the layer 2 neighbors for an interface:
 
