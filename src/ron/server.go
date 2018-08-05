@@ -915,6 +915,13 @@ func (s *Server) route(m *Message) {
 				}
 				// update client's tags in case we're matching based on them
 				c.Tags = vm.GetTags()
+
+				// load the relevant info fields, overriding any tag values
+				for _, cmd := range m.Commands {
+					for k := range cmd.Filter.Tags {
+						c.Tags[k], _ = vm.Info(k)
+					}
+				}
 			}
 
 			// create a copy of the Message

@@ -28,6 +28,7 @@ type VM interface {
 	SetCCActive(bool)
 	GetTags() map[string]string
 	SetTag(string, string)
+	Info(string) (string, error)
 }
 
 func unmangle(uuid string) string {
