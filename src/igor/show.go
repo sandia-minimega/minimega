@@ -82,6 +82,8 @@ func runShow(_ *Command, _ []string) {
 
 	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
+	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
+	resNodes := map[int]bool{}
 
 	// Use nmap to determine what nodes are up
 	args := []string{}
@@ -130,8 +132,9 @@ func runShow(_ *Command, _ []string) {
 		nodes[v] = true
 	}
 
-	// Gather a list of which nodes are down
+	// Gather a list of which nodes are down and which nodes are unreserved
 	var downNodes []string
+	var unreservedNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		if !nodes[i] {
 			hostname := igorConfig.Prefix + strconv.Itoa(i)
@@ -147,6 +150,23 @@ func runShow(_ *Command, _ []string) {
 		// Remember longest reservation name for formatting
 		if maxResNameLength < len(r.ResName) {
 			maxResNameLength = len(r.ResName)
+		}
+		// go through each host list and compile list of reserved nodes
+		for _, h := range r.Hosts {
+			v, err := strconv.Atoi(h[len(igorConfig.Prefix):])
+			if err != nil {
+				//that's weird
+				continue
+			}
+			resNodes[v] = true
+		}
+	}
+
+	//compile a list of unreserved nodes
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		if !resNodes[i] {
+			hostname := igorConfig.Prefix + strconv.Itoa(i)
+			unreservedNodes = append(unreservedNodes, hostname)
 		}
 	}
 	// nameFmt will create uniform color bars for 1st column
@@ -173,6 +193,10 @@ func runShow(_ *Command, _ []string) {
 	downrange, _ := rnge.UnsplitRange(downNodes)
 	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
+	// Unreserved Node list
+	resrange, _ := rnge.UnsplitRange(unreservedNodes)
+	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", resrange)
 	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
