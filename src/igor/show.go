@@ -59,16 +59,39 @@ const (
 )
 
 var cmdShow = &Command{
-	UsageLine: "show",
+	UsageLine: "show [-o]",
 	Short:     "show reservations",
 	Long: `
 List all extant reservations. Checks if a host is up by issuing a "ping"
+
+OPTIONAL FLAGS:
+
+The -o flag will change the sort order to sort by reservation owner.
 	`,
+}
+
+var subO bool // -o
+
+// Sort the slice of reservations based on the start time
+type ByOwner []Reservation
+
+func (s ByOwner) Len() int {
+	return len(s)
+}
+
+func (s ByOwner) Less(i, j int) bool {
+	return s[i].Owner < s[j].Owner
+}
+
+func (s ByOwner) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
 }
 
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
+
+	cmdShow.Flag.BoolVar(&subO, "o", false, "")
 }
 
 // Use nmap to scan all the nodes and then show which are up and the
@@ -151,7 +174,11 @@ func runShow(_ *Command, _ []string) {
 	}
 	// nameFmt will create uniform color bars for 1st column
 	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
-	sort.Sort(StartSorter(resarray))
+	if subO {
+		sort.Sort(ByOwner(resarray))
+	} else {
+		sort.Sort(StartSorter(resarray))
+	}
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
