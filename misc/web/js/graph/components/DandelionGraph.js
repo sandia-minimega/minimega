@@ -1,28 +1,22 @@
 /* global _ */
+
 import {MmCanvas} from './MmCanvas.js';
 import {MmGraph} from './MmGraph.js';
 
-// VLANCentricGraph contains a MmGraph that draws a VLAN-Centric
-// representation of a network. Buttons are included to recenter the
-// graph and expand/reduce the size of the nodes in the
-// drawing. Clicking a VLAN will cause its color to change and emit a
-// vlan-selected event.
+// DandelionGraph contains a MmGraph that draws a Host-Centric (?)
+// representation of a network. Both VLANs and Hosts are represented
+// as nodes. Buttons are included to recenter the graph and
+// expand/reduce the size of the nodes in the drawing.
 //
-// Events:
-//
-//   - vlan-selected: Fires whenever a node (VLAN) is clicked. The
-//                    VLAN name is included with the event
 //
 // Examples:
 //
-//     <vlan-centric-graph
-//         v-on:vlan-selected="doSomething($event)">
-//     </vlan-centric-graph>
+//     <dandelion-graph></dandelion-graph>
 //
 
 const template = `
     <div>
-        <h3>VLAN-Centric Graph</h3>
+        <h3>Dandelion Graph</h3>
         <div class="btn-toolbar">
             <div class="btn-group">
                 <button class="btn btn-default" v-on:click="recenter()">
@@ -47,14 +41,13 @@ const template = `
              ref="graph"
              :nodes="nodes"
              :links="links"
-             v-on:node-click="nodeClicked($event)"
              >
            </mm-graph>
         </mm-canvas>
     </div>
     `;
 
-export const VlanCentricGraph = {
+export const DandelionGraph = {
   template: template,
 
   // Other components used by this Vue template
@@ -67,64 +60,63 @@ export const VlanCentricGraph = {
   // dependencies don't change, the cached return value is used.
   computed: {
     // Returns an Array of nodes to be drawn. That is, an array of
-    // Objects representing VLANs is returned with relevant style
+    // Objects representing Hosts and VLANs is returned with relevant style
     // information. See the template and MmGraph for more details.
     nodes() {
-      return _.map(this.$store.getters.vlans, (vlan) => {
+      // VMs are blue
+      const vms = _.map(this.$store.state.vms, (vm) => {
+        return {
+          id: vm.id,
+          radius: this.nodeRadius,
+          fillStyle: 'blue',
+        };
+      });
+
+      // VLANs are red
+      const vlans = _.map(this.$store.getters.vlans, (vlan) => {
         return {
           id: vlan.name,
           radius: this.nodeRadius,
-          fillStyle: vlan.name == this.selectedVlan ? 'blue' : 'red',
+          fillStyle: 'red',
         };
       });
+
+      // Glue 'em together and cross your fingers that all those
+      // IDs are unique.
+      //
+      // TODO Are all those IDs unique?
+      return [].concat(vms, vlans);
     },
 
     // Returns an Array of links to be drawn. That is, an array of
-    // Objects representing links between VLANs is returned. If
-    // one or more VMs is connected to two VLANs, a link is drawn
-    // between those two VLANs.
+    // Objects representing links between Hosts and VLANs is returned
     links() {
-      return _.map(this.$store.getters.routers, (router) => {
-        if (router.vlan.length > 2) {
-          console.log('Found vm connected to >2 vlans');
-        }
-        return {
-          source: router.vlan[0],
-          target: router.vlan[1],
-          strokeStyle: '#000',
-        };
+      const m = _.map(this.$store.state.vms, (vm) => {
+        return _.map(vm.vlan, (vlan) => {
+          return {
+            source: vm.id,
+            target: vlan,
+          };
+        });
       });
+
+      return _.flatten(m);
     },
   },
 
-  // Local data for VlanCentricGraph
+  // Local data for DandelionGraph
   data() {
     return {
       // The radius of the nodes
       nodeRadius: 5,
-
-      // The selected VLAN, if any
-      selectedVlan: null,
     };
   },
 
   // Convenience methods
   methods: {
-
     // Recenters and reheats the graph
     recenter() {
       this.$refs['graph'].recenter();
-    },
-
-    // Runs when a node is clicked
-    nodeClicked(nodeId) {
-      // nodeId is null if clicked away from node
-      this.selectedVlan = nodeId;
-
-      // If the node ID is non-null
-      if (nodeId) {
-        this.$emit('vlan-selected', nodeId);
-      }
     },
   },
 };

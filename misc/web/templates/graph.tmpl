@@ -3,9 +3,20 @@
       <div class="container-fluid">
         <div class="row">
           <div class="col-xs-8">
-            <vlan-centric-graph v-on:vlan-selected="vlanNodeClicked($event)"></vlan-centric-graph>
+            <host-centric-graph v-if="selectedView == 'Host'"></host-centric-graph>
+            <dandelion-graph v-if="selectedView == 'Dandelion'"></dandelion-graph>
+            <vlan-centric-graph v-if="selectedView == 'VLAN'" v-on:vlan-selected="vlanNodeClicked($event)"></vlan-centric-graph>
           </div>
+
           <div class="col-xs-4">
+            <select v-model="selectedView">
+              <option>VLAN</option>
+              <option>Host</option>
+              <option>Dandelion</option>
+            </select>
+
+            <hr>
+
             <vlan-list-group ref="list"></vlan-list-group>
           </div>
         </div>

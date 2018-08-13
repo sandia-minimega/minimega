@@ -1,28 +1,22 @@
 /* global _ */
+
 import {MmCanvas} from './MmCanvas.js';
 import {MmGraph} from './MmGraph.js';
 
-// VLANCentricGraph contains a MmGraph that draws a VLAN-Centric
+// HostCentricGraph contains a MmGraph that draws a Host-Centric (?)
 // representation of a network. Buttons are included to recenter the
 // graph and expand/reduce the size of the nodes in the
-// drawing. Clicking a VLAN will cause its color to change and emit a
-// vlan-selected event.
+// drawing.
 //
-// Events:
-//
-//   - vlan-selected: Fires whenever a node (VLAN) is clicked. The
-//                    VLAN name is included with the event
 //
 // Examples:
 //
-//     <vlan-centric-graph
-//         v-on:vlan-selected="doSomething($event)">
-//     </vlan-centric-graph>
+//     <host-centric-graph></host-centric-graph>
 //
 
 const template = `
     <div>
-        <h3>VLAN-Centric Graph</h3>
+        <h3>Host-Centric Graph</h3>
         <div class="btn-toolbar">
             <div class="btn-group">
                 <button class="btn btn-default" v-on:click="recenter()">
@@ -47,14 +41,13 @@ const template = `
              ref="graph"
              :nodes="nodes"
              :links="links"
-             v-on:node-click="nodeClicked($event)"
              >
            </mm-graph>
         </mm-canvas>
     </div>
     `;
 
-export const VlanCentricGraph = {
+export const HostCentricGraph = {
   template: template,
 
   // Other components used by this Vue template
@@ -67,64 +60,75 @@ export const VlanCentricGraph = {
   // dependencies don't change, the cached return value is used.
   computed: {
     // Returns an Array of nodes to be drawn. That is, an array of
-    // Objects representing VLANs is returned with relevant style
+    // Objects representing Hosts is returned with relevant style
     // information. See the template and MmGraph for more details.
     nodes() {
-      return _.map(this.$store.getters.vlans, (vlan) => {
+      // Returns the color of the VM based on the number of
+      // VLANs it's connected to
+      const fillColor = (vm) => {
+        switch (vm.vlan.length) {
+        case 0:
+          // Unconnected VM
+          return 'red';
+        case 1:
+          // Regular VM
+          return 'blue';
+        default:
+          // "Router"
+          return 'green';
+        }
+      };
+
+
+      return _.map(this.$store.state.vms, (vm) => {
         return {
-          id: vlan.name,
+          id: vm.id,
           radius: this.nodeRadius,
-          fillStyle: vlan.name == this.selectedVlan ? 'blue' : 'red',
+          fillStyle: fillColor(vm),
         };
       });
     },
 
     // Returns an Array of links to be drawn. That is, an array of
-    // Objects representing links between VLANs is returned. If
-    // one or more VMs is connected to two VLANs, a link is drawn
-    // between those two VLANs.
+    // Objects representing links between Hosts is returned
     links() {
-      return _.map(this.$store.getters.routers, (router) => {
-        if (router.vlan.length > 2) {
-          console.log('Found vm connected to >2 vlans');
-        }
-        return {
-          source: router.vlan[0],
-          target: router.vlan[1],
-          strokeStyle: '#000',
-        };
+      // Create an Object that maps VLAN name to an Array of VMs in that VLAN
+      const machines = _.groupBy(
+        this.$store.getters.connectedMachines,
+        (vm) => vm.vlan[0]
+      );
+
+      // Create an Array of link Objects. For each router, create a
+      // link to every VM in every VLAN that the router is connected
+      // to.
+      const connections = _.map(this.$store.getters.routers, (router) => {
+        return _.map(router.vlan, (vlan) => {
+          return _.map(machines[vlan], (m) => {
+            return {
+              source: router.id,
+              target: m.id,
+            };
+          });
+        });
       });
+
+      return _.flatten(connections);
     },
   },
 
-  // Local data for VlanCentricGraph
+  // Local data for HostCentricGraph
   data() {
     return {
       // The radius of the nodes
       nodeRadius: 5,
-
-      // The selected VLAN, if any
-      selectedVlan: null,
     };
   },
 
   // Convenience methods
   methods: {
-
     // Recenters and reheats the graph
     recenter() {
       this.$refs['graph'].recenter();
-    },
-
-    // Runs when a node is clicked
-    nodeClicked(nodeId) {
-      // nodeId is null if clicked away from node
-      this.selectedVlan = nodeId;
-
-      // If the node ID is non-null
-      if (nodeId) {
-        this.$emit('vlan-selected', nodeId);
-      }
     },
   },
 };

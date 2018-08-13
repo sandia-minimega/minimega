@@ -7,27 +7,42 @@ const template = `
     </div>
     `;
 
-export var MmCanvas = {
-    template: template,
+// MmCanvas is an "abstract" Vue component that contains a canvas
+// element. It provides an object named "provider", which allows
+// descendents to manipulate the provided canvas.
+export const MmCanvas = {
 
-    data() {
-        return {
-            provider: {
-                context: null
-            }
-        }
-    },
+  // HTML template for this component
+  template: template,
 
-    provide () {
-        return {
-            provider: this.provider
-        };
-    },
+  // Local data for this component
+  data() {
+    return {
+      // The provider with its canvas context
+      provider: {
+        context: null,
+      },
+    };
+  },
 
-    mounted () {
-        this.provider.context = this.$refs['my-canvas'].getContext('2d');
+  // Provide provider to descendents
+  provide() {
+    return {
+      provider: this.provider,
+    };
+  },
 
-        this.$refs['my-canvas'].width = this.$refs['my-canvas'].parentElement.clientWidth;
-        this.$refs['my-canvas'].height = this.$refs['my-canvas'].parentElement.clientHeight;
-    }
+  // Runs after this Vue component has been mounted and is
+  // ready-to-go
+  mounted() {
+    // Grab the canvas context
+    this.provider.context = this.$refs['my-canvas'].getContext('2d');
+
+    // Set the size of the canvas according to the size of its parent element
+    this.$refs['my-canvas'].width =
+      this.$refs['my-canvas'].parentElement.clientWidth;
+
+    this.$refs['my-canvas'].height =
+      this.$refs['my-canvas'].parentElement.clientHeight;
+  },
 };
