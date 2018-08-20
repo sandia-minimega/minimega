@@ -918,11 +918,13 @@ func (s *Server) route(m *Message) {
 
 				// load the relevant info fields, overriding any tag values
 				for _, cmd := range m.Commands {
-					for k := range cmd.Filter.Tags {
-						// only replace non-zero fields
-						v, _ := vm.Info(k)
-						if v != "" {
-							c.Tags[k] = v
+					if cmd.Filter.Tags != nil {
+						for k := range cmd.Filter.Tags {
+							// only replace non-zero fields
+							v, _ := vm.Info(k)
+							if v != "" {
+								c.Tags[k] = v
+							}
 						}
 					}
 				}
