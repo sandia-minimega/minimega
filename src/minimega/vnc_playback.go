@@ -174,7 +174,7 @@ func (v *vncPlayer) GetStep(vm *KvmVM) (string, error) {
 	return res, err
 }
 
-func (v vncPlayer) apply(vm *KvmVM, fn func(*vncKBPlayback) error) error {
+func (v *vncPlayer) apply(vm *KvmVM, fn func(*vncKBPlayback) error) error {
 	v.Lock()
 	defer v.Unlock()
 
