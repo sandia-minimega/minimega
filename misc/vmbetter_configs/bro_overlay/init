@@ -1,0 +1,66 @@
+#!/bin/sh
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+
+# mount volatile filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
+mount -t cgroup cgroup /sys/fs/cgroup
+
+# / needs permissions!?
+chmod a+rx /
+
+# minimega needs
+modprobe loop
+modprobe virtio_console
+modprobe virtio_pci
+
+# swath of network drivers that might be used
+modprobe e1000
+modprobe e1000e
+modprobe virtio_net
+modprobe vmxnet3
+
+# storage for logs
+modprobe ext4
+modprobe sd_mod
+modprobe ata_piix
+
+# settle :(
+sleep 10
+
+ifconfig lo up
+ifconfig eth0 up
+
+# create symlinks for virtio devices
+mkdir /dev/virtio-ports
+
+for d in $(ls /sys/class/virtio-ports); do
+	name=$(cat /sys/class/virtio-ports/$d/name)
+	ln -s -T /dev/$d /dev/virtio-ports/$name
+done
+
+/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /miniccc.log &
+
+# directory for logs
+mkdir /bro
+
+# create a single partition if we have a disk to write to
+if [ -e /dev/sda ]; then
+    sfdisk /dev/sda << EOF
+    ;
+EOF
+
+    yes | mkfs.ext4 /dev/sda1
+    mount /dev/sda1 /bro
+fi
+
+# start bro
+(cd /bro && /usr/bin/bro -i eth0 &)
+
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'
