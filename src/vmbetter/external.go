@@ -19,7 +19,7 @@ var externalProcesses = map[string]string{
 	"mkfs":        "mkfs.ext3",
 	"extlinux":    "extlinux",
 	"cp":          "cp",
-	"fdisk":       "fdisk",
+	"sfdisk":      "sfdisk",
 	"debootstrap": "debootstrap",
 	"chroot":      "chroot",
 	"bash":        "bash",
