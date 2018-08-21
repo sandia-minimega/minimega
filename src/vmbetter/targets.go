@@ -217,8 +217,8 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 	return nil
 }
 
-// Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, fdisk, mkfs.ext3,
-// cp, and extlinux.
+// Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, sfdisk,
+// mkfs.ext3, cp, and extlinux.
 func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	log.Debugln("using target name:", targetName)
@@ -352,7 +352,7 @@ func createQcow2(target, size string) error {
 // that is the size of the whole device and bootable.
 func partitionQcow2(dev string) error {
 	// partition with fdisk
-	p := process("fdisk")
+	p := process("sfdisk")
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
@@ -377,15 +377,16 @@ func partitionQcow2(dev string) error {
 		return err
 	}
 
-	log.LogAll(stdout, log.INFO, "fdisk")
-	log.LogAll(stderr, log.INFO, "fdisk")
+	log.LogAll(stdout, log.INFO, "sfdisk")
+	log.LogAll(stderr, log.INFO, "sfdisk")
 
 	log.Debug("partitioning with cmd: %v", cmd)
 	err = cmd.Start()
 	if err != nil {
 		return err
 	}
-	io.WriteString(sIn, "n\np\n1\n\n\na\n1\nw\n")
+	io.WriteString(sIn, ",,,*\n")
+	sIn.Close()
 	return cmd.Wait()
 }
 
