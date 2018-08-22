@@ -132,16 +132,6 @@ func runShow(_ *Command, _ []string) {
 		nodes[v] = true
 	}
 
-	// Gather a list of which nodes are down and which nodes are unreserved
-	var downNodes []string
-	var unreservedNodes []string
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		if !nodes[i] {
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			downNodes = append(downNodes, hostname)
-		}
-	}
-
 	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
 	maxResNameLength := 0
@@ -162,10 +152,13 @@ func runShow(_ *Command, _ []string) {
 		}
 	}
 
-	//compile a list of unreserved nodes
+	// Gather a list of which nodes are down and which nodes are unreserved
+	var downNodes []string
+	var unreservedNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		if !resNodes[i] {
 			hostname := igorConfig.Prefix + strconv.Itoa(i)
+			downNodes = append(downNodes, hostname)
 			unreservedNodes = append(unreservedNodes, hostname)
 		}
 	}
