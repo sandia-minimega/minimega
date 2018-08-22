@@ -72,21 +72,6 @@ The -o flag will change the sort order to sort by reservation owner.
 
 var subO bool // -o
 
-// Sort the slice of reservations based on the start time
-type ByOwner []Reservation
-
-func (s ByOwner) Len() int {
-	return len(s)
-}
-
-func (s ByOwner) Less(i, j int) bool {
-	return s[i].Owner < s[j].Owner
-}
-
-func (s ByOwner) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
@@ -175,9 +160,13 @@ func runShow(_ *Command, _ []string) {
 	// nameFmt will create uniform color bars for 1st column
 	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
 	if subO {
-		sort.Sort(ByOwner(resarray))
+		sort.Slice(resarray, func(i, j int) bool {
+			return resarray[i].Owner < resarray[j].Owner
+		})
 	} else {
-		sort.Sort(StartSorter(resarray))
+		sort.Slice(resarray, func(i, j int) bool {
+			return resarray[i].StartTime < resarray[j].StartTime
+		})
 	}
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
