@@ -1,32 +1,45 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
+	"html/template"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"html/template"
-	"fmt"
+	"ranges"
 	"strings"
-	"io/ioutil"
-	"encoding/json"
+	"time"
 )
 
-type Reservation struct {
-	Name string
+var cmdWeb = &Command{
+	UsageLine: "web",
+	Short:     "run a web application",
+	Long:      `Run a Go web application with a GUI for igor`,
+}
+
+func init() {
+	// break init cycle
+	cmdWeb.Run = runWeb
+}
+
+type ResTableRow struct {
+	Name  string
 	Owner string
 	Start string
-	End string
+	End   string
 	Nodes []int
 }
 
 type Speculate struct {
 	Start string
-	End string
+	End   string
 }
 
 type Response struct {
 	Success bool
 	Message string
-	Extra interface{}
+	Extra   interface{}
 }
 
 func throw404(w http.ResponseWriter) {
@@ -34,54 +47,84 @@ func throw404(w http.ResponseWriter) {
 }
 
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(w, r)
 	w.Header().Set("Content-Type", "text/plain")
 	var extra interface{}
+	extra = nil
 	command := r.URL.Query()["run"][0]
+	fmt.Println("Command:", command)
+	fmt.Println("\tFrom:", r.RemoteAddr)
 	q := strings.Split(command, " ")
-	if q[1] == "sub" && q[len(q) - 1] == "-s" {
-		extra = []Speculate{
+	var a Response
+	if q[0] != "igor" {
+		a = Response{false, "command must begin with 'igor'", extra}
+	} else {
+		switch q[1] {
+		case "del":
+			a = Response{true, "Delete! " + command, extra}
+		case "sub":
+			if q[len(q)-1] == "-s" {
+				extra = []Speculate{
 					Speculate{"Apr 25 09:37", "Apr 24 09:37"},
 					Speculate{"Apr 26 09:37", "Apr 23 09:37"},
 					Speculate{"Apr 27 09:37", "Apr 22 09:37"},
 					Speculate{"Apr 28 09:37", "Apr 21 09:37"},
 					Speculate{"Apr 29 09:37", "Apr 20 09:37"},
-				    Speculate{"Apr 30 09:37", "Apr 19 09:37"},
-				    Speculate{"Apr 31 09:37", "Apr 18 09:37"},
-				    Speculate{"Apr 32 09:37", "Apr 17 09:37"},
-				    Speculate{"Apr 33 09:37", "Apr 16 09:37"},
-				    Speculate{"Apr 34 09:37", "Apr 15 09:37"},
+					Speculate{"Apr 30 09:37", "Apr 19 09:37"},
+					Speculate{"Apr 31 09:37", "Apr 18 09:37"},
+					Speculate{"Apr 32 09:37", "Apr 17 09:37"},
+					Speculate{"Apr 33 09:37", "Apr 16 09:37"},
+					Speculate{"Apr 34 09:37", "Apr 15 09:37"},
 				}
-	} else {
-		extra = nil
+			}
+			a = Response{true, "Reserve! " + command, extra}
+		case "power":
+			a = Response{true, "Power! " + command, extra}
+		case "extend":
+			a = Response{true, "Extend! " + command, extra}
+		default:
+			a = Response{false, "command not supported (del, sub, power, extend)", extra}
+		}
 	}
-	a := Response{true, "Server responding to: " + command, extra}
+	fmt.Println("\tResponse:", a.Message)
 	s, _ := json.Marshal(a)
 	w.Write([]byte(s))
-	// fmt.Fprintf(w, "Server successfully received this command: " + r.URL.Query()["run"][0])
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(w, r)
+	fmt.Println(r.Method, r.URL, r.RemoteAddr)
+
+	resRows := []ResTableRow{}
+
+	resRows = append(resRows, ResTableRow{
+		"",
+		"",
+		"",
+		"",
+		ranges.RangeToInts(getDownNodes(getNodes())),
+	})
+
+	timefmt := "Jan 2 15:04"
+	for _, r := range Reservations {
+		resRows = append(resRows, ResTableRow{
+			r.ResName,
+			r.Owner,
+			time.Unix(r.StartTime, 0).Format(timefmt),
+			time.Unix(r.EndTime, 0).Format(timefmt),
+			ranges.RangeToInts(r.Hosts),
+		})
+	}
+
 	if r.URL.Path == "/" {
 		t, err := template.ParseFiles("igorweb.html")
 		if err != nil {
 			panic(err)
 		}
 		data := struct {
-			NumNodeCols int
-			NumNodes int
-			Cluster string
-			Reservations []Reservation
-		}{16, 288, "kn",
-			[]Reservation{
-				Reservation{"", "", "", "", []int{54, 55, 265, 266}},
-				Reservation{"jacob", "ryan", "Apr 25 09:37", "Apr 30 09:37", []int{1, 2, 3}},
-				Reservation{"tis", "terrys", "Apr 25 09:37", "Apr 30 09:37", []int{165, 256, 260, 264}},
-				Reservation{"ptare", "actualhuman", "Apr 25 09:37", "Apr 30 09:37", []int{39, 62, 84, 104, 106, 111, 124, 133, 138, 156, 163, 170, 204}},
-				Reservation{"rcore", "throjs", "Apr 25 09:37", "Apr 30 09:37", []int{45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60}},
-				Reservation{"program", "expertman", "Apr 25 09:37", "Apr 30 09:37", []int{288, 287, 286, 285, 284, 283, 282, 281, 280}},
-		}}
+			NumNodeCols  int
+			NumNodes     int
+			Cluster      string
+			ResTableRows []ResTableRow
+		}{16, 288, igorConfig.Prefix, resRows}
 
 		err = t.Execute(w, data)
 		if err != nil {
@@ -99,7 +142,6 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			}
 			if ext == ".css" {
 				w.Header().Add("Content-Type", "text/css")
-				// t, err := template.ParseFiles("index.html")
 				t, err := template.New("").Parse(
 					fmt.Sprintf("%s", string(contents)),
 				)
@@ -113,7 +155,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func main() {
+func runWeb(_ *Command, _ []string) {
 
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 	http.HandleFunc("/", handler)

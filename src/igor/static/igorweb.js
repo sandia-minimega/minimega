@@ -1,58 +1,3 @@
-// var numNodeCols = 16;
-// var numNodes = 288;
-// var reservations = [
-//     {"nodes": [8, 9, 10, 11, 12 ,13, 14, 15]},
-//     {"name": "jacob", "owner": "Thornton", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [1, 2, 3]},
-//     {"name": "bird", "owner": "Larry", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [4, 5, 6, 7]},
-//     {"name": "jacob", "owner": "Thornton", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [16, 17]},
-//     {"name": "bird", "owner": "Larry", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [18]},
-//     {"name": "jacob", "owner": "Thornton", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [19, 20, 30, 50]},
-//     {"name": "bird", "owner": "Larry", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [60, 75, 288]},
-//     {"name": "jacob", "owner": "Thornton", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [88, 89, 90, 93]},
-//     {"name": "bird", "owner": "Larry", "start": "Apr 25 09:37", "end": "Apr 30 09:37", "nodes": [21, 22, 23, 24, 25]},
-// ];
-// console.log(reservations[0].Name);
-// var specResults = [
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 25 09:37", "end": "Apr 30 09:37"},
-//     {"start": "Apr 29 09:37", "end": "Apr 35 09:37"}
-// ];
-// TODO: work with focusing
-// var colors = {
-//     "Reserved": {
-//         "Down": {
-//             "Unselected": "#ffdd9b",
-//             "Selected": "#eab448",
-//         },
-//         "Up": {
-//             "Unselected": "#ccdfff",
-//             "Selected": "#3f73cc",
-//         }
-//     },
-//     "Available": {
-//         "Down": {
-//             "Unselected": "#e85555",
-//             "Selected": "#ffb5b5",
-//         },
-//         "Up": {
-//             "Unselected": "#ccdfff",
-//             "Selected": "#eab448",
-//         }
-//     }
-// }
-//     ["#ccdfff", "#3f73cc"],
-//     ["#e1c8f7", "#a975d6"],
-//     ["#ffb5b5", "#e85555"],
-//     ["#ffdd9b", "#eab448"],
-//     ["#ffdd9b", "#eab448"],
-// ]
 var response = "";
 
 // selection functions
@@ -212,6 +157,8 @@ function debug(message) {
 }
 
 function execute(onResponse) {
+    $(".responseparent").hide();
+    $("#deletemodaldialog").addClass("modal-sm");
     response = "";
     $(".command").html(command);
     var result;
@@ -234,30 +181,19 @@ function parseResult(successbar = true) {
         result = [false, response];
     }
     $(".result").html(response.Message);
+    $(".response").html(response.Message);
     if (response.Success) {
-        if (successbar) {
-            $("#successbar").addClass("active");
-            setTimeout(function() {
-                if (!$("#successbar").is(":hover")) {
-                    $("#successbar").removeClass("active");
-                }
-                $("#successbar").mouseleave(function() {
-                    setTimeout(function() {
-                        if (!$("#successbar").is(":hover")) {
-                            $("#successbar").removeClass("active");
-                        }
-                    }, 1000)
-                })
-            }, 5000);
-        }
-        return true;
+        $(".responseparent").addClass("success");
+    } else {
+        $(".responseparent").removeClass("success");
     }
-    $(".error").html(response.Message);
-    $(".errorparent").show();
-    return false;
+    $("#deletemodaldialog").removeClass("modal-sm");
+    $(".responseparent").show();
+    return response.Success;
 }
 
 function showLoader(obj) {
+    showBigLoaders();
     obj.children().eq(0).css("visibility", "hidden");
     obj.children().eq(1).css("visibility", "visible");
     $(".dash, .edash, .pdash").prop("disabled", true);
@@ -266,11 +202,27 @@ function showLoader(obj) {
 }
 
 function hideLoaders() {
+    // TODO: only hide big loaders when show/housekeeping stuff returns
+    hideBigLoaders();
     $(".loader").css("visibility", "hidden");
     $(".mdlcmdtext").css("visibility", "visible");
     $(".dash, .edash, .pdash").prop("disabled", false);
     $(".igorbtn").prop("disabled", false);
     $(".cancel").prop("disabled", false);
+}
+
+function showBigLoaders() {
+    $(".bigloader").show();
+    $(".node, #table").animate({"opacity": 0}, 700, function() {});
+    $("#nodegrid").css("min-height", "864px");
+    $("#table").parent().css("min-height", "400px");
+}
+
+function hideBigLoaders() {
+    $(".bigloader").hide();
+    $(".node, #table").animate({"opacity": 1}, 700, function() {});
+    $("#nodegrid").css("min-height", "auto");
+    $("#table").parent().css("min-height", "auto");
 }
 
 
@@ -280,7 +232,7 @@ var newcol = '<div class="col" style="padding: 0">' +
 for (var i = 0; i < numNodeCols; i++) {
     $('#nodegrid').append(newcol + 'id="col' + i + '"></div></div>');
 }
-var grid = '<div draggable="true" tabIndex="-1" style="width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
+var grid = '<div draggable="true" tabIndex="-1" style="opacity: 0; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
 for (var i = 1; i <= numNodes; i++) {
     col = (i - 1) % numNodeCols;
     var classes = ' class="list-group-item list-group-item-action node ';
@@ -304,6 +256,7 @@ for (var i = 1; i <= numNodes; i++) {
     classes += '" ';
     $("#col" + col).append(grid + classes + ' id="' + i +'">' + i + '</div>');
 }
+hideBigLoaders();
 
 // node grid selections
 $(".node").click(function(event) {
@@ -311,6 +264,7 @@ $(".node").click(function(event) {
     toggle($(this));
 });
 
+// node hover to cause res table hover
 $(".node").hover(function() {
     var node = getNodeIndexFromObj($(this));
     for (var i = 0; i < reservations.length; i++) {
@@ -329,36 +283,26 @@ $(".node").mouseleave(function() {
     }
 });
 
-// $(".node").prop("draggable", true);
+// node dragging
 var selectOn = true;
 var firstDragNode = -1;
-// // $(".node").on("dragstart", function( event ) {
-// //     // deselectTable();
-// //     // firstDragNode = $(event.target);
-// //     // if ($(event.target).hasClass("active")) {
-// //     //     selectOn = false;
-// //     // } else {
-// //     //     selectOn = true;
-// //     // }
-// //     // toggle($(event.target));
-// // });
-// TODO: configure dragging for firefox
-// TODO: make sure dragging can be undone in the same movement
-// TODO: fix hover, I don't like it right now
-// TODO: disable drag from outside
 var nodes = document.getElementsByClassName("node");
 var nodeLeft;
 var maxDragNode;
 var minDragNode;
+var extremeMax;
+var extremeMin;
+var minDragNode;
 var lastDrag;
 for (var i = 0; i < nodes.length; i++) {
-    nodes[i].addEventListener("dragstart", function(e) {
-        // console.log("dragstart");
+    nodes[i].addEventListener("dragstart", function(event) {
         deselectTable();
         firstDragNode = $(event.target);
         maxDragNode = getNodeIndexFromObj(firstDragNode);
-        minDragNode = getNodeIndexFromObj(firstDragNode);
-        lastDrag = getNodeIndexFromObj(firstDragNode);
+        minDragNode = maxDragNode;
+        extremeMax = maxDragNode;
+        extremeMin = maxDragNode;
+        lastDrag = maxDragNode;
         if ($(event.target).hasClass("active")) {
             selectOn = false;
         } else {
@@ -368,70 +312,55 @@ for (var i = 0; i < nodes.length; i++) {
         var crt = this.cloneNode(true);
         crt.style.display = "none";
         document.body.appendChild(crt);
-        e.dataTransfer.setDragImage(crt, 0, 0);
+        event.dataTransfer.setDragImage(crt, 0, 0);
+        event.dataTransfer.setData('text/plain', '');
     }, false);
 }
 
-$(".node").on("dragover", function( event ) {
-    // console.log(firstDragNode);
+$(".node").on("dragover", function(event) {
     if (firstDragNode === -1) return;
     var fromIndex = getNodeIndexFromObj(firstDragNode);
     var toIndex = getNodeIndexFromObj($(event.target));
-    if (toIndex > minDragNode && toIndex < maxDragNode) {
-        if (toIndex > minDragNode && toIndex < firstDragNode) {
-            console.log("deselecta");
-            selectNodes(minDragNode, toIndex, !selectOn);
+    if (selectOn) {
+        if (toIndex > minDragNode && toIndex < maxDragNode) {
+            if (toIndex < fromIndex) {
+                selectNodes(minDragNode, toIndex, !selectOn);
+                minDragNode = toIndex;
+            }
+            if (toIndex > fromIndex) {
+                selectNodes(maxDragNode, toIndex, !selectOn);
+                maxDragNode = toIndex;
+            }
+        } else {
+            selectNodes(fromIndex, toIndex, selectOn);
         }
-        if (toIndex > firstDragNode && toIndex < maxDragNode) {
-            console.log("deselectb");
-            selectNodes(maxDragNode, toIndex, !selectOn);
+        if (toIndex < fromIndex && lastDrag >= fromIndex) {
+            maxDragNode = fromIndex;
+            if (extremeMax !== fromIndex) {
+                selectNodes(extremeMax, fromIndex + 1, !selectOn);
+            }
         }
+        if (toIndex > fromIndex && lastDrag <= fromIndex) {
+            minDragNode = fromIndex;
+            if (extremeMin !== fromIndex) {
+                selectNodes(extremeMin, fromIndex - 1, !selectOn);
+            }
+        }
+        maxDragNode = Math.max(toIndex, maxDragNode);
+        minDragNode = Math.min(toIndex, minDragNode);
+        extremeMax = Math.max(extremeMax, maxDragNode);
+        extremeMin = Math.min(extremeMin, minDragNode);
+        if (toIndex != firstDragNode) {
+            lastDrag = toIndex;
+        }
+        event.preventDefault();
     } else {
-        selectNodes(fromIndex, toIndex, selectOn);
+        selectNodes(fromIndex, toIndex, false);
     }
-    if (toIndex < firstDragNode && lastDrag >= firstDragNode) {
-        console.log("switcha");
-    }
-    if (toIndex > firstDragNode && lastDrag <= firstDragNode) {
-        console.log("switchb");
-    }
-    maxDragNode = Math.max(toIndex, maxDragNode);
-    minDragNode = Math.min(toIndex, minDragNode);
-    if (toIndex != firstDragNode) {
-        lastDrag = toIndex;
-    }
-    // for (var i = 0; i <= Math.abs(toIndex - fromIndex); i++) {
-    //     var node = Math.min(fromIndex, toIndex) + i;
-    //     if (selectOn) {
-    //         select(getObjFromNodeIndex(node));
-    //     } else {
-    //         deselect(getObjFromNodeIndex(node));
-    //     }
-    // }
-    event.preventDefault();
 });
 
 $(".node").on("dragend", function(event) {
     firstDragNode = -1;
-})
-
-$(".node").on("dragenter", function(event) {
-    if (firstDragNode === -1) return;
-    // console.log("dragenter");
-    var fromIndex = getNodeIndexFromObj(firstDragNode);
-    var toIndex = getNodeIndexFromObj($(event.target));
-    // console.log("l " + nodeLeft);
-    // console.log("f " + fromIndex);
-    // console.log("t " + toIndex);
-    if (nodeLeft < Math.min(fromIndex, toIndex) || nodeLeft > Math.max(fromIndex, toIndex)) {
-        // deselect(getObjFromNodeIndex(nodeLeft));
-    }
-})
-
-$(".node").on("dragleave", function(event) {
-    deselect($(event.target));
-    // console.log("dragleave");
-    nodeLeft = getNodeIndexFromObj($(event.target));
 })
 
 // populate reservation table
@@ -483,9 +412,6 @@ $(".res").mouseleave(function() {
 
 // deselect on outside click
 $(document).click(function(event) {
-    if (!$(event.target).hasClass("mdl") && !$(event.target).hasClass("successbar")) {
-        $("#successbar").removeClass("active");
-    }
     if (!$(event.target).hasClass("node") &&
     !$(event.target).hasClass("res") &&
     !$(event.target).hasClass("igorbtn") &&
@@ -556,10 +482,7 @@ $(".specreserve").click(function() {
 
 function runNew() {
     hideLoaders();
-    if (parseResult()) {
-        $("#newresmodal").modal("hide");
-        $(".dash").val("");
-    }
+    parseResult();
 }
 
 $(".newresmodalgobtn").click(function(event) {
@@ -609,7 +532,6 @@ $("#nrmodalnodelist").click(function(event){
 // Update new reservation command
 var command = "";
 function updateCommandLine() {
-    $(".errorparent").hide();
     if ($("#dashr").val() === "" ||
     ($("#nrmodalki").hasClass("active") ?
     $("#dashk").val() === "" ||
@@ -657,17 +579,11 @@ $("#dashn").click(function(event) {
 // Delete reservation modal
 function runDelete() {
     hideLoaders();
-    if (parseResult()) {
-        $("#deleteresmodal").modal("hide");
-        getObjFromResIndex(selectedRes).hide();
-        deselectGrid();
-        deselectTable();
-    }
+    parseResult();
 }
 
 $(".deleteresmodalgobtn").click(function() {
     command = "igor del " + reservations[selectedRes].Name;
-    $(".errorparent").hide();
     showLoader($(this));
     execute(runDelete);
 });
@@ -687,12 +603,7 @@ $("#powermodal").on('show.bs.modal', function() {
 
 function runPower() {
     hideLoaders();
-    if (parseResult()) {
-        $("#powermodal").modal("hide");
-        $(".pdash").val("");
-        deselectGrid();
-        deselectTable();
-    }
+    parseResult();
 }
 
 $(".powermodalgobtn").click(function(event) {
@@ -721,7 +632,6 @@ $("#pmodalnodelist").click(function(event){
 // Update power command
 var command = "";
 function pUpdateCommandLine() {
-    $(".errorparent").hide();
     if ($("#pmodalres").hasClass("active") ?
     $("#pdashr").val() === "" :
     $("#pdashn").val() === "") {
@@ -751,12 +661,7 @@ $("#extendmodal").on('show.bs.modal', function() {
 
 function runExtend() {
     hideLoaders();
-    if(parseResult()) {
-        $("#extendmodal").modal("hide");
-        $(".edash").val("");
-        deselectGrid();
-        deselectTable();
-    }
+    parseResult();
 }
 
 $(".extendmodalgobtn").click(function(event) {
@@ -768,7 +673,6 @@ $(".extendmodalgobtn").click(function(event) {
 // Update extend command
 var command = "";
 function eUpdateCommandLine() {
-    $(".errorparent").hide();
     if ($("#edashr").val() === "") {
         $(".extendmodalgobtn").prop("disabled", true);
     } else {
@@ -780,7 +684,29 @@ function eUpdateCommandLine() {
     "-r " + $("#edashr").val() + " " +
     ($("#edasht").val() == "" ?
     "" : "-t " + $("#edasht").val()
-)
-;
-$("#ecommandline").html(command);
+    );
+    $("#ecommandline").html(command);
 }
+
+// copy response
+$(".copy").click(function(event) {
+    var textArea = document.createElement("textarea");
+    textArea.value = $(event.target).parent().parent().parent().find("code").html();
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand("copy");
+    textArea.remove();
+    $(".copytooltip").show();
+    $(".copytooltip").animate({"opacity": 0.95}, 250, function() {
+        setTimeout(function() {
+            $(".copytooltip").animate({"opacity": 0}, 250, function() {
+                $(".copytooltip").hide();
+            })
+        }, 1000);
+    });
+});
+
+$(".igorbtn").click(function() {
+    $(".responseparent").hide();
+    $("#deletemodaldialog").addClass("modal-sm");
+});

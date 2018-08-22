@@ -53,6 +53,7 @@ var commands = []*Command{
 	cmdPower,
 	cmdExtend,
 	cmdNotify,
+	cmdWeb,
 }
 
 var exitStatus = 0

@@ -2,10 +2,16 @@
 <html lang="en-US">
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Smlep5jCw/wG7hdkwQ/Z5nLIefveQRIY9nfy6xoR1uRYBtpZgI6339F5dgvm/e9B" crossorigin="anonymous">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/js/bootstrap.min.js" integrity="sha384-o+RDsa0aLu++PJvFqy8fFScvbHFLtbvScb8AjopnFD+iEQ7wo/CG0xlczd+2O/em" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="/static/igorweb.css">
+    <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script> -->
+    <script src="./static/jquery-3.3.1.min.js"></script>
+
+    <!-- <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-Smlep5jCw/wG7hdkwQ/Z5nLIefveQRIY9nfy6xoR1uRYBtpZgI6339F5dgvm/e9B" crossorigin="anonymous">
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.2/js/bootstrap.min.js" integrity="sha384-o+RDsa0aLu++PJvFqy8fFScvbHFLtbvScb8AjopnFD+iEQ7wo/CG0xlczd+2O/em" crossorigin="anonymous"></script> -->
+    <link href="./static/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous">
+    <script src="./static/bootstrap.min.js" crossorigin="anonymous"></script>
+    <link href="./static/bootstrap-grid.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link href="./static/bootstrap-reboot.min.css" rel="stylesheet" crossorigin="anonymous">
+    <link rel="stylesheet" href="./static/igorweb.css">
     <link href="https://fonts.googleapis.com/css?family=Montserrat:600i,800" rel="stylesheet">
 </head>
 <body style="background-color: whitesmoke">
@@ -19,9 +25,10 @@
             <div class="col-10">
                 <div class="row" style="margin-top: 8em">
                     <div class="col">
-                        <div class="card mx-auto text-center" style="width: 1000px; margin-bottom: 4em; background-color: #e1c8f7; border: none;">
+                        <div class="card mx-auto text-center" style="width: 1000px; margin-bottom: 4em; background-color: #e7ccff; border: none;">
                             <div class="card-body">
-                                <div id="nodegrid" class="row" style="margin: 0.5em">
+                                <div id="nodegrid" class="row" style="margin: 0.5em; min-height: 400px;">
+                                    <div class="mdl bigloader"></div>
                                     <!-- Grid of nodes -->
                                 </div>
                             </div>
@@ -29,8 +36,9 @@
                     </div>
                     <div class="col">
                         <div class="card mx-auto" style="width: 800px; margin-bottom: 4em;">
-                            <div class="card-body">
-                                <div id="table" class="row" style="margin: 0.5em">
+                            <div class="card-body" style="min-height: 400px;">
+                                <div class="mdl bigloader purple"></div>
+                                <div id="table" class="row" style="margin: 0.5em; opacity: 0;">
                                     <table class="table table-hover table-borderless">
                                         <thead>
                                             <tr>
@@ -126,7 +134,7 @@
                         <i class="mb-2 mdl">Optional:</i>
                         <div class="mb-4 mdl" style="border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; padding-top: 5px;">
                             <div class="form-group mdl">
-                                <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. console=tty0 ... (separated by spaces)">
+                                <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. console=tty0">
                                     <div class="input-group-prepend mdl">
                                         <div class="input-group-text mdl"><code id="dashccode" class="mdl" style="color: royalblue;">-c</code></div>
                                     </div>
@@ -151,283 +159,6 @@
                             </div>
                         </div>
                     </form>
-                    <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef; display: none;">
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <br>
-                        <div class="speccard card">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                        <div class="speccard card" style="display: none">
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                            <br>
-                            <br>
-                            <span class="col">
-                                Apr 25 09:37
-                            </span>
-                            <span style="padding: 0" class="col">
-                                <b>to</b>
-                            </span>
-                            <span class="col">
-                                Apr 27 09:37
-                            </span>
-                            <div class="ml-auto" style="display: inline-block;">
-                                <button type="button" style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;" class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand reserve" disabled><span class="mdl mdlcmdtext">Reserve</span><div style="visibility: hidden" class="mdl loader"></div></button>
-                            </div>
-                        </div>
-                    </div>
                     <div class="mdl" id="newresspec" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef; display: none;">
                         <table class="mdl table table-borderless">
                             <thead class="mdl">
@@ -512,7 +243,23 @@
                         </table>
                     </div>
                     <div class="card commandline mdl"><code id="commandline" class="mdl" style="color: seagreen;"></code></div>
-                    <div class="card commandline mdl errorparent" style="display: none; margin-top: 20px; background-color: firebrick;"><code class="error mdl" style="color: white;"></code></div>
+                    <div class="card commandline mdl responseparent" style="display: none; margin-top: 20px;">
+                        <table class="mdl" style="width: 100%;">
+                            <tbody class="mdl">
+                                <tr class="mdl">
+                                    <td class="mdl">
+                                        <code class="response mdl" style="color: white;"></code>
+                                    </td>
+                                    <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl">
+                                        <svg class="copy mdl clickable" style="width:24px;height:24px" viewBox="0 0 24 24">
+                                            <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
+                                        </svg>
+                                        <span class="mdl copytooltip" style="opacity: 0; display: none;">Copied!</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="modal-footer m-3 mdl">
                     <button type="button" class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel" id="newrescancel" data-dismiss="modal">Cancel</button>
@@ -556,10 +303,26 @@
                         </div>
                     </form>
                     <div class="card commandline mdl"><code id="pcommandline" class="mdl" style="color: seagreen;"></code></div>
-                    <div class="card commandline mdl errorparent" style="display: none; margin-top: 20px; background-color: firebrick;"><code class="error mdl" style="color: white;"></code></div>
+                    <div class="card commandline mdl responseparent" style="display: none; margin-top: 20px;">
+                        <table class="mdl" style="width: 100%;">
+                            <tbody class="mdl">
+                                <tr class="mdl">
+                                    <td class="mdl">
+                                        <code class="response mdl" style="color: white;"></code>
+                                    </td>
+                                    <td class="copy mdl clickable" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard">
+                                        <svg class="mdl" style="width:24px;height:24px" viewBox="0 0 24 24">
+                                            <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
+                                        </svg>
+                                        <span class="mdl copytooltip" style="opacity: 0; display: none;">Copied!</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="modal-footer m-3 mdl">
-                    <button type="button" class="modalbtn igorbtn btn btn-secondary mr-auto mdl" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel" data-dismiss="modal">Cancel</button>
                     <button type="button" style="background-color: mediumseagreen; border-color: mediumseagreen;" class="modalbtn powermodalgobtn igorbtn btn btn-primary mdl modalcommand" id="on" disabled><span class="mdl mdlcmdtext">On</span><div style="visibility: hidden" class="mdl loader"></div></button>
                     <button type="button" style="background-color: lightcoral; border-color: lightcoral;" class="modalbtn powermodalgobtn igorbtn btn btn-primary mdl modalcommand" id="off" disabled><span class="mdl mdlcmdtext">Off</span><div style="visibility: hidden" class="mdl loader"></div></button>
                     <button type="button" class="modalbtn powermodalgobtn igorbtn btn btn-primary mdl modalcommand" id="cycle" disabled><span class="mdl mdlcmdtext">Cycle</span><div style="visibility: hidden" class="mdl loader"></div></button>
@@ -568,7 +331,7 @@
         </div>
     </div>
     <div class="modal fade mdl" id="deleteresmodal" tabindex="-1" role="dialog" aria-labelledby="Delete Reservation?" aria-hidden="true">
-        <div class="modal-dialog modal-sm modal-dialog-centered mdl" role="document">
+        <div id="deletemodaldialog" class="modal-dialog modal-sm modal-dialog-centered mdl" role="document">
             <div class="modal-content mdl">
                 <div class="modal-header m-3 mdl" style="padding-bottom: 0px; margin-bottom: 5px !important; border: none;">
                     <h5 class="modal-title text-center col-12 mdl" id="dmodaltitle"><b class="mdl">Delete reservation?</b></h5>
@@ -576,7 +339,23 @@
                         <span class="mdl" aria-hidden="true">&times;</span>
                     </button>
                 </div>
-                <div class="card commandline mdl errorparent" style="display: none; margin: 20px; background-color: firebrick;"><code class="error mdl" style="color: white;"></code></div>
+                <div class="card commandline mdl responseparent" style="display: none; margin: 20px;">
+                    <table class="mdl" style="width: 100%;">
+                        <tbody class="mdl">
+                            <tr class="mdl">
+                                <td class="mdl">
+                                    <code class="response mdl" style="color: white;"></code>
+                                </td>
+                                <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl">
+                                    <svg class="copy mdl clickable" style="width:24px;height:24px" viewBox="0 0 24 24">
+                                        <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
+                                    </svg>
+                                    <span class="mdl copytooltip" style="opacity: 0; display: none;">Copied!</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div class="modal-footer m-3 mdl" style="padding-top: 20px; margin-top: 20px;">
                     <button type="button" class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel" data-dismiss="modal">Cancel</button>
                     <button type="button" style="background-color: #a975d6; border-color: #a975d6;" class="modalbtn deleteresmodalgobtn igorbtn btn btn-primary mdl modalcommand" id="delete"><span class="mdl mdlcmdtext">Delete</span><div style="visibility: hidden" class="mdl loader"></div></button>
@@ -616,7 +395,23 @@
                         </div>
                     </form>
                     <div class="card commandline mdl"><code id="ecommandline" class="mdl" style="color: seagreen;"></code></div>
-                    <div class="card commandline mdl errorparent" style="display: none; margin-top: 20px; background-color: firebrick;"><code class="error mdl" style="color: white;"></code></div>
+                    <div class="card commandline mdl responseparent" style="display: none; margin-top: 20px;">
+                        <table class="mdl" style="width: 100%;">
+                            <tbody class="mdl">
+                                <tr class="mdl">
+                                    <td class="mdl">
+                                        <code class="response mdl" style="color: white;"></code>
+                                    </td>
+                                    <td class="mdl" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard">
+                                        <svg class="copy mdl clickable" svg style="width:24px;height:24px" viewBox="0 0 24 24">
+                                            <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
+                                        </svg>
+                                        <span class="mdl copytooltip" style="opacity: 0; display: none;">Copied!</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
                 <div class="modal-footer m-3 mdl">
                     <button type="button" class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel" data-dismiss="modal">Cancel</button>
@@ -632,21 +427,12 @@
         <button id="extendresbtn" class="igorbtn btn btn-outline-light actionbar resaction" data-focus="false" data-toggle="modal" data-target="#extendmodal">Extend Reservation</button>
         <span class="close clickable closeactionbar">&times;</span>
     </div>
-    <div id="successbar" class="successbar mx-auto fixed-top card text-white bg-success mb-3" style="max-width: 30rem;">
-        <h5 class="successbar card-header">
-            <code style="color: white" class="successbar command"></code>
-            <span class="close clickable closesuccessbar">&times;</span>
-        </h5>
-        <div class="successbar card-body">
-            <code style="color: white" class="successbar result card-text"></code>
-        </div>
-    </div>
 </body>
 <script>
     var numNodeCols = {{ .NumNodeCols }};
     var numNodes = {{ .NumNodes }};
     var cluster = {{ .Cluster }};
-    var reservations = {{ .Reservations }}
+    var reservations = {{ .ResTableRows }}
 </script>
-<script src="/static/igorweb.js"></script>
+<script src="./static/igorweb.js"></script>
 </html>

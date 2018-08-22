@@ -71,9 +71,7 @@ func init() {
 	cmdShow.Run = runShow
 }
 
-// Use nmap to scan all the nodes and then show which are up and the
-// reservations they below to
-func runShow(_ *Command, _ []string) {
+func getNodes() map[int]bool {
 	names := []string{}
 	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
@@ -129,8 +127,11 @@ func runShow(_ *Command, _ []string) {
 		// If we found a node name in the output, that means it's up, so mark it as up
 		nodes[v] = true
 	}
+	return nodes
+}
 
-	// Gather a list of which nodes are down
+// Gather a list of which nodes are down
+func getDownNodes(nodes map[int]bool) []string {
 	var downNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
 		if !nodes[i] {
@@ -138,6 +139,16 @@ func runShow(_ *Command, _ []string) {
 			downNodes = append(downNodes, hostname)
 		}
 	}
+	return downNodes
+}
+
+// Use nmap to scan all the nodes and then show which are up and the
+// reservations they below to
+func runShow(_ *Command, _ []string) {
+
+	nodes := getNodes()
+
+	downNodes := getDownNodes(nodes)
 
 	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
