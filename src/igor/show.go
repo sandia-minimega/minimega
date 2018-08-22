@@ -156,10 +156,12 @@ func runShow(_ *Command, _ []string) {
 	var downNodes []string
 	var unreservedNodes []string
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		hostname := igorConfig.Prefix + strconv.Itoa(i)
 		if !resNodes[i] {
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			downNodes = append(downNodes, hostname)
 			unreservedNodes = append(unreservedNodes, hostname)
+		}
+		if !nodes[i] {
+			downNodes = append(downNodes, hostname)
 		}
 	}
 	// nameFmt will create uniform color bars for 1st column
