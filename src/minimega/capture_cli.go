@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"gonetflow"
 	"minicli"
@@ -142,7 +141,7 @@ func cliCapture(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return cliCapturePcap(ns, c, resp)
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -189,7 +188,7 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		return nil
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCaptureList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -344,5 +343,5 @@ func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response
 		return nil
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }

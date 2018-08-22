@@ -514,7 +514,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		})
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

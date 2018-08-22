@@ -90,6 +90,15 @@ func (m *loggingMutex) Unlock() {
 	log.Info("unlocked: %v:%v", file, line)
 }
 
+// unreachable returns an error when we reach a condition that should be
+// unreachable and tags the file/line number. This usually means our CLI
+// handling is wrong (i.e. we missed a case).
+func unreachable() error {
+	_, file, line, _ := runtime.Caller(1)
+
+	return fmt.Errorf("unreachable %v:%v, please report.", file, line)
+}
+
 func generateUUID() string {
 	log.Debugln("generateUUID")
 	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
