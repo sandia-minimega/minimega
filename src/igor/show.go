@@ -161,6 +161,9 @@ func runShow(_ *Command, _ []string) {
 	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
 	if subO {
 		sort.Slice(resarray, func(i, j int) bool {
+			if resarray[i].Owner == resarray[j].Owner {
+				return resarray[i].StartTime < resarray[j].StartTime
+			}
 			return resarray[i].Owner < resarray[j].Owner
 		})
 	} else {
