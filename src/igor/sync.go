@@ -21,12 +21,14 @@ OPTIONAL FLAGS:
 	`,
 }
 
+var subL bool // -l
 var subV bool // -v
 
 func init() {
 	// break init cycle
 	cmdSync.Run = runSync
 
+	cmdSync.Flag.BoolVar(&subL, "l", false, "")
 	cmdSync.Flag.BoolVar(&subV, "v", false, "")
 }
 
@@ -50,6 +52,23 @@ func runSync(cmd *Command, args []string) {
 			}
 		}
 	}
+	// we are only listing
+	if subL {
+		return
+	}
+
+	// purge the orphan IDs from the shedule
+	if len(IDs) > 0 {
+		if !subV {
+			fmt.Println("Purging Orphan IDs from Schedule...")
+		}
+		for _, oid := range IDs {
+			purgeFromSchedule(oid)
+		}
+		fmt.Println("Done.")
+		dirty = true
+	}
+
 }
 
 func getOrphanIDs() []uint64 {
@@ -77,11 +96,16 @@ func getOrphanIDs() []uint64 {
 }
 
 func purgeFromSchedule(id uint64) {
-	for _, s := range Schedule {
-		for _, n := range s.Nodes {
-			if n == id {
-				n = 0
+	if subV {
+		fmt.Printf("Purging orphan ID %v from schedule...\n", id)
+	}
+	newSched := Schedule
+	for i := 0; i < len(newSched); i++ {
+		for j := 0; j < len(newSched[i].Nodes); j++ {
+			if newSched[i].Nodes[j] == id {
+				newSched[i].Nodes[j] = 0
 			}
 		}
 	}
+	Schedule = newSched
 }
