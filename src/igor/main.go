@@ -55,6 +55,7 @@ var commands = []*Command{
 	cmdPower,
 	cmdExtend,
 	cmdNotify,
+	cmdSync,
 }
 
 var exitStatus = 0
