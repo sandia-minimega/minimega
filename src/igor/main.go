@@ -89,6 +89,39 @@ func setExitStatus(n int) {
 	exitMu.Unlock()
 }
 
+// We open and lock the lock file before trying to open the data file
+// because the data file may have been changed by the instance of igor that
+// holds the lock.
+func lockAndReadData(isWeb bool) (*os.File, *os.File) {
+	lockPath := filepath.Join(igorConfig.TFTPRoot, "/igor/lock")
+	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
+
+	lock, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Fatal("failed to open data file %v: %v", lockPath, err)
+	}
+	defer lock.Close()
+
+	// Lock the file so we don't have simultaneous updates
+	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
+		log.Fatal("unable to lock file -- please retry")
+	}
+	if !isWeb {
+		// unlock at the end later
+		defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	}
+
+	db, err := os.OpenFile(dataPath, os.O_RDWR|os.O_CREATE, 0664)
+	if err != nil {
+		log.Fatal("failed to open data file %v: %v", dataPath, err)
+	}
+	defer db.Close()
+
+	readData(db)
+
+	return lock, db
+}
+
 // Runs at startup to handle automated tasks that need to happen now.
 // Read the reservations, delete any that are too old.
 // Copy in netboot files for any reservations that have just started
@@ -165,7 +198,6 @@ func init() {
 }
 
 func main() {
-	var err error
 
 	flag.Usage = usage
 	flag.Parse()
@@ -200,32 +232,7 @@ func main() {
 		log.AddLogger("file", logfile, log.INFO, false)
 	}
 
-	// We open and lock the lock file before trying to open the data file
-	// because the data file may have been changed by the instance of igor that
-	// holds the lock.
-	lockPath := filepath.Join(igorConfig.TFTPRoot, "/igor/lock")
-	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
-
-	lock, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0664)
-	if err != nil {
-		log.Fatal("failed to open data file %v: %v", lockPath, err)
-	}
-	defer lock.Close()
-
-	// Lock the file so we don't have simultaneous updates
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		log.Fatal("unable to lock file -- please retry")
-	}
-	// unlock at the end later
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-
-	db, err := os.OpenFile(dataPath, os.O_RDWR|os.O_CREATE, 0664)
-	if err != nil {
-		log.Fatal("failed to open data file %v: %v", dataPath, err)
-	}
-	defer db.Close()
-
-	readData(db)
+	lock, db := lockAndReadData(args[0] == "web")
 
 	// Here, we need to go through and delete any reservations which should be
 	// expired, and bring in new ones that are just starting
@@ -240,6 +247,9 @@ func main() {
 			} else {
 				cmd.Flag.Parse(args[1:])
 				args = cmd.Flag.Args()
+			}
+			if cmd.Name() == "web" {
+				syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 			}
 			cmd.Run(cmd, args)
 

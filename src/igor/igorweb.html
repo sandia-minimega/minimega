@@ -28,7 +28,6 @@
                         <div class="card mx-auto text-center" style="width: 1000px; margin-bottom: 4em; background-color: #e7ccff; border: none;">
                             <div class="card-body">
                                 <div id="nodegrid" class="row" style="margin: 0.5em; min-height: 400px;">
-                                    <div class="mdl bigloader"></div>
                                     <!-- Grid of nodes -->
                                 </div>
                             </div>
@@ -247,10 +246,10 @@
                         <table class="mdl" style="width: 100%;">
                             <tbody class="mdl">
                                 <tr class="mdl">
-                                    <td class="mdl">
+                                    <td style="word-break: break-all;" class="mdl">
                                         <code class="response mdl" style="color: white;"></code>
                                     </td>
-                                    <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl">
+                                    <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl" style="vertical-align: top;">
                                         <svg class="copy mdl clickable" style="width:24px;height:24px" viewBox="0 0 24 24">
                                             <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
                                         </svg>
@@ -307,10 +306,10 @@
                         <table class="mdl" style="width: 100%;">
                             <tbody class="mdl">
                                 <tr class="mdl">
-                                    <td class="mdl">
+                                    <td style="word-break: break-all;" class="mdl">
                                         <code class="response mdl" style="color: white;"></code>
                                     </td>
-                                    <td class="copy mdl clickable" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard">
+                                    <td class="copy mdl clickable" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" style="vertical-align: top;">
                                         <svg class="mdl" style="width:24px;height:24px" viewBox="0 0 24 24">
                                             <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
                                         </svg>
@@ -343,10 +342,10 @@
                     <table class="mdl" style="width: 100%;">
                         <tbody class="mdl">
                             <tr class="mdl">
-                                <td class="mdl">
+                                <td style="word-break: break-all;" class="mdl">
                                     <code class="response mdl" style="color: white;"></code>
                                 </td>
-                                <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl">
+                                <td data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" class="mdl" style="vertical-align: top;">
                                     <svg class="copy mdl clickable" style="width:24px;height:24px" viewBox="0 0 24 24">
                                         <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
                                     </svg>
@@ -399,10 +398,10 @@
                         <table class="mdl" style="width: 100%;">
                             <tbody class="mdl">
                                 <tr class="mdl">
-                                    <td class="mdl">
+                                    <td style="word-break: break-all;" class="mdl">
                                         <code class="response mdl" style="color: white;"></code>
                                     </td>
-                                    <td class="mdl" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard">
+                                    <td class="mdl" data-toggle="tooltip" data-placement="bottom" title="Copy to clipboard" style="vertical-align: top;">
                                         <svg class="copy mdl clickable" svg style="width:24px;height:24px" viewBox="0 0 24 24">
                                             <path class="mdl" fill="#ffffff" d="M16,15H12V18L7,13L12,8V11H16M12,3A1,1 0 0,1 13,4A1,1 0 0,1 12,5A1,1 0 0,1 11,4A1,1 0 0,1 12,3M19,3H14.82C14.4,1.84 13.3,1 12,1C10.7,1 9.6,1.84 9.18,3H5A2,2 0 0,0 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3Z" />
                                         </svg>
@@ -429,8 +428,9 @@
     </div>
 </body>
 <script>
-    var numNodeCols = {{ .NumNodeCols }};
-    var numNodes = {{ .NumNodes }};
+    var startNode = {{ .StartNode }};
+    var endNode = {{ .EndNode }};
+    var rackWidth = {{ .RackWidth }};
     var cluster = {{ .Cluster }};
     var reservations = {{ .ResTableRows }}
 </script>

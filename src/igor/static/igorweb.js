@@ -9,6 +9,18 @@ function getObjFromResIndex(index) {
     return $("#res" + index);
 }
 
+function getResIndexByName(name) {
+    if (name === "") {
+        return -1;
+    }
+    for (var i = 0; i < reservations.length; i++) {
+        if (reservations[i].Name === name) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 function getNodeIndexFromObj(obj) {
     return parseInt(obj.attr("id"));
 }
@@ -161,7 +173,6 @@ function execute(onResponse) {
     $("#deletemodaldialog").addClass("modal-sm");
     response = "";
     $(".command").html(command);
-    var result;
     $.get(
         "/run/",
         {run: command},
@@ -174,13 +185,44 @@ function execute(onResponse) {
     );
 }
 
-function parseResult(successbar = true) {
-    if (new Date().getTime() % 5 != 0) {
-        result = [true, response];
-    } else {
-        result = [false, response];
+function getReservations() {
+    showBigLoaders();
+    var curResName = "";
+    if (selectedRes != -1) {
+        curResName = reservations[selectedRes].Name;
     }
-    $(".result").html(response.Message);
+    var selectedNodestmp = selectedNodes;
+    deselectGrid();
+    deselectTable();
+    $.get(
+        "/run/",
+        {run: "igor show"},
+        function(data) {
+            setTimeout(function() {
+                var rsp = JSON.parse(data);
+                reservations = rsp.Extra;
+                console.log(reservations)
+                showReservationData();
+                if (newResName !== "" && response.Success) {
+                    selectedRes = getResIndexByName(newResName);
+                    newResName = "";
+                } else {
+                    selectedRes = getResIndexByName(curResName);
+                }
+                if (selectedRes != -1) {
+                    select(getObjFromResIndex(selectedRes));
+                } else {
+                    for (var i = 0; i < selectedNodestmp.length; i++) {
+                        select(getObjFromNodeIndex(selectedNodestmp[i]));
+                    }
+                }
+                hideBigLoaders();
+            }, 700)
+        }
+    );
+}
+
+function parseResult() {
     $(".response").html(response.Message);
     if (response.Success) {
         $(".responseparent").addClass("success");
@@ -193,7 +235,6 @@ function parseResult(successbar = true) {
 }
 
 function showLoader(obj) {
-    showBigLoaders();
     obj.children().eq(0).css("visibility", "hidden");
     obj.children().eq(1).css("visibility", "visible");
     $(".dash, .edash, .pdash").prop("disabled", true);
@@ -202,8 +243,7 @@ function showLoader(obj) {
 }
 
 function hideLoaders() {
-    // TODO: only hide big loaders when show/housekeeping stuff returns
-    hideBigLoaders();
+    getReservations();
     $(".loader").css("visibility", "hidden");
     $(".mdlcmdtext").css("visibility", "visible");
     $(".dash, .edash, .pdash").prop("disabled", false);
@@ -225,65 +265,6 @@ function hideBigLoaders() {
     $("#table").parent().css("min-height", "auto");
 }
 
-
-// populate node grid
-var newcol = '<div class="col" style="padding: 0">' +
-'    <div class="list-group" ';
-for (var i = 0; i < numNodeCols; i++) {
-    $('#nodegrid').append(newcol + 'id="col' + i + '"></div></div>');
-}
-var grid = '<div draggable="true" tabIndex="-1" style="opacity: 0; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
-for (var i = 1; i <= numNodes; i++) {
-    col = (i - 1) % numNodeCols;
-    var classes = ' class="list-group-item list-group-item-action node ';
-    if (reservations[0].Nodes.includes(i)) {
-        classes += "down ";
-    } else {
-        classes += "up ";
-    }
-    var reserved = false;
-    for (var j = 1; j < reservations.length; j++) {
-        if (reservations[j].Nodes.includes(i)) {
-            reserved = true;
-            classes += "reserved ";
-            break;
-        }
-    }
-    if (!reserved) {
-        classes += "available ";
-    }
-    classes += "unselected ";
-    classes += '" ';
-    $("#col" + col).append(grid + classes + ' id="' + i +'">' + i + '</div>');
-}
-hideBigLoaders();
-
-// node grid selections
-$(".node").click(function(event) {
-    deselectTable();
-    toggle($(this));
-});
-
-// node hover to cause res table hover
-$(".node").hover(function() {
-    var node = getNodeIndexFromObj($(this));
-    for (var i = 0; i < reservations.length; i++) {
-        if (reservations[i].Nodes.includes(node)) {
-            getObjFromResIndex(i).addClass("hover");
-        };
-    }
-});
-
-$(".node").mouseleave(function() {
-    var node = getNodeIndexFromObj($(this));
-    for (var i = 0; i < reservations.length; i++) {
-        if (reservations[i].Nodes.includes(node)) {
-            getObjFromResIndex(i).removeClass("hover");
-        };
-    }
-});
-
-// node dragging
 var selectOn = true;
 var firstDragNode = -1;
 var nodes = document.getElementsByClassName("node");
@@ -294,121 +275,189 @@ var extremeMax;
 var extremeMin;
 var minDragNode;
 var lastDrag;
-for (var i = 0; i < nodes.length; i++) {
-    nodes[i].addEventListener("dragstart", function(event) {
-        deselectTable();
-        firstDragNode = $(event.target);
-        maxDragNode = getNodeIndexFromObj(firstDragNode);
-        minDragNode = maxDragNode;
-        extremeMax = maxDragNode;
-        extremeMin = maxDragNode;
-        lastDrag = maxDragNode;
-        if ($(event.target).hasClass("active")) {
-            selectOn = false;
-        } else {
-            selectOn = true;
-        }
-        toggle($(event.target));
-        var crt = this.cloneNode(true);
-        crt.style.display = "none";
-        document.body.appendChild(crt);
-        event.dataTransfer.setDragImage(crt, 0, 0);
-        event.dataTransfer.setData('text/plain', '');
-    }, false);
-}
-
-$(".node").on("dragover", function(event) {
-    if (firstDragNode === -1) return;
-    var fromIndex = getNodeIndexFromObj(firstDragNode);
-    var toIndex = getNodeIndexFromObj($(event.target));
-    if (selectOn) {
-        if (toIndex > minDragNode && toIndex < maxDragNode) {
-            if (toIndex < fromIndex) {
-                selectNodes(minDragNode, toIndex, !selectOn);
-                minDragNode = toIndex;
-            }
-            if (toIndex > fromIndex) {
-                selectNodes(maxDragNode, toIndex, !selectOn);
-                maxDragNode = toIndex;
-            }
-        } else {
-            selectNodes(fromIndex, toIndex, selectOn);
-        }
-        if (toIndex < fromIndex && lastDrag >= fromIndex) {
-            maxDragNode = fromIndex;
-            if (extremeMax !== fromIndex) {
-                selectNodes(extremeMax, fromIndex + 1, !selectOn);
-            }
-        }
-        if (toIndex > fromIndex && lastDrag <= fromIndex) {
-            minDragNode = fromIndex;
-            if (extremeMin !== fromIndex) {
-                selectNodes(extremeMin, fromIndex - 1, !selectOn);
-            }
-        }
-        maxDragNode = Math.max(toIndex, maxDragNode);
-        minDragNode = Math.min(toIndex, minDragNode);
-        extremeMax = Math.max(extremeMax, maxDragNode);
-        extremeMin = Math.min(extremeMin, minDragNode);
-        if (toIndex != firstDragNode) {
-            lastDrag = toIndex;
-        }
-        event.preventDefault();
-    } else {
-        selectNodes(fromIndex, toIndex, false);
+function showReservationData(){
+    $("#nodegrid").html('<div class="mdl bigloader"></div>');
+    $("#res_table").html("");
+    // populate node grid
+    var newcol = '<div class="col" style="padding: 0">' +
+    '    <div class="list-group" ';
+    for (var i = 0; i < rackWidth; i++) {
+        $('#nodegrid').append(newcol + 'id="col' + i + '"></div></div>');
     }
-});
+    var grid = '<div draggable="true" tabIndex="-1" style="opacity: 0; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
+    for (var i = startNode; i <= endNode; i++) {
+        col = (i - 1) % rackWidth;
+        var classes = ' class="list-group-item list-group-item-action node ';
+        if (reservations[0].Nodes.includes(i)) {
+            classes += "down ";
+        } else {
+            classes += "up ";
+        }
+        var reserved = false;
+        for (var j = 1; j < reservations.length; j++) {
+            if (reservations[j].Nodes.includes(i)) {
+                reserved = true;
+                classes += "reserved ";
+                break;
+            }
+        }
+        if (!reserved) {
+            classes += "available ";
+        }
+        classes += "unselected ";
+        classes += '" ';
+        $("#col" + col).append(grid + classes + ' id="' + i +'">' + i + '</div>');
+    }
+    hideBigLoaders();
 
-$(".node").on("dragend", function(event) {
-    firstDragNode = -1;
-})
+    // node grid selections
+    $(".node").click(function(event) {
+        deselectTable();
+        toggle($(this));
+    });
 
-// populate reservation table
-var tr1 = '<tr class="res clickable mdl" ';
-var tr2 = '</tr>';
-var td1 = '<td class="mdl">';
-var td2 = '</td>';
-$("#res_table").append(
-    tr1 + 'id="res0">' +
-    '<td colspan="4" class="mdl">Down</td>' +
-    td1 + reservations[0].Nodes.length + td2 +
-    tr2
-);
-for (var i = 1; i < reservations.length; i++) {
+    // node hover to cause res table hover
+    $(".node").hover(function() {
+        var node = getNodeIndexFromObj($(this));
+        for (var i = 0; i < reservations.length; i++) {
+            if (reservations[i].Nodes.includes(node)) {
+                getObjFromResIndex(i).addClass("hover");
+            };
+        }
+    });
+
+    $(".node").mouseleave(function() {
+        var node = getNodeIndexFromObj($(this));
+        for (var i = 0; i < reservations.length; i++) {
+            if (reservations[i].Nodes.includes(node)) {
+                getObjFromResIndex(i).removeClass("hover");
+            };
+        }
+    });
+
+    // node dragging
+    for (var i = 0; i < nodes.length; i++) {
+        nodes[i].addEventListener("dragstart", function(event) {
+            deselectTable();
+            firstDragNode = $(event.target);
+            maxDragNode = getNodeIndexFromObj(firstDragNode);
+            minDragNode = maxDragNode;
+            extremeMax = maxDragNode;
+            extremeMin = maxDragNode;
+            lastDrag = maxDragNode;
+            if ($(event.target).hasClass("active")) {
+                selectOn = false;
+            } else {
+                selectOn = true;
+            }
+            toggle($(event.target));
+            var crt = this.cloneNode(true);
+            crt.style.display = "none";
+            document.body.appendChild(crt);
+            event.dataTransfer.setDragImage(crt, 0, 0);
+            event.dataTransfer.setData('text/plain', '');
+        }, false);
+    }
+
+    $(".node").on("dragover", function(event) {
+        if (firstDragNode === -1) return;
+        var fromIndex = getNodeIndexFromObj(firstDragNode);
+        var toIndex = getNodeIndexFromObj($(event.target));
+        if (selectOn) {
+            if (toIndex > minDragNode && toIndex < maxDragNode) {
+                if (toIndex < fromIndex) {
+                    selectNodes(minDragNode, toIndex, !selectOn);
+                    minDragNode = toIndex;
+                }
+                if (toIndex > fromIndex) {
+                    selectNodes(maxDragNode, toIndex, !selectOn);
+                    maxDragNode = toIndex;
+                }
+            } else {
+                selectNodes(fromIndex, toIndex, selectOn);
+            }
+            if (toIndex < fromIndex && lastDrag >= fromIndex) {
+                maxDragNode = fromIndex;
+                if (extremeMax !== fromIndex) {
+                    selectNodes(extremeMax, fromIndex + 1, !selectOn);
+                }
+            }
+            if (toIndex > fromIndex && lastDrag <= fromIndex) {
+                minDragNode = fromIndex;
+                if (extremeMin !== fromIndex) {
+                    selectNodes(extremeMin, fromIndex - 1, !selectOn);
+                }
+            }
+            maxDragNode = Math.max(toIndex, maxDragNode);
+            minDragNode = Math.min(toIndex, minDragNode);
+            extremeMax = Math.max(extremeMax, maxDragNode);
+            extremeMin = Math.min(extremeMin, minDragNode);
+            if (toIndex != firstDragNode) {
+                lastDrag = toIndex;
+            }
+            event.preventDefault();
+        } else {
+            selectNodes(fromIndex, toIndex, false);
+        }
+    });
+
+    $(".node").on("dragend", function(event) {
+        firstDragNode = -1;
+    })
+
+    // populate reservation table
+    var tr1 = '<tr class="res clickable mdl" ';
+    var tr2 = '</tr>';
+    var td1 = '<td class="mdl">';
+    var td2 = '</td>';
     $("#res_table").append(
-        tr1 + 'id="res' + i + '">' +
-        td1 + reservations[i].Name + td2 +
-        td1 + reservations[i].Owner + td2 +
-        td1 + reservations[i].Start + td2 +
-        td1 + reservations[i].End + td2 +
-        td1 + reservations[i].Nodes.length + td2 +
+        tr1 + 'id="res0">' +
+        '<td colspan="4" class="mdl">Down</td>' +
+        td1 + reservations[0].Nodes.length + td2 +
         tr2
     );
+    for (var i = 1; i < reservations.length; i++) {
+        $("#res_table").append(
+            tr1 + 'id="res' + i + '">' +
+            td1 + reservations[i].Name + td2 +
+            td1 + reservations[i].Owner + td2 +
+            td1 + reservations[i].Start + td2 +
+            td1 + reservations[i].End + td2 +
+            td1 + reservations[i].Nodes.length + td2 +
+            tr2
+        );
+    }
+
+    // reservation selection
+    $(".res").click(function() {
+        deselectGrid();
+        toggle($(this));
+    });
+
+    $(".res").hover(function() {
+        $(".node").addClass("noshadow");
+        var nodes = reservations[getResIndexFromObj($(this))].Nodes;
+        for (var i = 0; i < nodes.length; i++) {
+            getObjFromNodeIndex(nodes[i]).removeClass("noshadow");
+            getObjFromNodeIndex(nodes[i]).addClass("shadow");
+        }
+    });
+
+    $(".res").mouseleave(function() {
+        $(".node").removeClass("noshadow")
+        $(".node").removeClass("shadow")
+        var nodes = reservations[getResIndexFromObj($(this))].Nodes;
+        for (var i = 0; i < nodes.length; i++) {
+            getObjFromNodeIndex(nodes[i]).removeClass("hover");
+        }
+    });
 }
+showReservationData();
 
-// reservation selection
-$(".res").click(function() {
-    deselectGrid();
-    toggle($(this));
-});
-
-$(".res").hover(function() {
-    $(".node").addClass("noshadow");
-    var nodes = reservations[getResIndexFromObj($(this))].Nodes;
-    for (var i = 0; i < nodes.length; i++) {
-        getObjFromNodeIndex(nodes[i]).removeClass("noshadow");
-        getObjFromNodeIndex(nodes[i]).addClass("shadow");
-    }
-});
-
-$(".res").mouseleave(function() {
-    $(".node").removeClass("noshadow")
-    $(".node").removeClass("shadow")
-    var nodes = reservations[getResIndexFromObj($(this))].Nodes;
-    for (var i = 0; i < nodes.length; i++) {
-        getObjFromNodeIndex(nodes[i]).removeClass("hover");
-    }
-});
+// heartbeat
+setInterval(function() {
+    getReservations();
+}, 60000);
 
 // deselect on outside click
 $(document).click(function(event) {
@@ -485,6 +534,7 @@ function runNew() {
     parseResult();
 }
 
+var newResName = "";
 $(".newresmodalgobtn").click(function(event) {
     updateCommandLine();
     if ($(event.target).hasClass("speculate")) {
@@ -494,6 +544,7 @@ $(".newresmodalgobtn").click(function(event) {
         return;
     }
     showLoader($(this));
+    newResName = $("#dashr").val();
     execute(runNew);
 });
 
@@ -556,7 +607,7 @@ command =
 "-p " + $("#dashp").val() + " "
 ) +
 ($("#nrmodalnodelist").hasClass("active") ?
-"-w " + cluster + "[" + $("#dashw").val() + "] " :
+"-w " + cluster + "[" + $("#dashw").val().replace(/ /g, "") + "] " :
 "-n " + $("#dashn").val() + " "
 ) +
 ($("#dashc").val() === "" ? "" : "-c " + $("#dashc").val() + " ") +
@@ -578,8 +629,14 @@ $("#dashn").click(function(event) {
 
 // Delete reservation modal
 function runDelete() {
+    deselectGrid();
+    deselectTable();
     hideLoaders();
-    parseResult();
+    if (!response.Success) {
+        parseResult();
+    } else {
+        $("#deleteresmodal").modal("hide");
+    }
 }
 
 $(".deleteresmodalgobtn").click(function() {
@@ -644,7 +701,7 @@ function pUpdateCommandLine() {
     "igor power " +
     ($("#pmodalres").hasClass("active") ?
         "-r " + $("#pdashr").val() + " " :
-        "-n " + cluster + "[" + $("#pdashn").val() + "] "
+        "-n " + cluster + "[" + $("#pdashn").val().replace(/ /g, "") + "] "
     )
     $("#pcommandline").html(command);
 }

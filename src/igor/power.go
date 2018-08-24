@@ -137,7 +137,7 @@ func runPower(cmd *Command, args []string) {
 			fmt.Printf("Powering %s nodes %s\n", action, unsplit)
 			doPower(validatedNodes, action)
 		} else {
-			fmt.Printf("No nodes specified are in a reservation owned by the user\n")
+			log.Fatal("No nodes specified are in a reservation owned by the user\n")
 		}
 	}
 }
