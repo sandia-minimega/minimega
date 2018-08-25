@@ -81,24 +81,35 @@ func getReservations() []ResTableRow {
 
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
-	var extra interface{}
-	extra = nil
 	command := r.URL.Query()["run"][0]
 	fmt.Println("Command:", command)
 	fmt.Println("\tFrom:", r.RemoteAddr)
 	splitcmd := strings.Split(command, " ")
-	var rsp Response
-	var log string
-	var err error
+	var extra interface{}
+	log := ""
+	var err error = nil
 	if splitcmd[1] == "show" {
 		extra = getReservations()
-		log = ""
-		err = nil
 	} else {
 		log, err = processWrapper(splitcmd[0:]...)
 		housekeeping()
 	}
-	rsp = Response{err == nil, log, extra}
+	if splitcmd[1] == "sub" && splitcmd[len(splitcmd)-1] == "-s" {
+		specs := []Speculate{}
+		splitlog := strings.FieldsFunc(log, func(c rune) bool {
+			return c == '\n' || c == '\t'
+		})
+		oldtimefmt := "2006-Jan-2-15:04"
+		timefmt := "Jan 2 15:04"
+		for i := 3; i < len(splitlog); i += 2 {
+			t1, _ := time.Parse(oldtimefmt, splitlog[i])
+			t2, _ := time.Parse(oldtimefmt, splitlog[i+1])
+			specs = append(specs, Speculate{t1.Format(timefmt), t2.Format(timefmt)})
+		}
+		extra = specs
+		fmt.Println(extra)
+	}
+	rsp := Response{err == nil, log, extra}
 	fmt.Println("\tResponse:", rsp.Message)
 	jsonrsp, _ := json.Marshal(rsp)
 	w.Write([]byte(jsonrsp))

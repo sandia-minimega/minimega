@@ -519,8 +519,10 @@ function runSpeculate() {
         $("#spec_table").children().eq(i).children().eq(1).text(response.Extra[i].End);
     }
     hideLoaders();
-    if (parseResult(false)) {
+    if (response.Success) {
         newResShowSpec();
+    } else {
+        parseResult();
     }
 }
 
@@ -599,20 +601,20 @@ $("#dashn").val() === ""
 }
 
 command =
-"igor sub " +
-"-r " + $("#dashr").val() + " " +
+"igor sub" +
+" -r " + $("#dashr").val() +
 ($("#nrmodalki").hasClass("active") ?
-"-k " + $("#dashk").val() + " " +
-"-i " + $("#dashi").val() + " " :
-"-p " + $("#dashp").val() + " "
+" -k " + $("#dashk").val() +
+" -i " + $("#dashi").val() :
+" -p " + $("#dashp").val()
 ) +
 ($("#nrmodalnodelist").hasClass("active") ?
-"-w " + cluster + "[" + $("#dashw").val().replace(/ /g, "") + "] " :
-"-n " + $("#dashn").val() + " "
+" -w " + cluster + "[" + $("#dashw").val().replace(/ /g, "") + "]" :
+" -n " + $("#dashn").val()
 ) +
-($("#dashc").val() === "" ? "" : "-c " + $("#dashc").val() + " ") +
-($("#dasht").val() === "" ? "" : "-t " + $("#dasht").val() + " ") +
-($("#dasha").val() === "" ? "" : "-a " + $("#dasha").val() + " ")
+($("#dashc").val() === "" ? "" : " -c " + $("#dashc").val()) +
+($("#dasht").val() === "" ? "" : " -t " + $("#dasht").val()) +
+($("#dasha").val() === "" ? "" : " -a " + $("#dasha").val())
 ;
 $("#commandline").html(command);
 }
