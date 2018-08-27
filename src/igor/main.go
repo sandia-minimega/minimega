@@ -67,21 +67,6 @@ type TimeSlice struct {
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
 }
 
-// Sort the slice of reservations based on the start time
-type StartSorter []Reservation
-
-func (s StartSorter) Len() int {
-	return len(s)
-}
-
-func (s StartSorter) Less(i, j int) bool {
-	return s[i].StartTime < s[j].StartTime
-}
-
-func (s StartSorter) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
-}
-
 func setExitStatus(n int) {
 	exitMu.Lock()
 	if exitStatus < n {
