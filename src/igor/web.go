@@ -33,8 +33,9 @@ type ResTableRow struct {
 }
 
 type Speculate struct {
-	Start string
-	End   string
+	Start     string
+	End       string
+	Formatted string
 }
 
 type Response struct {
@@ -94,7 +95,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		log, err = processWrapper(splitcmd[0:]...)
 		housekeeping()
 	}
-	if splitcmd[1] == "sub" && splitcmd[len(splitcmd)-1] == "-s" {
+	if splitcmd[1] == "sub" && splitcmd[len(splitcmd)-1] == "-s" && err == nil {
 		specs := []Speculate{}
 		splitlog := strings.FieldsFunc(log, func(c rune) bool {
 			return c == '\n' || c == '\t'
@@ -104,7 +105,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		for i := 3; i < len(splitlog); i += 2 {
 			t1, _ := time.Parse(oldtimefmt, splitlog[i])
 			t2, _ := time.Parse(oldtimefmt, splitlog[i+1])
-			specs = append(specs, Speculate{t1.Format(timefmt), t2.Format(timefmt)})
+			specs = append(specs, Speculate{t1.Format(timefmt), t2.Format(timefmt), splitlog[i]})
 		}
 		extra = specs
 		fmt.Println(extra)

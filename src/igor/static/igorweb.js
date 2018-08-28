@@ -514,25 +514,32 @@ $("#newresback").click(function() {
 })
 
 function runSpeculate() {
-    for (var i = 0; i < 10; i++) {
-        $("#spec_table").children().eq(i).children().eq(0).text(response.Extra[i].Start);
-        $("#spec_table").children().eq(i).children().eq(1).text(response.Extra[i].End);
-    }
-    hideLoaders();
     if (response.Success) {
+        for (var i = 0; i < 10; i++) {
+            $("#spec_table").children().eq(i).children().eq(0).text(response.Extra[i].Start);
+            $("#spec_table").children().eq(i).children().eq(1).text(response.Extra[i].End);
+        }
         newResShowSpec();
     } else {
         parseResult();
     }
+    hideLoaders();
 }
 
 $(".specreserve").click(function() {
+    showLoader($(this));
+    var i = $(this).parent().parent().index();
+    $("#dasha").val(response.Extra[i].Formatted);
     updateCommandLine();
-    $("#dasha").val($(this).parent().prev().prev().html());
+    newResName = $("#dashr").val();
+    execute(runNew);
 })
 
 function runNew() {
     hideLoaders();
+    if ($("#newresspec").is(":visible") && response.Success) {
+        newResHideSpec();
+    }
     parseResult();
 }
 
