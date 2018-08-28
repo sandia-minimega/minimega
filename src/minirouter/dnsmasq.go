@@ -99,7 +99,7 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 		ip := c.StringArgs["ip"]
 		host := c.StringArgs["host"]
 		dnsmasqData.DNS[host] = append(dnsmasqData.DNS[host], ip)
-		log.Debugln("added ip %v to host %v", ip, host)
+		log.Debug("added ip %v to host %v", ip, host)
 	} else if c.BoolArgs["upstream"] {
 		ip := c.StringArgs["ip"]
 		dnsmasqData.Upstream = ip

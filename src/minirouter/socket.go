@@ -11,7 +11,7 @@ import (
 func commandSocketStart() {
 	l, err := net.Listen("unix", filepath.Join(*f_path, "minirouter"))
 	if err != nil {
-		log.Fatalln("commandSocketStart: %v", err)
+		log.Fatal("commandSocketStart: %v", err)
 	}
 
 	for {
