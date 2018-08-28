@@ -13,27 +13,54 @@ var cmdSync = &Command{
 	UsageLine: "sync",
 	Short:     "synchronize igor data",
 	Long: `
-Does an internal check to verify the integrity of the data file.
+Does an internal check to verify the integrity of the data file. Can report and attempt to clean.
 
-OPTIONAL FLAGS:
+SYNOPSIS
+	igor sync <[-d] [-f]> [-q]
 
-	-v	Verbose - Prints additioanl information
+OPTIONS
+
+	-f, -force
+	    Will force sync to fix inconsistencies found in addition to reporting
+
+	-d, -dry_run
+	    Does not attempt to make any corrections, only reports inconsistencies
+
+	-q, -quiet
+	    Suppress reports, only report errors
 	`,
 }
 
-var subL bool // -l
-var subV bool // -v
+var subF bool   // -f
+var force bool  // -force
+var subD bool   // -d
+var dryRun bool // -dry-run
+var subQ bool   // -q
+var quiet bool  // -quiet
 
 func init() {
 	// break init cycle
 	cmdSync.Run = runSync
 
-	cmdSync.Flag.BoolVar(&subL, "l", false, "")
-	cmdSync.Flag.BoolVar(&subV, "v", false, "")
+	cmdSync.Flag.BoolVar(&subF, "f", false, "")
+	cmdSync.Flag.BoolVar(&force, "force", false, "")
+	cmdSync.Flag.BoolVar(&subD, "d", false, "")
+	cmdSync.Flag.BoolVar(&dryRun, "dry_run", false, "")
+	cmdSync.Flag.BoolVar(&subQ, "q", false, "")
+	cmdSync.Flag.BoolVar(&quiet, "quiet", false, "")
 }
 
 // Gather data integrity information, report, and fix
 func runSync(cmd *Command, args []string) {
+	// process flags
+	dryRun = (dryRun || subD)
+	force = (force || subF)
+	quiet = (quiet || subQ)
+
+	if dryRun == force {
+		log.Fatal("Missing or invalid flags. Please see igor sync -h, --help")
+	}
+
 	user, err := getUser()
 	if err != nil {
 		log.Fatalln("Cannot determine current user", err)
@@ -44,28 +71,24 @@ func runSync(cmd *Command, args []string) {
 
 	log.Debug("Sync called - finding orphan IDs")
 	IDs := getOrphanIDs()
-	if len(IDs) > 0 {
-		fmt.Printf("%v orphan Reservation IDs found\n", len(IDs))
-		if subV {
-			for _, id := range IDs {
-				fmt.Println(id)
-			}
+	if len(IDs) > 0 && !quiet {
+		fmt.Printf("%v orphan Reservation IDs found:\n", len(IDs))
+		for _, id := range IDs {
+			fmt.Println(id)
 		}
 	}
-	// we are only listing
-	if subL {
-		return
-	}
 
-	// purge the orphan IDs from the shedule
-	if len(IDs) > 0 {
-		if !subV {
+	// purge the orphan IDs from the schedule
+	if len(IDs) > 0 && force {
+		if !quiet {
 			fmt.Println("Purging Orphan IDs from Schedule...")
 		}
 		for _, oid := range IDs {
 			purgeFromSchedule(oid)
 		}
-		fmt.Println("Done.")
+		if !quiet {
+			fmt.Println("Done.")
+		}
 		dirty = true
 	}
 
@@ -81,22 +104,20 @@ func getOrphanIDs() []uint64 {
 	}
 	// Go through the reservations and turn off IDs we know about
 	for _, r := range Reservations {
-		resIDs[r.ID] = false
+		delete(resIDs, r.ID)
 	}
-	resIDs[0] = false //we don't care about 0
+	delete(resIDs, 0) //we don't care about 0
 	// Compile a list of the remaining IDs, if any
-	var orphanIDs []uint64
-	for k, v := range resIDs {
-		if v {
-			orphanIDs = append(orphanIDs, k)
-		}
+	orphanIDs := make([]uint64, 0, len(resIDs))
+	for k, _ := range resIDs {
+		orphanIDs = append(orphanIDs, k)
 	}
 	log.Debug("Sync:getOrphanIDs concluded with: %v", resIDs)
 	return orphanIDs
 }
 
 func purgeFromSchedule(id uint64) {
-	if subV {
+	if !quiet {
 		fmt.Printf("Purging orphan ID %v from schedule...\n", id)
 	}
 	newSched := Schedule
