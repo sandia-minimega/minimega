@@ -23,7 +23,7 @@ OPTIONS
 	-f, -force
 	    Will force sync to fix inconsistencies found in addition to reporting
 
-	-d, -dry_run
+	-d, -dry-run
 	    Does not attempt to make any corrections, only reports inconsistencies
 
 	-q, -quiet
@@ -45,7 +45,7 @@ func init() {
 	cmdSync.Flag.BoolVar(&subF, "f", false, "")
 	cmdSync.Flag.BoolVar(&force, "force", false, "")
 	cmdSync.Flag.BoolVar(&subD, "d", false, "")
-	cmdSync.Flag.BoolVar(&dryRun, "dry_run", false, "")
+	cmdSync.Flag.BoolVar(&dryRun, "dry-run", false, "")
 	cmdSync.Flag.BoolVar(&subQ, "q", false, "")
 	cmdSync.Flag.BoolVar(&quiet, "quiet", false, "")
 }
