@@ -17,7 +17,8 @@
 <body style="background-color: whitesmoke">
     <nav class="navbar fixed-top navbar-dark">
         <span class="navbar-brand mdl" style="margin-left: 10%; color: white; font-size: 2.25em; font-family: 'Montserrat', sans-serif;"><b class="mdl">Igor</b><i>Web</i></span>
-        <button id="newresbtn" class="igorbtn navbar btn btn-outline-light" data-focus="false" data-toggle="modal" data-target="#newresmodal" style="margin-right: 15%">New Reservation</button>
+        <button id="keybtn" class="active navbar btn btn-outline-light" style="margin-right: 18%">Key</button>
+        <div id="newbutton" class="clickable" data-focus="false" data-toggle="modal" data-target="#newresmodal">+</div>
     </nav>
     <div class="container-fluid">
         <div class="row" style="padding-bottom: 6%;">
@@ -32,7 +33,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="card mx-auto text-center" style="width: 400px; margin-bottom: 4em; border: none;">
+                        <div id="key" class="card mx-auto text-center" style="width: 400px; margin-bottom: 4em; border: none;">
                             <div class="card-body">
                                 <table class="table table-borderless">
                                     <tbody>
@@ -78,9 +79,9 @@
                     </div>
                     <div class="col">
                         <div class="card mx-auto" style="width: 800px; margin-bottom: 4em;">
-                            <div class="card-body" style="min-height: 400px;">
-                                <div class="mdl bigloader purple"></div>
-                                <div id="table" class="row" style="margin: 0.5em; opacity: 0;">
+                            <div class="card-body">
+                                <!-- <div class="mdl bigloader purple"></div> -->
+                                <div id="table" class="row" style="margin: 0.5em; opacity: 1;">
                                     <table class="table table-hover table-borderless">
                                         <thead>
                                             <tr>

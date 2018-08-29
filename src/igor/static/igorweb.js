@@ -191,38 +191,32 @@ function execute(onResponse) {
 }
 
 function getReservations() {
-    showBigLoaders();
-    var curResName = "";
-    if (selectedRes != -1) {
-        curResName = reservations[selectedRes].Name;
-    }
-    var selectedNodestmp = selectedNodes;
-    deselectGrid();
-    deselectTable();
     $.get(
         "/run/",
         {run: "igor show"},
         function(data) {
-            setTimeout(function() {
-                var rsp = JSON.parse(data);
-                reservations = rsp.Extra;
-                console.log(reservations)
-                showReservationData();
-                if (newResName !== "" && response.Success) {
-                    selectedRes = getResIndexByName(newResName);
-                    newResName = "";
-                } else {
-                    selectedRes = getResIndexByName(curResName);
+            var curResName = "";
+            if (selectedRes != -1) {
+                curResName = reservations[selectedRes].Name;
+            }
+            var selectedNodestmp = selectedNodes;
+            var rsp = JSON.parse(data);
+            reservations = rsp.Extra;
+            console.log(reservations);
+            showReservationData();
+            if (newResName !== "" && response.Success) {
+                selectedRes = getResIndexByName(newResName);
+                newResName = "";
+            } else {
+                selectedRes = getResIndexByName(curResName);
+            }
+            if (selectedRes != -1) {
+                select(getObjFromResIndex(selectedRes));
+            } else {
+                for (var i = 0; i < selectedNodestmp.length; i++) {
+                    select(getObjFromNodeIndex(selectedNodestmp[i]));
                 }
-                if (selectedRes != -1) {
-                    select(getObjFromResIndex(selectedRes));
-                } else {
-                    for (var i = 0; i < selectedNodestmp.length; i++) {
-                        select(getObjFromNodeIndex(selectedNodestmp[i]));
-                    }
-                }
-                hideBigLoaders();
-            }, 700)
+            }
         }
     );
 }
@@ -281,7 +275,18 @@ var extremeMin;
 var minDragNode;
 var lastDrag;
 function showReservationData(){
-    $("#nodegrid").html('<div class="mdl bigloader"></div>');
+    reservations.sort(function (a, b) {
+        var diff = a.StartInt - b.StartInt;
+        if (diff === 0) {
+            if (a.Name > b.Name) {
+                diff = 1;
+            } else {
+                diff = -1;
+            }
+        }
+        return diff;
+    });
+    $("#nodegrid").html('');//<div class="mdl bigloader"></div>');
     $("#res_table").html("");
     // populate node grid
     var newcol = '<div class="col" style="padding: 0">' +
@@ -289,7 +294,7 @@ function showReservationData(){
     for (var i = 0; i < rackWidth; i++) {
         $('#nodegrid').append(newcol + 'id="col' + i + '"></div></div>');
     }
-    var grid = '<div draggable="true" tabIndex="-1" style="opacity: 0; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
+    var grid = '<div draggable="true" tabIndex="-1" style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;" ';
     for (var i = startNode; i <= endNode; i++) {
         col = (i - 1) % rackWidth;
         var classes = ' class="list-group-item list-group-item-action node ';
@@ -313,7 +318,7 @@ function showReservationData(){
         classes += '" ';
         $("#col" + col).append(grid + classes + ' id="' + i +'">' + i + '</div>');
     }
-    hideBigLoaders();
+    // hideBigLoaders();
 
     // node grid selections
     $(".node").click(function(event) {
@@ -435,12 +440,12 @@ function showReservationData(){
     var tr2 = '</tr>';
     var td1 = '<td class="mdl">';
     var td2 = '</td>';
-    $("#res_table").append(
-        tr1 + 'id="res0">' +
-        '<td colspan="4" class="mdl">Down</td>' +
-        td1 + reservations[0].Nodes.length + td2 +
-        tr2
-    );
+    // $("#res_table").append(
+    //     tr1 + 'id="res0">' +
+    //     '<td colspan="4" class="mdl">Down</td>' +
+    //     td1 + reservations[0].Nodes.length + td2 +
+    //     tr2
+    // );
     for (var i = 1; i < reservations.length; i++) {
         $("#res_table").append(
             tr1 + 'id="res' + i + '">' +
@@ -478,7 +483,7 @@ showReservationData();
 // heartbeat
 setInterval(function() {
     getReservations();
-}, 60000);
+}, 10000);
 
 // deselect on outside click
 $(document).click(function(event) {
@@ -858,4 +863,9 @@ $(".key").hover(function() {
 $(".key").mouseleave(function() {
     $(".node").removeClass("noshadow")
     $(".node").removeClass("shadow")
+});
+
+$("#keybtn").click(function() {
+    $(this).toggleClass("active");
+    $("#key").toggle();
 });

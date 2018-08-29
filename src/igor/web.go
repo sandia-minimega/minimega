@@ -19,17 +19,26 @@ var cmdWeb = &Command{
 	Long:      `Run a Go web application with a GUI for igor`,
 }
 
+var webP string // port
+var webF string // location of static folder
+var webS bool   // silent
+
 func init() {
 	// break init cycle
 	cmdWeb.Run = runWeb
+
+	cmdWeb.Flag.StringVar(&webP, "p", "8080", "")
+	cmdWeb.Flag.StringVar(&webF, "f", "", "")
+	cmdWeb.Flag.BoolVar(&webS, "s", false, "")
 }
 
 type ResTableRow struct {
-	Name  string
-	Owner string
-	Start string
-	End   string
-	Nodes []int
+	Name     string
+	Owner    string
+	Start    string
+	StartInt int64
+	End      string
+	Nodes    []int
 }
 
 type Speculate struct {
@@ -63,6 +72,7 @@ func getReservations() []ResTableRow {
 		"",
 		"",
 		"",
+		0,
 		"",
 		rnge.RangeToInts(getDownNodes(getNodes())),
 	})
@@ -73,6 +83,7 @@ func getReservations() []ResTableRow {
 			r.ResName,
 			r.Owner,
 			time.Unix(r.StartTime, 0).Format(timefmt),
+			r.StartTime,
 			time.Unix(r.EndTime, 0).Format(timefmt),
 			rnge.RangeToInts(r.Hosts),
 		})
@@ -83,8 +94,10 @@ func getReservations() []ResTableRow {
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	command := r.URL.Query()["run"][0]
-	fmt.Println("Command:", command)
-	fmt.Println("\tFrom:", r.RemoteAddr)
+	if !webS {
+		fmt.Println("Command:", command)
+		fmt.Println("\tFrom:", r.RemoteAddr)
+	}
 	splitcmd := strings.Split(command, " ")
 	var extra interface{}
 	log := ""
@@ -108,21 +121,24 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 			specs = append(specs, Speculate{t1.Format(timefmt), t2.Format(timefmt), splitlog[i]})
 		}
 		extra = specs
-		fmt.Println(extra)
 	}
 	rsp := Response{err == nil, log, extra}
-	fmt.Println("\tResponse:", rsp.Message)
+	if !webS {
+		fmt.Println("\tResponse:", rsp.Message)
+	}
 	jsonrsp, _ := json.Marshal(rsp)
 	w.Write([]byte(jsonrsp))
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
 
-	fmt.Println(r.Method, r.URL, r.RemoteAddr)
+	if !webS {
+		fmt.Println(r.Method, r.URL, r.RemoteAddr)
+	}
 	resRows := getReservations()
 
 	if r.URL.Path == "/" {
-		t, err := template.ParseFiles("igorweb.html")
+		t, err := template.ParseFiles(webF + "igorweb.html")
 		if err != nil {
 			panic(err)
 		}
@@ -165,8 +181,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func runWeb(_ *Command, _ []string) {
 
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(webF+"static"))))
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/run/", cmdHandler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":"+webP, nil))
 }

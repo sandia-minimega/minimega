@@ -78,14 +78,23 @@ th {
     box-shadow: 0px 4px 40px -5px rgba(0#ffdd9b,0,0,0.38);
     background-color: #a975d6;
 }
-.igorbtn {
+.igorbtn, #keybtn {
     -webkit-box-shadow: none;
     -moz-box-shadow: none;
     box-shadow: none;
     -webkit-transition-duration: 0.2s; /* Safari */
     transition-duration: 0.2s;
 }
-button.actionbar:active {
+#keybtn:hover {
+    color: white !important;
+    background-color: #a975d6 !important;
+    border-color: white !important;
+}
+#keybtn:hover.active {
+    color: #a975d6 !important;
+    background-color: white !important;
+}
+button.actionbar:active, #keybtn.active {
     color: #a975d6 !important;
 }
 .igorbtn:hover {
@@ -311,4 +320,32 @@ thead {
 .keycolor {
     width: 50%;
     height: 20px;
+}
+#newbutton {
+    position: fixed;
+    top: 43px;
+    z-index: 5000;
+    right: 10%;
+    background-color: #659af5;
+    color: white;
+    width: 75px;
+    height: 75px;
+    border-radius: 100%;
+    text-align: center;
+    line-height: 75px;
+    font-weight: bold;
+    font-size: 2rem;
+    -webkit-box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
+    -moz-box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
+    box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
+    -webkit-transition-duration: 0.3s !important;
+    transition-duration: 0.3s !important;
+}
+#newbutton:hover {
+    background-color: #88b0f5;
+}
+#newbutton:active {
+    -webkit-box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
+    -moz-box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
+    box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
 }
