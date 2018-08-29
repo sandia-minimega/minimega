@@ -32,9 +32,12 @@ function getObjFromNodeIndex(index) {
 var selectedNodes = [];
 var selectedRes = -1;
 function select(obj) {
+    if (obj.length === 0) return;
     if (obj.hasClass("active")) return;
     if (obj.hasClass("node")) {
-        selectedNodes.push(getNodeIndexFromObj(obj));
+        obj.each(function () {
+            selectedNodes.push(getNodeIndexFromObj($(this)));
+        });
         selectedNodes.sort((a, b) => a - b);
     } else {
         var selectedResTemp = getResIndexFromObj(obj);
@@ -50,7 +53,9 @@ function deselect(obj) {
     if (!obj.hasClass("active")) return;
     obj.removeClass("active");
     if (obj.hasClass("node")) {
-        selectedNodes.splice(selectedNodes.indexOf(getNodeIndexFromObj(obj)), 1);
+        obj.each(function () {
+            selectedNodes.splice(selectedNodes.indexOf(getNodeIndexFromObj($(this))), 1);
+        });
     } else {
         selectedRes = -1;
     }
@@ -316,7 +321,7 @@ function showReservationData(){
         toggle($(this));
     });
 
-    // node hover to cause res table hover
+    // node hover to cause res table and key hover
     $(".node").hover(function() {
         var node = getNodeIndexFromObj($(this));
         for (var i = 0; i < reservations.length; i++) {
@@ -324,15 +329,35 @@ function showReservationData(){
                 getObjFromResIndex(i).addClass("hover");
             };
         }
+        if ($(this).hasClass("available")) {
+            $(".key.available.headtext").addClass("hover");
+        }
+        if ($(this).hasClass("reserved")) {
+            $(".key.reserved.headtext").addClass("hover");
+        }
+        if ($(this).hasClass("up")) {
+            $(".key.up.headtext").addClass("hover");
+        }
+        if ($(this).hasClass("down")) {
+            $(".key.down.headtext").addClass("hover");
+        }
+        if ($(this).hasClass("available")) {
+            if ($(this).hasClass("up")) {
+                $(".key.available.up").addClass("hover");
+            } else {
+                $(".key.available.down").addClass("hover");
+            }
+        } else if ($(this).hasClass("reserved")) {
+            if ($(this).hasClass("up")) {
+                $(".key.reserved.up").addClass("hover");
+            } else {
+                $(".key.reserved.down").addClass("hover");
+            }
+        }
     });
 
     $(".node").mouseleave(function() {
-        var node = getNodeIndexFromObj($(this));
-        for (var i = 0; i < reservations.length; i++) {
-            if (reservations[i].Nodes.includes(node)) {
-                getObjFromResIndex(i).removeClass("hover");
-            };
-        }
+        $(".res, .key").removeClass("hover");
     });
 
     // node dragging
@@ -446,10 +471,6 @@ function showReservationData(){
     $(".res").mouseleave(function() {
         $(".node").removeClass("noshadow")
         $(".node").removeClass("shadow")
-        var nodes = reservations[getResIndexFromObj($(this))].Nodes;
-        for (var i = 0; i < nodes.length; i++) {
-            getObjFromNodeIndex(nodes[i]).removeClass("hover");
-        }
     });
 }
 showReservationData();
@@ -775,4 +796,66 @@ $(".copy").click(function(event) {
 $(".igorbtn").click(function() {
     $(".responseparent").hide();
     $("#deletemodaldialog").addClass("modal-sm");
+});
+
+// key
+$(".key").click(function(event) {
+    deselectGrid();
+    deselectTable();
+    var obj;
+    if ($(this).hasClass("available")) {
+        if ($(this).hasClass("up")) {
+            obj = $(".node.available.up");
+        } else if ($(this).hasClass("down")) {
+            obj = $(".node.available.down");
+        } else {
+            obj = $(".node.available");
+        }
+    } else if ($(this).hasClass("reserved")) {
+        if ($(this).hasClass("up")) {
+            obj = $(".node.reserved.up");
+        } else if ($(this).hasClass("down")) {
+            obj = $(".node.reserved.down");
+        } else {
+            obj = $(".node.reserved");
+        }
+    } else if ($(this).hasClass("up")) {
+        obj = $(".node.up");
+    } else if ($(this).hasClass("down")) {
+        obj = $(".node.down");
+    }
+    select(obj);
+});
+
+$(".key").hover(function() {
+    $(".node").addClass("noshadow");
+    var obj;
+    if ($(this).hasClass("available")) {
+        if ($(this).hasClass("up")) {
+            obj = $(".node.available.up");
+        } else if ($(this).hasClass("down")) {
+            obj = $(".node.available.down");
+        } else {
+            obj = $(".node.available");
+        }
+    } else if ($(this).hasClass("reserved")) {
+        if ($(this).hasClass("up")) {
+            obj = $(".node.reserved.up");
+        } else if ($(this).hasClass("down")) {
+            obj = $(".node.reserved.down");
+        } else {
+            obj = $(".node.reserved");
+        }
+    } else if ($(this).hasClass("up")) {
+        obj = $(".node.up");
+    } else if ($(this).hasClass("down")) {
+        obj = $(".node.down");
+    }
+    obj.removeClass("noshadow");
+    obj.addClass("shadow");
+});
+
+$(".key").mouseleave(function() {
+    $(".node").removeClass("noshadow")
+    $(".node").removeClass("shadow")
 });

@@ -44,28 +44,25 @@
     box-shadow: none !important;
 }
 /* TODO: make shadows behind all nodes */
-.node.hover {
-    background-color: #e9ecef;
-}
-.node.reserved.down.unselected {
+.node.reserved.down.unselected, .keycolor.reserved.down.unselected {
     background-color: #ffdd9b;
 }
 .node.reserved.down.active {
     background-color: #d29723;
 }
-.node.reserved.up.unselected {
+.node.reserved.up.unselected, .keycolor.reserved.up.unselected {
     background-color: #ccdfff;
 }
 .node.reserved.up.active {
     background-color: #3f73cc;
 }
-.node.available.down.unselected {
+.node.available.down.unselected, .keycolor.available.down.unselected {
     background-color: #ffb5b5;
 }
 .node.available.down.active {
     background-color: #e85555;
 }
-.node.available.up.unselected {
+.node.available.up.unselected, .keycolor.available.up.unselected {
     background-color: #e7ccff;
 }
 .node.available.up.active {
@@ -302,4 +299,16 @@ thead {
     font-style: normal;
     font-weight: 400;
     top: 80%;
+}
+.tdhover {
+    -webkit-transition-duration: 0.3s !important;
+    transition-duration: 0.3s !important;
+    vertical-align: middle;
+}
+.tdhover:hover, .tdhover.hover {
+    background-color: rgba(0,0,0,.075);
+}
+.keycolor {
+    width: 50%;
+    height: 20px;
 }
