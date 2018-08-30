@@ -275,6 +275,13 @@ function initHostDataTable() {
             { "title": "CPU Commit", "data": "cpucommit" },
             { "title": "Mem Commit", "data": "memcommit" },
             { "title": "Net Commit", "data": "netcommit" },
+			{
+                "title": "Logs",
+                "data": "name",
+                render:  function ( data, type, full, meta ) {
+                    return '<a href="'+connectURL(full)+'" target="_blank">View</a>';
+                }
+            },
             { "title": "Uptime", "data": "uptime", render: function(data, type, full, meta) {
                 // calculate days separately
                 var seconds = parseInt(data);
@@ -282,6 +289,7 @@ function initHostDataTable() {
                 seconds -= days * 86400;
                 return days + " days " + new Date(seconds * 1000).toISOString().substr(11, 8);
             } },
+
         ],
         "order": [[ 0, 'asc' ]],
         "stateSave": true,

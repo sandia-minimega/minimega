@@ -12,12 +12,19 @@ import (
 
 var (
 	f_stddev = flag.Float64("stddev", 0.0, "standard deviation")
+	f_seed   = flag.Int64("seed", -1, "standard deviation")
 )
 
 func main() {
 	flag.Parse()
 
-	s := rand.NewSource(time.Now().UnixNano())
+	var s rand.Source
+	if *f_seed != -1 {
+		s = rand.NewSource(*f_seed)
+	} else {
+		s = rand.NewSource(time.Now().UnixNano())
+	}
+
 	r := rand.New(s)
 
 	scanner := bufio.NewScanner(os.Stdin)

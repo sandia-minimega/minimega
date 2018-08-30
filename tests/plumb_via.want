@@ -1,0 +1,425 @@
+## # Plumbing tests for vias
+## # Note: These test vias, modes, and a small stress test
+
+## # Setting up VMs
+## .annotate false
+## vm launch kvm box[1-15]
+## vm start box[1-15]
+## .columns name,state vm info
+name  | state
+box1  | RUNNING
+box10 | RUNNING
+box11 | RUNNING
+box12 | RUNNING
+box13 | RUNNING
+box14 | RUNNING
+box15 | RUNNING
+box2  | RUNNING
+box3  | RUNNING
+box4  | RUNNING
+box5  | RUNNING
+box6  | RUNNING
+box7  | RUNNING
+box8  | RUNNING
+box9  | RUNNING
+
+## # Basic via test
+## # Note: -u means unbuffered and makes the command run faster
+## plumb box1 box2 box3
+## pipe
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 0     |     | 
+box2 | all  | 1       | 1       | 0     |     | 
+box3 | all  | 0       | 1       | 0     |     |
+## pipe box1 via sed -u "s/kittens/cats/"
+## pipe 
+name | mode | readers | writers | count | via                    | previous
+box1 | all  | 1       | 0       | 0     | sed -u s/kittens/cats/ | 
+box2 | all  | 1       | 1       | 0     |                        | 
+box3 | all  | 0       | 1       | 0     |                        |
+## pipe box1 "Whiskers on kittens."
+## pipe
+name | mode | readers | writers | count | via                    | previous
+box1 | all  | 1       | 0       | 1     | sed -u s/kittens/cats/ | Whiskers on kittens.
+box2 | all  | 1       | 1       | 1     |                        | Whiskers on cats.
+box3 | all  | 0       | 1       | 1     |                        | Whiskers on cats.
+
+## # Text manipulation with vias
+## # Single word replace.
+## clear plumb
+## clear pipe
+
+## plumb box1 "sed -u s/packages/boxes/" box2
+## pipe
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 0     |     |
+## pipe box1 "Brown paper packages tied up with strings. packages."
+## pipe
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 1     |     | Brown paper packages tied up with strings. packages.
+
+## # Multi-word replace
+## clear plumb
+## clear pipe
+
+## plumb box1 box2 box3
+## pipe
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 0     |     | 
+box2 | all  | 1       | 1       | 0     |     | 
+box3 | all  | 0       | 1       | 0     |     |
+## pipe box1 via sed "s/raindrops/water/g"
+## pipe
+name | mode | readers | writers | count | via                     | previous
+box1 | all  | 1       | 0       | 0     | sed s/raindrops/water/g | 
+box2 | all  | 1       | 1       | 0     |                         | 
+box3 | all  | 0       | 1       | 0     |                         |
+## pipe box1 "raindrops on roses, raindrops on roses, raindrops on roses."
+## pipe
+name | mode | readers | writers | count | via                     | previous
+box1 | all  | 1       | 0       | 1     | sed s/raindrops/water/g | raindrops on roses, raindrops on roses, raindrops on roses.
+box2 | all  | 1       | 1       | 0     |                         | 
+box3 | all  | 0       | 1       | 0     |                         |
+
+## # Only second word replace
+## pipe box1 via sed "s/kettles/pots/2"
+## pipe
+name | mode | readers | writers | count | via                  | previous
+box1 | all  | 1       | 0       | 1     | sed s/kettles/pots/2 | raindrops on roses, raindrops on roses, raindrops on roses.
+box2 | all  | 1       | 1       | 1     |                      | water on roses, water on roses, water on roses.
+box3 | all  | 0       | 1       | 1     |                      | water on roses, water on roses, water on roses.
+## pipe box1 "bright copper kettles, bright copper kettles, bright copper kettles."
+## pipe
+name | mode | readers | writers | count | via                  | previous
+box1 | all  | 1       | 0       | 2     | sed s/kettles/pots/2 | bright copper kettles, bright copper kettles, bright copper kettles.
+box2 | all  | 1       | 1       | 1     |                      | water on roses, water on roses, water on roses.
+box3 | all  | 0       | 1       | 1     |                      | water on roses, water on roses, water on roses.
+
+## # Ignore upper and lower case, focus on every word replace.
+## pipe box1 via sed "s/GEESE/ducks/i"
+## pipe
+name | mode | readers | writers | count | via                 | previous
+box1 | all  | 1       | 0       | 2     | sed s/GEESE/ducks/i | bright copper kettles, bright copper kettles, bright copper kettles.
+box2 | all  | 1       | 1       | 2     |                     | bright copper kettles, bright copper pots, bright copper kettles.
+box3 | all  | 0       | 1       | 2     |                     | bright copper kettles, bright copper pots, bright copper kettles.
+## pipe box1 "Geese with moonlight, geese with moonlight, GEESE with moonlight."
+## pipe
+name | mode | readers | writers | count | via                 | previous
+box1 | all  | 1       | 0       | 3     | sed s/GEESE/ducks/i | Geese with moonlight, geese with moonlight, GEESE with moonlight.
+box2 | all  | 1       | 1       | 3     |                     | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+box3 | all  | 0       | 1       | 3     |                     | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+
+## # Regex, replace line up to specified text.
+## pipe box1 via sed "s/^.*cats/Packages tied up with strings/"
+## pipe
+name | mode | readers | writers | count | via                                          | previous
+box1 | all  | 1       | 0       | 3     | sed s/^.*cats/Packages tied up with strings/ | Geese with moonlight, geese with moonlight, GEESE with moonlight.
+box2 | all  | 1       | 1       | 3     |                                              | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+box3 | all  | 0       | 1       | 3     |                                              | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+## pipe box1 "Warm woolen mittens, we get cats. These are a few of my favorite things."
+## pipe
+name | mode | readers | writers | count | via                                          | previous
+box1 | all  | 1       | 0       | 4     | sed s/^.*cats/Packages tied up with strings/ | Warm woolen mittens, we get cats. These are a few of my favorite things.
+box2 | all  | 1       | 1       | 3     |                                              | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+box3 | all  | 0       | 1       | 3     |                                              | ducks with moonlight, geese with moonlight, GEESE with moonlight.
+
+## # Regex example, you must double escape special characters.
+## pipe box1 via sed "s/and/\\&/g"
+## pipe 
+name | mode | readers | writers | count | via            | previous
+box1 | all  | 1       | 0       | 4     | sed s/and/\&/g | Warm woolen mittens, we get cats. These are a few of my favorite things.
+box2 | all  | 1       | 1       | 4     |                | Packages tied up with strings. These are a few of my favorite things.
+box3 | all  | 0       | 1       | 4     |                | Packages tied up with strings. These are a few of my favorite things.
+## pipe box1 "Roses and kittens and sleigh bells and mittens."
+## pipe
+name | mode | readers | writers | count | via            | previous
+box1 | all  | 1       | 0       | 5     | sed s/and/\&/g | Roses and kittens and sleigh bells and mittens.
+box2 | all  | 1       | 1       | 4     |                | Packages tied up with strings. These are a few of my favorite things.
+box3 | all  | 0       | 1       | 4     |                | Packages tied up with strings. These are a few of my favorite things.
+
+## # Multiple replacements per pipe
+## pipe box1 via sed -e "s/and/\\&/" -e "s/kittens/cats/g" -e "s/GEESE/ducks/i"
+## pipe 
+name | mode | readers | writers | count | via                                                     | previous
+box1 | all  | 1       | 0       | 5     | sed -e s/and/\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i | Roses and kittens and sleigh bells and mittens.
+box2 | all  | 1       | 1       | 5     |                                                         | Roses & kittens & sleigh bells & mittens.
+box3 | all  | 0       | 1       | 5     |                                                         | Roses & kittens & sleigh bells & mittens.
+## pipe box1 "kittens and geese and kittens and GEESE and kittens and geese."
+## pipe
+name | mode | readers | writers | count | via                                                     | previous
+box1 | all  | 1       | 0       | 6     | sed -e s/and/\&/ -e s/kittens/cats/g -e s/GEESE/ducks/i | kittens and geese and kittens and GEESE and kittens and geese.
+box2 | all  | 1       | 1       | 5     |                                                         | Roses & kittens & sleigh bells & mittens.
+box3 | all  | 0       | 1       | 5     |                                                         | Roses & kittens & sleigh bells & mittens.
+
+## # Number manipulation with vias
+## clear plumb
+## clear pipe
+
+## plumb box1 box2 box3
+## pipe
+name | mode | readers | writers | count | via | previous
+box1 | all  | 1       | 0       | 0     |     | 
+box2 | all  | 1       | 1       | 0     |     | 
+box3 | all  | 0       | 1       | 0     |     |
+## pipe box1 via bin/normal -seed 4 
+## pipe
+name | mode | readers | writers | count | via                | previous
+box1 | all  | 1       | 0       | 0     | bin/normal -seed 4 | 
+box2 | all  | 1       | 1       | 0     |                    | 
+box3 | all  | 0       | 1       | 0     |                    |
+## pipe box1 4.44
+## pipe
+name | mode | readers | writers | count | via                | previous
+box1 | all  | 1       | 0       | 1     | bin/normal -seed 4 | 4.44
+box2 | all  | 1       | 1       | 0     |                    | 
+box3 | all  | 0       | 1       | 0     |                    |
+## pipe box1 5
+## pipe
+name | mode | readers | writers | count | via                | previous
+box1 | all  | 1       | 0       | 2     | bin/normal -seed 4 | 5
+box2 | all  | 1       | 1       | 1     |                    | 4.44
+box3 | all  | 0       | 1       | 1     |                    | 4.44
+## pipe box1 via bin/normal -seed 100
+## pipe
+name | mode | readers | writers | count | via                  | previous
+box1 | all  | 1       | 0       | 2     | bin/normal -seed 100 | 5
+box2 | all  | 1       | 1       | 2     |                      | 5
+box3 | all  | 0       | 1       | 2     |                      | 5
+## pipe box1 94.09
+## pipe 
+name | mode | readers | writers | count | via                  | previous
+box1 | all  | 1       | 0       | 3     | bin/normal -seed 100 | 94.09
+box2 | all  | 1       | 1       | 2     |                      | 5
+box3 | all  | 0       | 1       | 2     |                      | 5
+##  
+## # Stress test with mode, number and text manipulation
+## clear plumb 
+## clear pipe
+
+## plumb box1 box2 box3
+## plumb box4 box5 box6
+## plumb box6 box7
+## plumb box7 box8 box9 box10 box11 box12 box13 box14 box15
+
+## pipe
+name  | mode | readers | writers | count | via | previous
+box1  | all  | 1       | 0       | 0     |     | 
+box10 | all  | 1       | 1       | 0     |     | 
+box11 | all  | 1       | 1       | 0     |     | 
+box12 | all  | 1       | 1       | 0     |     | 
+box13 | all  | 1       | 1       | 0     |     | 
+box14 | all  | 1       | 1       | 0     |     | 
+box15 | all  | 0       | 1       | 0     |     | 
+box2  | all  | 1       | 1       | 0     |     | 
+box3  | all  | 0       | 1       | 0     |     | 
+box4  | all  | 1       | 0       | 0     |     | 
+box5  | all  | 1       | 1       | 0     |     | 
+box6  | all  | 1       | 1       | 0     |     | 
+box7  | all  | 1       | 1       | 0     |     | 
+box8  | all  | 1       | 1       | 0     |     | 
+box9  | all  | 1       | 1       | 0     |     |
+## pipe box6 mode round-robin
+
+## pipe
+name  | mode        | readers | writers | count | via | previous
+box1  | all         | 1       | 0       | 0     |     | 
+box10 | all         | 1       | 1       | 0     |     | 
+box11 | all         | 1       | 1       | 0     |     | 
+box12 | all         | 1       | 1       | 0     |     | 
+box13 | all         | 1       | 1       | 0     |     | 
+box14 | all         | 1       | 1       | 0     |     | 
+box15 | all         | 0       | 1       | 0     |     | 
+box2  | all         | 1       | 1       | 0     |     | 
+box3  | all         | 0       | 1       | 0     |     | 
+box4  | all         | 1       | 0       | 0     |     | 
+box5  | all         | 1       | 1       | 0     |     | 
+box6  | round-robin | 1       | 1       | 0     |     | 
+box7  | all         | 1       | 1       | 0     |     | 
+box8  | all         | 1       | 1       | 0     |     | 
+box9  | all         | 1       | 1       | 0     |     |
+## pipe box1 via sed "s/kittens/cats/g"
+## pipe
+name  | mode        | readers | writers | count | via                  | previous
+box1  | all         | 1       | 0       | 0     | sed s/kittens/cats/g | 
+box10 | all         | 1       | 1       | 0     |                      | 
+box11 | all         | 1       | 1       | 0     |                      | 
+box12 | all         | 1       | 1       | 0     |                      | 
+box13 | all         | 1       | 1       | 0     |                      | 
+box14 | all         | 1       | 1       | 0     |                      | 
+box15 | all         | 0       | 1       | 0     |                      | 
+box2  | all         | 1       | 1       | 0     |                      | 
+box3  | all         | 0       | 1       | 0     |                      | 
+box4  | all         | 1       | 0       | 0     |                      | 
+box5  | all         | 1       | 1       | 0     |                      | 
+box6  | round-robin | 1       | 1       | 0     |                      | 
+box7  | all         | 1       | 1       | 0     |                      | 
+box8  | all         | 1       | 1       | 0     |                      | 
+box9  | all         | 1       | 1       | 0     |                      |
+## pipe box1 "kittens with whiskers, kittens with whiskers, kittens with whiskers."
+## pipe
+name  | mode        | readers | writers | count | via                  | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 0     |                      | 
+box11 | all         | 1       | 1       | 0     |                      | 
+box12 | all         | 1       | 1       | 0     |                      | 
+box13 | all         | 1       | 1       | 0     |                      | 
+box14 | all         | 1       | 1       | 0     |                      | 
+box15 | all         | 0       | 1       | 0     |                      | 
+box2  | all         | 1       | 1       | 0     |                      | 
+box3  | all         | 0       | 1       | 0     |                      | 
+box4  | all         | 1       | 0       | 0     |                      | 
+box5  | all         | 1       | 1       | 0     |                      | 
+box6  | round-robin | 1       | 1       | 0     |                      | 
+box7  | all         | 1       | 1       | 0     |                      | 
+box8  | all         | 1       | 1       | 0     |                      | 
+box9  | all         | 1       | 1       | 0     |                      |
+## pipe box4 via sed -e "s/kettles/pots/" -e "s/geese/ducks/i" -e "s/and/\\&/2"
+## pipe
+name  | mode        | readers | writers | count | via                                                     | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 0     |                                                         | 
+box11 | all         | 1       | 1       | 0     |                                                         | 
+box12 | all         | 1       | 1       | 0     |                                                         | 
+box13 | all         | 1       | 1       | 0     |                                                         | 
+box14 | all         | 1       | 1       | 0     |                                                         | 
+box15 | all         | 0       | 1       | 0     |                                                         | 
+box2  | all         | 1       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 0     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | 
+box5  | all         | 1       | 1       | 0     |                                                         | 
+box6  | round-robin | 1       | 1       | 0     |                                                         | 
+box7  | all         | 1       | 1       | 0     |                                                         | 
+box8  | all         | 1       | 1       | 0     |                                                         | 
+box9  | all         | 1       | 1       | 0     |                                                         |
+## pipe box4 "kittens and geese and kittens and geese and kittens and geese."
+## pipe
+name  | mode        | readers | writers | count | via                                                     | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 0     |                                                         | 
+box11 | all         | 1       | 1       | 0     |                                                         | 
+box12 | all         | 1       | 1       | 0     |                                                         | 
+box13 | all         | 1       | 1       | 0     |                                                         | 
+box14 | all         | 1       | 1       | 0     |                                                         | 
+box15 | all         | 0       | 1       | 0     |                                                         | 
+box2  | all         | 1       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 0     |                                                         | 
+box6  | round-robin | 1       | 1       | 0     |                                                         | 
+box7  | all         | 1       | 1       | 0     |                                                         | 
+box8  | all         | 1       | 1       | 0     |                                                         | 
+box9  | all         | 1       | 1       | 0     |                                                         |
+## pipe box6 via bin/normal -seed 8000
+## pipe
+name  | mode        | readers | writers | count | via                                                     | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 0     |                                                         | 
+box11 | all         | 1       | 1       | 0     |                                                         | 
+box12 | all         | 1       | 1       | 0     |                                                         | 
+box13 | all         | 1       | 1       | 0     |                                                         | 
+box14 | all         | 1       | 1       | 0     |                                                         | 
+box15 | all         | 0       | 1       | 0     |                                                         | 
+box2  | all         | 1       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                         | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 1     | bin/normal -seed 8000                                   | kittens and ducks & kittens and geese and kittens and geese.
+box7  | all         | 1       | 1       | 0     |                                                         | 
+box8  | all         | 1       | 1       | 0     |                                                         | 
+box9  | all         | 1       | 1       | 0     |                                                         |
+## pipe box6 90.8
+## pipe
+name  | mode        | readers | writers | count | via                                                     | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                    | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 1     |                                                         | 
+box11 | all         | 1       | 1       | 1     |                                                         | 
+box12 | all         | 1       | 1       | 1     |                                                         | 
+box13 | all         | 1       | 1       | 1     |                                                         | 
+box14 | all         | 1       | 1       | 1     |                                                         | 
+box15 | all         | 0       | 1       | 1     |                                                         | 
+box2  | all         | 1       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                         | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2 | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                         | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 2     | bin/normal -seed 8000                                   | 90.8
+box7  | all         | 1       | 1       | 1     |                                                         | 
+box8  | all         | 1       | 1       | 1     |                                                         | 
+box9  | all         | 1       | 1       | 1     |                                                         |
+## pipe box7 via sed -e "s/kittens/cats/g" -e "s/these are a few of my favorite things/\\:\\)/"
+## pipe
+name  | mode        | readers | writers | count | via                                                                      | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box11 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box12 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box13 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box14 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box15 | all         | 0       | 1       | 2     |                                                                          | 90.8
+box2  | all         | 1       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                                          | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 2     | bin/normal -seed 8000                                                    | 90.8
+box7  | all         | 1       | 1       | 2     | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | 90.8
+box8  | all         | 1       | 1       | 2     |                                                                          | 90.8
+box9  | all         | 1       | 1       | 2     |                                                                          | 90.8
+## pipe box7 "kittens and whiskers and kittens and these are a few of my favorite things and kittens."
+## pipe
+name  | mode        | readers | writers | count | via                                                                      | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box11 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box12 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box13 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box14 | all         | 1       | 1       | 2     |                                                                          | 90.8
+box15 | all         | 0       | 1       | 2     |                                                                          | 90.8
+box2  | all         | 1       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                                          | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 2     | bin/normal -seed 8000                                                    | 90.8
+box7  | all         | 1       | 1       | 3     | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | kittens and whiskers and kittens and these are a few of my favorite things and kittens.
+box8  | all         | 1       | 1       | 2     |                                                                          | 90.8
+box9  | all         | 1       | 1       | 2     |                                                                          | 90.8
+## pipe box6 88
+## pipe
+name  | mode        | readers | writers | count | via                                                                      | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box11 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box12 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box13 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box14 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box15 | all         | 0       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box2  | all         | 1       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 1     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | kittens and geese and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                                          | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 3     | bin/normal -seed 8000                                                    | 88
+box7  | all         | 1       | 1       | 3     | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | kittens and whiskers and kittens and these are a few of my favorite things and kittens.
+box8  | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box9  | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+## pipe box4 "Kittens and kettles and geese are fun. Kittens and GEESE and kittens and geese and kittens and geese."
+## pipe
+name  | mode        | readers | writers | count | via                                                                      | previous
+box1  | all         | 1       | 0       | 1     | sed s/kittens/cats/g                                                     | kittens with whiskers, kittens with whiskers, kittens with whiskers.
+box10 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box11 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box12 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box13 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box14 | all         | 1       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box15 | all         | 0       | 1       | 3     |                                                                          | cats and whiskers and cats and :) and cats.
+box2  | all         | 1       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box3  | all         | 0       | 1       | 1     |                                                                          | cats with whiskers, cats with whiskers, cats with whiskers.
+box4  | all         | 1       | 0       | 2     | sed -e s/kettles/pots/ -e s/geese/ducks/i -e s/and/\&/2                  | Kittens and kettles and geese are fun. Kittens and GEESE and kittens and geese and kittens and geese.
+box5  | all         | 1       | 1       | 1     |                                                                          | kittens and ducks & kittens and geese and kittens and geese.
+box6  | round-robin | 1       | 1       | 3     | bin/normal -seed 8000                                                    | 88
+box7  | all         | 1       | 1       | 4     | sed -e s/kittens/cats/g -e s/these are a few of my favorite things/\:\)/ | 88
+box8  | all         | 1       | 1       | 4     |                                                                          | 88
+box9  | all         | 1       | 1       | 4     |                                                                          | 88
+
+## # Close up shop
+## clear plumb
+## clear pipe
+## vm kill box[1-15]
+## vm flush
