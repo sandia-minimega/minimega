@@ -459,15 +459,32 @@ function showReservationData(){
     $(".res").hover(function() {
         $(".node").addClass("noshadow");
         var nodes = reservations[getResIndexFromObj($(this))].Nodes;
+        var up = false;
+        var down = false;
         for (var i = 0; i < nodes.length; i++) {
+            if (reservations[0].Nodes.includes(nodes[i])) {
+                down = true;
+            } else {
+                up = true;
+            }
+            $(".key.reserved.headtext").addClass("hover");
+            if (down) {
+                $(".key.down.headtext").addClass("hover");
+                $(".key.reserved.down").addClass("hover");
+            }
+            if (up) {
+                $(".key.up.headtext").addClass("hover");
+                $(".key.reserved.up").addClass("hover");
+            }
             getObjFromNodeIndex(nodes[i]).removeClass("noshadow");
             getObjFromNodeIndex(nodes[i]).addClass("shadow");
         }
     });
 
     $(".res").mouseleave(function() {
-        $(".node").removeClass("noshadow")
-        $(".node").removeClass("shadow")
+        $(".key").removeClass("hover");
+        $(".node").removeClass("noshadow");
+        $(".node").removeClass("shadow");
     });
 }
 showReservationData();
@@ -853,23 +870,56 @@ $(".key").hover(function() {
     } else if ($(this).hasClass("reserved")) {
         if ($(this).hasClass("up")) {
             obj = $(".node.reserved.up");
+            for (var i = 1; i < reservations.length; i++) {
+                for (var j = 0; j < reservations[i].Nodes.length; j++) {
+                    if (!reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                        getObjFromResIndex(i).addClass("hover");
+                        break;
+                    }
+                }
+            }
         } else if ($(this).hasClass("down")) {
             obj = $(".node.reserved.down");
+            for (var i = 1; i < reservations.length; i++) {
+                for (var j = 0; j < reservations[i].Nodes.length; j++) {
+                    if (reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                        getObjFromResIndex(i).addClass("hover");
+                        break;
+                    }
+                }
+            }
         } else {
             obj = $(".node.reserved");
         }
     } else if ($(this).hasClass("up")) {
         obj = $(".node.up");
+        for (var i = 1; i < reservations.length; i++) {
+            for (var j = 0; j < reservations[i].Nodes.length; j++) {
+                if (!reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                    getObjFromResIndex(i).addClass("hover");
+                    break;
+                }
+            }
+        }
     } else if ($(this).hasClass("down")) {
         obj = $(".node.down");
+        for (var i = 1; i < reservations.length; i++) {
+            for (var j = 0; j < reservations[i].Nodes.length; j++) {
+                if (reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                    getObjFromResIndex(i).addClass("hover");
+                    break;
+                }
+            }
+        }
     }
     obj.removeClass("noshadow");
     obj.addClass("shadow");
 });
 
 $(".key").mouseleave(function() {
-    $(".node").removeClass("noshadow")
-    $(".node").removeClass("shadow")
+    $(".node").removeClass("noshadow");
+    $(".node").removeClass("shadow");
+    $(".res").removeClass("hover");
 });
 
 $("#keybtn").click(function() {
