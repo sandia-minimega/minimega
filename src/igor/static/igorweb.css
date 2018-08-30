@@ -1,4 +1,4 @@
-/* primary: #a975d6; */
+/* primary color: #a975d6; */
 .clickable {
     cursor: pointer;
 }
@@ -12,7 +12,6 @@
     margin-bottom: 0px;
     font-weight: bold;
     color: #676767;
-    /* background-color: rgb(169, 117, 214, 0.3); */
 }
 .node:hover {
     -webkit-transition-duration: 0.15s !important; /* Safari */
@@ -43,7 +42,6 @@
     -moz-box-shadow: none !important;
     box-shadow: none !important;
 }
-/* TODO: make shadows behind all nodes */
 .node.reserved.down.unselected, .keycolor.reserved.down.unselected {
     background-color: #ffdd9b;
 }

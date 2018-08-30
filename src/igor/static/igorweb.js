@@ -202,7 +202,6 @@ function getReservations() {
             var selectedNodestmp = selectedNodes;
             var rsp = JSON.parse(data);
             reservations = rsp.Extra;
-            console.log(reservations);
             showReservationData();
             if (newResName !== "" && response.Success) {
                 selectedRes = getResIndexByName(newResName);
@@ -286,7 +285,7 @@ function showReservationData(){
         }
         return diff;
     });
-    $("#nodegrid").html('');//<div class="mdl bigloader"></div>');
+    $("#nodegrid").html('');
     $("#res_table").html("");
     // populate node grid
     var newcol = '<div class="col" style="padding: 0">' +
@@ -318,7 +317,6 @@ function showReservationData(){
         classes += '" ';
         $("#col" + col).append(grid + classes + ' id="' + i +'">' + i + '</div>');
     }
-    // hideBigLoaders();
 
     // node grid selections
     $(".node").click(function(event) {
@@ -440,12 +438,6 @@ function showReservationData(){
     var tr2 = '</tr>';
     var td1 = '<td class="mdl">';
     var td2 = '</td>';
-    // $("#res_table").append(
-    //     tr1 + 'id="res0">' +
-    //     '<td colspan="4" class="mdl">Down</td>' +
-    //     td1 + reservations[0].Nodes.length + td2 +
-    //     tr2
-    // );
     for (var i = 1; i < reservations.length; i++) {
         $("#res_table").append(
             tr1 + 'id="res' + i + '">' +
@@ -481,9 +473,24 @@ function showReservationData(){
 showReservationData();
 
 // heartbeat
-setInterval(function() {
+var heartbeat = setInterval(function() {
     getReservations();
 }, 10000);
+$(window).focus(function() {
+    if (!heartbeat) {
+        getReservations();
+        heartbeat = setInterval(function() {
+            getReservations();
+        }, 10000);
+    }
+});
+
+$(window).blur(function() {
+    clearInterval(heartbeat);
+    heartbeat = 0;
+});
+
+
 
 // deselect on outside click
 $(document).click(function(event) {
