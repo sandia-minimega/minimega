@@ -182,7 +182,7 @@ func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			}
 		}
 
-		return errors.New("unreachable")
+		return unreachable()
 	}
 
 	// If no sub handler, display the number of clients instead
@@ -629,7 +629,7 @@ func cliCCDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		return ns.ccServer.DeleteResponses(s)
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
