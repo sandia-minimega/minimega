@@ -929,9 +929,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-nographic")
 
-	args = append(args, "-balloon")
-	args = append(args, "none")
-
 	args = append(args, "-vnc")
 	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
 
