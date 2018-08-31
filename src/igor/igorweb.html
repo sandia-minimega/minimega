@@ -17,8 +17,8 @@
 <body style="background-color: whitesmoke">
     <nav class="navbar fixed-top navbar-dark">
         <span class="navbar-brand mdl" style="margin-left: 10%; color: white; font-size: 2.25em; font-family: 'Montserrat', sans-serif;"><b class="mdl">Igor</b><i>Web</i></span>
-        <button id="keybtn" class="active navbar btn btn-outline-light" style="margin-right: 18%">Key</button>
-        <div id="newbutton" class="clickable" data-focus="false" data-toggle="modal" data-target="#newresmodal">+</div>
+        <button id="keybtn" class="active navbar btn btn-outline-light" style="margin-right: 18%" data-toggle="tooltip" data-placement="bottom" title="Show/hide key">Key</button>
+        <div id="newbutton" class="clickable" data-toggle="tooltip" data-placement="bottom" title="Make a new reservation">+</div>
     </nav>
     <div class="container-fluid">
         <div class="row" style="padding-bottom: 6%;">
@@ -116,7 +116,7 @@
                 <div class="modal-body m-3 mdl">
                     <form id="newresmain" class="mdl">
                         <div class="form-group mdl">
-                            <div class="input-group mdl">
+                            <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Reservation name">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="dashrcode" class="mdl">-r</code></div>
                                 </div>
@@ -158,7 +158,7 @@
                             <button id="nrmodalnodelist" type="button" class="modalswitch btn btn-light mdl" style="width: 50%;">Node list</button>
                         </div>
                         <div class="form-group mdl switchnumnodes">
-                            <div id="dashnparent" class="input-group mdl">
+                            <div id="dashnparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Number of nodes">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="dashncode" class="mdl">-n</code></div>
                                 </div>
@@ -166,7 +166,7 @@
                             </div>
                         </div>
                         <div class="form-group mdl switchnodelist">
-                            <div id="dashwparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. 34, 57, 158 ...">
+                            <div id="dashwparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Node list, e.g. 34, 57, 158 ...">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="dashwcode" class="mdl">-w</code></div>
                                 </div>
@@ -328,7 +328,7 @@
                             <button id="pmodalnodelist" type="button" class="modalswitch btn btn-light mdl" style="width: 50%;">By Node List</button>
                         </div>
                         <div id="pdashrfg" class="form-group mdl">
-                            <div class="input-group mdl">
+                            <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Reservation name">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="pdashrcode" class="mdl">-r</code></div>
                                 </div>
@@ -336,7 +336,7 @@
                             </div>
                         </div>
                         <div id="pdashnfg" class="form-group mdl nodelistoption2">
-                            <div id="pdashnparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. 34, 57, 158 ...">
+                            <div id="pdashnparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Node list, e.g. 34, 57, 158 ...">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="pdashncode" class="mdl">-n</code></div>
                                 </div>
@@ -417,7 +417,7 @@
                 <div class="modal-body m-3 mdl">
                     <form class="mdl">
                         <div class="form-group mdl">
-                            <div class="input-group mdl">
+                            <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Reservation name">
                                 <div class="input-group-prepend mdl">
                                     <div class="input-group-text mdl"><code id="edashrcode" class="mdl">-r</code></div>
                                 </div>
