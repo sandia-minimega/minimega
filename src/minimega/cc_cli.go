@@ -71,6 +71,13 @@ treated as tags:
 
 	cc filter foo=bar
 
+Users can also filter by any column in "vm info" using a similar syntax:
+
+	cc filter name=server
+	cc filter vlan=DMZ
+
+"vm info" columns take precedance over tags when both define the same key.
+
 "cc mount" allows direct access to a guest's filesystem over the command and
 control connection. When given a VM uuid or name and a path, the VM's
 filesystem is mounted to the local machine at the provided path. "cc mount"
@@ -295,7 +302,7 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				parts = parts[1:]
 				fallthrough
 			default:
-				// Implicit filter on a tag
+				// Implicit filter on a tag or `vm info` field
 				if filter.Tags == nil {
 					filter.Tags = make(map[string]string)
 				}
