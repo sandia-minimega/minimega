@@ -159,7 +159,7 @@ func main() {
 			}
 
 			cmd := quoteJoin(parts, " ")
-			log.Infoln("got command: `%v`", cmd)
+			log.Info("got command: `%v`", cmd)
 
 			mm.RunAndPrint(cmd, false)
 		} else {
