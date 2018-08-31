@@ -61,3 +61,38 @@ while pinging VM B from VM A:
 .image mirror/ping.png
 
 .image mirror/tcpdump.png
+
+* Using Bro
+
+Instead of using a simple VM as the monitor, we can replace it with one running
+[[https://www.bro.org/][Bro]]. minimega includes a `vmbetter` config to build a
+VM that runs Bro. By default, this VM listens on `eth0` and writes logs to
+`/bro`. In order to launch the Bro VM, we use the following minimega commands
+(in place of the previous commands to launch the monitor):
+
+    # create Bro VM to monitor the network
+    disk create bro.qcow2 10G
+    vm config net 0
+    vm config uuid 33333333-3333-3333-3333-333333333333
+    vm config kernel $images/bro.kernel
+    vm config initrd $images/bro.initrd
+    vm config snapshot false
+    vm config disk bro.qcow2
+    vm launch kvm monitor
+
+The Bro VM will format and mount any provided disk to `/bro` allowing users to
+extract the data after the experiment completes. The VM must run with snapshot
+set to false so that any logs written to disk persist after the VM exits. Each
+VM must have its own disk image. If a disk is not provided, `/bro` is stored in
+memory and may cause the VM to run out of memory if there are too many log
+messages.
+
+To extract files from the QCOW2 after the VM exits, users can run the following
+bash commands as root:
+
+    $ modprobe nbd # if not already loaded
+    $ qemu-nbd -c /dev/nbd0 /path/to/bro.qcow2
+    $ mount /dev/nbd0 /mnt
+    $ cp -a /mnt /path/to/dst/
+    $ umount /mnt
+    $ qemu-nbd -d /dev/nbd0
