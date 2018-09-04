@@ -697,7 +697,8 @@ function showReservations(){
     //      hover the type of nodes in the key
     $(".res").hover(function() {
         // remove shadows from all nodes temporarily to create contrast
-        $(".node").addClass("noshadow");
+        $(".node").addClass("light");
+        $("#nodegridcard").addClass("light");
         var resNodes = reservations[getResIndexFromObj($(this))].Nodes;
         var up = false;
         var down = false;
@@ -718,16 +719,15 @@ function showReservations(){
                 $(".key.reserved.up").addClass("hover");
             }
             // node hover
-            getObjFromNodeIndex(resNodes[i]).removeClass("noshadow");
-            getObjFromNodeIndex(resNodes[i]).addClass("shadow");
+            getObjFromNodeIndex(resNodes[i]).removeClass("light");
         }
     });
 
     // remove hover of nodes and key when res hover ends
     $(".res").mouseleave(function() {
+        $("#nodegridcard").removeClass("light");
         $(".key").removeClass("hover");
-        $(".node").removeClass("noshadow");
-        $(".node").removeClass("shadow");
+        $(".node").removeClass("light");
     });
 }
 
@@ -1148,7 +1148,8 @@ $(".key").click(function(event) {
 // when hovering over any cell in key, hover the respective nodes
 // hover reservations also, but this is only relevant for some table cells
 $(".key").hover(function() {
-    $(".node").addClass("noshadow");
+    $("#nodegridcard").addClass("light");
+    $(".node").addClass("light");
     var obj;
     if ($(this).hasClass("available")) {
         if ($(this).hasClass("up")) {
@@ -1203,14 +1204,13 @@ $(".key").hover(function() {
             }
         }
     }
-    obj.removeClass("noshadow");
-    obj.addClass("shadow");
+    obj.removeClass("light");
 });
 
 // undo hover for nodes and reservations
 $(".key").mouseleave(function() {
-    $(".node").removeClass("noshadow");
-    $(".node").removeClass("shadow");
+    $("#nodegridcard").removeClass("light");
+    $(".node").removeClass("light");
     $(".res").removeClass("hover");
 });
 

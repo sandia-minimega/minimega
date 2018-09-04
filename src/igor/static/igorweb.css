@@ -2,6 +2,9 @@
 .clickable {
     cursor: pointer;
 }
+#nodegridcard {
+    transition: background-color 0.15s;
+}
 .node, .node:focus {
     -webkit-transition-duration: 0.15s; /* Safari */
     transition-duration: 0.15s;
@@ -18,15 +21,6 @@
     transition-duration: 0.15s !important;
     color: black;
 }
-.shadow {
-    -webkit-transition-duration: 0.4s; /* Safari */
-    transition-duration: 0.4s;
-    -webkit-box-shadow: 3px 3px 16px 0px rgba(0,0,0,0.75) !important;
-    -moz-box-shadow: 3px 3px 16px 0px rgba(0,0,0,0.75) !important;
-    box-shadow: 3px 3px 16px 0px rgba(0,0,0,0.75) !important;
-    position: relative !important;
-    z-index: 3 !important;
-}
 .node.active {
     -webkit-transition-duration: 0.4s; /* Safari */
     transition-duration: 0.4s;
@@ -37,10 +31,16 @@
     position: relative;
     z-index: 2;
 }
-.noshadow {
+.light {
+    background-color: #f6edff !important;
+}
+.node.light {
     -webkit-box-shadow: none !important;
     -moz-box-shadow: none !important;
     box-shadow: none !important;
+}
+.node.light.active {
+    color: black !important;
 }
 .node.reserved.down.unselected, .keycolor.reserved.down.unselected {
     background-color: #ffdd9b;
