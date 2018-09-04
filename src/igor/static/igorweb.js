@@ -202,6 +202,7 @@ function deselectTable(sr = -1) {
 //      if only nodes are selected, only power-cycle is shown
 //      if a reservation is selected, delete and extend are also shown
 function showActionBar() {
+    updateSelectText();
     if (selectedRes > 0) {
         showResActions();
     } else {
@@ -213,6 +214,7 @@ function showActionBar() {
 // hide the action bar if only nodes are selected, and
 //      take care of res actions
 function checkHideActionBar() {
+    updateSelectText();
     if (selectedRes === -1 || selectedRes === 0) {
         hideResActions();
         if (selectedNodes.length === 0) {
@@ -220,6 +222,19 @@ function checkHideActionBar() {
         }
     } else {
         showResActions();
+    }
+}
+
+// update the select text to the current number of nodes selected
+function updateSelectText() {
+    if (selectedNodes.length === 1) {
+        $("#selecttext").show();
+        $("#selecttext").text("1 node selected");
+    } else if (selectedNodes.length > 1) {
+        $("#selecttext").show();
+        $("#selecttext").text(selectedNodes.length + " nodes selected");
+    } else {
+        $("#selecttext").hide();
     }
 }
 
