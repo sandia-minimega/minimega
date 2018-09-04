@@ -95,17 +95,11 @@ func getReservations() []ResTableRow {
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	command := r.URL.Query()["run"][0]
-	if !webS {
-		fmt.Println("Command:", command)
-		fmt.Println("\tFrom:", r.RemoteAddr)
-	}
 	splitcmd := strings.Split(command, " ")
 	var extra interface{}
 	log := ""
 	var err error = nil
-	if splitcmd[1] == "show" {
-		extra = getReservations()
-	} else {
+	if splitcmd[1] != "show" {
 		log, err = processWrapper(splitcmd[0:]...)
 		housekeeping()
 	}
@@ -122,10 +116,14 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 			specs = append(specs, Speculate{t1.Format(timefmt), t2.Format(timefmt), splitlog[i]})
 		}
 		extra = specs
+	} else {
+		extra = getReservations()
 	}
 	re := regexp.MustCompile("\x1b\\[..?m")
 	rsp := Response{err == nil, fmt.Sprintln(re.ReplaceAllString(log, "")), extra}
 	if !webS {
+		fmt.Println("Command:", command)
+		fmt.Println("\tFrom:", r.RemoteAddr)
 		fmt.Println("\tResponse:", rsp.Message)
 	}
 	jsonrsp, _ := json.Marshal(rsp)

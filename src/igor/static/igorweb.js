@@ -285,11 +285,14 @@ function execute(onResponse) {
 //      with green background on success and red on failure
 //      generally called in the onResponse function passed into execute()
 //      updates on screen reservations information on success
-function parseResult() {
+function parseResult(shouldUpdateReservations = true) {
     $(".response").html(response.Message);
+    if (shouldUpdateReservations) {
+        parseReservationData(response.Extra);
+        // getReservations();
+    }
     if (response.Success) {
         $(".responseparent").addClass("success");
-        getReservations();
     } else {
         $(".responseparent").removeClass("success");
     }
@@ -311,36 +314,62 @@ function getReservations() {
         "/run/",
         {run: "igor show"},
         function(data) {
-            // save current selection information so it can be reselected when
-            //      html is regenerated
-            var curResName = "";
-            if (selectedRes != -1) {
-                curResName = reservations[selectedRes].Name;
-            }
-            var selectedNodestmp = selectedNodes;
-            // update reservations array, but don't change "response" because
-            //      this isn't considered a command
             var rsp = JSON.parse(data);
-            reservations = rsp.Extra;
-            showReservationData();
-            // if a new reservation was just created (successfully),
-            //      then select it
-            if (newResName !== "" && response.Success) {
-                selectedRes = getResIndexByName(newResName);
-                newResName = "";
-            } else {
-                selectedRes = getResIndexByName(curResName);
-            }
-            // otherwise select what was already selected
-            if (selectedRes != -1) {
-                select(getObjFromResIndex(selectedRes));
-            } else {
-                for (var i = 0; i < selectedNodestmp.length; i++) {
-                    select(getObjFromNodeIndex(selectedNodestmp[i]));
-                }
-            }
+            parseReservationData(rsp.Extra);
         }
     );
+}
+
+// update reservation data displayed on page only if reservation data changed
+function parseReservationData(resArray) {
+    newReservations = sortReservations(resArray);
+    if (!equalReservations(reservations, newReservations)) {
+        // save current selection information so it can be reselected when
+        //      html is regenerated
+        var curResName = "";
+        if (selectedRes != -1) {
+            curResName = reservations[selectedRes].Name;
+        }
+        var selectedNodestmp = selectedNodes;
+        // update reservations array, but don't change "response" because
+        //      this isn't considered a command
+        reservations = newReservations;
+        showReservations();
+        // if a new reservation was just created (successfully),
+        //      then select it
+        if (newResName !== "" && response.Success) {
+            selectedRes = getResIndexByName(newResName);
+            newResName = "";
+        } else {
+            selectedRes = getResIndexByName(curResName);
+        }
+        // otherwise select what was already selected
+        if (selectedRes != -1) {
+            select(getObjFromResIndex(selectedRes));
+        } else {
+            for (var i = 0; i < selectedNodestmp.length; i++) {
+                select(getObjFromNodeIndex(selectedNodestmp[i]));
+            }
+        }
+    }
+}
+
+// check if two reservation arrays are equal
+//      true if contain equivalent information, false otherwise
+// arrays must be presorted for accurate results
+// checks four string attributes and node list length,
+//      does not check actual nodes in reservation
+// assumes nodes in reservation are constant since a reservation's creation
+function equalReservations(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 1; i < a.length; i++) {
+        if (a[i].Name != b[i].Name) return false;
+        if (a[i].Owner != b[i].Owner) return false;
+        if (a[i].Start != b[i].Start) return false;
+        if (a[i].End != b[i].End) return false;
+        if (a[i].Nodes.length != b[i].Nodes.length) return false;
+    }
+    return true;
 }
 
 // heartbeat: update reservations every set time
@@ -423,17 +452,14 @@ function updateNodeListField(id = "dashw") {
 
  ****************************************/
 
-// display new reservation information on node grid and reservation table,
-//      by clearing them and regenerating the html
-// NOTE: this is usually so quick it won't even be visible if the data is
-//          the same,
-//          but every so often it will cause a user's clicks to be unregistered
-function showReservationData(){
-    // sort reservations based on:
-    //      start time, then
-    //      number of nodes, then
-    //      reservation name
-    reservations.sort(function (a, b) {
+// sort reservation array for consistent display that doesn't keep switching
+//      the order of the reservation like igor show does
+// sort reservations based on:
+//      start time, then
+//      number of nodes, then
+//      reservation name
+function sortReservations(resArray) {
+    resArray.sort(function (a, b) {
         if (a.Name === "") return -1;
         if (b.Name === "") return 1;
         var diff = a.StartInt - b.StartInt;
@@ -449,10 +475,17 @@ function showReservationData(){
         }
         return diff;
     });
+    return resArray;
+}
+
+// display new reservation information on node grid and reservation table,
+//      by clearing them and regenerating the html
+// NOTE: this is usually so quick it won't even be visible if the data is
+//          the same,
+//          but every so often it will cause a user's clicks to be unregistered
+function showReservations(){
     $("#nodegrid").html("");
     $("#res_table").html("");
-
-
 
     // POPULATE NODE GRID
 
@@ -699,7 +732,8 @@ function showReservationData(){
 }
 
 // show reservations when page first loads
-showReservationData();
+reservations = sortReservations(reservations);
+showReservations();
 
 
 
@@ -766,7 +800,7 @@ function onSpeculateReturn() {
         }
         newResShowSpec();
     } else {
-        parseResult();
+        parseResult(false);
     }
     hideLoaders();
 }
