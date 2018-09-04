@@ -107,6 +107,8 @@ function select(obj) {
     if (obj.hasClass("node")) {
         // add all of the nodes (or one) to the selectedNodes array
         obj.each(function () {
+            if ($(this).hasClass("active")) return;
+            if (selectedNodes.includes(getNodeIndexFromObj($(this)))) return;
             selectedNodes.push(getNodeIndexFromObj($(this)));
         });
         selectedNodes.sort((a, b) => a - b);
@@ -429,14 +431,20 @@ function updateNodeListField(id = "dashw") {
 function showReservationData(){
     // sort reservations based on:
     //      start time, then
+    //      number of nodes, then
     //      reservation name
     reservations.sort(function (a, b) {
+        if (a.Name === "") return -1;
+        if (b.Name === "") return 1;
         var diff = a.StartInt - b.StartInt;
         if (diff === 0) {
-            if (a.Name > b.Name) {
-                diff = 1;
-            } else {
-                diff = -1;
+            var diff = a.Nodes.length - b.Nodes.length;
+            if (diff === 0) {
+                if (a.Name > b.Name) {
+                    diff = 1;
+                } else {
+                    diff = -1;
+                }
             }
         }
         return diff;
@@ -616,20 +624,33 @@ function showReservationData(){
 
     // POPULATE RESERVATION TABLE
 
-    var tr1 = '<tr class="res clickable mdl" ';
+    var tr1 = '<tr class="res clickable mdl ';
     var tr2 = '</tr>';
     var td1 = '<td class="mdl">';
+    var tdcurrent = '<td class="mdl current">';
     var td2 = '</td>';
     for (var i = 1; i < reservations.length; i++) {
-        $("#res_table").append(
-            tr1 + 'id="res' + i + '">' +
-            td1 + reservations[i].Name + td2 +
-            td1 + reservations[i].Owner + td2 +
-            td1 + reservations[i].Start + td2 +
-            td1 + reservations[i].End + td2 +
-            td1 + reservations[i].Nodes.length + td2 +
-            tr2
-        );
+        if (reservations[i].StartInt < reservations[0].StartInt) {
+            $("#res_table").append(
+                tr1 + classes + 'id="res' + i + '">' +
+                td1 + reservations[i].Name + td2 +
+                td1 + reservations[i].Owner + td2 +
+                tdcurrent + reservations[i].Start + td2 +
+                td1 + reservations[i].End + td2 +
+                td1 + reservations[i].Nodes.length + td2 +
+                tr2
+            );
+        } else {
+            $("#res_table").append(
+                tr1 + classes + 'id="res' + i + '">' +
+                td1 + reservations[i].Name + td2 +
+                td1 + reservations[i].Owner + td2 +
+                td1 + reservations[i].Start + td2 +
+                td1 + reservations[i].End + td2 +
+                td1 + reservations[i].Nodes.length + td2 +
+                tr2
+            );
+        }
     }
 
     // reservation selection on click

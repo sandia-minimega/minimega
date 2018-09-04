@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"ranges"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -72,7 +73,7 @@ func getReservations() []ResTableRow {
 		"",
 		"",
 		"",
-		0,
+		time.Now().Unix(),
 		"",
 		rnge.RangeToInts(getDownNodes(getNodes())),
 	})
@@ -122,7 +123,8 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		extra = specs
 	}
-	rsp := Response{err == nil, log, extra}
+	re := regexp.MustCompile("\x1b\\[..?m")
+	rsp := Response{err == nil, fmt.Sprintln(re.ReplaceAllString(log, "")), extra}
 	if !webS {
 		fmt.Println("\tResponse:", rsp.Message)
 	}

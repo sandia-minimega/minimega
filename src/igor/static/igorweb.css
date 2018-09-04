@@ -162,6 +162,10 @@ button.actionbar {
     -webkit-transition-duration: 0.3s !important; /* Safari */
     transition-duration: 0.3s !important;
 }
+.current {
+    text-decoration: underline;
+    font-style: italic;
+}
 .res.active {
     color: #f8f9fa;
     background-color: #a975d6 !important;
