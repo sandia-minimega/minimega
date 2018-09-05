@@ -102,7 +102,6 @@ function getObjFromNodeIndex(index) {
 //      for several nodes: select($(".node.[CLASS]"))
 function select(obj) {
     if (obj.length === 0) return;
-    if (obj.hasClass("active")) return;
     // if node
     if (obj.hasClass("node")) {
         // add all of the nodes (or one) to the selectedNodes array
@@ -114,6 +113,7 @@ function select(obj) {
         selectedNodes.sort((a, b) => a - b);
     // if reservation
     } else {
+        if (obj.hasClass("active")) return;
         var selectedResTemp = getResIndexFromObj(obj);
         // deselect res table before selecting the new reservation
         //      hide res action bar only if reservation just selected is down
@@ -269,6 +269,19 @@ $(document).click(function(event) {
         deselectGrid();
         deselectTable();
     }
+});
+
+// follow when control is clicked to allow multiple reservation and key
+//      selections
+var isControl = false;
+$(document).keydown(function(event) {
+    if (event.key !== "Control") return;
+    isControl = true;
+});
+
+$(document).keyup(function(event) {
+    if (event.key !== "Control") return;
+    isControl = false;
 });
 
 
@@ -725,6 +738,14 @@ function showReservations(){
 
     // reservation selection on click
     $(".res").click(function() {
+        if (isControl) {
+            deselectTable();
+            hideResActions();
+            for (var i = 0; i < reservations[getResIndexFromObj($(this))].Nodes.length; i++) {
+                select(getObjFromNodeIndex(reservations[getResIndexFromObj($(this))].Nodes[i]));
+            }
+            return;
+        }
         deselectGrid();
         toggle($(this));
     });
@@ -781,6 +802,7 @@ showReservations();
 
 // open a new reservation modal
 $("#newbutton").click(function() {
+    $(".responseparent").hide();
     newResHideSpec();
     updateNodeListField();
     $("#nrmodalki").click();
@@ -1155,7 +1177,9 @@ $(".copy").click(function(event) {
 
 // when any cell is clicked, select the respective nodes
 $(".key").click(function(event) {
-    deselectGrid();
+    if (!isControl) {
+        deselectGrid();
+    }
     deselectTable();
     var obj;
     if ($(this).hasClass("available")) {
