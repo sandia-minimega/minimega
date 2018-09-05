@@ -3,7 +3,7 @@
     cursor: pointer;
 }
 #nodegridcard {
-    transition: background-color 0.15s;
+    transition: all 0.7s, background-color 0.15s;
 }
 .node, .node:focus {
     -webkit-transition-duration: 0.15s; /* Safari */
@@ -95,17 +95,20 @@ th {
 button.actionbar:active, #keybtn.active {
     color: #a975d6 !important;
 }
-.igorbtn:hover {
+.igorbtn.actionbar:hover {
     color: #a975d6 !important;
     -webkit-box-shadow: 10px 10px 56px -15px rgba(0,40,82,1);
     -moz-box-shadow: 10px 10px 56px -15px rgba(0,40,82,1);
     box-shadow: 10px 10px 56px -15px rgba(0,40,82,1);
 }
-.modalbtn:hover {
+.igorbtn.modalcommand:hover {
     color: #ffffff !important;
-    -webkit-box-shadow: 5px 5px 56px -15px rgba(0,40,82,1);
-    -moz-box-shadow: 5px 5px 56px -15px rgba(0,40,82,1);
-    box-shadow: 5px 5px 56px -15px rgba(0,40,82,1);
+    -webkit-box-shadow: inset 0px 0px 100px 100px rgba(0,0,0,0.2) !important;
+    -moz-box-shadow: inset 0px 0px 100px 100px rgba(0,0,0,0.2) !important;
+    box-shadow: inset 0px 0px 100px 100px rgba(0,0,0,0.2) !important;
+}
+.igorbtn.modalcommand {
+    border: none !important;
 }
 button.actionbar {
     margin: 20px;

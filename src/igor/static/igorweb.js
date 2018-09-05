@@ -278,18 +278,33 @@ $(document).click(function(event) {
 
  ********************/
 
+// how long to wait after sending a request before giving up and showing
+//      timeout error
+var timeoutLength = 10000;
+
 // send a command to web.go for execution, stored in the "command" variable
 //      when response is received, the function onResponse is called,
 //      which can use "response" to decide how to proceed
+// times out after a set time in case igor hangs, and
+//      sends a timeout error to user
 function execute(onResponse) {
     $(".responseparent").hide();
     $("#deletemodaldialog").addClass("modal-sm");
     response = "";
     $(".command").html(command);
+    var hasTimedOut = false;
+    var timeout = setTimeout(function() {
+        hasTimedOut = true;
+        response = {Success: false, Message: "Error: timeout after " + timeoutLength/1000 + " seconds"}
+        parseResult(false);
+        hideLoaders();
+    }, timeoutLength);
     $.get(
         "/run/",
         {run: command},
         function(data) {
+            if (hasTimedOut) return;
+            clearTimeout(timeout);
             response = JSON.parse(data);
             onResponse();
         }
@@ -325,10 +340,17 @@ $(".igorbtn").click(function() {
 // send a request to web.go to issue an "igor show" command to update the
 //      reservation information
 function getReservations() {
+    var hasTimedOut = false;
+    var timeout = setTimeout(function() {
+        hasTimedOut = true;
+        location.reload();
+    }, timeoutLength);
     $.get(
         "/run/",
         {run: "igor show"},
         function(data) {
+            if (hasTimedOut) return;
+            clearTimeout(timeout);
             var rsp = JSON.parse(data);
             parseReservationData(rsp.Extra);
         }
