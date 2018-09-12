@@ -4,7 +4,7 @@ Vue.use(Vuex);
 
 // Vuex manages the application-wide state, so that state must be
 // modified in a predictable way.
-export const store = new Vuex.Store({
+window.store = new Vuex.Store({
   // Application-wide state
   state: {
     // An Array of VM info. Contains data loaded from /vms/info.json

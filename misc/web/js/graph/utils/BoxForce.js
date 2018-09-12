@@ -5,7 +5,7 @@
 //
 // For additional reference, refer to other force implementations
 // found in https://github.com/d3/d3-force
-export function box(width, height) {
+function box(width, height) {
   let nodes;
   let maxX = width;
   let maxY = height;

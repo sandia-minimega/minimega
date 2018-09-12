@@ -1,9 +1,3 @@
-import {store} from './store/index.js';
-import {VlanListGroup} from './components/VLANListGroup.js';
-import {HostCentricGraph} from './components/HostCentricGraph.js';
-import {VlanCentricGraph} from './components/VLANCentricGraph.js';
-import {DandelionGraph} from './components/DandelionGraph.js';
-
 const app = new Vue({
   // Main element
   el: '#app',
