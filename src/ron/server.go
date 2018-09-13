@@ -143,27 +143,45 @@ func (s *Server) Destroy() {
 	close(s.responses)
 }
 
-// Listen starts accepting TCP connections on the specified port
+// Listen starts accepting TCP connections on the specified port, accepting
+// connections in a goroutine. Returns an error if the server is already
+// listening on that port or if there was another error.
 func (s *Server) Listen(port int) error {
 	log.Info("listening on :%v", port)
 
+	s.listenersLock.Lock()
+	defer s.listenersLock.Unlock()
+
 	addr := ":" + strconv.Itoa(port)
+
+	if _, ok := s.listeners[addr]; ok {
+		return fmt.Errorf("already listening on %v", addr)
+	}
 
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
 
-	s.serve(addr, ln)
+	s.listeners[addr] = ln
+	go s.serve(addr, ln)
 
 	return nil
 }
 
 // ListenUnix creates a unix domain socket at the given path and listens for
 // incoming connections. ListenUnix returns on the successful creation of the
-// socket, and accepts connections in a goroutine.
+// socket, and accepts connections in a goroutine. Returns an error if the
+// server is already listening on that path or if there was another error.
 func (s *Server) ListenUnix(path string) error {
 	log.Info("listening on `%v`", path)
+
+	s.listenersLock.Lock()
+	defer s.listenersLock.Unlock()
+
+	if _, ok := s.listeners[path]; ok {
+		return fmt.Errorf("already listening on %v", path)
+	}
 
 	u, err := net.ResolveUnixAddr("unix", path)
 	if err != nil {
@@ -175,7 +193,8 @@ func (s *Server) ListenUnix(path string) error {
 		return err
 	}
 
-	s.serve(path, ln)
+	s.listeners[path] = ln
+	go s.serve(path, ln)
 
 	return nil
 }
@@ -183,7 +202,7 @@ func (s *Server) ListenUnix(path string) error {
 // Dial a client serial port. The server will maintain this connection until a
 // client connects and then disconnects.
 func (s *Server) DialSerial(path string) error {
-	log.Debug("DialSerial: %v", path)
+	log.Info("dial serial: %v", path)
 
 	s.connsLock.Lock()
 	defer s.connsLock.Unlock()
@@ -225,7 +244,7 @@ func (s *Server) DialSerial(path string) error {
 }
 
 // CloseUnix closes a unix domain socket created via ListenUnix.
-func (s *Server) CloseUnix(path string) {
+func (s *Server) CloseUnix(path string) error {
 	log.Info("close UNIX: %v", path)
 
 	s.listenersLock.Lock()
@@ -234,10 +253,15 @@ func (s *Server) CloseUnix(path string) {
 	l, ok := s.listeners[path]
 	if !ok {
 		log.Info("tried to close unknown path: %v", path)
-		return
+		return nil
 	}
 
-	l.Close()
+	if err := l.Close(); err != nil {
+		return err
+	}
+
+	delete(s.listeners, path)
+	return nil
 }
 
 // NewCommand posts a new command to the active command list. The command ID is
@@ -533,52 +557,45 @@ func (s *Server) responsePath(id *int) string {
 
 // serve
 func (s *Server) serve(addr string, ln net.Listener) {
-	s.listenersLock.Lock()
-	defer s.listenersLock.Unlock()
+	defer func() {
+		s.listenersLock.Lock()
+		defer s.listenersLock.Unlock()
 
-	s.listeners[addr] = ln
-
-	go func() {
-		defer func() {
-			s.listenersLock.Lock()
-			defer s.listenersLock.Unlock()
-
-			delete(s.listeners, addr)
-			log.Info("closed listener: %v", addr)
-		}()
-
-		for {
-			conn, err := ln.Accept()
-			if err != nil {
-				// filter out errors caused by closed network connection --
-				// probably means the server is being destroyed or CloseUnix
-				// was called.
-				if !strings.Contains(err.Error(), "use of closed network connection") {
-					log.Error("serving %v: %v", addr, err)
-				}
-
-				return
-			}
-
-			remote := conn.RemoteAddr()
-
-			log.Info("client connected: %v -> %v", remote, addr)
-			c, err := s.handshake(conn)
-			if err != nil {
-				if err != io.EOF {
-					// supress these, VM was probably never started
-					log.Error("handshake failed: %v", err)
-				}
-				conn.Close()
-				continue
-			}
-
-			go func() {
-				s.clientHandler(c)
-				log.Debug("client disconnected: %v -> %v", remote, addr)
-			}()
-		}
+		delete(s.listeners, addr)
+		log.Info("closed listener: %v", addr)
 	}()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			// filter out errors caused by closed network connection --
+			// probably means the server is being destroyed or CloseUnix
+			// was called.
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Error("serving %v: %v", addr, err)
+			}
+
+			return
+		}
+
+		remote := conn.RemoteAddr()
+
+		log.Info("client connected: %v -> %v", remote, addr)
+		c, err := s.handshake(conn)
+		if err != nil {
+			if err != io.EOF {
+				// supress these, VM was probably never started
+				log.Error("handshake failed: %v", err)
+			}
+			conn.Close()
+			continue
+		}
+
+		go func() {
+			s.clientHandler(c)
+			log.Debug("client disconnected: %v -> %v", remote, addr)
+		}()
+	}
 }
 
 // handshake performs a handshake with the client, returning the new client if

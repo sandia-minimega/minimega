@@ -75,13 +75,9 @@ func Trunk(remote io.ReadCloser, uuid string, fn func(*Message) error) {
 
 			err = fn(m)
 		}
-
-		if err != nil && err != io.ErrClosedPipe {
-			log.Errorln(err)
-		}
 	}
 
-	if err != io.ErrClosedPipe {
+	if err != io.ErrClosedPipe && err != io.EOF {
 		log.Error("trunk failed for %v: %v", uuid, err)
 	}
 

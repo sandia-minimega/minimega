@@ -11,6 +11,7 @@ import (
 	"minicli"
 	log "minilog"
 	"ranges"
+	"ron"
 	"runtime"
 	"strconv"
 	"strings"
@@ -234,13 +235,12 @@ func (vms *VMs) FindKvmVMs() []*KvmVM {
 }
 
 // Launch takes QueuedVMs and launches them after performing a few sanity
-// checks. Launch returns the VMs it launched and any errors that occured.
-func (vms *VMs) Launch(namespace string, q *QueuedVMs) (<-chan VM, <-chan error) {
+// checks. Launch returns any errors that occur via a channel since it launches
+// VMs asynchronously.
+func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 	errs := make(chan error)
-	launched := make(chan VM)
 
 	go func() {
-		defer close(launched)
 		defer close(errs)
 
 		// prefetch any files associated with VMs
@@ -293,8 +293,6 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) (<-chan VM, <-chan error)
 					errs <- err
 					return
 				}
-
-				launched <- vm
 			}(name)
 		}
 
@@ -304,16 +302,62 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) (<-chan VM, <-chan error)
 		log.Info("launched %v %v vms in %v", len(q.Names), q.VMType, stop.Sub(start))
 	}()
 
-	return launched, errs
+	return errs
 }
 
-// Kill VMs matching target.
-func (vms *VMs) Kill(target string) []error {
-	vms.mu.Lock()
-	defer vms.mu.Unlock()
+// Start VMs matching target and connects them to the provided ron.Server.
+func (vms *VMs) Start(target string, cc *ron.Server) error {
+	// For each VM, start it if it's in a startable state.
+	return vms.Apply(target, func(vm VM, wild bool) (bool, error) {
+		// whether this is a reconnect for CC or not
+		reconnect := true
 
-	// For each VM, kill it if it's in a killable state.
-	errs := vms.apply(target, func(vm VM, _ bool) (bool, error) {
+		switch vm.GetState() {
+		case VM_BUILDING:
+			// always start building, first connect so reconnect=false
+			reconnect = false
+		case VM_PAUSED:
+			// always start paused
+		case VM_QUIT, VM_ERROR:
+			// only start quit or error when not wild
+			if wild {
+				return false, nil
+			}
+		case VM_RUNNING:
+			// shouldn't start an already running vm
+			if !wild {
+				return true, errors.New("vm is already running")
+			}
+
+			return false, nil
+		}
+
+		if err := vm.Start(); err != nil {
+			return true, err
+		}
+
+		if err := vm.Connect(cc, reconnect); err != nil {
+			log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
+		}
+
+		return true, nil
+	})
+}
+
+// Stop VMs matching target.
+func (vms *VMs) Stop(target string) error {
+	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {
+		if vm.GetState()&VM_RUNNING != 0 {
+			return true, vm.Stop()
+		}
+
+		return false, nil
+	})
+}
+
+// Kill VMs matching target
+func (vms *VMs) Kill(target string) error {
+	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&VM_KILLABLE == 0 {
 			return false, nil
 		}
@@ -325,33 +369,31 @@ func (vms *VMs) Kill(target string) []error {
 
 		return true, nil
 	})
-
-	return errs
 }
 
-// Flush deletes VMs that are in the QUIT or ERROR state. Returns a list of the
-// VMs that were flushed.
-func (vms *VMs) Flush() []VM {
+// Flush deletes VMs that are in the QUIT or ERROR state, disconnecting them
+// from the provided ron.Server first.
+func (vms *VMs) Flush(cc *ron.Server) error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
-
-	flushed := []VM{}
 
 	for i, vm := range vms.m {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			log.Info("deleting VM: %v", i)
 
+			if err := vm.Disconnect(cc); err != nil {
+				log.Error("unable to disconnect to cc for vm %v: %v", vm.GetID(), err)
+			}
+
 			if err := vm.Flush(); err != nil {
 				log.Error("clogged VM: %v", err)
 			}
-
-			flushed = append(flushed, vm)
 
 			delete(vms.m, i)
 		}
 	}
 
-	return flushed
+	return nil
 }
 
 func (vms *VMs) ProcStats(d time.Duration) []*VMProcStats {
