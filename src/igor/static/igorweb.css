@@ -341,3 +341,12 @@ thead {
 .sortarrow.up {
     display: none;
 }
+@font-face {
+    font-family: Logo;
+    src: url("Montserrat-SemiBoldItalic.ttf");
+}
+@font-face {
+    font-family: Logo;
+    font-weight: bold;
+    src: url("Montserrat-ExtraBold.ttf");
+}
