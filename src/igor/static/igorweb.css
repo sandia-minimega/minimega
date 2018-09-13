@@ -335,3 +335,9 @@ thead {
     -moz-box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
     box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
 }
+.sortarrow {
+    visibility: hidden;
+}
+.sortarrow.up {
+    display: none;
+}

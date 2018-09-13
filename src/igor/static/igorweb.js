@@ -92,6 +92,17 @@ function getObjFromNodeIndex(index) {
  //      if not shown, then only power-cycle will appear
  var resActionShown = false;
 
+// checks if a node array contains a value
+//      since IE doesn't support the JS .includes function D:
+function contains(nodeArray, node) {
+    for (var i = 0; i < nodeArray.length; i++) {
+        if (nodeArray[i] === node) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // select a reservation or node(s)
 //      will do nothing if already selected
 //      called on an object representing a single reservation, or
@@ -107,10 +118,10 @@ function select(obj) {
         // add all of the nodes (or one) to the selectedNodes array
         obj.each(function () {
             if ($(this).hasClass("active")) return;
-            if (selectedNodes.includes(getNodeIndexFromObj($(this)))) return;
+            if (contains(selectedNodes, getNodeIndexFromObj($(this)))) return;
             selectedNodes.push(getNodeIndexFromObj($(this)));
         });
-        selectedNodes.sort((a, b) => a - b);
+        selectedNodes.sort(function(a, b) { return a - b; });
     // if reservation
     } else {
         if (obj.hasClass("active")) return;
@@ -372,7 +383,7 @@ function getReservations() {
 
 // update reservation data displayed on page only if reservation data changed
 function parseReservationData(resArray) {
-    newReservations = sortReservations(resArray);
+    var newReservations = sortReservations(resArray);
     if (!equalReservations(reservations, newReservations)) {
         // save current selection information so it can be reselected when
         //      html is regenerated
@@ -502,37 +513,131 @@ function updateNodeListField(id = "dashw") {
 
  ****************************************/
 
-// sort reservation array for consistent display that doesn't keep switching
-//      the order of the reservation like igor show does
-// sort reservations based on:
-//      start time, then
-//      number of nodes, then
-//      reservation name
-function sortReservations(resArray) {
-    resArray.sort(function (a, b) {
-        if (a.Name === "") return -1;
-        if (b.Name === "") return 1;
-        var diff = a.StartInt - b.StartInt;
+// default comparison function for reservations
+// returns positive if a > b,
+//      0 if a == b
+//      negative if b < a
+// compare reservations based on:
+//      start time (earlier first), then
+//      number of nodes (larger first), then
+//      reservation name (earlier in alphabet first)
+var compare = function(a, b) {
+    if (a.Name === "") return -1;
+    if (b.Name === "") return 1;
+    aName = a.Name.toLowerCase();
+    bName = b.Name.toLowerCase();
+    var diff = a.StartInt - b.StartInt;
+    if (diff === 0) {
+        var diff = b.Nodes.length - a.Nodes.length;
         if (diff === 0) {
-            var diff = a.Nodes.length - b.Nodes.length;
-            if (diff === 0) {
-                if (a.Name > b.Name) {
-                    diff = 1;
-                } else {
-                    diff = -1;
-                }
+            if (aName === bName) {
+                diff = 0;
+            } else if (aName > bName) {
+                diff = 1;
+            } else {
+                diff = -1;
             }
         }
-        return diff;
+    }
+    return diff;
+}
+
+// sort reservation array for consistent display that doesn't keep switching
+//      the order of the reservation like igor show does
+// (to prevent unnecessary breaks in UX)
+function sortReservations(resArray = reservations, cmp = compare) {
+    resArray.sort(function (a, b) {
+        return cmp(a, b);
     });
+    if (arguments.length === 0) {
+        reservations = resArray;
+    }
     return resArray;
 }
 
+// create a function to compare between two different reservations
+// getAttribute should be a function to return the value to compare
+//      betweeen the reservations
+// smallToLarge: boolean to decide direction of resulting sort
+// lastCompare is the function to fall back on in case new one returns 0,
+//      used for multi-layered sorts
+function createCompareFunction(getAttribute, smallToLarge, lastCompare) {
+    function ret(a, b) {
+        if (a.Name === "") return -1;
+        if (b.Name === "") return 1;
+        var diff;
+        if (getAttribute(a) === getAttribute(b)) {
+            diff = lastCompare(a, b);
+        } else if (getAttribute(a) > getAttribute(b)) {
+            diff = smallToLarge ? 1 : -1;
+        } else {
+            diff = smallToLarge ? -1 : 1;
+        }
+        return diff;
+    }
+    return ret;
+}
+
+// sort reservations when clicking table headers
+$(".restableheader").click(function() {
+    var lastCompare = compare;
+    var reverse = false;
+    $(this).removeClass("reversesort");
+    $(".sortarrow").css("visibility", "hidden");
+    $(".sortarrow.up").hide();
+    $(".sortarrow.down").show();
+    if ($(this).hasClass("sort")) {
+        reverse = true;
+        $(this).removeClass("sort");
+        $(this).addClass("reversesort");
+        $(this).find(".sortarrow.up").show();
+        $(this).find(".sortarrow.down").hide();
+        $(this).find(".sortarrow.up").css("visibility", "visible");
+    } else {
+        $(this).find(".sortarrow.down").css("visibility", "visible");
+    }
+    switch($(this).attr("id")) {
+        case "rtname":
+            compare = createCompareFunction(function(r) { return r.Name.toLowerCase(); }, !reverse, lastCompare);
+            break;
+        case "rtowner":
+            compare = createCompareFunction(function(r) { return r.Owner; }, !reverse, lastCompare);
+            break;
+        case "rtstart":
+            compare = createCompareFunction(function(r) { return r.StartInt; }, !reverse, lastCompare);
+            break;
+        case "rtend":
+            compare = createCompareFunction(function(r) { return r.EndInt; }, !reverse, lastCompare);
+            break;
+        case "rtnumber":
+            compare = createCompareFunction(function(r) { return r.Nodes.length; }, reverse, lastCompare);
+            break;
+    }
+    if (!$(this).hasClass("reversesort")) {
+        $(this).addClass("sort");
+    }
+    // save current selection information so it can be reselected when
+    //      html is regenerated
+    var curResName = "";
+    if (selectedRes != -1) {
+        curResName = reservations[selectedRes].Name;
+    }
+    var selectedNodestmp = selectedNodes;
+    sortReservations();
+    showReservations();
+    selectedRes = getResIndexByName(curResName);
+    // otherwise select what was already selected
+    if (selectedRes != -1) {
+        select(getObjFromResIndex(selectedRes));
+    } else {
+        for (var i = 0; i < selectedNodestmp.length; i++) {
+            select(getObjFromNodeIndex(selectedNodestmp[i]));
+        }
+    }
+});
+
 // display new reservation information on node grid and reservation table,
 //      by clearing them and regenerating the html
-// NOTE: this is usually so quick it won't even be visible if the data is
-//          the same,
-//          but every so often it will cause a user's clicks to be unregistered
 function showReservations(){
     $("#nodegrid").html("");
     $("#res_table").html("");
@@ -577,7 +682,7 @@ function showReservations(){
     $(".node").hover(function() {
         var node = getNodeIndexFromObj($(this));
         for (var i = 0; i < reservations.length; i++) {
-            if (reservations[i].Nodes.includes(node)) {
+            if (contains(reservations[i].Nodes, node)) {
                 getObjFromResIndex(i).addClass("hover");
             };
         }
@@ -707,33 +812,29 @@ function showReservations(){
 
     // POPULATE RESERVATION TABLE
 
+    var maxnamelength = 16;
     var tr1 = '<tr class="res clickable mdl ';
     var tr2 = '</tr>';
     var td1 = '<td class="mdl">';
-    var tdcurrent = '<td class="mdl current">';
     var td2 = '</td>';
     for (var i = 1; i < reservations.length; i++) {
-        if (reservations[i].StartInt < reservations[0].StartInt) {
-            $("#res_table").append(
-                tr1 + classes + 'id="res' + i + '">' +
-                td1 + reservations[i].Name + td2 +
-                td1 + reservations[i].Owner + td2 +
-                tdcurrent + reservations[i].Start + td2 +
-                td1 + reservations[i].End + td2 +
-                td1 + reservations[i].Nodes.length + td2 +
-                tr2
-            );
-        } else {
-            $("#res_table").append(
-                tr1 + classes + 'id="res' + i + '">' +
-                td1 + reservations[i].Name + td2 +
-                td1 + reservations[i].Owner + td2 +
-                td1 + reservations[i].Start + td2 +
-                td1 + reservations[i].End + td2 +
-                td1 + reservations[i].Nodes.length + td2 +
-                tr2
-            );
+        var name = reservations[i].Name;
+        if (name.length > maxnamelength) {
+            name = name.substring(0, maxnamelength - 3) + "...";
         }
+        var tdcurrent = td1;
+        if (reservations[i].StartInt < reservations[0].StartInt) {
+            tdcurrent = '<td class="mdl current">';
+        }
+        $("#res_table").append(
+            tr1 + classes + 'id="res' + i + '">' +
+            td1 + name + td2 +
+            td1 + reservations[i].Owner + td2 +
+            tdcurrent + reservations[i].Start + td2 +
+            td1 + reservations[i].End + td2 +
+            td1 + reservations[i].Nodes.length + td2 +
+            tr2
+        );
     }
 
     // reservation selection on click
@@ -762,7 +863,7 @@ function showReservations(){
         var down = false;
         for (var i = 0; i < resNodes.length; i++) {
             // key hover
-            if (reservations[0].Nodes.includes(resNodes[i])) {
+            if (contains(reservations[0].Nodes, resNodes[i])) {
                 down = true;
             } else {
                 up = true;
@@ -790,7 +891,7 @@ function showReservations(){
 }
 
 // show reservations when page first loads
-reservations = sortReservations(reservations);
+sortReservations();
 showReservations();
 
 
@@ -1225,7 +1326,7 @@ $(".key").hover(function() {
             obj = $(".node.reserved.up");
             for (var i = 1; i < reservations.length; i++) {
                 for (var j = 0; j < reservations[i].Nodes.length; j++) {
-                    if (!reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                    if (!contains(reservations[0].Nodes, reservations[i].Nodes[j])) {
                         getObjFromResIndex(i).addClass("hover");
                         break;
                     }
@@ -1235,7 +1336,7 @@ $(".key").hover(function() {
             obj = $(".node.reserved.down");
             for (var i = 1; i < reservations.length; i++) {
                 for (var j = 0; j < reservations[i].Nodes.length; j++) {
-                    if (reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                    if (contains(reservations[0].Nodes, reservations[i].Nodes[j])) {
                         getObjFromResIndex(i).addClass("hover");
                         break;
                     }
@@ -1248,7 +1349,7 @@ $(".key").hover(function() {
         obj = $(".node.up");
         for (var i = 1; i < reservations.length; i++) {
             for (var j = 0; j < reservations[i].Nodes.length; j++) {
-                if (!reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                if (!contains(reservations[0].Nodes, reservations[i].Nodes[j])) {
                     getObjFromResIndex(i).addClass("hover");
                     break;
                 }
@@ -1258,7 +1359,7 @@ $(".key").hover(function() {
         obj = $(".node.down");
         for (var i = 1; i < reservations.length; i++) {
             for (var j = 0; j < reservations[i].Nodes.length; j++) {
-                if (reservations[0].Nodes.includes(reservations[i].Nodes[j])) {
+                if (contains(reservations[0].Nodes, reservations[i].Nodes[j])) {
                     getObjFromResIndex(i).addClass("hover");
                     break;
                 }

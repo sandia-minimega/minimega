@@ -17,7 +17,16 @@ import (
 var cmdWeb = &Command{
 	UsageLine: "web",
 	Short:     "run a web application",
-	Long:      `Run a Go web application with a GUI for igor`,
+	Long: `
+Run a Go web application with a GUI for igor -p for port
+
+OPTIONAL FLAGS:
+
+The -p flag sets the port of the server (default = 8080).
+
+The -f flag sets location of html and static folder (default = current path).
+
+The -s flag silences output.`,
 }
 
 var webP string // port
@@ -39,6 +48,7 @@ type ResTableRow struct {
 	Start    string
 	StartInt int64
 	End      string
+	EndInt   int64
 	Nodes    []int
 }
 
@@ -75,6 +85,7 @@ func getReservations() []ResTableRow {
 		"",
 		time.Now().Unix(),
 		"",
+		0,
 		rnge.RangeToInts(getDownNodes(getNodes())),
 	})
 
@@ -86,6 +97,7 @@ func getReservations() []ResTableRow {
 			time.Unix(r.StartTime, 0).Format(timefmt),
 			r.StartTime,
 			time.Unix(r.EndTime, 0).Format(timefmt),
+			r.EndTime,
 			rnge.RangeToInts(r.Hosts),
 		})
 	}

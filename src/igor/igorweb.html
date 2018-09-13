@@ -22,10 +22,10 @@
         <div id="newbutton" class="clickable mdl" data-toggle="tooltip" data-placement="bottom" title="Make a new reservation">+</div>
     </nav>
     <div class="container-fluid">
-        <div class="row" style="padding-bottom: 6%;">
+        <div class="row">
             <div class="col-1"></div>
             <div class="col-10">
-                <div class="row" style="margin-top: 8em">
+                <div class="row" style="margin-top: 9em">
                     <div class="col">
                         <div id="nodegridcard" class="card mx-auto text-center" style="width: 1000px; margin-bottom: 3em; background-color: #e7ccff; border: none;">
                             <div class="card-body">
@@ -34,7 +34,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div id="key" class="card mx-auto text-center" style="width: 400px; margin-bottom: 4em; border: none;">
+                        <div id="key" class="card mx-auto text-center" style="width: 400px; margin-bottom: 3em; border: none;">
                             <div class="card-body">
                                 <table class="table table-borderless">
                                     <tbody>
@@ -81,18 +81,33 @@
                     <div class="col">
                         <div class="card mx-auto" style="width: 800px; margin-bottom: 4em;">
                             <div class="card-body">
-                                <div id="table" class="row" style="margin: 0.5em; opacity: 1;">
-                                    <table class="table table-hover table-borderless">
-                                        <thead>
-                                            <tr>
-                                                <th scope="col">Name</th>
-                                                <th scope="col">Owner</th>
-                                                <th scope="col">Start Time</th>
-                                                <th scope="col">End Time</th>
-                                                <th scope="col"># of Nodes</th>
+                                <div id="table" class="row mdl" style="margin: 0.5em; opacity: 1;">
+                                    <table class="table table-hover table-borderless mdl">
+                                        <thead class="mdl">
+                                            <tr class="mdl">
+                                                <th id="rtname" class="mdl restableheader clickable" scope="col">Name
+                                                    <span id="rtnamedown" class="mdl sortarrow down"> ▼</span>
+                                                    <span id="rtnameup" class="mdl sortarrow up"> ▲</span>
+                                                </th>
+                                                <th id="rtowner" class="mdl restableheader clickable" scope="col">Owner
+                                                    <span id="rtownerdown" class="mdl sortarrow down"> ▼</span>
+                                                    <span id="rtownerup" class="mdl sortarrow up"> ▲</span>
+                                                </th>
+                                                <th id="rtstart" class="mdl restableheader clickable" scope="col">Start Time
+                                                    <span id="rtstartdown" class="mdl sortarrow down"> ▼</span>
+                                                    <span id="rtstartup" class="mdl sortarrow up"> ▲</span>
+                                                </th>
+                                                <th id="rtend" class="mdl restableheader clickable" scope="col">End Time
+                                                    <span id="rtenddown" class="mdl sortarrow down"> ▼</span>
+                                                    <span id="rtendup" class="mdl sortarrow up"> ▲</span>
+                                                </th>
+                                                <th id="rtnumber" class="mdl restableheader clickable" scope="col"># of Nodes
+                                                    <span id="rtnumberdown" class="mdl sortarrow down"> ▼</span>
+                                                    <span id="rtnumberup" class="mdl sortarrow up"> ▲</span>
+                                                </th>
                                             </tr>
                                         </thead>
-                                        <tbody id="res_table">
+                                        <tbody id="res_table" class="mdl">
                                             <!-- Reservation table -->
                                         </tbody>
                                     </table>
