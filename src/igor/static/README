@@ -1,0 +1,231 @@
+GENERAL
+---------
+
+IgorWeb is a web application to make it easier to manage reservations with igor.
+It is a front-end GUI with a Go backend, connecting to the Go files of the rest
+of igor.
+To run the server, simply type:
+
+    $ igor web
+
+Optional flags for the igor web command:
+
+    -p flag sets the port of the server (default = 8080)
+    -f flag sets location of igorweb.html and static folder (default = current path).
+    -s flag silences output
+
+When run without further network setup, clients can connect to IgorWeb by:
+
+    http://[server IP address]:[portnumber]/
+
+Output of the server (if invoked without the -s flag) is
+For general requests:
+    [METHOD] [path requested] [IP address]
+For commands:
+    Command: [command string from client]
+        From: [IP address]
+        Response: [response issued to client from IgorWeb]
+
+Files of IgorWeb, in minimega/src/igor/ (../):
+    web.go          - Go program that runs the server,
+                        serves all files, and
+                        executes commands from users
+    igorweb.html    - initial page served to user; references all other files
+    static/         - all other static web files
+        igorweb.js  - inserts reservation data to html,
+                            runs animations,
+                            sends commands to server, and
+                            receives and displays responses from server.
+        igorweb.css - styling of all html elements
+
+External dependencies placed locally, in static/:
+    Bootstrap
+        bootstrap-grid.min.css
+        bootstrap-grid.min.css.map
+        bootstrap-reboot.min.css
+        bootstrap-reboot.min.css.map
+        bootstrap.min.css
+        bootstrap.min.css.map
+        bootstrap-grid.min.js
+        bootstrap-grid.min.js.map
+    JQuery
+        jquery-3.3.1.min.js
+    Font (for logo)
+        Montserrat-ExtraBold.ttf
+        Montserrat-SemiBoldItalic.ttf
+
+
+
+(After every relevant section in this documentation,
+    there are code references like this:
+ => file-name.ext: text-to-look-up-in-that-file-CASE-SENSITIVE
+                   in another-higher-level-text-to-lookup-that-encompasses-last-one
+These will lead you to an exact code segment in the specified file)
+
+GUI
+----
+All general use igor commands are implemented in IgorWeb, with additional useful
+features that help better visualize reservations and node states.
+
+igor show has been replaced by a permanent graphic that shows the same info,
+the main IgorWeb page
+
+node grid:
+The left center of the screen features the node grid, a graphical representation
+of the server cluster. The dimensions of this grid are identical to those diplayed
+in igor show, but with a different coloring scheme.
+ => igorweb.html: Node grid
+    igorweb.js: POPULATE NODE GRID
+                in function showReservations()
+                in GENERATE NODE GRID AND RESERVATION TABLE
+    igorweb.css: coloring of nodes
+
+key:
+The bottom left is a key describing the color scheme of the nodes in the node grid.
+    purple - up, available nodes
+    blue   - up, reserved nodes
+    red    - down, available nodes
+    yellow - down, reserved nodes
+ => igorweb.html: <!-- Key -->
+    igorweb.js: KEY
+The Key button in the navigation bar can be used to show or hide the key.
+ => igorweb.html: Key, Show/hide key
+    igorweb.js: keybtn
+
+reservation table:
+Shows all the same data that igor show does, except nodes. The range of nodes that
+each reservation is replaced by the number of nodes.
+ => igorweb.html: Reservation table
+    igorweb.js: POPULATE RESERVATION TABLE
+                in function showReservations()
+                in GENERATE NODE GRID AND RESERVATION TABLE
+
+sorting:
+The reservation table can be sorted by each of the fields shown by clicking on
+the table headers. The reservations will first be sorted smallest to largest,
+and a second click will switch it to largest to smallest. Sorting is cumulative,
+meaning that clicking on multiple headers, will sort first by the last header
+clicked (one with the arrow), then by the second to last clicked, etc.
+igorweb.js: SORTING
+            in GENERATE NODE GRID AND RESERVATION TABLE
+
+hover:
+Hovering over any node highlights:
+    the relevant part of the key that applies to the node, and
+    the all of the reservations that own the node, currently and in the future.
+     => igorweb.js: node hover to cause
+                    in POPULATE NODE GRID
+                    in function showReservations()
+                    in GENERATE NODE GRID AND RESERVATION TABLE
+Hovering over any reservation highlights:
+    all of the nodes that the reservation owns, and
+    all sections of the key that apply to nodes that the reservation owns
+        (only for the blue and yellow sections of the key).
+     => igorweb.js: when hovering over a reservation
+                    in POPULATE RESERVATION TABLE
+                    in function showReservations()
+                    in GENERATE NODE GRID AND RESERVATION TABLE
+Hovering over any part of the key highlights:
+    all nodes that apply, and
+    all reservations that contain nodes that apply
+        (only for the blue and yellow sections of the key).
+     => igorweb.js: when hovering over any cell in key
+                    in KEY
+
+selections:
+Clicking on a node in the node grid selects it.
+ => igorweb.js: NODE/RESERVATION SELECTION FUNCTIONS
+Dragging from one node to another selects all of the nodes numerically in between
+the nodes.
+ => igorweb.js: NODE DRAGGING
+Text in the middle of the navigation bar at the top of the screen shows how many
+nodes are selected.
+ => igorweb.html: selecttext
+ => igorweb.js: function updateSelectText()
+                in NODE/RESERVATION SELECTION FUNCTIONS
+Once nodes are selected, you can power-cycle them by clicking on the button in the
+action bar that appears at the bottom of the screen.
+ => igorweb.html: Action bar
+ => igorweb.js: function showActionBar()
+                in NODE/RESERVATION SELECTION FUNCTIONS
+Clicking on a reservation selects the reservation as well as all of the nodes in
+the reservation.
+ => igorweb.js: reservation selection on click
+                in POPULATE RESERVATION TABLE
+                in function showReservations()
+                in GENERATE NODE GRID AND RESERVATION TABLE
+Once a reservation is selected you can:
+    delete the reservation,
+    power-cycle the nodes in the reservation, or
+    extend the reservation,
+by clicking on the buttons that appear on the action bar.
+ => igorweb.html: Action bar
+ => igorweb.js: function showResActions()
+                in NODE/RESERVATION SELECTION FUNCTIONS
+You can add the nodes of a specific reservation or key section to your currently
+selected nodes by holding Ctrl while clicking on it. With this you can select the
+nodes of multiple reservations at once.
+ => igorweb.js: allow multiple
+
+
+
+COMMANDS
+---------
+
+All commands are in the form of a modal, triggered by a button click. All flags
+in the command line show up as text inputs in the modals, with the required flags
+as red, and the remaining optional flags as blue.
+As the user types, the command box at the bottom of the modal updates, showing
+the command that will be sent to the server.
+These modals have buttons at the bottom right that allow users to submit the command
+they created, only as soon as all of the required fields are filled.
+ => igorweb.html, igorweb.js: modalgobtn
+
+When a user clicks such a button, the command is sent to the server (web.go),
+which runs it on igor and returns a boolean response, with success as green and
+failure as red, in a response box under the command box. The response can then
+be copied by clicking on the clipboard icon on the right of the response box.
+ => igorweb.html: commandline
+
+igor sub:
+Clicking on the blue plus at the top right of the screen (newbutton) opens a
+modal to type in information about the new reservation.
+ => igorweb.html: New reservation modal
+The user can choose between using a (kernel and initrd) or (cobbler profile)
+and (number of nodes) or (node list) by clicking on the switches.
+ => igorweb.html: nrmodal
+ => igorweb.js: switch between
+
+speculate:
+When Speculate is clicked, igor checks what time segments are available for
+reserving the specified information, and offers 10 options to choose from.
+ => igorweb.html: Speculate page of
+ => igorweb.js: go to speculate page
+            in NEW RESERVATION MODAL
+
+igor power:
+Selected nodes can be turned, on, off, or cycled. Can be done by either
+reservation or by node list.
+Command can only be accessed when a nodes are selected.
+ => igorweb.html: Power-cycle modal
+ => igorweb.js: POWER-CYCLE MODAL
+
+igor delete:
+User can delete the reservation by clicking Delete.
+Command can only be accessed when a reservation is selected.
+ => igorweb.html: Delete reservation modal
+ => igorweb.js: DELETE RESERVATION MODAL
+
+igor extend:
+Reservations can be extended for a specified amount of time.
+Command can only be accessed when a reservation is selected.
+ => igorweb.html: Extend reservation modal
+ => igorweb.js: EXTEND MODAL
+
+heartbeat:
+Every 10 seconds, the application will automatically update the reservation data
+it displays if it detects any changes.
+ => igorweb.js: heartbeat: update reservations every set time
+When a command is executed, the reservation data is also updated to reflect the
+change.
+ => igorweb.js: function getReservations()

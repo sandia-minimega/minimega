@@ -1,3 +1,30 @@
+/**********************************************
+ * igorweb.js
+ * -----------
+ * This file is called upon by igorweb.html.
+ * Inserts reservation data to html, runs animations, sends commands to server, and
+ * receives and displays responses from server.
+ *
+ * Code Sections
+ * --------------
+ * GLOBAL VARIABLES
+ * GETTER FUNCTIONS
+ * NODE/RESERVATION SELECTION FUNCTIONS
+ * COMMAND EXECUTION FUNCTIONS
+ * GENERATE NODE GRID AND RESERVATION TABLE
+ *      SORTING
+ *      POPULATE NODE GRID
+ *      NODE DRAGGING
+ *      POPULATE RESERVATION TABLE
+ * NEW RESERVATION MODAL
+ * DELETE RESERVATION MODAL
+ * POWER-CYCLE MODAL
+ * EXTEND MODAL
+ * COPY RESPONSE FROM SERVER
+ * KEY
+ *********************************************/
+
+
 /*****************
  GLOBAL VARIABLES
 
@@ -30,10 +57,10 @@ var lastDrag;
 
 
 
-/*************************
- NODE TO OBJECT FUNCTIONS
+/*****************
+ GETTER FUNCTIONS
 
- *************************/
+ *****************/
 
 // input a res object (row from res table)
 //      returns its index in the reservations array
@@ -297,10 +324,10 @@ $(document).keyup(function(event) {
 
 
 
-/********************
- EXECUTION FUNCTIONS
+/***************************
+ COMMAND EXECUTION FUNCTIONS
 
- ********************/
+ ***************************/
 
 // how long to wait after sending a request before giving up and showing
 //      timeout error
@@ -512,6 +539,8 @@ function updateNodeListField(id = "dashw") {
  GENERATE NODE GRID AND RESERVATION TABLE
 
  ****************************************/
+
+// SORTING
 
 // default comparison function for reservations
 // returns positive if a > b,
@@ -905,6 +934,7 @@ showReservations();
 $("#newbutton").click(function() {
     $(".responseparent").hide();
     newResHideSpec();
+    $("#dasha").val("");
     updateNodeListField();
     $("#nrmodalki").click();
     // if nodes are selected, set fields and go to node list
