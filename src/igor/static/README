@@ -104,33 +104,33 @@ sorting:
 The reservation table can be sorted by each of the fields shown by clicking on
 the table headers. The reservations will first be sorted smallest to largest,
 and a second click will switch it to largest to smallest. Sorting is cumulative,
-meaning that clicking on multiple headers, will sort first by the last header
+meaning that clicking on multiple headers will sort first by the last header
 clicked (one with the arrow), then by the second to last clicked, etc.
-igorweb.js: SORTING
-            in GENERATE NODE GRID AND RESERVATION TABLE
+ => igorweb.js: SORTING
+                in GENERATE NODE GRID AND RESERVATION TABLE
 
 hover:
 Hovering over any node highlights:
     the relevant part of the key that applies to the node, and
     the all of the reservations that own the node, currently and in the future.
-     => igorweb.js: node hover to cause
-                    in POPULATE NODE GRID
-                    in function showReservations()
-                    in GENERATE NODE GRID AND RESERVATION TABLE
+ => igorweb.js: node hover to cause
+                in POPULATE NODE GRID
+                in function showReservations()
+                in GENERATE NODE GRID AND RESERVATION TABLE
 Hovering over any reservation highlights:
     all of the nodes that the reservation owns, and
     all sections of the key that apply to nodes that the reservation owns
         (only for the blue and yellow sections of the key).
-     => igorweb.js: when hovering over a reservation
-                    in POPULATE RESERVATION TABLE
-                    in function showReservations()
-                    in GENERATE NODE GRID AND RESERVATION TABLE
+ => igorweb.js: when hovering over a reservation
+                in POPULATE RESERVATION TABLE
+                in function showReservations()
+                in GENERATE NODE GRID AND RESERVATION TABLE
 Hovering over any part of the key highlights:
     all nodes that apply, and
     all reservations that contain nodes that apply
         (only for the blue and yellow sections of the key).
-     => igorweb.js: when hovering over any cell in key
-                    in KEY
+ => igorweb.js: when hovering over any cell in key
+                in KEY
 
 selections:
 Clicking on a node in the node grid selects it.
@@ -141,12 +141,12 @@ the nodes.
 Text in the middle of the navigation bar at the top of the screen shows how many
 nodes are selected.
  => igorweb.html: selecttext
- => igorweb.js: function updateSelectText()
+    igorweb.js: function updateSelectText()
                 in NODE/RESERVATION SELECTION FUNCTIONS
 Once nodes are selected, you can power-cycle them by clicking on the button in the
 action bar that appears at the bottom of the screen.
  => igorweb.html: Action bar
- => igorweb.js: function showActionBar()
+    igorweb.js: function showActionBar()
                 in NODE/RESERVATION SELECTION FUNCTIONS
 Clicking on a reservation selects the reservation as well as all of the nodes in
 the reservation.
@@ -160,7 +160,7 @@ Once a reservation is selected you can:
     extend the reservation,
 by clicking on the buttons that appear on the action bar.
  => igorweb.html: Action bar
- => igorweb.js: function showResActions()
+    igorweb.js: function showResActions()
                 in NODE/RESERVATION SELECTION FUNCTIONS
 You can add the nodes of a specific reservation or key section to your currently
 selected nodes by holding Ctrl while clicking on it. With this you can select the
@@ -194,13 +194,13 @@ modal to type in information about the new reservation.
 The user can choose between using a (kernel and initrd) or (cobbler profile)
 and (number of nodes) or (node list) by clicking on the switches.
  => igorweb.html: nrmodal
- => igorweb.js: switch between
+    igorweb.js: switch between
 
 speculate:
 When Speculate is clicked, igor checks what time segments are available for
 reserving the specified information, and offers 10 options to choose from.
  => igorweb.html: Speculate page of
- => igorweb.js: go to speculate page
+    igorweb.js: go to speculate page
             in NEW RESERVATION MODAL
 
 igor power:
@@ -208,19 +208,19 @@ Selected nodes can be turned, on, off, or cycled. Can be done by either
 reservation or by node list.
 Command can only be accessed when a nodes are selected.
  => igorweb.html: Power-cycle modal
- => igorweb.js: POWER-CYCLE MODAL
+    igorweb.js: POWER-CYCLE MODAL
 
 igor delete:
 User can delete the reservation by clicking Delete.
 Command can only be accessed when a reservation is selected.
  => igorweb.html: Delete reservation modal
- => igorweb.js: DELETE RESERVATION MODAL
+    igorweb.js: DELETE RESERVATION MODAL
 
 igor extend:
 Reservations can be extended for a specified amount of time.
 Command can only be accessed when a reservation is selected.
  => igorweb.html: Extend reservation modal
- => igorweb.js: EXTEND MODAL
+    igorweb.js: EXTEND MODAL
 
 heartbeat:
 Every 10 seconds, the application will automatically update the reservation data
@@ -229,3 +229,22 @@ it displays if it detects any changes.
 When a command is executed, the reservation data is also updated to reflect the
 change.
  => igorweb.js: function getReservations()
+
+
+
+CSS
+----
+
+.mdl class:
+All elements with the mdl class with not deselect all selections when you click
+on them. This is useful for action buttons or modals that shouldn't undo all
+selections when they are clicked.
+ => igorweb.js: deselect all on outside click
+
+.active class:
+For elements that are currently in a selected state (dark background, white text)
+
+.available/.reserved classes:
+To describe the node state, whether it is available or reserved
+
+The rest of the css classes should be just for styling within igorweb.css.
