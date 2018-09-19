@@ -64,7 +64,7 @@
         // VMs are blue
         const vms = _.map(this.$store.state.vms, (vm) => {
           return {
-            id: vm.id,
+            id: 'vm' + vm.id,  // Prefix with 'vm' to avoid collisions w/ VLANs
             radius: this.nodeRadius,
             fillStyle: 'blue',
           };
@@ -73,16 +73,13 @@
         // VLANs are red
         const vlans = _.map(this.$store.getters.vlans, (vlan) => {
           return {
-            id: vlan.name,
+            id: 'vlan' + vlan.name,  // Prefix with 'vlan' to avoid collisions w/ VMs
             radius: this.nodeRadius,
             fillStyle: 'red',
           };
         });
 
-        // Glue 'em together and cross your fingers that all those
-        // IDs are unique.
-        //
-        // TODO Are all those IDs unique?
+        // Glue 'em together
         return [].concat(vms, vlans);
       },
 
@@ -92,8 +89,8 @@
         const m = _.map(this.$store.state.vms, (vm) => {
           return _.map(vm.vlan, (vlan) => {
             return {
-              source: vm.id,
-              target: vlan,
+              source: 'vm' + vm.id,
+              target: 'vlan' + vlan,
             };
           });
         });
