@@ -19,11 +19,11 @@ func Debootstrap(buildPath string, c vmconfig.Config) error {
 
 	// build debootstrap parameters
 	var args []string
+	if *f_dstrp_append != "" {
+		args = append(args, strings.Split(*f_dstrp_append, " ")...)
+	}
 	args = append(args, "--variant=minbase")
 	args = append(args, fmt.Sprintf("--include=%v", strings.Join(c.Packages, ",")))
-	if *f_components != "" {
-		args = append(args, fmt.Sprintf("--components=%v", *f_components))
-	}
 	args = append(args, *f_branch)
 	args = append(args, buildPath)
 	args = append(args, *f_debian_mirror)
