@@ -91,6 +91,28 @@ Added glob support to `file`delete`.
 
 PR [[https://github.com/sandia-minimega/minimega/pull/972][#972]].
 
+*** vnc API
+
+Added support for running commands against multiple VMs in the same VNC
+command with an API similar to `vm`start`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1158][#1158]].
+
+*** cc filter API
+
+Added support for all `vm`info` fields for `cc`filter` such as:
+
+    cc filter name=server
+    cc filter vlan=DMZ
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1161][#1161]].
+
+*** qemu
+
+Trim `-balloon` flag from the default QEMU args.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1165][#1165]].
+
 *** noVNC
 
 Upgraded noVNC to v1.0.0.
@@ -132,6 +154,22 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1164][#1164]].
 
 *** igor
 
+Improved show command.
+
+PRs [[https://github.com/sandia-minimega/minimega/pull/1159][#1159]] and
+[[https://github.com/sandia-minimega/minimega/pull/1160][#1160]].
+
+Added sync command.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1169][#1169]].
+
+* protonuke
+
+Added support for user-agent strings in HTTP requests and fix a reporting
+error with DNS hits/second.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1172][#1172]].
+
 * Bug fixes
 
 ** vnc API with namespaces
@@ -160,6 +198,18 @@ Fix bug in `vm`tag` where tags for all VMs were being shown instead of just
 those for the specified target.
 
 PR [[https://github.com/sandia-minimega/minimega/pull/1156][#1156]].
+
+** capture API
+
+Fix bug in `capture` where some arguments caused an `unreachable` error.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1167][#1167]].
+
+* vmbetter images
+
+Added Bro [[https://github.com/sandia-minimega/minimega/pull/1163][#1163]].
+
+Added minimal Ubuntu [[https://github.com/sandia-minimega/minimega/pull/1179][#1179]].
 
 * Availability
 
