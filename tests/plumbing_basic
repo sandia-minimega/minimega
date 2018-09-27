@@ -1,0 +1,28 @@
+# Basic plumbing tests
+# Note: These test message delivery modes "all" and "round-robin."
+
+.annotate false
+
+# Create basic pipe: test mode all. This is a depth 2 binary tree (to be used for round-robin as well).
+plumb p0 p1
+plumb p0 p2
+plumb p1 p3
+plumb p1 p4
+plumb p2 p5
+plumb p2 p6
+plumb
+.columns name,mode,readers,writers,count pipe
+
+pipe p0 "Hello to you."
+.columns name,mode,readers,writers,count pipe
+
+# Round-robin mode testing: set all parents to RR and verify message count distributions
+pipe p0 mode round-robin
+pipe p1 mode round-robin
+pipe p2 mode round-robin
+
+pipe p0 "This is round robin."
+pipe p0 "This is round 2."
+pipe p0 "This is round 3."
+pipe p0 "This is round 4."
+.columns name,mode,readers,writers,count pipe

@@ -30,8 +30,8 @@ of course) and a few new namespace-specific APIs.
 By default, minimega starts out in the `minimega` namespace. This namespace is
 special for several reasons:
 
-	* If you delete it, it gets recreated automatically.
-	* It only contains the local node on creation.
+- If you delete it, it gets recreated automatically.
+- It only contains the local node on creation.
 
 ** namespace API
 

@@ -59,16 +59,24 @@ const (
 )
 
 var cmdShow = &Command{
-	UsageLine: "show",
+	UsageLine: "show [-o]",
 	Short:     "show reservations",
 	Long: `
 List all extant reservations. Checks if a host is up by issuing a "ping"
+
+OPTIONAL FLAGS:
+
+The -o flag will change the sort order to sort by reservation owner.
 	`,
 }
+
+var subO bool // -o
 
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
+
+	cmdShow.Flag.BoolVar(&subO, "o", false, "")
 }
 
 // Use nmap to scan all the nodes and then show which are up and the
@@ -82,6 +90,8 @@ func runShow(_ *Command, _ []string) {
 
 	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
+	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
+	resNodes := map[int]bool{}
 
 	// Use nmap to determine what nodes are up
 	args := []string{}
@@ -130,15 +140,6 @@ func runShow(_ *Command, _ []string) {
 		nodes[v] = true
 	}
 
-	// Gather a list of which nodes are down
-	var downNodes []string
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		if !nodes[i] {
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			downNodes = append(downNodes, hostname)
-		}
-	}
-
 	// For colors... get all the reservations and sort them
 	resarray := []Reservation{}
 	maxResNameLength := 0
@@ -148,10 +149,43 @@ func runShow(_ *Command, _ []string) {
 		if maxResNameLength < len(r.ResName) {
 			maxResNameLength = len(r.ResName)
 		}
+		// go through each host list and compile list of reserved nodes
+		for _, h := range r.Hosts {
+			v, err := strconv.Atoi(h[len(igorConfig.Prefix):])
+			if err != nil {
+				//that's weird
+				continue
+			}
+			resNodes[v] = true
+		}
+	}
+
+	// Gather a list of which nodes are down and which nodes are unreserved
+	var downNodes []string
+	var unreservedNodes []string
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		hostname := igorConfig.Prefix + strconv.Itoa(i)
+		if !resNodes[i] {
+			unreservedNodes = append(unreservedNodes, hostname)
+		}
+		if !nodes[i] {
+			downNodes = append(downNodes, hostname)
+		}
 	}
 	// nameFmt will create uniform color bars for 1st column
 	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
-	sort.Sort(StartSorter(resarray))
+	if subO {
+		sort.Slice(resarray, func(i, j int) bool {
+			if resarray[i].Owner == resarray[j].Owner {
+				return resarray[i].StartTime < resarray[j].StartTime
+			}
+			return resarray[i].Owner < resarray[j].Owner
+		})
+	} else {
+		sort.Slice(resarray, func(i, j int) bool {
+			return resarray[i].StartTime < resarray[j].StartTime
+		})
+	}
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
@@ -173,6 +207,10 @@ func runShow(_ *Command, _ []string) {
 	downrange, _ := rnge.UnsplitRange(downNodes)
 	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
+	// Unreserved Node list
+	resrange, _ := rnge.UnsplitRange(unreservedNodes)
+	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", resrange)
 	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {

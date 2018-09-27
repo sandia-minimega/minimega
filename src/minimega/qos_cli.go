@@ -170,7 +170,7 @@ func cliParseQos(c *minicli.Command) (bridge.QosOption, error) {
 
 		op.Value = delay
 	} else {
-		return op, errors.New("unreachable")
+		return op, unreachable()
 	}
 
 	return op, nil

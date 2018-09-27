@@ -306,8 +306,7 @@ func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 		return nil
 	}
 
-	// boo, should be unreachable
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliDnsmasq(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

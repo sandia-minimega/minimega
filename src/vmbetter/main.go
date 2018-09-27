@@ -25,13 +25,13 @@ var (
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
 	f_branch        = flag.String("branch", "testing", "debian branch to use")
-	f_components    = flag.String("components", "", "use packages from the listed components of the archive")
 	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
 	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
 	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
 	f_iso           = flag.Bool("iso", false, "generate an ISO")
 	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
 	f_rootfs        = flag.Bool("rootfs", false, "generate a simple rootfs")
+	f_dstrp_append  = flag.String("debootstrap-append", "", "additional arguments to be passed to debootstrap")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.

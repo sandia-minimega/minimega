@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"gonetflow"
 	"minicli"
@@ -142,7 +141,7 @@ func cliCapture(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return cliCapturePcap(ns, c, resp)
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -189,7 +188,7 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		return nil
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCaptureList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -290,33 +289,19 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	b := c.StringArgs["bridge"]
 
-	if c.BoolArgs["delete"] {
-		return ns.captures.StopBridge(b, "netflow")
-	} else if c.BoolArgs["timeout"] {
-		// Set or get the netflow timeout
-		timeout := c.StringArgs["timeout"]
-		val, err := strconv.Atoi(timeout)
-		if timeout != "" {
-			resp.Response = strconv.Itoa(captureNFTimeout)
-		} else if err != nil {
-			return fmt.Errorf("invalid timeout parameter: `%v`", timeout)
-		} else {
-			captureNFTimeout = val
-			updateNetflowTimeouts()
+	switch {
+	case c.BoolArgs["bridge"]:
+		// start capture to file to socket
+		if fname, ok := c.StringArgs["filename"]; ok {
+
+			// Ensure that relative paths are always relative to /files/
+			if !filepath.IsAbs(fname) {
+				fname = filepath.Join(*f_iomBase, fname)
+			}
+
+			return ns.captures.CaptureNetflowFile(b, fname)
 		}
 
-		return nil
-	} else if c.BoolArgs["file"] {
-		// Capture -> netflow (file)
-		fname := c.StringArgs["filename"]
-
-		// Ensure that relative paths are always relative to /files/
-		if !filepath.IsAbs(fname) {
-			fname = filepath.Join(*f_iomBase, fname)
-		}
-
-		return ns.captures.CaptureNetflowFile(b, fname)
-	} else if c.BoolArgs["socket"] {
 		// Capture -> netflow (socket)
 		transport := "tcp"
 		if c.BoolArgs["udp"] {
@@ -326,7 +311,11 @@ func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response
 		host := c.StringArgs["hostname:port"]
 
 		return ns.captures.CaptureNetflowSocket(b, transport, host)
-	} else if c.BoolArgs["timeout"] {
+	case c.BoolArgs["delete"]:
+		// delete capture
+		return ns.captures.StopBridge(c.StringArgs["bridge"], "netflow")
+	case c.BoolArgs["timeout"]:
+		// Set or get the netflow timeout
 		if v, ok := c.StringArgs["timeout"]; ok {
 			i, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
@@ -342,7 +331,7 @@ func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response
 
 		resp.Response = strconv.Itoa(captureNFTimeout)
 		return nil
+	default:
+		return unreachable()
 	}
-
-	return errors.New("unreachable")
 }

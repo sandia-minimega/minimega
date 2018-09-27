@@ -164,8 +164,19 @@ func httpClientRequest(h string, client *http.Client) (elapsed uint64) {
 		url = "http://" + url
 	}
 
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	if *f_httpUserAgent != "" {
+		req.Header.Set("User-Agent", *f_httpUserAgent)
+	}
+
 	start := time.Now().UnixNano()
-	resp, err := client.Get(url)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -217,8 +228,18 @@ func httpTLSClientRequest(h string, client *http.Client) (elapsed uint64) {
 		url = "https://" + url
 	}
 
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		log.Errorln(err)
+		return
+	}
+
+	if *f_httpUserAgent != "" {
+		req.Header.Set("User-Agent", *f_httpUserAgent)
+	}
+
 	start := time.Now().UnixNano()
-	resp, err := client.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Errorln(err)
 		return

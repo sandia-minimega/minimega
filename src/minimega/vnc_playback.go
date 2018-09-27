@@ -139,6 +139,55 @@ func (v *vncPlayer) Inject(vm *KvmVM, s string) error {
 	return v.playbackKB(vm, e.(string))
 }
 
+func (v *vncPlayer) Stop(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Stop()
+	})
+}
+
+func (v *vncPlayer) Pause(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Pause()
+	})
+}
+
+func (v *vncPlayer) Continue(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Continue()
+	})
+}
+
+func (v *vncPlayer) Step(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Step()
+	})
+}
+
+func (v *vncPlayer) GetStep(vm *KvmVM) (string, error) {
+	var res string
+
+	err := v.apply(vm, func(p *vncKBPlayback) (err error) {
+		res, err = p.GetStep()
+		return
+	})
+
+	return res, err
+}
+
+func (v *vncPlayer) apply(vm *KvmVM, fn func(*vncKBPlayback) error) error {
+	v.Lock()
+	defer v.Unlock()
+
+	// clear out any old playbacks
+	v.reap()
+
+	if p := v.m[vm.Name]; p != nil {
+		return fn(p)
+	}
+
+	return fmt.Errorf("kb playback not found for %v", vm.Name)
+}
+
 // Clear stops all playbacks
 func (v *vncPlayer) Clear() {
 	v.Lock()

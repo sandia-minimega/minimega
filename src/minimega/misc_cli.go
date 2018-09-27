@@ -141,7 +141,7 @@ func cliQuit(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	Shutdown("quitting")
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

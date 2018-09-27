@@ -73,7 +73,7 @@ func read(path, prev string, c *Config) error {
 			return err
 		}
 		tok = s.Scan()
-		if tok != scanner.String {
+		if tok != scanner.String && tok != scanner.RawString {
 			err = fmt.Errorf("%s:%s malformed config %s, expected string, got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
 			return err
 		}

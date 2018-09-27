@@ -7,7 +7,6 @@ package main
 import (
 	"bridge"
 	"bufio"
-	"errors"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
@@ -82,7 +81,7 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	Shutdown("nuked")
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 // nukeTaps removes a list of tap devices
