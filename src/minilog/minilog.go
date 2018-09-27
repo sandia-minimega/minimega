@@ -65,6 +65,16 @@ func AddLogger(name string, output io.Writer, level Level, color bool) {
 	loggers[name] = &minilogger{golog.New(output, "", golog.LstdFlags), level, color, nil}
 }
 
+func AddLogRing(name string, l *Ring, level Level) {
+	logLock.Lock()
+	defer logLock.Unlock()
+
+	loggers[name] = &minilogger{
+		logger: l,
+		Level:  level,
+	}
+}
+
 // Remove a named logger that was added using AddLogger
 func DelLogger(name string) {
 	logLock.Lock()
@@ -265,7 +275,7 @@ func Error(format string, arg ...interface{}) {
 }
 
 func Fatal(format string, arg ...interface{}) {
-	log(FATAL, "", format, arg)
+	log(FATAL, "", format, arg...)
 
 	os.Exit(1)
 }

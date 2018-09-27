@@ -74,4 +74,36 @@ minifuzzer generates random minimega commands and runs them on a minimega
 instance to find crashes.
 </p>
 
+<h2>passwordify: modify credentials for ramdisk images</h2>
+
+<p>
+This utility installs a root password or root SSH keys in a ramdisk image. It
+is intended to help prevent interference between users on a cluster by
+implementing login controls on the bootable image. Running
+`sudo passwordify SOURCE NEW` will unpack the *source* ramdisk image, prompt
+for a root password, and re-pack it into the specified *new* file, leaving the
+source unchanged. The `-keys` flag allows you to specify an authorized_keys
+formatted file (one public key per line) to be installed in the ramdisk's
+`/root/.ssh/authorized_keys`; this can be used to allow key-based root login.
+Specifying the `-passwordless` flag will configure the image such that its own
+RSA keys are in its authorized_keys file, which will allow multiple nodes
+booted from the same image to ssh to each other without needing password input.
+</p>
+
+<h2>rond: standalone command-and-control server</h2>
+
+<p>
+minimega includes a `ron` server to provide command-and-control for VMs. rond
+is a standalone command-and-control server with its own CLI to control physical
+machines running miniccc.
+</p>
+
+<h2>vmconfiger: code generation</h2>
+
+<p>
+vmconfiger generates the `vm config` APIs automatically for minimega. Only
+developers that are changing the VMConfig structs will need to use this. It
+runs automatically with `go generate`.
+</p>
+
 {{ end }}

@@ -215,8 +215,13 @@ func schedule(queue []*QueuedVMs, hosts []*HostStats, hostSorter hostSortBy) (ma
 		}
 	}
 
-	// perform sanity checks to simplify scheduling loop
 	for _, q := range queue {
+		// resolve `localhost` to actual hostname
+		if q.Schedule == Localhost {
+			q.Schedule = hostname
+		}
+
+		// ensure we can get host stats to simplify scheduling loop
 		if host := q.Schedule; host != "" {
 			// host should exist
 			if findHostStats(host) == nil {

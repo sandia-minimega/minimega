@@ -1,0 +1,98 @@
+Tap mirroring
+
+The minimega authors
+13 June 2018
+
+* Introduction
+
+Tap mirroring can allow VMs to passively inspect traffic from other VMs to
+perform network monitoring. This article describes the basic setup.
+
+* Environment
+
+We will use a simple environment to test the tap mirroring capability:
+
+    # create two VMs, each with a hardcoded UUID
+    vm config kernel $images/miniccc.kernel
+    vm config initrd $images/miniccc.initrd
+    vm config net LAN
+    vm config uuid 11111111-1111-1111-1111-111111111111
+    vm launch kvm A
+    vm config uuid 22222222-2222-2222-2222-222222222222
+    vm launch kvm B
+
+    # create a VM to monitor the other two, also with a hardcoded UUID
+    vm config net 0
+    vm config uuid 33333333-3333-3333-3333-333333333333
+    vm launch kvm monitor
+
+    # start all the VMs
+    vm start all
+
+    # set static IP on A
+    cc filter uuid=11111111-1111-1111-1111-111111111111
+    cc exec ip addr add 10.0.0.1/24 dev eth0
+
+    # set static IP on B
+    cc filter uuid=22222222-2222-2222-2222-222222222222
+    cc exec ip addr add 10.0.0.2/24 dev eth0
+
+* Creating the mirror
+
+The `tap`mirror` API allows you to create a mirror between two existing taps.
+In this case, we wish to mirror either A's or B's tap to monitor's tap:
+
+    minimega$ .column name,tap vm info
+    name    | tap
+    A       | [mega_tap0]
+    B       | [mega_tap1]
+    monitor | [mega_tap2]
+
+The command to create the mirror is then:
+
+    minimega$ tap mirror mega_tap0 mega_tap2
+
+* Using the mirror
+
+`eth0` on the monitor VM should now see all the traffic that traverses
+`mega_tap0`. We can confirm this by running `tcpdump`-i`eth0` on the monitor VM
+while pinging VM B from VM A:
+
+.image mirror/ping.png
+
+.image mirror/tcpdump.png
+
+* Using Bro
+
+Instead of using a simple VM as the monitor, we can replace it with one running
+[[https://www.bro.org/][Bro]]. minimega includes a `vmbetter` config to build a
+VM that runs Bro. By default, this VM listens on `eth0` and writes logs to
+`/bro`. In order to launch the Bro VM, we use the following minimega commands
+(in place of the previous commands to launch the monitor):
+
+    # create Bro VM to monitor the network
+    disk create bro.qcow2 10G
+    vm config net 0
+    vm config uuid 33333333-3333-3333-3333-333333333333
+    vm config kernel $images/bro.kernel
+    vm config initrd $images/bro.initrd
+    vm config snapshot false
+    vm config disk bro.qcow2
+    vm launch kvm monitor
+
+The Bro VM will format and mount any provided disk to `/bro` allowing users to
+extract the data after the experiment completes. The VM must run with snapshot
+set to false so that any logs written to disk persist after the VM exits. Each
+VM must have its own disk image. If a disk is not provided, `/bro` is stored in
+memory and may cause the VM to run out of memory if there are too many log
+messages.
+
+To extract files from the QCOW2 after the VM exits, users can run the following
+bash commands as root:
+
+    $ modprobe nbd # if not already loaded
+    $ qemu-nbd -c /dev/nbd0 /path/to/bro.qcow2
+    $ mount /dev/nbd0 /mnt
+    $ cp -a /mnt /path/to/dst/
+    $ umount /mnt
+    $ qemu-nbd -d /dev/nbd0

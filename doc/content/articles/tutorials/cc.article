@@ -72,43 +72,6 @@ By default, miniccc will create the directory `/tmp/miniccc` to store state and
 files in. Files sent to the client will be stored in `/tmp/miniccc/files`. You
 can change this directory with the `-base` flag.
 
-** Adding miniccc to VMs/containers
-
-Typically, miniccc is baked into images and set to start automatically when the
-VM or container starts. Adding miniccc can be done in several ways.
-VMs/containers built with `vmbetter` can make use of overlays to add miniccc
-and the necessary files to start miniccc at boot. Existing VMs/containers can
-be modified to include miniccc by starting a single VM/container with `vm
-config snapshot false`, adding the miniccc binary, configuring it to run
-automatically, shutting down the VM, and saving the disk image or containerfs.
-
-*** init Scripts
-
-There are several examples of integrating miniccc into vmbetter-built
-VMs/containers in the repo.
-
-*** systemd Integration
-
-To start miniccc automatically with systemd, add the following to
-`/etc/systemd/system/miniccc.service`:
-
-    [Unit]
-    Description=miniccc
-
-    [Service]
-    ExecStart=/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /var/log/miniccc.log
-
-    [Install]
-    WantedBy=multi-user.target
-
-You may need to adjust the ExecStart command if you copied miniccc elsewhere.
-And then enable the service:
-
-    systemctl enable miniccc.service
-
-This will start miniccc whenever the VM starts. If you are adding to a VM with
-snapshot=false, you should now shutdown the VM and save the disk image.
-
 * Client Information
 
 Clients report their UUID, hostname, OS, architecture, IP and MAC addresses to
@@ -227,6 +190,29 @@ subdirectory `/foo`. This is because the `/foo` subdirectory was specified with
 the receive command.
 
 .mega cc/recv2.mm
+
+** Full filesystem access
+
+The `cc`mount` can be used to mount the guest filesystem on the host. This is
+accomplished by a 9p server integrated into miniccc that serves the guest's
+filesystem over the existing connection to the command and control server.
+`cc`mount` is fully integrated with namespaces -- you may mount a VM's
+filesystem to the head node, regardless of which host is actually running the
+VM. In order to mount the filesystem, you'll need to use either the name or
+UUID of the VM:
+
+    cc mount vm-0 /mnt
+
+To list existing mounts, run it with no arguments:
+
+    cc mount
+
+You can unmount a specific VM or mount by path using:
+
+    clear cc mount [uuid or name or path].
+
+Without an argument, `clear`cc`mount` clears all mounts. This also occurs when
+you call `clear`cc`.
 
 * Examining Responses
 

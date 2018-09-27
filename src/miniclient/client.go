@@ -36,7 +36,7 @@ type Response struct {
 	More     bool // whether there are more responses coming
 
 	// Suggest is returned in response to Suggest request
-	Suggest []string `json:"omitempty"`
+	Suggest []string `json:",omitempty"`
 }
 
 type Conn struct {
@@ -256,7 +256,7 @@ func (mm *Conn) Error() error {
 }
 
 // Attach creates a CLI interface to the dialed minimega instance
-func (mm *Conn) Attach() {
+func (mm *Conn) Attach(namespace string) {
 	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
 	fmt.Println("use 'disconnect' or ^d to exit just the minimega command line")
 	fmt.Println()
@@ -269,6 +269,10 @@ func (mm *Conn) Attach() {
 	input.SetCompleter(mm.Suggest)
 
 	prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
+
+	if namespace != "" {
+		prompt = fmt.Sprintf("minimega:%v[%v]$ ", mm.url, namespace)
+	}
 
 	var quit bool
 	for {
@@ -300,6 +304,10 @@ func (mm *Conn) Attach() {
 		}
 
 		quit = false
+
+		if namespace != "" {
+			line = fmt.Sprintf("namespace %q %v", namespace, line)
+		}
 
 		mm.RunAndPrint(line, true)
 

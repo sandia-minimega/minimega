@@ -142,7 +142,7 @@ func ProcessString(input string, record bool) (<-chan Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) <-chan Responses {
-	if !c.noOp && c.Call == nil {
+	if !c.Nop && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
 
@@ -160,7 +160,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 			}
 		}
 
-		if !c.noOp {
+		if !c.Nop {
 			c.Call(c, respChan)
 		}
 
@@ -215,7 +215,7 @@ func Compile(input string) (*Command, error) {
 	}
 
 	if strings.HasPrefix(input, CommentLeader) {
-		cmd := &Command{Original: input, noOp: true}
+		cmd := &Command{Original: input, Nop: true}
 		return cmd, nil
 	}
 

@@ -55,7 +55,7 @@ func Overlays(buildPath string, c vmconfig.Config) error {
 		if err != nil {
 			return err
 		}
-		log.LogAll(stdout, log.INFO, "cp")
+		log.LogAll(stdout, log.DEBUG, "cp")
 		log.LogAll(stderr, log.ERROR, "cp")
 
 		err = cmd.Run()

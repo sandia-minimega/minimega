@@ -14,7 +14,7 @@ VLAN 100). Now, minimega assigns VLANs automatically via aliases:
 	[DMZ (2)]
 
 
-** `vlans` API
+** vlans API
 
 In the above example, minimega automatically assigned VLAN 2 to the alias
 `DMZ`. You may inspect the current VLAN assignments using the `vlans` API:
@@ -80,7 +80,7 @@ that VLAN. Users may also use this feature to blacklist VLANs by hand:
 
 	minimega[dev2]$ vlan blacklist 333
 
-** `clear`vlans` API
+** clear vlans API
 
 The `clear`vlans` API is used to delete aliases. When run with no arguments and
 a namespace is active, it will clear all the aliases for the namespace. When

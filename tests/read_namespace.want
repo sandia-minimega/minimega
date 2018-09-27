@@ -1,0 +1,24 @@
+## .columns namespace,active namespace
+namespace | active
+minimega  | true
+## namespace foo
+## .columns namespace,active namespace
+namespace | active
+foo       | true
+minimega  | false
+## namespace bar
+## .columns namespace,active namespace
+namespace | active
+bar       | true
+foo       | false
+minimega  | false
+## namespace foo namespace
+namespace | vlans    | active
+bar       |          | false
+foo       |          | true
+minimega  | 101-4096 | false
+## .columns namespace,active namespace
+namespace | active
+bar       | true
+foo       | false
+minimega  | false

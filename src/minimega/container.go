@@ -851,9 +851,6 @@ func (vm *ContainerVM) launch() error {
 		}
 	}
 
-	// write the config for this vm
-	config := vm.BaseConfig.String(vm.Namespace) + vm.ContainerConfig.String()
-	mustWrite(vm.path("config"), config)
 	mustWrite(vm.path("name"), vm.Name)
 
 	// the child process will communicate with a fake console using pipes
@@ -1129,6 +1126,9 @@ func (vm *ContainerVM) launchNetwork() error {
 	for i := range vm.Networks {
 		nic := &vm.Networks[i]
 
+		// squash driver, not used by containers
+		nic.Driver = ""
+
 		br, err := getBridge(nic.Bridge)
 		if err != nil {
 			return fmt.Errorf("get bridge: %v", err)
@@ -1158,6 +1158,59 @@ func (vm *ContainerVM) Flush() error {
 	}
 
 	return vm.BaseVM.Flush()
+}
+
+// NetworkConnect calls BaseVM.networkConnect when the container is running or
+// paused. Otherwise, it makes changes to the nic and returns.
+func (vm *ContainerVM) NetworkConnect(pos, vlan int, bridge string) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	switch vm.State {
+	case VM_RUNNING, VM_PAUSED:
+		// containers only have taps while they are running
+		return vm.BaseVM.networkConnect(pos, vlan, bridge)
+	}
+
+	if len(vm.Networks) <= pos {
+		return fmt.Errorf("no network %v, container only has %v networks", pos, len(vm.Networks))
+	}
+
+	nic := &vm.Networks[pos]
+
+	nic.VLAN = vlan
+
+	if bridge != "" {
+		nic.Bridge = bridge
+	}
+	if nic.Bridge == "" {
+		nic.Bridge = DefaultBridge
+	}
+
+	return nil
+}
+
+// NetworkDisconnect mirrors the behavior of NetworkConnect.
+func (vm *ContainerVM) NetworkDisconnect(pos int) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	switch vm.State {
+	case VM_RUNNING, VM_PAUSED:
+		// containers only have taps while they are running
+		return vm.BaseVM.networkDisconnect(pos)
+	}
+
+	if len(vm.Networks) <= pos {
+		return fmt.Errorf("no network %v, container only has %v networks", pos, len(vm.Networks))
+	}
+
+	nic := &vm.Networks[pos]
+
+	nic.Bridge = ""
+	nic.VLAN = DisconnectedVLAN
+
+	return nil
 }
 
 func (vm *ContainerVM) symlinkNetns() error {
@@ -1323,6 +1376,14 @@ func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
 	}
 
 	return res, nil
+}
+
+func (vm *ContainerVM) WriteConfig(w io.Writer) error {
+	if err := vm.BaseConfig.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return vm.ContainerConfig.WriteConfig(w)
 }
 
 func containerSetCapabilities() error {

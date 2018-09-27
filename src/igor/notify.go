@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	log "minilog"
-	"os"
 	"os/exec"
 	"text/template"
 	"time"
@@ -25,7 +24,12 @@ cronjob rather than by the users themselves.`,
 func runNotify(cmd *Command, args []string) {
 	log.Info("notifying users of upcoming and expiring reservations")
 
-	if os.Getuid() != 0 {
+	user, err := getUser()
+	if err != nil {
+		log.Fatalln("Cannot determine current user", err)
+	}
+
+	if user.Username != "root" {
 		log.Fatalln("only root can notify users")
 	}
 

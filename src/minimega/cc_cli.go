@@ -11,20 +11,32 @@ import (
 	"fmt"
 	"minicli"
 	log "minilog"
+	"net"
+	"os"
 	"ron"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 )
+
+type ccMount struct {
+	// Name of the VM, kept to help with unmount
+	Name string
+	// Addr for UFS
+	Addr string
+	// Path where the filesystem is mounted
+	Path string
+}
 
 var ccCLIHandlers = []minicli.Handler{
 	{ // cc
 		HelpShort: "command and control commands",
 		HelpLong: `
-Command and control for virtual machines running the miniccc client. Commands
-may include regular commands, backgrounded commands, and any number of sent
-and/or received files. Commands will be executed in command creation order. For
-example, to send a file 'foo' and display the contents on a remote VM:
+Command and control for VMs running the miniccc client. Commands may include
+regular commands, backgrounded commands, and any number of sent and/or received
+files. Commands will be executed in command creation order. For example, to
+send a file 'foo' and display the contents on a remote VM:
 
 	cc send foo
 	cc exec cat foo
@@ -59,14 +71,27 @@ treated as tags:
 
 	cc filter foo=bar
 
-When a namespace is active, there is an implicit filter for vms with the
-provided namespace.
+Users can also filter by any column in "vm info" using a similar syntax:
+
+	cc filter name=server
+	cc filter vlan=DMZ
+
+"vm info" columns take precedance over tags when both define the same key.
+
+"cc mount" allows direct access to a guest's filesystem over the command and
+control connection. When given a VM uuid or name and a path, the VM's
+filesystem is mounted to the local machine at the provided path. "cc mount"
+without arguments displays the existing mounts. Users can use "clear cc mount"
+to unmount the filesystem of one or all VMs. This should be done before killing
+or stopping the VM ("clear namespace <name>" will handle this automatically).
 
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
 			"cc <listen,> <port>",
 			"cc <clients,>",
+			"cc <filter,> [filter]...",
+			"cc <commands,>",
 
 			"cc <prefix,> [prefix]",
 
@@ -81,10 +106,6 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <log,> level <debug,info,warn,error,fatal>",
 
-			"cc <commands,>",
-
-			"cc <filter,> [filter]...",
-
 			"cc <responses,> <id or prefix or all> [raw,]",
 
 			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
@@ -94,6 +115,20 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <delete,> <response,> <id or prefix or all>",
 		},
 		Call: wrapBroadcastCLI(cliCC),
+	},
+	{ // cc mount
+		HelpShort: "list mounted filesystems",
+		Patterns: []string{
+			"cc mount",
+		},
+		Call: cliCCMount,
+	},
+	{ // cc mount uuid
+		HelpShort: "mount VM filesystem",
+		Patterns: []string{
+			"cc mount <uuid or name> [path]",
+		},
+		Call: cliCCMountUUID,
 	},
 	{ // clear cc
 		HelpShort: "reset command and control state",
@@ -107,7 +142,14 @@ See "help cc" for more information.`,
 			"clear cc <prefix,>",
 			"clear cc <responses,>",
 		},
-		Call: wrapBroadcastCLI(cliCCClear),
+		Call: wrapSimpleCLI(cliCCClear),
+	},
+	{ // clear cc mount
+		HelpShort: "unmount VM filesystem",
+		Patterns: []string{
+			"clear cc mount [uuid or name or path]",
+		},
+		Call: cliCCClearMount,
 	},
 }
 
@@ -140,7 +182,7 @@ func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			}
 		}
 
-		return errors.New("unreachable")
+		return unreachable()
 	}
 
 	// If no sub handler, display the number of clients instead
@@ -260,7 +302,7 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				parts = parts[1:]
 				fallthrough
 			default:
-				// Implicit filter on a tag
+				// Implicit filter on a tag or `vm info` field
 				if filter.Tags == nil {
 					filter.Tags = make(map[string]string)
 				}
@@ -587,7 +629,7 @@ func cliCCDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		return ns.ccServer.DeleteResponses(s)
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -599,26 +641,302 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	return ns.ccServer.Listen(port)
 }
 
-func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	for what := range ccCliSubHandlers {
-		// We only want to clear something if it was specified on the
-		// command line or if we're clearing everything (nothing was
-		// specified).
-		if c.BoolArgs[what] || len(c.BoolArgs) == 0 {
-			log.Info("clearing %v in namespace `%v`", what, ns.Name)
+// cliCCMount needs to collect mounts from both the local ccMounts for the
+// namespace and across the cluster.
+func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
 
-			switch what {
-			case "filter":
-				ns.ccFilter = nil
-			case "commands":
-				ns.ccServer.ClearCommands()
-			case "responses":
-				ns.ccServer.ClearResponses()
-			case "prefix":
-				ns.ccPrefix = ""
+	// makeResponse creates a response from the namespace's ccMounts
+	makeResponse := func() *minicli.Response {
+		resp := &minicli.Response{Host: hostname}
+
+		resp.Header = []string{"name", "uuid", "addr", "path"}
+
+		for uuid, mnt := range ns.ccMounts {
+			resp.Tabular = append(resp.Tabular, []string{
+				mnt.Name,
+				uuid,
+				mnt.Addr,
+				mnt.Path,
+			})
+		}
+
+		return resp
+	}
+
+	// local behavior, see cli.go
+	if c.Source != "" {
+		respChan <- minicli.Responses{makeResponse()}
+		return
+	}
+
+	var res minicli.Responses
+
+	// LOCK: this is a CLI handler so we already hold the cmdLock.
+	for resps := range runCommands(namespaceCommands(ns, c)...) {
+		for _, resp := range resps {
+			res = append(res, resp)
+		}
+	}
+
+	// if local node is not in namespace, append local response too
+	if !ns.Hosts[hostname] {
+		res = append(res, makeResponse())
+	}
+
+	respChan <- res
+
+	return
+}
+
+func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	resp := &minicli.Response{Host: hostname}
+
+	id := c.StringArgs["uuid"]
+	path := c.StringArgs["path"]
+
+	if path == "" && c.Source == "" {
+		// TODO: we could generate a sane default
+		resp.Error = "must provide a mount path"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if _, err := os.Stat(path); path != "" && os.IsNotExist(err) {
+		resp.Error = "mount point does not exist"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	var vm VM
+
+	// If we're doing the local behavior, only look at the local VMs.
+	// Otherwise, look globally. See note in cli.go.
+	if c.Source == "" {
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		for _, vm2 := range globalVMs(ns) {
+			if vm2.GetName() == id || vm2.GetUUID() == id {
+				vm = vm2
+				break
+			}
+		}
+	} else {
+		vm = ns.VMs.FindVM(id)
+	}
+
+	if vm == nil {
+		resp.Error = vmNotFound(id).Error()
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// sanity check
+	if c.Source != "" && vm.GetHost() != hostname {
+		resp.Error = "holy heisenvm"
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if vm.GetHost() == hostname {
+		// VM is running locally
+		if mnt, ok := ns.ccMounts[vm.GetUUID()]; ok {
+			resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		// Start UFS
+		port, err := ns.ccServer.ListenUFS(vm.GetUUID())
+		if err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Debug("ufs for %v started on %v", vm.GetUUID(), port)
+
+		mnt := ccMount{
+			Name: vm.GetName(),
+			Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
+			Path: path,
+		}
+
+		if path == "" {
+			ns.ccMounts[vm.GetUUID()] = mnt
+
+			resp.Response = strconv.Itoa(port)
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Info("mount for %v from :%v to %v", vm.GetUUID(), port, path)
+
+		// do the mount
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+
+		if err := syscall.Mount("127.0.0.1", path, "9p", 0, opts); err != nil {
+			if err := ns.ccServer.DisconnectUFS(vm.GetUUID()); err != nil {
+				// zombie UFS
+				log.Error("unable to disconnect ufs for %v: %v", vm.GetUUID(), err)
+			}
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		ns.ccMounts[vm.GetUUID()] = mnt
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if mnt, ok := ns.ccMounts[vm.GetUUID()]; ok {
+		resp.Error = fmt.Sprintf("already connected to %v", mnt.Addr)
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	// VM is running on a remote host
+	cmd := minicli.MustCompilef("namespace %v cc mount %v", ns.Name, vm.GetUUID())
+	cmd.SetSource(ns.Name)
+	cmd.SetRecord(false)
+
+	respChan2, err := meshageSend(cmd, vm.GetHost())
+	if err != nil {
+		resp.Error = err.Error()
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	var port int
+
+	for resps := range respChan2 {
+		for _, resp := range resps {
+			// error from previous response... there should only be one
+			if err != nil {
+				continue
+			}
+
+			if resp.Error != "" {
+				err = errors.New(resp.Error)
+			} else {
+				port, err = strconv.Atoi(resp.Response)
 			}
 		}
 	}
 
-	return nil
+	if err != nil {
+		resp.Error = err.Error()
+	} else if port == 0 {
+		resp.Error = "unable to find UFS port"
+	} else {
+		log.Info("remote mount for %v from %v:%v to %v", vm.GetUUID(), vm.GetHost(), port, path)
+
+		addr, err := net.ResolveIPAddr("ip", vm.GetHost())
+		if err != nil {
+			resp.Error = err.Error()
+
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
+		log.Info("resolved host %v to %v", vm.GetHost(), addr)
+
+		// do the (remote) mount
+		opts := fmt.Sprintf("trans=tcp,port=%v,version=9p2000", port)
+
+		if err := syscall.Mount(addr.IP.String(), path, "9p", 0, opts); err != nil {
+			resp.Error = err.Error()
+		} else {
+			ns.ccMounts[vm.GetUUID()] = ccMount{
+				Name: vm.GetName(),
+				Addr: fmt.Sprintf("%v:%v", vm.GetHost(), port),
+				Path: path,
+			}
+		}
+	}
+
+	respChan <- minicli.Responses{resp}
+	return
+}
+
+func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// local behavior, see cli.go
+	if c.Source != "" {
+		for what := range ccCliSubHandlers {
+			// We only want to clear something if it was specified on the
+			// command line or if we're clearing everything (nothing was
+			// specified).
+			if c.BoolArgs[what] || len(c.BoolArgs) == 0 {
+				log.Info("clearing %v in namespace `%v`", what, ns.Name)
+
+				switch what {
+				case "filter":
+					ns.ccFilter = nil
+				case "commands":
+					ns.ccServer.ClearCommands()
+				case "responses":
+					ns.ccServer.ClearResponses()
+				case "prefix":
+					ns.ccPrefix = ""
+				}
+			}
+		}
+
+		if len(c.BoolArgs) == 0 {
+			// clear mounts too (not a sub handler)
+			if err := ns.clearCCMount(""); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	// local clean up
+	if err := ns.clearCCMount(""); err != nil {
+		return err
+	}
+
+	// fan out behavior
+	// LOCK: this is a CLI handler so we already hold the cmdLock.
+	return consume(runCommands(namespaceCommands(ns, c)...))
+}
+
+func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
+	ns := GetNamespace()
+
+	resp := &minicli.Response{Host: hostname}
+
+	id := c.StringArgs["uuid"]
+
+	if err := ns.clearCCMount(id); err != nil {
+		resp.Error = err.Error()
+
+		respChan <- minicli.Responses{resp}
+		return
+	}
+
+	if c.Source == "" {
+		// LOCK: this is a CLI handler so we already hold the cmdLock.
+		err := consume(runCommands(namespaceCommands(ns, c)...))
+		if err != nil {
+			resp.Error = err.Error()
+		}
+	}
+
+	respChan <- minicli.Responses{resp}
+	return
 }

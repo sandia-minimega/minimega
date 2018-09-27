@@ -84,6 +84,8 @@ func report(reportWait time.Duration) {
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
 		esmtp := smtpReportMail - lastsmtpReportMail
+
+		lastDnsReportHits = dnsReportHits
 		lastftpReportHits = ftpReportHits
 		lastftpTLSReportHits = ftpTLSReportHits
 		lasthttpReportHits = httpReportHits

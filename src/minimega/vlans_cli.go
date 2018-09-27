@@ -14,7 +14,7 @@ import (
 	"vlans"
 )
 
-var allocatedVLANs = vlans.NewAllocatedVLANs()
+var VLANs = vlans.NewVLANs()
 
 var vlansCLIHandlers = []minicli.Handler{
 	{ // vlans
@@ -74,25 +74,20 @@ func cliVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	// No match, must want to just print
 	resp.Header = []string{"alias", "vlan"}
-	resp.Tabular = allocatedVLANs.Tabular(ns.Name)
+	resp.Tabular = vlans.Tabular(ns.Name)
 
 	return nil
 }
 
 func cliVLANsAdd(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	// Prepend `<namespace>//` if it doesn't look like the user already
-	// included it.
 	alias := c.StringArgs["alias"]
-	if !strings.Contains(alias, vlans.AliasSep) {
-		alias = ns.Name + vlans.AliasSep + alias
-	}
 
 	vlan, err := strconv.Atoi(c.StringArgs["vlan"])
 	if err != nil {
 		return errors.New("expected integer VLAN")
 	}
 
-	err = allocatedVLANs.AddAlias(alias, vlan)
+	err = vlans.AddAlias(ns.Name, alias, vlan)
 	if err == nil {
 		// update file so that we have a copy of the vlans if minimega crashes
 		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
@@ -119,14 +114,14 @@ func cliVLANsRange(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			return errors.New("expected min > max")
 		}
 
-		return allocatedVLANs.SetRange(name, min, max)
+		return vlans.SetRange(name, min, max)
 	}
 
 	// Must want to display the ranges
 	resp.Header = []string{"min", "max", "next"}
 	resp.Tabular = [][]string{}
 
-	for prefix, r := range allocatedVLANs.GetRanges() {
+	for prefix, r := range vlans.GetRanges() {
 		if name != prefix {
 			continue
 		}
@@ -149,7 +144,7 @@ func cliVLANsBlacklist(ns *Namespace, c *minicli.Command, resp *minicli.Response
 			return errors.New("expected integer VLAN")
 		}
 
-		allocatedVLANs.Blacklist(vlan)
+		vlans.Blacklist(vlan)
 		return nil
 	}
 
@@ -157,7 +152,7 @@ func cliVLANsBlacklist(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	resp.Header = []string{"vlan"}
 	resp.Tabular = [][]string{}
 
-	for _, v := range allocatedVLANs.GetBlacklist() {
+	for _, v := range vlans.GetBlacklist() {
 		resp.Tabular = append(resp.Tabular,
 			[]string{
 				strconv.Itoa(v),
@@ -172,11 +167,11 @@ func cliClearVLANs(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	if prefix == Wildcard {
 		log.Info("resetting VLAN state")
-		allocatedVLANs = vlans.NewAllocatedVLANs()
+		vlans.Default = vlans.NewVLANs()
 		return nil
 	}
 
-	allocatedVLANs.Delete(ns.Name, prefix)
+	vlans.Delete(ns.Name, prefix)
 	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
 	return nil
@@ -191,7 +186,7 @@ func cliVLANSuggest(ns *Namespace, prefix string) []string {
 		prefix = ns.Name + vlans.AliasSep + prefix
 	}
 
-	res := allocatedVLANs.GetAliases(prefix)
+	res := vlans.GetAliases(ns.Name)
 
 	for i, v := range res {
 		res[i] = strings.TrimPrefix(v, ns.Name+vlans.AliasSep)

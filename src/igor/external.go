@@ -18,10 +18,17 @@ func processWrapper(args ...string) (string, error) {
 		return "", fmt.Errorf("empty argument list")
 	}
 
+	log.Debug("running %v", args)
+
 	start := time.Now()
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	stop := time.Now()
+
 	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
+
+	if err != nil {
+		log.Debug("error running %v: %v %v", args, err, string(out))
+	}
 
 	return string(out), err
 }

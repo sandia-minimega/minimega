@@ -29,17 +29,17 @@ type Command struct {
 	// not. Must be set before the Command is executed.
 	Preprocess bool
 
-	// Set when the command is intentionally a NoOp (the original string
+	// Set when the command is intentionally a No-op (the original string
 	// contains just a comment). This was added to ensure that lines containing
 	// only a comment are recorded in the history.
-	noOp bool
+	Nop bool
 
 	// Source allows developers to keep track of where the command originated
 	// from. Setting and using this is entirely up to developers using minicli.
 	Source string
 }
 
-func newCommand(pattern patternItems, input *Input, call CLIFunc) (*Command, int, bool) {
+func newCommand(pattern PatternItems, input *Input, call CLIFunc) (*Command, int, bool) {
 	exact := true
 	cmd := Command{
 		Original:   input.Original,

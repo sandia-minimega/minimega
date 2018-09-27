@@ -18,7 +18,7 @@ Although minimega is decentralized, we like to pick one node as a
 head node. This node is then the one that will store the minimega
 tree, plus any disk images or results files we may generate. We
 like to put the minimega tree under `/opt`, as mentioned in the
-[[installing.article][installation article]]
+[[installing.article][installation article]].
 
 ** Passwordless login
 
@@ -84,10 +84,10 @@ for that vlan as if on an isolated network.
 It is also possible to have multiple, isolated vlans running on several nodes
 in a cluster. That is, you can have nodes A and B both running VMs with vlans
 100 and 200, and Open vSwitch and your switch hardware will isolate the two
-networks, even though the traffic is going to both physical nodes. 
+networks, even though the traffic is going to both physical nodes.
 
 If software defined networking and setting up Open vSwitch is new to you, check
-out the [[http://openvswitch.org][Open vSwitch website]] for more information. 
+out the [[http://openvswitch.org][Open vSwitch website]] for more information.
 
 ** Configuring Open vSwitch for cluster operation
 
@@ -118,10 +118,10 @@ You can create the bridge manually using the following commands, although
 so *do*not*run*these*commands*over*ssh*:
 
 	$ ovs-vsctl add-br mega_bridge
-	
+
 	# This will drop you from the network
 	$ ovs-vsctl add-port mega_bridge eth0
-	
+
 	# Now we can get an IP for the bridge instead
 	$ dhclient mega_bridge
 

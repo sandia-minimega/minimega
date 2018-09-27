@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	log "minilog"
-	"net"
 )
 
 const (
@@ -59,7 +58,7 @@ func (s *Server) Reverse(filter *Filter, source int, host string, dest int) erro
 
 // Trunk reads data from remote, constructs a *Message, and sends it using fn.
 // Returns the first error.
-func Trunk(remote net.Conn, uuid string, fn func(*Message) error) {
+func Trunk(remote io.ReadCloser, uuid string, fn func(*Message) error) {
 	var n int
 	var err error
 

@@ -39,8 +39,10 @@ var externalDependencies = map[string]bool{
 	"cp":        true, // used in disk.go
 	"qemu-img":  true, // used in disk.go
 	"ntfs-3g":   true, // used in disk.go
+	"blockdev":  true, // used in disk.go
 	"ovs-vsctl": true, // used in external.go
 	"taskset":   true, // used in optimize.go
+	"tar":       true, // used in cli.go
 }
 
 func init() {

@@ -55,13 +55,23 @@ type vncKBPlayback struct {
 	closed     bool          // set after playback closed
 }
 
-// playEvents writes events from the out channel to the vnc connection.
+// writeEvents reads events from the out channel and write them to the vnc
+// connection. Closes the connection when it drains the channel.
 func (v *vncKBPlayback) writeEvents() {
+	defer v.Conn.Close()
+
 	for e := range v.out {
 		if err := e.Write(v.Conn); err != nil {
 			log.Error("unable to write vnc event: %v", err)
 			break
 		}
+	}
+
+	// stop ourselves in a separate goroutine to avoid a deadlock
+	go v.Stop()
+
+	for range v.out {
+		// drain the channel
 	}
 }
 
@@ -127,6 +137,55 @@ func (v *vncPlayer) Inject(vm *KvmVM, s string) error {
 	// This is an injected LoadFile event without a running playback. This is
 	// equivalent to starting a new vnc playback.
 	return v.playbackKB(vm, e.(string))
+}
+
+func (v *vncPlayer) Stop(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Stop()
+	})
+}
+
+func (v *vncPlayer) Pause(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Pause()
+	})
+}
+
+func (v *vncPlayer) Continue(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Continue()
+	})
+}
+
+func (v *vncPlayer) Step(vm *KvmVM) error {
+	return v.apply(vm, func(p *vncKBPlayback) error {
+		return p.Step()
+	})
+}
+
+func (v *vncPlayer) GetStep(vm *KvmVM) (string, error) {
+	var res string
+
+	err := v.apply(vm, func(p *vncKBPlayback) (err error) {
+		res, err = p.GetStep()
+		return
+	})
+
+	return res, err
+}
+
+func (v *vncPlayer) apply(vm *KvmVM, fn func(*vncKBPlayback) error) error {
+	v.Lock()
+	defer v.Unlock()
+
+	// clear out any old playbacks
+	v.reap()
+
+	if p := v.m[vm.Name]; p != nil {
+		return fn(p)
+	}
+
+	return fmt.Errorf("kb playback not found for %v", vm.Name)
 }
 
 // Clear stops all playbacks
@@ -269,7 +328,6 @@ func (v *vncKBPlayback) playFile(parent *os.File, filename string) error {
 				return err
 			}
 		}
-
 	}
 
 	return nil
@@ -352,11 +410,16 @@ func (v *vncKBPlayback) Start(filename string) error {
 
 	go v.writeEvents()
 	go func() {
-		defer v.Stop()
-
 		if err := v.playFile(nil, filename); err != nil {
 			log.Error("playback failed: %v", err)
 		}
+
+		// finished producing -- close output so the underlying connection
+		// closes (see writeEvents)
+		close(v.out)
+
+		// finished with this playback
+		v.Stop()
 	}()
 
 	return nil

@@ -13,8 +13,6 @@ import (
 	"os"
 	"path/filepath"
 	"ranges"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -140,32 +138,13 @@ func runSub(cmd *Command, args []string) {
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes
-	duration := 0
-
-	v, err := strconv.Atoi(subT)
-	if err == nil {
-		duration = v
-	} else {
-		index := strings.Index(subT, "d")
-		if index > 0 {
-			days, err := strconv.Atoi(subT[:index])
-			if err != nil {
-				log.Fatal("unable to parse -t: %v", err)
-			}
-			duration = days * 24 * 60 // convert to minutes
-		}
-
-		if index+1 < len(subT) {
-			v, err := time.ParseDuration(subT[index+1:])
-			if err != nil {
-				log.Fatal("unable to parse -t: %v", err)
-			}
-			duration += int(v / time.Minute)
-		}
-	}
-
-	if duration < MINUTES_PER_SLICE { //1 slice minimum reservation time
-		duration = MINUTES_PER_SLICE
+	duration, err := parseDuration(subT)
+	if err != nil {
+		log.Fatal("unable to parse -t: %v", err)
+	} else if duration <= 0 {
+		log.Fatal("Please specify a positive value for -t")
+	} else if duration%MINUTES_PER_SLICE != 0 { // Reserve at least (duration) minutes worth of slices, in increments of MINUTES_PER_SLICE
+		duration = (duration/MINUTES_PER_SLICE + 1) * MINUTES_PER_SLICE
 	}
 	log.Debug("duration: %v minutes", duration)
 
@@ -186,7 +165,7 @@ func runSub(cmd *Command, args []string) {
 
 	// Validate the cobbler profile
 	if subProfile != "" {
-		cobblerProfiles := getCobblerProfiles()
+		cobblerProfiles := CobblerProfiles()
 		if !cobblerProfiles[subProfile] {
 			log.Fatal("Cobbler profile does not exist: %v", subProfile)
 		}
@@ -222,9 +201,15 @@ func runSub(cmd *Command, args []string) {
 			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
 		}
 	}
-	if user.Username != "root" && igorConfig.TimeLimit > 0 {
-		if duration > igorConfig.TimeLimit {
-			log.Fatal("Only root can make a reservation longer than %v minutes", igorConfig.TimeLimit)
+	if user.Username != "root" {
+		// nodes is only set if using subW
+		n := len(nodes)
+		if subN > 0 {
+			// must be using subN
+			n = subN
+		}
+		if err := checkTimeLimit(n, duration); err != nil {
+			log.Fatalln(err)
 		}
 	}
 
@@ -321,17 +306,16 @@ VlanLoop:
 	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
 
-	emitReservationLog("CREATED", reservation)
-
 	Schedule = newSched
 
 	// update the network config
 	err = networkSet(reservation.Hosts, vlan)
 	if err != nil {
 		// TODO: we may leak a kernel and initrd here
-		log.Fatal("error setting network isolation: %v", err)
+		log.Fatal("unable to set up network isolation")
 	}
 
-	putReservations()
-	putSchedule()
+	emitReservationLog("CREATED", reservation)
+
+	dirty = true
 }
