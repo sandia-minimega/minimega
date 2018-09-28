@@ -70,7 +70,8 @@ type VM interface {
 
 	SetCCActive(bool)
 	HasCC() bool
-	Connect(*ron.Server) error
+	Connect(*ron.Server, bool) error
+	Disconnect(*ron.Server) error
 
 	UpdateNetworks()
 

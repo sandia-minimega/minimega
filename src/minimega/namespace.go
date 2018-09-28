@@ -193,7 +193,7 @@ func (n *Namespace) Destroy() error {
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
-	n.Flush()
+	n.Flush(n.ccServer)
 
 	// Stop ron server
 	n.ccServer.Destroy()
@@ -413,31 +413,13 @@ func (n *Namespace) Schedule() error {
 // Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
 // until all the VMs are launched.
 func (n *Namespace) Launch(q *QueuedVMs) []error {
-	vms, errChan := n.VMs.Launch(n.Name, q)
-
-	// fire off goroutine to do the registration
-	go func() {
-		for vm := range vms {
-			if err := vm.Connect(n.ccServer); err != nil {
-				log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
-			}
-		}
-	}()
-
 	// collect all the errors
 	errs := []error{}
-	for err := range errChan {
+	for err := range n.VMs.Launch(n.Name, q) {
 		errs = append(errs, err)
 	}
 
 	return errs
-}
-
-// Flush wraps VMs.Flush, unregistering the flushed VMs with ron.
-func (n *Namespace) Flush() {
-	for _, vm := range n.VMs.Flush() {
-		n.ccServer.UnregisterVM(vm)
-	}
 }
 
 // NewCommand takes a command, adds the current filter and prefix, and then

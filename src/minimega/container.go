@@ -289,9 +289,6 @@ type ContainerVM struct {
 	ptyTCPListener  net.Listener
 	netns           string
 
-	// ccServer is the server we are Connect'd to
-	ccServer *ron.Server
-
 	ConsolePort int
 
 	scrollBack         *byteFifo
@@ -709,14 +706,6 @@ func (vm *ContainerVM) Start() (err error) {
 		if err := vm.launch(); err != nil {
 			return err
 		}
-
-		// Reconnect cc
-		if vm.ccServer != nil {
-			ccPath := filepath.Join(vm.effectivePath, "cc")
-			if err := vm.ccServer.ListenUnix(ccPath); err != nil {
-				return err
-			}
-		}
 	}
 
 	log.Info("starting VM: %v", vm.ID)
@@ -983,8 +972,6 @@ func (vm *ContainerVM) launch() error {
 		parentSync2.Close()
 	}
 
-	ccPath := filepath.Join(vm.effectivePath, "cc")
-
 	if err != nil {
 		// Some error occurred.. clean up the process
 		cmd.Process.Kill()
@@ -1068,11 +1055,6 @@ func (vm *ContainerVM) launch() error {
 			vm.ptyTCPListener.Close()
 		}
 
-		// cleanup cc domain socket
-		if vm.ccServer != nil {
-			vm.ccServer.CloseUnix(ccPath)
-		}
-
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
@@ -1100,20 +1082,31 @@ func (vm *ContainerVM) launch() error {
 	return nil
 }
 
-func (vm *ContainerVM) Connect(cc *ron.Server) error {
-	if !vm.Backchannel {
+func (vm *ContainerVM) Connect(cc *ron.Server, reconnect bool) error {
+	if !vm.Backchannel || reconnect {
 		return nil
 	}
 
 	cc.RegisterVM(vm)
 
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.ccServer = cc
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
 	return cc.ListenUnix(ccPath)
+}
+
+func (vm *ContainerVM) Disconnect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.UnregisterVM(vm)
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	ccPath := filepath.Join(vm.effectivePath, "cc")
+
+	return cc.CloseUnix(ccPath)
 }
 
 func (vm *ContainerVM) launchNetwork() error {

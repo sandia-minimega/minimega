@@ -734,17 +734,26 @@ func (vm *KvmVM) launch() error {
 	return nil
 }
 
-func (vm *KvmVM) Connect(cc *ron.Server) error {
+func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
 	if !vm.Backchannel {
 		return nil
 	}
 
-	cc.RegisterVM(vm)
+	if !reconnect {
+		cc.RegisterVM(vm)
+	}
 
-	// connect cc
-	ccPath := vm.path("cc")
+	return cc.DialSerial(vm.path("cc"))
+}
 
-	return cc.DialSerial(ccPath)
+func (vm *KvmVM) Disconnect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.UnregisterVM(vm)
+
+	return nil
 }
 
 func (vm *KvmVM) Hotplug(f, version, serial string) error {
