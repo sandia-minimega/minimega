@@ -9,6 +9,7 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"vmconfig"
 )
 
@@ -18,6 +19,33 @@ import (
 // executing it with bash inside of a chroot. Post build commands are executed
 // in depth-first order.
 func PostBuildCommands(buildPath string, c vmconfig.Config) error {
+	if len(c.Postbuilds) == 0 {
+		return nil
+	}
+
+	// mount /dev and /proc inside the chroot
+	proc := filepath.Join(buildPath, "proc")
+	if err := exec.Command("mount", "-t", "proc", "none", proc).Run(); err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := exec.Command("umount", proc).Run(); err != nil {
+			log.Error("unable to umount: %v", err)
+		}
+	}()
+
+	dev := filepath.Join(buildPath, "dev")
+	if err := exec.Command("mount", "-o", "bind", "/dev", dev).Run(); err != nil {
+		return err
+	}
+
+	defer func() {
+		if err := exec.Command("umount", dev).Run(); err != nil {
+			log.Error("unable to umount: %v", err)
+		}
+	}()
+
 	for _, pb := range c.Postbuilds {
 		log.Debugln("postbuild:", pb)
 
