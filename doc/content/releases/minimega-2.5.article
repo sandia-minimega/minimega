@@ -3,13 +3,26 @@ minimega 2.5 release notes
 * Introduction
 
 The minimega team is pleased to announce the release of minimega 2.5. This
-release includes improvements to make experiments more portable, an effort that
-started in 2.4, and numerous bug fixes. This release contains changes to the
-existing API which will improve user experience and programmability.
+release includes various improvements and numerous bug fixes. This release
+contains changes to the existing API which will improve user experience and
+programmability.
 
 * What's new
 
 ** Major changes and milestones
+
+*** cc synchronization
+
+miniccc and the cc server now synchronize with magic bytes ("RON") before their
+handshake so that extra data from a previous connection can be flushed from
+their buffers. This allows VMs to be shutdown/`vm`start`'d and reconnect to the
+cc server. Because of the way minimega connects to the client, we only attempt
+to reconnect after a `vm`start`. If the VM restarts (i.e. with the in-guest
+restart mechanism), we currently do not detect this to attempt a reconnect.
+
+This changes requires users to update the miniccc binaries in their VMs.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1177][#1177]].
 
 *** cc mount API
 
