@@ -77,6 +77,9 @@ type Config struct {
 
 	// Domain for email address
 	Domain string
+
+	//Igor Notify Notice time (in hours) is the amount of time before reservation expires users are notified
+	ExpirationLeadTime int
 }
 
 // Read in the configuration from the specified path.
@@ -90,5 +93,6 @@ func readConfig(path string) (c Config) {
 	if err != nil {
 		log.Fatal("Couldn't parse json: %v", err)
 	}
+
 	return
 }
