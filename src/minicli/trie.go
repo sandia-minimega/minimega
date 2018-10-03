@@ -96,7 +96,8 @@ func (p *patternTrie) setHandler(h *Handler) error {
 // compile an input into a Command.
 func (p *patternTrie) compile(input inputItems) *Command {
 	if len(input) == 0 {
-		// reached the end of the input... return a new command
+		// reached the end of the input... return a new command if there is a
+		// handler at this depth
 		if p.Handler != nil {
 			return newCommand(p.Handler.Call)
 		}
@@ -154,8 +155,8 @@ func (p *patternTrie) compile(input inputItems) *Command {
 			}
 
 			// remaining items are compiled as a nested command
-			c := newCommand(p2.Handler.Call)
-			if c.Subcommand = trie.compile(input); c.Subcommand != nil {
+			c = newCommand(p2.Handler.Call)
+			if c.Subcommand = trie.compile(input); c.Subcommand == nil {
 				c = nil
 			}
 		default:
@@ -168,6 +169,7 @@ func (p *patternTrie) compile(input inputItems) *Command {
 	}
 
 	if len(cmds) == 1 {
+		cmds[0].Original = input.String()
 		return cmds[0]
 	} else if len(cmds) > 1 {
 		log.Warn("ambiguous command, found %v possibilities", len(cmds))
