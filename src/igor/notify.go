@@ -78,8 +78,8 @@ func runNotify(cmd *Command, args []string) {
 			lowerwindow = time.Duration(23)
 			upperwindow = time.Duration(24)
 		} else {
-			lowerwindow = time.Duration(igorConfig.ExpirationLeadTime - 1)
-			upperwindow = time.Duration(igorConfig.ExpirationLeadTime)
+			lowerwindow = time.Duration((igorConfig.ExpirationLeadTime / 60) - 1)
+			upperwindow = time.Duration(igorConfig.ExpirationLeadTime / 60)
 		}
 		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= lowerwindow*time.Hour && diff < upperwindow*time.Hour {
 			if users[r.Owner] == nil {
