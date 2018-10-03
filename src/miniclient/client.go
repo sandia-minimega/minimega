@@ -78,7 +78,6 @@ func Dial(base string) (*Conn, error) {
 			time.Sleep(backoff)
 			backoff *= 2
 		} else {
-			log.Error("%#v", err)
 			return nil, err
 		}
 	}
