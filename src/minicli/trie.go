@@ -179,21 +179,32 @@ func (p *patternTrie) compile(input inputItems) *Command {
 }
 
 // help finds all handlers with a given prefix
-//
-// TODO: remove duplicates
 func (p *patternTrie) help(input inputItems) []*Handler {
-	var res []*Handler
-
-	if len(input) == 0 {
-		if p.Handler != nil {
-			res = append(res, p.Handler)
+	handlers := map[*Handler]bool{}
+	add := func(vals ...*Handler) {
+		for _, v := range vals {
+			handlers[v] = true
 		}
-
-		for _, p2 := range p.Children {
-			res = append(res, p2.help(input)...)
+	}
+	flatten := func() []*Handler {
+		var res []*Handler
+		for h := range handlers {
+			res = append(res, h)
 		}
 
 		return res
+	}
+
+	if len(input) == 0 {
+		if p.Handler != nil {
+			add(p.Handler)
+		}
+
+		for _, p2 := range p.Children {
+			add(p2.help(input)...)
+		}
+
+		return flatten()
 	}
 
 	for k, p2 := range p.Children {
@@ -204,23 +215,23 @@ func (p *patternTrie) help(input inputItems) []*Handler {
 				continue
 			}
 
-			res = append(res, p2.help(input[1:])...)
+			add(p2.help(input[1:])...)
 		case stringItem, stringItem | optionalItem:
 			// ignore the item itself
-			res = append(res, p2.help(input[1:])...)
+			add(p2.help(input[1:])...)
 		case listItem, listItem | optionalItem, commandItem, commandItem | optionalItem:
 			if p.Handler == nil {
 				log.Warn("found list item without handler... odd")
 				continue
 			}
 
-			res = append(res, p.Handler)
+			add(p.Handler)
 		default:
 			log.Warn("found unknown pattern item: %v", k.Type)
 		}
 	}
 
-	return res
+	return flatten()
 }
 
 func (p *patternTrie) dump(depth int) {
