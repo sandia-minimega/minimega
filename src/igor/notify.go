@@ -74,7 +74,7 @@ func runNotify(cmd *Command, args []string) {
 		diff = res.End.Sub(now)
 		var lowerwindow, upperwindow time.Duration
 
-		if igorConfig.ExpirationLeadTime < 24 { //check if there is a leadtime configured if not assign default value
+		if igorConfig.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value
 			lowerwindow = time.Duration(23)
 			upperwindow = time.Duration(24)
 		} else {
