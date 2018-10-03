@@ -78,7 +78,7 @@ type Config struct {
 	// Domain for email address
 	Domain string
 
-	//Igor Notify Notice time (in hours) is the amount of time before reservation expires users are notified
+	//Igor Notify Notice time (in minutes) is the amount of time before reservation expires users are notified
 	ExpirationLeadTime int
 }
 
