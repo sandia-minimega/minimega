@@ -54,6 +54,10 @@ var defaultFlags = Flags{
 }
 
 var handlers []*Handler
+var trie = &patternTrie{
+	Children: make(map[patternTrieKey]*patternTrie),
+}
+
 var history []string // command history for the write command
 
 // HistoryLen is the length of the history of commands that minicli stores.
@@ -91,6 +95,10 @@ func Reset() {
 	handlers = nil
 	history = nil
 	firstHistoryTruncate = true
+
+	trie = &patternTrie{
+		Children: make(map[patternTrieKey]*patternTrie),
+	}
 }
 
 // MustRegister calls Register for a handler and panics if the handler has an
@@ -113,8 +121,7 @@ func Register(h *Handler) error {
 	h.SharedPrefix = h.findPrefix()
 
 	handlers = append(handlers, h)
-
-	return nil
+	return trie.Add(h)
 }
 
 // Process raw input text. An error is returned if parsing the input text
@@ -219,7 +226,10 @@ func Compile(input string) (*Command, error) {
 		return cmd, nil
 	}
 
-	_, cmd := closestMatch(in)
+	var cmd *Command
+	if h := trie.findHandler(in.items); h != nil {
+		cmd, _, _ = h.compile(in)
+	}
 	if cmd != nil {
 		flagsLock.Lock()
 		defer flagsLock.Unlock()
