@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/peterh/liner"
 )
@@ -62,10 +63,24 @@ func Dial(base string) (*Conn, error) {
 		url: path.Join(base, "minimega"),
 	}
 
+	var conn net.Conn
+
+	var backoff = 10 * time.Millisecond
+
 	// try to connect to the local minimega
-	conn, err := net.Dial("unix", mm.url)
-	if err != nil {
-		return nil, err
+	for {
+		var err error
+
+		conn, err = net.Dial("unix", mm.url)
+		if err == nil {
+			break
+		} else if err, ok := err.(*net.OpError); ok && err.Temporary() {
+			time.Sleep(backoff)
+			backoff *= 2
+		} else {
+			log.Error("%#v", err)
+			return nil, err
+		}
 	}
 
 	mm.conn = conn
