@@ -226,20 +226,19 @@ func Compile(input string) (*Command, error) {
 		return cmd, nil
 	}
 
-	var cmd *Command
-	if h := trie.findHandler(in.items); h != nil {
-		cmd, _, _ = h.compile(in)
-	}
-	if cmd != nil {
-		flagsLock.Lock()
-		defer flagsLock.Unlock()
-
-		cmd.Record = defaultFlags.Record
-		cmd.Preprocess = defaultFlags.Preprocess
-		return cmd, nil
+	cmd := trie.compile(in.items)
+	if cmd == nil {
+		return nil, fmt.Errorf("invalid command: `%s`", input)
 	}
 
-	return nil, fmt.Errorf("invalid command: `%s`", input)
+	cmd.Original = input
+
+	flagsLock.Lock()
+	defer flagsLock.Unlock()
+
+	cmd.Record = defaultFlags.Record
+	cmd.Preprocess = defaultFlags.Preprocess
+	return cmd, nil
 }
 
 // Compilef wraps fmt.Sprintf and Compile
@@ -299,19 +298,7 @@ func Help(input string) string {
 		return printHelpShort(handlers)
 	}
 
-	matches := []*Handler{}
-	max := -1
-
-	for _, h := range handlers {
-		_, length, _ := h.compile(inputItems)
-
-		if length > max {
-			max = length
-			matches = []*Handler{h}
-		} else if length == max {
-			matches = append(matches, h)
-		}
-	}
+	matches := trie.help(inputItems.items)
 
 	if len(matches) == 0 {
 		return fmt.Sprintf("no help entry for `%s`", input)

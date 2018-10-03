@@ -50,32 +50,25 @@ func (p *patternTrie) add(v []PatternItem, h *Handler) error {
 		}
 	}
 
-	var keys []patternTrieKey
+	var keys []string
 
 	switch {
 	case v[0].IsLiteral():
-		keys = append(keys, patternTrieKey{
-			Type:  v[0].Type,
-			Value: v[0].Text,
-		})
+		keys = append(keys, v[0].Text)
 	case v[0].IsChoice():
 		// explode all the options into literals
 		for _, opt := range v[0].Options {
-			keys = append(keys, patternTrieKey{
-				Type:  literalItem,
-				Value: opt,
-			})
+			keys = append(keys, opt)
 		}
 	default:
-		keys = append(keys, patternTrieKey{
-			Type:  v[0].Type,
-			Value: v[0].Key,
-		})
+		keys = append(keys, v[0].Key)
 	}
 
-	for _, key := range keys {
-		// clear optional since we have already dealt with it
-		key.Type = key.Type & ^optionalItem
+	for _, k := range keys {
+		key := patternTrieKey{
+			Type:  v[0].Type,
+			Value: k,
+		}
 
 		if _, ok := p.Children[key]; !ok {
 			p.Children[key] = &patternTrie{
@@ -100,53 +93,132 @@ func (p *patternTrie) setHandler(h *Handler) error {
 	return nil
 }
 
-// findHandler finds the handler based on the input.
-//
-// TODO: we should change this so that it actually does the compilation and
-// returns a command.
-func (p *patternTrie) findHandler(input inputItems) *Handler {
+// compile an input into a Command.
+func (p *patternTrie) compile(input inputItems) *Command {
 	if len(input) == 0 {
-		return p.Handler
+		// reached the end of the input... return a new command
+		if p.Handler != nil {
+			return newCommand(p.Handler.Call)
+		}
+
+		return nil
 	}
 
-	var handlers []*Handler
+	var cmds []*Command
 
-	for k, v := range p.Children {
-		switch k.Type {
+	for k, p2 := range p.Children {
+		var c *Command
+
+		// ignore optional flag since we have input to consume
+		switch k.Type & ^optionalItem {
 		case literalItem:
-			// failed to match literal
+			// must match literal for current item
 			if !strings.HasPrefix(k.Value, input[0].Value) {
 				continue
 			}
+
+			c = p2.compile(input[1:])
 		case stringItem:
-			// anything matches
-		case listItem:
-			// anything matches and throw away rest of input
-		case commandItem:
-			// can't make a wrong choice (well, not at this stage at least)
-			handlers = append(handlers, p.Handler)
-			continue
+			// current item becomes StringArg if the remainder compiles
+			c = p2.compile(input[1:])
+			if c != nil {
+				c.StringArgs[k.Value] = input[0].Value
+			}
 		case choiceItem:
-			// this should never happen since we expand all choices into
-			// literals in patternTrie.add
+			// must match literal for current item
+			if !strings.HasPrefix(k.Value, input[0].Value) {
+				continue
+			}
+
+			// current item becomes BoolArgs if the remainder compiles
+			c = p2.compile(input[1:])
+			if c != nil {
+				c.BoolArgs[k.Value] = true
+			}
+		case listItem:
+			if p2.Handler == nil {
+				log.Warn("found list item without handler... odd")
+				continue
+			}
+
+			// remaining items become ListArgs
+			c = newCommand(p2.Handler.Call)
+			c.ListArgs[k.Value] = make([]string, len(input))
+			for i, v := range input {
+				c.ListArgs[k.Value][i] = v.Value
+			}
+		case commandItem:
+			if p2.Handler == nil {
+				log.Warn("found command item without handler... odd")
+				continue
+			}
+
+			// remaining items are compiled as a nested command
+			c := newCommand(p2.Handler.Call)
+			if c.Subcommand = trie.compile(input); c.Subcommand != nil {
+				c = nil
+			}
+		default:
+			log.Warn("found unknown pattern item: %v", k.Type)
 		}
 
-		// must be a candidate
-		if h := v.findHandler(input[1:]); h != nil {
-			handlers = append(handlers, h)
+		if c != nil {
+			cmds = append(cmds, c)
 		}
 	}
 
-	switch len(handlers) {
-	case 0:
-		return nil
-	case 1:
-		return handlers[0]
-	default:
-		// wtf
-		log.Warn("multiple handlers matched!?")
-		return nil
+	if len(cmds) == 1 {
+		return cmds[0]
+	} else if len(cmds) > 1 {
+		log.Warn("ambiguous command, found %v possibilities", len(cmds))
 	}
+
+	return nil
+}
+
+// help finds all handlers with a given prefix
+//
+// TODO: remove duplicates
+func (p *patternTrie) help(input inputItems) []*Handler {
+	var res []*Handler
+
+	if len(input) == 0 {
+		if p.Handler != nil {
+			res = append(res, p.Handler)
+		}
+
+		for _, p2 := range p.Children {
+			res = append(res, p2.help(input)...)
+		}
+
+		return res
+	}
+
+	for k, p2 := range p.Children {
+		switch k.Type {
+		case literalItem, choiceItem:
+			// must match literal for current item
+			if !strings.HasPrefix(k.Value, input[0].Value) {
+				continue
+			}
+
+			res = append(res, p2.help(input[1:])...)
+		case stringItem, stringItem | optionalItem:
+			// ignore the item itself
+			res = append(res, p2.help(input[1:])...)
+		case listItem, listItem | optionalItem, commandItem, commandItem | optionalItem:
+			if p.Handler == nil {
+				log.Warn("found list item without handler... odd")
+				continue
+			}
+
+			res = append(res, p.Handler)
+		default:
+			log.Warn("found unknown pattern item: %v", k.Type)
+		}
+	}
+
+	return res
 }
 
 func (p *patternTrie) dump(depth int) {
