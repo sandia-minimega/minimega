@@ -6,7 +6,6 @@ package main
 
 import (
 	"bytes"
-	"fmt"
 	log "minilog"
 	"os/exec"
 	"text/template"
@@ -86,8 +85,6 @@ func runNotify(cmd *Command, args []string) {
 			if users[r.Owner] == nil {
 				users[r.Owner] = &Notification{}
 			}
-			fmt.Println(r.Owner)
-			fmt.Println(users[r.Owner].Expiring)
 			users[r.Owner].Expiring = append(users[r.Owner].Expiring, res)
 		}
 	}
