@@ -72,7 +72,16 @@ func runNotify(cmd *Command, args []string) {
 		// expiring reservations are longer than two days and expire in just
 		// over 24 hours.
 		diff = res.End.Sub(now)
-		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= 23*time.Hour && diff < 24*time.Hour {
+		var lowerwindow, upperwindow time.Duration
+
+		if igorConfig.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value
+			lowerwindow = time.Duration(23)
+			upperwindow = time.Duration(24)
+		} else {
+			lowerwindow = time.Duration((igorConfig.ExpirationLeadTime / 60) - 1)
+			upperwindow = time.Duration(igorConfig.ExpirationLeadTime / 60)
+		}
+		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= lowerwindow*time.Hour && diff < upperwindow*time.Hour {
 			if users[r.Owner] == nil {
 				users[r.Owner] = &Notification{}
 			}
