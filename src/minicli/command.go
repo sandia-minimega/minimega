@@ -5,7 +5,6 @@
 package minicli
 
 type Command struct {
-	Pattern  string // the specific pattern that was matched
 	Original string // original raw input
 
 	StringArgs map[string]string

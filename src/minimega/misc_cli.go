@@ -225,7 +225,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		if !cmd.Nop {
 			for cmd := cmd; cmd != nil; cmd = cmd.Subcommand {
 				// found command to change namespace
-				if strings.HasPrefix(cmd.Pattern, "namespace") && cmd.Subcommand == nil {
+				if strings.HasPrefix(cmd.Original, "namespace") && cmd.Subcommand == nil {
 					namespace = cmd.StringArgs["name"]
 				}
 			}

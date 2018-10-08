@@ -231,6 +231,9 @@ func Compile(input string) (*Command, error) {
 		return nil, fmt.Errorf("invalid command: `%s`", input)
 	}
 
+	// patch original input
+	cmd.Original = input
+
 	flagsLock.Lock()
 	defer flagsLock.Unlock()
 
