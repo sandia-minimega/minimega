@@ -285,16 +285,18 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 				}
 			} else {
 				if statstartdate.Before(d.ActualEnd) {
-					uDuration += nodeMultiplier * d.ActualDuration
-				} else {
-					uDuration += nodeMultiplier * statstartdate.Sub(d.ActualEnd)
+					if statstartdate.Before(d.ResStart) {
+						uDuration += nodeMultiplier * d.ActualDuration
+					} else {
+						uDuration += nodeMultiplier * d.ActualEnd.Sub(statstartdate)
+					}
 				}
 
 			}
 			uResCount += 1
 			//earlyCancel := false
 			// fuzzy math here because igor takes a few seconds to delete a res
-			if (d.ResEnd.Sub(d.ActualEnd).Minutes()) > 1.0 {
+			if d.ActualEnd != empty && (d.ResEnd.Sub(d.ActualEnd).Minutes()) > 1.0 {
 				//earlyCancel = true
 				uEarlyCancel += 1
 			}
@@ -304,7 +306,6 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 
 		}
 		if statsV {
-
 			fmt.Printf("User stats for %v \n", n)
 			fmt.Printf("Total Number of Reservations: %v\n", uResCount)
 			fmt.Printf("Total Early Cancel: %v\n", uEarlyCancel)
