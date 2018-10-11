@@ -196,16 +196,24 @@ func (iom *IOMeshage) fileInfo(filename string) ([]string, int64, error) {
 }
 
 // Transactions need unique TIDs, and a corresponing channel to return
-// responses along. Register a TID and channel for the mux to respond along.
-func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
+// responses along. Returns a new TID and channel for the mux to respond along.
+func (iom *IOMeshage) newTID() (int64, <-chan *IOMMessage) {
 	iom.tidLock.Lock()
 	defer iom.tidLock.Unlock()
 
-	if _, ok := iom.TIDs[TID]; ok {
-		return fmt.Errorf("TID already exists, collision?")
+	var tid int64
+	for {
+		// can't run for more than a few iterations... surely
+		tid = iom.rand.Int63()
+
+		if _, ok := iom.TIDs[tid]; !ok {
+			break
+		}
 	}
-	iom.TIDs[TID] = c
-	return nil
+
+	c := make(chan *IOMMessage)
+	iom.TIDs[tid] = c
+	return tid, c
 }
 
 // Unregister TIDs from the mux.
