@@ -61,6 +61,7 @@ func runExtend(cmd *Command, args []string) {
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
+
 	log.Debug("Running Extend as %v", user.Username)
 
 	for _, r := range Reservations {
