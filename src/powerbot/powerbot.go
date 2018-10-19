@@ -140,6 +140,15 @@ func readConfig(filename string) (Config, error) {
 				ipmi.node = nodename
 				ret.ipmis[nodename] = ipmi
 			}
+		case "logpath":
+			if len(fields) > 1 {
+				powerbotlog := fields[1]
+				logfile, err := os.OpenFile(powerbotlog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+				if err != nil {
+					log.Fatal("failed to create logfile %v: %v", powerbotlog, err)
+				}
+				log.AddLogger("file", logfile, log.INFO, false)
+			}
 		}
 	}
 	return ret, nil
