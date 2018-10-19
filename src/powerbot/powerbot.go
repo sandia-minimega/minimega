@@ -143,6 +143,7 @@ func readConfig(filename string) (Config, error) {
 		case "logpath":
 			if len(fields) > 1 {
 				powerbotlog := fields[1]
+				log.Debug("Attempting to write to or create %v", powerbotlog)
 				logfile, err := os.OpenFile(powerbotlog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 				if err != nil {
 					log.Fatal("failed to create logfile %v: %v", powerbotlog, err)
