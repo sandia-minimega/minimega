@@ -57,9 +57,11 @@ func runExtend(cmd *Command, args []string) {
 	}
 
 	user, err := getUser()
+
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
+	log.Debug("Running Extend as %v", user.Username)
 
 	for _, r := range Reservations {
 		if r.ResName != subR {
@@ -80,7 +82,7 @@ func runExtend(cmd *Command, args []string) {
 
 		// Make sure that the user is extending a reservation that is near its
 		// completion based on the ExtendWithin config.
-		if igorConfig.ExtendWithin > 0 {
+		if igorConfig.ExtendWithin > 0 && user.Username != "root" {
 			remaining := time.Unix(r.EndTime, 0).Sub(time.Now())
 			if int(remaining.Minutes()) > igorConfig.ExtendWithin {
 				log.Fatal("reservations can only be extended if they are within %v minutes of ending", igorConfig.ExtendWithin)
