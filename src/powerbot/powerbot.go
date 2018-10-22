@@ -236,6 +236,7 @@ func main() {
 			log.Error(err.Error())
 			continue
 		}
+		log.Debug("Performing powerbot %v on %v:%v:%v with type %v", command, dev.name, dev.host, dev.port, dev.pdutype)
 		switch command {
 		case "on":
 			pdu.On(dev.outlets)
@@ -301,7 +302,7 @@ func useIPMI(s []string, c string) []string {
 		var err error
 		if ipmiData, ok := ipmis[n]; !ok {
 			ret = append(ret, n)
-			log.Info("No data for %s, skipping...", n)
+			log.Debug("No data for %s, skipping...", n)
 			continue
 		} else {
 			ipmi = NewIPMI(ipmiData.ip, ipmiData.node, ipmiData.password, config.ipmiPath, ipmiData.username)
