@@ -240,7 +240,7 @@
         console.log('Resize');
         let canvas = this.provider.context.canvas;
         canvas.width = canvas.parentElement.clientWidth;
-        canvas.height = $(window).height()*0.8;
+        canvas.height = $(window).height()*0.75;
 
         this.adjustCenter();
 
@@ -277,7 +277,7 @@
       // Adjust the canvas dimensions, based on the dimensions of
       // its parent element.
       canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = $(window).height()*0.8;
+      canvas.height = $(window).height()*0.75;
 
       // Whenever a user clicks (near) a node, emit a "node-click"
       // event along with the "id" of the clicked node.

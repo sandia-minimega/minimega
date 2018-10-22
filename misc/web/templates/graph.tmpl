@@ -3,20 +3,26 @@
       <div class="container-fluid">
         <div class="row">
           <div class="col-xs-8">
-            <host-centric-graph v-if="selectedView == 'Host'"></host-centric-graph>
+            <br>
+            <div class="dropdown">
+              <button class="btn btn-default dropdown-toggle" type="button" id="dropdownMenu1" data-toggle="dropdown">
+                <span style="font-size:32px">{{"{{"}} selectedView {{"}}"}} Graph <span class="caret"></span></span>
+              </button>
+              <ul class="dropdown-menu">
+                <li><a href="#" v-on:click="selectedView = 'Dandelion'">Dandelion Graph</a></li>
+                <li><a href="#" v-on:click="selectedView = 'Host-Centric'">Host-Centric Graph</a></li>
+                <li><a href="#" v-on:click="selectedView = 'VLAN-Centric'">VLAN-Centric Graph</a></li>
+              </ul>
+            </div>
+
+            <br>
+
+            <host-centric-graph v-if="selectedView == 'Host-Centric'"></host-centric-graph>
             <dandelion-graph v-if="selectedView == 'Dandelion'"></dandelion-graph>
-            <vlan-centric-graph v-if="selectedView == 'VLAN'" v-on:vlan-selected="vlanNodeClicked($event)"></vlan-centric-graph>
+            <vlan-centric-graph v-if="selectedView == 'VLAN-Centric'" v-on:vlan-selected="vlanNodeClicked($event)"></vlan-centric-graph>
           </div>
 
           <div class="col-xs-4">
-            <select v-model="selectedView">
-              <option>VLAN</option>
-              <option>Host</option>
-              <option>Dandelion</option>
-            </select>
-
-            <hr>
-
             <vlan-list-group ref="list"></vlan-list-group>
           </div>
         </div>
@@ -27,8 +33,8 @@
     <script type="text/javascript" src="/libs/bootstrap.min.js"></script>
     <script type="text/javascript" src="/libs/underscore.js"></script>
     <script type="text/javascript" src="/libs/underscore.string.js"></script>
-    <script type="text/javascript" src="/libs/vue/vue.js"></script>
-    <script type="text/javascript" src="/libs/vuex/vuex.js"></script>
+    <script type="text/javascript" src="/libs/vue.min.js"></script>
+    <script type="text/javascript" src="/libs/vuex.min.js"></script>
 
     <script type="text/javascript" src="/js/graph/filters/formatVMField.js"></script>
     <script type="text/javascript" src="/js/graph/utils/BoxForce.js"></script>

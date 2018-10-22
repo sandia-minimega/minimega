@@ -14,7 +14,6 @@
 
   const template = `
       <div>
-          <h3>Dandelion Graph</h3>
           <div class="btn-toolbar">
               <div class="btn-group">
                   <button class="btn btn-default" v-on:click="recenter()">

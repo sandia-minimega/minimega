@@ -21,7 +21,6 @@
 
   const template = `
       <div>
-          <h3>VLAN-Centric Graph</h3>
           <div class="btn-toolbar">
               <div class="btn-group">
                   <button class="btn btn-default" v-on:click="recenter()">
