@@ -161,9 +161,9 @@ func (stats *Stats) readLog() {
 			continue
 		}
 		//Field names in the Log Line
-		DATESTAMP := 0
-		TIMESTAMP := 1
-		ACTION := 4
+		dateStamp := 0
+		timeStamp := 1
+		action := 4
 		//Below calculates where the fields are in case parameters were moved
 		resuser, err := stats.calculateVariable("user=", fields)
 		if err {
@@ -214,19 +214,19 @@ func (stats *Stats) readLog() {
 		}
 
 		//choose action to add new reservation metric or add new usage metric
-		switch fields[ACTION] {
+		switch fields[action] {
 		case "INSTALL":
 			if !rs.After(time.Now().AddDate(0, 0, 0)) {
 				stats.addReservation(rn, ru, ri, rs, re, nodes)
 			}
 			break
 		case "DELETED":
-			ad, er := time.Parse(formatDateStamp, fields[DATESTAMP])
+			ad, er := time.Parse(formatDateStamp, fields[dateStamp])
 			if er != nil {
 				log.Fatal("%v", er)
 				break
 			}
-			at, er := time.Parse(formatTimeStamp, fields[TIMESTAMP])
+			at, er := time.Parse(formatTimeStamp, fields[timeStamp])
 			if er != nil {
 				log.Fatal("%v", er)
 				break
@@ -250,7 +250,7 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 	for n, rd := range stats.Reservations {
 		var uResCount, uEarlyCancel, uExtension int
 		var uDuration time.Duration
-		userHadValidRes := false
+		userHadvalidRes := false
 		if statsV {
 			fmt.Printf("------------------User Summary for %v ------------------\n", n)
 		}
@@ -266,10 +266,10 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 				continue //reservation hasnt started yet
 			}
 			if d.ResEnd.Before(statstartdate) {
-				continue //reservation did not have a delete in the log assume
+				continue //reservation did not have a delete in the log assume it was deleted
 			}
 			uExtension += d.NumExtensions
-			userHadValidRes = true
+			userHadvalidRes = true
 			for _, n := range d.Nodes {
 				stats.NodesUsed[n] += 1
 			}
@@ -312,7 +312,7 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 			fmt.Printf("Number of Extensions: %v\n", uExtension)
 			fmt.Printf("Total user duration: %v\n\n", fmtDuration(uDuration))
 		}
-		if userHadValidRes {
+		if userHadvalidRes {
 			stats.NumUsers += 1
 			stats.NumRes += uResCount
 			stats.TotalDurationMinutes += uDuration
@@ -343,6 +343,7 @@ func (stats *Stats) findRes(ru string, rn string, ri int, rs time.Time) (*ResDat
 	return nil, false
 }
 
+//Finds out where in the log line is a particular field of interest
 func (stats *Stats) calculateVariable(param string, fields []string) (int, bool) {
 	for i := 5; i < len(fields); i++ {
 		if strings.Contains(fields[i], param) {
@@ -352,6 +353,7 @@ func (stats *Stats) calculateVariable(param string, fields []string) (int, bool)
 	return -1, true
 }
 
+//toString of ResData Struct
 func (res *ResData) String() string {
 	var s string
 	var formatLong string = "2006-Jan-2-15:04"
