@@ -29,6 +29,8 @@ p5   | all  | 0       | 1       | 0
 p6   | all  | 0       | 1       | 0
 
 ## pipe p0 "Hello to you."
+## shell sleep 2s
+
 ## .columns name,mode,readers,writers,count pipe
 name | mode | readers | writers | count
 p0   | all  | 2       | 0       | 1
@@ -48,6 +50,7 @@ p6   | all  | 0       | 1       | 1
 ## pipe p0 "This is round 2."
 ## pipe p0 "This is round 3."
 ## pipe p0 "This is round 4."
+
 ## .columns name,mode,readers,writers,count pipe
 name | mode        | readers | writers | count
 p0   | round-robin | 2       | 0       | 5
