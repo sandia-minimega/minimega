@@ -43,7 +43,7 @@ func init() {
 
 }
 
-//Data type for individual Reservations
+// Data type for individual Reservations
 type ResData struct {
 	ResName        string
 	ResStart       time.Time
@@ -55,7 +55,7 @@ type ResData struct {
 	NumExtensions  int
 }
 
-//Data Structure to Store igor statistics
+// Data Structure to Store igor statistics
 type Stats struct {
 	NumRes               int
 	NodesUsed            map[string]int
@@ -68,31 +68,33 @@ type Stats struct {
 	Reservationsid       map[int]*ResData
 }
 
-//Main Stats function to output reservation calculations
+// Main Stats function to output reservation calculations
 func runStats(_ *Command, _ []string) {
-	globalStats := Stats{}
-	globalStats.Reservations = make(map[string][]*ResData)
-	globalStats.NodesUsed = make(map[string]int)
-	globalStats.Reservationsid = make(map[int]*ResData)
-	globalStats.readLog()
-	globalStats.NumUsers = len(globalStats.Reservations)
-	d, err := strconv.Atoi(statsD) //Day Paramater how many days in the past to collect data
+	d, err := strconv.Atoi(statsD) // Day Paramater how many days in the past to collect data
 	if err != nil {
 		log.Fatalln("Invalid Duration Specified")
 	}
+
+	gs := Stats{
+		Reservations:   make(map[string][]*ResData),
+		NodesUsed:      make(map[string]int),
+		Reservationsid: make(map[int]*ResData),
+	}
+	gs.readLog()
+	gs.NumUsers = len(gs.Reservations)
 	statstartdate := time.Now().AddDate(0, 0, -d)
-	globalStats.calculateStats(statstartdate)
-	globalStats.NumNodes = len(globalStats.NodesUsed)
+	gs.calculateStats(statstartdate)
+	gs.NumNodes = len(gs.NodesUsed)
 	fmt.Printf("------------------Global Statistics for all nodes------------------ \n")
-	fmt.Printf("Total Users: %v\n", globalStats.NumUsers)
-	fmt.Printf("Number of Nodes used: %v\n", globalStats.NumNodes)
-	fmt.Printf("Total Number of Reservations: %v\n", globalStats.NumRes)
-	fmt.Printf("Total Number of Reservations Cancelled Early: %v\n", globalStats.TotalEarlyCancels)
-	fmt.Printf("Total Number of Extensions: %v\n", globalStats.TotalExtensions)
-	fmt.Printf("Total Reservation Time: %v\n", fmtDuration(globalStats.TotalDurationMinutes))
+	fmt.Printf("Total Users: %v\n", gs.NumUsers)
+	fmt.Printf("Number of Nodes used: %v\n", gs.NumNodes)
+	fmt.Printf("Total Number of Reservations: %v\n", gs.NumRes)
+	fmt.Printf("Total Number of Reservations Cancelled Early: %v\n", gs.TotalEarlyCancels)
+	fmt.Printf("Total Number of Extensions: %v\n", gs.TotalExtensions)
+	fmt.Printf("Total Reservation Time: %v\n", fmtDuration(gs.TotalDurationMinutes))
 }
 
-//Adds reservation to a particular user. Map of user names to slices of reservations
+// Adds reservation to a particular user. Map of user names to slices of reservations
 func (stats *Stats) addReservation(rn string, ru string, ri int, start time.Time, end time.Time, nodes string) {
 	rd := ResData{}
 	rd.ResName = rn
@@ -110,48 +112,48 @@ func (stats *Stats) addReservation(rn string, ru string, ri int, start time.Time
 	}
 }
 
-//Adds the end of a reservation to a particular user's reservation.
-//Attempts to find a reservation if it does not find one assume the log was reset and create a reservation
+// Adds the end of a reservation to a particular user's reservation.
+// Attempts to find a reservation if it does not find one assume the log was reset and create a reservation
 func (stats *Stats) addEndRes(rn string, ru string, ri int, rs time.Time, re time.Time, ae time.Time, nodes string) {
-	res, found := stats.findRes(ru, rn, ri, rs)
-	if found {
+	res := stats.findRes(ru, rn, ri, rs)
+	if res != nil {
 		res.ActualEnd = ae
 		res.ActualDuration = ae.Sub(res.ResStart)
-	} else {
-		stats.addReservation(rn, ru, ri, rs, re, nodes)
-		res, _ := stats.findRes(ru, rn, ri, rs)
-		res.ActualEnd = ae
-		res.ActualDuration = ae.Sub(res.ResStart)
+		return
 	}
+	stats.addReservation(rn, ru, ri, rs, re, nodes)
+	res = stats.findRes(ru, rn, ri, rs)
+	res.ActualEnd = ae
+	res.ActualDuration = ae.Sub(res.ResStart)
 }
 
-//Extends a reservation
-//Attempts to find a reservation if it does not find one assume the log was reset and create a reservation
+// Extends a reservation
+// Attempts to find a reservation if it does not find one assume the log was reset and create a reservation
 func (stats *Stats) extendRes(rn string, ru string, ri int, rs time.Time, rex time.Time, nodes string) {
-	res, found := stats.findRes(ru, rn, ri, rs)
-	if found {
+	res := stats.findRes(ru, rn, ri, rs)
+	if res != nil {
 		res.ResEnd = rex
 		res.NumExtensions += 1
-	} else {
-		stats.addReservation(rn, ru, ri, rs, rex, nodes)
-		res := stats.Reservations[ru][len(stats.Reservations[ru])-1]
-		res.NumExtensions += 1
-		stats.Reservations[ru][len(stats.Reservations[ru])-1] = res
+		return
 	}
+	stats.addReservation(rn, ru, ri, rs, rex, nodes)
+	res = stats.findRes(ru, rn, ri, rs)
+	res.NumExtensions += 1
+	stats.Reservations[ru][len(stats.Reservations[ru])-1] = res
 
 }
 
-//Reads the logfile and adds the necessary reservations and usage time
+// Reads the logfile and adds the necessary reservations and usage time
 func (stats *Stats) readLog() {
 	f, err := os.Open(igorConfig.LogFile)
 	if err != nil {
-		fmt.Printf("unable to open log")
+		log.Fatal("unable to open log")
 	}
 	defer f.Close()
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := s.Text()
-		//Unless the log file has action ID of util.go:157: skip it
+		// Unless the log file has action ID of util.go:157: skip it
 		if !strings.Contains(line, "util.go:157:") {
 			continue
 		}
@@ -160,11 +162,12 @@ func (stats *Stats) readLog() {
 		if len(fields) < 11 {
 			continue
 		}
-		//Field names in the Log Line
+
+		// Field names in the Log Line
 		dateStamp := 0
 		timeStamp := 1
 		action := 4
-		//Below calculates where the fields are in case parameters were moved
+		// Below calculates where the fields are in case parameters were moved
 		resuser, err := stats.calculateVariable("user=", fields)
 		if err {
 			continue
@@ -213,40 +216,35 @@ func (stats *Stats) readLog() {
 			}
 		}
 
-		//choose action to add new reservation metric or add new usage metric
+		// choose action to add new reservation metric or add new usage metric
 		switch fields[action] {
+
 		case "INSTALL":
 			if !rs.After(time.Now().AddDate(0, 0, 0)) {
 				stats.addReservation(rn, ru, ri, rs, re, nodes)
 			}
-			break
 		case "DELETED":
 			ad, er := time.Parse(formatDateStamp, fields[dateStamp])
 			if er != nil {
 				log.Fatal("%v", er)
-				break
 			}
 			at, er := time.Parse(formatTimeStamp, fields[timeStamp])
 			if er != nil {
 				log.Fatal("%v", er)
-				break
 			}
 			ae := time.Date(ad.Year(), ad.Month(), ad.Day(), at.Hour(), at.Minute(), at.Second(), 0, at.Location())
 			stats.addEndRes(rn, ru, ri, rs, re, ae, nodes)
-			break
 		case "EXTENDED":
 			stats.extendRes(rn, ru, ri, rs, re, nodes)
-			break
 		}
 	}
 }
 
-//Function to handle the statistics calculation
-//Walk through every reservation of thats within the search criteria
-//Calculate the 5 metrics , Total Number of Unique users, Number of Unique Nodes Used,
-//Number of Reservations, Number of Reservations Cancelled Early, Total Reservation Time Used
+// Function to handle the statistics calculation
+// Walk through every reservation of thats within the search criteria
+// Calculate the 5 metrics , Total Number of Unique users, Number of Unique Nodes Used,
+// Number of Reservations, Number of Reservations Cancelled Early, Total Reservation Time Used
 func (stats *Stats) calculateStats(statstartdate time.Time) {
-	//var display := ""
 	for n, rd := range stats.Reservations {
 		var uResCount, uEarlyCancel, uExtension int
 		var uDuration time.Duration
@@ -257,16 +255,16 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 		for _, d := range rd {
 			var empty time.Time
 			if d.ActualEnd.Before(statstartdate) && !d.ActualEnd.Equal(empty) {
-				continue //ended before period we care about
+				continue // ended before period we care about
 			}
 			if d.ActualEnd.Before(d.ResStart) && !d.ActualEnd.Equal(empty) {
-				continue //deleted a queued res that had not yet started
+				continue // deleted a queued res that had not yet started
 			}
 			if d.ResStart.After(time.Now()) {
-				continue //reservation hasnt started yet
+				continue // reservation hasnt started yet
 			}
 			if d.ResEnd.Before(statstartdate) {
-				continue //reservation did not have a delete in the log assume it was deleted
+				continue // reservation did not have a delete in the log assume it was deleted
 			}
 			uExtension += d.NumExtensions
 			userHadvalidRes = true
@@ -294,10 +292,8 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 
 			}
 			uResCount += 1
-			//earlyCancel := false
 			// fuzzy math here because igor takes a few seconds to delete a res
 			if d.ActualEnd != empty && (d.ResEnd.Sub(d.ActualEnd).Minutes()) > 1.0 {
-				//earlyCancel = true
 				uEarlyCancel += 1
 			}
 			if statsV {
@@ -328,19 +324,18 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 
 }
 
-//Returns Reservation data pointer. tries to find the reservation by unique ID
-//Otherwise it will search by name and by user
-func (stats *Stats) findRes(ru string, rn string, ri int, rs time.Time) (*ResData, bool) {
+// Returns Reservation data pointer. tries to find the reservation by unique ID
+// Otherwise it will search by name and by user
+func (stats *Stats) findRes(ru string, rn string, ri int, rs time.Time) *ResData {
 	if res, found := stats.Reservationsid[ri]; found {
-		return res, true
-	} else {
-		for i, res := range stats.Reservations[ru] {
-			if res.ResStart == rs && res.ResName == rn {
-				return stats.Reservations[ru][i], true
-			}
+		return res
+	}
+	for i, res := range stats.Reservations[ru] {
+		if res.ResStart == rs && res.ResName == rn {
+			return stats.Reservations[ru][i]
 		}
 	}
-	return nil, false
+	return nil
 }
 
 //Finds out where in the log line is a particular field of interest
@@ -355,26 +350,25 @@ func (stats *Stats) calculateVariable(param string, fields []string) (int, bool)
 
 //toString of ResData Struct
 func (res *ResData) String() string {
-	var s string
+	var b strings.Builder
 	var formatLong string = "2006-Jan-2-15:04"
-	s += "Reservation Name: " + res.ResName + "\tReservation ID: " + strconv.Itoa(res.ResId) + "\n"
-	s += "Nodes: "
+	fmt.Fprintf(&b, "Reservation Name: %v\tReservation ID: %v\n", res.ResName, res.ResId)
+	fmt.Fprintf(&b, "Nodes:")
 	for i, n := range res.Nodes {
-		s += n + " "
+		fmt.Fprintf(&b, "% v ", n)
 		if i%10 == 0 && i != 0 {
-			s += "\n"
+			fmt.Fprintln(&b, "")
 		}
 	}
-	s += "\n"
-	s += "Reservation Start: " + res.ResStart.Format(formatLong) + "\tReservation End: " + res.ResEnd.Format(formatLong) + "\n"
-	s += "Actual End: " + res.ActualEnd.Format(formatLong) + "\tActual Duration: " + res.ActualDuration.String() + "\n"
-	//s += "Canceled Early: " + res.
-	s += "Number of Extensions: " + strconv.Itoa(res.NumExtensions) + "\n\n"
-	return s
+	fmt.Fprintln(&b, "")
+	fmt.Fprintf(&b, "Reservation Start: %v\tReservation End: %v\n", res.ResStart.Format(formatLong), res.ResEnd.Format(formatLong))
+	fmt.Fprintf(&b, "Actual End: %v\tActual Duration: %v\n", res.ActualEnd.Format(formatLong), res.ActualDuration.String())
+	fmt.Fprintf(&b, "Number of Extensions: %v\n\n", res.NumExtensions)
+
+	return b.String()
 }
 
 func fmtDuration(t time.Duration) string {
-	//t = t.Round(time.Minute)
 	weeks := t / (time.Hour * 24 * 7)
 	t -= weeks * (time.Hour * 24 * 7)
 	days := t / (time.Hour * 24)
