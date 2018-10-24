@@ -209,6 +209,8 @@ func (iom *IOMeshage) newTID() (int64, <-chan *IOMMessage) {
 		if _, ok := iom.TIDs[tid]; !ok {
 			break
 		}
+
+		log.Warn("found duplicated TID, number of TIDs: %v", len(iom.TIDs))
 	}
 
 	c := make(chan *IOMMessage)
