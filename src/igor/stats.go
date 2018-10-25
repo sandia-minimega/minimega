@@ -6,6 +6,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	log "minilog"
 	"os"
@@ -350,7 +351,7 @@ func (stats *Stats) calculateVariable(param string, fields []string) (int, bool)
 
 //toString of ResData Struct
 func (res *ResData) String() string {
-	var b strings.Builder
+	var b bytes.Buffer
 	var formatLong string = "2006-Jan-2-15:04"
 	fmt.Fprintf(&b, "Reservation Name: %v\tReservation ID: %v\n", res.ResName, res.ResId)
 	fmt.Fprintf(&b, "Nodes:")
