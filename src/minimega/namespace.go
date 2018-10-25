@@ -78,6 +78,11 @@ type Namespace struct {
 	ccPrefix string
 
 	ccMounts map[string]ccMount
+
+	// optimizations
+	affinityEnabled    bool
+	affinityCPUSets    map[string][]int
+	hugepagesMountPath string
 }
 
 type NamespaceInfo struct {

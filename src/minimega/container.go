@@ -283,7 +283,6 @@ type ContainerVM struct {
 	*BaseVM         // embed
 	ContainerConfig // embed
 
-	pid             int
 	effectivePath   string
 	ptyUnixListener net.Listener
 	ptyTCPListener  net.Listener
@@ -945,9 +944,6 @@ func (vm *ContainerVM) launch() error {
 	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
 	go vm.console(pseudotty)
-
-	// TODO: add affinity funcs for containers
-	// vm.CheckAffinity()
 
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the container

@@ -34,6 +34,7 @@ const (
 
 type VM interface {
 	GetID() int               // GetID returns the VM's per-host unique ID
+	GetPID() int              // GetPID returns the VM's PID
 	GetName() string          // GetName returns the VM's per-host unique name
 	GetNamespace() string     // GetNamespace returns the VM's namespace name
 	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
@@ -115,6 +116,8 @@ type BaseVM struct {
 	Type       VMType
 	ActiveCC   bool // set when CC is active
 
+	pid int
+
 	lock sync.Mutex // synchronizes changes to this VM
 	cond *sync.Cond
 
@@ -126,14 +129,14 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "uptime", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "type", "uuid", "cc_active", "pid",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
 	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
-	"append", "serial-ports", "virtio-ports", "vnc_port", "pid",
+	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",
@@ -336,6 +339,10 @@ func (vm *BaseVM) GetMem() uint64 {
 
 func (vm *BaseVM) GetCoschedule() int {
 	return int(vm.Coschedule)
+}
+
+func (vm *BaseVM) GetPID() int {
+	return vm.pid
 }
 
 // Kill a VM. Blocks until the VM process has terminated.
@@ -627,6 +634,8 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	switch field {
 	case "id":
 		return strconv.Itoa(vm.ID), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	case "name":
 		return vm.Name, nil
 	case "state":

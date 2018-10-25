@@ -398,3 +398,28 @@ func wget(u, dst string) error {
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
+
+func writeInt(filename string, value int) error {
+	log.Debug("writing %v to %v", value, filename)
+
+	b := []byte(strconv.Itoa(value))
+	return ioutil.WriteFile(filename, b, 0644)
+}
+
+func readInt(filename string) (int, error) {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read %v: %v", filename, err)
+	}
+
+	s := strings.TrimSpace(string(b))
+
+	run, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("expected int from %v, not `%v`", filename, s)
+	}
+
+	log.Debug("got %v from %v", int(run), filename)
+
+	return int(run), nil
+}
