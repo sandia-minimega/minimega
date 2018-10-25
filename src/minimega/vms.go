@@ -305,45 +305,6 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 	return errs
 }
 
-// Start VMs matching target and connects them to the provided ron.Server.
-func (vms *VMs) Start(target string, cc *ron.Server) error {
-	// For each VM, start it if it's in a startable state.
-	return vms.Apply(target, func(vm VM, wild bool) (bool, error) {
-		// whether this is a reconnect for CC or not
-		reconnect := true
-
-		switch vm.GetState() {
-		case VM_BUILDING:
-			// always start building, first connect so reconnect=false
-			reconnect = false
-		case VM_PAUSED:
-			// always start paused
-		case VM_QUIT, VM_ERROR:
-			// only start quit or error when not wild
-			if wild {
-				return false, nil
-			}
-		case VM_RUNNING:
-			// shouldn't start an already running vm
-			if !wild {
-				return true, errors.New("vm is already running")
-			}
-
-			return false, nil
-		}
-
-		if err := vm.Start(); err != nil {
-			return true, err
-		}
-
-		if err := vm.Connect(cc, reconnect); err != nil {
-			log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
-		}
-
-		return true, nil
-	})
-}
-
 // Stop VMs matching target.
 func (vms *VMs) Stop(target string) error {
 	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {

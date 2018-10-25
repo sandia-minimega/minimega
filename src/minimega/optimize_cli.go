@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"minicli"
 	log "minilog"
@@ -14,7 +13,6 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
-	"sync"
 )
 
 // cpuRange to parse filter ranges
@@ -39,7 +37,7 @@ To disable hugepage support:
 
 	clear optimize hugepages
 
-To enable/disable CPU affinity support for running VMs:
+To enable/disable CPU affinity support for VMs in the namespace:
 
 	optimize affinity [true,false]
 
@@ -162,20 +160,13 @@ func cliOptimizeAffinity(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 			return fmt.Errorf("cannot expand CPU range: %v", err)
 		}
 
-		ns.affinityCPUSets = make(map[string][]int)
-		for _, v := range cpus {
-			ns.affinityCPUSets[v] = []int{}
-		}
+		ns.affinityFilter = cpus
 
-		if ns.affinityEnabled {
-			return affinityEnable(ns)
-		}
-
-		return nil
+		return ns.enableAffinity()
 	case c.BoolArgs["true"]:
-		return affinityEnable(ns)
+		return ns.enableAffinity()
 	case c.BoolArgs["false"]:
-		return affinityDisable(ns)
+		return ns.disableAffinity()
 	}
 
 	// Must want to print affinity status
@@ -202,9 +193,10 @@ func cliOptimizeAffinity(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	switch {
 	case c.BoolArgs["filter"]:
-		affinityClearFilter(ns)
+		ns.affinityFilter = nil
+		ns.enableAffinity()
 	case c.BoolArgs["affinity"]:
-		affinityDisable(ns)
+		ns.disableAffinity()
 	case c.BoolArgs["hugepages"]:
 		ns.hugepagesMountPath = ""
 	case c.BoolArgs["ksm"]:
@@ -217,106 +209,9 @@ func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		}
 
 		ns.hugepagesMountPath = ""
-		affinityDisable(ns)
-		affinityClearFilter(ns)
+		ns.affinityFilter = nil
+		ns.disableAffinity()
 	}
 
-	return nil
-}
-
-func affinityEnable(ns *Namespace) error {
-	if ns.affinityEnabled {
-		return errors.New("affinity is already enabled for this namespace")
-	}
-
-	// first enable, no filter
-	if ns.affinityCPUSets == nil {
-		for i := 0; i < runtime.NumCPU(); i++ {
-			ns.affinityCPUSets[strconv.Itoa(i)] = []int{}
-		}
-	}
-
-	var mu sync.Mutex
-	err := ns.Apply(Wildcard, func(vm VM, _ bool) (bool, error) {
-		// make synchronous
-		mu.Lock()
-		defer mu.Unlock()
-
-		// find cpu with the fewest number of entries
-		var cpu string
-		for k, v := range ns.affinityCPUSets {
-			if cpu == "" {
-				cpu = k
-				continue
-			}
-			if len(v) < len(ns.affinityCPUSets[cpu]) {
-				cpu = k
-			}
-		}
-
-		if cpu == "" {
-			return true, errors.New("could not find a valid CPU set!")
-		}
-
-		if err := setAffinity(cpu, vm.GetPID()); err != nil {
-			return true, err
-		}
-
-		ns.affinityCPUSets[cpu] = append(ns.affinityCPUSets[cpu], vm.GetPID())
-		return true, nil
-	})
-
-	if err == nil {
-		ns.affinityEnabled = true
-	}
-
-	return err
-}
-
-func affinityDisable(ns *Namespace) error {
-	if !ns.affinityEnabled {
-		return errors.New("affinity is not enabled for this namespace")
-	}
-
-	for cpu, pids := range ns.affinityCPUSets {
-		for _, pid := range pids {
-			if err := clearAffinity(pid); err != nil {
-				return err
-			}
-		}
-
-		ns.affinityCPUSets[cpu] = nil
-	}
-
-	ns.affinityEnabled = false
-	return nil
-}
-
-func affinityClearFilter(ns *Namespace) {
-	ns.affinityCPUSets = nil
-	if ns.affinityEnabled {
-		affinityEnable(ns)
-	}
-}
-
-// setAffinity sets the affinity for the PID to the given CPU.
-func setAffinity(cpu string, pid int) error {
-	log.Debug("set affinity to %v for %v", cpu, pid)
-
-	out, err := processWrapper("taskset", "-a", "-p", cpu, strconv.Itoa(pid))
-	if err != nil {
-		return fmt.Errorf("%v: %v", err, out)
-	}
-	return nil
-}
-
-// clearAffinity removes the affinity for a PID.
-func clearAffinity(pid int) error {
-	log.Debug("clear affinity for %v", pid)
-
-	out, err := processWrapper("taskset", "-p", "0xffffffffffffffff", strconv.Itoa(pid))
-	if err != nil {
-		return fmt.Errorf("%v: %v", err, out)
-	}
 	return nil
 }

@@ -440,7 +440,7 @@ func init() {
 func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	switch {
 	case c.BoolArgs["start"]:
-		return ns.VMs.Start(c.StringArgs["vm"], ns.ccServer)
+		return ns.Start(c.StringArgs["vm"])
 	case c.BoolArgs["stop"]:
 		return ns.VMs.Stop(c.StringArgs["vm"])
 	case c.BoolArgs["kill"]:
