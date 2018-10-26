@@ -1,0 +1,42 @@
+## ###
+## ### Implicit pipelines (created through 'cc')
+## ###
+
+## ## Stand up two VMs, foo (on host mm1) and bar (on host mm2)
+## vm config filesystem /root/uminicccfs
+## vm config schedule mm1 
+## vm config uuid 00000000-0000-0000-0000-000000000000
+## vm config hostname foo
+## vm launch container foo
+## vm config schedule mm2
+## vm config uuid 11111111-1111-1111-1111-111111111111
+## vm config hostname bar
+## vm launch container bar
+## .annotate true .columns name vm info
+host | name
+mm1  | foo
+mm2  | bar
+## vm start foo
+## vm start bar
+
+## # Give sufficient build time
+## shell sleep 10s
+
+## # Set up a cat pipeline on bar from foopipe
+## # TODO: Use pipe.out to test in-order delivery of meshage-based pipe communication
+## cc filter hostname=bar
+## cc background stdin=foopipe sh -c "cat > pipe.out"
+
+## shell sleep 5s
+
+## # Send a message from foo through foopipe
+## cc filter hostname=foo
+## cc exec stdout=foopipe seq 1000
+
+## shell sleep 60s
+
+## # Verify that all messages were received on bar through foopipe
+## pipe
+name    | mode | readers | writers | count | via | previous
+foopipe | all  | 0       | 0       | 1000  |     | 1000
+foopipe | all  | 1       | 0       | 1000  |     | 1000
