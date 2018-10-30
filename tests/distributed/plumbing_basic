@@ -1,0 +1,19 @@
+###
+### Explicit pipelines (created through plumb/pipe)
+###
+
+# Set up a pipeline from foo->bar->baz->qux across mm1->mm2->mm3
+mesh send mm1 plumb foo "sed -u s/cc/mm1/" bar
+mesh send mm2 plumb bar "sed -u s/mm1/mm2/" baz
+mesh send mm3 plumb baz "sed -u s/mm2/mm3/" qux
+
+# Send a message through foo (created on mm1)
+mesh send mm1 pipe foo "hello from cc!"
+
+# Give the message time to go through the pipeline
+shell sleep 5
+
+.annotate true
+# Emit 'pipe' responses from all nodes
+mesh send all .columns name,readers,writers,count,previous pipe
+
