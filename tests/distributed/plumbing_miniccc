@@ -33,4 +33,11 @@ cc exec stdout=foopipe seq 1000
 shell sleep 60s
 
 # Verify that all messages were received on bar through foopipe
+cc filter hostname=bar
+cc exec wc -l pipe.out
+
+shell sleep 5s
+
+cc responses all
+
 pipe
