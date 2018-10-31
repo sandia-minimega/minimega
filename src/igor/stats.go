@@ -82,17 +82,9 @@ func runStats(_ *Command, _ []string) {
 		Reservationsid: make(map[int]*ResData),
 	}
 	gs.readLog()
-	gs.NumUsers = len(gs.Reservations)
 	statstartdate := time.Now().AddDate(0, 0, -d)
 	gs.calculateStats(statstartdate)
-	gs.NumNodes = len(gs.NodesUsed)
-	fmt.Printf("------------------Global Statistics for all nodes------------------ \n")
-	fmt.Printf("Total Users: %v\n", gs.NumUsers)
-	fmt.Printf("Number of Nodes used: %v\n", gs.NumNodes)
-	fmt.Printf("Total Number of Reservations: %v\n", gs.NumRes)
-	fmt.Printf("Total Number of Reservations Cancelled Early: %v\n", gs.TotalEarlyCancels)
-	fmt.Printf("Total Number of Extensions: %v\n", gs.TotalExtensions)
-	fmt.Printf("Total Reservation Time: %v\n", fmtDuration(gs.TotalDurationMinutes))
+	fmt.Println(printStats(&gs))
 }
 
 // Adds reservation to a particular user. Map of user names to slices of reservations
@@ -366,6 +358,18 @@ func (res *ResData) String() string {
 	fmt.Fprintf(&b, "Actual End: %v\tActual Duration: %v\n", res.ActualEnd.Format(formatLong), res.ActualDuration.String())
 	fmt.Fprintf(&b, "Number of Extensions: %v\n\n", res.NumExtensions)
 
+	return b.String()
+}
+
+func printStats(gs *Stats) string {
+	var b bytes.Buffer
+	fmt.Fprintf(&b, "------------------Global Statistics for all nodes------------------\n")
+	fmt.Fprintf(&b, "Total Users: %v\n", gs.NumUsers)
+	fmt.Fprintf(&b, "Number of Nodes used: %v\n", gs.NumNodes)
+	fmt.Fprintf(&b, "Total Number of Reservations: %v\n", gs.NumRes)
+	fmt.Fprintf(&b, "Total Number of Reservations Cancelled Early: %v\n", gs.TotalEarlyCancels)
+	fmt.Fprintf(&b, "Total Number of Extensions: %v\n", gs.TotalExtensions)
+	fmt.Fprintf(&b, "Total Reservation Time: %v\n", fmtDuration(gs.TotalDurationMinutes))
 	return b.String()
 }
 
