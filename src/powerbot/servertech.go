@@ -8,10 +8,12 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"github.com/ziutek/telnet"
+	"io"
+	log "minilog"
 	"sort"
 	"strings"
-
-	"github.com/ziutek/telnet"
+	"time"
 )
 
 var (
@@ -44,21 +46,23 @@ func NewServerTechPDU(host, port, username, password string) (PDU, error) {
 // Convenience function, log in.
 func (p ServerTechPDU) login() error {
 	// wait for login prompt
-	_, err := p.c.ReadUntil("Username: ")
+	//todo write a wrapper for read deadline
+	log.Debug("Logging into PDU")
+	err := p.readTelnet("Username: ")
 	if err != nil {
 		return err
 	}
 	cmd := fmt.Sprintf("%s\r\n", p.username)
-	_, err = p.c.Write([]byte(cmd))
+	err = p.writeTelnet(cmd)
 	if err != nil {
 		return err
 	}
-	_, err = p.c.ReadUntil("Password: ")
+	err = p.readTelnet("Password: ")
 	if err != nil {
 		return err
 	}
 	cmd = fmt.Sprintf("%s\r\n", p.password)
-	_, err = p.c.Write([]byte(cmd))
+	err = p.writeTelnet(cmd)
 	if err != nil {
 		return err
 	}
@@ -68,18 +72,31 @@ func (p ServerTechPDU) login() error {
 // Convenience function, log out.
 func (p ServerTechPDU) logout() error {
 	// send a blank line to make sure we get a prompt
-	_, err := p.c.Write([]byte("\r\n"))
+	log.Debug("Logging into PDU")
+	err := p.writeTelnet("\r\n")
 	if err != nil {
 		return err
 	}
-	_, err = p.c.ReadUntil(prompt)
+	err = p.readTelnet(prompt)
 	if err != nil {
 		return err
 	}
-	_, err = p.c.Write([]byte("exit\r\n"))
+	err = p.writeTelnet("exit\r\n")
 	if err != nil {
 		return err
 	}
+	//check if connection is closed
+	/*
+		for err := p.c.Read(make([]byte,0)); err == io.EOF{
+			log.Debug("Connection Closed")
+			p.c.Close()
+		}*/
+	p.c.Close()
+	_, err = p.c.Read(make([]byte, 0))
+	for err != io.EOF {
+		log.Debug("Connection still open waiting for pdu to close")
+	}
+	log.Debug("Connection Closed")
 	return nil
 }
 
@@ -88,11 +105,11 @@ func (p ServerTechPDU) logout() error {
 func (p ServerTechPDU) On(ports map[string]string) error {
 	p.login()
 	for _, port := range ports {
-		_, err := p.c.ReadUntil(prompt)
+		err := p.readTelnet(prompt)
 		if err != nil {
 			return err
 		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("on %s\r\n", port)))
+		err = p.writeTelnet(fmt.Sprintf("on %s\r\n", port))
 		if err != nil {
 			return err
 		}
@@ -106,11 +123,12 @@ func (p ServerTechPDU) On(ports map[string]string) error {
 func (p ServerTechPDU) Off(ports map[string]string) error {
 	p.login()
 	for _, port := range ports {
-		_, err := p.c.ReadUntil(prompt)
+		log.Debug("Attempting to power off %v", port)
+		err := p.readTelnet(prompt)
 		if err != nil {
 			return err
 		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("off %s\r\n", port)))
+		err = p.writeTelnet(fmt.Sprintf("off %s\r\n", port))
 		if err != nil {
 			return err
 		}
@@ -124,11 +142,12 @@ func (p ServerTechPDU) Off(ports map[string]string) error {
 func (p ServerTechPDU) Cycle(ports map[string]string) error {
 	p.login()
 	for _, port := range ports {
-		_, err := p.c.ReadUntil(prompt)
+		log.Debug("Attempting to power cylce %v", port)
+		err := p.readTelnet(prompt)
 		if err != nil {
 			return err
 		}
-		_, err = p.c.Write([]byte(fmt.Sprintf("reboot %s\r\n", port)))
+		err = p.writeTelnet(fmt.Sprintf("reboot %s\r\n", port))
 		if err != nil {
 			return err
 		}
@@ -139,6 +158,7 @@ func (p ServerTechPDU) Cycle(ports map[string]string) error {
 
 func (p ServerTechPDU) Status(ports map[string]string) error {
 	p.login()
+	log.Debug("Attempting to get status")
 	_, err := p.c.ReadUntil(prompt)
 	if err != nil {
 		return err
@@ -180,5 +200,34 @@ func (p ServerTechPDU) Temp() error {
 
 func (p ServerTechPDU) Info() error {
 	//noop
+	return nil
+}
+
+func (p ServerTechPDU) readTelnet(token string) error {
+	dl := time.Now().Add((time.Second * 5))
+	p.c.SetReadDeadline(dl)
+	read, err := p.c.ReadUntil(token)
+	if len(read) != 0 {
+		log.Debug("contents from telnet: %v", string(read))
+	}
+
+	if err != nil {
+		log.Error("Read Timedout: waiting for %v", token)
+		p.c.Close()
+		return err
+	}
+	return nil
+}
+
+func (p ServerTechPDU) writeTelnet(token string) error {
+	log.Debug("Attempting to write: %v", token)
+	dl := time.Now().Add((time.Second * 5))
+	p.c.SetWriteDeadline(dl)
+	_, err := p.c.Write([]byte(token))
+	if err != nil {
+		log.Error("Write Timedout")
+		p.c.Close()
+		return err
+	}
 	return nil
 }
