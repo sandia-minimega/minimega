@@ -51,6 +51,7 @@ var dirty bool
 var commands = []*Command{
 	cmdDel,
 	cmdShow,
+	cmdStats,
 	cmdSub,
 	cmdPower,
 	cmdExtend,
