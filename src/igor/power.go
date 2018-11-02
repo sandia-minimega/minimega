@@ -126,7 +126,7 @@ func runPower(cmd *Command, args []string) {
 
 			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
-				if r.ID == resID && r.Owner == user.Username || user.Username == "root" {
+				if r.ID == resID && (r.Owner == user.Username || user.Username == "root") {
 					// Success! This node is in a reservation owned by the user
 					validatedNodes = append(validatedNodes, n)
 				}
