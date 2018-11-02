@@ -82,7 +82,7 @@ func runExtend(cmd *Command, args []string) {
 		// completion based on the ExtendWithin config.
 		if igorConfig.ExtendWithin > 0 {
 			remaining := time.Unix(r.EndTime, 0).Sub(time.Now())
-			if int(remaining.Minutes()) > igorConfig.ExtendWithin {
+			if int(remaining.Minutes()) > igorConfig.ExtendWithin && user.Username != "root" {
 				log.Fatal("reservations can only be extended if they are within %v minutes of ending", igorConfig.ExtendWithin)
 			}
 		}
