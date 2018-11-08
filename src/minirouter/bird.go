@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 )
@@ -18,10 +19,13 @@ const (
 )
 
 type Bird struct {
-	Static   map[string]string
-	Static6  map[string]string
-	OSPF     map[string]*OSPF
-	RouterID string
+	Static      map[string]string
+	Namedstatic map[string]map[string]string
+	Static6     map[string]string
+	OSPF        map[string]*OSPF
+	BGP         map[string]*BGP
+	RouterID    string
+	ExportOSPF  bool
 }
 
 var (
@@ -32,8 +36,21 @@ var (
 )
 
 type OSPF struct {
-	Area       string
-	Interfaces map[string]bool // bool placeholder for later options
+	Area           string
+	Interfaces     map[string]bool // bool placeholder for later options
+	Prefixes       map[string]bool
+	Filternetworks map[string]bool
+}
+
+type BGP struct {
+	Bgpprocessname    string
+	Localip           string
+	Localas           int
+	Neighborip        string
+	Neighboras        int
+	Routereflector    bool
+	Exportnetworks    map[string]bool
+	Advertiseinternal bool
 }
 
 func init() {
@@ -41,80 +58,153 @@ func init() {
 		Patterns: []string{
 			"bird <flush,>",
 			"bird <commit,>",
-			"bird <static,> <network> <nh>",
-			"bird <ospf,> <area> <network>",
+			"bird <routerid,> <id>",
+			"bird <static,> <network> <nh> <name>",
+			"bird <ospf,> <area> <network or lo>",
+			"bird <ospf,> <area> <filter,> <filtername or IPv4/MASK>",
+			"bird <bgp,> <processname> <local,neighbor> <IPv4> <asnumber>",
+			"bird <bgp,> <processname> <rrclient,>",
+			"bird <bgp,> <processname> <filter,> <filtername>",
 		},
 		Call: handleBird,
 	})
 	birdID = getRouterID()
 	birdData = &Bird{
-		Static:   make(map[string]string),
-		Static6:  make(map[string]string),
-		OSPF:     make(map[string]*OSPF),
-		RouterID: birdID,
+		Static:      make(map[string]string),
+		Namedstatic: make(map[string]map[string]string),
+		Static6:     make(map[string]string),
+		OSPF:        make(map[string]*OSPF),
+		BGP:         make(map[string]*BGP),
+		RouterID:    birdID,
+		ExportOSPF:  false,
 	}
 
 }
-
 func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	defer func() {
 		r <- nil
 	}()
-
+	log.Debugln("bird: Parsing command")
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
-			Static:   make(map[string]string),
-			Static6:  make(map[string]string),
-			OSPF:     make(map[string]*OSPF),
-			RouterID: birdID,
+			Static:      make(map[string]string),
+			Namedstatic: make(map[string]map[string]string),
+			Static6:     make(map[string]string),
+			OSPF:        make(map[string]*OSPF),
+			BGP:         make(map[string]*BGP),
+			RouterID:    birdID,
 		}
 	} else if c.BoolArgs["commit"] {
 		birdConfig()
 		birdRestart()
 	} else if c.BoolArgs["static"] {
+		name := c.StringArgs["name"]
 		network := c.StringArgs["network"]
 		nh := c.StringArgs["nh"]
-		if isIPv4(nh) {
-			birdData.Static[network] = nh
+		if nh == "null" {
+			nh = ""
+		}
+
+		if isIPv4(nh) || nh == "" {
+			if name == "null" && nh != "" {
+				birdData.Static[network] = nh
+			} else {
+				if birdData.Namedstatic[name] == nil {
+					birdData.Namedstatic[name] = make(map[string]string)
+				}
+				birdData.Namedstatic[name][network] = nh
+			}
 		} else if isIPv6(nh) {
-			birdData.Static6[network] = nh
+			if name == "null" {
+				birdData.Static6[network] = nh
+			}
 		}
 	} else if c.BoolArgs["ospf"] {
 		area := c.StringArgs["area"]
-		network := c.StringArgs["network"]
+		if c.BoolArgs["filter"] {
+			o := OSPFFindOrCreate(area)
+			birdData.ExportOSPF = true
+			if strings.Contains(c.StringArgs["filtername"], "/") {
+				o.Prefixes[c.StringArgs["filtername"]] = true
+			} else {
+				o.Filternetworks[c.StringArgs["filtername"]] = true
+			}
+		} else {
+			network := c.StringArgs["network"]
+			var iface string
+			if network == "lo" {
+				iface = "lo"
+			} else {
+				var idx int
+				var err error
+				// get an interface from the index
+				idx, err = strconv.Atoi(network)
+				if err != nil {
+					log.Errorln(err)
+					return
+				}
 
-		// get an interface from the index
-		idx, err := strconv.Atoi(network)
-		if err != nil {
-			log.Errorln(err)
-			return
+				iface, err = findEth(idx)
+				if err != nil {
+					log.Errorln(err)
+					return
+				}
+			}
+
+			o := OSPFFindOrCreate(area)
+			o.Interfaces[iface] = true
 		}
-
-		iface, err := findEth(idx)
-		if err != nil {
-			log.Errorln(err)
-			return
+	} else if c.BoolArgs["bgp"] {
+		var ip string
+		processname := c.StringArgs["processname"]
+		log.Debugln("bird: Looking for Bgp process")
+		b := bgpFindOrCreate(processname)
+		log.Debug("bird: Found BGP process %", b.Bgpprocessname)
+		if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
+			ip = c.StringArgs["IPv4"]
+			as, err := strconv.Atoi(c.StringArgs["asnumber"])
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
+			if c.BoolArgs["local"] {
+				log.Debug("bird: Setting local IP %v and AS %v\n", ip, as)
+				b.Localip = ip
+				b.Localas = as
+			} else if c.BoolArgs["neighbor"] {
+				log.Debug("bird: Setting neighbor IP %v and AS %v\n", ip, as)
+				b.Neighborip = ip
+				b.Neighboras = as
+			}
+		} else if c.BoolArgs["rrclient"] {
+			b.Routereflector = true
+		} else if c.BoolArgs["filter"] {
+			log.Debug("bird: adding filter %", c.StringArgs["filtername"])
+			if c.StringArgs["filtername"] != "all" {
+				b.Advertiseinternal = true
+			}
+			b.Exportnetworks[c.StringArgs["filtername"]] = true
 		}
-
-		o := OSPFFindOrCreate(area)
-		o.Interfaces[iface] = true
+	} else if c.BoolArgs["routerid"] {
+		birdData.RouterID = c.StringArgs["id"]
 	}
 }
 
 func birdConfig() {
+	log.Debugln("bird: Setting preparing template")
 	t, err := template.New("bird").Parse(birdTmpl)
 	if err != nil {
 		log.Errorln(err)
 		return
 	}
-
+	log.Debugln("bird: creating file")
 	// First, IPv4
 	f, err := os.Create(BIRD_CONFIG)
 	if err != nil {
 		log.Errorln(err)
 		return
 	}
-
+	log.Debugln("bird: executing template")
 	err = t.Execute(f, birdData)
 	if err != nil {
 		log.Errorln(err)
@@ -180,18 +270,35 @@ func birdRestart() {
 	}
 }
 
+// Returns OSPF Area for the router
 func OSPFFindOrCreate(area string) *OSPF {
 	if o, ok := birdData.OSPF[area]; ok {
 		return o
 	}
 	o := &OSPF{
-		Area:       area,
-		Interfaces: make(map[string]bool),
+		Area:           area,
+		Interfaces:     make(map[string]bool),
+		Prefixes:       make(map[string]bool),
+		Filternetworks: make(map[string]bool),
 	}
 	birdData.OSPF[area] = o
 	return o
 }
 
+// Returns BGP Area for the router
+func bgpFindOrCreate(bgpprocess string) *BGP {
+	if b, ok := birdData.BGP[bgpprocess]; ok {
+		return b
+	}
+	b := &BGP{
+		Bgpprocessname: bgpprocess,
+		Exportnetworks: make(map[string]bool),
+	}
+	birdData.BGP[bgpprocess] = b
+	return b
+}
+
+// In case Minirouter doesnt get a router ID
 func getRouterID() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	p := make([]byte, 4)
@@ -201,6 +308,25 @@ func getRouterID() string {
 	}
 	ip := net.IPv4(p[0], p[1], p[2], p[3])
 	return ip.String()
+}
+
+// Generates the filter config lines for the template
+func (b *BGP) GenerateFilter() string {
+	filter := ""
+	if _, ok := b.Exportnetworks["all"]; ok {
+		filter = "source = RTS_BGP"
+	}
+	if b.Advertiseinternal {
+		for rt := range b.Exportnetworks {
+			if rt != "all" {
+				if filter != "" {
+					filter += " || "
+				}
+				filter += "proto = \"static_" + rt + "\""
+			}
+		}
+	}
+	return filter
 }
 
 var birdTmpl = `
@@ -223,6 +349,7 @@ protocol device {
 
 {{ $DOSTATIC := len .Static }}
 {{ if ne $DOSTATIC 0 }}
+#static routes
 protocol static {
 	check link;
 {{ range $network, $nh := .Static }}
@@ -231,11 +358,47 @@ protocol static {
 }
 {{ end }}
 
+{{ $DOSTATIC := len .Namedstatic }}
+{{ if ne $DOSTATIC 0 }}
+#Named static routes
+{{ range $name, $network := .Namedstatic }}
+protocol static static_{{$name}}{
+	import all;
+{{ range $net, $nh := $network }}
+	{{ if ne $nh "" }}
+	route {{ $net }} via {{ $nh }};
+	{{ else }}
+	route {{ $net }} reject;
+	{{ end }}
+{{ end }}
+}
+{{ end }}
+{{ end }}
+
 {{ $DOOSPF := len .OSPF }}
 {{ if ne $DOOSPF 0 }}
 protocol ospf {
+	import all;
+	{{ if .ExportOSPF}}
+	export filter {
+		{{ range $v := .OSPF }}
+		{{ range $f , $options := $v.Filternetworks }} 
+		if proto = "static_{{ $f }}" then 
+			accept;
+		{{ end }}
+		{{ end }}
+	};
+	{{ end }}
 {{ range $v := .OSPF }} 
 	area {{ $v.Area }} {
+		{{ $DONETWORK := len $v.Prefixes }}
+		{{ if ne $DONETWORK 0 }}
+		networks {
+			{{ range $p, $options := $v.Prefixes }} 
+			{{ $p }};
+			{{ end }}
+		};
+		{{ end }}
 		{{ range $int, $options := $v.Interfaces }}
 		interface "{{ $int }}";
 		{{ end }}
@@ -243,4 +406,28 @@ protocol ospf {
 {{ end }}
 }
 {{ end }}
+
+{{ $DOBGP := len .BGP }}
+{{ if ne $DOBGP 0 }}
+
+{{ range $v := .BGP }}
+protocol bgp {{ $v.Bgpprocessname }} {
+	import all;       
+	local {{ $v.Localip }} as {{ $v.Localas }};
+	neighbor {{ $v.Neighborip }} as {{ $v.Neighboras }};
+	{{ if $v.Routereflector }}
+	rr client;
+	{{ end }}
+	{{ $EXPORT := len .Exportnetworks }}
+	{{ if ne $EXPORT 0 }}
+	export filter {
+		if {{$v.GenerateFilter}} then
+			accept;
+		else reject;
+	};
+	{{ end }}
+}
+{{ end }}
+{{ end }}
+
 `

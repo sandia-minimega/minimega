@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	"net"
 	"strconv"
 )
 
@@ -68,8 +69,9 @@ router takes a number of subcommands:
 		Patterns: []string{
 			"router <vm>",
 			"router <vm> <commit,>",
+			"router <vm> <rid,> <id>",
 			"router <vm> <log,> <level,> <fatal,error,warn,info,debug>",
-			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp> [lo,]",
 			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
 			"router <vm> <dhcp,> <listen address> <router,> <router address>",
 			"router <vm> <dhcp,> <listen address> <dns,> <address>",
@@ -78,8 +80,13 @@ router takes a number of subcommands:
 			"router <vm> <upstream,> <ip>",
 			"router <vm> <gw,> <gw>",
 			"router <vm> <ra,> <subnet>",
-			"router <vm> <route,> <static,> <network> <next-hop>",
+			"router <vm> <route,> <static,> <network> <next-hop> [staticroutename]",
 			"router <vm> <route,> <ospf,> <area> <network>",
+			"router <vm> <route,> <ospf,> <area> <export,> <Ipv4/Mask or staticroutename>",
+			"router <vm> <route,> <bgp,> <processname> <local,neighbor> <IPv4> <asnumber>",
+			"router <vm> <route,> <bgp,> <processname> <rrclient,>",
+			"router <vm> <route,> <bgp,> <processname> <export,> <all,filter> <filtername>",
+			//"router <vm> <importbird,> <configfilepath>", TODO
 		},
 		Call:    wrapVMTargetCLI(cliRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -90,9 +97,10 @@ router takes a number of subcommands:
 		Patterns: []string{
 			"clear router",
 			"clear router <vm>",
+			"clear router <vm> <rid,>",
 			"clear router <vm> <interface,>",
 			"clear router <vm> <interface,> <network>",
-			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp or all> [lo,]",
 			"clear router <vm> <dhcp,>",
 			"clear router <vm> <dhcp,> <listen address>",
 			"clear router <vm> <dhcp,> <listen address> <range,>",
@@ -107,11 +115,15 @@ router takes a number of subcommands:
 			"clear router <vm> <ra,>",
 			"clear router <vm> <ra,> <subnet>",
 			"clear router <vm> <route,>",
-			"clear router <vm> <route,> <static,>",
-			"clear router <vm> <route,> <static,> <network>",
+			"clear router <vm> <route,> <static,namedstatic>",
+			"clear router <vm> <route,> <static,> <network or all> [staticroutename]",
 			"clear router <vm> <route,> <ospf,>",
 			"clear router <vm> <route,> <ospf,> <area>",
 			"clear router <vm> <route,> <ospf,> <area> <network>",
+			"clear router <vm> <route,> <ospf,> <area> <export,> <Ipv4/Mask or staticroutename>",
+			"clear router <vm> <route,> <bgp,> <processname>",
+			"clear router <vm> <route,> <bgp,> <processname> <rrclient,>",
+			"clear router <vm> <route,> <bgp,> <processname> <local,neighbor>",
 		},
 		Call:    wrapVMTargetCLI(cliClearRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -159,11 +171,10 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			return fmt.Errorf("invalid network: %v : %v", c.StringArgs["network"], err)
 		}
 		ip := c.StringArgs["IPv4/MASK"]
-
-		return rtr.InterfaceAdd(network, ip)
+		loopback := c.BoolArgs["lo"]
+		return rtr.InterfaceAdd(network, ip, loopback)
 	} else if c.BoolArgs["dhcp"] {
 		addr := c.StringArgs["listen"]
-
 		if c.BoolArgs["range"] {
 			low := c.StringArgs["low"]
 			high := c.StringArgs["high"]
@@ -199,13 +210,47 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		if c.BoolArgs["static"] {
 			network := c.StringArgs["network"]
 			nh := c.StringArgs["next-hop"]
-			rtr.RouteStaticAdd(network, nh)
+			if c.StringArgs["staticroutename"] != "" {
+				rtr.RouteStaticAdd(network, nh, c.StringArgs["staticroutename"])
+			} else {
+				rtr.RouteStaticAdd(network, nh, "")
+			}
 			return nil
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["network"]
-			rtr.RouteOSPFAdd(area, iface)
+			if c.StringArgs["network"] != "" {
+				iface := c.StringArgs["network"]
+				rtr.RouteOSPFAdd(area, iface, "")
+			} else if c.BoolArgs["export"] {
+				filter := c.StringArgs["Ipv4/Mask"]
+				rtr.RouteOSPFAdd(area, "", filter)
+			}
+		} else if c.BoolArgs["bgp"] {
+			var ip string
+			islocal := false
+			processname := c.StringArgs["processname"]
+			if c.BoolArgs["export"] {
+				if c.BoolArgs["all"] {
+					rtr.ExportBGP(processname, true, "0.0.0.0/0")
+				} else if c.BoolArgs["filter"] {
+					rtr.ExportBGP(processname, false, c.StringArgs["filtername"])
+				}
+			} else if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
+				ip = c.StringArgs["IPv4"]
+				as, _ := strconv.Atoi(c.StringArgs["asnumber"])
+				if c.BoolArgs["local"] {
+					islocal = true
+				}
+				rtr.RouteBGPAdd(islocal, processname, ip, as)
+			} else if c.BoolArgs["rrclient"] {
+				rtr.bgpFindOrCreate(processname).routereflector = true
+			}
 		}
+	} else if c.BoolArgs["rid"] {
+		if net.ParseIP(c.StringArgs["id"]) == nil {
+			return fmt.Errorf("invalid routerid: %v", c.StringArgs["id"])
+		}
+		rtr.routerid = c.StringArgs["id"]
 	}
 
 	return nil
@@ -232,12 +277,20 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	}
 
 	if c.BoolArgs["interface"] {
-		network := c.StringArgs["network"]
-		ip := c.StringArgs["IPv4/MASK"]
-
-		err := rtr.InterfaceDel(network, ip)
-		if err != nil {
-			return err
+		if c.BoolArgs["lo"] {
+			network := c.StringArgs["network"]
+			ip := c.StringArgs["IPv4/MASK"]
+			err := rtr.InterfaceDel(network, ip, true)
+			if err != nil {
+				return err
+			}
+		} else {
+			network := c.StringArgs["network"]
+			ip := c.StringArgs["IPv4/MASK"]
+			err := rtr.InterfaceDel(network, ip, false)
+			if err != nil {
+				return err
+			}
 		}
 	} else if c.BoolArgs["dhcp"] {
 		addr := c.StringArgs["listen"]
@@ -287,27 +340,69 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	} else if c.BoolArgs["route"] {
 		if c.BoolArgs["static"] {
 			network := c.StringArgs["network"]
-			return rtr.RouteStaticDel(network)
+			rtname := c.StringArgs["staticroutename"]
+			if rtname == "" {
+				return rtr.RouteStaticDel(network)
+			}
+			return rtr.NamedRouteStaticDel(network, rtname)
+
+		} else if c.BoolArgs["namedstatic"] {
+			return rtr.NamedRouteStaticDel("", "")
+
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["network"]
-			return rtr.RouteOSPFDel(area, iface)
+			if c.StringArgs["network"] != "" {
+				iface := c.StringArgs["network"]
+				return rtr.RouteOSPFDel(area, iface)
+			}
+			if c.BoolArgs["export"] {
+				filter := c.StringArgs["Ipv4/Mask"]
+				return rtr.RouteOSPFDelFilter(area, filter)
+			}
+			if err := rtr.RouteOSPFDel(area, ""); err != nil {
+				return err
+			}
+			if err := rtr.RouteOSPFDelFilter(area, ""); err != nil {
+				return err
+			}
+			return nil
+		} else if c.BoolArgs["bgp"] {
+			processname := c.StringArgs["processname"]
+			if c.BoolArgs["rrclient"] {
+				return rtr.RouteBGPRRDel(processname)
+			} else if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
+				local := false
+				if c.BoolArgs["local"] {
+					local = true
+				}
+				return rtr.RouteBGPDel(processname, local, false)
+			}
+			return rtr.RouteBGPDel(processname, false, true)
+
 		} else {
 			// clear all routes on all protocols
 			rtr.RouteStaticDel("")
+			rtr.NamedRouteStaticDel("", "")
 			rtr.RouteOSPFDel("", "")
+			rtr.RouteBGPDel("", false, true)
 		}
+	} else if c.BoolArgs["rid"] {
+		rtr.routerid = "0.0.0.0"
+		return nil
 	} else {
 		// remove everything about this router
-		err := rtr.InterfaceDel("", "")
+		err := rtr.InterfaceDel("", "", true)
 		if err != nil {
 			return err
 		}
 		rtr.DNSDel("")
 		rtr.RADDel("")
 		rtr.RouteStaticDel("")
+		rtr.NamedRouteStaticDel("", "")
 		rtr.RouteOSPFDel("", "")
 		rtr.dhcp = make(map[string]*dhcp)
+		rtr.RouteBGPDel("", false, true)
+		rtr.routerid = "0.0.0.0"
 	}
 	return nil
 }

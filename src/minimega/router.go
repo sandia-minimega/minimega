@@ -7,9 +7,10 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io/ioutil"
+	"io"
 	log "minilog"
 	"net"
+	"os"
 	"path/filepath"
 	"ron"
 	"sort"
@@ -20,7 +21,8 @@ import (
 
 type Router struct {
 	vm           VM
-	IPs          [][]string // positional ip address (index 0 is the first listed network in vm config net)
+	IPs          [][]string     // positional ip address (index 0 is the first listed network in vm config net)
+	Loopbacks    map[int]string //loopback where it takes index number from interface command as key
 	logLevel     string
 	updateIPs    bool // only update IPs if we've made changes
 	dhcp         map[string]*dhcp
@@ -29,12 +31,16 @@ type Router struct {
 	gw           string
 	rad          map[string]bool // using a bool placeholder here for later RAD options
 	staticRoutes map[string]string
+	namedRoutes  map[string]map[string]string
 	ospfRoutes   map[string]*ospf
+	bgpRoutes    map[string]*bgp
+	routerid     string
 }
 
 type ospf struct {
 	area       string
 	interfaces map[string]bool
+	prefixes   map[string]bool
 }
 
 type dhcp struct {
@@ -44,6 +50,16 @@ type dhcp struct {
 	router string
 	dns    string
 	static map[string]string
+}
+
+type bgp struct {
+	bgpprocessname string
+	localip        string
+	localas        int
+	neighborip     string
+	neighboras     int
+	routereflector bool
+	exportnetworks map[string]bool
 }
 
 // Create a new router for vm, or returns an existing router if it already
@@ -58,12 +74,16 @@ func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
 	r := &Router{
 		vm:           vm,
 		IPs:          [][]string{},
+		Loopbacks:    make(map[int]string),
 		logLevel:     "error",
 		dhcp:         make(map[string]*dhcp),
 		dns:          make(map[string][]string),
 		rad:          make(map[string]bool),
 		staticRoutes: make(map[string]string),
+		namedRoutes:  make(map[string]map[string]string),
 		ospfRoutes:   make(map[string]*ospf),
+		bgpRoutes:    make(map[string]*bgp),
+		routerid:     "0.0.0.0",
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -83,18 +103,33 @@ func (ns *Namespace) FindRouter(vm VM) *Router {
 	return ns.routers[id]
 }
 
+// ToString for Router Object
 func (r *Router) String() string {
 	// create output
 	var o bytes.Buffer
+	// IP config
 	fmt.Fprintf(&o, "IPs:\n")
 	for i, v := range r.IPs {
 		fmt.Fprintf(&o, "Network: %v: %v\n", i, v)
 	}
-	fmt.Fprintln(&o)
 
+	if len(r.Loopbacks) > 0 {
+		var keys []string
+		for _, k := range r.Loopbacks {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		fmt.Fprintf(&o, "Loopback IPs:\n")
+		for _, l := range keys {
+			fmt.Fprintf(&o, "%v\n", l)
+		}
+	}
+
+	fmt.Fprintln(&o)
+	// DHCP config
 	if len(r.dhcp) > 0 {
 		var keys []string
-		for k, _ := range r.dhcp {
+		for k := range r.dhcp {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -103,11 +138,11 @@ func (r *Router) String() string {
 			fmt.Fprintf(&o, "%v\n", d)
 		}
 	}
-
+	// DNS Config
 	if len(r.dns) > 0 {
 		fmt.Fprintf(&o, "DNS:\n")
 		var keys []string
-		for k, _ := range r.dns {
+		for k := range r.dns {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -131,7 +166,7 @@ func (r *Router) String() string {
 	if len(r.rad) > 0 {
 		fmt.Fprintf(&o, "Router Advertisements:\n")
 		var keys []string
-		for k, _ := range r.rad {
+		for k := range r.rad {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -140,11 +175,11 @@ func (r *Router) String() string {
 		}
 		fmt.Fprintln(&o)
 	}
-
+	// Static route config
 	if len(r.staticRoutes) > 0 {
 		fmt.Fprintf(&o, "Static Routes:\n")
 		var keys []string
-		for k, _ := range r.staticRoutes {
+		for k := range r.staticRoutes {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -154,9 +189,28 @@ func (r *Router) String() string {
 		fmt.Fprintln(&o)
 	}
 
+	if len(r.namedRoutes) > 0 {
+		fmt.Fprintf(&o, "Named Static Routes:\n")
+		var names []string
+		for k := range r.namedRoutes {
+			names = append(names, k)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			fmt.Fprintf(&o, "%v\n", name)
+			for network, nh := range r.namedRoutes[name] {
+				if nh != "" {
+					nh = "\t" + nh
+				}
+				fmt.Fprintf(&o, "\t%v%v\n", network, nh)
+			}
+		}
+		fmt.Fprintln(&o)
+	}
+	// OSPF route config
 	if len(r.ospfRoutes) > 0 {
 		var keys []string
-		for k, _ := range r.ospfRoutes {
+		for k := range r.ospfRoutes {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
@@ -165,80 +219,125 @@ func (r *Router) String() string {
 			fmt.Fprintf(&o, "%v\n", ospfRoute)
 		}
 	}
-
-	lines := strings.Split(r.vm.Tag("minirouter_log"), "\n")
-
-	fmt.Fprintln(&o, "Log:")
-	for _, v := range lines {
-		fmt.Fprintf(&o, "\t%v\n", v)
+	// BGP route config
+	if len(r.bgpRoutes) > 0 {
+		var keys []string
+		for k := range r.bgpRoutes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			bgpRoute := r.bgpRoutes[k]
+			fmt.Fprintf(&o, "%v\n", bgpRoute)
+		}
+	}
+	if r.vm != nil {
+		lines := strings.Split(r.vm.Tag("minirouter_log"), "\n")
+		fmt.Fprintln(&o, "Log:")
+		for _, v := range lines {
+			fmt.Fprintf(&o, "\t%v\n", v)
+		}
 	}
 
 	return o.String()
 }
 
-func (r *Router) generateConfig() error {
-	var out bytes.Buffer
-
+// Write config performs the write operation to the Router configfile
+func (r *Router) writeConfig(w io.Writer) error {
 	// log level
-	fmt.Fprintf(&out, "log level %v\n", r.logLevel)
+	fmt.Fprintf(w, "log level %v\n", r.logLevel)
 
 	// only writeout ip changes if it's changed from the last commit in
 	// order to avoid upsetting existing connections the device may have
 	if r.updateIPs {
 		// ips
-		fmt.Fprintf(&out, "ip flush\n") // no need to manage state - just start over
-		for i, v := range r.IPs {
-			for _, w := range v {
-				fmt.Fprintf(&out, "ip add %v %v\n", i, w)
+		fmt.Fprintf(w, "ip flush\n") // no need to manage state - just start over
+		for i, j := range r.IPs {
+			for _, k := range j {
+				fmt.Fprintf(w, "ip add %v %v\n", i, k)
 			}
+		}
+		for _, v := range r.Loopbacks {
+			fmt.Fprintf(w, "ip add lo %v\n", v)
 		}
 	}
 
 	// dnsmasq
-	fmt.Fprintf(&out, "dnsmasq flush\n")
+	fmt.Fprintf(w, "dnsmasq flush\n")
 	for _, d := range r.dhcp {
 		if d.low != "" {
-			fmt.Fprintf(&out, "dnsmasq dhcp range %v %v %v\n", d.addr, d.low, d.high)
+			fmt.Fprintf(w, "dnsmasq dhcp range %v %v %v\n", d.addr, d.low, d.high)
 		}
 		if d.router != "" {
-			fmt.Fprintf(&out, "dnsmasq dhcp option router %v %v\n", d.addr, d.router)
+			fmt.Fprintf(w, "dnsmasq dhcp option router %v %v\n", d.addr, d.router)
 		}
 		if d.dns != "" {
-			fmt.Fprintf(&out, "dnsmasq dhcp option dns %v %v\n", d.addr, d.dns)
+			fmt.Fprintf(w, "dnsmasq dhcp option dns %v %v\n", d.addr, d.dns)
 		}
 		for mac, ip := range d.static {
-			fmt.Fprintf(&out, "dnsmasq dhcp static %v %v %v\n", d.addr, mac, ip)
+			fmt.Fprintf(w, "dnsmasq dhcp static %v %v %v\n", d.addr, mac, ip)
 		}
 	}
 	for ip, hosts := range r.dns {
 		for _, host := range hosts {
-			fmt.Fprintf(&out, "dnsmasq dns %v %v\n", ip, host)
+			fmt.Fprintf(w, "dnsmasq dns %v %v\n", ip, host)
 		}
 	}
 	if r.upstream != "" {
-		fmt.Fprintf(&out, "dnsmasq upstream %v\n", r.upstream)
+		fmt.Fprintf(w, "dnsmasq upstream %v\n", r.upstream)
 	}
 	if r.gw != "" {
-		fmt.Fprintf(&out, "route add default gw %v\n", r.gw)
+		fmt.Fprintf(w, "route add default gw %v\n", r.gw)
 	} else {
-		fmt.Fprintf(&out, "route del default\n")
+		fmt.Fprintf(w, "route del default\n")
 	}
-	for subnet, _ := range r.rad {
-		fmt.Fprintf(&out, "dnsmasq ra %v\n", subnet)
+	for subnet := range r.rad {
+		fmt.Fprintf(w, "dnsmasq ra %v\n", subnet)
 	}
-	fmt.Fprintf(&out, "dnsmasq commit\n")
+	fmt.Fprintf(w, "dnsmasq commit\n")
 
 	// bird
-	fmt.Fprintf(&out, "bird flush\n")
+	fmt.Fprintf(w, "bird flush\n")
 	for network, nh := range r.staticRoutes {
-		fmt.Fprintf(&out, "bird static %v %v\n", network, nh)
+		fmt.Fprintf(w, "bird static %v %v %v\n", network, nh, "null")
 	}
-	for _, o := range r.ospfRoutes {
-		for iface, _ := range o.interfaces {
-			fmt.Fprintf(&out, "bird ospf %v %v\n", o.area, iface)
+	for name, network := range r.namedRoutes {
+		for nt, nh := range network {
+			if nh == "" {
+				nh = "null"
+			}
+			fmt.Fprintf(w, "bird static %v %v %v\n", nt, nh, name)
 		}
 	}
-	fmt.Fprintf(&out, "bird commit\n")
+	for _, o := range r.ospfRoutes {
+		for iface := range o.interfaces {
+			fmt.Fprintf(w, "bird ospf %v %v\n", o.area, iface)
+		}
+		for filter := range o.prefixes {
+			fmt.Fprintf(w, "bird ospf %v filter %v\n", o.area, filter)
+		}
+	}
+	for _, b := range r.bgpRoutes {
+		fmt.Fprintf(w, "bird bgp %v local %v %v\n", b.bgpprocessname, b.localip, b.localas)
+		fmt.Fprintf(w, "bird bgp %v neighbor %v %v\n", b.bgpprocessname, b.neighborip, b.neighboras)
+		if b.routereflector {
+			fmt.Fprintf(w, "bird bgp %v rrclient\n", b.bgpprocessname)
+		}
+		for net := range b.exportnetworks {
+			fmt.Fprintf(w, "bird bgp %v filter %v\n", b.bgpprocessname, net)
+		}
+	}
+
+	r.setRouterID()
+	fmt.Fprintf(w, "bird routerid %v\n", r.routerid)
+	fmt.Fprintf(w, "bird commit\n")
+
+	return nil
+}
+
+// Commit completes the changes to the Minirouter configuartion file
+func (r *Router) Commit(ns *Namespace) error {
+	log.Debugln("Commit")
 
 	filename := fmt.Sprintf("minirouter-%v", r.vm.GetName())
 
@@ -249,17 +348,18 @@ func (r *Router) generateConfig() error {
 		path = filepath.Join(*f_iomBase, namespace)
 	}
 
-	return ioutil.WriteFile(filepath.Join(path, filename), out.Bytes(), 0644)
-}
-
-func (r *Router) Commit(ns *Namespace) error {
-	log.Debugln("Commit")
-
-	// build a command list from the router
-	err := r.generateConfig()
+	f, err := os.Create(filepath.Join(path, filename))
 	if err != nil {
 		return err
 	}
+
+	defer f.Close()
+
+	if err := r.writeConfig(f); err != nil {
+		return err
+	}
+
+	f.Sync()
 	r.updateIPs = false // IPs are no longer stale
 
 	// remove any previous commands
@@ -302,38 +402,49 @@ func (r *Router) Commit(ns *Namespace) error {
 	return nil
 }
 
+// Sets log level for Minirouter
 func (r *Router) LogLevel(level string) {
 	log.Debug("RouterLogLevel: %v", level)
 
 	r.logLevel = level
 }
 
-func (r *Router) InterfaceAdd(n int, i string) error {
+// Adds an ip address to the specified interface. This could be ethernet or Loopback
+func (r *Router) InterfaceAdd(n int, i string, loopback bool) error {
 	log.Debug("RouterInterfaceAdd: %v, %v", n, i)
-
+	if loopback {
+		if i == "dhcp" {
+			return fmt.Errorf("Cannot put %v on loopback", i)
+		}
+		if !routerIsValidIP(i) {
+			return fmt.Errorf("invalid IP: %v", i)
+		}
+		if r.routerIPExistance(n, i, loopback) {
+			return fmt.Errorf("IP %v already exists", i)
+		}
+		log.Debug("adding Loopback ip %v", i)
+		r.Loopbacks[n] = i
+		r.updateIPs = true
+		return nil
+	}
 	if n >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", n)
 	}
-
 	if !routerIsValidIP(i) {
 		return fmt.Errorf("invalid IP: %v", i)
 	}
-
-	for _, v := range r.IPs[n] {
-		if v == i {
-			return fmt.Errorf("IP %v already exists", i)
-		}
+	if r.routerIPExistance(n, i, loopback) {
+		return fmt.Errorf("IP %v already exists", i)
 	}
-
 	log.Debug("adding ip %v", i)
-
 	r.IPs[n] = append(r.IPs[n], i)
 	r.updateIPs = true
 
 	return nil
 }
 
-func (r *Router) InterfaceDel(n string, i string) error {
+// Removes ip(s) from interface or loopback
+func (r *Router) InterfaceDel(n string, i string, lo bool) error {
 	log.Debug("RouterInterfaceDel: %v, %v", n, i)
 
 	var network int
@@ -350,7 +461,18 @@ func (r *Router) InterfaceDel(n string, i string) error {
 
 	if network == -1 {
 		r.IPs = make([][]string, len(r.IPs))
+		r.Loopbacks = make(map[int]string)
 		r.updateIPs = true
+		return nil
+	}
+	// check if request is to delete all loopbacks or just specific loopback
+	if lo {
+		if i == "all" {
+			r.Loopbacks = make(map[int]string)
+			r.updateIPs = true
+			return nil
+		}
+		delete(r.Loopbacks, network)
 		return nil
 	}
 
@@ -358,7 +480,7 @@ func (r *Router) InterfaceDel(n string, i string) error {
 		return fmt.Errorf("no such network index: %v", network)
 	}
 
-	if i == "" {
+	if i == "" || i == "all" {
 		r.IPs[network] = []string{}
 		r.updateIPs = true
 		return nil
@@ -385,6 +507,7 @@ func (r *Router) InterfaceDel(n string, i string) error {
 	return nil
 }
 
+// Checks if the IP is valid
 func routerIsValidIP(i string) bool {
 	if _, _, err := net.ParseCIDR(i); err != nil && i != "dhcp" {
 		return false
@@ -392,6 +515,51 @@ func routerIsValidIP(i string) bool {
 	return true
 }
 
+// Checks if the IP Currenlty Exists
+func (r *Router) routerIPExistance(n int, i string, loopback bool) bool {
+	if loopback {
+		for _, v := range r.Loopbacks {
+			if v == i {
+				return true
+			}
+		}
+	} else {
+		for _, v := range r.IPs[n] {
+			if v == i {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+//Generates router ID based on established rules
+//Manually configure has highest preference -> Highest loopback -> Highest interface
+func (r *Router) setRouterID() {
+	if strings.Compare(r.routerid, "0.0.0.0") == 0 {
+		if len(r.Loopbacks) > 0 {
+			for _, ip := range r.Loopbacks {
+				log.Debug("compare loopback ip %v with current router id %v", ip, r.routerid)
+				if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerid)) == 1 {
+					log.Debug("found new router id %v", ip)
+					r.routerid = strings.Split(ip, "/")[0]
+				}
+			}
+		} else {
+			for _, iplist := range r.IPs {
+				for _, ip := range iplist {
+					log.Debug("compare int ip %v with current router id %v", ip, r.routerid)
+					if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerid)) == 1 {
+						log.Debug("found new router id %v", ip)
+						r.routerid = strings.Split(ip, "/")[0]
+					}
+				}
+			}
+		}
+	}
+}
+
+// Sets DHCP Range
 func (r *Router) DHCPAddRange(addr, low, high string) error {
 	d := r.dhcpFindOrCreate(addr)
 
@@ -401,6 +569,7 @@ func (r *Router) DHCPAddRange(addr, low, high string) error {
 	return nil
 }
 
+// Turns on DHCP Function to the router
 func (r *Router) DHCPAddRouter(addr, rtr string) error {
 	d := r.dhcpFindOrCreate(addr)
 
@@ -409,6 +578,7 @@ func (r *Router) DHCPAddRouter(addr, rtr string) error {
 	return nil
 }
 
+// Adds DNS server infromation to the router for DHCP
 func (r *Router) DHCPAddDNS(addr, dns string) error {
 	d := r.dhcpFindOrCreate(addr)
 
@@ -417,6 +587,7 @@ func (r *Router) DHCPAddDNS(addr, dns string) error {
 	return nil
 }
 
+// Creates a static IP reseravtion for DHCP
 func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
 	d := r.dhcpFindOrCreate(addr)
 
@@ -437,6 +608,7 @@ func (r *Router) dhcpFindOrCreate(addr string) *dhcp {
 	return d
 }
 
+// toString for DHCP object
 func (d *dhcp) String() string {
 	var o bytes.Buffer
 
@@ -455,7 +627,7 @@ func (d *dhcp) String() string {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 
 	var keys []string
-	for k, _ := range d.static {
+	for k := range d.static {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -520,23 +692,61 @@ func (r *Router) RADDel(subnet string) error {
 	return nil
 }
 
-func (r *Router) RouteStaticAdd(network, nh string) {
-	r.staticRoutes[network] = nh
+// Adds a static routes for the router
+// These can be standard routes or named routes that can referenced by Bird
+func (r *Router) RouteStaticAdd(network, nh, name string) {
+	if name != "" {
+		if r.namedRoutes[name] == nil {
+			r.namedRoutes[name] = make(map[string]string)
+		}
+		if nh == "0" {
+			nh = ""
+		}
+		r.namedRoutes[name][network] = nh
+	} else {
+		r.staticRoutes[network] = nh
+	}
 }
 
+// Removes static route(s) for the router
 func (r *Router) RouteStaticDel(network string) error {
-	if network == "" {
+	if network == "" || network == "all" {
 		r.staticRoutes = make(map[string]string)
-	} else {
-		if _, ok := r.staticRoutes[network]; ok {
-			delete(r.staticRoutes, network)
-		} else {
-			return fmt.Errorf("no such network: %v", network)
-		}
+		return nil
 	}
+
+	if _, ok := r.staticRoutes[network]; !ok {
+		return fmt.Errorf("no such static route: %v", network)
+	}
+	delete(r.staticRoutes, network)
 	return nil
 }
 
+// Removes named route(s) for the router
+func (r *Router) NamedRouteStaticDel(network, name string) error {
+	if name == "" {
+		r.namedRoutes = make(map[string]map[string]string)
+		return nil
+	}
+
+	if _, ok := r.namedRoutes[name]; !ok {
+		return fmt.Errorf("no such named static route: %v", name)
+	}
+
+	if network == "all" {
+		delete(r.namedRoutes, name)
+		return nil
+	}
+
+	if _, ok := r.namedRoutes[name][network]; !ok {
+		return fmt.Errorf("no such network in named static route: %v", network)
+	}
+
+	delete(r.namedRoutes[name], network)
+	return nil
+}
+
+// Sets up or returns existing OSPF Area
 func (r *Router) ospfFindOrCreate(area string) *ospf {
 	if o, ok := r.ospfRoutes[area]; ok {
 		return o
@@ -544,11 +754,13 @@ func (r *Router) ospfFindOrCreate(area string) *ospf {
 	o := &ospf{
 		area:       area,
 		interfaces: make(map[string]bool),
+		prefixes:   make(map[string]bool),
 	}
 	r.ospfRoutes[area] = o
 	return o
 }
 
+// toString for OSPF objects
 func (o *ospf) String() string {
 	var out bytes.Buffer
 
@@ -556,7 +768,7 @@ func (o *ospf) String() string {
 	fmt.Fprintf(&out, "Interfaces:\n")
 
 	var keys []string
-	for k, _ := range o.interfaces {
+	for k := range o.interfaces {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -564,15 +776,61 @@ func (o *ospf) String() string {
 		fmt.Fprintf(&out, "\t%v\n", iface)
 	}
 
+	if len(o.prefixes) > 0 {
+		fmt.Fprintln(&out, "OSPF Export Networks or Routes:")
+
+		keys = nil
+		for k := range o.prefixes {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, filter := range keys {
+			fmt.Fprintf(&out, "\t%v\n", filter)
+		}
+	}
+
 	return out.String()
 }
 
-func (r *Router) RouteOSPFAdd(area, iface string) {
+// Adds interface,network and/or filter information for OSPF
+func (r *Router) RouteOSPFAdd(area, iface, filter string) {
 	o := r.ospfFindOrCreate(area)
-	o.interfaces[iface] = true
+	if iface != "" {
+		o.interfaces[iface] = true
+	}
+	if filter != "" {
+		if strings.Contains(filter, "/") {
+			o.prefixes[filter] = false
+		} else {
+			o.prefixes[filter] = true
+		}
+	}
 }
 
+// Deletes an OSPF Interface Setting or the entire area
 func (r *Router) RouteOSPFDel(area, iface string) error {
+	if area == "" {
+		r.ospfRoutes = make(map[string]*ospf)
+		return nil
+	}
+	o, ok := r.ospfRoutes[area]
+	if !ok {
+		return fmt.Errorf("no such area: %v", area)
+	}
+
+	if iface == "" {
+		o.interfaces = make(map[string]bool)
+		return nil
+	}
+	if _, ok := o.interfaces[iface]; ok {
+		delete(o.interfaces, iface)
+		return nil
+	}
+	return fmt.Errorf("no such interface: %v", iface)
+}
+
+// Deletes a specific network or filter from OSPF
+func (r *Router) RouteOSPFDelFilter(area, filter string) error {
 	if area == "" {
 		r.ospfRoutes = make(map[string]*ospf)
 		return nil
@@ -583,15 +841,114 @@ func (r *Router) RouteOSPFDel(area, iface string) error {
 		return fmt.Errorf("no such area: %v", area)
 	}
 
-	if iface == "" {
-		o.interfaces = make(map[string]bool)
+	if filter == "" {
+		o.prefixes = make(map[string]bool)
 		return nil
 	}
 
-	if _, ok := o.interfaces[iface]; ok {
-		delete(o.interfaces, iface)
+	if _, ok := o.prefixes[filter]; ok {
+		delete(o.prefixes, filter)
 		return nil
 	}
 
-	return fmt.Errorf("no such interface: %v", iface)
+	return fmt.Errorf("no such filter: %v", filter)
+}
+
+// Sets up or returns existing BGP Process
+func (r *Router) bgpFindOrCreate(bgpprocess string) *bgp {
+	log.Debugln("Finding or creating Bgp process")
+	if b, ok := r.bgpRoutes[bgpprocess]; ok {
+		log.Debug("found bgp %v", b.bgpprocessname)
+		return b
+	}
+	b := &bgp{
+		bgpprocessname: bgpprocess,
+		exportnetworks: make(map[string]bool),
+	}
+	log.Debug("created bgp %v", b.bgpprocessname)
+	r.bgpRoutes[bgpprocess] = b
+	return b
+}
+
+// Adds BGP configuration information
+func (r *Router) RouteBGPAdd(islocal bool, processname string, ip string, as int) {
+	b := r.bgpFindOrCreate(processname)
+	if islocal {
+		log.Debugln("Setting local IP and AS bgp")
+		b.localip = ip
+		b.localas = as
+	} else {
+		log.Debugln("Setting neighbor IP and AS bgp")
+		b.neighborip = ip
+		b.neighboras = as
+	}
+}
+
+// Adds BGP export rules
+func (r *Router) ExportBGP(processname string, all bool, filter string) {
+	b := r.bgpFindOrCreate(processname)
+	log.Debugln("Setting export")
+	if all {
+		b.exportnetworks["all"] = true
+	} else {
+		b.exportnetworks[filter] = true
+		//r.RouteStaticAdd(network, "", processname)
+	}
+}
+
+// Resets BGP route reflector status
+func (r *Router) RouteBGPRRDel(processname string) error {
+	if _, ok := r.bgpRoutes[processname]; !ok {
+		return fmt.Errorf("no such bgp process: %v", processname)
+	}
+	r.bgpRoutes[processname].routereflector = false
+	return nil
+}
+
+// Resets certain BGP settings or deletes the entire bgp process
+func (r *Router) RouteBGPDel(processname string, local, clearall bool) error {
+	if _, ok := r.bgpRoutes[processname]; !ok && processname != "" {
+		return fmt.Errorf("no such bgp process: %v", processname)
+	}
+	if processname == "" {
+		r.bgpRoutes = make(map[string]*bgp)
+		return nil
+	}
+	if !clearall {
+		if local {
+			r.bgpRoutes[processname].localip = ""
+			r.bgpRoutes[processname].localas = 0
+			return nil
+		} else {
+			r.bgpRoutes[processname].neighborip = ""
+			r.bgpRoutes[processname].neighboras = 0
+			return nil
+		}
+	}
+	delete(r.bgpRoutes, processname)
+	return nil
+}
+
+// toString for BGP Object
+func (b *bgp) String() string {
+	var out bytes.Buffer
+	fmt.Fprintf(&out, "BGP Process Name:\t%v\n", b.bgpprocessname)
+	fmt.Fprintf(&out, "BGP Local IP:\t%v\n", b.localip)
+	fmt.Fprintf(&out, "BGP Local As:\t%v\n", b.localas)
+	fmt.Fprintf(&out, "BGP Neighbor IP:\t%v\n", b.neighborip)
+	fmt.Fprintf(&out, "BGP Neighbor As:\t%v\n", b.neighboras)
+	fmt.Fprintf(&out, "BGP RouteReflector:\t%v\n", b.routereflector)
+	if len(b.exportnetworks) > 0 {
+		fmt.Fprintln(&out, "BGP Export Networks or Routes:")
+
+		var keys []string
+		for k := range b.exportnetworks {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, filter := range keys {
+			fmt.Fprintf(&out, "\t%v\n", filter)
+		}
+	}
+	return out.String()
 }

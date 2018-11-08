@@ -1,0 +1,105 @@
+# Setup
+clear cc responses
+vm config filesystem $images/minirouterfs
+vm config preinit $images/minirouterfs/preinit
+vm config net a b
+vm launch container routerA
+vm config net b c
+vm launch container routerB
+vm config net c d
+vm launch container routerC
+vm config net a,00:1f:53:02:0b:51
+vm launch container vmA
+vm config net d,00:1f:53:02:0b:52
+vm launch container vmB
+# Test basic BGP
+router routerA interface 0 10.0.0.1/24
+router routerA interface 1 10.1.0.1/24
+router routerA interface 0 10.2.0.1/32 lo
+router routerA dhcp 10.0.0.1 static 00:1f:53:02:0b:51 10.0.0.2
+router routerA route ospf 0 0
+router routerA route ospf 0 1
+router routerA route ospf 0 lo
+router routerA route bgp ibgp local 10.2.0.1 100
+router routerA route bgp ibgp neighbor 10.2.0.2 100
+router routerA route bgp ibgp export all 0
+router routerA
+clear router routerA route bgp ibgp local
+router routerA
+clear router routerA route bgp ibgp neighbor
+router routerA
+router routerA route bgp ibgp rrclient
+router routerA
+clear router routerA route bgp ibgp
+router routerA
+router routerA route bgp ibgp local 10.2.0.1 100
+router routerA route bgp ibgp neighbor 10.2.0.2 100
+router routerA route bgp ibgp export all 0
+router routerA commit
+shell sort /tmp/minimega/files/minirouter-routerA
+router routerB interface 0 10.1.0.2/24
+router routerB interface 1 192.168.1.1/24
+router routerB interface 0 10.2.0.2/32 lo
+router routerB route ospf 0 0
+router routerB route ospf 0 lo
+router routerB route static 10.0.0.0/8 0 ebgpnet
+router routerB route static 192.168.1.0/24 10.2.0.2 ibgpnet
+router routerB route ospf 0 export ibgpnet
+router routerB route bgp ibgp local 10.2.0.2 100
+router routerB route bgp ibgp neighbor 10.2.0.1 100
+router routerB route bgp ibgp rrclient
+router routerB route bgp ibgp export all 0
+router routerB route bgp ebgp local 192.168.1.1 100
+router routerB route bgp ebgp neighbor 192.168.1.2 200
+router routerB route bgp ebgp export filter ebgpnet
+router routerB route bgp ebgp export all 0
+router routerB
+router routerB commit
+shell sort /tmp/minimega/files/minirouter-routerB
+router routerC interface 0 192.168.1.2/24
+router routerC interface 1 11.0.0.1/24
+router routerC dhcp 11.0.0.1 static 00:1f:53:02:0b:52 11.0.0.2
+router routerC route static 11.0.0.0/24 0 bgpnet
+router routerC route bgp ebgp local 192.168.1.2 200
+router routerC route bgp ebgp neighbor 192.168.1.1 100
+router routerC route bgp ebgp export filter bgpnet
+router routerC route bgp ebgp export all 0
+router routerC
+router routerC commit
+# Test EndtoEnd
+router vmA interface 0 dhcp
+router vmA gw 10.0.0.1
+router vmA commit
+router vmB interface 0 dhcp
+router vmB gw 11.0.0.1
+router vmB commit
+vm start routerA,routerB,routerC
+shell sleep 5
+vm start vmA,vmB
+shell sleep 60
+cc filter hostname=routerA
+cc exec route -n
+clear cc filter
+cc filter hostname=routerB
+cc exec route -n
+cc exec bash -c 'birdc -s /bird.sock show protocol ebgp | grep -o "ebgp     BGP      master   up"'
+clear cc filter
+cc filter hostname=routerC
+cc exec route -n
+cc exec bash -c 'birdc -s /bird.sock show protocol ebgp | grep -o "ebgp     BGP      master   up"'
+clear cc filter
+cc filter hostname=vmA
+cc exec bash -c 'ping -c 4 10.2.0.2 | grep -o "4 packets transmitted, 4 received"'
+clear cc filter
+cc filter hostname=vmB
+cc exec bash -c 'ping -c 4 11.0.0.2 | grep -o "4 packets transmitted, 4 received"'
+clear cc filter
+shell sleep 10
+cc responses 16 raw
+cc responses 17 raw
+cc responses 18 raw
+cc responses 19 raw
+cc responses 20 raw
+cc responses 21 raw
+cc responses 22 raw
+
