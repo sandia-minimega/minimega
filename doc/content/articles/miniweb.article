@@ -171,6 +171,12 @@ the same time. minimega stores some "scrollback" from the container's console,
 so when a new console connects it can re-play recent output rather than present
 a blank screen.
 
+Note that miniweb assumes that it can directly connect to the VM using the host
+and port from `vm`info`. This can cause issues if your machine has a firewall
+that blocks external connections. If you see errors in miniweb's log that it
+cannot connect, you may need to modify your firewall rules to allow the
+connections.
+
 ** Screenshots
 
 Each KVM VM can returns its current screenshot to `miniweb` via the
