@@ -89,7 +89,8 @@ By default, very little is configured beyond the memory size and number of
 CPUs. Note the "Snapshot: true" parameter--this indicates that by default,
 changes will not be written to the virtual disk file, meaning you can launch
 multiple copies of the same VM using the same disk. If you wanted to make
-permanent changes to the disk, you would set "snapshot" to false.
+permanent changes to the disk, you would set "snapshot" to false. The snapshot
+parameter only applies to disk images, not the initrd used in this example.
 
 For this tutorial, we just need to tell it to use the kernel/initrd pair that
 we just created:
