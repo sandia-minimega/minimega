@@ -31,6 +31,10 @@ type Command struct {
 	// Source allows developers to keep track of where the command originated
 	// from. Setting and using this is entirely up to developers using minicli.
 	Source string
+
+	// exact tracks whether the command was formed from prefixes or not, can be
+	// used to break ties if there is ambiguity.
+	exact bool
 }
 
 func newCommand(call CLIFunc) *Command {
@@ -39,6 +43,7 @@ func newCommand(call CLIFunc) *Command {
 		BoolArgs:   make(map[string]bool),
 		ListArgs:   make(map[string][]string),
 		Call:       call,
+		exact:      true,
 	}
 }
 

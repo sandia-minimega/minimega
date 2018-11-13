@@ -119,6 +119,9 @@ func (p *patternTrie) compile(input inputItems) *Command {
 			}
 
 			c = p2.compile(input[1:])
+			if c != nil {
+				c.exact = c.exact && len(k.Value) == len(input[0].Value)
+			}
 		case stringItem:
 			// current item becomes StringArg if the remainder compiles
 			c = p2.compile(input[1:])
@@ -135,6 +138,7 @@ func (p *patternTrie) compile(input inputItems) *Command {
 			c = p2.compile(input[1:])
 			if c != nil {
 				c.BoolArgs[k.Value] = true
+				c.exact = c.exact && len(k.Value) == len(input[0].Value)
 			}
 		case listItem:
 			if p2.Handler == nil {
@@ -168,19 +172,40 @@ func (p *patternTrie) compile(input inputItems) *Command {
 		}
 	}
 
-	if len(cmds) == 1 {
-		flagsLock.Lock()
-		defer flagsLock.Unlock()
-
-		cmds[0].Record = defaultFlags.Record
-		cmds[0].Preprocess = defaultFlags.Preprocess
-		cmds[0].Original = input.String()
-		return cmds[0]
-	} else if len(cmds) > 1 {
-		log.Warn("ambiguous command, found %v possibilities", len(cmds))
+	var res *Command
+	var exact int
+	for _, cmd := range cmds {
+		if cmd.exact {
+			exact += 1
+			// optimistic
+			res = cmd
+		}
 	}
 
-	return nil
+	if len(cmds) == 0 {
+		return nil
+	} else if len(cmds) == 1 {
+		res = cmds[0]
+	} else if exact == 1 {
+		// have multiple ambiguous commands but already found the one exact
+		// match with optimism
+	} else if exact > 1 {
+		// this shouldn't happen -- patterns should be distinct
+		log.Error("found multiple exact matches, please report")
+		return nil
+	} else {
+		// multiple ambiguous and no exact
+		log.Warn("ambiguous command, found %v possibilities", len(cmds))
+		return nil
+	}
+
+	flagsLock.Lock()
+	defer flagsLock.Unlock()
+
+	res.Record = defaultFlags.Record
+	res.Preprocess = defaultFlags.Preprocess
+	res.Original = input.String()
+	return res
 }
 
 // help finds all handlers with a given prefix
