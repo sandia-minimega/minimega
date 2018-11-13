@@ -234,11 +234,6 @@ func Compile(input string) (*Command, error) {
 	// patch original input
 	cmd.Original = input
 
-	flagsLock.Lock()
-	defer flagsLock.Unlock()
-
-	cmd.Record = defaultFlags.Record
-	cmd.Preprocess = defaultFlags.Preprocess
 	return cmd, nil
 }
 

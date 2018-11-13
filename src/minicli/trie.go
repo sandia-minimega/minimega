@@ -169,6 +169,11 @@ func (p *patternTrie) compile(input inputItems) *Command {
 	}
 
 	if len(cmds) == 1 {
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
+		cmds[0].Record = defaultFlags.Record
+		cmds[0].Preprocess = defaultFlags.Preprocess
 		cmds[0].Original = input.String()
 		return cmds[0]
 	} else if len(cmds) > 1 {
