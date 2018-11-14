@@ -78,6 +78,14 @@ type Namespace struct {
 	ccPrefix string
 
 	ccMounts map[string]ccMount
+
+	// optimizations
+	hugepagesMountPath string
+
+	affinityEnabled bool
+	affinityFilter  []string
+	affinityMu      sync.Mutex // protects affinityCPUSets
+	affinityCPUSets map[string][]int
 }
 
 type NamespaceInfo struct {
@@ -567,6 +575,53 @@ func (n *Namespace) Snapshot(dir string) error {
 	}
 
 	return nil
+}
+
+// Start VMs matching target and setup interactions with namespace such as connecting
+// them to the correct ron.Server.
+func (ns *Namespace) Start(target string) error {
+	// For each VM, start it if it's in a startable state.
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		// whether this is a reconnect for CC or not
+		reconnect := true
+
+		switch vm.GetState() {
+		case VM_BUILDING:
+			// always start building, first connect so reconnect=false
+			reconnect = false
+
+			// first launch, set affinity
+			if ns.affinityEnabled {
+				if err := ns.addAffinity(vm); err != nil {
+					return true, err
+				}
+			}
+		case VM_PAUSED:
+			// always start paused
+		case VM_QUIT, VM_ERROR:
+			// only start quit or error when not wild
+			if wild {
+				return false, nil
+			}
+		case VM_RUNNING:
+			// shouldn't start an already running vm
+			if !wild {
+				return true, errors.New("vm is already running")
+			}
+
+			return false, nil
+		}
+
+		if err := vm.Start(); err != nil {
+			return true, err
+		}
+
+		if err := vm.Connect(ns.ccServer, reconnect); err != nil {
+			log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
+		}
+
+		return true, nil
+	})
 }
 
 func (ns *Namespace) clearCCMount(s string) error {
