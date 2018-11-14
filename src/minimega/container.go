@@ -910,6 +910,11 @@ func (vm *ContainerVM) launch() error {
 		// Create source:target pairs
 		// TODO: should probably handle spaces
 		args = append(args, fmt.Sprintf("%v:%v", v, k))
+
+		// create source directory if it doesn't exist
+		if err := os.MkdirAll(v, 0755); err != nil {
+			return err
+		}
 	}
 	// denotes end of volumes
 	args = append(args, "--")
