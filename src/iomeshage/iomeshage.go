@@ -41,6 +41,8 @@ type IOMeshage struct {
 	drainLock    sync.RWMutex
 	transferLock sync.RWMutex
 	queue        chan bool
+
+	rand *rand.Rand // RNG for this object
 }
 
 // FileInfo object. Used by the calling API to describe existing files.
@@ -78,6 +80,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 		TIDs:      make(map[int64]chan *IOMMessage),
 		transfers: make(map[string]*Transfer),
 		queue:     make(chan bool, QUEUE_LEN),
+		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 
 	go r.handleMessages()
@@ -114,15 +117,8 @@ func (iom *IOMeshage) Info(file string) []string {
 	ret = append(ret, files...)
 
 	// search the mesh
-	TID := genTID()
-	c := make(chan *IOMMessage)
-	err := iom.registerTID(TID, c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
-
-	if err != nil {
-		// a collision in int64, we should tell someone about this
-		log.Fatalln(err)
-	}
 
 	m := &IOMMessage{
 		From:     iom.node.Name(),
@@ -189,15 +185,8 @@ func (iom *IOMeshage) Get(file string) error {
 	iom.transferLock.RUnlock()
 
 	// find the file somewhere in the mesh
-	TID := genTID()
-	c := make(chan *IOMMessage)
-	err = iom.registerTID(TID, c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
-
-	if err != nil {
-		// a collision in int64, we should tell someone about this
-		log.Fatalln(err)
-	}
 
 	m := &IOMMessage{
 		From:     iom.node.Name(),
@@ -274,10 +263,8 @@ func (iom *IOMeshage) Get(file string) error {
 			// call Get on each of the constituent files, queued in a random order
 
 			// fisher-yates shuffle
-			s := rand.NewSource(time.Now().UnixNano())
-			r := rand.New(s)
 			for i := int64(len(v.Glob)) - 1; i > 0; i-- {
-				j := r.Int63n(i + 1)
+				j := iom.rand.Int63n(i + 1)
 				t := v.Glob[j]
 				v.Glob[j] = v.Glob[i]
 				v.Glob[i] = t
@@ -337,10 +324,8 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 	}
 
 	// fisher-yates shuffle
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
 	for i = numParts - 1; i > 0; i-- {
-		j := r.Int63n(i + 1)
+		j := iom.rand.Int63n(i + 1)
 		t := parts[j]
 		parts[j] = parts[i]
 		parts[i] = t
@@ -368,14 +353,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 
 		// attempt to get this part up to MAX_ATTEMPTS attempts
 		for attempt := 0; attempt < MAX_ATTEMPTS; attempt++ {
-			TID := genTID()
-			c := make(chan *IOMMessage)
-			err := iom.registerTID(TID, c)
-
-			if err != nil {
-				// a collision in int64, we should tell someone about this
-				log.Fatalln(err)
-			}
+			TID, c := iom.newTID()
 
 			if log.WillLog(log.DEBUG) {
 				log.Debug("transferring filepart %v:%v, attempt %v", filename, p, attempt)
@@ -443,8 +421,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 			}
 
 			// transfer this part
-			err = iom.Xfer(m.Filename, info.Part, info.From)
-			if err != nil {
+			if err := iom.Xfer(m.Filename, info.Part, info.From); err != nil {
 				log.Errorln(err)
 				iom.unregisterTID(TID)
 				continue
@@ -526,15 +503,8 @@ func (iom *IOMeshage) destroyTempTransfer(filename string) {
 
 // Transfer a single filepart to a temporary transfer directory.
 func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
-	TID := genTID()
-	c := make(chan *IOMMessage)
-	err := iom.registerTID(TID, c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
-
-	if err != nil {
-		// a collision in int64, we should tell someone about this
-		log.Fatalln(err)
-	}
 
 	m := &IOMMessage{
 		From:     iom.node.Name(),
@@ -543,8 +513,7 @@ func (iom *IOMeshage) Xfer(filename string, part int64, from string) error {
 		TID:      TID,
 		Part:     part,
 	}
-	_, err = iom.node.Set([]string{from}, m)
-	if err != nil {
+	if _, err := iom.node.Set([]string{from}, m); err != nil {
 		return err
 	}
 
@@ -675,11 +644,4 @@ func (iom *IOMeshage) dirPrep(dir string) string {
 	log.Info("dir is %v", dir)
 
 	return dir
-}
-
-// Generate a random 63 bit TID (positive int64).
-func genTID() int64 {
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
-	return r.Int63()
 }
