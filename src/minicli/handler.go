@@ -34,34 +34,6 @@ type Handler struct {
 	Suggest SuggestFunc `json:"-"`
 }
 
-// compile tests whether the input matches the Handler's pattern and builds a
-// command based on the input. If there was no match, the returned Command will
-// be nil. The second return value is the number of elements of the Handler's
-// pattern that were matched. This can be used to determine which handler was
-// the closest match. The third return value is true if there pattern is an
-// exact match, not an apropos match.
-func (h *Handler) compile(input *Input) (*Command, int, bool) {
-	var maxMatchLen int
-	var cmd *Command
-	var matchLen int
-	var exact bool
-
-	for i, pattern := range h.PatternItems {
-		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
-		if cmd != nil {
-			// patch up patterns from original pattern strings
-			cmd.Pattern = h.Patterns[i]
-			return cmd, matchLen, exact
-		}
-
-		if matchLen > maxMatchLen {
-			maxMatchLen = matchLen
-		}
-	}
-
-	return nil, maxMatchLen, false
-}
-
 func (h *Handler) parsePatterns() error {
 	for _, pattern := range h.Patterns {
 		items, err := lexPattern(pattern)

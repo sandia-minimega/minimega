@@ -47,16 +47,17 @@ var escapedChars = map[string]string{
 }
 
 func (items inputItems) String() string {
-	parts := make([]string, len(items))
+	s2 := make([]string, len(items))
+
 	for i, v := range items {
-		if strings.Contains(v.Value, ` `) {
-			parts[i] = strconv.Quote(v.Value)
+		if strings.IndexFunc(v.Value, unicode.IsSpace) > -1 {
+			s2[i] = strconv.Quote(v.Value)
 		} else {
-			parts[i] = v.Value
+			s2[i] = v.Value
 		}
 	}
 
-	return strings.Join(parts, " ")
+	return strings.Join(s2, " ")
 }
 
 func lexInput(input string) (*Input, error) {
