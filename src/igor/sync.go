@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	log "minilog"
+	"time"
 )
 
 var cmdSync = &Command{
@@ -16,7 +17,7 @@ var cmdSync = &Command{
 Does an internal check to verify the integrity of the data file. Can report and attempt to clean.
 
 SYNOPSIS
-	igor sync <[-d] [-f]> [-q]
+	igor sync <[-d] [-f]> [-q] WHAT
 
 OPTIONS
 
@@ -28,6 +29,11 @@ OPTIONS
 
 	-q, -quiet
 	    Suppress reports, only report errors
+
+Possible WHATs:
+
+arista: 	reconfigure switchports for active reservations
+schedule:	purge orphan reservation IDs from the schedule
 	`,
 }
 
@@ -69,6 +75,21 @@ func runSync(cmd *Command, args []string) {
 		log.Fatalln("Sync access restricted. Please use as admin.")
 	}
 
+	if len(args) != 1 {
+		log.Fatalln("Invalid arguments")
+	}
+
+	switch args[0] {
+	case "schedule":
+		syncSchedule()
+	case "arista":
+		syncArista()
+	default:
+		log.Fatalln("Invalid arguments")
+	}
+}
+
+func syncSchedule() {
 	log.Debug("Sync called - finding orphan IDs")
 	IDs := getOrphanIDs()
 	if len(IDs) > 0 && !quiet {
@@ -92,6 +113,25 @@ func runSync(cmd *Command, args []string) {
 		dirty = true
 	}
 
+}
+
+func syncArista() {
+	now := time.Now()
+
+	for _, r := range Reservations {
+		if !r.Active(now) {
+			continue
+		}
+
+		if !quiet {
+			fmt.Printf("Set switchports for %v to %v\n", r.Hosts, r.Vlan)
+		}
+		if !dryRun {
+			if err := networkSet(r.Hosts, r.Vlan); err != nil {
+				log.Fatal("unable to set up network isolation")
+			}
+		}
+	}
 }
 
 func getOrphanIDs() []uint64 {
