@@ -13,6 +13,7 @@ import (
 	"os"
 	"ranges"
 	"strings"
+	//"time"
 )
 
 var (
@@ -140,15 +141,14 @@ func readConfig(filename string) (Config, error) {
 				ipmi.node = nodename
 				ret.ipmis[nodename] = ipmi
 			}
-		case "logpath":
+		case "loglevel":
 			if len(fields) > 1 {
-				powerbotlog := fields[1]
-				log.Debug("Attempting to write to or create %v", powerbotlog)
-				logfile, err := os.OpenFile(powerbotlog, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+				ll, err := log.ParseLevel(fields[1])
 				if err != nil {
-					log.Fatal("failed to create logfile %v: %v", powerbotlog, err)
+					log.Error(err.Error())
+					return ret, nil
 				}
-				log.AddLogger("file", logfile, log.INFO, false)
+				log.AddSyslog("local", "", "powerbot", ll)
 			}
 		}
 	}
@@ -164,6 +164,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	log.Init()
+	log.AddSyslog("local", "", "powerbot", log.INFO)
 
 	if len(args) == 0 {
 		command = "status"
@@ -229,6 +230,7 @@ func main() {
 
 	// For each device affected, perform the command
 	for _, dev := range devs {
+		log.Info("Performing powerbot %v on %v:%v:%v with type %v", command, dev.name, dev.host, dev.port, dev.pdutype)
 		var pdu PDU
 		// First, let's see if IPMI is available
 		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
@@ -236,21 +238,34 @@ func main() {
 			log.Error(err.Error())
 			continue
 		}
-		log.Debug("Performing powerbot %v on %v:%v:%v with type %v", command, dev.name, dev.host, dev.port, dev.pdutype)
+
 		switch command {
 		case "on":
-			pdu.On(dev.outlets)
+			err := pdu.On(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "off":
-			pdu.Off(dev.outlets)
+			err := pdu.Off(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "cycle":
-			pdu.Cycle(dev.outlets)
+			err := pdu.Cycle(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "status":
-			pdu.Status(dev.outlets)
+			err := pdu.Status(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "temp", "info":
 			fmt.Println("Invalid PDU command; Remaining nodes skipped.")
 		default:
 			usage()
 		}
+		//time.Sleep(500 * time.Millisecond)
 	}
 }
 
