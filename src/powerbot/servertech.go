@@ -9,7 +9,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/ziutek/telnet"
-	//"io"
 	log "minilog"
 	"sort"
 	"strings"

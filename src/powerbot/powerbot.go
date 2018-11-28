@@ -13,7 +13,6 @@ import (
 	"os"
 	"ranges"
 	"strings"
-	//"time"
 )
 
 var (
@@ -265,7 +264,6 @@ func main() {
 		default:
 			usage()
 		}
-		//time.Sleep(500 * time.Millisecond)
 	}
 }
 
