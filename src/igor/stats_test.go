@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	log "minilog"
+	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -14,7 +17,8 @@ var empty time.Time
 func TestCalculateStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
-	globalStats, counter := genResall(start, window)
+	globalStats, counter := genResall(start, window, false)
+	statsV = true
 	globalStats.calculateStats(window)
 	if globalStats.NumNodes != 5 {
 		t.Error("nodes used error counting nodes for time period, got", globalStats.NumNodes, " expected ", 5)
@@ -36,7 +40,7 @@ func TestCalculateStats(t *testing.T) {
 func TestPrintStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
-	globalStats, _ := genResall(start, window)
+	globalStats, _ := genResall(start, window, false)
 	globalStats.calculateStats(window)
 	test := printStats(globalStats)
 	if ok, err := testout(test); !ok {
@@ -44,7 +48,8 @@ func TestPrintStats(t *testing.T) {
 	}
 }
 
-func genRes(user string, start time.Time, end time.Time, actualend time.Time, id int, numnodes int, numext int) *ResData {
+// Generates a Single Reservation
+func genRes(user string, start time.Time, end time.Time, actualend time.Time, id int, numnodes int, numext int, log bool) *ResData {
 	var nodes []string
 	var res *ResData
 	for i := 0; i < numnodes; i++ {
@@ -53,12 +58,16 @@ func genRes(user string, start time.Time, end time.Time, actualend time.Time, id
 	if actualend != empty {
 		res = &ResData{user, start, end, actualend, actualend.Sub(start), id, nodes, numext}
 	} else {
-		res = &ResData{ResName: user, ResStart: start, ResEnd: end, ResId: id, Nodes: nodes, NumExtensions: numext}
+		res = &ResData{ResName: user, ResStart: start, ResEnd: end, ResID: id, Nodes: nodes, NumExtensions: numext}
+	}
+	if log {
+		genlog(res)
 	}
 	return res
 }
 
-func genResall(start time.Time, window time.Time) (*Stats, time.Duration) {
+// Generates Several use cases
+func genResall(start time.Time, window time.Time, log bool) (*Stats, time.Duration) {
 	globalStats := Stats{}
 	globalStats.Reservations = make(map[string][]*ResData)
 	globalStats.NodesUsed = make(map[string]int)
@@ -66,18 +75,18 @@ func genResall(start time.Time, window time.Time) (*Stats, time.Duration) {
 	var counter time.Duration
 	nodecount := 1
 	//test reservation start and end during window
-	globalStats.Reservations["userA"] = []*ResData{genRes("userA", start, start.Add(time.Hour*24*6), start.Add(time.Hour*24*4), 1, nodecount, 0)}
+	globalStats.Reservations["userA"] = []*ResData{genRes("userA", start, start.Add(time.Hour*24*6), start.Add(time.Hour*24*4), 1, nodecount, 0, log)}
 	counter += (start.Add(time.Hour * 24 * 4).Sub(start)) * time.Duration(nodecount)
 	//test reservation start and with no end during window
-	globalStats.Reservations["userB"] = []*ResData{genRes("userB", start, start.Add(time.Hour*24*6), empty, 2, nodecount+1, 0)}
+	globalStats.Reservations["userB"] = []*ResData{genRes("userB", start, start.Add(time.Hour*24*6), empty, 2, nodecount+1, 0, log)}
 	counter += time.Now().Sub(window) * time.Duration(nodecount+1)
 	//test reservation with start and end before window
-	globalStats.Reservations["userC"] = []*ResData{genRes("userC", start.Add(time.Hour*24*-5), start.Add(time.Hour*24*1), start.Add(time.Hour*24*-4), 3, nodecount+2, 0)}
+	globalStats.Reservations["userC"] = []*ResData{genRes("userC", start.Add(time.Hour*24*-5), start.Add(time.Hour*24*1), start.Add(time.Hour*24*-4), 3, nodecount+2, 0, log)}
 	//test reservation with start and no end during window differnet num of extends
-	globalStats.Reservations["userD"] = []*ResData{genRes("userD", start, start.Add(time.Hour*24*10), empty, 4, nodecount+3, 3)}
+	globalStats.Reservations["userD"] = []*ResData{genRes("userD", start, start.Add(time.Hour*24*10), empty, 4, nodecount+3, 3, log)}
 	counter += time.Now().Sub(window) * time.Duration(nodecount+3)
 	//test reservation with start before window and end during window differnet num of extends
-	globalStats.Reservations["userE"] = []*ResData{genRes("userE", start.Add(time.Hour*24*-1), start.Add(time.Hour*24*6), start.Add(time.Hour*24*4), 5, nodecount+4, 2)}
+	globalStats.Reservations["userE"] = []*ResData{genRes("userE", start.Add(time.Hour*24*-1), start.Add(time.Hour*24*6), start.Add(time.Hour*24*4), 5, nodecount+4, 2, log)}
 	counter += (start.Add(time.Hour * 24 * 4).Sub(window)) * time.Duration(nodecount+4)
 	return &globalStats, counter
 }
@@ -105,4 +114,69 @@ func testout(test string) (bool, string) {
 	}
 	return true, ""
 
+}
+
+func TestReadLog(t *testing.T) {
+	initlog()
+	statsV = true
+	start := time.Now().AddDate(0, 0, -5)
+	window := start.Add((time.Nanosecond * -5))
+	globalStats, _ := genResall(start, window, true)
+	globalStats.readLog()
+	control := []string{"userA:1", "userB:2", "userC:3", "userD:4", "userE:5"}
+
+	if len(globalStats.Reservations) != 5 {
+		t.Error("User count mismatch on read, got", len(globalStats.Reservations), " expected ", 5)
+	}
+	var b bytes.Buffer
+	count := 0
+	var test []string
+	for _, rd := range globalStats.Reservationsid {
+		count++
+		fmt.Fprintf(&b, "%v:%v", rd.ResName, rd.ResID)
+		test = append(test, b.String())
+		b.Reset()
+	}
+	sort.Strings(test)
+
+	if count != 5 {
+		t.Error("Reservation count mismatch on read, got", count, " expected ", 5)
+	}
+
+	for i := 0; i < len(control) && i < len(test); i++ {
+		if control[i] != test[i] {
+			t.Error("Reservation  mismatch on read, got", test[i], " expected ", control[i])
+		}
+	}
+}
+
+// Generates a Log to test agaisnt
+func genlog(rd *ResData) {
+	var empty time.Time
+	res := Reservation{
+		ResName:   rd.ResName,
+		StartTime: rd.ResStart.Unix(),
+		EndTime:   rd.ResEnd.Unix(),
+		Duration:  rd.ResEnd.Sub(rd.ResStart).Minutes(),
+		Owner:     rd.ResName,
+		ID:        uint64(rd.ResID),
+	}
+	emitReservationLog("CREATED", res)
+	emitReservationLog("INSTALL", res)
+	for i := 0; i < rd.NumExtensions; i++ {
+		emitReservationLog("EXTENDED", res)
+	}
+	if rd.ActualEnd != empty {
+		emitReservationLog("DELETED", res)
+	}
+}
+
+func initlog() {
+	igorConfig.LogFile = "igor.log"
+	log.Init()
+	logfile, err := os.OpenFile(igorConfig.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+	if err != nil {
+		log.Fatal("failed to create logfile %v: %v", igorConfig.LogFile, err)
+	}
+	log.AddLogger("file", logfile, log.INFO, false)
 }
