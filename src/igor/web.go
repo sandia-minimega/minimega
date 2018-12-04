@@ -11,11 +11,14 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
+	"path/filepath"
 	"ranges"
 	"regexp"
 	"strings"
@@ -42,14 +45,16 @@ The -s flag silences output.`,
 var webP string // port
 var webF string // location of static folder
 var webS bool   // silent
+var webE string // path to igor executable
 
 func init() {
 	// break init cycle
 	cmdWeb.Run = runWeb
 
-	cmdWeb.Flag.StringVar(&webP, "p", "8080", "")
-	cmdWeb.Flag.StringVar(&webF, "f", "", "")
-	cmdWeb.Flag.BoolVar(&webS, "s", false, "")
+	cmdWeb.Flag.StringVar(&webP, "p", "8080", "port")
+	cmdWeb.Flag.StringVar(&webF, "f", "", "path to static resources")
+	cmdWeb.Flag.BoolVar(&webS, "s", false, "silence output")
+	cmdWeb.Flag.StringVar(&webE, "e", "igor", "path to igor executable")
 }
 
 // reservation object that igorweb.js understands
@@ -79,7 +84,7 @@ type Speculate struct {
 	// display string for "End Time" in speculate page
 	End string
 	// properly formatted start string to be used in -a tag if Reserve is
-	// 		clicked in speculate page
+	//              clicked in speculate page
 	Formatted string
 }
 
@@ -89,8 +94,8 @@ type Response struct {
 	// string displayed in response box
 	Message string
 	// additional information:
-	// 		if speculate command - array of Speculate objects
-	// 		else - updated reservations array
+	//              if speculate command - array of Speculate objects
+	//              else - updated reservations array
 	Extra interface{}
 }
 
@@ -135,8 +140,50 @@ func getReservations() []ResTableRow {
 	return resRows
 }
 
+// Returns a non-nil error if something's wrong with the igor command
+// and argument list. We expect that the first item in "args" is "igor"
+func validCommand(args []string) error {
+	// Check that the command starts with 'igor'
+	if args[0] != "igor" {
+		return errors.New("Not an igor command.")
+	}
+
+	// Check for valid subcommand
+	found := false
+	for _, c := range commands {
+		if args[1] == c.Name() {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("Invalid igor subcommand.")
+	}
+
+	// A-OK
+	return nil
+}
+
+// Grabs the user's username from the Authorization header. This
+// header must exist in incoming requests.
+func userFromAuthHeader(r *http.Request) (string, error) {
+	authHeader := r.Header.Get("Authorization")
+	if authHeader == "" {
+		return "", errors.New("Invalid user.")
+	}
+
+	// strip off "Basic " and decode
+	authInfo, err := base64.StdEncoding.DecodeString(authHeader[6:])
+	if err != nil {
+		return "", errors.New("Invalid user.")
+	}
+
+	// Remove :password if it's there
+	return strings.Split(string(authInfo), ":")[0], nil
+}
+
 // handler for commands from client (sent through /run/[command])
-// 		"show" is run on heartbeat, no igor command needs to be run
+//              "show" is run on heartbeat, no igor command needs to be run
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	// separate command from path
@@ -144,12 +191,29 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	splitcmd := strings.Split(command, " ")
 
 	var extra interface{} // for Response.Extra
-	log := ""             // for Response.Message
+	out := ""             // for Response.Message
 	var err error = nil   // for Response.Success (if not nil)
+
+	// Check that the igor command is valid
+	if err := validCommand(splitcmd); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// if an actual command (not heartbeat), run it and log response and error
 	if splitcmd[1] != "show" {
-		log, err = processWrapper(splitcmd[0:]...)
+		username, err := userFromAuthHeader(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		cmd := make([]string, len(splitcmd))
+		copy(cmd, splitcmd)
+		cmd[0] = webE
+
+		env := []string{"USER=" + username}
+		out, err = processWrapperEnv(env, cmd[0:]...)
 		housekeeping()
 	}
 
@@ -158,7 +222,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		specs := []Speculate{}
 
 		// parse response from igor
-		splitlog := strings.FieldsFunc(log, func(c rune) bool {
+		splitlog := strings.FieldsFunc(out, func(c rune) bool {
 			return c == '\n' || c == '\t'
 		})
 
@@ -181,7 +245,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	re := regexp.MustCompile("\x1b\\[..?m")
 
 	// create Response object
-	rsp := Response{err == nil, fmt.Sprintln(re.ReplaceAllString(log, "")), extra}
+	rsp := Response{err == nil, fmt.Sprintln(re.ReplaceAllString(out, "")), extra}
 
 	// write to output if not silent
 	if !webS {
@@ -202,10 +266,10 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// serve igorweb.html with JS template variables filled in
-	// 		for initial display of reservation info
+	//              for initial display of reservation info
 	if r.URL.Path == "/" {
 		resRows := getReservations()
-		t, err := template.ParseFiles(webF + "igorweb.html")
+		t, err := template.ParseFiles(filepath.Join(webF, "igorweb.html"))
 		if err != nil {
 			panic(err)
 		}
@@ -231,11 +295,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 // main web function
 func runWeb(_ *Command, _ []string) {
 	// handle requests for files in /static/
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(webF+"static"))))
+	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
 	// general requests
 	http.HandleFunc("/", handler)
 	// commands
 	http.HandleFunc("/run/", cmdHandler)
 	// spin up server on specified port
-	log.Fatal(http.ListenAndServe(":"+webP, nil))
+	log.Fatal(http.ListenAndServe("127.0.0.1:"+webP, nil))
 }
