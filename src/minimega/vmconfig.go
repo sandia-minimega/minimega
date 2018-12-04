@@ -64,6 +64,11 @@ type BaseConfig struct {
 	// Default: -1
 	Coschedule int64
 
+	// Colocate this VM with another VM that has already been launched or is
+	// queued for launching. Conflicting Schedule or Coschedule values may
+	// cause errors during scheduling.
+	Colocate string
+
 	// Enable/disable serial command and control layer for this VM.
 	//
 	// Default: true

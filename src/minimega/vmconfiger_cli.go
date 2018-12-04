@@ -738,6 +738,27 @@ Default: -1
 		}),
 	},
 	{
+		HelpShort: "configures colocate",
+		HelpLong: `Colocate this VM with another VM that has already been launched or is
+queued for launching. Conflicting Schedule or Coschedule values may
+cause errors during scheduling.
+`,
+		Patterns: []string{
+			"vm config colocate [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Colocate
+				return nil
+			}
+
+			ns.vmConfig.Colocate = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures backchannel",
 		HelpLong: `Enable/disable serial command and control layer for this VM.
 
@@ -803,6 +824,7 @@ newly launched VMs.
 			"clear vm config <backchannel,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
+			"clear vm config <colocate,>",
 			"clear vm config <cores,>",
 			"clear vm config <coschedule,>",
 			"clear vm config <disk,>",
@@ -864,6 +886,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "coschedule" {
 		return fmt.Sprintf("%v", v.Coschedule), nil
 	}
+	if field == "colocate" {
+		return v.Colocate, nil
+	}
 	if field == "backchannel" {
 		return strconv.FormatBool(v.Backchannel), nil
 	}
@@ -896,6 +921,9 @@ func (v *BaseConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "coschedule" {
 		v.Coschedule = -1
 	}
+	if mask == Wildcard || mask == "colocate" {
+		v.Colocate = ""
+	}
 	if mask == Wildcard || mask == "backchannel" {
 		v.Backchannel = true
 	}
@@ -925,6 +953,9 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.Coschedule != -1 {
 		fmt.Fprintf(w, "vm config coschedule %v\n", v.Coschedule)
+	}
+	if v.Colocate != "" {
+		fmt.Fprintf(w, "vm config colocate %v\n", v.Colocate)
 	}
 	if v.Backchannel != true {
 		fmt.Fprintf(w, "vm config backchannel %t\n", v.Backchannel)
