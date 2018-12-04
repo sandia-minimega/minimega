@@ -33,12 +33,11 @@ const (
 )
 
 type VM interface {
-	GetID() int               // GetID returns the VM's per-host unique ID
-	GetPID() int              // GetPID returns the VM's PID
-	GetName() string          // GetName returns the VM's per-host unique name
-	GetNamespace() string     // GetNamespace returns the VM's namespace name
-	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
-	GetHost() string          // GetHost returns the hostname that the VM is running on
+	GetID() int           // GetID returns the VM's per-host unique ID
+	GetPID() int          // GetPID returns the VM's PID
+	GetName() string      // GetName returns the VM's per-host unique name
+	GetNamespace() string // GetNamespace returns the VM's namespace name
+	GetHost() string      // GetHost returns the hostname that the VM is running on
 	GetState() VMState
 	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM was launched
 	GetType() VMType
@@ -47,6 +46,9 @@ type VM interface {
 	GetCPUs() uint64
 	GetMem() uint64
 	GetCoschedule() int
+
+	GetNetwork(i int) (NetConfig, error) // GetNetwork returns the ith NetConfigs associated with the vm.
+	GetNetworks() []NetConfig            // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 
 	// Lifecycle functions
 	Launch() error
@@ -286,6 +288,17 @@ func (vm *BaseVM) GetName() string {
 
 func (vm *BaseVM) GetNamespace() string {
 	return vm.Namespace
+}
+
+func (vm *BaseVM) GetNetwork(i int) (NetConfig, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if len(vm.Networks) < i {
+		return NetConfig{}, fmt.Errorf("no such interface %v for %v", i, vm.Name)
+	}
+
+	return vm.Networks[i], nil
 }
 
 func (vm *BaseVM) GetNetworks() []NetConfig {

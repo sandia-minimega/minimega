@@ -113,14 +113,13 @@ func (c *netflowCapture) Stop() error {
 // CaptureVM starts a new capture for a specified interface on a VM, writing
 // the packets to the specified file in PCAP format.
 func (c *captures) CaptureVM(vm VM, iface int, fname string) error {
-	networks := vm.GetNetworks()
-
-	if len(networks) <= iface {
-		return fmt.Errorf("no such interface %v", iface)
+	nic, err := vm.GetNetwork(iface)
+	if err != nil {
+		return err
 	}
 
-	bridge := networks[iface].Bridge
-	tap := networks[iface].Tap
+	bridge := nic.Bridge
+	tap := nic.Tap
 
 	br, err := getBridge(bridge)
 	if err != nil {

@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"text/tabwriter"
 	"time"
 )
@@ -212,4 +213,42 @@ func mirrorDelete(ns *Namespace, name string) error {
 	}
 
 	return delMirror(name)
+}
+
+// mirrorDeleteVM looks up the name of the interface(s) for the VM and then
+// calls mirrorDelete on them.
+func mirrorDeleteVM(ns *Namespace, svm, si string) error {
+	vm := ns.FindVM(svm)
+	if vm == nil {
+		return vmNotFound(svm)
+	}
+
+	// delete all mirrors for all interfaces
+	if si == "" {
+		networks := vm.GetNetworks()
+
+		for _, nic := range networks {
+			if !ns.Mirrors[nic.Tap] {
+				continue
+			}
+
+			if err := mirrorDelete(ns, nic.Tap); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	i, err := strconv.Atoi(si)
+	if err != nil {
+		return fmt.Errorf("invalid interface number: `%v`", si)
+	}
+
+	nic, err := vm.GetNetwork(i)
+	if err != nil {
+		return err
+	}
+
+	return mirrorDelete(ns, nic.Tap)
 }

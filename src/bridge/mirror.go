@@ -22,6 +22,9 @@ func (b *Bridge) CreateMirror(src, dst string) error {
 
 func (b *Bridge) createMirror(src, dst string) error {
 	log.Info("adding mirror on bridge: %v:%v to %v", b.Name, src, dst)
+	if src == dst {
+		return errors.New("cannot mirror tap to itself")
+	}
 
 	// check source tap exists, if it is set
 	if _, ok := b.taps[src]; src != "" && !ok {
