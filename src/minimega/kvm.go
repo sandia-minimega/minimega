@@ -164,7 +164,7 @@ type KVMConfig struct {
 	QemuOverride QemuOverrides
 
 	// hugepagesMountPath is copied from ns.hugepagesMountPath when the VM is
-	// launched. Not set by `vm config` APIs.
+	// launched. Not set by "vm config" APIs.
 	hugepagesMountPath string
 }
 
