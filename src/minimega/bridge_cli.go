@@ -102,7 +102,7 @@ mirrors. "clear tap" also deletes all mirrors.`,
 		Patterns: []string{
 			"clear tap",
 			"clear tap <mirror,> [name]",
-			"clear tap <mirror,> <vm name> [interface index]",
+			"clear tap <mirror,> <vm name> <interface index or all>",
 		},
 		Call: wrapSimpleCLI(cliTapClear),
 	},

@@ -224,7 +224,7 @@ func mirrorDeleteVM(ns *Namespace, svm, si string) error {
 	}
 
 	// delete all mirrors for all interfaces
-	if si == "" {
+	if si == Wildcard {
 		networks := vm.GetNetworks()
 
 		for _, nic := range networks {
