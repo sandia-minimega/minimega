@@ -344,6 +344,15 @@ func (n *Namespace) Schedule() error {
 		}
 	}
 
+	// resolve any "colocated" VMs for VMs that are already launched
+	for _, vm := range globalVMs(n) {
+		for _, q := range n.queue {
+			if q.Colocate == vm.GetName() {
+				q.Schedule = vm.GetHost()
+			}
+		}
+	}
+
 	// Create the host -> VMs assignment
 	assignment, err := schedule(n.queue, hostStats, hostSorter)
 	if err != nil {

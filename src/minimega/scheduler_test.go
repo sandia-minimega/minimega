@@ -450,6 +450,116 @@ func TestScheduleUniformityNet(t *testing.T) {
 	}
 }
 
+// TestColocate tests colocate chaining
+func TestColocate(t *testing.T) {
+	queue := []*QueuedVMs{
+		&QueuedVMs{
+			Names: []string{"vm-0"},
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+					Schedule:   "0",
+				},
+			},
+		},
+	}
+	for i := 1; i < 10; i++ {
+		queue = append(queue, &QueuedVMs{
+			Names: []string{"vm-" + strconv.Itoa(i)},
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Colocate:   "vm-" + strconv.Itoa(i-1),
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		})
+	}
+
+	hosts := fakeHostData(2, true)
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Error(err)
+	}
+
+	// all VMs should be on "0"
+	if len(s["0"]) != 10 {
+		t.Errorf("expected 10 VMs on `0`, got %v", len(s["0"]))
+	}
+}
+
+// TestColocateError tests a few impossible configurations
+func TestColocateError(t *testing.T) {
+	a := &QueuedVMs{
+		Names: []string{"a"},
+		VMConfig: VMConfig{
+			BaseConfig: BaseConfig{
+				VCPUs:      1,
+				Memory:     1,
+				Coschedule: -1,
+				Schedule:   "0",
+			},
+		},
+	}
+	b := &QueuedVMs{
+		Names: []string{"b"},
+		VMConfig: VMConfig{
+			BaseConfig: BaseConfig{
+				VCPUs:      1,
+				Memory:     1,
+				Coschedule: -1,
+				Colocate:   "a",
+			},
+		},
+	}
+	queue := []*QueuedVMs{a, b}
+
+	hosts := func() []*HostStats { return fakeHostData(2, true) }
+
+	// create error
+	a.Coschedule = 0
+	if _, err := schedule(queue, hosts(), cpuCommit); err == nil {
+		t.Error("expected error, conflicting coschedule limits -- a limit is 0")
+	} else {
+		t.Log(err)
+	}
+	// undo error, make sure it goes away
+	a.Coschedule = -1
+	if _, err := schedule(queue, hosts(), cpuCommit); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// create error
+	b.Coschedule = 0
+	if _, err := schedule(queue, hosts(), cpuCommit); err == nil {
+		t.Error("expected error, conflicting coschedule limits -- b limit is 0")
+	} else {
+		t.Log(err)
+	}
+	// undo error, make sure it goes away
+	b.Coschedule = -1
+	if _, err := schedule(queue, hosts(), cpuCommit); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	// create error
+	b.Colocate = "c"
+	if _, err := schedule(queue, hosts(), cpuCommit); err == nil {
+		t.Error("expected error, nonexistent colocate VM")
+	} else {
+		t.Log(err)
+	}
+	// undo error, make sure it goes away
+	b.Colocate = "a"
+	if _, err := schedule(queue, hosts(), cpuCommit); err != nil {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func BenchmarkSchedule(b *testing.B) {
 	var names []string
 	for i := 0; i < 10000; i++ {

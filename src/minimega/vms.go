@@ -38,6 +38,13 @@ type QueuedVMs struct {
 	Names    []string
 	VMType   // embed
 	VMConfig // embed
+
+	// book keeping for scheduler
+
+	// counts for colocated VMs, indexed by name
+	colocatedCounts map[string]int
+	// sum of colocatedCounts, used for sorting
+	colocatedCount int
 }
 
 // GetFiles looks through the VMConfig for files in the IOMESHAGE directory and

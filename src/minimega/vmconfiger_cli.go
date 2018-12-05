@@ -690,8 +690,9 @@ Default: true
 	},
 	{
 		HelpShort: "configures schedule",
-		HelpLong: `Set a host where the VM should be scheduled. This is only used when
-launching VMs in a namespace.
+		HelpLong: `Set a host where the VM should be scheduled.
+
+Note: Cannot specify Schedule and Colocate in the same config.
 `,
 		Patterns: []string{
 			"vm config schedule [value]",
@@ -703,7 +704,37 @@ launching VMs in a namespace.
 				return nil
 			}
 
+			if err := validSchedule(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
 			ns.vmConfig.Schedule = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures colocate",
+		HelpLong: `Colocate this VM with another VM that has already been launched or is
+queued for launching.
+
+Note: Cannot specify Colocate and Schedule in the same
+`,
+		Patterns: []string{
+			"vm config colocate [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Colocate
+				return nil
+			}
+
+			if err := validColocate(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
+			ns.vmConfig.Colocate = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -733,27 +764,6 @@ Default: -1
 			}
 
 			ns.vmConfig.Coschedule = i
-
-			return nil
-		}),
-	},
-	{
-		HelpShort: "configures colocate",
-		HelpLong: `Colocate this VM with another VM that has already been launched or is
-queued for launching. Conflicting Schedule or Coschedule values may
-cause errors during scheduling.
-`,
-		Patterns: []string{
-			"vm config colocate [value]",
-		},
-
-		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
-			if len(c.StringArgs) == 0 {
-				r.Response = ns.vmConfig.Colocate
-				return nil
-			}
-
-			ns.vmConfig.Colocate = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -883,11 +893,11 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "schedule" {
 		return v.Schedule, nil
 	}
-	if field == "coschedule" {
-		return fmt.Sprintf("%v", v.Coschedule), nil
-	}
 	if field == "colocate" {
 		return v.Colocate, nil
+	}
+	if field == "coschedule" {
+		return fmt.Sprintf("%v", v.Coschedule), nil
 	}
 	if field == "backchannel" {
 		return strconv.FormatBool(v.Backchannel), nil
@@ -918,11 +928,11 @@ func (v *BaseConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "schedule" {
 		v.Schedule = ""
 	}
-	if mask == Wildcard || mask == "coschedule" {
-		v.Coschedule = -1
-	}
 	if mask == Wildcard || mask == "colocate" {
 		v.Colocate = ""
+	}
+	if mask == Wildcard || mask == "coschedule" {
+		v.Coschedule = -1
 	}
 	if mask == Wildcard || mask == "backchannel" {
 		v.Backchannel = true
@@ -951,11 +961,11 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
 	}
-	if v.Coschedule != -1 {
-		fmt.Fprintf(w, "vm config coschedule %v\n", v.Coschedule)
-	}
 	if v.Colocate != "" {
 		fmt.Fprintf(w, "vm config colocate %v\n", v.Colocate)
+	}
+	if v.Coschedule != -1 {
+		fmt.Fprintf(w, "vm config coschedule %v\n", v.Coschedule)
 	}
 	if v.Backchannel != true {
 		fmt.Fprintf(w, "vm config backchannel %t\n", v.Backchannel)
