@@ -294,7 +294,7 @@ func (vm *BaseVM) GetNetwork(i int) (NetConfig, error) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	if len(vm.Networks) < i {
+	if len(vm.Networks) <= i {
 		return NetConfig{}, fmt.Errorf("no such interface %v for %v", i, vm.Name)
 	}
 
