@@ -53,7 +53,7 @@ type dhcp struct {
 }
 
 type bgp struct {
-	bgpprocessname string
+	processname    string
 	localip        string
 	localas        int
 	neighborip     string
@@ -318,13 +318,13 @@ func (r *Router) writeConfig(w io.Writer) error {
 		}
 	}
 	for _, b := range r.bgpRoutes {
-		fmt.Fprintf(w, "bird bgp %v local %v %v\n", b.bgpprocessname, b.localip, b.localas)
-		fmt.Fprintf(w, "bird bgp %v neighbor %v %v\n", b.bgpprocessname, b.neighborip, b.neighboras)
+		fmt.Fprintf(w, "bird bgp %v local %v %v\n", b.processname, b.localip, b.localas)
+		fmt.Fprintf(w, "bird bgp %v neighbor %v %v\n", b.processname, b.neighborip, b.neighboras)
 		if b.routereflector {
-			fmt.Fprintf(w, "bird bgp %v rrclient\n", b.bgpprocessname)
+			fmt.Fprintf(w, "bird bgp %v rrclient\n", b.processname)
 		}
 		for net := range b.exportnetworks {
-			fmt.Fprintf(w, "bird bgp %v filter %v\n", b.bgpprocessname, net)
+			fmt.Fprintf(w, "bird bgp %v filter %v\n", b.processname, net)
 		}
 	}
 
@@ -858,14 +858,14 @@ func (r *Router) RouteOSPFDelFilter(area, filter string) error {
 func (r *Router) bgpFindOrCreate(bgpprocess string) *bgp {
 	log.Debugln("Finding or creating Bgp process")
 	if b, ok := r.bgpRoutes[bgpprocess]; ok {
-		log.Debug("found bgp %v", b.bgpprocessname)
+		log.Debug("found bgp %v", b.processname)
 		return b
 	}
 	b := &bgp{
-		bgpprocessname: bgpprocess,
+		processname:    bgpprocess,
 		exportnetworks: make(map[string]bool),
 	}
-	log.Debug("created bgp %v", b.bgpprocessname)
+	log.Debug("created bgp %v", b.processname)
 	r.bgpRoutes[bgpprocess] = b
 	return b
 }
@@ -932,7 +932,7 @@ func (r *Router) RouteBGPDel(processname string, local, clearall bool) error {
 // toString for BGP Object
 func (b *bgp) String() string {
 	var out bytes.Buffer
-	fmt.Fprintf(&out, "BGP Process Name:\t%v\n", b.bgpprocessname)
+	fmt.Fprintf(&out, "BGP Process Name:\t%v\n", b.processname)
 	fmt.Fprintf(&out, "BGP Local IP:\t%v\n", b.localip)
 	fmt.Fprintf(&out, "BGP Local As:\t%v\n", b.localas)
 	fmt.Fprintf(&out, "BGP Neighbor IP:\t%v\n", b.neighborip)
