@@ -24,7 +24,7 @@ Show usage statistics for a range of days prior to today or duration of log hist
 
 REQUIRED FLAGS:
 
--d   Duration (in days) - specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the pre$
+-d   Duration (in days) - specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the last seven days
 
 OPTIONAL FLAGS:
 
@@ -71,8 +71,15 @@ type Stats struct {
 
 // Main Stats function to output reservation calculations
 func runStats(_ *Command, _ []string) {
+
+	if statsD == "" {
+		help([]string{"stats"})
+		return
+	}
+
 	d, err := strconv.Atoi(statsD) // Day Paramater how many days in the past to collect data
 	if err != nil {
+		help([]string{"stats"})
 		log.Fatalln("Invalid Duration Specified")
 	}
 
