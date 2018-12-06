@@ -243,14 +243,14 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 				}
 				rtr.RouteBGPAdd(islocal, processname, ip, as)
 			} else if c.BoolArgs["rrclient"] {
-				rtr.bgpFindOrCreate(processname).routereflector = true
+				rtr.bgpFindOrCreate(processname).routeReflector = true
 			}
 		}
 	} else if c.BoolArgs["rid"] {
 		if net.ParseIP(c.StringArgs["id"]) == nil {
 			return fmt.Errorf("invalid routerid: %v", c.StringArgs["id"])
 		}
-		rtr.routerid = c.StringArgs["id"]
+		rtr.routerID = c.StringArgs["id"]
 	}
 
 	return nil
@@ -387,7 +387,7 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 			rtr.RouteBGPDel("", false, true)
 		}
 	} else if c.BoolArgs["rid"] {
-		rtr.routerid = "0.0.0.0"
+		rtr.routerID = "0.0.0.0"
 		return nil
 	} else {
 		// remove everything about this router
@@ -402,7 +402,7 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		rtr.RouteOSPFDel("", "")
 		rtr.dhcp = make(map[string]*dhcp)
 		rtr.RouteBGPDel("", false, true)
-		rtr.routerid = "0.0.0.0"
+		rtr.routerID = "0.0.0.0"
 	}
 	return nil
 }

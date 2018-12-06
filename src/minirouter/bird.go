@@ -20,7 +20,7 @@ const (
 
 type Bird struct {
 	Static      map[string]string
-	Namedstatic map[string]map[string]string
+	NamedStatic map[string]map[string]string
 	Static6     map[string]string
 	OSPF        map[string]*OSPF
 	BGP         map[string]*BGP
@@ -43,13 +43,13 @@ type OSPF struct {
 }
 
 type BGP struct {
-	Bgpprocessname    string
-	Localip           string
-	Localas           int
-	Neighborip        string
-	Neighboras        int
-	Routereflector    bool
-	Exportnetworks    map[string]bool
+	ProcessName       string
+	LocalIP           string
+	LocalAS           int
+	NeighborIp        string
+	NeighborAs        int
+	RouteReflector    bool
+	ExportNetworks    map[string]bool
 	Advertiseinternal bool
 }
 
@@ -71,7 +71,7 @@ func init() {
 	birdID = getRouterID()
 	birdData = &Bird{
 		Static:      make(map[string]string),
-		Namedstatic: make(map[string]map[string]string),
+		NamedStatic: make(map[string]map[string]string),
 		Static6:     make(map[string]string),
 		OSPF:        make(map[string]*OSPF),
 		BGP:         make(map[string]*BGP),
@@ -88,7 +88,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
 			Static:      make(map[string]string),
-			Namedstatic: make(map[string]map[string]string),
+			NamedStatic: make(map[string]map[string]string),
 			Static6:     make(map[string]string),
 			OSPF:        make(map[string]*OSPF),
 			BGP:         make(map[string]*BGP),
@@ -109,10 +109,10 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 			if name == "null" && nh != "" {
 				birdData.Static[network] = nh
 			} else {
-				if birdData.Namedstatic[name] == nil {
-					birdData.Namedstatic[name] = make(map[string]string)
+				if birdData.NamedStatic[name] == nil {
+					birdData.NamedStatic[name] = make(map[string]string)
 				}
-				birdData.Namedstatic[name][network] = nh
+				birdData.NamedStatic[name][network] = nh
 			}
 		} else if isIPv6(nh) {
 			if name == "null" {
@@ -159,7 +159,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		processname := c.StringArgs["processname"]
 		log.Debugln("bird: Looking for Bgp process")
 		b := bgpFindOrCreate(processname)
-		log.Debug("bird: Found BGP process %", b.Bgpprocessname)
+		log.Debug("bird: Found BGP process %v", b.ProcessName)
 		if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
 			ip = c.StringArgs["IPv4"]
 			as, err := strconv.Atoi(c.StringArgs["asnumber"])
@@ -169,21 +169,21 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 			}
 			if c.BoolArgs["local"] {
 				log.Debug("bird: Setting local IP %v and AS %v\n", ip, as)
-				b.Localip = ip
-				b.Localas = as
+				b.LocalIP = ip
+				b.LocalAS = as
 			} else if c.BoolArgs["neighbor"] {
 				log.Debug("bird: Setting neighbor IP %v and AS %v\n", ip, as)
-				b.Neighborip = ip
-				b.Neighboras = as
+				b.NeighborIp = ip
+				b.NeighborAs = as
 			}
 		} else if c.BoolArgs["rrclient"] {
-			b.Routereflector = true
+			b.RouteReflector = true
 		} else if c.BoolArgs["filter"] {
-			log.Debug("bird: adding filter %", c.StringArgs["filtername"])
+			log.Debug("bird: adding filter %v", c.StringArgs["filtername"])
 			if c.StringArgs["filtername"] != "all" {
 				b.Advertiseinternal = true
 			}
-			b.Exportnetworks[c.StringArgs["filtername"]] = true
+			b.ExportNetworks[c.StringArgs["filtername"]] = true
 		}
 	} else if c.BoolArgs["routerid"] {
 		birdData.RouterID = c.StringArgs["id"]
@@ -291,8 +291,8 @@ func bgpFindOrCreate(bgpprocess string) *BGP {
 		return b
 	}
 	b := &BGP{
-		Bgpprocessname: bgpprocess,
-		Exportnetworks: make(map[string]bool),
+		ProcessName:    bgpprocess,
+		ExportNetworks: make(map[string]bool),
 	}
 	birdData.BGP[bgpprocess] = b
 	return b
@@ -313,11 +313,11 @@ func getRouterID() string {
 // Generates the filter config lines for the template
 func (b *BGP) GenerateFilter() string {
 	filter := ""
-	if _, ok := b.Exportnetworks["all"]; ok {
+	if _, ok := b.ExportNetworks["all"]; ok {
 		filter = "source = RTS_BGP"
 	}
 	if b.Advertiseinternal {
-		for rt := range b.Exportnetworks {
+		for rt := range b.ExportNetworks {
 			if rt != "all" {
 				if filter != "" {
 					filter += " || "
@@ -358,10 +358,10 @@ protocol static {
 }
 {{ end }}
 
-{{ $DOSTATIC := len .Namedstatic }}
+{{ $DOSTATIC := len .NamedStatic }}
 {{ if ne $DOSTATIC 0 }}
 #Named static routes
-{{ range $name, $network := .Namedstatic }}
+{{ range $name, $network := .NamedStatic }}
 protocol static static_{{$name}}{
 	import all;
 {{ range $net, $nh := $network }}
@@ -411,14 +411,14 @@ protocol ospf {
 {{ if ne $DOBGP 0 }}
 
 {{ range $v := .BGP }}
-protocol bgp {{ $v.Bgpprocessname }} {
+protocol bgp {{ $v.ProcessName }} {
 	import all;       
-	local {{ $v.Localip }} as {{ $v.Localas }};
-	neighbor {{ $v.Neighborip }} as {{ $v.Neighboras }};
-	{{ if $v.Routereflector }}
+	local {{ $v.LocalIP }} as {{ $v.LocalAS }};
+	neighbor {{ $v.NeighborIP }} as {{ $v.NeighborAS }};
+	{{ if $v.RouteReflector }}
 	rr client;
 	{{ end }}
-	{{ $EXPORT := len .Exportnetworks }}
+	{{ $EXPORT := len .ExportNetworks }}
 	{{ if ne $EXPORT 0 }}
 	export filter {
 		if {{$v.GenerateFilter}} then

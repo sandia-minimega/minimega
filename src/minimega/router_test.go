@@ -21,7 +21,7 @@ func generaterouter() *Router {
 		namedRoutes:  make(map[string]map[string]string),
 		ospfRoutes:   make(map[string]*ospf),
 		bgpRoutes:    make(map[string]*bgp),
-		routerid:     "0.0.0.0",
+		routerID:     "0.0.0.0",
 	}
 	for i := 0; i < 3; i++ {
 		r.IPs = append(r.IPs, []string{})
@@ -254,10 +254,10 @@ func TestRouteBGPAdd(t *testing.T) {
 	if _, ok := r.bgpRoutes["r1"]; !ok {
 		t.Error("unable to find bgp route")
 	}
-	if r.bgpRoutes["r1"].localip != "192.168.1.2" || r.bgpRoutes["r1"].localas != 200 {
+	if r.bgpRoutes["r1"].localIP != "192.168.1.2" || r.bgpRoutes["r1"].localAS != 200 {
 		t.Error("localip/as incorrect match")
 	}
-	if r.bgpRoutes["r1"].neighborip != "192.168.1.1" || r.bgpRoutes["r1"].neighboras != 100 {
+	if r.bgpRoutes["r1"].neighborIP != "192.168.1.1" || r.bgpRoutes["r1"].neighborAs != 100 {
 		t.Error("neighbor ip/as incorrect match")
 	}
 	if ok, err := configmatch(r.String(), 4); !ok {
@@ -269,10 +269,10 @@ func TestExportBGP(t *testing.T) {
 	r := generaterouter()
 	r.ExportBGP("r1", true, "")
 	r.ExportBGP("r1", false, "r1route")
-	if _, ok := r.bgpRoutes["r1"].exportnetworks["all"]; !ok {
+	if _, ok := r.bgpRoutes["r1"].exportNetworks["all"]; !ok {
 		t.Error("unable to find test export statement: all")
 	}
-	if _, ok := r.bgpRoutes["r1"].exportnetworks["r1route"]; !ok {
+	if _, ok := r.bgpRoutes["r1"].exportNetworks["r1route"]; !ok {
 		t.Error("unable to find test export statement: r1")
 	}
 	if ok, err := configmatch(r.String(), 5); !ok {

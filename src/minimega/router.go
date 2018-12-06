@@ -34,7 +34,7 @@ type Router struct {
 	namedRoutes  map[string]map[string]string
 	ospfRoutes   map[string]*ospf
 	bgpRoutes    map[string]*bgp
-	routerid     string
+	routerID     string
 }
 
 type ospf struct {
@@ -53,13 +53,13 @@ type dhcp struct {
 }
 
 type bgp struct {
-	processname    string
-	localip        string
-	localas        int
-	neighborip     string
-	neighboras     int
-	routereflector bool
-	exportnetworks map[string]bool
+	processName    string
+	localIP        string
+	localAS        int
+	neighborIP     string
+	neighborAs     int
+	routeReflector bool
+	exportNetworks map[string]bool
 }
 
 // Create a new router for vm, or returns an existing router if it already
@@ -83,7 +83,7 @@ func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
 		namedRoutes:  make(map[string]map[string]string),
 		ospfRoutes:   make(map[string]*ospf),
 		bgpRoutes:    make(map[string]*bgp),
-		routerid:     "0.0.0.0",
+		routerID:     "0.0.0.0",
 	}
 	nets := vm.GetNetworks()
 	for i := 0; i < len(nets); i++ {
@@ -318,18 +318,18 @@ func (r *Router) writeConfig(w io.Writer) error {
 		}
 	}
 	for _, b := range r.bgpRoutes {
-		fmt.Fprintf(w, "bird bgp %v local %v %v\n", b.processname, b.localip, b.localas)
-		fmt.Fprintf(w, "bird bgp %v neighbor %v %v\n", b.processname, b.neighborip, b.neighboras)
-		if b.routereflector {
-			fmt.Fprintf(w, "bird bgp %v rrclient\n", b.processname)
+		fmt.Fprintf(w, "bird bgp %v local %v %v\n", b.processName, b.localIP, b.localAS)
+		fmt.Fprintf(w, "bird bgp %v neighbor %v %v\n", b.processName, b.neighborIP, b.neighborAs)
+		if b.routeReflector {
+			fmt.Fprintf(w, "bird bgp %v rrclient\n", b.processName)
 		}
-		for net := range b.exportnetworks {
-			fmt.Fprintf(w, "bird bgp %v filter %v\n", b.processname, net)
+		for net := range b.exportNetworks {
+			fmt.Fprintf(w, "bird bgp %v filter %v\n", b.processName, net)
 		}
 	}
 
 	r.setRouterID()
-	fmt.Fprintf(w, "bird routerid %v\n", r.routerid)
+	fmt.Fprintf(w, "bird routerid %v\n", r.routerID)
 	fmt.Fprintf(w, "bird commit\n")
 
 	return nil
@@ -533,27 +533,28 @@ func (r *Router) routerIPExistance(n int, i string, loopback bool) bool {
 	return false
 }
 
-//Generates router ID based on established rules
-//Manually configure has highest preference -> Highest loopback -> Highest interface
+// Generates router ID based on established rules
+// Manually configure has highest preference -> Highest loopback -> Highest interface
 func (r *Router) setRouterID() {
-	if strings.Compare(r.routerid, "0.0.0.0") == 0 {
-		if len(r.Loopbacks) > 0 {
-			for _, ip := range r.Loopbacks {
-				log.Debug("compare loopback ip %v with current router id %v", ip, r.routerid)
-				if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerid)) == 1 {
-					log.Debug("found new router id %v", ip)
-					r.routerid = strings.Split(ip, "/")[0]
-				}
+	if strings.Compare(r.routerID, "0.0.0.0") != 0 {
+		return
+	}
+	if len(r.Loopbacks) > 0 {
+		for _, ip := range r.Loopbacks {
+			log.Debug("compare loopback ip %v with current router id %v", ip, r.routerID)
+			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerID)) == 1 {
+				log.Debug("found new router id %v", ip)
+				r.routerID = strings.Split(ip, "/")[0]
 			}
-		} else {
-			for _, iplist := range r.IPs {
-				for _, ip := range iplist {
-					log.Debug("compare int ip %v with current router id %v", ip, r.routerid)
-					if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerid)) == 1 {
-						log.Debug("found new router id %v", ip)
-						r.routerid = strings.Split(ip, "/")[0]
-					}
-				}
+		}
+		return
+	}
+	for _, iplist := range r.IPs {
+		for _, ip := range iplist {
+			log.Debug("compare int ip %v with current router id %v", ip, r.routerID)
+			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerID)) == 1 {
+				log.Debug("found new router id %v", ip)
+				r.routerID = strings.Split(ip, "/")[0]
 			}
 		}
 	}
@@ -858,14 +859,14 @@ func (r *Router) RouteOSPFDelFilter(area, filter string) error {
 func (r *Router) bgpFindOrCreate(bgpprocess string) *bgp {
 	log.Debugln("Finding or creating Bgp process")
 	if b, ok := r.bgpRoutes[bgpprocess]; ok {
-		log.Debug("found bgp %v", b.processname)
+		log.Debug("found bgp %v", b.processName)
 		return b
 	}
 	b := &bgp{
-		processname:    bgpprocess,
-		exportnetworks: make(map[string]bool),
+		processName:    bgpprocess,
+		exportNetworks: make(map[string]bool),
 	}
-	log.Debug("created bgp %v", b.processname)
+	log.Debug("created bgp %v", b.processName)
 	r.bgpRoutes[bgpprocess] = b
 	return b
 }
@@ -875,12 +876,12 @@ func (r *Router) RouteBGPAdd(islocal bool, processname string, ip string, as int
 	b := r.bgpFindOrCreate(processname)
 	if islocal {
 		log.Debugln("Setting local IP and AS bgp")
-		b.localip = ip
-		b.localas = as
+		b.localIP = ip
+		b.localAS = as
 	} else {
 		log.Debugln("Setting neighbor IP and AS bgp")
-		b.neighborip = ip
-		b.neighboras = as
+		b.neighborIP = ip
+		b.neighborAs = as
 	}
 }
 
@@ -889,9 +890,9 @@ func (r *Router) ExportBGP(processname string, all bool, filter string) {
 	b := r.bgpFindOrCreate(processname)
 	log.Debugln("Setting export")
 	if all {
-		b.exportnetworks["all"] = true
+		b.exportNetworks["all"] = true
 	} else {
-		b.exportnetworks[filter] = true
+		b.exportNetworks[filter] = true
 		//r.RouteStaticAdd(network, "", processname)
 	}
 }
@@ -901,7 +902,7 @@ func (r *Router) RouteBGPRRDel(processname string) error {
 	if _, ok := r.bgpRoutes[processname]; !ok {
 		return fmt.Errorf("no such bgp process: %v", processname)
 	}
-	r.bgpRoutes[processname].routereflector = false
+	r.bgpRoutes[processname].routeReflector = false
 	return nil
 }
 
@@ -916,12 +917,12 @@ func (r *Router) RouteBGPDel(processname string, local, clearall bool) error {
 	}
 	if !clearall {
 		if local {
-			r.bgpRoutes[processname].localip = ""
-			r.bgpRoutes[processname].localas = 0
+			r.bgpRoutes[processname].localIP = ""
+			r.bgpRoutes[processname].localAS = 0
 			return nil
 		} else {
-			r.bgpRoutes[processname].neighborip = ""
-			r.bgpRoutes[processname].neighboras = 0
+			r.bgpRoutes[processname].neighborIP = ""
+			r.bgpRoutes[processname].neighborAs = 0
 			return nil
 		}
 	}
@@ -932,17 +933,17 @@ func (r *Router) RouteBGPDel(processname string, local, clearall bool) error {
 // toString for BGP Object
 func (b *bgp) String() string {
 	var out bytes.Buffer
-	fmt.Fprintf(&out, "BGP Process Name:\t%v\n", b.processname)
-	fmt.Fprintf(&out, "BGP Local IP:\t%v\n", b.localip)
-	fmt.Fprintf(&out, "BGP Local As:\t%v\n", b.localas)
-	fmt.Fprintf(&out, "BGP Neighbor IP:\t%v\n", b.neighborip)
-	fmt.Fprintf(&out, "BGP Neighbor As:\t%v\n", b.neighboras)
-	fmt.Fprintf(&out, "BGP RouteReflector:\t%v\n", b.routereflector)
-	if len(b.exportnetworks) > 0 {
+	fmt.Fprintf(&out, "BGP Process Name:\t%v\n", b.processName)
+	fmt.Fprintf(&out, "BGP Local IP:\t%v\n", b.localIP)
+	fmt.Fprintf(&out, "BGP Local As:\t%v\n", b.localAS)
+	fmt.Fprintf(&out, "BGP Neighbor IP:\t%v\n", b.neighborIP)
+	fmt.Fprintf(&out, "BGP Neighbor As:\t%v\n", b.neighborAs)
+	fmt.Fprintf(&out, "BGP RouteReflector:\t%v\n", b.routeReflector)
+	if len(b.exportNetworks) > 0 {
 		fmt.Fprintln(&out, "BGP Export Networks or Routes:")
 
 		var keys []string
-		for k := range b.exportnetworks {
+		for k := range b.exportNetworks {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
