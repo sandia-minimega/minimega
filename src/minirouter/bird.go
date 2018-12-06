@@ -50,7 +50,7 @@ type BGP struct {
 	NeighborAs        int
 	RouteReflector    bool
 	ExportNetworks    map[string]bool
-	Advertiseinternal bool
+	AdvertiseInternal bool
 }
 
 func init() {
@@ -181,7 +181,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		} else if c.BoolArgs["filter"] {
 			log.Debug("bird: adding filter %v", c.StringArgs["filtername"])
 			if c.StringArgs["filtername"] != "all" {
-				b.Advertiseinternal = true
+				b.AdvertiseInternal = true
 			}
 			b.ExportNetworks[c.StringArgs["filtername"]] = true
 		}
@@ -316,7 +316,7 @@ func (b *BGP) GenerateFilter() string {
 	if _, ok := b.ExportNetworks["all"]; ok {
 		filter = "source = RTS_BGP"
 	}
-	if b.Advertiseinternal {
+	if b.AdvertiseInternal {
 		for rt := range b.ExportNetworks {
 			if rt != "all" {
 				if filter != "" {
