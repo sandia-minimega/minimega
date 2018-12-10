@@ -24,7 +24,7 @@ Show usage statistics for a range of days prior to today or duration of log hist
 
 REQUIRED FLAGS:
 
--d   Duration (in days) - specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the pre$
+-d   Duration (in days) - specifies the number of days to be included in the report, ending with today. e.g. igor stats -d 7 will display statistics for the last seven days
 
 OPTIONAL FLAGS:
 
@@ -51,7 +51,7 @@ type ResData struct {
 	ResEnd         time.Time
 	ActualEnd      time.Time
 	ActualDuration time.Duration
-	ResId          int
+	ResID          int
 	Nodes          []string
 	NumExtensions  int
 }
@@ -71,8 +71,15 @@ type Stats struct {
 
 // Main Stats function to output reservation calculations
 func runStats(_ *Command, _ []string) {
+
+	if statsD == "" {
+		help([]string{"stats"})
+		return
+	}
+
 	d, err := strconv.Atoi(statsD) // Day Paramater how many days in the past to collect data
 	if err != nil {
+		help([]string{"stats"})
 		log.Fatalln("Invalid Duration Specified")
 	}
 
@@ -98,7 +105,7 @@ func (stats *Stats) addReservation(rn string, ru string, ri int, start time.Time
 	if err != nil {
 		log.Fatal("%v", err)
 	}
-	rd.ResId = ri
+	rd.ResID = ri
 	stats.Reservations[ru] = append(stats.Reservations[ru], &rd)
 	if ri != -1 { // if there was no id field do not add to the map
 		stats.Reservationsid[ri] = &rd
@@ -126,12 +133,12 @@ func (stats *Stats) extendRes(rn string, ru string, ri int, rs time.Time, rex ti
 	res := stats.findRes(ru, rn, ri, rs)
 	if res != nil {
 		res.ResEnd = rex
-		res.NumExtensions += 1
+		res.NumExtensions++
 		return
 	}
 	stats.addReservation(rn, ru, ri, rs, rex, nodes)
 	res = stats.findRes(ru, rn, ri, rs)
-	res.NumExtensions += 1
+	res.NumExtensions++
 	stats.Reservations[ru][len(stats.Reservations[ru])-1] = res
 
 }
@@ -146,8 +153,8 @@ func (stats *Stats) readLog() {
 	s := bufio.NewScanner(f)
 	for s.Scan() {
 		line := s.Text()
-		// Unless the log file has action ID of util.go:157: skip it
-		if !strings.Contains(line, "util.go:157:") {
+		// Unless the log file has action ID of util.go: skip it
+		if !strings.Contains(line, "util.go:") {
 			continue
 		}
 
@@ -185,9 +192,9 @@ func (stats *Stats) readLog() {
 		if err {
 			resid = -1
 		}
-		var formatDateStamp string = "2006/01/02"
-		var formatTimeStamp string = "15:04:05"
-		var formatLong string = "2006-Jan-2-15:04"
+		formatDateStamp := "2006/01/02"
+		formatTimeStamp := "15:04:05"
+		formatLong := "2006-Jan-2-15:04"
 		var nodes string
 
 		ri := -1
@@ -241,9 +248,10 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 	for n, rd := range stats.Reservations {
 		var uResCount, uEarlyCancel, uExtension int
 		var uDuration time.Duration
+		var b bytes.Buffer
 		userHadvalidRes := false
 		if statsV {
-			fmt.Printf("------------------User Summary for %v ------------------\n", n)
+			fmt.Fprintf(&b, "------------------User Summary for %v ------------------\n", n)
 		}
 		for _, d := range rd {
 			var empty time.Time
@@ -262,7 +270,7 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 			uExtension += d.NumExtensions
 			userHadvalidRes = true
 			for _, n := range d.Nodes {
-				stats.NodesUsed[n] += 1
+				stats.NodesUsed[n]++
 			}
 			nodeMultiplier := time.Duration(len(d.Nodes))
 
@@ -284,25 +292,25 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 				}
 
 			}
-			uResCount += 1
+			uResCount++
 			// fuzzy math here because igor takes a few seconds to delete a res
 			if d.ActualEnd != empty && (d.ResEnd.Sub(d.ActualEnd).Minutes()) > 1.0 {
-				uEarlyCancel += 1
+				uEarlyCancel++
 			}
 			if statsV {
-				fmt.Printf(d.String())
+				fmt.Fprintf(&b, d.String())
 			}
 
 		}
-		if statsV {
-			fmt.Printf("User stats for %v \n", n)
-			fmt.Printf("Total Number of Reservations: %v\n", uResCount)
-			fmt.Printf("Total Early Cancel: %v\n", uEarlyCancel)
-			fmt.Printf("Number of Extensions: %v\n", uExtension)
-			fmt.Printf("Total user duration: %v\n\n", fmtDuration(uDuration))
+		if statsV && uResCount > 0 {
+			fmt.Fprintf(&b, "Total Number of Reservations: %v\n", uResCount)
+			fmt.Fprintf(&b, "Total Early Cancel: %v\n", uEarlyCancel)
+			fmt.Fprintf(&b, "Number of Extensions: %v\n", uExtension)
+			fmt.Fprintf(&b, "Total user duration: %v\n\n", fmtDuration(uDuration))
+			fmt.Println(b.String())
 		}
 		if userHadvalidRes {
-			stats.NumUsers += 1
+			stats.NumUsers++
 			stats.NumRes += uResCount
 			stats.TotalDurationMinutes += uDuration
 			stats.TotalEarlyCancels += uEarlyCancel
@@ -311,7 +319,7 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 	}
 	for _, d := range stats.NodesUsed {
 		if d > 0 {
-			stats.NumNodes += 1
+			stats.NumNodes++
 		}
 	}
 
@@ -344,8 +352,9 @@ func (stats *Stats) calculateVariable(param string, fields []string) (int, bool)
 //toString of ResData Struct
 func (res *ResData) String() string {
 	var b bytes.Buffer
-	var formatLong string = "2006-Jan-2-15:04"
-	fmt.Fprintf(&b, "Reservation Name: %v\tReservation ID: %v\n", res.ResName, res.ResId)
+	var empty time.Time
+	formatLong := "2006-Jan-2-15:04"
+	fmt.Fprintf(&b, "Reservation Name: %v\tReservation ID: %v\n", res.ResName, res.ResID)
 	fmt.Fprintf(&b, "Nodes:")
 	for i, n := range res.Nodes {
 		fmt.Fprintf(&b, "% v ", n)
@@ -353,9 +362,13 @@ func (res *ResData) String() string {
 			fmt.Fprintln(&b, "")
 		}
 	}
+	ae := "Currently Active"
+	if !res.ActualEnd.Equal(empty) {
+		ae = res.ActualEnd.Format(formatLong)
+	}
 	fmt.Fprintln(&b, "")
 	fmt.Fprintf(&b, "Reservation Start: %v\tReservation End: %v\n", res.ResStart.Format(formatLong), res.ResEnd.Format(formatLong))
-	fmt.Fprintf(&b, "Actual End: %v\tActual Duration: %v\n", res.ActualEnd.Format(formatLong), res.ActualDuration.String())
+	fmt.Fprintf(&b, "Actual End: %v\tActual Duration: %v\n", ae, res.ActualDuration.String())
 	fmt.Fprintf(&b, "Number of Extensions: %v\n\n", res.NumExtensions)
 
 	return b.String()
