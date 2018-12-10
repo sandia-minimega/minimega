@@ -3,7 +3,10 @@
 // the U.S. Government retains certain rights in this software.
 package main
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"time"
+)
 
 // Represents a single reservation
 type Reservation struct {
@@ -30,4 +33,12 @@ type Reservation struct {
 // Filename returns the filename that stores the reservation configuration
 func (r Reservation) Filename() string {
 	return filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+}
+
+// Active returns true if the reservation is active at the given time
+func (r Reservation) Active(t time.Time) bool {
+	start := time.Unix(r.StartTime, 0)
+	end := time.Unix(r.EndTime, 0)
+
+	return start.Before(t) && end.After(t)
 }
