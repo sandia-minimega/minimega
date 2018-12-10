@@ -55,7 +55,7 @@ func doPower(hosts []string, action string) {
 		}
 	case "cycle":
 		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power off failed: %v", err)
+			log.Fatal("power cycle failed: %v", err)
 		}
 
 		fallthrough
