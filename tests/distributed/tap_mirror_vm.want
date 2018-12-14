@@ -1,0 +1,31 @@
+## # three VMs, two of which are on the same node
+## vm config filesystem /root/uminicccfs
+## vm config net LAN
+## vm config schedule mm1
+## vm launch container a
+## vm config schedule mm1
+## vm launch container b
+## vm config schedule mm2
+## vm launch container c
+## vm start all
+
+## .annotate true .column name vm info
+host | name
+mm1  | a
+mm1  | b
+mm2  | c
+
+## # should not work
+## tap mirror a 0 c 0
+E: vms are not colocated or invalid vm name: a
+E: vms are not colocated or invalid vm name: c
+
+## # should work
+## tap mirror a 0 b 0
+
+## # clear by destination
+## clear tap mirror b 0
+
+## # already cleared, should have error
+## clear tap mirror b 0
+E: not a valid mirror

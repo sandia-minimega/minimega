@@ -76,7 +76,6 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			"tap <create,> <vlan> bridge <bridge> <dhcp,> [tap name]",
 			"tap <create,> <vlan> bridge <bridge> ip <ip> [tap name]",
 			"tap <mirror,> <src name> <dst name> [bridge]",
-			"tap <mirror,> <vm name> <interface index> <vm2 name> <interface2 index>",
 			"tap <delete,> <tap name or all>",
 		},
 		Call: wrapSimpleCLI(cliTap),
@@ -91,6 +90,23 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			return nil
 		}),
 	},
+	{ // tap mirror vm -> vm
+		HelpShort: "create vm->vm tap mirror",
+		HelpLong: `
+Create a mirror from one VM interface to another VM interface. The VMs must be
+running on the same physical node.
+		`,
+		Patterns: []string{
+			"tap <mirror,> <vm name> <interface index> <vm2 name> <interface2 index>",
+		},
+		Call: wrapVMTargetCLI(cliTapMirrorVM),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "vm" || val == "vm2" {
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE, false)
+			}
+			return nil
+		}),
+	},
 	{ // clear tap
 		HelpShort: "reset tap state",
 		HelpLong: `
@@ -98,13 +114,21 @@ Reset state for taps. To delete individual taps, use "tap delete".
 
 "clear tap mirror" can be used to delete one or all mirrors. Mirrors are
 identified by the destination for the mirror since a source can have multiple
-mirrors. "clear tap" also deletes all mirrors.`,
+mirrors. "clear tap" also deletes all mirrors.
+
+Only affects taps on the local node.`,
 		Patterns: []string{
 			"clear tap",
 			"clear tap <mirror,> [name]",
-			"clear tap <mirror,> <vm name> <interface index or all>",
 		},
 		Call: wrapSimpleCLI(cliTapClear),
+	},
+	{ // clear tap mirror vm
+		HelpShort: "clear tap mirror for vm->vm",
+		Patterns: []string{
+			"clear tap <mirror,> <vm name> <interface index or all>",
+		},
+		Call: wrapVMTargetCLI(cliTapClearMirrorVM),
 	},
 	{ // bridge
 		HelpShort: "display information and modify virtual bridges",
@@ -143,10 +167,8 @@ func cliTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	switch {
 	case c.BoolArgs["create"]:
 		return cliTapCreate(ns, c, resp)
-	case c.BoolArgs["mirror"] && c.StringArgs["src"] != "":
+	case c.BoolArgs["mirror"]:
 		return cliTapMirror(ns, c, resp)
-	case c.BoolArgs["mirror"] && c.StringArgs["vm"] != "":
-		return cliTapMirrorVM(ns, c, resp)
 	case c.BoolArgs["delete"]:
 		return cliTapDelete(ns, c, resp)
 	}
@@ -247,13 +269,20 @@ func cliTapMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	}
 
 	n1, err := getNetwork(c.StringArgs["vm"], c.StringArgs["interface"])
+	n2, err2 := getNetwork(c.StringArgs["vm2"], c.StringArgs["interface2"])
 	if err != nil {
+		if err2 == nil && isVMNotFound(err.Error()) {
+			return fmt.Errorf("vms are not colocated or invalid vm name: %v", c.StringArgs["vm"])
+		}
+		// unknown error
 		return err
 	}
-
-	n2, err := getNetwork(c.StringArgs["vm2"], c.StringArgs["interface2"])
-	if err != nil {
-		return err
+	if err2 != nil {
+		if err == nil && isVMNotFound(err2.Error()) {
+			return fmt.Errorf("vms are not colocated or invalid vm name: %v", c.StringArgs["vm2"])
+		}
+		// unknown error
+		return err2
 	}
 
 	if n1.Bridge != n2.Bridge {
@@ -294,17 +323,18 @@ func cliTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 }
 
 func cliTapClearMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	switch {
-	case c.StringArgs["name"] != "":
+	if c.StringArgs["name"] != "" {
 		// clear mirror by name
 		return mirrorDelete(ns, c.StringArgs["name"])
-	case c.StringArgs["vm"] != "":
-		// clear mirror by VM name (and optional index)
-		return mirrorDeleteVM(ns, c.StringArgs["vm"], c.StringArgs["interface"])
 	}
 
 	// clear all mirrors
 	return mirrorDelete(ns, Wildcard)
+}
+
+func cliTapClearMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// clear mirror by VM name (and optional index)
+	return mirrorDeleteVM(ns, c.StringArgs["vm"], c.StringArgs["interface"])
 }
 
 func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
