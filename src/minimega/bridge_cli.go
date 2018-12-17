@@ -50,6 +50,9 @@ the default bridge:
 
 	tap mirror mega_tapX mega_tapY
 
+Mirroring is also supported via vm names/interface indices. The VM interfaces
+should already be on the same bridge. VMs must be colocated.
+
 To delete a host tap, use the delete command and tap name from the tap list:
 
 	tap delete <id>
@@ -87,6 +90,23 @@ Similarly, delete only applies to the taps in the active namespace. Unlike the
 			return nil
 		}),
 	},
+	{ // tap mirror vm -> vm
+		HelpShort: "create vm->vm tap mirror",
+		HelpLong: `
+Create a mirror from one VM interface to another VM interface. The VMs must be
+running on the same physical node.
+		`,
+		Patterns: []string{
+			"tap <mirror,> <vm name> <interface index> <vm2 name> <interface2 index>",
+		},
+		Call: wrapVMTargetCLI(cliTapMirrorVM),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+			if val == "vm" || val == "vm2" {
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE, false)
+			}
+			return nil
+		}),
+	},
 	{ // clear tap
 		HelpShort: "reset tap state",
 		HelpLong: `
@@ -94,12 +114,21 @@ Reset state for taps. To delete individual taps, use "tap delete".
 
 "clear tap mirror" can be used to delete one or all mirrors. Mirrors are
 identified by the destination for the mirror since a source can have multiple
-mirrors. "clear tap" also deletes all mirrors.`,
+mirrors. "clear tap" also deletes all mirrors.
+
+Only affects taps on the local node.`,
 		Patterns: []string{
 			"clear tap",
 			"clear tap <mirror,> [name]",
 		},
 		Call: wrapSimpleCLI(cliTapClear),
+	},
+	{ // clear tap mirror vm
+		HelpShort: "clear tap mirror for vm->vm",
+		Patterns: []string{
+			"clear tap <mirror,> <vm name> <interface index or all>",
+		},
+		Call: wrapVMTargetCLI(cliTapClearMirrorVM),
 	},
 	{ // bridge
 		HelpShort: "display information and modify virtual bridges",
@@ -223,19 +252,89 @@ func cliTapMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return nil
 }
 
+func cliTapMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// getNetwork gets the NetConfig for a given VM and interface number
+	getNetwork := func(svm, si string) (NetConfig, error) {
+		i, err := strconv.Atoi(si)
+		if err != nil {
+			return NetConfig{}, fmt.Errorf("invalid interface number: `%v`", si)
+		}
+
+		vm := ns.FindVM(svm)
+		if vm == nil {
+			return NetConfig{}, vmNotFound(svm)
+		}
+
+		return vm.GetNetwork(i)
+	}
+
+	n1, err := getNetwork(c.StringArgs["vm"], c.StringArgs["interface"])
+	n2, err2 := getNetwork(c.StringArgs["vm2"], c.StringArgs["interface2"])
+	if err != nil {
+		if err2 == nil && isVMNotFound(err.Error()) {
+			return fmt.Errorf("vms are not colocated or invalid vm name: %v", c.StringArgs["vm"])
+		}
+		// unknown error
+		return err
+	}
+	if err2 != nil {
+		if err == nil && isVMNotFound(err2.Error()) {
+			return fmt.Errorf("vms are not colocated or invalid vm name: %v", c.StringArgs["vm2"])
+		}
+		// unknown error
+		return err2
+	}
+
+	if n1.Bridge != n2.Bridge {
+		return fmt.Errorf("interfaces on different bridges: %v and %v", n1.Bridge, n2.Bridge)
+	}
+
+	br, err := getBridge(n1.Bridge)
+	if err != nil {
+		return err
+	}
+
+	if err := br.CreateMirror(n1.Tap, n2.Tap); err != nil {
+		return err
+	}
+
+	// need lock?
+	ns.Mirrors[n2.Tap] = true
+
+	return nil
+}
+
 func cliTapDelete(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return hostTapDelete(ns, c.StringArgs["tap"])
 }
 
 func cliTapClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	// always clear the mirrors, if we are only clearing the mirrors, return
-	// and don't clear any taps.
-	err := mirrorDelete(ns, c.StringArgs["name"])
-	if c.BoolArgs["mirror"] || err != nil {
+	switch {
+	case c.BoolArgs["mirror"]:
+		return cliTapClearMirror(ns, c, resp)
+	}
+
+	// must be "clear tap", still need to clear mirrors
+	if err := mirrorDelete(ns, Wildcard); err != nil {
 		return err
 	}
 
 	return hostTapDelete(ns, Wildcard)
+}
+
+func cliTapClearMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.StringArgs["name"] != "" {
+		// clear mirror by name
+		return mirrorDelete(ns, c.StringArgs["name"])
+	}
+
+	// clear all mirrors
+	return mirrorDelete(ns, Wildcard)
+}
+
+func cliTapClearMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// clear mirror by VM name (and optional index)
+	return mirrorDeleteVM(ns, c.StringArgs["vm"], c.StringArgs["interface"])
 }
 
 func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

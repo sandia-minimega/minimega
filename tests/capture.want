@@ -55,7 +55,7 @@ mega_bridge | pcap | car:0     |      |          | /dev/null
 
 ## # Try some things that shouldn't work
 ## namespace foo capture pcap vm car 1 /dev/null
-E: no such interface 1
+E: no such interface 1 for car
 ## namespace foo capture pcap vm bar 0 /dev/null
 E: vm not found: bar
 ## namespace foo capture pcap delete vm bar
