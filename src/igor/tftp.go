@@ -79,3 +79,19 @@ func (b *TFTPBackend) Power(hosts []string, on bool) error {
 
 	return runner.RunAll(hosts)
 }
+
+func (b *TFTPBackend) SetProfile(Reservation, string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *TFTPBackend) SetKernel(Reservation, string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *TFTPBackend) SetInitrd(Reservation, string) error {
+	return fmt.Errorf("not implemented")
+}
+
+func (b *TFTPBackend) SetKernelArgs(Reservation, string) error {
+	return fmt.Errorf("not implemented")
+}

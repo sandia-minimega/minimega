@@ -15,6 +15,15 @@ type Backend interface {
 
 	// Power sets the power state for nodes
 	Power([]string, bool) error
+
+	// SetProfile of existing, installed reservation.
+	SetProfile(Reservation, string) error
+	// SetKernel of existing, installed reservation.
+	SetKernel(Reservation, string) error
+	// SetInitrd of existing, installed reservation.
+	SetInitrd(Reservation, string) error
+	// SetKernelArgs of existing, installed reservation.
+	SetKernelArgs(Reservation, string) error
 }
 
 func GetBackend() Backend {

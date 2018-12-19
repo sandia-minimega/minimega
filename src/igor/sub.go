@@ -5,12 +5,8 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
-	"io"
 	log "minilog"
-	"os"
 	"path/filepath"
 	"ranges"
 	"time"
@@ -83,52 +79,6 @@ func init() {
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
-}
-
-// install src into dir, using the hash as the file name. Returns the hash or
-// an error.
-func install(src, dir, suffix string) (string, error) {
-	f, err := os.Open(src)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	// hash the file
-	hash := sha1.New()
-	if _, err := io.Copy(hash, f); err != nil {
-		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
-	}
-
-	fname := hex.EncodeToString(hash.Sum(nil))
-
-	dst := filepath.Join(dir, fname+suffix)
-
-	// copy the file if it doesn't already exist
-	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		// need to go back to the beginning of the file since we already read
-		// it once to do the hashing
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			return "", err
-		}
-
-		f2, err := os.Create(dst)
-		if err != nil {
-			return "", err
-		}
-		defer f2.Close()
-
-		if _, err := io.Copy(f2, f); err != nil {
-			return "", fmt.Errorf("unable to install %v: %v", src, err)
-		}
-	} else if err != nil {
-		// strange...
-		return "", err
-	} else {
-		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
-	}
-
-	return fname, nil
 }
 
 func runSub(cmd *Command, args []string) {
@@ -278,22 +228,18 @@ VlanLoop:
 
 	// If we're not doing a Cobbler profile...
 	if subProfile == "" {
-		reservation.Kernel = subK
-		reservation.Initrd = subI
-
+		var err error
 		dir := filepath.Join(igorConfig.TFTPRoot, "igor")
 
-		if hash, err := install(subK, dir, "-kernel"); err != nil {
+		reservation.Kernel = subK
+		if reservation.KernelHash, err = install(subK, dir, "-kernel"); err != nil {
 			log.Fatal("reservation failed: %v", err)
-		} else {
-			reservation.KernelHash = hash
 		}
 
-		if hash, err := install(subI, dir, "-initrd"); err != nil {
+		reservation.Initrd = subI
+		if reservation.InitrdHash, err = install(subI, dir, "-initrd"); err != nil {
 			// TODO: we may leak a kernel here
 			log.Fatal("reservation failed: %v", err)
-		} else {
-			reservation.InitrdHash = hash
 		}
 	}
 
