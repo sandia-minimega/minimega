@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	//"math/rand"
-	//"strconv"
 	"strings"
 	"testing"
 )
