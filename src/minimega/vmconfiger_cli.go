@@ -437,10 +437,10 @@ $minimega_runtime/<vm_id>/serialX.
 Examples:
 
 To display current serial ports:
-  vm config serial
+  vm config serial-ports
 
 To create three serial ports:
-  vm config serial 3
+  vm config serial-ports 3
 
 Note: Whereas modern versions of Windows support up to 256 COM ports,
 Linux typically only supports up to four serial devices. To use more,
@@ -478,10 +478,10 @@ $minimega_runtime/<vm_id>/virtio-serialX.
 Examples:
 
 To display current virtio-serial ports:
-  vm config virtio-serial
+  vm config virtio-ports
 
 To create three virtio-serial ports:
-  vm config virtio-serial 3
+  vm config virtio-ports 3
 `,
 		Patterns: []string{
 			"vm config virtio-ports [value]",
