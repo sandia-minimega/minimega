@@ -88,10 +88,17 @@ type KVMConfig struct {
 	// Default: "host"
 	CPU string `validate:"validCPU" suggest:"wrapSuggest(suggestCPU)"`
 
-	// Set the number of CPU cores per socket.
-	//
-	// Default: 1
-	Cores uint64 `validate:"checkCores"`
+	// Set the number of CPU sockets. If unspecified, QEMU will calculate
+	// missing values based on vCPUs, cores, and threads.
+	Sockets uint64
+
+	// Set the number of CPU cores per socket. If unspecified, QEMU will
+	// calculate missing values based on vCPUs, sockets, and threads.
+	Cores uint64
+
+	// Set the number of CPU threads per core. If unspecified, QEMU will
+	// calculate missing values based on vCPUs, sockets, and cores.
+	Threads uint64
 
 	// Specify the machine type. See 'qemu -M help' for a list supported
 	// machine types.
@@ -950,8 +957,14 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-smp")
 	smp := strconv.FormatUint(vm.VCPUs, 10)
-	if vm.Cores != 1 {
+	if vm.Cores != 0 {
 		smp += ",cores=" + strconv.FormatUint(vm.Cores, 10)
+	}
+	if vm.Threads != 0 {
+		smp += ",threads=" + strconv.FormatUint(vm.Threads, 10)
+	}
+	if vm.Sockets != 0 {
+		smp += ",sockets=" + strconv.FormatUint(vm.Sockets, 10)
 	}
 	args = append(args, smp)
 
@@ -1163,14 +1176,6 @@ func qmpLogger(id int, q qmp.Conn) {
 	for v := q.Message(); v != nil; v = q.Message() {
 		log.Info("VM %v received asynchronous message: %v", id, v)
 	}
-}
-
-func checkCores(vmConfig VMConfig, cores uint64) error {
-	if vmConfig.VCPUs < cores {
-		return errors.New("vcpus must be greater than or equal to the number of cores")
-	}
-
-	return nil
 }
 
 func validCPU(vmConfig VMConfig, cpu string) error {
