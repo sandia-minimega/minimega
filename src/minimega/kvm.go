@@ -136,6 +136,12 @@ type KVMConfig struct {
 	//   vm config virtio-serial 3
 	VirtioPorts uint64
 
+	// Specify the graphics card to emulate. "cirrus" or "std" should work with
+	// most operating systems.
+	//
+	// Default: "std"
+	Vga string
+
 	// Add an append string to a kernel set with vm kernel. Setting vm append
 	// without using vm kernel will result in an error.
 	//
@@ -953,7 +959,11 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
 
 	args = append(args, "-vga")
-	args = append(args, "std")
+	if vm.Vga == "" {
+		args = append(args, "std")
+	} else {
+		args = append(args, vm.Vga)
+	}
 
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")

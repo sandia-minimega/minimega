@@ -504,6 +504,28 @@ To create three virtio-serial ports:
 		}),
 	},
 	{
+		HelpShort: "configures vga",
+		HelpLong: `Specify the graphics card to emulate. "cirrus" or "std" should work with
+most operating systems.
+
+Default: "std"
+`,
+		Patterns: []string{
+			"vm config vga [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Vga
+				return nil
+			}
+
+			ns.vmConfig.Vga = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures append",
 		HelpLong: `Add an append string to a kernel set with vm kernel. Setting vm append
 without using vm kernel will result in an error.
@@ -858,6 +880,7 @@ newly launched VMs.
 			"clear vm config <tags,>",
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
+			"clear vm config <vga,>",
 			"clear vm config <virtio-ports,>",
 			"clear vm config <volume,>",
 		},
@@ -1078,6 +1101,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "virtio-ports" {
 		return strconv.FormatUint(v.VirtioPorts, 10), nil
 	}
+	if field == "vga" {
+		return v.Vga, nil
+	}
 	if field == "append" {
 		return fmt.Sprintf("%v", v.Append), nil
 	}
@@ -1125,6 +1151,9 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "virtio-ports" {
 		v.VirtioPorts = 0
 	}
+	if mask == Wildcard || mask == "vga" {
+		v.Vga = "std"
+	}
 	if mask == Wildcard || mask == "append" {
 		v.Append = nil
 	}
@@ -1169,6 +1198,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.VirtioPorts != 0 {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
+	}
+	if v.Vga != "std" {
+		fmt.Fprintf(w, "vm config vga %v\n", v.Vga)
 	}
 	if len(v.Append) > 0 {
 		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
