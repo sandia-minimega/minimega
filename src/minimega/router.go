@@ -62,18 +62,11 @@ type bgp struct {
 	exportNetworks map[string]bool
 }
 
-// Create a new router for vm, or returns an existing router if it already
-// exists
-func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
-	log.Debug("FindOrCreateRouter: %v", vm)
-
-	id := vm.GetID()
-	if r, ok := ns.routers[id]; ok {
-		return r
-	}
+// NewRouter creates a new router with a given number of interfaces,
+// initializing all the maps and setting sane defaults.
+func NewRouter(i int) *Router {
 	r := &Router{
-		vm:           vm,
-		IPs:          [][]string{},
+		IPs:          make([][]string, i),
 		Loopbacks:    make(map[int]string),
 		logLevel:     "error",
 		dhcp:         make(map[string]*dhcp),
@@ -85,10 +78,21 @@ func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
 		bgpRoutes:    make(map[string]*bgp),
 		routerID:     "0.0.0.0",
 	}
-	nets := vm.GetNetworks()
-	for i := 0; i < len(nets); i++ {
-		r.IPs = append(r.IPs, []string{})
+	return r
+}
+
+// Create a new router for vm, or returns an existing router if it already
+// exists
+func (ns *Namespace) FindOrCreateRouter(vm VM) *Router {
+	log.Debug("FindOrCreateRouter: %v", vm)
+
+	id := vm.GetID()
+	if r, ok := ns.routers[id]; ok {
+		return r
 	}
+
+	r := NewRouter(len(vm.GetNetworks()))
+	r.vm = vm
 
 	ns.routers[id] = r
 

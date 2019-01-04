@@ -7,28 +7,8 @@ import (
 	"testing"
 )
 
-func generaterouter() *Router {
-	r := &Router{
-		IPs:          [][]string{},
-		Loopbacks:    make(map[int]string),
-		logLevel:     "error",
-		dhcp:         make(map[string]*dhcp),
-		dns:          make(map[string][]string),
-		rad:          make(map[string]bool),
-		staticRoutes: make(map[string]string),
-		namedRoutes:  make(map[string]map[string]string),
-		ospfRoutes:   make(map[string]*ospf),
-		bgpRoutes:    make(map[string]*bgp),
-		routerID:     "0.0.0.0",
-	}
-	for i := 0; i < 3; i++ {
-		r.IPs = append(r.IPs, []string{})
-	}
-	return r
-}
-
 func TestGenerateConfig(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	r.InterfaceAdd(0, "192.168.1.1/24", false)
 	r.InterfaceAdd(1, "192.168.2.1/24", false)
 	r.InterfaceAdd(2, "192.168.3.1/24", false)
@@ -48,130 +28,35 @@ func TestGenerateConfig(t *testing.T) {
 
 	var b bytes.Buffer
 	r.writeConfig(&b)
-
-	if ok, err := configmatch(b.String(), 0); !ok {
-		t.Error("Mismatch Generating bird config:", err)
-	}
+	configtest(b.String(), testGenerateConfigWant, t)
 }
 
-func configmatch(test string, t int) (bool, string) {
-	var control map[string]bool
-	testarr := strings.Split(test, "\n")
-	switch t {
-	case 0:
-		control = map[string]bool{
-			"log level error":          true,
-			"ip flush":                 true,
-			"ip add 0 192.168.1.1/24":  true,
-			"ip add 1 192.168.2.1/24":  true,
-			"ip add 2 192.168.3.1/24":  true,
-			"ip add lo 192.168.4.1/32": true,
-			"dnsmasq flush":            true,
-			"route del default":        true,
-			"dnsmasq commit":           true,
-			"bird flush":               true,
-			"bird static 0.0.0.0/0 192.168.1.2 defaultroute": true,
-			"bird static 192.168.1.0/24 172.16.1.1 route1":   true,
-			"bird static 192.168.2.0/24 null route2":         true,
-			"bird ospf 0 0":                                  true,
-			"bird ospf 0 1":                                  true,
-			"bird ospf 0 filter 192.168.3.0/24":              true,
-			"bird ospf 0 filter defaultroute":                true,
-			"bird bgp r2 local 192.168.1.2 100":              true,
-			"bird bgp r2 neighbor 192.168.1.1 200":           true,
-			"bird bgp r2 filter all":                         true,
-			"bird bgp r2 filter route1":                      true,
-			"bird bgp r2 filter route2":                      true,
-			"bird routerid 192.168.4.1":                      true,
-			"bird commit":                                    true,
-			"":                                               true,
-		}
-		if len(testarr) != len(control) {
-			return false, "length mismatch"
-		}
-	case 1:
-		control = map[string]bool{
-			"IPs:":                         true,
-			"Network: 0: [192.168.1.1/24]": true,
-			"Network: 1: [192.168.2.1/24]": true,
-			"Network: 2: [192.168.3.1/24]": true,
-			"Loopback IPs:":                true,
-			"192.168.4.1/32":               true,
-			"":                             true,
-		}
-	case 2:
-		control = map[string]bool{
-			"IPs:":                            true,
-			"Network: 0: []":                  true,
-			"Network: 1: []":                  true,
-			"Network: 2: []":                  true,
-			"OSPF Area:\t0":                   true,
-			"Interfaces:":                     true,
-			"\t0":                             true,
-			"OSPF Export Networks or Routes:": true,
-			"\t192.168.3.0/24":                true,
-			"":                                true,
-		}
-	case 3:
-		control = map[string]bool{
-			"IPs:":           true,
-			"Network: 0: []": true,
-			"Network: 1: []": true,
-			"Network: 2: []": true,
-			"Static Routes:": true,
-			"172.16.1.1/24	192.168.1.2": true,
-			"Named Static Routes:":     true,
-			"defaultroute":             true,
-			"\t0.0.0.0/0\t192.168.1.2": true,
-			"ospf":                     true,
-			"\t192.168.1.1/32":         true,
-			"\t192.168.1.2/32":         true,
-			"":                         true,
-		}
-	case 4:
-		control = map[string]bool{
-			"IPs:":                          true,
-			"Network: 0: []":                true,
-			"Network: 1: []":                true,
-			"Network: 2: []":                true,
-			"BGP Process Name:\tr1":         true,
-			"BGP Local IP:\t192.168.1.2":    true,
-			"BGP Local As:\t200":            true,
-			"BGP Neighbor IP:\t192.168.1.1": true,
-			"BGP Neighbor As:\t100":         true,
-			"BGP RouteReflector:\tfalse":    true,
-			"":                              true,
-		}
-	case 5:
-		control = map[string]bool{
-			"IPs:":                           true,
-			"Network: 0: []":                 true,
-			"Network: 1: []":                 true,
-			"Network: 2: []":                 true,
-			"BGP Process Name:\tr1":          true,
-			"BGP Local IP:\t":                true,
-			"BGP Local As:\t0":               true,
-			"BGP Neighbor IP:\t":             true,
-			"BGP Neighbor As:\t0":            true,
-			"BGP RouteReflector:\tfalse":     true,
-			"BGP Export Networks or Routes:": true,
-			"\tall":                          true,
-			"\tr1route":                      true,
-			"":                               true,
+func configtest(test, control string, t *testing.T) {
+	want := map[string]bool{}
+	for _, v := range strings.Split(control, "\n") {
+		want[v] = true
+	}
+
+	// delete lines in both
+	got := map[string]bool{}
+	for _, v := range strings.Split(test, "\n") {
+		if _, ok := want[v]; !ok && v != "" {
+			got[v] = true
+		} else {
+			delete(want, v)
 		}
 	}
 
-	for _, c := range testarr {
-		if _, ok := control[c]; !ok {
-			return false, c
-		}
+	for v := range want {
+		t.Error("- ", v)
 	}
-
-	return true, ""
+	for v := range got {
+		t.Error("+ ", v)
+	}
 }
 
 func TestInterfaceAdd(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	//Positive Testing
 	if err := r.InterfaceAdd(0, "192.168.1.1/24", false); err != nil {
 		t.Error(err)
@@ -195,13 +80,11 @@ func TestInterfaceAdd(t *testing.T) {
 	if err := r.InterfaceAdd(4, "192.168.4", true); err.Error() != fmt.Errorf("invalid IP: %v", "192.168.4").Error() {
 		t.Error("Expected error invalid IP: but got ", err)
 	}
-	if ok, err := configmatch(r.String(), 1); !ok {
-		t.Error("To String mismatch:", err)
-	}
+	configtest(r.String(), testInterfaceWant, t)
 }
 
 func TestRouteOSPFAdd(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	r.RouteOSPFAdd("0", "0", "")
 	r.RouteOSPFAdd("0", "", "192.168.3.0/24")
 	o, ok := r.ospfRoutes["0"]
@@ -214,13 +97,11 @@ func TestRouteOSPFAdd(t *testing.T) {
 	} else {
 		t.Error("unable to find area")
 	}
-	if ok, err := configmatch(r.String(), 2); !ok {
-		t.Error("To String mismatch:", err)
-	}
+	configtest(r.String(), testOSPFWant, t)
 }
 
 func TestRouteStaticAdd(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	r.RouteStaticAdd("0.0.0.0/0", "192.168.1.2", "defaultroute")
 	r.RouteStaticAdd("192.168.1.1/32", "0", "ospf")
 	r.RouteStaticAdd("192.168.1.2/32", "", "ospf")
@@ -240,13 +121,11 @@ func TestRouteStaticAdd(t *testing.T) {
 	if _, ok := r.namedRoutes["defaultroute"]; !ok {
 		t.Error("unable to find named route:defaultroute")
 	}
-	if ok, err := configmatch(r.String(), 3); !ok {
-		t.Error("To String mismatch:", err)
-	}
+	configtest(r.String(), testStaticWant, t)
 }
 
 func TestRouteBGPAdd(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	r.RouteBGPAdd(false, "r1", "192.168.1.1", 100)
 	r.RouteBGPAdd(true, "r1", "192.168.1.2", 200)
 	if _, ok := r.bgpRoutes["r1"]; !ok {
@@ -258,13 +137,11 @@ func TestRouteBGPAdd(t *testing.T) {
 	if r.bgpRoutes["r1"].neighborIP != "192.168.1.1" || r.bgpRoutes["r1"].neighborAs != 100 {
 		t.Error("neighbor ip/as incorrect match")
 	}
-	if ok, err := configmatch(r.String(), 4); !ok {
-		t.Error("To String mismatch:", err)
-	}
+	configtest(r.String(), testBGPAddWant, t)
 }
 
 func TestExportBGP(t *testing.T) {
-	r := generaterouter()
+	r := NewRouter(3)
 	r.ExportBGP("r1", true, "")
 	r.ExportBGP("r1", false, "r1route")
 	if _, ok := r.bgpRoutes["r1"].exportNetworks["all"]; !ok {
@@ -273,7 +150,92 @@ func TestExportBGP(t *testing.T) {
 	if _, ok := r.bgpRoutes["r1"].exportNetworks["r1route"]; !ok {
 		t.Error("unable to find test export statement: r1")
 	}
-	if ok, err := configmatch(r.String(), 5); !ok {
-		t.Error("To String mismatch:", err)
-	}
+	configtest(r.String(), testBGPExportWant, t)
 }
+
+const testGenerateConfigWant = `
+log level error
+ip flush
+ip add 0 192.168.1.1/24
+ip add 1 192.168.2.1/24
+ip add 2 192.168.3.1/24
+ip add lo 192.168.4.1/32
+dnsmasq flush
+route del default
+dnsmasq commit
+bird flush
+bird static 0.0.0.0/0 192.168.1.2 defaultroute
+bird static 192.168.1.0/24 172.16.1.1 route1
+bird static 192.168.2.0/24 null route2
+bird ospf 0 0
+bird ospf 0 1
+bird ospf 0 filter 192.168.3.0/24
+bird ospf 0 filter defaultroute
+bird bgp r2 local 192.168.1.2 100
+bird bgp r2 neighbor 192.168.1.1 200
+bird bgp r2 filter all
+bird bgp r2 filter route1
+bird bgp r2 filter route2
+bird routerid 192.168.4.1
+bird commit
+`
+const testInterfaceWant = `
+IPs:
+Network: 0: [192.168.1.1/24]
+Network: 1: [192.168.2.1/24]
+Network: 2: [192.168.3.1/24]
+Loopback IPs:
+192.168.4.1/32
+`
+const testOSPFWant = `
+IPs:
+Network: 0: []
+Network: 1: []
+Network: 2: []
+OSPF Area:	0
+Interfaces:
+	0
+OSPF Export Networks or Routes:
+	192.168.3.0/24
+`
+const testStaticWant = `
+IPs:
+Network: 0: []
+Network: 1: []
+Network: 2: []
+Static Routes:
+172.16.1.1/24	192.168.1.2
+Named Static Routes:
+defaultroute
+	0.0.0.0/0	192.168.1.2
+ospf
+	192.168.1.1/32
+	192.168.1.2/32
+`
+const testBGPAddWant = `
+IPs:
+Network: 0: []
+Network: 1: []
+Network: 2: []
+BGP Process Name:	r1
+BGP Local IP:	192.168.1.2
+BGP Local As:	200
+BGP Neighbor IP:	192.168.1.1
+BGP Neighbor As:	100
+BGP RouteReflector:	false
+`
+const testBGPExportWant = `
+IPs:
+Network: 0: []
+Network: 1: []
+Network: 2: []
+BGP Process Name:	r1
+BGP Local IP:	
+BGP Local As:	0
+BGP Neighbor IP:	
+BGP Neighbor As:	0
+BGP RouteReflector:	false
+BGP Export Networks or Routes:
+	all
+	r1route
+`
