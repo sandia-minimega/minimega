@@ -46,8 +46,8 @@ type BGP struct {
 	ProcessName       string
 	LocalIP           string
 	LocalAS           int
-	NeighborIp        string
-	NeighborAs        int
+	NeighborIP        string
+	NeighborAS        int
 	RouteReflector    bool
 	ExportNetworks    map[string]bool
 	AdvertiseInternal bool
@@ -173,8 +173,8 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 				b.LocalAS = as
 			} else if c.BoolArgs["neighbor"] {
 				log.Debug("bird: Setting neighbor IP %v and AS %v\n", ip, as)
-				b.NeighborIp = ip
-				b.NeighborAs = as
+				b.NeighborIP = ip
+				b.NeighborAS = as
 			}
 		} else if c.BoolArgs["rrclient"] {
 			b.RouteReflector = true
