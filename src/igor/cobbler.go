@@ -6,7 +6,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	log "minilog"
 	"path/filepath"
@@ -26,7 +25,7 @@ func NewCobblerBackend() Backend {
 }
 
 // Install configures Cobbler to boot the correct stuff
-func (b *CobblerBackend) Install(r Reservation) error {
+func (b *CobblerBackend) Install(r *Reservation) error {
 	// If we're using a kernel+ramdisk instead of an existing profile, create a
 	// profile and set the nodes to boot from it
 	if r.CobblerProfile == "" {
@@ -71,7 +70,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 	return b.enableNetboot(r.Hosts)
 }
 
-func (b *CobblerBackend) Uninstall(r Reservation) error {
+func (b *CobblerBackend) Uninstall(r *Reservation) error {
 	// Set all nodes in the reservation back to the default profile
 	if err := b.setProfile(r.Hosts, igorConfig.CobblerDefaultProfile); err != nil {
 		return err
@@ -83,73 +82,6 @@ func (b *CobblerBackend) Uninstall(r Reservation) error {
 	}
 
 	return nil
-}
-
-func (b *CobblerBackend) SetProfile(r Reservation, profile string) error {
-	if !b.profiles[profile] {
-		return fmt.Errorf("cobbler profile does not exist: %v", profile)
-	}
-
-	if err := b.setProfile(r.Hosts, profile); err != nil {
-		return err
-	}
-
-	if err := b.enableNetboot(r.Hosts); err != nil {
-		return err
-	}
-
-	if r.CobblerProfile == "" {
-		// clean up old profile
-		return b.removeProfile("igor_" + r.ResName)
-	}
-
-	return nil
-}
-
-func (b *CobblerBackend) SetKernel(r Reservation, hash string) error {
-	if r.CobblerProfile != "" {
-		// TODO: need to swap from profile to "igor_"+ r.ResName
-		return errors.New("not implemented")
-	}
-
-	if r.KernelHash == hash {
-		return errors.New("no change to kernel")
-	}
-
-	profile := "igor_" + r.ResName
-	kernel := filepath.Join(igorConfig.TFTPRoot, "igor", hash+"-kernel")
-
-	_, err := processWrapper("cobbler", "distro", "edit", "--name="+profile, "--kernel="+kernel)
-	return err
-}
-
-func (b *CobblerBackend) SetInitrd(r Reservation, hash string) error {
-	if r.CobblerProfile != "" {
-		// TODO: need to swap from profile to "igor_"+ r.ResName
-		return fmt.Errorf("not implemented")
-	}
-
-	if r.InitrdHash == hash {
-		return errors.New("no change to initrd")
-	}
-
-	profile := "igor_" + r.ResName
-	initrd := filepath.Join(igorConfig.TFTPRoot, "igor", hash+"-initrd")
-
-	_, err := processWrapper("cobbler", "distro", "edit", "--name="+profile, "--initrd="+initrd)
-	return err
-}
-
-func (b *CobblerBackend) SetKernelArgs(r Reservation, args string) error {
-	if r.CobblerProfile != "" {
-		// TODO: need to swap from profile to "igor_"+ r.ResName
-		return fmt.Errorf("not implemented")
-	}
-
-	profile := "igor_" + r.ResName
-
-	_, err := processWrapper("cobbler", "distro", "edit", "--name="+profile, "--kopts="+args)
-	return err
 }
 
 // setProfile sets the cobbler profile for all hosts to the specified profile

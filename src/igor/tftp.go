@@ -20,7 +20,7 @@ func NewTFTPBackend() Backend {
 	return &TFTPBackend{}
 }
 
-func (b *TFTPBackend) Install(r Reservation) error {
+func (b *TFTPBackend) Install(r *Reservation) error {
 	// Manual file installation happens now
 	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 	masterfile, err := os.Create(r.Filename())
@@ -51,7 +51,7 @@ func (b *TFTPBackend) Install(r Reservation) error {
 	return nil
 }
 
-func (b *TFTPBackend) Uninstall(r Reservation) error {
+func (b *TFTPBackend) Uninstall(r *Reservation) error {
 	// Delete all the PXE files in the reservation
 	for _, pxename := range r.PXENames {
 		// TODO: check error?
@@ -78,20 +78,4 @@ func (b *TFTPBackend) Power(hosts []string, on bool) error {
 	})
 
 	return runner.RunAll(hosts)
-}
-
-func (b *TFTPBackend) SetProfile(Reservation, string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (b *TFTPBackend) SetKernel(Reservation, string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (b *TFTPBackend) SetInitrd(Reservation, string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (b *TFTPBackend) SetKernelArgs(Reservation, string) error {
-	return fmt.Errorf("not implemented")
 }

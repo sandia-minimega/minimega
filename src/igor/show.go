@@ -141,7 +141,7 @@ func runShow(_ *Command, _ []string) {
 	}
 
 	// For colors... get all the reservations and sort them
-	resarray := []Reservation{}
+	resarray := []*Reservation{}
 	maxResNameLength := 0
 	for _, r := range Reservations {
 		resarray = append(resarray, r)
@@ -222,7 +222,7 @@ func runShow(_ *Command, _ []string) {
 	w.Flush()
 }
 
-func printShelves(alive map[int]bool, resarray []Reservation) {
+func printShelves(alive map[int]bool, resarray []*Reservation) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(strconv.Itoa(igorConfig.End))
 	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s

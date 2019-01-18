@@ -161,13 +161,13 @@ func genlog(rd *ResData) {
 		Owner:     rd.ResName,
 		ID:        uint64(rd.ResID),
 	}
-	emitReservationLog("CREATED", res)
-	emitReservationLog("INSTALL", res)
+	emitReservationLog("CREATED", &res)
+	emitReservationLog("INSTALL", &res)
 	for i := 0; i < rd.NumExtensions; i++ {
-		emitReservationLog("EXTENDED", res)
+		emitReservationLog("EXTENDED", &res)
 	}
 	if rd.ActualEnd != empty {
-		emitReservationLog("DELETED", res)
+		emitReservationLog("DELETED", &res)
 	}
 }
 

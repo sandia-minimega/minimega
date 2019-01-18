@@ -119,12 +119,12 @@ func syncArista() {
 	now := time.Now()
 
 	for _, r := range Reservations {
-		if !r.Active(now) {
+		if !r.IsActive(now) {
 			continue
 		}
 
 		if !quiet {
-			fmt.Printf("Set switchports for %v to %v\n", r.Hosts, r.Vlan)
+			fmt.Printf("set switchports for %v to %v\n", r.Hosts, r.Vlan)
 		}
 		if !dryRun {
 			if err := networkSet(r.Hosts, r.Vlan); err != nil {

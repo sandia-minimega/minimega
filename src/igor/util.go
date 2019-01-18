@@ -6,12 +6,15 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	log "minilog"
 	"net"
 	"os"
 	"os/user"
+	"path/filepath"
 	"ranges"
 	"strings"
 	"text/template"
@@ -152,9 +155,55 @@ func getUser() (*user.User, error) {
 // and prints out a summary of the reservation.
 // NOTE: Stats relies on the order of this data.
 //       If you change the order/content please update stats.go
-func emitReservationLog(action string, res Reservation) {
+func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 	unsplit, _ := rnge.UnsplitRange(res.Hosts)
 	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, res.ID, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
+}
+
+// install src into dir, using the hash as the file name. Returns the hash or
+// an error.
+func install(src, dir, suffix string) (string, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// hash the file
+	hash := sha1.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
+	}
+
+	fname := hex.EncodeToString(hash.Sum(nil))
+
+	dst := filepath.Join(dir, fname+suffix)
+
+	// copy the file if it doesn't already exist
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		// need to go back to the beginning of the file since we already read
+		// it once to do the hashing
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+
+		f2, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		defer f2.Close()
+
+		if _, err := io.Copy(f2, f); err != nil {
+			return "", fmt.Errorf("unable to install %v: %v", src, err)
+		}
+	} else if err != nil {
+		// strange...
+		return "", err
+	} else {
+		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
+	}
+
+	return fname, nil
 }

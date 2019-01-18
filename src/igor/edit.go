@@ -1,9 +1,6 @@
 package main
 
-import (
-	log "minilog"
-	"path/filepath"
-)
+import log "minilog"
 
 var cmdEdit = &Command{
 	UsageLine: "edit -r <reservation name> [OPTIONS]",
@@ -16,9 +13,16 @@ REQUIRED FLAGS:
 
 The -r flag specifies the name of the reservation to edit.
 
+OPTIONAL FLAGS:
+
 See "igor sub" for the meanings of the -k, -i, -profile, and -c flags. As with
-"igor sub", the -profile flag takes precedence over the other flags.`,
+"igor sub", the -profile flag takes precedence over the other flags.
+
+The -owner flag can be used to modify the reservation owner (admin only). If
+-owner is specified, all other edits are ignored.`,
 }
+
+var subOwner string // -owner
 
 func init() {
 	// break init cycle
@@ -29,6 +33,7 @@ func init() {
 	cmdEdit.Flag.StringVar(&subI, "i", "", "")
 	cmdEdit.Flag.StringVar(&subC, "c", "", "")
 	cmdEdit.Flag.StringVar(&subProfile, "profile", "", "")
+	cmdEdit.Flag.StringVar(&subOwner, "owner", "", "")
 }
 
 func runEdit(cmd *Command, args []string) {
@@ -46,111 +51,100 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatalln("cannot determine current user", err)
 	}
 
-	for _, r := range Reservations {
-		if r.ResName != subR {
-			continue
+	r := FindReservation(subR)
+	if r == nil {
+		log.Fatal("reservation does not exist: %v", subR)
+	}
+
+	if !r.IsWritable(user.Username) {
+		log.Fatal("insufficient privileges to edit reservation: %v", subR)
+	}
+
+	if subOwner != "" {
+		if user.Username != "root" {
+			log.Fatalln("only root can modify reservation owners")
 		}
 
-		// The reservation name is unique if it exists
-		if r.Owner != user.Username && user.Username != "root" {
-			log.Fatal("Cannot edit reservation %v: insufficient privileges", subR)
-		}
-
-		if !r.Installed {
-			log.Fatal("Cannot edit reservation that is not installed")
-		}
-
-		// create copy
-		r2 := r
-
-		backend := GetBackend()
-
-		if r.CobblerProfile != "" {
-			if subProfile != "" {
-				// changing from one cobbler profile to another
-				if err := backend.SetProfile(r, subProfile); err != nil {
-					log.Fatal("unable to change profile: %v", err)
-				}
-
-				r.CobblerProfile = subProfile
-			} else {
-				// changing from cobbler profile to kernel/initrd
-				if subK == "" || subI == "" {
-					log.Fatal("must specify a kernel & initrd since reservation used profile before")
-				}
-
-				log.Fatal("not implemented")
-			}
-		} else if subProfile != "" {
-			// changing from kernel/initrd to cobbler profile
-			if err := backend.SetProfile(r, subProfile); err != nil {
-				log.Fatal("unable to change profile: %v", err)
-			}
-
-			r2.CobblerProfile = subProfile
-			r2.Kernel = ""
-			r2.KernelHash = ""
-			r2.Initrd = ""
-			r2.InitrdHash = ""
-			r2.KernelArgs = ""
-		} else {
-			var err error
-			dir := filepath.Join(igorConfig.TFTPRoot, "igor")
-
-			// tweaking kernel/initrd/kernel args
-			if subK != "" {
-				r2.Kernel = subK
-				if r2.KernelHash, err = install(subK, dir, "-kernel"); err != nil {
-					log.Fatal("edit failed: %v", err)
-				}
-
-				if err := backend.SetKernel(r, r2.KernelHash); err != nil {
-					// TODO: we may leak a kernel here
-					log.Fatal("edit failed: %v", err)
-				}
-			}
-
-			if subI != "" {
-				r2.Initrd = subI
-				if r2.InitrdHash, err = install(subI, dir, "-kernel"); err != nil {
-					// TODO: we may leak a kernel here
-					log.Error("unable to update initrd: %v", err)
-				}
-
-				if err := backend.SetInitrd(r, r2.InitrdHash); err != nil {
-					// TODO: we may leak a kernel here
-					log.Fatal("unable to update initrd: %v", err)
-				}
-			}
-
-			// always change kernel args if they are different since we don't
-			// know if the user intends to clear them or not
-			//
-			// TODO: is this the right behavior?
-			if r.KernelArgs != subC {
-				if err := backend.SetKernelArgs(r, subC); err != nil {
-					// TODO: we may leak a kernel and initrd here
-					log.Error("edit failed: %v", err)
-				}
-				r2.KernelArgs = subC
-			}
-		}
-
-		Reservations[r.ID] = r2
-
-		// purgeFiles from the original reservation in case we changed the
-		// kernel and/or initrd so they're no longer used.
-		if err := purgeFiles(r); err != nil {
-			log.Error("unable to purge files: %v", err)
-		}
-
+		r.Owner = subOwner
 		dirty = true
-
-		emitReservationLog("EDITED", r2)
-
 		return
 	}
 
-	// didn't find the reservation
-	log.Fatal("Reservation %v does not exist", subR)
+	// create copy
+	var r2 *Reservation
+	*r2 = *r
+
+	// modify r2 based on the flags
+	if r.CobblerProfile != "" && subProfile != "" {
+		// changing from one cobbler profile to another
+		r2.CobblerProfile = subProfile
+	} else if r.CobblerProfile != "" && subProfile == "" {
+		// changing from cobbler profile to kernel/initrd
+		if subK == "" || subI == "" {
+			log.Fatal("must specify a kernel & initrd since reservation used profile before")
+		}
+
+		r2.CobblerProfile = ""
+		if err := r2.SetKernelInitrd(subK, subI); err != nil {
+			log.Fatalln(err)
+		}
+
+		r2.KernelArgs = subC
+	} else if subProfile != "" {
+		// changing from kernel/initrd to cobbler profile
+		r2.CobblerProfile = subProfile
+		r2.Kernel = ""
+		r2.KernelHash = ""
+		r2.Initrd = ""
+		r2.InitrdHash = ""
+		r2.KernelArgs = ""
+	} else {
+		// tweaking kernel/initrd/kernel args
+		if subK != "" {
+			if err := r2.SetKernel(subK); err != nil {
+				log.Fatal("edit failed: %v", err)
+			}
+		}
+
+		if subI != "" {
+			if err := r2.SetInitrd(subI); err != nil {
+				// clean up (possibly) already installed kernel
+				if err := r2.PurgeFiles(); err != nil {
+					log.Error("leaked kernel: %v", subK)
+				}
+
+				log.Fatal("edit failed: %v", err)
+			}
+		}
+
+		// always change kernel args if they are different since we don't
+		// know if the user intends to clear them or not
+		//
+		// TODO: is this the right behavior?
+		if r.KernelArgs != subC {
+			r2.KernelArgs = subC
+		}
+	}
+
+	// replace reservation with modified version
+	Reservations[r.ID] = r2
+
+	backend := GetBackend()
+
+	if r.Installed {
+		if err := backend.Uninstall(r); err != nil {
+			log.Fatal("unable to uninstall old reservation: %v", err)
+		}
+
+		if err := backend.Install(r2); err != nil {
+			log.Fatal("unable to install edited reservation: %v", err)
+		}
+	}
+
+	// clean up any files that are no longer needed
+	if err := r.PurgeFiles(); err != nil {
+		log.Error("leaked files: %v", err)
+	}
+
+	emitReservationLog("EDITED", r2)
 }

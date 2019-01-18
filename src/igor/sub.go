@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	log "minilog"
-	"path/filepath"
 	"ranges"
 	"time"
 )
@@ -82,9 +81,9 @@ func init() {
 }
 
 func runSub(cmd *Command, args []string) {
-	var nodes []string          // if the user has requested specific nodes
-	var reservation Reservation // the new reservation
-	var newSched []TimeSlice    // the new schedule
+	var nodes []string       // if the user has requested specific nodes
+	var r *Reservation       // the new reservation
+	var newSched []TimeSlice // the new schedule
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes
@@ -127,10 +126,8 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Make sure there's not already a reservation with this name
-	for _, r := range Reservations {
-		if r.ResName == subR {
-			log.Fatal("A reservation named %v already exists.", subR)
-		}
+	if FindReservation(subR) != nil {
+		log.Fatal("A reservation named %v already exists.", subR)
 	}
 
 	// figure out which nodes to reserve
@@ -197,9 +194,17 @@ func runSub(cmd *Command, args []string) {
 		if subN > 0 {
 			log.Fatalln("Both -n and -w options used. Operation canceled.")
 		}
+
+		// TODO: Somewhat sketchy. It would probably be cleaner to set a few
+		// properties on the Reservation (i.e. hosts or node count) and then
+		// call Schedule() on the reservation.
+		var reservation Reservation
 		reservation, newSched, err = findReservationGeneric(duration, 0, nodes, true, when.Unix())
+		r = &reservation
 	} else if subN > 0 {
+		var reservation Reservation
 		reservation, newSched, err = findReservationAfter(duration, subN, when.Unix())
+		r = &reservation
 	}
 	if err != nil {
 		log.Fatalln(err)
@@ -219,49 +224,39 @@ VlanLoop:
 	if vlan > igorConfig.VLANMax {
 		log.Fatal("couldn't assign a vlan!")
 	}
-	reservation.Vlan = vlan
+	r.Vlan = vlan
 
-	reservation.Owner = user.Username
-	reservation.ResName = subR
-	reservation.KernelArgs = subC
-	reservation.CobblerProfile = subProfile // safe to do even if unset
+	r.Owner = user.Username
+	r.ResName = subR
+	r.KernelArgs = subC
+	r.CobblerProfile = subProfile // safe to do even if unset
 
 	// If we're not doing a Cobbler profile...
 	if subProfile == "" {
-		var err error
-		dir := filepath.Join(igorConfig.TFTPRoot, "igor")
-
-		reservation.Kernel = subK
-		if reservation.KernelHash, err = install(subK, dir, "-kernel"); err != nil {
-			log.Fatal("reservation failed: %v", err)
-		}
-
-		reservation.Initrd = subI
-		if reservation.InitrdHash, err = install(subI, dir, "-initrd"); err != nil {
-			// TODO: we may leak a kernel here
-			log.Fatal("reservation failed: %v", err)
+		if err := r.SetKernelInitrd(subK, subI); err != nil {
+			log.Fatalln(err)
 		}
 	}
 
 	// Add it to the list of reservations
-	Reservations[reservation.ID] = reservation
+	Reservations[r.ID] = r
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
-	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
+	fmt.Printf("Reservation created for %v - %v\n", time.Unix(r.StartTime, 0).Format(timefmt), time.Unix(r.EndTime, 0).Format(timefmt))
+	unsplit, _ := rnge.UnsplitRange(r.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
 
 	Schedule = newSched
 
 	// update the network config
-	err = networkSet(reservation.Hosts, vlan)
+	err = networkSet(r.Hosts, vlan)
 	if err != nil {
 		// TODO: we may leak a kernel and initrd here
 		log.Fatal("unable to set up network isolation")
 	}
 
-	emitReservationLog("CREATED", reservation)
+	emitReservationLog("CREATED", r)
 
 	dirty = true
 }

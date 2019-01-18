@@ -8,22 +8,13 @@ import "log"
 
 type Backend interface {
 	// Install activates a reservation
-	Install(Reservation) error
+	Install(*Reservation) error
 
 	// Uninstall deactivates a reservation
-	Uninstall(Reservation) error
+	Uninstall(*Reservation) error
 
 	// Power sets the power state for nodes
 	Power([]string, bool) error
-
-	// SetProfile of existing, installed reservation.
-	SetProfile(Reservation, string) error
-	// SetKernel of existing, installed reservation.
-	SetKernel(Reservation, string) error
-	// SetInitrd of existing, installed reservation.
-	SetInitrd(Reservation, string) error
-	// SetKernelArgs of existing, installed reservation.
-	SetKernelArgs(Reservation, string) error
 }
 
 func GetBackend() Backend {
@@ -37,12 +28,12 @@ func GetBackend() Backend {
 // MockBackend can be used for testing
 type MockBackend struct{}
 
-func (b *MockBackend) Install(r Reservation) error {
+func (b *MockBackend) Install(r *Reservation) error {
 	log.Printf("mock install %v", r.ResName)
 	return nil
 }
 
-func (b *MockBackend) Uninstall(r Reservation) error {
+func (b *MockBackend) Uninstall(r *Reservation) error {
 	log.Printf("mock uninstall %v", r.ResName)
 	return nil
 }

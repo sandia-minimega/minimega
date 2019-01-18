@@ -39,8 +39,7 @@ var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration 
 var igorConfig Config
 
 // Our most important data structures: the reservation list, and the schedule
-var Reservations map[uint64]Reservation // map ID to reservations
-var Schedule []TimeSlice                // The schedule
+var Schedule []TimeSlice // The schedule
 
 // dirty is set by the command handlers when the schedule is changed so we know
 // if we need to write it out or not.
@@ -88,9 +87,9 @@ func housekeeping() {
 	for _, r := range Reservations {
 		if r.EndTime < now {
 			// Reservation expired; delete it
-			deleteReservation(false, []string{r.ResName})
-
-			dirty = true
+			if err := DeleteReservation(r.ID); err != nil {
+				log.Fatalln(err)
+			}
 		} else if r.StartTime >= now {
 			// Reservation is in the future, ignore for now
 			continue
@@ -107,8 +106,6 @@ func housekeeping() {
 			log.Info("%v is already installed", r.ResName)
 
 			r.Installed = true
-			// TODO: make Reservations map[int]*Reservation
-			Reservations[r.ID] = r
 			dirty = true
 
 			continue
@@ -138,18 +135,11 @@ func housekeeping() {
 		}
 
 		r.Installed = true
-		// TODO: make Reservations map[int]*Reservation
-		Reservations[r.ID] = r
-
 		dirty = true
 	}
 
 	// Remove expired time slices from the schedule
 	expireSchedule()
-}
-
-func init() {
-	Reservations = make(map[uint64]Reservation)
 }
 
 func main() {
