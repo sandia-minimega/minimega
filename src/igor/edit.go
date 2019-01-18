@@ -128,6 +128,7 @@ func runEdit(cmd *Command, args []string) {
 
 	// replace reservation with modified version
 	Reservations[r.ID] = r2
+	dirty = true
 
 	backend := GetBackend()
 
