@@ -128,6 +128,9 @@ func (b *CobblerBackend) removeProfile(profile string) error {
 	if len(hosts) > 0 {
 		log.Info("setting hosts to default profile: %v", hosts)
 
+		if err := b.setProfile(hosts, igorConfig.CobblerDefaultProfile); err != nil {
+			return err
+		}
 	}
 
 	// delete the profile, if it exists
