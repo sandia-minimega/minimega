@@ -89,7 +89,8 @@ Multiple addresses can be added to the same interface as well:
 	minimega$ router foo interface 0 10.0.0.1/24
 	minimega$ router foo interface 0 2001:1::1/64
 
-Minirouter can also assign loopback interfaces. These types of interfaces are useful in routing processes (ie OSPF)
+minirouter can also assign loopback interfaces. These types of interfaces are 
+useful in routing processes (i.e. OSPF)
 
 	minimega$ router foo interface 1 11.0.0.1/32 lo
 
@@ -146,7 +147,7 @@ the record:
 
 `minirouter` uses the [[http://bird.network.cz/][bird routing daemon]] to
 provide routing using a variety of protocols. Currently, `minirouter` only
-supports static,OSPF and bgp routes.
+supports static, OSPF and bgp routes.
 
 Bird is a lightweight routing daemon that scales well. In our tests we were
 able to scale minirouter with bird to at least 40 gigabit.
@@ -154,8 +155,8 @@ able to scale minirouter with bird to at least 40 gigabit.
 ** Static routes
 
 `minirouter` makes possible adding IPv4 or IPv6 static routes by simply
-specifying the destination network and net-hop IP. For example, to add a static
-IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
+specifying the destination network and net-hop IP. For example, to add a 
+static IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
 
 	minimega$ router foo route static 1.2.3.0/24 1.2.3.254
 
@@ -167,7 +168,10 @@ IPv6 routes are added in the same way:
 
 	minimega$ router foo route static 2001:1:2:3::/64 2001:1:2:3::1
 
-you can also give names to static routes so you can combine multple routes under a single name. By doing so you can create a sort of filter to be used in routing processes like OSPF and BGP. For example setting a static route with the name bar-route
+You can also give names to static routes so you can combine multple routes
+under a single name. By doing so you can create simple filter or advertise
+this route in routing processes like OSPF and BGP. For example, setting a 
+static route with the name bar-route
 
 	minimega$ router foo route static 1.2.3.0/24 1.2.3.254 bar-route	
 
@@ -178,7 +182,7 @@ specifying the OSPF area and *interface* to include in the area. OSPF generally
 supports specifying networks and many other options, which `minirouter` may add
 in the future. Specifying an interface (and all of the networks on
 that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`.
-You can also specify specific networks or static routes into the OSPF process
+You can also specify specific networks or static routes into the OSPF process.
 
 Interfaces are identified by the index in which they were added by the
 `vm`config`net` API. For example, to add the first and third network of the
@@ -192,12 +196,14 @@ router VM to area 0 in an OSPF route:
 	# add interface 'c', index 2
 	minimega$ router foo route ospf 0 2
 
-Now lets say you want to advertise a network that is on index 1 but you do not want interface 1 to participate in OSPF (ie its an Internet facing interface)
+Now lets say you want to advertise a network that is on index 1 but you do not 
+want interface 1 to participate in OSPF (i.e. its an Internet facing interface)
 	
 	# advertise network 10.0.0.0/24 in OSPF area 0
 	minimega$router foo route ospf 0 export 10.0.0.0/24 
 
-Say you want to advertise a specific static route(s) into the ospf process. The export command provides this functionality
+Say you want to advertise a specific static route(s) into the ospf process. 
+The export command provides this functionality
 
 	# advertise network default route 0.0.0.0/0 in OSPF area 0
 	minimega$router foo route static 0.0.0.0/0 1.2.3.254 default-route
@@ -205,9 +211,20 @@ Say you want to advertise a specific static route(s) into the ospf process. The 
 
 ** BGP
 
-‘minirouter’ provides basic support for BGP on IPv4 Networks. Each BGP peering relationship or process needs to have a name, local information, neighbor information and whats being exported. The local and neighbor information will be IP address and AS numbers. You can additionally set up whats being exported ie all learned routes or just routes specified. The filter keyword allows you to use named static routes for simple route filtering. More advanced route filtering is planned. Route reflection can also be configured if you want to configure a particular router to be a route reflector server by default all routers are BGP route clients.
+‘minirouter’ provides basic support for BGP on IPv4 Networks. Each BGP peering
+relationship or process needs to have a name, local information, neighbor 
+information and whats being exported. The local and neighbor information will 
+be IP address and AS numbers. You can additionally set up whats being exported 
+i.e. all learned routes or just routes specified. The filter keyword allows you
+to use named static routes for simple route filtering. More advanced route 
+filtering is planned. Route reflection can also be configured if you want to 
+configure a particular router to be a route reflector server by default all 
+routers are BGP route clients.
 
-For example R1 has an ip of 10.0.0.1 in AS 100 and R2 has an IP of 20.0.0.1 in AS 20. We would like R1 just to announce the 10.0.0.0/24 network to R2 while on R2 we want to advertise all learned routes. We could also optionally add additional routes by adding more export statements to R2 
+For example R1 has an ip of 10.0.0.1 in AS 100 and R2 has an IP of 20.0.0.1 in 
+AS 20. We would like R1 just to announce the 10.0.0.0/24 network to R2 while on 
+R2 we want to advertise all learned routes. We could also optionally add 
+additional routes by adding more export statements to R2 
 
 To configure BGP:
 	

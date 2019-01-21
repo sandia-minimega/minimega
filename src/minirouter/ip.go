@@ -122,7 +122,7 @@ func ipDel(idx int, ip string) error {
 
 	// TODO: Need to send release ip reservation to dhcp server
 	if ip == "dhcp" {
-		out, err := exec.Command("dhclient -r", iface).CombinedOutput()
+		out, err := exec.Command("dhclient", "-r", iface).CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("%v: %v", err, string(out))
 		}

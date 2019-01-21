@@ -31,7 +31,7 @@ router takes a number of subcommands:
 
 - 'interface': Set IPv4 or IPv6 addresses, or configure an interface to assign
   using DHCP. The interface field is an integer index of the interface defined
-  with 'vm config net'. you could also specify if that interface will be a 
+  with 'vm config net'. You could also specify if that interface will be a 
   loopback interface For example, to configure the second interface of the
   router with a static IP and a loopback witha  different IP:
 
@@ -64,8 +64,9 @@ router takes a number of subcommands:
 
     router foo route static 0.0.0.0/0 10.0.0.1 default-route
   
-  OSPF routes include an area and a network index corresponding to the interface described in 
-  'vm config net'. You can also specify what networks to advertise using the export command
+  OSPF routes include an area and a network index corresponding to the 
+  interface described in 'vm config net'. You can also specify what networks 
+  to advertise using the export command.
   
   For example, to enable OSPF on area 0 for both interfaces of a router:
 
@@ -74,7 +75,8 @@ router takes a number of subcommands:
 	router foo route ospf 0 0
 	router foo route ospf 0 1
 
-  For example to advertrise specific networks, advertise a static route or use a static route as a filter:
+  For example, to advertise specific networks, advertise a static route or 
+  use a static route as a filter:
 	
     router foo route static 11.0.0.0/24 0 bar-route
 	router foo route static 12.0.0.0/24 0 bar-route
@@ -85,7 +87,7 @@ router takes a number of subcommands:
   To configure BGP must specify the process name for the specific bgp context, local ip address and AS,
   Neighbor ip address and AS, and what networks need to be advertised
 
-  For example local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
+  For example, local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
   and you want to advterise network 10.0.0.0/24:
 	
     router foo route static 10.0.0.0/24 0 foo_out
