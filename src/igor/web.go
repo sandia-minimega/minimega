@@ -15,6 +15,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"html/template"
 	"log"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"ranges"
 	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -38,7 +40,9 @@ The -p flag sets the port of the server (default = 8080).
 
 The -f flag sets location of html and static folder (default = current path).
 
-The -s flag silences output.`,
+The -s flag silences output.
+
+The -e flag sets the path of the igor executable to exec`,
 }
 
 // argument variables explained above
@@ -46,6 +50,9 @@ var webP string // port
 var webF string // location of static folder
 var webS bool   // silent
 var webE string // path to igor executable
+
+var resCacheL sync.RWMutex
+var resCache []ResTableRow
 
 func init() {
 	// break init cycle
@@ -99,15 +106,49 @@ type Response struct {
 	Extra interface{}
 }
 
+func getReservations() []ResTableRow {
+	// Remove old reservations if necessary
+	now := time.Now().Unix()
+	for i := 1; i < len(resCache); i++ {
+		r := resCache[i]
+		if r.EndInt < now {
+			log.Println(r.Name, " has expired. Running 'igor show'.")
+			processWrapper(webE, "show")
+			updateReservations()
+			break
+		}
+	}
+
+	// Update list of down nodes
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	resCache[0] = ResTableRow{
+		"",
+		"",
+		"",
+		time.Now().Unix(),
+		"",
+		0,
+		rnge.RangeToInts(getDownNodes(getNodes())),
+	}
+
+	resCacheL.RLock()
+	defer resCacheL.RUnlock()
+
+	return resCache
+}
+
 // updates reservation data and returns an array with the updated reservation info
 // the first reservation (index 0) is all of the down nodes
 //		and its StartInt is the current time
 //			(for comparison in order to label current reservations)
-func getReservations() []ResTableRow {
+func updateReservations() {
+	resCacheL.Lock()
+	defer resCacheL.Unlock()
+
+	log.Print("Updating reservations")
 
 	// read data from files, update info, unlock files
 	lock, _ := lockAndReadData(true)
-	housekeeping()
 	syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 
 	resRows := []ResTableRow{}
@@ -137,7 +178,10 @@ func getReservations() []ResTableRow {
 			rnge.RangeToInts(r.Hosts),
 		})
 	}
-	return resRows
+
+	resCache = resRows
+
+	log.Print("Reservations updated.")
 }
 
 // Returns a non-nil error if something's wrong with the igor command
@@ -214,7 +258,8 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 		env := []string{"USER=" + username}
 		out, err = processWrapperEnv(env, cmd[0:]...)
-		housekeeping()
+		processWrapperEnv(env, webE, "show")
+		updateReservations()
 	}
 
 	// if a speculate command
@@ -294,6 +339,32 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 // main web function
 func runWeb(_ *Command, _ []string) {
+	// Watch for changes to data.gob, refresh cache when it changes
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer watcher.Close()
+
+	go func() {
+		for {
+			select {
+			case event := <-watcher.Events:
+				log.Println("Modified file:", event.Name)
+				updateReservations()
+			case err := <-watcher.Errors:
+				log.Println(err)
+			}
+		}
+	}()
+
+	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
+	if err := watcher.Add(dataPath); err != nil {
+		log.Fatal(err)
+	}
+
+	updateReservations()
+
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
 	// general requests
