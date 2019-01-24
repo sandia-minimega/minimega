@@ -132,12 +132,12 @@ th {
 /* font of logo in navigation bar */
 @font-face {
     font-family: Logo;
-    src: url("Montserrat-SemiBoldItalic.ttf");
+    src: url("../fonts/Montserrat-SemiBoldItalic.ttf");
 }
 @font-face {
     font-family: Logo;
     font-weight: bold;
-    src: url("Montserrat-ExtraBold.ttf");
+    src: url("../fonts/Montserrat-ExtraBold.ttf");
 }
 
 /* Buttons */
@@ -199,7 +199,7 @@ button.actionbar {
 
 #actionbar {
     padding: 0 !important;
-    bottom: -15%;
+    bottom: 5%;
     width: fit-content;
     width: -moz-fit-content;
     padding: 0;
