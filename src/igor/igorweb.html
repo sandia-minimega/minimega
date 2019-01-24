@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<!--
+    - igorweb.html
+    - This file holds the visual aspects of IgorWeb, sent from the server on a request to /.
+    - All static files in IgorWeb are referenced from this file.
+    - End of the file has javascript template variables that are filled by web.go
+    -      for initial reservation information. The rest comes from requests made
+    -      by igorweb.js.
+  -->
+
+<html lang="en-US">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+
+    <!-- Style files -->
+    <link href="static/style/bootstrap.min.css" rel="stylesheet">
+    <link href="static/style/bootstrap-grid.min.css" rel="stylesheet">
+    <link href="static/style/bootstrap-reboot.min.css" rel="stylesheet">
+    <link href="static/style/igorweb.css" rel="stylesheet" >
+  </head>
+  <body style="background-color: whitesmoke; padding-top: 80px;">
+    <div id="app">
+
+      <!-- Navigation bar -->
+      <nav class="navbar fixed-top navbar-dark">
+        <!-- IgorWeb logo -->
+        <span class="navbar-brand mdl" style="margin-left: 10%; color: white; font-size: 2.25em; font-family: Logo, sans-serif;">
+          <b class="mdl">Igor</b><i>Web</i>
+        </span>
+
+        <!-- Text that shows how many nodes are selected -->
+        <span id="selecttext" class="mdl navbar-item" style="color: white; font-size: 1.25em; font-weight: bold; display: none;"></span>
+
+        <!-- New reservation button, floating blue plus -->
+        <div id="newbutton" class="clickable mdl" data-toggle="tooltip" data-placement="bottom" title="Make a new reservation" v-on:click="showNewResForm()">+</div>
+      </nav>
+
+      <alert :message="alertMessage"></alert>
+
+      <reservation-info></reservation-info>
+
+      <div
+        id="actionbar"
+        class="mx-auto fixed-bottom card active"
+        v-if="selectedReservation != null">
+
+        <button
+          class="igorbtn btn btn-outline-light actionbar"
+          v-if="selectedReservation != null"
+          v-on:click="showDeleteModal()">
+          Delete Reservation
+        </button>
+
+        <button
+          class="igorbtn btn btn-outline-light actionbar"
+          v-if="selectedReservation != null"
+          v-on:click="showPowerModal()">
+          Power Control
+        </button>
+
+        <button
+          class="igorbtn btn btn-outline-light actionbar"
+          v-on:click="showExtendModal()"
+          v-if="selectedReservation != null">
+          Extend Reservation
+        </button>
+
+        <span class="close clickable closeactionbar" v-on:click="clearSelection()">&times;</span>
+      </div>
+
+      <new-reservation-modal ref="newResModal"></new-reservation-modal>
+      <delete-reservation-modal
+        v-bind:reservation="selectedReservation"
+        v-if="selectedReservation != null"
+        v-on:deleted="clearSelection()"
+        ref="deleteModal"></delete-reservation-modal>
+      <power-modal
+        v-bind:reservation="selectedReservation"
+        v-if="selectedReservation != null"
+        ref="powerModal"></power-modal>
+      <extend-reservation-modal
+        v-bind:reservation="selectedReservation"
+        v-if="selectedReservation != null"
+        ref="extendModal"></extend-reservation-modal>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        <!-- Set some globals provided by the Go template -->
+        const STARTNODE = {{ .StartNode }};
+        const ENDNODE = {{ .EndNode }};
+        const RACKWIDTH = {{ .RackWidth }};
+        const CLUSTER = {{ .Cluster }};
+        const INITIALRESERVATIONS = {{ .ResTableRows }};
+    </script>
+
+    <script src="static/libs/jquery-3.3.1.min.js"></script>
+    <script src="static/libs/bootstrap.min.js"></script>
+    <script src="static/libs/vue.min.js"></script>
+    <script src="static/libs/vuex.min.js"></script>
+    <script src="static/scripts/Alert.js"></script>
+    <script src="static/scripts/KeyCard.js"></script>
+    <script src="static/scripts/LoadingModal.js"></script>
+    <script src="static/scripts/SpeculateTable.js"></script>
+    <script src="static/scripts/NewReservationModal.js"></script>
+    <script src="static/scripts/DeleteReservationModal.js"></script>
+    <script src="static/scripts/ExtendReservationModal.js"></script>
+    <script src="static/scripts/PowerModal.js"></script>
+    <script src="static/scripts/ReservationTableRow.js"></script>
+    <script src="static/scripts/ReservationTable.js"></script>
+    <script src="static/scripts/Node.js"></script>
+    <script src="static/scripts/NodeGrid.js"></script>
+    <script src="static/scripts/ReservationInfo.js"></script>
+    <script src="static/scripts/store.js"></script>
+    <script src="static/scripts/main.js"></script>
+  </body>
+</html>
