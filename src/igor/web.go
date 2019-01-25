@@ -52,7 +52,10 @@ var webS bool   // silent
 var webE string // path to igor executable
 
 var resCacheL sync.RWMutex
-var resCache []ResTableRow
+var resCache ResTable
+
+var powerCacheL sync.RWMutex
+var powerCache ResTableRow
 
 func init() {
 	// break init cycle
@@ -83,6 +86,20 @@ type ResTableRow struct {
 	Nodes []int
 }
 
+type ResTable []ResTableRow
+
+func (r ResTable) ContainsExpired() bool {
+	now := time.Now().Unix()
+	for i := 0; i < len(r); i++ {
+		row := r[i]
+		if row.EndInt < now {
+			return true
+		}
+	}
+
+	return false
+}
+
 // object conataining a single option for speculate
 // an array of ten of these is passed to the client
 type Speculate struct {
@@ -106,64 +123,39 @@ type Response struct {
 	Extra interface{}
 }
 
+func runShowCommand() {
+	log.Print("Running show for housekeeping's sake")
+	processWrapper(webE, "show")
+	log.Print("Done")
+}
+
 func getReservations() []ResTableRow {
 	// Remove old reservations if necessary
-	now := time.Now().Unix()
-	for i := 1; i < len(resCache); i++ {
-		r := resCache[i]
-		if r.EndInt < now {
-			log.Println(r.Name, " has expired. Running 'igor show'.")
-			processWrapper(webE, "show")
-			updateReservations()
-			break
-		}
-	}
-
-	// Update list of down nodes
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	resCache[0] = ResTableRow{
-		"",
-		"",
-		"",
-		time.Now().Unix(),
-		"",
-		0,
-		rnge.RangeToInts(getDownNodes(getNodes())),
-	}
 
 	resCacheL.RLock()
 	defer resCacheL.RUnlock()
 
-	return resCache
+	if resCache.ContainsExpired() {
+		log.Println("Found expired reservation(s)!")
+	}
+
+	res := make(ResTable, len(resCache)+1)
+	res[0] = getDownReservation()
+	copy(res[1:], resCache)
+
+	return res
 }
 
-// updates reservation data and returns an array with the updated reservation info
-// the first reservation (index 0) is all of the down nodes
-//		and its StartInt is the current time
-//			(for comparison in order to label current reservations)
+// updates reservation data
 func updateReservations() {
-	resCacheL.Lock()
-	defer resCacheL.Unlock()
-
 	log.Print("Updating reservations")
 
 	// read data from files, update info, unlock files
 	lock, _ := lockAndReadData(true)
 	syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 
-	resRows := []ResTableRow{}
+	resRows := ResTable{}
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-
-	// resRows[0] => down nodes
-	resRows = append(resRows, ResTableRow{
-		"",
-		"",
-		"",
-		time.Now().Unix(),
-		"",
-		0,
-		rnge.RangeToInts(getDownNodes(getNodes())),
-	})
 
 	// convert all of the Reservations to ResTableRows
 	timefmt := "Jan 2 15:04"
@@ -179,9 +171,35 @@ func updateReservations() {
 		})
 	}
 
+	resCacheL.Lock()
 	resCache = resRows
+	resCacheL.Unlock()
 
 	log.Print("Reservations updated.")
+}
+
+func getDownReservation() ResTableRow {
+	powerCacheL.RLock()
+	defer powerCacheL.RUnlock()
+
+	return powerCache
+}
+
+func updatePowerCache() {
+	powerCacheL.Lock()
+	defer powerCacheL.Unlock()
+
+	// Update list of down nodes
+	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	powerCache = ResTableRow{
+		"",
+		"",
+		"",
+		time.Now().Unix(),
+		"",
+		0,
+		rnge.RangeToInts(getDownNodes(getNodes())),
+	}
 }
 
 // Returns a non-nil error if something's wrong with the igor command
@@ -258,8 +276,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 		env := []string{"USER=" + username}
 		out, err = processWrapperEnv(env, cmd[0:]...)
-		processWrapperEnv(env, webE, "show")
-		updateReservations()
+		updatePowerCache()
 	}
 
 	// if a speculate command
@@ -358,12 +375,19 @@ func runWeb(_ *Command, _ []string) {
 		}
 	}()
 
-	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
+	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	if err := watcher.Add(dataPath); err != nil {
 		log.Fatal(err)
 	}
 
+	go func() {
+		for _ = range time.Tick(10 * time.Second) {
+			updatePowerCache()
+		}
+	}()
+
 	updateReservations()
+	updatePowerCache()
 
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
