@@ -10,14 +10,15 @@ clear vm config
 
 # schedule with non-existent VM with queueing enabled
 ns queueing false
-vm config coschedule foo
+vm config colocate foo
 vm launch kvm a
 ns flush
 clear vm config
 
 # schedule with non-existent VM with queueing disabled
 ns queueing true
-vm config coschedule foo
+vm config colocate foo
 vm launch kvm a
+vm launch
 ns flush
 clear vm config
