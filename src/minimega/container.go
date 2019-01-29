@@ -1226,6 +1226,10 @@ func (vm *ContainerVM) unlinkNetns() error {
 // create an overlay mount (linux 3.18 or greater) if snapshot mode is
 // being used.
 func (vm *ContainerVM) overlayMount() error {
+	if _, err := os.Stat(vm.FilesystemPath); os.IsNotExist(err) {
+		return err
+	}
+
 	vm.effectivePath = vm.path("fs")
 	workPath := vm.path("fs_work")
 
