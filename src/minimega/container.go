@@ -44,6 +44,10 @@ const (
 	CONTAINER_MAGIC        = "CONTAINER"
 	CONTAINER_NONE         = "CONTAINER_NONE"
 	CONTAINER_KILL_TIMEOUT = 5 * time.Second
+
+	// UnmountRetries is the maximum number of times to try to unmount a busy
+	// filesystem.
+	UnmountRetries = 10
 )
 
 const (
@@ -1258,12 +1262,22 @@ func (vm *ContainerVM) overlayMount() error {
 }
 
 func (vm *ContainerVM) overlayUnmount() error {
-	err := syscall.Unmount(vm.effectivePath, 0)
-	if err != nil {
+	for i := 0; i < UnmountRetries; i++ {
+		err := syscall.Unmount(vm.effectivePath, 0)
+		if err == nil {
+			return nil
+		}
+
+		if err, ok := err.(syscall.Errno); ok && err == syscall.EBUSY {
+			log.Info("filesystem busy for vm %v, sleeping", vm.ID)
+			time.Sleep(time.Second)
+			continue
+		}
+
 		return fmt.Errorf("overlay unmount: %v", err)
 	}
 
-	return nil
+	return fmt.Errorf("unable to unmount overlay")
 }
 
 func (vm *ContainerVM) console(pseudotty *os.File) {
