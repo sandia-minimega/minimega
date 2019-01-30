@@ -204,7 +204,7 @@ func (iom *IOMeshage) Get(file string) error {
 		return err
 	}
 	if len(info) == 0 {
-		return fmt.Errorf("file not found")
+		return fmt.Errorf("get %v: file not found", file)
 	}
 
 	inflight := make(map[string]bool)
@@ -280,7 +280,7 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 		return nil, err
 	}
 	if len(info) == 0 {
-		return nil, fmt.Errorf("file not found")
+		return nil, fmt.Errorf("stream %v: file not found", file)
 	}
 
 	// request file from the first responder
@@ -496,7 +496,7 @@ func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
 		}
 	}
 
-	return "", errors.New("file not found")
+	return "", fmt.Errorf("who has %v: file not found", filename)
 }
 
 func (iom *IOMeshage) getPart(filename string, p int64) error {
