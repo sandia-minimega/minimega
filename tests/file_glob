@@ -4,28 +4,30 @@ file list /minitest
 # Create files to glob
 shell mkdir /tmp/minimega/files/minitest
 shell mkdir /tmp/minimega/files/minitest/foo1
-shell touch /tmp/minimega/files/minitest/foo1/a
+shell touch /tmp/minimega/files/minitest/foo1/a.txt
+shell touch /tmp/minimega/files/minitest/foo1/a.txt2
 shell mkdir /tmp/minimega/files/minitest/foo2
-shell touch /tmp/minimega/files/minitest/foo2/a
-shell touch /tmp/minimega/files/minitest/foo2/b
+shell touch /tmp/minimega/files/minitest/foo2/a.txt
+shell touch /tmp/minimega/files/minitest/foo2/b.txt
 shell mkdir /tmp/minimega/files/minitest/foo3
-shell touch /tmp/minimega/files/minitest/foo3/a
-shell touch /tmp/minimega/files/minitest/foo3/b
-shell touch /tmp/minimega/files/minitest/foo3/c
+shell touch /tmp/minimega/files/minitest/foo3/a.txt
+shell touch /tmp/minimega/files/minitest/foo3/b.txt
+shell touch /tmp/minimega/files/minitest/foo3/c.txt
 
 # Test list
-file list /minitest
 file list /minitest/foo*
-file list /minitest/*/a
-file list /minitest/*/b
-file list /minitest/*/c
+file list /minitest/*/a.txt
+file list /minitest/*/b.txt
+file list /minitest/*/c.txt
+file list /minitest/foo1/a.*
+file list /minitest/foo3/*.txt
 
 # Test deletion
-file delete /minitest/*/c
+file delete /minitest/*/c.txt
 file list /minitest/foo*
-file delete /minitest/*/b
+file delete /minitest/*/b.txt
 file list /minitest/foo*
-file delete /minitest/*/a
+file delete /minitest/*/a.txt
 file list /minitest/foo*
 file delete /minitest/foo*
 file list /minitest/

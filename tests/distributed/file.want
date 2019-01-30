@@ -21,7 +21,7 @@ E: file not found
 dir   | name          | size
       | minitest/big  | 104857600
       | minitest/zero | 0
-<dir> | minitest/dir  | 4096
+<dir> | minitest/dir  | 100
 ## mesh send all file list /minitest
 
 ## # Test whether the files transfer properly
@@ -35,7 +35,7 @@ d41d8cd98f00b204e9800998ecf8427e  /tmp/minimega/files/minitest/zero
 dir   | name          | size
       | minitest/big  | 104857600
       | minitest/zero | 0
-<dir> | minitest/dir  | 4096
+<dir> | minitest/dir  | 100
 ## mesh send all file list /minitest
 dir  | name          | size
      | minitest/big  | 104857600

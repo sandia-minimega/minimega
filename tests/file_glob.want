@@ -4,59 +4,69 @@
 ## # Create files to glob
 ## shell mkdir /tmp/minimega/files/minitest
 ## shell mkdir /tmp/minimega/files/minitest/foo1
-## shell touch /tmp/minimega/files/minitest/foo1/a
+## shell touch /tmp/minimega/files/minitest/foo1/a.txt
+## shell touch /tmp/minimega/files/minitest/foo1/a.txt2
 ## shell mkdir /tmp/minimega/files/minitest/foo2
-## shell touch /tmp/minimega/files/minitest/foo2/a
-## shell touch /tmp/minimega/files/minitest/foo2/b
+## shell touch /tmp/minimega/files/minitest/foo2/a.txt
+## shell touch /tmp/minimega/files/minitest/foo2/b.txt
 ## shell mkdir /tmp/minimega/files/minitest/foo3
-## shell touch /tmp/minimega/files/minitest/foo3/a
-## shell touch /tmp/minimega/files/minitest/foo3/b
-## shell touch /tmp/minimega/files/minitest/foo3/c
+## shell touch /tmp/minimega/files/minitest/foo3/a.txt
+## shell touch /tmp/minimega/files/minitest/foo3/b.txt
+## shell touch /tmp/minimega/files/minitest/foo3/c.txt
 
 ## # Test list
-## file list /minitest
-dir   | name          | size
-<dir> | minitest/foo1 | 4096
-<dir> | minitest/foo2 | 4096
-<dir> | minitest/foo3 | 4096
 ## file list /minitest/foo*
-dir  | name            | size
-     | minitest/foo1/a | 0
-     | minitest/foo2/a | 0
-     | minitest/foo2/b | 0
-     | minitest/foo3/a | 0
-     | minitest/foo3/b | 0
-     | minitest/foo3/c | 0
-## file list /minitest/*/a
-dir  | name            | size
-     | minitest/foo1/a | 0
-     | minitest/foo2/a | 0
-     | minitest/foo3/a | 0
-## file list /minitest/*/b
-dir  | name            | size
-     | minitest/foo2/b | 0
-     | minitest/foo3/b | 0
-## file list /minitest/*/c
-dir  | name            | size
-     | minitest/foo3/c | 0
+dir  | name                 | size
+     | minitest/foo1/a.txt  | 0
+     | minitest/foo1/a.txt2 | 0
+     | minitest/foo2/a.txt  | 0
+     | minitest/foo2/b.txt  | 0
+     | minitest/foo3/a.txt  | 0
+     | minitest/foo3/b.txt  | 0
+     | minitest/foo3/c.txt  | 0
+## file list /minitest/*/a.txt
+dir  | name                | size
+     | minitest/foo1/a.txt | 0
+     | minitest/foo2/a.txt | 0
+     | minitest/foo3/a.txt | 0
+## file list /minitest/*/b.txt
+dir  | name                | size
+     | minitest/foo2/b.txt | 0
+     | minitest/foo3/b.txt | 0
+## file list /minitest/*/c.txt
+dir  | name                | size
+     | minitest/foo3/c.txt | 0
+## file list /minitest/foo1/a.*
+dir  | name                 | size
+     | minitest/foo1/a.txt  | 0
+     | minitest/foo1/a.txt2 | 0
+## file list /minitest/foo3/*.txt
+dir  | name                | size
+     | minitest/foo3/a.txt | 0
+     | minitest/foo3/b.txt | 0
+     | minitest/foo3/c.txt | 0
 
 ## # Test deletion
-## file delete /minitest/*/c
+## file delete /minitest/*/c.txt
 ## file list /minitest/foo*
-dir  | name            | size
-     | minitest/foo1/a | 0
-     | minitest/foo2/a | 0
-     | minitest/foo2/b | 0
-     | minitest/foo3/a | 0
-     | minitest/foo3/b | 0
-## file delete /minitest/*/b
+dir  | name                 | size
+     | minitest/foo1/a.txt  | 0
+     | minitest/foo1/a.txt2 | 0
+     | minitest/foo2/a.txt  | 0
+     | minitest/foo2/b.txt  | 0
+     | minitest/foo3/a.txt  | 0
+     | minitest/foo3/b.txt  | 0
+## file delete /minitest/*/b.txt
 ## file list /minitest/foo*
-dir  | name            | size
-     | minitest/foo1/a | 0
-     | minitest/foo2/a | 0
-     | minitest/foo3/a | 0
-## file delete /minitest/*/a
+dir  | name                 | size
+     | minitest/foo1/a.txt  | 0
+     | minitest/foo1/a.txt2 | 0
+     | minitest/foo2/a.txt  | 0
+     | minitest/foo3/a.txt  | 0
+## file delete /minitest/*/a.txt
 ## file list /minitest/foo*
+dir  | name                 | size
+     | minitest/foo1/a.txt2 | 0
 ## file delete /minitest/foo*
 ## file list /minitest/
 
