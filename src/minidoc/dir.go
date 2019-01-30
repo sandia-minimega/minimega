@@ -88,6 +88,8 @@ var (
 func initTemplates(base string) error {
 	// Locate the template file.
 	actionTmpl := filepath.Join(base, "action.tmpl")
+	layoutTmpl := filepath.Join(base, "layout.tmpl")
+	dirTmpl := filepath.Join(base, "dir.tmpl")
 
 	contentTemplate = make(map[string]*template.Template)
 
@@ -100,29 +102,14 @@ func initTemplates(base string) error {
 		// Read and parse the input.
 		tmpl := present.Template()
 		tmpl = tmpl.Funcs(template.FuncMap{"playable": executable})
-		if _, err := tmpl.ParseFiles(actionTmpl, contentTmpl); err != nil {
+		if _, err := tmpl.ParseFiles(actionTmpl, layoutTmpl, contentTmpl); err != nil {
 			return err
 		}
 		contentTemplate[ext] = tmpl
 	}
 
 	var err error
-	layoutTemplate, err = template.ParseFiles(filepath.Join(base, "layout.tmpl"))
-	if err != nil {
-		return err
-	}
-
-	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "dir.tmpl"))
-	if err != nil {
-		return err
-	}
-
-	tmpl, err := layoutTemplate.Clone()
-	if err != nil {
-		return err
-	}
-
-	dirListTemplate, err = dirListTemplate.AddParseTree("layout.tmpl", tmpl.Tree)
+	dirListTemplate, err = template.ParseFiles(layoutTmpl, dirTmpl)
 	return err
 }
 
@@ -145,20 +132,18 @@ func renderDoc(w io.Writer, docFile string) error {
 // renderHTML parses the html file as a template and tries to execute it with
 // layoutTemplate. Reparses the html file each time.
 func renderHTML(w io.Writer, name string) error {
+	layoutTmpl := filepath.Join(*f_base, "layout.tmpl")
+
 	log.Info("renderHTML: %v", name)
 
 	f := filepath.Join(*f_root, name)
-	tmpl, err := layoutTemplate.Clone()
+
+	tmpl, err := template.ParseFiles(f, layoutTmpl)
 	if err != nil {
 		return err
 	}
 
-	tmpl, err = tmpl.ParseFiles(f)
-	if err != nil {
-		return err
-	}
-
-	return tmpl.Execute(w, nil)
+	return tmpl.ExecuteTemplate(w, "root", nil)
 }
 
 func parse(name string, mode present.ParseMode) (*present.Doc, error) {
@@ -235,7 +220,7 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 	sort.Sort(d.Slides)
 	sort.Sort(d.Articles)
 	sort.Sort(d.Other)
-	return true, dirListTemplate.Execute(w, d)
+	return true, dirListTemplate.ExecuteTemplate(w, "root", d)
 }
 
 // showFile reports whether the given file should be displayed in the list.
