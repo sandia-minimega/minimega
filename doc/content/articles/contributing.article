@@ -34,7 +34,7 @@ specification, and _generally_ follows the programming style used by core Go
 developers (and by luck most Go developers). There are exceptions, particularly
 in the few C files in the codebase.
 
-Unless the devlopment in question is aimed at reformatting a piece of the
+Unless the development in question is aimed at reformatting a piece of the
 codebase, you should adhere to the style in that particular section of code.
 minimega is growing rapidly and often times newer code is more well thought out
 (or not) than older code.
@@ -76,8 +76,8 @@ that span many components, we typically prefix them with `various: ...`.
 
 minimega is hosted on github.com, and we use github's 'pull request'
 functionality for code review and merging patches to the main repository. See
-[[https://help.github.com/articles/using-pull-requests/][github's pull request
-page]] for more information. In short, you will need to fork minimega to your
+[[https://help.github.com/articles/using-pull-requests/][github's pull request page]]
+for more information. In short, you will need to fork minimega to your
 own account, commit to your local tree, and issue a pull request to the main
 repository from your own.
 
@@ -89,7 +89,7 @@ commit log, so the issue is referenced to your work.
 
 * Code review
 
-When a pull request is made, at least one contributer will review the patchset,
+When a pull request is made, at least one contributor will review the patchset,
 make comments, and either wait for more feedback or authorize the patch with a
 'LGTM' (looks good to me) phrase. After authorization, any committer may merge
 the pull request.

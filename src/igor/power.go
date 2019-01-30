@@ -55,7 +55,7 @@ func doPower(hosts []string, action string) {
 		}
 	case "cycle":
 		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power off failed: %v", err)
+			log.Fatal("power cycle failed: %v", err)
 		}
 
 		fallthrough
@@ -88,7 +88,7 @@ func runPower(cmd *Command, args []string) {
 		for _, r := range Reservations {
 			if r.ResName == powerR && r.StartTime < time.Now().Unix() {
 				found = true
-				if r.Owner != user.Username {
+				if r.Owner != user.Username && user.Username != "root" {
 					log.Fatal("You are not the owner of %v", powerR)
 				} else if r.ResName == powerR {
 					fmt.Printf("Powering %s reservation %s\n", action, powerR)
@@ -126,7 +126,7 @@ func runPower(cmd *Command, args []string) {
 
 			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
-				if r.ID == resID && r.Owner == user.Username {
+				if r.ID == resID && (r.Owner == user.Username || user.Username == "root") {
 					// Success! This node is in a reservation owned by the user
 					validatedNodes = append(validatedNodes, n)
 				}

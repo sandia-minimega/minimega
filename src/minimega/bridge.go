@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"text/tabwriter"
 	"time"
 )
@@ -160,7 +161,6 @@ func hostTapDelete(ns *Namespace, s string) error {
 
 		// update the host taps for the namespace
 		delete(ns.Taps, tap.Name)
-
 		return nil
 	}
 
@@ -175,4 +175,80 @@ func hostTapDelete(ns *Namespace, s string) error {
 	}
 
 	return delTap(s)
+}
+
+func mirrorDelete(ns *Namespace, name string) error {
+	delMirror := func(m string) error {
+		if !ns.Mirrors[m] {
+			return errors.New("not a valid mirror")
+		}
+
+		tap, err := bridges.FindTap(m)
+		if err != nil {
+			return err
+		}
+
+		br, err := getBridge(tap.Bridge)
+		if err != nil {
+			return err
+		}
+
+		if err := br.DestroyMirror(m); err != nil {
+			return err
+		}
+
+		// update the mirrors for the namespace
+		delete(ns.Mirrors, m)
+		return nil
+	}
+
+	if name == Wildcard || name == "" {
+		for mirror := range ns.Mirrors {
+			if err := delMirror(mirror); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	return delMirror(name)
+}
+
+// mirrorDeleteVM looks up the name of the interface(s) for the VM and then
+// calls mirrorDelete on them.
+func mirrorDeleteVM(ns *Namespace, svm, si string) error {
+	vm := ns.FindVM(svm)
+	if vm == nil {
+		return vmNotFound(svm)
+	}
+
+	// delete all mirrors for all interfaces
+	if si == Wildcard {
+		networks := vm.GetNetworks()
+
+		for _, nic := range networks {
+			if !ns.Mirrors[nic.Tap] {
+				continue
+			}
+
+			if err := mirrorDelete(ns, nic.Tap); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	i, err := strconv.Atoi(si)
+	if err != nil {
+		return fmt.Errorf("invalid interface number: `%v`", si)
+	}
+
+	nic, err := vm.GetNetwork(i)
+	if err != nil {
+		return err
+	}
+
+	return mirrorDelete(ns, nic.Tap)
 }

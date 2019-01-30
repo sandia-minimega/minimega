@@ -8,6 +8,7 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	log "minilog"
 	"net"
@@ -58,6 +59,9 @@ func main() {
 	}
 
 	log.Init()
+
+	// init client
+	NewClient()
 
 	if *f_pipe != "" {
 		pipeHandler(*f_pipe)
@@ -153,6 +157,21 @@ func dial() error {
 			client.conn, err = net.Dial(*f_family, addr)
 		} else {
 			client.conn, err = dialSerial(*f_serial)
+		}
+
+		// write magic bytes
+		if err == nil {
+			_, err = io.WriteString(client.conn, "RON")
+		}
+
+		// read until we see the magic bytes back
+		var buf [3]byte
+		for err == nil && string(buf[:]) != "RON" {
+			// shift the buffer
+			buf[0] = buf[1]
+			buf[1] = buf[2]
+			// read the next byte
+			_, err = client.conn.Read(buf[2:])
 		}
 
 		if err == nil {

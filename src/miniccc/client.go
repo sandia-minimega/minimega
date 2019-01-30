@@ -41,8 +41,7 @@ type Process struct {
 	process *os.Process
 }
 
-// init client fields
-func init() {
+func NewClient() {
 	client.UUID = getUUID()
 	client.Arch = runtime.GOARCH
 	client.OS = runtime.GOOS

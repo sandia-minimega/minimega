@@ -110,14 +110,44 @@ func (b *CobblerBackend) Uninstall(r Reservation) error {
 }
 
 func (b *CobblerBackend) removeProfile(profile string) error {
-	var err error
+	log.Info("removing profile: %v", profile)
 
-	if b.profiles[profile] {
-		_, err = processWrapper("cobbler", "profile", "remove", "--name="+profile)
+	var err error
+	var hosts []string
+
+	// find list of hosts that are using this profile and reset them to the
+	// default. This list should be empty if igor wasn't interrupted
+	// mid-install.
+	for host := range CobblerSystems(profile) {
+		hosts = append(hosts, host)
 	}
 
+	if len(hosts) > 0 {
+		log.Info("setting hosts to default profile: %v", hosts)
+
+		runner := DefaultRunner(func(host string) error {
+			_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+			return err
+		})
+		if err := runner.RunAll(hosts); err != nil {
+			return fmt.Errorf("unable to set cobbler profile: %v", err)
+		}
+	}
+
+	// delete the profile, if it exists
+	if b.profiles[profile] {
+		_, err = processWrapper("cobbler", "profile", "remove", "--name="+profile)
+		if err == nil {
+			delete(b.profiles, profile)
+		}
+	}
+
+	// delete the distro, if it exists
 	if err == nil && b.distros[profile] {
 		_, err = processWrapper("cobbler", "distro", "remove", "--name="+profile)
+		if err == nil {
+			delete(b.distros, profile)
+		}
 	}
 
 	return err
@@ -143,6 +173,10 @@ func CobblerProfiles() map[string]bool {
 
 func CobblerDistros() map[string]bool {
 	return cobblerList("cobbler", "distro", "list")
+}
+
+func CobblerSystems(profile string) map[string]bool {
+	return cobblerList("cobbler", "system", "find", "--profile", profile)
 }
 
 func cobblerList(args ...string) map[string]bool {

@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -87,6 +88,15 @@ func (m *loggingMutex) Unlock() {
 	log.Info("unlocking: %v:%v", file, line)
 	m.Mutex.Unlock()
 	log.Info("unlocked: %v:%v", file, line)
+}
+
+// unreachable returns an error when we reach a condition that should be
+// unreachable and tags the file/line number. This usually means our CLI
+// handling is wrong (i.e. we missed a case).
+func unreachable() error {
+	_, file, line, _ := runtime.Caller(1)
+
+	return fmt.Errorf("unreachable %v:%v, please report.", file, line)
 }
 
 func generateUUID() string {
@@ -181,6 +191,22 @@ func unescapeString(input []string) string {
 	}
 	log.Debug("unescapeString generated: %v", ret)
 	return strings.TrimSpace(ret)
+}
+
+// quoteJoin joins elements from s with sep, quoting any element containing a
+// space.
+func quoteJoin(s []string, sep string) string {
+	s2 := make([]string, len(s))
+
+	for i := range s {
+		if strings.IndexFunc(s[i], unicode.IsSpace) > -1 {
+			s2[i] = strconv.Quote(s[i])
+		} else {
+			s2[i] = s[i]
+		}
+	}
+
+	return strings.Join(s2, sep)
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
@@ -371,4 +397,29 @@ func wget(u, dst string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func writeInt(filename string, value int) error {
+	log.Debug("writing %v to %v", value, filename)
+
+	b := []byte(strconv.Itoa(value))
+	return ioutil.WriteFile(filename, b, 0644)
+}
+
+func readInt(filename string) (int, error) {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read %v: %v", filename, err)
+	}
+
+	s := strings.TrimSpace(string(b))
+
+	run, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("expected int from %v, not `%v`", filename, s)
+	}
+
+	log.Debug("got %v from %v", int(run), filename)
+
+	return int(run), nil
 }

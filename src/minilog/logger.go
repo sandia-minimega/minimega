@@ -2,14 +2,19 @@ package minilog
 
 import (
 	"fmt"
-	golog "log"
 	"runtime"
 	"strconv"
 	"strings"
 )
 
+type logger interface {
+	Println(...interface{})
+}
+
 type minilogger struct {
-	*golog.Logger
+	// embed
+	logger
+
 	Level   Level
 	Color   bool // print in color
 	filters []string
@@ -75,7 +80,7 @@ func (l *minilogger) log(level Level, name, format string, arg ...interface{}) {
 			return
 		}
 	}
-	l.Print(msg)
+	l.Println(msg)
 }
 
 func (l *minilogger) logln(level Level, name string, arg ...interface{}) {

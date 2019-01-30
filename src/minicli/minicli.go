@@ -54,6 +54,10 @@ var defaultFlags = Flags{
 }
 
 var handlers []*Handler
+var trie = &patternTrie{
+	Children: make(map[patternTrieKey]*patternTrie),
+}
+
 var history []string // command history for the write command
 
 // HistoryLen is the length of the history of commands that minicli stores.
@@ -91,6 +95,10 @@ func Reset() {
 	handlers = nil
 	history = nil
 	firstHistoryTruncate = true
+
+	trie = &patternTrie{
+		Children: make(map[patternTrieKey]*patternTrie),
+	}
 }
 
 // MustRegister calls Register for a handler and panics if the handler has an
@@ -113,8 +121,7 @@ func Register(h *Handler) error {
 	h.SharedPrefix = h.findPrefix()
 
 	handlers = append(handlers, h)
-
-	return nil
+	return trie.Add(h)
 }
 
 // Process raw input text. An error is returned if parsing the input text
@@ -142,7 +149,7 @@ func ProcessString(input string, record bool) (<-chan Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) <-chan Responses {
-	if !c.noOp && c.Call == nil {
+	if !c.Nop && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
 
@@ -160,7 +167,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 			}
 		}
 
-		if !c.noOp {
+		if !c.Nop {
 			c.Call(c, respChan)
 		}
 
@@ -215,21 +222,19 @@ func Compile(input string) (*Command, error) {
 	}
 
 	if strings.HasPrefix(input, CommentLeader) {
-		cmd := &Command{Original: input, noOp: true}
+		cmd := &Command{Original: input, Nop: true}
 		return cmd, nil
 	}
 
-	_, cmd := closestMatch(in)
-	if cmd != nil {
-		flagsLock.Lock()
-		defer flagsLock.Unlock()
-
-		cmd.Record = defaultFlags.Record
-		cmd.Preprocess = defaultFlags.Preprocess
-		return cmd, nil
+	cmd := trie.compile(in.items)
+	if cmd == nil {
+		return nil, fmt.Errorf("invalid command: `%s`", input)
 	}
 
-	return nil, fmt.Errorf("invalid command: `%s`", input)
+	// patch original input
+	cmd.Original = input
+
+	return cmd, nil
 }
 
 // Compilef wraps fmt.Sprintf and Compile
@@ -289,19 +294,7 @@ func Help(input string) string {
 		return printHelpShort(handlers)
 	}
 
-	matches := []*Handler{}
-	max := -1
-
-	for _, h := range handlers {
-		_, length, _ := h.compile(inputItems)
-
-		if length > max {
-			max = length
-			matches = []*Handler{h}
-		} else if length == max {
-			matches = append(matches, h)
-		}
-	}
+	matches := trie.help(inputItems.items)
 
 	if len(matches) == 0 {
 		return fmt.Sprintf("no help entry for `%s`", input)

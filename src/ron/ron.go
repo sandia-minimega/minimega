@@ -10,17 +10,6 @@ import (
 	"strings"
 )
 
-type Type int
-
-// Ron message types to inform the mux on either end how to route the message
-const (
-	MESSAGE_COMMAND Type = iota
-	MESSAGE_CLIENT
-	MESSAGE_TUNNEL
-	MESSAGE_FILE
-	MESSAGE_PIPE
-)
-
 const (
 	HEARTBEAT_RATE = 5
 	REAPER_RATE    = 30
@@ -39,37 +28,7 @@ type VM interface {
 	SetCCActive(bool)
 	GetTags() map[string]string
 	SetTag(string, string)
-}
-
-type Message struct {
-	Type     Type
-	UUID     string
-	Commands map[int]*Command
-	Client   *Client
-	File     []byte
-	Filename string
-	Error    string
-	Tunnel   []byte
-	Pipe     string
-	PipeMode int
-	PipeData string
-}
-
-func (t Type) String() string {
-	switch t {
-	case MESSAGE_COMMAND:
-		return "COMMAND"
-	case MESSAGE_CLIENT:
-		return "CLIENT"
-	case MESSAGE_TUNNEL:
-		return "TUNNEL"
-	case MESSAGE_FILE:
-		return "FILE"
-	case MESSAGE_PIPE:
-		return "PIPE"
-	}
-
-	return "UNKNOWN"
+	Info(string) (string, error)
 }
 
 func unmangle(uuid string) string {

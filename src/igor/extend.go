@@ -72,9 +72,18 @@ func runExtend(cmd *Command, args []string) {
 		}
 
 		// Make sure the reservation doesn't exceed any limits
-		if user.Username != "root" && igorConfig.TimeLimit > 0 {
-			if float64(duration)+r.Duration > float64(igorConfig.TimeLimit) {
-				log.Fatal("Only root can extend a reservation longer than %v minutes. The maximum allowable time you may extend is %v minutes.", igorConfig.TimeLimit, float64(igorConfig.TimeLimit)-r.Duration)
+		if user.Username != "root" {
+			if err := checkTimeLimit(len(r.Hosts), duration); err != nil {
+				log.Fatalln(err)
+			}
+		}
+
+		// Make sure that the user is extending a reservation that is near its
+		// completion based on the ExtendWithin config.
+		if igorConfig.ExtendWithin > 0 && user.Username != "root" {
+			remaining := time.Unix(r.EndTime, 0).Sub(time.Now())
+			if int(remaining.Minutes()) > igorConfig.ExtendWithin {
+				log.Fatal("reservations can only be extended if they are within %v minutes of ending", igorConfig.ExtendWithin)
 			}
 		}
 
@@ -94,8 +103,8 @@ func runExtend(cmd *Command, args []string) {
 
 			for _, idx := range nodes {
 				// Check if each node is free on the Schedule
-				if !isFree(Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes, idx, idx) {
-					log.Fatal("Cannot extend reservation due to conflict")
+				if !isFree(Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes, idx, 1) {
+					log.Fatal("Cannot extend reservation due to conflict with another reservation")
 				} else {
 					Schedule[resEnd/MINUTES_PER_SLICE+int64(i)].Nodes[idx] = r.ID
 				}

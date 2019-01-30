@@ -62,6 +62,11 @@ type Config struct {
 	NodeLimit int
 	TimeLimit int
 
+	// ExtendWithin is the number of minutes before the end of a reservation
+	// that it can be extended. For example, 24*60 would mean that the
+	// reservation can be extended within 24 hours of its expiration.
+	ExtendWithin int
+
 	// ConcurrencyLimit is the maximum number of parallel commands igor
 	// executes for cobbler and power management.
 	ConcurrencyLimit uint
@@ -72,6 +77,9 @@ type Config struct {
 
 	// Domain for email address
 	Domain string
+
+	//Igor Notify Notice time (in minutes) is the amount of time before reservation expires users are notified
+	ExpirationLeadTime int
 }
 
 // Read in the configuration from the specified path.
@@ -85,5 +93,6 @@ func readConfig(path string) (c Config) {
 	if err != nil {
 		log.Fatal("Couldn't parse json: %v", err)
 	}
+
 	return
 }

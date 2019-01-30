@@ -122,9 +122,9 @@ allocate resources across the cluster.`,
 Kill one or more running virtual machines. See "vm start" for a full
 description of allowable targets.`,
 		Patterns: []string{
-			"vm kill <vm target>",
+			"vm <kill,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMKill),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm start
@@ -156,9 +156,9 @@ Calling "vm start" on a specific list of VMs will cause them to be started if
 they are in the building, paused, quit, or error states. When used with the
 wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
-			"vm start <vm target>",
+			"vm <start,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMStart),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(^VM_RUNNING, true),
 	},
 	{ // vm stop
@@ -169,9 +169,9 @@ description of allowable targets.
 
 Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <vm target>",
+			"vm <stop,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMStop),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(VM_RUNNING, true),
 	},
 	{ // vm flush
@@ -181,9 +181,9 @@ Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm info. Names
 of VMs that have been flushed may be reused.`,
 		Patterns: []string{
-			"vm flush",
+			"vm <flush,>",
 		},
-		Call: wrapBroadcastCLI(cliVMFlush),
+		Call: wrapBroadcastCLI(cliVMApply),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -437,37 +437,19 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func cliVMStart(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["vm"]
+func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["start"]:
+		return ns.Start(c.StringArgs["vm"])
+	case c.BoolArgs["stop"]:
+		return ns.VMs.Stop(c.StringArgs["vm"])
+	case c.BoolArgs["kill"]:
+		return ns.VMs.Kill(c.StringArgs["vm"])
+	case c.BoolArgs["flush"]:
+		return ns.VMs.Flush(ns.ccServer)
+	}
 
-	// For each VM, start it if it's in a startable state.
-	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
-		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
-			// If wild, we only start VMs in the building or running state
-			return true, vm.Start()
-		} else if !wild && vm.GetState()&VM_RUNNING == 0 {
-			// If not wild, start VMs that aren't already running
-			return true, vm.Start()
-		}
-
-		return false, nil
-	})
-}
-
-func cliVMStop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["vm"]
-
-	return ns.VMs.Apply(target, func(vm VM, _ bool) (bool, error) {
-		if vm.GetState()&VM_RUNNING != 0 {
-			return true, vm.Stop()
-		}
-
-		return false, nil
-	})
-}
-
-func cliVMKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.Kill(c.StringArgs["vm"]))
+	return unreachable()
 }
 
 func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -514,7 +496,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		})
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -549,7 +531,7 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// synchronizes appends to resp.Tabular
 	var mu sync.Mutex
 
-	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -621,12 +603,6 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return ns.Schedule()
-}
-
-func cliVMFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	ns.Flush()
-
-	return nil
 }
 
 func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

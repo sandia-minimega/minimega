@@ -283,14 +283,10 @@ type ContainerVM struct {
 	*BaseVM         // embed
 	ContainerConfig // embed
 
-	pid             int
 	effectivePath   string
 	ptyUnixListener net.Listener
 	ptyTCPListener  net.Listener
 	netns           string
-
-	// ccServer is the server we are Connect'd to
-	ccServer *ron.Server
 
 	ConsolePort int
 
@@ -709,14 +705,6 @@ func (vm *ContainerVM) Start() (err error) {
 		if err := vm.launch(); err != nil {
 			return err
 		}
-
-		// Reconnect cc
-		if vm.ccServer != nil {
-			ccPath := filepath.Join(vm.effectivePath, "cc")
-			if err := vm.ccServer.ListenUnix(ccPath); err != nil {
-				return err
-			}
-		}
 	}
 
 	log.Info("starting VM: %v", vm.ID)
@@ -922,6 +910,11 @@ func (vm *ContainerVM) launch() error {
 		// Create source:target pairs
 		// TODO: should probably handle spaces
 		args = append(args, fmt.Sprintf("%v:%v", v, k))
+
+		// create source directory if it doesn't exist
+		if err := os.MkdirAll(v, 0755); err != nil {
+			return err
+		}
 	}
 	// denotes end of volumes
 	args = append(args, "--")
@@ -957,9 +950,6 @@ func (vm *ContainerVM) launch() error {
 
 	go vm.console(pseudotty)
 
-	// TODO: add affinity funcs for containers
-	// vm.CheckAffinity()
-
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the container
 	// side of the network namespace. That means that unlike kvm vms, we MUST
@@ -982,8 +972,6 @@ func (vm *ContainerVM) launch() error {
 		parentSync1.Close()
 		parentSync2.Close()
 	}
-
-	ccPath := filepath.Join(vm.effectivePath, "cc")
 
 	if err != nil {
 		// Some error occurred.. clean up the process
@@ -1068,11 +1056,6 @@ func (vm *ContainerVM) launch() error {
 			vm.ptyTCPListener.Close()
 		}
 
-		// cleanup cc domain socket
-		if vm.ccServer != nil {
-			vm.ccServer.CloseUnix(ccPath)
-		}
-
 		vm.unlinkNetns()
 
 		for _, net := range vm.Networks {
@@ -1100,20 +1083,31 @@ func (vm *ContainerVM) launch() error {
 	return nil
 }
 
-func (vm *ContainerVM) Connect(cc *ron.Server) error {
-	if !vm.Backchannel {
+func (vm *ContainerVM) Connect(cc *ron.Server, reconnect bool) error {
+	if !vm.Backchannel || reconnect {
 		return nil
 	}
 
 	cc.RegisterVM(vm)
 
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	vm.ccServer = cc
 	ccPath := filepath.Join(vm.effectivePath, "cc")
 
 	return cc.ListenUnix(ccPath)
+}
+
+func (vm *ContainerVM) Disconnect(cc *ron.Server) error {
+	if !vm.Backchannel {
+		return nil
+	}
+
+	cc.UnregisterVM(vm)
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	ccPath := filepath.Join(vm.effectivePath, "cc")
+
+	return cc.CloseUnix(ccPath)
 }
 
 func (vm *ContainerVM) launchNetwork() error {

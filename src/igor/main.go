@@ -13,7 +13,9 @@ import (
 	"math/rand"
 	log "minilog"
 	"os"
+	"os/user"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -49,10 +51,12 @@ var dirty bool
 var commands = []*Command{
 	cmdDel,
 	cmdShow,
+	cmdStats,
 	cmdSub,
 	cmdPower,
 	cmdExtend,
 	cmdNotify,
+	cmdSync,
 }
 
 var exitStatus = 0
@@ -63,21 +67,6 @@ type TimeSlice struct {
 	Start int64    // UNIX time
 	End   int64    // UNIX time
 	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
-}
-
-// Sort the slice of reservations based on the start time
-type StartSorter []Reservation
-
-func (s StartSorter) Len() int {
-	return len(s)
-}
-
-func (s StartSorter) Less(i, j int) bool {
-	return s[i].StartTime < s[j].StartTime
-}
-
-func (s StartSorter) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
 }
 
 func setExitStatus(n int) {
@@ -197,6 +186,15 @@ func main() {
 			log.Fatal("failed to create logfile %v: %v", igorConfig.LogFile, err)
 		}
 		log.AddLogger("file", logfile, log.INFO, false)
+	}
+
+	// Make sure that we are running with effective UID of igor. This ensures
+	// that we write files that we can read later.
+	u, err := user.LookupId(strconv.Itoa(os.Geteuid()))
+	if err != nil {
+		log.Fatal("unable to get effective uid: %v", err)
+	} else if u.Username != "igor" {
+		log.Fatal("effective uid must be igor and not %v", u.Username)
 	}
 
 	// We open and lock the lock file before trying to open the data file

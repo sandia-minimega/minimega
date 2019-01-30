@@ -145,9 +145,8 @@ the current directory. We can test it using minimega:
 	minimega$ vm config cdrom wireshark.iso
 	minimega$ vm launch kvm wireshark
 	minimega$ vm start wireshark
-	minimega$ web 9001
 
-Now, if you point your web browser at
+Start [[/articles/miniweb.article][miniweb]] and then point your web browser to
 [[http://localhost:9001/][http://localhost:9001]], you should be able to see
 minimega's web front-end. There should be one VM listed on the main page; click
 the screenshot to open a VNC session to it.

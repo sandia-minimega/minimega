@@ -182,6 +182,9 @@ func (g *Generator) handleNode(node ast.Node) bool {
 		for _, field := range strct.Fields.List {
 			log.Info("%#v", field)
 			name := field.Names[0].Name
+			if !ast.IsExported(name) {
+				continue
+			}
 			doc := field.Doc.Text()
 			var tag reflect.StructTag
 			if field.Tag != nil {

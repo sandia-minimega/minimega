@@ -32,6 +32,7 @@ type IOMeshage struct {
 	Messages  chan *meshage.Message // Incoming messages from meshage
 	drainLock sync.RWMutex
 	queue     chan bool
+	rand      *rand.Rand
 
 	// transferLock guards transfers
 	transferLock sync.RWMutex
@@ -40,8 +41,6 @@ type IOMeshage struct {
 	// tidLock guards TIDs
 	tidLock sync.Mutex
 	TIDs    map[int64]chan *Message // transfer ID -> channel
-
-	rand *rand.Rand
 }
 
 // Transfer describes an in-flight transfer.
@@ -82,8 +81,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 }
 
 func (iom *IOMeshage) info(file string) ([]*Message, error) {
-	c := make(chan *Message)
-	TID := iom.registerChan(c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
 	m := &Message{
@@ -135,8 +133,7 @@ func (iom *IOMeshage) Info(file string) []string {
 	}
 
 	// search the mesh
-	c := make(chan *Message)
-	TID := iom.registerChan(c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
 	m := &Message{
@@ -247,10 +244,8 @@ func (iom *IOMeshage) Get(file string) error {
 			// call Get on each of the constituent files, queued in a random order
 
 			// fisher-yates shuffle
-			s := rand.NewSource(time.Now().UnixNano())
-			r := rand.New(s)
 			for i := int64(len(v.Glob)) - 1; i > 0; i-- {
-				j := r.Int63n(i + 1)
+				j := iom.rand.Int63n(i + 1)
 				t := v.Glob[j]
 				v.Glob[j] = v.Glob[i]
 				v.Glob[i] = t
@@ -349,10 +344,8 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 	}
 
 	// fisher-yates shuffle
-	s := rand.NewSource(time.Now().UnixNano())
-	r := rand.New(s)
 	for i = numParts - 1; i > 0; i-- {
-		j := r.Int63n(i + 1)
+		j := iom.rand.Int63n(i + 1)
 		t := parts[j]
 		parts[j] = parts[i]
 		parts[i] = t
@@ -463,8 +456,7 @@ func (iom *IOMeshage) destroyTempTransfer(filename string) {
 }
 
 func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
-	c := make(chan *Message)
-	TID := iom.registerChan(c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
 	m := &Message{
@@ -552,8 +544,7 @@ func (iom *IOMeshage) getPart(filename string, p int64) error {
 
 // xfer returns a part of the file read requested from a remote node.
 func (iom *IOMeshage) xfer(filename string, part int64, from string) ([]byte, error) {
-	c := make(chan *Message)
-	TID := iom.registerChan(c)
+	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
 	m := &Message{

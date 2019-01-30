@@ -437,10 +437,10 @@ $minimega_runtime/<vm_id>/serialX.
 Examples:
 
 To display current serial ports:
-  vm config serial
+  vm config serial-ports
 
 To create three serial ports:
-  vm config serial 3
+  vm config serial-ports 3
 
 Note: Whereas modern versions of Windows support up to 256 COM ports,
 Linux typically only supports up to four serial devices. To use more,
@@ -478,10 +478,10 @@ $minimega_runtime/<vm_id>/virtio-serialX.
 Examples:
 
 To display current virtio-serial ports:
-  vm config virtio-serial
+  vm config virtio-ports
 
 To create three virtio-serial ports:
-  vm config virtio-serial 3
+  vm config virtio-ports 3
 `,
 		Patterns: []string{
 			"vm config virtio-ports [value]",
@@ -690,8 +690,9 @@ Default: true
 	},
 	{
 		HelpShort: "configures schedule",
-		HelpLong: `Set a host where the VM should be scheduled. This is only used when
-launching VMs in a namespace.
+		HelpLong: `Set a host where the VM should be scheduled.
+
+Note: Cannot specify Schedule and Colocate in the same config.
 `,
 		Patterns: []string{
 			"vm config schedule [value]",
@@ -703,7 +704,37 @@ launching VMs in a namespace.
 				return nil
 			}
 
+			if err := validSchedule(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
 			ns.vmConfig.Schedule = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures colocate",
+		HelpLong: `Colocate this VM with another VM that has already been launched or is
+queued for launching.
+
+Note: Cannot specify Colocate and Schedule in the same
+`,
+		Patterns: []string{
+			"vm config colocate [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Colocate
+				return nil
+			}
+
+			if err := validColocate(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
+			ns.vmConfig.Colocate = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -803,6 +834,7 @@ newly launched VMs.
 			"clear vm config <backchannel,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
+			"clear vm config <colocate,>",
 			"clear vm config <cores,>",
 			"clear vm config <coschedule,>",
 			"clear vm config <disk,>",
@@ -861,6 +893,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "schedule" {
 		return v.Schedule, nil
 	}
+	if field == "colocate" {
+		return v.Colocate, nil
+	}
 	if field == "coschedule" {
 		return fmt.Sprintf("%v", v.Coschedule), nil
 	}
@@ -893,6 +928,9 @@ func (v *BaseConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "schedule" {
 		v.Schedule = ""
 	}
+	if mask == Wildcard || mask == "colocate" {
+		v.Colocate = ""
+	}
 	if mask == Wildcard || mask == "coschedule" {
 		v.Coschedule = -1
 	}
@@ -922,6 +960,9 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
+	}
+	if v.Colocate != "" {
+		fmt.Fprintf(w, "vm config colocate %v\n", v.Colocate)
 	}
 	if v.Coschedule != -1 {
 		fmt.Fprintf(w, "vm config coschedule %v\n", v.Coschedule)
@@ -991,7 +1032,7 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config hostname %v\n", v.Hostname)
 	}
 	if len(v.Init) > 0 {
-		fmt.Fprintf(w, "vm config init %v\n", v.Init)
+		fmt.Fprintf(w, "vm config init %v\n", quoteJoin(v.Init, " "))
 	}
 	if v.Preinit != "" {
 		fmt.Fprintf(w, "vm config preinit %v\n", v.Preinit)
@@ -1130,13 +1171,13 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
 	}
 	if len(v.Append) > 0 {
-		fmt.Fprintf(w, "vm config append %v\n", v.Append)
+		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
 	}
 	if len(v.DiskPaths) > 0 {
-		fmt.Fprintf(w, "vm config disk %v\n", v.DiskPaths)
+		fmt.Fprintf(w, "vm config disk %v\n", quoteJoin(v.DiskPaths, " "))
 	}
 	if len(v.QemuAppend) > 0 {
-		fmt.Fprintf(w, "vm config qemu-append %v\n", v.QemuAppend)
+		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
 	if err := v.QemuOverride.WriteConfig(w); err != nil {
 		return err

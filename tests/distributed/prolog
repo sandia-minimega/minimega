@@ -1,4 +1,5 @@
 .annotate false
 clear history
+clear cc responses
 
 namespace distributed

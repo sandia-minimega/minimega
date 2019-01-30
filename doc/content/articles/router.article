@@ -29,13 +29,7 @@ minirouter at startup.
 
 ** Building a KVM image
 
-You can also build a disk image for booting in KVM. First, copy the miniccc and
-minirouter binaries into the overlay directory:
-
-	$ cp bin/minirouter misc/vmbetter_configs/minirouter_overlay
-	$ cp bin/minirouter misc/vmbetter_configs/minirouter_overlay
-
-Then build the image with vmbetter (see
+You can also build a disk image for booting in KVM using vmbetter (see
 [[tutorials/vmbetter.article][the vmbetter tutorial for more information]])
 
 	$ ./bin/vmbetter -branch stable -level debug misc/vmbetter_configs/minirouter.conf

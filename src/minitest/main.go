@@ -26,8 +26,8 @@ the U.S. Government retains certain rights in this software.`
 )
 
 var skippedExtensions = []string{
-	"got",
-	"want",
+	".got",
+	".want",
 }
 
 var (

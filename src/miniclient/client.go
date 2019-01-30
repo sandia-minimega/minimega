@@ -17,6 +17,7 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/peterh/liner"
 )
@@ -62,10 +63,23 @@ func Dial(base string) (*Conn, error) {
 		url: path.Join(base, "minimega"),
 	}
 
+	var conn net.Conn
+
+	var backoff = 10 * time.Millisecond
+
 	// try to connect to the local minimega
-	conn, err := net.Dial("unix", mm.url)
-	if err != nil {
-		return nil, err
+	for {
+		var err error
+
+		conn, err = net.Dial("unix", mm.url)
+		if err == nil {
+			break
+		} else if err, ok := err.(*net.OpError); ok && err.Temporary() {
+			time.Sleep(backoff)
+			backoff *= 2
+		} else {
+			return nil, err
+		}
 	}
 
 	mm.conn = conn
@@ -256,7 +270,7 @@ func (mm *Conn) Error() error {
 }
 
 // Attach creates a CLI interface to the dialed minimega instance
-func (mm *Conn) Attach() {
+func (mm *Conn) Attach(namespace string) {
 	fmt.Println("CAUTION: calling 'quit' will cause the minimega daemon to exit")
 	fmt.Println("use 'disconnect' or ^d to exit just the minimega command line")
 	fmt.Println()
@@ -269,6 +283,10 @@ func (mm *Conn) Attach() {
 	input.SetCompleter(mm.Suggest)
 
 	prompt := fmt.Sprintf("minimega:%v$ ", mm.url)
+
+	if namespace != "" {
+		prompt = fmt.Sprintf("minimega:%v[%v]$ ", mm.url, namespace)
+	}
 
 	var quit bool
 	for {
@@ -300,6 +318,10 @@ func (mm *Conn) Attach() {
 		}
 
 		quit = false
+
+		if namespace != "" {
+			line = fmt.Sprintf("namespace %q %v", namespace, line)
+		}
 
 		mm.RunAndPrint(line, true)
 

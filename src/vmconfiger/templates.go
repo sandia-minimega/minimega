@@ -279,7 +279,7 @@ func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
 			}
 		{{- else if eq .Type "slice"}}
 			if len(v.{{ .Field }}) > 0 {
-				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", v.{{ .Field }})
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v\n", quoteJoin(v.{{ .Field }}, " "))
 			}
 		{{- else }}
 			if err := v.{{ .Field }}.WriteConfig(w); err != nil {

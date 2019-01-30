@@ -1,0 +1,28 @@
+## # both schedule and colocate
+## vm config schedule mm1
+## vm config colocate a
+E: cannot specify colocate and schedule in the same config
+## clear vm config
+
+## # both colocate and schedule
+## vm config colocate a
+## vm config schedule mm1
+E: cannot specify schedule and colocate in the same config
+## clear vm config
+
+## # schedule with non-existent VM with queueing disabled
+## ns queueing false
+## vm config colocate foo
+## vm launch kvm a
+E: nonexistent colocate VMs: [foo]
+## ns flush
+## clear vm config
+
+## # schedule with non-existent VM with queueing enabled
+## ns queueing true
+## vm config colocate foo
+## vm launch kvm a
+## vm launch
+E: nonexistent colocate VMs: [foo]
+## ns flush
+## clear vm config

@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"sync"
+	"syscall"
 	"time"
 	"vlans"
 )
@@ -49,6 +50,9 @@ type Namespace struct {
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
 
+	// Names of mirrors associated with this namespace
+	Mirrors map[string]bool
+
 	// How to determine which host is least loaded
 	HostSortBy string
 
@@ -72,6 +76,16 @@ type Namespace struct {
 	ccServer *ron.Server
 	ccFilter *ron.Filter
 	ccPrefix string
+
+	ccMounts map[string]ccMount
+
+	// optimizations
+	hugepagesMountPath string
+
+	affinityEnabled bool
+	affinityFilter  []string
+	affinityMu      sync.Mutex // protects affinityCPUSets
+	affinityCPUSets map[string][]int
 }
 
 type NamespaceInfo struct {
@@ -96,6 +110,7 @@ func NewNamespace(name string) *Namespace {
 		Name:       name,
 		Hosts:      map[string]bool{},
 		Taps:       map[string]bool{},
+		Mirrors:    map[string]bool{},
 		HostSortBy: "cpucommit",
 		VMs: VMs{
 			m: make(map[int]VM),
@@ -115,6 +130,7 @@ func NewNamespace(name string) *Namespace {
 		},
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
+		ccMounts:      make(map[string]ccMount),
 	}
 
 	if name == DefaultNamespace {
@@ -172,6 +188,9 @@ func (n *Namespace) Destroy() error {
 
 	n.vmID.Stop()
 
+	// unmount
+	n.clearCCMount("")
+
 	// Stop all captures
 	n.captures.StopAll()
 	n.counter.Stop()
@@ -182,7 +201,7 @@ func (n *Namespace) Destroy() error {
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
-	n.Flush()
+	n.Flush(n.ccServer)
 
 	// Stop ron server
 	n.ccServer.Destroy()
@@ -203,6 +222,9 @@ func (n *Namespace) Destroy() error {
 			return err
 		}
 	}
+
+	// We don't need to delete mirrors -- deleting the taps should clean those
+	// up automatically.
 
 	// Free up any VLANs associated with the namespace
 	vlans.Delete(n.Name, "")
@@ -322,6 +344,15 @@ func (n *Namespace) Schedule() error {
 		}
 	}
 
+	// resolve any "colocated" VMs for VMs that are already launched
+	for _, vm := range globalVMs(n) {
+		for _, q := range n.queue {
+			if q.Colocate == vm.GetName() {
+				q.Schedule = vm.GetHost()
+			}
+		}
+	}
+
 	// Create the host -> VMs assignment
 	assignment, err := schedule(n.queue, hostStats, hostSorter)
 	if err != nil {
@@ -399,31 +430,13 @@ func (n *Namespace) Schedule() error {
 // Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
 // until all the VMs are launched.
 func (n *Namespace) Launch(q *QueuedVMs) []error {
-	vms, errChan := n.VMs.Launch(n.Name, q)
-
-	// fire off goroutine to do the registration
-	go func() {
-		for vm := range vms {
-			if err := vm.Connect(n.ccServer); err != nil {
-				log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
-			}
-		}
-	}()
-
 	// collect all the errors
 	errs := []error{}
-	for err := range errChan {
+	for err := range n.VMs.Launch(n.Name, q) {
 		errs = append(errs, err)
 	}
 
 	return errs
-}
-
-// Flush wraps VMs.Flush, unregistering the flushed VMs with ron.
-func (n *Namespace) Flush() {
-	for _, vm := range n.VMs.Flush() {
-		n.ccServer.UnregisterVM(vm)
-	}
 }
 
 // NewCommand takes a command, adds the current filter and prefix, and then
@@ -568,6 +581,86 @@ func (n *Namespace) Snapshot(dir string) error {
 		}
 
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
+	}
+
+	return nil
+}
+
+// Start VMs matching target and setup interactions with namespace such as connecting
+// them to the correct ron.Server.
+func (ns *Namespace) Start(target string) error {
+	// For each VM, start it if it's in a startable state.
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		// whether this is a reconnect for CC or not
+		reconnect := true
+
+		switch vm.GetState() {
+		case VM_BUILDING:
+			// always start building, first connect so reconnect=false
+			reconnect = false
+
+			// first launch, set affinity
+			if ns.affinityEnabled {
+				if err := ns.addAffinity(vm); err != nil {
+					return true, err
+				}
+			}
+		case VM_PAUSED:
+			// always start paused
+		case VM_QUIT, VM_ERROR:
+			// only start quit or error when not wild
+			if wild {
+				return false, nil
+			}
+		case VM_RUNNING:
+			// shouldn't start an already running vm
+			if !wild {
+				return true, errors.New("vm is already running")
+			}
+
+			return false, nil
+		}
+
+		if err := vm.Start(); err != nil {
+			return true, err
+		}
+
+		if err := vm.Connect(ns.ccServer, reconnect); err != nil {
+			log.Warn("unable to connect to cc for vm %v: %v", vm.GetID(), err)
+		}
+
+		return true, nil
+	})
+}
+
+func (ns *Namespace) clearCCMount(s string) error {
+	for uuid, mnt := range ns.ccMounts {
+		switch s {
+		case "", uuid, mnt.Name, mnt.Path:
+			// match
+		default:
+			continue
+		}
+
+		if mnt.Path != "" {
+			if err := syscall.Unmount(mnt.Path, 0); err != nil {
+				return err
+			}
+		}
+
+		vm := ns.VMs.FindVM(uuid)
+		if vm == nil {
+			// VM was mounted from remote host
+			delete(ns.ccMounts, uuid)
+			continue
+		}
+
+		// VM is running locally
+		if err := ns.ccServer.DisconnectUFS(uuid); err != nil {
+			return err
+		}
+
+		delete(ns.ccMounts, uuid)
 	}
 
 	return nil

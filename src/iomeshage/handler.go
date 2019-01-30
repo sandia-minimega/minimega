@@ -104,18 +104,27 @@ func (iom *IOMeshage) handleInfo(m *Message) {
 	}
 }
 
-// registerChan creates a unique TID and associates it with the given channel.
-func (iom *IOMeshage) registerChan(c chan *Message) int64 {
+// Transactions need unique TIDs, and a corresponing channel to return
+// responses along. Returns a new TID and channel for the mux to respond along.
+func (iom *IOMeshage) newTID() (int64, <-chan *Message) {
 	iom.tidLock.Lock()
 	defer iom.tidLock.Unlock()
 
-	tid := iom.rand.Int63()
-	for ; iom.TIDs[tid] != nil; tid = iom.rand.Int63() {
-		// retry until no collision... not that a collision is likely
+	var tid int64
+	for {
+		// can't run for more than a few iterations... surely
+		tid = iom.rand.Int63()
+
+		if _, ok := iom.TIDs[tid]; !ok {
+			break
+		}
+
+		log.Warn("found duplicated TID, number of TIDs: %v", len(iom.TIDs))
 	}
 
+	c := make(chan *Message)
 	iom.TIDs[tid] = c
-	return tid
+	return tid, c
 }
 
 // Unregister TIDs from the mux.

@@ -21,54 +21,62 @@ import (
 
 // Some color constants for output
 const (
-	Reset      = "\x1b[0m"
-	Bright     = "\x1b[1m"
-	Dim        = "\x1b[2m"
-	Underscore = "\x1b[4m"
-	Blink      = "\x1b[5m"
-	Reverse    = "\x1b[7m"
-	Hidden     = "\x1b[8m"
+	Reset      = "\x1b[0000m"
+	Bright     = "\x1b[0001m"
+	Dim        = "\x1b[0002m"
+	Underscore = "\x1b[0004m"
+	Blink      = "\x1b[0005m"
+	Reverse    = "\x1b[0007m"
+	Hidden     = "\x1b[0008m"
 
-	FgBlack   = "\x1b[30m"
-	FgRed     = "\x1b[31m"
-	FgGreen   = "\x1b[32m"
-	FgYellow  = "\x1b[33m"
-	FgBlue    = "\x1b[34m"
-	FgMagenta = "\x1b[35m"
-	FgCyan    = "\x1b[36m"
-	FgWhite   = "\x1b[37m"
+	FgBlack   = "\x1b[0030m"
+	FgRed     = "\x1b[0031m"
+	FgGreen   = "\x1b[0032m"
+	FgYellow  = "\x1b[0033m"
+	FgBlue    = "\x1b[0034m"
+	FgMagenta = "\x1b[0035m"
+	FgCyan    = "\x1b[0036m"
+	FgWhite   = "\x1b[0037m"
 
-	FgLightWhite = "\x1b[97m"
+	FgLightWhite = "\x1b[0097m"
 
-	BgBlack         = "\x1b[40m"
-	BgRed           = "\x1b[41m"
-	BgGreen         = "\x1b[42m"
-	BgYellow        = "\x1b[43m"
-	BgBlue          = "\x1b[44m"
-	BgMagenta       = "\x1b[45m"
-	BgCyan          = "\x1b[46m"
-	BgWhite         = "\x1b[47m"
-	BgBrightBlack   = "\x1b[100m"
-	BgBrightRed     = "\x1b[101m"
-	BgBrightGreen   = "\x1b[102m"
-	BgBrightYellow  = "\x1b[103m"
-	BgBrightBlue    = "\x1b[104m"
-	BgBrightMagenta = "\x1b[105m"
-	BgBrightCyan    = "\x1b[106m"
-	BgBrightWhite   = "\x1b[107m"
+	BgBlack         = "\x1b[0040m"
+	BgRed           = "\x1b[0041m"
+	BgGreen         = "\x1b[0042m"
+	BgYellow        = "\x1b[0043m"
+	BgBlue          = "\x1b[0044m"
+	BgMagenta       = "\x1b[0045m"
+	BgCyan          = "\x1b[0046m"
+	BgWhite         = "\x1b[0047m"
+	BgBrightBlack   = "\x1b[0100m"
+	BgBrightRed     = "\x1b[0101m"
+	BgBrightGreen   = "\x1b[0102m"
+	BgBrightYellow  = "\x1b[0103m"
+	BgBrightBlue    = "\x1b[0104m"
+	BgBrightMagenta = "\x1b[0105m"
+	BgBrightCyan    = "\x1b[0106m"
+	BgBrightWhite   = "\x1b[0107m"
 )
 
 var cmdShow = &Command{
-	UsageLine: "show",
+	UsageLine: "show [-o]",
 	Short:     "show reservations",
 	Long: `
 List all extant reservations. Checks if a host is up by issuing a "ping"
+
+OPTIONAL FLAGS:
+
+The -o flag will change the sort order to sort by reservation owner.
 	`,
 }
+
+var subO bool // -o
 
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
+
+	cmdShow.Flag.BoolVar(&subO, "o", false, "")
 }
 
 // Use nmap to scan all the nodes and then show which are up and the
@@ -82,6 +90,8 @@ func runShow(_ *Command, _ []string) {
 
 	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
+	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
+	resNodes := map[int]bool{}
 
 	// Use nmap to determine what nodes are up
 	args := []string{}
@@ -130,44 +140,85 @@ func runShow(_ *Command, _ []string) {
 		nodes[v] = true
 	}
 
-	// Gather a list of which nodes are down
-	var downNodes []string
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		if !nodes[i] {
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			downNodes = append(downNodes, hostname)
+	// For colors... get all the reservations and sort them
+	resarray := []Reservation{}
+	maxResNameLength := 0
+	for _, r := range Reservations {
+		resarray = append(resarray, r)
+		// Remember longest reservation name for formatting
+		if maxResNameLength < len(r.ResName) {
+			maxResNameLength = len(r.ResName)
+		}
+		// go through each host list and compile list of reserved nodes
+		for _, h := range r.Hosts {
+			v, err := strconv.Atoi(h[len(igorConfig.Prefix):])
+			if err != nil {
+				//that's weird
+				continue
+			}
+			resNodes[v] = true
 		}
 	}
 
-	// For colors... get all the reservations and sort them
-	resarray := []Reservation{}
-	for _, r := range Reservations {
-		resarray = append(resarray, r)
+	// Gather a list of which nodes are down and which nodes are unreserved
+	var downNodes []string
+	var unreservedNodes []string
+	for i := igorConfig.Start; i <= igorConfig.End; i++ {
+		hostname := igorConfig.Prefix + strconv.Itoa(i)
+		if !resNodes[i] {
+			unreservedNodes = append(unreservedNodes, hostname)
+		}
+		if !nodes[i] {
+			downNodes = append(downNodes, hostname)
+		}
 	}
-	sort.Sort(StartSorter(resarray))
+	// nameFmt will create uniform color bars for 1st column
+	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
+	if subO {
+		sort.Slice(resarray, func(i, j int) bool {
+			if resarray[i].Owner == resarray[j].Owner {
+				return resarray[i].StartTime < resarray[j].StartTime
+			}
+			return resarray[i].Owner < resarray[j].Owner
+		})
+	} else {
+		sort.Slice(resarray, func(i, j int) bool {
+			return resarray[i].StartTime < resarray[j].StartTime
+		})
+	}
 
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
 	printShelves(nodes, resarray)
 
 	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
-
-	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
-	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
-	w.Flush()
+	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+	// Header Row
+	name := BgBlack + FgWhite + fmt.Sprintf(nameFmt, "NAME") + Reset
+	fmt.Fprintln(w, name, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
+	// Divider lines
+	namedash := ""
+	for i := 0; i < maxResNameLength; i++ {
+		namedash += "-"
+	}
+	name = BgBlack + FgWhite + fmt.Sprintf(nameFmt, namedash) + Reset
+	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------------")
+	// "Down" Node list
 	downrange, _ := rnge.UnsplitRange(downNodes)
-	fmt.Print(BgRed + "DOWN" + Reset)
-	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
-	w.Flush()
+	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
+	// Unreserved Node list
+	resrange, _ := rnge.UnsplitRange(unreservedNodes)
+	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", resrange)
+	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		fmt.Print(colorize(i, r.ResName))
-		fmt.Fprintln(w, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
-		w.Flush()
+		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
+		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
 	}
+	// only 1 flush at the end to ensure alignment
 	w.Flush()
 }
 
