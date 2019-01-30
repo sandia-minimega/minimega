@@ -483,7 +483,7 @@ func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
 				log.Debugln("got response: ", resp)
 			}
 			if resp.ACK {
-				log.Debugln("%v has %v: ", resp.From, filename)
+				log.Debug("%v has %v", resp.From, filename)
 
 				return resp.From, nil
 			}
