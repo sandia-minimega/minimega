@@ -1,7 +1,7 @@
 ## # Shouldn't have any files
 ## file list /minitest
 ## file get /minitest/foo
-E: file not found
+E: get /minitest/foo: file not found
 
 ## # Create files in directory
 ## shell mkdir /tmp/minimega/files/minitest
