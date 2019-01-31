@@ -16,6 +16,7 @@ import (
 	"miniplumber"
 	"ranges"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"version"
@@ -221,8 +222,9 @@ func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Res
 				} else {
 					// wrap response up into a minicli.Response
 					resp := &minicli.Response{
-						Host:  host,
-						Error: strings.Join(body.Errors, "\n"),
+						Host:     host,
+						Response: strconv.Itoa(len(body.Errors)),
+						Error:    strings.Join(body.Errors, "\n"),
 					}
 
 					out <- minicli.Responses{resp}

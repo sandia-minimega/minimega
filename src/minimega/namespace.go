@@ -16,6 +16,7 @@ import (
 	"ron"
 	"runtime"
 	"sort"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -441,11 +442,14 @@ func (n *Namespace) schedule(assignment map[string][]*QueuedVMs) error {
 	// Collect all the responses and log them
 	for resps := range respChan {
 		for _, resp := range resps {
-			stats.launched += 1
 			if resp.Error != "" {
 				stats.failures += 1
 				log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
-			} else if resp.Response != "" {
+			} else {
+				// Response should number of VMs launched
+				i, _ := strconv.Atoi(resp.Response)
+				stats.launched += i
+
 				log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
 			}
 		}
@@ -541,7 +545,10 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 
 	// Launching the VMs locally
 	if host == hostname {
-		resp := &minicli.Response{Host: hostname}
+		resp := &minicli.Response{
+			Host:     hostname,
+			Response: strconv.Itoa(len(queued.Names)),
+		}
 
 		if err := makeErrSlice(n.Launch(queued)); err != nil {
 			resp.Error = err.Error()
