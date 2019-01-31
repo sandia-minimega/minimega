@@ -81,6 +81,22 @@ reference to the file:
 Additionally, `file:` can by tab completed across the mesh in the same way as
 bash.
 
+** tar: prefix
+
+The `tar:` prefix fetches and untars tarballs via meshage, typically for use as
+a container filesystem:
+
+	minimega$ vm config filesystem tar:containerfs.tar.gz
+	minimega$ vm config filesystem
+	[/tmp/minimega/files/containerfs]
+	minimega$
+
+If the tarball contains more than a single top-level directory, it will return
+an error since the filesystem path is set to the top-level directory inside the
+tarball. If the tarball resides outside of the iomeshage directory, minimega
+will still untar the tarball if it exists on the local node running the
+container to the same directory where the tarball resides.
+
 ** http://, https:// prefix
 
 Similar to the `file:` prefix, an HTTP(s) URL can be supplied anywhere minimega
