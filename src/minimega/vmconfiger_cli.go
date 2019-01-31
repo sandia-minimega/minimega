@@ -367,10 +367,34 @@ Default: "host"
 		}),
 	},
 	{
-		HelpShort: "configures cores",
-		HelpLong: `Set the number of CPU cores per socket.
+		HelpShort: "configures sockets",
+		HelpLong: `Set the number of CPU sockets. If unspecified, QEMU will calculate
+missing values based on vCPUs, cores, and threads.
+`,
+		Patterns: []string{
+			"vm config sockets [value]",
+		},
 
-Default: 1
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatUint(ns.vmConfig.Sockets, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			ns.vmConfig.Sockets = i
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures cores",
+		HelpLong: `Set the number of CPU cores per socket. If unspecified, QEMU will
+calculate missing values based on vCPUs, sockets, and threads.
 `,
 		Patterns: []string{
 			"vm config cores [value]",
@@ -387,11 +411,32 @@ Default: 1
 				return err
 			}
 
-			if err := checkCores(ns.vmConfig, i); err != nil {
+			ns.vmConfig.Cores = i
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures threads",
+		HelpLong: `Set the number of CPU threads per core. If unspecified, QEMU will
+calculate missing values based on vCPUs, sockets, and cores.
+`,
+		Patterns: []string{
+			"vm config threads [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatUint(ns.vmConfig.Threads, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+			if err != nil {
 				return err
 			}
 
-			ns.vmConfig.Cores = i
+			ns.vmConfig.Threads = i
 
 			return nil
 		}),
@@ -499,6 +544,28 @@ To create three virtio-serial ports:
 			}
 
 			ns.vmConfig.VirtioPorts = i
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures vga",
+		HelpLong: `Specify the graphics card to emulate. "cirrus" or "std" should work with
+most operating systems.
+
+Default: "std"
+`,
+		Patterns: []string{
+			"vm config vga [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Vga
+				return nil
+			}
+
+			ns.vmConfig.Vga = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -855,9 +922,12 @@ newly launched VMs.
 			"clear vm config <schedule,>",
 			"clear vm config <serial-ports,>",
 			"clear vm config <snapshot,>",
+			"clear vm config <sockets,>",
 			"clear vm config <tags,>",
+			"clear vm config <threads,>",
 			"clear vm config <uuid,>",
 			"clear vm config <vcpus,>",
+			"clear vm config <vga,>",
 			"clear vm config <virtio-ports,>",
 			"clear vm config <volume,>",
 		},
@@ -1066,8 +1136,14 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "cpu" {
 		return v.CPU, nil
 	}
+	if field == "sockets" {
+		return strconv.FormatUint(v.Sockets, 10), nil
+	}
 	if field == "cores" {
 		return strconv.FormatUint(v.Cores, 10), nil
+	}
+	if field == "threads" {
+		return strconv.FormatUint(v.Threads, 10), nil
 	}
 	if field == "machine" {
 		return v.Machine, nil
@@ -1077,6 +1153,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	}
 	if field == "virtio-ports" {
 		return strconv.FormatUint(v.VirtioPorts, 10), nil
+	}
+	if field == "vga" {
+		return v.Vga, nil
 	}
 	if field == "append" {
 		return fmt.Sprintf("%v", v.Append), nil
@@ -1113,8 +1192,14 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "cpu" {
 		v.CPU = "host"
 	}
+	if mask == Wildcard || mask == "sockets" {
+		v.Sockets = 0
+	}
 	if mask == Wildcard || mask == "cores" {
-		v.Cores = 1
+		v.Cores = 0
+	}
+	if mask == Wildcard || mask == "threads" {
+		v.Threads = 0
 	}
 	if mask == Wildcard || mask == "machine" {
 		v.Machine = ""
@@ -1124,6 +1209,9 @@ func (v *KVMConfig) Clear(mask string) {
 	}
 	if mask == Wildcard || mask == "virtio-ports" {
 		v.VirtioPorts = 0
+	}
+	if mask == Wildcard || mask == "vga" {
+		v.Vga = "std"
 	}
 	if mask == Wildcard || mask == "append" {
 		v.Append = nil
@@ -1158,8 +1246,14 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.CPU != "host" {
 		fmt.Fprintf(w, "vm config cpu %v\n", v.CPU)
 	}
-	if v.Cores != 1 {
+	if v.Sockets != 0 {
+		fmt.Fprintf(w, "vm config sockets %v\n", v.Sockets)
+	}
+	if v.Cores != 0 {
 		fmt.Fprintf(w, "vm config cores %v\n", v.Cores)
+	}
+	if v.Threads != 0 {
+		fmt.Fprintf(w, "vm config threads %v\n", v.Threads)
 	}
 	if v.Machine != "" {
 		fmt.Fprintf(w, "vm config machine %v\n", v.Machine)
@@ -1169,6 +1263,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.VirtioPorts != 0 {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
+	}
+	if v.Vga != "std" {
+		fmt.Fprintf(w, "vm config vga %v\n", v.Vga)
 	}
 	if len(v.Append) > 0 {
 		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))

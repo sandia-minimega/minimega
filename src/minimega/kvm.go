@@ -88,10 +88,17 @@ type KVMConfig struct {
 	// Default: "host"
 	CPU string `validate:"validCPU" suggest:"wrapSuggest(suggestCPU)"`
 
-	// Set the number of CPU cores per socket.
-	//
-	// Default: 1
-	Cores uint64 `validate:"checkCores"`
+	// Set the number of CPU sockets. If unspecified, QEMU will calculate
+	// missing values based on vCPUs, cores, and threads.
+	Sockets uint64
+
+	// Set the number of CPU cores per socket. If unspecified, QEMU will
+	// calculate missing values based on vCPUs, sockets, and threads.
+	Cores uint64
+
+	// Set the number of CPU threads per core. If unspecified, QEMU will
+	// calculate missing values based on vCPUs, sockets, and cores.
+	Threads uint64
 
 	// Specify the machine type. See 'qemu -M help' for a list supported
 	// machine types.
@@ -135,6 +142,12 @@ type KVMConfig struct {
 	// To create three virtio-serial ports:
 	//   vm config virtio-ports 3
 	VirtioPorts uint64
+
+	// Specify the graphics card to emulate. "cirrus" or "std" should work with
+	// most operating systems.
+	//
+	// Default: "std"
+	Vga string
 
 	// Add an append string to a kernel set with vm kernel. Setting vm append
 	// without using vm kernel will result in an error.
@@ -404,11 +417,14 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Kernel Append:\t%v\n", vm.Append)
 	fmt.Fprintf(w, "QEMU Path:\t%v\n", vm.QemuPath)
 	fmt.Fprintf(w, "QEMU Append:\t%v\n", vm.QemuAppend)
-	fmt.Fprintf(w, "SerialPorts:\t%v\n", vm.SerialPorts)
-	fmt.Fprintf(w, "Virtio-SerialPorts:\t%v\n", vm.VirtioPorts)
+	fmt.Fprintf(w, "Serial Ports:\t%v\n", vm.SerialPorts)
+	fmt.Fprintf(w, "Virtio-Serial Ports:\t%v\n", vm.VirtioPorts)
 	fmt.Fprintf(w, "Machine:\t%v\n", vm.Machine)
 	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
 	fmt.Fprintf(w, "Cores:\t%v\n", vm.Cores)
+	fmt.Fprintf(w, "Threads:\t%v\n", vm.Threads)
+	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
+	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -944,8 +960,14 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-smp")
 	smp := strconv.FormatUint(vm.VCPUs, 10)
-	if vm.Cores != 1 {
+	if vm.Cores != 0 {
 		smp += ",cores=" + strconv.FormatUint(vm.Cores, 10)
+	}
+	if vm.Threads != 0 {
+		smp += ",threads=" + strconv.FormatUint(vm.Threads, 10)
+	}
+	if vm.Sockets != 0 {
+		smp += ",sockets=" + strconv.FormatUint(vm.Sockets, 10)
 	}
 	args = append(args, smp)
 
@@ -953,7 +975,11 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
 
 	args = append(args, "-vga")
-	args = append(args, "std")
+	if vm.Vga == "" {
+		args = append(args, "std")
+	} else {
+		args = append(args, vm.Vga)
+	}
 
 	args = append(args, "-rtc")
 	args = append(args, "clock=vm,base=utc")
@@ -1153,14 +1179,6 @@ func qmpLogger(id int, q qmp.Conn) {
 	for v := q.Message(); v != nil; v = q.Message() {
 		log.Info("VM %v received asynchronous message: %v", id, v)
 	}
-}
-
-func checkCores(vmConfig VMConfig, cores uint64) error {
-	if vmConfig.VCPUs < cores {
-		return errors.New("vcpus must be greater than or equal to the number of cores")
-	}
-
-	return nil
 }
 
 func validCPU(vmConfig VMConfig, cpu string) error {
