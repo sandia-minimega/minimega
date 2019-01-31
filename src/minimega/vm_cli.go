@@ -106,9 +106,9 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
-If enabled (see "ns"), VMs will be queued for launching until "vm launch" is
-called with no additional arguments. This allows the scheduler to better
-allocate resources across the cluster.`,
+If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
+launch" is called with no additional arguments. This allows the scheduler to
+better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
 			"vm launch <kvm,> <name or count>",
@@ -596,13 +596,13 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!
-			return ns.Schedule()
+			return ns.Schedule(false)
 		}
 
 		return err
 	}
 
-	return ns.Schedule()
+	return ns.Schedule(false)
 }
 
 func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

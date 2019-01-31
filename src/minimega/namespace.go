@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"qemu"
+	"ranges"
 	"ron"
 	"runtime"
 	"sort"
@@ -43,6 +44,10 @@ type Namespace struct {
 
 	// Queued VMs to launch
 	queue []*QueuedVMs
+
+	// Assignment created by dry-run that the user can tinker with. Used on the
+	// next call to Schedule() unless invalidated.
+	assignment map[string][]*QueuedVMs
 
 	// Status of launching things
 	scheduleStats []*scheduleStat
@@ -238,6 +243,9 @@ func (n *Namespace) Destroy() error {
 // Queue handles storing the current VM config to the namespace's queued VMs so
 // that we can launch it in the future.
 func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
+	// invalidate assignment
+	n.assignment = nil
+
 	names, err := expandLaunchNames(arg)
 	if err != nil {
 		return err
@@ -325,8 +333,11 @@ func (n *Namespace) hostStats() []*HostStats {
 // Schedule runs the scheduler, launching VMs across the cluster. Blocks until
 // all the `vm launch ...` commands are in-flight.
 //
+// If dryRun is true, the scheduler will determine VM placement but not
+// actually launch any VMs so that the user can tinker with the schedule.
+//
 // LOCK: Assumes cmdLock is held.
-func (n *Namespace) Schedule() error {
+func (n *Namespace) Schedule(dryRun bool) error {
 	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
@@ -334,6 +345,18 @@ func (n *Namespace) Schedule() error {
 	if len(n.queue) == 0 {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
+
+	// already have assignment so if we're not doing a dry run, run it
+	if n.assignment != nil && !dryRun {
+		if err := n.schedule(n.assignment); err != nil {
+			return err
+		}
+
+		n.assignment = nil
+		return nil
+	}
+
+	// otherwise, generate a fresh assignment
 
 	hostStats := n.hostStats()
 
@@ -359,6 +382,15 @@ func (n *Namespace) Schedule() error {
 		return err
 	}
 
+	if dryRun {
+		n.assignment = assignment
+		return nil
+	}
+
+	return n.schedule(assignment)
+}
+
+func (n *Namespace) schedule(assignment map[string][]*QueuedVMs) error {
 	total := 0
 	for _, q := range n.queue {
 		total += len(q.Names)
@@ -369,7 +401,7 @@ func (n *Namespace) Schedule() error {
 
 	stats := &scheduleStat{
 		total: total,
-		hosts: len(hostStats),
+		hosts: len(n.Hosts),
 		start: time.Now(),
 		state: SchedulerRunning,
 	}
@@ -423,6 +455,58 @@ func (n *Namespace) Schedule() error {
 
 	stats.end = time.Now()
 	stats.state = SchedulerCompleted
+
+	return nil
+}
+
+// Reschedule
+func (n *Namespace) Reschedule(target, dst string) error {
+	if n.assignment == nil {
+		return errors.New("must run dry-run first")
+	}
+
+	if !n.Hosts[dst] {
+		return errors.New("new dst host is not in namespace")
+	}
+
+	vals, err := ranges.SplitList(target)
+	if err != nil {
+		return err
+	}
+
+Outer:
+	for _, v := range vals {
+		// find each VM
+		for src, qs := range n.assignment {
+			for i, q := range qs {
+				for j, v2 := range q.Names {
+					// no match
+					if v != v2 {
+						continue
+					}
+
+					if len(q.Names) == 1 {
+						// only a single name, simply relocate whole QueuedVMs
+						n.assignment[src] = append(n.assignment[src][:i], n.assignment[src][i+1:]...)
+						n.assignment[dst] = append(n.assignment[dst], q)
+
+						continue Outer
+					}
+
+					// more than one name, need to split QueuedVMs
+					q2 := *q
+					q2.Names = []string{v2}
+					q.Names = append(q.Names[:j], q.Names[j+1:]...)
+
+					n.assignment[dst] = append(n.assignment[dst], &q2)
+					continue Outer
+				}
+			}
+		}
+
+		// didn't find vm -- strange
+		return fmt.Errorf("reassign %v: vm not found", v)
+	}
 
 	return nil
 }
