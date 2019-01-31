@@ -148,7 +148,7 @@ Calling `vm`launch` with no additional arguments flushes the queue and invokes
 the scheduler:
 
 	minimega[foo]$ vm launch
-	minimega[foo]$ ns schedules
+	minimega[foo]$ ns schedule status
 	start               | end                 | state     | launched | failures | total | hosts
 	02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 1        | 0        | 1     | 1
 
