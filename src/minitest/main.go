@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -76,14 +77,16 @@ func (c Client) runCommands(file string) (string, error) {
 		}
 
 		for resps := range c.Run(cmd) {
-			if err != nil {
-				continue
-			}
-
+			var errs []string
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
-					res += fmt.Sprintf("E: %v\n", resp.Error)
+					errs = append(errs, "E: "+resp.Error)
 				}
+			}
+
+			if len(errs) > 0 {
+				sort.Strings(errs)
+				res += strings.Join(errs, "\n")
 			}
 
 			if len(resps.Rendered) > 0 {
