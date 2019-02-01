@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -57,23 +58,21 @@ func (c Client) mustRunCommands(file string) string {
 // runCommands reads and runs all the commands from a file. Return the
 // concatenation of all the Responses or an error.
 func (c Client) runCommands(file string) (string, error) {
-	var res string
-	var err error
-
 	f, err := os.Open(file)
 	if err != nil {
 		return "", err
 	}
 
+	var b bytes.Buffer
 	s := bufio.NewScanner(f)
 
 	for s.Scan() {
 		cmd := s.Text()
 
 		if len(cmd) > 0 {
-			res += fmt.Sprintf("## %v\n", cmd)
+			fmt.Fprintf(&b, "## %v\n", cmd)
 		} else {
-			res += "\n"
+			b.WriteString("\n")
 		}
 
 		for resps := range c.Run(cmd) {
@@ -86,11 +85,13 @@ func (c Client) runCommands(file string) (string, error) {
 
 			if len(errs) > 0 {
 				sort.Strings(errs)
-				res += strings.Join(errs, "\n")
+				b.WriteString(strings.Join(errs, "\n"))
+				b.WriteString("\n")
 			}
 
 			if len(resps.Rendered) > 0 {
-				res += resps.Rendered + "\n"
+				b.WriteString(resps.Rendered)
+				b.WriteString("\n")
 			}
 		}
 	}
@@ -99,7 +100,7 @@ func (c Client) runCommands(file string) (string, error) {
 		return "", err
 	}
 
-	return res, nil
+	return b.String(), nil
 }
 
 // write s to f
