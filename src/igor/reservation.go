@@ -7,27 +7,35 @@ import (
 	"fmt"
 	log "minilog"
 	"os"
+	"os/user"
 	"path/filepath"
 	"time"
 )
 
 // Represents a single reservation
 type Reservation struct {
-	ResName        string
-	CobblerProfile string   // Optional; if set, use this Cobbler profile instead of a kernel+initrd
-	Hosts          []string // separate, not a range
-	PXENames       []string // eg C000025B
-	StartTime      int64    // UNIX time
-	EndTime        int64    // UNIX time
-	Duration       float64  // minutes
-	Owner          string
-	ID             uint64
+	ID      uint64
+	ResName string
+
+	Owner   string
+	Group   string // optional group associated with reservation
+	GroupID string // resolved group ID for Group
+
+	StartTime int64   // UNIX time
+	EndTime   int64   // UNIX time
+	Duration  float64 // minutes
+
+	Hosts    []string // separate, not a range
+	PXENames []string // eg C000025B
+
+	CobblerProfile string // Optional; if set, use this Cobbler profile instead of a kernel+initrd
 	KernelArgs     string
-	Vlan           int
 	Kernel         string
 	Initrd         string
 	KernelHash     string
 	InitrdHash     string
+
+	Vlan int
 
 	// Installed is set when the reservation is first installed
 	Installed bool
@@ -47,12 +55,30 @@ func (r Reservation) IsActive(t time.Time) bool {
 }
 
 // IsWritable returns true if the reservation can be modified by the given user
-func (r Reservation) IsWritable(u string) bool {
-	if u == "root" {
+func (r Reservation) IsWritable(u *user.User) bool {
+	if u.Username == "root" || u.Username == r.Owner {
 		return true
 	}
 
-	return r.Owner == u
+	// no group associated with reservations
+	if r.Group == "" {
+		return false
+	}
+
+	groups, err := u.GroupIds()
+	if err != nil {
+		log.Error("unable to query groups: %v", err)
+		// safety first
+		return false
+	}
+
+	for _, gid := range groups {
+		if gid == r.GroupID {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *Reservation) SetKernel(k string) error {

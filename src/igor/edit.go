@@ -1,6 +1,9 @@
 package main
 
-import log "minilog"
+import (
+	log "minilog"
+	"os/user"
+)
 
 var cmdEdit = &Command{
 	UsageLine: "edit -r <reservation name> [OPTIONS]",
@@ -19,7 +22,8 @@ See "igor sub" for the meanings of the -k, -i, -profile, and -c flags. As with
 "igor sub", the -profile flag takes precedence over the other flags.
 
 The -owner flag can be used to modify the reservation owner (admin only). If
--owner is specified, all other edits are ignored.`,
+-owner is specified, all other edits are ignored. Similarily, the -g flag can
+be used to modify the reservation group (admin only).`,
 }
 
 var subOwner string // -owner
@@ -34,6 +38,7 @@ func init() {
 	cmdEdit.Flag.StringVar(&subC, "c", "", "")
 	cmdEdit.Flag.StringVar(&subProfile, "profile", "", "")
 	cmdEdit.Flag.StringVar(&subOwner, "owner", "", "")
+	cmdEdit.Flag.StringVar(&subG, "g", "", "")
 }
 
 func runEdit(cmd *Command, args []string) {
@@ -46,7 +51,7 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
 	}
 
-	user, err := getUser()
+	u, err := getUser()
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
@@ -56,16 +61,27 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatal("reservation does not exist: %v", subR)
 	}
 
-	if !r.IsWritable(user.Username) {
+	if !r.IsWritable(u) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 
-	if subOwner != "" {
-		if user.Username != "root" {
-			log.Fatalln("only root can modify reservation owners")
+	if subOwner != "" || subG != "" {
+		if u.Username != "root" {
+			log.Fatalln("only root can modify reservation owner or group")
 		}
 
-		r.Owner = subOwner
+		if subOwner != "" {
+			r.Owner = subOwner
+		}
+		if subG != "" {
+			g, err := user.LookupGroup(subG)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			r.Group = subG
+			r.GroupID = g.Gid
+		}
 		dirty = true
 		return
 	}

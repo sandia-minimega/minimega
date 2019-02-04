@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	log "minilog"
+	"os/user"
 	"ranges"
 	"time"
 )
@@ -43,6 +44,10 @@ numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To
 make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6
 hours, 30 minutes: -t 4d6h30m (default = 60m).
 
+The -g flag sets a group owner for the reservation. Any user that is a member
+of this group may modify, delete, or perform power operations on the
+reservation.
+
 The -s flag is a boolean to enable 'speculative' mode; this will print a
 selection of available times for the reservation, but will not actually make
 the reservation. Intended to be used with the -a flag to select a specific time
@@ -62,6 +67,7 @@ var subT string       // -t
 var subS bool         // -s
 var subA string       // -a
 var subW string       // -w
+var subG string       // -g
 var subProfile string // -profile
 
 func init() {
@@ -77,6 +83,7 @@ func init() {
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
+	cmdSub.Flag.StringVar(&subG, "g", "", "")
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
@@ -120,7 +127,7 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	user, err := getUser()
+	u, err := getUser()
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
 	}
@@ -143,12 +150,12 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Make sure the reservation doesn't exceed any limits
-	if user.Username != "root" && igorConfig.NodeLimit > 0 {
+	if u.Username != "root" && igorConfig.NodeLimit > 0 {
 		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
 			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
 		}
 	}
-	if user.Username != "root" {
+	if u.Username != "root" {
 		// nodes is only set if using subW
 		n := len(nodes)
 		if subN > 0 {
@@ -226,7 +233,7 @@ VlanLoop:
 	}
 	r.Vlan = vlan
 
-	r.Owner = user.Username
+	r.Owner = u.Username
 	r.ResName = subR
 	r.KernelArgs = subC
 	r.CobblerProfile = subProfile // safe to do even if unset
@@ -236,6 +243,17 @@ VlanLoop:
 		if err := r.SetKernelInitrd(subK, subI); err != nil {
 			log.Fatalln(err)
 		}
+	}
+
+	// set group if specified
+	if subG != "" {
+		g, err := user.LookupGroup(subG)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		r.Group = subG
+		r.GroupID = g.Gid
 	}
 
 	// Add it to the list of reservations

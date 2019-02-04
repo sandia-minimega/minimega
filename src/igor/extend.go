@@ -66,7 +66,7 @@ func runExtend(cmd *Command, args []string) {
 		log.Fatal("reservation does not exist: %v", subR)
 	}
 
-	if !r.IsWritable(user.Username) {
+	if !r.IsWritable(user) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 

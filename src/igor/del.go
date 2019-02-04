@@ -38,7 +38,7 @@ func runDel(cmd *Command, args []string) {
 		log.Fatal("reservation does not exist: %v", name)
 	}
 
-	if !r.IsWritable(user.Username) {
+	if !r.IsWritable(user) {
 		log.Fatal("insufficient privileges to delete reservation: %v", name)
 	}
 
