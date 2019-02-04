@@ -95,8 +95,8 @@ func housekeeping() {
 			continue
 		}
 
-		// already installed
-		if r.Installed {
+		// already installed or errored
+		if r.Installed || r.InstallError != "" {
 			continue
 		}
 
@@ -105,8 +105,10 @@ func housekeeping() {
 			// also already installed
 			log.Info("%v is already installed", r.ResName)
 
-			r.Installed = true
-			dirty = true
+			if !r.Installed {
+				r.Installed = true
+				dirty = true
+			}
 
 			continue
 		}
@@ -121,7 +123,9 @@ func housekeeping() {
 		}
 
 		if err := backend.Install(r); err != nil {
-			log.Fatal("unable to install: %v", err)
+			log.Error("unable to install: %v", err)
+			r.InstallError = err.Error()
+			dirty = true
 		}
 
 		if igorConfig.AutoReboot {

@@ -9,6 +9,7 @@ import (
 	log "minilog"
 	"os/user"
 	"ranges"
+	"regexp"
 	"time"
 )
 
@@ -108,6 +109,14 @@ func runSub(cmd *Command, args []string) {
 	if subR == "" || (subN == 0 && subW == "") {
 		help([]string{"sub"})
 		log.Fatalln("Missing required argument")
+	}
+
+	// make sure there's no weird characters in the reservation name
+	if matched, err := regexp.MatchString("^[a-zA-Z0-9-_]+$", subR); !matched {
+		log.Fatalln("reservation name contains invalid characters, must only contain letters, numbers, hyphen and underscores")
+	} else if err != nil {
+		// ???
+		log.Fatalln(err)
 	}
 
 	if (subK == "" || subI == "") && subProfile == "" {

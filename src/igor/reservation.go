@@ -39,6 +39,8 @@ type Reservation struct {
 
 	// Installed is set when the reservation is first installed
 	Installed bool
+	// InstallError is set when the reservation failed to install
+	InstallError string
 }
 
 // Filename returns the filename that stores the reservation configuration

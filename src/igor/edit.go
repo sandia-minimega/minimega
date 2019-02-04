@@ -90,6 +90,9 @@ func runEdit(cmd *Command, args []string) {
 	var r2 *Reservation
 	*r2 = *r
 
+	// clear error because maybe the problem has been fixed
+	r2.InstallError = ""
+
 	// modify r2 based on the flags
 	if r.CobblerProfile != "" && subProfile != "" {
 		// changing from one cobbler profile to another

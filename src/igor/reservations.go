@@ -6,6 +6,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	log "minilog"
 	"os"
 )
 
@@ -15,6 +16,10 @@ var Reservations = make(map[uint64]*Reservation) // map ID to reservations
 func FindReservation(s string) *Reservation {
 	for _, r := range Reservations {
 		if r.ResName == s {
+			if r.InstallError != "" {
+				log.Warn("reservation has install error: %v", r.InstallError)
+			}
+
 			return r
 		}
 	}
