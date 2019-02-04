@@ -82,6 +82,11 @@ func init() {
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
 func runShow(_ *Command, _ []string) {
+	user, err := getUser()
+	if err != nil {
+		log.Fatal("can't get current user: %v\n", err)
+	}
+
 	names := []string{}
 	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
@@ -89,56 +94,12 @@ func runShow(_ *Command, _ []string) {
 	}
 
 	// Maps a node's index to a boolean value (up = true, down = false)
-	nodes := map[int]bool{}
-	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
-	resNodes := map[int]bool{}
-
-	// Use nmap to determine what nodes are up
-	args := []string{}
-	if igorConfig.DNSServer != "" {
-		args = append(args, "--dns-servers", igorConfig.DNSServer)
-	}
-	args = append(args,
-		"-sn",
-		"-PS22",
-		"--unprivileged",
-		"-T5",
-		"-oG",
-		"-",
-	)
-	cmd := exec.Command("nmap", append(args, names...)...)
-	out, err := cmd.Output()
+	nodes, err := scanNodes(names)
 	if err != nil {
 		log.Fatal("unable to scan: %v", err)
 	}
-	s := bufio.NewScanner(bytes.NewReader(out))
-
-	// Parse the results of nmap
-	for s.Scan() {
-		line := s.Text()
-		if strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		fields := strings.Fields(line)
-		if len(fields) != 5 {
-			// that's weird
-			continue
-		}
-
-		// trim off ()
-		name := fields[2][1 : len(fields[2])-1]
-		// get rid of any domain that may exist
-		name = strings.Split(name, ".")[0]
-		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
-		if err != nil {
-			// that's weird
-			continue
-		}
-
-		// If we found a node name in the output, that means it's up, so mark it as up
-		nodes[v] = true
-	}
+	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
+	resNodes := map[int]bool{}
 
 	// For colors... get all the reservations and sort them
 	resarray := []*Reservation{}
@@ -193,33 +154,113 @@ func runShow(_ *Command, _ []string) {
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+
 	// Header Row
 	name := BgBlack + FgWhite + fmt.Sprintf(nameFmt, "NAME") + Reset
-	fmt.Fprintln(w, name, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
+	fmt.Fprintln(w, name, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "FLAGS", "\t", "SIZE", "\t", "NODES")
+
 	// Divider lines
 	namedash := ""
 	for i := 0; i < maxResNameLength; i++ {
 		namedash += "-"
 	}
 	name = BgBlack + FgWhite + fmt.Sprintf(nameFmt, namedash) + Reset
-	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------------")
+	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------------", "\t", "------------", "\t", "------------")
+
 	// "Down" Node list
 	downrange, _ := rnge.UnsplitRange(downNodes)
 	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
-	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(downNodes), "\t", downrange)
+
 	// Unreserved Node list
 	resrange, _ := rnge.UnsplitRange(unreservedNodes)
 	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
-	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", resrange)
+	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(unreservedNodes), "\t", resrange)
+
+	now := time.Now()
+
 	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
 		unsplit, _ := rnge.UnsplitRange(r.Hosts)
 		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
-		fmt.Fprintln(w, name, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
+		start := time.Unix(r.StartTime, 0).Format(timefmt)
+		end := time.Unix(r.EndTime, 0).Format(timefmt)
+
+		var flags string
+		if r.IsActive(now) {
+			flags += "A"
+		}
+		if r.IsWritable(user) {
+			flags += "W"
+		}
+		if r.Installed {
+			flags += "I"
+		}
+		if r.InstallError != "" {
+			flags += "E"
+		}
+
+		fmt.Fprintln(w, name, "\t", r.Owner, "\t", start, "\t", end, "\t", flags, "\t", len(r.Hosts), "\t", unsplit)
 	}
+
 	// only 1 flush at the end to ensure alignment
 	w.Flush()
+}
+
+// scanNodes checks to see what hosts are up/down from the list. Returns a map
+// where indices in nodes correspond to up/down.
+func scanNodes(nodes []string) (map[int]bool, error) {
+	res := map[int]bool{}
+
+	// Use nmap to determine what nodes are up
+	args := []string{}
+	if igorConfig.DNSServer != "" {
+		args = append(args, "--dns-servers", igorConfig.DNSServer)
+	}
+	args = append(args,
+		"-sn",
+		"-PS22",
+		"--unprivileged",
+		"-T5",
+		"-oG",
+		"-",
+	)
+	cmd := exec.Command("nmap", append(args, nodes...)...)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	s := bufio.NewScanner(bytes.NewReader(out))
+
+	// Parse the results of nmap
+	for s.Scan() {
+		line := s.Text()
+		if strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		fields := strings.Fields(line)
+		if len(fields) != 5 {
+			// that's weird
+			continue
+		}
+
+		// trim off ()
+		name := fields[2][1 : len(fields[2])-1]
+		// get rid of any domain that may exist
+		name = strings.Split(name, ".")[0]
+		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
+		if err != nil {
+			// that's weird
+			continue
+		}
+
+		// If we found a node name in the output, that means it's up, so mark it as up
+		res[v] = true
+	}
+
+	return res, nil
 }
 
 func printShelves(alive map[int]bool, resarray []*Reservation) {
