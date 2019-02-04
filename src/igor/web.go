@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"github.com/fsnotify/fsnotify"
 	"html/template"
-	"log"
+	log "minilog"
 	"net/http"
 	"path/filepath"
 	"ranges"
@@ -124,9 +124,9 @@ type Response struct {
 }
 
 func runShowCommand() {
-	log.Print("Running show for housekeeping's sake")
+	log.Debug("Running show for housekeeping's sake")
 	processWrapper(webE, "show")
-	log.Print("Done")
+	log.Debug("Done")
 }
 
 func getReservations() []ResTableRow {
@@ -136,7 +136,7 @@ func getReservations() []ResTableRow {
 	defer resCacheL.RUnlock()
 
 	if resCache.ContainsExpired() {
-		log.Println("Found expired reservation(s)!")
+		log.Debug("Found expired reservation(s)!")
 	}
 
 	res := make(ResTable, len(resCache)+1)
@@ -148,7 +148,7 @@ func getReservations() []ResTableRow {
 
 // updates reservation data
 func updateReservations() {
-	log.Print("Updating reservations")
+	log.Debug("Updating reservations")
 
 	// read data from files, update info, unlock files
 	lock, _ := lockAndReadData(true)
@@ -175,7 +175,7 @@ func updateReservations() {
 	resCache = resRows
 	resCacheL.Unlock()
 
-	log.Print("Reservations updated.")
+	log.Debug("Reservations updated.")
 }
 
 func getDownReservation() ResTableRow {
@@ -311,9 +311,8 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write to output if not silent
 	if !webS {
-		fmt.Println("Command:", command)
-		fmt.Println("\tFrom:", r.RemoteAddr)
-		fmt.Println("\tResponse:", rsp.Message)
+		m := fmt.Sprintf("From: %s Command: %q \tResponse: %q", r.RemoteAddr, command, rsp.Message)
+		log.Debug(m)
 	}
 
 	// send response
@@ -324,7 +323,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 // general handler for requests, only accepts requests to /
 func handler(w http.ResponseWriter, r *http.Request) {
 	if !webS {
-		fmt.Println(r.Method, r.URL, r.RemoteAddr)
+		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
 	}
 
 	// serve igorweb.html with JS template variables filled in
@@ -359,7 +358,7 @@ func runWeb(_ *Command, _ []string) {
 	// Watch for changes to data.gob, refresh cache when it changes
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
 	defer watcher.Close()
 
@@ -367,17 +366,17 @@ func runWeb(_ *Command, _ []string) {
 		for {
 			select {
 			case event := <-watcher.Events:
-				log.Println("Modified file:", event.Name)
+				log.Debug("Modified file: %s", event.Name)
 				updateReservations()
 			case err := <-watcher.Errors:
-				log.Println(err)
+				log.Warn(err.Error())
 			}
 		}
 	}()
 
 	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
 	if err := watcher.Add(dataPath); err != nil {
-		log.Fatal(err)
+		log.Fatal("Unable to open reservations.json:", err)
 	}
 
 	go func() {
@@ -396,5 +395,5 @@ func runWeb(_ *Command, _ []string) {
 	// commands
 	http.HandleFunc("/run/", cmdHandler)
 	// spin up server on specified port
-	log.Fatal(http.ListenAndServe("127.0.0.1:"+webP, nil))
+	log.Fatal(http.ListenAndServe("127.0.0.1:"+webP, nil).Error())
 }
