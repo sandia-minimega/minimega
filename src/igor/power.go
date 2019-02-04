@@ -83,22 +83,21 @@ func runPower(cmd *Command, args []string) {
 	}
 
 	if powerR != "" {
-		// The user specified a reservation name
-		found := false
-		for _, r := range Reservations {
-			if r.ResName == powerR && r.StartTime < time.Now().Unix() {
-				found = true
-				if r.Owner != user.Username && user.Username != "root" {
-					log.Fatal("You are not the owner of %v", powerR)
-				} else if r.ResName == powerR {
-					fmt.Printf("Powering %s reservation %s\n", action, powerR)
-					doPower(r.Hosts, action)
-				}
-			}
+		r := FindReservation(powerR)
+		if r == nil {
+			log.Fatal("reservation does not exist: %v", powerR)
 		}
-		if !found {
-			log.Fatal("Cannot find an active reservation %v", powerR)
+
+		if !r.IsActive(time.Now()) {
+			log.Fatal("reservation is not active: %v", powerR)
 		}
+
+		if !r.IsWritable(user) {
+			log.Fatal("insufficient privileges to power %v reservation: %v", action, powerR)
+		}
+
+		fmt.Printf("Powering %s reservation %s\n", action, powerR)
+		doPower(r.Hosts, action)
 	} else if powerN != "" {
 		// The user specified some nodes. We need to verify they 'own' all those nodes.
 		// Instead of looking through the reservations, we'll look at the current slice of the Schedule
@@ -126,7 +125,7 @@ func runPower(cmd *Command, args []string) {
 
 			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
-				if r.ID == resID && (r.Owner == user.Username || user.Username == "root") {
+				if r.ID == resID && r.IsWritable(user) {
 					// Success! This node is in a reservation owned by the user
 					validatedNodes = append(validatedNodes, n)
 				}
