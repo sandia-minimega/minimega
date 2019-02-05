@@ -22,8 +22,10 @@ See "igor sub" for the meanings of the -k, -i, -profile, and -c flags. As with
 "igor sub", the -profile flag takes precedence over the other flags.
 
 The -owner flag can be used to modify the reservation owner (admin only). If
--owner is specified, all other edits are ignored. Similarily, the -g flag can
-be used to modify the reservation group (admin only).`,
+-owner is specified, all other edits are ignored.
+
+Similarily, the -g flag can be used to modify the reservation group. Only the
+owner can modify the group. If -g is specified, all other edits are ignored.`,
 }
 
 var subOwner string // -owner
@@ -65,29 +67,34 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 
-	if subOwner != "" || subG != "" {
+	if subOwner != "" {
 		if u.Username != "root" {
-			log.Fatalln("only root can modify reservation owner or group")
+			log.Fatalln("only root can modify reservation owner")
 		}
 
-		if subOwner != "" {
-			r.Owner = subOwner
-		}
-		if subG != "" {
-			g, err := user.LookupGroup(subG)
-			if err != nil {
-				log.Fatalln(err)
-			}
+		r.Owner = subOwner
+		dirty = true
+		return
+	}
 
-			r.Group = subG
-			r.GroupID = g.Gid
+	if subG != "" {
+		if u.Username != "root" && r.Owner != u.Username {
+			log.Fatalln("only owner or root can modify reservation group")
 		}
+
+		g, err := user.LookupGroup(subG)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		r.Group = subG
+		r.GroupID = g.Gid
 		dirty = true
 		return
 	}
 
 	// create copy
-	var r2 *Reservation
+	r2 := new(Reservation)
 	*r2 = *r
 
 	// clear error because maybe the problem has been fixed

@@ -165,7 +165,7 @@ func runShow(_ *Command, _ []string) {
 		namedash += "-"
 	}
 	name = BgBlack + FgWhite + fmt.Sprintf(nameFmt, namedash) + Reset
-	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------------", "\t", "------------", "\t", "------------")
+	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------", "\t", "-----", "\t", "------------")
 
 	// "Down" Node list
 	downrange, _ := rnge.UnsplitRange(downNodes)
