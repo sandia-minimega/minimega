@@ -153,7 +153,24 @@ func (b *CobblerBackend) removeProfile(profile string) error {
 }
 
 func (b *CobblerBackend) Power(hosts []string, on bool) error {
-	command := "poweroff"
+	// use power off/power on in config, if set
+	command := igorConfig.PowerOffCommand
+	if on {
+		command = igorConfig.PowerOnCommand
+	}
+
+	if command != "" {
+		runner := DefaultRunner(func(host string) error {
+			cmd := strings.Split(fmt.Sprintf(command, host), " ")
+			_, err := processWrapper(cmd...)
+			return err
+		})
+
+		return runner.RunAll(hosts)
+	}
+
+	// fallback on cobbler
+	command = "poweroff"
 	if on {
 		command = "poweron"
 	}
