@@ -45,6 +45,9 @@ var Schedule []TimeSlice // The schedule
 // if we need to write it out or not.
 var dirty bool
 
+// User running igor, should be set in main.
+var User *user.User
+
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
 var commands = []*Command{
@@ -190,6 +193,12 @@ func main() {
 		log.Fatal("unable to get effective uid: %v", err)
 	} else if u.Username != "igor" {
 		log.Fatal("effective uid must be igor and not %v", u.Username)
+	}
+
+	// Look up the user so that we can attribute actions.
+	User, err = getUser()
+	if err != nil {
+		log.Fatalln("cannot determine current user", err)
 	}
 
 	// We open and lock the lock file before trying to open the data file

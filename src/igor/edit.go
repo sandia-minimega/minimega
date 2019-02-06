@@ -53,22 +53,17 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
 	}
 
-	u, err := getUser()
-	if err != nil {
-		log.Fatalln("cannot determine current user", err)
-	}
-
 	r := FindReservation(subR)
 	if r == nil {
 		log.Fatal("reservation does not exist: %v", subR)
 	}
 
-	if !r.IsWritable(u) {
+	if !r.IsWritable(User) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 
 	if subOwner != "" {
-		if u.Username != "root" {
+		if User.Username != "root" {
 			log.Fatalln("only root can modify reservation owner")
 		}
 
@@ -78,7 +73,7 @@ func runEdit(cmd *Command, args []string) {
 	}
 
 	if subG != "" {
-		if u.Username != "root" && r.Owner != u.Username {
+		if User.Username != "root" && r.Owner != User.Username {
 			log.Fatalln("only owner or root can modify reservation group")
 		}
 

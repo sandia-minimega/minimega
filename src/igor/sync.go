@@ -67,11 +67,7 @@ func runSync(cmd *Command, args []string) {
 		log.Fatal("Missing or invalid flags. Please see igor sync -h, --help")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatalln("Cannot determine current user", err)
-	}
-	if user.Username != "root" {
+	if User.Username != "root" {
 		log.Fatalln("Sync access restricted. Please use as admin.")
 	}
 

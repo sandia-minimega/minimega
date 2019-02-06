@@ -56,21 +56,16 @@ func runExtend(cmd *Command, args []string) {
 		log.Fatalln("Missing required argument")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatalln("cannot determine current user", err)
-	}
-
 	r := FindReservation(subR)
 	if r == nil {
 		log.Fatal("reservation does not exist: %v", subR)
 	}
 
-	if !r.IsWritable(user) {
+	if !r.IsWritable(User) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 
-	if user.Username != "root" {
+	if User.Username != "root" {
 		// Make sure the reservation doesn't exceed any limits
 		if err := checkTimeLimit(len(r.Hosts), duration); err != nil {
 			log.Fatalln(err)

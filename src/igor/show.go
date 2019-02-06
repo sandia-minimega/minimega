@@ -82,11 +82,6 @@ func init() {
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
 func runShow(_ *Command, _ []string) {
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
-	}
-
 	names := []string{}
 	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
 	for i := igorConfig.Start; i <= igorConfig.End; i++ {
@@ -191,7 +186,7 @@ func runShow(_ *Command, _ []string) {
 		if r.IsActive(now) {
 			flags += "A"
 		}
-		if r.IsWritable(user) {
+		if r.IsWritable(User) {
 			flags += "W"
 		}
 		if r.Installed {

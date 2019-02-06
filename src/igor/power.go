@@ -41,12 +41,7 @@ func init() {
 func doPower(hosts []string, action string) {
 	backend := GetBackend()
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
-	}
-
-	log.Info("POWER	user=%v	nodes=%v	action=%v", user.Username, hosts, action)
+	log.Info("POWER	user=%v	nodes=%v	action=%v", User.Username, hosts, action)
 
 	switch action {
 	case "off":
@@ -77,11 +72,6 @@ func runPower(cmd *Command, args []string) {
 		log.Fatalln("must specify on, off, or cycle")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
-	}
-
 	if powerR != "" {
 		r := FindReservation(powerR)
 		if r == nil {
@@ -92,7 +82,7 @@ func runPower(cmd *Command, args []string) {
 			log.Fatal("reservation is not active: %v", powerR)
 		}
 
-		if !r.IsWritable(user) {
+		if !r.IsWritable(User) {
 			log.Fatal("insufficient privileges to power %v reservation: %v", action, powerR)
 		}
 
@@ -125,7 +115,7 @@ func runPower(cmd *Command, args []string) {
 
 			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
-				if r.ID == resID && r.IsWritable(user) {
+				if r.ID == resID && r.IsWritable(User) {
 					// Success! This node is in a reservation owned by the user
 					validatedNodes = append(validatedNodes, n)
 				}

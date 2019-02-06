@@ -24,12 +24,7 @@ cronjob rather than by the users themselves.`,
 func runNotify(cmd *Command, args []string) {
 	log.Info("notifying users of upcoming and expiring reservations")
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatalln("Cannot determine current user", err)
-	}
-
-	if user.Username != "root" {
+	if User.Username != "root" {
 		log.Fatalln("only root can notify users")
 	}
 

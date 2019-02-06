@@ -136,11 +136,6 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	u, err := getUser()
-	if err != nil {
-		log.Fatalln("cannot determine current user", err)
-	}
-
 	// Make sure there's not already a reservation with this name
 	if FindReservation(subR) != nil {
 		log.Fatal("A reservation named %v already exists.", subR)
@@ -159,12 +154,12 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Make sure the reservation doesn't exceed any limits
-	if u.Username != "root" && igorConfig.NodeLimit > 0 {
+	if User.Username != "root" && igorConfig.NodeLimit > 0 {
 		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
 			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
 		}
 	}
-	if u.Username != "root" {
+	if User.Username != "root" {
 		// nodes is only set if using subW
 		n := len(nodes)
 		if subN > 0 {
@@ -242,7 +237,7 @@ VlanLoop:
 	}
 	r.Vlan = vlan
 
-	r.Owner = u.Username
+	r.Owner = User.Username
 	r.ResName = subR
 	r.KernelArgs = subC
 	r.CobblerProfile = subProfile // safe to do even if unset
