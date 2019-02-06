@@ -106,7 +106,7 @@ func (b *CobblerBackend) enableNetboot(hosts []string) error {
 	})
 
 	if err := runner.RunAll(hosts); err != nil {
-		return fmt.Errorf("unable to set cobbler profile: %v", err)
+		return fmt.Errorf("unable to enable netboot: %v", err)
 	}
 
 	return nil
