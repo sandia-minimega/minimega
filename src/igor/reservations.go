@@ -45,8 +45,8 @@ func DeleteReservation(id uint64) error {
 	}
 
 	// purge it from the schedule
-	for i, _ := range Schedule {
-		for j, _ := range Schedule[i].Nodes {
+	for i := range Schedule {
+		for j := range Schedule[i].Nodes {
 			if Schedule[i].Nodes[j] == r.ID {
 				Schedule[i].Nodes[j] = 0
 			}

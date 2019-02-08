@@ -132,13 +132,15 @@ func (r *Reservation) SetKernelInitrd(k, i string) error {
 // purgeFiles removes the KernelHash/InitrdHash if they are not used by any
 // other reservations.
 func (r *Reservation) PurgeFiles() error {
-	// If no other reservations are using them, delete the kernel and/or initrd
+	// If no other reservations are using them, delete the kernel and/or
+	// initrd. Make sure not to include ourselves if the reservation is still
+	// in the list of reservations.
 	var kfound, ifound bool
 	for _, r2 := range Reservations {
-		if r2.KernelHash == r.KernelHash {
+		if r2.KernelHash == r.KernelHash && r.ID != r2.ID {
 			kfound = true
 		}
-		if r2.InitrdHash == r.InitrdHash {
+		if r2.InitrdHash == r.InitrdHash && r.ID != r2.ID {
 			ifound = true
 		}
 	}
