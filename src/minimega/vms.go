@@ -354,7 +354,7 @@ func (vms *VMs) Flush(cc *ron.Server) error {
 			}
 
 			if err := vm.Flush(); err != nil {
-				log.Error("clogged VM: %v", err)
+				log.Error("clogged vm %v: %v", vm.GetID(), err)
 			}
 
 			delete(vms.m, i)
