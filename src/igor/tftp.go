@@ -5,12 +5,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type TFTPBackend struct {
@@ -59,23 +57,4 @@ func (b *TFTPBackend) Uninstall(r *Reservation) error {
 	}
 
 	return nil
-}
-
-func (b *TFTPBackend) Power(hosts []string, on bool) error {
-	command := igorConfig.PowerOffCommand
-	if on {
-		command = igorConfig.PowerOnCommand
-	}
-
-	if command == "" {
-		return errors.New("power configuration missing")
-	}
-
-	runner := DefaultRunner(func(host string) error {
-		cmd := strings.Split(fmt.Sprintf(command, host), " ")
-		_, err := processWrapper(cmd...)
-		return err
-	})
-
-	return runner.RunAll(hosts)
 }

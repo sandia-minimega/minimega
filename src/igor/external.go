@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "minilog"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -31,4 +32,14 @@ func processWrapper(args ...string) (string, error) {
 	}
 
 	return string(out), err
+}
+
+func runAll(format string, args []string) error {
+	r := DefaultRunner(func(s string) error {
+		cmd := strings.Split(fmt.Sprintf(format, s), " ")
+		_, err := processWrapper(cmd...)
+		return err
+	})
+
+	return r.RunAll(args)
 }

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	log "minilog"
 	"ranges"
@@ -38,27 +39,35 @@ func init() {
 	cmdPower.Flag.StringVar(&powerN, "n", "", "")
 }
 
-func doPower(hosts []string, action string) {
-	backend := GetBackend()
-
+func doPower(hosts []string, action string) error {
 	log.Info("POWER	user=%v	nodes=%v	action=%v", User.Username, hosts, action)
 
 	switch action {
 	case "off":
-		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power off failed: %v", err)
+		if igorConfig.PowerOffCommand == "" {
+			return errors.New("power configuration missing")
 		}
+
+		return runAll(igorConfig.PowerOffCommand, hosts)
 	case "cycle":
-		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power cycle failed: %v", err)
+		if igorConfig.PowerOffCommand == "" {
+			return errors.New("power configuration missing")
+		}
+
+		if err := runAll(igorConfig.PowerOffCommand, hosts); err != nil {
+			return err
 		}
 
 		fallthrough
 	case "on":
-		if err := backend.Power(hosts, true); err != nil {
-			log.Fatal("power on failed: %v", err)
+		if igorConfig.PowerOnCommand == "" {
+			return errors.New("power configuration missing")
 		}
+
+		return runAll(igorConfig.PowerOnCommand, hosts)
 	}
+
+	return fmt.Errorf("invalid power operation: %v", action)
 }
 
 // Turn a node on or off

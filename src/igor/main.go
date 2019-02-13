@@ -133,12 +133,8 @@ func housekeeping() {
 		}
 
 		if igorConfig.AutoReboot {
-			if err := backend.Power(r.Hosts, false); err != nil {
-				log.Fatal("unable to power off: %v", err)
-			}
-
-			if err := backend.Power(r.Hosts, true); err != nil {
-				log.Fatal("unable to power on: %v", err)
+			if err := doPower(r.Hosts, "cycle"); err != nil {
+				log.Fatal("unable to power cycle %v: %v", r.ResName, err)
 			}
 		}
 
