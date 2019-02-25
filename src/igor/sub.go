@@ -5,14 +5,11 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
-	"io"
 	log "minilog"
-	"os"
-	"path/filepath"
+	"os/user"
 	"ranges"
+	"regexp"
 	"time"
 )
 
@@ -48,6 +45,10 @@ numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To
 make a reservation for 7 days: -t 7d. To make a reservation for 4 days, 6
 hours, 30 minutes: -t 4d6h30m (default = 60m).
 
+The -g flag sets a group owner for the reservation. Any user that is a member
+of this group may modify, delete, or perform power operations on the
+reservation.
+
 The -s flag is a boolean to enable 'speculative' mode; this will print a
 selection of available times for the reservation, but will not actually make
 the reservation. Intended to be used with the -a flag to select a specific time
@@ -67,6 +68,7 @@ var subT string       // -t
 var subS bool         // -s
 var subA string       // -a
 var subW string       // -w
+var subG string       // -g
 var subProfile string // -profile
 
 func init() {
@@ -82,59 +84,14 @@ func init() {
 	cmdSub.Flag.BoolVar(&subS, "s", false, "")
 	cmdSub.Flag.StringVar(&subA, "a", "", "")
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
+	cmdSub.Flag.StringVar(&subG, "g", "", "")
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
 }
 
-// install src into dir, using the hash as the file name. Returns the hash or
-// an error.
-func install(src, dir, suffix string) (string, error) {
-	f, err := os.Open(src)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	// hash the file
-	hash := sha1.New()
-	if _, err := io.Copy(hash, f); err != nil {
-		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
-	}
-
-	fname := hex.EncodeToString(hash.Sum(nil))
-
-	dst := filepath.Join(dir, fname+suffix)
-
-	// copy the file if it doesn't already exist
-	if _, err := os.Stat(dst); os.IsNotExist(err) {
-		// need to go back to the beginning of the file since we already read
-		// it once to do the hashing
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			return "", err
-		}
-
-		f2, err := os.Create(dst)
-		if err != nil {
-			return "", err
-		}
-		defer f2.Close()
-
-		if _, err := io.Copy(f2, f); err != nil {
-			return "", fmt.Errorf("unable to install %v: %v", src, err)
-		}
-	} else if err != nil {
-		// strange...
-		return "", err
-	} else {
-		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
-	}
-
-	return fname, nil
-}
-
 func runSub(cmd *Command, args []string) {
-	var nodes []string          // if the user has requested specific nodes
-	var reservation Reservation // the new reservation
-	var newSched []TimeSlice    // the new schedule
+	var nodes []string       // if the user has requested specific nodes
+	var r *Reservation       // the new reservation
+	var newSched []TimeSlice // the new schedule
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes
@@ -154,6 +111,14 @@ func runSub(cmd *Command, args []string) {
 		log.Fatalln("Missing required argument")
 	}
 
+	// make sure there's no weird characters in the reservation name
+	if matched, err := regexp.MatchString("^[a-zA-Z0-9-_]+$", subR); !matched {
+		log.Fatalln("reservation name contains invalid characters, must only contain letters, numbers, hyphen and underscores")
+	} else if err != nil {
+		// ???
+		log.Fatalln(err)
+	}
+
 	if (subK == "" || subI == "") && subProfile == "" {
 		help([]string{"sub"})
 		log.Fatalln("Must specify either a kernel & initrd, or a Cobbler profile")
@@ -171,16 +136,9 @@ func runSub(cmd *Command, args []string) {
 		}
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatalln("cannot determine current user", err)
-	}
-
 	// Make sure there's not already a reservation with this name
-	for _, r := range Reservations {
-		if r.ResName == subR {
-			log.Fatal("A reservation named %v already exists.", subR)
-		}
+	if FindReservation(subR) != nil {
+		log.Fatal("A reservation named %v already exists.", subR)
 	}
 
 	// figure out which nodes to reserve
@@ -196,12 +154,12 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Make sure the reservation doesn't exceed any limits
-	if user.Username != "root" && igorConfig.NodeLimit > 0 {
+	if User.Username != "root" && igorConfig.NodeLimit > 0 {
 		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
 			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
 		}
 	}
-	if user.Username != "root" {
+	if User.Username != "root" {
 		// nodes is only set if using subW
 		n := len(nodes)
 		if subN > 0 {
@@ -247,9 +205,17 @@ func runSub(cmd *Command, args []string) {
 		if subN > 0 {
 			log.Fatalln("Both -n and -w options used. Operation canceled.")
 		}
+
+		// TODO: Somewhat sketchy. It would probably be cleaner to set a few
+		// properties on the Reservation (i.e. hosts or node count) and then
+		// call Schedule() on the reservation.
+		var reservation Reservation
 		reservation, newSched, err = findReservationGeneric(duration, 0, nodes, true, when.Unix())
+		r = &reservation
 	} else if subN > 0 {
+		var reservation Reservation
 		reservation, newSched, err = findReservationAfter(duration, subN, when.Unix())
+		r = &reservation
 	}
 	if err != nil {
 		log.Fatalln(err)
@@ -269,53 +235,50 @@ VlanLoop:
 	if vlan > igorConfig.VLANMax {
 		log.Fatal("couldn't assign a vlan!")
 	}
-	reservation.Vlan = vlan
+	r.Vlan = vlan
 
-	reservation.Owner = user.Username
-	reservation.ResName = subR
-	reservation.KernelArgs = subC
-	reservation.CobblerProfile = subProfile // safe to do even if unset
+	r.Owner = User.Username
+	r.ResName = subR
+	r.KernelArgs = subC
+	r.CobblerProfile = subProfile // safe to do even if unset
 
 	// If we're not doing a Cobbler profile...
 	if subProfile == "" {
-		reservation.Kernel = subK
-		reservation.Initrd = subI
-
-		dir := filepath.Join(igorConfig.TFTPRoot, "igor")
-
-		if hash, err := install(subK, dir, "-kernel"); err != nil {
-			log.Fatal("reservation failed: %v", err)
-		} else {
-			reservation.KernelHash = hash
-		}
-
-		if hash, err := install(subI, dir, "-initrd"); err != nil {
-			// TODO: we may leak a kernel here
-			log.Fatal("reservation failed: %v", err)
-		} else {
-			reservation.InitrdHash = hash
+		if err := r.SetKernelInitrd(subK, subI); err != nil {
+			log.Fatalln(err)
 		}
 	}
 
+	// set group if specified
+	if subG != "" {
+		g, err := user.LookupGroup(subG)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		r.Group = subG
+		r.GroupID = g.Gid
+	}
+
 	// Add it to the list of reservations
-	Reservations[reservation.ID] = reservation
+	Reservations[r.ID] = r
 
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Printf("Reservation created for %v - %v\n", time.Unix(reservation.StartTime, 0).Format(timefmt), time.Unix(reservation.EndTime, 0).Format(timefmt))
-	unsplit, _ := rnge.UnsplitRange(reservation.Hosts)
+	fmt.Printf("Reservation created for %v - %v\n", time.Unix(r.StartTime, 0).Format(timefmt), time.Unix(r.EndTime, 0).Format(timefmt))
+	unsplit, _ := rnge.UnsplitRange(r.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
 
 	Schedule = newSched
 
 	// update the network config
-	err = networkSet(reservation.Hosts, vlan)
+	err = networkSet(r.Hosts, vlan)
 	if err != nil {
 		// TODO: we may leak a kernel and initrd here
 		log.Fatal("unable to set up network isolation")
 	}
 
-	emitReservationLog("CREATED", reservation)
+	emitReservationLog("CREATED", r)
 
 	dirty = true
 }

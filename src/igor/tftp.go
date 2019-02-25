@@ -5,12 +5,10 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type TFTPBackend struct {
@@ -20,7 +18,7 @@ func NewTFTPBackend() Backend {
 	return &TFTPBackend{}
 }
 
-func (b *TFTPBackend) Install(r Reservation) error {
+func (b *TFTPBackend) Install(r *Reservation) error {
 	// Manual file installation happens now
 	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
 	masterfile, err := os.Create(r.Filename())
@@ -51,7 +49,7 @@ func (b *TFTPBackend) Install(r Reservation) error {
 	return nil
 }
 
-func (b *TFTPBackend) Uninstall(r Reservation) error {
+func (b *TFTPBackend) Uninstall(r *Reservation) error {
 	// Delete all the PXE files in the reservation
 	for _, pxename := range r.PXENames {
 		// TODO: check error?
@@ -59,23 +57,4 @@ func (b *TFTPBackend) Uninstall(r Reservation) error {
 	}
 
 	return nil
-}
-
-func (b *TFTPBackend) Power(hosts []string, on bool) error {
-	command := igorConfig.PowerOffCommand
-	if on {
-		command = igorConfig.PowerOnCommand
-	}
-
-	if command == "" {
-		return errors.New("power configuration missing")
-	}
-
-	runner := DefaultRunner(func(host string) error {
-		cmd := strings.Split(fmt.Sprintf(command, host), " ")
-		_, err := processWrapper(cmd...)
-		return err
-	})
-
-	return runner.RunAll(hosts)
 }

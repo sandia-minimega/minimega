@@ -4,11 +4,7 @@
 
 package main
 
-import (
-	log "minilog"
-	"os"
-	"path/filepath"
-)
+import log "minilog"
 
 var cmdDel = &Command{
 	UsageLine: "del <reservation name>",
@@ -25,86 +21,23 @@ func init() {
 
 // Remove the specified reservation.
 func runDel(cmd *Command, args []string) {
-	deleteReservation(true, args)
-}
-
-// The checkUser argument specifies whether or not we should compare the current
-// username to the username of the deleted reservation. It is set to 'true' when
-// a reservation is deleted at the command line, and 'false' when the reservation
-// is deleted because it has expired.
-func deleteReservation(checkUser bool, args []string) {
-	var deletedReservation Reservation
-
+	// reservation name should be the only argument
 	if len(args) != 1 {
 		log.Fatalln("Invalid arguments")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
+	name := args[0]
+
+	r := FindReservation(name)
+	if r == nil {
+		log.Fatal("reservation does not exist: %v", name)
 	}
 
-	// Remove the reservation
-	found := false
-	for _, r := range Reservations {
-		if r.ResName != args[0] {
-			continue
-		}
-
-		if checkUser && (r.Owner != user.Username && user.Username != "root") {
-			log.Fatal("You are not the owner of %v", args[0])
-		}
-
-		deletedReservation = r
-		delete(Reservations, r.ID)
-		found = true
-	}
-	if !found {
-		log.Fatal("unable to find reservation %v", args[0])
+	if !r.IsWritable(User) {
+		log.Fatal("insufficient privileges to delete reservation: %v", name)
 	}
 
-	// Now purge it from the schedule
-	for i, _ := range Schedule {
-		for j, _ := range Schedule[i].Nodes {
-			if Schedule[i].Nodes[j] == deletedReservation.ID {
-				Schedule[i].Nodes[j] = 0
-			}
-		}
+	if err := DeleteReservation(r.ID); err != nil {
+		log.Fatalln(err)
 	}
-
-	// clean up the network config
-	if err := networkClear(deletedReservation.Hosts); err != nil {
-		log.Fatal("error clearing network isolation: %v", err)
-	}
-
-	if err := GetBackend().Uninstall(deletedReservation); err != nil {
-		log.Fatal("unable to uninstall reservation: %v", err)
-	}
-
-	// We use this to indicate if a reservation has been created or not
-	// It's used with Cobbler too, even though we don't manually manage PXE files.
-	os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", deletedReservation.ResName))
-
-	// If no other reservations are using them, delete the kernel and/or initrd
-	var ifound, kfound bool
-	for _, r := range Reservations {
-		if r.InitrdHash == deletedReservation.InitrdHash {
-			ifound = true
-		}
-		if r.KernelHash == deletedReservation.KernelHash {
-			kfound = true
-		}
-	}
-	if !ifound {
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.InitrdHash+"-initrd")
-		os.Remove(fname)
-	}
-	if !kfound {
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", deletedReservation.KernelHash+"-kernel")
-		os.Remove(fname)
-	}
-
-	emitReservationLog("DELETED", deletedReservation)
-
-	dirty = true
 }

@@ -67,11 +67,7 @@ func runSync(cmd *Command, args []string) {
 		log.Fatal("Missing or invalid flags. Please see igor sync -h, --help")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatalln("Cannot determine current user", err)
-	}
-	if user.Username != "root" {
+	if User.Username != "root" {
 		log.Fatalln("Sync access restricted. Please use as admin.")
 	}
 
@@ -119,12 +115,12 @@ func syncArista() {
 	now := time.Now()
 
 	for _, r := range Reservations {
-		if !r.Active(now) {
+		if !r.IsActive(now) {
 			continue
 		}
 
 		if !quiet {
-			fmt.Printf("Set switchports for %v to %v\n", r.Hosts, r.Vlan)
+			fmt.Printf("set switchports for %v to %v\n", r.Hosts, r.Vlan)
 		}
 		if !dryRun {
 			if err := networkSet(r.Hosts, r.Vlan); err != nil {

@@ -19,7 +19,7 @@ import (
 // to a clean slate.
 func readData(f *os.File) {
 	var data struct {
-		Reservations map[uint64]Reservation
+		Reservations map[uint64]*Reservation
 		Schedule     []TimeSlice
 	}
 
@@ -30,7 +30,7 @@ func readData(f *os.File) {
 	} else if err == io.EOF {
 		// init to usable defaults
 		log.Warn("no previous reservations")
-		Reservations = make(map[uint64]Reservation)
+		Reservations = make(map[uint64]*Reservation)
 	} else {
 		log.Fatal("unable to load data: %v", err)
 	}
@@ -40,7 +40,7 @@ func readData(f *os.File) {
 // file to ensure that the update is all-or-nothing.
 func writeData(f *os.File) {
 	data := struct {
-		Reservations map[uint64]Reservation
+		Reservations map[uint64]*Reservation
 		Schedule     []TimeSlice
 	}{
 		Reservations,

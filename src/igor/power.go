@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	log "minilog"
 	"ranges"
@@ -38,32 +39,35 @@ func init() {
 	cmdPower.Flag.StringVar(&powerN, "n", "", "")
 }
 
-func doPower(hosts []string, action string) {
-	backend := GetBackend()
-
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
-	}
-
-	log.Info("POWER	user=%v	nodes=%v	action=%v", user.Username, hosts, action)
+func doPower(hosts []string, action string) error {
+	log.Info("POWER	user=%v	nodes=%v	action=%v", User.Username, hosts, action)
 
 	switch action {
 	case "off":
-		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power off failed: %v", err)
+		if igorConfig.PowerOffCommand == "" {
+			return errors.New("power configuration missing")
 		}
+
+		return runAll(igorConfig.PowerOffCommand, hosts)
 	case "cycle":
-		if err := backend.Power(hosts, false); err != nil {
-			log.Fatal("power cycle failed: %v", err)
+		if igorConfig.PowerOffCommand == "" {
+			return errors.New("power configuration missing")
+		}
+
+		if err := runAll(igorConfig.PowerOffCommand, hosts); err != nil {
+			return err
 		}
 
 		fallthrough
 	case "on":
-		if err := backend.Power(hosts, true); err != nil {
-			log.Fatal("power on failed: %v", err)
+		if igorConfig.PowerOnCommand == "" {
+			return errors.New("power configuration missing")
 		}
+
+		return runAll(igorConfig.PowerOnCommand, hosts)
 	}
+
+	return fmt.Errorf("invalid power operation: %v", action)
 }
 
 // Turn a node on or off
@@ -77,28 +81,22 @@ func runPower(cmd *Command, args []string) {
 		log.Fatalln("must specify on, off, or cycle")
 	}
 
-	user, err := getUser()
-	if err != nil {
-		log.Fatal("can't get current user: %v\n", err)
-	}
-
 	if powerR != "" {
-		// The user specified a reservation name
-		found := false
-		for _, r := range Reservations {
-			if r.ResName == powerR && r.StartTime < time.Now().Unix() {
-				found = true
-				if r.Owner != user.Username && user.Username != "root" {
-					log.Fatal("You are not the owner of %v", powerR)
-				} else if r.ResName == powerR {
-					fmt.Printf("Powering %s reservation %s\n", action, powerR)
-					doPower(r.Hosts, action)
-				}
-			}
+		r := FindReservation(powerR)
+		if r == nil {
+			log.Fatal("reservation does not exist: %v", powerR)
 		}
-		if !found {
-			log.Fatal("Cannot find an active reservation %v", powerR)
+
+		if !r.IsActive(time.Now()) {
+			log.Fatal("reservation is not active: %v", powerR)
 		}
+
+		if !r.IsWritable(User) {
+			log.Fatal("insufficient privileges to power %v reservation: %v", action, powerR)
+		}
+
+		fmt.Printf("Powering %s reservation %s\n", action, powerR)
+		doPower(r.Hosts, action)
 	} else if powerN != "" {
 		// The user specified some nodes. We need to verify they 'own' all those nodes.
 		// Instead of looking through the reservations, we'll look at the current slice of the Schedule
@@ -126,7 +124,7 @@ func runPower(cmd *Command, args []string) {
 
 			resID := currentSched.Nodes[index-1]
 			for _, r := range Reservations {
-				if r.ID == resID && (r.Owner == user.Username || user.Username == "root") {
+				if r.ID == resID && r.IsWritable(User) {
 					// Success! This node is in a reservation owned by the user
 					validatedNodes = append(validatedNodes, n)
 				}

@@ -39,12 +39,14 @@ var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration 
 var igorConfig Config
 
 // Our most important data structures: the reservation list, and the schedule
-var Reservations map[uint64]Reservation // map ID to reservations
-var Schedule []TimeSlice                // The schedule
+var Schedule []TimeSlice // The schedule
 
 // dirty is set by the command handlers when the schedule is changed so we know
 // if we need to write it out or not.
 var dirty bool
+
+// User running igor, should be set in main.
+var User *user.User
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
@@ -57,6 +59,7 @@ var commands = []*Command{
 	cmdExtend,
 	cmdNotify,
 	cmdSync,
+	cmdEdit,
 }
 
 var exitStatus = 0
@@ -88,16 +91,16 @@ func housekeeping() {
 	for _, r := range Reservations {
 		if r.EndTime < now {
 			// Reservation expired; delete it
-			deleteReservation(false, []string{r.ResName})
-
-			dirty = true
+			if err := DeleteReservation(r.ID); err != nil {
+				log.Fatalln(err)
+			}
 		} else if r.StartTime >= now {
 			// Reservation is in the future, ignore for now
 			continue
 		}
 
-		// already installed
-		if r.Installed {
+		// already installed or errored
+		if r.Installed || r.InstallError != "" {
 			continue
 		}
 
@@ -106,10 +109,10 @@ func housekeeping() {
 			// also already installed
 			log.Info("%v is already installed", r.ResName)
 
-			r.Installed = true
-			// TODO: make Reservations map[int]*Reservation
-			Reservations[r.ID] = r
-			dirty = true
+			if !r.Installed {
+				r.Installed = true
+				dirty = true
+			}
 
 			continue
 		}
@@ -124,32 +127,23 @@ func housekeeping() {
 		}
 
 		if err := backend.Install(r); err != nil {
-			log.Fatal("unable to install: %v", err)
+			log.Error("unable to install: %v", err)
+			r.InstallError = err.Error()
+			dirty = true
 		}
 
 		if igorConfig.AutoReboot {
-			if err := backend.Power(r.Hosts, false); err != nil {
-				log.Fatal("unable to power off: %v", err)
-			}
-
-			if err := backend.Power(r.Hosts, true); err != nil {
-				log.Fatal("unable to power on: %v", err)
+			if err := doPower(r.Hosts, "cycle"); err != nil {
+				log.Fatal("unable to power cycle %v: %v", r.ResName, err)
 			}
 		}
 
 		r.Installed = true
-		// TODO: make Reservations map[int]*Reservation
-		Reservations[r.ID] = r
-
 		dirty = true
 	}
 
 	// Remove expired time slices from the schedule
 	expireSchedule()
-}
-
-func init() {
-	Reservations = make(map[uint64]Reservation)
 }
 
 func main() {
@@ -195,6 +189,12 @@ func main() {
 		log.Fatal("unable to get effective uid: %v", err)
 	} else if u.Username != "igor" {
 		log.Fatal("effective uid must be igor and not %v", u.Username)
+	}
+
+	// Look up the user so that we can attribute actions.
+	User, err = getUser()
+	if err != nil {
+		log.Fatalln("cannot determine current user", err)
 	}
 
 	// We open and lock the lock file before trying to open the data file
