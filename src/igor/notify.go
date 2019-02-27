@@ -24,11 +24,11 @@ cronjob rather than by the users themselves.`,
 func runNotify(cmd *Command, args []string) {
 	log.Info("notifying users of upcoming and expiring reservations")
 
-	if User.Username != "root" {
+	if igor.Username != "root" {
 		log.Fatalln("only root can notify users")
 	}
 
-	if igorConfig.Domain == "" {
+	if igor.Domain == "" {
 		log.Fatalln("must specify domain in config to notify users")
 	}
 
@@ -47,12 +47,13 @@ func runNotify(cmd *Command, args []string) {
 
 	now := time.Now()
 
-	for _, r := range Reservations {
+	// TODO: probably shouldn't iteration over .M directly
+	for _, r := range igor.Reservations.M {
 		// convert unix to time.Time
 		res := Reservation{
-			Name:  r.ResName,
-			Start: time.Unix(r.StartTime, 0),
-			End:   time.Unix(r.EndTime, 0),
+			Name:  r.Name,
+			Start: r.Start,
+			End:   r.End,
 		}
 
 		// upcoming reservations start in just over an hour
@@ -69,12 +70,12 @@ func runNotify(cmd *Command, args []string) {
 		diff = res.End.Sub(now)
 		var lowerwindow, upperwindow time.Duration
 
-		if igorConfig.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value
+		if igor.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value
 			lowerwindow = time.Duration(23)
 			upperwindow = time.Duration(24)
 		} else {
-			lowerwindow = time.Duration((igorConfig.ExpirationLeadTime / 60) - 1)
-			upperwindow = time.Duration(igorConfig.ExpirationLeadTime / 60)
+			lowerwindow = time.Duration((igor.ExpirationLeadTime / 60) - 1)
+			upperwindow = time.Duration(igor.ExpirationLeadTime / 60)
 		}
 		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= lowerwindow*time.Hour && diff < upperwindow*time.Hour {
 			if users[r.Owner] == nil {
@@ -94,7 +95,7 @@ func runNotify(cmd *Command, args []string) {
 
 		log.Info("notifying %v of %v upcoming and %v expiring reservations", user, len(notification.Upcoming), len(notification.Expiring))
 
-		cmd := exec.Command("mail", "-s", notifySubject, user+"@"+igorConfig.Domain)
+		cmd := exec.Command("mail", "-s", notifySubject, user+"@"+igor.Domain)
 		cmd.Stdin = &buf
 		out, err := cmd.CombinedOutput()
 		if err != nil {

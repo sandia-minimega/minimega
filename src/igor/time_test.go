@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 )
 
 func TestParseDuration(t *testing.T) {
@@ -13,7 +14,7 @@ func TestParseDuration(t *testing.T) {
 
 	// non-zero: should parse
 	duration, _ = parseDuration("60")
-	if duration != 60 {
+	if duration != 60*time.Minute {
 		t.Error("expected duration = 60")
 	}
 
@@ -31,13 +32,13 @@ func TestParseDuration(t *testing.T) {
 
 	// non-zero usage of "d" suffix: should parse
 	duration, _ = parseDuration("2d")
-	if duration != 2*24*60 {
+	if duration != 2*24*60*time.Minute {
 		t.Error("expected duration = 2880")
 	}
 
 	// non-zero usage of suffix supported by time.ParseDuration(): should parse
 	duration, _ = parseDuration("2h")
-	if duration != 2*60 {
+	if duration != 2*60*time.Minute {
 		t.Error("expected duration = 120, got", duration)
 	}
 
@@ -49,7 +50,7 @@ func TestParseDuration(t *testing.T) {
 
 	// negative time: should parse
 	duration, err = parseDuration("-2")
-	if duration != -2 {
+	if duration != -2*time.Minute {
 		t.Error("expected duration = -2, got ", duration)
 	}
 

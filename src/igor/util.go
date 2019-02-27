@@ -15,10 +15,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"ranges"
 	"strings"
 	"text/template"
-	"time"
 	"unicode"
 	"unicode/utf8"
 	"version"
@@ -157,9 +155,8 @@ func getUser() (*user.User, error) {
 //       If you change the order/content please update stats.go
 func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	unsplit, _ := rnge.UnsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, res.ID, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
+	unsplit := igor.unsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Start.Format(format), res.End.Format(format), res.Duration)
 }
 
 // install src into dir, using the hash as the file name. Returns the hash or

@@ -21,32 +21,9 @@ import (
 	"time"
 )
 
-// Constants
-
-// The length of a single time-slice in the schedule.
-// Must be less than 60! 1, 5, 10, or 15 are good choices
-// Shorter length means less waiting for reservations to start, but bigger schedule files.
-const MINUTES_PER_SLICE = 1
-
-// Minimum schedule length in minutes, 720 = 12 hours
-const MIN_SCHED_LEN = 720
-
 // Global Variables
 // This flag can be set regardless of which subcommand is executed
 var configpath = flag.String("config", "/etc/igor.conf", "Path to configuration file")
-
-// The configuration we read in from the file
-var igorConfig Config
-
-// Our most important data structures: the reservation list, and the schedule
-var Schedule []TimeSlice // The schedule
-
-// dirty is set by the command handlers when the schedule is changed so we know
-// if we need to write it out or not.
-var dirty bool
-
-// User running igor, should be set in main.
-var User *user.User
 
 // Commands lists the available commands and help topics.
 // The order here is the order in which they are printed by 'go help'.
@@ -65,85 +42,12 @@ var commands = []*Command{
 var exitStatus = 0
 var exitMu sync.Mutex
 
-// Represents a slice of time in the Schedule
-type TimeSlice struct {
-	Start int64    // UNIX time
-	End   int64    // UNIX time
-	Nodes []uint64 // slice of len(# of nodes), mapping to reservation IDs
-}
-
 func setExitStatus(n int) {
 	exitMu.Lock()
 	if exitStatus < n {
 		exitStatus = n
 	}
 	exitMu.Unlock()
-}
-
-// Runs at startup to handle automated tasks that need to happen now.
-// Read the reservations, delete any that are too old.
-// Copy in netboot files for any reservations that have just started
-func housekeeping() {
-	now := time.Now().Unix()
-
-	backend := GetBackend()
-
-	for _, r := range Reservations {
-		if r.EndTime < now {
-			// Reservation expired; delete it
-			if err := DeleteReservation(r.ID); err != nil {
-				log.Fatalln(err)
-			}
-		} else if r.StartTime >= now {
-			// Reservation is in the future, ignore for now
-			continue
-		}
-
-		// already installed or errored
-		if r.Installed || r.InstallError != "" {
-			continue
-		}
-
-		// check to see if we need to install the reservation
-		if _, err := os.Stat(r.Filename()); err == nil {
-			// also already installed
-			log.Info("%v is already installed", r.ResName)
-
-			if !r.Installed {
-				r.Installed = true
-				dirty = true
-			}
-
-			continue
-		}
-
-		// Reservation has started but has not yet been installed
-		emitReservationLog("INSTALL", r)
-
-		// update network config
-		err := networkSet(r.Hosts, r.Vlan)
-		if err != nil {
-			log.Error("error setting network isolation: %v", err)
-		}
-
-		if err := backend.Install(r); err != nil {
-			log.Error("unable to install: %v", err)
-			r.InstallError = err.Error()
-			dirty = true
-		}
-
-		if igorConfig.AutoReboot {
-			if err := doPower(r.Hosts, "cycle"); err != nil {
-				log.Fatal("unable to power cycle %v: %v", r.ResName, err)
-			}
-		}
-
-		r.Installed = true
-		dirty = true
-	}
-
-	// Remove expired time slices from the schedule
-	expireSchedule()
 }
 
 func main() {
@@ -171,13 +75,13 @@ func main() {
 
 	rand.Seed(time.Now().UnixNano())
 
-	igorConfig = readConfig(*configpath)
+	igor.Config = readConfig(*configpath)
 
 	// Add another logger for the logfile, if set
-	if igorConfig.LogFile != "" {
-		logfile, err := os.OpenFile(igorConfig.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+	if igor.LogFile != "" {
+		logfile, err := os.OpenFile(igor.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 		if err != nil {
-			log.Fatal("failed to create logfile %v: %v", igorConfig.LogFile, err)
+			log.Fatal("failed to create logfile %v: %v", igor.LogFile, err)
 		}
 		log.AddLogger("file", logfile, log.INFO, false)
 	}
@@ -192,16 +96,22 @@ func main() {
 	}
 
 	// Look up the user so that we can attribute actions.
-	User, err = getUser()
+	igor.User, err = getUser()
 	if err != nil {
 		log.Fatalln("cannot determine current user", err)
+	}
+
+	if igor.UseCobbler {
+		igor.Backend = NewCobblerBackend()
+	} else {
+		igor.Backend = NewTFTPBackend()
 	}
 
 	// We open and lock the lock file before trying to open the data file
 	// because the data file may have been changed by the instance of igor that
 	// holds the lock.
-	lockPath := filepath.Join(igorConfig.TFTPRoot, "/igor/lock")
-	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/data.gob")
+	lockPath := filepath.Join(igor.TFTPRoot, "/igor/lock")
+	dataPath := filepath.Join(igor.TFTPRoot, "/igor/reservations.json")
 
 	lock, err := os.OpenFile(lockPath, os.O_RDWR|os.O_CREATE, 0664)
 	if err != nil {
@@ -213,7 +123,6 @@ func main() {
 	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
 		log.Fatal("unable to lock file -- please retry")
 	}
-	// unlock at the end later
 	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 
 	db, err := os.OpenFile(dataPath, os.O_RDWR|os.O_CREATE, 0664)
@@ -222,11 +131,15 @@ func main() {
 	}
 	defer db.Close()
 
-	readData(db)
+	if err := igor.readData(db); err != nil {
+		log.Fatalln(err)
+	}
 
 	// Here, we need to go through and delete any reservations which should be
 	// expired, and bring in new ones that are just starting
-	housekeeping()
+	if err := igor.Housekeeping(); err != nil {
+		log.Fatalln(err)
+	}
 
 	// Now process the command
 	for _, cmd := range commands {
@@ -240,17 +153,17 @@ func main() {
 			}
 			cmd.Run(cmd, args)
 
-			if dirty {
+			if igor.dirty {
 				log.Info("writing data file")
-				writeData(db)
-				log.Info("writing reservations file")
-				writeReservations()
+				if err := igor.writeData(db); err != nil {
+					log.Fatalln(err)
+				}
 			}
 
 			return
 		}
 	}
 
-	fmt.Fprintf(os.Stderr, "go: unknown subcommand %q\nRun 'go help' for usage.\n", args[0])
+	fmt.Fprintf(os.Stderr, "igor: unknown subcommand %q\nRun 'igor help' for usage.\n", args[0])
 	setExitStatus(2)
 }

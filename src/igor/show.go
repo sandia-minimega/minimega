@@ -11,7 +11,6 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
-	"ranges"
 	"sort"
 	"strconv"
 	"strings"
@@ -82,11 +81,7 @@ func init() {
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
 func runShow(_ *Command, _ []string) {
-	names := []string{}
-	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		names = append(names, fmt.Sprintf(fmtstring, igorConfig.Prefix, i))
-	}
+	names := igor.validHosts()
 
 	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes, err := scanNodes(names)
@@ -99,15 +94,17 @@ func runShow(_ *Command, _ []string) {
 	// For colors... get all the reservations and sort them
 	resarray := []*Reservation{}
 	maxResNameLength := 0
-	for _, r := range Reservations {
+
+	// TODO: probably shouldn't iteration over .M directly
+	for _, r := range igor.Reservations.M {
 		resarray = append(resarray, r)
 		// Remember longest reservation name for formatting
-		if maxResNameLength < len(r.ResName) {
-			maxResNameLength = len(r.ResName)
+		if maxResNameLength < len(r.Name) {
+			maxResNameLength = len(r.Name)
 		}
 		// go through each host list and compile list of reserved nodes
 		for _, h := range r.Hosts {
-			v, err := strconv.Atoi(h[len(igorConfig.Prefix):])
+			v, err := strconv.Atoi(h[len(igor.Prefix):])
 			if err != nil {
 				//that's weird
 				continue
@@ -119,8 +116,8 @@ func runShow(_ *Command, _ []string) {
 	// Gather a list of which nodes are down and which nodes are unreserved
 	var downNodes []string
 	var unreservedNodes []string
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		hostname := igorConfig.Prefix + strconv.Itoa(i)
+	for i := igor.Start; i <= igor.End; i++ {
+		hostname := igor.Prefix + strconv.Itoa(i)
 		if !resNodes[i] {
 			unreservedNodes = append(unreservedNodes, hostname)
 		}
@@ -133,17 +130,15 @@ func runShow(_ *Command, _ []string) {
 	if subO {
 		sort.Slice(resarray, func(i, j int) bool {
 			if resarray[i].Owner == resarray[j].Owner {
-				return resarray[i].StartTime < resarray[j].StartTime
+				return resarray[i].Start.Before(resarray[j].Start)
 			}
 			return resarray[i].Owner < resarray[j].Owner
 		})
 	} else {
 		sort.Slice(resarray, func(i, j int) bool {
-			return resarray[i].StartTime < resarray[j].StartTime
+			return resarray[i].Start.Before(resarray[j].Start)
 		})
 	}
-
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
 
 	printShelves(nodes, resarray)
 
@@ -163,12 +158,12 @@ func runShow(_ *Command, _ []string) {
 	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------", "\t", "-----", "\t", "------------")
 
 	// "Down" Node list
-	downrange, _ := rnge.UnsplitRange(downNodes)
+	downrange := igor.unsplitRange(downNodes)
 	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(downNodes), "\t", downrange)
 
 	// Unreserved Node list
-	resrange, _ := rnge.UnsplitRange(unreservedNodes)
+	resrange := igor.unsplitRange(unreservedNodes)
 	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
 	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(unreservedNodes), "\t", resrange)
 
@@ -177,16 +172,16 @@ func runShow(_ *Command, _ []string) {
 	// Active Reservations
 	timefmt := "Jan 2 15:04"
 	for i, r := range resarray {
-		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		name = colorize(i, fmt.Sprintf(nameFmt, r.ResName))
-		start := time.Unix(r.StartTime, 0).Format(timefmt)
-		end := time.Unix(r.EndTime, 0).Format(timefmt)
+		unsplit := igor.unsplitRange(r.Hosts)
+		name = colorize(i, fmt.Sprintf(nameFmt, r.Name))
+		start := r.Start.Format(timefmt)
+		end := r.End.Format(timefmt)
 
 		var flags string
 		if r.IsActive(now) {
 			flags += "A"
 		}
-		if r.IsWritable(User) {
+		if r.IsWritable(igor.User) {
 			flags += "W"
 		}
 		if r.Installed {
@@ -210,8 +205,8 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 
 	// Use nmap to determine what nodes are up
 	args := []string{}
-	if igorConfig.DNSServer != "" {
-		args = append(args, "--dns-servers", igorConfig.DNSServer)
+	if igor.DNSServer != "" {
+		args = append(args, "--dns-servers", igor.DNSServer)
 	}
 	args = append(args,
 		"-sn",
@@ -245,7 +240,7 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 		name := fields[2][1 : len(fields[2])-1]
 		// get rid of any domain that may exist
 		name = strings.Split(name, ".")[0]
-		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
+		v, err := strconv.Atoi(name[len(igor.Prefix):])
 		if err != nil {
 			// that's weird
 			continue
@@ -260,23 +255,23 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 
 func printShelves(alive map[int]bool, resarray []*Reservation) {
 	// figure out how many digits we need per node displayed
-	nodewidth := len(strconv.Itoa(igorConfig.End))
+	nodewidth := len(strconv.Itoa(igor.End))
 	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s
 
 	// how many nodes per rack?
-	perrack := igorConfig.Rackwidth * igorConfig.Rackheight
+	perrack := igor.Rackwidth * igor.Rackheight
 
 	// How wide is the full rack display?
 	// width of nodes * number of nodes across a rack, plus the number of | characters we need
-	totalwidth := nodewidth*igorConfig.Rackwidth + igorConfig.Rackwidth + 1
+	totalwidth := nodewidth*igor.Rackwidth + igor.Rackwidth + 1
 
 	// figure out all the node -> reservations ahead of time
 	n2r := map[int]int{}
-	now := time.Now().Unix()
+	now := time.Now()
 	for i, r := range resarray {
-		if r.StartTime < now {
+		if r.Start.Before(now) {
 			for _, name := range r.Hosts {
-				name := strings.TrimPrefix(name, igorConfig.Prefix)
+				name := strings.TrimPrefix(name, igor.Prefix)
 				v, err := strconv.Atoi(name)
 				if err == nil {
 					n2r[v] = i
@@ -286,7 +281,7 @@ func printShelves(alive map[int]bool, resarray []*Reservation) {
 	}
 
 	var buf bytes.Buffer
-	for i := igorConfig.Start; i <= igorConfig.End; i += perrack {
+	for i := igor.Start; i <= igor.End; i += perrack {
 		for j := 0; j < totalwidth; j++ {
 			buf.WriteString(Reverse)
 			buf.WriteString("-")
@@ -294,12 +289,12 @@ func printShelves(alive map[int]bool, resarray []*Reservation) {
 		}
 		buf.WriteString("\n")
 		for j := i; j < i+perrack; j++ {
-			if (j-1)%igorConfig.Rackwidth == 0 {
+			if (j-1)%igor.Rackwidth == 0 {
 				buf.WriteString(Reverse)
 				buf.WriteString("|")
 				buf.WriteString(Reset)
 			}
-			if j <= igorConfig.End {
+			if j <= igor.End {
 				if index, ok := n2r[j]; ok {
 					if alive[j] {
 						buf.WriteString(colorize(index, fmt.Sprintf(nodefmt+"d", j)))
@@ -323,7 +318,7 @@ func printShelves(alive map[int]bool, resarray []*Reservation) {
 			buf.WriteString(Reverse)
 			buf.WriteString("|")
 			buf.WriteString(Reset)
-			if (j-1)%igorConfig.Rackwidth == igorConfig.Rackwidth-1 {
+			if (j-1)%igor.Rackwidth == igor.Rackwidth-1 {
 				buf.WriteString("\n")
 			}
 		}

@@ -145,7 +145,7 @@ func (stats *Stats) extendRes(rn string, ru string, ri int, rs time.Time, rex ti
 
 // Reads the logfile and adds the necessary reservations and usage time
 func (stats *Stats) readLog() {
-	f, err := os.Open(igorConfig.LogFile)
+	f, err := os.Open(igor.LogFile)
 	if err != nil {
 		log.Fatal("unable to open log")
 	}

@@ -72,7 +72,7 @@ func aristaSet(nodes []string, vlan int) error {
 
 	for _, n := range nodes {
 		var b bytes.Buffer
-		eth, ok := igorConfig.NodeMap[n]
+		eth, ok := igor.NodeMap[n]
 		if !ok {
 			return fmt.Errorf("no such node: %v", n)
 		}
@@ -87,7 +87,7 @@ func aristaSet(nodes []string, vlan int) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igorConfig.NetworkUser, igorConfig.NetworkPassword, igorConfig.NetworkURL, commands)
+		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func aristaClear(nodes []string) error {
 
 	for _, n := range nodes {
 		var b bytes.Buffer
-		eth, ok := igorConfig.NodeMap[n]
+		eth, ok := igor.NodeMap[n]
 		if !ok {
 			return fmt.Errorf("no such node: %v", n)
 		}
@@ -116,7 +116,7 @@ func aristaClear(nodes []string) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igorConfig.NetworkUser, igorConfig.NetworkPassword, igorConfig.NetworkURL, commands)
+		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}

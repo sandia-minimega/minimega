@@ -8,7 +8,6 @@ import (
 	"fmt"
 	log "minilog"
 	"os/user"
-	"ranges"
 	"regexp"
 	"time"
 )
@@ -89,9 +88,8 @@ func init() {
 }
 
 func runSub(cmd *Command, args []string) {
-	var nodes []string       // if the user has requested specific nodes
-	var r *Reservation       // the new reservation
-	var newSched []TimeSlice // the new schedule
+	var r *Reservation // the new reservation
+
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes
@@ -100,15 +98,17 @@ func runSub(cmd *Command, args []string) {
 		log.Fatal("unable to parse -t: %v", err)
 	} else if duration <= 0 {
 		log.Fatal("Please specify a positive value for -t")
-	} else if duration%MINUTES_PER_SLICE != 0 { // Reserve at least (duration) minutes worth of slices, in increments of MINUTES_PER_SLICE
-		duration = (duration/MINUTES_PER_SLICE + 1) * MINUTES_PER_SLICE
 	}
-	log.Debug("duration: %v minutes", duration)
+	log.Debug("duration: %v", duration)
 
 	// validate arguments
 	if subR == "" || (subN == 0 && subW == "") {
 		help([]string{"sub"})
 		log.Fatalln("Missing required argument")
+	}
+
+	if subW != "" && subN > 0 {
+		log.Fatalln("Must specify either number of nodes or list of nodes")
 	}
 
 	// make sure there's no weird characters in the reservation name
@@ -124,7 +124,7 @@ func runSub(cmd *Command, args []string) {
 		log.Fatalln("Must specify either a kernel & initrd, or a Cobbler profile")
 	}
 
-	if subProfile != "" && !igorConfig.UseCobbler {
+	if subProfile != "" && !igor.UseCobbler {
 		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
 	}
 
@@ -137,114 +137,28 @@ func runSub(cmd *Command, args []string) {
 	}
 
 	// Make sure there's not already a reservation with this name
-	if FindReservation(subR) != nil {
+	if igor.Find(subR) != nil {
 		log.Fatal("A reservation named %v already exists.", subR)
 	}
 
 	// figure out which nodes to reserve
 	if subW != "" {
-		rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-		nodes, _ = rnge.SplitRange(subW)
-		if len(nodes) == 0 {
+		r.Hosts = igor.splitRange(subW)
+		if len(r.Hosts) == 0 {
 			log.Fatal("Couldn't parse node specification %v", subW)
 		}
-		if !checkValidNodeRange(nodes) {
-			log.Fatalln("Invalid node range")
-		}
+	} else {
+		r.Hosts = make([]string, subN)
 	}
 
 	// Make sure the reservation doesn't exceed any limits
-	if User.Username != "root" && igorConfig.NodeLimit > 0 {
-		if subN > igorConfig.NodeLimit || len(nodes) > igorConfig.NodeLimit {
-			log.Fatal("Only root can make a reservation of more than %v nodes", igorConfig.NodeLimit)
+	if igor.Username != "root" && igor.NodeLimit > 0 {
+		if subN > igor.NodeLimit || len(r.Hosts) > igor.NodeLimit {
+			log.Fatal("Only root can make a reservation of more than %v nodes", igor.NodeLimit)
 		}
 	}
-	if User.Username != "root" {
-		// nodes is only set if using subW
-		n := len(nodes)
-		if subN > 0 {
-			// must be using subN
-			n = subN
-		}
-		if err := checkTimeLimit(n, duration); err != nil {
-			log.Fatalln(err)
-		}
-	}
-
-	when := time.Now().Add(-time.Minute * MINUTES_PER_SLICE) //keep from putting the reservation 1 minute into future
-	if subA != "" {
-		loc, _ := time.LoadLocation("Local")
-		t, _ := time.Parse(format, subA)
-		when = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
-	}
-
-	// If this is a speculative call, run findReservationAfter a few times,
-	// print, and exit
-	if subS {
-		fmt.Println("AVAILABLE RESERVATIONS")
-		fmt.Println("START\t\t\tEND")
-		for i := 0; i < 10; i++ {
-			var r Reservation
-			if subN > 0 {
-				r, _, err = findReservationAfter(duration, subN, when.Add(time.Duration(i*10)*time.Minute).Unix())
-				if err != nil {
-					log.Fatalln(err)
-				}
-			} else if subW != "" {
-				r, _, err = findReservationGeneric(duration, 0, nodes, true, when.Add(time.Duration(i*10)*time.Minute).Unix())
-				if err != nil {
-					log.Fatalln(err)
-				}
-			}
-			fmt.Printf("%v\t%v\n", time.Unix(r.StartTime, 0).Format(format), time.Unix(r.EndTime, 0).Format(format))
-		}
-		return
-	}
-
-	if subW != "" {
-		if subN > 0 {
-			log.Fatalln("Both -n and -w options used. Operation canceled.")
-		}
-
-		// TODO: Somewhat sketchy. It would probably be cleaner to set a few
-		// properties on the Reservation (i.e. hosts or node count) and then
-		// call Schedule() on the reservation.
-		var reservation Reservation
-		reservation, newSched, err = findReservationGeneric(duration, 0, nodes, true, when.Unix())
-		r = &reservation
-	} else if subN > 0 {
-		var reservation Reservation
-		reservation, newSched, err = findReservationAfter(duration, subN, when.Unix())
-		r = &reservation
-	}
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// pick a network segment
-	var vlan int
-VlanLoop:
-	for vlan = igorConfig.VLANMin; vlan <= igorConfig.VLANMax; vlan++ {
-		for _, r := range Reservations {
-			if vlan == r.Vlan {
-				continue VlanLoop
-			}
-		}
-		break
-	}
-	if vlan > igorConfig.VLANMax {
-		log.Fatal("couldn't assign a vlan!")
-	}
-	r.Vlan = vlan
-
-	r.Owner = User.Username
-	r.ResName = subR
-	r.KernelArgs = subC
-	r.CobblerProfile = subProfile // safe to do even if unset
-
-	// If we're not doing a Cobbler profile...
-	if subProfile == "" {
-		if err := r.SetKernelInitrd(subK, subI); err != nil {
+	if igor.Username != "root" {
+		if err := igor.checkTimeLimit(len(r.Hosts), duration); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -260,25 +174,79 @@ VlanLoop:
 		r.GroupID = g.Gid
 	}
 
-	// Add it to the list of reservations
-	Reservations[r.ID] = r
+	r.Start = time.Now().Round(time.Minute).Add(-time.Minute * 1) //keep from putting the reservation 1 minute into future
+	if subA != "" {
+		loc, _ := time.LoadLocation("Local")
+		t, _ := time.Parse(format, subA)
+		r.Start = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+	}
+
+	// If this is a speculative call, run findReservationAfter a few times,
+	// print, and exit
+	if subS {
+		fmt.Println("AVAILABLE RESERVATIONS")
+		fmt.Println("START\t\t\tEND")
+		for i := 0; i < 10; i++ {
+			r.Start = r.Start.Add(10 * time.Minute)
+
+			if subN > 0 {
+				r.Hosts = make([]string, subN)
+
+				if err := igor.Schedule(r, true); err != nil {
+					log.Fatalln(err)
+				}
+			} else if subW != "" {
+				if err := igor.Schedule(r, true); err != nil {
+					log.Fatalln(err)
+				}
+			}
+			fmt.Printf("%v\t%v\n", r.Start.Format(format), r.End.Format(format))
+		}
+		return
+	}
+
+	if err := igor.Schedule(r, false); err != nil {
+		log.Fatalln(err)
+	}
+
+	// pick a network segment
+	if v, err := igor.NextVLAN(); err != nil {
+		log.Fatalln(err)
+	} else {
+		r.Vlan = v
+	}
+
+	r.Owner = igor.Username
+	r.Name = subR
+	r.KernelArgs = subC
+	r.CobblerProfile = subProfile // safe to do even if unset
+
+	// If we're not doing a Cobbler profile...
+	if subProfile == "" {
+		if err := r.SetKernel(subK); err != nil {
+			log.Fatalln(err)
+		}
+		if err := r.SetInitrd(subI); err != nil {
+			if err := igor.PurgeFiles(r); err != nil {
+				log.Error("leaked kernel: %v", subK)
+			}
+			log.Fatalln(err)
+		}
+	}
 
 	timefmt := "Jan 2 15:04"
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Printf("Reservation created for %v - %v\n", time.Unix(r.StartTime, 0).Format(timefmt), time.Unix(r.EndTime, 0).Format(timefmt))
-	unsplit, _ := rnge.UnsplitRange(r.Hosts)
+	fmt.Printf("Reservation created for %v - %v\n", r.Start.Format(timefmt), r.End.Format(timefmt))
+	unsplit := igor.unsplitRange(r.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
 
-	Schedule = newSched
-
 	// update the network config
-	err = networkSet(r.Hosts, vlan)
+	err = networkSet(r.Hosts, r.Vlan)
 	if err != nil {
-		// TODO: we may leak a kernel and initrd here
+		if err := igor.PurgeFiles(r); err != nil {
+			log.Error("leaked file: %v", err)
+		}
 		log.Fatal("unable to set up network isolation")
 	}
 
 	emitReservationLog("CREATED", r)
-
-	dirty = true
 }

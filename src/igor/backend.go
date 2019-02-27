@@ -14,23 +14,15 @@ type Backend interface {
 	Uninstall(*Reservation) error
 }
 
-func GetBackend() Backend {
-	if igorConfig.UseCobbler {
-		return NewCobblerBackend()
-	}
-
-	return NewTFTPBackend()
-}
-
 // MockBackend can be used for testing
 type MockBackend struct{}
 
 func (b *MockBackend) Install(r *Reservation) error {
-	log.Printf("mock install %v", r.ResName)
+	log.Printf("mock install %v", r.Name)
 	return nil
 }
 
 func (b *MockBackend) Uninstall(r *Reservation) error {
-	log.Printf("mock uninstall %v", r.ResName)
+	log.Printf("mock uninstall %v", r.Name)
 	return nil
 }

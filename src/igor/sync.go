@@ -33,7 +33,6 @@ OPTIONS
 Possible WHATs:
 
 arista: 	reconfigure switchports for active reservations
-schedule:	purge orphan reservation IDs from the schedule
 	`,
 }
 
@@ -67,7 +66,7 @@ func runSync(cmd *Command, args []string) {
 		log.Fatal("Missing or invalid flags. Please see igor sync -h, --help")
 	}
 
-	if User.Username != "root" {
+	if igor.Username != "root" {
 		log.Fatalln("Sync access restricted. Please use as admin.")
 	}
 
@@ -76,8 +75,6 @@ func runSync(cmd *Command, args []string) {
 	}
 
 	switch args[0] {
-	case "schedule":
-		syncSchedule()
 	case "arista":
 		syncArista()
 	default:
@@ -85,36 +82,11 @@ func runSync(cmd *Command, args []string) {
 	}
 }
 
-func syncSchedule() {
-	log.Debug("Sync called - finding orphan IDs")
-	IDs := getOrphanIDs()
-	if len(IDs) > 0 && !quiet {
-		fmt.Printf("%v orphan Reservation IDs found:\n", len(IDs))
-		for _, id := range IDs {
-			fmt.Println(id)
-		}
-	}
-
-	// purge the orphan IDs from the schedule
-	if len(IDs) > 0 && force {
-		if !quiet {
-			fmt.Println("Purging Orphan IDs from Schedule...")
-		}
-		for _, oid := range IDs {
-			purgeFromSchedule(oid)
-		}
-		if !quiet {
-			fmt.Println("Done.")
-		}
-		dirty = true
-	}
-
-}
-
 func syncArista() {
 	now := time.Now()
 
-	for _, r := range Reservations {
+	// TODO: probably shouldn't iteration over .M directly
+	for _, r := range igor.Reservations.M {
 		if !r.IsActive(now) {
 			continue
 		}
@@ -128,41 +100,4 @@ func syncArista() {
 			}
 		}
 	}
-}
-
-func getOrphanIDs() []uint64 {
-	resIDs := make(map[uint64]bool)
-	// make a list of all reseration IDs that appear in the schedule
-	for _, s := range Schedule {
-		for _, n := range s.Nodes {
-			resIDs[n] = true
-		}
-	}
-	// Go through the reservations and turn off IDs we know about
-	for _, r := range Reservations {
-		delete(resIDs, r.ID)
-	}
-	delete(resIDs, 0) //we don't care about 0
-	// Compile a list of the remaining IDs, if any
-	orphanIDs := make([]uint64, 0, len(resIDs))
-	for k, _ := range resIDs {
-		orphanIDs = append(orphanIDs, k)
-	}
-	log.Debug("Sync:getOrphanIDs concluded with: %v", resIDs)
-	return orphanIDs
-}
-
-func purgeFromSchedule(id uint64) {
-	if !quiet {
-		fmt.Printf("Purging orphan ID %v from schedule...\n", id)
-	}
-	newSched := Schedule
-	for i := 0; i < len(newSched); i++ {
-		for j := 0; j < len(newSched[i].Nodes); j++ {
-			if newSched[i].Nodes[j] == id {
-				newSched[i].Nodes[j] = 0
-			}
-		}
-	}
-	Schedule = newSched
 }

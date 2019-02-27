@@ -6,27 +6,27 @@ package main
 import (
 	"fmt"
 	log "minilog"
-	"os"
+	"net"
 	"os/user"
 	"path/filepath"
 	"time"
 )
 
-// Represents a single reservation
+// Reservation stores the information about a single reservation
 type Reservation struct {
-	ID      uint64
-	ResName string
+	ID   uint64
+	Name string
 
 	Owner   string
 	Group   string // optional group associated with reservation
 	GroupID string // resolved group ID for Group
 
-	StartTime int64   // UNIX time
-	EndTime   int64   // UNIX time
-	Duration  float64 // minutes
+	Start    time.Time
+	End      time.Time
+	Duration time.Duration
 
 	Hosts    []string // separate, not a range
-	PXENames []string // eg C000025B
+	PXENames []string // e.g. C000025B
 
 	CobblerProfile string // Optional; if set, use this Cobbler profile instead of a kernel+initrd
 	KernelArgs     string
@@ -45,15 +45,28 @@ type Reservation struct {
 
 // Filename returns the filename that stores the reservation configuration
 func (r Reservation) Filename() string {
-	return filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", "igor", r.ResName)
+	return filepath.Join(igor.TFTPRoot, "pxelinux.cfg", "igor", r.Name)
 }
 
 // IsActive returns true if the reservation is active at the given time
 func (r Reservation) IsActive(t time.Time) bool {
-	start := time.Unix(r.StartTime, 0)
-	end := time.Unix(r.EndTime, 0)
+	return r.Start.Before(t) && r.End.After(t)
+}
 
-	return start.Before(t) && end.After(t)
+// Remaining returns how long the reservation has remaining at the given time
+// if the reservation is active. If the reservation is not active, it returns
+// how long the reservation will be active for.
+func (r Reservation) Remaining(t time.Time) time.Duration {
+	if r.IsActive(t) {
+		return r.End.Sub(t)
+	}
+
+	return r.Duration
+}
+
+// IsExpired returns true if the reservation is before the given time
+func (r Reservation) IsExpired(t time.Time) bool {
+	return r.End.Before(t)
 }
 
 // IsWritable returns true if the reservation can be modified by the given user
@@ -83,10 +96,29 @@ func (r Reservation) IsWritable(u *user.User) bool {
 	return false
 }
 
+// SetHosts sets Hosts and PXENames based on IP lookups for the provided hosts.
+func (r *Reservation) SetHosts(hosts []string) error {
+	r.Hosts = hosts
+
+	// First, go from node name to PXE filename
+	for _, h := range hosts {
+		ips, err := net.LookupIP(h)
+		if err != nil {
+			return fmt.Errorf("failure looking up %v: %v", h, err)
+		}
+
+		for _, ip := range ips {
+			r.PXENames = append(r.PXENames, toPXE(ip))
+		}
+	}
+
+	return nil
+}
+
 func (r *Reservation) SetKernel(k string) error {
 	var err error
 
-	dir := filepath.Join(igorConfig.TFTPRoot, "igor")
+	dir := filepath.Join(igor.TFTPRoot, "igor")
 
 	r.Kernel = k
 	if r.KernelHash, err = install(k, dir, "-kernel"); err != nil {
@@ -99,64 +131,11 @@ func (r *Reservation) SetKernel(k string) error {
 func (r *Reservation) SetInitrd(i string) error {
 	var err error
 
-	dir := filepath.Join(igorConfig.TFTPRoot, "igor")
+	dir := filepath.Join(igor.TFTPRoot, "igor")
 
 	r.Initrd = i
 	if r.InitrdHash, err = install(i, dir, "-initrd"); err != nil {
 		return fmt.Errorf("install initrd failed: %v", err)
-	}
-
-	return nil
-}
-
-// SetKernelInitrd wraps calling SetKernel and SetInitrd, calling PurgeFiles if
-// SetInitrd fails and we have already succesfully call SetKernel to avoid
-// leaking a kernel.
-func (r *Reservation) SetKernelInitrd(k, i string) error {
-	if err := r.SetKernel(k); err != nil {
-		return err
-	}
-
-	if err := r.SetInitrd(i); err != nil {
-		// clean up already installed kernel
-		if err := r.PurgeFiles(); err != nil {
-			log.Error("leaked kernel: %v", k)
-		}
-
-		return err
-	}
-
-	return nil
-}
-
-// purgeFiles removes the KernelHash/InitrdHash if they are not used by any
-// other reservations.
-func (r *Reservation) PurgeFiles() error {
-	// If no other reservations are using them, delete the kernel and/or
-	// initrd. Make sure not to include ourselves if the reservation is still
-	// in the list of reservations.
-	var kfound, ifound bool
-	for _, r2 := range Reservations {
-		if r2.KernelHash == r.KernelHash && r.ID != r2.ID {
-			kfound = true
-		}
-		if r2.InitrdHash == r.InitrdHash && r.ID != r2.ID {
-			ifound = true
-		}
-	}
-
-	if !kfound && r.KernelHash != "" {
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel")
-		if err := os.Remove(fname); err != nil {
-			return err
-		}
-	}
-
-	if !ifound && r.InitrdHash != "" {
-		fname := filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd")
-		if err := os.Remove(fname); err != nil {
-			return err
-		}
 	}
 
 	return nil

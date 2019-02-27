@@ -24,9 +24,9 @@ type Runner struct {
 	errs map[string]error
 }
 
-// DefaultRunner returns a runner with parameters based on igorConfig.
+// DefaultRunner returns a runner with parameters based on igor.Config.
 func DefaultRunner(fn RunnerFn) *Runner {
-	r, err := NewRunner(fn, Limit(igorConfig.ConcurrencyLimit), Retries(igorConfig.CommandRetries))
+	r, err := NewRunner(fn, Limit(igor.ConcurrencyLimit), Retries(igor.CommandRetries))
 	if err != nil {
 		log.Fatal("invalid parameters: %v", err)
 	}
