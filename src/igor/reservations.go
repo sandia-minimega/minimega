@@ -72,44 +72,53 @@ func (r *Reservations) Housekeeping() error {
 			continue
 		}
 
-		// check to see if we need to install the reservation
-		if _, err := os.Stat(res.Filename()); err == nil {
-			// also already installed
-			log.Info("%v is already installed", res.Name)
-
-			if !res.Installed {
-				res.Installed = true
-				r.dirty = true
-			}
-
-			continue
-		}
-
-		// Reservation has started but has not yet been installed
-		emitReservationLog("INSTALL", res)
-
-		// update network config
-		err := networkSet(res.Hosts, res.Vlan)
-		if err != nil {
-			log.Error("error setting network isolation: %v", err)
-		}
-
-		if err := igor.Install(res); err != nil {
-			log.Error("unable to install: %v", err)
+		// attempt install
+		if err := r.Install(res); err != nil {
+			log.Error("install %v error: %v", res.Name, err)
 			res.InstallError = err.Error()
-			r.dirty = true
+		} else {
+			res.Installed = true
 		}
 
-		if igor.Config.AutoReboot {
-			if err := doPower(res.Hosts, "cycle"); err != nil {
-				return fmt.Errorf("unable to power cycle %v: %v", res.Name, err)
-			}
-		}
-
-		res.Installed = true
 		r.dirty = true
 	}
 
+	return nil
+}
+
+func (r *Reservations) Install(res *Reservation) error {
+	// check to see if we need to install the reservation
+	if _, err := os.Stat(res.Filename()); err == nil {
+		// already installed
+		log.Info("%v is already installed", res.Name)
+
+		return nil
+	}
+
+	// pick a network segment
+	if v, err := r.NextVLAN(); err != nil {
+		return fmt.Errorf("error setting network isolation: %v", err)
+	} else {
+		res.Vlan = v
+	}
+
+	// update network config
+	if err := networkSet(res.Hosts, res.Vlan); err != nil {
+		return fmt.Errorf("error setting network isolation: %v", err)
+	}
+
+	if err := igor.Backend.Install(res); err != nil {
+		return err
+	}
+
+	if igor.Config.AutoReboot {
+		if err := doPower(res.Hosts, "cycle"); err != nil {
+			// everything should be set, user can try to power cycle
+			log.Warn("unable to power cycle %v: %v", res.Name, err)
+		}
+	}
+
+	emitReservationLog("INSTALL", res)
 	return nil
 }
 

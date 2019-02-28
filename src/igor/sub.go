@@ -209,13 +209,6 @@ func runSub(cmd *Command, args []string) {
 		log.Fatalln(err)
 	}
 
-	// pick a network segment
-	if v, err := igor.NextVLAN(); err != nil {
-		log.Fatalln(err)
-	} else {
-		r.Vlan = v
-	}
-
 	r.Owner = igor.Username
 	r.Name = subR
 	r.KernelArgs = subC
@@ -238,15 +231,6 @@ func runSub(cmd *Command, args []string) {
 	fmt.Printf("Reservation created for %v - %v\n", r.Start.Format(timefmt), r.End.Format(timefmt))
 	unsplit := igor.unsplitRange(r.Hosts)
 	fmt.Printf("Nodes: %v\n", unsplit)
-
-	// update the network config
-	err = networkSet(r.Hosts, r.Vlan)
-	if err != nil {
-		if err := igor.PurgeFiles(r); err != nil {
-			log.Error("leaked file: %v", err)
-		}
-		log.Fatal("unable to set up network isolation")
-	}
 
 	emitReservationLog("CREATED", r)
 }

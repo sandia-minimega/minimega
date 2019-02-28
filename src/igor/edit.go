@@ -159,7 +159,7 @@ func runEdit(cmd *Command, args []string) {
 			log.Fatal("unable to uninstall old reservation: %v", err)
 		}
 
-		if err := igor.Install(r2); err != nil {
+		if err := igor.Backend.Install(r2); err != nil {
 			log.Fatal("unable to install edited reservation: %v", err)
 		}
 	}
