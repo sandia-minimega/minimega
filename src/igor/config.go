@@ -7,11 +7,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	log "minilog"
+	"os"
+	"os/user"
 	"ranges"
 	"strconv"
+	"syscall"
 	"time"
 )
 
@@ -87,16 +89,41 @@ type Config struct {
 	ExpirationLeadTime int
 }
 
-// Read in the configuration from the specified path.
+// Read in the configuration from the specified path. Checks to make sure that
+// the config is owned and only writable by the effective user to ensure that
+// users can't try to specify their own config when we're running with setuid.
 func readConfig(path string) (c Config) {
-	b, err := ioutil.ReadFile(path)
+	user, err := user.Current()
 	if err != nil {
-		log.Fatal("Couldn't read config file: %v", err)
+		log.Fatal("unable to get current user: %v", err)
 	}
 
-	err = json.Unmarshal(b, &c)
+	f, err := os.Open(path)
 	if err != nil {
-		log.Fatal("Couldn't parse json: %v", err)
+		log.Fatal("unable to open config file: %v", err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		log.Fatal("unable to stat config file: %v", err)
+	}
+
+	switch fi := fi.Sys().(type) {
+	case *syscall.Stat_t:
+		if strconv.FormatUint(uint64(fi.Uid), 10) != user.Uid {
+			log.Fatal("config file must be owned by running user")
+		}
+
+		if fi.Mode&0022 != 0 {
+			log.Fatal("config file must only be writable by running user")
+		}
+	default:
+		log.Warn("unable to check config ownership/permissions")
+	}
+
+	if err := json.NewDecoder(f).Decode(&c); err != nil {
+		log.Fatal("unable to parse json: %v", err)
 	}
 
 	return
