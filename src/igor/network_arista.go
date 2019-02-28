@@ -51,9 +51,13 @@ func aristaJSONRPC(user, password, URL string, commands []string) error {
 	path := fmt.Sprintf("http://%s:%s@%s", user, password, URL)
 	resp, err := http.Post(path, "application/json", strings.NewReader(string(data)))
 	if err != nil {
-		return fmt.Errorf("post: %v", err)
+		// replace the password with a placeholder so that it doesn't show up
+		// in error logs
+		msg := strings.Replace(err.Error(), password, "<PASSWORD>", -1)
+		return fmt.Errorf("post failed: %v", msg)
 	}
 	defer resp.Body.Close()
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("readall: %v", err)
