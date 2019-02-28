@@ -40,15 +40,15 @@ func (r *Reservations) writeData(f *os.File) error {
 	defer tmp.Close()
 
 	if err := json.NewEncoder(tmp).Encode(r.M); err != nil {
-		fmt.Errorf("unable to encode data: %v", err)
+		return fmt.Errorf("unable to encode data: %v", err)
 	}
 
 	if err := tmp.Close(); err != nil {
-		fmt.Errorf("update failed: %v", err)
+		return fmt.Errorf("update failed: %v", err)
 	}
 
 	if err := os.Rename(tmp.Name(), f.Name()); err != nil {
-		fmt.Errorf("update failed: %v", err)
+		return fmt.Errorf("update failed: %v", err)
 	}
 
 	return nil
