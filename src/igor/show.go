@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -15,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
 )
 
 // Some color constants for output
@@ -57,37 +57,148 @@ const (
 	BgBrightWhite   = "\x1b[0107m"
 )
 
+const showTimeFmt = "Jan 2 15:04"
+
+type rowPrinter struct {
+	w       io.Writer
+	nameFmt string
+
+	showColors bool
+}
+
 var cmdShow = &Command{
-	UsageLine: "show [-o]",
+	UsageLine: "show [OPTION]...",
 	Short:     "show reservations",
 	Long: `
-List all extant reservations. Checks if a host is up by issuing a "ping"
+Show node status and list reservations. Checks if a node is up by issuing a
+"ping". By default, reservations are sorted by start time. Each reservation
+has a set of associated flags:
+
+	A: Reservation is active
+	W: Reservation is writable by current user
+	I: Reservation is installed
+	E: Reservation had an error during install
+
+All active reservations will be either installed or in an error state. Use
+"igor show -e" to show install errors.
+
+If a reservation is writable, that means that that the current user can perform
+power operations, edit, delete, or extend the reservation. Writable is
+determined based on the reservation's owner and group.
 
 OPTIONAL FLAGS:
 
-The -o flag will change the sort order to sort by reservation owner.
+Sorting:
+
+	-o: change the sort order to sort by reservation owner
+	-n: change the sort order to sort by reservation name
+	-r: reverse the order while sorting
+
+Filtering (may be used together):
+
+	-owner: filter reservations based on owner
+	-group: filter reservations based on group
+	-name: filter reservations based on name
+	-active: only show active reservations
+	-future: only show future reservations
+	-installed: only show installed reservations
+	-errored: only show install errored reservations
+	-writable: only show writable reservations
+
+Formatting:
+
+	-c: shows colors (default true, use -c=false to disable colors)
+	-t: show node status table (default true, use -t=false to disable)
+	-e: prints install errors for reservations (ignores other flags)
 	`,
 }
 
-var subO bool // -o
+var showOpts struct {
+	sortOwner bool
+	sortName  bool
+	reverse   bool
+
+	filterOwner     string
+	filterName      string
+	filterGroup     string
+	filterActive    bool
+	filterFuture    bool
+	filterInstalled bool
+	filterErrored   bool
+	filterWritable  bool
+
+	showColors bool
+	showTable  bool
+	showErrors bool
+}
 
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
 
-	cmdShow.Flag.BoolVar(&subO, "o", false, "")
+	cmdShow.Flag.BoolVar(&showOpts.sortOwner, "o", false, "sort by owner")
+	cmdShow.Flag.BoolVar(&showOpts.sortName, "n", false, "sort by reservation name")
+	cmdShow.Flag.BoolVar(&showOpts.reverse, "r", false, "reverse order while sorting")
+
+	cmdShow.Flag.StringVar(&showOpts.filterOwner, "owner", "", "filter by owner")
+	cmdShow.Flag.StringVar(&showOpts.filterGroup, "group", "", "filter by group")
+	cmdShow.Flag.StringVar(&showOpts.filterName, "name", "", "filter by name")
+	cmdShow.Flag.BoolVar(&showOpts.filterActive, "active", false, "only show active reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterFuture, "future", false, "only show future reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterInstalled, "installed", false, "only show installed reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterErrored, "errored", false, "only show install errored reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterWritable, "writable", false, "only show writable reservations")
+
+	cmdShow.Flag.BoolVar(&showOpts.showColors, "c", true, "show colors")
+	cmdShow.Flag.BoolVar(&showOpts.showTable, "t", true, "show node status table")
+	cmdShow.Flag.BoolVar(&showOpts.showErrors, "e", false, "show install errors")
 }
 
 // Use nmap to scan all the nodes and then show which are up and the
 // reservations they below to
 func runShow(_ *Command, _ []string) {
+	// Show reservations with errors and return
+	if showOpts.showErrors {
+		// check to see that there are install errors first
+		var count int
+
+		// TODO: probably shouldn't iteration over .M directly
+		for _, r := range igor.Reservations.M {
+			if r.InstallError != "" {
+				count += 1
+			}
+		}
+		if count == 0 {
+			return
+		}
+
+		w := new(tabwriter.Writer)
+		w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+		fmt.Fprintln(w, "Reservation", "\t", "Error")
+
+		// TODO: probably shouldn't iteration over .M directly
+		for _, r := range igor.Reservations.M {
+			if r.InstallError != "" {
+				fmt.Fprintln(w, r.Name, "\t", r.InstallError)
+			}
+		}
+
+		w.Flush()
+		return
+	}
+
 	names := igor.validHosts()
 
 	// Maps a node's index to a boolean value (up = true, down = false)
-	nodes, err := scanNodes(names)
-	if err != nil {
-		log.Fatal("unable to scan: %v", err)
+	nodes := map[int]bool{}
+	if showOpts.showTable {
+		n, err := scanNodes(names)
+		if err != nil {
+			log.Fatal("unable to scan: %v", err)
+		}
+		nodes = n
 	}
+
 	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
 	resNodes := map[int]bool{}
 
@@ -125,74 +236,39 @@ func runShow(_ *Command, _ []string) {
 			downNodes = append(downNodes, hostname)
 		}
 	}
-	// nameFmt will create uniform color bars for 1st column
-	nameFmt := "%" + strconv.Itoa(maxResNameLength) + "v"
-	if subO {
-		sort.Slice(resarray, func(i, j int) bool {
-			if resarray[i].Owner == resarray[j].Owner {
-				return resarray[i].Start.Before(resarray[j].Start)
-			}
-			return resarray[i].Owner < resarray[j].Owner
-		})
-	} else {
-		sort.Slice(resarray, func(i, j int) bool {
-			return resarray[i].Start.Before(resarray[j].Start)
-		})
-	}
 
-	printShelves(nodes, resarray)
+	if showOpts.showTable {
+		printShelves(nodes, resarray)
+	}
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
 
-	// Header Row
-	name := BgBlack + FgWhite + fmt.Sprintf(nameFmt, "NAME") + Reset
-	fmt.Fprintln(w, name, "\t", "OWNER", "\t", "START", "\t", "END", "\t", "FLAGS", "\t", "SIZE", "\t", "NODES")
-
-	// Divider lines
-	namedash := ""
-	for i := 0; i < maxResNameLength; i++ {
-		namedash += "-"
+	p := rowPrinter{
+		// nameFmt will create uniform color bars for 1st column
+		nameFmt:    "%" + strconv.Itoa(maxResNameLength) + "v",
+		showColors: showOpts.showColors,
+		w:          w,
 	}
-	name = BgBlack + FgWhite + fmt.Sprintf(nameFmt, namedash) + Reset
-	fmt.Fprintln(w, name, "\t", "-------", "\t", "------------", "\t", "------------", "\t", "------", "\t", "-----", "\t", "------------")
 
-	// "Down" Node list
-	downrange := igor.unsplitRange(downNodes)
-	name = BgRed + FgWhite + fmt.Sprintf(nameFmt, "DOWN") + Reset
-	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(downNodes), "\t", downrange)
+	// Header Row
+	p.printHeader()
+	p.printSpacer()
+
+	// "Down" Node list, only available if we scanned to create the table
+	if showOpts.showTable {
+		p.printHosts("DOWN", BgRed+FgWhite, downNodes)
+	}
 
 	// Unreserved Node list
-	resrange := igor.unsplitRange(unreservedNodes)
-	name = BgGreen + FgBlack + fmt.Sprintf(nameFmt, "UNRESERVED") + Reset
-	fmt.Fprintln(w, name, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", len(unreservedNodes), "\t", resrange)
+	p.printHosts("UNRESERVED", BgGreen+FgBlack, unreservedNodes)
+	p.printSpacer()
 
-	now := time.Now()
+	// Filter and sort the reservations, if any
+	resarray = filterReservations(resarray)
+	sortReservations(resarray)
 
-	// Active Reservations
-	timefmt := "Jan 2 15:04"
-	for i, r := range resarray {
-		unsplit := igor.unsplitRange(r.Hosts)
-		name = colorize(i, fmt.Sprintf(nameFmt, r.Name))
-		start := r.Start.Format(timefmt)
-		end := r.End.Format(timefmt)
-
-		var flags string
-		if r.IsActive(now) {
-			flags += "A"
-		}
-		if r.IsWritable(igor.User) {
-			flags += "W"
-		}
-		if r.Installed {
-			flags += "I"
-		}
-		if r.InstallError != "" {
-			flags += "E"
-		}
-
-		fmt.Fprintln(w, name, "\t", r.Owner, "\t", start, "\t", end, "\t", flags, "\t", len(r.Hosts), "\t", unsplit)
-	}
+	p.printReservations(resarray)
 
 	// only 1 flush at the end to ensure alignment
 	w.Flush()
@@ -253,6 +329,84 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 	return res, nil
 }
 
+// filterReservations filters the reservations based on showOpts
+func filterReservations(rs []*Reservation) []*Reservation {
+	rs2 := []*Reservation{}
+
+	for _, r := range rs {
+		if !strings.Contains(r.Owner, showOpts.filterOwner) {
+			continue
+		}
+
+		if !strings.Contains(r.Group, showOpts.filterGroup) {
+			continue
+		}
+
+		if !strings.Contains(r.Name, showOpts.filterName) {
+			continue
+		}
+
+		if showOpts.filterActive && !r.IsActive(igor.Now) {
+			continue
+		}
+
+		if showOpts.filterFuture && r.IsActive(igor.Now) {
+			continue
+		}
+
+		if showOpts.filterInstalled && !r.Installed {
+			continue
+		}
+
+		if showOpts.filterErrored && r.InstallError != "" {
+			continue
+		}
+
+		if showOpts.filterWritable && !r.IsWritable(igor.User) {
+			continue
+		}
+
+		// passed all filters (or none set)
+		rs2 = append(rs2, r)
+	}
+
+	return rs2
+}
+
+// sortReservations sorts the reservations based on showOpts
+func sortReservations(rs []*Reservation) {
+	sortStart := func(i, j int) bool {
+		return rs[i].Start.Before(rs[j].Start)
+	}
+	sortFn := sortStart
+
+	if showOpts.sortOwner {
+		sortFn = func(i, j int) bool {
+			if rs[i].Owner == rs[j].Owner {
+				return sortStart(i, j)
+			}
+			return rs[i].Owner < rs[j].Owner
+		}
+	} else if showOpts.sortName {
+		sortFn = func(i, j int) bool {
+			if rs[i].Name == rs[j].Name {
+				return sortStart(i, j)
+			}
+			return rs[i].Owner < rs[j].Name
+		}
+	}
+
+	sort.Slice(rs, sortFn)
+
+	if showOpts.reverse {
+		// From golang's SliceTricks
+		for i := len(rs)/2 - 1; i >= 0; i-- {
+			opp := len(rs) - 1 - i
+			rs[i], rs[opp] = rs[opp], rs[i]
+		}
+	}
+}
+
 func printShelves(alive map[int]bool, resarray []*Reservation) {
 	// figure out how many digits we need per node displayed
 	nodewidth := len(strconv.Itoa(igor.End))
@@ -267,9 +421,8 @@ func printShelves(alive map[int]bool, resarray []*Reservation) {
 
 	// figure out all the node -> reservations ahead of time
 	n2r := map[int]int{}
-	now := time.Now()
 	for i, r := range resarray {
-		if r.Start.Before(now) {
+		if r.Start.Before(igor.Now) {
 			for _, name := range r.Hosts {
 				name := strings.TrimPrefix(name, igor.Prefix)
 				v, err := strconv.Atoi(name)
@@ -330,6 +483,72 @@ func printShelves(alive map[int]bool, resarray []*Reservation) {
 		buf.WriteString("\n\n")
 	}
 	fmt.Print(buf.String())
+}
+
+func (p rowPrinter) printHeader() {
+	name := fmt.Sprintf(p.nameFmt, "NAME")
+	if p.showColors {
+		name = BgBlack + FgWhite + name + Reset
+	}
+
+	fmt.Fprintln(p.w,
+		name, "\t",
+		"OWNER", "\t",
+		"START", "\t",
+		"END", "\t",
+		"FLAGS", "\t",
+		"SIZE", "\t",
+		"NODES")
+}
+
+func (p rowPrinter) printSpacer() {
+	name := strings.Replace(fmt.Sprintf(p.nameFmt, ""), " ", "-", -1)
+	if p.showColors {
+		name = BgBlack + FgWhite + name + Reset
+	}
+
+	fmt.Fprintln(p.w,
+		name, "\t",
+		"-------", "\t",
+		"------------", "\t",
+		"------------", "\t",
+		"------", "\t",
+		"-----", "\t",
+		"------------")
+}
+
+func (p rowPrinter) printHosts(name, color string, hosts []string) {
+	name = fmt.Sprintf(p.nameFmt, name)
+	if p.showColors {
+		name = color + name + Reset
+	}
+
+	fmt.Fprintln(p.w,
+		name, "\t",
+		"N/A", "\t",
+		"N/A", "\t",
+		"N/A", "\t",
+		"N/A", "\t",
+		len(hosts), "\t",
+		igor.unsplitRange(hosts))
+}
+
+func (p rowPrinter) printReservations(rs []*Reservation) {
+	for i, r := range rs {
+		name := fmt.Sprintf(p.nameFmt, r.Name)
+		if p.showColors {
+			name = colorize(i, name)
+		}
+
+		fmt.Fprintln(p.w,
+			name, "\t",
+			r.Owner, "\t",
+			r.Start.Format(showTimeFmt), "\t",
+			r.End.Format(showTimeFmt), "\t",
+			r.Flags(igor.Now), "\t",
+			len(r.Hosts), "\t",
+			igor.unsplitRange(r.Hosts))
+	}
 }
 
 func colorize(index int, str string) string {

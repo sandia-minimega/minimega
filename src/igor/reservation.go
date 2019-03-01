@@ -140,3 +140,21 @@ func (r *Reservation) SetInitrd(i string) error {
 
 	return nil
 }
+
+// Flags returns a string to indicate reservation status
+func (r *Reservation) Flags(t time.Time) (flags string) {
+	if r.IsActive(t) {
+		flags += "A"
+	}
+	if r.IsWritable(igor.User) {
+		flags += "W"
+	}
+	if r.Installed {
+		flags += "I"
+	}
+	if r.InstallError != "" {
+		flags += "E"
+	}
+
+	return
+}
