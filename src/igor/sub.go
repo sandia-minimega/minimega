@@ -88,7 +88,7 @@ func init() {
 }
 
 func runSub(cmd *Command, args []string) {
-	var r *Reservation // the new reservation
+	r := new(Reservation) // the new reservation
 
 	format := "2006-Jan-2-15:04"
 
@@ -100,6 +100,8 @@ func runSub(cmd *Command, args []string) {
 		log.Fatal("Please specify a positive value for -t")
 	}
 	log.Debug("duration: %v", duration)
+
+	r.Duration = duration
 
 	// validate arguments
 	if subR == "" || (subN == 0 && subW == "") {

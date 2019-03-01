@@ -69,8 +69,8 @@ func doPower(hosts []string, action string) error {
 
 // Turn a node on or off
 func runPower(cmd *Command, args []string) {
-	if (powerR == "") != (powerN == "") {
-		log.Fatalln("must reservation or list of nodes")
+	if (powerR == "") == (powerN == "") {
+		log.Fatalln("must specify reservation or list of nodes")
 	}
 
 	if len(args) != 1 {
