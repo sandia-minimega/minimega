@@ -3,7 +3,10 @@
 // the U.S. Government retains certain rights in this software.
 package main
 
-import "os/user"
+import (
+	"os/user"
+	"time"
+)
 
 // igor holds globals
 var igor struct {
@@ -11,4 +14,8 @@ var igor struct {
 	Reservations // embed
 	Backend      // embed
 	*user.User   // embed
+
+	// Now is the time when igor started, used for a consistent view of "now"
+	// across functions
+	Now time.Time
 }

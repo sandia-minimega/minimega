@@ -55,10 +55,8 @@ func (r *Reservations) ActiveHosts(t time.Time) map[string]*Reservation {
 // Housekeeping deletes expired reservations and installs newly active
 // reservations
 func (r *Reservations) Housekeeping() error {
-	now := time.Now()
-
 	for _, res := range r.M {
-		if res.IsExpired(now) {
+		if res.IsExpired(igor.Now) {
 			// Reservation expired; delete it
 			if err := r.Delete(res.ID); err != nil {
 				return err
@@ -67,7 +65,7 @@ func (r *Reservations) Housekeeping() error {
 			continue
 		}
 
-		if !res.IsActive(now) || res.Installed || res.InstallError != "" {
+		if !res.IsActive(igor.Now) || res.Installed || res.InstallError != "" {
 			// Reservation is in the future, already installed, or errored
 			continue
 		}

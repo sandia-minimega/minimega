@@ -45,8 +45,6 @@ func runNotify(cmd *Command, args []string) {
 	// per-user notification
 	users := map[string]*Notification{}
 
-	now := time.Now()
-
 	// TODO: probably shouldn't iteration over .M directly
 	for _, r := range igor.Reservations.M {
 		// convert unix to time.Time
@@ -57,7 +55,7 @@ func runNotify(cmd *Command, args []string) {
 		}
 
 		// upcoming reservations start in just over an hour
-		diff := res.Start.Sub(now)
+		diff := res.Start.Sub(igor.Now)
 		if diff >= 0 && diff < time.Hour {
 			if users[r.Owner] == nil {
 				users[r.Owner] = &Notification{}
@@ -67,7 +65,7 @@ func runNotify(cmd *Command, args []string) {
 
 		// expiring reservations are longer than two days and expire in just
 		// over 24 hours.
-		diff = res.End.Sub(now)
+		diff = res.End.Sub(igor.Now)
 		var lowerwindow, upperwindow time.Duration
 
 		if igor.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value

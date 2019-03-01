@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	log "minilog"
-	"time"
 )
 
 var cmdPower = &Command{
@@ -88,7 +87,7 @@ func runPower(cmd *Command, args []string) {
 			log.Fatal("reservation does not exist: %v", powerR)
 		}
 
-		if !r.IsActive(time.Now()) {
+		if !r.IsActive(igor.Now) {
 			log.Fatal("reservation is not active: %v", powerR)
 		}
 
@@ -107,7 +106,7 @@ func runPower(cmd *Command, args []string) {
 		log.Fatal("Couldn't parse node specification %v\n", subW)
 	}
 
-	active := igor.ActiveHosts(time.Now())
+	active := igor.ActiveHosts(igor.Now)
 
 	for _, node := range nodes {
 		if _, ok := active[node]; !ok {

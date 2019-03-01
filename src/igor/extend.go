@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	log "minilog"
-	"time"
 )
 
 var cmdExtend = &Command{
@@ -63,17 +62,15 @@ func runExtend(cmd *Command, args []string) {
 	}
 
 	if igor.Username != "root" {
-		now := time.Now()
-
 		// Make sure the reservation doesn't exceed any limits
-		if err := igor.checkTimeLimit(len(r.Hosts), r.Remaining(now)+duration); err != nil {
+		if err := igor.checkTimeLimit(len(r.Hosts), r.Remaining(igor.Now)+duration); err != nil {
 			log.Fatalln(err)
 		}
 
 		// Make sure that the user is extending a reservation that is near its
 		// completion based on the ExtendWithin config.
 		if igor.ExtendWithin > 0 {
-			remaining := r.End.Sub(now)
+			remaining := r.End.Sub(igor.Now)
 			if int(remaining.Minutes()) > igor.ExtendWithin {
 				log.Fatal("reservations can only be extended if they are within %v minutes of ending", igor.ExtendWithin)
 			}

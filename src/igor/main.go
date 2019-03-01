@@ -73,8 +73,6 @@ func main() {
 		return
 	}
 
-	rand.Seed(time.Now().UnixNano())
-
 	igor.Config = readConfig(*configpath)
 
 	// Add another logger for the logfile, if set
@@ -106,6 +104,11 @@ func main() {
 	} else {
 		igor.Backend = NewTFTPBackend()
 	}
+
+	igor.Now = time.Now()
+
+	// Seed the random number based on the current time
+	rand.Seed(igor.Now.UnixNano())
 
 	// We open and lock the lock file before trying to open the data file
 	// because the data file may have been changed by the instance of igor that

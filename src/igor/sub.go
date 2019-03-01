@@ -176,7 +176,7 @@ func runSub(cmd *Command, args []string) {
 		r.GroupID = g.Gid
 	}
 
-	r.Start = time.Now().Round(time.Minute).Add(-time.Minute * 1) //keep from putting the reservation 1 minute into future
+	r.Start = igor.Now.Round(time.Minute).Add(-time.Minute * 1) //keep from putting the reservation 1 minute into future
 	if subA != "" {
 		loc, _ := time.LoadLocation("Local")
 		t, _ := time.Parse(format, subA)

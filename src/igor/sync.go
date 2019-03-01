@@ -7,7 +7,6 @@ package main
 import (
 	"fmt"
 	log "minilog"
-	"time"
 )
 
 var cmdSync = &Command{
@@ -83,11 +82,9 @@ func runSync(cmd *Command, args []string) {
 }
 
 func syncArista() {
-	now := time.Now()
-
 	// TODO: probably shouldn't iteration over .M directly
 	for _, r := range igor.Reservations.M {
-		if !r.IsActive(now) {
+		if !r.IsActive(igor.Now) {
 			continue
 		}
 

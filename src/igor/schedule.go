@@ -17,7 +17,7 @@ func scheduleHosts(r *Reservations, res *Reservation) error {
 	nodes := r.Nodes()
 
 	if res.Start.IsZero() {
-		res.Start = time.Now().Round(time.Minute)
+		res.Start = igor.Now.Round(time.Minute)
 	}
 
 Outer:
@@ -49,7 +49,7 @@ func scheduleContiguous(r *Reservations, res *Reservation) error {
 	nodes := r.Nodes()
 
 	if res.Start.IsZero() {
-		res.Start = time.Now().Round(time.Minute)
+		res.Start = igor.Now.Round(time.Minute)
 	}
 
 	// Hard mode, need to find contiguous block of nodes that are all free at
