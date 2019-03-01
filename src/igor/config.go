@@ -10,7 +10,6 @@ import (
 	"math"
 	log "minilog"
 	"os"
-	"os/user"
 	"ranges"
 	"strconv"
 	"syscall"
@@ -93,11 +92,6 @@ type Config struct {
 // the config is owned and only writable by the effective user to ensure that
 // users can't try to specify their own config when we're running with setuid.
 func readConfig(path string) (c Config) {
-	user, err := user.Current()
-	if err != nil {
-		log.Fatal("unable to get current user: %v", err)
-	}
-
 	f, err := os.Open(path)
 	if err != nil {
 		log.Fatal("unable to open config file: %v", err)
@@ -111,7 +105,8 @@ func readConfig(path string) (c Config) {
 
 	switch fi := fi.Sys().(type) {
 	case *syscall.Stat_t:
-		if strconv.FormatUint(uint64(fi.Uid), 10) != user.Uid {
+		euid := syscall.Geteuid()
+		if fi.Uid != uint32(euid) {
 			log.Fatal("config file must be owned by running user")
 		}
 
