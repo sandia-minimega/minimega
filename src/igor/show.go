@@ -392,7 +392,7 @@ func sortReservations(rs []*Reservation) {
 			if rs[i].Name == rs[j].Name {
 				return sortStart(i, j)
 			}
-			return rs[i].Owner < rs[j].Name
+			return rs[i].Name < rs[j].Name
 		}
 	}
 
