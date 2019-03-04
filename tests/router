@@ -1,17 +1,24 @@
 # router interfaces
 vm config net 100 200
-vm config filesystem $images/uminirouterfs
+vm config filesystem $images/minirouterfs
 vm launch container vm0
 vm start all
 router vm0 interface 0 1.2.3.4/24
 router vm0 interface 0 dhcp
 router vm0 interface 1 5.6.7.8/16
+router vm0 interface 0 10.0.0.1/32 lo
+router vm0 interface 1 10.0.0.2/32 lo
+router vm0 interface 2 10.0.0.3/32 lo
 router vm0
 clear router vm0 interface 0 1.2.3.4/24
 router vm0
 clear router vm0 interface 1 5.6.7.8/24
 router vm0
 clear router vm0 interface 1 5.6.7.8/16
+router vm0
+clear router vm0 interface 2 10.0.0.3/32 lo
+router vm0
+clear router vm0 interface 0 all lo
 router vm0
 router vm0 interface 0 1.2.3.4/24
 router vm0 interface 1 5.6.7.8/16
@@ -30,6 +37,7 @@ router vm0
 # router commit
 router vm0 interface 0 1.2.3.4/24
 router vm0 interface 1 5.6.7.8/24
+router vm0 interface 0 10.0.0.1/32 lo
 router vm0 commit
 shell sort /tmp/minimega/files/minirouter-vm0
 
@@ -37,6 +45,7 @@ shell sort /tmp/minimega/files/minirouter-vm0
 shell sleep 15
 cc background ping -c 1 1.2.3.5
 cc background ping -c 1 5.6.7.9
+cc exec ip addr
 shell sleep 30
 .columns ip vm info
 

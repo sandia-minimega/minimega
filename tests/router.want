@@ -1,15 +1,22 @@
 ## # router interfaces
 ## vm config net 100 200
-## vm config filesystem $images/uminirouterfs
+## vm config filesystem $images/minirouterfs
 ## vm launch container vm0
 ## vm start all
 ## router vm0 interface 0 1.2.3.4/24
 ## router vm0 interface 0 dhcp
 ## router vm0 interface 1 5.6.7.8/16
+## router vm0 interface 0 10.0.0.1/32 lo
+## router vm0 interface 1 10.0.0.2/32 lo
+## router vm0 interface 2 10.0.0.3/32 lo
 ## router vm0
 IPs:
 Network: 0: [1.2.3.4/24 dhcp]
 Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
 
 Log:
 ## clear router vm0 interface 0 1.2.3.4/24
@@ -17,6 +24,10 @@ Log:
 IPs:
 Network: 0: [dhcp]
 Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
 
 Log:
 ## clear router vm0 interface 1 5.6.7.8/24
@@ -25,9 +36,34 @@ E: no such network: 5.6.7.8/24
 IPs:
 Network: 0: [dhcp]
 Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
 
 Log:
 ## clear router vm0 interface 1 5.6.7.8/16
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
+
+Log:
+## clear router vm0 interface 2 10.0.0.3/32 lo
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+
+Log:
+## clear router vm0 interface 0 all lo
 ## router vm0
 IPs:
 Network: 0: [dhcp]
@@ -66,14 +102,17 @@ Log:
 ## # router commit
 ## router vm0 interface 0 1.2.3.4/24
 ## router vm0 interface 1 5.6.7.8/24
+## router vm0 interface 0 10.0.0.1/32 lo
 ## router vm0 commit
 ## shell sort /tmp/minimega/files/minirouter-vm0
 bird commit
 bird flush
+bird routerid 10.0.0.1
 dnsmasq commit
 dnsmasq flush
 ip add 0 1.2.3.4/24
 ip add 1 5.6.7.8/24
+ip add lo 10.0.0.1/32
 ip flush
 log level error
 route del default
@@ -82,6 +121,7 @@ route del default
 ## shell sleep 15
 ## cc background ping -c 1 1.2.3.5
 ## cc background ping -c 1 5.6.7.9
+## cc exec ip addr
 ## shell sleep 30
 ## .columns ip vm info
 ip
@@ -286,6 +326,7 @@ Log:
 ## shell sort /tmp/minimega/files/minirouter-vm0
 bird commit
 bird flush
+bird routerid 5.6.7.8
 dnsmasq commit
 dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
 dnsmasq dhcp option router 1.2.3.4 1.2.3.254
@@ -369,6 +410,7 @@ Log:
 ## shell sort /tmp/minimega/files/minirouter-vm0
 bird commit
 bird flush
+bird routerid 5.6.7.8
 dnsmasq commit
 dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
 dnsmasq dhcp option router 1.2.3.4 1.2.3.254
@@ -386,17 +428,18 @@ route del default
 ## cc exec nslookup bar.com 1.2.3.4
 ## shell sleep 30
 ## cc response all raw
-Server:    1.2.3.4
-Address 1: 1.2.3.4
+Server:		1.2.3.4
+Address:	1.2.3.4#53
 
-Name:      foo.com
-Address 1: 1.1.1.1
+Name:	foo.com
+Address: 1.1.1.1
 
-Server:    1.2.3.4
-Address 1: 1.2.3.4
 
-Name:      bar.com
-Address 1: 2.2.2.2
+Server:		1.2.3.4
+Address:	1.2.3.4#53
+
+Name:	bar.com
+Address: 2.2.2.2
 
 ## # router advertisements
 ## router vm0 interface 0 2001:1::1/64
@@ -470,6 +513,7 @@ Log:
 ## shell sort /tmp/minimega/files/minirouter-vm0
 bird commit
 bird flush
+bird routerid 5.6.7.8
 dnsmasq commit
 dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
 dnsmasq dhcp option router 1.2.3.4 1.2.3.254
