@@ -289,6 +289,10 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 		"-PS22",
 		"--unprivileged",
 		"-T5",
+		// scan all the nodes in parallel since we really shouldn't have that
+		// many hosts to scan
+		"--min-parallelism",
+		strconv.Itoa(len(nodes)),
 		"-oG",
 		"-",
 	)
