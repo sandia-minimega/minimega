@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
 	log "minilog"
 	"os"
 	"os/exec"
@@ -17,54 +16,6 @@ import (
 	"strings"
 	"text/tabwriter"
 )
-
-// Some color constants for output
-const (
-	Reset      = "\x1b[0000m"
-	Bright     = "\x1b[0001m"
-	Dim        = "\x1b[0002m"
-	Underscore = "\x1b[0004m"
-	Blink      = "\x1b[0005m"
-	Reverse    = "\x1b[0007m"
-	Hidden     = "\x1b[0008m"
-
-	FgBlack   = "\x1b[0030m"
-	FgRed     = "\x1b[0031m"
-	FgGreen   = "\x1b[0032m"
-	FgYellow  = "\x1b[0033m"
-	FgBlue    = "\x1b[0034m"
-	FgMagenta = "\x1b[0035m"
-	FgCyan    = "\x1b[0036m"
-	FgWhite   = "\x1b[0037m"
-
-	FgLightWhite = "\x1b[0097m"
-
-	BgBlack         = "\x1b[0040m"
-	BgRed           = "\x1b[0041m"
-	BgGreen         = "\x1b[0042m"
-	BgYellow        = "\x1b[0043m"
-	BgBlue          = "\x1b[0044m"
-	BgMagenta       = "\x1b[0045m"
-	BgCyan          = "\x1b[0046m"
-	BgWhite         = "\x1b[0047m"
-	BgBrightBlack   = "\x1b[0100m"
-	BgBrightRed     = "\x1b[0101m"
-	BgBrightGreen   = "\x1b[0102m"
-	BgBrightYellow  = "\x1b[0103m"
-	BgBrightBlue    = "\x1b[0104m"
-	BgBrightMagenta = "\x1b[0105m"
-	BgBrightCyan    = "\x1b[0106m"
-	BgBrightWhite   = "\x1b[0107m"
-)
-
-const showTimeFmt = "Jan 2 15:04"
-
-type rowPrinter struct {
-	w       io.Writer
-	nameFmt string
-
-	showColors bool
-}
 
 var cmdShow = &Command{
 	UsageLine: "show [OPTION]...",
@@ -237,18 +188,29 @@ func runShow(_ *Command, _ []string) {
 		}
 	}
 
+	// sort according to options
+	sortReservations(resarray)
+
 	if showOpts.showTable {
-		printShelves(nodes, resarray)
+		p := tablePrinter{
+			filter:     isFiltered,
+			showColors: showOpts.showColors,
+			alive:      nodes,
+		}
+		p.printTable(resarray)
 	}
 
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
 
 	p := rowPrinter{
-		// nameFmt will create uniform color bars for 1st column
-		nameFmt:    "%" + strconv.Itoa(maxResNameLength) + "v",
+		filter:     isFiltered,
 		showColors: showOpts.showColors,
-		w:          w,
+
+		nameFmt: "%" + strconv.Itoa(maxResNameLength) + "v",
+		timeFmt: "Jan 2 15:04",
+
+		w: w,
 	}
 
 	// Header Row
@@ -264,10 +226,7 @@ func runShow(_ *Command, _ []string) {
 	p.printHosts("UNRESERVED", BgGreen+FgBlack, unreservedNodes)
 	p.printSpacer()
 
-	// Filter and sort the reservations, if any
-	resarray = filterReservations(resarray)
-	sortReservations(resarray)
-
+	// Finally, print all the reservations
 	p.printReservations(resarray)
 
 	// only 1 flush at the end to ensure alignment
@@ -333,48 +292,42 @@ func scanNodes(nodes []string) (map[int]bool, error) {
 	return res, nil
 }
 
-// filterReservations filters the reservations based on showOpts
-func filterReservations(rs []*Reservation) []*Reservation {
-	rs2 := []*Reservation{}
-
-	for _, r := range rs {
-		if !strings.Contains(r.Owner, showOpts.filterOwner) {
-			continue
-		}
-
-		if !strings.Contains(r.Group, showOpts.filterGroup) {
-			continue
-		}
-
-		if !strings.Contains(r.Name, showOpts.filterName) {
-			continue
-		}
-
-		if showOpts.filterActive && !r.IsActive(igor.Now) {
-			continue
-		}
-
-		if showOpts.filterFuture && r.IsActive(igor.Now) {
-			continue
-		}
-
-		if showOpts.filterInstalled && !r.Installed {
-			continue
-		}
-
-		if showOpts.filterErrored && r.InstallError != "" {
-			continue
-		}
-
-		if showOpts.filterWritable && !r.IsWritable(igor.User) {
-			continue
-		}
-
-		// passed all filters (or none set)
-		rs2 = append(rs2, r)
+// isFiltered tests whether a reservation should be filtered or not based on
+// showOpts
+func isFiltered(r *Reservation) bool {
+	if !strings.Contains(r.Owner, showOpts.filterOwner) {
+		return true
 	}
 
-	return rs2
+	if !strings.Contains(r.Group, showOpts.filterGroup) {
+		return true
+	}
+
+	if !strings.Contains(r.Name, showOpts.filterName) {
+		return true
+	}
+
+	if showOpts.filterActive && !r.IsActive(igor.Now) {
+		return true
+	}
+
+	if showOpts.filterFuture && r.IsActive(igor.Now) {
+		return true
+	}
+
+	if showOpts.filterInstalled && !r.Installed {
+		return true
+	}
+
+	if showOpts.filterErrored && r.InstallError != "" {
+		return true
+	}
+
+	if showOpts.filterWritable && !r.IsWritable(igor.User) {
+		return true
+	}
+
+	return false
 }
 
 // sortReservations sorts the reservations based on showOpts
@@ -409,178 +362,4 @@ func sortReservations(rs []*Reservation) {
 			rs[i], rs[opp] = rs[opp], rs[i]
 		}
 	}
-}
-
-func printShelves(alive map[int]bool, resarray []*Reservation) {
-	// figure out how many digits we need per node displayed
-	nodewidth := len(strconv.Itoa(igor.End))
-	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s
-
-	// how many nodes per rack?
-	perrack := igor.Rackwidth * igor.Rackheight
-
-	// How wide is the full rack display?
-	// width of nodes * number of nodes across a rack, plus the number of | characters we need
-	totalwidth := nodewidth*igor.Rackwidth + igor.Rackwidth + 1
-
-	// figure out all the node -> reservations ahead of time
-	n2r := map[int]int{}
-	for i, r := range resarray {
-		if r.Start.Before(igor.Now) {
-			for _, name := range r.Hosts {
-				name := strings.TrimPrefix(name, igor.Prefix)
-				v, err := strconv.Atoi(name)
-				if err == nil {
-					n2r[v] = i
-				}
-			}
-		}
-	}
-
-	var buf bytes.Buffer
-	for i := igor.Start; i <= igor.End; i += perrack {
-		for j := 0; j < totalwidth; j++ {
-			buf.WriteString(Reverse)
-			buf.WriteString("-")
-			buf.WriteString(Reset)
-		}
-		buf.WriteString("\n")
-		for j := i; j < i+perrack; j++ {
-			if (j-1)%igor.Rackwidth == 0 {
-				buf.WriteString(Reverse)
-				buf.WriteString("|")
-				buf.WriteString(Reset)
-			}
-			if j <= igor.End {
-				if index, ok := n2r[j]; ok {
-					if alive[j] {
-						buf.WriteString(colorize(index, fmt.Sprintf(nodefmt+"d", j)))
-					} else {
-						buf.WriteString(BgRed)
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-						buf.WriteString(Reset)
-					}
-				} else {
-					if alive[j] {
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-					} else {
-						buf.WriteString(BgRed)
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-						buf.WriteString(Reset)
-					}
-				}
-			} else {
-				fmt.Fprintf(&buf, nodefmt+"s", " ")
-			}
-			buf.WriteString(Reverse)
-			buf.WriteString("|")
-			buf.WriteString(Reset)
-			if (j-1)%igor.Rackwidth == igor.Rackwidth-1 {
-				buf.WriteString("\n")
-			}
-		}
-		for j := 0; j < totalwidth; j++ {
-			buf.WriteString(Reverse)
-			buf.WriteString("-")
-			buf.WriteString(Reset)
-		}
-		buf.WriteString("\n\n")
-	}
-	fmt.Print(buf.String())
-}
-
-func (p rowPrinter) printHeader() {
-	name := fmt.Sprintf(p.nameFmt, "NAME")
-	if p.showColors {
-		name = BgBlack + FgWhite + name + Reset
-	}
-
-	fmt.Fprintln(p.w,
-		name, "\t",
-		"OWNER", "\t",
-		"START", "\t",
-		"END", "\t",
-		"FLAGS", "\t",
-		"SIZE", "\t",
-		"NODES")
-}
-
-func (p rowPrinter) printSpacer() {
-	name := strings.Replace(fmt.Sprintf(p.nameFmt, ""), " ", "-", -1)
-	if p.showColors {
-		name = BgBlack + FgWhite + name + Reset
-	}
-
-	fmt.Fprintln(p.w,
-		name, "\t",
-		"-------", "\t",
-		"------------", "\t",
-		"------------", "\t",
-		"------", "\t",
-		"-----", "\t",
-		"------------")
-}
-
-func (p rowPrinter) printHosts(name, color string, hosts []string) {
-	name = fmt.Sprintf(p.nameFmt, name)
-	if p.showColors {
-		name = color + name + Reset
-	}
-
-	fmt.Fprintln(p.w,
-		name, "\t",
-		"N/A", "\t",
-		"N/A", "\t",
-		"N/A", "\t",
-		"N/A", "\t",
-		len(hosts), "\t",
-		igor.unsplitRange(hosts))
-}
-
-func (p rowPrinter) printReservations(rs []*Reservation) {
-	for i, r := range rs {
-		name := fmt.Sprintf(p.nameFmt, r.Name)
-		if p.showColors {
-			name = colorize(i, name)
-		}
-
-		fmt.Fprintln(p.w,
-			name, "\t",
-			r.Owner, "\t",
-			r.Start.Format(showTimeFmt), "\t",
-			r.End.Format(showTimeFmt), "\t",
-			r.Flags(igor.Now), "\t",
-			len(r.Hosts), "\t",
-			igor.unsplitRange(r.Hosts))
-	}
-}
-
-func colorize(index int, str string) string {
-	return fgColors[index%len(fgColors)] + bgColors[index%len(bgColors)] + str + Reset
-}
-
-var fgColors = []string{
-	FgLightWhite,
-	FgLightWhite,
-	FgLightWhite,
-	FgLightWhite,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-}
-
-var bgColors = []string{
-	BgGreen,
-	BgBlue,
-	BgMagenta,
-	BgCyan,
-	BgYellow,
-	BgBrightGreen,
-	BgBrightBlue,
-	BgBrightMagenta,
-	BgBrightCyan,
-	BgBrightYellow,
 }
