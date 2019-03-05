@@ -143,14 +143,14 @@ to add interface bar to bridge foo:
 To create a vxlan or GRE tunnel to another bridge, use 'bridge tunnel'. For
 example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 
-	bridge tunnel vxlan, mega_bridge 10.0.0.1
+	bridge tunnel vxlan mega_bridge 10.0.0.1
 
 Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
 			"bridge <trunk,> <bridge> <interface>",
 			"bridge <notrunk,> <bridge> <interface>",
-			"bridge <tunnel,> <vxlan,gre> <bridge> <remote ip>",
+			"bridge <tunnel,> <vxlan,gre> <bridge> <remote ip> [key]",
 			"bridge <notunnel,> <bridge> <interface>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
@@ -358,7 +358,7 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			t = bridge.TunnelGRE
 		}
 
-		return br.AddTunnel(t, remoteIP)
+		return br.AddTunnel(t, remoteIP, c.StringArgs["key"])
 	} else if c.BoolArgs["notunnel"] {
 		return br.RemoveTunnel(iface)
 	}
