@@ -145,7 +145,7 @@ func runSub(cmd *Command, args []string) {
 
 	// figure out which nodes to reserve
 	if subW != "" {
-		r.Hosts = igor.splitRange(subW)
+		r.SetHosts(igor.splitRange(subW))
 		if len(r.Hosts) == 0 {
 			log.Fatal("Couldn't parse node specification %v", subW)
 		}

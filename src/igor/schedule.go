@@ -122,9 +122,8 @@ func scheduleContiguous(r *Reservations, res *Reservation) error {
 
 	res.Start = starts[minBlock]
 	res.End = res.Start.Add(res.Duration)
-	for j := 0; j < len(res.Hosts); j++ {
-		res.Hosts[j] = validHosts[minBlock+j]
-	}
+	res.SetHosts(validHosts[minBlock : minBlock+len(res.Hosts)])
+
 	return nil
 }
 
