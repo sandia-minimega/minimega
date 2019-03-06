@@ -56,6 +56,10 @@ type Namespace struct {
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
 
+	// Names of bridges associated with this namespace and there associated
+	// tunnel keys
+	Bridges map[string]uint32
+
 	// Names of mirrors associated with this namespace
 	Mirrors map[string]bool
 
@@ -116,6 +120,7 @@ func NewNamespace(name string) *Namespace {
 		Name:       name,
 		Hosts:      map[string]bool{},
 		Taps:       map[string]bool{},
+		Bridges:    map[string]uint32{},
 		Mirrors:    map[string]bool{},
 		HostSortBy: "cpucommit",
 		VMs: VMs{

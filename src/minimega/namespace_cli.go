@@ -5,11 +5,14 @@
 package main
 
 import (
+	"bridge"
 	"bytes"
 	"errors"
 	"fmt"
+	"math/rand"
 	"minicli"
 	log "minilog"
+	"net"
 	"ranges"
 	"strconv"
 	"strings"
@@ -60,6 +63,7 @@ Display or modify the active namespace.
   - dump    : print out VM -> host assignments (after dry-run)
   - mv      : manually edit VM placement in schedule (after dry-run)
   - status  : display scheduling status
+- bridge    : create a bridge, defaults to GRE mesh between hosts
 - snapshot  : take a snapshot of namespace or print snapshot progress
 - run       : run a command on all nodes in the namespace
 `,
@@ -79,6 +83,7 @@ Display or modify the active namespace.
 			"ns <schedule,> <dump,>",
 			"ns <schedule,> <mv,> <vm target> <dst>",
 			"ns <schedule,> <status,>",
+			"ns <bridge,> <bridge> [vxlan,gre]",
 			"ns <snapshot,> [name]",
 			"ns <run,> (command)",
 		},
@@ -117,6 +122,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
 	"flush":     wrapSimpleCLI(cliNamespaceFlush),
 	"schedule":  wrapSimpleCLI(cliNamespaceSchedule),
+	"bridge":    wrapSimpleCLI(cliNamespaceBridge),
 	"snapshot":  cliNamespaceSnapshot,
 	"run":       cliNamespaceRun,
 }
@@ -378,6 +384,69 @@ func cliNamespaceSchedule(ns *Namespace, c *minicli.Command, resp *minicli.Respo
 	default:
 		return ns.Schedule(false)
 	}
+}
+
+func cliNamespaceBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	b := c.StringArgs["bridge"]
+	if b == "" {
+		return errors.New("bridge name must not be empty string")
+	}
+
+	if len(ns.Hosts) == 1 {
+		return nil
+	}
+
+	tunnel := bridge.TunnelGRE
+	if c.BoolArgs["vxlan"] {
+		tunnel = bridge.TunnelVXLAN
+	}
+
+	// map from host to IP
+	ips := map[string]string{}
+
+	// create a copy that we can shuffle
+	hosts := []string{}
+	for host := range ns.Hosts {
+		hosts = append(hosts, host)
+
+		res, err := net.LookupIP(host)
+		if err != nil {
+			return fmt.Errorf("failure looking up %v: %v", host, err)
+		}
+
+		if len(res) >= 1 {
+			// probably fine to use the first?
+			ips[host] = res[0].String()
+		} else if len(res) == 0 {
+			return errors.New("host has no IP")
+		}
+	}
+
+	cmds := []*minicli.Command{}
+
+	// create a random key for these tunnels
+	key := rand.Uint32()
+
+	// compute targets for each host, pairwise for now
+	for host, hosts := range mesh(hosts, true) {
+		// enable rstp before creating any tunnels because loops are bad
+		cmd := minicli.MustCompilef("mesh send %q bridge config %q rstp_enable=true", host, b)
+		cmds = append(cmds, cmd)
+
+		for _, host2 := range hosts {
+			cmd := minicli.MustCompilef("mesh send %q bridge tunnel %v %q %v %v", host, tunnel, b, ips[host2], key)
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	if err := consume(runCommands(cmds...)); err != nil {
+		return err
+	}
+
+	// track bridge for later
+	ns.Bridges[b] = key
+
+	return nil
 }
 
 func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
