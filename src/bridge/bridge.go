@@ -45,6 +45,9 @@ type Bridge struct {
 
 	handle *pcap.Handle
 
+	// config values that have been set on this bridge
+	config map[string]string
+
 	// set to non-zero value by Bridge.destroy
 	isdestroyed uint64
 }
@@ -57,6 +60,7 @@ type BridgeInfo struct {
 	Trunks   []string
 	Tunnels  []string
 	Mirrors  []string
+	Config   map[string]string
 }
 
 // Tap represents an interface that is attached to an openvswitch bridge.

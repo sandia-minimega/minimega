@@ -148,6 +148,7 @@ example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
+			"bridge <config,> <bridge> <config>",
 			"bridge <trunk,> <bridge> <interface>",
 			"bridge <notrunk,> <bridge> <interface>",
 			"bridge <tunnel,> <vxlan,gre> <bridge> <remote ip> [key]",
@@ -361,10 +362,12 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return br.AddTunnel(t, remoteIP, c.StringArgs["key"])
 	} else if c.BoolArgs["notunnel"] {
 		return br.RemoveTunnel(iface)
+	} else if c.BoolArgs["config"] {
+		return br.Config(c.StringArgs["config"])
 	}
 
 	// Must want to list bridges
-	resp.Header = []string{"bridge", "preexisting", "vlans", "trunks", "tunnels"}
+	resp.Header = []string{"bridge", "preexisting", "vlans", "trunks", "tunnels", "config"}
 	resp.Tabular = [][]string{}
 
 	for _, info := range bridges.Info() {
@@ -379,7 +382,9 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			strconv.FormatBool(info.PreExist),
 			fmt.Sprintf("%v", vlans),
 			fmt.Sprintf("%v", info.Trunks),
-			fmt.Sprintf("%v", info.Tunnels)}
+			fmt.Sprintf("%v", info.Tunnels),
+			marshal(info.Config),
+		}
 		resp.Tabular = append(resp.Tabular, row)
 	}
 
