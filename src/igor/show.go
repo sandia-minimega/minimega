@@ -155,7 +155,7 @@ func runShow(_ *Command, _ []string) {
 
 	// For colors... get all the reservations and sort them
 	resarray := []*Reservation{}
-	maxResNameLength := 0
+	maxResNameLength := len("UNRESERVED") // always included
 
 	// TODO: probably shouldn't iteration over .M directly
 	for _, r := range igor.Reservations.M {
