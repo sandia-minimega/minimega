@@ -98,6 +98,8 @@ func (r Reservation) IsWritable(u *user.User) bool {
 
 // SetHosts sets Hosts and PXENames based on IP lookups for the provided hosts.
 func (r *Reservation) SetHosts(hosts []string) error {
+	log.Info("setting hosts to %v", hosts)
+
 	r.Hosts = hosts
 
 	// First, go from node name to PXE filename
@@ -108,8 +110,16 @@ func (r *Reservation) SetHosts(hosts []string) error {
 		}
 
 		for _, ip := range ips {
-			r.PXENames = append(r.PXENames, toPXE(ip))
+			pxe := toPXE(ip)
+			log.Debug("resolved %v to %v (%v)", h, ip, pxe)
+			if pxe != "" {
+				r.PXENames = append(r.PXENames, pxe)
+			}
 		}
+	}
+
+	if len(r.PXENames) < len(r.Hosts) {
+		log.Error("failed to resolve all node names, possible dns issue")
 	}
 
 	return nil
