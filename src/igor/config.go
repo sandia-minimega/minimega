@@ -113,6 +113,10 @@ func readConfig(path string) (c Config) {
 		if fi.Mode&0022 != 0 {
 			log.Fatal("config file must only be writable by running user")
 		}
+
+		if fi.Mode&0044 != 0 {
+			log.Fatal("config file must only be readable by running user")
+		}
 	default:
 		log.Warn("unable to check config ownership/permissions")
 	}
