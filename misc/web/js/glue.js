@@ -628,11 +628,13 @@ function connectURL (vm) {
 function initCowbell () {
     var audioElement = document.createElement('audio');
     audioElement.setAttribute('src', '/images/cow_and_bell_1243222141.mp3');
-    $('#nav-container').dblclick(function() {
-        audioElement.currentTime = 0;
-        audioElement.play();
+    document.querySelector('#nav-container').addEventListener('click', function (e) {
+        if (e.detail === 3) {
+            audioElement.currentTime = 0;
+            audioElement.play();
+        }
     });
-    console.log("Added more cowbell.");
+    console.log("Added reduced cowbell.");
 }
 
 
