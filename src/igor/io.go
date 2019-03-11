@@ -51,5 +51,10 @@ func (r *Reservations) writeData(f *os.File) error {
 		return fmt.Errorf("update failed: %v", err)
 	}
 
+	// make reservations file world-readable
+	if err := os.Chmod(f.Name(), 0644); err != nil {
+		return fmt.Errorf("update failed: %v", err)
+	}
+
 	return nil
 }
