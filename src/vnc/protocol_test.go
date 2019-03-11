@@ -119,9 +119,9 @@ func TestStringParse(t *testing.T) {
 
 		switch want.(type) {
 		case *KeyEvent:
-			got, err = ParseKeyEvent(s)
+			got, err = parseKeyEvent(s)
 		case *PointerEvent:
-			got, err = ParsePointerEvent(s)
+			got, err = parsePointerEvent(s)
 		}
 
 		if err != nil {

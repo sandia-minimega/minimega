@@ -594,7 +594,7 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
-						ns.vncRecorder.Route(vm, msg)
+						ns.Recorder.Route(vm.GetName(), msg)
 						continue
 					}
 
