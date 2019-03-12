@@ -458,7 +458,7 @@ func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		fields = vmInfoLite
 	}
 
-	ns.Info(fields, resp)
+	ns.VMs.Info(fields, resp)
 	return nil
 }
 
