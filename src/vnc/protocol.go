@@ -7,10 +7,11 @@ package vnc
 import (
 	"encoding/binary"
 	"fmt"
+	"image"
 	"io"
 )
 
-// See RFC 6143 Section 7.5
+// Client to server messages. See RFC 6143 Section 7.5
 const (
 	TypeSetPixelFormat uint8 = iota
 	_                        // Not used
@@ -19,6 +20,14 @@ const (
 	TypeKeyEvent
 	TypePointerEvent
 	TypeClientCutText
+)
+
+// Server to client messages. See RFC 6143 Section 7.6
+const (
+	TypeFramebufferUpdate uint8 = iota
+	TypeSetColorMapEntries
+	TypeBell
+	TypeServerCutText
 )
 
 // See RFC 6143 Section 7.4
@@ -80,6 +89,59 @@ type ClientCutText struct {
 	Text []uint8
 }
 
+// See RFC 6143 Section 7.6.1
+type Rectangle struct {
+	XPosition    uint16
+	YPosition    uint16
+	Width        uint16
+	Height       uint16
+	EncodingType int32
+}
+
+type _FramebufferUpdate struct {
+	_                  [1]byte // Padding
+	NumberOfRectangles uint16
+}
+
+// See RFC 6143 Section 7.6.1
+type FramebufferUpdate struct {
+	_FramebufferUpdate
+	Updates []*image.RGBA64
+}
+
+type _SetColorMapEntries struct {
+	_              [1]byte // Padding
+	FirstColor     uint16
+	NumberOfColors uint16
+}
+
+// See RFC 6143 Section 7.6.2
+type Color struct {
+	R, G, B uint16
+}
+
+// See RFC 6143 Section 7.6.2
+type SetColorMapEntries struct {
+	_SetColorMapEntries
+	Colors []Color
+}
+
+// See RFC 6143 Section 7.6.3
+type Bell struct {
+}
+
+// See RFC 6143 Section 7.6.4
+type _ServerCutText struct {
+	_      [3]byte // Padding
+	Length uint32  // Length of Text
+}
+
+// See RFC 6143 Section 7.6.4
+type ServerCutText struct {
+	_ServerCutText
+	Text []uint8
+}
+
 var clientMessages = map[uint8]func() interface{}{
 	TypeSetPixelFormat:           func() interface{} { return new(SetPixelFormat) },
 	TypeSetEncodings:             func() interface{} { return new(_SetEncodings) },
@@ -87,6 +149,13 @@ var clientMessages = map[uint8]func() interface{}{
 	TypeKeyEvent:                 func() interface{} { return new(KeyEvent) },
 	TypePointerEvent:             func() interface{} { return new(PointerEvent) },
 	TypeClientCutText:            func() interface{} { return new(_ClientCutText) },
+}
+
+var serverMessages = map[uint8]func() interface{}{
+	TypeFramebufferUpdate:  func() interface{} { return new(_FramebufferUpdate) },
+	TypeSetColorMapEntries: func() interface{} { return new(_SetColorMapEntries) },
+	TypeBell:               func() interface{} { return new(Bell) },
+	TypeServerCutText:      func() interface{} { return new(_ServerCutText) },
 }
 
 // ReadClientMessage reads the next client-to-server message

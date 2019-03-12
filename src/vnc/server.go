@@ -11,21 +11,6 @@ import (
 	"io"
 )
 
-// See RFC 6143 Section 7.6
-const (
-	TypeFramebufferUpdate uint8 = iota
-	TypeSetColorMapEntries
-	TypeBell
-	TypeServerCutText
-)
-
-var serverMessages = map[uint8]func() interface{}{
-	TypeFramebufferUpdate:  func() interface{} { return new(_FramebufferUpdate) },
-	TypeSetColorMapEntries: func() interface{} { return new(_SetColorMapEntries) },
-	TypeBell:               func() interface{} { return new(Bell) },
-	TypeServerCutText:      func() interface{} { return new(_ServerCutText) },
-}
-
 // See RFC 6143 Section 7.3.2
 type Server struct {
 	Width  uint16
@@ -33,59 +18,6 @@ type Server struct {
 	PixelFormat
 	NameLength uint32
 	Name       []uint8
-}
-
-// See RFC 6143 Section 7.6.1
-type Rectangle struct {
-	XPosition    uint16
-	YPosition    uint16
-	Width        uint16
-	Height       uint16
-	EncodingType int32
-}
-
-type _FramebufferUpdate struct {
-	_                  [1]byte // Padding
-	NumberOfRectangles uint16
-}
-
-// See RFC 6143 Section 7.6.1
-type FramebufferUpdate struct {
-	_FramebufferUpdate
-	Updates []*image.RGBA64
-}
-
-type _SetColorMapEntries struct {
-	_              [1]byte // Padding
-	FirstColor     uint16
-	NumberOfColors uint16
-}
-
-// See RFC 6143 Section 7.6.2
-type Color struct {
-	R, G, B uint16
-}
-
-// See RFC 6143 Section 7.6.2
-type SetColorMapEntries struct {
-	_SetColorMapEntries
-	Colors []Color
-}
-
-// See RFC 6143 Section 7.6.3
-type Bell struct {
-}
-
-// See RFC 6143 Section 7.6.4
-type _ServerCutText struct {
-	_      [3]byte // Padding
-	Length uint32  // Length of Text
-}
-
-// See RFC 6143 Section 7.6.4
-type ServerCutText struct {
-	_ServerCutText
-	Text []uint8
 }
 
 // ReadMessage reads the next server-to-client message
