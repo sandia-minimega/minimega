@@ -17,6 +17,10 @@ import (
 	"sync"
 )
 
+const (
+	TOKEN_MAX = 1024 * 1024
+)
+
 var (
 	plumber     *miniplumber.Plumber
 	readerCount map[string]int
@@ -204,6 +208,8 @@ func pipeHandler(pipe string) {
 
 	for {
 		scanner := bufio.NewScanner(os.Stdin)
+		buf := make([]byte, 0, TOKEN_MAX)
+		scanner.Buffer(buf, TOKEN_MAX)
 		for scanner.Scan() {
 			err := enc.Encode(scanner.Text() + "\n")
 			if err != nil {

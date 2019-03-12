@@ -24,7 +24,8 @@ import (
 )
 
 const (
-	TIMEOUT = time.Duration(10 * time.Second)
+	TIMEOUT   = time.Duration(10 * time.Second)
+	TOKEN_MAX = 1024 * 1024
 )
 
 const (
@@ -836,6 +837,8 @@ func (pl *pipeline) exec(production []string, in <-chan string, write bool) (<-c
 			defer pl.cancel()
 
 			scanner := bufio.NewScanner(stdout)
+			buf := make([]byte, 0, TOKEN_MAX)
+			scanner.Buffer(buf, TOKEN_MAX)
 			for scanner.Scan() {
 				select {
 				case out <- scanner.Text() + "\n":

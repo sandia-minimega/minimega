@@ -17,6 +17,10 @@ import (
 	"strings"
 )
 
+const (
+	TOKEN_MAX = 1024 * 1024
+)
+
 var (
 	plumber *miniplumber.Plumber
 )
@@ -270,6 +274,8 @@ func pipeMMHandler() {
 
 	go func() {
 		scanner := bufio.NewScanner(r)
+		buf := make([]byte, 0, TOKEN_MAX)
+		scanner.Buffer(buf, TOKEN_MAX)
 		for scanner.Scan() {
 			_, err := os.Stdout.Write(append(scanner.Bytes(), '\n'))
 			if err != nil {
@@ -283,6 +289,8 @@ func pipeMMHandler() {
 	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
+	buf := make([]byte, 0, TOKEN_MAX)
+	scanner.Buffer(buf, TOKEN_MAX)
 	for scanner.Scan() {
 		log.Debug("writing: %v", scanner.Text())
 		_, err := w.Write(append(scanner.Bytes(), '\n'))
