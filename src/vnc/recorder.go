@@ -17,7 +17,7 @@ import (
 
 // Recorder keeps track of active recordings.
 type Recorder struct {
-	sync.RWMutex // guards below
+	mu sync.RWMutex // guards below
 
 	kb map[string]*kbRecorder
 	fb map[string]*fbRecorder
@@ -86,8 +86,8 @@ func (r *recorder) Stop() error {
 }
 
 func (r *Recorder) RecordKB(id, rhost, filename string) error {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// is this ID already being recorded?
 	if _, ok := r.kb[id]; ok {
@@ -109,8 +109,8 @@ func (r *Recorder) RecordKB(id, rhost, filename string) error {
 }
 
 func (r *Recorder) RecordFB(id, rhost, filename string) error {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	// is this vm already being recorded?
 	if _, ok := r.fb[id]; ok {
@@ -134,8 +134,8 @@ func (r *Recorder) RecordFB(id, rhost, filename string) error {
 
 // Route records a message for the correct recording based on the VM
 func (r *Recorder) Route(id string, msg interface{}) {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	if r, ok := r.kb[id]; ok {
 		r.Record(msg)
@@ -143,8 +143,8 @@ func (r *Recorder) Route(id string, msg interface{}) {
 }
 
 func (r *Recorder) StopKB(id string) error {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	if kb, ok := r.kb[id]; ok {
 		if err := kb.Stop(); err != nil {
@@ -159,8 +159,8 @@ func (r *Recorder) StopKB(id string) error {
 }
 
 func (r *Recorder) StopFB(id string) error {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	if fb, ok := r.fb[id]; ok {
 		if err := fb.Stop(); err != nil {
@@ -176,8 +176,8 @@ func (r *Recorder) StopFB(id string) error {
 
 // Clear stops all recordings
 func (r *Recorder) Clear() {
-	r.Lock()
-	defer r.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
 	for k, kb := range r.kb {
 		log.Debug("stopping kb recording for %v", k)
@@ -199,8 +199,8 @@ func (r *Recorder) Clear() {
 }
 
 func (r *Recorder) Info() [][]string {
-	r.RLock()
-	defer r.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 
 	res := [][]string{}
 

@@ -12,7 +12,7 @@ import (
 )
 
 func TestWriteRead(t *testing.T) {
-	want := []Writable{
+	want := []Event{
 		&SetPixelFormat{
 			PixelFormat: PixelFormat{
 				BitsPerPixel:  1,

@@ -88,7 +88,7 @@ type ServerCutText struct {
 	Text []uint8
 }
 
-// ReadServerMessage reads the next server-to-client message
+// ReadMessage reads the next server-to-client message
 func (s *Server) ReadMessage(r io.Reader) (interface{}, error) {
 	var msgType uint8
 	if err := binary.Read(r, binary.BigEndian, &msgType); err != nil {

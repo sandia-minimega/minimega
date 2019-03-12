@@ -12,7 +12,7 @@ import (
 
 // Player keeps track of active playbacks.
 type Player struct {
-	sync.RWMutex // guards below
+	mu sync.RWMutex // guards below
 
 	m map[string]*playback
 }
@@ -59,8 +59,8 @@ func (p *Player) GetStep(id string) (string, error) {
 }
 
 func (p *Player) apply(id string, fn func(*playback) error) error {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// clear out any old playbacks
 	p.reap()
@@ -74,8 +74,8 @@ func (p *Player) apply(id string, fn func(*playback) error) error {
 
 // Clear stops all playbacks
 func (p *Player) Clear() {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	for k, pb := range p.m {
 		log.Debug("stopping kb playback for %v", k)
@@ -98,8 +98,8 @@ func (p *Player) reap() {
 // Creates a new VNC connection, the initial playback reader, and starts the
 // vnc playback
 func (p *Player) Playback(id, rhost, filename string) error {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// clear out any old playbacks
 	p.reap()
@@ -124,8 +124,8 @@ func (p *Player) playback(id, rhost, filename string) error {
 }
 
 func (p *Player) Inject(id, rhost, s string) error {
-	p.Lock()
-	defer p.Unlock()
+	p.mu.Lock()
+	defer p.mu.Unlock()
 
 	// clear out any old playbacks
 	p.reap()
@@ -157,8 +157,8 @@ func (p *Player) Inject(id, rhost, s string) error {
 }
 
 func (p *Player) Info() [][]string {
-	p.RLock()
-	defer p.RUnlock()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 
 	// clear out any old playbacks
 	p.reap()
