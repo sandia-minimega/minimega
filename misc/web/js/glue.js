@@ -628,6 +628,7 @@ function connectURL (vm) {
 function initCowbell () {
     var audioElement = document.createElement('audio');
     audioElement.setAttribute('src', '/images/cow_and_bell_1243222141.mp3');
+    audioElement.volume = 0.1;
     document.querySelector('#nav-container').addEventListener('click', function (e) {
         if (e.detail === 3) {
             audioElement.currentTime = 0;
