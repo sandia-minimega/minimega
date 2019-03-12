@@ -29,7 +29,7 @@ func (b *CobblerBackend) Install(r *Reservation) error {
 	// If we're using a kernel+ramdisk instead of an existing profile, create a
 	// profile and set the nodes to boot from it
 	if r.CobblerProfile == "" {
-		profile := "igor_" + r.ResName
+		profile := "igor_" + r.Name
 
 		// Try to clean up any leftover profile/distro with this name. Will
 		// be a no-op if there are no conflicts.
@@ -38,7 +38,7 @@ func (b *CobblerBackend) Install(r *Reservation) error {
 		}
 
 		// Create the distro from the kernel+ramdisk
-		_, err := processWrapper("cobbler", "distro", "add", "--name="+profile, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
+		_, err := processWrapper("cobbler", "distro", "add", "--name="+profile, "--kernel="+filepath.Join(igor.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igor.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
 		if err != nil {
 			return err
 		}
@@ -72,13 +72,13 @@ func (b *CobblerBackend) Install(r *Reservation) error {
 
 func (b *CobblerBackend) Uninstall(r *Reservation) error {
 	// Set all nodes in the reservation back to the default profile
-	if err := b.setProfile(r.Hosts, igorConfig.CobblerDefaultProfile); err != nil {
+	if err := b.setProfile(r.Hosts, igor.CobblerDefaultProfile); err != nil {
 		return err
 	}
 
 	// Delete the profile and distro we created for this reservation
 	if r.CobblerProfile == "" {
-		return b.removeProfile("igor_" + r.ResName)
+		return b.removeProfile("igor_" + r.Name)
 	}
 
 	return nil
@@ -128,7 +128,7 @@ func (b *CobblerBackend) removeProfile(profile string) error {
 	if len(hosts) > 0 {
 		log.Info("setting hosts to default profile: %v", hosts)
 
-		if err := b.setProfile(hosts, igorConfig.CobblerDefaultProfile); err != nil {
+		if err := b.setProfile(hosts, igor.CobblerDefaultProfile); err != nil {
 			return err
 		}
 	}

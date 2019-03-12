@@ -15,10 +15,8 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"ranges"
 	"strings"
 	"text/template"
-	"time"
 	"unicode"
 	"unicode/utf8"
 	"version"
@@ -133,8 +131,12 @@ func printVersion() {
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
 func toPXE(ip net.IP) string {
-	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
-	return s
+	ip = ip.To4()
+	if ip == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%02X%02X%02X%02X", ip[0], ip[1], ip[2], ip[3])
 }
 
 // Get the calling user. First try $SUDO_USER, then $USER, then just
@@ -157,9 +159,8 @@ func getUser() (*user.User, error) {
 //       If you change the order/content please update stats.go
 func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	unsplit, _ := rnge.UnsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, res.ID, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
+	unsplit := igor.unsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Start.Format(format), res.End.Format(format), res.Duration)
 }
 
 // install src into dir, using the hash as the file name. Returns the hash or
