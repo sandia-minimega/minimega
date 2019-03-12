@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -609,6 +610,11 @@ func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(c.StringArgs["qmp"]), &m); err != nil {
+		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	out, err := vm.QMPRaw(c.StringArgs["qmp"])
