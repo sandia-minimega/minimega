@@ -854,7 +854,24 @@ func (pl *pipeline) exec(production []string, in <-chan string, write bool) (<-c
 		}()
 	}
 
-	err := cmd.Start()
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		r := bufio.NewReader(stderr)
+		for {
+			d, err := r.ReadString('\n')
+			if d := strings.TrimSpace(d); d != "" {
+				log.Debug("plumber: %v: %v", cmd.Path, d)
+			}
+			if err != nil {
+				break
+			}
+		}
+	}()
+
+	err = cmd.Start()
 	if err != nil {
 		return nil, err
 	}
@@ -990,17 +1007,19 @@ func (p *Pipe) via(value string) (string, error) {
 
 	stdin := bytes.NewBufferString(value)
 	var stdout bytes.Buffer
+	var stderr bytes.Buffer
 
 	cmd := &exec.Cmd{
 		Path:   process,
 		Args:   p.viaCommand,
 		Stdin:  stdin,
 		Stdout: &stdout,
+		Stderr: &stderr,
 	}
 
 	err = cmd.Run()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%v: %v", err, stderr.String())
 	}
 
 	return stdout.String(), nil
