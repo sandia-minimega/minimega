@@ -101,14 +101,6 @@ type tapStat struct {
 	TxBytes int
 }
 
-// Destroy a bridge, removing all of the taps, etc. associated with it
-func (b *Bridge) Destroy() error {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-
-	return b.destroy()
-}
-
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 

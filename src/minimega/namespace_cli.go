@@ -64,6 +64,7 @@ Display or modify the active namespace.
   - mv      : manually edit VM placement in schedule (after dry-run)
   - status  : display scheduling status
 - bridge    : create a bridge, defaults to GRE mesh between hosts
+- del-bridge: destroy a bridge
 - snapshot  : take a snapshot of namespace or print snapshot progress
 - run       : run a command on all nodes in the namespace
 `,
@@ -84,6 +85,7 @@ Display or modify the active namespace.
 			"ns <schedule,> <mv,> <vm target> <dst>",
 			"ns <schedule,> <status,>",
 			"ns <bridge,> <bridge> [vxlan,gre]",
+			"ns <del-bridge,> <bridge>",
 			"ns <snapshot,> [name]",
 			"ns <run,> (command)",
 		},
@@ -114,17 +116,18 @@ any remote state as well.`,
 
 // Functions pointers to the various handlers for the subcommands
 var nsCliHandlers = map[string]minicli.CLIFunc{
-	"hosts":     wrapSimpleCLI(cliNamespaceHosts),
-	"add-hosts": wrapSimpleCLI(cliNamespaceAddHost),
-	"del-hosts": wrapSimpleCLI(cliNamespaceDelHost),
-	"load":      wrapSimpleCLI(cliNamespaceLoad),
-	"queue":     wrapSimpleCLI(cliNamespaceQueue),
-	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
-	"flush":     wrapSimpleCLI(cliNamespaceFlush),
-	"schedule":  wrapSimpleCLI(cliNamespaceSchedule),
-	"bridge":    wrapSimpleCLI(cliNamespaceBridge),
-	"snapshot":  cliNamespaceSnapshot,
-	"run":       cliNamespaceRun,
+	"hosts":      wrapSimpleCLI(cliNamespaceHosts),
+	"add-hosts":  wrapSimpleCLI(cliNamespaceAddHost),
+	"del-hosts":  wrapSimpleCLI(cliNamespaceDelHost),
+	"load":       wrapSimpleCLI(cliNamespaceLoad),
+	"queue":      wrapSimpleCLI(cliNamespaceQueue),
+	"queueing":   wrapSimpleCLI(cliNamespaceQueueing),
+	"flush":      wrapSimpleCLI(cliNamespaceFlush),
+	"schedule":   wrapSimpleCLI(cliNamespaceSchedule),
+	"bridge":     wrapSimpleCLI(cliNamespaceBridge),
+	"del-bridge": wrapSimpleCLI(cliNamespaceDelBridge),
+	"snapshot":   cliNamespaceSnapshot,
+	"run":        cliNamespaceRun,
 }
 
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -431,14 +434,23 @@ func cliNamespaceBridge(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 	for host, hosts := range mesh(hosts, true) {
 		// enable rstp before creating any tunnels because loops are bad
 		cmd := minicli.MustCompilef("mesh send %q bridge config %q rstp_enable=true", host, b)
+		if host == hostname {
+			cmd = minicli.MustCompilef("bridge config %q rstp_enable=true", b)
+		}
+
 		cmds = append(cmds, cmd)
 
 		for _, host2 := range hosts {
 			cmd := minicli.MustCompilef("mesh send %q bridge tunnel %v %q %v %v", host, tunnel, b, ips[host2], key)
+			if host == hostname {
+				cmd = minicli.MustCompilef("bridge tunnel %v %q %v %v", tunnel, b, ips[host2], key)
+			}
+
 			cmds = append(cmds, cmd)
 		}
 	}
 
+	// LOCK: This is a CLI handler.
 	if err := consume(runCommands(cmds...)); err != nil {
 		return err
 	}
@@ -447,6 +459,31 @@ func cliNamespaceBridge(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 	ns.Bridges[b] = key
 
 	return nil
+}
+
+func cliNamespaceDelBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	b := c.StringArgs["bridge"]
+	if b == "" {
+		return errors.New("bridge name must not be empty string")
+	}
+
+	if _, ok := ns.Bridges[b]; !ok {
+		return errors.New("bridge is not associated with namespace")
+	}
+
+	cmds := []*minicli.Command{}
+
+	for host := range ns.Hosts {
+		cmd := minicli.MustCompilef("mesh send %q bridge destroy %q", host, b)
+		if host == hostname {
+			cmd = minicli.MustCompilef("bridge destroy %q", b)
+		}
+
+		cmds = append(cmds, cmd)
+	}
+
+	// LOCK: This is a CLI handler.
+	return consume(runCommands(cmds...))
 }
 
 func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
@@ -513,10 +550,29 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 		// Going back to default namespace
 		if err := SetNamespace(DefaultNamespace); err != nil {
 			respChan <- errResp(err)
+			return
 		}
 
 		respChan <- minicli.Responses{resp}
 		return
+	}
+
+	// clean up any bridges that we created
+	if c.Source == "" {
+		ns := GetOrCreateNamespace(name)
+
+		cmds := []*minicli.Command{}
+
+		for b := range ns.Bridges {
+			cmd := minicli.MustCompilef("namespace %q ns del-bridge %q", name, b)
+			cmds = append(cmds, cmd)
+		}
+
+		// LOCK: This is a CLI handler.
+		if err := consume(runCommands(cmds...)); err != nil {
+			respChan <- errResp(err)
+			return
+		}
 	}
 
 	// destroy the namespace locally first

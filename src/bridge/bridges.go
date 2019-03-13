@@ -267,6 +267,25 @@ func (b Bridges) Destroy() error {
 	return nil
 }
 
+// DestroyBridge destroys a bridge by name, removing all of the taps, etc.
+// associated with it.
+func (b Bridges) DestroyBridge(name string) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	br, ok := b.bridges[name]
+	if !ok {
+		return fmt.Errorf("bridge not found: %v", name)
+	}
+
+	if err := br.destroy(); err != nil {
+		return err
+	}
+
+	delete(b.bridges, name)
+	return nil
+}
+
 // ReapTaps calls `Bridge.ReapTaps` on each bridge, returning the first error.
 func (b Bridges) ReapTaps() error {
 	bridgeLock.Lock()

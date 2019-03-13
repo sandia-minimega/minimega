@@ -153,6 +153,7 @@ Note: bridge is not a namespace-aware command.`,
 			"bridge <notrunk,> <bridge> <interface>",
 			"bridge <tunnel,> <vxlan,gre> <bridge> <remote ip> [key]",
 			"bridge <notunnel,> <bridge> <interface>",
+			"bridge <destroy,> <bridge>",
 		},
 		Call: wrapSimpleCLI(cliBridge),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
@@ -364,6 +365,8 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return br.RemoveTunnel(iface)
 	} else if c.BoolArgs["config"] {
 		return br.Config(c.StringArgs["config"])
+	} else if c.BoolArgs["destroy"] {
+		return bridges.DestroyBridge(c.StringArgs["bridge"])
 	}
 
 	// Must want to list bridges
