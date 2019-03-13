@@ -27,8 +27,8 @@ You may find it convenient to place the minimega directory in `/opt`.
 
 ** Building from source
 
-To build from source you will need [[http://golang.org][Go]] (version 1.8 or
-higher) and libpcap headers. On a Debian-type system, you can install
+To build from source you will need [[http://golang.org][Go]] (version 1.10 or
+1.11) and libpcap headers. On a Debian-type system, you can install
 compile-time dependencies with:
 
 	$ apt-get install libpcap-dev

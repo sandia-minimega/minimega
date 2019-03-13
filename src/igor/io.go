@@ -5,8 +5,8 @@
 package main
 
 import (
-	"encoding/gob"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	log "minilog"
@@ -14,73 +14,47 @@ import (
 	"path/filepath"
 )
 
-// readData reads the Reservations and Schedule from a gob-encoded file. If the
-// file is empty (newly created), it initializes the Reservations and Schedule
-// to a clean slate.
-func readData(f *os.File) {
-	var data struct {
-		Reservations map[uint64]*Reservation
-		Schedule     []TimeSlice
-	}
-
-	if err := gob.NewDecoder(f).Decode(&data); err == nil {
-		// copy to globals
-		Reservations = data.Reservations
-		Schedule = data.Schedule
-	} else if err == io.EOF {
+// readData reads the Reservations a json-encoded file. If the file is empty
+// (newly created), it initializes the Reservations to a clean slate.
+func (r *Reservations) readData(f *os.File) error {
+	if err := json.NewDecoder(f).Decode(&r.M); err == io.EOF {
 		// init to usable defaults
 		log.Warn("no previous reservations")
-		Reservations = make(map[uint64]*Reservation)
-	} else {
-		log.Fatal("unable to load data: %v", err)
+		r.M = make(map[uint64]*Reservation)
+	} else if err != nil {
+		return fmt.Errorf("unable to load data: %v", err)
 	}
+
+	return nil
 }
 
-// writeData writes the Reservations and Schedule to f using an intermediate
-// file to ensure that the update is all-or-nothing.
-func writeData(f *os.File) {
-	data := struct {
-		Reservations map[uint64]*Reservation
-		Schedule     []TimeSlice
-	}{
-		Reservations,
-		Schedule,
-	}
-
+// writeData writes the Reservations to f using an intermediate file to ensure
+// that the update is all-or-nothing.
+func (r *Reservations) writeData(f *os.File) error {
 	// TODO: we should remove any leftover tmpdata files
-	tpath := filepath.Join(igorConfig.TFTPRoot, "igor")
+	tpath := filepath.Join(igor.TFTPRoot, "igor")
 	tmp, err := ioutil.TempFile(tpath, "tmpdata")
 	if err != nil {
-		log.Fatal("unable to create tmp file: %v", err)
+		return fmt.Errorf("unable to create tmp file: %v", err)
 	}
 	defer tmp.Close()
 
-	if err := gob.NewEncoder(tmp).Encode(data); err != nil {
-		log.Fatal("unable to encode data: %v", err)
+	if err := json.NewEncoder(tmp).Encode(r.M); err != nil {
+		return fmt.Errorf("unable to encode data: %v", err)
 	}
 
 	if err := tmp.Close(); err != nil {
-		log.Fatal("update failed: %v", err)
+		return fmt.Errorf("update failed: %v", err)
 	}
 
 	if err := os.Rename(tmp.Name(), f.Name()); err != nil {
-		log.Fatal("update failed: %v", err)
+		return fmt.Errorf("update failed: %v", err)
 	}
-}
 
-// writeReservations writes just the JSON-encoded Reservations to the
-// reservation file based on igorConfig. Since this file is just a mirror for
-// the UI, we don't need to make it all-or-nothing.
-func writeReservations() {
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0664)
-	if err != nil {
-		log.Fatal("failed to open file %v: %v", path, err)
+	// make reservations file world-readable
+	if err := os.Chmod(f.Name(), 0644); err != nil {
+		return fmt.Errorf("update failed: %v", err)
 	}
-	defer f.Close()
 
-	if err := json.NewEncoder(f).Encode(Reservations); err != nil {
-		log.Fatal("unable to encode reservations: %v", err)
-	}
+	return nil
 }

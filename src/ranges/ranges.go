@@ -72,6 +72,9 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 					pad = 0
 				}
 				t, _ := strconv.Atoi(n)
+				if t < r.Min || t > r.Max {
+					return nil, fmt.Errorf("value of out range: %v", t)
+				}
 				dedup[t] = t
 			}
 		} else {
@@ -83,6 +86,9 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 			t, err := strconv.Atoi(part)
 			if err != nil {
 				return nil, err
+			}
+			if t < r.Min || t > r.Max {
+				return nil, fmt.Errorf("value of out range: %v", t)
 			}
 			dedup[t] = t
 		}

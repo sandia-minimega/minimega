@@ -20,23 +20,23 @@ func NewTFTPBackend() Backend {
 
 func (b *TFTPBackend) Install(r *Reservation) error {
 	// Manual file installation happens now
-	// create appropriate pxe config file in igorConfig.TFTPRoot+/pxelinux.cfg/igor/
+	// create appropriate pxe config file in igor.TFTPRoot+/pxelinux.cfg/igor/
 	masterfile, err := os.Create(r.Filename())
 	if err != nil {
 		return fmt.Errorf("failed to create %v -- %v", r.Filename(), err)
 	}
 	defer masterfile.Close()
 
-	masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.ResName))
-	masterfile.WriteString(fmt.Sprintf("label %s\n", r.ResName))
+	masterfile.WriteString(fmt.Sprintf("default %s\n\n", r.Name))
+	masterfile.WriteString(fmt.Sprintf("label %s\n", r.Name))
 	masterfile.WriteString(fmt.Sprintf("kernel /igor/%s-kernel\n", r.KernelHash))
 	masterfile.WriteString(fmt.Sprintf("append initrd=/igor/%s-initrd %s\n", r.InitrdHash, r.KernelArgs))
 
-	// create individual PXE boot configs i.e. igorConfig.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
+	// create individual PXE boot configs i.e. igor.TFTPRoot+/pxelinux.cfg/AC10001B by copying config created above
 	for _, pxename := range r.PXENames {
 		masterfile.Seek(0, 0)
 
-		fname := filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename)
+		fname := filepath.Join(igor.TFTPRoot, "pxelinux.cfg", pxename)
 		f, err := os.Create(fname)
 		if err != nil {
 			return fmt.Errorf("failed to create %v -- %v", fname, err)
@@ -53,7 +53,7 @@ func (b *TFTPBackend) Uninstall(r *Reservation) error {
 	// Delete all the PXE files in the reservation
 	for _, pxename := range r.PXENames {
 		// TODO: check error?
-		os.Remove(filepath.Join(igorConfig.TFTPRoot, "pxelinux.cfg", pxename))
+		os.Remove(filepath.Join(igor.TFTPRoot, "pxelinux.cfg", pxename))
 	}
 
 	return nil

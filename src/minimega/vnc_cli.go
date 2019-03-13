@@ -10,7 +10,6 @@ import (
 	"minicli"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 var vncCLIHandlers = []minicli.Handler{
@@ -78,8 +77,8 @@ Resets the state for VNC recordings. See "help vnc" for more information.`,
 			"clear vnc",
 		},
 		Call: wrapBroadcastCLI(func(ns *Namespace, _ *minicli.Command, _ *minicli.Response) error {
-			ns.vncRecorder.Clear()
-			ns.vncPlayer.Clear()
+			ns.Recorder.Clear()
+			ns.Player.Clear()
 			return nil
 		}),
 	},
@@ -116,21 +115,24 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 			return false, nil
 		}
 
+		id := kvm.GetName()
+		rhost := fmt.Sprintf("%v:%v", kvm.GetHost(), kvm.VNCPort)
+
 		switch {
 		case c.BoolArgs["play"]:
-			return true, ns.vncPlayer.PlaybackKB(kvm, fname)
+			return true, ns.Player.Playback(id, rhost, fname)
 		case c.BoolArgs["stop"]:
-			return true, ns.vncPlayer.Stop(kvm)
+			return true, ns.Player.Stop(id)
 		case c.BoolArgs["inject"]:
-			return true, ns.vncPlayer.Inject(kvm, c.StringArgs["cmd"])
+			return true, ns.Player.Inject(id, rhost, c.StringArgs["cmd"])
 		case c.BoolArgs["pause"]:
-			return true, ns.vncPlayer.Pause(kvm)
+			return true, ns.Player.Pause(id)
 		case c.BoolArgs["continue"]:
-			return true, ns.vncPlayer.Continue(kvm)
+			return true, ns.Player.Continue(id)
 		case c.BoolArgs["step"]:
-			return true, ns.vncPlayer.Step(kvm)
+			return true, ns.Player.Step(id)
 		case c.BoolArgs["getstep"]:
-			res, err := ns.vncPlayer.GetStep(kvm)
+			res, err := ns.Player.GetStep(id)
 			if err != nil {
 				return true, err
 			}
@@ -140,7 +142,7 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 			defer mu.Unlock()
 
 			resp.Tabular = append(resp.Tabular, []string{
-				vm.GetName(),
+				id,
 				res,
 			})
 		}
@@ -163,69 +165,29 @@ func cliVNCRecord(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
+	id := vm.Name
+	rhost := fmt.Sprintf("%v:%v", vm.GetHost(), vm.VNCPort)
+
 	if c.BoolArgs["record"] {
 		if c.BoolArgs["kb"] {
-			return ns.RecordKB(vm, fname)
+			return ns.RecordKB(id, rhost, fname)
 		}
 
-		return ns.RecordFB(vm, fname)
+		return ns.RecordFB(id, rhost, fname)
 	}
-
-	// must want to stop recording
-	ns.vncRecorder.Lock()
-	defer ns.vncRecorder.Unlock()
-
-	id := vm.Name
 
 	if c.BoolArgs["kb"] {
-		if v, ok := ns.vncRecorder.kb[id]; ok {
-			delete(ns.vncRecorder.kb, id)
-			return v.vncClient.Stop()
-		}
-
-		return fmt.Errorf("kb recording %v not found", vm.Name)
+		return ns.Recorder.StopKB(vm.Name)
 	}
-
-	if v, ok := ns.vncRecorder.fb[id]; ok {
-		delete(ns.vncRecorder.fb, id)
-		return v.vncClient.Stop()
-	}
-
-	return fmt.Errorf("fb recording %v not found", vm.Name)
+	return ns.Recorder.StopFB(vm.Name)
 }
 
 // List all active recordings and playbacks
 func cliVNCList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{"name", "type", "time", "filename"}
 
-	ns.vncRecorder.RLock()
-	defer ns.vncRecorder.RUnlock()
-	ns.vncPlayer.RLock()
-	defer ns.vncPlayer.RUnlock()
-
-	ns.vncPlayer.reap()
-
-	for _, v := range ns.vncRecorder.kb {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record kb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
-	}
-
-	for _, v := range ns.vncRecorder.fb {
-		resp.Tabular = append(resp.Tabular, []string{
-			v.VM.Name, "record fb",
-			time.Since(v.start).String(),
-			v.file.Name(),
-		})
-	}
-
-	for _, v := range ns.vncPlayer.m {
-		if info := v.Info(); info != nil {
-			resp.Tabular = append(resp.Tabular, info)
-		}
-	}
+	resp.Tabular = append(resp.Tabular, ns.Recorder.Info()...)
+	resp.Tabular = append(resp.Tabular, ns.Player.Info()...)
 
 	return nil
 }

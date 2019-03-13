@@ -9,8 +9,8 @@ func TestIsActive(t *testing.T) {
 	now := time.Now()
 
 	r := &Reservation{
-		StartTime: now.Add(-time.Hour).Unix(),
-		EndTime:   now.Add(time.Hour).Unix(),
+		Start: now.Add(-time.Hour),
+		End:   now.Add(time.Hour),
 	}
 
 	if !r.IsActive(now) {
