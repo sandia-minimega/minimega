@@ -196,9 +196,9 @@ func (c *Conn) decodeRawEncoding(r *Rectangle) error {
 		for x := r.Rect.Min.X; x < r.Rect.Max.X; x++ {
 			pixel, err := c.readPixel()
 			if err != nil {
-				return fmt.Errorf("error reading pixel %d, %d", x, y)
+				return fmt.Errorf("error reading pixel (%v, %v): %v", x, y, err)
 			}
-			r.Set(x, y, pixel)
+			r.RGBA.Set(x, y, pixel)
 		}
 	}
 
@@ -207,14 +207,14 @@ func (c *Conn) decodeRawEncoding(r *Rectangle) error {
 
 func (c *Conn) decodeDesktopSizeEncoding(r *Rectangle) error {
 	width, height := uint16(r.Rect.Dx()), uint16(r.Rect.Dy())
-	log.Debug("new desktop size: %v x %v -> %v x %v", c.s.Width, c.s.Height, width, height)
+	log.Info("new desktop size: %v x %v -> %v x %v", c.s.Width, c.s.Height, width, height)
 	c.s.Width, c.s.Height = width, height
 
 	return nil
 }
 
-func (c *Conn) readPixel() (color.RGBA64, error) {
-	var rgb color.RGBA64
+func (c *Conn) readPixel() (color.RGBA, error) {
+	var rgb color.RGBA
 
 	bytesPerPixel := c.s.BitsPerPixel / 8
 	buf := make([]byte, bytesPerPixel)
@@ -232,10 +232,10 @@ func (c *Conn) readPixel() (color.RGBA64, error) {
 	}
 
 	if c.s.TrueColorFlag != 0 {
-		rgb.R = uint16((raw >> uint32(c.s.RedShift)) & uint32(c.s.RedMax))
-		rgb.G = uint16((raw >> uint32(c.s.GreenShift)) & uint32(c.s.GreenMax))
-		rgb.B = uint16((raw >> uint32(c.s.BlueShift)) & uint32(c.s.BlueMax))
-		rgb.A = 65535
+		rgb.R = uint8((raw >> uint32(c.s.RedShift)) & uint32(c.s.RedMax))
+		rgb.G = uint8((raw >> uint32(c.s.GreenShift)) & uint32(c.s.GreenMax))
+		rgb.B = uint8((raw >> uint32(c.s.BlueShift)) & uint32(c.s.BlueMax))
+		rgb.A = 255
 	} else {
 		// TODO
 		return rgb, errors.New("unable to decode untrue colors")
