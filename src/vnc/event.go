@@ -21,19 +21,31 @@ type Event interface {
 	Write(w io.Writer) error
 }
 
+type WaitForItEvent struct {
+	File    string
+	Timeout uint
+}
+
+type LoadFileEvent struct {
+	File string
+}
+
 const (
-	keyEventFmt     = "KeyEvent,%t,%s"
-	pointerEventFmt = "PointerEvent,%d,%d,%d"
-	loadEventFmt    = "LoadFile,%s"
+	keyEventFmt       = "KeyEvent,%t,%s"
+	pointerEventFmt   = "PointerEvent,%d,%d,%d"
+	loadEventFmt      = "LoadFile,%s"
+	waitForItEventFmt = "WaitForIt,%d,%s"
 )
 
 func parseEvent(cmd string) (interface{}, error) {
 	if e, err := parseKeyEvent(cmd); err == nil {
-		return e, err
+		return e, nil
 	} else if e, err := parsePointerEvent(cmd); err == nil {
-		return e, err
+		return e, nil
 	} else if e, err := parseLoadFileEvent(cmd); err == nil {
-		return e, err
+		return e, nil
+	} else if e, err := parseWaitForItEvent(cmd); err == nil {
+		return e, nil
 	}
 
 	return nil, errors.New("invalid event specified")
@@ -83,6 +95,18 @@ func parsePointerEvent(arg string) (*PointerEvent, error) {
 
 	_, err := fmt.Sscanf(arg, pointerEventFmt, &m.ButtonMask, &m.XPosition, &m.YPosition)
 	if err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
+
+func parseWaitForItEvent(arg string) (*WaitForItEvent, error) {
+	m := &WaitForItEvent{}
+
+	_, err := fmt.Sscanf(arg, waitForItEventFmt, &m.Timeout, &m.File)
+	if err != nil {
+		log.Error("failed to parse wait for it: %v", err)
 		return nil, err
 	}
 

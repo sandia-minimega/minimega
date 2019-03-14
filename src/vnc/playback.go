@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"image/png"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -40,7 +41,7 @@ type playback struct {
 
 type signal struct {
 	kind Control
-	data string
+	data interface{}
 }
 
 // newPlayback creates a new playback with given id.
@@ -120,6 +121,41 @@ func (p *playback) Start(filename string) error {
 		// finished with this playback
 		p.Stop()
 	}()
+	go func() {
+		var i int
+		// consume responses from the server
+		for {
+			msg, err := p.Conn.ReadMessage()
+			if err != nil {
+				log.Error("server to playback error: %v", err)
+				break
+			}
+
+			switch msg := msg.(type) {
+			case *FramebufferUpdate:
+				log.Info("len(rectangles) = %v", len(msg.Rectangles))
+				for _, rect := range msg.Rectangles {
+					// ignore
+					if rect.RGBA == nil {
+						continue
+					}
+
+					f, err := os.Create(fmt.Sprintf("screenshot-%v.png", i))
+					if err != nil {
+						log.Error("screenshot failed to write: %v", err)
+						continue
+					}
+
+					i += 1
+
+					png.Encode(f, rect.RGBA)
+					f.Close()
+				}
+			case *SetColorMapEntries:
+			case *Bell:
+			}
+		}
+	}()
 
 	return nil
 }
@@ -194,8 +230,16 @@ func (p *playback) Inject(cmd string) error {
 
 	if event, ok := e.(Event); ok {
 		p.out <- event
-	} else {
-		p.signal <- signal{kind: LoadFile, data: e.(string)}
+		return nil
+	}
+
+	switch e := e.(type) {
+	case *LoadFileEvent:
+		p.signal <- signal{kind: LoadFile, data: e}
+	case *WaitForItEvent:
+		p.signal <- signal{kind: WaitForIt, data: e}
+	default:
+		return fmt.Errorf("unknown event: %v", e)
 	}
 
 	return nil
@@ -305,9 +349,18 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 						log.Error("unexpected signal: %v", sig)
 					}
 				case LoadFile:
-					if err := v.playFile(f, sig.data); err != nil {
+					e := sig.data.(LoadFileEvent)
+
+					if err := v.playFile(f, e.File); err != nil {
 						return err
 					}
+				case WaitForIt:
+					e := sig.data.(*WaitForItEvent)
+
+					if err := v.waitForIt(e); err != nil {
+						return err
+					}
+
 				case Step:
 					// decrease by the remaining
 					v.addDuration(-duration)
@@ -321,15 +374,37 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 
 		// waited so process the event
 	Event:
-		switch event := res.(type) {
+		switch e := res.(type) {
 		case Event:
-			v.out <- event
-		case string:
-			if err := v.playFile(f, event); err != nil {
+			v.out <- e
+		case *LoadFileEvent:
+			if err := v.playFile(f, e.File); err != nil {
+				return err
+			}
+		case *WaitForItEvent:
+			if err := v.waitForIt(e); err != nil {
 				return err
 			}
 		}
 	}
+
+	return nil
+}
+
+func (v *playback) waitForIt(e *WaitForItEvent) error {
+	log.Info("wait for it!!!!")
+
+	fb := &FramebufferUpdateRequest{
+		Width:  v.Conn.s.Width,
+		Height: v.Conn.s.Height,
+	}
+
+	// request an update
+	if err := fb.Write(v.Conn); err != nil {
+		return err
+	}
+
+	// TODO: actually wait for it
 
 	return nil
 }

@@ -244,28 +244,6 @@ func (kb *kbRecorder) Record(msg interface{}) {
 }
 
 func (fb *fbRecorder) Record() {
-	err := (&SetPixelFormat{
-		PixelFormat: PixelFormat{
-			BitsPerPixel: 32, Depth: 24, TrueColorFlag: 1,
-			RedMax: 255, GreenMax: 255, BlueMax: 255,
-			RedShift: 16, GreenShift: 8, BlueShift: 0,
-		},
-	}).Write(fb.Conn)
-
-	if err != nil {
-		fb.err = fmt.Errorf("unable to set pixel format: %v", err)
-		return
-	}
-
-	err = (&SetEncodings{
-		Encodings: []int32{RawEncoding, DesktopSizePseudoEncoding},
-	}).Write(fb.Conn)
-
-	if err != nil {
-		fb.err = fmt.Errorf("unable to set encodings: %v", err)
-		return
-	}
-
 	go func() {
 		prev := time.Now()
 		buf := make([]byte, 4096)

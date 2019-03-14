@@ -12,4 +12,5 @@ const (
 	Pause
 	Step
 	LoadFile
+	WaitForIt
 )
