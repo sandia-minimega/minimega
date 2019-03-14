@@ -206,7 +206,9 @@ func (c *Conn) decodeRawEncoding(r *Rectangle) error {
 }
 
 func (c *Conn) decodeDesktopSizeEncoding(r *Rectangle) error {
-	log.Debug("new desktop size: %d x %d", r.Rect.Dx(), r.Rect.Dy())
+	width, height := uint16(r.Rect.Dx()), uint16(r.Rect.Dy())
+	log.Debug("new desktop size: %v x %v -> %v x %v", c.s.Width, c.s.Height, width, height)
+	c.s.Width, c.s.Height = width, height
 
 	return nil
 }
