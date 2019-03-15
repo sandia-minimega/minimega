@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"image"
 	"image/png"
 	log "minilog"
 	"os"
@@ -25,9 +26,10 @@ type playback struct {
 
 	start time.Time // start for when the playback started
 
-	out    chan Event
-	signal chan signal
-	done   chan bool
+	out         chan Event // events to write to vnc server
+	signal      chan signal
+	done        chan bool        // teardown playback
+	screenshots chan *image.RGBA // screenshots of the VM
 
 	sync.Mutex               // guards below
 	depth      int           // how nested we are in LoadFiles
@@ -52,12 +54,13 @@ func newPlayback(id, rhost string) (*playback, error) {
 	}
 
 	return &playback{
-		ID:     id,
-		Conn:   conn,
-		out:    make(chan Event),
-		signal: make(chan signal),
-		done:   make(chan bool),
-		state:  Play,
+		ID:          id,
+		Conn:        conn,
+		out:         make(chan Event),
+		signal:      make(chan signal),
+		done:        make(chan bool),
+		screenshots: make(chan *image.RGBA),
+		state:       Play,
 	}, nil
 }
 
@@ -122,7 +125,6 @@ func (p *playback) Start(filename string) error {
 		p.Stop()
 	}()
 	go func() {
-		var i int
 		// consume responses from the server
 		for {
 			msg, err := p.Conn.ReadMessage()
@@ -133,23 +135,18 @@ func (p *playback) Start(filename string) error {
 
 			switch msg := msg.(type) {
 			case *FramebufferUpdate:
-				log.Info("len(rectangles) = %v", len(msg.Rectangles))
 				for _, rect := range msg.Rectangles {
-					// ignore
+					// ignore non-image
 					if rect.RGBA == nil {
 						continue
 					}
 
-					f, err := os.Create(fmt.Sprintf("screenshot-%v.png", i))
-					if err != nil {
-						log.Error("screenshot failed to write: %v", err)
-						continue
+					select {
+					case p.screenshots <- rect.RGBA:
+						// success
+					default:
+						// drop
 					}
-
-					i += 1
-
-					png.Encode(f, rect.RGBA)
-					f.Close()
 				}
 			case *SetColorMapEntries:
 			case *Bell:
@@ -391,22 +388,56 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 	return nil
 }
 
-func (v *playback) waitForIt(e *WaitForItEvent) error {
-	log.Info("wait for it!!!!")
+func (p *playback) waitForIt(e *WaitForItEvent) error {
+	timeout := time.Duration(e.Timeout) * time.Nanosecond
+
+	log.Info("playback %v, wait for %v, timeout = %v", p.ID, e.File, timeout)
+
+	// TODO: load image
 
 	fb := &FramebufferUpdateRequest{
-		Width:  v.Conn.s.Width,
-		Height: v.Conn.s.Height,
+		Width:  p.Conn.s.Width,
+		Height: p.Conn.s.Height,
 	}
 
-	// request an update
-	if err := fb.Write(v.Conn); err != nil {
-		return err
+	var i int
+	for timeout > 0 {
+		// request an updated screenshot
+		if err := fb.Write(p.Conn); err != nil {
+			return err
+		}
+
+		start := time.Now()
+
+		select {
+		case screenshot := <-p.screenshots:
+			waited := time.Now().Sub(start)
+			timeout -= waited
+
+			log.Info("playback %v got screenshot after %v", p.ID, waited)
+
+			// TODO: check for image
+			f, err := os.Create(fmt.Sprintf("screenshot-%v.png", i))
+			if err != nil {
+				return fmt.Errorf("screenshot failed to write: %v", err)
+			}
+
+			i += 1
+
+			if err := png.Encode(f, screenshot); err != nil {
+				return fmt.Errorf("unable to encode screenshot: %v", err)
+			}
+			f.Close()
+		case <-time.After(timeout):
+			return fmt.Errorf("timeout waiting for %v", e.File)
+		}
+
+		// sleep and try again
+		time.Sleep(time.Second)
+		timeout -= time.Second
 	}
 
-	// TODO: actually wait for it
-
-	return nil
+	return fmt.Errorf("timeout waiting for %v", e.File)
 }
 
 func (p *playback) setFile(f *os.File) (old *os.File, err error) {
