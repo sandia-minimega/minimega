@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"image"
-	"image/png"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -345,6 +344,11 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 					default:
 						log.Error("unexpected signal: %v", sig)
 					}
+				case Step:
+					// decrease by the remaining
+					v.addDuration(-duration)
+
+					goto Event
 				case LoadFile:
 					e := sig.data.(LoadFileEvent)
 
@@ -354,15 +358,19 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 				case WaitForIt:
 					e := sig.data.(*WaitForItEvent)
 
-					if err := v.waitForIt(e); err != nil {
+					// TODO: what to do for duration?
+					if _, err := v.waitForIt(e.File, e.Timeout); err != nil {
 						return err
 					}
+				case ClickIt:
+					e := sig.data.(*ClickItEvent)
 
-				case Step:
-					// decrease by the remaining
-					v.addDuration(-duration)
-
-					goto Event
+					// TODO: what to do for duration?
+					if e, err := v.waitForIt(e.File, e.Timeout); err != nil {
+						return err
+					} else {
+						v.out <- e
+					}
 				default:
 					log.Error("unexpected signal: %v", sig)
 				}
@@ -379,8 +387,16 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 				return err
 			}
 		case *WaitForItEvent:
-			if err := v.waitForIt(e); err != nil {
+			// TODO: what to do for duration?
+			if _, err := v.waitForIt(e.File, e.Timeout); err != nil {
 				return err
+			}
+		case *ClickItEvent:
+			// TODO: what to do for duration?
+			if e, err := v.waitForIt(e.File, e.Timeout); err != nil {
+				return err
+			} else {
+				v.out <- e
 			}
 		}
 	}
@@ -388,23 +404,33 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 	return nil
 }
 
-func (p *playback) waitForIt(e *WaitForItEvent) error {
-	timeout := time.Duration(e.Timeout) * time.Nanosecond
+// waitForIt waits until the template image is displayed. If it is detected
+// within the timeout, returns a PointerEvent to click on the center of the
+// template image.
+func (p *playback) waitForIt(file string, timeout time.Duration) (*PointerEvent, error) {
+	log.Info("playback %v, wait for %v, timeout = %v", p.ID, file, timeout)
 
-	log.Info("playback %v, wait for %v, timeout = %v", p.ID, e.File, timeout)
+	// load image
+	f, err := os.Open(file)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
 
-	// TODO: load image
+	template, _, err := image.Decode(f)
+	if err != nil {
+		return nil, err
+	}
 
 	fb := &FramebufferUpdateRequest{
 		Width:  p.Conn.s.Width,
 		Height: p.Conn.s.Height,
 	}
 
-	var i int
 	for timeout > 0 {
 		// request an updated screenshot
 		if err := fb.Write(p.Conn); err != nil {
-			return err
+			return nil, err
 		}
 
 		start := time.Now()
@@ -416,20 +442,11 @@ func (p *playback) waitForIt(e *WaitForItEvent) error {
 
 			log.Info("playback %v got screenshot after %v", p.ID, waited)
 
-			// TODO: check for image
-			f, err := os.Create(fmt.Sprintf("screenshot-%v.png", i))
-			if err != nil {
-				return fmt.Errorf("screenshot failed to write: %v", err)
+			if e := matchTemplate(screenshot, template); e != nil {
+				return e, nil
 			}
-
-			i += 1
-
-			if err := png.Encode(f, screenshot); err != nil {
-				return fmt.Errorf("unable to encode screenshot: %v", err)
-			}
-			f.Close()
 		case <-time.After(timeout):
-			return fmt.Errorf("timeout waiting for %v", e.File)
+			return nil, fmt.Errorf("timeout waiting for %v", file)
 		}
 
 		// sleep and try again
@@ -437,7 +454,7 @@ func (p *playback) waitForIt(e *WaitForItEvent) error {
 		timeout -= time.Second
 	}
 
-	return fmt.Errorf("timeout waiting for %v", e.File)
+	return nil, fmt.Errorf("timeout waiting for %v", file)
 }
 
 func (p *playback) setFile(f *os.File) (old *os.File, err error) {

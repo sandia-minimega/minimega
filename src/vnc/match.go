@@ -4,14 +4,11 @@
 
 package vnc
 
-// VNC playback control
-type Control int
-
-const (
-	Play Control = iota
-	Pause
-	Step
-	LoadFile
-	WaitForIt
-	ClickIt
+import (
+	"image"
 )
+
+func matchTemplate(img, template image.Image) *PointerEvent {
+	// TODO: check for template match
+	return nil
+}
