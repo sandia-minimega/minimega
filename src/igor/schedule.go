@@ -20,6 +20,8 @@ func scheduleHosts(r *Reservations, res *Reservation) error {
 		res.Start = igor.Now.Round(time.Minute)
 	}
 
+	log.Info("scheduling %v requested nodes: %v", len(res.Hosts), res.Hosts)
+
 Outer:
 	for {
 		for _, h := range res.Hosts {
@@ -60,21 +62,21 @@ func scheduleContiguous(r *Reservations, res *Reservation) error {
 		return errors.New("reservation too big for cluster")
 	}
 
-	log.Debug("scheduling %v contiguous nodes across %v nodes", len(res.Hosts), len(validHosts))
+	log.Info("scheduling %v contiguous nodes", len(res.Hosts))
 
 	// End of time
 	maxTime := time.Unix(1<<63-62135596801, 999999999)
 
-	// block with earliest start time
-	minBlock := -1
-
 	// next free time for each of the valid hosts
 	starts := make([]time.Time, len(validHosts))
 
-	// minStart holds the time that the next reservation ends
-	minStart := maxTime
-
 	for {
+		log.Debug("res start time is %v", res.Start)
+
+		// block with earliest start time and it's start time on this pass
+		minBlock := -1
+		minStart := maxTime
+
 		// update the valid start times for all nodes
 		for i, h := range validHosts {
 			// find the next time that the node is free
@@ -83,48 +85,57 @@ func scheduleContiguous(r *Reservations, res *Reservation) error {
 
 	HostLoop:
 		for i := range validHosts[:len(validHosts)-len(res.Hosts)+1] {
-			// compute the earliest start time for this block
-			var maxStart time.Time
+			// compute the latest start time for this block
+			var blockStart time.Time
 			for j := 0; j < len(res.Hosts); j++ {
-				if starts[i+j].After(maxStart) {
-					maxStart = starts[i+j]
+				if starts[i+j].After(blockStart) {
+					blockStart = starts[i+j]
 				}
 			}
 
-			// check that all the nodes are actually free from that start time
+			// when reservation would end for this block
+			end := blockStart.Add(res.Duration)
+
+			// ensure that the nodes are actually free for that range of time
 			for j := 0; j < len(res.Hosts); j++ {
 				rs := nodes[validHosts[i+j]]
-				if len(rs) == 0 || len(rs) == 1 {
+				if len(rs) == 0 {
 					continue
 				}
 
-				for _, v := range rs[1:] {
-					if v.IsActive(maxStart) || v.IsActive(maxStart.Add(res.Duration)) {
+				for _, v := range rs {
+					if v.IsOverlap(blockStart, end) {
 						log.Info("conflicts with reservation %v", v)
 						continue HostLoop
 					}
 				}
 			}
 
-			if minBlock == -1 || maxStart.Before(starts[minBlock]) {
+			if minBlock == -1 || blockStart.Before(minStart) {
 				minBlock = i
+				minStart = blockStart
 			}
 		}
 
-		if minBlock != -1 {
-			break
+		if minBlock == -1 {
+			// we didn't find any available blocks so bump reservation start
+			// time to the earliest node end time.
+			var maxStart time.Time
+			for _, start := range starts {
+				if start.After(maxStart) {
+					maxStart = start
+				}
+			}
+			res.Start = maxStart
+			continue
 		}
 
-		// did not find a block -- try again after updating the start time
+		// found a block
 		res.Start = minStart
-		minStart = maxTime
+		res.End = res.Start.Add(res.Duration)
+		res.SetHosts(validHosts[minBlock : minBlock+len(res.Hosts)])
+		return nil
 	}
-
-	res.Start = starts[minBlock]
-	res.End = res.Start.Add(res.Duration)
-	res.SetHosts(validHosts[minBlock : minBlock+len(res.Hosts)])
-
-	return nil
 }
 
 // nextFree finds when a reservation of duration d can be schedule among
