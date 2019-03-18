@@ -302,7 +302,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 		// Set the current event context
 		v.setStep(scanner.Text())
 
-		duration, err := time.ParseDuration(s[0] + "ns")
+		duration, err := parseDuration(s[0])
 		if err != nil {
 			log.Errorln(err)
 			continue
