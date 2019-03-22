@@ -53,6 +53,11 @@ func (r Reservation) IsActive(t time.Time) bool {
 	return r.Start.Before(t) && r.End.After(t)
 }
 
+// IsOverlap tests whether the reservation overlaps with a given time range
+func (r Reservation) IsOverlap(start, end time.Time) bool {
+	return r.End.Sub(start) > 0 && r.Start.Sub(end) < 0
+}
+
 // Remaining returns how long the reservation has remaining at the given time
 // if the reservation is active. If the reservation is not active, it returns
 // how long the reservation will be active for.
