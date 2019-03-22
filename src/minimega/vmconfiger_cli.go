@@ -604,7 +604,8 @@ Note: this configuration only applies to KVM-based VMs.
 		HelpShort: "configures disk",
 		HelpLong: `Attach one or more disks to a vm. Any disk image supported by QEMU is a
 valid parameter. Disk images launched in snapshot mode may safely be
-used for multiple VMs.
+used for multiple VMs since minimega snapshots the disk image when the
+VM launches, creating a back qcow2 in the VM's instance directory.
 
 Note: this configuration only applies to KVM-based VMs.
 `,

@@ -161,7 +161,8 @@ type KVMConfig struct {
 
 	// Attach one or more disks to a vm. Any disk image supported by QEMU is a
 	// valid parameter. Disk images launched in snapshot mode may safely be
-	// used for multiple VMs.
+	// used for multiple VMs since minimega snapshots the disk image when the
+	// VM launches, creating a back qcow2 in the VM's instance directory.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
 	DiskPaths []string
@@ -630,6 +631,18 @@ func (vm *KvmVM) launch() error {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			return fmt.Errorf("unable to create VM dir: %v", err)
 		}
+
+		// Create a snapshot of each disk image
+		if vm.Snapshot {
+			for i, d := range vm.DiskPaths {
+				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
+				if err := diskSnapshot(d, dst); err != nil {
+					return fmt.Errorf("unable to snapshot %v: %v", d, err)
+				}
+
+				vm.DiskPaths[i] = dst
+			}
+		}
 	}
 
 	mustWrite(vm.path("name"), vm.Name)
@@ -1040,10 +1053,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 			args = append(args, "-drive")
 			args = append(args, "file="+diskPath+",media=disk")
 		}
-	}
-
-	if vm.Snapshot {
-		args = append(args, "-snapshot")
 	}
 
 	if vm.KernelPath != "" {
