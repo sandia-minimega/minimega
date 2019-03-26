@@ -381,7 +381,8 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
+	namespacesDir := filepath.Join(*f_base, "namespaces")
+	namespaceAliasDir := filepath.Join(namespacesDir, vm.Namespace)
 	vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
 
 	// remove just the symlink to the instance path
@@ -389,8 +390,11 @@ func (vm *BaseVM) Flush() error {
 		return err
 	}
 
-	// try removing the namespace directory, but let it fail if not empty
+	// try removing the <namespace> directory, but let it fail if not empty
 	os.Remove(namespaceAliasDir)
+
+	// try removing the namespaces/ directory, but let it fail if not empty
+	os.Remove(namespacesDir)
 
 	// remove the actual instance path
 	if err := os.RemoveAll(vm.instancePath); err != nil {
