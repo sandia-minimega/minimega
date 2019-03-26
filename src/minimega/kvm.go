@@ -625,10 +625,23 @@ func (vm *KvmVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
 	// If this is the first time launching the VM, do the final configuration
-	// check and create a directory for it.
+	// check and create directories for it.
 	if vm.State == VM_BUILDING {
+		// create a directory for the VM at the instance path
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			return fmt.Errorf("unable to create VM dir: %v", err)
+		}
+
+		// create the namespaces/<namespace> directory
+		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
+		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
+			return fmt.Errorf("unable to create namespace dir: %v", err)
+		}
+
+		// create a symlink under namespaces/<namespace> to the instance path
+		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
+		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
+			return fmt.Errorf("unable to create VM dir symlink: %v", err)
 		}
 	}
 
