@@ -17,6 +17,7 @@ var empty time.Time
 func TestCalculateStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, counter := genResall(start, window, false)
 	statsV = true
 	globalStats.calculateStats(window)
@@ -40,6 +41,7 @@ func TestCalculateStats(t *testing.T) {
 func TestPrintStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, _ := genResall(start, window, false)
 	globalStats.calculateStats(window)
 	test := printStats(globalStats)
@@ -121,6 +123,7 @@ func TestReadLog(t *testing.T) {
 	statsV = true
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, _ := genResall(start, window, true)
 	globalStats.readLog()
 	control := []string{"userA:1", "userB:2", "userC:3", "userD:4", "userE:5"}

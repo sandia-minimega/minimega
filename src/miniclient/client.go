@@ -22,6 +22,10 @@ import (
 	"github.com/peterh/liner"
 )
 
+const (
+	TOKEN_MAX = 1024 * 1024
+)
+
 // Request sent to minimega -- ethier a command to run or a string to return
 // suggestions for
 type Request struct {
@@ -146,6 +150,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 		defer mm.Close()
 		for {
 			scanner := bufio.NewScanner(wr)
+			buf := make([]byte, 0, TOKEN_MAX)
+			scanner.Buffer(buf, TOKEN_MAX)
 			for scanner.Scan() {
 				err = mm.enc.Encode(scanner.Text() + "\n")
 				if err != nil {
