@@ -891,12 +891,12 @@ func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
 	return res
 }
 
-func (vm *KvmVM) ChangeCD(f string) error {
+func (vm *KvmVM) ChangeCD(f string, force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	if vm.CdromPath != "" {
-		if err := vm.ejectCD(false); err != nil {
+		if err := vm.ejectCD(force); err != nil {
 			return err
 		}
 	}

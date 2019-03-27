@@ -348,7 +348,7 @@ Change a VM to use a new ISO:
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
 			"vm cdrom <eject,> <vm target> [force,]",
-			"vm cdrom <change,> <vm target> <path>",
+			"vm cdrom <change,> <vm target> <path> [force,]",
 		},
 		Call:    wrapVMTargetCLI(cliVMCdrom),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
@@ -467,11 +467,10 @@ func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 }
 
 func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	force := c.BoolArgs["force"]
 	target := c.StringArgs["vm"]
 
 	if c.BoolArgs["eject"] {
-		force := c.BoolArgs["force"]
-
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
@@ -498,7 +497,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				return false, nil
 			}
 
-			return true, kvm.ChangeCD(f)
+			return true, kvm.ChangeCD(f, force)
 		})
 	}
 
