@@ -601,40 +601,6 @@ Note: this configuration only applies to KVM-based VMs.
 		}),
 	},
 	{
-		HelpShort: "configures disk",
-		HelpLong: `Attach one or more disks to a vm. Any disk image supported by QEMU is a
-valid parameter. Disk images launched in snapshot mode may safely be
-used for multiple VMs since minimega snapshots the disk image when the
-VM launches, creating a back qcow2 in the VM's instance directory.
-
-Note: this configuration only applies to KVM-based VMs.
-`,
-		Patterns: []string{
-			"vm config disk [value]...",
-		},
-
-		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
-			if len(c.ListArgs) == 0 {
-				if len(ns.vmConfig.DiskPaths) == 0 {
-					return nil
-				}
-
-				r.Response = fmt.Sprintf("%v", ns.vmConfig.DiskPaths)
-				return nil
-			}
-
-			vals := c.ListArgs["value"]
-
-			for i := range vals {
-				vals[i] = checkPath(vals[i])
-			}
-
-			ns.vmConfig.DiskPaths = vals
-
-			return nil
-		}),
-	},
-	{
 		HelpShort: "configures qemu-append",
 		HelpLong: `Add additional arguments to be passed to the QEMU instance. For example:
 
@@ -905,7 +871,7 @@ newly launched VMs.
 			"clear vm config <colocate,>",
 			"clear vm config <cores,>",
 			"clear vm config <coschedule,>",
-			"clear vm config <disk,>",
+			"clear vm config <disks,>",
 			"clear vm config <fifos,>",
 			"clear vm config <filesystem,>",
 			"clear vm config <hostname,>",
@@ -1161,8 +1127,8 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "append" {
 		return fmt.Sprintf("%v", v.Append), nil
 	}
-	if field == "disk" {
-		return fmt.Sprintf("%v", v.DiskPaths), nil
+	if field == "disks" {
+		return fmt.Sprintf("%v", v.Disks), nil
 	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
@@ -1217,8 +1183,8 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "append" {
 		v.Append = nil
 	}
-	if mask == Wildcard || mask == "disk" {
-		v.DiskPaths = nil
+	if mask == Wildcard || mask == "disks" {
+		v.Disks = nil
 	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
@@ -1271,8 +1237,8 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if len(v.Append) > 0 {
 		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
 	}
-	if len(v.DiskPaths) > 0 {
-		fmt.Fprintf(w, "vm config disk %v\n", quoteJoin(v.DiskPaths, " "))
+	if err := v.Disks.WriteConfig(w); err != nil {
+		return err
 	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))

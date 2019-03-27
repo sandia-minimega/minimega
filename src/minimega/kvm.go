@@ -31,14 +31,15 @@ const (
 	DefaultKVMCPU    = "host"
 	DefaultKVMDriver = "e1000"
 
+	DefaultKVMDiskInterface = "ide"
+	DefaultKVMDiskCache     = "writeback"
+
 	DEV_PER_BUS    = 32
 	DEV_PER_VIRTIO = 30 // Max of 30 virtio ports/device (0 and 32 are reserved)
 
 	QMP_CONNECT_RETRY = 50
 	QMP_CONNECT_DELAY = 100
 )
-
-const DefaultDriver = "e1000"
 
 type KVMConfig struct {
 	// Set the QEMU binary name to invoke. Relative paths are ok.
@@ -165,7 +166,7 @@ type KVMConfig struct {
 	// VM launches, creating a back qcow2 in the VM's instance directory.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
-	DiskPaths []string
+	Disks DiskConfigs
 
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
@@ -216,8 +217,8 @@ func (old KVMConfig) Copy() KVMConfig {
 	res := old
 
 	// Make deep copy of slices
-	res.DiskPaths = make([]string, len(old.DiskPaths))
-	copy(res.DiskPaths, old.DiskPaths)
+	res.Disks = make([]DiskConfig, len(old.Disks))
+	copy(res.Disks, old.Disks)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
 	copy(res.QemuAppend, old.QemuAppend)
 
@@ -393,9 +394,9 @@ func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	for _, d := range vm.DiskPaths {
-		for _, d2 := range vm2.DiskPaths {
-			if d == d2 && (!vm.Snapshot || !vm2.Snapshot) {
+	for _, d := range vm.Disks {
+		for _, d2 := range vm2.Disks {
+			if d.Path == d2.Path && (!vm.Snapshot || !vm2.Snapshot) {
 				return fmt.Errorf("disk conflict with vm %v: %v", vm.Name, d)
 			}
 		}
@@ -411,7 +412,7 @@ func (vm *KVMConfig) String() string {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "KVM configuration:")
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
-	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
+	fmt.Fprintf(w, "Disks:\t%v\n", vm.DiskString(namespace))
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
@@ -429,6 +430,10 @@ func (vm *KVMConfig) String() string {
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
+}
+
+func (vm *KVMConfig) DiskString(namespace string) string {
+	return fmt.Sprintf("[%s]", vm.Disks.String())
 }
 
 func (vm *KvmVM) QMPRaw(input string) (string, error) {
@@ -634,13 +639,13 @@ func (vm *KvmVM) launch() error {
 
 		// Create a snapshot of each disk image
 		if vm.Snapshot {
-			for i, d := range vm.DiskPaths {
+			for i, d := range vm.Disks {
 				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
-				if err := diskSnapshot(d, dst); err != nil {
+				if err := diskSnapshot(d.Path, dst); err != nil {
 					return fmt.Errorf("unable to snapshot %v: %v", d, err)
 				}
 
-				vm.DiskPaths[i] = dst
+				vm.Disks[i].SnapshotPath = dst
 			}
 		}
 	}
@@ -1048,10 +1053,28 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, "media=cdrom")
 	}
 
-	if len(vm.DiskPaths) != 0 {
-		for _, diskPath := range vm.DiskPaths {
+	// disks
+	var ahciBusSlot int
+	args = append(args, "-device")
+	args = append(args, "ahci,id=ahci")
+
+	if len(vm.Disks) != 0 {
+		for _, diskConfig := range vm.Disks {
 			args = append(args, "-drive")
-			args = append(args, "file="+diskPath+",media=disk")
+
+			if diskConfig.Interface == "ahci" {
+				params := fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none,cache=%v", ahciBusSlot, diskConfig.SnapshotPath, diskConfig.Cache)
+
+				args = append(args, params)
+				args = append(args, "-device")
+				args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
+
+				ahciBusSlot++
+			} else {
+				params := fmt.Sprintf("file=%v,media=disk,if=%v,cache=%v", diskConfig.SnapshotPath, diskConfig.Interface, diskConfig.Cache)
+
+				args = append(args, params)
+			}
 		}
 	}
 

@@ -52,6 +52,42 @@ remove saved configurations.`,
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 		Call:    wrapSimpleCLI(cliVMConfig),
 	},
+	{ // vm config disk
+		HelpShort: "specify disks for VM",
+		HelpLong: `Specify one or more disks to be connected to a VM. Any disk image supported by QEMU is a valid parameter.
+
+Optionally, you may specify the cache mode to be used by the drive. By default, "writeback" is used. Supported cache modes are "none", "writeback", "unsafe", "directsync", and "writethrough".
+
+Optionally, you may specify the drive interface for qemu to use. By default, "ide" is used. Supported interfaces are "ahci", "ide", "scsi", "sd", "mtd", "floppy", "pflash", and "virtio".
+
+The order is:
+
+	<path>,<driver>,<cache mode>
+
+Examples:
+
+To attach a disk with the defaults driver and cache mode:
+
+	vm config disk linux_disk.qcow2
+
+To attach 2 disks using the "ide" driver for the first disk and default driver for the second disk:
+
+	vm config disk linux_disk.qcow2,ide storage_disk.qcow2
+
+To attach a disk using the "ide" driver with the "unsafe" cache mode:
+
+	vm config disk linux_disk.qcow2,ide,unsafe
+
+Disk images launched in snapshot mode may safely be used for multiple VMs.
+
+Note: this configuration only applies to KVM-based VMs.
+
+Calling vm config disks with no arguments prints the current configuration.`,
+		Patterns: []string{
+			"vm config disks [diskspec]...",
+		},
+		Call: wrapSimpleCLI(cliVMConfigDisk),
+	},
 	{ // vm config net
 		HelpShort: "specify network interfaces for VM",
 		HelpLong: `
@@ -208,6 +244,16 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	// Print the config
 	resp.Response = ns.vmConfig.String(ns.Name)
 	return nil
+}
+
+func cliVMConfigDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if len(c.ListArgs) == 0 {
+		resp.Response = ns.vmConfig.DiskString(ns.Name)
+		// TODO
+		return nil
+	}
+
+	return ns.processVMDisks(c.ListArgs["diskspec"])
 }
 
 func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
