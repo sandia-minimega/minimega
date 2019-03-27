@@ -13,11 +13,13 @@ import (
 )
 
 type Conn struct {
-	net.Conn
+	net.Conn // embed
 
+	//
 	s Server
 }
 
+// Dial a VNC server and complete the handshake
 func Dial(host string) (*Conn, error) {
 	c, err := net.Dial("tcp", host)
 	if err != nil {
