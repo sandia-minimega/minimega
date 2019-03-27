@@ -394,6 +394,24 @@ func (q *Conn) USBDeviceAdd(id, bus, serial string) (string, error) {
 	return resp, err
 }
 
+func (q *Conn) NetDevAdd(id, devType, ifname string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
+	arg := fmt.Sprintf('netdev_add type=%v,id=%v,ifname=%v,script=no,downscript=no', devType, id, ifname)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
+}
+
+func (q *Conn) NicAdd(id, netdevID, bus, addr, driver, mac string) (string, error) {
+	if !q.ready {
+		return "", ERR_READY
+	}
+	arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,addr=%v,driver=%v,mac=%v", id, netdevID, bus, addr, driver, mac)
+	resp, err := q.HumanMonitorCommand(arg)
+	return resp, err
+}
+
 func (q *Conn) USBDeviceDel(id string) (string, error) {
 	if !q.ready {
 		return "", ERR_READY
