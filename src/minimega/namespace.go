@@ -574,7 +574,7 @@ func (n *Namespace) processVMDisks(vals []string) error {
 	n.vmConfig.Disks = nil
 
 	for _, spec := range vals {
-		disk, err := ParseDiskConfig(spec)
+		disk, err := ParseDiskConfig(spec, n.vmConfig.Snapshot)
 		if err != nil {
 			n.vmConfig.Disks = nil
 			return err

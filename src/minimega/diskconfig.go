@@ -28,7 +28,7 @@ type DiskConfigs []DiskConfig
 
 // ParseDiskConfig processes the input specifying the disk image path, interface,
 // and cache mode and udpates the vm config accordingly.
-func ParseDiskConfig(spec string) (*DiskConfig, error) {
+func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 	// example: /data/minimega/images/linux.qcow2,virtio,writeback
 	f := strings.Split(spec, ",")
 
@@ -62,10 +62,6 @@ func ParseDiskConfig(spec string) (*DiskConfig, error) {
 
 	if i == "" && isInterface(DefaultKVMDiskInterface) {
 		i = DefaultKVMDiskInterface
-	}
-
-	if c == "" && isCache(DefaultKVMDiskCache) {
-		c = DefaultKVMDiskCache
 	}
 
 	return &DiskConfig{
@@ -111,6 +107,7 @@ func (c DiskConfigs) WriteConfig(w io.Writer) error {
 	return nil
 }
 
+// disk interface cache mode is a hypervisor-independant feature
 func isCache(c string) bool {
 	// supported QEMU disk cache modes from the man page
 	validCaches := map[string]bool{"none": true, "writeback": true, "unsafe": true, "directsync": true, "writethrough": true}

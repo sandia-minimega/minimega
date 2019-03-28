@@ -28,11 +28,11 @@ import (
 )
 
 const (
-	DefaultKVMCPU    = "host"
-	DefaultKVMDriver = "e1000"
-
-	DefaultKVMDiskInterface = "ide"
-	DefaultKVMDiskCache     = "writeback"
+	DefaultKVMCPU                    = "host"
+	DefaultKVMDriver                 = "e1000"
+	DefaultKVMDiskInterface          = "ide"
+	DefaultKVMDiskCacheSnapshotTrue  = "unsafe"
+	DefaultKVMDiskCacheSnapshotFalse = "writeback"
 
 	DEV_PER_BUS    = 32
 	DEV_PER_VIRTIO = 30 // Max of 30 virtio ports/device (0 and 32 are reserved)
@@ -1068,26 +1068,44 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	// disks
 	var ahciBusSlot int
-	args = append(args, "-device")
-	args = append(args, "ahci,id=ahci")
 
 	if len(vm.Disks) != 0 {
 		for _, diskConfig := range vm.Disks {
-			args = append(args, "-drive")
+			var driveParams string
+
+			path := diskConfig.Path
+			if diskConfig.SnapshotPath != "" {
+				path = diskConfig.SnapshotPath
+			}
 
 			if diskConfig.Interface == "ahci" {
-				params := fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none,cache=%v", ahciBusSlot, diskConfig.SnapshotPath, diskConfig.Cache)
+				if ahciBusSlot == 0 {
+					args = append(args, "-device")
+					args = append(args, "ahci,id=ahci")
+				}
 
-				args = append(args, params)
 				args = append(args, "-device")
 				args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
 
+				driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
+
 				ahciBusSlot++
 			} else {
-				params := fmt.Sprintf("file=%v,media=disk,if=%v,cache=%v", diskConfig.SnapshotPath, diskConfig.Interface, diskConfig.Cache)
-
-				args = append(args, params)
+				driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, diskConfig.Interface)
 			}
+
+			if diskConfig.Cache != "" {
+				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, diskConfig.Cache)
+			} else {
+				if vm.Snapshot {
+					driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotTrue)
+				} else {
+					driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotFalse)
+				}
+			}
+
+			args = append(args, "-drive")
+			args = append(args, driveParams)
 		}
 	}
 
