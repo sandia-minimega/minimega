@@ -1089,8 +1089,10 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 			driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
 
 			ahciBusSlot++
-		} else {
+		} else if diskConfig.Interface != "" {
 			driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, diskConfig.Interface)
+		} else {
+			driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, DefaultKVMDiskInterface)
 		}
 
 		if diskConfig.Cache != "" {

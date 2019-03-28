@@ -13,7 +13,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -58,7 +58,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -100,7 +100,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -139,7 +139,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
