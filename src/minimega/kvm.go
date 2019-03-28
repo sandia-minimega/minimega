@@ -891,12 +891,12 @@ func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
 	return res
 }
 
-func (vm *KvmVM) ChangeCD(f string) error {
+func (vm *KvmVM) ChangeCD(f string, force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	if vm.CdromPath != "" {
-		if err := vm.ejectCD(); err != nil {
+		if err := vm.ejectCD(force); err != nil {
 			return err
 		}
 	}
@@ -909,7 +909,7 @@ func (vm *KvmVM) ChangeCD(f string) error {
 	return err
 }
 
-func (vm *KvmVM) EjectCD() error {
+func (vm *KvmVM) EjectCD(force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -917,11 +917,11 @@ func (vm *KvmVM) EjectCD() error {
 		return errors.New("no cdrom inserted")
 	}
 
-	return vm.ejectCD()
+	return vm.ejectCD(force)
 }
 
-func (vm *KvmVM) ejectCD() error {
-	err := vm.q.BlockdevEject("ide0-cd0")
+func (vm *KvmVM) ejectCD(force bool) error {
+	err := vm.q.BlockdevEject("ide0-cd0", force)
 	if err == nil {
 		vm.CdromPath = ""
 	}

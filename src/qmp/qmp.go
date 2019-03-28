@@ -200,7 +200,7 @@ func (q *Conn) Stop() error {
 	return nil
 }
 
-func (q *Conn) BlockdevEject(device string) error {
+func (q *Conn) BlockdevEject(device string, force bool) error {
 	if !q.ready {
 		return ERR_READY
 	}
@@ -208,6 +208,7 @@ func (q *Conn) BlockdevEject(device string) error {
 		"execute": "eject",
 		"arguments": map[string]interface{}{
 			"device": device,
+			"force":  force,
 		},
 	}
 	err := q.write(s)
