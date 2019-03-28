@@ -263,7 +263,6 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 func cliVMConfigDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.ListArgs) == 0 {
 		resp.Response = ns.vmConfig.DiskString(ns.Name)
-		// TODO
 		return nil
 	}
 

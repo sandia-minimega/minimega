@@ -64,6 +64,8 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		i = DefaultKVMDiskInterface
 	}
 
+	p = checkPath(p)
+
 	return &DiskConfig{
 		Path:      p,
 		Cache:     c,
