@@ -56,11 +56,22 @@ remove saved configurations.`,
 		HelpShort: "specify disks for VM",
 		HelpLong: `Specify one or more disks to be connected to a VM. Any disk image supported by QEMU is a valid parameter.
 
-Optionally, you may specify the drive interface for QEMU to use. By default, "ide" is used. Supported interfaces are "ahci", "ide", "scsi", "sd", "mtd", "floppy", "pflash", and "virtio".
+Optionally, you may specify the drive interface for QEMU to use. By default,
+"ide" is used. Supported interfaces are "ahci", "ide", "scsi", "sd", "mtd",
+"floppy", "pflash", and "virtio".
 
-Optionally, you may specify the cache mode to be used by the drive. By default, "unsafe" is used for vms launched in snapshot mode, and "writeback" is used otherwise. Supported cache modes are "none", "writeback", "unsafe", "directsync", and "writethrough".
+Optionally, you may specify the cache mode to be used by the drive. By default,
+"unsafe" is used for vms launched in snapshot mode, and "writeback" is used
+otherwise. Supported cache modes are "none", "writeback", "unsafe",
+"directsync", and "writethrough".
 
-Note: although disk snapshot image files are saved in the temporary vm instance paths, they may not be usable if the "unsafe" cache mode is used, as all flush commands from the guest are ignored in that cache mode. For example, even if you shut down the guest cleanly, there may still be data not yet written to the snapshot image file. If you wish to copy and use the snapshot image file cleanly, you can flush the disk cache manually via the QMP command socket, or specify a different cache mode such as "writeback".
+Note: although disk snapshot image files are saved in the temporary vm instance
+paths, they may not be usable if the "unsafe" cache mode is used, as all flush
+commands from the guest are ignored in that cache mode. For example, even if
+you shut down the guest cleanly, there may still be data not yet written to the
+snapshot image file. If you wish to copy and use the snapshot image file
+cleanly, you can flush the disk cache manually via the QMP command socket, or
+specify a different cache mode such as "writeback".
 
 The order is:
 
@@ -72,7 +83,8 @@ To attach a disk with the default interface and cache mode:
 
 	vm config disk linux_disk.qcow2
 
-To attach 2 disks using the "ide" interface for the first disk and default interface for the second disk:
+To attach 2 disks using the "ide" interface for the first disk and default
+interface for the second disk:
 
 	vm config disk linux_disk.qcow2,ide storage_disk.qcow2
 
@@ -82,9 +94,9 @@ To attach a disk using the "ide" interface with the "unsafe" cache mode:
 
 Disk images launched in snapshot mode may safely be used for multiple VMs.
 
-Note: this configuration only applies to KVM-based VMs.
+Calling vm config disks with no arguments prints the current configuration.
 
-Calling vm config disks with no arguments prints the current configuration.`,
+Note: this configuration only applies to KVM-based VMs.`,
 		Patterns: []string{
 			"vm config disks [diskspec]...",
 		},
