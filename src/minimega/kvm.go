@@ -1069,44 +1069,42 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// disks
 	var ahciBusSlot int
 
-	if len(vm.Disks) != 0 {
-		for _, diskConfig := range vm.Disks {
-			var driveParams string
+	for _, diskConfig := range vm.Disks {
+		var driveParams string
 
-			path := diskConfig.Path
-			if diskConfig.SnapshotPath != "" {
-				path = diskConfig.SnapshotPath
-			}
-
-			if diskConfig.Interface == "ahci" {
-				if ahciBusSlot == 0 {
-					args = append(args, "-device")
-					args = append(args, "ahci,id=ahci")
-				}
-
-				args = append(args, "-device")
-				args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
-
-				driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
-
-				ahciBusSlot++
-			} else {
-				driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, diskConfig.Interface)
-			}
-
-			if diskConfig.Cache != "" {
-				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, diskConfig.Cache)
-			} else {
-				if vm.Snapshot {
-					driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotTrue)
-				} else {
-					driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotFalse)
-				}
-			}
-
-			args = append(args, "-drive")
-			args = append(args, driveParams)
+		path := diskConfig.Path
+		if diskConfig.SnapshotPath != "" {
+			path = diskConfig.SnapshotPath
 		}
+
+		if diskConfig.Interface == "ahci" {
+			if ahciBusSlot == 0 {
+				args = append(args, "-device")
+				args = append(args, "ahci,id=ahci")
+			}
+
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
+
+			driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
+
+			ahciBusSlot++
+		} else {
+			driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, diskConfig.Interface)
+		}
+
+		if diskConfig.Cache != "" {
+			driveParams = fmt.Sprintf("%v,cache=%v", driveParams, diskConfig.Cache)
+		} else {
+			if vm.Snapshot {
+				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotTrue)
+			} else {
+				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotFalse)
+			}
+		}
+
+		args = append(args, "-drive")
+		args = append(args, driveParams)
 	}
 
 	if vm.KernelPath != "" {
