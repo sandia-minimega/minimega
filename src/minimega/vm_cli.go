@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -106,9 +107,9 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
-If enabled (see "ns"), VMs will be queued for launching until "vm launch" is
-called with no additional arguments. This allows the scheduler to better
-allocate resources across the cluster.`,
+If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
+launch" is called with no additional arguments. This allows the scheduler to
+better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
 			"vm launch <kvm,> <name or count>",
@@ -334,17 +335,21 @@ Eject all VM cdroms:
 
         vm cdrom eject all
 
+If the cdrom is "locked" by the guest, the force option can be used to override
+the lock:
+
+        vm cdrom eject 0 force
+
 Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
 "vm cdrom change" ejects the current ISO, if there is one.
 
-
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm cdrom <eject,> <vm target>",
-			"vm cdrom <change,> <vm target> <path>",
+			"vm cdrom <eject,> <vm target> [force,]",
+			"vm cdrom <change,> <vm target> <path> [force,]",
 		},
 		Call:    wrapVMTargetCLI(cliVMCdrom),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
@@ -458,11 +463,12 @@ func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		fields = vmInfoLite
 	}
 
-	ns.Info(fields, resp)
+	ns.VMs.Info(fields, resp)
 	return nil
 }
 
 func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	force := c.BoolArgs["force"]
 	target := c.StringArgs["vm"]
 
 	if c.BoolArgs["eject"] {
@@ -472,7 +478,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				return false, nil
 			}
 
-			err := kvm.EjectCD()
+			err := kvm.EjectCD(force)
 			if wild && err != nil && err.Error() == "no cdrom inserted" {
 				// suppress error if more than one target
 				err = nil
@@ -492,7 +498,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				return false, nil
 			}
 
-			return true, kvm.ChangeCD(f)
+			return true, kvm.ChangeCD(f, force)
 		})
 	}
 
@@ -596,19 +602,24 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!
-			return ns.Schedule()
+			return ns.Schedule(false)
 		}
 
 		return err
 	}
 
-	return ns.Schedule()
+	return ns.Schedule(false)
 }
 
 func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(c.StringArgs["qmp"]), &m); err != nil {
+		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	out, err := vm.QMPRaw(c.StringArgs["qmp"])

@@ -148,7 +148,7 @@ Calling `vm`launch` with no additional arguments flushes the queue and invokes
 the scheduler:
 
 	minimega[foo]$ vm launch
-	minimega[foo]$ ns schedules
+	minimega[foo]$ ns schedule status
 	start               | end                 | state     | launched | failures | total | hosts
 	02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 1        | 0        | 1     | 1
 
@@ -201,6 +201,41 @@ Instructs the scheduler to launch four VMs called quad[0-3] on any node and not
 to schedule at most four other VMs on those nodes. Note: because of the way the
 least loaded scheduler works, quad[0-3] will most likely not be scheduled on the
 same node.
+
+*** Dry-run
+
+The `ns` API also allows users to perform dry runs with the scheduler. This
+will determine VM placement but stop before launching any VMs. The VM placement
+is displayed back to the user for editing with the `ns`schedule`mv` API. For
+example, if we launched four VMs with queueing enabled:
+
+    minimega$ ns queueing true
+    minimega$ vm launch kvm vm[0-3]
+    minimega$ ns schedule dry-run
+    vm   | dst
+    vm0  | mm0
+    vm1  | mm1
+    vm2  | mm2
+    vm3  | mm3
+
+We can then move one or more VMs:
+
+    minimega$ ns schedule mv vm0 mm1
+    minimega$ ns schedule mv vm[1-2] mm0
+    minimega$ ns schedule dump
+    vm   | dst
+    vm0  | mm1
+    vm1  | mm0
+    vm2  | mm0
+    vm3  | mm3
+
+To launch the VMs based on the edited VM placement, simply run `ns`schedule`:
+
+    minimega$ ns schedule dump
+
+Note that only named VMs can be manipulated in this manner. If you launch VMs
+with a number (i.e. `vm`launch`kvm`4`), the VMs do not have names until they
+are launched.
 
 ** vm API
 

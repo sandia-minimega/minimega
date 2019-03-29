@@ -410,7 +410,19 @@ function initFilesDataTable() {
     var table = $('#files-dataTable').DataTable({
         "ajax": {
             "url": path+"/files.json?path="+subdir,
-            "dataSrc": ""
+            "dataSrc": function(data) {
+                // Add '..' to data
+                if (subdir != "") {
+                    data.unshift({
+                        "host": "",
+                        "dir": "<dir>",
+                        "name": "..",
+                        "size": "",
+                    });
+                }
+
+                return data;
+            },
         },
         "dom":
             "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
@@ -432,15 +444,15 @@ function initFilesDataTable() {
         "columns": [
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name", render:  function ( data, type, full, meta ) {
-                if ( full["dir"] != "" ) {
-                    var p = window.location.pathname;
-                    if (!p.endsWith("/")) {
-                        p += "/";
-                    }
-                    return '<a href="'+p+data+'/">'+data+'</a>';
+                var p = window.location.pathname;
+                if (!p.endsWith("/")) {
+                    p += "/";
                 }
-
-                return data;
+                var base = data.split(/[\\/]/).pop();
+                if (full["dir"] != "") {
+                    base += "/";
+                }
+                return '<a href="'+p+base+'">'+base+'</a>';
             } },
             { "title": "Size", "data": "size", render:  function ( data, type, full, meta ) {
                 // From https://stackoverflow.com/a/22023833
@@ -616,11 +628,14 @@ function connectURL (vm) {
 function initCowbell () {
     var audioElement = document.createElement('audio');
     audioElement.setAttribute('src', '/images/cow_and_bell_1243222141.mp3');
-    $('#nav-container').dblclick(function() {
-        audioElement.currentTime = 0;
-        audioElement.play();
+    audioElement.volume = 0.1;
+    document.querySelector('#nav-container').addEventListener('click', function (e) {
+        if (e.detail === 3) {
+            audioElement.currentTime = 0;
+            audioElement.play();
+        }
     });
-    console.log("Added more cowbell.");
+    console.log("Added reduced cowbell.");
 }
 
 

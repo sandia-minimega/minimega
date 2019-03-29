@@ -1,0 +1,57 @@
+## ns queueing true
+
+## # schedule one container per host
+## vm config filesystem /root/uminicccfs
+## vm config schedule mm1
+## vm launch container vm1
+## vm config schedule mm2
+## vm launch container vm2
+## vm config schedule mm3
+## vm launch container vm3
+
+## # dry run, dump schedule
+## ns schedule dry-run
+vm   | dst
+vm1  | mm1
+vm2  | mm2
+vm3  | mm3
+
+## # try invalid moves
+## ns schedule mv vm4 mm1
+E: reassign vm4: vm not found
+## ns schedule mv vm1 mm4
+E: new dst host is not in namespace
+
+## # no changes, hopefully
+## ns schedule dump
+vm   | dst
+vm1  | mm1
+vm2  | mm2
+vm3  | mm3
+
+## # try valid moves
+## ns schedule mv vm1 mm2
+## ns schedule dump
+vm   | dst
+vm1  | mm2
+vm2  | mm2
+vm3  | mm3
+## ns schedule mv vm[1-3] mm3
+## ns schedule dump
+vm   | dst
+vm1  | mm3
+vm2  | mm3
+vm3  | mm3
+
+## # run scheduler
+## ns schedule
+
+## # wait for scheduler to run
+## shell sleep 5s
+
+## # check where VMs ended up
+## .annotate true .columns name vm info
+host | name
+mm3  | vm1
+mm3  | vm2
+mm3  | vm3

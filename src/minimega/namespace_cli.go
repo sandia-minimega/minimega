@@ -55,7 +55,11 @@ Display or modify the active namespace.
 - queue     : display VM queue
 - flush     : clear the VM queue
 - queueing  : toggle VMs queueing when launching (default false)
-- schedules : display scheduling stats
+- schedule  : run scheduler (same as "vm launch")
+  - dry-run : determine VM placement and print out VM -> host assignments
+  - dump    : print out VM -> host assignments (after dry-run)
+  - mv      : manually edit VM placement in schedule (after dry-run)
+  - status  : display scheduling status
 - snapshot  : take a snapshot of namespace or print snapshot progress
 - run       : run a command on all nodes in the namespace
 `,
@@ -70,7 +74,11 @@ Display or modify the active namespace.
 			"ns <queue,>",
 			"ns <flush,>",
 			"ns <queueing,> [true,false]",
-			"ns <schedules,>",
+			"ns <schedule,>",
+			"ns <schedule,> <dry-run,>",
+			"ns <schedule,> <dump,>",
+			"ns <schedule,> <mv,> <vm target> <dst>",
+			"ns <schedule,> <status,>",
 			"ns <snapshot,> [name]",
 			"ns <run,> (command)",
 		},
@@ -108,7 +116,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"queue":     wrapSimpleCLI(cliNamespaceQueue),
 	"queueing":  wrapSimpleCLI(cliNamespaceQueueing),
 	"flush":     wrapSimpleCLI(cliNamespaceFlush),
-	"schedules": wrapSimpleCLI(cliNamespaceSchedules),
+	"schedule":  wrapSimpleCLI(cliNamespaceSchedule),
 	"snapshot":  cliNamespaceSnapshot,
 	"run":       cliNamespaceRun,
 }
@@ -314,31 +322,62 @@ func cliNamespaceFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	return nil
 }
 
-func cliNamespaceSchedules(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	resp.Header = []string{
-		"start", "end", "state", "launched", "failures", "total", "hosts",
-	}
-
-	for _, stats := range ns.scheduleStats {
-		var end string
-		if !stats.end.IsZero() {
-			end = stats.end.Format(time.RFC822)
+func cliNamespaceSchedule(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["dry-run"]:
+		if err := ns.Schedule(true); err != nil {
+			return err
 		}
 
-		row := []string{
-			stats.start.Format(time.RFC822),
-			end,
-			stats.state,
-			strconv.Itoa(stats.launched),
-			strconv.Itoa(stats.failures),
-			strconv.Itoa(stats.total),
-			strconv.Itoa(stats.hosts),
+		fallthrough
+	case c.BoolArgs["dump"]:
+		if ns.assignment == nil {
+			return errors.New("must run dry-run first")
 		}
 
-		resp.Tabular = append(resp.Tabular, row)
-	}
+		resp.Header = []string{"vm", "dst"}
 
-	return nil
+		for k, vms := range ns.assignment {
+			for _, vm := range vms {
+				for _, v := range vm.Names {
+					row := []string{v, k}
+
+					resp.Tabular = append(resp.Tabular, row)
+				}
+			}
+		}
+
+		return nil
+	case c.BoolArgs["mv"]:
+		return ns.Reschedule(c.StringArgs["vm"], c.StringArgs["dst"])
+	case c.BoolArgs["status"]:
+		resp.Header = []string{
+			"start", "end", "state", "launched", "failures", "total", "hosts",
+		}
+
+		for _, stats := range ns.scheduleStats {
+			var end string
+			if !stats.end.IsZero() {
+				end = stats.end.Format(time.RFC822)
+			}
+
+			row := []string{
+				stats.start.Format(time.RFC822),
+				end,
+				stats.state,
+				strconv.Itoa(stats.launched),
+				strconv.Itoa(stats.failures),
+				strconv.Itoa(stats.total),
+				strconv.Itoa(stats.hosts),
+			}
+
+			resp.Tabular = append(resp.Tabular, row)
+		}
+
+		return nil
+	default:
+		return ns.Schedule(false)
+	}
 }
 
 func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {

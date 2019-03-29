@@ -17,6 +17,7 @@ var empty time.Time
 func TestCalculateStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, counter := genResall(start, window, false)
 	statsV = true
 	globalStats.calculateStats(window)
@@ -40,6 +41,7 @@ func TestCalculateStats(t *testing.T) {
 func TestPrintStats(t *testing.T) {
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, _ := genResall(start, window, false)
 	globalStats.calculateStats(window)
 	test := printStats(globalStats)
@@ -121,6 +123,7 @@ func TestReadLog(t *testing.T) {
 	statsV = true
 	start := time.Now().AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
+	igor.Now = time.Now()
 	globalStats, _ := genResall(start, window, true)
 	globalStats.readLog()
 	control := []string{"userA:1", "userB:2", "userC:3", "userD:4", "userE:5"}
@@ -154,29 +157,29 @@ func TestReadLog(t *testing.T) {
 func genlog(rd *ResData) {
 	var empty time.Time
 	res := Reservation{
-		ResName:   rd.ResName,
-		StartTime: rd.ResStart.Unix(),
-		EndTime:   rd.ResEnd.Unix(),
-		Duration:  rd.ResEnd.Sub(rd.ResStart).Minutes(),
-		Owner:     rd.ResName,
-		ID:        uint64(rd.ResID),
+		Name:     rd.ResName,
+		Start:    rd.ResStart,
+		End:      rd.ResEnd,
+		Duration: rd.ResEnd.Sub(rd.ResStart),
+		Owner:    rd.ResName,
+		ID:       uint64(rd.ResID),
 	}
-	emitReservationLog("CREATED", res)
-	emitReservationLog("INSTALL", res)
+	emitReservationLog("CREATED", &res)
+	emitReservationLog("INSTALL", &res)
 	for i := 0; i < rd.NumExtensions; i++ {
-		emitReservationLog("EXTENDED", res)
+		emitReservationLog("EXTENDED", &res)
 	}
 	if rd.ActualEnd != empty {
-		emitReservationLog("DELETED", res)
+		emitReservationLog("DELETED", &res)
 	}
 }
 
 func initlog() {
-	igorConfig.LogFile = "igor.log"
+	igor.Config.LogFile = "igor.log"
 	log.Init()
-	logfile, err := os.OpenFile(igorConfig.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
+	logfile, err := os.OpenFile(igor.Config.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)
 	if err != nil {
-		log.Fatal("failed to create logfile %v: %v", igorConfig.LogFile, err)
+		log.Fatal("failed to create logfile %v: %v", igor.Config.LogFile, err)
 	}
 	log.AddLogger("file", logfile, log.INFO, false)
 }

@@ -19,8 +19,9 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		args := fieldsQuoteEscape("\"", fmt.Sprintf(argf, scanner.Text()))
-		out, err := exec.Command(args[0], args[1:]...).Output()
+		out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 		if err != nil {
+			fmt.Fprintln(os.Stderr, string(out))
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}

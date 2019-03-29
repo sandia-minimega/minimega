@@ -125,6 +125,63 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 func filesHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("files handler: %v", r.URL.Path)
 
+	base := "/files/"
+
+	i := strings.Index(r.URL.Path, base)
+	path := r.URL.Path[:i]
+	subdir := r.URL.Path[i+len(base):]
+
+	cmd := NewCommand(r)
+	cmd.Command = fmt.Sprintf("ns run file list %q", subdir)
+	data := runTabular(cmd)
+
+	log.Info("path: `%v`, subdir: `%v`", path, subdir)
+
+	// count how many distinct files
+	files := map[string]bool{}
+
+	for _, v := range data {
+		files[v["name"]] = true
+	}
+
+	// handle special case -- requesting a single file
+	if len(files) == 1 {
+		f := data[0]
+
+		if f["name"] == subdir && f["dir"] == "" {
+			cmd := NewCommand(r)
+			cmd.Command = fmt.Sprintf("file stream %q", subdir)
+
+			w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(subdir))
+			w.Header().Set("Content-Type", "application/octet-stream")
+
+			for resps := range mm.Run(cmd.String()) {
+				for _, resp := range resps.Resp {
+					if resp.Error != "" {
+						log.Errorln(resp.Error)
+						continue
+					}
+
+					switch d := resp.Data.(type) {
+					case string:
+						// should be a base64 encoded string
+						dec := base64.NewDecoder(base64.StdEncoding, strings.NewReader(d))
+						_, err := io.Copy(w, dec)
+						if err != nil {
+							log.Error("unable to stream file: %v", err)
+							return
+						}
+					default:
+						log.Error("unexpected data type: %t", d)
+						return
+					}
+				}
+			}
+
+			return
+		}
+	}
+
 	renderTemplate(w, r, "files.tmpl", nil)
 }
 

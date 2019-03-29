@@ -159,6 +159,9 @@ func main() {
 			}
 
 			cmd := quoteJoin(parts, " ")
+			if len(parts) == 1 {
+				cmd = parts[0]
+			}
 			log.Info("got command: `%v`", cmd)
 
 			mm.RunAndPrint(cmd, false)
