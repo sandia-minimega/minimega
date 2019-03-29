@@ -123,7 +123,7 @@ func read(path, prev string, c *Config) error {
 		d := strings.Fields(v)
 
 		if !c.matches(constraints) {
-			log.Infoln("%v skipping %v, does not match constraints", s.Pos(), k)
+			log.Info("%v skipping %v, does not match constraints", s.Pos(), k)
 			constraints = nil
 			continue
 		}
