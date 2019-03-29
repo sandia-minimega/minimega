@@ -625,10 +625,23 @@ func (vm *KvmVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
 	// If this is the first time launching the VM, do the final configuration
-	// check and create a directory for it.
+	// check and create directories for it.
 	if vm.State == VM_BUILDING {
+		// create a directory for the VM at the instance path
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			return fmt.Errorf("unable to create VM dir: %v", err)
+		}
+
+		// create the namespaces/<namespace> directory
+		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
+		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
+			return fmt.Errorf("unable to create namespace dir: %v", err)
+		}
+
+		// create a symlink under namespaces/<namespace> to the instance path
+		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
+		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
+			return fmt.Errorf("unable to create VM dir symlink: %v", err)
 		}
 	}
 
@@ -878,12 +891,12 @@ func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
 	return res
 }
 
-func (vm *KvmVM) ChangeCD(f string) error {
+func (vm *KvmVM) ChangeCD(f string, force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	if vm.CdromPath != "" {
-		if err := vm.ejectCD(); err != nil {
+		if err := vm.ejectCD(force); err != nil {
 			return err
 		}
 	}
@@ -896,7 +909,7 @@ func (vm *KvmVM) ChangeCD(f string) error {
 	return err
 }
 
-func (vm *KvmVM) EjectCD() error {
+func (vm *KvmVM) EjectCD(force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -904,11 +917,11 @@ func (vm *KvmVM) EjectCD() error {
 		return errors.New("no cdrom inserted")
 	}
 
-	return vm.ejectCD()
+	return vm.ejectCD(force)
 }
 
-func (vm *KvmVM) ejectCD() error {
-	err := vm.q.BlockdevEject("ide0-cd0")
+func (vm *KvmVM) ejectCD(force bool) error {
+	err := vm.q.BlockdevEject("ide0-cd0", force)
 	if err == nil {
 		vm.CdromPath = ""
 	}

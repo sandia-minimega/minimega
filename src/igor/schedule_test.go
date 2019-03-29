@@ -6,6 +6,8 @@ package main
 
 import (
 	log "minilog"
+	"sort"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -63,15 +65,11 @@ func TestScheduleHosts(t *testing.T) {
 	igor.Config.End = 4
 
 	res := makeReservation(now, "", "5m")
-	if err := scheduleHosts(r, res); err != nil {
-		t.Errorf("unable to schedule: %v", err)
-	}
+	mustSchedule(t, r, res, false)
 	t.Logf("%v", res)
 
 	res = makeReservation(now, "", "15m")
-	if err := scheduleHosts(r, res); err != nil {
-		t.Errorf("unable to schedule: %v", err)
-	}
+	mustSchedule(t, r, res, false)
 	t.Logf("%v", res)
 }
 
@@ -93,12 +91,8 @@ func TestScheduleContiguous(t *testing.T) {
 		log.Info("reservation #%v", i)
 		res := makeReservation(now, "0m", "5m")
 		res.Hosts = make([]string, i%4+1)
+		mustSchedule(t, r, res, true)
 
-		if err := scheduleContiguous(r, res); err != nil {
-			t.Errorf("unable to schedule: %v", err)
-		}
-
-		r.M[uint64(len(r.M))] = res
 		t.Logf("res #%v scheduled from %v to %v on hosts %v", i, res.Start, res.End, res.Hosts)
 	}
 
@@ -106,16 +100,98 @@ func TestScheduleContiguous(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		res := makeReservation(now, "0m", "5m")
 		res.Hosts = make([]string, 1)
+		mustSchedule(t, r, res, true)
 
-		if err := scheduleContiguous(r, res); err != nil {
-			t.Errorf("unable to schedule: %v", err)
-		}
-
-		r.M[uint64(len(r.M))] = res
 		if res.End.Sub(now) > time.Hour {
 			t.Errorf("should have been within the hour")
 		}
 		t.Logf("res #%v scheduled from %v to %v on hosts %v", i, res.Start, res.End, res.Hosts)
+	}
+}
+
+func TestScheduleContiguousGap(t *testing.T) {
+	now, _ := time.Parse(time.RFC3339, "2006-01-02T15:00:00Z")
+
+	igor.Config.Padlen = 1
+	igor.Config.Prefix = "host"
+	igor.Config.Start = 1
+	igor.Config.End = 4
+
+	for i := igor.Config.Start; i < igor.Config.End; i++ {
+		for j := i + 1; j < igor.Config.End+1; j++ {
+			r := &Reservations{
+				M: map[uint64]*Reservation{},
+			}
+
+			// create reservation on host i, j
+			res := makeReservation(now, "0m", "5m")
+			res.Hosts = []string{"host" + strconv.Itoa(i), "host" + strconv.Itoa(j)}
+			sort.Strings(res.Hosts)
+			mustSchedule(t, r, res, true)
+
+			// Make sure that we schedule after
+			res2 := makeReservation(now, "0m", "5m")
+			res2.Hosts = make([]string, (igor.Config.End - igor.Config.Start))
+			log.Info("reserving n hosts: %v", len(res2.Hosts))
+			mustSchedule(t, r, res2, false)
+
+			if res2.Start != res.End {
+				t.Errorf("scheduling error: res2 should start at %v not %v", res.End, res2.Start)
+			}
+		}
+	}
+}
+
+func TestScheduleContiguousFragmented(t *testing.T) {
+	now, _ := time.Parse(time.RFC3339, "2006-01-02T15:00:00Z")
+
+	igor.Config.Padlen = 1
+	igor.Config.Prefix = "host"
+	igor.Config.Start = 1
+	igor.Config.End = 4
+
+	r := &Reservations{
+		M: map[uint64]*Reservation{},
+	}
+
+	// create reservation on host 1, 4 for 5 minutes from now
+	res := makeReservation(now, "5m", "5m")
+	res.Hosts = []string{"host1", "host4"}
+	mustSchedule(t, r, res, true)
+
+	// try to schedule 4 nodes for 5 minutes (should fit before)
+	res2 := makeReservation(now, "0m", "5m")
+	res2.Hosts = make([]string, 4)
+	mustSchedule(t, r, res2, false)
+
+	log.Info("res2 start time: %v", res2.Start)
+	if res2.Start != now {
+		t.Errorf("res2 should start now")
+	}
+
+	// try to schedule 4 nodes for 10 minutes (should go after)
+	res3 := makeReservation(now, "0m", "10m")
+	res3.Hosts = make([]string, 4)
+	mustSchedule(t, r, res3, false)
+
+	log.Info("res3 start time: %v", res3.Start)
+	if res3.Start != res.End {
+		t.Errorf("res3 should after res")
+	}
+
+	// add another 5 minute reservation
+	res4 := makeReservation(now, "15m", "5m")
+	res4.Hosts = []string{"host1", "host4"}
+	mustSchedule(t, r, res4, true)
+
+	// try to schedule res3 again (should go after res4 now)
+	res3 = makeReservation(now, "0m", "10m")
+	res3.Hosts = make([]string, 4)
+	mustSchedule(t, r, res3, false)
+
+	log.Info("res3 start time: %v", res3.Start)
+	if res3.Start != res4.End {
+		t.Errorf("res3 should after res")
 	}
 }
 
@@ -163,4 +239,23 @@ func makeReservation(now time.Time, start, duration string) *Reservation {
 	}
 
 	return r
+}
+
+func mustSchedule(t *testing.T, r *Reservations, res *Reservation, keep bool) {
+	var err error
+	if res.Hosts[0] == "" {
+		err = scheduleContiguous(r, res)
+	} else {
+		err = scheduleHosts(r, res)
+	}
+
+	log.Info("scheduled from %v to %v: %v", res.Start, res.End, res.Hosts)
+
+	if err != nil {
+		t.Errorf("unable to schedule: %v", err)
+	}
+
+	if keep {
+		r.M[uint64(len(r.M))] = res
+	}
 }

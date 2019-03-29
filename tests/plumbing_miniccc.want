@@ -24,6 +24,6 @@
 
 ## # Verify that barpipe received the message from foopipe
 ## pipe
-name    | mode | readers | writers | count | via | previous
-barpipe | all  | 0       | 1       | 1     |     | hello, world
-foopipe | all  | 1       | 0       | 1     |     | hello, world
+name              | mode | readers | writers | count | via | previous
+minimega//barpipe | all  | 0       | 1       | 1     |     | hello, world
+minimega//foopipe | all  | 1       | 0       | 1     |     | hello, world
