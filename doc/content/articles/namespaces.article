@@ -92,20 +92,20 @@ host taps.
 The `ns` API allows users to view and configure parameters of the active
 namespace such as which hosts belong to the namespace.
 
+To display the list of hosts, use `ns`hosts`:
+
+	minimega[foo]$ ns hosts
+	ccc[1-5]
+
 To add hosts to the namespace, use `ns`add-hosts`:
 
-	minimega[foo]$ ns add-hosts ccc[1-10]
+	minimega[foo]$ ns add-hosts ccc[6-10]
 
 minimega only adds hosts that are already part of the mesh.
 
 To remove hosts, use `ns`del-hosts`:
 
 	minimega[foo]$ ns del-hosts ccc[1,3,5,7,9]
-
-To display the list of hosts, use `ns`hosts`:
-
-	minimega[foo]$ ns hosts
-	ccc[2,4,6,8,10]
 
 An important parameter is whether VMs should be queued or not. This is
 configured by the `ns`queueing` option which defaults to false. See the
@@ -121,7 +121,7 @@ See the Scheduler section below for a description of the different ways the
 scheduler can compute load.
 
 `ns` can also be used to display the current VM queue with `ns`queue` and
-information about the schedules it has run so far with `ns`schedules`.
+information about the schedules it has run so far with `ns`schedule`status`.
 
 ** Launching VMs
 
@@ -173,13 +173,13 @@ busy nodes if there are multiple namespaces are using the same nodes or there
 are VMs running outside of a namespace.
 
 In order to allow users to statically schedule some portions of their experiment
-(such as when there is hardware or people in the loop), we have added two new
-`vm`config` APIs:
+(such as when there is hardware or people in the loop), there are three APIs to modify VM placement on a per-VM basis:
 
-	* vm config schedule   : schedule these VMs on a particular node.
+	* vm config schedule   : schedule these VMs on a particular node
 	* vm config coschedule : limit the number of coscheduled VMs
+	* vm config colocate   : schedule VM on the same node as another VM
 
-These two APIs can be used together or separately:
+These three APIs can be used together or separately:
 
 	minimega$ vm config schedule ccc50
 	minimega$ vm config coschedule 0
@@ -202,6 +202,23 @@ to schedule at most four other VMs on those nodes. Note: because of the way the
 least loaded scheduler works, quad[0-3] will most likely not be scheduled on the
 same node.
 
+	minimega$ vm launch kvm a
+	minimega$ vm config colocate a
+	minimega$ vm launch kvm b
+
+Instructs the scheduler to schedule `b` on the same node as `a`.
+
+	minimega$ vm config coschedule 1
+	minimega$ vm launch kvm a
+	minimega$ vm config colocate a
+	minimega$ vm launch kvm b
+
+Instructs the scheduler to schedule `b` on the same node as `a` on the same
+node with no other VMs.
+
+Note that `vm`config`schedule` and `vm`config`colocate` cannot be used for the
+same VM as this could lead to conflicts in VM placement.
+
 *** Dry-run
 
 The `ns` API also allows users to perform dry runs with the scheduler. This
@@ -209,33 +226,75 @@ will determine VM placement but stop before launching any VMs. The VM placement
 is displayed back to the user for editing with the `ns`schedule`mv` API. For
 example, if we launched four VMs with queueing enabled:
 
-    minimega$ ns queueing true
-    minimega$ vm launch kvm vm[0-3]
-    minimega$ ns schedule dry-run
-    vm   | dst
-    vm0  | mm0
-    vm1  | mm1
-    vm2  | mm2
-    vm3  | mm3
+	minimega$ ns queueing true
+	minimega$ vm launch kvm vm[0-3]
+	minimega$ ns schedule dry-run
+	vm   | dst
+	vm0  | mm0
+	vm1  | mm1
+	vm2  | mm2
+	vm3  | mm3
 
 We can then move one or more VMs:
 
-    minimega$ ns schedule mv vm0 mm1
-    minimega$ ns schedule mv vm[1-2] mm0
-    minimega$ ns schedule dump
-    vm   | dst
-    vm0  | mm1
-    vm1  | mm0
-    vm2  | mm0
-    vm3  | mm3
+	minimega$ ns schedule mv vm0 mm1
+	minimega$ ns schedule mv vm[1-2] mm0
+	minimega$ ns schedule dump
+	vm   | dst
+	vm0  | mm1
+	vm1  | mm0
+	vm2  | mm0
+	vm3  | mm3
 
 To launch the VMs based on the edited VM placement, simply run `ns`schedule`:
 
-    minimega$ ns schedule dump
+	minimega$ ns schedule dump
 
 Note that only named VMs can be manipulated in this manner. If you launch VMs
 with a number (i.e. `vm`launch`kvm`4`), the VMs do not have names until they
 are launched.
+
+** Private bridge
+
+The `ns`bridge` API creates a bridge on all the hosts in the namespace and then
+creates a fully connected mesh of GRE or VXLAN tunnels between them. This
+bridge can then be used when launching VMs:
+
+	minimega$ namespace foo
+	minimega$ ns bridge foo
+	minimega$ vm config net foo,LAN
+	minimega$ vm launch kvm 2
+
+minimega uses tunnel keys on the GRE or VXLAN tunnels so that each namespace
+has an isolated bridge. This allows VLANs to be reused although this is not
+currently supported.
+
+Note that bridge names are not automatically namespaced -- users may wish to
+follow a convention of prefixing the bridge name with the namespace name. This
+may happen automatically in a future release.
+
+The bridge can be manually destroyed using the `ns`del-bridge` API or it will
+be automatically destroyed when the namespace is destroyed.
+
+** Replacing mesh send all
+
+Before namespaces, users would call `mesh`send`all` to run a command across the
+cluster and then run the command locally as well if it applied to the head
+node. To help with running commands across nodes in a namespace which can be a
+segment of the mesh, we created the `ns`run` API. This API runs the subcommand
+on all nodes in the namespace including the head node, if it is part of the
+namespace.
+
+** Snapshot
+
+Namespaces are working towards a full snapshot of a running experiment. This
+capability is partially implemented in the `ns`snapshot` API. This API records
+a minimega script to relaunch the running VMs and calls `vm`migrate` on each VM
+to capture its memory. The resulting migration files are added to the minimega
+script using the `vm`config`migrate` API. This snapshot capability should work
+for VMs with a kernel/initrd but not for VMs with a disk.
+
+In future releases, we plan to expand upon this capability.
 
 ** vm API
 
