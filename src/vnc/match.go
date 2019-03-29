@@ -64,14 +64,14 @@ func matchTemplate(img, template image.Image) *PointerEvent {
 
 	log.Debug("lowest SAD %v at %v,%v (center %v,%v)", minSAD, minX, minY, minX+templateBounds.Dx()/2, minY+templateBounds.Dy()/2)
 
-	// TODO: what's a good threshold?
-	if minSAD < 1.0 {
-		return &PointerEvent{
-			ButtonMask: 1, // left click
-			XPosition:  uint16(minX + templateBounds.Dx()/2),
-			YPosition:  uint16(minY + templateBounds.Dy()/2),
-		}
+	// 20 seems to be a decent cut off...
+	if minSAD > 20.0 {
+		return nil
 	}
 
-	return nil
+	return &PointerEvent{
+		ButtonMask: 1, // left click
+		XPosition:  uint16(minX + templateBounds.Dx()/2),
+		YPosition:  uint16(minY + templateBounds.Dy()/2),
+	}
 }
