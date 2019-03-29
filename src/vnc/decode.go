@@ -153,15 +153,15 @@ func (c *Conn) readRectangle() (*Rectangle, error) {
 	r := &Rectangle{}
 
 	if err := binary.Read(c, binary.BigEndian, &r.X); err != nil {
-		return nil, fmt.Errorf("unable to decode rect X pos", err)
+		return nil, fmt.Errorf("unable to decode rect X pos: %v", err)
 	} else if err := binary.Read(c, binary.BigEndian, &r.Y); err != nil {
-		return nil, fmt.Errorf("unable to decode rect Y pos", err)
+		return nil, fmt.Errorf("unable to decode rect Y pos: %v", err)
 	} else if err := binary.Read(c, binary.BigEndian, &r.Width); err != nil {
-		return nil, fmt.Errorf("unable to decode rect width", err)
+		return nil, fmt.Errorf("unable to decode rect width: %v", err)
 	} else if err := binary.Read(c, binary.BigEndian, &r.Height); err != nil {
-		return nil, fmt.Errorf("unable to decode rect height", err)
+		return nil, fmt.Errorf("unable to decode rect height: %v", err)
 	} else if err := binary.Read(c, binary.BigEndian, &r.EncodingType); err != nil {
-		return nil, fmt.Errorf("unable to decode rect encoding type", err)
+		return nil, fmt.Errorf("unable to decode rect encoding type: %v", err)
 	}
 
 	log.Debug("rectangle: %d x %d at (%d, %d)", r.Width, r.Height, r.X, r.Y)
