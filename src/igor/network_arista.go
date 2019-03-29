@@ -51,9 +51,13 @@ func aristaJSONRPC(user, password, URL string, commands []string) error {
 	path := fmt.Sprintf("http://%s:%s@%s", user, password, URL)
 	resp, err := http.Post(path, "application/json", strings.NewReader(string(data)))
 	if err != nil {
-		return fmt.Errorf("post: %v", err)
+		// replace the password with a placeholder so that it doesn't show up
+		// in error logs
+		msg := strings.Replace(err.Error(), password, "<PASSWORD>", -1)
+		return fmt.Errorf("post failed: %v", msg)
 	}
 	defer resp.Body.Close()
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("readall: %v", err)
@@ -72,7 +76,7 @@ func aristaSet(nodes []string, vlan int) error {
 
 	for _, n := range nodes {
 		var b bytes.Buffer
-		eth, ok := igorConfig.NodeMap[n]
+		eth, ok := igor.NodeMap[n]
 		if !ok {
 			return fmt.Errorf("no such node: %v", n)
 		}
@@ -87,7 +91,7 @@ func aristaSet(nodes []string, vlan int) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igorConfig.NetworkUser, igorConfig.NetworkPassword, igorConfig.NetworkURL, commands)
+		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}
@@ -101,7 +105,7 @@ func aristaClear(nodes []string) error {
 
 	for _, n := range nodes {
 		var b bytes.Buffer
-		eth, ok := igorConfig.NodeMap[n]
+		eth, ok := igor.NodeMap[n]
 		if !ok {
 			return fmt.Errorf("no such node: %v", n)
 		}
@@ -116,7 +120,7 @@ func aristaClear(nodes []string) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igorConfig.NetworkUser, igorConfig.NetworkPassword, igorConfig.NetworkURL, commands)
+		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}

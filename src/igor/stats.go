@@ -89,7 +89,7 @@ func runStats(_ *Command, _ []string) {
 		Reservationsid: make(map[int]*ResData),
 	}
 	gs.readLog()
-	statstartdate := time.Now().AddDate(0, 0, -d)
+	statstartdate := igor.Now.AddDate(0, 0, -d)
 	gs.calculateStats(statstartdate)
 	fmt.Println(printStats(&gs))
 }
@@ -145,7 +145,7 @@ func (stats *Stats) extendRes(rn string, ru string, ri int, rs time.Time, rex ti
 
 // Reads the logfile and adds the necessary reservations and usage time
 func (stats *Stats) readLog() {
-	f, err := os.Open(igorConfig.LogFile)
+	f, err := os.Open(igor.LogFile)
 	if err != nil {
 		log.Fatal("unable to open log")
 	}
@@ -220,7 +220,7 @@ func (stats *Stats) readLog() {
 		switch fields[action] {
 
 		case "INSTALL":
-			if !rs.After(time.Now().AddDate(0, 0, 0)) {
+			if !rs.After(igor.Now.AddDate(0, 0, 0)) {
 				stats.addReservation(rn, ru, ri, rs, re, nodes)
 			}
 		case "DELETED":
@@ -261,7 +261,7 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 			if d.ActualEnd.Before(d.ResStart) && !d.ActualEnd.Equal(empty) {
 				continue // deleted a queued res that had not yet started
 			}
-			if d.ResStart.After(time.Now()) {
+			if d.ResStart.After(igor.Now) {
 				continue // reservation hasnt started yet
 			}
 			if d.ResEnd.Before(statstartdate) {
@@ -276,11 +276,11 @@ func (stats *Stats) calculateStats(statstartdate time.Time) {
 
 			if d.ActualDuration.Minutes() == 0 { // we never saw this res get deleted
 				if statstartdate.Before(d.ResStart) {
-					uDuration += nodeMultiplier * time.Now().Sub(d.ResStart)
-					d.ActualDuration = time.Now().Sub(d.ResStart)
+					uDuration += nodeMultiplier * igor.Now.Sub(d.ResStart)
+					d.ActualDuration = igor.Now.Sub(d.ResStart)
 				} else {
-					uDuration += nodeMultiplier * time.Now().Sub(statstartdate)
-					d.ActualDuration = time.Now().Sub(statstartdate)
+					uDuration += nodeMultiplier * igor.Now.Sub(statstartdate)
+					d.ActualDuration = igor.Now.Sub(statstartdate)
 				}
 			} else {
 				if statstartdate.Before(d.ActualEnd) {

@@ -21,6 +21,7 @@ import (
 	"syscall"
 	"time"
 	"vlans"
+	"vnc"
 )
 
 const (
@@ -79,8 +80,8 @@ type Namespace struct {
 
 	routers map[int]*Router
 
-	vncRecorder // embed vnc recorder for this namespace
-	vncPlayer   // embed vnc player for this namespace
+	*vnc.Recorder // embed vnc recorder for this namespace
+	*vnc.Player   // embed vnc player for this namespace
 
 	// Command and control for this namespace
 	ccServer *ron.Server
@@ -132,13 +133,8 @@ func NewNamespace(name string) *Namespace {
 			m:       make(map[int]capture),
 			counter: NewCounter(),
 		},
-		vncRecorder: vncRecorder{
-			kb: make(map[string]*vncKBRecord),
-			fb: make(map[string]*vncFBRecord),
-		},
-		vncPlayer: vncPlayer{
-			m: make(map[string]*vncKBPlayback),
-		},
+		Recorder:      vnc.NewRecorder(),
+		Player:        vnc.NewPlayer(),
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
 		ccMounts:      make(map[string]ccMount),
@@ -207,8 +203,8 @@ func (n *Namespace) Destroy() error {
 	n.counter.Stop()
 
 	// Stop VNC record/replay
-	n.vncRecorder.Clear()
-	n.vncPlayer.Clear()
+	n.Recorder.Clear()
+	n.Player.Clear()
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)

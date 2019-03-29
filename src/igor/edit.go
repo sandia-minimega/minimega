@@ -49,31 +49,30 @@ func runEdit(cmd *Command, args []string) {
 		log.Fatalln("missing required argument")
 	}
 
-	if subProfile != "" && !igorConfig.UseCobbler {
+	if subProfile != "" && !igor.UseCobbler {
 		log.Fatalln("igor is not configured to use Cobbler, cannot specify a Cobbler profile")
 	}
 
-	r := FindReservation(subR)
+	r := igor.Find(subR)
 	if r == nil {
 		log.Fatal("reservation does not exist: %v", subR)
 	}
 
-	if !r.IsWritable(User) {
+	if !r.IsWritable(igor.User) {
 		log.Fatal("insufficient privileges to edit reservation: %v", subR)
 	}
 
 	if subOwner != "" {
-		if User.Username != "root" {
+		if igor.Username != "root" {
 			log.Fatalln("only root can modify reservation owner")
 		}
 
-		r.Owner = subOwner
-		dirty = true
+		igor.EditOwner(r, subOwner)
 		return
 	}
 
 	if subG != "" {
-		if User.Username != "root" && r.Owner != User.Username {
+		if igor.Username != "root" && r.Owner != igor.Username {
 			log.Fatalln("only owner or root can modify reservation group")
 		}
 
@@ -82,9 +81,7 @@ func runEdit(cmd *Command, args []string) {
 			log.Fatalln(err)
 		}
 
-		r.Group = subG
-		r.GroupID = g.Gid
-		dirty = true
+		igor.EditGroup(r, subG, g.Gid)
 		return
 	}
 
@@ -106,7 +103,14 @@ func runEdit(cmd *Command, args []string) {
 		}
 
 		r2.CobblerProfile = ""
-		if err := r2.SetKernelInitrd(subK, subI); err != nil {
+
+		if err := r2.SetKernel(subK); err != nil {
+			log.Fatalln(err)
+		}
+		if err := r2.SetInitrd(subI); err != nil {
+			if err := igor.PurgeFiles(r2); err != nil {
+				log.Error("leaked kernel: %v", subK)
+			}
 			log.Fatalln(err)
 		}
 
@@ -130,7 +134,7 @@ func runEdit(cmd *Command, args []string) {
 		if subI != "" {
 			if err := r2.SetInitrd(subI); err != nil {
 				// clean up (possibly) already installed kernel
-				if err := r2.PurgeFiles(); err != nil {
+				if err := igor.PurgeFiles(r2); err != nil {
 					log.Error("leaked kernel: %v", subK)
 				}
 
@@ -148,23 +152,20 @@ func runEdit(cmd *Command, args []string) {
 	}
 
 	// replace reservation with modified version
-	Reservations[r.ID] = r2
-	dirty = true
-
-	backend := GetBackend()
+	igor.Edit(r, r2)
 
 	if r.Installed {
-		if err := backend.Uninstall(r); err != nil {
+		if err := igor.Uninstall(r); err != nil {
 			log.Fatal("unable to uninstall old reservation: %v", err)
 		}
 
-		if err := backend.Install(r2); err != nil {
+		if err := igor.Backend.Install(r2); err != nil {
 			log.Fatal("unable to install edited reservation: %v", err)
 		}
 	}
 
 	// clean up any files that are no longer needed
-	if err := r.PurgeFiles(); err != nil {
+	if err := igor.PurgeFiles(r); err != nil {
 		log.Error("leaked files: %v", err)
 	}
 

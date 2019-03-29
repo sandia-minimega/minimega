@@ -6,8 +6,14 @@ package main
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"math"
 	log "minilog"
+	"os"
+	"ranges"
+	"strconv"
+	"syscall"
+	"time"
 )
 
 // The configuration of the system
@@ -82,17 +88,86 @@ type Config struct {
 	ExpirationLeadTime int
 }
 
-// Read in the configuration from the specified path.
+// Read in the configuration from the specified path. Checks to make sure that
+// the config is owned and only writable by the effective user to ensure that
+// users can't try to specify their own config when we're running with setuid.
 func readConfig(path string) (c Config) {
-	b, err := ioutil.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
-		log.Fatal("Couldn't read config file: %v", err)
+		log.Fatal("unable to open config file: %v", err)
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		log.Fatal("unable to stat config file: %v", err)
 	}
 
-	err = json.Unmarshal(b, &c)
-	if err != nil {
-		log.Fatal("Couldn't parse json: %v", err)
+	switch fi := fi.Sys().(type) {
+	case *syscall.Stat_t:
+		euid := syscall.Geteuid()
+		if fi.Uid != uint32(euid) {
+			log.Fatal("config file must be owned by running user")
+		}
+
+		if fi.Mode&0022 != 0 {
+			log.Fatal("config file must only be writable by running user")
+		}
+
+		if fi.Mode&0044 != 0 {
+			log.Fatal("config file must only be readable by running user")
+		}
+	default:
+		log.Warn("unable to check config ownership/permissions")
+	}
+
+	if err := json.NewDecoder(f).Decode(&c); err != nil {
+		log.Fatal("unable to parse json: %v", err)
 	}
 
 	return
+}
+
+func (c Config) validHosts() []string {
+	fmtstring := "%s%0" + strconv.Itoa(c.Padlen) + "d"
+
+	names := []string{}
+	for i := c.Start; i <= c.End; i++ {
+		names = append(names, fmt.Sprintf(fmtstring, c.Prefix, i))
+	}
+	return names
+}
+
+func (c Config) unsplitRange(hosts []string) string {
+	r, _ := ranges.NewRange(c.Prefix, c.Start, c.End)
+	s, _ := r.UnsplitRange(hosts)
+
+	return s
+}
+
+func (c Config) splitRange(s string) []string {
+	r, _ := ranges.NewRange(c.Prefix, c.Start, c.End)
+	v, _ := r.SplitRange(s)
+
+	return v
+}
+
+func (c Config) checkTimeLimit(nodes int, d time.Duration) error {
+	// no time limit in the config
+	if c.TimeLimit <= 0 {
+		return nil
+	}
+
+	max := time.Duration(c.TimeLimit) * time.Minute
+	if nodes > 1 {
+		// compute the max reservation length for this many nodes, rounding up
+		// to the nearest minute.
+		max = time.Duration(float64(max)/math.Log2(float64(nodes)) + 0.5)
+	}
+
+	if d > max {
+		return fmt.Errorf("max allowable duration for %v nodes is %v", nodes, max)
+	}
+
+	return nil
 }

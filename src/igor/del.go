@@ -28,16 +28,16 @@ func runDel(cmd *Command, args []string) {
 
 	name := args[0]
 
-	r := FindReservation(name)
+	r := igor.Find(name)
 	if r == nil {
 		log.Fatal("reservation does not exist: %v", name)
 	}
 
-	if !r.IsWritable(User) {
+	if !r.IsWritable(igor.User) {
 		log.Fatal("insufficient privileges to delete reservation: %v", name)
 	}
 
-	if err := DeleteReservation(r.ID); err != nil {
+	if err := igor.Delete(r.ID); err != nil {
 		log.Fatalln(err)
 	}
 }
