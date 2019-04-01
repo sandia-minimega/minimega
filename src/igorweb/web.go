@@ -19,26 +19,25 @@ import (
 	"html/template"
 	log "minilog"
 	"net/http"
+	"os"
 	"path/filepath"
-	"ranges"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
 
-var usage = `
-Run a Go web application with a GUI for igor -p for port
+var help = `
+Run a Go web application with a GUI for igor
 
 OPTIONAL FLAGS:
+`
 
-The -p flag sets the port of the server (default = 8080).
+func usage() {
+	fmt.Fprintln(os.Stderr, help)
+	flag.PrintDefaults()
 
-The -f flag sets location of html and static folder (default = current path).
-
-The -s flag silences output.
-
-The -e flag sets the path of the igor executable to exec`
+	os.Exit(2)
+}
 
 var commands = map[string]bool{
 	"del":    true,
@@ -58,78 +57,11 @@ var webF string // location of static folder
 var webS bool   // silent
 var webE string // path to igor executable
 
-var resCacheL sync.RWMutex
-var resCache ResTable
-
-var configCacheL sync.RWMutex
-var configCache AbbrevConfig
-
-var powerCacheL sync.RWMutex
-var powerCache ResTableRow
-
 func init() {
 	flag.StringVar(&webP, "p", "8080", "port")
 	flag.StringVar(&webF, "f", "", "path to static resources")
 	flag.BoolVar(&webS, "s", false, "silence output")
 	flag.StringVar(&webE, "e", "igor", "path to igor executable")
-}
-
-type AbbrevReservation struct {
-	Name  string
-	Owner string
-	Start time.Time
-	End   time.Time
-	Hosts []string // separate, not a range
-}
-
-type AbbrevConfig struct {
-	Prefix                                      string
-	RangeStart, RangeEnd, RackWidth, RackHeight int
-}
-
-// reservation object that igorweb.js understands
-// an array of these is passed to client
-// need to convert data to this structure in order to send it to client
-type ResTableRow struct {
-	Name  string
-	Owner string
-	// display string for "Start Time"
-	Start string
-	// integer start time for comparisons
-	StartInt int64
-	// display string for "End Time"
-	End string
-	// integer end time for comparisons
-	EndInt int64
-	// list of individual nodes in reservation
-	// use RangeToInts for conversion from range
-	Nodes []int
-}
-
-type ResTable []ResTableRow
-
-func (r ResTable) ContainsExpired() bool {
-	now := time.Now().Unix()
-	for i := 0; i < len(r); i++ {
-		row := r[i]
-		if row.EndInt < now {
-			return true
-		}
-	}
-
-	return false
-}
-
-// object conataining a single option for speculate
-// an array of ten of these is passed to the client
-type Speculate struct {
-	// display string for "Start Time" in speculate page
-	Start string
-	// display string for "End Time" in speculate page
-	End string
-	// properly formatted start string to be used in -a tag if Reserve is
-	//              clicked in speculate page
-	Formatted string
 }
 
 // object containing the response from web.go to client
@@ -143,107 +75,22 @@ type Response struct {
 	Extra interface{}
 }
 
-func runShowCommand() {
-	log.Debug("Running show for housekeeping's sake")
-	processWrapper(webE, "show")
-	log.Debug("Done")
-}
-
-func getReservations() []ResTableRow {
-	// Remove old reservations if necessary
-
-	resCacheL.RLock()
-	defer resCacheL.RUnlock()
-
-	if resCache.ContainsExpired() {
-		log.Debug("Found expired reservation(s)!")
-	}
-
-	res := make(ResTable, len(resCache)+1)
-	res[0] = getDownReservation()
-	copy(res[1:], resCache)
-
-	return res
-}
-
-// updates reservation data
-func updateReservations() {
+// run "show"
+func show() *Show {
 	log.Debug("Updating reservations")
 
 	out, err := processWrapper("igor", "show", "-json")
 	if err != nil {
 		log.Warn("Error updating reservations")
-		return
+		return nil
 	}
 
-	data := struct {
-		Prefix                                      string
-		RangeStart, RangeEnd, RackWidth, RackHeight int
-		Available, Down                             []string
-		Reservations                                []AbbrevReservation
-	}{}
-	if err := json.Unmarshal([]byte(out), &data); err != nil {
+	data := new(Show)
+	if err := json.Unmarshal([]byte(out), data); err != nil {
 		log.Warn("Error unmarshaling reservations: %v", err)
 	}
 
-	configCacheL.Lock()
-	configCache = AbbrevConfig{
-		Prefix:     data.Prefix,
-		RangeStart: data.RangeStart,
-		RangeEnd:   data.RangeEnd,
-		RackWidth:  data.RackWidth,
-		RackHeight: data.RackHeight,
-	}
-	configCacheL.Unlock()
-
-	resRows := ResTable{}
-	rnge, _ := ranges.NewRange(data.Prefix, data.RangeStart, data.RangeEnd)
-
-	// convert all of the Reservations to ResTableRows
-	timefmt := "Jan 2 15:04"
-	for _, r := range data.Reservations {
-		resRows = append(resRows, ResTableRow{
-			Name:     r.Name,
-			Owner:    r.Owner,
-			Start:    r.Start.Format(timefmt),
-			StartInt: r.Start.UnixNano(),
-			End:      r.End.Format(timefmt),
-			EndInt:   r.End.UnixNano(),
-			Nodes:    rnge.RangeToInts(r.Hosts),
-		})
-	}
-
-	resCacheL.Lock()
-	resCache = resRows
-	resCacheL.Unlock()
-
-	powerCacheL.Lock()
-	powerCache = ResTableRow{
-		"",
-		"",
-		"",
-		time.Now().Unix(),
-		"",
-		0,
-		rnge.RangeToInts(data.Down),
-	}
-	powerCacheL.Unlock()
-
-	log.Debug("Reservations updated.")
-}
-
-func getDownReservation() ResTableRow {
-	powerCacheL.RLock()
-	defer powerCacheL.RUnlock()
-
-	return powerCache
-}
-
-func getConfig() AbbrevConfig {
-	configCacheL.RLock()
-	defer configCacheL.RUnlock()
-
-	return configCache
+	return data
 }
 
 // Returns a non-nil error if something's wrong with the igor command
@@ -313,7 +160,6 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 		env := []string{"USER=" + username}
 		out, err = processWrapperEnv(env, cmd[0:]...)
-		updateReservations()
 	}
 
 	// if a speculate command
@@ -337,8 +183,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		// all other commands get an updated reservations array in Response.Extra
-		updateReservations()
-		extra = getReservations()
+		extra = show().ResTable()
 	}
 
 	// clean up response message
@@ -364,27 +209,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
 	}
 
-	// Update caches
-	updateReservations()
-
 	// serve igorweb.html with JS template variables filled in
 	//              for initial display of reservation info
 	if r.URL.Path == "/" {
-		resRows := getReservations()
-		config := getConfig()
 		t, err := template.ParseFiles(filepath.Join(webF, "igorweb.html"))
 		if err != nil {
 			panic(err)
 		}
-		data := struct {
-			StartNode    int
-			EndNode      int
-			RackWidth    int
-			Cluster      string
-			ResTableRows []ResTableRow
-		}{config.RangeStart, config.RangeEnd, config.RackWidth, config.Prefix, resRows}
 
-		err = t.Execute(w, data)
+		err = t.Execute(w, show())
 		if err != nil {
 			panic(err)
 		}
@@ -397,10 +230,15 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 // main web function
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 
-	// Update caches
-	updateReservations()
+	log.Init()
+
+	args := flag.Args()
+	if len(args) > 0 {
+		usage()
+	}
 
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))

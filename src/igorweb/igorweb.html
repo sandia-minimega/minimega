@@ -26,16 +26,16 @@
 
       <!-- Navigation bar -->
       <nav class="navbar fixed-top navbar-dark">
-        <!-- IgorWeb logo -->
-        <span class="navbar-brand mdl" style="margin-left: 10%; color: white; font-size: 2.25em; font-family: Logo, sans-serif;">
-          <b class="mdl">Igor</b><i>Web</i>
-        </span>
+	<!-- IgorWeb logo -->
+	<span class="navbar-brand mdl" style="margin-left: 10%; color: white; font-size: 2.25em; font-family: Logo, sans-serif;">
+	  <b class="mdl">Igor</b><i>Web</i>
+	</span>
 
-        <!-- Text that shows how many nodes are selected -->
-        <span id="selecttext" class="mdl navbar-item" style="color: white; font-size: 1.25em; font-weight: bold; display: none;"></span>
+	<!-- Text that shows how many nodes are selected -->
+	<span id="selecttext" class="mdl navbar-item" style="color: white; font-size: 1.25em; font-weight: bold; display: none;"></span>
 
-        <!-- New reservation button, floating blue plus -->
-        <div id="newbutton" class="clickable mdl" data-toggle="tooltip" data-placement="bottom" title="Make a new reservation" v-on:click="showNewResForm()">+</div>
+	<!-- New reservation button, floating blue plus -->
+	<div id="newbutton" class="clickable mdl" data-toggle="tooltip" data-placement="bottom" title="Make a new reservation" v-on:click="showNewResForm()">+</div>
       </nav>
 
       <alert :message="alertMessage"></alert>
@@ -43,58 +43,58 @@
       <reservation-info></reservation-info>
 
       <div
-        id="actionbar"
-        class="mx-auto fixed-bottom card active"
-        v-if="selectedReservation != null">
+	id="actionbar"
+	class="mx-auto fixed-bottom card active"
+	v-if="selectedReservation != null">
 
-        <button
-          class="igorbtn btn btn-outline-light actionbar"
-          v-if="selectedReservation != null"
-          v-on:click="showDeleteModal()">
-          Delete Reservation
-        </button>
+	<button
+	  class="igorbtn btn btn-outline-light actionbar"
+	  v-if="selectedReservation != null"
+	  v-on:click="showDeleteModal()">
+	  Delete Reservation
+	</button>
 
-        <button
-          class="igorbtn btn btn-outline-light actionbar"
-          v-if="selectedReservation != null"
-          v-on:click="showPowerModal()">
-          Power Control
-        </button>
+	<button
+	  class="igorbtn btn btn-outline-light actionbar"
+	  v-if="selectedReservation != null"
+	  v-on:click="showPowerModal()">
+	  Power Control
+	</button>
 
-        <button
-          class="igorbtn btn btn-outline-light actionbar"
-          v-on:click="showExtendModal()"
-          v-if="selectedReservation != null">
-          Extend Reservation
-        </button>
+	<button
+	  class="igorbtn btn btn-outline-light actionbar"
+	  v-on:click="showExtendModal()"
+	  v-if="selectedReservation != null">
+	  Extend Reservation
+	</button>
 
-        <span class="close clickable closeactionbar" v-on:click="clearSelection()">&times;</span>
+	<span class="close clickable closeactionbar" v-on:click="clearSelection()">&times;</span>
       </div>
 
       <new-reservation-modal ref="newResModal"></new-reservation-modal>
       <delete-reservation-modal
-        v-bind:reservation="selectedReservation"
-        v-if="selectedReservation != null"
-        v-on:deleted="clearSelection()"
-        ref="deleteModal"></delete-reservation-modal>
+	v-bind:reservation="selectedReservation"
+	v-if="selectedReservation != null"
+	v-on:deleted="clearSelection()"
+	ref="deleteModal"></delete-reservation-modal>
       <power-modal
-        v-bind:reservation="selectedReservation"
-        v-if="selectedReservation != null"
-        ref="powerModal"></power-modal>
+	v-bind:reservation="selectedReservation"
+	v-if="selectedReservation != null"
+	ref="powerModal"></power-modal>
       <extend-reservation-modal
-        v-bind:reservation="selectedReservation"
-        v-if="selectedReservation != null"
-        ref="extendModal"></extend-reservation-modal>
+	v-bind:reservation="selectedReservation"
+	v-if="selectedReservation != null"
+	ref="extendModal"></extend-reservation-modal>
     </div>
 
     <!-- Scripts -->
     <script>
-        <!-- Set some globals provided by the Go template -->
-        const STARTNODE = {{ .StartNode }};
-        const ENDNODE = {{ .EndNode }};
-        const RACKWIDTH = {{ .RackWidth }};
-        const CLUSTER = {{ .Cluster }};
-        const INITIALRESERVATIONS = {{ .ResTableRows }};
+	<!-- Set some globals provided by the Go template -->
+	const STARTNODE = {{ .RangeStart }};
+	const ENDNODE = {{ .RangeEnd }};
+	const RACKWIDTH = {{ .RackWidth }};
+	const CLUSTER = {{ .Prefix }};
+	const INITIALRESERVATIONS = {{ .ResTable }};
     </script>
 
     <script src="static/libs/jquery-3.3.1.min.js"></script>
