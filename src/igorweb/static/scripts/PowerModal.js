@@ -123,7 +123,7 @@
       },
 
       hideLoading() {
-        this.$refs['loadingModal'].hide();
+        setTimeout(this.$refs['loadingModal'].hide, 500);
       },
 
       submitPower(cmd) {

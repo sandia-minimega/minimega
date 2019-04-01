@@ -78,8 +78,10 @@
             }
 
             this.$store.commit('setAlert', msg);
-            this.hideLoading();
-            this.$emit('deleted');
+	    setTimeout(() => {
+              this.hideLoading();
+              this.$emit('deleted');
+            }, 500);
           }
         );
       },
