@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// Show stores data received from "igor show -json"
 type Show struct {
 	Prefix                                      string
 	RangeStart, RangeEnd, RackWidth, RackHeight int
@@ -12,6 +13,7 @@ type Show struct {
 	Reservations                                []Res
 }
 
+// DownRow returns a ResTableRow that enumerates all nodes in the "down" state
 func (s Show) DownRow() ResTableRow {
 	rnge, _ := ranges.NewRange(s.Prefix, s.RangeStart, s.RangeEnd)
 	return ResTableRow{
@@ -25,6 +27,8 @@ func (s Show) DownRow() ResTableRow {
 	}
 }
 
+// ResTable returns the reservations as a ResTable. The first element
+// in the ResTable enumerates the hosts that are "down"
 func (s Show) ResTable() ResTable {
 	// First element is a row containing all down nodes
 	resRows := ResTable{s.DownRow()}
@@ -34,6 +38,10 @@ func (s Show) ResTable() ResTable {
 	return resRows
 }
 
+// Res represents a Reservation. It's for unmarshalling
+// igor.Reservations from "igor show -json". However, the number of
+// fields in Res is less than igor.Reservation, since we don't need
+// everything there.
 type Res struct {
 	Name  string
 	Owner string
@@ -42,6 +50,7 @@ type Res struct {
 	Hosts []string // separate, not a range
 }
 
+// ResTableRow returns a Res as a ResTableRow.
 func (r Res) ResTableRow(prefix string, start, end int) ResTableRow {
 	timefmt := "Jan 2 15:04"
 	rnge, _ := ranges.NewRange(prefix, start, end)

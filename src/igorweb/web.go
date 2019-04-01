@@ -51,7 +51,6 @@ var commands = map[string]bool{
 	"edit":   true,
 }
 
-// argument variables explained above
 var webP string // port
 var webF string // location of static folder
 var webS bool   // silent

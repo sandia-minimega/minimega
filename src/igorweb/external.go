@@ -34,6 +34,12 @@ func processWrapper(args ...string) (string, error) {
 	return string(out), err
 }
 
+// processWrapperEnv executes the given arg list and returns a
+// combined stdout/stderr and any errors. Unlike processWrapper,
+// processWrapperEnv allows the user to set additional environment
+// variables for the command. Note that the set environment variables
+// are added to those that already exist in the
+// environment. processWrapperEnv blocks until the process exits.
 func processWrapperEnv(env []string, args ...string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("empty argument list")

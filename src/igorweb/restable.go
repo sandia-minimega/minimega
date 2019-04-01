@@ -4,9 +4,9 @@ import (
 	"time"
 )
 
-// reservation object that igorweb.js understands
-// an array of these is passed to client
-// need to convert data to this structure in order to send it to client
+// ResTableRow represents a Reservation that igorweb.js understands an
+// array of these is passed to client need to convert data to this
+// structure in order to send it to client
 type ResTableRow struct {
 	Name  string
 	Owner string
@@ -23,8 +23,11 @@ type ResTableRow struct {
 	Nodes []int
 }
 
+// ResTable is a list of ResTableRows
 type ResTable []ResTableRow
 
+// ContainsExpired returns true if any ResTableRow has an End time
+// that is before the current wall time.
 func (r ResTable) ContainsExpired() bool {
 	now := time.Now().Unix()
 	for i := 0; i < len(r); i++ {
