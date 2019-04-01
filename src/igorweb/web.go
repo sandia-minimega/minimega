@@ -14,8 +14,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
-	"github.com/fsnotify/fsnotify"
 	"html/template"
 	log "minilog"
 	"net/http"
@@ -24,14 +24,10 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 )
 
-var cmdWeb = &Command{
-	UsageLine: "web",
-	Short:     "run a web application",
-	Long: `
+var usage = `
 Run a Go web application with a GUI for igor -p for port
 
 OPTIONAL FLAGS:
@@ -42,7 +38,18 @@ The -f flag sets location of html and static folder (default = current path).
 
 The -s flag silences output.
 
-The -e flag sets the path of the igor executable to exec`,
+The -e flag sets the path of the igor executable to exec`
+
+var commands = map[string]bool{
+	"del":    true,
+	"show":   true,
+	"stats":  true,
+	"sub":    true,
+	"power":  true,
+	"extend": true,
+	"notify": true,
+	"sync":   true,
+	"edit":   true,
 }
 
 // argument variables explained above
@@ -54,17 +61,30 @@ var webE string // path to igor executable
 var resCacheL sync.RWMutex
 var resCache ResTable
 
+var configCacheL sync.RWMutex
+var configCache AbbrevConfig
+
 var powerCacheL sync.RWMutex
 var powerCache ResTableRow
 
 func init() {
-	// break init cycle
-	cmdWeb.Run = runWeb
+	flag.StringVar(&webP, "p", "8080", "port")
+	flag.StringVar(&webF, "f", "", "path to static resources")
+	flag.BoolVar(&webS, "s", false, "silence output")
+	flag.StringVar(&webE, "e", "igor", "path to igor executable")
+}
 
-	cmdWeb.Flag.StringVar(&webP, "p", "8080", "port")
-	cmdWeb.Flag.StringVar(&webF, "f", "", "path to static resources")
-	cmdWeb.Flag.BoolVar(&webS, "s", false, "silence output")
-	cmdWeb.Flag.StringVar(&webE, "e", "igor", "path to igor executable")
+type AbbrevReservation struct {
+	Name  string
+	Owner string
+	Start time.Time
+	End   time.Time
+	Hosts []string // separate, not a range
+}
+
+type AbbrevConfig struct {
+	Prefix                                      string
+	RangeStart, RangeEnd, RackWidth, RackHeight int
 }
 
 // reservation object that igorweb.js understands
@@ -150,30 +170,64 @@ func getReservations() []ResTableRow {
 func updateReservations() {
 	log.Debug("Updating reservations")
 
-	// read data from files, update info, unlock files
-	lock, _ := lockAndReadData(true)
-	syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
+	out, err := processWrapper("igor", "show", "-json")
+	if err != nil {
+		log.Warn("Error updating reservations")
+		return
+	}
+
+	data := struct {
+		Prefix                                      string
+		RangeStart, RangeEnd, RackWidth, RackHeight int
+		Available, Down                             []string
+		Reservations                                []AbbrevReservation
+	}{}
+	if err := json.Unmarshal([]byte(out), &data); err != nil {
+		log.Warn("Error unmarshaling reservations: %v", err)
+	}
+
+	configCacheL.Lock()
+	configCache = AbbrevConfig{
+		Prefix:     data.Prefix,
+		RangeStart: data.RangeStart,
+		RangeEnd:   data.RangeEnd,
+		RackWidth:  data.RackWidth,
+		RackHeight: data.RackHeight,
+	}
+	configCacheL.Unlock()
 
 	resRows := ResTable{}
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
+	rnge, _ := ranges.NewRange(data.Prefix, data.RangeStart, data.RangeEnd)
 
 	// convert all of the Reservations to ResTableRows
 	timefmt := "Jan 2 15:04"
-	for _, r := range Reservations {
+	for _, r := range data.Reservations {
 		resRows = append(resRows, ResTableRow{
-			r.ResName,
-			r.Owner,
-			time.Unix(r.StartTime, 0).Format(timefmt),
-			r.StartTime,
-			time.Unix(r.EndTime, 0).Format(timefmt),
-			r.EndTime,
-			rnge.RangeToInts(r.Hosts),
+			Name:     r.Name,
+			Owner:    r.Owner,
+			Start:    r.Start.Format(timefmt),
+			StartInt: r.Start.UnixNano(),
+			End:      r.End.Format(timefmt),
+			EndInt:   r.End.UnixNano(),
+			Nodes:    rnge.RangeToInts(r.Hosts),
 		})
 	}
 
 	resCacheL.Lock()
 	resCache = resRows
 	resCacheL.Unlock()
+
+	powerCacheL.Lock()
+	powerCache = ResTableRow{
+		"",
+		"",
+		"",
+		time.Now().Unix(),
+		"",
+		0,
+		rnge.RangeToInts(data.Down),
+	}
+	powerCacheL.Unlock()
 
 	log.Debug("Reservations updated.")
 }
@@ -185,21 +239,11 @@ func getDownReservation() ResTableRow {
 	return powerCache
 }
 
-func updatePowerCache() {
-	powerCacheL.Lock()
-	defer powerCacheL.Unlock()
+func getConfig() AbbrevConfig {
+	configCacheL.RLock()
+	defer configCacheL.RUnlock()
 
-	// Update list of down nodes
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	powerCache = ResTableRow{
-		"",
-		"",
-		"",
-		time.Now().Unix(),
-		"",
-		0,
-		rnge.RangeToInts(getDownNodes(getNodes())),
-	}
+	return configCache
 }
 
 // Returns a non-nil error if something's wrong with the igor command
@@ -211,14 +255,7 @@ func validCommand(args []string) error {
 	}
 
 	// Check for valid subcommand
-	found := false
-	for _, c := range commands {
-		if args[1] == c.Name() {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !commands[args[1]] {
 		return errors.New("Invalid igor subcommand.")
 	}
 
@@ -262,21 +299,21 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	username, err := userFromAuthHeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// if an actual command (not heartbeat), run it and log response and error
 	if splitcmd[1] != "show" {
-		username, err := userFromAuthHeader(r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
 		cmd := make([]string, len(splitcmd))
 		copy(cmd, splitcmd)
 		cmd[0] = webE
 
 		env := []string{"USER=" + username}
 		out, err = processWrapperEnv(env, cmd[0:]...)
-		updatePowerCache()
+		updateReservations()
 	}
 
 	// if a speculate command
@@ -300,6 +337,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		// all other commands get an updated reservations array in Response.Extra
+		updateReservations()
 		extra = getReservations()
 	}
 
@@ -326,10 +364,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
 	}
 
+	// Update caches
+	updateReservations()
+
 	// serve igorweb.html with JS template variables filled in
 	//              for initial display of reservation info
 	if r.URL.Path == "/" {
 		resRows := getReservations()
+		config := getConfig()
 		t, err := template.ParseFiles(filepath.Join(webF, "igorweb.html"))
 		if err != nil {
 			panic(err)
@@ -340,7 +382,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			RackWidth    int
 			Cluster      string
 			ResTableRows []ResTableRow
-		}{igorConfig.Start, igorConfig.End, igorConfig.Rackwidth, igorConfig.Prefix, resRows}
+		}{config.RangeStart, config.RangeEnd, config.RackWidth, config.Prefix, resRows}
 
 		err = t.Execute(w, data)
 		if err != nil {
@@ -354,39 +396,11 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 // main web function
-func runWeb(_ *Command, _ []string) {
-	// Watch for changes to data.gob, refresh cache when it changes
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-	defer watcher.Close()
+func main() {
+	flag.Parse()
 
-	go func() {
-		for {
-			select {
-			case event := <-watcher.Events:
-				log.Debug("Modified file: %s", event.Name)
-				updateReservations()
-			case err := <-watcher.Errors:
-				log.Warn(err.Error())
-			}
-		}
-	}()
-
-	dataPath := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	if err := watcher.Add(dataPath); err != nil {
-		log.Fatal("Unable to open reservations.json:", err)
-	}
-
-	go func() {
-		for _ = range time.Tick(10 * time.Second) {
-			updatePowerCache()
-		}
-	}()
-
+	// Update caches
 	updateReservations()
-	updatePowerCache()
 
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
