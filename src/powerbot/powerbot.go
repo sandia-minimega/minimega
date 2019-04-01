@@ -140,6 +140,15 @@ func readConfig(filename string) (Config, error) {
 				ipmi.node = nodename
 				ret.ipmis[nodename] = ipmi
 			}
+		case "loglevel":
+			if len(fields) > 1 {
+				ll, err := log.ParseLevel(fields[1])
+				if err != nil {
+					log.Error(err.Error())
+					return ret, nil
+				}
+				log.AddSyslog("local", "", "powerbot", ll)
+			}
 		}
 	}
 	return ret, nil
@@ -154,6 +163,7 @@ func main() {
 	flag.Parse()
 	args := flag.Args()
 	log.Init()
+	log.AddSyslog("local", "", "powerbot", log.INFO)
 
 	if len(args) == 0 {
 		command = "status"
@@ -219,6 +229,7 @@ func main() {
 
 	// For each device affected, perform the command
 	for _, dev := range devs {
+		log.Info("Performing powerbot %v on %v:%v:%v with type %v", command, dev.name, dev.host, dev.port, dev.pdutype)
 		var pdu PDU
 		// First, let's see if IPMI is available
 		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
@@ -226,15 +237,28 @@ func main() {
 			log.Error(err.Error())
 			continue
 		}
+
 		switch command {
 		case "on":
-			pdu.On(dev.outlets)
+			err := pdu.On(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "off":
-			pdu.Off(dev.outlets)
+			err := pdu.Off(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "cycle":
-			pdu.Cycle(dev.outlets)
+			err := pdu.Cycle(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "status":
-			pdu.Status(dev.outlets)
+			err := pdu.Status(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "temp", "info":
 			fmt.Println("Invalid PDU command; Remaining nodes skipped.")
 		default:
@@ -291,7 +315,7 @@ func useIPMI(s []string, c string) []string {
 		var err error
 		if ipmiData, ok := ipmis[n]; !ok {
 			ret = append(ret, n)
-			log.Info("No data for %s, skipping...", n)
+			log.Debug("No data for %s, skipping...", n)
 			continue
 		} else {
 			ipmi = NewIPMI(ipmiData.ip, ipmiData.node, ipmiData.password, config.ipmiPath, ipmiData.username)

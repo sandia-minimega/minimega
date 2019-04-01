@@ -92,8 +92,11 @@ func wrapSimpleCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 // errResp creates a minicli.Responses from a single error.
 func errResp(err error) minicli.Responses {
 	resp := &minicli.Response{
-		Host:  hostname,
-		Error: err.Error(),
+		Host: hostname,
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
 	return minicli.Responses{resp}

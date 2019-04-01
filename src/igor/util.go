@@ -6,16 +6,17 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"io"
 	log "minilog"
 	"net"
 	"os"
 	"os/user"
-	"ranges"
+	"path/filepath"
 	"strings"
 	"text/template"
-	"time"
 	"unicode"
 	"unicode/utf8"
 	"version"
@@ -130,8 +131,12 @@ func printVersion() {
 
 // Convert an IP to a PXELinux-compatible string, i.e. 192.0.2.91 -> C000025B
 func toPXE(ip net.IP) string {
-	s := fmt.Sprintf("%02X%02X%02X%02X", ip[12], ip[13], ip[14], ip[15])
-	return s
+	ip = ip.To4()
+	if ip == nil {
+		return ""
+	}
+
+	return fmt.Sprintf("%02X%02X%02X%02X", ip[0], ip[1], ip[2], ip[3])
 }
 
 // Get the calling user. First try $SUDO_USER, then $USER, then just
@@ -150,9 +155,56 @@ func getUser() (*user.User, error) {
 
 // Emits a log event stating that a particular action has occurred for a reservation
 // and prints out a summary of the reservation.
-func emitReservationLog(action string, res Reservation) {
+// NOTE: Stats relies on the order of this data.
+//       If you change the order/content please update stats.go
+func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	unsplit, _ := rnge.UnsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.ResName, unsplit, time.Unix(res.StartTime, 0).Format(format), time.Unix(res.EndTime, 0).Format(format), res.Duration)
+	unsplit := igor.unsplitRange(res.Hosts)
+	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Start.Format(format), res.End.Format(format), res.Duration)
+}
+
+// install src into dir, using the hash as the file name. Returns the hash or
+// an error.
+func install(src, dir, suffix string) (string, error) {
+	f, err := os.Open(src)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// hash the file
+	hash := sha1.New()
+	if _, err := io.Copy(hash, f); err != nil {
+		return "", fmt.Errorf("unable to hash file %v: %v", src, err)
+	}
+
+	fname := hex.EncodeToString(hash.Sum(nil))
+
+	dst := filepath.Join(dir, fname+suffix)
+
+	// copy the file if it doesn't already exist
+	if _, err := os.Stat(dst); os.IsNotExist(err) {
+		// need to go back to the beginning of the file since we already read
+		// it once to do the hashing
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			return "", err
+		}
+
+		f2, err := os.Create(dst)
+		if err != nil {
+			return "", err
+		}
+		defer f2.Close()
+
+		if _, err := io.Copy(f2, f); err != nil {
+			return "", fmt.Errorf("unable to install %v: %v", src, err)
+		}
+	} else if err != nil {
+		// strange...
+		return "", err
+	} else {
+		log.Info("file with identical hash %v already exists, skipping install of %v.", fname, src)
+	}
+
+	return fname, nil
 }

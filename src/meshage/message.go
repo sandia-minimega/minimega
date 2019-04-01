@@ -27,6 +27,7 @@ const (
 type Message struct {
 	Recipients   []string    // list of client recipients, unused if broadcasting
 	Source       string      // source node name
+	Instance     uint64      // ID for the instance, new on restart
 	CurrentRoute []string    // list of hops for an in-flight message
 	ID           uint64      // sequence ID, uses lollipop sequence numbering
 	Command      int         // mesh state announcement, message
@@ -83,6 +84,7 @@ func (n *Node) Send(m *Message) ([]string, error) {
 			mOne := &Message{
 				Recipients:   recipients,
 				Source:       m.Source,
+				Instance:     m.Instance,
 				CurrentRoute: m.CurrentRoute,
 				Command:      m.Command,
 				Body:         m.Body,
@@ -150,6 +152,7 @@ func (n *Node) Set(recipients []string, body interface{}) ([]string, error) {
 	m := &Message{
 		Recipients:   recipients,
 		Source:       n.name,
+		Instance:     n.instance,
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
@@ -164,6 +167,7 @@ func (n *Node) Broadcast(body interface{}) ([]string, error) {
 	m := &Message{
 		Recipients:   n.BroadcastRecipients(),
 		Source:       n.name,
+		Instance:     n.instance,
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
@@ -205,11 +209,11 @@ func (n *Node) messageHandler() {
 		switch m.Command {
 		case MSA:
 			n.sequenceLock.Lock()
-			if m.ID == 1 && n.sequences[m.Source] > LOLLIPOP_LENGTH {
-				n.sequences[m.Source] = 0
+			if m.ID == 1 && n.sequences[m.Instance] > LOLLIPOP_LENGTH {
+				n.sequences[m.Instance] = 0
 			}
-			if m.ID > n.sequences[m.Source] {
-				n.sequences[m.Source] = m.ID
+			if m.ID > n.sequences[m.Instance] {
+				n.sequences[m.Instance] = m.ID
 
 				go n.handleMSA(m)
 				go n.flood(m)

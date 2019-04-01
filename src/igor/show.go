@@ -11,93 +11,254 @@ import (
 	log "minilog"
 	"os"
 	"os/exec"
-	"ranges"
 	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
-)
-
-// Some color constants for output
-const (
-	Reset      = "\x1b[0m"
-	Bright     = "\x1b[1m"
-	Dim        = "\x1b[2m"
-	Underscore = "\x1b[4m"
-	Blink      = "\x1b[5m"
-	Reverse    = "\x1b[7m"
-	Hidden     = "\x1b[8m"
-
-	FgBlack   = "\x1b[30m"
-	FgRed     = "\x1b[31m"
-	FgGreen   = "\x1b[32m"
-	FgYellow  = "\x1b[33m"
-	FgBlue    = "\x1b[34m"
-	FgMagenta = "\x1b[35m"
-	FgCyan    = "\x1b[36m"
-	FgWhite   = "\x1b[37m"
-
-	FgLightWhite = "\x1b[97m"
-
-	BgBlack         = "\x1b[40m"
-	BgRed           = "\x1b[41m"
-	BgGreen         = "\x1b[42m"
-	BgYellow        = "\x1b[43m"
-	BgBlue          = "\x1b[44m"
-	BgMagenta       = "\x1b[45m"
-	BgCyan          = "\x1b[46m"
-	BgWhite         = "\x1b[47m"
-	BgBrightBlack   = "\x1b[100m"
-	BgBrightRed     = "\x1b[101m"
-	BgBrightGreen   = "\x1b[102m"
-	BgBrightYellow  = "\x1b[103m"
-	BgBrightBlue    = "\x1b[104m"
-	BgBrightMagenta = "\x1b[105m"
-	BgBrightCyan    = "\x1b[106m"
-	BgBrightWhite   = "\x1b[107m"
 )
 
 var cmdShow = &Command{
-	UsageLine: "show",
+	UsageLine: "show [OPTION]...",
 	Short:     "show reservations",
 	Long: `
-List all extant reservations. Checks if a host is up by issuing a "ping"
+Show node status and list reservations. Checks if a node is up by issuing a
+"ping". By default, reservations are sorted by start time. Each reservation
+has a set of associated flags:
+
+	A: Reservation is active
+	W: Reservation is writable by current user
+	I: Reservation is installed
+	E: Reservation had an error during install
+
+All active reservations will be either installed or in an error state. Use
+"igor show -e" to show install errors.
+
+If a reservation is writable, that means that that the current user can perform
+power operations, edit, delete, or extend the reservation. Writable is
+determined based on the reservation's owner and group.
+
+OPTIONAL FLAGS:
+
+Sorting:
+
+	-o: change the sort order to sort by reservation owner
+	-n: change the sort order to sort by reservation name
+	-r: reverse the order while sorting
+
+Filtering (may be used together):
+
+	-owner: filter reservations based on owner
+	-group: filter reservations based on group
+	-name: filter reservations based on name
+	-active: only show active reservations
+	-future: only show future reservations
+	-installed: only show installed reservations
+	-errored: only show install errored reservations
+	-writable: only show writable reservations
+
+Formatting:
+
+	-c: shows colors (default true, use -c=false to disable colors)
+	-t: show node status table (default true, use -t=false to disable)
+	-e: prints install errors for reservations (ignores other flags)
 	`,
+}
+
+var showOpts struct {
+	sortOwner bool
+	sortName  bool
+	reverse   bool
+
+	filterOwner     string
+	filterName      string
+	filterGroup     string
+	filterActive    bool
+	filterFuture    bool
+	filterInstalled bool
+	filterErrored   bool
+	filterWritable  bool
+
+	showColors bool
+	showTable  bool
+	showErrors bool
 }
 
 func init() {
 	// break init cycle
 	cmdShow.Run = runShow
+
+	cmdShow.Flag.BoolVar(&showOpts.sortOwner, "o", false, "sort by owner")
+	cmdShow.Flag.BoolVar(&showOpts.sortName, "n", false, "sort by reservation name")
+	cmdShow.Flag.BoolVar(&showOpts.reverse, "r", false, "reverse order while sorting")
+
+	cmdShow.Flag.StringVar(&showOpts.filterOwner, "owner", "", "filter by owner")
+	cmdShow.Flag.StringVar(&showOpts.filterGroup, "group", "", "filter by group")
+	cmdShow.Flag.StringVar(&showOpts.filterName, "name", "", "filter by name")
+	cmdShow.Flag.BoolVar(&showOpts.filterActive, "active", false, "only show active reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterFuture, "future", false, "only show future reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterInstalled, "installed", false, "only show installed reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterErrored, "errored", false, "only show install errored reservations")
+	cmdShow.Flag.BoolVar(&showOpts.filterWritable, "writable", false, "only show writable reservations")
+
+	cmdShow.Flag.BoolVar(&showOpts.showColors, "c", true, "show colors")
+	cmdShow.Flag.BoolVar(&showOpts.showTable, "t", true, "show node status table")
+	cmdShow.Flag.BoolVar(&showOpts.showErrors, "e", false, "show install errors")
 }
 
-func getNodes() map[int]bool {
-	names := []string{}
-	fmtstring := "%s%0" + strconv.Itoa(igorConfig.Padlen) + "d"
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		names = append(names, fmt.Sprintf(fmtstring, igorConfig.Prefix, i))
+// Use nmap to scan all the nodes and then show which are up and the
+// reservations they below to
+func runShow(_ *Command, _ []string) {
+	// Show reservations with errors and return
+	if showOpts.showErrors {
+		// check to see that there are install errors first
+		var count int
+
+		// TODO: probably shouldn't iteration over .M directly
+		for _, r := range igor.Reservations.M {
+			if r.InstallError != "" {
+				count += 1
+			}
+		}
+		if count == 0 {
+			return
+		}
+
+		w := new(tabwriter.Writer)
+		w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+		fmt.Fprintln(w, "Reservation", "\t", "Error")
+
+		// TODO: probably shouldn't iteration over .M directly
+		for _, r := range igor.Reservations.M {
+			if r.InstallError != "" {
+				fmt.Fprintln(w, r.Name, "\t", r.InstallError)
+			}
+		}
+
+		w.Flush()
+		return
 	}
+
+	names := igor.validHosts()
 
 	// Maps a node's index to a boolean value (up = true, down = false)
 	nodes := map[int]bool{}
+	if showOpts.showTable {
+		n, err := scanNodes(names)
+		if err != nil {
+			log.Fatal("unable to scan: %v", err)
+		}
+		nodes = n
+	}
+
+	// Maps a node's index to a boolean value (reserved = true, unreserved = false)
+	resNodes := map[int]bool{}
+
+	// For colors... get all the reservations and sort them
+	resarray := []*Reservation{}
+	maxResNameLength := len("UNRESERVED") // always included
+
+	// TODO: probably shouldn't iteration over .M directly
+	for _, r := range igor.Reservations.M {
+		resarray = append(resarray, r)
+		// Remember longest reservation name for formatting
+		if maxResNameLength < len(r.Name) {
+			maxResNameLength = len(r.Name)
+		}
+		// go through each host list and compile list of reserved nodes
+		for _, h := range r.Hosts {
+			v, err := strconv.Atoi(h[len(igor.Prefix):])
+			if err != nil {
+				//that's weird
+				continue
+			}
+			resNodes[v] = true
+		}
+	}
+
+	// Gather a list of which nodes are down and which nodes are unreserved
+	var downNodes []string
+	var unreservedNodes []string
+	for i := igor.Start; i <= igor.End; i++ {
+		hostname := igor.Prefix + strconv.Itoa(i)
+		if !resNodes[i] {
+			unreservedNodes = append(unreservedNodes, hostname)
+		}
+		if !nodes[i] {
+			downNodes = append(downNodes, hostname)
+		}
+	}
+
+	// sort according to options
+	sortReservations(resarray)
+
+	if showOpts.showTable {
+		p := tablePrinter{
+			filter:     isFiltered,
+			showColors: showOpts.showColors,
+			alive:      nodes,
+		}
+		p.printTable(resarray)
+	}
+
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+
+	p := rowPrinter{
+		filter:     isFiltered,
+		showColors: showOpts.showColors,
+
+		nameFmt: "%" + strconv.Itoa(maxResNameLength) + "v",
+		timeFmt: "Jan 2 15:04",
+
+		w: w,
+	}
+
+	// Header Row
+	p.printHeader()
+	p.printSpacer()
+
+	// "Down" Node list, only available if we scanned to create the table
+	if showOpts.showTable {
+		p.printHosts("DOWN", BgRed+FgWhite, downNodes)
+	}
+
+	// Unreserved Node list
+	p.printHosts("UNRESERVED", BgGreen+FgBlack, unreservedNodes)
+	p.printSpacer()
+
+	// Finally, print all the reservations
+	p.printReservations(resarray)
+
+	// only 1 flush at the end to ensure alignment
+	w.Flush()
+}
+
+// scanNodes checks to see what hosts are up/down from the list. Returns a map
+// where indices in nodes correspond to up/down.
+func scanNodes(nodes []string) (map[int]bool, error) {
+	res := map[int]bool{}
 
 	// Use nmap to determine what nodes are up
 	args := []string{}
-	if igorConfig.DNSServer != "" {
-		args = append(args, "--dns-servers", igorConfig.DNSServer)
+	if igor.DNSServer != "" {
+		args = append(args, "--dns-servers", igor.DNSServer)
 	}
 	args = append(args,
 		"-sn",
 		"-PS22",
 		"--unprivileged",
 		"-T5",
+		// scan all the nodes in parallel since we really shouldn't have that
+		// many hosts to scan
+		"--min-parallelism",
+		strconv.Itoa(len(nodes)),
 		"-oG",
 		"-",
 	)
-	cmd := exec.Command("nmap", append(args, names...)...)
+	cmd := exec.Command("nmap", append(args, nodes...)...)
 	out, err := cmd.Output()
 	if err != nil {
-		log.Fatal("unable to scan: %v", err)
+		return nil, err
 	}
 	s := bufio.NewScanner(bytes.NewReader(out))
 
@@ -118,175 +279,87 @@ func getNodes() map[int]bool {
 		name := fields[2][1 : len(fields[2])-1]
 		// get rid of any domain that may exist
 		name = strings.Split(name, ".")[0]
-		v, err := strconv.Atoi(name[len(igorConfig.Prefix):])
+		v, err := strconv.Atoi(name[len(igor.Prefix):])
 		if err != nil {
 			// that's weird
 			continue
 		}
 
 		// If we found a node name in the output, that means it's up, so mark it as up
-		nodes[v] = true
+		res[v] = true
 	}
-	return nodes
+
+	return res, nil
 }
 
-// Gather a list of which nodes are down
-func getDownNodes(nodes map[int]bool) []string {
-	var downNodes []string
-	for i := igorConfig.Start; i <= igorConfig.End; i++ {
-		if !nodes[i] {
-			hostname := igorConfig.Prefix + strconv.Itoa(i)
-			downNodes = append(downNodes, hostname)
-		}
+// isFiltered tests whether a reservation should be filtered or not based on
+// showOpts
+func isFiltered(r *Reservation) bool {
+	if !strings.Contains(r.Owner, showOpts.filterOwner) {
+		return true
 	}
-	return downNodes
+
+	if !strings.Contains(r.Group, showOpts.filterGroup) {
+		return true
+	}
+
+	if !strings.Contains(r.Name, showOpts.filterName) {
+		return true
+	}
+
+	if showOpts.filterActive && !r.IsActive(igor.Now) {
+		return true
+	}
+
+	if showOpts.filterFuture && r.IsActive(igor.Now) {
+		return true
+	}
+
+	if showOpts.filterInstalled && !r.Installed {
+		return true
+	}
+
+	if showOpts.filterErrored && r.InstallError != "" {
+		return true
+	}
+
+	if showOpts.filterWritable && !r.IsWritable(igor.User) {
+		return true
+	}
+
+	return false
 }
 
-// Use nmap to scan all the nodes and then show which are up and the
-// reservations they below to
-func runShow(_ *Command, _ []string) {
-
-	nodes := getNodes()
-
-	downNodes := getDownNodes(nodes)
-
-	// For colors... get all the reservations and sort them
-	resarray := []Reservation{}
-	for _, r := range Reservations {
-		resarray = append(resarray, r)
+// sortReservations sorts the reservations based on showOpts
+func sortReservations(rs []*Reservation) {
+	sortStart := func(i, j int) bool {
+		return rs[i].Start.Before(rs[j].Start)
 	}
-	sort.Sort(StartSorter(resarray))
+	sortFn := sortStart
 
-	rnge, _ := ranges.NewRange(igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-
-	printShelves(nodes, resarray)
-
-	w := new(tabwriter.Writer)
-	w.Init(os.Stdout, 10, 8, 0, '\t', 0)
-
-	//	fmt.Fprintf(w, "Reservations for cluster nodes %s[%d-%d]\n", igorConfig.Prefix, igorConfig.Start, igorConfig.End)
-	fmt.Fprintln(w, "NAME", "\t", "OWNER", "\t", "START", "\t", "END", "\t", "NODES")
-	fmt.Fprintf(w, "--------------------------------------------------------------------------------\n")
-	w.Flush()
-	downrange, _ := rnge.UnsplitRange(downNodes)
-	fmt.Print(BgRed + "DOWN" + Reset)
-	fmt.Fprintln(w, "\t", "N/A", "\t", "N/A", "\t", "N/A", "\t", downrange)
-	w.Flush()
-	timefmt := "Jan 2 15:04"
-	for i, r := range resarray {
-		unsplit, _ := rnge.UnsplitRange(r.Hosts)
-		fmt.Print(colorize(i, r.ResName))
-		fmt.Fprintln(w, "\t", r.Owner, "\t", time.Unix(r.StartTime, 0).Format(timefmt), "\t", time.Unix(r.EndTime, 0).Format(timefmt), "\t", unsplit)
-		w.Flush()
-	}
-	w.Flush()
-}
-
-func printShelves(alive map[int]bool, resarray []Reservation) {
-	// figure out how many digits we need per node displayed
-	nodewidth := len(strconv.Itoa(igorConfig.End))
-	nodefmt := "%" + strconv.Itoa(nodewidth) // for example, %3, for use as %3d or %3s
-
-	// how many nodes per rack?
-	perrack := igorConfig.Rackwidth * igorConfig.Rackheight
-
-	// How wide is the full rack display?
-	// width of nodes * number of nodes across a rack, plus the number of | characters we need
-	totalwidth := nodewidth*igorConfig.Rackwidth + igorConfig.Rackwidth + 1
-
-	// figure out all the node -> reservations ahead of time
-	n2r := map[int]int{}
-	now := time.Now().Unix()
-	for i, r := range resarray {
-		if r.StartTime < now {
-			for _, name := range r.Hosts {
-				name := strings.TrimPrefix(name, igorConfig.Prefix)
-				v, err := strconv.Atoi(name)
-				if err == nil {
-					n2r[v] = i
-				}
+	if showOpts.sortOwner {
+		sortFn = func(i, j int) bool {
+			if rs[i].Owner == rs[j].Owner {
+				return sortStart(i, j)
 			}
+			return rs[i].Owner < rs[j].Owner
+		}
+	} else if showOpts.sortName {
+		sortFn = func(i, j int) bool {
+			if rs[i].Name == rs[j].Name {
+				return sortStart(i, j)
+			}
+			return rs[i].Name < rs[j].Name
 		}
 	}
 
-	var buf bytes.Buffer
-	for i := igorConfig.Start; i <= igorConfig.End; i += perrack {
-		for j := 0; j < totalwidth; j++ {
-			buf.WriteString(Reverse)
-			buf.WriteString("-")
-			buf.WriteString(Reset)
+	sort.Slice(rs, sortFn)
+
+	if showOpts.reverse {
+		// From golang's SliceTricks
+		for i := len(rs)/2 - 1; i >= 0; i-- {
+			opp := len(rs) - 1 - i
+			rs[i], rs[opp] = rs[opp], rs[i]
 		}
-		buf.WriteString("\n")
-		for j := i; j < i+perrack; j++ {
-			if (j-1)%igorConfig.Rackwidth == 0 {
-				buf.WriteString(Reverse)
-				buf.WriteString("|")
-				buf.WriteString(Reset)
-			}
-			if j <= igorConfig.End {
-				if index, ok := n2r[j]; ok {
-					if alive[j] {
-						buf.WriteString(colorize(index, fmt.Sprintf(nodefmt+"d", j)))
-					} else {
-						buf.WriteString(BgRed)
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-						buf.WriteString(Reset)
-					}
-				} else {
-					if alive[j] {
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-					} else {
-						buf.WriteString(BgRed)
-						fmt.Fprintf(&buf, nodefmt+"d", j)
-						buf.WriteString(Reset)
-					}
-				}
-			} else {
-				fmt.Fprintf(&buf, nodefmt+"s", " ")
-			}
-			buf.WriteString(Reverse)
-			buf.WriteString("|")
-			buf.WriteString(Reset)
-			if (j-1)%igorConfig.Rackwidth == igorConfig.Rackwidth-1 {
-				buf.WriteString("\n")
-			}
-		}
-		for j := 0; j < totalwidth; j++ {
-			buf.WriteString(Reverse)
-			buf.WriteString("-")
-			buf.WriteString(Reset)
-		}
-		buf.WriteString("\n\n")
 	}
-	fmt.Print(buf.String())
-}
-
-func colorize(index int, str string) string {
-	return fgColors[index%len(fgColors)] + bgColors[index%len(bgColors)] + str + Reset
-}
-
-var fgColors = []string{
-	FgLightWhite,
-	FgLightWhite,
-	FgLightWhite,
-	FgLightWhite,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-	FgBlack,
-}
-
-var bgColors = []string{
-	BgGreen,
-	BgBlue,
-	BgMagenta,
-	BgCyan,
-	BgYellow,
-	BgBrightGreen,
-	BgBrightBlue,
-	BgBrightMagenta,
-	BgBrightCyan,
-	BgBrightYellow,
 }

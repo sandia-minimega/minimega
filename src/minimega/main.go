@@ -18,7 +18,6 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -152,15 +151,18 @@ func main() {
 		if *f_e {
 			parts := []string{}
 			if *f_namespace != "" {
-				parts = append(parts, "namespace", quoteIfSpace(*f_namespace))
+				parts = append(parts, "namespace", *f_namespace)
 			}
 
 			for _, arg := range flag.Args() {
-				parts = append(parts, quoteIfSpace(arg))
+				parts = append(parts, arg)
 			}
 
-			cmd := strings.Join(parts, " ")
-			log.Infoln("got command: `%v`", cmd)
+			cmd := quoteJoin(parts, " ")
+			if len(parts) == 1 {
+				cmd = parts[0]
+			}
+			log.Info("got command: `%v`", cmd)
 
 			mm.RunAndPrint(cmd, false)
 		} else {

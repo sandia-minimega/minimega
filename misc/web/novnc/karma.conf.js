@@ -1,12 +1,61 @@
 // Karma configuration
 
 module.exports = function(config) {
+  /*var customLaunchers = {
+    sl_chrome_win7: {
+      base: 'SauceLabs',
+      browserName: 'chrome',
+      platform: 'Windows 7'
+    },
+
+    sl_firefox30_linux: {
+      base: 'SauceLabs',
+      browserName: 'firefox',
+      version: '30',
+      platform: 'Linux'
+    },
+
+    sl_firefox26_linux: {
+      base: 'SauceLabs',
+      browserName: 'firefox',
+      version: 26,
+      platform: 'Linux'
+    },
+
+    sl_windows7_ie10: {
+      base: 'SauceLabs',
+      browserName: 'internet explorer',
+      platform: 'Windows 7',
+      version: '10'
+    },
+
+    sl_windows81_ie11: {
+      base: 'SauceLabs',
+      browserName: 'internet explorer',
+      platform: 'Windows 8.1',
+      version: '11'
+    },
+
+    sl_osxmavericks_safari7: {
+      base: 'SauceLabs',
+      browserName: 'safari',
+      platform: 'OS X 10.9',
+      version: '7'
+    },
+
+    sl_osxmtnlion_safari6: {
+      base: 'SauceLabs',
+      browserName: 'safari',
+      platform: 'OS X 10.8',
+      version: '6'
+    }
+  };*/
+
   var customLaunchers = {};
   var browsers = [];
   var useSauce = false;
 
-  // use Sauce when running on Travis
-  if (process.env.TRAVIS_JOB_NUMBER) {
+  if (process.env.SAUCE_USERNAME && process.env.SAUCE_ACCESS_KEY) {
     useSauce = true;
   }
 
@@ -44,8 +93,7 @@ module.exports = function(config) {
     browsers = Object.keys(customLaunchers);
   } else {
     useSauce = false;
-    //browsers = ['PhantomJS'];
-    browsers = [];
+    browsers = ['PhantomJS'];
   }
 
   var my_conf = {
@@ -55,31 +103,38 @@ module.exports = function(config) {
 
     // frameworks to use
     // available frameworks: https://npmjs.org/browse/keyword/karma-adapter
-    frameworks: ['requirejs', 'mocha', 'chai'],
+    frameworks: ['mocha', 'sinon', 'chai', 'sinon-chai'],
+
 
     // list of files / patterns to load in the browser (loaded in order)
     files: [
-      { pattern: 'vendor/sinon.js', included: false },
-      { pattern: 'node_modules/sinon-chai/lib/sinon-chai.js', included: false },
-      { pattern: 'app/localization.js', included: false },
-      { pattern: 'core/**/*.js', included: false },
-      { pattern: 'vendor/pako/**/*.js', included: false },
-      { pattern: 'tests/test.*.js', included: false },
-      { pattern: 'tests/fake.*.js', included: false },
-      { pattern: 'tests/assertions.js', included: false },
-      'tests/karma-test-main.js',
+      'tests/fake.*.js',
+      'tests/assertions.js',
+      'include/util.js',  // load first to avoid issues, since methods are called immediately
+      //'../include/*.js',
+      'include/base64.js',
+      'include/keysym.js',
+      'include/keysymdef.js',
+      'include/keyboard.js',
+      'include/input.js',
+      'include/websock.js',
+      'include/rfb.js',
+      'include/des.js',
+      'include/display.js',
+      'include/inflator.js',
+      'tests/test.*.js'
     ],
 
     client: {
       mocha: {
-        // replace Karma debug page with mocha display
-        'reporter': 'html',
         'ui': 'bdd'
       }
     },
 
     // list of files to exclude
     exclude: [
+      '../include/playback.js',
+      '../include/ui.js'
     ],
 
     customLaunchers: customLaunchers,
@@ -91,25 +146,14 @@ module.exports = function(config) {
     // preprocess matching files before serving them to the browser
     // available preprocessors: https://npmjs.org/browse/keyword/karma-preprocessor
     preprocessors: {
-      'app/localization.js': ['babel'],
-      'core/**/*.js': ['babel'],
-      'tests/test.*.js': ['babel'],
-      'tests/fake.*.js': ['babel'],
-      'tests/assertions.js': ['babel'],
-      'vendor/pako/**/*.js': ['babel'],
+
     },
 
-    babelPreprocessor: {
-      options: {
-        plugins: ['transform-es2015-modules-amd', 'syntax-dynamic-import'],
-        sourceMap: 'inline',
-      },
-    },
 
     // test results reporter to use
     // possible values: 'dots', 'progress'
     // available reporters: https://npmjs.org/browse/keyword/karma-reporter
-    reporters: ['mocha'],
+    reporters: ['mocha', 'saucelabs'],
 
 
     // web server port
@@ -141,7 +185,6 @@ module.exports = function(config) {
   };
 
   if (useSauce) {
-    my_conf.reporters.push('saucelabs');
     my_conf.captureTimeout = 0; // use SL timeout
     my_conf.sauceLabs = {
       testName: 'noVNC Tests (all)',

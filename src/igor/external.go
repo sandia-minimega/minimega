@@ -7,8 +7,8 @@ package main
 import (
 	"fmt"
 	log "minilog"
-	"os"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -34,25 +34,12 @@ func processWrapper(args ...string) (string, error) {
 	return string(out), err
 }
 
-func processWrapperEnv(env []string, args ...string) (string, error) {
-	if len(args) == 0 {
-		return "", fmt.Errorf("empty argument list")
-	}
+func runAll(format string, args []string) error {
+	r := DefaultRunner(func(s string) error {
+		cmd := strings.Split(fmt.Sprintf(format, s), " ")
+		_, err := processWrapper(cmd...)
+		return err
+	})
 
-	log.Debug("running %v", args)
-
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Env = append(os.Environ(), env...)
-
-	start := time.Now()
-	out, err := cmd.CombinedOutput()
-	stop := time.Now()
-
-	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
-
-	if err != nil {
-		log.Debug("error running %v: %v %v", args, err, string(out))
-	}
-
-	return string(out), err
+	return r.RunAll(args)
 }

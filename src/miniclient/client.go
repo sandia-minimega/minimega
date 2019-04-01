@@ -17,8 +17,13 @@ import (
 	"os"
 	"path"
 	"sync"
+	"time"
 
 	"github.com/peterh/liner"
+)
+
+const (
+	TOKEN_MAX = 1024 * 1024
 )
 
 // Request sent to minimega -- ethier a command to run or a string to return
@@ -62,10 +67,23 @@ func Dial(base string) (*Conn, error) {
 		url: path.Join(base, "minimega"),
 	}
 
+	var conn net.Conn
+
+	var backoff = 10 * time.Millisecond
+
 	// try to connect to the local minimega
-	conn, err := net.Dial("unix", mm.url)
-	if err != nil {
-		return nil, err
+	for {
+		var err error
+
+		conn, err = net.Dial("unix", mm.url)
+		if err == nil {
+			break
+		} else if err, ok := err.(*net.OpError); ok && err.Temporary() {
+			time.Sleep(backoff)
+			backoff *= 2
+		} else {
+			return nil, err
+		}
 	}
 
 	mm.conn = conn
@@ -132,6 +150,8 @@ func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
 		defer mm.Close()
 		for {
 			scanner := bufio.NewScanner(wr)
+			buf := make([]byte, 0, TOKEN_MAX)
+			scanner.Buffer(buf, TOKEN_MAX)
 			for scanner.Scan() {
 				err = mm.enc.Encode(scanner.Text() + "\n")
 				if err != nil {

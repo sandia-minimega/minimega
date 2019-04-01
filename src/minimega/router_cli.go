@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	"minicli"
+	"net"
 	"strconv"
 )
 
@@ -30,12 +31,14 @@ router takes a number of subcommands:
 
 - 'interface': Set IPv4 or IPv6 addresses, or configure an interface to assign
   using DHCP. The interface field is an integer index of the interface defined
-  with 'vm config net'. For example, to configure the second interface of the
-  router with a static IP:
+  with 'vm config net'. You could also specify if that interface will be a 
+  loopback interface For example, to configure the second interface of the
+  router with a static IP and a loopback witha  different IP:
 
 	vm config net 100 200
 	# ...
 	router foo interface 1 10.0.0.1/24
+	router foo interface 2 11.0.0.1/32 lo
 
 - 'dhcp': Configure one or more DHCP servers on the router. The API allows you
   to set several options including static IP assignments and the default route
@@ -55,21 +58,59 @@ router takes a number of subcommands:
 - 'ra': Enable neighbor discovery protocol router advertisements for a given
   subnet.
 
-- 'route': Set static or OSPF routes. Static routes include a subnet and
-  next-hop. OSPF routes include an area and a network index corresponding to the
-  interface described in 'vm config net'. For example, to enable OSPF on area 0
-  for both interfaces of a router:
+- 'route': Set static, OSPF, or BGP routes. Static routes include a subnet,
+  next-hop, and optionally a name for this router. For example to specify a 
+  static route(s):
+
+    router foo route static 0.0.0.0/0 10.0.0.1 default-route
+  
+  OSPF routes include an area and a network index corresponding to the 
+  interface described in 'vm config net'. You can also specify what networks 
+  to advertise using the export command.
+  
+  For example, to enable OSPF on area 0 for both interfaces of a router:
 
 	vm config net 100 200
 	# ...
 	router foo route ospf 0 0
 	router foo route ospf 0 1
+
+  For example, to advertise specific networks, advertise a static route or 
+  use a static route as a filter:
+	
+    router foo route static 11.0.0.0/24 0 bar-route
+	router foo route static 12.0.0.0/24 0 bar-route
+	router foo route ospf 0 export 10.0.0.0/24
+	router foo route ospf 0 export default-route
+	router foo route ospf 0 export bar-route
+
+  To configure BGP must specify the process name for the specific bgp context, local ip address and AS,
+  Neighbor ip address and AS, and what networks need to be advertised
+
+  For example, local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
+  and you want to advterise network 10.0.0.0/24:
+	
+    router foo route static 10.0.0.0/24 0 foo_out
+    router foo bgp bar local 10.0.0.1 100
+	router foo bgp bar neighbor 20.0.0.1 200
+	router foo bgp bar export filter foo_out
+
+  You can set up route reflection for BGP by ussing the rrclient command for that process. 
+  By using the command it indicates that the peer is a bgp client:
+	
+    router foo bgp bar rrclient
+
+- 'rid': Sets the 32 bit router ID for the router. Typically this ID is unqiue 
+  across the orginizations network and is used for various routing protocols ie OSPF
+
+    router foo rid 1.1.1.1
 `,
 		Patterns: []string{
 			"router <vm>",
 			"router <vm> <commit,>",
+			"router <vm> <rid,> <id>",
 			"router <vm> <log,> <level,> <fatal,error,warn,info,debug>",
-			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp> [lo,]",
 			"router <vm> <dhcp,> <listen address> <range,> <low address> <high address>",
 			"router <vm> <dhcp,> <listen address> <router,> <router address>",
 			"router <vm> <dhcp,> <listen address> <dns,> <address>",
@@ -78,8 +119,13 @@ router takes a number of subcommands:
 			"router <vm> <upstream,> <ip>",
 			"router <vm> <gw,> <gw>",
 			"router <vm> <ra,> <subnet>",
-			"router <vm> <route,> <static,> <network> <next-hop>",
+			"router <vm> <route,> <static,> <network> <next-hop> [staticroutename]",
 			"router <vm> <route,> <ospf,> <area> <network>",
+			"router <vm> <route,> <ospf,> <area> <export,> <Ipv4/Mask or staticroutename>",
+			"router <vm> <route,> <bgp,> <processname> <local,neighbor> <IPv4> <asnumber>",
+			"router <vm> <route,> <bgp,> <processname> <rrclient,>",
+			"router <vm> <route,> <bgp,> <processname> <export,> <all,filter> <filtername>",
+			//"router <vm> <importbird,> <configfilepath>", TODO
 		},
 		Call:    wrapVMTargetCLI(cliRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -90,9 +136,10 @@ router takes a number of subcommands:
 		Patterns: []string{
 			"clear router",
 			"clear router <vm>",
+			"clear router <vm> <rid,>",
 			"clear router <vm> <interface,>",
 			"clear router <vm> <interface,> <network>",
-			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp>",
+			"clear router <vm> <interface,> <network> <IPv4/MASK or IPv6/MASK or dhcp or all> [lo,]",
 			"clear router <vm> <dhcp,>",
 			"clear router <vm> <dhcp,> <listen address>",
 			"clear router <vm> <dhcp,> <listen address> <range,>",
@@ -107,11 +154,15 @@ router takes a number of subcommands:
 			"clear router <vm> <ra,>",
 			"clear router <vm> <ra,> <subnet>",
 			"clear router <vm> <route,>",
-			"clear router <vm> <route,> <static,>",
-			"clear router <vm> <route,> <static,> <network>",
+			"clear router <vm> <route,> <static,namedstatic>",
+			"clear router <vm> <route,> <static,> <network or all> [staticroutename]",
 			"clear router <vm> <route,> <ospf,>",
 			"clear router <vm> <route,> <ospf,> <area>",
 			"clear router <vm> <route,> <ospf,> <area> <network>",
+			"clear router <vm> <route,> <ospf,> <area> <export,> <Ipv4/Mask or staticroutename>",
+			"clear router <vm> <route,> <bgp,> <processname>",
+			"clear router <vm> <route,> <bgp,> <processname> <rrclient,>",
+			"clear router <vm> <route,> <bgp,> <processname> <local,neighbor>",
 		},
 		Call:    wrapVMTargetCLI(cliClearRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -159,11 +210,10 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			return fmt.Errorf("invalid network: %v : %v", c.StringArgs["network"], err)
 		}
 		ip := c.StringArgs["IPv4/MASK"]
-
-		return rtr.InterfaceAdd(network, ip)
+		loopback := c.BoolArgs["lo"]
+		return rtr.InterfaceAdd(network, ip, loopback)
 	} else if c.BoolArgs["dhcp"] {
 		addr := c.StringArgs["listen"]
-
 		if c.BoolArgs["range"] {
 			low := c.StringArgs["low"]
 			high := c.StringArgs["high"]
@@ -199,13 +249,47 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		if c.BoolArgs["static"] {
 			network := c.StringArgs["network"]
 			nh := c.StringArgs["next-hop"]
-			rtr.RouteStaticAdd(network, nh)
+			if c.StringArgs["staticroutename"] != "" {
+				rtr.RouteStaticAdd(network, nh, c.StringArgs["staticroutename"])
+			} else {
+				rtr.RouteStaticAdd(network, nh, "")
+			}
 			return nil
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["network"]
-			rtr.RouteOSPFAdd(area, iface)
+			if c.StringArgs["network"] != "" {
+				iface := c.StringArgs["network"]
+				rtr.RouteOSPFAdd(area, iface, "")
+			} else if c.BoolArgs["export"] {
+				filter := c.StringArgs["Ipv4/Mask"]
+				rtr.RouteOSPFAdd(area, "", filter)
+			}
+		} else if c.BoolArgs["bgp"] {
+			var ip string
+			islocal := false
+			processname := c.StringArgs["processname"]
+			if c.BoolArgs["export"] {
+				if c.BoolArgs["all"] {
+					rtr.ExportBGP(processname, true, "0.0.0.0/0")
+				} else if c.BoolArgs["filter"] {
+					rtr.ExportBGP(processname, false, c.StringArgs["filtername"])
+				}
+			} else if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
+				ip = c.StringArgs["IPv4"]
+				as, _ := strconv.Atoi(c.StringArgs["asnumber"])
+				if c.BoolArgs["local"] {
+					islocal = true
+				}
+				rtr.RouteBGPAdd(islocal, processname, ip, as)
+			} else if c.BoolArgs["rrclient"] {
+				rtr.bgpFindOrCreate(processname).routeReflector = true
+			}
 		}
+	} else if c.BoolArgs["rid"] {
+		if net.ParseIP(c.StringArgs["id"]) == nil {
+			return fmt.Errorf("invalid routerid: %v", c.StringArgs["id"])
+		}
+		rtr.routerID = c.StringArgs["id"]
 	}
 
 	return nil
@@ -234,8 +318,7 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	if c.BoolArgs["interface"] {
 		network := c.StringArgs["network"]
 		ip := c.StringArgs["IPv4/MASK"]
-
-		err := rtr.InterfaceDel(network, ip)
+		err := rtr.InterfaceDel(network, ip, c.BoolArgs["lo"])
 		if err != nil {
 			return err
 		}
@@ -287,27 +370,69 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	} else if c.BoolArgs["route"] {
 		if c.BoolArgs["static"] {
 			network := c.StringArgs["network"]
-			return rtr.RouteStaticDel(network)
+			rtname := c.StringArgs["staticroutename"]
+			if rtname == "" {
+				return rtr.RouteStaticDel(network)
+			}
+			return rtr.NamedRouteStaticDel(network, rtname)
+
+		} else if c.BoolArgs["namedstatic"] {
+			return rtr.NamedRouteStaticDel("", "")
+
 		} else if c.BoolArgs["ospf"] {
 			area := c.StringArgs["area"]
-			iface := c.StringArgs["network"]
-			return rtr.RouteOSPFDel(area, iface)
+			if c.StringArgs["network"] != "" {
+				iface := c.StringArgs["network"]
+				return rtr.RouteOSPFDel(area, iface)
+			}
+			if c.BoolArgs["export"] {
+				filter := c.StringArgs["Ipv4/Mask"]
+				return rtr.RouteOSPFDelFilter(area, filter)
+			}
+			if err := rtr.RouteOSPFDel(area, ""); err != nil {
+				return err
+			}
+			if err := rtr.RouteOSPFDelFilter(area, ""); err != nil {
+				return err
+			}
+			return nil
+		} else if c.BoolArgs["bgp"] {
+			processname := c.StringArgs["processname"]
+			if c.BoolArgs["rrclient"] {
+				return rtr.RouteBGPRRDel(processname)
+			} else if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
+				local := false
+				if c.BoolArgs["local"] {
+					local = true
+				}
+				return rtr.RouteBGPDel(processname, local, false)
+			}
+			return rtr.RouteBGPDel(processname, false, true)
+
 		} else {
 			// clear all routes on all protocols
 			rtr.RouteStaticDel("")
+			rtr.NamedRouteStaticDel("", "")
 			rtr.RouteOSPFDel("", "")
+			rtr.RouteBGPDel("", false, true)
 		}
+	} else if c.BoolArgs["rid"] {
+		rtr.routerID = "0.0.0.0"
+		return nil
 	} else {
 		// remove everything about this router
-		err := rtr.InterfaceDel("", "")
+		err := rtr.InterfaceDel("", "", true)
 		if err != nil {
 			return err
 		}
 		rtr.DNSDel("")
 		rtr.RADDel("")
 		rtr.RouteStaticDel("")
+		rtr.NamedRouteStaticDel("", "")
 		rtr.RouteOSPFDel("", "")
 		rtr.dhcp = make(map[string]*dhcp)
+		rtr.RouteBGPDel("", false, true)
+		rtr.routerID = "0.0.0.0"
 	}
 	return nil
 }

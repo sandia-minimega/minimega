@@ -33,11 +33,11 @@ const (
 )
 
 type VM interface {
-	GetID() int               // GetID returns the VM's per-host unique ID
-	GetName() string          // GetName returns the VM's per-host unique name
-	GetNamespace() string     // GetNamespace returns the VM's namespace name
-	GetNetworks() []NetConfig // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
-	GetHost() string          // GetHost returns the hostname that the VM is running on
+	GetID() int           // GetID returns the VM's per-host unique ID
+	GetPID() int          // GetPID returns the VM's PID
+	GetName() string      // GetName returns the VM's per-host unique name
+	GetNamespace() string // GetNamespace returns the VM's namespace name
+	GetHost() string      // GetHost returns the hostname that the VM is running on
 	GetState() VMState
 	GetLaunchTime() time.Time // GetLaunchTime returns the time when the VM was launched
 	GetType() VMType
@@ -46,6 +46,9 @@ type VM interface {
 	GetCPUs() uint64
 	GetMem() uint64
 	GetCoschedule() int
+
+	GetNetwork(i int) (NetConfig, error) // GetNetwork returns the ith NetConfigs associated with the vm.
+	GetNetworks() []NetConfig            // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 
 	// Lifecycle functions
 	Launch() error
@@ -70,7 +73,8 @@ type VM interface {
 
 	SetCCActive(bool)
 	HasCC() bool
-	Connect(*ron.Server) error
+	Connect(*ron.Server, bool) error
+	Disconnect(*ron.Server) error
 
 	UpdateNetworks()
 
@@ -114,6 +118,8 @@ type BaseVM struct {
 	Type       VMType
 	ActiveCC   bool // set when CC is active
 
+	pid int
+
 	lock sync.Mutex // synchronizes changes to this VM
 	cond *sync.Cond
 
@@ -125,14 +131,14 @@ type BaseVM struct {
 // Valid names for output masks for `vm info`, in preferred output order
 var vmInfo = []string{
 	// generic fields
-	"id", "name", "state", "uptime", "type", "uuid", "cc_active",
+	"id", "name", "state", "uptime", "type", "uuid", "cc_active", "pid",
 	// network fields
 	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
 	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
-	"append", "serial-ports", "virtio-ports", "vnc_port", "pid",
+	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",
@@ -284,6 +290,17 @@ func (vm *BaseVM) GetNamespace() string {
 	return vm.Namespace
 }
 
+func (vm *BaseVM) GetNetwork(i int) (NetConfig, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if len(vm.Networks) <= i {
+		return NetConfig{}, fmt.Errorf("no such interface %v for %v", i, vm.Name)
+	}
+
+	return vm.Networks[i], nil
+}
+
 func (vm *BaseVM) GetNetworks() []NetConfig {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
@@ -337,6 +354,10 @@ func (vm *BaseVM) GetCoschedule() int {
 	return int(vm.Coschedule)
 }
 
+func (vm *BaseVM) GetPID() int {
+	return vm.pid
+}
+
 // Kill a VM. Blocks until the VM process has terminated.
 func (vm *BaseVM) Kill() error {
 	vm.lock.Lock()
@@ -360,7 +381,27 @@ func (vm *BaseVM) Kill() error {
 }
 
 func (vm *BaseVM) Flush() error {
-	return os.RemoveAll(vm.instancePath)
+	namespacesDir := filepath.Join(*f_base, "namespaces")
+	namespaceAliasDir := filepath.Join(namespacesDir, vm.Namespace)
+	vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
+
+	// remove just the symlink to the instance path
+	if err := os.Remove(vmAlias); err != nil {
+		return err
+	}
+
+	// try removing the <namespace> directory, but let it fail if not empty
+	os.Remove(namespaceAliasDir)
+
+	// try removing the namespaces/ directory, but let it fail if not empty
+	os.Remove(namespacesDir)
+
+	// remove the actual instance path
+	if err := os.RemoveAll(vm.instancePath); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (vm *BaseVM) Tag(t string) string {
@@ -626,6 +667,8 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	switch field {
 	case "id":
 		return strconv.Itoa(vm.ID), nil
+	case "pid":
+		return strconv.Itoa(vm.pid), nil
 	case "name":
 		return vm.Name, nil
 	case "state":

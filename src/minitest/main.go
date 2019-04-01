@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -26,8 +28,8 @@ the U.S. Government retains certain rights in this software.`
 )
 
 var skippedExtensions = []string{
-	"got",
-	"want",
+	".got",
+	".want",
 }
 
 var (
@@ -56,38 +58,40 @@ func (c Client) mustRunCommands(file string) string {
 // runCommands reads and runs all the commands from a file. Return the
 // concatenation of all the Responses or an error.
 func (c Client) runCommands(file string) (string, error) {
-	var res string
-	var err error
-
 	f, err := os.Open(file)
 	if err != nil {
 		return "", err
 	}
 
+	var b bytes.Buffer
 	s := bufio.NewScanner(f)
 
 	for s.Scan() {
 		cmd := s.Text()
 
 		if len(cmd) > 0 {
-			res += fmt.Sprintf("## %v\n", cmd)
+			fmt.Fprintf(&b, "## %v\n", cmd)
 		} else {
-			res += "\n"
+			b.WriteString("\n")
 		}
 
 		for resps := range c.Run(cmd) {
-			if err != nil {
-				continue
-			}
-
+			var errs []string
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
-					res += fmt.Sprintf("E: %v\n", resp.Error)
+					errs = append(errs, "E: "+resp.Error)
 				}
 			}
 
+			if len(errs) > 0 {
+				sort.Strings(errs)
+				b.WriteString(strings.Join(errs, "\n"))
+				b.WriteString("\n")
+			}
+
 			if len(resps.Rendered) > 0 {
-				res += resps.Rendered + "\n"
+				b.WriteString(resps.Rendered)
+				b.WriteString("\n")
 			}
 		}
 	}
@@ -96,7 +100,7 @@ func (c Client) runCommands(file string) (string, error) {
 		return "", err
 	}
 
-	return res, nil
+	return b.String(), nil
 }
 
 // write s to f

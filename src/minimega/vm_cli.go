@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -106,9 +107,9 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
-If enabled (see "ns"), VMs will be queued for launching until "vm launch" is
-called with no additional arguments. This allows the scheduler to better
-allocate resources across the cluster.`,
+If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
+launch" is called with no additional arguments. This allows the scheduler to
+better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
 			"vm launch <kvm,> <name or count>",
@@ -122,9 +123,9 @@ allocate resources across the cluster.`,
 Kill one or more running virtual machines. See "vm start" for a full
 description of allowable targets.`,
 		Patterns: []string{
-			"vm kill <vm target>",
+			"vm <kill,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMKill),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm start
@@ -156,9 +157,9 @@ Calling "vm start" on a specific list of VMs will cause them to be started if
 they are in the building, paused, quit, or error states. When used with the
 wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
-			"vm start <vm target>",
+			"vm <start,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMStart),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(^VM_RUNNING, true),
 	},
 	{ // vm stop
@@ -169,9 +170,9 @@ description of allowable targets.
 
 Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <vm target>",
+			"vm <stop,> <vm target>",
 		},
-		Call:    wrapVMTargetCLI(cliVMStop),
+		Call:    wrapVMTargetCLI(cliVMApply),
 		Suggest: wrapVMSuggest(VM_RUNNING, true),
 	},
 	{ // vm flush
@@ -181,9 +182,9 @@ Discard information about VMs that have either quit or encountered an error.
 This will remove any VMs with a state of "quit" or "error" from vm info. Names
 of VMs that have been flushed may be reused.`,
 		Patterns: []string{
-			"vm flush",
+			"vm <flush,>",
 		},
-		Call: wrapBroadcastCLI(cliVMFlush),
+		Call: wrapBroadcastCLI(cliVMApply),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -334,17 +335,21 @@ Eject all VM cdroms:
 
         vm cdrom eject all
 
+If the cdrom is "locked" by the guest, the force option can be used to override
+the lock:
+
+        vm cdrom eject 0 force
+
 Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
 "vm cdrom change" ejects the current ISO, if there is one.
 
-
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm cdrom <eject,> <vm target>",
-			"vm cdrom <change,> <vm target> <path>",
+			"vm cdrom <eject,> <vm target> [force,]",
+			"vm cdrom <change,> <vm target> <path> [force,]",
 		},
 		Call:    wrapVMTargetCLI(cliVMCdrom),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
@@ -437,37 +442,19 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func cliVMStart(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["vm"]
+func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["start"]:
+		return ns.Start(c.StringArgs["vm"])
+	case c.BoolArgs["stop"]:
+		return ns.VMs.Stop(c.StringArgs["vm"])
+	case c.BoolArgs["kill"]:
+		return ns.VMs.Kill(c.StringArgs["vm"])
+	case c.BoolArgs["flush"]:
+		return ns.VMs.Flush(ns.ccServer)
+	}
 
-	// For each VM, start it if it's in a startable state.
-	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
-		if wild && vm.GetState()&(VM_PAUSED|VM_BUILDING) != 0 {
-			// If wild, we only start VMs in the building or running state
-			return true, vm.Start()
-		} else if !wild && vm.GetState()&VM_RUNNING == 0 {
-			// If not wild, start VMs that aren't already running
-			return true, vm.Start()
-		}
-
-		return false, nil
-	})
-}
-
-func cliVMStop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["vm"]
-
-	return ns.VMs.Apply(target, func(vm VM, _ bool) (bool, error) {
-		if vm.GetState()&VM_RUNNING != 0 {
-			return true, vm.Stop()
-		}
-
-		return false, nil
-	})
-}
-
-func cliVMKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(ns.Kill(c.StringArgs["vm"]))
+	return unreachable()
 }
 
 func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -476,11 +463,12 @@ func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		fields = vmInfoLite
 	}
 
-	ns.Info(fields, resp)
+	ns.VMs.Info(fields, resp)
 	return nil
 }
 
 func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	force := c.BoolArgs["force"]
 	target := c.StringArgs["vm"]
 
 	if c.BoolArgs["eject"] {
@@ -490,7 +478,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				return false, nil
 			}
 
-			err := kvm.EjectCD()
+			err := kvm.EjectCD(force)
 			if wild && err != nil && err.Error() == "no cdrom inserted" {
 				// suppress error if more than one target
 				err = nil
@@ -510,11 +498,11 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				return false, nil
 			}
 
-			return true, kvm.ChangeCD(f)
+			return true, kvm.ChangeCD(f, force)
 		})
 	}
 
-	return errors.New("unreachable")
+	return unreachable()
 }
 
 func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -549,7 +537,7 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// synchronizes appends to resp.Tabular
 	var mu sync.Mutex
 
-	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
@@ -614,25 +602,24 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!
-			return ns.Schedule()
+			return ns.Schedule(false)
 		}
 
 		return err
 	}
 
-	return ns.Schedule()
-}
-
-func cliVMFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	ns.Flush()
-
-	return nil
+	return ns.Schedule(false)
 }
 
 func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
+	}
+
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(c.StringArgs["qmp"]), &m); err != nil {
+		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	out, err := vm.QMPRaw(c.StringArgs["qmp"])

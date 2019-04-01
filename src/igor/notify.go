@@ -7,7 +7,6 @@ package main
 import (
 	"bytes"
 	log "minilog"
-	"os"
 	"os/exec"
 	"text/template"
 	"time"
@@ -25,11 +24,11 @@ cronjob rather than by the users themselves.`,
 func runNotify(cmd *Command, args []string) {
 	log.Info("notifying users of upcoming and expiring reservations")
 
-	if os.Getuid() != 0 {
+	if igor.Username != "root" {
 		log.Fatalln("only root can notify users")
 	}
 
-	if igorConfig.Domain == "" {
+	if igor.Domain == "" {
 		log.Fatalln("must specify domain in config to notify users")
 	}
 
@@ -46,18 +45,17 @@ func runNotify(cmd *Command, args []string) {
 	// per-user notification
 	users := map[string]*Notification{}
 
-	now := time.Now()
-
-	for _, r := range Reservations {
+	// TODO: probably shouldn't iteration over .M directly
+	for _, r := range igor.Reservations.M {
 		// convert unix to time.Time
 		res := Reservation{
-			Name:  r.ResName,
-			Start: time.Unix(r.StartTime, 0),
-			End:   time.Unix(r.EndTime, 0),
+			Name:  r.Name,
+			Start: r.Start,
+			End:   r.End,
 		}
 
 		// upcoming reservations start in just over an hour
-		diff := res.Start.Sub(now)
+		diff := res.Start.Sub(igor.Now)
 		if diff >= 0 && diff < time.Hour {
 			if users[r.Owner] == nil {
 				users[r.Owner] = &Notification{}
@@ -67,8 +65,17 @@ func runNotify(cmd *Command, args []string) {
 
 		// expiring reservations are longer than two days and expire in just
 		// over 24 hours.
-		diff = res.End.Sub(now)
-		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= 23*time.Hour && diff < 24*time.Hour {
+		diff = res.End.Sub(igor.Now)
+		var lowerwindow, upperwindow time.Duration
+
+		if igor.ExpirationLeadTime < 24*60 { //check if there is a leadtime configured if not assign default value
+			lowerwindow = time.Duration(23)
+			upperwindow = time.Duration(24)
+		} else {
+			lowerwindow = time.Duration((igor.ExpirationLeadTime / 60) - 1)
+			upperwindow = time.Duration(igor.ExpirationLeadTime / 60)
+		}
+		if res.End.Sub(res.Start) >= 48*time.Hour && diff >= lowerwindow*time.Hour && diff < upperwindow*time.Hour {
 			if users[r.Owner] == nil {
 				users[r.Owner] = &Notification{}
 			}
@@ -86,7 +93,7 @@ func runNotify(cmd *Command, args []string) {
 
 		log.Info("notifying %v of %v upcoming and %v expiring reservations", user, len(notification.Upcoming), len(notification.Expiring))
 
-		cmd := exec.Command("mail", "-s", notifySubject, user+"@"+igorConfig.Domain)
+		cmd := exec.Command("mail", "-s", notifySubject, user+"@"+igor.Domain)
 		cmd.Stdin = &buf
 		out, err := cmd.CombinedOutput()
 		if err != nil {

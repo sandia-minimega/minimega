@@ -7,23 +7,27 @@ Snapshot:         true
 UUID:             
 Schedule host:    
 Coschedule limit: -1
+Colocate:         
 Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:       
-Disk Paths:         []
-CDROM Path:         
-Kernel Path:        
-Initrd Path:        
-Kernel Append:      []
-QEMU Path:          kvm
-QEMU Append:        []
-SerialPorts:        0
-Virtio-SerialPorts: 0
-Machine:            
-CPU:                host
-Cores:              1
+Migrate Path:        
+Disk Paths:          []
+CDROM Path:          
+Kernel Path:         
+Initrd Path:         
+Kernel Append:       []
+QEMU Path:           kvm
+QEMU Append:         []
+Serial Ports:        0
+Virtio-Serial Ports: 0
+Machine:             
+CPU:                 host
+Cores:               0
+Threads:             0
+Sockets:             0
+VGA:                 std
 
 Container configuration:
 Filesystem Path: 
@@ -48,23 +52,27 @@ Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
 Coschedule limit: -1
+Colocate:         
 Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:       
-Disk Paths:         []
-CDROM Path:         
-Kernel Path:        
-Initrd Path:        
-Kernel Append:      []
-QEMU Path:          kvm
-QEMU Append:        [-k en-us]
-SerialPorts:        0
-Virtio-SerialPorts: 0
-Machine:            
-CPU:                host
-Cores:              1
+Migrate Path:        
+Disk Paths:          []
+CDROM Path:          
+Kernel Path:         
+Initrd Path:         
+Kernel Append:       []
+QEMU Path:           kvm
+QEMU Append:         [-k en-us]
+Serial Ports:        0
+Virtio-Serial Ports: 0
+Machine:             
+CPU:                 host
+Cores:               0
+Threads:             0
+Sockets:             0
+VGA:                 std
 
 Container configuration:
 Filesystem Path: 
@@ -86,23 +94,27 @@ Snapshot:         true
 UUID:             
 Schedule host:    
 Coschedule limit: -1
+Colocate:         
 Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:       
-Disk Paths:         []
-CDROM Path:         
-Kernel Path:        
-Initrd Path:        
-Kernel Append:      []
-QEMU Path:          kvm
-QEMU Append:        []
-SerialPorts:        0
-Virtio-SerialPorts: 0
-Machine:            
-CPU:                host
-Cores:              1
+Migrate Path:        
+Disk Paths:          []
+CDROM Path:          
+Kernel Path:         
+Initrd Path:         
+Kernel Append:       []
+QEMU Path:           kvm
+QEMU Append:         []
+Serial Ports:        0
+Virtio-Serial Ports: 0
+Machine:             
+CPU:                 host
+Cores:               0
+Threads:             0
+Sockets:             0
+VGA:                 std
 
 Container configuration:
 Filesystem Path: 
@@ -121,23 +133,27 @@ Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
 Coschedule limit: -1
+Colocate:         
 Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:       
-Disk Paths:         []
-CDROM Path:         
-Kernel Path:        
-Initrd Path:        
-Kernel Append:      []
-QEMU Path:          kvm
-QEMU Append:        [-k en-us]
-SerialPorts:        0
-Virtio-SerialPorts: 0
-Machine:            
-CPU:                host
-Cores:              1
+Migrate Path:        
+Disk Paths:          []
+CDROM Path:          
+Kernel Path:         
+Initrd Path:         
+Kernel Append:       []
+QEMU Path:           kvm
+QEMU Append:         [-k en-us]
+Serial Ports:        0
+Virtio-Serial Ports: 0
+Machine:             
+CPU:                 host
+Cores:               0
+Threads:             0
+Sockets:             0
+VGA:                 std
 
 Container configuration:
 Filesystem Path: 

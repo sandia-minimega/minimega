@@ -152,18 +152,17 @@ func (c NetConfig) String() string {
 	parts := []string{}
 
 	if c.Bridge != "" && c.Bridge != DefaultBridge {
-		parts = append(parts, quoteIfSpace(c.Bridge))
+		parts = append(parts, c.Bridge)
 	}
 
-	parts = append(parts, quoteIfSpace(c.Alias))
+	parts = append(parts, c.Alias)
 
 	if c.MAC != "" {
-		// shouldn't need to quote MAC since it is a valid MAC
 		parts = append(parts, c.MAC)
 	}
 
 	if c.Driver != "" && c.Driver != DefaultKVMDriver {
-		parts = append(parts, quoteIfSpace(c.Driver))
+		parts = append(parts, c.Driver)
 	}
 
 	return strings.Join(parts, ",")

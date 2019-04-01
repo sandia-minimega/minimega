@@ -9,6 +9,7 @@ package main
 import (
 	"bridge"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -52,9 +53,16 @@ type BaseConfig struct {
 	// Default: true
 	Snapshot bool
 
-	// Set a host where the VM should be scheduled. This is only used when
-	// launching VMs in a namespace.
-	Schedule string
+	// Set a host where the VM should be scheduled.
+	//
+	// Note: Cannot specify Schedule and Colocate in the same config.
+	Schedule string `validate:"validSchedule"`
+
+	// Colocate this VM with another VM that has already been launched or is
+	// queued for launching.
+	//
+	// Note: Cannot specify Colocate and Schedule in the same
+	Colocate string `validate:"validColocate"`
 
 	// Set a limit on the number of VMs that should be scheduled on the same
 	// host as the VM. A limit of zero means that the VM should be scheduled by
@@ -143,6 +151,7 @@ func (vm *BaseConfig) String(namespace string) string {
 	fmt.Fprintf(w, "UUID:\t%v\n", vm.UUID)
 	fmt.Fprintf(w, "Schedule host:\t%v\n", vm.Schedule)
 	fmt.Fprintf(w, "Coschedule limit:\t%v\n", vm.Coschedule)
+	fmt.Fprintf(w, "Colocate:\t%v\n", vm.Colocate)
 	fmt.Fprintf(w, "Backchannel:\t%v\n", vm.Backchannel)
 	if vm.Tags != nil {
 		fmt.Fprintf(w, "Tags:\t%v\n", marshal(vm.Tags))
@@ -183,4 +192,22 @@ func (vm *BaseConfig) QosString(b, t, i string) string {
 		}
 	}
 	return strings.Trim(val, " ")
+}
+
+func validSchedule(vmConfig VMConfig, s string) error {
+	if vmConfig.Colocate != "" && s != "" {
+		return errors.New("cannot specify schedule and colocate in the same config")
+	}
+
+	// TODO: could check if s is a host in the mesh
+	return nil
+}
+
+func validColocate(vmConfig VMConfig, s string) error {
+	if vmConfig.Schedule != "" && s != "" {
+		return errors.New("cannot specify colocate and schedule in the same config")
+	}
+
+	// TODO: could check if s is a known VM
+	return nil
 }

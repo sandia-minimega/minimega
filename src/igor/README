@@ -124,9 +124,3 @@ command to increase the reservation duration:
 
 You can type "igor help" to access the built-in help, which gives more
 details on all the possible command line switches.
-
-In order to run the IgorWeb application:
-
-	$ igor web -f path/to/static/folder -p portnumber
-
-(For in-depth information about IgorWeb, see static/README)

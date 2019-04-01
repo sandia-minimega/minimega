@@ -22,6 +22,8 @@ mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
 mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
 
+ln -s /proc/self/mounts /etc/mtab
+
 # / needs permissions!?
 chmod a+rx /
 
@@ -53,18 +55,14 @@ modprobe ehci-pci
 # settle :(
 sleep 10
 
-# format and mount the local disk for scratch space
-fdisk /dev/sda << EOF
-g
-n
+# format but leave sda floating so user can mount where needed
+echo ",,,*" | sfdisk /dev/sda
+yes | mkfs.ext4 /dev/sda
 
-
-
-Y
-w
-EOF
-yes | mkfs.ext4 /dev/sda1
-mount /dev/sda1 /scratch
+# create raid0 across sdb/sdc and mount to scratch
+yes | mdadm --create /dev/md0 --level=0 --raid-devices=2 /dev/sdb /dev/sdc
+yes | mkfs.ext4 /dev/md0
+mount /dev/md0 /scratch
 
 # bump open file handle limits
 ulimit -n 999999

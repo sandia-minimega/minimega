@@ -17,6 +17,10 @@ import (
 	"strings"
 )
 
+const (
+	TOKEN_MAX = 1024 * 1024
+)
+
 var (
 	plumber *miniplumber.Plumber
 )
@@ -80,7 +84,9 @@ example, to send a unique floating-point value on a normal distribution with a
 written mean to all readers:
 
 	pipe foo via normal -stddev 5.0
-	pipe foo 1.5`,
+	pipe foo 1.5
+
+Pipes in other namespaces can be referenced with the syntax <namespace>//<pipe>.`,
 		Patterns: []string{
 			"pipe",
 			"pipe <pipe> <mode,> <all,round-robin,random>",
@@ -115,15 +121,16 @@ func plumberStart(node *meshage.Node) {
 func cliPlumbLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
 
-	// rewrite pipes with namespace prefixes
-	if ns != nil {
-		for i, e := range args {
-			if fields := strings.Split(e, "//"); len(fields) == 1 {
-				f := fieldsQuoteEscape("\"", e)
-				_, err := exec.LookPath(f[0])
-				if err != nil {
-					args[i] = fmt.Sprintf("%v//%v", ns, e)
-				}
+	for i, e := range args {
+		// This production is a little odd but we have to make choices
+		// somewhere - if a field isn't already in the namespace//pipe
+		// format AND doesn't exist in the path, then it must be a pipe
+		// in this namespace.
+		if fqnsPipe(ns, e) != e {
+			f := fieldsQuoteEscape("\"", e)
+			_, err := exec.LookPath(f[0])
+			if err != nil {
+				args[i] = fqnsPipe(ns, e)
 			}
 		}
 	}
@@ -138,11 +145,8 @@ func cliPlumbBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	resp.Tabular = [][]string{}
 
 	for _, v := range plumber.Pipelines() {
-		if ns := GetNamespace(); ns != nil {
-			if !strings.Contains(v, fmt.Sprintf("%v//", ns)) {
-				continue
-			}
-			v = strings.Replace(v, fmt.Sprintf("%v//", ns), "", -1)
+		if !strings.Contains(v, fmt.Sprintf("%v//", ns)) {
+			continue
 		}
 		resp.Tabular = append(resp.Tabular, []string{v})
 	}
@@ -150,6 +154,7 @@ func cliPlumbBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	return nil
 }
 
+// TODO: only clear pipelines in this namespace
 func cliPlumbClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if pipeline, ok := c.ListArgs["pipeline"]; ok {
 		return plumber.PipelineDelete(pipeline...)
@@ -162,11 +167,7 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	pipe := c.StringArgs["pipe"]
 
 	// rewrite the pipe with the namespace prefix, if any
-	if ns != nil {
-		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
-			pipe = fmt.Sprintf("%v//%v", ns, pipe)
-		}
-	}
+	pipe = fqnsPipe(ns, pipe)
 
 	if c.BoolArgs["mode"] {
 		var mode int
@@ -188,18 +189,15 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		}
 	} else {
 		// get info on all named pipes
-		resp.Header = []string{"name", "mode", "readers", "writers", "via", "last message"}
+		resp.Header = []string{"name", "mode", "readers", "writers", "count", "via", "previous"}
 		resp.Tabular = [][]string{}
 
 		for _, v := range plumber.Pipes() {
 			name := v.Name()
-			if ns := GetNamespace(); ns != nil {
-				if !strings.Contains(name, fmt.Sprintf("%v//", ns)) {
-					continue
-				}
-				name = strings.Replace(name, fmt.Sprintf("%v//", ns), "", -1)
+			if !strings.Contains(name, fmt.Sprintf("%v//", ns)) {
+				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), v.GetVia(), strings.TrimSpace(v.Last())})
+			resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), strings.TrimSpace(v.Last())})
 		}
 	}
 
@@ -207,14 +205,7 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 }
 
 func cliPipeLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	pipe := c.StringArgs["pipe"]
-
-	// rewrite the pipe with the namespace prefix, if any
-	if ns != nil {
-		if fields := strings.Split(pipe, "//"); len(fields) == 1 {
-			pipe = fmt.Sprintf("%v//%v", ns, pipe)
-		}
-	}
+	pipe := fqnsPipe(ns, c.StringArgs["pipe"])
 
 	if c.BoolArgs["via"] {
 		plumber.Via(pipe, c.ListArgs["command"])
@@ -225,8 +216,10 @@ func cliPipeLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return nil
 }
 
+//TODO: clearing all pipes should be restricted to this namespace
 func cliPipeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	pipe, ok := c.StringArgs["pipe"]
+	pipe = fqnsPipe(ns, pipe)
 
 	if c.BoolArgs["mode"] {
 		if !ok {
@@ -257,6 +250,10 @@ func cliPipeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 func pipeMMHandler() {
 	pipe := *f_pipe
 
+	if fields := strings.Split(pipe, "//"); len(fields) == 1 {
+		pipe = DefaultNamespace + "//" + pipe
+	}
+
 	log.Debug("got pipe: %v", pipe)
 
 	// connect to the running minimega as a plumber
@@ -270,6 +267,8 @@ func pipeMMHandler() {
 
 	go func() {
 		scanner := bufio.NewScanner(r)
+		buf := make([]byte, 0, TOKEN_MAX)
+		scanner.Buffer(buf, TOKEN_MAX)
 		for scanner.Scan() {
 			_, err := os.Stdout.Write(append(scanner.Bytes(), '\n'))
 			if err != nil {
@@ -283,6 +282,8 @@ func pipeMMHandler() {
 	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
+	buf := make([]byte, 0, TOKEN_MAX)
+	scanner.Buffer(buf, TOKEN_MAX)
 	for scanner.Scan() {
 		log.Debug("writing: %v", scanner.Text())
 		_, err := w.Write(append(scanner.Bytes(), '\n'))
@@ -301,4 +302,13 @@ func pipeMMHandler() {
 	w.Close()
 
 	<-wait
+}
+
+func fqnsPipe(ns *Namespace, p string) string {
+	fields := strings.Split(p, "//")
+
+	if len(fields) == 1 {
+		return fmt.Sprintf("%v//%v", ns, p)
+	}
+	return p
 }

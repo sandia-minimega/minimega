@@ -16,6 +16,7 @@ import (
 	"miniplumber"
 	"ranges"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"version"
@@ -62,7 +63,7 @@ func init() {
 	gob.Register(meshageResponse{})
 	gob.Register(meshageVMLaunch{})
 	gob.Register(meshageVMResponse{})
-	gob.Register(iomeshage.IOMMessage{})
+	gob.Register(iomeshage.Message{})
 	gob.Register(miniplumber.Message{})
 }
 
@@ -92,7 +93,7 @@ func meshageMux() {
 			meshageVMLaunchChan <- m
 		case meshageVMResponse:
 			meshageVMResponseChan <- m
-		case iomeshage.IOMMessage:
+		case iomeshage.Message:
 			iom.Messages <- m
 		case miniplumber.Message:
 			plumber.Messages <- m
@@ -103,8 +104,8 @@ func meshageMux() {
 }
 
 func meshageSnooper(m *meshage.Message) {
-	if reflect.TypeOf(m.Body) == reflect.TypeOf(iomeshage.IOMMessage{}) {
-		i := m.Body.(iomeshage.IOMMessage)
+	if reflect.TypeOf(m.Body) == reflect.TypeOf(iomeshage.Message{}) {
+		i := m.Body.(iomeshage.Message)
 		iom.MITM(&i)
 	}
 }
@@ -221,8 +222,9 @@ func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Res
 				} else {
 					// wrap response up into a minicli.Response
 					resp := &minicli.Response{
-						Host:  host,
-						Error: strings.Join(body.Errors, "\n"),
+						Host:     host,
+						Response: strconv.Itoa(len(body.Errors)),
+						Error:    strings.Join(body.Errors, "\n"),
 					}
 
 					out <- minicli.Responses{resp}

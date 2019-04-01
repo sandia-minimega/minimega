@@ -25,11 +25,11 @@ func NewCobblerBackend() Backend {
 }
 
 // Install configures Cobbler to boot the correct stuff
-func (b *CobblerBackend) Install(r Reservation) error {
+func (b *CobblerBackend) Install(r *Reservation) error {
 	// If we're using a kernel+ramdisk instead of an existing profile, create a
 	// profile and set the nodes to boot from it
 	if r.CobblerProfile == "" {
-		profile := "igor_" + r.ResName
+		profile := "igor_" + r.Name
 
 		// Try to clean up any leftover profile/distro with this name. Will
 		// be a no-op if there are no conflicts.
@@ -38,7 +38,7 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		}
 
 		// Create the distro from the kernel+ramdisk
-		_, err := processWrapper("cobbler", "distro", "add", "--name="+profile, "--kernel="+filepath.Join(igorConfig.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igorConfig.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
+		_, err := processWrapper("cobbler", "distro", "add", "--name="+profile, "--kernel="+filepath.Join(igor.TFTPRoot, "igor", r.KernelHash+"-kernel"), "--initrd="+filepath.Join(igor.TFTPRoot, "igor", r.InitrdHash+"-initrd"), "--kopts="+r.KernelArgs)
 		if err != nil {
 			return err
 		}
@@ -50,21 +50,11 @@ func (b *CobblerBackend) Install(r Reservation) error {
 		}
 
 		// Now set each host to boot from that profile
-		runner := DefaultRunner(func(host string) error {
-			if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+profile); err != nil {
-				return err
-			}
-
-			// We make sure to set netboot enabled so the nodes can boot
-			_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--netboot-enabled=true")
+		if err := b.setProfile(r.Hosts, profile); err != nil {
 			return err
-		})
-
-		if err := runner.RunAll(r.Hosts); err != nil {
-			return fmt.Errorf("unable to set cobbler profile: %v", err)
 		}
 
-		return nil
+		return b.enableNetboot(r.Hosts)
 	}
 
 	// install profile by name
@@ -73,37 +63,50 @@ func (b *CobblerBackend) Install(r Reservation) error {
 	}
 
 	// If the requested profile exists, go ahead and set the nodes to use it
-	runner := DefaultRunner(func(host string) error {
-		if _, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+r.CobblerProfile); err != nil {
-			return err
-		}
+	if err := b.setProfile(r.Hosts, r.CobblerProfile); err != nil {
+		return err
+	}
 
-		// We make sure to set netboot enabled so the nodes can boot
-		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--netboot-enabled=true")
+	return b.enableNetboot(r.Hosts)
+}
+
+func (b *CobblerBackend) Uninstall(r *Reservation) error {
+	// Set all nodes in the reservation back to the default profile
+	if err := b.setProfile(r.Hosts, igor.CobblerDefaultProfile); err != nil {
+		return err
+	}
+
+	// Delete the profile and distro we created for this reservation
+	if r.CobblerProfile == "" {
+		return b.removeProfile("igor_" + r.Name)
+	}
+
+	return nil
+}
+
+// setProfile sets the cobbler profile for all hosts to the specified profile
+func (b *CobblerBackend) setProfile(hosts []string, profile string) error {
+	runner := DefaultRunner(func(host string) error {
+		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+profile)
 		return err
 	})
 
-	if err := runner.RunAll(r.Hosts); err != nil {
+	if err := runner.RunAll(hosts); err != nil {
 		return fmt.Errorf("unable to set cobbler profile: %v", err)
 	}
 
 	return nil
 }
 
-func (b *CobblerBackend) Uninstall(r Reservation) error {
-	// Set all nodes in the reservation back to the default profile
+// enableNetboot enables netboot for all hosts
+func (b *CobblerBackend) enableNetboot(hosts []string) error {
 	runner := DefaultRunner(func(host string) error {
-		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+		_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--netboot-enabled=true")
 		return err
 	})
 
-	if err := runner.RunAll(r.Hosts); err != nil {
-		return fmt.Errorf("unable to set cobbler profile: %v", err)
-	}
-
-	// Delete the profile and distro we created for this reservation
-	if r.CobblerProfile == "" {
-		return b.removeProfile("igor_" + r.ResName)
+	if err := runner.RunAll(hosts); err != nil {
+		return fmt.Errorf("unable to enable netboot: %v", err)
 	}
 
 	return nil
@@ -125,12 +128,8 @@ func (b *CobblerBackend) removeProfile(profile string) error {
 	if len(hosts) > 0 {
 		log.Info("setting hosts to default profile: %v", hosts)
 
-		runner := DefaultRunner(func(host string) error {
-			_, err := processWrapper("cobbler", "system", "edit", "--name="+host, "--profile="+igorConfig.CobblerDefaultProfile)
+		if err := b.setProfile(hosts, igor.CobblerDefaultProfile); err != nil {
 			return err
-		})
-		if err := runner.RunAll(hosts); err != nil {
-			return fmt.Errorf("unable to set cobbler profile: %v", err)
 		}
 	}
 
@@ -151,20 +150,6 @@ func (b *CobblerBackend) removeProfile(profile string) error {
 	}
 
 	return err
-}
-
-func (b *CobblerBackend) Power(hosts []string, on bool) error {
-	command := "poweroff"
-	if on {
-		command = "poweron"
-	}
-
-	runner := DefaultRunner(func(host string) error {
-		_, err := processWrapper("cobbler", "system", command, "--name", host)
-		return err
-	})
-
-	return runner.RunAll(hosts)
 }
 
 func CobblerProfiles() map[string]bool {

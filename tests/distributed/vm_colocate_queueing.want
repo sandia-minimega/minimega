@@ -1,0 +1,20 @@
+## # test that all VMs end up on mm1 with queueing enabled
+## ns queueing true
+## vm config schedule mm1
+## vm launch kvm a
+## clear vm config schedule
+## vm config colocate a
+## vm launch kvm b
+## vm config colocate b
+## vm launch kvm c
+## vm launch
+
+## # wait for scheduler to run
+## shell sleep 5s
+
+## # check where VMs ended up
+## .annotate true .columns name vm info
+host | name
+mm1  | a
+mm1  | b
+mm1  | c
