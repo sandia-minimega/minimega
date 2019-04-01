@@ -16,7 +16,8 @@
                 <div class="card mx-auto" >
                   <div class="card-body">
                     <div class="input-group">
-                      <input type="text" class="form-control" placeholder="Filter Reservations" v-model="searchText">
+                      <input type="text" class="form-control" placeholder="Filter Reservations" v-model="searchText"/>
+                      <button v-if="searchText != ''" class="btn btn-default" v-on:click="clearFilter()">Clear</button>
                     </div>
                     <div id="table" class="row mdl" style="margin: 0.5em; opacity: 1;">
                       <reservation-table :filter="searchText"></reservation-table>
@@ -43,6 +44,12 @@
       return {
         searchText: "",
       };
+    },
+
+    methods: {
+      clearFilter() {
+        this.searchText = "";
+      },
     },
   };
 })();
