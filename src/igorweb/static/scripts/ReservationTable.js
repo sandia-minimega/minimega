@@ -66,10 +66,10 @@
           sortFunc = sortHelper((x) => x.Owner.toUpperCase());
           break;
         case 'start':
-          sortFunc = sortHelper((x) => x.Start);
+          sortFunc = sortHelper((x) => x.StartInt);
           break;
         case 'end':
-          sortFunc = sortHelper((x) => x.End);
+          sortFunc = sortHelper((x) => x.EndInt);
           break;
         case 'nodes':
           sortFunc = sortHelper((x) => x.Nodes.length);
