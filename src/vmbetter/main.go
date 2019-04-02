@@ -32,6 +32,8 @@ var (
 	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
 	f_rootfs        = flag.Bool("rootfs", false, "generate a simple rootfs")
 	f_dstrp_append  = flag.String("debootstrap-append", "", "additional arguments to be passed to debootstrap")
+	f_constraints   = flag.String("constraints", "debian,amd64", "specify build constraints, separated by commas")
+	f_dry_run       = flag.Bool("dry-run", false, "parse and print configs and then exit")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -68,9 +70,12 @@ func main() {
 	// find any other dependent configs and get an ordered list of those
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
-	config, err := vmconfig.ReadConfig(configfile)
+	config, err := vmconfig.ReadConfig(configfile, strings.Split(*f_constraints, ",")...)
 	if err != nil {
 		log.Fatalln(err)
+	} else if *f_dry_run {
+		fmt.Printf("%v", config)
+		os.Exit(0)
 	} else {
 		log.Debugln("read config:", config)
 	}
