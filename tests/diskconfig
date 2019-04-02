@@ -1,0 +1,42 @@
+# no interface or cache mode specified
+vm config disk foo.qcow2
+
+vm config snapshot true
+vm config qemu-override
+
+vm config snapshot false
+vm config qemu-override
+
+# interface specified, no cache mode specified
+vm config disk foo.qcow2,virtio
+
+vm config snapshot true
+vm config qemu-override
+
+vm config snapshot false
+vm config qemu-override
+
+# no interface specified, cache mode specified
+vm config disk foo.qcow2,writeback
+
+vm config snapshot true
+vm config qemu-override
+
+vm config snapshot false
+vm config qemu-override
+
+# both interface and cache mode specified, 
+vm config disk foo.qcow2,virtio,none
+vm config snapshot true
+vm config qemu-override
+
+vm config snapshot false
+vm config qemu-override
+
+# ahci interface
+vm config disk foo.qcow2,ahci,none
+vm config qemu-override
+
+# multiple disks, mixed ahci/not
+vm config disk foo.qcow2,ide,none foo.qcow2,ahci,writeback foo.qcow2,virtio,writeback foo.qcow2,ahci,directsync
+vm config qemu-override

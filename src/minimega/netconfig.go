@@ -124,8 +124,8 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		b = DefaultBridge
 	}
 
-	if d == "" && isDriver(DefaultDriver) {
-		d = DefaultDriver
+	if d == "" && isDriver(DefaultKVMDriver) {
+		d = DefaultKVMDriver
 	} else if d == "" {
 		// use alphabetically first driver
 		vals := []string{}
@@ -135,7 +135,7 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		sort.Strings(vals)
 		d = vals[0]
 
-		log.Info("default driver `%v` is not available, using `%v` instead", DefaultDriver, d)
+		log.Info("default driver `%v` is not available, using `%v` instead", DefaultKVMDriver, d)
 	}
 
 	return &NetConfig{

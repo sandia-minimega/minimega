@@ -568,6 +568,24 @@ func (n *Namespace) hostSlice() []string {
 	return hosts
 }
 
+// processVMDisks parses a list of diskspecs using processVMDisk and updates the
+// active vmConfig.
+func (n *Namespace) processVMDisks(vals []string) error {
+	n.vmConfig.Disks = nil
+
+	for _, spec := range vals {
+		disk, err := ParseDiskConfig(spec, n.vmConfig.Snapshot)
+		if err != nil {
+			n.vmConfig.Disks = nil
+			return err
+		}
+
+		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
+	}
+
+	return nil
+}
+
 // processVMNets parses a list of netspecs using processVMNet and updates the
 // active vmConfig.
 func (n *Namespace) processVMNets(vals []string) error {
