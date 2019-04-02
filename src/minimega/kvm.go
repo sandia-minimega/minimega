@@ -141,7 +141,14 @@ type KVMConfig struct {
 	//
 	// To create three virtio-serial ports:
 	//   vm config virtio-ports 3
-	VirtioPorts uint64
+	//
+	// To explicitly name the virtio-ports, pass a comma-separated list of names:
+	//
+	//   vm config virtio-ports foo,bar
+	//
+	// The ports (on the guest) will then be mapped to /dev/virtio-port/foo and
+	// /dev/virtio-port/bar.
+	VirtioPorts string
 
 	// Specify the graphics card to emulate. "cirrus" or "std" should work with
 	// most operating systems.
@@ -1118,16 +1125,36 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
 	}
 
-	for i := uint64(0); i < vm.VirtioPorts; i++ {
-		// If we've maxed out the device, create a new one
-		if i%DEV_PER_VIRTIO == 0 {
-			addVirtioDevice()
+	if vm.VirtioPorts != "" {
+		names := []string{}
+
+		v, err := strconv.ParseUint(vm.VirtioPorts, 10, 64)
+		if err == nil {
+			// if the VirtioPorts is an int, assume they want automatically generated names
+			for i := uint64(0); i < v; i++ {
+				names = append(names, "virtio-serial"+strconv.FormatUint(i, 10))
+			}
+		} else {
+			// otherwise, assume they specified a list of names
+			names = strings.Split(vm.VirtioPorts, ",")
 		}
 
-		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", virtioPort, i, i, i))
+		for i, name := range names {
+			if name == "cc" && vm.Backchannel {
+				// TODO: abort?
+				log.Warn("virtio-port name conflicts with miniccc's")
+			}
+
+			// If we've maxed out the device, create a new one
+			if i%DEV_PER_VIRTIO == 0 {
+				addVirtioDevice()
+			}
+
+			args = append(args, "-chardev")
+			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
+		}
 	}
 
 	// hook for hugepage support

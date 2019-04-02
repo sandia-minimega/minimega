@@ -527,6 +527,13 @@ To display current virtio-serial ports:
 
 To create three virtio-serial ports:
   vm config virtio-ports 3
+
+To explicitly name the virtio-ports, pass a comma-separated list of names:
+
+  vm config virtio-ports foo,bar
+
+The ports (on the guest) will then be mapped to /dev/virtio-port/foo and
+/dev/virtio-port/bar.
 `,
 		Patterns: []string{
 			"vm config virtio-ports [value]",
@@ -534,16 +541,11 @@ To create three virtio-serial ports:
 
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(ns.vmConfig.VirtioPorts, 10)
+				r.Response = ns.vmConfig.VirtioPorts
 				return nil
 			}
 
-			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
-			if err != nil {
-				return err
-			}
-
-			ns.vmConfig.VirtioPorts = i
+			ns.vmConfig.VirtioPorts = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -1152,7 +1154,7 @@ func (v *KVMConfig) Info(field string) (string, error) {
 		return strconv.FormatUint(v.SerialPorts, 10), nil
 	}
 	if field == "virtio-ports" {
-		return strconv.FormatUint(v.VirtioPorts, 10), nil
+		return v.VirtioPorts, nil
 	}
 	if field == "vga" {
 		return v.Vga, nil
@@ -1208,7 +1210,7 @@ func (v *KVMConfig) Clear(mask string) {
 		v.SerialPorts = 0
 	}
 	if mask == Wildcard || mask == "virtio-ports" {
-		v.VirtioPorts = 0
+		v.VirtioPorts = ""
 	}
 	if mask == Wildcard || mask == "vga" {
 		v.Vga = "std"
@@ -1261,7 +1263,7 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.SerialPorts != 0 {
 		fmt.Fprintf(w, "vm config serial-ports %v\n", v.SerialPorts)
 	}
-	if v.VirtioPorts != 0 {
+	if v.VirtioPorts != "" {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
 	}
 	if v.Vga != "std" {
