@@ -238,6 +238,11 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		case *KvmVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.KVMConfig = vm.KVMConfig.Copy()
+
+			// Clear SnapshotPaths since we can't launch VMs with the same SnapshotPath
+			for i, _ := range ns.vmConfig.KVMConfig.Disks {
+				ns.vmConfig.KVMConfig.Disks[i].SnapshotPath = ""
+			}
 		case *ContainerVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()

@@ -1,3 +1,6 @@
+disk create qcow2 foo.qcow2 512M
+disk create qcow2 bar.qcow2 512M
+
 # no interface or cache mode specified
 vm config disk foo.qcow2
 
@@ -40,3 +43,38 @@ vm config qemu-override
 # multiple disks, mixed ahci/not
 vm config disk foo.qcow2,ide,none foo.qcow2,ahci,writeback foo.qcow2,virtio,writeback foo.qcow2,ahci,directsync
 vm config qemu-override
+
+# launching
+clear vm config
+
+vm config snapshot true
+vm config disk foo.qcow2
+vm launch kvm foo1
+.column name,state,snapshot,disk vm info
+
+vm config disk bar.qcow2
+vm launch kvm bar1
+.column name,state,snapshot,disk vm info
+
+vm config clone foo1
+vm launch kvm foo2
+.column name,state,snapshot,disk vm info
+
+# should fail
+vm config snapshot false
+vm launch kvm foo3
+.column name,state,snapshot,disk vm info
+
+# should work
+vm config clone bar1
+vm launch kvm bar2
+.column name,state,snapshot,disk vm info
+
+# should also work
+vm config clone foo1
+vm config snapshot false
+vm kill foo1
+vm kill foo2
+vm flush
+vm launch kvm foo3
+.column name,state,snapshot,disk vm info
