@@ -89,7 +89,11 @@ func (p *playback) Info() []string {
 		res = append(res, fmt.Sprintf("%v remaining", p.duration))
 	}
 
-	res = append(res, p.file.Name())
+	if p.file != nil {
+		res = append(res, p.file.Name())
+	} else {
+		res = append(res, "N/A")
+	}
 
 	return res
 }
