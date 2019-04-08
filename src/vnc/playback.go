@@ -212,16 +212,20 @@ func (p *playback) Stop() error {
 }
 
 func (p *playback) Inject(cmd string) error {
+	e, err := parseEvent(cmd)
+	if err != nil {
+		return err
+	}
+
+	return p.InjectEvent(e)
+}
+
+func (p *playback) InjectEvent(e interface{}) error {
 	p.Lock()
 	defer p.Unlock()
 
 	if p.closed {
 		return errors.New("playback has already stopped")
-	}
-
-	e, err := parseEvent(cmd)
-	if err != nil {
-		return err
 	}
 
 	if event, ok := e.(Event); ok {
