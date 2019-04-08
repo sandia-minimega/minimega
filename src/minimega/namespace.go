@@ -268,7 +268,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 			return fmt.Errorf("vm already exists with name `%s`", name)
 		}
 
-		if !validName.MatchString(name) {
+		if name != "" && !validName.MatchString(name) {
 			return fmt.Errorf("%v: `%v`", validNameErr, name)
 		}
 	}
