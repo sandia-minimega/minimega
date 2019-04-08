@@ -199,7 +199,13 @@ func validSchedule(vmConfig VMConfig, s string) error {
 		return errors.New("cannot specify schedule and colocate in the same config")
 	}
 
-	// TODO: could check if s is a host in the mesh
+	// check if s is in the namespace
+	ns := GetNamespace()
+
+	if !ns.Hosts[s] {
+		return fmt.Errorf("host is not in namespace: %v", s)
+	}
+
 	return nil
 }
 
