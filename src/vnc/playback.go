@@ -359,17 +359,10 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 					e := sig.data.(*WaitForItEvent)
 
 					// TODO: what to do for duration?
-					if _, err := v.waitForIt(e.File, e.Timeout); err != nil {
+					if e2, err := v.waitForIt(e); err != nil {
 						return err
-					}
-				case ClickIt:
-					e := sig.data.(*ClickItEvent)
-
-					// TODO: what to do for duration?
-					if e, err := v.waitForIt(e.File, e.Timeout); err != nil {
-						return err
-					} else {
-						v.out <- e
+					} else if e.Click {
+						v.out <- e2
 					}
 				default:
 					log.Error("unexpected signal: %v", sig)
@@ -388,15 +381,10 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 			}
 		case *WaitForItEvent:
 			// TODO: what to do for duration?
-			if _, err := v.waitForIt(e.File, e.Timeout); err != nil {
+			if e2, err := v.waitForIt(e); err != nil {
 				return err
-			}
-		case *ClickItEvent:
-			// TODO: what to do for duration?
-			if e, err := v.waitForIt(e.File, e.Timeout); err != nil {
-				return err
-			} else {
-				v.out <- e
+			} else if e.Click {
+				v.out <- e2
 			}
 		}
 	}
@@ -407,20 +395,11 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 // waitForIt waits until the template image is displayed. If it is detected
 // within the timeout, returns a PointerEvent to click on the center of the
 // template image.
-func (p *playback) waitForIt(file string, timeout time.Duration) (*PointerEvent, error) {
-	log.Info("playback %v, wait for %v, timeout = %v", p.ID, file, timeout)
+func (p *playback) waitForIt(e *WaitForItEvent) (*PointerEvent, error) {
+	log.Info("playback %v, wait for %v, timeout = %v", p.ID, e.Source, e.Timeout)
 
-	// load image
-	f, err := os.Open(file)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	template, _, err := image.Decode(f)
-	if err != nil {
-		return nil, err
-	}
+	// timeout tracks how long we have left to wait
+	timeout := e.Timeout
 
 	fb := &FramebufferUpdateRequest{
 		Width:  p.Conn.s.Width,
@@ -442,11 +421,11 @@ func (p *playback) waitForIt(file string, timeout time.Duration) (*PointerEvent,
 
 			log.Info("playback %v got screenshot after %v", p.ID, waited)
 
-			if e := matchTemplate(screenshot, template); e != nil {
+			if e := matchTemplate(screenshot, e.Template); e != nil {
 				return e, nil
 			}
 		case <-time.After(timeout):
-			return nil, fmt.Errorf("timeout waiting for %v", file)
+			return nil, fmt.Errorf("timeout waiting for %v", e.Source)
 		}
 
 		// sleep and try again
@@ -454,7 +433,7 @@ func (p *playback) waitForIt(file string, timeout time.Duration) (*PointerEvent,
 		timeout -= time.Second
 	}
 
-	return nil, fmt.Errorf("timeout waiting for %v", file)
+	return nil, fmt.Errorf("timeout waiting for %v", e.Source)
 }
 
 func (p *playback) setFile(f *os.File) (old *os.File, err error) {

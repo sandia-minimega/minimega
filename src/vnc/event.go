@@ -6,6 +6,8 @@ package vnc
 
 import (
 	"bufio"
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -14,6 +16,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"image"
+
+	// supported image formats
+	_ "image/jpeg"
+	_ "image/png"
 )
 
 // Events can be written to a vnc connect
@@ -22,17 +30,13 @@ type Event interface {
 }
 
 // WaitForItEvent is a pseudo event indicating that we should wait for an image
-// to appear on the screen.
+// to appear on the screen. If click is true, we should click on the center of
+// the image if it appears.
 type WaitForItEvent struct {
-	File    string
-	Timeout time.Duration
-}
-
-// ClickItEvent is a pseudo event indicating that we should wait for an image
-// to appear on the screen and click it.
-type ClickItEvent struct {
-	File    string
-	Timeout time.Duration
+	Source   string
+	Template image.Image
+	Timeout  time.Duration
+	Click    bool
 }
 
 // LoadFileEvent is a pseudo event indicating that we should start reading
@@ -111,36 +115,52 @@ func parseEvent(cmd string) (interface{}, error) {
 		}
 
 		return e, nil
-	case "WaitForIt":
+	case "WaitForIt", "ClickItEvent":
 		if len(fields) != 3 {
-			return nil, fmt.Errorf("expected 2 values for WaitForIt, got %v", len(fields)-1)
+			return nil, fmt.Errorf("expected 2 values for %v, got %v", fields[0], len(fields)-1)
 		}
 
-		timeout, err := parseDuration(fields[2])
+		timeout, err := parseDuration(fields[1])
 		if err != nil {
-			return nil, fmt.Errorf("invalid WaitForIt: %v", err)
+			return nil, fmt.Errorf("invalid timeout for %v: %v", fields[0], err)
 		}
 
 		e := &WaitForItEvent{
-			File:    fields[1],
 			Timeout: timeout,
+			Click:   fields[0] == "ClickItEvent",
+			Source:  fields[2],
 		}
 
-		return e, nil
-	case "ClickIt":
-		if len(fields) != 3 {
-			return nil, fmt.Errorf("expected 2 values for ClickIt, got %v", len(fields)-1)
+		// reader for image
+		var r io.Reader
+
+		b, err := base64.StdEncoding.DecodeString(fields[2])
+		if err == nil {
+			// successfully decoded as base64-encoded image
+			r = bytes.NewReader(b)
+
+			// truncate for sanity
+			if len(e.Source) > 32 {
+				e.Source = e.Source[:29] + "..."
+			}
+		} else {
+			// argument must be a path to a file
+			f, err := os.Open(fields[2])
+			if err != nil {
+				return nil, err
+			}
+			defer f.Close()
+
+			r = f
 		}
 
-		timeout, err := parseDuration(fields[2])
+		// TODO: cache image?
+		template, _, err := image.Decode(r)
 		if err != nil {
-			return nil, fmt.Errorf("invalid ClickIt: %v", err)
+			return nil, err
 		}
 
-		e := &ClickItEvent{
-			File:    fields[1],
-			Timeout: timeout,
-		}
+		e.Template = template
 
 		return e, nil
 	}
