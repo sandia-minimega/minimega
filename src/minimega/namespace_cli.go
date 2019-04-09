@@ -128,6 +128,13 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	ns := GetNamespace()
 
 	if name, ok := c.StringArgs["name"]; ok {
+		// check the name is sane
+		if !validName.MatchString(name) {
+			resp.Error = validNameErr.Error()
+			respChan <- minicli.Responses{resp}
+			return
+		}
+
 		ns2 := GetOrCreateNamespace(name)
 
 		if c.Subcommand != nil {
