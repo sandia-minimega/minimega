@@ -33,6 +33,7 @@ var (
 	f_rootfs        = flag.Bool("rootfs", false, "generate a simple rootfs")
 	f_dstrp_append  = flag.String("debootstrap-append", "", "additional arguments to be passed to debootstrap")
 	f_constraints   = flag.String("constraints", "debian,amd64", "specify build constraints, separated by commas")
+	f_target        = flag.String("O", "", "specify output name, by default uses name of config")
 	f_dry_run       = flag.Bool("dry-run", false, "parse and print configs and then exit")
 )
 
