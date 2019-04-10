@@ -278,3 +278,24 @@ Init:            [/init]
 Pre-init:        
 FIFOs:           0
 Volumes:
+
+
+## # check that malformed diskspecs fail
+## clear vm config
+## vm config disks foo.qcow2,bad
+E: malformed diskspec
+
+## vm config disks foo.qcow2,bad bar.qcow2
+E: malformed diskspec
+
+## vm config disks foo.qcow2,virtio bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,bad bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,virtio bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,virtio,bad bar.qcow2,virtio
+E: malformed diskspec

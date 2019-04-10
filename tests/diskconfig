@@ -126,3 +126,18 @@ vm launch kvm foo3
 clear vm config
 vm config disks foo.qcow2,virtio bar.qcow2,virtio foo.qcow2
 vm config
+
+
+# check that malformed diskspecs fail
+clear vm config
+vm config disks foo.qcow2,bad
+
+vm config disks foo.qcow2,bad bar.qcow2
+
+vm config disks foo.qcow2,virtio bar.qcow2,bad
+
+vm config disks bar.qcow2,bad bar.qcow2,bad
+
+vm config disks bar.qcow2,virtio bar.qcow2,bad
+
+vm config disks bar.qcow2,virtio,bad bar.qcow2,virtio

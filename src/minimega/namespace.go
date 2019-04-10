@@ -580,17 +580,15 @@ func (n *Namespace) processVMDisks(vals []string) error {
 			return err
 		}
 
-		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
-	}
-
-	// check for disk conflicts in a single VM:
-	for i, d1 := range n.vmConfig.Disks {
-		for j, d2 := range n.vmConfig.Disks {
-			if i != j && d1.Path == d2.Path {
+		// check for disk conflicts in a single VM
+		for _, d2 := range n.vmConfig.Disks {
+			if disk.Path == d2.Path {
 				n.vmConfig.Disks = nil
-				return fmt.Errorf("disk conflict: %v", d2)
+				return fmt.Errorf("disk conflict: %v", d2.Path)
 			}
 		}
+
+		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
 	}
 
 	return nil
