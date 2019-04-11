@@ -8,6 +8,10 @@ var HOST_REFRESH_TIMEOUT = 5000;    // How often the currently-displayed hosts a
 var IMAGE_REFRESH_THRESHOLD = 100;  // Above this threshold, disable auto-refresh of screenshots
 var IMAGE_REFRESH_ENABLE = true;    // Auto-refresh of screenshots enabled?
 var IMAGE_REFRESH_TIMEOUT = 5000;   // How often the currently-displayed screenshots are updated (in millis)
+var IMAGE_REFRESH_INTERVAL;         // Handle for setInterval to refresh tiles
+var IMAGE_INFO_JSON;                // Holds info.json, populated on tilevnc load
+var LASTPRINT1;                     // Store last console log details
+var LASTPRINT2;                     // Store last console log refresh status
 var COLOR_CLASSES = {
     BUILDING: "yellow",
     RUNNING:  "green",
@@ -85,7 +89,7 @@ function initVMInfoDataTable() {
             //{ "title": "ID", "data": "id" },
             { "title": "VCPUs", "data": "vcpus" },
             { "title": "Memory", "data": "memory" },
-            { "title": "Disks", "data": null, "visible": false, render: renderDisksColumn },
+            { "title": "Disk", "data": null, "visible": false, render: renderDisksColumn },
             { "title": "VLAN", "data": "vlan" },
             { "title": "IPv4", "data": "ip" },
             { "title": "IPv6", "data": "ip6", "visible": false },
@@ -483,24 +487,18 @@ function initScreenshotDataTable() {
     var path = window.location.pathname;
     path = path.substr(0, path.indexOf("/tilevnc"));
 
-    updateJSON(path+"/vms/info.json", updateScreenshotTable);
-
-    if (IMAGE_REFRESH_TIMEOUT > 0) {
-        setInterval(function() {
-            if (IMAGE_REFRESH_ENABLE) {
-                updateJSON(path+"/vms/info.json", updateScreenshotTable);
-            }
-        }, IMAGE_REFRESH_TIMEOUT);
-    }
+    updateJSON(path+'/vms/info.json', function(vmsData) { 
+                IMAGE_INFO_JSON = vmsData;
+	        console.log("vms: "+IMAGE_INFO_JSON.length)
+                updateScreenshotTable()
+    });
+   
 }
 
 
 // Update the Screenshot table with new data
-function updateScreenshotTable(vmsData) {
-
-    // disable auto-refresh there are too many VMs
-    IMAGE_REFRESH_ENABLE = Object.keys(vmsData).length <= IMAGE_REFRESH_THRESHOLD;
-
+function updateScreenshotTable() {
+    var vmsData = IMAGE_INFO_JSON;
     var imageUrls = Object.keys(lastImages);
     for (var i = 0; i < imageUrls.length; i++) {
         if (lastImages[imageUrls[i]].used === false) {
@@ -554,6 +552,8 @@ function updateScreenshotTable(vmsData) {
     if ($.fn.dataTable.isDataTable("#screenshots-list")) {
         var table = $("#screenshots-list").dataTable();
         table.fnClearTable(false);
+	table.on('length.dt',checkPageLength)
+        table.on('search.dt',checkImageThresholds)
         if (screenshotList.length > 0) {
             table.fnAddData(screenshotList, false);
         }
@@ -576,7 +576,8 @@ function updateScreenshotTable(vmsData) {
                 { "title": "Model", "data": "model", "searchable": false },
                 { "title": "VM", "data": "vm", "visible": false, "searchable": false },
             ],
-            "createdRow": loadOrRestoreImage,
+            "rowCallback": loadOrRestoreImage,
+	    "initComplete":  imageRefresher,
             "stateSave": true,
             "stateDuration": 0
         });
@@ -678,7 +679,7 @@ function renderDisksColumn(data, type, full, meta) {
     if (data.type === "container") {
         var keys = ['filesystem', 'preinit', 'init'];
     } else if (data.type === "kvm") {
-        var keys = ['initrd', 'kernel', 'disks'];
+        var keys = ['initrd', 'kernel', 'disk'];
     }
 
     for (var i = 0; i < keys.length; i++) {
@@ -718,4 +719,82 @@ function handleEmptyString (value, type) {
         }
     }
     return value;
+}
+
+function checkPageLength(e,settings,len){
+    checkImageRefresh(len)
+}
+
+function checkImageThresholds(){
+    var len = $('select[name=screenshots-list_length]').val()
+    checkImageRefresh(len)
+}
+
+function checkImageRefresh(len){
+    var atable = $("#screenshots-list").DataTable();
+    var acount = atable.data().count() 
+    var ccount = atable.rows({ page: 'current' }).nodes().count(); 
+    var toprint = "length: "+len+" shown_vms: "+ccount+ " vm_count: "+acount+" threshold: "+IMAGE_REFRESH_THRESHOLD
+    if (toprint === LASTPRINT1){
+        //ignore
+    }
+    else{
+        LASTPRINT1 = toprint
+        console.log(toprint)
+    }
+    IMAGE_REFRESH_ENABLE = true
+    if (len > IMAGE_REFRESH_THRESHOLD){
+        IMAGE_REFRESH_ENABLE = false
+        // 5 vms, limit 20, 24 entries shown
+        if (acount < len && acount < IMAGE_REFRESH_THRESHOLD){
+            IMAGE_REFRESH_ENABLE = true
+        }
+        // search query shown vms < threshold
+        if (ccount < IMAGE_REFRESH_THRESHOLD){
+            IMAGE_REFRESH_ENABLE = true
+        }
+    }
+    // all
+    if (len == "-1") {
+        if (acount > IMAGE_REFRESH_THRESHOLD){
+            IMAGE_REFRESH_ENABLE = false
+        }
+        // search query
+        if (ccount < IMAGE_REFRESH_THRESHOLD){
+            IMAGE_REFRESH_ENABLE = true
+        }
+    }
+    imageRefresher()
+}
+
+function imageRefresher(){
+    clearInterval(IMAGE_REFRESH_INTERVAL)
+    IMAGE_REFRESH_INTERVAL = undefined;
+    var disableFlag = true
+    if (IMAGE_REFRESH_ENABLE){
+        if (IMAGE_REFRESH_TIMEOUT > 0) {
+            disableFlag = false
+            if (LASTPRINT2 === "refresh enabled"){
+                //ignore
+            }
+            else{
+                LASTPRINT2 = "refresh enabled"
+                console.log("refresh enabled")
+            }
+            IMAGE_REFRESH_INTERVAL = setInterval(function() {
+                if (IMAGE_REFRESH_ENABLE) {
+                    updateScreenshotTable()
+                }
+            }, IMAGE_REFRESH_TIMEOUT);
+        }
+    }
+    if (disableFlag){
+        if (LASTPRINT2 === "refresh disabled"){
+            //ignore
+        }
+        else{
+            LASTPRINT2 = "refresh disabled"
+            console.log("refresh disabled")
+        }
+    }
 }
