@@ -1,3 +1,8 @@
+## disk create qcow2 foo.qcow2 512M
+## disk create qcow2 bar.qcow2 512M
+## disk create qcow2 baz.qcow2 512M
+## disk create qcow2 qux.qcow2 512M
+
 ## # no interface or cache mode specified
 ## vm config disk foo.qcow2
 
@@ -101,12 +106,196 @@ After overrides:
 -name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # multiple disks, mixed ahci/not
-## vm config disk foo.qcow2,ide,none foo.qcow2,ahci,writeback foo.qcow2,virtio,writeback foo.qcow2,ahci,directsync
+## vm config disk foo.qcow2,ide,none bar.qcow2,ahci,writeback baz.qcow2,virtio,writeback qux.qcow2,ahci,directsync
 ## vm config qemu-override
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+
+## # launching
+## clear vm config
+
+## vm config snapshot true
+## vm config disk foo.qcow2
+## vm launch kvm foo1
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## vm config disk bar.qcow2
+## vm launch kvm bar1
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## vm config clone foo1
+## vm launch kvm foo2
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should fail
+## vm config snapshot false
+## vm launch kvm foo3
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should work
+## vm config clone bar1
+## vm launch kvm bar2
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+bar2 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should also work
+## vm config clone foo1
+## vm config snapshot false
+## vm kill foo1
+## vm kill foo2
+## vm flush
+## vm launch kvm foo3
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+bar2 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo3 | BUILDING | false    | /tmp/minimega/files/foo.qcow2
+
+
+## # now do it again, with initrd and kernel
+## vm kill all
+## vm flush
+## clear vm config
+## vm config kernel $images/miniccc.kernel
+## vm config initrd $images/miniccc.initrd
+
+## vm config snapshot true
+## vm config disk foo.qcow2
+## vm launch kvm foo1
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## vm config disk bar.qcow2
+## vm launch kvm bar1
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## vm config clone foo1
+## vm launch kvm foo2
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should fail
+## vm config snapshot false
+## vm launch kvm foo3
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should work
+## vm config clone bar1
+## vm launch kvm bar2
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+bar2 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo1 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+foo2 | BUILDING | true     | /tmp/minimega/files/foo.qcow2
+
+## # should also work
+## vm config clone foo1
+## vm config snapshot false
+## vm kill foo1
+## vm kill foo2
+## vm flush
+## vm launch kvm foo3
+## .column name,state,snapshot,disk vm info
+name | state    | snapshot | disks
+bar1 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+bar2 | BUILDING | true     | /tmp/minimega/files/bar.qcow2
+foo3 | BUILDING | false    | /tmp/minimega/files/foo.qcow2
+
+
+## # duplicate disks on a single VM should fail
+## clear vm config
+## vm config disks foo.qcow2,virtio bar.qcow2,virtio foo.qcow2
+E: disk conflict: /tmp/minimega/files/foo.qcow2
+## vm config
+VM configuration:
+Memory:           2048
+VCPUs:            1
+Networks:         []
+Snapshot:         true
+UUID:             
+Schedule host:    
+Coschedule limit: -1
+Colocate:         
+Backchannel:      true
+Tags:             {}
+
+KVM configuration:
+Migrate Path:        
+Disks:               []
+CDROM Path:          
+Kernel Path:         
+Initrd Path:         
+Kernel Append:       []
+QEMU Path:           kvm
+QEMU Append:         []
+Serial Ports:        0
+Virtio-Serial Ports: 
+Machine:             
+CPU:                 host
+Cores:               0
+Threads:             0
+Sockets:             0
+VGA:                 std
+
+Container configuration:
+Filesystem Path: 
+Hostname:        
+Init:            [/init]
+Pre-init:        
+FIFOs:           0
+Volumes:
+
+
+## # check that malformed diskspecs fail
+## clear vm config
+## vm config disks foo.qcow2,bad
+E: malformed diskspec
+
+## vm config disks foo.qcow2,bad bar.qcow2
+E: malformed diskspec
+
+## vm config disks foo.qcow2,virtio bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,bad bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,virtio bar.qcow2,bad
+E: malformed diskspec
+
+## vm config disks bar.qcow2,virtio,bad bar.qcow2,virtio
+E: malformed diskspec

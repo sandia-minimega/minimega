@@ -137,7 +137,7 @@ var vmInfo = []string{
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
-	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
+	"vcpus", "disks", "snapshot", "initrd", "kernel", "cdrom", "migrate",
 	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",

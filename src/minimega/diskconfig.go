@@ -46,6 +46,8 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		} else if isInterface(f[1]) {
 			// path, interface
 			p, i = f[0], f[1]
+		} else {
+			return nil, errors.New("malformed diskspec")
 		}
 	case 3:
 		if isInterface(f[1]) && isCache(f[2]) {

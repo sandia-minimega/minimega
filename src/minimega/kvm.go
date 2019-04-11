@@ -1080,7 +1080,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		var driveParams string
 
 		path := diskConfig.Path
-		if diskConfig.SnapshotPath != "" {
+		if vm.Snapshot && diskConfig.SnapshotPath != "" {
 			path = diskConfig.SnapshotPath
 		}
 
