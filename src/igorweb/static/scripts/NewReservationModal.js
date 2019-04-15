@@ -263,6 +263,12 @@
 
     methods: {
       show() {
+        let range = this.$store.getters.selectedRange;
+        if (range != '') {
+          this.numNodes = this.$store.state.selectedNodes.length;
+          this.nodeList = range;
+          this.isNodeList = true;
+        }
         $(this.$refs['modal']).modal('show');
       },
 

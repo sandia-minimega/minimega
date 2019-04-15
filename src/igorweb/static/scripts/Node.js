@@ -5,8 +5,8 @@
         tabindex="-1"
         style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
         class="list-group-item list-group-item-action node unselected"
-        :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: reservationIsSelected }"
-        v-on:click="selectNode()"
+        :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: isSelected }"
+        v-on:click.stop="selectNode()"
       >
         {{ nodeID }}
       </div>
@@ -38,11 +38,8 @@
         return false;
       },
 
-      reservationIsSelected() {
-        if (this.$store.state.selectedReservation == null || this.nodeInfo.Reservation == null) {
-          return false;
-        }
-        return this.$store.state.selectedReservation.Name == this.nodeInfo.Reservation.Name;
+      isSelected() {
+        return this.$store.state.selectedNodes.includes(this.nodeInfo.NodeID);
       },
 
       isUp() {
@@ -56,7 +53,7 @@
 
     methods: {
       selectNode() {
-        this.$store.dispatch('selectNode', this.nodeInfo);
+        this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
       }
     },
   };

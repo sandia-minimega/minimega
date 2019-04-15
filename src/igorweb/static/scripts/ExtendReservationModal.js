@@ -67,18 +67,9 @@
       LoadingModal,
     },
 
-    props: {
-      reservation: {
-        type: Object,
-      },
-    },
-
     data() {
       return {
-        serverMessage: '',
-        serverSuccess: true,
-
-        resName: this.reservation.Name,
+        resName: '',
         timeRange: '60m',
       };
     },
@@ -103,6 +94,11 @@
 
     methods: {
       show() {
+        let res = this.$store.state.selectedReservation;
+        if (res) {
+          this.resName = res.Name;
+        }
+
         $(this.$refs['modal']).modal('show');
       },
 

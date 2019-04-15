@@ -39,14 +39,15 @@
       LoadingModal,
     },
 
-    props: {
-      reservation: {
-        type: Object,
-      },
+    data() {
+      return {
+        reservation: {},
+      };
     },
 
     methods: {
       show() {
+        this.reservation = this.$store.state.selectedReservation;
         $(this.$refs['modal']).modal('show');
       },
 
@@ -77,8 +78,9 @@
               msg = `Successfully deleted ${this.reservation.Name}`;
             }
 
+            this.$store.commit('updateReservations', response.Extra);
             this.$store.commit('setAlert', msg);
-	    setTimeout(() => {
+            setTimeout(() => {
               this.hideLoading();
               this.$emit('deleted');
             }, 500);

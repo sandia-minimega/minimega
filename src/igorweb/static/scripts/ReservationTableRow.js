@@ -3,7 +3,7 @@
     <tr
       class="res clickable mdl"
       :class="{active: selected}"
-      v-on:click="selectReservation(reservation)"
+      v-on:click.stop="selectReservation(reservation)"
     >
       <td class="mdl">{{ reservation.Name }}</td>
       <td class="mdl">{{ reservation.Owner }}</td>

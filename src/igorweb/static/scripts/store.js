@@ -5,7 +5,7 @@ window.store = new Vuex.Store({
 
   state: {
     selectedReservation: null,
-    selectedNode: null,
+    selectedNodes: [],
     reservations: [],
     alert: "",
   },
@@ -17,7 +17,14 @@ window.store = new Vuex.Store({
       return state.reservations;
     },
 
-    nodes: (state) => {
+    selectedRange: (state, getters) => {
+      if (state.selectedNodes.length == 0) {
+        return '';
+      }
+      return `${getters.clusterPrefix}[${toRange(state.selectedNodes)}]`;
+    },
+
+    nodes: (state, getters) => {
       let n = {};
 
       for (let i = STARTNODE; i <= ENDNODE; i++) {
@@ -53,11 +60,15 @@ window.store = new Vuex.Store({
           let nodeID = r.Nodes[j];
 
           n[nodeID].Reservation = r;
-          n[nodeID].Reservation.Range = toRange(r.Nodes);
+          n[nodeID].Reservation.Range = `${getters.clusterPrefix}[${toRange(r.Nodes)}]`;
         }
       }
 
       return n;
+    },
+
+    clusterPrefix: () => {
+      return CLUSTER;
     },
 
     nodeCount: () => {
@@ -84,12 +95,12 @@ window.store = new Vuex.Store({
       state.alert = msg;
     },
 
-    setSelectedNode(state, id) {
-      state.selectedNode = id;
+    setSelectedNodes(state, nodes) {
+      state.selectedNodes = nodes;
     },
 
-    setSelectedReservation(state, name) {
-      state.selectedReservation = name;
+    setSelectedReservation(state, res) {
+      state.selectedReservation = res;
     },
   },
 
@@ -113,17 +124,17 @@ window.store = new Vuex.Store({
     },
 
     selectReservation({commit}, r) {
-      commit('setSelectedNode', null);
+      commit('setSelectedNodes', r.Nodes);
       commit('setSelectedReservation', r);
     },
 
-    selectNode({commit}, n) {
-      commit('setSelectedNode', n);
+    selectNodes({commit}, n) {
+      commit('setSelectedNodes', n);
       commit('setSelectedReservation', null);
     },
 
     clearSelection({commit}) {
-      commit('setSelectedNode', null);
+      commit('setSelectedNodes', []);
       commit('setSelectedReservation', null);
     },
   },

@@ -73,15 +73,9 @@
       LoadingModal,
     },
 
-    props: {
-      reservation: {
-        type: Object,
-      },
-    },
-
     data() {
       return {
-        resName: this.reservation.Name,
+        resName: '',
         nodeRange: '',
 
         byReservation: true,
@@ -111,6 +105,18 @@
 
     methods: {
       show() {
+        let range = this.$store.getters.selectedRange;
+        if (range) {
+          this.nodeRange = range;
+          this.byReservation = false;
+        }
+
+        let res = this.$store.state.selectedReservation;
+        if (res) {
+          this.resName = res.Name;
+          this.byReservation = true;
+        }
+
         $(this.$refs['modal']).modal('show');
       },
 

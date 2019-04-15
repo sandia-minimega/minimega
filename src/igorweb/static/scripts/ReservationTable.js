@@ -89,6 +89,13 @@
             }
           });
           include = include || x.Nodes.includes(+this.filter);
+          include = include || x.Range == this.filter;
+
+          let single_node_range = this.filter.match(/^.+\[(\d+)\]$/);
+          if (single_node_range) {
+            let node = single_node_range[1];
+            include = include || x.Nodes.includes(+node);
+          }
 
           return include;
         });
