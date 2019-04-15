@@ -121,30 +121,19 @@ class minimega(object):
 		self._namespace = namespace
 		self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		self._socket.connect(path)
+		self._socketfile = self._socket.makefile()
 
 
 	def _get_response(self):
 		'''
 		_get_response reads a single response from minimega
 		'''
-
-		msg = ''
-		more = self._socket.recv(1).decode('utf-8')
-		response = None
-		while response is None and more:
-			msg += more
-			# want to read a full JSON object, and not run json.loads for
-			# every byte read
-			if more != '}':
-				more = self._socket.recv(1).decode('utf-8')
-				continue
-
-			try:
-				response = json.loads(msg)
-			except ValueError as e:
-				if self._debug:
-					print(e)
-			more = self._socket.recv(1).decode('utf-8')
+		line = self._socketfile.readline().decode('utf-8')
+		try:
+			response = json.loads(line)
+		except ValueError as e:
+			if self._debug:
+				print(e)
 
 		if not response:
 			raise Error('Expected response, socket closed')
