@@ -121,7 +121,7 @@ class minimega(object):
 		self._namespace = namespace
 		self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 		self._socket.connect(path)
-		self._socketfile = self._socket.makefile()
+		self._socketfile = self._socket.makefile('rb')
 
 
 	def _get_response(self):
