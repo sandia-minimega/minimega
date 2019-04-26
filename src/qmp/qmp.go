@@ -398,7 +398,7 @@ func (q *Conn) NetDevAdd(id, devType, ifname string) (string, error) {
 	if !q.ready {
 		return "", ERR_READY
 	}
-	arg := fmt.Sprintf('netdev_add type=%v,id=%v,ifname=%v,script=no,downscript=no', devType, id, ifname)
+	arg := fmt.Sprintf("netdev_add type=%v,id=%v,ifname=%v,script=no,downscript=no", devType, id, ifname)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }

@@ -786,6 +786,23 @@ func (vm *KvmVM) Disconnect(cc *ron.Server) error {
 	return nil
 }
 
+func (vm *KvmVM) AddNIC() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// We just added this network, so it should be the last one in the list
+	pos := len(vm.Networks) - 1
+	if pos < 0 {
+		// weird...
+		return fmt.Errorf("Missing network interface to add...")
+	}
+	nic := &vm.Networks[pos]
+	if nic.MAC == "" {
+		nic.MAC = randomMac()
+	}
+	return nil
+}
+
 func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	var bus string
 	switch version {
