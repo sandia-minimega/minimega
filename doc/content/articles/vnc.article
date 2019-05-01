@@ -204,7 +204,10 @@ to search the VM's screenshot for the template image and continue once the
 template image has been found. The event supports a timeout which will cause
 the playback to stop if exceeded.
 
-    1000:WaitForIt,template.png,10s
+    1000:WaitForIt,10s,template.png
+
+You may also base64-encode the image and include it in place of the filename.
+This allows your VNC scripts to be self-contained.
 
 *** ClickIt event
 
@@ -212,4 +215,7 @@ Similar to the `WaitForIt` event, the `ClickIt` event waits until a template
 image appears in the VM screenshot but has an additional action to click on the
 center of the template image in the screenshot.
 
-    1000:ClickIt,template.png,10s
+    1000:ClickIt,10s,template.png
+
+As with the `WaitForIt` event, you may base64-encode the image to use in place
+of the filename.
