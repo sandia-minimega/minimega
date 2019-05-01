@@ -47,8 +47,13 @@ Output a graphviz formatted dot file representing the connected topology.`,
 	},
 	{ // mesh list
 		HelpShort: "display the mesh adjacency list",
+		HelpLong: `
+Without "all" or "peers", displays the mesh adjacency list. If "all" is
+specified, the hostnames of all nodes in the list are printed. If "peers" is
+specified, the hostnames of all peers are printed (the local node is not
+included).`,
 		Patterns: []string{
-			"mesh list",
+			"mesh list [all,peers]",
 		},
 		Call: wrapSimpleCLI(cliMeshageList),
 	},
@@ -136,12 +141,28 @@ func cliMeshageList(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	}
 	sort.Strings(keys)
 
-	for _, key := range keys {
-		v := mesh[key]
-		resp.Response += fmt.Sprintf("%s\n", key)
-		sort.Strings(v)
-		for _, x := range v {
-			resp.Response += fmt.Sprintf(" |--%s\n", x)
+	switch {
+	case c.BoolArgs["all"]:
+		// combine keys into list
+		resp.Response = ranges.UnsplitList(keys)
+	case c.BoolArgs["peers"]:
+		// reconstruct keys without local node
+		for i, v := range keys {
+			if v == hostname {
+				keys = append(keys[:i], keys[i+1:]...)
+				break
+			}
+		}
+		resp.Response = ranges.UnsplitList(keys)
+	default:
+		// print adjacency list
+		for _, key := range keys {
+			v := mesh[key]
+			resp.Response += fmt.Sprintf("%s\n", key)
+			sort.Strings(v)
+			for _, x := range v {
+				resp.Response += fmt.Sprintf(" |--%s\n", x)
+			}
 		}
 	}
 
