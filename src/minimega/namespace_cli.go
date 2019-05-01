@@ -90,6 +90,12 @@ Display or modify the active namespace.
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
+			if val == "hosts" {
+				return cliHostnameSuggest(prefix, true, false, true)
+			}
+			return nil
+		}),
 	},
 	{ // clear namespace
 		HelpShort: "unset or delete namespace",

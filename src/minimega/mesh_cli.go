@@ -9,8 +9,10 @@ import (
 	"math"
 	"minicli"
 	"os"
+	"ranges"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -44,6 +46,12 @@ Output a graphviz formatted dot file representing the connected topology.`,
 			"mesh hangup <hostname>",
 		},
 		Call: wrapSimpleCLI(cliMeshageHangup),
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
+			if val == "hostname" {
+				return cliHostnameSuggest(prefix, false, true, false)
+			}
+			return nil
+		}),
 	},
 	{ // mesh list
 		HelpShort: "display the mesh adjacency list",
@@ -91,9 +99,15 @@ vm info from nodes kn1 and kn2:
 
 You can use 'all' to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh send <clients or all> (command)",
+			"mesh send <hosts or all> (command)",
 		},
 		Call: cliMeshageSend,
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
+			if val == "hosts" {
+				return cliHostnameSuggest(prefix, false, false, true)
+			}
+			return nil
+		}),
 	},
 }
 
@@ -225,11 +239,54 @@ func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// behaviors, see wrapBroadcastCLI.
 	c.Subcommand.SetSource(SourceMeshage)
 
-	in, err := meshageSend(c.Subcommand, c.StringArgs["clients"])
+	in, err := meshageSend(c.Subcommand, c.StringArgs["hosts"])
 	if err != nil {
 		respChan <- errResp(err)
 		return
 	}
 
 	forward(in, respChan)
+}
+
+// cliHostnameSuggest takes a prefix and suggests hostnames based on nodes in
+// the mesh. If local is true, the local node will be included in the
+// suggestions. If direct is true, only peers of the local node will be
+// included in the suggestions.
+func cliHostnameSuggest(prefix string, local, direct, wild bool) []string {
+	mesh := meshageNode.Mesh()
+
+	res := []string{}
+
+	// suggest peers of the local node
+	if direct {
+		for _, v := range mesh[hostname] {
+			if strings.HasPrefix(v, prefix) {
+				res = append(res, v)
+			}
+		}
+
+		return res
+	}
+
+	// suggest nodes in the mesh
+	for k := range mesh {
+		// skip the local node if local is false
+		if k == hostname && !local {
+			continue
+		}
+
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, k)
+		}
+	}
+
+	if local && strings.HasPrefix("localhost", prefix) {
+		res = append(res, "localhost")
+	}
+
+	if wild && strings.HasPrefix(Wildcard, prefix) {
+		res = append(res, Wildcard)
+	}
+
+	return res
 }
