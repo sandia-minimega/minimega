@@ -734,6 +734,8 @@ Note: Cannot specify Schedule and Colocate in the same config.
 			"vm config schedule [value]",
 		},
 
+		Suggest: wrapHostnameSuggest(true, false, false),
+
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
 				r.Response = ns.vmConfig.Schedule

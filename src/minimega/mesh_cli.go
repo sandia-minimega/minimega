@@ -45,13 +45,8 @@ Output a graphviz formatted dot file representing the connected topology.`,
 		Patterns: []string{
 			"mesh hangup <hostname>",
 		},
-		Call: wrapSimpleCLI(cliMeshageHangup),
-		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
-			if val == "hostname" {
-				return cliHostnameSuggest(prefix, false, true, false)
-			}
-			return nil
-		}),
+		Call:    wrapSimpleCLI(cliMeshageHangup),
+		Suggest: wrapHostnameSuggest(false, true, false),
 	},
 	{ // mesh list
 		HelpShort: "display the mesh adjacency list",
@@ -99,15 +94,10 @@ vm info from nodes kn1 and kn2:
 
 You can use 'all' to send a command to all connected clients.`,
 		Patterns: []string{
-			"mesh send <hosts or all> (command)",
+			"mesh send <hostname or range or all> (command)",
 		},
-		Call: cliMeshageSend,
-		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
-			if val == "hosts" {
-				return cliHostnameSuggest(prefix, false, false, true)
-			}
-			return nil
-		}),
+		Call:    cliMeshageSend,
+		Suggest: wrapHostnameSuggest(false, false, true),
 	},
 }
 
@@ -239,7 +229,7 @@ func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// behaviors, see wrapBroadcastCLI.
 	c.Subcommand.SetSource(SourceMeshage)
 
-	in, err := meshageSend(c.Subcommand, c.StringArgs["hosts"])
+	in, err := meshageSend(c.Subcommand, c.StringArgs["hostname"])
 	if err != nil {
 		respChan <- errResp(err)
 		return
