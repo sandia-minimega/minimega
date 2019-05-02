@@ -199,6 +199,10 @@ func validSchedule(vmConfig VMConfig, s string) error {
 		return errors.New("cannot specify schedule and colocate in the same config")
 	}
 
+	if s == "localhost" {
+		s = hostname
+	}
+
 	// check if s is in the namespace
 	ns := GetNamespace()
 
