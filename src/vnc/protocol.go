@@ -30,6 +30,13 @@ const (
 	TypeServerCutText
 )
 
+const (
+	RawEncoding               = 0
+	TightEncoding             = 7
+	DesktopSizePseudoEncoding = -223
+	CursorPseudoEncoding      = -239
+)
+
 // See RFC 6143 Section 7.4
 type PixelFormat struct {
 	BitsPerPixel, Depth, BigEndianFlag, TrueColorFlag uint8
@@ -58,8 +65,8 @@ type SetEncodings struct {
 // See RFC 6143 Section 7.5.3
 type FramebufferUpdateRequest struct {
 	Incremental uint8
-	XPosition   uint16
-	YPosition   uint16
+	X           uint16
+	Y           uint16
 	Width       uint16
 	Height      uint16
 }
@@ -91,28 +98,21 @@ type ClientCutText struct {
 
 // See RFC 6143 Section 7.6.1
 type Rectangle struct {
-	XPosition    uint16
-	YPosition    uint16
+	X            uint16
+	Y            uint16
 	Width        uint16
 	Height       uint16
 	EncodingType int32
-}
 
-type _FramebufferUpdate struct {
-	_                  [1]byte // Padding
-	NumberOfRectangles uint16
+	// rgba is the pixel data for this Rectangle
+	*image.RGBA
 }
 
 // See RFC 6143 Section 7.6.1
 type FramebufferUpdate struct {
-	_FramebufferUpdate
-	Updates []*image.RGBA64
-}
-
-type _SetColorMapEntries struct {
-	_              [1]byte // Padding
-	FirstColor     uint16
-	NumberOfColors uint16
+	_             [1]byte // Padding
+	NumRectangles uint16
+	Rectangles    []*Rectangle
 }
 
 // See RFC 6143 Section 7.6.2
@@ -122,8 +122,10 @@ type Color struct {
 
 // See RFC 6143 Section 7.6.2
 type SetColorMapEntries struct {
-	_SetColorMapEntries
-	Colors []Color
+	_          [1]byte // Padding
+	FirstColor uint16
+	NumColors  uint16
+	Colors     []Color
 }
 
 // See RFC 6143 Section 7.6.3
@@ -131,74 +133,10 @@ type Bell struct {
 }
 
 // See RFC 6143 Section 7.6.4
-type _ServerCutText struct {
+type ServerCutText struct {
 	_      [3]byte // Padding
 	Length uint32  // Length of Text
-}
-
-// See RFC 6143 Section 7.6.4
-type ServerCutText struct {
-	_ServerCutText
-	Text []uint8
-}
-
-var clientMessages = map[uint8]func() interface{}{
-	TypeSetPixelFormat:           func() interface{} { return new(SetPixelFormat) },
-	TypeSetEncodings:             func() interface{} { return new(_SetEncodings) },
-	TypeFramebufferUpdateRequest: func() interface{} { return new(FramebufferUpdateRequest) },
-	TypeKeyEvent:                 func() interface{} { return new(KeyEvent) },
-	TypePointerEvent:             func() interface{} { return new(PointerEvent) },
-	TypeClientCutText:            func() interface{} { return new(_ClientCutText) },
-}
-
-var serverMessages = map[uint8]func() interface{}{
-	TypeFramebufferUpdate:  func() interface{} { return new(_FramebufferUpdate) },
-	TypeSetColorMapEntries: func() interface{} { return new(_SetColorMapEntries) },
-	TypeBell:               func() interface{} { return new(Bell) },
-	TypeServerCutText:      func() interface{} { return new(_ServerCutText) },
-}
-
-// ReadClientMessage reads the next client-to-server message
-func ReadClientMessage(r io.Reader) (interface{}, error) {
-	var msgType uint8
-	if err := binary.Read(r, binary.BigEndian, &msgType); err != nil {
-		return nil, err
-	}
-
-	if _, ok := clientMessages[msgType]; !ok {
-		return nil, fmt.Errorf("unknown client-to-server message: %d", msgType)
-	}
-
-	// Copy the struct
-	msg := clientMessages[msgType]()
-
-	if err := binary.Read(r, binary.BigEndian, msg); err != nil {
-		return nil, err
-	}
-
-	var err error
-
-	// Do extra processing on messages that have variable length fields
-	switch msgType {
-	case TypeSetEncodings:
-		newMsg := &SetEncodings{_SetEncodings: *msg.(*_SetEncodings)}
-		newMsg.Encodings = make([]int32, newMsg.NumberOfEncodings)
-
-		err = binary.Read(r, binary.BigEndian, &newMsg.Encodings)
-		msg = newMsg
-	case TypeClientCutText:
-		newMsg := &ClientCutText{_ClientCutText: *msg.(*_ClientCutText)}
-		newMsg.Text = make([]uint8, newMsg.Length)
-
-		err = binary.Read(r, binary.BigEndian, &newMsg.Text)
-		msg = newMsg
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return msg, nil
+	Text   []uint8
 }
 
 func (m *SetPixelFormat) Write(w io.Writer) error {
@@ -215,7 +153,7 @@ func (m *SetEncodings) Write(w io.Writer) error {
 
 	// Write variable length encodings
 	if err := binary.Write(w, binary.BigEndian, &m.Encodings); err != nil {
-		return fmt.Errorf("unable to write encodings -- %s", err.Error())
+		return fmt.Errorf("unable to write encodings -- %v", err)
 	}
 
 	return nil
