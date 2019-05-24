@@ -70,8 +70,8 @@ Display or modify the active namespace.
 `,
 		Patterns: []string{
 			"ns <hosts,>",
-			"ns <add-hosts,> <hosts>",
-			"ns <del-hosts,> <hosts>",
+			"ns <add-hosts,> <hostname or range or all>",
+			"ns <del-hosts,> <hostname or range or all>",
 			"ns <load,>",
 			"ns <load,> <cpucommit,>",
 			"ns <load,> <netcommit,>",
@@ -90,6 +90,12 @@ Display or modify the active namespace.
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
+		Suggest: wrapSuggest(func(_ *Namespace, val, prefix string) []string {
+			if val == "hostname" {
+				return cliHostnameSuggest(prefix, true, false, true)
+			}
+			return nil
+		}),
 	},
 	{ // clear namespace
 		HelpShort: "unset or delete namespace",
@@ -216,7 +222,7 @@ func cliNamespaceHosts(ns *Namespace, c *minicli.Command, resp *minicli.Response
 }
 
 func cliNamespaceAddHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+	hosts, err := ranges.SplitList(c.StringArgs["hostname"])
 	if err != nil {
 		return fmt.Errorf("invalid hosts -- %v", err)
 	}
@@ -258,7 +264,7 @@ func cliNamespaceAddHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 }
 
 func cliNamespaceDelHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	hosts, err := ranges.SplitList(c.StringArgs["hosts"])
+	hosts, err := ranges.SplitList(c.StringArgs["hostname"])
 	if err != nil {
 		return fmt.Errorf("invalid hosts -- %v", err)
 	}

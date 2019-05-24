@@ -56,7 +56,7 @@ type BaseConfig struct {
 	// Set a host where the VM should be scheduled.
 	//
 	// Note: Cannot specify Schedule and Colocate in the same config.
-	Schedule string `validate:"validSchedule"`
+	Schedule string `validate:"validSchedule" suggest:"wrapHostnameSuggest(true, false, false)"`
 
 	// Colocate this VM with another VM that has already been launched or is
 	// queued for launching.
@@ -197,6 +197,10 @@ func (vm *BaseConfig) QosString(b, t, i string) string {
 func validSchedule(vmConfig VMConfig, s string) error {
 	if vmConfig.Colocate != "" && s != "" {
 		return errors.New("cannot specify schedule and colocate in the same config")
+	}
+
+	if s == "localhost" {
+		s = hostname
 	}
 
 	// check if s is in the namespace
