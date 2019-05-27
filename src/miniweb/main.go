@@ -95,6 +95,7 @@ func main() {
 	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
 	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
+	mux.HandleFunc("/vms/new", mustAuth(vmsHandler))
 
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
