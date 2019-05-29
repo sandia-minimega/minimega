@@ -800,6 +800,30 @@ func (vm *KvmVM) AddNIC() error {
 	if nic.MAC == "" {
 		nic.MAC = randomMac()
 	}
+
+	// generate an id by adding 2 to the highest in the list for the
+	// nic devices, 0 if it's empty - we add two because we need to
+	// generate 2 devices for every nic, a net device (tap) for the
+	// nic and the nic itself
+	id := 0
+	for k := range vm.Networks {
+		id = k + 2
+	}
+	ndid := fmt.Sprintf("nd%v", id)
+	tapid := fmt.Sprintf("tap%v", id)
+	r, err := vm.q.NetDevAdd(ndid, "tap", tapid)
+	if err != nil {
+		return err
+	}
+	log.Debugln("Add Nic: NetDevAdd QMP response:", r)
+
+	nicid := fmt.Sprintf("nic%v", id+1)
+	r, err = vm.q.NicAdd(nicid, ndid, "pci.0", nic.Driver, nic.MAC)
+	if err != nil {
+		return err
+	}
+	log.Debugln("Add Nic: NicAdd QMP response:", r)
+
 	return nil
 }
 

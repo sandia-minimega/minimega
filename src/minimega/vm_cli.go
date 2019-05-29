@@ -802,14 +802,17 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["vm"]
-
-	pos, err := strconv.Atoi(c.StringArgs["tap"])
-	if err != nil {
-		return err
+	var pos int
+	var err error
+	if !c.BoolArgs["add"] {
+		pos, err = strconv.Atoi(c.StringArgs["tap"])
+		if err != nil {
+			return err
+		}
 	}
 
 	var vlan int
-	if !c.BoolArgs["disconnect"] {
+	if !c.BoolArgs["disconnect"] && !c.BoolArgs["add"] {
 		vlan, err = lookupVLAN(ns.Name, c.StringArgs["vlan"])
 		if err != nil {
 			return err

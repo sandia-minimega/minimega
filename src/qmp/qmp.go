@@ -403,11 +403,12 @@ func (q *Conn) NetDevAdd(id, devType, ifname string) (string, error) {
 	return resp, err
 }
 
-func (q *Conn) NicAdd(id, netdevID, bus, addr, driver, mac string) (string, error) {
+func (q *Conn) NicAdd(id, netdevID, bus, driver, mac string) (string, error) {
 	if !q.ready {
 		return "", ERR_READY
 	}
-	arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,addr=%v,driver=%v,mac=%v", id, netdevID, bus, addr, driver, mac)
+	//arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,addr=%v,driver=%v,mac=%v", id, netdevID, bus, addr, driver, mac)
+	arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,driver=%v,mac=%v", id, netdevID, bus, driver, mac)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
