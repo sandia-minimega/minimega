@@ -227,8 +227,13 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 	// write to output if not silent
 	if !webS {
-		m := fmt.Sprintf("From: %s Command: %q \tResponse: %q", r.RemoteAddr, command, rsp.Message)
-		log.Debug(m)
+		m := fmt.Sprintf("From: %s By: %s Command: %q \tResponse: %q", r.RemoteAddr, username, command, rsp.Message)
+
+		if splitcmd[1] != "show" {
+			log.Info(m)
+		} else {
+			log.Debug(m)
+		}
 	}
 
 	// send response
