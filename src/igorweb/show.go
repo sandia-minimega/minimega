@@ -7,6 +7,7 @@ import (
 
 // Show stores data received from "igor show -json"
 type Show struct {
+	LastUpdated                                 time.Time
 	Prefix                                      string
 	RangeStart, RangeEnd, RackWidth, RackHeight int
 	Available, Down                             []string

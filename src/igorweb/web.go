@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -74,22 +75,48 @@ type Response struct {
 	Extra interface{}
 }
 
-// run "show"
+var (
+	igorLock      sync.Mutex
+	showCacheLock sync.RWMutex
+	showCache     *Show
+)
+
+// "run" igor show
 func show() *Show {
+	if showCache == nil || time.Now().Sub(showCache.LastUpdated) > 10*time.Second {
+		updateShow()
+	}
+
+	showCacheLock.RLock()
+	defer showCacheLock.RUnlock()
+
+	return showCache
+}
+
+// run "show" and update cache
+func updateShow() {
+	showCacheLock.Lock()
+	defer showCacheLock.Unlock()
+
+	igorLock.Lock()
+	defer igorLock.Unlock()
+
 	log.Debug("Updating reservations")
 
-	out, err := processWrapper("igor", "show", "-json")
+	out, err := processWrapper(webE, "show", "-json")
 	if err != nil {
 		log.Warn("Error updating reservations")
-		return nil
+		return
 	}
 
 	data := new(Show)
 	if err := json.Unmarshal([]byte(out), data); err != nil {
 		log.Warn("Error unmarshaling reservations: %v", err)
+		return
 	}
 
-	return data
+	data.LastUpdated = time.Now()
+	showCache = data
 }
 
 // Returns a non-nil error if something's wrong with the igor command
@@ -157,8 +184,15 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		copy(cmd, splitcmd)
 		cmd[0] = webE
 
+		igorLock.Lock()
+
 		env := []string{"USER=" + username}
 		out, err = processWrapperEnv(env, cmd[0:]...)
+		log.Debug(out)
+
+		igorLock.Unlock()
+
+		updateShow()
 	}
 
 	// if a speculate command
