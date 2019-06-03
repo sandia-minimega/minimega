@@ -15,7 +15,7 @@
            </tr>
            <tr>
              <td class="mdl key up clickable tdhover headtext text-right" v-on:click.stop="select(null, 'up');">
-               Up
+               Powered On
              </td>
              <td class="mdl key available up clickable tdhover" v-on:click.stop="select('available', 'up');">
                <div class="mdl mx-auto keycolor available up unselected">
@@ -28,7 +28,7 @@
            </tr>
            <tr>
              <td class="mdl key down clickable tdhover headtext text-right" v-on:click.stop="select(null, 'down');">
-               Down
+               Powered Off
              </td>
              <td class="mdl key available down clickable tdhover"  v-on:click.stop="select('available', 'down')">
                <div class="mdl mx-auto keycolor available down unselected">
