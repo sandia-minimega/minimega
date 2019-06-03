@@ -278,6 +278,12 @@ func main() {
 		usage()
 	}
 
+	for _, envvar := range os.Environ() {
+		if strings.HasPrefix(envvar, "SUDO_USER=") {
+			log.Error("SUDO_USER is set. This will likely cause problems with names on reservations.")
+		}
+	}
+
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
 	// general requests
