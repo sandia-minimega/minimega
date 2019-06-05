@@ -27,6 +27,7 @@ func commandSocketStart() {
 			conn, err := l.Accept()
 			if err != nil {
 				log.Error("commandSocketStart: accept: %v", err)
+				continue
 			}
 			log.Infoln("client connected")
 
