@@ -408,11 +408,9 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 
 			http.Redirect(w, r, "/vms", http.StatusFound)
 			return
-		default:
-			http.Error(w, "not allowed", http.StatusMethodNotAllowed)
-			return
 		}
 
+		http.Error(w, "not allowed", http.StatusMethodNotAllowed)
 		return
 	default:
 		http.NotFound(w, r)
